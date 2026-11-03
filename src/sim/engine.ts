@@ -1,0 +1,470 @@
+import { headingAtDistance, pointAtDistance } from '../geo/polyline';
+import type { CConnector } from '../network';
+import {
+  createRouteProvider,
+  freeFlowLinkCosts,
+  type LinkCosts,
+  type RouteProvider,
+} from '../routing';
+import { movementPenaltyS } from '../routing/costs';
+import type { SimParams, TripRequest } from '../schema';
+import { createConnectors } from './connectors';
+import { stateHash } from './hash';
+import { idmAcceleration } from './idm';
+import { createIntersections } from './intersection';
+import { createAccounting } from './metrics';
+import { DEFAULT_SIM_PARAMS } from './params';
+import type { TrafficEngine, VehicleDetail, VehicleSnapshot, VehicleState } from './types';
+import { createVehicles, DRIVING, QUEUED_ORIGIN, QUEUED_DESTINATION, PENDING } from './vehicle';
+
+type LoadInput = Parameters<TrafficEngine['load']>[0] & {
+  routeProvider?: RouteProvider;
+  linkCosts?: LinkCosts;
+};
+const detailStates: (VehicleState | null)[] = [
+  null,
+  'driving',
+  'queued_destination',
+  'queued_origin',
+  'completed',
+  'failed',
+];
+
+function createRun({
+  compiled,
+  trips,
+  scenario,
+  params: overrides,
+  routeProvider,
+  linkCosts,
+}: LoadInput) {
+  const params: SimParams = { ...DEFAULT_SIM_PARAMS, ...scenario.simParams, ...overrides };
+  const { dtS, vehicleLengthM, idm, spawnMinGapM } = params;
+  const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
+  const accounting = createAccounting(compiled, vehicles);
+  const connectors = createConnectors(compiled, trips, scenario, params, vehicles, accounting);
+  const intersections = createIntersections(compiled, vehicles, params);
+  const provider =
+    routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
+  const costs = linkCosts ?? freeFlowLinkCosts(compiled);
+  const fallback = new Uint8Array(trips.length);
+  const arrival = new Int32Array(trips.length).fill(-1);
+  const order = new Uint32Array(trips.length);
+  const acceleration = new Float64Array(trips.length);
+  const limit = new Float64Array(trips.length);
+  let orderCount = 0;
+  let tick = 0;
+  const time = () => scenario.startS + tick * dtS;
+
+  function routeFrom(id: number, lane: number, positionM: number) {
+    return provider.route(compiled, costs, {
+      fromLane: lane,
+      fromPosM: positionM,
+      toConnector: vehicles.destination[id]!,
+      vehicleClass: 'car',
+      desiredSpeedFactor: vehicles.speedFactor[id]!,
+      noise: 0,
+      seed: vehicles.routeSeed[id]!,
+    });
+  }
+
+  function planLane(id: number, lane: number, positionM: number) {
+    const destination = compiled.connectors[vehicles.destination[id]!]!;
+    const route = vehicles.route[id]!;
+    const planned = compiled.movements[route.movements[vehicles.routeStep[id]!] ?? -1];
+    arrival[id] = -1;
+    vehicles.movement[id] = -1;
+    fallback[id] = 0;
+    if (destination.lane === lane && destination.positionM >= positionM) {
+      arrival[id] = destination.idx;
+    } else if (planned?.fromLane === lane) {
+      vehicles.movement[id] = planned.idx;
+    } else {
+      let penalty = Infinity;
+      for (const idx of compiled.lanes[lane]!.out) {
+        const movement = compiled.movements[idx]!;
+        if (
+          movement.neverGreen ||
+          !compiled.lanes[movement.toLane]!.allowed.includes('car') ||
+          vehicles.attemptedFallbacks[id]?.has(idx)
+        )
+          continue;
+        const cost = movementPenaltyS(compiled, movement);
+        if (cost < penalty || (cost === penalty && idx < vehicles.movement[id]!)) {
+          penalty = cost;
+          vehicles.movement[id] = idx;
+        }
+      }
+      if (vehicles.movement[id] !== -1) fallback[id] = 1;
+    }
+  }
+
+  function freeFlow(id: number, origin: CConnector) {
+    const destination = compiled.connectors[vehicles.destination[id]!]!;
+    let position = origin.positionM;
+    let travel = 0;
+    for (const idx of vehicles.route[id]!.movements) {
+      const movement = compiled.movements[idx]!;
+      const lane = compiled.lanes[movement.fromLane]!;
+      const next = compiled.lanes[movement.toLane]!;
+      travel += Math.max(0, lane.lengthM - position) / lane.speedLimitMps;
+      travel += movement.lengthM / Math.min(lane.speedLimitMps, next.speedLimitMps);
+      position = 0;
+    }
+    return (
+      travel + (destination.positionM - position) / compiled.lanes[destination.lane]!.speedLimitMps
+    );
+  }
+
+  function hasSpawnGap(connector: CConnector) {
+    const { lane, positionM } = connector;
+    const spacing = vehicleLengthM + Math.max(spawnMinGapM, idm.minGapM);
+    if (intersections.exitOwner[lane] !== -1 && positionM < spacing) return false;
+    for (
+      let id = vehicles.last(lane);
+      id !== -1 && vehicles.position[id]! <= positionM + spacing;
+      id = vehicles.previous[id]!
+    ) {
+      if (Math.abs(vehicles.position[id]! - positionM) < spacing) return false;
+    }
+    const source = compiled.lanes[lane]!;
+    if (source.lengthM - positionM < spacing) {
+      for (const idx of source.out) {
+        const id = vehicles.last(-idx - 1);
+        if (id !== -1 && source.lengthM - positionM + vehicles.position[id]! < spacing)
+          return false;
+      }
+    }
+    return true;
+  }
+
+  function releaseTrip(id: number, connector: CConnector, timeS: number) {
+    const { lane, positionM } = connector;
+    const result = routeFrom(id, lane, positionM);
+    if (!result.ok) {
+      accounting.fail(id, 'no_route');
+      return false;
+    }
+    vehicles.route[id] = result.route;
+    vehicles.freeFlow[id] = freeFlow(id, connector);
+    vehicles.departed[id] = timeS;
+    planLane(id, lane, positionM);
+    vehicles.insert(id, lane, positionM);
+    accounting.transition(id, DRIVING);
+    return true;
+  }
+
+  function propose(timeS: number) {
+    orderCount = 0;
+    for (let segment = 0; segment < vehicles.head.length; segment++) {
+      const head = vehicles.head[segment]!;
+      if (head === -1) continue;
+      const lane = compiled.lanes[segment];
+      const path = lane ? null : compiled.movements[segment - compiled.lanes.length]!;
+      const length = lane?.lengthM ?? path!.lengthM;
+      const speedLimit =
+        lane?.speedLimitMps ??
+        Math.min(
+          compiled.lanes[path!.fromLane]!.speedLimitMps,
+          compiled.lanes[path!.toLane]!.speedLimitMps,
+        );
+      let ahead = -1;
+      for (let id = head; id !== -1; id = vehicles.next[id]!) {
+        order[orderCount++] = id;
+        if (vehicles.state[id] === QUEUED_DESTINATION) {
+          ahead = id;
+          continue;
+        }
+        const position = vehicles.position[id]!;
+        const destination = compiled.connectors[arrival[id]!];
+        const movement = compiled.movements[vehicles.movement[id]!];
+        const granted = intersections.grants[id] !== -1;
+        let leader = ahead;
+        let offset = 0;
+        if (leader === -1 && path) {
+          leader = vehicles.last(path.toLane);
+          offset = length;
+        } else if (leader === -1 && lane && !destination) {
+          // A car's rear can still be on this approach after its front enters a turn.
+          offset = length;
+          for (const idx of lane.out) {
+            const occupant = vehicles.last(-idx - 1);
+            if (
+              occupant !== -1 &&
+              (leader === -1 || vehicles.position[occupant]! < vehicles.position[leader]!)
+            ) {
+              leader = occupant;
+            }
+          }
+          if (leader === -1 && movement) {
+            leader = vehicles.last(movement.toLane);
+            offset += movement.lengthM;
+          }
+        }
+        const rear =
+          leader === -1 ? Infinity : offset + vehicles.position[leader]! - vehicleLengthM;
+        limit[id] = Math.max(position, rear - idm.minGapM);
+        let obstacle = rear;
+        let leaderSpeed = leader === -1 ? 0 : vehicles.speed[leader]!;
+        let stopAt = Infinity;
+        if (lane && destination && !connectors.canArrive(destination, timeS)) {
+          // Put the virtual bumper beyond the portal so standstill occurs at the portal.
+          stopAt = destination.positionM + idm.minGapM;
+        } else if (lane && movement && !granted) {
+          stopAt = length;
+        }
+        if (stopAt < obstacle) {
+          obstacle = stopAt;
+          leaderSpeed = 0;
+        }
+        acceleration[id] = idmAcceleration(
+          idm,
+          vehicles.speed[id]!,
+          speedLimit * vehicles.speedFactor[id]!,
+          leaderSpeed,
+          obstacle - position,
+        );
+
+        // TASK-004: compute lane change proposals here from the same start-of-step occupancy.
+        if (
+          lane &&
+          ahead === -1 &&
+          movement &&
+          !granted &&
+          length - position <= params.intersection.decisionDistanceM
+        ) {
+          intersections.request(id, movement);
+        }
+        ahead = id;
+      }
+    }
+  }
+
+  function resolve() {
+    // TASK-004: resolve lane change proposals in proposal order before granting entries.
+    intersections.resolve();
+  }
+
+  function reachDestination(id: number, connector: CConnector, timeS: number) {
+    vehicles.position[id] = connector.positionM;
+    vehicles.speed[id] = 0;
+    if (connectors.arrive(connector, timeS)) {
+      vehicles.remove(id);
+      accounting.complete(id, timeS);
+    } else {
+      if (vehicles.state[id] !== QUEUED_DESTINATION) accounting.transition(id, QUEUED_DESTINATION);
+      else vehicles.waiting[id] = vehicles.waiting[id]! + dtS;
+    }
+  }
+
+  function enterLane(id: number, lane: number, position: number, timeS: number) {
+    intersections.release(id);
+    vehicles.remove(id);
+    if (fallback[id]) {
+      const result = routeFrom(id, lane, 0);
+      if (!result.ok) {
+        vehicles.lane[id] = lane;
+        vehicles.position[id] = 0;
+        vehicles.speed[id] = 0;
+        vehicles.route[id] = null;
+        accounting.fail(id, 'stranded');
+        return;
+      }
+      vehicles.route[id] = result.route;
+      vehicles.routeStep[id] = 0;
+    } else {
+      vehicles.routeStep[id] = vehicles.routeStep[id]! + 1;
+    }
+    planLane(id, lane, 0);
+    const destination = compiled.connectors[arrival[id]!];
+    vehicles.insert(
+      id,
+      lane,
+      Math.min(position, compiled.lanes[lane]!.lengthM, destination?.positionM ?? Infinity),
+    );
+    vehicles.stopped[id] = 0;
+    vehicles.junctionWaiting[id] = 0;
+    if (destination && position >= destination.positionM) reachDestination(id, destination, timeS);
+  }
+
+  function commit(timeS: number) {
+    for (let i = 0; i < orderCount; i++) {
+      const id = order[i]!;
+      const destination = compiled.connectors[arrival[id]!];
+      if (vehicles.state[id] === QUEUED_DESTINATION) {
+        reachDestination(id, destination!, timeS);
+        continue;
+      }
+      const field = vehicles.lane[id]!;
+      const previousPosition = vehicles.position[id]!;
+      const previousSpeed = vehicles.speed[id]!;
+      let speed = Math.max(0, previousSpeed + acceleration[id]! * dtS);
+      let position = Math.min(previousPosition + speed * dtS, limit[id]!);
+      if (field < 0) {
+        const path = compiled.movements[-field - 1]!;
+        vehicles.speed[id] = (position - previousPosition) / dtS;
+        if (position >= path.lengthM) enterLane(id, path.toLane, position - path.lengthM, timeS);
+        else vehicles.position[id] = position;
+        continue;
+      }
+      const lane = compiled.lanes[field]!;
+      const remaining = lane.lengthM - previousPosition;
+      const granted = intersections.grants[id]!;
+      const movement = vehicles.movement[id]!;
+      // TASK-004: apply accepted lane changes before longitudinal movement.
+      if (movement !== -1 && granted === -1) {
+        position = Math.min(position, Math.max(previousPosition, lane.lengthM - idm.minGapM));
+        if (remaining <= params.intersection.decisionDistanceM) {
+          vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;
+        }
+        // IDM approaches a standstill asymptotically. Settle before counting a full stop step.
+        if (remaining <= idm.minGapM + 0.1 && speed <= 0.1) position = previousPosition;
+      }
+      speed = (position - previousPosition) / dtS;
+      vehicles.position[id] = position;
+      vehicles.speed[id] = speed;
+      vehicles.stopped[id] =
+        previousSpeed === 0 && speed === 0 && remaining <= idm.minGapM + 0.1 ? 1 : 0;
+      if (speed === 0) vehicles.waiting[id] = vehicles.waiting[id]! + dtS;
+
+      if (
+        destination &&
+        (position >= destination.positionM ||
+          (speed <= 0.1 &&
+            position >= destination.positionM - 0.01 &&
+            limit[id]! >= destination.positionM))
+      ) {
+        reachDestination(id, destination, timeS);
+      } else if (position >= lane.lengthM) {
+        if (granted !== -1) {
+          if (fallback[id]) {
+            vehicles.missedTurn[id] = 1;
+            (vehicles.attemptedFallbacks[id] ??= new Set()).add(granted);
+          }
+          vehicles.remove(id);
+          vehicles.insert(
+            id,
+            -granted - 1,
+            Math.min(position - lane.lengthM, compiled.movements[granted]!.lengthM),
+          );
+        } else if (movement === -1) {
+          vehicles.remove(id);
+          vehicles.position[id] = lane.lengthM;
+          vehicles.speed[id] = 0;
+          accounting.fail(id, 'stranded');
+        }
+      }
+    }
+  }
+
+  function snapshot(): VehicleSnapshot {
+    const count = accounting.trips.driving + accounting.trips.queuedDestination;
+    const snapshot: VehicleSnapshot = {
+      timeS: time(),
+      count,
+      id: new Uint32Array(count),
+      x: new Float32Array(count),
+      y: new Float32Array(count),
+      heading: new Float32Array(count),
+      speed: new Float32Array(count),
+      lateralM: new Float32Array(count),
+      lane: new Int32Array(count),
+      state: new Uint8Array(count),
+    };
+    let i = 0;
+    for (let id = 0; id < vehicles.count; id++) {
+      const state = vehicles.state[id]!;
+      if (state !== DRIVING && state !== QUEUED_DESTINATION) continue;
+      const field = vehicles.lane[id]!;
+      const segment = field < 0 ? compiled.movements[-field - 1]! : compiled.lanes[field]!;
+      const position = vehicles.position[id]!;
+      const point = pointAtDistance(segment.polyline, segment.cumulative, position);
+      snapshot.id[i] = id + 1;
+      snapshot.x[i] = point.x;
+      snapshot.y[i] = point.y;
+      snapshot.heading[i] = headingAtDistance(segment.polyline, segment.cumulative, position);
+      snapshot.speed[i] = vehicles.speed[id]!;
+      snapshot.lane[i] = field;
+      snapshot.state[i] = state;
+      i++;
+    }
+    return snapshot;
+  }
+
+  function inspect(vehicleId: number): VehicleDetail | null {
+    const id = vehicleId - 1;
+    const trip: TripRequest | undefined = trips[id];
+    const state = vehicles.state[id];
+    if (!trip || state === undefined || state === PENDING) return null;
+    const route = vehicles.route[id];
+    return {
+      id: vehicleId,
+      tripId: trip.id,
+      personId: trip.personId,
+      originPlace: trip.originPlaceId,
+      destinationPlace: trip.destinationPlaceId,
+      state: detailStates[state]!,
+      lane: vehicles.lane[id]!,
+      positionM: vehicles.position[id]!,
+      speedMps: vehicles.speed[id]!,
+      route: route
+        ? {
+            ...route,
+            roads: route.roads.slice(),
+            movements: route.movements.slice(),
+            targetLanes: route.targetLanes.map((lanes) => lanes.slice()),
+          }
+        : null,
+      routeReason: vehicles.missedTurn[id] ? 'missed_turn' : 'initial',
+      waitingS:
+        state === QUEUED_ORIGIN
+          ? Math.max(0, time() - connectors.queuedSince(id))
+          : vehicles.waiting[id]!,
+      departedS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.departed[id]!,
+      arrivedS: Number.isNaN(vehicles.arrived[id]) ? null : vehicles.arrived[id]!,
+      failReason: vehicles.failReason[id]!,
+    };
+  }
+
+  return {
+    time,
+    snapshot,
+    inspect,
+    metrics: () => accounting.metrics(time()),
+    stateHash: () => stateHash(time(), vehicles, accounting.trips),
+    step(n: number) {
+      for (let i = 0; i < n; i++) {
+        const timeS = time();
+        intersections.signals(timeS);
+        connectors.spawn(timeS, hasSpawnGap, releaseTrip);
+        propose(timeS);
+        resolve();
+        tick++;
+        commit(time());
+      }
+    },
+  };
+}
+
+export function createEngine() {
+  let run: ReturnType<typeof createRun> | undefined;
+  function loaded() {
+    if (!run) throw new Error('Load a scenario before using the traffic engine');
+    return run;
+  }
+  return {
+    load(input: LoadInput) {
+      run = createRun(input);
+    },
+    get timeS() {
+      return loaded().time();
+    },
+    step(n = 1) {
+      loaded().step(n);
+    },
+    snapshot: () => loaded().snapshot(),
+    metrics: () => loaded().metrics(),
+    inspect: (id) => loaded().inspect(id),
+    stateHash: () => loaded().stateHash(),
+  } satisfies TrafficEngine;
+}
