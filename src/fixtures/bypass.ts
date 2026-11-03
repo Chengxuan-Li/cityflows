@@ -8,13 +8,20 @@ export function bypass(seed = 1) {
   const expressEnd = node(1100, -40);
   const origin = road(node(-100, 0), start);
   const destination = road(end, node(1300, 0));
-  road(start, end);
+  road(start, end, { speedKmh: 40 });
   road(start, expressStart, { roadClass: 'ramp', speedKmh: 70 });
+  // The expressway's first and last segments continue the ramps' headings so the joins compile
+  // as through movements; the deep middle makes it about 2 km, longer but faster.
   road(expressStart, expressEnd, {
     roadClass: 'motorway',
     speedKmh: 100,
     lanes: 2,
-    via: [{ x: 600, y: -40 - Math.sqrt(1000 ** 2 - 500 ** 2) }],
+    via: [
+      { x: 300, y: -120 },
+      { x: 500, y: -800 },
+      { x: 700, y: -800 },
+      { x: 900, y: -120 },
+    ],
   });
   road(expressEnd, end, { roadClass: 'ramp', speedKmh: 70 });
   place('Homes', 'residential', { x: -80, y: 15 }, [{ road: origin, direction: 'out' }]);

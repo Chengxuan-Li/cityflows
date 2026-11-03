@@ -6,14 +6,16 @@ export interface Random {
   derive(key: string | number): Random;
 }
 
+/** mulberry32: small, fast, and good enough for a game; seeded and fully deterministic. */
 export function createRandom(seed: number): Random {
   const root = seed >>> 0;
   let state = root;
-  // A full-period 32-bit LCG with an output mix to decorrelate neighboring states.
   const next = () => {
-    state = (Math.imul(1664525, state) + 1013904223) >>> 0;
-    const bits = Math.imul(state ^ (state >>> 16), 0x9e3779b1);
-    return ((bits ^ (bits >>> 16)) >>> 0) / 2 ** 32;
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
   return {
     next,

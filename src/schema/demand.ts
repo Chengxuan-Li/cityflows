@@ -1,4 +1,5 @@
 import type { PlaceId } from './city';
+import type { SimParams } from './sim';
 
 export interface Activity {
   kind: 'home' | 'work' | 'school' | 'shop' | 'leisure' | 'other';
@@ -47,16 +48,4 @@ export interface Scenario {
   endS: number;
   demand: DemandConfig;
   simParams: Partial<SimParams>;
-}
-
-export interface SimParams {
-  dtS: number;
-  vehicleLengthM: number;
-  idm: { aMps2: number; bMps2: number; headwayS: number; minGapM: number; desiredSpeedSd: number };
-  mobil: { politeness: number; thresholdMps2: number; safeDecelMps2: number };
-  laneChangeDistanceM: number;
-  laneChangeDurationS: number;
-  mandatoryUrgencyM: number; // extra margin before a required change becomes forced
-  intersection: { decisionDistanceM: number; gapS: number; creepSpeedMps: number };
-  spawnMinGapM: number;
 }

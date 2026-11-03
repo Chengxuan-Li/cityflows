@@ -115,16 +115,16 @@ export function compile(city: City): CompileResult {
   });
   const roadIndex = indices(roads);
   const lanes: CLane[] = [];
+  // A ramp ranks one below the road it joins: the roads leaving its end node, or, when it only
+  // leads into another ramp, the roads entering its start node. Other ramps do not count.
+  const joinedRank = (neighbors: CRoad[]) =>
+    Math.max(0, ...neighbors.map((next) => (next.roadClass === 'ramp' ? 0 : next.classRank)));
   for (const road of roads) {
     if (road.roadClass === 'ramp') {
-      const rank = (neighbors: CRoad[]) =>
-        Math.max(
-          0,
-          ...neighbors.map((next) =>
-            classRank[next.roadClass] === 1 ? 0 : classRank[next.roadClass],
-          ),
-        );
-      road.classRank = Math.max(1, (rank(outgoing[road.to]!) || rank(incoming[road.from]!)) - 1);
+      road.classRank = Math.max(
+        1,
+        (joinedRank(outgoing[road.to]!) || joinedRank(incoming[road.from]!)) - 1,
+      );
     }
     layoutRoad(
       sourceRoads[road.idx]!,

@@ -283,19 +283,28 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
 For every node, incoming roads are those with `road.to === node`, outgoing those with
 `road.from === node`. For each (incoming `i`, outgoing `o`) pair:
 
-1. Skip the pair if `o.streetGroupId !== null && o.streetGroupId === i.streetGroupId` unless a
-   turn rule explicitly allows it (U-turns off by default).
-2. Classify the turn from the signed heading change `d` between the end of `i` and the start
+1. Classify the turn from the signed heading change `d` between the end of `i` and the start
    of `o`, normalized to (-pi, pi]: `|d| < 30 degrees` through; `30 to 150 degrees` right if
-   `d > 0`, left if `d < 0` (y-south frame); `> 150 degrees` uturn. When the node has exactly
-   one outgoing road and two or more incoming roads with small angles, the movements are
-   `merge`; one incoming and several small-angle outgoing roads give `diverge`.
-3. Default lane assignment, before rules: every lane of `i` may go through to the lane with
-   the same index on `o` (clamped to the last lane; when `o` has more lanes, the outermost
-   lane of `i` also feeds the extra lanes). The leftmost lane of `i` may turn left into the
-   leftmost lane of `o`; the rightmost lane may turn right into the rightmost lane of `o`. A
-   single-lane road may do everything. Under left-hand traffic the roles of leftmost and
-   rightmost swap for turns. Merge and diverge assign lanes by index from the outer side.
+   `d > 0`, left if `d < 0` (y-south frame); `> 150 degrees` uturn. The two directions of one
+   `streetGroupId` always classify as uturn. When the node has exactly one outgoing road and
+   two or more incoming roads with small angles, the small-angle movements are `merge`; one
+   incoming and several small-angle outgoing roads give `diverge`.
+2. Pairs classified uturn are excluded unless a turn rule allows them (U-turns and hairpins
+   off by default).
+3. Default lane assignment, before rules. Lane 0 is the leftmost lane under either driving
+   side, so left turns leave from lane 0 into lane 0 of `o` and right turns leave from the
+   last lane into the last lane of `o` under both driving sides. The driving side decides
+   only which lane is at the curb (the last lane under right-hand traffic, lane 0 under
+   left-hand traffic) and which at the median. Through: lanes pair by index counted from the
+   median side, clamped to the last lane of `o`; when `o` has more lanes, the curb-side lane
+   of `i` also feeds the extra curb-side lanes. Merge and diverge: lanes pair one-to-one by
+   index counted from the curb side, with no clamping and no fan-out, so a one-lane ramp
+   joins or leaves only the curb-side lane. U-turns, when allowed, leave from the median-side
+   lane into the median-side lane. A single-lane road may do everything. Fallback: a lane that
+   ends up with no movement while another lane of the same road has one inherits the
+   non-U-turn movements of the nearest such lane (lower index wins ties), with the to-lane
+   shifted by the index difference and clamped, unless a rule bans the pair; a two-lane road
+   at a T-junction with a single exit therefore gets a dual turn.
 4. Apply `node.turnRules`: the most specific matching rule wins (both lanes given, then one
    lane, then road pair). `allowed: false` removes movements; `allowed: true` adds the lane
    pair (or, at road level, restores the defaults for that pair).
@@ -318,7 +327,7 @@ movement between nearly collinear lanes (under 5 degrees) is a straight segment.
   simulation by the right-before-left rule (left-before-right under left-hand traffic), then by
   waiting time, then by vehicle id.
 - Default `minorRoads` when empty at a yield or stop node: incoming roads whose class rank is
-  below the maximum rank at the node.
+  below the maximum rank among the node's incoming roads.
 
 ### 5.4 Signals
 
@@ -337,11 +346,15 @@ Errors (compile fails, editor rejects the commit):
 `signal_missing`, `signal_phase_invalid`, `signal_conflict`, `place_invalid`.
 
 Warnings (compile succeeds, shown in the validation panel):
-`disconnected_component` (lanes not in the largest strongly connected component),
-`dead_end` (a lane with no outgoing movement and no `in` connector),
-`node_no_movements`, `road_too_short`, `signal_unserved_movement`,
-`place_no_connector`, `connector_unreachable` (an `in` connector not reachable from any `out`
-connector, or an `out` connector that reaches no `in` connector),
+`disconnected_component` (lanes outside the largest weakly connected component, where
+movements and adjacent lanes of one road count as links regardless of direction; directional
+reachability is covered by `dead_end` and `connector_unreachable`),
+`dead_end` (a lane with no outgoing movement whose road has no `in` connector on any lane),
+`node_no_movements` (a node joined by an incoming and an outgoing road that are not the two
+directions of one street, yet with no movement), `road_too_short`,
+`signal_unserved_movement`, `place_no_connector`, `connector_unreachable` (an `in` connector
+not reachable from any `out` connector, or an `out` connector that reaches no `in` connector,
+following movements and lane changes),
 `inferred_attributes` (count of imported defaults, from provenance).
 
 ## 6. Editing
@@ -605,7 +618,7 @@ interface DemandConfig {
 }
 
 interface Scenario { id: string; name: string; seed: number; startS: number; endS: number;
-  demand: DemandConfig; simParams: Partial<SimParams> }
+  demand: DemandConfig; simParams: Partial<SimParams> }   // SimParams type lives in src/schema/sim.ts; defaults in src/sim/params.ts
 
 function generatePopulation(city: City, config: DemandConfig): Person[];
 function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[];  // sorted by departS
@@ -782,8 +795,11 @@ Synthetic fixtures (all generated by code with a seed, in `src/fixtures`):
   one-way pair, one signalized intersection at the center, a residential place in one corner
   and a work place in the opposite corner, each with two connectors.
 - `signalApproach`: one four-way node, two lanes per approach, signal.
-- `bypass`: an origin and destination joined by a slow local street (50 km/h, 1.2 km) and a
-  longer expressway (100 km/h, 2.0 km) with a ramp at each end.
+- `bypass`: an origin and destination joined by a slow local street (40 km/h, 1.2 km) and a
+  longer expressway (100 km/h, about 2.0 km) with a ramp at each end. The expressway's first
+  and last segments continue the ramps' headings, so the joins compile as through movements
+  and the ramp ends as diverge and merge; with free-flow costs and the section 7 penalties the
+  expressway wins by about 20 s and loses once its speed limit drops below about 75 km/h.
 - `ramp`: a two-lane motorway with an on-ramp merge and an exit diverge.
 - `dividedHighway`: two carriageways 20 m apart crossed by a bridge road on `layer 1` with no
   shared node, and an at-grade crossing 300 m further with shared nodes.

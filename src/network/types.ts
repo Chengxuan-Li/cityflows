@@ -1,9 +1,6 @@
 import type Flatbush from 'flatbush';
 import type { Vec2 } from '../geo/vec2';
 import type {
-  City,
-  Command,
-  HistoryEntry,
   Control,
   DrivingSide,
   NodeId,
@@ -23,7 +20,7 @@ export type CompileResult =
 
 export interface Diagnostic {
   severity: 'error' | 'warning';
-  code: string; // see list below
+  code: string; // architecture section 5.5
   message: string; // human readable, names the entities
   refs: string[]; // entity ids
 }
@@ -81,12 +78,12 @@ export interface CLane {
   widthM: number;
   allowed: VehicleClass[];
   speedLimitMps: number;
-  left: number;
-  right: number; // adjacent lane idx or -1
-  out: number[];
-  in: number[]; // movement idx
-  connectors: number[];
-} // sorted by positionM
+  left: number; // adjacent lane idx or -1
+  right: number;
+  out: number[]; // movement idx
+  in: number[];
+  connectors: number[]; // connector idx, sorted by positionM
+}
 export type Turn = 'through' | 'left' | 'right' | 'uturn' | 'merge' | 'diverge';
 export interface CMovement {
   idx: number;
@@ -126,19 +123,4 @@ export interface CPlace {
   connectorsIn: number[];
   connectorsOut: number[];
   capacity: number | null;
-}
-
-export type CommitResult =
-  | { ok: true; city: City; compiled: CompiledCity; diagnostics: Diagnostic[] }
-  | { ok: false; diagnostics: Diagnostic[] };
-
-export interface Editor {
-  readonly city: City;
-  readonly compiled: CompiledCity;
-  apply(command: Command): CommitResult;
-  undo(): CommitResult | null;
-  redo(): CommitResult | null;
-  readonly canUndo: boolean;
-  readonly canRedo: boolean;
-  readonly history: readonly HistoryEntry[];
 }

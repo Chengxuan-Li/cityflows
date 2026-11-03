@@ -7,7 +7,7 @@ import {
   type Place,
   type Road,
 } from '../schema';
-import type { CompiledCity, Diagnostic } from './types';
+import type { CompiledCity, CRoad, Diagnostic } from './types';
 
 export function validateCity(
   city: City,
@@ -169,40 +169,23 @@ export function warnAboutProvenance(
   });
 }
 
-// Iterative Kosaraju traversal keeps large imported networks off the call stack.
-function largestComponent(out: number[][], incoming: number[][]): number[] {
-  const visited = new Uint8Array(out.length);
-  const finish: number[] = [];
-  for (let root = 0; root < out.length; root++) {
-    if (visited[root]) continue;
-    const stack = [root];
-    while (stack.length) {
-      const lane = stack.pop()!;
-      if (lane < 0) finish.push(~lane);
-      else if (!visited[lane]) {
-        visited[lane] = 1;
-        stack.push(~lane);
-        for (const next of out[lane]!) if (!visited[next]) stack.push(next);
-      }
-    }
-  }
-
-  visited.fill(0);
+// Weakly connected: direction ignored, so one-way-only networks are not flagged. Directional
+// reachability is reported by dead_end and connector_unreachable.
+function largestWeakComponent(links: number[][]): number[] {
+  const visited = new Uint8Array(links.length);
   let largest: number[] = [];
-  for (const root of finish.reverse()) {
+  for (let root = 0; root < links.length; root++) {
     if (visited[root]) continue;
     const members = [root];
     visited[root] = 1;
     for (const lane of members) {
-      for (const previous of incoming[lane]!) {
-        if (visited[previous]) continue;
-        visited[previous] = 1;
-        members.push(previous);
+      for (const next of links[lane]!) {
+        if (visited[next]) continue;
+        visited[next] = 1;
+        members.push(next);
       }
     }
-    if (members.length > largest.length) {
-      largest = members;
-    }
+    if (members.length > largest.length) largest = members;
   }
   return largest;
 }
@@ -229,19 +212,30 @@ export function warnAboutConnectivity(city: CompiledCity, diagnostics: Diagnosti
   };
   const out = lanes.map((): number[] => []);
   const incoming = lanes.map((): number[] => []);
+  const links = lanes.map((): number[] => []);
   for (const { fromLane, toLane, neverGreen } of movements) {
+    links[fromLane]!.push(toLane);
+    links[toLane]!.push(fromLane);
     if (neverGreen) continue;
     out[fromLane]!.push(toLane);
     incoming[toLane]!.push(fromLane);
   }
+  // Lane changes join adjacent lanes for connectivity and reachability.
+  for (const lane of lanes) {
+    if (lane.right < 0) continue;
+    for (const list of [links, out, incoming]) {
+      list[lane.idx]!.push(lane.right);
+      list[lane.right]!.push(lane.idx);
+    }
+  }
 
-  const largest = new Set(largestComponent(out, incoming));
+  const largest = new Set(largestWeakComponent(links));
   const disconnected = lanes.filter((lane) => !largest.has(lane.idx)).map((lane) => lane.id);
   if (disconnected.length) {
     warn(
       'disconnected_component',
       disconnected,
-      `${disconnected.length} lanes are outside the largest strongly connected component`,
+      `${disconnected.length} lanes are not connected to the main network`,
     );
   }
 
@@ -252,14 +246,32 @@ export function warnAboutConnectivity(city: CompiledCity, diagnostics: Diagnosti
     if (direction !== 'out') lastArrival[lane] = Math.max(lastArrival[lane]!, positionM);
   }
 
+  const roadHasArrival = new Uint8Array(city.roads.length);
   for (const lane of lanes) {
-    if (lane.out.length === 0 && lastArrival[lane.idx] === -Infinity) {
+    if (lastArrival[lane.idx] !== -Infinity) roadHasArrival[lane.road] = 1;
+  }
+  for (const lane of lanes) {
+    if (lane.out.length === 0 && !roadHasArrival[lane.road]) {
       warn('dead_end', [lane.id], `Lane ${lane.id} has no outgoing movement or arrival connector`);
     }
   }
+
+  // A node joined only by the two directions of one street (a cul-de-sac) has no movements by
+  // design; any other node with both an entry and an exit should have some.
+  const entries = city.nodes.map((): CRoad[] => []);
+  const exits = city.nodes.map((): CRoad[] => []);
+  for (const road of city.roads) {
+    exits[road.from]!.push(road);
+    entries[road.to]!.push(road);
+  }
   for (const node of city.nodes) {
-    if (node.movements.length === 0)
-      warn('node_no_movements', [node.id], `Node ${node.id} has no movements`);
+    if (node.movements.length > 0) continue;
+    const crossing = entries[node.idx]!.some((entry) =>
+      exits[node.idx]!.some(
+        (exit) => entry.streetGroupId === null || entry.streetGroupId !== exit.streetGroupId,
+      ),
+    );
+    if (crossing) warn('node_no_movements', [node.id], `Node ${node.id} has no movements`);
   }
 
   const fromDeparture = reachedBeyondStart(out, firstDeparture);

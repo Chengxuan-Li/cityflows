@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
+import { ramp } from '../../src/fixtures/ramp';
 import { signalApproach } from '../../src/fixtures/signal-approach';
-import { compile, type CompiledCity } from '../../src/network';
+import { compile, type CompiledCity, type CRoad } from '../../src/network';
 import type { City, Road, TurnRule } from '../../src/schema';
 
 function junction() {
@@ -41,14 +42,20 @@ function pairs(city: City, from: Road, to: Road) {
     .map((m) => m.id);
 }
 
-it('assigns through lanes and mirrors turn lanes for left-hand traffic', () => {
-  const { city, incoming } = junction();
-  expect(turns(city, incoming, 0)).toEqual(['left', 'through']);
+it('keeps turn lanes on the same side under both driving sides and moves only the U-turn lane', () => {
+  const { city, node, incoming, reverse } = junction();
+  node.turnRules.push({
+    from: incoming.id,
+    to: reverse.id,
+    allowed: true,
+    provenance: node.provenance,
+  });
+  expect(turns(city, incoming, 0)).toEqual(['left', 'through', 'uturn']);
   expect(turns(city, incoming, 1)).toEqual(['right', 'through']);
   city.drivingSide = 'left';
   for (const road of Object.values(city.roads)) road.lateralOffsetM *= -1;
-  expect(turns(city, incoming, 0)).toEqual(['right', 'through']);
-  expect(turns(city, incoming, 1)).toEqual(['left', 'through']);
+  expect(turns(city, incoming, 0)).toEqual(['left', 'through']);
+  expect(turns(city, incoming, 1)).toEqual(['right', 'through', 'uturn']);
 });
 
 it('applies rules in order of specificity and requires explicit permission for U-turns', () => {
@@ -75,4 +82,45 @@ it('requires a shared vehicle class across the lane pair', () => {
   expect(pairs(city, incoming, left)).toEqual([]);
   left.lanes[0]!.allowed.push('truck');
   expect(pairs(city, incoming, left)).toHaveLength(1);
+});
+
+it('pairs merge and diverge lanes from the curb side without fan-out', () => {
+  const net = compiled(ramp());
+  const out = (road: CRoad) =>
+    road.lanes.flatMap((l) => net.lanes[l]!.out).map((i) => net.movements[i]!);
+  const describe = (m: (typeof net.movements)[number]) =>
+    `${net.lanes[m.fromLane]!.lane}>${net.roads[net.lanes[m.toLane]!.road]!.roadClass}#${net.lanes[m.toLane]!.lane}:${m.turn}`;
+  const [on, off] = net.roads
+    .filter((r) => r.roadClass === 'ramp')
+    .sort((a, b) => out(b).length - out(a).length);
+  expect(out(on!).map(describe)).toEqual(['0>motorway#1:merge']);
+  const offIn = off!.lanes.flatMap((l) => net.lanes[l]!.in).map((i) => net.movements[i]!);
+  expect(offIn.map(describe)).toEqual(['1>ramp#0:diverge']);
+  const mainline = net.roads.find(
+    (r) => r.roadClass === 'motorway' && out(r).some((m) => m.turn === 'diverge'),
+  )!;
+  expect(out(mainline).map(describe).sort()).toEqual([
+    '0>motorway#0:diverge',
+    '1>motorway#1:diverge',
+    '1>ramp#0:diverge',
+  ]);
+});
+
+it('gives a lane with no default movement the turns of its nearest served lane', () => {
+  const { city, incoming, through, left } = junction();
+  city.places = {};
+  for (const road of Object.values(city.roads)) {
+    if (road.streetGroupId === through.streetGroupId || road.streetGroupId === left.streetGroupId)
+      delete city.roads[road.id];
+  }
+  // From the west the only exit is now the south arm, a right turn: both lanes may take it.
+  expect(turns(city, incoming, 0)).toEqual(['right']);
+  expect(turns(city, incoming, 1)).toEqual(['right']);
+  const net = compiled(city);
+  const toLanes = [0, 1].map((lane) =>
+    net.lanes[net.index.lane.get(`${incoming.id}#${lane}`)!]!.out.map(
+      (i) => net.lanes[net.movements[i]!.toLane]!.lane,
+    ),
+  );
+  expect(toLanes).toEqual([[0], [1]]);
 });
