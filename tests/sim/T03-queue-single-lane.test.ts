@@ -7,6 +7,7 @@ import { scenario, setup, trips } from './fixtures';
 
 test('T03 a single-lane queue grows on red and drains on green with safe gaps', () => {
   const city = signalApproach();
+  for (const road of Object.values(city.roads)) road.lanes[1]!.allowed = ['truck'];
   for (const place of Object.values(city.places)) {
     place.connectors = place.connectors.filter((connector) => connector.lane === 0);
   }
