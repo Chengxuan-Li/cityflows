@@ -1,0 +1,112 @@
+import type { Metrics, VehicleDetail, VehicleSnapshot } from '../sim/types';
+import type { HostEvent, HostReply, HostRequest, HostWireRequest } from './protocol';
+
+type LoadInput = Omit<Extract<HostRequest, { type: 'load' }>, 'id' | 'type'>;
+type WithoutId<T> = T extends HostWireRequest ? Omit<T, 'id'> : never;
+
+export interface EngineClient {
+  load(input: LoadInput): Promise<void>;
+  play(): Promise<void>;
+  pause(): Promise<void>;
+  setSpeed(multiplier: number): Promise<void>;
+  step(steps: number): Promise<void>;
+  restart(): Promise<void>;
+  snapshot(): Promise<VehicleSnapshot>;
+  metrics(): Promise<Metrics>;
+  inspect(id: number): Promise<VehicleDetail | null>;
+  hash(): Promise<number>;
+  onEvent(listener: (event: HostEvent) => void): () => void;
+  terminate(): void;
+}
+
+export function createEngineClient(worker: Worker): EngineClient {
+  const pending = new Map<number, (reply: HostReply) => void>();
+  const listeners = new Set<(event: HostEvent) => void>();
+  let nextId = 1;
+  let snapshotInFlight: Promise<VehicleSnapshot> | undefined;
+  let closed: string | undefined;
+
+  function emit(event: HostEvent) {
+    for (const listener of listeners) listener(event);
+  }
+
+  function onMessage({ data }: MessageEvent<HostReply | HostEvent>) {
+    if (!('id' in data)) {
+      emit(data);
+      return;
+    }
+    const match = pending.get(data.id);
+    pending.delete(data.id);
+    match?.(data);
+  }
+
+  function close(reason: string) {
+    if (closed) return;
+    closed = reason;
+    worker.removeEventListener('message', onMessage);
+    worker.removeEventListener('error', onError);
+    worker.terminate();
+    for (const [id, match] of pending) match({ id, ok: false, error: reason });
+    pending.clear();
+    listeners.clear();
+  }
+
+  function onError(event: ErrorEvent) {
+    const message = event.message || 'Traffic worker failed';
+    try {
+      emit({ type: 'error', message });
+    } finally {
+      close(message);
+    }
+  }
+
+  worker.addEventListener('message', onMessage);
+  worker.addEventListener('error', onError);
+
+  function send<T>(request: WithoutId<HostWireRequest>): Promise<T> {
+    if (closed) return Promise.reject(new Error(closed));
+    const id = nextId++;
+    return new Promise((resolve, reject) => {
+      pending.set(id, (reply) => {
+        if (reply.ok) resolve(reply.result as T);
+        else reject(new Error(reply.error));
+      });
+      try {
+        worker.postMessage({ id, ...request } satisfies HostWireRequest);
+      } catch (error) {
+        pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  return {
+    load({ compiled, trips, scenario }) {
+      const { data, byteOffset } = compiled.laneSpatial;
+      return send({
+        type: 'load',
+        compiled: { ...compiled, laneSpatial: { data, byteOffset } },
+        trips,
+        scenario,
+      });
+    },
+    play: () => send({ type: 'play' }),
+    pause: () => send({ type: 'pause' }),
+    setSpeed: (multiplier) => send({ type: 'setSpeed', multiplier }),
+    step: (steps) => send({ type: 'step', steps }),
+    restart: () => send({ type: 'restart' }),
+    snapshot() {
+      return (snapshotInFlight ??= send<VehicleSnapshot>({ type: 'snapshot' }).finally(() => {
+        snapshotInFlight = undefined;
+      }));
+    },
+    metrics: () => send({ type: 'metrics' }),
+    inspect: (vehicleId) => send({ type: 'inspect', vehicleId }),
+    hash: () => send({ type: 'hash' }),
+    onEvent(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    terminate: () => close('Traffic worker terminated'),
+  };
+}
