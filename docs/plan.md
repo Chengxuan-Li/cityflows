@@ -77,8 +77,10 @@ dependency of its tasks is merged to `main`.
 
 - Wave 0: TASK-000, TASK-001. Nothing else starts before TASK-001 merges; it defines the
   types everything consumes.
-- Wave 1: TASK-002, TASK-003, TASK-006, TASK-007, TASK-008, TASK-011, TASK-020.
-- Wave 2: TASK-004 (after 003), TASK-005 (after 003), TASK-009 (after 005, 006, 008, 011).
+- Wave 1: TASK-002, TASK-006, TASK-007, TASK-008, TASK-011, TASK-020.
+- Wave 2: TASK-003 (after 002), then TASK-004 and TASK-005 (after 003); TASK-009 (after
+  005, 006, 008, 011). The 002, 003, 004 chain is sequential because each builds on the
+  previous one's code in `src/sim` and `src/routing`.
 - Wave 3: TASK-010 (after 007, 009), TASK-021 (after 020, 009), TASK-024 (after 006, 020),
   TASK-025 (after 008, 020).
 - Wave 4: TASK-012 (lead, after 004 and 010), TASK-022 (after 010).
@@ -89,6 +91,10 @@ dependency of its tasks is merged to `main`.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
+
+Execution model: the owner starts one Codex agent per task in its own git worktree cut from
+`main`; the lead reviews each branch on request and merges locally until a GitHub remote
+exists.
 
 ## Lead responsibilities
 
