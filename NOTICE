@@ -1,0 +1,22 @@
+CityFlows
+Copyright (C) 2026 Cheng Xuan Li
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See LICENSE.
+
+Third-party code and data
+-------------------------
+Every snippet adapted from another project is listed here with its origin,
+license and the file it landed in. Add an entry in the same change that copies
+the code. Study-only references (no code copied) are listed in
+docs/references/upstream-audit.md, not here.
+
+(none yet)
+
+Map data
+--------
+Imported road data is © OpenStreetMap contributors, licensed under the Open
+Database License (ODbL) 1.0. https://www.openstreetmap.org/copyright
+Projects that embed OSM-derived data carry this attribution in their manifest.
