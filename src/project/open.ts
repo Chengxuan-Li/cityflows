@@ -5,7 +5,6 @@ import { manifestSchema, type ProjectFile } from './manifest';
 import {
   historySchema,
   populationSchema,
-  projectKeys,
   scenariosSchema,
   viewSchema,
   type OpenResult,
@@ -13,7 +12,6 @@ import {
 import { readZip } from './zip';
 
 const jsonDocumentSchema = z.record(z.string(), z.unknown());
-const memberNames = new Set(['manifest.json', ...projectKeys.map((key) => `${key}.json`)]);
 
 function readJsonDocument(text: string): Record<string, Uint8Array> {
   const document = jsonDocumentSchema.parse(JSON.parse(text));
@@ -42,13 +40,8 @@ export async function openProject(input: Uint8Array | string): Promise<OpenResul
     const manifestBytes = files[file];
     if (!manifestBytes) throw new Error('Missing file');
     const manifest = manifestSchema.parse(JSON.parse(decoder.decode(manifestBytes)));
-    for (const name of Object.keys(files)) {
-      if (!memberNames.has(name)) {
-        file = name;
-        throw new Error('Unexpected project file');
-      }
-    }
 
+    // Members outside the layout (archive metadata, future files) are ignored, not rejected.
     async function read<T>(name: ProjectFile, parse: (value: unknown) => T): Promise<T> {
       file = name;
       const bytes = files[name];
@@ -59,10 +52,7 @@ export async function openProject(input: Uint8Array | string): Promise<OpenResul
       return parse(JSON.parse(decoder.decode(bytes)));
     }
 
-    const city = await read('city.json', (value) => {
-      z.object({ schemaVersion: z.literal(manifest.schemaVersion) }).parse(value);
-      return migrateCity(value);
-    });
+    const city = await read('city.json', migrateCity);
     const scenarios = await read('scenarios.json', (value) => scenariosSchema.parse(value));
     const project = { city, scenarios };
     const population =
@@ -71,7 +61,7 @@ export async function openProject(input: Uint8Array | string): Promise<OpenResul
         : undefined;
     const history =
       files['history.json'] || manifest.files['history.json']
-        ? await read('history.json', (value) => historySchema.parse(value))
+        ? await read('history.json', (value) => historySchema.parse(value).entries)
         : undefined;
     const view =
       files['view.json'] || manifest.files['view.json']

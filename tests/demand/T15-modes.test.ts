@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
-import { generatePopulation, scheduleTrips, tripRequestSchema } from '../../src/demand';
+import { generatePopulation, scheduleTrips } from '../../src/demand';
+import { tripRequestSchema } from '../../src/schema';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 

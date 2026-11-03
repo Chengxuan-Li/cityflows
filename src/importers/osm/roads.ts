@@ -80,7 +80,7 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
         laneCount = direction === 'forward' ? Math.ceil(total / 2) : Math.floor(total / 2);
       }
     }
-    const inferred = ['widthM', 'allowed'];
+    const inferred: string[] = [];
     if (laneCount === undefined || (direct === undefined && splitTotal && opposite === undefined)) {
       inferred.push('lanes');
     }

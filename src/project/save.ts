@@ -9,7 +9,8 @@ async function serializeProject(project: Project, metadata: SaveMetadata) {
   const files = projectKeys.flatMap((key) => {
     const value = project[key];
     if (value === undefined) return [];
-    const json = JSON.stringify(value);
+    // history.json carries its own version so it can be dropped or migrated apart from the city.
+    const json = JSON.stringify(key === 'history' ? { historyVersion: 1, entries: value } : value);
     return [{ key, json, bytes: encoder.encode(json) }];
   });
 

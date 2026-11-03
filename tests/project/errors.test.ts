@@ -67,7 +67,7 @@ it('opens without history and population files', async () => {
   expect(await openProject(saved)).toEqual({ ok: true, project });
 });
 
-it('reports the city version path when it disagrees with the manifest', async () => {
+it('reports an unsupported city schema version from the migration entry point', async () => {
   const entries = unzipSync(await saveProject(demoProject()));
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -84,6 +84,6 @@ it('reports the city version path when it disagrees with the manifest', async ()
   expect(await openProject(zipSync(entries))).toEqual({
     ok: false,
     file: 'city.json',
-    error: expect.stringContaining('$.schemaVersion'),
+    error: expect.stringMatching(/schema version/i),
   });
 });

@@ -420,6 +420,12 @@ Semantics:
   connectors are clamped to the outermost remaining lane with a warning.
 - The run loaded in the engine is tied to a `city.version`. The UI marks it stale when the
   editor's version moves ahead and offers restart; it never patches a running engine (T17).
+- Command handlers add their own warnings to the commit's diagnostics:
+  `junction_references_removed` (turn rules, minor-road entries or signal groups that named a
+  deleted or reversed road), `connector_lane_clamped`, `connector_removed`.
+- `reverseRoad` on one road of a street group dissolves the group (the two roads now run the
+  same way). `createEditor` requires a city that compiles without errors; importers and
+  fixtures guarantee that.
 
 ## 7. Routing
 
@@ -461,23 +467,31 @@ Algorithm:
    joined by at least one movement that is not `neverGreen` and allowed for the vehicle class.
    Edge cost = `roadTravelTimeS[b]` + turn penalty of the cheapest such movement. Turn
    penalties: through 2 s, right 4 s, left 8 s, uturn 15 s, merge 3 s, diverge 2 s; plus 10 s
-   at a signalized node, 4 s at a stop node and 2 s at a yield node for minor roads. Each cost
+   for every approach at a signalized node, and 4 s at a stop node or 2 s at a yield node for
+   minor approaches only (recognized by a compiled priority below 10). Each cost
    is multiplied by `1 + noise * u` with `u` drawn in [-1, 1] from a generator seeded by
    `req.seed` and the road idx, so vehicles spread over near-equal alternatives. Dijkstra with
    a binary heap; the origin cost counts only the remaining length of the origin road.
-2. Lane resolution, backward: `feasible[last]` = lanes on the last road from which the
-   connector lane is reachable with `|lane - c.lane| * laneChangeDistanceM <= c.positionM`.
-   `enterable[i]` = lanes on road `i` from which some lane in `feasible[i]` is reachable with
-   `|lane - f| * laneChangeDistanceM <= roads[i].lengthM - 10`. `feasible[i-1]` = lanes on
-   road `i-1` that have a movement into `enterable[i]`. If any set is empty the road-level
-   route is lane-infeasible.
-3. Origin check: the vehicle's lane must reach `feasible[0]` within
-   `lengthM - fromPosM` using the same rule.
+2. Lane resolution, backward. A lane change counts `laneChangeDistanceM` of travel; `k`
+   changes starting at position `s` are possible only if `s + k * laneChangeDistanceM` stays
+   within the budget below and within the length of every lane crossed. `feasible[last]` =
+   lanes on the last road from which the connector lane is reachable with budget
+   `c.positionM`; the last road has no separate enterable set, since the connector is the
+   cutoff. For `i < last`: `enterable[i]` = lanes on road `i` from which some lane in
+   `feasible[i]` is reachable with budget `roads[i].lengthM - 10`; `feasible[i-1]` = lanes on
+   road `i-1` that have a movement into `enterable[i]`, and the chosen movement per lane is
+   the one with the lowest penalty. If any set is empty the road-level route is
+   lane-infeasible.
+3. Origin check: the vehicle's lane must reach `feasible[0]` starting at `fromPosM` with
+   budget `lengthM` of its lane.
 4. Fallback when 2 or 3 fail: Dijkstra over lanes, edges = movements (same costs) plus lane
-   changes to adjacent lanes costing 3 s, allowed only when the lane is at least
-   `laneChangeDistanceM` long (on the origin lane: the remaining length). The result is
-   converted to a `Route` with singleton target lanes. If that fails too: `lane_infeasible`.
+   changes to adjacent lanes costing 3 s each; `k` successive changes on one lane need
+   `k * laneChangeDistanceM` of that lane (from the current position on the origin lane). The
+   result is converted to a `Route` with singleton target lanes. If that fails too:
+   `lane_infeasible`.
 5. `targetLanes[i]` is `feasible[i]`. The sim uses it for mandatory lane changes.
+   `desiredSpeedFactor` is carried in the request for congestion-aware costs (Gate 3) and
+   unused in Gate 1. A `toConnector` with direction `out` yields `destination_unreachable`.
 
 `laneChangeDistanceM` is a simulation parameter (default 30 m) shared with the sim through
 `SimParams`. Congestion-aware costs (Gate 3) replace `roadTravelTimeS` with EWMA observed
@@ -631,9 +645,14 @@ function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripR
   car access until the population is regenerated on purpose.
 - Gate 1 agendas: home, work (start from `workStart`, duration from `workDuration`), home.
   Gate 3 adds shop, school, leisure legs, gateway through traffic and place events.
-- `scheduleTrips` emits one `TripRequest` per agenda transition, mode `car` for persons with a
-  car. Persons without a car get mode `walk` in Gate 1, which the sim reports as unsupported
-  rather than spawning (T15).
+- `scheduleTrips` rebuilds each person's `agenda` in place from the persistent assignments
+  (persons without a workplace get a single home activity), then emits one `TripRequest` per
+  agenda transition, mode `car` for persons with a car. Persons without a car get mode `walk`
+  in Gate 1, which the sim reports as unsupported rather than spawning (T15). Population
+  draws use `DemandConfig.seed`; scheduling draws use `Scenario.seed`; both derive a
+  sub-stream per person id, so adding a place does not reshuffle existing persons.
+- Trips are not clipped to the scenario window. The sim releases a trip whose `departS` is
+  before `startS` at `startS`; a trip after `endS` stays pending in the counts.
 - Trip ends map to connectors in the sim: origin uses an `out` or `both` connector of the
   origin place, destination an `in` or `both` connector of the destination place. When a place
   has several, the sim picks per trip by seeded choice weighted by `throughputPerMin`.
@@ -681,6 +700,12 @@ type HostEvent =
 - Picking: `laneSpatial` for roads and lanes, nearest snapshot vehicle within a pixel radius,
   place polygons by point-in-polygon.
 - Static geometry is rebuilt only when `compiled.version` changes.
+- `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes and
+  node layers are not in the compiled model; grade-separated roads are drawn in layer order.
+  `Scene.setRouteOverlay({ lanes, movements } | null)` takes compiled indices; the UI maps a
+  `Route` to it (the lanes of `targetLanes` and the route's movements).
+- The renderer owns a structural copy of the `VehicleSnapshot` layout in `src/render/types.ts`
+  so it does not depend on `src/sim`; the sim's type must stay assignable to it.
 
 `src/ui` is the React app with one Zustand store. Layout follows the brief:
 
@@ -714,7 +739,11 @@ history.json      { historyVersion: 1, entries: HistoryEntry[] }   optional, dro
 view.json         { camera, layers, selection }                    optional
 ```
 
-- Single JSON: `{ manifest, city, population?, scenarios, history?, view? }`.
+- Single JSON: `{ manifest, city, population?, scenarios, history?, view? }`. Each member's
+  hash is computed over its compact JSON serialization, which is embedded verbatim, so the
+  same manifest verifies both forms. `manifest.schemaVersion` is the city's schema version at
+  save time; `openProject` passes `city.json` to `migrateCity` and ignores archive members
+  outside the layout.
 - `openProject(bytes)` verifies hashes, validates every file with Zod, runs
   `migrateCity(json)` keyed on `schemaVersion`, and returns a structured error naming the file
   and the first validation path on failure. Adding a schema version requires a fixture saved in
@@ -733,20 +762,32 @@ Lives in `src/importers/osm`, runs inside an import worker.
 2. Keep drivable highways: motorway, trunk, primary, secondary, tertiary, unclassified,
    residential, living_street, service (only when `service` is not `parking_aisle` or
    `driveway`), and their `_link` variants as `ramp`.
-3. Junction nodes: nodes shared by two or more kept ways, plus way ends. Split ways there.
+3. Junction nodes: nodes shared by two or more kept ways, way ends, nodes tagged
+   `traffic_signals`, `stop` or `give_way`, and `via` nodes of restriction relations. Split
+   ways there.
 4. Project with a `GeoReference` at the bbox center. One `Node` per junction node, `layer`
    from the tag. Connectivity comes from shared OSM node ids only.
-5. Roads: `oneway=yes` (or implied by motorway and roundabout) gives one road; otherwise two
-   roads with `streetGroupId = 'osm:way/<id>'` and mirrored centerlines. Lane counts from
-   `lanes`, `lanes:forward`, `lanes:backward`; otherwise class defaults (motorway and trunk 2
-   per direction, others 1) marked `inferred: ['lanes']`. Speed from `maxspeed` (km/h or mph)
-   otherwise class defaults marked `inferred`. Widths 3.5 m, 3.0 m for residential and service.
-6. Turn rules: `turn:lanes` becomes lane-level `TurnRule`s (listed directions allowed, the
-   others from that lane banned). Restriction relations (`no_*`, `only_*` with from, via node,
-   to) become road-level rules. Everything else stays default.
-7. Control: `highway=traffic_signals` on the node gives `signal` with a generated two-phase
-   program (through plus right for each pair of opposing approaches, left turns in their own
-   phase when the node has four or more approaches); `highway=stop` gives `stop`;
+5. Roads: `oneway=yes` (or `-1`, or implied by motorway and roundabout) gives one road;
+   otherwise two roads with mirrored centerlines sharing a `streetGroupId` per split section
+   (`osm:way/<id>` for the first section, `osm:way/<id>/<n>` after), since one group per way
+   would make the compiler treat continuing along the way as a U-turn. Lane counts from
+   `lanes:forward` and `lanes:backward`, else `lanes` (split ceil/floor between the two
+   directions and marked inferred), else class defaults (motorway and trunk 2 per direction,
+   others 1) marked `inferred: ['lanes']`. Speed from `maxspeed` (km/h or mph) otherwise class
+   defaults (motorway 100, trunk 80, primary 60, secondary 50, tertiary 40, residential 30,
+   service 20, ramp 40 km/h) marked `inferred`. Widths 3.5 m, 3.0 m for residential and
+   service. Only guessed attributes appear in `inferred`.
+6. Turn rules: `turn:lanes` (or `turn:lanes:forward` and `:backward` on two-way ways) becomes
+   lane-level `TurnRule`s: a marked lane is allowed into exactly one target lane per turn it
+   lists (aligned by index, curb-side for merges and diverges, outermost for right turns) and
+   banned from the others; unmarked lanes keep the compiler defaults. Restriction relations
+   (`no_*`, `only_*` with from, via node, to; `only_*_u_turn` becomes an allow) become
+   road-level rules; unsupported or non-incident relations produce `osm_unsupported_tag`.
+7. Control: `highway=traffic_signals` on the node gives `signal` with a generated program:
+   two 30 s phases for the two opposing approach axes with amber 3 s and all-red 1 s; a
+   road-pair group that conflicts with its phase, or a left turn at a node with four or more
+   approaches, gets an extra 15 s (left) or 30 s phase; a pair whose own lanes conflict is
+   left unserved with warning `osm_signal_group_conflict`. `highway=stop` gives `stop`;
    `highway=give_way` gives `yield`; else `uncontrolled`.
 8. Clip to the bbox: a road crossing the edge is cut there; the cut end becomes a node and a
    `gateway` place with an `out` connector (5 m into entering roads) or an `in` connector (5 m

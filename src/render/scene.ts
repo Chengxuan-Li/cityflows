@@ -131,7 +131,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       for (const movement of city.movements) {
         const { nodes, arrows } = grades.get(nodeGrades[movement.node]!)!;
         drawMovementSurface(nodes, city, movement);
-        drawMovementArrow(arrows, movement);
+        // A movement no phase ever serves is not a legal route for vehicles; routing skips it.
+        if (!movement.neverGreen) drawMovementArrow(arrows, movement);
       }
       drawPlaces(grades.get(0)!.places, city, shapes);
       for (const update of updateSignals) update(0);

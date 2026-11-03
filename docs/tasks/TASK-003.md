@@ -36,6 +36,19 @@ state hash. Lane changes are the next task; vehicles here stay in their lane.
 `src/geo/random.ts`. The engine takes a `RouteProvider` and `LinkCosts` at `load`; Gate 1
 uses `freeFlowLinkCosts`.
 
+Notes after wave 1:
+
+- `VehicleSnapshot` is defined by you in `src/sim/types.ts` exactly as section 8; the renderer
+  keeps a structural copy in `src/render/types.ts` and your type must stay assignable to it.
+- Trips are not clipped by the scheduler: release a trip whose `departS` is before
+  `scenario.startS` at `startS`; a trip after `endS` stays pending in the counts.
+- Use `createRouteProvider()` and `freeFlowLinkCosts(compiled)` from `src/routing`; a
+  `RouteResult` failure at spawn fails the trip with `no_route` (or `unsupported_mode` for
+  non-car trips at load).
+- Validate loaded trips with `tripRequestSchema` from `src/schema` only at the engine
+  boundary if the host passes untrusted data; the Gate 1 host passes typed data, so no
+  validation inside the engine.
+
 ## Acceptance tests
 
 - `tests/sim/T01-conservation.test.ts`: load 300 trips on `grid5x5`, step 2 hours; at every

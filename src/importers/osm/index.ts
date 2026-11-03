@@ -100,10 +100,10 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
       });
     const control =
       tags?.highway === 'stop' ? 'stop' : tags?.highway === 'give_way' ? 'yield' : 'uncontrolled';
+    // Only genuinely guessed attributes count as inferred; untagged layer and control are the
+    // OSM defaults, not guesses.
     const inferred: string[] = [];
-    if (!hasLayer) inferred.push('layer');
     if (control === 'stop' || control === 'yield') inferred.push('minorRoads');
-    if (control === 'uncontrolled' && tags?.highway !== 'traffic_signals') inferred.push('control');
     const id = allocateId(city, 'n');
     const node: Node = {
       id,

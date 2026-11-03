@@ -39,6 +39,17 @@ Consumes `EngineClient`, `Scene`, `Editor`, `openProject`, `saveProject`,
 sends it to the engine on load and restart. Expose `window.cityflows = { metrics(),
 hash(), inspect(id) }` in development and test builds for Playwright assertions.
 
+Notes after wave 1:
+
+- `Scene.setCity(compiled, city)` takes the canonical `City` as well (place shapes, node
+  layers). `Scene.setRouteOverlay({ lanes, movements })` takes compiled indices; map a `Route`
+  to it from `targetLanes` and `movements`. `Scene.ready` is a promise to await before use.
+- `openProject` returns `{ ok, project }` or `{ ok: false, file, error }`; `saveProject`
+  returns ZIP bytes, `saveProjectJson` a string. `Project.history` is the editor's
+  `history` array.
+- `generatePopulation(city, scenario.demand)` then `scheduleTrips(city, persons, scenario)`;
+  keep the persons in the project so restart reuses them.
+
 ## Acceptance
 
 - Start the app: it opens the bundled `grid5x5` project. Vehicles appear and move within a

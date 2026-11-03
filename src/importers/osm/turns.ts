@@ -63,11 +63,22 @@ export function addRestrictions(
       continue;
     }
     const node = nodes.get(String(via[0]!.ref));
-    if (!node) continue;
-    const incident = roads.get(node.id)!;
-    for (const from of incident.incoming.filter(({ wayId }) =>
-      fromWays.some(({ ref }) => ref === wayId),
-    )) {
+    const incident = node && roads.get(node.id)!;
+    const approaches = incident
+      ? incident.incoming.filter(({ wayId }) => fromWays.some(({ ref }) => ref === wayId))
+      : [];
+    if (!node || !incident || !approaches.length) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'osm_unsupported_tag',
+        refs: [`relation/${id}`],
+        message: node
+          ? `Restriction on OSM relation ${id} ignored: its from way does not enter the via node`
+          : `Restriction on OSM relation ${id} ignored: its via node is outside the imported roads`,
+      });
+      continue;
+    }
+    for (const from of approaches) {
       for (const to of incident.outgoing) {
         const listed =
           toWays.some(({ ref }) => ref === to.wayId) &&

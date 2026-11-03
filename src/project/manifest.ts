@@ -7,7 +7,7 @@ export type ProjectFile = `${ProjectKey}.json`;
 
 export const manifestSchema = z.object({
   format: z.literal('cityflows'),
-  schemaVersion: z.literal(1),
+  schemaVersion: z.int().positive(), // the city schema version at save time; migrateCity handles it
   appVersion: z.string(),
   projectId: z.string(),
   name: z.string(),
