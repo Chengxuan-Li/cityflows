@@ -6,7 +6,7 @@ import { searchLanes } from './lane-search';
 import { resolveLanes } from './lanes';
 import { shortestPath } from './search';
 
-export { freeFlowLinkCosts } from './costs';
+export { freeFlowLinkCosts, movementPenaltyS } from './costs';
 
 export interface RouteRequest {
   fromLane: number;

@@ -1,0 +1,73 @@
+import type { CompiledCity } from '../network';
+import type { FailReason, Metrics } from './types';
+import { COMPLETED, FAILED, tripStates, type TripState, type Vehicles } from './vehicle';
+
+export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
+  const trips = {
+    pending: vehicles.count,
+    queuedOrigin: 0,
+    driving: 0,
+    queuedDestination: 0,
+    completed: 0,
+    failed: 0,
+  };
+  const failedByReason: Record<FailReason, number> = {
+    no_route: 0,
+    unsupported_mode: 0,
+    destination_unreachable: 0,
+    stranded: 0,
+    no_origin_connector: 0,
+    no_destination_connector: 0,
+  };
+  let totalTravel = 0;
+  let totalDelay = 0;
+
+  function transition(id: number, state: TripState) {
+    trips[tripStates[vehicles.state[id] as TripState]]--;
+    trips[tripStates[state]]++;
+    vehicles.state[id] = state;
+  }
+
+  function metrics(timeS: number): Metrics {
+    const roadSpeedRatio = new Float32Array(compiled.roads.length).fill(1);
+    const speed = new Float64Array(compiled.roads.length);
+    const count = new Uint32Array(compiled.roads.length);
+    for (const lane of compiled.lanes) {
+      for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
+        speed[lane.road] = speed[lane.road]! + vehicles.speed[id]!;
+        count[lane.road] = count[lane.road]! + 1;
+      }
+    }
+    for (const road of compiled.roads) {
+      const n = count[road.idx]!;
+      if (n) roadSpeedRatio[road.idx] = speed[road.idx]! / (n * road.speedLimitMps);
+    }
+    return {
+      timeS,
+      trips: { ...trips },
+      failedByReason: { ...failedByReason },
+      meanTravelTimeS: trips.completed ? totalTravel / trips.completed : 0,
+      meanDelayS: trips.completed ? totalDelay / trips.completed : 0,
+      roadSpeedRatio,
+      stepsPerSecond: 0,
+    };
+  }
+
+  return {
+    trips,
+    transition,
+    metrics,
+    fail(id: number, reason: FailReason) {
+      transition(id, FAILED);
+      vehicles.failReason[id] = reason;
+      failedByReason[reason]++;
+    },
+    complete(id: number, timeS: number) {
+      transition(id, COMPLETED);
+      vehicles.arrived[id] = timeS;
+      const travel = timeS - vehicles.departed[id]!;
+      totalTravel += travel;
+      totalDelay += travel - vehicles.freeFlow[id]!;
+    },
+  };
+}
