@@ -10,8 +10,8 @@ Third-party code and data
 -------------------------
 Every snippet adapted from another project is listed here with its origin,
 license and the file it landed in. Add an entry in the same change that copies
-the code. Study-only references (no code copied) are listed in
-docs/references/upstream-audit.md, not here.
+the code.
+Study-only references (no code copied) are listed in docs/references/upstream-audit.md.
 
 (none yet)
 
