@@ -43,7 +43,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-000](tasks/TASK-000.md) | 0 | Upstream audit and reuse matrix | `docs/references/upstream-audit.md` | - | reuse decisions for sim and import | done |
 | [TASK-001](tasks/TASK-001.md) | 1 | Canonical schema, compile, fixtures | `src/schema`, `src/geo`, `src/network`, `src/fixtures`, `tests/network` | - | T13, T18 (schema), compile invariants | done |
 | [TASK-002](tasks/TASK-002.md) | 1 | Lane-feasible routing | `src/routing`, `tests/routing` | 001 | T04, T05, lane feasibility | done |
-| [TASK-003](tasks/TASK-003.md) | 1 | Simulation core | `src/sim` (except lane changes), `tests/sim` | 001, 002 | T01, T02, T03 (single lane), T08, T15 (sim side), intersections | todo |
+| [TASK-003](tasks/TASK-003.md) | 1 | Simulation core | `src/sim` (except lane changes), `tests/sim` | 001, 002 | T01, T02, T03 (single lane), T08, T15 (sim side), intersections | done |
 | [TASK-004](tasks/TASK-004.md) | 1 | Lane changing and route following | `src/sim/lane-change.ts`, engine hooks, `tests/sim/T03*`, `T07*` | 003 | T03, T07 (partial) | todo |
 | [TASK-005](tasks/TASK-005.md) | 1 | Engine host (worker) | `src/host`, `tests/host` | 003 | protocol, play loop, snapshot transfer | todo |
 | [TASK-006](tasks/TASK-006.md) | 1 | Renderer | `src/render`, `dev/render.html` | 001 | drawn city, camera, picking, vehicles | done |
@@ -161,6 +161,14 @@ exists.
   groups, failure cooldown, attribution constant, dev-page toggle. GeoJSON: `docs/geojson.md`
   documents the format; two-way roads take a total lane count split forward-heavy; export
   writes one one-way feature per directed road and lists everything dropped.
+
+- 2026-11-03, TASK-003 merged after a lead fix commit. The engine was faithful and
+  deterministic; review found that only one vehicle could occupy a movement at a time and that
+  a follower could request entry only as lane leader within 15 m, which broke every platoon at
+  every junction. Fixed with per-movement occupancy and a speed-aware request rule, with a
+  platoon test. Unknown place ids now throw at load. Section 8 documents the merged behaviour.
+  Accepted: minor-only stop standing, exit clearance measured from the last vehicle, commit
+  clamps, fallback memory, departed-only hash set, pending trips not inspectable.
 
 ## Owner decisions log
 
