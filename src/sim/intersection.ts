@@ -6,8 +6,9 @@ import { DRIVING, type Vehicles } from './vehicle';
 
 export function createIntersections(compiled: CompiledCity, vehicles: Vehicles, params: SimParams) {
   const colors = new Uint8Array(compiled.movements.length);
-  const owner = new Int32Array(compiled.movements.length).fill(-1);
-  const exitOwner = new Int32Array(compiled.lanes.length).fill(-1);
+  // Vehicles granted or driving on each movement. Several may share one movement (a platoon
+  // through a green); entry is refused only while a conflicting movement is occupied.
+  const occupancy = new Uint16Array(compiled.movements.length);
   const grants = new Int32Array(vehicles.count).fill(-1);
   const candidates = compiled.nodes.map((): number[] => []);
   const activeNodes: number[] = [];
@@ -26,23 +27,18 @@ export function createIntersections(compiled: CompiledCity, vehicles: Vehicles, 
   }
 
   function release(id: number) {
-    const movement = compiled.movements[grants[id]!]!;
-    owner[movement.idx] = -1;
-    exitOwner[movement.toLane] = -1;
+    occupancy[grants[id]!] = occupancy[grants[id]!]! - 1;
     grants[id] = -1;
   }
 
   function signals(timeS: number) {
     updateSignals(compiled, timeS, colors);
-    for (const node of compiled.nodes) {
-      if (!node.signal) continue;
-      for (const idx of node.movements) {
-        const id = owner[idx]!;
-        // A reservation cannot authorize entry after the light changes.
-        if (id !== -1 && vehicles.lane[id]! >= 0 && !signalAllows(id, compiled.movements[idx]!)) {
-          release(id);
-        }
-      }
+    // A reservation cannot authorize entry after the light changes.
+    for (let id = 0; id < vehicles.count; id++) {
+      const idx = grants[id]!;
+      if (idx === -1 || vehicles.lane[id]! < 0) continue;
+      const movement = compiled.movements[idx]!;
+      if (compiled.nodes[movement.node]!.signal && !signalAllows(id, movement)) release(id);
     }
   }
 
@@ -53,13 +49,13 @@ export function createIntersections(compiled: CompiledCity, vehicles: Vehicles, 
   }
 
   function canGrant(id: number, movement: CMovement) {
-    if (!signalAllows(id, movement) || exitOwner[movement.toLane] !== -1) return false;
+    if (!signalAllows(id, movement)) return false;
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1 && vehicles.position[exitTail]! < clearance) return false;
     const control = compiled.nodes[movement.node]!.control;
     if (control === 'stop' && movement.priority < 10 && !vehicles.stopped[id]) return false;
     for (const idx of movement.conflicts) {
-      if (owner[idx] !== -1) return false;
+      if (occupancy[idx]! > 0) return false;
       if (control !== 'yield' && control !== 'stop') continue;
       const higher = compiled.movements[idx]!;
       if (higher.priority <= movement.priority) continue;
@@ -131,8 +127,7 @@ export function createIntersections(compiled: CompiledCity, vehicles: Vehicles, 
           const movement = movementOf(id);
           if (!canGrant(id, movement)) continue;
           grants[id] = movement.idx;
-          owner[movement.idx] = id;
-          exitOwner[movement.toLane] = id;
+          occupancy[movement.idx] = occupancy[movement.idx]! + 1;
         }
         start = end;
       }
@@ -141,5 +136,5 @@ export function createIntersections(compiled: CompiledCity, vehicles: Vehicles, 
     activeNodes.length = 0;
   }
 
-  return { signals, request, resolve, release, grants, exitOwner };
+  return { signals, request, resolve, release, grants, occupancy };
 }

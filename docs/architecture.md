@@ -577,18 +577,23 @@ Step sequence, in this order every step:
      below `changesNeeded * laneChangeDistanceM + mandatoryUrgencyM` (accepts gaps down to
      `minGapM` and may slow to `creepSpeedMps`), otherwise discretionary by MOBIL. A proposal
      names the target lane and the position.
-   - Intersection entry request when within `decisionDistanceM` of the lane end and no grant
-     exists yet.
+   - Intersection entry request when no grant exists yet, the vehicle ahead on the lane (if
+     any) already holds its grant, and the distance to the lane end is within
+     `max(decisionDistanceM, v^2 / (2 * bMps2) + minGapM)`, so a car asks before the ungranted
+     stop line would make it brake and a platoon flows through a green.
 4. Resolution:
    - Lane changes are accepted in proposal order when the target gap is still free given
      already accepted changes this step.
    - Per node, entry candidates are sorted by (priority desc, right-before-left, waiting time
      desc, id asc). A candidate is granted when its movement is green or uncontrolled-allowed,
-     no vehicle occupies a conflicting movement, no conflicting movement was granted this
-     step, the exit lane has `vehicleLengthM + minGapM` free at its start (downstream
-     blocking), and for yield and stop nodes every vehicle approaching on a conflicting
-     higher-priority movement is more than `gapS` away. Stop nodes also require the vehicle to
-     have been standing for one step. Grants persist until the vehicle leaves the movement.
+     no vehicle holds a grant on or drives on a conflicting movement, the last vehicle on the
+     exit lane is at least `vehicleLengthM + minGapM` along it (downstream blocking), and for
+     yield and stop nodes every vehicle approaching on a conflicting higher-priority movement
+     is more than `gapS` away. Stop nodes also require a minor-approach vehicle to have been
+     standing for one step. Several vehicles may hold grants on the same movement (movements
+     from one lane never conflict); car-following keeps their spacing. A grant persists until
+     the vehicle leaves the movement, except that a signal change revokes grants of vehicles
+     still on the approach whose movement can no longer be entered.
 5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
    its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
@@ -598,10 +603,21 @@ Step sequence, in this order every step:
    as `stranded`. Nothing is ever moved to a lane it did not drive to.
 6. Accounting, metrics, hash.
 
+Implementation notes (TASK-003 as merged): the commit clamps a vehicle's new position to the
+start-of-step leader rear minus `minGapM` and to an ungranted stop line, and derives the
+committed speed from the clamped displacement, so the integrator never overlaps a leader. A
+vehicle that takes a fallback movement remembers it and will not retry it from the same lane;
+when every exit has been tried it fails as `stranded`. Vehicle ids in snapshots, `inspect`
+and the hash are the trip index plus one; `inspect` returns null for a pending trip. Gate 1
+routes with `noise: 0`; `routeSeed` is drawn at load for the congestion-aware routing of
+TASK-031. Trips naming a place that does not exist are an invariant violation and throw at
+load.
+
 Lane changes are discrete in the model (the vehicle switches lane and keeps its position along
 the road); `lateralM` animates the switch over `laneChangeDurationS` for the renderer only.
 
-State hash: FNV-1a over the sequence `[round(timeS * 10)]` followed, for every vehicle in id
+State hash: FNV-1a over the sequence `[round(timeS * 10)]` followed, for every vehicle that
+has departed (driving, queued at its destination, completed or failed after departing) in id
 order, by `[id, lane field, round(positionM * 100), round(speedMps * 100)]`, then the six
 trip counts. Two runs with the same city version, scenario seed and trips produce equal hashes
 at every step (T02).

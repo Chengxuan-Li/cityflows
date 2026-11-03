@@ -39,10 +39,13 @@ export function createConnectors(
     }
     if (trip.departS > scenario.endS) continue;
     const rng = random.derive(trip.id);
-    const origin = compiled.places[compiled.index.place.get(trip.originPlaceId) ?? -1];
-    const destination = compiled.places[compiled.index.place.get(trip.destinationPlaceId) ?? -1];
-    const out = pickConnector(compiled, origin?.connectorsOut ?? [], rng);
-    const into = pickConnector(compiled, destination?.connectorsIn ?? [], rng);
+    const place = (id: string) => {
+      const idx = compiled.index.place.get(id);
+      if (idx === undefined) throw new Error(`Trip ${trip.id} names unknown place ${id}`);
+      return compiled.places[idx]!;
+    };
+    const out = pickConnector(compiled, place(trip.originPlaceId).connectorsOut, rng);
+    const into = pickConnector(compiled, place(trip.destinationPlaceId).connectorsIn, rng);
     if (out === -1 || into === -1) {
       accounting.fail(id, out === -1 ? 'no_origin_connector' : 'no_destination_connector');
       continue;

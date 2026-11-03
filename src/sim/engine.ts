@@ -3,10 +3,10 @@ import type { CConnector } from '../network';
 import {
   createRouteProvider,
   freeFlowLinkCosts,
+  movementPenaltyS,
   type LinkCosts,
   type RouteProvider,
 } from '../routing';
-import { movementPenaltyS } from '../routing/costs';
 import type { SimParams, TripRequest } from '../schema';
 import { createConnectors } from './connectors';
 import { stateHash } from './hash';
@@ -119,7 +119,11 @@ function createRun({
   function hasSpawnGap(connector: CConnector) {
     const { lane, positionM } = connector;
     const spacing = vehicleLengthM + Math.max(spawnMinGapM, idm.minGapM);
-    if (intersections.exitOwner[lane] !== -1 && positionM < spacing) return false;
+    if (
+      positionM < spacing &&
+      compiled.lanes[lane]!.in.some((idx) => intersections.occupancy[idx]! > 0)
+    )
+      return false;
     for (
       let id = vehicles.last(lane);
       id !== -1 && vehicles.position[id]! <= positionM + spacing;
@@ -226,12 +230,19 @@ function createRun({
         );
 
         // TASK-004: compute lane change proposals here from the same start-of-step occupancy.
+        // Ask for entry before the ungranted stop line would force braking, and as soon as the
+        // car ahead on this lane holds its grant, so a platoon flows through a green.
+        const speed = vehicles.speed[id]!;
+        const requestDistance = Math.max(
+          params.intersection.decisionDistanceM,
+          (speed * speed) / (2 * idm.bMps2) + idm.minGapM,
+        );
         if (
           lane &&
-          ahead === -1 &&
           movement &&
           !granted &&
-          length - position <= params.intersection.decisionDistanceM
+          (ahead === -1 || intersections.grants[ahead] !== -1) &&
+          length - position <= requestDistance
         ) {
           intersections.request(id, movement);
         }

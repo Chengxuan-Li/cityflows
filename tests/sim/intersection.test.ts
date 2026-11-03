@@ -154,6 +154,46 @@ test('an occupied exit start prevents a grant until it clears', () => {
   expect(engine.metrics().trips.completed).toBe(2);
 });
 
+test('a platoon shares one movement through a green', () => {
+  const { city, node, road, place } = buildCity('Platoon', 1);
+  const junction = node(0, 0);
+  const west = road(node(-150, 0), junction, { lanes: 1 });
+  const east = road(junction, node(150, 0), { lanes: 1 });
+  // A wide crossing street makes the through movement long enough for two cars at once.
+  const north = road(node(0, -100), junction, { lanes: 8, roadClass: 'primary' });
+  const south = road(junction, node(0, 100), { lanes: 8, roadClass: 'primary' });
+  junction.control = 'signal';
+  junction.signal = {
+    offsetS: 0,
+    amberS: 3,
+    allRedS: 1,
+    phases: [
+      { durationS: 60, groups: [{ from: west.id, to: east.id }] },
+      { durationS: 20, groups: [{ from: north.id, to: south.id }] },
+    ],
+  };
+  place('West', 'residential', { x: -120, y: 10 }, [
+    { road: west, direction: 'out', positionM: 10 },
+  ]);
+  place('East', 'work', { x: 120, y: 10 }, [{ road: east, direction: 'in', positionM: 120 }]);
+  const compiled = setup(city);
+  const engine = createEngine();
+  engine.load({ compiled, scenario: scenario(), trips: trips(city, 8, 1) });
+  let largestPlatoon = 0;
+  for (let i = 0; i < 1200; i++) {
+    engine.step();
+    const view = engine.snapshot();
+    const onMovement = new Map<number, number>();
+    for (let index = 0; index < view.count; index++) {
+      const field = view.lane[index]!;
+      if (field < 0) onMovement.set(field, (onMovement.get(field) ?? 0) + 1);
+    }
+    largestPlatoon = Math.max(largestPlatoon, ...onMovement.values());
+  }
+  expect(largestPlatoon).toBeGreaterThanOrEqual(2);
+  expect(engine.metrics().trips.completed).toBe(8);
+});
+
 test('a nonconflicting lead car does not hide the higher-priority follower', () => {
   const { compiled, westLane, northLane } = cross('yield');
   const west = compiled.lanes[westLane]!;
