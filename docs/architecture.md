@@ -703,6 +703,13 @@ type HostEvent =
   flight; the worker replies with transferable buffers. `tick` events are pushed at 10 Hz.
 - The worker entry uses `postMessage(data, { transfer })`, which type-checks against the DOM
   lib and works in a worker; no WebWorker lib is added to the TypeScript config.
+- Wire form of `load`: a Flatbush index cannot be structured-cloned, so the client sends the
+  compiled city with `laneSpatial` reduced to its `data` buffer and `byteOffset`, and the
+  worker rebuilds the index with `Flatbush.from` (`HostWireRequest` in `src/host/protocol.ts`).
+- Play loop as merged: a 100 ms timer; at most 25 steps per tick (25x at `dtS = 0.1`); whole
+  steps the worker cannot keep up with are dropped rather than caught up later, and the
+  fractional remainder is kept. `setSpeed` may be called before `load`. Concurrent `snapshot`
+  calls share the one in flight and resolve to the same frame.
 
 ## 11. Rendering and UI
 

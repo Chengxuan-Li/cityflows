@@ -8,7 +8,6 @@ const engine = createEngine();
 let inputs: Parameters<typeof engine.load>[0] | undefined;
 let loop: ReturnType<typeof createPlayLoop> | undefined;
 let multiplier = 1;
-let loggedTransfer = false;
 
 function loadedLoop() {
   if (!loop) throw new Error('Load a scenario before using the traffic engine');
@@ -77,13 +76,6 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
       const transfer = Object.values(arrays).map((array) => array.buffer);
       const reply: HostReply = { id, ok: true, result: { timeS, count, ...arrays } };
       self.postMessage(reply, { transfer });
-      if (import.meta.env.DEV && count > 0 && !loggedTransfer) {
-        loggedTransfer = true;
-        console.debug(
-          'Worker snapshot buffer bytes after posting',
-          transfer.map((b) => b.byteLength),
-        );
-      }
     } else {
       self.postMessage({ id, ok: true, result: handle(request) } satisfies HostReply);
     }
