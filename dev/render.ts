@@ -6,8 +6,10 @@ import { ramp } from '../src/fixtures/ramp';
 import { shortTurnLane } from '../src/fixtures/short-turn-lane';
 import { signalApproach } from '../src/fixtures/signal-approach';
 import { headingAtDistance, pointAtDistance } from '../src/geo/polyline';
+import { importOsm } from '../src/importers/osm';
 import { compile } from '../src/network';
 import type { Bounds } from '../src/render/camera';
+import { tileSettings } from '../src/render/layers/tiles';
 import { createScene } from '../src/render/scene';
 import type { VehicleSnapshot } from '../src/render/types';
 
@@ -24,13 +26,24 @@ const query = new URLSearchParams(location.search);
 const fixture = query.get('fixture') ?? 'grid5x5';
 const status = document.querySelector<HTMLSpanElement>('#status')!;
 
-async function start() {
+async function loadCity() {
+  if (query.get('osm') === 'downtown') {
+    const { default: xml } = await import('../fixtures/osm/downtown.osm?raw');
+    const imported = importOsm(xml, { importerVersion: '1' });
+    if (!imported.ok)
+      throw new Error(imported.diagnostics.map(({ message }) => message).join('\n'));
+    return { ...imported.city, name: 'Center City, Philadelphia' };
+  }
   if (!Object.hasOwn(fixtures, fixture)) {
     throw new Error(
       `Unknown fixture "${fixture}". Available fixtures: ${Object.keys(fixtures).join(', ')}`,
     );
   }
-  const source = fixtures[fixture as keyof typeof fixtures]();
+  return fixtures[fixture as keyof typeof fixtures]();
+}
+
+async function start() {
+  const source = await loadCity();
   const result = compile(source);
   if (!result.ok) throw new Error(result.diagnostics.map(({ message }) => message).join('\n'));
   const { compiled } = result;
@@ -39,6 +52,17 @@ async function start() {
   const scene = createScene(canvas);
   await scene.ready;
   scene.setCity(compiled, source);
+  if (source.geo) {
+    const toggle = document.querySelector<HTMLInputElement>('#tiles')!;
+    toggle.parentElement!.hidden = false;
+    toggle.checked = query.get('tiles') !== 'off';
+    scene.setTiles(toggle.checked);
+    toggle.addEventListener('change', () => scene.setTiles(toggle.checked));
+    const attribution = document.querySelector<HTMLAnchorElement>('#attribution')!;
+    attribution.textContent = tileSettings.attribution;
+    attribution.href = tileSettings.attributionUrl;
+    attribution.hidden = false;
+  }
 
   const bounds: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   const points = [
