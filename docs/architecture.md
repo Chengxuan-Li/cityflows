@@ -1,0 +1,815 @@
+# CityFlows architecture and contracts
+
+Status: approved by the owner on 2026-11-03, including the adjustments recorded in section 1.
+Sections 3 to 12 are the frozen contracts for Gate 1 and Gate 2 tasks. A task that needs a
+contract change stops and reports to the lead; the change lands as a PR that updates this file
+and the affected code together.
+
+The product brief is `docs/20261103_browser_city_traffic_game_agent_handoff.md`. Its
+requirements R1 to R8 and tests T01 to T18 are binding and referenced below by ID.
+
+## 1. Decisions
+
+| # | Decision | Choice | Rejected and why |
+|---|---|---|---|
+| 1 | Engine foundation | Original TypeScript headless core in a Web Worker, behind the interfaces in this doc. Selective reuse: TRIZHAX (MIT) is mined for IDM/MOBIL and signal logic after TASK-000's audit; CityFlow's roadnet and osm2streets are schema and geometry references. | Forking TRIZHAX: single-commit project, no undo, no project format, graph model would need retrofitting. Native backend now: doubles the stack; the brief says to do this only when a browser benchmark forces it. |
+| 2 | Renderer | PixiJS 8 drawing the world in local meters, optional raster tile backdrop aligned by one affine. MapLibre only inside the import wizard for choosing a bounding box. | MapLibre + deck.gl: custom WebGL layers in Mercator space, Terra Draw for editing, heaviest dependency in the app. Canvas 2D: hits a wall around a few thousand vehicles; rewrite later. |
+| 3 | Repository shape | One Vite package; modules under `src/` with the ESLint layer rule. | pnpm workspace with ten packages: config overhead with no current benefit. |
+| 4 | License | GPL-3.0-or-later. Permissive and GPL-compatible sources may be adapted with a `NOTICE` entry. PolyForm Noncommercial sources are study-only. | MIT: would forbid adapting traffic-simulation.de (GPL). |
+| 5 | OSM data access | Bundled attributed fixtures, upload of `.osm` XML or GeoJSON, and small-bbox Overpass queries with an IndexedDB cache and a swappable endpoint. No PBF parsing in the browser. | Upload only: the "pick a city" step becomes a chore. Local import service: not needed for first-release map sizes. |
+| 6 | Workflow | GitHub remote, branch per task, PR, GitHub Actions CI, lead review of semantic compatibility. | Local-only merging. |
+| 7 | Upstream audit | Bounded, read-only, parallel to scaffolding (TASK-000). | Full Gate 0 with running every reference first: days of agent time before product code. |
+| 8 | Road geometry | Every directed carriageway owns its centerline. `streetGroupId` optionally groups the two directions of a simple street for editing. | Two directions sharing one centerline: cannot represent divided highways, medians, ramps or real OSM geometry. |
+| 9 | Movements | Lane-to-lane movements are generated at compile time from connectivity and lane rules; the canonical model stores only explicit allow/ban overrides. Structural errors block commits; connectivity problems are warnings that do not. | Every movement as a canonical entity: edits to lane counts would orphan thousands of records. |
+| 10 | Routing | Road-level search, then lane resolution with a feasibility check from the vehicle's current lane. Lane-level search is the fallback. A vehicle never teleports or takes an illegal movement; an infeasible plan becomes a legal movement plus a reroute with a reason code. | Road-level only: vehicles stuck in the wrong lane at a turn. |
+| 11 | Persistence | The canonical `City` snapshot is the authoritative saved state. Editor history is optional, separately versioned, and droppable. Migrations operate on snapshots. | Replaying a patch log on load: couples saved files to editor code history. |
+| 12 | Intersections | Vehicles explicitly occupy movement paths; entry needs free space on the exit lane; conflicts are resolved by deterministic arbitration each step; signals are conservative (enter on green with space). Permissive turns and finer gap acceptance come later. | Implicit intersections: gridlock and phantom collisions. |
+| 13 | Edits during a run | Release 1 requires a paused run; a committed topology or rule change marks the loaded run stale and the UI asks for a restart (T17). Live signal timing edits are a later option. | Live topology edits: invalid vehicle references. |
+| 14 | Demand | Persistent person-level home and work assignments with activity schedules, saved with the project. | Random origin-destination trips: no recognizable rush. |
+| 15 | Not in release 1 | Desktop wrapper, 3D view, transit vehicle operations, PBF import, live topology edits. | |
+
+## 2. Modules and data flow
+
+```
+                UI (React, Zustand)          src/ui
+                   |            \
+            Editor commands      Run control, inspect
+                   |                    |
+            src/editor  -->  City  -->  src/network.compile  -->  CompiledCity
+                                 \                                   |
+                           src/project                 +-------------+-------------+
+                        (save / open / ZIP)            |             |             |
+                                                 src/routing    src/demand      src/sim
+                                                       \             |            /
+                                                        +---- src/host (Worker) --+
+                                                                     |
+                                                        VehicleSnapshot, Metrics
+                                                                     |
+                                                               src/render (Pixi)
+```
+
+`src/importers` produces a `City` from OSM or GeoJSON. `src/fixtures` produces synthetic
+cities. Both go through the same compile and validation as hand edits. The layer rule in
+`AGENTS.md` is enforced by ESLint.
+
+## 3. Coordinate frame and extent
+
+Internal coordinates are meters in a local frame: Web Mercator scaled by `cos(lat0)` around
+the project origin, x east, y south (screen orientation). `src/geo/projection.ts` implements
+it. Headings are `atan2(dy, dx)`; because y points south, a positive heading change is a
+clockwise turn as seen on screen, which is a right turn for the driver.
+
+- A `City` without geography (synthetic worlds) has `geo: null` and uses origin (0, 0).
+- A `City` with geography records `geo.origin`, `geo.scale`, `geo.bbox` and the import source.
+  Project files carry this so coordinates are reproducible without the original OSM data.
+- Scale error grows with distance from the origin latitude: roughly `d * tan(lat0) / R`. The
+  frame is valid for cities up to 50 km from the origin at latitudes up to 60 degrees (error
+  under 1.4 percent). The browser importer caps a bounding box at 25 km by 25 km and 50 km
+  squared of area; larger areas need the bulk path, which is not in release 1.
+- Raster tiles (Gate 2) are placed with the affine `local = (merc - merc0) * scale`.
+
+## 4. Canonical model: `City`
+
+Lives in `src/schema`. Serialized as JSON, validated with Zod at every boundary (project open,
+import, fixtures in tests). This is what the editor edits and the project file stores.
+
+```ts
+type NodeId = string;      // "n:12"
+type RoadId = string;      // "r:12"
+type PlaceId = string;     // "p:12"
+type ConnectorId = string; // "c:12"
+type LaneId = string;      // derived: `${RoadId}#${laneIndex}`
+type MovementId = string;  // derived: `${LaneId}>${LaneId}`
+
+type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary'
+  | 'residential' | 'service' | 'ramp';
+type VehicleClass = 'car' | 'truck' | 'bus';
+type Control = 'uncontrolled' | 'yield' | 'stop' | 'signal';
+type DrivingSide = 'right' | 'left';
+
+interface Provenance {
+  source: 'osm' | 'authored' | 'generated';
+  osmIds?: number[];       // way or node ids this entity came from
+  inferred?: string[];     // attribute names that were defaulted, e.g. 'lanes', 'speedLimit'
+}
+
+interface Node {
+  id: NodeId;
+  pos: Vec2;
+  layer: number;           // from OSM `layer`; informational, connectivity is by shared ids
+  control: Control;
+  minorRoads: RoadId[];    // for yield/stop: incoming roads that must yield. Empty = by class.
+  turnRules: TurnRule[];
+  signal: SignalProgram | null;   // required when control === 'signal'
+  provenance: Provenance;
+}
+
+interface TurnRule {
+  from: RoadId;            // incoming road (road.to === node.id)
+  to: RoadId;              // outgoing road (road.from === node.id)
+  fromLane?: number;       // lane index on `from`; omitted = all lanes
+  toLane?: number;         // lane index on `to`; omitted = all lanes
+  allowed: boolean;
+  provenance: Provenance;
+}
+
+interface SignalProgram {
+  offsetS: number;
+  amberS: number;          // follows every phase
+  allRedS: number;         // follows amber
+  phases: { durationS: number; groups: { from: RoadId; to: RoadId }[] }[];  // green groups
+}
+
+interface Lane {
+  widthM: number;
+  allowed: VehicleClass[];
+}
+
+interface Road {
+  id: RoadId;
+  from: NodeId;
+  to: NodeId;
+  centerline: Vec2[];      // >= 2 points; first equals nodes[from].pos, last equals nodes[to].pos
+  lateralOffsetM: number;  // lane block center relative to centerline; positive = right of travel
+  lanes: Lane[];           // index 0 = leftmost in travel direction
+  roadClass: RoadClass;
+  speedLimitMps: number;
+  name: string | null;
+  streetGroupId: string | null;  // groups the two directions of a simple two-way street
+  provenance: Provenance;
+}
+
+type PlaceKind = 'residential' | 'work' | 'retail' | 'school' | 'station' | 'airport'
+  | 'parking' | 'gateway' | 'other';
+
+interface Connector {
+  id: ConnectorId;
+  roadId: RoadId;
+  lane: number;
+  positionM: number;       // along the lane, within [0, lane length]
+  direction: 'in' | 'out' | 'both';   // 'in' = vehicles arrive here, 'out' = vehicles depart here
+  throughputPerMin: number;           // max vehicles per minute through this connector
+}
+
+interface PlaceEvent {
+  id: string;
+  name: string;
+  startS: number;          // seconds since midnight
+  durationS: number;
+  arrivals: number;        // persons arriving during the event window
+  departures: number;      // persons leaving during the event window
+}
+
+interface Place {
+  id: PlaceId;
+  kind: PlaceKind;
+  name: string;
+  shape: { kind: 'point'; pos: Vec2 } | { kind: 'polygon'; ring: Vec2[] };
+  population: number;      // residents (residential, gateway = external commuters)
+  jobs: number;            // workplaces (work, retail, school, station, airport, gateway)
+  attraction: number;      // relative weight for non-work visits
+  capacity: number | null; // vehicles that can be inside at once; null = unlimited
+  connectors: Connector[];
+  profile: { arrivals: number[]; departures: number[] } | null;  // 24 relative hourly weights
+  events: PlaceEvent[];
+  provenance: Provenance;
+}
+
+interface GeoSource {
+  kind: 'osm' | 'file';
+  snapshotDate: string | null;
+  attribution: string;     // shown in UI and written to the manifest
+  importerVersion: string;
+  inferredCount: number;
+}
+
+interface City {
+  schemaVersion: 1;
+  version: number;         // bumps on every committed edit; caches key on it
+  name: string;
+  drivingSide: DrivingSide;
+  geo: (GeoReference & { bbox: [number, number, number, number]; source: GeoSource }) | null;
+  nodes: Record<NodeId, Node>;
+  roads: Record<RoadId, Road>;
+  places: Record<PlaceId, Place>;
+  nextId: number;          // single counter for all id kinds
+}
+```
+
+Invariants (checked by compile, section 5):
+
+- Every `road.from` and `road.to` exists; roads never connect by geographic coincidence, only
+  by shared node ids. A bridge over a street shares no node with it.
+- A road has at least one lane; lane widths are positive; `centerline` has at least two
+  points and positive length; `from !== to`.
+- Connectors reference an existing road and a lane index within range, with `positionM` in
+  range. When a lane-count edit removes a connector's lane, the editor command clamps the
+  connector to the outermost remaining lane and reports a warning.
+- A node with `control: 'signal'` has a `signal`.
+- `turnRules` reference roads incident to that node.
+
+## 5. Compiled model: `CompiledCity`
+
+`compile(city: City): CompileResult` lives in `src/network` and is a pure, deterministic
+function. It is the only producer of lane geometry, movements and conflict tables.
+
+```ts
+type CompileResult =
+  | { ok: true; compiled: CompiledCity; diagnostics: Diagnostic[] }   // warnings only
+  | { ok: false; diagnostics: Diagnostic[] };                         // contains errors
+
+interface Diagnostic {
+  severity: 'error' | 'warning';
+  code: string;            // see list below
+  message: string;         // human readable, names the entities
+  refs: string[];          // entity ids
+}
+
+interface CompiledCity {
+  version: number;
+  drivingSide: DrivingSide;
+  nodes: CNode[];
+  roads: CRoad[];
+  lanes: CLane[];
+  movements: CMovement[];
+  places: CPlace[];
+  connectors: CConnector[];
+  index: {
+    node: Map<NodeId, number>; road: Map<RoadId, number>; lane: Map<LaneId, number>;
+    movement: Map<MovementId, number>; place: Map<PlaceId, number>; connector: Map<ConnectorId, number>;
+  };
+  laneSpatial: Flatbush;   // lane segments, for picking and snapping
+}
+
+interface CNode { idx: number; id: NodeId; pos: Vec2; radiusM: number; control: Control;
+  movements: number[]; signal: CSignal | null; }
+interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[];
+  roadClass: RoadClass; classRank: number; speedLimitMps: number; lengthM: number;
+  streetGroupId: string | null; surface: Vec2[]; /* polygon for rendering */ }
+interface CLane { idx: number; id: LaneId; road: number; lane: number; polyline: Vec2[];
+  cumulative: Float64Array; lengthM: number; widthM: number; allowed: VehicleClass[];
+  speedLimitMps: number; left: number; right: number;   // adjacent lane idx or -1
+  out: number[]; in: number[];                          // movement idx
+  connectors: number[]; }                               // sorted by positionM
+type Turn = 'through' | 'left' | 'right' | 'uturn' | 'merge' | 'diverge';
+interface CMovement { idx: number; id: MovementId; fromLane: number; toLane: number;
+  node: number; turn: Turn; polyline: Vec2[]; cumulative: Float64Array; lengthM: number;
+  conflicts: number[]; priority: number; neverGreen: boolean; }
+interface CSignal { offsetS: number; amberS: number; allRedS: number; cycleS: number;
+  phases: { durationS: number; movements: number[] }[]; }
+interface CConnector { idx: number; id: ConnectorId; place: number; lane: number;
+  positionM: number; direction: 'in' | 'out' | 'both'; throughputPerMin: number; }
+interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
+  connectorsIn: number[]; connectorsOut: number[]; capacity: number | null; }
+```
+
+### 5.1 Lane layout
+
+- Let `W` be the sum of a road's lane widths. Lane `i` runs parallel to the centerline at
+  lateral offset `lateralOffsetM - W/2 + sum(widths before i) + widths[i]/2`, positive to the
+  right of travel. The right-hand normal of heading `(dx, dy)` is `(-dy, dx)`.
+- Offsetting a polyline uses per-vertex miter joins with the miter length clamped to twice the
+  offset; sharper vertices get a bevel. Good enough for a cartoon look.
+- Default `lateralOffsetM` for a two-way street made of two roads with one shared geometry:
+  `+W/2` of each road under right-hand traffic, `-W/2` under left-hand traffic, so the two lane
+  blocks sit side by side. One-way and divided carriageways use 0.
+- At each node, `radiusM = max over incident roads of (W/2 + |lateralOffsetM|) + 1.0`. Lanes
+  are trimmed by `radiusM` at each end along their road. A road shorter than `2 * radiusM + 5`
+  is trimmed proportionally to keep at least 5 m and gets warning `road_too_short`.
+- `CRoad.surface` is the union outline of the lane block, for rendering only.
+
+### 5.2 Movement generation
+
+For every node, incoming roads are those with `road.to === node`, outgoing those with
+`road.from === node`. For each (incoming `i`, outgoing `o`) pair:
+
+1. Skip the pair if `o.streetGroupId !== null && o.streetGroupId === i.streetGroupId` unless a
+   turn rule explicitly allows it (U-turns off by default).
+2. Classify the turn from the signed heading change `d` between the end of `i` and the start
+   of `o`, normalized to (-pi, pi]: `|d| < 30 degrees` through; `30 to 150 degrees` right if
+   `d > 0`, left if `d < 0` (y-south frame); `> 150 degrees` uturn. When the node has exactly
+   one outgoing road and two or more incoming roads with small angles, the movements are
+   `merge`; one incoming and several small-angle outgoing roads give `diverge`.
+3. Default lane assignment, before rules: every lane of `i` may go through to the lane with
+   the same index on `o` (clamped to the last lane; when `o` has more lanes, the outermost
+   lane of `i` also feeds the extra lanes). The leftmost lane of `i` may turn left into the
+   leftmost lane of `o`; the rightmost lane may turn right into the rightmost lane of `o`. A
+   single-lane road may do everything. Under left-hand traffic the roles of leftmost and
+   rightmost swap for turns. Merge and diverge assign lanes by index from the outer side.
+4. Apply `node.turnRules`: the most specific matching rule wins (both lanes given, then one
+   lane, then road pair). `allowed: false` removes movements; `allowed: true` adds the lane
+   pair (or, at road level, restores the defaults for that pair).
+5. Vehicle classes: a movement exists only if `toLane.allowed` intersects `fromLane.allowed`.
+
+Movement ids are deterministic, so signal programs and tests can name them. Curves: a cubic
+Bezier from the end of the from-lane (tangent along it) to the start of the to-lane, control
+distance `0.4 * chord`, sampled about every meter with at least four points; a through
+movement between nearly collinear lanes (under 5 degrees) is a straight segment.
+
+### 5.3 Conflicts and priority
+
+- Two movements at the same node conflict if their sampled polylines cross, or they end in the
+  same lane. Movements from the same lane never conflict with each other.
+- `classRank`: motorway 8, trunk 7, primary 6, secondary 5, tertiary 4, residential 3,
+  service 2, ramp uses the rank of the road it joins minus one (minimum 1).
+- `priority = majorRank * 10 + turnRank` where `majorRank` is the incoming road's classRank,
+  except that roads listed in `node.minorRoads` (yield/stop) get rank 0, and `turnRank` is 2
+  for through and right, 1 for left, merge and diverge, 0 for uturn. Ties are broken in the
+  simulation by the right-before-left rule (left-before-right under left-hand traffic), then by
+  waiting time, then by vehicle id.
+- Default `minorRoads` when empty at a yield or stop node: incoming roads whose class rank is
+  below the maximum rank at the node.
+
+### 5.4 Signals
+
+- Each phase's `groups` expand to every movement between the named road pair. A movement may
+  appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
+- State at simulation time `t`: `((t + offsetS) mod cycleS)` locates the phase and whether it
+  is in green, amber or all-red. Amber means vehicles that can stop before the stop line do.
+- Error `signal_conflict`: two conflicting movements in the same phase (T13).
+- Warning `signal_unserved_movement`: a movement at a signalized node that is in no phase. It
+  is compiled with `neverGreen: true` and routing excludes it.
+
+### 5.5 Diagnostic codes
+
+Errors (compile fails, editor rejects the commit):
+`dangling_ref`, `road_degenerate`, `lane_invalid`, `connector_invalid`, `turnrule_invalid`,
+`signal_missing`, `signal_phase_invalid`, `signal_conflict`, `place_invalid`.
+
+Warnings (compile succeeds, shown in the validation panel):
+`disconnected_component` (lanes not in the largest strongly connected component),
+`dead_end` (a lane with no outgoing movement and no `in` connector),
+`node_no_movements`, `road_too_short`, `signal_unserved_movement`,
+`place_no_connector`, `connector_unreachable` (an `in` connector not reachable from any `out`
+connector, or an `out` connector that reaches no `in` connector),
+`inferred_attributes` (count of imported defaults, from provenance).
+
+## 6. Editing
+
+Lives in `src/editor`. The editor owns one `City` and exposes:
+
+```ts
+type Command =
+  | { kind: 'setRoadLanes'; roadId: RoadId; lanes: Lane[] }
+  | { kind: 'setRoadAttributes'; roadId: RoadId; speedLimitMps?: number; roadClass?: RoadClass; name?: string | null }
+  | { kind: 'setStreetDirection'; streetGroupId: string; direction: 'both' | RoadId }  // RoadId = keep only this direction
+  | { kind: 'reverseRoad'; roadId: RoadId }
+  | { kind: 'setTurnRule'; nodeId: NodeId; rule: TurnRule }        // replaces an equal-key rule
+  | { kind: 'clearTurnRule'; nodeId: NodeId; rule: Omit<TurnRule, 'allowed' | 'provenance'> }
+  | { kind: 'setControl'; nodeId: NodeId; control: Control; signal?: SignalProgram; minorRoads?: RoadId[] }
+  | { kind: 'setSignal'; nodeId: NodeId; signal: SignalProgram }
+  | { kind: 'addRoad'; road: Omit<Road, 'id'>; newNodes: Omit<Node, 'id'>[] }   // Gate 2
+  | { kind: 'deleteRoad'; roadId: RoadId }                                        // Gate 2
+  | { kind: 'splitRoad'; roadId: RoadId; atM: number }                           // Gate 2
+  | { kind: 'moveNode'; nodeId: NodeId; pos: Vec2 }                               // Gate 2
+  | { kind: 'addPlace'; place: Omit<Place, 'id'> }
+  | { kind: 'updatePlace'; placeId: PlaceId; patch: Partial<Omit<Place, 'id' | 'connectors'>> }
+  | { kind: 'setConnectors'; placeId: PlaceId; connectors: Connector[] }
+  | { kind: 'deletePlace'; placeId: PlaceId }
+  | { kind: 'batch'; label: string; commands: Command[] };                      // Gate 2
+
+interface Patch {
+  set: { nodes?: Record<NodeId, Node>; roads?: Record<RoadId, Road>; places?: Record<PlaceId, Place> };
+  remove: { nodes?: NodeId[]; roads?: RoadId[]; places?: PlaceId[] };
+  nextId?: number;
+}
+
+interface HistoryEntry { label: string; patch: Patch; inverse: Patch; version: number }
+
+type CommitResult =
+  | { ok: true; city: City; compiled: CompiledCity; diagnostics: Diagnostic[] }
+  | { ok: false; diagnostics: Diagnostic[] };
+
+interface Editor {
+  readonly city: City;
+  readonly compiled: CompiledCity;
+  apply(command: Command): CommitResult;
+  undo(): CommitResult | null;
+  redo(): CommitResult | null;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly history: readonly HistoryEntry[];
+}
+```
+
+Semantics:
+
+- A command handler is a pure function `(city, command) => Patch`. The editor records the
+  inverse by snapshotting the entities the patch touches, applies the patch to a structurally
+  shared copy, compiles, and commits only when compile has no errors. On rejection the city,
+  compiled network and history are unchanged.
+- A commit bumps `city.version`. Undo and redo re-apply stored patches and recompile.
+- Commands addressed to a `streetGroupId` act on both roads. `setStreetDirection` with a
+  `RoadId` deletes the other road, removes rules referencing it, and sets
+  `lateralOffsetM = 0` on the survivor; `'both'` recreates the opposite road with mirrored
+  centerline and default offset.
+- `setRoadLanes` keeps lane-level turn rules whose indices still exist and drops the rest;
+  connectors are clamped to the outermost remaining lane with a warning.
+- The run loaded in the engine is tied to a `city.version`. The UI marks it stale when the
+  editor's version moves ahead and offers restart; it never patches a running engine (T17).
+
+## 7. Routing
+
+Lives in `src/routing`.
+
+```ts
+interface RouteRequest {
+  fromLane: number; fromPosM: number;       // compiled lane idx and position
+  toConnector: number;                      // compiled connector idx, direction 'in' or 'both'
+  vehicleClass: VehicleClass;
+  desiredSpeedFactor: number;               // per-driver, from the sim RNG
+  noise: number;                            // 0..1, per-vehicle cost perturbation amplitude
+  seed: number;                             // for the perturbation
+}
+
+interface Route {
+  roads: number[];                          // compiled road idx, first = road of fromLane
+  movements: number[];                      // movements[i] connects roads[i] -> roads[i+1]
+  targetLanes: number[][];                  // lane idx on roads[i] from which movements[i] departs
+  costS: number;
+}
+
+type RouteFailure = 'no_path' | 'destination_unreachable' | 'lane_infeasible' | 'class_forbidden';
+type RouteResult = { ok: true; route: Route } | { ok: false; reason: RouteFailure };
+
+interface RouteProvider {
+  route(compiled: CompiledCity, costs: LinkCosts, req: RouteRequest): RouteResult;
+}
+
+interface LinkCosts {                        // owned by the sim; free-flow in Gate 1
+  roadTravelTimeS: Float64Array;            // per compiled road
+  version: number;                          // increments when costs are updated
+}
+```
+
+Algorithm:
+
+1. Road-level graph: a node per compiled road; an edge road `a` to road `b` for every pair
+   joined by at least one movement that is not `neverGreen` and allowed for the vehicle class.
+   Edge cost = `roadTravelTimeS[b]` + turn penalty of the cheapest such movement. Turn
+   penalties: through 2 s, right 4 s, left 8 s, uturn 15 s, merge 3 s, diverge 2 s; plus 10 s
+   at a signalized node, 4 s at a stop node and 2 s at a yield node for minor roads. Each cost
+   is multiplied by `1 + noise * u` with `u` drawn in [-1, 1] from a generator seeded by
+   `req.seed` and the road idx, so vehicles spread over near-equal alternatives. Dijkstra with
+   a binary heap; the origin cost counts only the remaining length of the origin road.
+2. Lane resolution, backward: `feasible[last]` = lanes on the last road from which the
+   connector lane is reachable with `|lane - c.lane| * laneChangeDistanceM <= c.positionM`.
+   `enterable[i]` = lanes on road `i` from which some lane in `feasible[i]` is reachable with
+   `|lane - f| * laneChangeDistanceM <= roads[i].lengthM - 10`. `feasible[i-1]` = lanes on
+   road `i-1` that have a movement into `enterable[i]`. If any set is empty the road-level
+   route is lane-infeasible.
+3. Origin check: the vehicle's lane must reach `feasible[0]` within
+   `lengthM - fromPosM` using the same rule.
+4. Fallback when 2 or 3 fail: Dijkstra over lanes, edges = movements (same costs) plus lane
+   changes to adjacent lanes costing 3 s, allowed only when the lane is at least
+   `laneChangeDistanceM` long (on the origin lane: the remaining length). The result is
+   converted to a `Route` with singleton target lanes. If that fails too: `lane_infeasible`.
+5. `targetLanes[i]` is `feasible[i]`. The sim uses it for mandatory lane changes.
+
+`laneChangeDistanceM` is a simulation parameter (default 30 m) shared with the sim through
+`SimParams`. Congestion-aware costs (Gate 3) replace `roadTravelTimeS` with EWMA observed
+travel times and add bounded, hysteretic rerouting; the provider contract does not change.
+
+## 8. Simulation
+
+Lives in `src/sim`. Fixed step `dtS = 0.1`. All randomness from the seeded generator in
+`src/geo/random.ts` (mulberry32 or xoshiro128**, with uniform and normal sampling; shared by
+sim, demand and routing); all iteration in index order.
+
+```ts
+interface SimParams {
+  dtS: 0.1;
+  vehicleLengthM: 4.5;
+  idm: { aMps2: 1.5; bMps2: 2.0; headwayS: 1.2; minGapM: 2.0; desiredSpeedSd: 0.08 };
+  mobil: { politeness: 0.3; thresholdMps2: 0.2; safeDecelMps2: 3.0 };
+  laneChangeDistanceM: 30;
+  laneChangeDurationS: 2;
+  mandatoryUrgencyM: 10;         // extra margin before a required change becomes forced
+  intersection: { decisionDistanceM: 15; gapS: 4; creepSpeedMps: 1.0 };
+  spawnMinGapM: 8;
+}
+
+type VehicleState = 'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed';
+type FailReason = 'no_route' | 'unsupported_mode' | 'destination_unreachable' | 'stranded'
+  | 'no_origin_connector' | 'no_destination_connector';
+
+interface TrafficEngine {
+  load(input: { compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario; params?: Partial<SimParams> }): void;
+  step(n?: number): void;
+  readonly timeS: number;        // seconds since midnight of the scenario day
+  snapshot(): VehicleSnapshot;
+  metrics(): Metrics;
+  inspect(vehicleId: number): VehicleDetail | null;
+  stateHash(): number;           // 32-bit FNV-1a, see below
+}
+
+interface VehicleSnapshot {
+  timeS: number; count: number;
+  id: Uint32Array; x: Float32Array; y: Float32Array; heading: Float32Array;
+  speed: Float32Array; lateralM: Float32Array;       // lateral offset while changing lanes
+  lane: Int32Array;                                   // lane idx, or -(movement idx + 1) on a movement
+  state: Uint8Array;                                  // 1 driving, 2 queued_destination
+}
+
+interface Metrics {
+  timeS: number;
+  trips: { pending: number; queuedOrigin: number; driving: number; queuedDestination: number;
+           completed: number; failed: number };       // sum equals trips loaded (T01)
+  failedByReason: Record<FailReason, number>;
+  meanTravelTimeS: number; meanDelayS: number;        // delay = travel - free-flow estimate
+  roadSpeedRatio: Float32Array;                       // mean speed / limit per compiled road, for heat
+  stepsPerSecond: number;                             // measured by the host, 0 headless
+}
+
+interface VehicleDetail {
+  id: number; tripId: string; personId: string | null;
+  originPlace: PlaceId; destinationPlace: PlaceId; state: VehicleState;
+  lane: number; positionM: number; speedMps: number;
+  route: Route | null; routeReason: 'initial' | 'missed_turn' | 'congestion';
+  waitingS: number; departedS: number | null; arrivedS: number | null;
+  failReason: FailReason | null;
+}
+```
+
+Step sequence, in this order every step:
+
+1. Signals: compute each signalized node's phase state at `timeS`.
+2. Spawn: for each `out` or `both` connector in index order, release queued trips whose
+   departure time has passed while the lane has a free gap of `spawnMinGapM` at the connector
+   and the connector's per-minute budget allows. A released trip gets a route request from the
+   connector lane; `no_route` fails the trip without spawning. Trips whose mode is not `car`
+   fail at load time with `unsupported_mode` (T15).
+3. Proposals, for every driving vehicle in (lane idx, position descending) order, from the
+   state at the start of the step:
+   - Leader: the next vehicle ahead on the same lane, else on the movement the vehicle will
+     take, else on the lane after it. A red or ungranted movement is a standing obstacle at
+     the lane end; an arrival connector is a standing obstacle at its position when the place
+     cannot accept the vehicle.
+   - Acceleration from IDM.
+   - Lane change proposal: mandatory toward `targetLanes` when the distance to the lane end is
+     below `changesNeeded * laneChangeDistanceM + mandatoryUrgencyM` (accepts gaps down to
+     `minGapM` and may slow to `creepSpeedMps`), otherwise discretionary by MOBIL. A proposal
+     names the target lane and the position.
+   - Intersection entry request when within `decisionDistanceM` of the lane end and no grant
+     exists yet.
+4. Resolution:
+   - Lane changes are accepted in proposal order when the target gap is still free given
+     already accepted changes this step.
+   - Per node, entry candidates are sorted by (priority desc, right-before-left, waiting time
+     desc, id asc). A candidate is granted when its movement is green or uncontrolled-allowed,
+     no vehicle occupies a conflicting movement, no conflicting movement was granted this
+     step, the exit lane has `vehicleLengthM + minGapM` free at its start (downstream
+     blocking), and for yield and stop nodes every vehicle approaching on a conflicting
+     higher-priority movement is more than `gapS` away. Stop nodes also require the vehicle to
+     have been standing for one step. Grants persist until the vehicle leaves the movement.
+5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
+   its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
+   if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
+   the connector position and blocks the lane behind it (T08). A vehicle at the end of a lane
+   without any usable movement toward its route takes the legal movement with the lowest turn
+   penalty and gets a reroute with reason `missed_turn`; with no legal movement at all it fails
+   as `stranded`. Nothing is ever moved to a lane it did not drive to.
+6. Accounting, metrics, hash.
+
+Lane changes are discrete in the model (the vehicle switches lane and keeps its position along
+the road); `lateralM` animates the switch over `laneChangeDurationS` for the renderer only.
+
+State hash: FNV-1a over the sequence `[round(timeS * 10)]` followed, for every vehicle in id
+order, by `[id, lane field, round(positionM * 100), round(speedMps * 100)]`, then the six
+trip counts. Two runs with the same city version, scenario seed and trips produce equal hashes
+at every step (T02).
+
+## 9. Demand
+
+Lives in `src/demand`. Population is persistent and saved with the project; trips are
+regenerated deterministically from it.
+
+```ts
+interface Activity { kind: 'home' | 'work' | 'school' | 'shop' | 'leisure' | 'other';
+  placeId: PlaceId; startS: number; durationS: number }
+interface Person { id: string; homePlaceId: PlaceId; workPlaceId: PlaceId | null;
+  hasCar: boolean; agenda: Activity[] }
+type TripMode = 'car' | 'walk' | 'bus' | 'rail';
+interface Leg { mode: TripMode; fromPlaceId: PlaceId; toPlaceId: PlaceId }
+interface TripRequest { id: string; personId: string | null; originPlaceId: PlaceId;
+  destinationPlaceId: PlaceId; departS: number; mode: TripMode; legs: Leg[] }
+
+interface DemandConfig {
+  seed: number;
+  personsPerResident: number;     // sampling, 1 = everyone, 0.2 = one in five
+  carShare: number;               // 0..1
+  workStart: { meanS: number; sdS: number };       // default 08:00, 30 min
+  workDuration: { meanS: number; sdS: number };    // default 9 h, 1 h
+  gravityScaleM: number;          // home-work distance decay, default 5000
+  throughTripsPerHour: number[];  // 24 values, gateway to gateway (Gate 3)
+}
+
+interface Scenario { id: string; name: string; seed: number; startS: number; endS: number;
+  demand: DemandConfig; simParams: Partial<SimParams> }
+
+function generatePopulation(city: City, config: DemandConfig): Person[];
+function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[];  // sorted by departS
+```
+
+- Persons are created per residential place (and gateway places, which stand in for external
+  commuters) in proportion to `population * personsPerResident`. Work places are drawn by
+  gravity: probability proportional to `jobs * exp(-distance / gravityScaleM)` over places with
+  jobs, using straight-line distance between centroids. A person keeps the same home, work and
+  car access until the population is regenerated on purpose.
+- Gate 1 agendas: home, work (start from `workStart`, duration from `workDuration`), home.
+  Gate 3 adds shop, school, leisure legs, gateway through traffic and place events.
+- `scheduleTrips` emits one `TripRequest` per agenda transition, mode `car` for persons with a
+  car. Persons without a car get mode `walk` in Gate 1, which the sim reports as unsupported
+  rather than spawning (T15).
+- Trip ends map to connectors in the sim: origin uses an `out` or `both` connector of the
+  origin place, destination an `in` or `both` connector of the destination place. When a place
+  has several, the sim picks per trip by seeded choice weighted by `throughputPerMin`.
+- Validation summary (Gate 3 UI): trips by place and hour, total trips, mean length, queued
+  unspawned, completed, failed by reason.
+
+## 10. Engine host
+
+Lives in `src/host`. The worker owns the engine, the route provider and link costs. The main
+thread owns the editor and the compiled city for rendering and picking; it sends the compiled
+city (structured clone) to the worker on load.
+
+```ts
+type HostRequest =
+  | { id: number; type: 'load'; compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario }
+  | { id: number; type: 'play' } | { id: number; type: 'pause' }
+  | { id: number; type: 'setSpeed'; multiplier: number }       // 1, 2, 5, 10, 20
+  | { id: number; type: 'step'; steps: number }
+  | { id: number; type: 'restart' }                              // same inputs, same seed
+  | { id: number; type: 'snapshot' } | { id: number; type: 'metrics' }
+  | { id: number; type: 'inspect'; vehicleId: number } | { id: number; type: 'hash' };
+type HostReply = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
+type HostEvent =
+  | { type: 'tick'; timeS: number; achievedMultiplier: number; counts: Metrics['trips'] }
+  | { type: 'finished'; timeS: number } | { type: 'error'; message: string };
+```
+
+- The play loop runs in the worker on a timer: each wall tick advances enough fixed steps to
+  track `wallElapsed * multiplier`, capped per tick, and reports the achieved multiplier. The
+  UI shows the achieved speed, so throttling is visible rather than silent.
+- Snapshots are pulled: the main thread requests one per animation frame with at most one in
+  flight; the worker replies with transferable buffers. `tick` events are pushed at 10 Hz.
+- The worker entry uses `postMessage(data, { transfer })`, which type-checks against the DOM
+  lib and works in a worker; no WebWorker lib is added to the TypeScript config.
+
+## 11. Rendering and UI
+
+`src/render` draws a `CompiledCity` and the latest `VehicleSnapshot` with PixiJS 8:
+
+- Layers, bottom to top: tile backdrop (Gate 2, optional), road surfaces, lane markings and
+  movement arrows (legal movements only), node areas, places and connectors, signal heads
+  colored by current state, vehicles (ParticleContainer, rounded rectangles colored by state,
+  dots below a zoom threshold), selection and route overlays, road heat coloring.
+- Camera: pan and zoom at the pointer, world units meters, y-south so no flip is needed.
+- Picking: `laneSpatial` for roads and lanes, nearest snapshot vehicle within a pixel radius,
+  place polygons by point-in-polygon.
+- Static geometry is rebuilt only when `compiled.version` changes.
+
+`src/ui` is the React app with one Zustand store. Layout follows the brief:
+
+```
+| Scenario name   Undo Redo   Open Save Export   Play Pause Step Speed   [synthetic traffic] |
+| Toolbox | Map                                              | Inspector (selection-driven) |
+| Select  |                                                   | Street: lanes, direction,    |
+| Road    |                                                   |   speed, turn toggles        |
+| Place   |                                                   | Node: control, signal phases |
+|         |                                                   | Place: profile, connectors   |
+|         |                                                   | Vehicle: route, reason       |
+| 07:45  x5 (achieved x4.8)   driving 312  queued 18  done 1 204  failed 0   validation (2) |
+```
+
+Gate 1 edit flows through the inspector: lane count, speed limit, street direction, turn
+allow/ban toggles at a node, signal phase durations. Every committed change shows the
+"restart to apply" state on the run bar.
+
+## 12. Project format and migrations
+
+Lives in `src/project`. A project is a ZIP with extension `.cityflows` (fflate), or a single
+JSON document for small worlds and tests.
+
+```
+manifest.json     { format: 'cityflows', schemaVersion: 1, appVersion, projectId, name, savedAt,
+                    files: { 'city.json': sha256, ... }, licenses: string[], attribution: string | null }
+city.json         City                      authoritative canonical snapshot
+population.json   Person[]                  optional; absent = regenerate from the scenario config
+scenarios.json    Scenario[]                at least one
+history.json      { historyVersion: 1, entries: HistoryEntry[] }   optional, droppable
+view.json         { camera, layers, selection }                    optional
+```
+
+- Single JSON: `{ manifest, city, population?, scenarios, history?, view? }`.
+- `openProject(bytes)` verifies hashes, validates every file with Zod, runs
+  `migrateCity(json)` keyed on `schemaVersion`, and returns a structured error naming the file
+  and the first validation path on failure. Adding a schema version requires a fixture saved in
+  the old version and a migration test.
+- Round-trip test (T14): save, open in a fresh process, compare city and scenario hashes, run
+  N steps on both and compare `stateHash()`.
+- Exports (Gate 4): GeoJSON of roads and places (lossy, documented), CSV trip list, CSV of
+  per-road metrics. All exports carry seed, engine version, schema version and the synthetic
+  traffic notice.
+
+## 13. OSM import
+
+Lives in `src/importers/osm`, runs inside an import worker.
+
+1. Parse `.osm` XML with `fast-xml-parser` into nodes, ways, relations.
+2. Keep drivable highways: motorway, trunk, primary, secondary, tertiary, unclassified,
+   residential, living_street, service (only when `service` is not `parking_aisle` or
+   `driveway`), and their `_link` variants as `ramp`.
+3. Junction nodes: nodes shared by two or more kept ways, plus way ends. Split ways there.
+4. Project with a `GeoReference` at the bbox center. One `Node` per junction node, `layer`
+   from the tag. Connectivity comes from shared OSM node ids only.
+5. Roads: `oneway=yes` (or implied by motorway and roundabout) gives one road; otherwise two
+   roads with `streetGroupId = 'osm:way/<id>'` and mirrored centerlines. Lane counts from
+   `lanes`, `lanes:forward`, `lanes:backward`; otherwise class defaults (motorway and trunk 2
+   per direction, others 1) marked `inferred: ['lanes']`. Speed from `maxspeed` (km/h or mph)
+   otherwise class defaults marked `inferred`. Widths 3.5 m, 3.0 m for residential and service.
+6. Turn rules: `turn:lanes` becomes lane-level `TurnRule`s (listed directions allowed, the
+   others from that lane banned). Restriction relations (`no_*`, `only_*` with from, via node,
+   to) become road-level rules. Everything else stays default.
+7. Control: `highway=traffic_signals` on the node gives `signal` with a generated two-phase
+   program (through plus right for each pair of opposing approaches, left turns in their own
+   phase when the node has four or more approaches); `highway=stop` gives `stop`;
+   `highway=give_way` gives `yield`; else `uncontrolled`.
+8. Clip to the bbox: a road crossing the edge is cut there; the cut end becomes a node and a
+   `gateway` place with an `out` connector (5 m into entering roads) or an `in` connector (5 m
+   before the end of leaving roads). Gateway population and jobs default from the road class
+   and are editable.
+9. Places from OSM are limited to `amenity=parking` with a polygon, `railway=station`,
+   `aeroway=aerodrome`, `amenity=school`, `shop=mall`: a `Place` with a connector snapped to the
+   nearest lane. The user sets population and jobs; the wizard says so.
+10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
+    counts of inferred lanes and speeds. The wizard shows them before the city is accepted.
+
+Overpass provider: query drivable highways and restriction relations in a bbox capped at
+50 km squared, one request at a time, results cached in IndexedDB by bbox and query version,
+endpoint configurable, OSM attribution recorded. Nominatim, when used, is limited to one
+request per second and triggered only by an explicit search action.
+
+## 14. Testing
+
+Headless tests run in Vitest from fixtures in `src/fixtures` (generated) and `fixtures/`
+(data). Playwright drives the built app for the handoff demos. Mapping of handoff tests:
+
+| Test | Module | Fixture | Task |
+|---|---|---|---|
+| T01 vehicle conservation | sim | grid-5x5 | TASK-003 |
+| T02 determinism | sim | grid-5x5 | TASK-003 |
+| T03 multi-lane queue | sim | two-lane approach with signal | TASK-003, TASK-004 |
+| T04 turn restriction | routing, editor | grid-5x5 with a banned turn | TASK-002, TASK-007 |
+| T05 expressway preference | routing | bypass fixture | TASK-002 |
+| T06 congestion reroute | routing, sim | bypass fixture | TASK-031 |
+| T07 lane-aware ramp | sim | ramp fixture | TASK-004, TASK-032 |
+| T08 place connectors | sim | grid-5x5 with capacity-limited place | TASK-003 |
+| T09 daily activity | demand | grid-5x5 | TASK-011, TASK-030 |
+| T10 station surge | demand, sim | station fixture | TASK-030 |
+| T11 real-map import | importers | fixtures/osm | TASK-020 |
+| T12 graph edit | editor | grid-5x5 | TASK-007, TASK-022 |
+| T13 signal safety | network | four-way signal | TASK-001 |
+| T14 round-trip | project | grid-5x5 edited | TASK-008 |
+| T15 multimodal contract | demand, sim | grid-5x5 | TASK-011 |
+| T16 UI performance | e2e | grid-5x5, neighborhood | TASK-044 |
+| T17 edit live-state policy | ui, editor | grid-5x5 | TASK-010 |
+| T18 import diagnostics | importers, network | broken fixtures | TASK-001, TASK-020 |
+
+Synthetic fixtures (all generated by code with a seed, in `src/fixtures`):
+
+- `grid5x5`: 5 by 5 streets, 120 m blocks, mix of one-lane two-way, two-lane two-way and one
+  one-way pair, one signalized intersection at the center, a residential place in one corner
+  and a work place in the opposite corner, each with two connectors.
+- `signalApproach`: one four-way node, two lanes per approach, signal.
+- `bypass`: an origin and destination joined by a slow local street (50 km/h, 1.2 km) and a
+  longer expressway (100 km/h, 2.0 km) with a ramp at each end.
+- `ramp`: a two-lane motorway with an on-ramp merge and an exit diverge.
+- `dividedHighway`: two carriageways 20 m apart crossed by a bridge road on `layer 1` with no
+  shared node, and an at-grade crossing 300 m further with shared nodes.
+- `shortTurnLane`: a two-lane road with a left turn whose lane-feasible distance is below
+  `laneChangeDistanceM` from an upstream merge.
+- `disconnected`: two components and a dead-end lane.
+- `station`: a station place with an event, a pickup loop, and a capacity-limited parking
+  place (Gate 3).
+
+## 15. Performance targets
+
+Initial acceptance targets to be measured, not claims (brief section 10.2):
+
+| Scenario | Target |
+|---|---|
+| grid5x5, 100 to 300 vehicles | 60 FPS, deterministic, no crashes |
+| Neighborhood, 1 000 to 3 000 active vehicles | 30 FPS UI and 1x simulation speed |
+| 10x speed on grid5x5 | achieved; larger maps throttle visibly |
+| Imported neighborhood | import progress, diagnostics, no UI freeze |
+| 24 h run | stable memory, no lost trips |
+
+Benchmark the sim step, worker transfer, and render time separately (TASK-044).
+
+## 16. Deferred, explicitly
+
+Transit vehicles and GTFS, walking legs, PBF import and bulk extracts, live topology edits,
+permissive and actuated signals, adaptive routing beyond EWMA, 3D view, desktop packaging,
+parking circulation. R7's multimodal readiness is covered by `TripRequest.legs` and
+`TripMode` in section 9; nothing in the sim assumes a person equals a car.
