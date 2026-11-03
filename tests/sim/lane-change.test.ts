@@ -196,7 +196,7 @@ test('MOBIL resolves competing proposals from 200 vehicles without forcing unsaf
   }
   for (const lane of compiled.lanes) {
     for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
-      laneChanges.propose(id, lane, 0);
+      laneChanges.propose(id, lane, 0, true);
     }
   }
   const accepted = new Set<number>();

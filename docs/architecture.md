@@ -613,6 +613,17 @@ routes with `noise: 0`; `routeSeed` is drawn at load for the congestion-aware ro
 TASK-031. Trips naming a place that does not exist are an invariant violation and throw at
 load.
 
+Lane changes (TASK-004 as merged): proposals are generated before the car-following pass and
+applied before it, so following distances and entry requests use the resolved lanes; a vehicle
+that changes lane gives up any intersection grant and asks again from its new lane.
+Discretionary (MOBIL) changes are not proposed while a vehicle holds a grant, within
+`decisionDistanceM` of the lane end, or away from the destination lane on the final road, so
+a queue at an arrival connector keeps blocking its lane. A forced change that is blocked by a
+close leader or a faster follower caps the vehicle's speed at `creepSpeedMps` until it fits.
+When a vehicle cannot reach its planned movement, it prefers a movement from its current lane
+into the next road of its route whose landing lane can still reach the route's target lanes,
+and only otherwise takes the cheapest legal movement and reroutes with `missed_turn`.
+
 Lane changes are discrete in the model (the vehicle switches lane and keeps its position along
 the road); `lateralM` animates the switch over `laneChangeDurationS` for the renderer only.
 

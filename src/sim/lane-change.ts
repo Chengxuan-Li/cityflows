@@ -79,7 +79,7 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     return true;
   }
 
-  function propose(id: number, source: CLane, tick: number) {
+  function propose(id: number, source: CLane, tick: number, discretionary: boolean) {
     creeping[id] = 0;
     if (source.left === -1 && source.right === -1) return;
     const step = vehicles.routeStep[id]!;
@@ -107,6 +107,9 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
       if (mandatory) creeping[id] = 1;
       return;
     }
+    // Discretionary changes are off near the stop line, while holding a grant, and on the
+    // destination lane of the final road: a queue at the connector must hold the lane (T08).
+    if (!mandatory && (!discretionary || (finalRoad && changesNeeded === 0))) return;
 
     const oldLeader = vehicles.previous[id]!;
     const oldFollower = vehicles.next[id]!;

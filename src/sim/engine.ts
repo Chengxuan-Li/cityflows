@@ -4,10 +4,10 @@ import {
   createRouteProvider,
   freeFlowLinkCosts,
   movementPenaltyS,
+  reachableLanes,
   type LinkCosts,
   type RouteProvider,
 } from '../routing';
-import { reachableLanes } from '../routing/lanes';
 import type { SimParams, TripRequest } from '../schema';
 import { createConnectors } from './connectors';
 import { stateHash } from './hash';
@@ -191,7 +191,11 @@ function createRun({
     for (const lane of compiled.lanes) {
       if (lane.left === -1 && lane.right === -1) continue;
       for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
-        if (vehicles.state[id] === DRIVING) laneChanges.propose(id, lane, tick);
+        if (vehicles.state[id] !== DRIVING) continue;
+        const discretionary =
+          intersections.grants[id] === -1 &&
+          lane.lengthM - vehicles.position[id]! > params.intersection.decisionDistanceM;
+        laneChanges.propose(id, lane, tick, discretionary);
       }
     }
   }
