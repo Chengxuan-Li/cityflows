@@ -1,0 +1,33 @@
+import type { City, Command } from '../../schema';
+import { batch } from './batch';
+import { editNode } from './node';
+import { editPlace } from './place';
+import { editRoad } from './road';
+import type { CommandPatch } from './types';
+
+export function dispatch(city: City, command: Command): CommandPatch {
+  switch (command.kind) {
+    case 'setRoadLanes':
+    case 'setRoadAttributes':
+    case 'reverseRoad':
+    case 'setStreetDirection':
+      return editRoad(city, command);
+    case 'setTurnRule':
+    case 'clearTurnRule':
+    case 'setControl':
+    case 'setSignal':
+      return editNode(city, command);
+    case 'addPlace':
+    case 'updatePlace':
+    case 'setConnectors':
+    case 'deletePlace':
+      return editPlace(city, command);
+    case 'batch':
+      return batch(city, command.commands, dispatch);
+    case 'addRoad':
+    case 'deleteRoad':
+    case 'splitRoad':
+    case 'moveNode':
+      throw new Error(`not implemented: ${command.kind}`);
+  }
+}

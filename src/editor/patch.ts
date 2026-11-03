@@ -1,0 +1,53 @@
+import type { City, Patch } from '../schema';
+
+const collections = ['nodes', 'roads', 'places'] as const;
+
+function applyRecords<T>(
+  records: Record<string, T>,
+  set: Record<string, T> | undefined,
+  remove: string[] | undefined,
+): Record<string, T> {
+  if (!set && !remove?.length) return records;
+  const next = { ...records };
+  for (const id of remove ?? []) delete next[id];
+  return Object.assign(next, set);
+}
+
+export function applyPatch(city: City, patch: Patch): City {
+  return {
+    ...city,
+    nodes: applyRecords(city.nodes, patch.set.nodes, patch.remove.nodes),
+    roads: applyRecords(city.roads, patch.set.roads, patch.remove.roads),
+    places: applyRecords(city.places, patch.set.places, patch.remove.places),
+    nextId: patch.nextId ?? city.nextId,
+  };
+}
+
+export function invertPatch(city: City, patch: Patch): Patch {
+  const inverse: Patch = { set: {}, remove: {} };
+  for (const key of collections) {
+    const ids = new Set([...Object.keys(patch.set[key] ?? {}), ...(patch.remove[key] ?? [])]);
+    for (const id of ids) {
+      const original = city[key][id];
+      if (original) Object.assign((inverse.set[key] ??= {}), { [id]: original });
+      else (inverse.remove[key] ??= []).push(id);
+    }
+  }
+  if (patch.nextId !== undefined) inverse.nextId = city.nextId;
+  return inverse;
+}
+
+export function diffCity(before: City, after: City): Patch {
+  const patch: Patch = { set: {}, remove: {} };
+  for (const key of collections) {
+    if (before[key] === after[key]) continue;
+    for (const id of Object.keys(before[key])) {
+      if (!after[key][id]) (patch.remove[key] ??= []).push(id);
+    }
+    for (const [id, entity] of Object.entries(after[key])) {
+      if (entity !== before[key][id]) Object.assign((patch.set[key] ??= {}), { [id]: entity });
+    }
+  }
+  if (after.nextId !== before.nextId) patch.nextId = after.nextId;
+  return patch;
+}
