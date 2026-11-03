@@ -44,8 +44,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-001](tasks/TASK-001.md) | 1 | Canonical schema, compile, fixtures | `src/schema`, `src/geo`, `src/network`, `src/fixtures`, `tests/network` | - | T13, T18 (schema), compile invariants | done |
 | [TASK-002](tasks/TASK-002.md) | 1 | Lane-feasible routing | `src/routing`, `tests/routing` | 001 | T04, T05, lane feasibility | done |
 | [TASK-003](tasks/TASK-003.md) | 1 | Simulation core | `src/sim` (except lane changes), `tests/sim` | 001, 002 | T01, T02, T03 (single lane), T08, T15 (sim side), intersections | done |
-| [TASK-004](tasks/TASK-004.md) | 1 | Lane changing and route following | `src/sim/lane-change.ts`, engine hooks, `tests/sim/T03*`, `T07*` | 003 | T03, T07 (partial) | todo |
-| [TASK-005](tasks/TASK-005.md) | 1 | Engine host (worker) | `src/host`, `tests/host` | 003 | protocol, play loop, snapshot transfer | todo |
+| [TASK-004](tasks/TASK-004.md) | 1 | Lane changing and route following | `src/sim/lane-change.ts`, engine hooks, `tests/sim/T03*`, `T07*` | 003 | T03, T07 (partial) | done |
+| [TASK-005](tasks/TASK-005.md) | 1 | Engine host (worker) | `src/host`, `tests/host` | 003 | protocol, play loop, snapshot transfer | done |
 | [TASK-006](tasks/TASK-006.md) | 1 | Renderer | `src/render`, `dev/render.html` | 001 | drawn city, camera, picking, vehicles | done |
 | [TASK-007](tasks/TASK-007.md) | 1 | Editor core | `src/editor`, `tests/editor` | 001 | T12 (attribute and rule commands), T04 (editor side) | done |
 | [TASK-008](tasks/TASK-008.md) | 1 | Project persistence | `src/project`, `tests/project`, `fixtures/projects` | 001 | T14 | done |
@@ -169,6 +169,14 @@ exists.
   platoon test. Unknown place ids now throw at load. Section 8 documents the merged behaviour.
   Accepted: minor-only stop standing, exit clearance measured from the last vehicle, commit
   clamps, fallback memory, departed-only hash set, pending trips not inspectable.
+
+- 2026-11-03, TASK-004 and TASK-005 merged with lead fix commits. Lane changes: discretionary
+  changes were possible while holding a grant, near the stop line, and off a queued
+  destination lane (which defeated T08's spillback); all three are now excluded. Host: a
+  dev-only console log removed; section 10 documents the wire form (Flatbush rebuilt in the
+  worker), the 25-step cap and snapshot coalescing. Accepted: grant release on lane change,
+  creep as a speed clamp, the router-tolerance mismatch used by the short-turn tests, per-step
+  allocations in the lane-change pass (TASK-044).
 
 ## Owner decisions log
 
