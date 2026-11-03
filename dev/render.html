@@ -31,6 +31,14 @@
       header span {
         color: #afbeb9;
       }
+      #attribution {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        padding: 0.2rem 0.4rem;
+        background: #182021;
+        color: inherit;
+      }
       canvas {
         display: block;
         width: 100%;
@@ -48,9 +56,11 @@
       <strong id="fixture">CityFlows renderer</strong>
       <span>Synthetic traffic, not observed traffic</span>
       <span>Drag to pan · Scroll to zoom · Click to select</span>
+      <label hidden><input id="tiles" type="checkbox" /> Map tiles</label>
       <span id="status" aria-live="polite"></span>
     </header>
     <canvas aria-label="Traffic map"></canvas>
+    <a id="attribution" hidden></a>
     <script type="module" src="/dev/render.ts"></script>
   </body>
 </html>

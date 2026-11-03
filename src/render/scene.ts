@@ -7,6 +7,7 @@ import { drawHeat, drawRoute, drawSelection } from './layers/overlay';
 import { drawPlaces } from './layers/places';
 import { drawMovementArrow, drawRoad } from './layers/roads';
 import { drawSignal } from './layers/signals';
+import { Tiles } from './layers/tiles';
 import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { createPicker, pickVehicle } from './picking';
 import { style } from './style';
@@ -42,6 +43,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   const vehicles = new Vehicles();
   let city: CompiledCity | undefined;
+  let tiles: Tiles | undefined;
+  let tilesEnabled = true;
   let sourceGeometry: CityGeometry | undefined;
   let shapes: Place['shape'][] = [];
   let staticPick: ReturnType<typeof createPicker> | undefined;
@@ -69,6 +72,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         app.renderer.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight));
       });
       resizeObserver.observe(canvas);
+      app.ticker.add(({ deltaMS }) => {
+        if (tilesEnabled && tiles) {
+          const { width, height } = app.screen;
+          tiles.update(camera, width, height, deltaMS);
+        }
+      });
     });
 
   function updateVehicleRing(): void {
@@ -93,6 +102,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // Versions identify edits within a city. Different source cities can share a version.
       if (city?.version === compiled.version && sourceGeometry === source) return;
       city = compiled;
+      if (sourceGeometry?.geo !== source?.geo) {
+        tiles?.destroy();
+        tiles = source?.geo ? new Tiles(source.geo) : undefined;
+      }
       sourceGeometry = source;
       selection = null;
       selectedVehicle = -1;
@@ -100,9 +113,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       selectionOverlay.clear();
       routeOverlay.clear();
       heatOverlay.clear();
+      tiles?.container.removeFromParent();
       for (const child of map.removeChildren()) child.destroy({ children: true, context: true });
       updateSignals = [];
 
+      if (tiles) map.addChild(tiles.container);
       const nodeGrades = city.nodes.map(({ id }) => source?.nodes[id]?.layer ?? 0);
       const roadGrades = city.roads.map(({ from, to }) =>
         Math.min(nodeGrades[from]!, nodeGrades[to]!),
@@ -142,6 +157,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         city.movements.map(({ node }) => grades.get(nodeGrades[node]!)!.vehicles),
       );
     },
+    setTiles(enabled) {
+      tilesEnabled = enabled;
+      if (!enabled) tiles?.clearView();
+    },
     setSnapshot(snapshot) {
       if (!city) return;
       vehicles.update(snapshot);
@@ -179,6 +198,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       if (destroyed) return;
       destroyed = true;
       vehicles.destroy();
+      tiles?.destroy();
       if (resizeObserver) {
         resizeObserver.disconnect();
         app.destroy(false, { children: true, context: true });

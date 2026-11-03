@@ -32,6 +32,7 @@ export interface Scene {
   readonly camera: Camera;
   /** Supply source geometry to draw place rings and stack grade-separated roads. */
   setCity(compiled: CompiledCity, source?: CityGeometry): void;
+  setTiles(enabled: boolean): void;
   setSnapshot(snapshot: VehicleSnapshot): void;
   setSelection(selection: Pick | null): void;
   setRouteOverlay(route: RouteOverlay | null): void;
@@ -42,4 +43,4 @@ export interface Scene {
   destroy(): void;
 }
 
-export type CityGeometry = { nodes: City['nodes']; places: City['places'] };
+export type CityGeometry = { nodes: City['nodes']; places: City['places']; geo?: City['geo'] };
