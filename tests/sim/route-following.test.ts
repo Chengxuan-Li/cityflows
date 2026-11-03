@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
+import { createRouteProvider } from '../../src/routing';
 import { createEngine } from '../../src/sim/engine';
 import { scenario, setup, trips } from './fixtures';
 
@@ -20,15 +21,38 @@ test.each([true, false])(
       road(corner, north);
     }
     place('Homes', 'residential', { x: -80, y: 10 }, [
-      { road: approach, lane: 1, direction: 'out' },
+      { road: approach, lane: 1, positionM: 80, direction: 'out' },
     ]);
     place('Office', 'work', { x: 10, y: -170 }, [
       { road: destination, direction: 'in', positionM: 65 },
     ]);
+    place('Local origin', 'residential', { x: -20, y: -10 }, [
+      { road: approach, positionM: 80, direction: 'out' },
+    ]);
+    place('Full lot', 'work', { x: -10, y: -10 }, [
+      { road: approach, positionM: 85, direction: 'in' },
+    ]);
+    const [, , blockerOrigin, blockerDestination] = Object.values(city.places);
+    blockerDestination!.capacity = 0;
     const compiled = setup(city);
     const engine = createEngine();
-    engine.load({ compiled, scenario: scenario(), trips: trips(city, 1) });
-    engine.step();
+    const [trip] = trips(city, 1);
+    engine.load({
+      compiled,
+      scenario: scenario(),
+      routeProvider: createRouteProvider({ laneChangeDistanceM: 10 }),
+      trips: [
+        { ...trip!, departS: 110 },
+        {
+          ...trip!,
+          id: 'blocker',
+          originPlaceId: blockerOrigin!.id,
+          destinationPlaceId: blockerDestination!.id,
+        },
+      ],
+    });
+    engine.step(101);
+    expect(engine.inspect(2)!.state).toBe('queued_destination');
     const initial = engine.inspect(1)!;
     const firstTurn = compiled.movements[initial.route!.movements[0]!]!;
     expect(compiled.roads[compiled.lanes[firstTurn.toLane]!.road]!.id).toBe(left.id);
