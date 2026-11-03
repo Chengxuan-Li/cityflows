@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CityFlows worker demo</title>
+  </head>
+  <body>
+    <h1>5 × 5 grid</h1>
+    <p>Synthetic traffic, not observed traffic.</p>
+    <p><output id="status">Loading the worker…</output></p>
+    <p>Requested speed 10× · Achieved <output id="achieved">—</output></p>
+    <p>Simulation time <output id="time">—</output></p>
+    <pre id="counts"></pre>
+    <p>Vehicles in latest snapshot <output id="snapshot">—</output></p>
+    <script type="module" src="./host.ts"></script>
+  </body>
+</html>
