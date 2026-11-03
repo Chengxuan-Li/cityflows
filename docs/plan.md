@@ -40,8 +40,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 
 | Task | Gate | Name | Owns | Depends on | Proves | Status |
 |---|---|---|---|---|---|---|
-| [TASK-000](tasks/TASK-000.md) | 0 | Upstream audit and reuse matrix | `docs/references/upstream-audit.md` | - | reuse decisions for sim and import | todo |
-| [TASK-001](tasks/TASK-001.md) | 1 | Canonical schema, compile, fixtures | `src/schema`, `src/geo`, `src/network`, `src/fixtures`, `tests/network` | - | T13, T18 (schema), compile invariants | todo |
+| [TASK-000](tasks/TASK-000.md) | 0 | Upstream audit and reuse matrix | `docs/references/upstream-audit.md` | - | reuse decisions for sim and import | done |
+| [TASK-001](tasks/TASK-001.md) | 1 | Canonical schema, compile, fixtures | `src/schema`, `src/geo`, `src/network`, `src/fixtures`, `tests/network` | - | T13, T18 (schema), compile invariants | done |
 | [TASK-002](tasks/TASK-002.md) | 1 | Lane-feasible routing | `src/routing`, `tests/routing` | 001 | T04, T05, lane feasibility | todo |
 | [TASK-003](tasks/TASK-003.md) | 1 | Simulation core | `src/sim` (except lane changes), `tests/sim` | 001, 002 | T01, T02, T03 (single lane), T08, T15 (sim side), intersections | todo |
 | [TASK-004](tasks/TASK-004.md) | 1 | Lane changing and route following | `src/sim/lane-change.ts`, engine hooks, `tests/sim/T03*`, `T07*` | 003 | T03, T07 (partial) | todo |
@@ -130,6 +130,19 @@ exists.
   not planned before Gate 4.
 - `npm audit` reports moderate advisories in dev tooling only (minimatch under
   typescript-eslint); nothing ships to the browser. Revisit when upgrading tooling.
+
+## Review log
+
+- 2026-11-03, TASK-000 merged as delivered: pinned SHAs, line-anchored paths, destination
+  files per recommendation, do-not-use list.
+- 2026-11-03, TASK-001 merged after a lead fix commit (`6e4c0d7`). Found in review: merge and
+  diverge lanes fanned out instead of pairing from the curb; the spec's left-hand-traffic
+  sentence was wrong (lane 0 turns left on both sides) and the code followed it; strongly
+  connected components flagged every one-way-only fixture; a lane could be left without any
+  movement at a T-junction; the bypass fixture joined the expressway with left turns and had no
+  real time advantage; generator was not mulberry32. Spec sections 5.2, 5.3, 5.5, 9 and 14
+  amended in the same commit. Accepted as judgment calls: compile re-validating shapes, the
+  empty Flatbush subclass, `Command` living in `src/schema`.
 
 ## Owner decisions log
 

@@ -31,8 +31,10 @@ state hash. Lane changes are the next task; vehicles here stay in their lane.
 ## Interfaces
 
 `TrafficEngine`, `SimParams`, `VehicleSnapshot`, `Metrics`, `VehicleDetail`, `VehicleState`,
-`FailReason` from section 8. The engine takes a `RouteProvider` and `LinkCosts` at `load`;
-Gate 1 uses `freeFlowLinkCosts`.
+`FailReason` from section 8. The `SimParams` type already exists in `src/schema/sim.ts`
+(imported by `Scenario`); `src/sim/params.ts` holds the defaults only. The seeded generator is
+`src/geo/random.ts`. The engine takes a `RouteProvider` and `LinkCosts` at `load`; Gate 1
+uses `freeFlowLinkCosts`.
 
 ## Acceptance tests
 
