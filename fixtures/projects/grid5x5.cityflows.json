@@ -1,0 +1,1745 @@
+{
+  "manifest": {
+    "format": "cityflows",
+    "schemaVersion": 1,
+    "appVersion": "0.1.0",
+    "projectId": "grid5x5",
+    "name": "5 × 5 grid",
+    "savedAt": "2026-11-03T00:00:00.000Z",
+    "files": {
+      "city.json": "07cac5a84208e1b1497b9f1b44d967b59bafea4ded9b1132e29532a907750f8c",
+      "scenarios.json": "3a18db28ade4ba48c98e70e63f88f909bbfd532a0d964b790d533a3eb37bd9bc"
+    },
+    "licenses": [],
+    "attribution": null
+  },
+  "city": {
+    "schemaVersion": 1,
+    "version": 0,
+    "name": "5 × 5 grid",
+    "drivingSide": "right",
+    "geo": null,
+    "nodes": {
+      "n:1": {
+        "id": "n:1",
+        "pos": { "x": 0, "y": 0 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:2": {
+        "id": "n:2",
+        "pos": { "x": 120, "y": 0 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:3": {
+        "id": "n:3",
+        "pos": { "x": 240, "y": 0 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:4": {
+        "id": "n:4",
+        "pos": { "x": 360, "y": 0 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:5": {
+        "id": "n:5",
+        "pos": { "x": 480, "y": 0 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:6": {
+        "id": "n:6",
+        "pos": { "x": 0, "y": 120 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:7": {
+        "id": "n:7",
+        "pos": { "x": 120, "y": 120 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:8": {
+        "id": "n:8",
+        "pos": { "x": 240, "y": 120 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:9": {
+        "id": "n:9",
+        "pos": { "x": 360, "y": 120 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:10": {
+        "id": "n:10",
+        "pos": { "x": 480, "y": 120 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:11": {
+        "id": "n:11",
+        "pos": { "x": 0, "y": 240 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:12": {
+        "id": "n:12",
+        "pos": { "x": 120, "y": 240 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:13": {
+        "id": "n:13",
+        "pos": { "x": 240, "y": 240 },
+        "layer": 0,
+        "control": "signal",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": {
+          "offsetS": 0,
+          "amberS": 3,
+          "allRedS": 1,
+          "phases": [
+            {
+              "durationS": 25,
+              "groups": [
+                { "from": "r:52", "to": "r:65" },
+                { "from": "r:52", "to": "r:68" },
+                { "from": "r:52", "to": "r:70" }
+              ]
+            },
+            {
+              "durationS": 25,
+              "groups": [
+                { "from": "r:64", "to": "r:53" },
+                { "from": "r:64", "to": "r:68" },
+                { "from": "r:64", "to": "r:70" }
+              ]
+            },
+            {
+              "durationS": 25,
+              "groups": [
+                { "from": "r:69", "to": "r:53" },
+                { "from": "r:69", "to": "r:65" },
+                { "from": "r:69", "to": "r:70" }
+              ]
+            },
+            {
+              "durationS": 25,
+              "groups": [
+                { "from": "r:71", "to": "r:53" },
+                { "from": "r:71", "to": "r:65" },
+                { "from": "r:71", "to": "r:68" }
+              ]
+            }
+          ]
+        },
+        "provenance": { "source": "generated" }
+      },
+      "n:14": {
+        "id": "n:14",
+        "pos": { "x": 360, "y": 240 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:15": {
+        "id": "n:15",
+        "pos": { "x": 480, "y": 240 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:16": {
+        "id": "n:16",
+        "pos": { "x": 0, "y": 360 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:17": {
+        "id": "n:17",
+        "pos": { "x": 120, "y": 360 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:18": {
+        "id": "n:18",
+        "pos": { "x": 240, "y": 360 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:19": {
+        "id": "n:19",
+        "pos": { "x": 360, "y": 360 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:20": {
+        "id": "n:20",
+        "pos": { "x": 480, "y": 360 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:21": {
+        "id": "n:21",
+        "pos": { "x": 0, "y": 480 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:22": {
+        "id": "n:22",
+        "pos": { "x": 120, "y": 480 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:23": {
+        "id": "n:23",
+        "pos": { "x": 240, "y": 480 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:24": {
+        "id": "n:24",
+        "pos": { "x": 360, "y": 480 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      },
+      "n:25": {
+        "id": "n:25",
+        "pos": { "x": 480, "y": 480 },
+        "layer": 0,
+        "control": "uncontrolled",
+        "minorRoads": [],
+        "turnRules": [],
+        "signal": null,
+        "provenance": { "source": "generated" }
+      }
+    },
+    "roads": {
+      "r:26": {
+        "id": "r:26",
+        "from": "n:1",
+        "to": "n:2",
+        "centerline": [
+          { "x": 0, "y": 0 },
+          { "x": 120, "y": 0 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:1:n:2",
+        "provenance": { "source": "generated" }
+      },
+      "r:27": {
+        "id": "r:27",
+        "from": "n:2",
+        "to": "n:1",
+        "centerline": [
+          { "x": 120, "y": 0 },
+          { "x": 0, "y": 0 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:1:n:2",
+        "provenance": { "source": "generated" }
+      },
+      "r:28": {
+        "id": "r:28",
+        "from": "n:1",
+        "to": "n:6",
+        "centerline": [
+          { "x": 0, "y": 0 },
+          { "x": 0, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:1:n:6",
+        "provenance": { "source": "generated" }
+      },
+      "r:29": {
+        "id": "r:29",
+        "from": "n:6",
+        "to": "n:1",
+        "centerline": [
+          { "x": 0, "y": 120 },
+          { "x": 0, "y": 0 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:1:n:6",
+        "provenance": { "source": "generated" }
+      },
+      "r:30": {
+        "id": "r:30",
+        "from": "n:2",
+        "to": "n:3",
+        "centerline": [
+          { "x": 120, "y": 0 },
+          { "x": 240, "y": 0 }
+        ],
+        "lateralOffsetM": 0,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": null,
+        "provenance": { "source": "generated" }
+      },
+      "r:31": {
+        "id": "r:31",
+        "from": "n:2",
+        "to": "n:7",
+        "centerline": [
+          { "x": 120, "y": 0 },
+          { "x": 120, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:2:n:7",
+        "provenance": { "source": "generated" }
+      },
+      "r:32": {
+        "id": "r:32",
+        "from": "n:7",
+        "to": "n:2",
+        "centerline": [
+          { "x": 120, "y": 120 },
+          { "x": 120, "y": 0 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:2:n:7",
+        "provenance": { "source": "generated" }
+      },
+      "r:33": {
+        "id": "r:33",
+        "from": "n:3",
+        "to": "n:4",
+        "centerline": [
+          { "x": 240, "y": 0 },
+          { "x": 360, "y": 0 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:3:n:4",
+        "provenance": { "source": "generated" }
+      },
+      "r:34": {
+        "id": "r:34",
+        "from": "n:4",
+        "to": "n:3",
+        "centerline": [
+          { "x": 360, "y": 0 },
+          { "x": 240, "y": 0 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:3:n:4",
+        "provenance": { "source": "generated" }
+      },
+      "r:35": {
+        "id": "r:35",
+        "from": "n:3",
+        "to": "n:8",
+        "centerline": [
+          { "x": 240, "y": 0 },
+          { "x": 240, "y": 120 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:3:n:8",
+        "provenance": { "source": "generated" }
+      },
+      "r:36": {
+        "id": "r:36",
+        "from": "n:8",
+        "to": "n:3",
+        "centerline": [
+          { "x": 240, "y": 120 },
+          { "x": 240, "y": 0 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:3:n:8",
+        "provenance": { "source": "generated" }
+      },
+      "r:37": {
+        "id": "r:37",
+        "from": "n:4",
+        "to": "n:5",
+        "centerline": [
+          { "x": 360, "y": 0 },
+          { "x": 480, "y": 0 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:4:n:5",
+        "provenance": { "source": "generated" }
+      },
+      "r:38": {
+        "id": "r:38",
+        "from": "n:5",
+        "to": "n:4",
+        "centerline": [
+          { "x": 480, "y": 0 },
+          { "x": 360, "y": 0 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:4:n:5",
+        "provenance": { "source": "generated" }
+      },
+      "r:39": {
+        "id": "r:39",
+        "from": "n:4",
+        "to": "n:9",
+        "centerline": [
+          { "x": 360, "y": 0 },
+          { "x": 360, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:4:n:9",
+        "provenance": { "source": "generated" }
+      },
+      "r:40": {
+        "id": "r:40",
+        "from": "n:9",
+        "to": "n:4",
+        "centerline": [
+          { "x": 360, "y": 120 },
+          { "x": 360, "y": 0 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:4:n:9",
+        "provenance": { "source": "generated" }
+      },
+      "r:41": {
+        "id": "r:41",
+        "from": "n:5",
+        "to": "n:10",
+        "centerline": [
+          { "x": 480, "y": 0 },
+          { "x": 480, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:5:n:10",
+        "provenance": { "source": "generated" }
+      },
+      "r:42": {
+        "id": "r:42",
+        "from": "n:10",
+        "to": "n:5",
+        "centerline": [
+          { "x": 480, "y": 120 },
+          { "x": 480, "y": 0 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:5:n:10",
+        "provenance": { "source": "generated" }
+      },
+      "r:43": {
+        "id": "r:43",
+        "from": "n:6",
+        "to": "n:7",
+        "centerline": [
+          { "x": 0, "y": 120 },
+          { "x": 120, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:6:n:7",
+        "provenance": { "source": "generated" }
+      },
+      "r:44": {
+        "id": "r:44",
+        "from": "n:7",
+        "to": "n:6",
+        "centerline": [
+          { "x": 120, "y": 120 },
+          { "x": 0, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:6:n:7",
+        "provenance": { "source": "generated" }
+      },
+      "r:45": {
+        "id": "r:45",
+        "from": "n:6",
+        "to": "n:11",
+        "centerline": [
+          { "x": 0, "y": 120 },
+          { "x": 0, "y": 240 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:6:n:11",
+        "provenance": { "source": "generated" }
+      },
+      "r:46": {
+        "id": "r:46",
+        "from": "n:11",
+        "to": "n:6",
+        "centerline": [
+          { "x": 0, "y": 240 },
+          { "x": 0, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:6:n:11",
+        "provenance": { "source": "generated" }
+      },
+      "r:47": {
+        "id": "r:47",
+        "from": "n:8",
+        "to": "n:7",
+        "centerline": [
+          { "x": 240, "y": 120 },
+          { "x": 120, "y": 120 }
+        ],
+        "lateralOffsetM": 0,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": null,
+        "provenance": { "source": "generated" }
+      },
+      "r:48": {
+        "id": "r:48",
+        "from": "n:7",
+        "to": "n:12",
+        "centerline": [
+          { "x": 120, "y": 120 },
+          { "x": 120, "y": 240 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:7:n:12",
+        "provenance": { "source": "generated" }
+      },
+      "r:49": {
+        "id": "r:49",
+        "from": "n:12",
+        "to": "n:7",
+        "centerline": [
+          { "x": 120, "y": 240 },
+          { "x": 120, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:7:n:12",
+        "provenance": { "source": "generated" }
+      },
+      "r:50": {
+        "id": "r:50",
+        "from": "n:8",
+        "to": "n:9",
+        "centerline": [
+          { "x": 240, "y": 120 },
+          { "x": 360, "y": 120 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:8:n:9",
+        "provenance": { "source": "generated" }
+      },
+      "r:51": {
+        "id": "r:51",
+        "from": "n:9",
+        "to": "n:8",
+        "centerline": [
+          { "x": 360, "y": 120 },
+          { "x": 240, "y": 120 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:8:n:9",
+        "provenance": { "source": "generated" }
+      },
+      "r:52": {
+        "id": "r:52",
+        "from": "n:8",
+        "to": "n:13",
+        "centerline": [
+          { "x": 240, "y": 120 },
+          { "x": 240, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:8:n:13",
+        "provenance": { "source": "generated" }
+      },
+      "r:53": {
+        "id": "r:53",
+        "from": "n:13",
+        "to": "n:8",
+        "centerline": [
+          { "x": 240, "y": 240 },
+          { "x": 240, "y": 120 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:8:n:13",
+        "provenance": { "source": "generated" }
+      },
+      "r:54": {
+        "id": "r:54",
+        "from": "n:9",
+        "to": "n:10",
+        "centerline": [
+          { "x": 360, "y": 120 },
+          { "x": 480, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:9:n:10",
+        "provenance": { "source": "generated" }
+      },
+      "r:55": {
+        "id": "r:55",
+        "from": "n:10",
+        "to": "n:9",
+        "centerline": [
+          { "x": 480, "y": 120 },
+          { "x": 360, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:9:n:10",
+        "provenance": { "source": "generated" }
+      },
+      "r:56": {
+        "id": "r:56",
+        "from": "n:9",
+        "to": "n:14",
+        "centerline": [
+          { "x": 360, "y": 120 },
+          { "x": 360, "y": 240 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:9:n:14",
+        "provenance": { "source": "generated" }
+      },
+      "r:57": {
+        "id": "r:57",
+        "from": "n:14",
+        "to": "n:9",
+        "centerline": [
+          { "x": 360, "y": 240 },
+          { "x": 360, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:9:n:14",
+        "provenance": { "source": "generated" }
+      },
+      "r:58": {
+        "id": "r:58",
+        "from": "n:10",
+        "to": "n:15",
+        "centerline": [
+          { "x": 480, "y": 120 },
+          { "x": 480, "y": 240 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:10:n:15",
+        "provenance": { "source": "generated" }
+      },
+      "r:59": {
+        "id": "r:59",
+        "from": "n:15",
+        "to": "n:10",
+        "centerline": [
+          { "x": 480, "y": 240 },
+          { "x": 480, "y": 120 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:10:n:15",
+        "provenance": { "source": "generated" }
+      },
+      "r:60": {
+        "id": "r:60",
+        "from": "n:11",
+        "to": "n:12",
+        "centerline": [
+          { "x": 0, "y": 240 },
+          { "x": 120, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:11:n:12",
+        "provenance": { "source": "generated" }
+      },
+      "r:61": {
+        "id": "r:61",
+        "from": "n:12",
+        "to": "n:11",
+        "centerline": [
+          { "x": 120, "y": 240 },
+          { "x": 0, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:11:n:12",
+        "provenance": { "source": "generated" }
+      },
+      "r:62": {
+        "id": "r:62",
+        "from": "n:11",
+        "to": "n:16",
+        "centerline": [
+          { "x": 0, "y": 240 },
+          { "x": 0, "y": 360 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:11:n:16",
+        "provenance": { "source": "generated" }
+      },
+      "r:63": {
+        "id": "r:63",
+        "from": "n:16",
+        "to": "n:11",
+        "centerline": [
+          { "x": 0, "y": 360 },
+          { "x": 0, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:11:n:16",
+        "provenance": { "source": "generated" }
+      },
+      "r:64": {
+        "id": "r:64",
+        "from": "n:12",
+        "to": "n:13",
+        "centerline": [
+          { "x": 120, "y": 240 },
+          { "x": 240, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:12:n:13",
+        "provenance": { "source": "generated" }
+      },
+      "r:65": {
+        "id": "r:65",
+        "from": "n:13",
+        "to": "n:12",
+        "centerline": [
+          { "x": 240, "y": 240 },
+          { "x": 120, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:12:n:13",
+        "provenance": { "source": "generated" }
+      },
+      "r:66": {
+        "id": "r:66",
+        "from": "n:12",
+        "to": "n:17",
+        "centerline": [
+          { "x": 120, "y": 240 },
+          { "x": 120, "y": 360 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:12:n:17",
+        "provenance": { "source": "generated" }
+      },
+      "r:67": {
+        "id": "r:67",
+        "from": "n:17",
+        "to": "n:12",
+        "centerline": [
+          { "x": 120, "y": 360 },
+          { "x": 120, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:12:n:17",
+        "provenance": { "source": "generated" }
+      },
+      "r:68": {
+        "id": "r:68",
+        "from": "n:13",
+        "to": "n:14",
+        "centerline": [
+          { "x": 240, "y": 240 },
+          { "x": 360, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:13:n:14",
+        "provenance": { "source": "generated" }
+      },
+      "r:69": {
+        "id": "r:69",
+        "from": "n:14",
+        "to": "n:13",
+        "centerline": [
+          { "x": 360, "y": 240 },
+          { "x": 240, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:13:n:14",
+        "provenance": { "source": "generated" }
+      },
+      "r:70": {
+        "id": "r:70",
+        "from": "n:13",
+        "to": "n:18",
+        "centerline": [
+          { "x": 240, "y": 240 },
+          { "x": 240, "y": 360 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:13:n:18",
+        "provenance": { "source": "generated" }
+      },
+      "r:71": {
+        "id": "r:71",
+        "from": "n:18",
+        "to": "n:13",
+        "centerline": [
+          { "x": 240, "y": 360 },
+          { "x": 240, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:13:n:18",
+        "provenance": { "source": "generated" }
+      },
+      "r:72": {
+        "id": "r:72",
+        "from": "n:14",
+        "to": "n:15",
+        "centerline": [
+          { "x": 360, "y": 240 },
+          { "x": 480, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:14:n:15",
+        "provenance": { "source": "generated" }
+      },
+      "r:73": {
+        "id": "r:73",
+        "from": "n:15",
+        "to": "n:14",
+        "centerline": [
+          { "x": 480, "y": 240 },
+          { "x": 360, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:14:n:15",
+        "provenance": { "source": "generated" }
+      },
+      "r:74": {
+        "id": "r:74",
+        "from": "n:14",
+        "to": "n:19",
+        "centerline": [
+          { "x": 360, "y": 240 },
+          { "x": 360, "y": 360 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:14:n:19",
+        "provenance": { "source": "generated" }
+      },
+      "r:75": {
+        "id": "r:75",
+        "from": "n:19",
+        "to": "n:14",
+        "centerline": [
+          { "x": 360, "y": 360 },
+          { "x": 360, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:14:n:19",
+        "provenance": { "source": "generated" }
+      },
+      "r:76": {
+        "id": "r:76",
+        "from": "n:15",
+        "to": "n:20",
+        "centerline": [
+          { "x": 480, "y": 240 },
+          { "x": 480, "y": 360 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:15:n:20",
+        "provenance": { "source": "generated" }
+      },
+      "r:77": {
+        "id": "r:77",
+        "from": "n:20",
+        "to": "n:15",
+        "centerline": [
+          { "x": 480, "y": 360 },
+          { "x": 480, "y": 240 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:15:n:20",
+        "provenance": { "source": "generated" }
+      },
+      "r:78": {
+        "id": "r:78",
+        "from": "n:16",
+        "to": "n:17",
+        "centerline": [
+          { "x": 0, "y": 360 },
+          { "x": 120, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:16:n:17",
+        "provenance": { "source": "generated" }
+      },
+      "r:79": {
+        "id": "r:79",
+        "from": "n:17",
+        "to": "n:16",
+        "centerline": [
+          { "x": 120, "y": 360 },
+          { "x": 0, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:16:n:17",
+        "provenance": { "source": "generated" }
+      },
+      "r:80": {
+        "id": "r:80",
+        "from": "n:16",
+        "to": "n:21",
+        "centerline": [
+          { "x": 0, "y": 360 },
+          { "x": 0, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:16:n:21",
+        "provenance": { "source": "generated" }
+      },
+      "r:81": {
+        "id": "r:81",
+        "from": "n:21",
+        "to": "n:16",
+        "centerline": [
+          { "x": 0, "y": 480 },
+          { "x": 0, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:16:n:21",
+        "provenance": { "source": "generated" }
+      },
+      "r:82": {
+        "id": "r:82",
+        "from": "n:17",
+        "to": "n:18",
+        "centerline": [
+          { "x": 120, "y": 360 },
+          { "x": 240, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:17:n:18",
+        "provenance": { "source": "generated" }
+      },
+      "r:83": {
+        "id": "r:83",
+        "from": "n:18",
+        "to": "n:17",
+        "centerline": [
+          { "x": 240, "y": 360 },
+          { "x": 120, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:17:n:18",
+        "provenance": { "source": "generated" }
+      },
+      "r:84": {
+        "id": "r:84",
+        "from": "n:17",
+        "to": "n:22",
+        "centerline": [
+          { "x": 120, "y": 360 },
+          { "x": 120, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:17:n:22",
+        "provenance": { "source": "generated" }
+      },
+      "r:85": {
+        "id": "r:85",
+        "from": "n:22",
+        "to": "n:17",
+        "centerline": [
+          { "x": 120, "y": 480 },
+          { "x": 120, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:17:n:22",
+        "provenance": { "source": "generated" }
+      },
+      "r:86": {
+        "id": "r:86",
+        "from": "n:18",
+        "to": "n:19",
+        "centerline": [
+          { "x": 240, "y": 360 },
+          { "x": 360, "y": 360 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:18:n:19",
+        "provenance": { "source": "generated" }
+      },
+      "r:87": {
+        "id": "r:87",
+        "from": "n:19",
+        "to": "n:18",
+        "centerline": [
+          { "x": 360, "y": 360 },
+          { "x": 240, "y": 360 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:18:n:19",
+        "provenance": { "source": "generated" }
+      },
+      "r:88": {
+        "id": "r:88",
+        "from": "n:18",
+        "to": "n:23",
+        "centerline": [
+          { "x": 240, "y": 360 },
+          { "x": 240, "y": 480 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:18:n:23",
+        "provenance": { "source": "generated" }
+      },
+      "r:89": {
+        "id": "r:89",
+        "from": "n:23",
+        "to": "n:18",
+        "centerline": [
+          { "x": 240, "y": 480 },
+          { "x": 240, "y": 360 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:18:n:23",
+        "provenance": { "source": "generated" }
+      },
+      "r:90": {
+        "id": "r:90",
+        "from": "n:19",
+        "to": "n:20",
+        "centerline": [
+          { "x": 360, "y": 360 },
+          { "x": 480, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:19:n:20",
+        "provenance": { "source": "generated" }
+      },
+      "r:91": {
+        "id": "r:91",
+        "from": "n:20",
+        "to": "n:19",
+        "centerline": [
+          { "x": 480, "y": 360 },
+          { "x": 360, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:19:n:20",
+        "provenance": { "source": "generated" }
+      },
+      "r:92": {
+        "id": "r:92",
+        "from": "n:19",
+        "to": "n:24",
+        "centerline": [
+          { "x": 360, "y": 360 },
+          { "x": 360, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:19:n:24",
+        "provenance": { "source": "generated" }
+      },
+      "r:93": {
+        "id": "r:93",
+        "from": "n:24",
+        "to": "n:19",
+        "centerline": [
+          { "x": 360, "y": 480 },
+          { "x": 360, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:19:n:24",
+        "provenance": { "source": "generated" }
+      },
+      "r:94": {
+        "id": "r:94",
+        "from": "n:20",
+        "to": "n:25",
+        "centerline": [
+          { "x": 480, "y": 360 },
+          { "x": 480, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:20:n:25",
+        "provenance": { "source": "generated" }
+      },
+      "r:95": {
+        "id": "r:95",
+        "from": "n:25",
+        "to": "n:20",
+        "centerline": [
+          { "x": 480, "y": 480 },
+          { "x": 480, "y": 360 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:20:n:25",
+        "provenance": { "source": "generated" }
+      },
+      "r:96": {
+        "id": "r:96",
+        "from": "n:21",
+        "to": "n:22",
+        "centerline": [
+          { "x": 0, "y": 480 },
+          { "x": 120, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:21:n:22",
+        "provenance": { "source": "generated" }
+      },
+      "r:97": {
+        "id": "r:97",
+        "from": "n:22",
+        "to": "n:21",
+        "centerline": [
+          { "x": 120, "y": 480 },
+          { "x": 0, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:21:n:22",
+        "provenance": { "source": "generated" }
+      },
+      "r:98": {
+        "id": "r:98",
+        "from": "n:22",
+        "to": "n:23",
+        "centerline": [
+          { "x": 120, "y": 480 },
+          { "x": 240, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:22:n:23",
+        "provenance": { "source": "generated" }
+      },
+      "r:99": {
+        "id": "r:99",
+        "from": "n:23",
+        "to": "n:22",
+        "centerline": [
+          { "x": 240, "y": 480 },
+          { "x": 120, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:22:n:23",
+        "provenance": { "source": "generated" }
+      },
+      "r:100": {
+        "id": "r:100",
+        "from": "n:23",
+        "to": "n:24",
+        "centerline": [
+          { "x": 240, "y": 480 },
+          { "x": 360, "y": 480 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:23:n:24",
+        "provenance": { "source": "generated" }
+      },
+      "r:101": {
+        "id": "r:101",
+        "from": "n:24",
+        "to": "n:23",
+        "centerline": [
+          { "x": 360, "y": 480 },
+          { "x": 240, "y": 480 }
+        ],
+        "lateralOffsetM": 3,
+        "lanes": [
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] },
+          { "widthM": 3, "allowed": ["car", "truck", "bus"] }
+        ],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:23:n:24",
+        "provenance": { "source": "generated" }
+      },
+      "r:102": {
+        "id": "r:102",
+        "from": "n:24",
+        "to": "n:25",
+        "centerline": [
+          { "x": 360, "y": 480 },
+          { "x": 480, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:24:n:25",
+        "provenance": { "source": "generated" }
+      },
+      "r:103": {
+        "id": "r:103",
+        "from": "n:25",
+        "to": "n:24",
+        "centerline": [
+          { "x": 480, "y": 480 },
+          { "x": 360, "y": 480 }
+        ],
+        "lateralOffsetM": 1.5,
+        "lanes": [{ "widthM": 3, "allowed": ["car", "truck", "bus"] }],
+        "roadClass": "residential",
+        "speedLimitMps": 13.88888888888889,
+        "name": null,
+        "streetGroupId": "street:n:24:n:25",
+        "provenance": { "source": "generated" }
+      }
+    },
+    "places": {
+      "p:104": {
+        "id": "p:104",
+        "name": "Homes",
+        "kind": "residential",
+        "shape": { "kind": "point", "pos": { "x": 15, "y": -15 } },
+        "population": 131,
+        "jobs": 0,
+        "attraction": 1,
+        "capacity": null,
+        "profile": null,
+        "events": [],
+        "provenance": { "source": "generated" },
+        "connectors": [
+          {
+            "id": "c:105",
+            "roadId": "r:26",
+            "lane": 0,
+            "positionM": 5,
+            "direction": "out",
+            "throughputPerMin": 30
+          },
+          {
+            "id": "c:106",
+            "roadId": "r:27",
+            "lane": 0,
+            "positionM": 5,
+            "direction": "in",
+            "throughputPerMin": 30
+          }
+        ]
+      },
+      "p:107": {
+        "id": "p:107",
+        "name": "Offices",
+        "kind": "work",
+        "shape": { "kind": "point", "pos": { "x": 465, "y": 495 } },
+        "population": 0,
+        "jobs": 200,
+        "attraction": 1,
+        "capacity": null,
+        "profile": null,
+        "events": [],
+        "provenance": { "source": "generated" },
+        "connectors": [
+          {
+            "id": "c:108",
+            "roadId": "r:95",
+            "lane": 0,
+            "positionM": 5,
+            "direction": "out",
+            "throughputPerMin": 30
+          },
+          {
+            "id": "c:109",
+            "roadId": "r:94",
+            "lane": 0,
+            "positionM": 5,
+            "direction": "in",
+            "throughputPerMin": 30
+          }
+        ]
+      }
+    },
+    "nextId": 110
+  },
+  "scenarios": [
+    {
+      "id": "grid5x5",
+      "name": "5 × 5 grid",
+      "seed": 1,
+      "startS": 25200,
+      "endS": 64800,
+      "demand": {
+        "seed": 1,
+        "personsPerResident": 1,
+        "carShare": 1,
+        "workStart": { "meanS": 28800, "sdS": 1800 },
+        "workDuration": { "meanS": 32400, "sdS": 3600 },
+        "gravityScaleM": 5000,
+        "throughTripsPerHour": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ]
+      },
+      "simParams": {}
+    }
+  ]
+}
