@@ -21,15 +21,16 @@ export function drawPlaces(
   graphics: Graphics,
   city: CompiledCity,
   shapes: readonly Place['shape'][],
+  connectorGraphics: Graphics = graphics,
 ): void {
   for (const connector of city.connectors) {
     const { centroid } = city.places[connector.place]!;
     const end = connectorPosition(city, connector);
-    graphics
+    connectorGraphics
       .moveTo(centroid.x, centroid.y)
       .lineTo(end.x, end.y)
       .stroke({ width: 0.32, color: style.connector, alpha: 0.55 });
-    graphics.circle(end.x, end.y, style.connectorRadiusM).fill(style.connector);
+    connectorGraphics.circle(end.x, end.y, style.connectorRadiusM).fill(style.connector);
   }
   for (const { idx, id, kind } of city.places) {
     placePath(graphics, shapes[idx]!, kind)

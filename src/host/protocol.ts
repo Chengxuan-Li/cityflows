@@ -1,6 +1,19 @@
 import type { CompiledCity } from '../network';
 import type { Scenario, TripRequest } from '../schema';
-import type { Metrics } from '../sim/types';
+import type { Metrics, VehicleSnapshot } from '../sim/types';
+
+export interface MetricsSample {
+  timeS: number;
+  driving: number;
+  queued: number;
+  completed: number;
+  meanDelayS: number;
+}
+
+export interface HostSnapshot extends VehicleSnapshot {
+  /** Included at most twice per wall second, alongside the matching vehicle positions. */
+  roadSpeedRatio?: Float32Array;
+}
 
 export type HostRequest =
   | { id: number; type: 'load'; compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario }
@@ -11,6 +24,7 @@ export type HostRequest =
   | { id: number; type: 'restart' }
   | { id: number; type: 'snapshot' }
   | { id: number; type: 'metrics' }
+  | { id: number; type: 'metricsSeries' }
   | { id: number; type: 'inspect'; vehicleId: number }
   | { id: number; type: 'hash' };
 

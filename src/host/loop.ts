@@ -1,5 +1,5 @@
 import type { Metrics, TrafficEngine } from '../sim/types';
-import type { HostEvent } from './protocol';
+import type { HostEvent, MetricsSample } from './protocol';
 
 const tickMs = 100;
 const maxStepsPerTick = 25;
@@ -13,7 +13,7 @@ interface LoopOptions {
 }
 
 type LoopEngine = Pick<TrafficEngine, 'timeS' | 'step'> & {
-  metrics(): Pick<Metrics, 'trips'>;
+  metrics(): Pick<Metrics, 'trips' | 'meanDelayS'>;
 };
 
 export function createPlayLoop(engine: LoopEngine, { dtS, endS, now, emit }: LoopOptions) {
@@ -24,6 +24,20 @@ export function createPlayLoop(engine: LoopEngine, { dtS, endS, now, emit }: Loo
   let budget = 0;
   let stepsPerSecond = 0;
   let finished = false;
+  const series: MetricsSample[] = [];
+  let nextSampleS = engine.timeS + 60;
+
+  function sample() {
+    const { trips, meanDelayS } = engine.metrics();
+    series.push({
+      timeS: engine.timeS,
+      driving: trips.driving,
+      queued: trips.queuedOrigin + trips.queuedDestination,
+      completed: trips.completed,
+      meanDelayS,
+    });
+  }
+  sample();
 
   function pause() {
     clearInterval(timer);
@@ -43,7 +57,18 @@ export function createPlayLoop(engine: LoopEngine, { dtS, endS, now, emit }: Loo
 
   function advance(steps: number) {
     const count = Math.min(steps, remainingSteps());
-    if (count > 0) engine.step(count);
+    let remaining = count;
+    // Split large manual steps too: each sample describes its actual minute, not the final state.
+    while (remaining > 0) {
+      const untilSample = Math.max(1, Math.ceil((nextSampleS - engine.timeS) / dtS - stepEpsilon));
+      const batch = Math.min(remaining, untilSample);
+      engine.step(batch);
+      remaining -= batch;
+      if (engine.timeS + stepEpsilon >= nextSampleS) {
+        sample();
+        nextSampleS += 60;
+      }
+    }
     return count;
   }
 
@@ -99,5 +124,6 @@ export function createPlayLoop(engine: LoopEngine, { dtS, endS, now, emit }: Loo
     get stepsPerSecond() {
       return stepsPerSecond;
     },
+    metricsSeries: () => series.slice(),
   };
 }

@@ -17,10 +17,11 @@ function setup(endS = 100) {
       steps += count;
     },
     metrics: () => ({
+      meanDelayS: steps / 100,
       trips: {
         pending: 0,
         queuedOrigin: 0,
-        driving: 0,
+        driving: steps,
         queuedDestination: 0,
         completed: 0,
         failed: 0,
@@ -56,6 +57,32 @@ test('tracks 5× wall time and emits ten ticks per second', () => {
   expect(run.steps).toBe(50);
   expect(run.events).toHaveLength(10);
   expect(run.events.at(-1)).toMatchObject({ type: 'tick', timeS: 5, achievedMultiplier: 5 });
+});
+
+test('samples actual minute boundaries across manual batches, play and pause', () => {
+  const run = setup(245);
+  expect(run.loop.metricsSeries()).toEqual([
+    { timeS: 0, driving: 0, queued: 0, completed: 0, meanDelayS: 0 },
+  ]);
+  run.loop.step(1799);
+  expect(run.loop.metricsSeries().map(({ timeS }) => timeS)).toEqual([0, 60, 120]);
+  run.loop.setSpeed(20);
+  run.loop.play();
+  run.tick();
+  run.loop.pause();
+  run.tick(60_000);
+  expect(run.loop.metricsSeries().at(-1)).toEqual({
+    timeS: 180,
+    driving: 1800,
+    queued: 0,
+    completed: 0,
+    meanDelayS: 18,
+  });
+  run.loop.step(10_000);
+  expect(run.loop.metricsSeries().map(({ timeS }) => timeS)).toEqual([0, 60, 120, 180, 240]);
+  run.loop.step(1);
+  expect(run.loop.metricsSeries()).toHaveLength(5);
+  expect(setup().loop.metricsSeries()).toHaveLength(1);
 });
 
 test('caps a delayed tick, reports the achieved speed, and discards the backlog', () => {

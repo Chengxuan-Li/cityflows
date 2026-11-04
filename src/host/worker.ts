@@ -8,6 +8,7 @@ const engine = createEngine();
 let inputs: Parameters<typeof engine.load>[0] | undefined;
 let loop: ReturnType<typeof createPlayLoop> | undefined;
 let multiplier = 1;
+let lastHeatMs = -Infinity;
 
 function loadedLoop() {
   if (!loop) throw new Error('Load a scenario before using the traffic engine');
@@ -21,6 +22,7 @@ function load(input: Parameters<typeof engine.load>[0]) {
   engine.load(input);
   loop?.pause();
   inputs = input;
+  lastHeatMs = -Infinity;
   loop = createPlayLoop(engine, {
     dtS,
     endS: scenario.endS,
@@ -61,6 +63,8 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return load(inputs);
     case 'metrics':
       return { ...engine.metrics(), stepsPerSecond: loadedLoop().stepsPerSecond };
+    case 'metricsSeries':
+      return loadedLoop().metricsSeries();
     case 'inspect':
       return engine.inspect(request.vehicleId);
     case 'hash':
@@ -74,7 +78,17 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
     if (request.type === 'snapshot') {
       const { timeS, count, ...arrays } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
-      const reply: HostReply = { id, ok: true, result: { timeS, count, ...arrays } };
+      const now = performance.now();
+      const roadSpeedRatio = now - lastHeatMs >= 500 ? engine.metrics().roadSpeedRatio : undefined;
+      if (roadSpeedRatio) {
+        lastHeatMs = now;
+        transfer.push(roadSpeedRatio.buffer);
+      }
+      const reply: HostReply = {
+        id,
+        ok: true,
+        result: { timeS, count, ...arrays, roadSpeedRatio },
+      };
       self.postMessage(reply, { transfer });
     } else {
       self.postMessage({ id, ok: true, result: handle(request) } satisfies HostReply);
