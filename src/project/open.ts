@@ -10,6 +10,7 @@ import {
   type OpenResult,
 } from './types';
 import { readZip } from './zip';
+import { baselineSchema } from './scenarios';
 
 const jsonDocumentSchema = z.record(z.string(), z.unknown());
 
@@ -55,6 +56,10 @@ export async function openProject(input: Uint8Array | string): Promise<OpenResul
     const city = await read('city.json', migrateCity);
     const scenarios = await read('scenarios.json', (value) => scenariosSchema.parse(value));
     const project = { city, scenarios };
+    const baseline =
+      files['baseline.json'] || manifest.files['baseline.json']
+        ? await read('baseline.json', (value) => baselineSchema.parse(value))
+        : undefined;
     const population =
       files['population.json'] || manifest.files['population.json']
         ? await read('population.json', (value) => populationSchema.parse(value))
@@ -71,6 +76,7 @@ export async function openProject(input: Uint8Array | string): Promise<OpenResul
       ok: true,
       project: {
         ...project,
+        ...(baseline === undefined ? {} : { baseline }),
         ...(population === undefined ? {} : { population }),
         ...(history === undefined ? {} : { history }),
         ...(view === undefined ? {} : { view }),

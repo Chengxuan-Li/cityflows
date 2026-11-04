@@ -6,6 +6,7 @@ import type {
   HostWireRequest,
   HostSnapshot,
   MetricsSample,
+  HeadlessResult,
 } from './protocol';
 
 type LoadInput = Omit<Extract<HostRequest, { type: 'load' }>, 'id' | 'type'>;
@@ -21,6 +22,7 @@ export interface EngineClient {
   snapshot(): Promise<HostSnapshot>;
   metrics(): Promise<Metrics>;
   metricsSeries(): Promise<MetricsSample[]>;
+  runHeadless(): Promise<HeadlessResult>;
   inspect(id: number): Promise<VehicleDetail | null>;
   hash(): Promise<number>;
   onEvent(listener: (event: HostEvent) => void): () => void;
@@ -110,6 +112,7 @@ export function createEngineClient(worker: Worker): EngineClient {
     },
     metrics: () => send({ type: 'metrics' }),
     metricsSeries: () => send({ type: 'metricsSeries' }),
+    runHeadless: () => send({ type: 'runHeadless' }),
     inspect: (vehicleId) => send({ type: 'inspect', vehicleId }),
     hash: () => send({ type: 'hash' }),
     onEvent(listener) {

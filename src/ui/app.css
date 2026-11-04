@@ -812,3 +812,53 @@ dd {
   justify-content: flex-end;
   margin-top: 10px;
 }
+
+.compare-sheet {
+  width: min(620px, calc(100vw - 2 * var(--inset)));
+}
+
+.compare-actions {
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.compare-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  margin: 12px 0;
+}
+
+.compare-sheet th,
+.compare-sheet td {
+  text-align: right;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.compare-sheet th:first-child {
+  text-align: left;
+}
+
+.compare-sheet p {
+  margin-top: 8px;
+}
+
+.comparison-progress {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.comparison-progress progress {
+  flex: 1;
+  accent-color: #4d8e94;
+}
+
+.usage-up {
+  color: #98603e;
+}
+
+.usage-down {
+  color: #39737a;
+}

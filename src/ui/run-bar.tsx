@@ -1,6 +1,7 @@
 import { useAppStore } from './store';
 import { Layers } from './layers';
 import { MetricsPanel } from './panels/metrics';
+import { ComparePanel } from './panels/compare';
 
 const speeds = [1, 2, 5, 10, 20];
 
@@ -17,6 +18,8 @@ export function RunBar() {
   const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
   const layersOpen = useAppStore((state) => state.layersOpen);
   const metricsOpen = useAppStore((state) => state.metricsOpen);
+  const compareOpen = useAppStore((state) => state.compareOpen);
+  const { toggleCompare } = useAppStore.getState();
   const { toggleLayers, toggleMetrics } = useAppStore.getState();
   const { control, setSpeed, toggleDiagnostics } = useAppStore.getState();
   const disabled = !run || busy;
@@ -74,6 +77,15 @@ export function RunBar() {
         {run?.status === 'finished' && <span>Finished</span>}
       </div>
       <div className="run-summary">
+        <button
+          disabled={!run}
+          aria-expanded={compareOpen && !layersOpen && !metricsOpen}
+          aria-controls="compare"
+          onClick={toggleCompare}
+        >
+          Compare
+        </button>
+        {compareOpen && !layersOpen && !metricsOpen && <ComparePanel />}
         <button
           disabled={!run}
           aria-expanded={layersOpen}

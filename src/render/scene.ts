@@ -53,6 +53,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   vehicleRing.visible = false;
   const heatOverlay = new Graphics();
   const heat = new HeatLayer();
+  const difference = new Graphics();
+  let differenceCount = 0;
   heatOverlay.addChild(heat.roads, heat.queues);
   const disconnectedOverlay = new Graphics();
   const signalPreview = new Graphics();
@@ -75,6 +77,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
 
   function applyVisibility() {
+    difference.visible = layerVisibility.difference;
+    if (import.meta.env.MODE === 'test')
+      canvas.dataset.differenceRoads = String(layerVisibility.difference ? differenceCount : 0);
     heat.roads.visible = layerVisibility.heat;
     heat.queues.visible = layerVisibility.queues;
     routeOverlay.visible = layerVisibility.routes;
@@ -156,6 +161,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       tiles?.container.removeFromParent();
       // The heat tint lives in the base grade so it sits under vehicles and signals.
       heat.roads.removeFromParent();
+      difference.removeFromParent();
+      difference.clear();
+      differenceCount = 0;
       for (const child of map.removeChildren()) child.destroy({ children: true, context: true });
       updateSignals = [];
 
@@ -172,6 +180,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       for (const { group } of grades.values()) map.addChild(group);
       const base = grades.get(0)!;
       base.group.addChildAt(heat.roads, base.group.getChildIndex(base.connectors));
+      base.group.addChildAt(difference, base.group.getChildIndex(base.connectors));
       visibleGrades = [...grades.values()];
       applyVisibility();
       shapes = city.places.map(
@@ -244,6 +253,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     },
     setHeat(ratios) {
       if (city) heat.setHeat(ratios);
+    },
+    setDifference(roads) {
+      difference.clear();
+      differenceCount = 0;
+      const max = Math.max(1, ...(roads ?? []).map(({ vehicles }) => Math.abs(vehicles)));
+      for (const road of roads ?? []) {
+        if (!road.vehicles) continue;
+        difference.poly(road.surface).fill({
+          color: road.vehicles > 0 ? 0xb97750 : 0x4d8e94,
+          alpha: 0.35 + (0.5 * Math.abs(road.vehicles)) / max,
+        });
+        differenceCount++;
+      }
+      applyVisibility();
     },
     setQueues(snapshot) {
       if (city) heat.setQueues(snapshot);

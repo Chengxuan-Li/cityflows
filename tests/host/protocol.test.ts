@@ -123,6 +123,20 @@ test('round-trips every request through the worker and matches replies by ID', a
     'hash',
     'step',
   ]);
+  const beforeComparison = await client.metrics();
+  const comparisonHash = await client.hash();
+  const historyBefore = await client.metricsSeries();
+  const comparisonEvents: HostEvent[] = [];
+  client.onEvent((event) => comparisonEvents.push(event));
+  const headless = await client.runHeadless();
+  expect(headless.metrics.timeS).toBe(101);
+  expect(await client.hash()).toBe(comparisonHash);
+  expect(await client.metrics()).toEqual(beforeComparison);
+  expect(await client.metricsSeries()).toEqual(historyBefore);
+  expect(comparisonEvents).toEqual([
+    { type: 'headlessProgress', timeS: 100 },
+    { type: 'headlessProgress', timeS: 101 },
+  ]);
   const pending = client.hash();
   client.terminate();
   await expect(pending).rejects.toThrow('terminated');

@@ -3,6 +3,7 @@ import type { LayerVisibility } from '../render/types';
 import { useAppStore } from './store';
 
 const labels: [keyof LayerVisibility, string][] = [
+  ['difference', 'Comparison road usage'],
   ['heat', 'Road speeds'],
   ['queues', 'Queues'],
   ['places', 'Places'],
@@ -33,6 +34,12 @@ export function Layers() {
       {layers.heat && (
         <p className="heat-key">
           <span /> Darker roads are slower
+        </p>
+      )}
+      {layers.difference && (
+        <p className="difference-key">
+          <span className="usage-up">More vehicles</span> ·{' '}
+          <span className="usage-down">Fewer vehicles</span>
         </p>
       )}
       {layers.queues && (

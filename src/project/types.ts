@@ -1,11 +1,20 @@
 import { z } from 'zod';
 import { historyFileSchema, personSchema, scenarioSchema } from '../schema';
 import type { City, HistoryEntry, Person, Scenario } from '../schema';
+import type { Baseline } from './scenarios';
 
-export const projectKeys = ['city', 'population', 'scenarios', 'history', 'view'] as const;
+export const projectKeys = [
+  'city',
+  'population',
+  'scenarios',
+  'history',
+  'view',
+  'baseline',
+] as const;
 export type ProjectKey = (typeof projectKeys)[number];
 
 export interface Project {
+  baseline?: Baseline;
   city: City;
   population?: Person[];
   scenarios: Scenario[];

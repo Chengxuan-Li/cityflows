@@ -16,6 +16,7 @@ function applyRecords<T>(
 export function applyPatch(city: City, patch: Patch): City {
   return {
     ...city,
+    ...patch.metadata,
     nodes: applyRecords(city.nodes, patch.set.nodes, patch.remove.nodes),
     roads: applyRecords(city.roads, patch.set.roads, patch.remove.roads),
     places: applyRecords(city.places, patch.set.places, patch.remove.places),
@@ -25,6 +26,8 @@ export function applyPatch(city: City, patch: Patch): City {
 
 export function invertPatch(city: City, patch: Patch): Patch {
   const inverse: Patch = { set: {}, remove: {} };
+  if (patch.metadata)
+    inverse.metadata = { name: city.name, drivingSide: city.drivingSide, geo: city.geo };
   for (const key of collections) {
     const ids = new Set([...Object.keys(patch.set[key] ?? {}), ...(patch.remove[key] ?? [])]);
     for (const id of ids) {
@@ -39,6 +42,13 @@ export function invertPatch(city: City, patch: Patch): Patch {
 
 export function diffCity(before: City, after: City): Patch {
   const patch: Patch = { set: {}, remove: {} };
+  if (
+    before.name !== after.name ||
+    before.drivingSide !== after.drivingSide ||
+    before.geo !== after.geo
+  ) {
+    patch.metadata = { name: after.name, drivingSide: after.drivingSide, geo: after.geo };
+  }
   for (const key of collections) {
     if (before[key] === after[key]) continue;
     for (const id of Object.keys(before[key])) {

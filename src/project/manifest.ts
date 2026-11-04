@@ -13,7 +13,14 @@ export const manifestSchema = z.object({
   name: z.string(),
   savedAt: z.iso.datetime(),
   files: z.partialRecord(
-    z.enum(['city.json', 'population.json', 'scenarios.json', 'history.json', 'view.json']),
+    z.enum([
+      'city.json',
+      'population.json',
+      'scenarios.json',
+      'history.json',
+      'view.json',
+      'baseline.json',
+    ]),
     z.string().regex(/^[0-9a-f]{64}$/),
   ),
   licenses: z.array(z.string()),

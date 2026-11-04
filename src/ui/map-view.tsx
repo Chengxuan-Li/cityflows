@@ -298,6 +298,7 @@ export function MapView() {
       let pulling = false;
       let failed: Session | null = null;
       let drawnLayers = getState().layers;
+      let drawnComparison = getState().comparison;
       view.setLayerVisibility(drawnLayers);
 
       async function pull(session: Session) {
@@ -362,10 +363,15 @@ export function MapView() {
           drawn = session;
           drawnSelection = drawnRoute = null;
           snapshotTime = NaN;
+          drawnComparison = null;
         }
         if (selection !== drawnSelection) {
           view.setSelection(selection);
           drawnSelection = selection;
+        }
+        if (getState().comparison !== drawnComparison) {
+          drawnComparison = getState().comparison;
+          view.setDifference(drawnComparison?.roads ?? null);
         }
         const route = vehicle?.route ?? null;
         if (route !== drawnRoute) {
