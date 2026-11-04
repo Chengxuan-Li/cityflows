@@ -888,3 +888,96 @@ dd {
   background: var(--paper);
   pointer-events: none;
 }
+
+.profile-row {
+  margin: 6px 0 0;
+}
+
+.profile-row svg {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.profile-row rect {
+  fill: #86b2a1;
+  min-height: 1px;
+}
+
+.profile-row rect:hover,
+.profile-row rect:focus-visible {
+  fill: var(--accent);
+  outline: none;
+}
+
+.profile-axis {
+  stroke: var(--edge);
+}
+
+.profile-row text {
+  fill: var(--muted);
+  font-size: 9px;
+}
+
+.profile-editor + button,
+.inspector .disclosure > .muted + button {
+  margin-top: 6px;
+}
+
+.demand-sheet {
+  width: min(760px, calc(100vw - 2 * var(--inset)));
+}
+
+.demand-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin: 8px 0;
+}
+
+.demand-columns figure {
+  margin: 0;
+}
+
+.demand-columns svg {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  overflow: visible;
+}
+
+.demand-columns text {
+  fill: var(--muted);
+  font-size: 13px;
+}
+
+.demand-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.demand-sheet th,
+.demand-sheet td {
+  text-align: right;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.demand-sheet th[scope='row'],
+.demand-sheet th:first-child {
+  text-align: left;
+  font-weight: inherit;
+}
+
+.demand-sheet form {
+  margin-top: 12px;
+}
+
+@media (max-width: 1050px) {
+  .demand-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

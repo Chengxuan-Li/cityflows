@@ -2,6 +2,7 @@ import { useAppStore } from './store';
 import { Layers } from './layers';
 import { MetricsPanel } from './panels/metrics';
 import { ComparePanel } from './panels/compare';
+import { DemandPanel } from './panels/demand';
 
 const speeds = [1, 2, 5, 10, 20];
 
@@ -18,10 +19,10 @@ export function RunBar() {
   const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
   const layersOpen = useAppStore((state) => state.layersOpen);
   const metricsOpen = useAppStore((state) => state.metricsOpen);
-  const seed = useAppStore((state) => state.session?.project.scenarios[0]?.demand.seed);
+  const demandOpen = useAppStore((state) => state.demandOpen);
   const compareOpen = useAppStore((state) => state.compareOpen);
   const { toggleCompare } = useAppStore.getState();
-  const { toggleLayers, toggleMetrics } = useAppStore.getState();
+  const { toggleLayers, toggleMetrics, toggleDemand } = useAppStore.getState();
   const { control, setSpeed, toggleDiagnostics } = useAppStore.getState();
   const disabled = !run || busy;
   const counts = run?.counts;
@@ -80,13 +81,13 @@ export function RunBar() {
       <div className="run-summary">
         <button
           disabled={!run}
-          aria-expanded={compareOpen && !layersOpen && !metricsOpen}
+          aria-expanded={compareOpen && !layersOpen && !metricsOpen && !demandOpen}
           aria-controls="compare"
           onClick={toggleCompare}
         >
           Compare
         </button>
-        {compareOpen && !layersOpen && !metricsOpen && <ComparePanel />}
+        {compareOpen && !layersOpen && !metricsOpen && !demandOpen && <ComparePanel />}
         <button
           disabled={!run}
           aria-expanded={layersOpen}
@@ -103,8 +104,17 @@ export function RunBar() {
         >
           Chart
         </button>
+        <button
+          disabled={disabled}
+          aria-expanded={demandOpen}
+          aria-controls="demand"
+          onClick={toggleDemand}
+        >
+          Demand
+        </button>
         {layersOpen && <Layers />}
         {metricsOpen && <MetricsPanel />}
+        {demandOpen && <DemandPanel />}
         {counts && (
           <details className="metrics">
             <summary>Trip counts</summary>
@@ -136,30 +146,6 @@ export function RunBar() {
                 </div>
               </dl>
               <p className="muted">achieved ×{(run?.achieved ?? 0).toFixed(1)}</p>
-              <form
-                className="edit-fields"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const input = new FormData(event.currentTarget).get('seed');
-                  void useAppStore.getState().regenerateDemand(Number(input));
-                }}
-              >
-                <label className="edit-field">
-                  Demand seed
-                  <input
-                    key={seed}
-                    name="seed"
-                    type="number"
-                    min={Number.MIN_SAFE_INTEGER}
-                    max={Number.MAX_SAFE_INTEGER}
-                    step={1}
-                    required
-                    defaultValue={seed}
-                    disabled={disabled}
-                  />
-                </label>
-                <button disabled={disabled}>Regenerate demand</button>
-              </form>
               <p className="muted">Synthetic traffic, not observed traffic</p>
             </div>
           </details>
