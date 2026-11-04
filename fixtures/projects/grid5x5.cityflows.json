@@ -7,7 +7,7 @@
     "name": "5 × 5 grid",
     "savedAt": "2026-11-03T00:00:00.000Z",
     "files": {
-      "city.json": "07cac5a84208e1b1497b9f1b44d967b59bafea4ded9b1132e29532a907750f8c",
+      "city.json": "0c9ecae3ca6f9b60045777ef15aa037a7892f9d7cb241aad34cba8fb28a212da",
       "scenarios.json": "3a18db28ade4ba48c98e70e63f88f909bbfd532a0d964b790d533a3eb37bd9bc"
     },
     "licenses": [],
@@ -1661,7 +1661,7 @@
         "name": "Homes",
         "kind": "residential",
         "shape": { "kind": "point", "pos": { "x": 15, "y": -15 } },
-        "population": 131,
+        "population": 1088,
         "jobs": 0,
         "attraction": 1,
         "capacity": null,
@@ -1693,7 +1693,7 @@
         "kind": "work",
         "shape": { "kind": "point", "pos": { "x": 465, "y": 495 } },
         "population": 0,
-        "jobs": 200,
+        "jobs": 1200,
         "attraction": 1,
         "capacity": null,
         "profile": null,

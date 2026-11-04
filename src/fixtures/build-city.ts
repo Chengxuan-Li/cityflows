@@ -92,8 +92,9 @@ export function buildCity(name: string, seed: number) {
       name,
       kind,
       shape: { kind: 'point', pos },
-      population: kind === 'residential' ? 100 + Math.floor(random.uniform(0, 51)) : 0,
-      jobs: kind === 'work' ? 200 : 0,
+      // Enough commuters that the morning peak overloads the central signal and queues form.
+      population: kind === 'residential' ? 900 + Math.floor(random.uniform(0, 301)) : 0,
+      jobs: kind === 'work' ? 1200 : 0,
       attraction: 1,
       capacity: null,
       profile: null,

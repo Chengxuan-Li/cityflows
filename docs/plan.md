@@ -52,7 +52,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-009](tasks/TASK-009.md) | 1 | App shell, run controls, inspectors | `src/ui`, `src/main.tsx`, `tests/e2e/gate1-run.spec.ts` | 005, 006, 008, 011 | Gate 1 items 1 to 4, 7 | done |
 | [TASK-010](tasks/TASK-010.md) | 1 | Editing UI and restart policy | `src/ui/inspector/*`, `src/ui/run-bar*`, `tests/e2e/gate1-edit.spec.ts` | 007, 009 | Gate 1 items 5, 6; T17 | done |
 | [TASK-011](tasks/TASK-011.md) | 1 | Demand v1: population and commute trips | `src/demand`, `tests/demand` | 001 | T09 (commute), T15 (data side) | done |
-| [TASK-012](tasks/TASK-012.md) | 1 | Gate 1 integration and acceptance | anywhere (lead), `tests/e2e/gate1-*.spec.ts` | 004, 010 | Gate 1 checklist, CI green | todo |
+| [TASK-012](tasks/TASK-012.md) | 1 | Gate 1 integration and acceptance | anywhere (lead), `tests/e2e/gate1-*.spec.ts` | 004, 010 | Gate 1 checklist, CI green | done |
 | [TASK-020](tasks/TASK-020.md) | 2 | OSM importer and fixtures | `src/importers/osm`, `src/importers/types.ts`, `fixtures/osm`, `tests/importers` | 001 | T11, T18 | done |
 | [TASK-021](tasks/TASK-021.md) | 2 | Import wizard, Overpass provider, file upload | `src/ui/import`, `src/importers/overpass.ts`, `src/importers/cache.ts`, `src/importers/worker.ts` | 020, 009 | import workflow end to end | todo |
 | [TASK-022](tasks/TASK-022.md) | 2 | Topology editing: draw, split, delete, move | `src/editor/commands/topology.ts`, `src/ui/tools/*`, `src/render/layers/edit-overlay.ts`, `tests/editor/T12-topology.test.ts`, `tests/e2e/gate2-edit.spec.ts` | 007, 010 | T12 (full) | todo |
@@ -194,6 +194,18 @@ exists.
   Accepted: per-phase road-pair checkboxes ahead of TASK-040, test hooks on window.cityflows,
   vehicles on a deleted lane drawn in layer 0 until restart. With this, Gate 1 items 1 to 7
   are implemented; TASK-012 verifies them end to end.
+
+- 2026-11-03, Gate 1 verified (TASK-012, lead). Checklist items 1 to 7 pass in Playwright
+  (seven scenarios: run, replay and inspect; JSON open, ZIP save and reopen; T17; a banned
+  movement changes routes and the hash; a shortened phase changes the queue; rejected and
+  undone edits; an edited network surviving save and reopen) and by hand in the browser. The
+  demo grid now has 1 088 residents so the morning peak overloads the central signal. A full
+  scenario day headless (07:00 to 18:00, 2 176 trips): 1 978 completed, 0 failed, the rest
+  scheduled after the end of the window, peak 24 driving and 26 queued at the origin, mean
+  delay 31 s, 396 000 steps in 0.7 s, heap 17 to 32 MB with no growth after the peak. The
+  handoff's failure conditions are absent: cars carry state, roads are canonical topology,
+  routing is by expected time with lane feasibility, edits change routes after restart, trips
+  start and end only at connectors, and the project exports and reopens.
 
 ## Owner decisions log
 

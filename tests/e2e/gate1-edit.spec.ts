@@ -108,6 +108,8 @@ test('a five-second phase changes the queue at the same simulation time', async 
   const destination = fixture.city.places['p:107']!.connectors.find(({ id }) => id === 'c:109')!;
   Object.assign(origin, { roadId: 'r:52', lane: 1 });
   Object.assign(destination, { roadId: 'r:65', lane: 1, throughputPerMin: 10 });
+  // A small burst keeps the central signal, not the origin connector, as the bottleneck.
+  fixture.city.places['p:104']!.population = 150;
   fixture.city.name = fixture.manifest.name = 'Signal queue';
   const scenario = fixture.scenarios[0]!;
   scenario.demand.workStart = { meanS: scenario.startS, sdS: 0 };
