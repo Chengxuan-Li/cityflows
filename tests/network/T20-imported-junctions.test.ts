@@ -17,13 +17,20 @@ test.each([
     if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
     const result = compile(imported.city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    const overlaps = junctionOverlaps(result.compiled);
+    const all = junctionOverlaps(result.compiled);
+    const overlaps = all.filter((pair) => !pair.capped);
     const sourceDefects = importedRoadBodyOverlaps[name]!;
-    console.info(name, 'road-body overlap occurrences', overlaps.length);
-    expect(overlaps.filter((pair) => !sourceDefects[pair.lanes.join('>')])).toEqual([]);
-    expect([...new Set(overlaps.map((pair) => pair.lanes.join('>')))].sort()).toEqual(
-      Object.keys(sourceDefects).sort(),
+    console.info(
+      name,
+      'road-body overlap occurrences',
+      overlaps.length,
+      'crossings beyond a capped setback',
+      all.length - overlaps.length,
     );
+    expect(overlaps.filter((pair) => !sourceDefects[pair.lanes.join('>')])).toEqual([]);
+    // Every listed source defect still crosses somewhere, capped node or not.
+    const keys = new Set(all.map((pair) => pair.lanes.join('>')));
+    expect(Object.keys(sourceDefects).filter((key) => !keys.has(key))).toEqual([]);
     expect(movementsOutside(result.compiled)).toEqual([]);
   },
   120_000,

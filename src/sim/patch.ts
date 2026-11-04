@@ -121,6 +121,8 @@ export function createProjector(city: CompiledCity) {
 function project(p: Vec2, a: Vec2, b: Vec2) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
+  // A zero-length segment (a through node's movement after TASK-061) has no direction.
+  if (dx === 0 && dy === 0) return { fraction: 0, distance: Math.hypot(p.x - a.x, p.y - a.y) };
   const fraction = Math.max(
     0,
     Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)),

@@ -76,7 +76,13 @@ test.each([true, false])(
         waited = true;
       }
       if (detail.lane !== previous) {
-        if (previous >= 0 && detail.lane >= 0) {
+        const through = compiled.lanes[previous >= 0 ? previous : 0]!.out.some(
+          (i) =>
+            compiled.movements[i]!.toLane === detail.lane && compiled.movements[i]!.lengthM === 0,
+        );
+        if (previous >= 0 && detail.lane >= 0 && through) {
+          // A through node's movement has no length and is crossed within one step (TASK-061).
+        } else if (previous >= 0 && detail.lane >= 0) {
           expect(reachable).toBe(false);
           expect(compiled.lanes[detail.lane]!.road).toBe(compiled.lanes[previous]!.road);
         } else if (previous >= 0) {

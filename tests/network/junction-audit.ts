@@ -1,9 +1,12 @@
 import { segmentsIntersect } from '../../src/geo/polyline';
 import type { CompiledCity } from '../../src/network';
+import { SETBACK_CAP_M } from '../../src/network/junctions';
 import type { Vec2 } from '../../src/geo/vec2';
 
 // Canonical road-body defects, outside TASK-061's junction geometry surface.
 // Keys name lane pairs so a new crossing at another junction cannot disappear into a count.
+// Crossings beyond a capped setback (`capped`) are not listed: the Sindelfingen pair
+// r:140#0>r:476#0 (curved service ways, 47 m beyond the junction) became one with the cap.
 export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = {
   'munich-donnersberger': {
     'r:566#0>r:588#0':
@@ -16,8 +19,9 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
   },
   'sindelfingen-a81': {
     'r:1029#0>r:1178#0': 'Separate source streets cross 114/124 m from their shared endpoints.',
-    'r:140#0>r:476#0': 'Curved service ways cross 47 m beyond their common junction.',
     'r:499#0>r:876#0': 'Curved zero-offset source roads cross 25 m beyond their common junction.',
+    'r:505#0>r:665#0':
+      'Two short source ways leave n:501 on top of each other for their whole length.',
     'r:746#0>r:803#1': 'Opposing source carriageways have coincident centerlines and zero offsets.',
     'r:746#1>r:803#0': 'Opposing source carriageways have coincident centerlines and zero offsets.',
     'r:574#0>r:971#0': 'Separate zero-offset source carriageways cross along their road bodies.',
@@ -56,13 +60,17 @@ export function movementsOutside(net: CompiledCity) {
     .map((m) => m.id);
 }
 
-/** Count lane pairs of distinct incident roads with a proper crossing (shared ends excluded). */
+/** Lane pairs of distinct incident roads with a proper crossing (shared ends excluded).
+ * `capped` marks a crossing at a node where a road end's setback hit `SETBACK_CAP_M`: an
+ * acute approach the junction surface covers instead of a longer setback (architecture 5.1). */
 export function junctionOverlaps(net: CompiledCity) {
-  const overlaps: { node: string; lanes: string[] }[] = [];
+  const overlaps: { node: string; lanes: string[]; capped: boolean }[] = [];
   for (const node of net.nodes) {
-    const lanes = net.roads
-      .filter((r) => r.from === node.idx || r.to === node.idx)
-      .flatMap((r) => r.lanes.map((i) => net.lanes[i]!));
+    const roads = net.roads.filter((r) => r.from === node.idx || r.to === node.idx);
+    const capped = new Set(
+      roads.filter((_, i) => node.setbacks[i]! >= SETBACK_CAP_M - 1e-9).map((r) => r.idx),
+    );
+    const lanes = roads.flatMap((r) => r.lanes.map((i) => net.lanes[i]!));
     for (let i = 0; i < lanes.length; i++) {
       const a = lanes[i]!;
       for (const b of lanes.slice(i + 1)) {
@@ -77,7 +85,12 @@ export function junctionOverlaps(net: CompiledCity) {
             return !shared && segmentsIntersect(start, end, before, other);
           }),
         );
-        if (crosses) overlaps.push({ node: node.id, lanes: [a.id, b.id] });
+        if (crosses)
+          overlaps.push({
+            node: node.id,
+            lanes: [a.id, b.id],
+            capped: capped.size > 0,
+          });
       }
     }
   }

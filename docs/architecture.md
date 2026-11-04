@@ -295,7 +295,12 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   setback of a road end is the distance along its centerline from the node to the farthest
   intersection of its lane-block edges with the lane-block edges of the two road ends
   adjacent to it in angular order, plus 1.0 m, with a floor of `W/2 + 1`; where adjacent
-  edges do not intersect (nearly parallel ends, as at a ramp merge) the setback is the floor.
+  edges do not intersect (nearly parallel ends, as at a ramp merge) the setback is the floor,
+  and a setback is never more than `max(floor, 10 m)` (`SETBACK_CAP_M`): at an acute
+  approach the lane blocks overlap beyond the cap and the junction surface covers them,
+  rather than holding cars ever farther from the junction on a movement that blocks every
+  conflicting one for its whole length (lead decision at the TASK-061 review, after the
+  Munich morning lost 40 percent of its completed trips to 50 to 115 m movements).
   A node with two ends of one street has setback 0: the road draws and drives through.
   Lanes are trimmed by their own road end's setback; `road_too_short` keeps its rule with the
   two setbacks in place of `2 * radiusM`. `CNode.radiusM` stays as the largest setback, for

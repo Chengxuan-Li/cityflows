@@ -491,6 +491,10 @@ function createRun({
             -granted - 1,
             Math.min(position - lane.lengthM, compiled.movements[granted]!.lengthM),
           );
+          // A through node's movement has no length (TASK-061): carry the overflow into the
+          // next lane in the same step, so a split road drives like one road.
+          if (compiled.movements[granted]!.lengthM === 0)
+            enterLane(id, compiled.movements[granted]!.toLane, position - lane.lengthM, timeS);
         } else if (movement === -1) {
           vehicles.remove(id);
           vehicles.position[id] = lane.lengthM;

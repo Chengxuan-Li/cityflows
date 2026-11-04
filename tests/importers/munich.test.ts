@@ -16,9 +16,6 @@ const remainingShortRoads: Record<string, string> = {
   'r:1172': 'Short Westendstraße remnant: 2.50 m and 3.41 m setbacks leave less than 5 m.',
   'r:1173': 'Reverse Westendstraße remnant: 3.69 m and 2.50 m setbacks leave less than 5 m.',
   'r:345': 'Philipp-Loewenfeld-Straße link: 4.09 m and 3.94 m setbacks exceed available length.',
-  'r:636': 'Acute Arnulfstraße approach needs 51.25 m and 12.52 m setbacks.',
-  'r:660': 'Landshuter Allee short link needs 11.56 m and 11.51 m setbacks.',
-  'r:961': 'Acute Landsberger Straße approach needs 6.25 m and 47.95 m setbacks.',
   'r:972': 'Friedrich-von-Pauli-Straße short remnant cannot fit two floor setbacks plus 5 m.',
   'r:973':
     'Reverse Friedrich-von-Pauli-Straße short remnant cannot fit two floor setbacks plus 5 m.',
@@ -125,8 +122,10 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
       .flatMap((d) => d.refs)
       .sort(),
   ).toEqual(Object.keys(remainingShortRoads).sort());
-  const overlaps = junctionOverlaps(compiled);
-  expect(overlaps).toHaveLength(8); // 78 before TASK-061; remaining source road-body defects only.
+  // 78 lane crossings at junction ends before TASK-061. What remains is either a source
+  // road-body defect listed in the audit or a crossing at a node with a capped setback,
+  // which the junction surface covers (architecture 5.1).
+  const overlaps = junctionOverlaps(compiled).filter((pair) => !pair.capped);
   expect(
     overlaps.filter(
       (pair) => !importedRoadBodyOverlaps['munich-donnersberger']![pair.lanes.join('>')],

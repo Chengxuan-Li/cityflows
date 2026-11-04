@@ -14,6 +14,11 @@ function outward(road: Road, node: CNode) {
   return road.from === node.id ? road.centerline : [...road.centerline].reverse();
 }
 
+/** Longest setback at acute approaches beyond what clearing the widest neighbouring road
+ * end at a right angle needs: past it the roads merge as one surface instead of stopping
+ * cars ever farther from the junction (lead decision at the TASK-061 review). */
+export const SETBACK_CAP_M = 10;
+
 /** Setback array follows incident road index order, independently of angular sorting. */
 export function junctionSetbacks(node: CNode, roads: Road[]): number[] {
   const ends = roads.map((road, index) => {
@@ -29,6 +34,7 @@ export function junctionSetbacks(node: CNode, roads: Road[]): number[] {
       lengths,
       heading,
       width,
+      extent: Math.max(Math.abs(offset - width / 2), Math.abs(offset + width / 2)),
       edges: [-1, 1].map((side) => {
         const lateral = offset + (side * width) / 2;
         const start = {
@@ -86,6 +92,11 @@ export function junctionSetbacks(node: CNode, roads: Road[]): number[] {
         ? [arms[(i + 1) % arms.length]!, arms[(i + arms.length - 1) % arms.length]!]
         : [];
     for (const end of arm) {
+      const cap = Math.max(
+        end.width / 2 + 1,
+        SETBACK_CAP_M,
+        ...neighbors.flatMap((neighbor) => neighbor.map((other) => other.extent + 1)),
+      );
       for (const neighbor of new Set(neighbors))
         for (const other of neighbor) {
           if (Math.abs(Math.sin(end.heading - other.heading)) < Math.sin(Math.PI / 36)) continue;
@@ -119,7 +130,7 @@ export function junctionSetbacks(node: CNode, roads: Road[]): number[] {
                         along = end.lengths[s - 1]! + t * segment;
                       }
                     }
-                    setbacks[end.index] = Math.max(setbacks[end.index]!, along + 1);
+                    setbacks[end.index] = Math.min(cap, Math.max(setbacks[end.index]!, along + 1));
                   }
                 }
             }
