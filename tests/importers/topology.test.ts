@@ -111,13 +111,15 @@ test('through arrows align within their lane group after dedicated left-turn lan
   ]);
 });
 
-test('short-section consolidation retains mapped stop and yield controls', () => {
+test('short-section consolidation retains mapped stop and yield controls at real junctions', () => {
   for (const highway of ['stop', 'give_way']) {
     const result = importOsm(
       `<osm>
       <node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0.0001"><tag k="highway" v="${highway}"/></node>
       <node id="3" lat="0" lon="0.001"/>
+      <node id="4" lat="0.001" lon="0.0001"/>
       <way id="10"><nd ref="1"/><nd ref="2"/><nd ref="3"/><tag k="highway" v="residential"/></way>
+      <way id="11"><nd ref="2"/><nd ref="4"/><tag k="highway" v="residential"/></way>
     </osm>`,
       { importerVersion: 'test' },
     );
