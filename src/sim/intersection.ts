@@ -48,6 +48,12 @@ export function createIntersections(
   }
 
   function request(id: number, movement: CMovement) {
+    if (
+      compiled.nodes[movement.node]!.control === 'stop' &&
+      movement.priority < 10 &&
+      vehicles.stopped[id]! < 1 - 1e-9
+    )
+      return;
     const queue = candidates[movement.node]!;
     if (!queue.length) activeNodes.push(movement.node);
     queue.push(id);
@@ -58,7 +64,6 @@ export function createIntersections(
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1 && vehicles.position[exitTail]! < clearance) return false;
     const control = compiled.nodes[movement.node]!.control;
-    if (control === 'stop' && movement.priority < 10 && !vehicles.stopped[id]) return false;
     for (const idx of movement.conflicts) {
       if (occupancy[idx]! > 0) return false;
       if (control !== 'yield' && control !== 'stop') continue;
@@ -74,7 +79,7 @@ export function createIntersections(
           vehicles.state[approaching] === DRIVING &&
           vehicles.movement[approaching] === idx &&
           vehicles.speed[approaching]! > 0 &&
-          length - vehicles.position[approaching]! <=
+          length - vehicles.position[approaching]! <
             vehicles.speed[approaching]! * params.intersection.gapS
         ) {
           return false;

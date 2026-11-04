@@ -625,8 +625,9 @@ Step sequence, in this order every step:
      no vehicle holds a grant on or drives on a conflicting movement, the last vehicle on the
      exit lane is at least `vehicleLengthM + minGapM` along it (downstream blocking), and for
      yield and stop nodes every vehicle approaching on a conflicting higher-priority movement
-     is more than `gapS` away. Stop nodes also require a minor-approach vehicle to have been
-     standing for one step. Several vehicles may hold grants on the same movement (movements
+     is at least `gapS` away. Stop nodes require a minor-approach vehicle to stand at the
+     stop line continuously for at least one second before requesting entry. Waiting behind
+     another car away from the line does not count. Several vehicles may hold grants on the same movement (movements
      from one lane never conflict); car-following keeps their spacing. A grant persists until
      the vehicle leaves the movement, except that a signal change revokes grants of vehicles
      still on the approach whose movement can no longer be entered.
