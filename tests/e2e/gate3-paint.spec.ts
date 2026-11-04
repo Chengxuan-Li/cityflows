@@ -52,7 +52,7 @@ test('painted work attracts inspected vehicles and same-seed regeneration replay
   expect(created.jobs).toBeGreaterThan(100);
   await page.getByText('Connectors', { exact: true }).click();
   await page.screenshot({ path: info.outputPath('02-place-controls.png') });
-  await page.getByText('Trip counts', { exact: true }).click();
+  await button(page, 'Demand').click();
   const seed = page.getByLabel('Demand seed');
   await expect(seed).toHaveValue('1');
   await seed.fill('23');
@@ -91,7 +91,7 @@ test('painted work attracts inspected vehicles and same-seed regeneration replay
   expect(
     (await page.evaluate((id) => window.cityflows!.inspect(id), vehicle!.id))!.arrivedS,
   ).not.toBeNull();
-  await page.getByText('Trip counts', { exact: true }).click();
+  await button(page, 'Demand').click();
   await button(page, 'Add connector').click();
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();

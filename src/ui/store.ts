@@ -77,9 +77,11 @@ interface AppState {
   layers: LayerVisibility;
   layersOpen: boolean;
   metricsOpen: boolean;
+  demandOpen: boolean;
   toggleLayer: (layer: keyof LayerVisibility) => void;
   toggleLayers: () => void;
   toggleMetrics: () => void;
+  toggleDemand: () => void;
   tool: 'select' | 'road' | 'place' | 'ramp';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
@@ -246,10 +248,11 @@ export const useAppStore = create<AppState>((set, get) => {
     comparison: null,
     comparisonProgress: null,
     toggleCompare: () =>
-      set(({ compareOpen, layersOpen, metricsOpen }) => ({
-        compareOpen: layersOpen || metricsOpen || !compareOpen,
+      set(({ compareOpen, layersOpen, metricsOpen, demandOpen }) => ({
+        compareOpen: layersOpen || metricsOpen || demandOpen || !compareOpen,
         metricsOpen: false,
         layersOpen: false,
+        demandOpen: false,
       })),
     cancelComparison,
     saveBaseline: () => {
@@ -354,11 +357,19 @@ export const useAppStore = create<AppState>((set, get) => {
     layers: { ...defaultLayers },
     layersOpen: false,
     metricsOpen: false,
+    demandOpen: false,
     toggleLayer: (layer) =>
       set(({ layers }) => ({ layers: { ...layers, [layer]: !layers[layer] } })),
-    toggleLayers: () => set(({ layersOpen }) => ({ layersOpen: !layersOpen, metricsOpen: false })),
+    toggleLayers: () =>
+      set(({ layersOpen }) => ({ layersOpen: !layersOpen, metricsOpen: false, demandOpen: false })),
     toggleMetrics: () =>
-      set(({ metricsOpen }) => ({ metricsOpen: !metricsOpen, layersOpen: false })),
+      set(({ metricsOpen }) => ({
+        metricsOpen: !metricsOpen,
+        layersOpen: false,
+        demandOpen: false,
+      })),
+    toggleDemand: () =>
+      set(({ demandOpen }) => ({ demandOpen: !demandOpen, layersOpen: false, metricsOpen: false })),
     tool: 'select',
     setTool: (tool) =>
       set({ tool, selection: null, selectedRoads: [], vehicle: null, selectionPoint: null }),
