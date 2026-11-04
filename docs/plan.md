@@ -71,7 +71,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-042](tasks/TASK-042.md) | 4 | Scenario comparison | `src/ui/panels/compare*`, `src/project/scenarios.ts` | 008, 041 | same-seed baseline versus variant | done |
 | [TASK-043](tasks/TASK-043.md) | 4 | Analysis and interchange exports | `src/project/export-*.ts`, export menu | 008, 041 | CSV and GeoJSON exports labelled synthetic | done |
 | [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | done |
-| [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | todo |
+| [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | done |
 | [TASK-046](tasks/TASK-046.md) | 4 | Simulation hotspots | `src/sim/reroute.ts`, `engine.ts`, `lane-change.ts`, `src/host/headless.ts`, `export-data.ts`, `bench/` | 044, 032 | bench gains with unchanged hashes | done |
 
 ### Waves
@@ -454,6 +454,19 @@ residential and work places from buildings and land use.
   tree; the lead opened the panel and the editors in the browser. Two follow-ups noted: a
   second connector with direction "both" on a capacity-limited place deadlocks its loop
   (departures spawn into the arriving queue), and the demand chart oversizes below 900 px.
+
+- 2026-11-04, TASK-045 merged as delivered (session from the lead chat). Four recorded demo
+  scenarios with a video and a metrics file each (A: grid with 2 000 residents, peak at 08:00,
+  22 driving and 240 queued at the Homes exit; B: Station city, queue 0 before the 08:05
+  train, peak 64, 53 with a second arrival connector; C: expressway with two ramps, every
+  inspected route uses it, mean travel time 90.7 s to 60.0 s; D: the downtown OSM fixture
+  imported, a banned turn lifted, saved, reopened in a fresh browser context and replayed to
+  the same hash), a shared e2e helper module, and a first-run hint sequence of six cards
+  beside their targets that advance when the step is done, with Show hints, `?hints` and a
+  dev hook to reopen it. The lead followed the first three hints in the browser. Demo D
+  confirms the import demand problem already in the backlog (B3, B5): 7 442 of the imported
+  city's gateway trips fail in the first 15 minutes. With this, every task in the plan is
+  merged; the backlog from real OSM testing is the next wave.
 
 ## Owner decisions log
 
