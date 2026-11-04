@@ -14,6 +14,8 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
     metrics: () => engine().metrics(),
     hash: () => engine().hash(),
     inspect: (id) => engine().inspect(id),
+    step: (steps) => useAppStore.getState().control('step', steps),
+    movementId: (index) => useAppStore.getState().session!.loadedCompiled.movements[index]!.id,
   };
 }
 

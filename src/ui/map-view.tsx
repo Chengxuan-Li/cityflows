@@ -1,9 +1,37 @@
 import { useEffect, useRef } from 'react';
 import type { Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
-import type { Pick, Scene } from '../render/types';
+import type { Pick, Scene, VehicleSnapshot } from '../render/types';
 import type { Route } from '../routing';
 import { useAppStore, type Session } from './store';
+
+function snapshotForMap(snapshot: VehicleSnapshot, { compiled, loadedCompiled }: Session) {
+  if (compiled === loadedCompiled) return snapshot;
+
+  // Positions stay in world coordinates. The renderer only needs the remapped index for layering.
+  const lane = snapshot.lane.map((index) => {
+    if (index >= 0) return compiled.index.lane.get(loadedCompiled.lanes[index]!.id) ?? 0;
+    const movement = loadedCompiled.movements[-index - 1]!;
+    const current = compiled.index.movement.get(movement.id);
+    return current === undefined
+      ? (compiled.index.lane.get(loadedCompiled.lanes[movement.toLane]!.id) ?? 0)
+      : -current - 1;
+  });
+  return { ...snapshot, lane };
+}
+
+function routeForMap(route: Route, { compiled, loadedCompiled }: Session) {
+  const lanes = route.targetLanes.flat();
+  if (compiled === loadedCompiled) return { lanes, movements: route.movements };
+  return {
+    lanes: lanes
+      .map((index) => compiled.index.lane.get(loadedCompiled.lanes[index]!.id))
+      .filter((index) => index !== undefined),
+    movements: route.movements
+      .map((index) => compiled.index.movement.get(loadedCompiled.movements[index]!.id))
+      .filter((index) => index !== undefined),
+  };
+}
 
 function fitCity(scene: Scene, canvas: HTMLCanvasElement, { project, compiled }: Session) {
   const bounds: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
@@ -120,7 +148,7 @@ export function MapView() {
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
         if (snapshot.timeS !== snapshotTime) {
-          view.setSnapshot(snapshot);
+          view.setSnapshot(snapshotForMap(snapshot, session));
           snapshotTime = snapshot.timeS;
         }
         const { selection, run } = current;
@@ -141,7 +169,7 @@ export function MapView() {
       function frame() {
         animation = requestAnimationFrame(frame);
         const { session, selection, vehicle, busy } = getState();
-        if (!session) return;
+        if (!session || busy) return;
         if (drawn?.compiled !== session.compiled) {
           view.setCity(session.compiled, session.project.city);
           if (drawn?.editor !== session.editor) fitCity(view, canvas, session);
@@ -155,12 +183,10 @@ export function MapView() {
         }
         const route = vehicle?.route ?? null;
         if (route !== drawnRoute) {
-          view.setRouteOverlay(
-            route && { lanes: route.targetLanes.flat(), movements: route.movements },
-          );
+          view.setRouteOverlay(route && routeForMap(route, session));
           drawnRoute = route;
         }
-        if (busy || pulling || failed === session) return;
+        if (pulling || failed === session) return;
         pulling = true;
         void pull(session)
           .catch((error: unknown) => {

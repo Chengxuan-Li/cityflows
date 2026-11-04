@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import demo from '../../fixtures/projects/grid5x5.cityflows.json?raw';
 import { generatePopulation, scheduleTrips } from '../demand';
-import { createEditor, type Editor } from '../editor';
+import { createEditor, type CommitResult, type Editor } from '../editor';
 import { createEngineClient, type EngineClient } from '../host/client';
 import type { HostEvent } from '../host/protocol';
 import { compile, type CompiledCity, type Diagnostic } from '../network';
@@ -9,17 +9,22 @@ import { openProject } from '../project/open';
 import { saveProject } from '../project/save';
 import type { Project } from '../project/types';
 import type { Pick as MapPick } from '../render/types';
+import type { Command, Person } from '../schema';
 import type { Metrics, VehicleDetail } from '../sim/types';
+import { selectionAfterEdit } from './edit-selection';
 
 export interface Session {
-  project: Project;
+  project: Project & { population: Person[] };
   editor: Editor;
   compiled: CompiledCity;
+  loadedCompiled: CompiledCity;
   diagnostics: Diagnostic[];
   engine: EngineClient;
 }
 
 interface Run {
+  stale: boolean;
+  cityVersion: number;
   status: 'paused' | 'playing' | 'finished';
   timeS: number;
   counts: Metrics['trips'];
@@ -35,6 +40,7 @@ interface AppState {
   selection: MapPick | null;
   vehicle: VehicleDetail | null;
   diagnosticsOpen: boolean;
+  rejectedEdit: Diagnostic[];
   busy: boolean;
   error: string | null;
   select: (selection: MapPick | null) => void;
@@ -42,7 +48,10 @@ interface AppState {
   reportError: (error: unknown) => void;
   open: (file?: File) => Promise<void>;
   save: () => Promise<void>;
-  control: (command: RunCommand) => Promise<void>;
+  control: (command: RunCommand, steps?: number) => Promise<void>;
+  commit: (command: Command) => Promise<void>;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
   setSpeed: (speed: number) => Promise<void>;
 }
 
@@ -72,21 +81,59 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
+  function edit(apply: (editor: Editor) => CommitResult | null) {
+    return perform(async () => {
+      const { session, run, selection } = get();
+      if (!session || !run) return;
+      const { editor, engine, project } = session;
+      const result = apply(editor);
+      if (!result) return;
+      if (!result.ok) {
+        set({ rejectedEdit: result.diagnostics });
+        return;
+      }
+      const { city, compiled, diagnostics } = result;
+      const playing = run.status === 'playing';
+      set({
+        session: {
+          ...session,
+          project: { ...project, city, history: editor.history },
+          compiled,
+          diagnostics,
+        },
+        run: { ...run, status: 'paused', achieved: 0, stale: true },
+        selection: selectionAfterEdit(selection, session.compiled, compiled),
+        rejectedEdit: [],
+      });
+      if (playing) {
+        await engine.pause();
+        const { timeS, trips: counts } = await engine.metrics();
+        set(({ run }) => ({ run: { ...run!, status: 'paused', timeS, counts, achieved: 0 } }));
+      }
+    });
+  }
+
   return {
     session: null,
     run: null,
     selection: null,
     vehicle: null,
     diagnosticsOpen: false,
+    rejectedEdit: [],
     busy: false,
     error: null,
-    select: (selection) => set({ selection, vehicle: null, diagnosticsOpen: false }),
+    select: (selection) =>
+      set({ selection, vehicle: null, diagnosticsOpen: false, rejectedEdit: [] }),
     toggleDiagnostics: () =>
       set(({ diagnosticsOpen }) => ({
         diagnosticsOpen: !diagnosticsOpen,
         selection: null,
         vehicle: null,
+        rejectedEdit: [],
       })),
+    commit: (command) => edit((editor) => editor.apply(command)),
+    undo: () => edit((editor) => editor.undo()),
+    redo: () => edit((editor) => editor.redo()),
     reportError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
     open: (file) =>
       perform(async () => {
@@ -100,8 +147,8 @@ export const useAppStore = create<AppState>((set, get) => {
         }
         const editor = createEditor(project.city);
         const scenario = project.scenarios[0]!;
-        project.population ??= generatePopulation(editor.city, scenario.demand);
-        const trips = scheduleTrips(editor.city, project.population, scenario);
+        const population = project.population ?? generatePopulation(editor.city, scenario.demand);
+        const trips = scheduleTrips(editor.city, population, scenario);
         const engine = createEngineClient(
           new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' }),
         );
@@ -112,16 +159,26 @@ export const useAppStore = create<AppState>((set, get) => {
           get().session?.engine.terminate();
           set({
             session: {
-              project,
+              project: { ...project, population },
               editor,
               compiled: editor.compiled,
+              loadedCompiled: editor.compiled,
               diagnostics: validation.diagnostics,
               engine,
             },
-            run: { status: 'paused', timeS, counts, speed: 1, achieved: 0 },
+            run: {
+              status: 'paused',
+              stale: false,
+              cityVersion: editor.city.version,
+              timeS,
+              counts,
+              speed: 1,
+              achieved: 0,
+            },
             selection: null,
             vehicle: null,
             diagnosticsOpen: false,
+            rejectedEdit: [],
           });
         } catch (error) {
           engine.terminate();
@@ -143,11 +200,33 @@ export const useAppStore = create<AppState>((set, get) => {
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 0);
       }),
-    control: (command) =>
+    control: (command, steps = 1) =>
       perform(async () => {
         const { session, run } = get();
         if (!session || !run) return;
-        const { engine } = session;
+        if (run.stale && command !== 'restart') return;
+        const { engine, editor, project } = session;
+        if (command === 'restart') {
+          const scenario = project.scenarios[0]!;
+          const compiled = editor.compiled;
+          const trips = scheduleTrips(editor.city, project.population, scenario);
+          await engine.load({ compiled, trips, scenario });
+          const { timeS, trips: counts } = await engine.metrics();
+          set({
+            session: { ...session, loadedCompiled: compiled },
+            run: {
+              ...run,
+              status: 'paused',
+              stale: false,
+              cityVersion: compiled.version,
+              timeS,
+              counts,
+              achieved: 0,
+            },
+            ...(get().selection?.kind === 'vehicle' && { selection: null, vehicle: null }),
+          });
+          return;
+        }
         if (command === 'play') {
           await engine.play();
           set(({ run }) =>
@@ -155,13 +234,11 @@ export const useAppStore = create<AppState>((set, get) => {
           );
           return;
         }
-        if (command === 'step') await engine.step(1);
-        else await engine[command]();
+        if (command === 'step') await engine.step(steps);
+        else await engine.pause();
         const { timeS, trips: counts } = await engine.metrics();
-        const status =
-          command !== 'restart' && get().run?.status === 'finished' ? 'finished' : 'paused';
+        const status = get().run?.status === 'finished' ? 'finished' : 'paused';
         set({ run: { ...run, status, timeS, counts, achieved: 0 } });
-        if (command === 'restart') set({ selection: null, vehicle: null });
       }),
     setSpeed: (speed) =>
       perform(async () => {
@@ -175,6 +252,8 @@ export const useAppStore = create<AppState>((set, get) => {
 
 declare global {
   interface Window {
-    cityflows?: Pick<EngineClient, 'metrics' | 'hash' | 'inspect'>;
+    cityflows?: Pick<EngineClient, 'metrics' | 'hash' | 'inspect' | 'step'> & {
+      movementId(index: number): string;
+    };
   }
 }
