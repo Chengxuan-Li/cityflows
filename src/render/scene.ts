@@ -47,7 +47,10 @@ function createGrade() {
   };
 }
 
-export function createScene(canvas: HTMLCanvasElement): Scene {
+export function createScene(canvas: HTMLCanvasElement): Scene & {
+  setVehicleGeometry(city: CompiledCity): void;
+  animateVehicles(elapsedS: number): void;
+} {
   const app = new Application();
   const world = new Container();
   world.eventMode = 'none';
@@ -186,6 +189,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // Versions identify edits within a city. Different source cities can share a version.
       if (city?.version === compiled.version && sourceGeometry === source) return;
       city = compiled;
+      vehicles.setGeometry(compiled);
       if (sourceGeometry?.geo !== source?.geo) {
         tiles?.destroy();
         tiles = source?.geo ? new Tiles(source.geo) : undefined;
@@ -276,6 +280,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         selectedVehicle = snapshot.id.subarray(0, snapshot.count).indexOf(selection.id);
         updateVehicleRing();
       }
+    },
+    setVehicleGeometry(compiled) {
+      vehicles.setGeometry(compiled);
+    },
+    animateVehicles(elapsedS) {
+      vehicles.animate(elapsedS);
+      updateVehicleRing();
     },
     setSelection(next) {
       selection = next;

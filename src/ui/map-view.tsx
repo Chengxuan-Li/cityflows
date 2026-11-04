@@ -19,7 +19,7 @@ function snapshotForMap(
   snapshot: VehicleSnapshot,
   { compiled, loadedCompiled, vehicleHues }: Session,
 ) {
-  const presentation = { ...snapshot, vehicleHues };
+  const presentation = { ...snapshot, vehicleHues, motionLane: snapshot.lane };
   if (compiled === loadedCompiled) return presentation;
 
   // Positions stay in world coordinates. The renderer only needs the remapped index for layering.
@@ -304,6 +304,8 @@ export function MapView() {
       let drawnRoads: readonly string[] | null = null;
       let drawnRoute: Route | null = null;
       let snapshotTime = NaN;
+      let snapshotAgeS = 0;
+      let lastFrame = performance.now();
       let inspected: Pick | null = null;
       let inspectedTime = NaN;
       let pulling = false;
@@ -332,6 +334,8 @@ export function MapView() {
         if (snapshot.timeS !== snapshotTime) {
           view.setSnapshot(snapshotForMap(snapshot, session));
           snapshotTime = snapshot.timeS;
+          snapshotAgeS = 0;
+          lastFrame = performance.now();
         }
         const { selection, run } = current;
         if (selection?.kind !== 'vehicle' || !run) return;
@@ -352,6 +356,8 @@ export function MapView() {
         animation = requestAnimationFrame(frame);
         pointer.advance(now);
         const { session, selection, vehicle, busy } = getState();
+        const elapsedS = Math.max(0, now - lastFrame) / 1000;
+        lastFrame = now;
         if (!session || busy) return;
         const layers = getState().layers;
         if (layers !== drawnLayers) {
@@ -360,6 +366,7 @@ export function MapView() {
         }
         if (drawn?.compiled !== session.compiled) {
           view.setCity(session.compiled, session.project.city);
+          view.setVehicleGeometry(session.loadedCompiled);
           view.setDisconnected(
             session.diagnostics
               .filter(({ code }) => code === 'disconnected_component')
@@ -375,6 +382,7 @@ export function MapView() {
           drawnSelection = drawnRoute = null;
           drawnRoads = null;
           snapshotTime = NaN;
+          snapshotAgeS = 0;
           drawnComparison = null;
         }
         if (selection !== drawnSelection) {
@@ -399,6 +407,9 @@ export function MapView() {
           view.setRouteOverlay(route && routeForMap(route, session));
           drawnRoute = route;
         }
+        const run = getState().run;
+        snapshotAgeS = run?.status === 'playing' ? snapshotAgeS + elapsedS * run.speed : 0;
+        view.animateVehicles(snapshotAgeS);
         if (pulling || failed === session) return;
         pulling = true;
         void pull(session)
