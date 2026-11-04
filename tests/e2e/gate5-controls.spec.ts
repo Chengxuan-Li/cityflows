@@ -85,7 +85,7 @@ test('stop control and restart grow the side-street queue', async ({ page }, inf
   const baseline = await queue(page, source);
   await clickGrid(page, 240, 240);
   await page.getByRole('combobox', { name: 'Control', exact: true }).selectOption('stop');
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   await button(page, 'Restart').click();
   await step(page, 1000);
   const stopped = await queue(page, source);

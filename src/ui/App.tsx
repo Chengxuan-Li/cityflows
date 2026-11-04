@@ -88,6 +88,7 @@ export function App() {
     if (window.cityflows) {
       window.cityflows.city = () => useAppStore.getState().session!.project.city;
       window.cityflows.commit = (command) => useAppStore.getState().commit(command);
+      window.cityflows.snapshot = () => useAppStore.getState().session!.engine.snapshot();
     }
   }, []);
   const error = useAppStore((state) => state.error);

@@ -164,5 +164,5 @@ export function createIntersections(
     activeNodes.length = 0;
   }
 
-  return { signals, request, resolve, release, grants, occupancy, continuations };
+  return { signals, request, resolve, release, grants, redGrants, occupancy, continuations };
 }

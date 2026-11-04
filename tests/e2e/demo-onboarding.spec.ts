@@ -90,7 +90,7 @@ test('a new player following only the hints completes the loop once', async ({ p
   const lanes = page.getByLabel('Lanes in this direction');
   await lanes.fill('2');
   await lanes.press('Enter');
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
 
   await expect(hint(page)).toContainText('Restart to replay the day with your edits.');
   await ringed(page, button(page, 'Restart'));

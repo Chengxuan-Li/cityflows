@@ -98,7 +98,7 @@ test('T13 drafts conflict-free programs with timeline, schematic and shared defa
   await page.getByLabel('Offset (s)').fill('7');
   await page.getByLabel('Offset (s)').press('Enter');
   await apply(page).click();
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   await expect(page.getByLabel('Offset (s)')).toHaveValue('7');
   await expect(page.getByLabel('Amber (s)')).toHaveValue('4');
   await expect(page.getByLabel('All red (s)')).toHaveValue('2');
@@ -169,10 +169,16 @@ test('preview follows the loaded engine phase through green, amber and all-red',
   await page.getByLabel('Phase 1 green (s)').press('Enter');
   await matches(); // Drafts do not change the loaded preview.
   await apply(page).click();
-  await expect.poll(() => preview(page)).toBeNull();
-  await button(page, 'Restart').click();
+  await expect(page.getByRole('status').filter({ hasText: 'Edit applied' })).toBeVisible();
   signal.phases[0]!.durationS = 5;
   signal.cycleS -= 20;
+  const originalOffset = signal.offsetS;
+  signal.offsetS -= time;
+  await matches(); // The edited program starts at the patch's simulation time.
+  await step(page, 60);
+  await matches();
+  await button(page, 'Restart').click();
+  signal.offsetS = originalOffset;
   await matches();
 });
 

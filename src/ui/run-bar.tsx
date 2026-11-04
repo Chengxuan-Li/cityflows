@@ -96,6 +96,11 @@ export function RunBar() {
             Restart to apply changes
           </span>
         )}
+        {!run?.stale && run?.patch && (
+          <span key={run.patch.version} className="live-edit-notice" role="status">
+            Edit applied · {run.patch.rerouted} cars rerouted · {run.patch.stranded} removed
+          </span>
+        )}
         <label className="speed">
           Speed
           <select

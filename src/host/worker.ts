@@ -44,6 +44,19 @@ function load(input: Parameters<typeof engine.load>[0]) {
 
 function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
   switch (request.type) {
+    case 'patch': {
+      if (!inputs) throw new Error('Load a scenario before using the traffic engine');
+      const { data, byteOffset } = request.compiled.laneSpatial;
+      const compiled = { ...request.compiled, laneSpatial: Flatbush.from(data, byteOffset) };
+      const started = performance.now();
+      const result = engine.patch(compiled);
+      inputs = { ...inputs, compiled };
+      loadedRecorder().patch(compiled);
+      lastHeatMs = -Infinity;
+      performance.clearMeasures('cityflows.patch');
+      performance.measure('cityflows.patch', { start: started, end: performance.now() });
+      return { ...result, timeS: engine.timeS };
+    }
     case 'load': {
       const { compiled, trips, scenario } = request;
       const { data, byteOffset } = compiled.laneSpatial;

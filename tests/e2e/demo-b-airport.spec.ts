@@ -56,7 +56,7 @@ test('demo B, terminal access: the 08:05 arrival wave queues cars; a dedicated a
   await expect(page.getByRole('heading', { name: 'Station', level: 2 })).toBeVisible();
   await page.getByText('Connectors', { exact: true }).click();
   await button(page, 'Add connector').click();
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   await page.getByLabel('Direction').nth(2).selectOption('in');
   const connectors = (await city(page)).places[place.id]!.connectors;
   expect(connectors).toHaveLength(3);

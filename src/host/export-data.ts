@@ -28,22 +28,42 @@ export function tripRecords(engine: TrafficEngine, trips: readonly TripRequest[]
 
 /** Worker-owned observations every tenth fixed step, independent of rendering/pull frequency. */
 export function createExportRecorder(engine: TrafficEngine, compiled: CompiledCity) {
-  const stats: RoadStats[] = compiled.roads.map(({ id }) => ({
+  let stats: RoadStats[] = compiled.roads.map(({ id }) => ({
     id,
     meanSpeedRatio: 1,
     vehiclesPassed: 0,
     maxQueue: 0,
   }));
-  const speedSum = new Float64Array(stats.length);
-  const observations = new Float64Array(stats.length);
+  let speedSum = new Float64Array(stats.length);
+  let observations = new Float64Array(stats.length);
   let previousRoads = new Map<number, number>();
   const samples: TrajectoryRecord[] = [];
   let enabled = false;
   let nextSampleS = Infinity;
   let step = 0;
-  const ends = compiled.lanes.map(({ polyline }) => polyline.at(-1)!);
+  let ends = compiled.lanes.map(({ polyline }) => polyline.at(-1)!);
 
   return {
+    patch(next: CompiledCity) {
+      const nextSpeed = new Float64Array(next.roads.length);
+      const nextObservations = new Float64Array(next.roads.length);
+      stats = next.roads.map(({ id, idx }) => {
+        const old = compiled.index.road.get(id);
+        if (old === undefined) return { id, meanSpeedRatio: 1, vehiclesPassed: 0, maxQueue: 0 };
+        nextSpeed[idx] = speedSum[old]!;
+        nextObservations[idx] = observations[old]!;
+        return stats[old]!;
+      });
+      // Projection during an edit is not an observed traversal of the old road.
+      const snapshot = engine.snapshot();
+      previousRoads = new Map(
+        Array.from(snapshot.id, (id, i) => [id, next.lanes[snapshot.lane[i]!]?.road ?? -1]),
+      );
+      speedSum = nextSpeed;
+      observations = nextObservations;
+      ends = next.lanes.map(({ polyline }) => polyline.at(-1)!);
+      compiled = next;
+    },
     observe() {
       const record = enabled && engine.timeS + 1e-8 >= nextSampleS;
       // Road statistics are sampled every tenth step; trajectories at their own deadlines.

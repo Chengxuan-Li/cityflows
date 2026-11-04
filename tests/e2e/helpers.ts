@@ -103,7 +103,7 @@ export async function buildBypass(page: Page) {
   await clickGrid(page, 135, 15);
   await clickGrid(page, 450, 330);
   await page.keyboard.press('Enter');
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   await button(page, 'Ramp').click();
   await clickGrid(page, 60, 1.5);
   const hover = await gridPoint(page, 180, 60);

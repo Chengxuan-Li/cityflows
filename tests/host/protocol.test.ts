@@ -1,5 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
+import { createEditor } from '../../src/editor';
+import { createEngine } from '../../src/sim/engine';
 import { createEngineClient } from '../../src/host/client';
 import type { HostEvent, HostReply, HostWireRequest } from '../../src/host/protocol';
 import { scenario, setup, trips } from '../sim/fixtures';
@@ -137,6 +139,24 @@ test('round-trips every request through the worker and matches replies by ID', a
     { type: 'headlessProgress', timeS: 100 },
     { type: 'headlessProgress', timeS: 101 },
   ]);
+  const editor = createEditor(city);
+  expect(editor.apply({ kind: 'setRoadAttributes', roadId: 'r:26', speedLimitMps: 8 }).ok).toBe(
+    true,
+  );
+  const patch = await client.patch(editor.compiled);
+  expect(patch.version).toBe(editor.city.version);
+  expect(patch.timeS).toBe(beforeComparison.timeS);
+  expect((await client.metrics()).timeS).toBe(beforeComparison.timeS);
+  expect(await client.metricsSeries()).toEqual(historyBefore);
+  expect((await client.snapshot()).roadSpeedRatio).toBeDefined();
+  const wire = requests.find((request) => request.type === 'patch')!;
+  expect(wire.type === 'patch' && wire.compiled.laneSpatial.data).toBeInstanceOf(ArrayBuffer);
+  await client.restart();
+  const fresh = createEngine();
+  fresh.load({ ...input, compiled: editor.compiled });
+  await client.step(10);
+  fresh.step(10);
+  expect(await client.hash()).toBe(fresh.stateHash());
   const pending = client.hash();
   client.terminate();
   await expect(pending).rejects.toThrow('terminated');

@@ -137,7 +137,7 @@ test('demo B: the 08:05 train queues cars at the Station; a second arrival conne
   await expect(page.getByRole('heading', { name: 'Station', level: 2 })).toBeVisible();
   await page.getByText('Connectors', { exact: true }).click();
   await button(page, 'Add connector').click();
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   let connectors = (await city(page)).places[place.id]!.connectors;
   expect(connectors).toHaveLength(3);
   // The pickup loop is the only lane within reach and both existing connectors sit on it, so
@@ -161,7 +161,7 @@ test('demo B: the 08:05 train queues cars at the Station; a second arrival conne
   expect(errors).toEqual([]);
 });
 
-test('profile and event editors commit through the inspector and move trips', async ({
+test('profile and event edits preserve trips until demand is regenerated', async ({
   page,
 }, info) => {
   const errors: string[] = [];
@@ -194,6 +194,10 @@ test('profile and event editors commit through the inspector and move trips', as
   await button(page, 'Demand').click();
   await expect(page.getByRole('region', { name: 'Demand' })).toBeVisible();
   expect((await tripsByHour(page))[12]).toBe(0);
+  await button(page, 'Restart').click();
+  await expect(button(page, 'Step')).toBeEnabled();
+  expect((await tripsByHour(page))[12]).toBe(0);
+  await button(page, 'Regenerate demand').click();
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();
   const weighted = await tripsByHour(page);
@@ -242,6 +246,10 @@ test('profile and event editors commit through the inspector and move trips', as
     .getByRole('region', { name: 'Demand' })
     .getByRole('row', { name: /^Offices/ });
   await expect(ending).toContainText('1,088');
+  await button(page, 'Restart').click();
+  await expect(button(page, 'Step')).toBeEnabled();
+  await expect(ending).toContainText('1,088');
+  await button(page, 'Regenerate demand').click();
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();
   await expect(ending).toContainText('1,128');

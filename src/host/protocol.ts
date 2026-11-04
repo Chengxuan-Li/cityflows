@@ -1,6 +1,10 @@
 import type { CompiledCity } from '../network';
 import type { Scenario, TripRequest } from '../schema';
-import type { Metrics, VehicleSnapshot } from '../sim/types';
+import type { Metrics, PatchResult, VehicleSnapshot } from '../sim/types';
+
+export interface HostPatchResult extends PatchResult {
+  timeS: number;
+}
 
 export interface MetricsSample {
   timeS: number;
@@ -36,6 +40,7 @@ export interface HeadlessResult {
 
 export type HostRequest =
   | { id: number; type: 'load'; compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario }
+  | { id: number; type: 'patch'; compiled: CompiledCity }
   | { id: number; type: 'play' }
   | { id: number; type: 'pause' }
   | { id: number; type: 'setSpeed'; multiplier: number }
@@ -62,11 +67,12 @@ export type HostEvent =
   | { type: 'error'; message: string };
 
 // Flatbush instances contain constructors that structured clone cannot copy.
-type LoadRequest = Extract<HostRequest, { type: 'load' }>;
-export type HostWireRequest =
-  | Exclude<HostRequest, LoadRequest>
-  | (Omit<LoadRequest, 'compiled'> & {
+type LoadRequest = Extract<HostRequest, { type: 'load' | 'patch' }>;
+type WireCity<Request> = Request extends LoadRequest
+  ? Omit<Request, 'compiled'> & {
       compiled: Omit<CompiledCity, 'laneSpatial'> & {
         laneSpatial: Pick<CompiledCity['laneSpatial'], 'data' | 'byteOffset'>;
       };
-    });
+    }
+  : never;
+export type HostWireRequest = Exclude<HostRequest, LoadRequest> | WireCity<LoadRequest>;

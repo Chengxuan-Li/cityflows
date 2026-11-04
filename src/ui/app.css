@@ -1078,3 +1078,25 @@ dd {
   right: var(--inset);
   color: var(--muted);
 }
+@keyframes live-edit-fade {
+  0%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.live-edit-notice {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  white-space: nowrap;
+  padding: 6px 10px;
+  background: var(--surface, #faf9f5);
+  border-radius: 4px;
+  pointer-events: none;
+  animation: live-edit-fade 6s forwards;
+}
