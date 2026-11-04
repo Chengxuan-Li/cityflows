@@ -99,6 +99,11 @@ dependency of its tasks is merged to `main`.
   TASK-031 owns `src/sim/engine.ts` in wave 5; TASK-030 stays in `src/demand` and
   `src/sim/connectors.ts`. Wave 5 outcome: TASK-026, TASK-031 and TASK-050 merged;
   TASK-030 was not delivered and runs again alongside wave 6.
+- Wave 6 (lead, 2026-11-03): TASK-021, TASK-022, TASK-040, TASK-041 and the TASK-030 rerun
+  (branch `task/030-activities-2`) in parallel. TASK-034 follows TASK-022 because both need
+  the map pointer plumbing for a drawing tool; TASK-022 owns `src/ui/toolbox.tsx`,
+  `src/ui/map-view.tsx` and the tool state in the store. Shared files (`store.ts`, `App.tsx`,
+  `scene.ts`, `app.css`) take additive edits only; the lead resolves the merges.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
