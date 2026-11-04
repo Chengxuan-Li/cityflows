@@ -154,6 +154,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       disconnectedOverlay.clear();
       signalPreview.clear();
       tiles?.container.removeFromParent();
+      // The heat tint lives in the base grade so it sits under vehicles and signals.
+      heat.roads.removeFromParent();
       for (const child of map.removeChildren()) child.destroy({ children: true, context: true });
       updateSignals = [];
 
@@ -168,6 +170,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           .map((grade) => [grade, createGrade()]),
       );
       for (const { group } of grades.values()) map.addChild(group);
+      const base = grades.get(0)!;
+      base.group.addChildAt(heat.roads, base.group.getChildIndex(base.connectors));
       visibleGrades = [...grades.values()];
       applyVisibility();
       shapes = city.places.map(

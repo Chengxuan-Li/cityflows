@@ -54,20 +54,20 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-011](tasks/TASK-011.md) | 1 | Demand v1: population and commute trips | `src/demand`, `tests/demand` | 001 | T09 (commute), T15 (data side) | done |
 | [TASK-012](tasks/TASK-012.md) | 1 | Gate 1 integration and acceptance | anywhere (lead), `tests/e2e/gate1-*.spec.ts` | 004, 010 | Gate 1 checklist, CI green | done |
 | [TASK-020](tasks/TASK-020.md) | 2 | OSM importer and fixtures | `src/importers/osm`, `src/importers/types.ts`, `fixtures/osm`, `tests/importers` | 001 | T11, T18 | done |
-| [TASK-021](tasks/TASK-021.md) | 2 | Import wizard, Overpass provider, file upload | `src/ui/import`, `src/importers/overpass.ts`, `src/importers/cache.ts`, `src/importers/worker.ts` | 020, 009 | import workflow end to end | todo |
-| [TASK-022](tasks/TASK-022.md) | 2 | Topology editing: draw, split, delete, move | `src/editor/commands/topology.ts`, `src/ui/tools/*`, `src/render/layers/edit-overlay.ts`, `tests/editor/T12-topology.test.ts`, `tests/e2e/gate2-edit.spec.ts` | 007, 010 | T12 (full) | todo |
+| [TASK-021](tasks/TASK-021.md) | 2 | Import wizard, Overpass provider, file upload | `src/ui/import`, `src/importers/overpass.ts`, `src/importers/cache.ts`, `src/importers/worker.ts` | 020, 009 | import workflow end to end | done |
+| [TASK-022](tasks/TASK-022.md) | 2 | Topology editing: draw, split, delete, move | `src/editor/commands/topology.ts`, `src/ui/tools/*`, `src/render/layers/edit-overlay.ts`, `tests/editor/T12-topology.test.ts`, `tests/e2e/gate2-edit.spec.ts` | 007, 010 | T12 (full) | done |
 | [TASK-023](tasks/TASK-023.md) | 2 | Multi-select and batch editing | `src/ui/selection`, `src/editor/commands/batch.ts` | 022 | bulk edits, one undo entry | todo |
 | [TASK-024](tasks/TASK-024.md) | 2 | Raster tile backdrop | `src/render/layers/tiles.ts`, layer toggle in `src/ui/layers*` | 006, 020 | tiles align with imported roads | done |
 | [TASK-025](tasks/TASK-025.md) | 2 | GeoJSON feature import and export | `src/importers/geojson`, `src/project/geojson.ts` | 008, 020 | documented interchange, id conflict handling | done |
 | [TASK-026](tasks/TASK-026.md) | 2 | Large synthetic city fixture | `src/fixtures/town.ts`, `src/fixtures/scenarios.ts`, `fixtures/projects/town.cityflows.json`, `tests/network/town.test.ts`, `tests/sim/town-day.test.ts` | 001 | compiles, full day under 1 percent failed, perf workload | done |
 | [TASK-050](tasks/TASK-050.md) | 2 | Game-like UI redesign | `src/ui`, `src/render/style.ts`, `src/render/layers/*` visuals, `tests/e2e` names | 010 | all capabilities reachable, seven e2e scenarios green | done |
-| [TASK-030](tasks/TASK-030.md) | 3 | Activity chains, through traffic, place events | `src/demand`, `src/sim/connectors.ts` (events, capacity), `tests/demand`, `tests/sim/T10*` | 011, 003 | T09 (full), T10 | todo |
+| [TASK-030](tasks/TASK-030.md) | 3 | Activity chains, through traffic, place events | `src/demand`, `src/sim/connectors.ts` (events, capacity), `tests/demand`, `tests/sim/T10*` | 011, 003 | T09 (full), T10 | done |
 | [TASK-031](tasks/TASK-031.md) | 3 | Congestion-aware routing | `src/sim/link-costs.ts`, `src/sim/reroute.ts`, `src/routing` (costs) | 002, 004 | T06 | done |
 | [TASK-032](tasks/TASK-032.md) | 3 | Ramps, merging, expressway construction | `src/sim/merge.ts`, `src/editor/commands/ramp.ts`, `src/ui/tools/ramp*`, `tests/sim/T07*` | 004, 022 | T07 (full), demo C | todo |
 | [TASK-033](tasks/TASK-033.md) | 3 | Place editor and demand panel | `src/ui/inspector/place*`, `src/ui/panels/demand*`, vehicle inspector reasons | 030, 010 | demos A and B reachable from the UI | todo |
 | [TASK-034](tasks/TASK-034.md) | 3 | Place painting and demand regeneration | `src/ui/tools/place-paint.tsx`, place controls, regenerate action, `tests/e2e/gate3-paint.spec.ts` | 050, 011 | painted place attracts trips after regenerate | todo |
-| [TASK-040](tasks/TASK-040.md) | 4 | Signal editor | `src/ui/inspector/signal*`, `src/render/layers/signal-preview.ts` | 010 | T13 through the UI | todo |
-| [TASK-041](tasks/TASK-041.md) | 4 | Metrics, layers and charts | `src/ui/panels/metrics*`, `src/ui/layers*`, `src/render/layers/heat.ts` | 005, 006 | readable congestion feedback | implemented; local review pending |
+| [TASK-040](tasks/TASK-040.md) | 4 | Signal editor | `src/ui/inspector/signal*`, `src/render/layers/signal-preview.ts` | 010 | T13 through the UI | done |
+| [TASK-041](tasks/TASK-041.md) | 4 | Metrics, layers and charts | `src/ui/panels/metrics*`, `src/ui/layers*`, `src/render/layers/heat.ts` | 005, 006 | readable congestion feedback | done |
 | [TASK-042](tasks/TASK-042.md) | 4 | Scenario comparison | `src/ui/panels/compare*`, `src/project/scenarios.ts` | 008, 041 | same-seed baseline versus variant | todo |
 | [TASK-043](tasks/TASK-043.md) | 4 | Analysis and interchange exports | `src/project/export-*.ts`, export menu | 008, 041 | CSV and GeoJSON exports labelled synthetic | todo |
 | [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | todo |
@@ -104,6 +104,9 @@ dependency of its tasks is merged to `main`.
   the map pointer plumbing for a drawing tool; TASK-022 owns `src/ui/toolbox.tsx`,
   `src/ui/map-view.tsx` and the tool state in the store. Shared files (`store.ts`, `App.tsx`,
   `scene.ts`, `app.css`) take additive edits only; the lead resolves the merges.
+- Wave 6 outcome (2026-11-03): all five merged. Next: TASK-034 alone on the new tool
+  plumbing, then wave 7 (TASK-023, TASK-032, TASK-033, TASK-042, TASK-043, TASK-044) and
+  TASK-045 last.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -138,8 +141,6 @@ exists.
 
 ## Deferrals and open items
 
-- Gate 1 demand is home-work-home only; chains, through traffic and events arrive in
-  TASK-030.
 - Lane changes are discrete in the model; the renderer animates them (architecture section 8).
 - Edits during a run pause the run and require a restart (T17); live signal timing edits are
   not planned before Gate 4.
@@ -257,6 +258,52 @@ exists.
 - 2026-11-03, TASK-030 not delivered: the branch `task/030-activities` holds no commits and
   its worktree is clean. The brief stands and is re-issued with wave 6; the agent merges
   `main` first, since the engine and the sim parameters changed under TASK-031.
+
+- 2026-11-03, TASK-030 (rerun on `task/030-activities-2`) merged as delivered. Opt-in chains
+  through a new `DemandConfig.chains` (school, shop and leisure shares; schema addition
+  approved), departures drawn from place profiles, gateway through trips with seeded
+  stochastic rounding, event visitors as paired inbound and outbound trips, admission windows
+  and parking pairing in the connectors, `CPlace.events` on the compiled city (approved), and
+  the station fixture (08:00 to 08:35, 180 through trips per hour, an 80-visitor train). T09
+  and T10 pass; without chains, events or through traffic the town day is unchanged (12 640
+  trips, none failed).
+
+- 2026-11-03, TASK-022 merged as delivered. `src/editor/commands/topology.ts` implements
+  addRoad, deleteRoad, splitRoad, moveNode and the approved mergeRoads (added to the Command
+  union and architecture section 6); drawing snaps to nodes and roads, splits on snap, keeps
+  crossings grade-separated, and the select tool drags junctions; Split, Delete street and
+  Merge streets sit in the inspector. T12 and the three gate2-edit scenarios pass; the lead
+  drew and undid a snapped diagonal in the browser. Noted for TASK-044: every topology command
+  compiles the city twice to relocate connectors, fine at town scale.
+
+- 2026-11-03, TASK-040 merged as delivered. Signal programs are now drafted in
+  `src/ui/inspector/signal.tsx` (timeline with draggable durations, a schematic with one arrow
+  per legal road pair, the generator shared with the importer in
+  `src/importers/signal-program.ts`) and committed with "Apply signal program" after a trial
+  compile; a conflicting draft disables the apply button. The preview highlights the loaded
+  engine's green movements at the selected signal. The gate1 scenarios were updated for the
+  explicit apply step.
+
+- 2026-11-03, TASK-041 merged with two lead changes: the heat tint now sits under vehicles in
+  the base grade instead of covering them, and the ramp runs from the plain road tone to dark
+  teal so free-flowing roads keep their look. `metricsSeries` and the throttled
+  `roadSpeedRatio` on snapshots are approved protocol additions. The layer list, queue dots
+  and the four inline SVG curves work in the browser. The agent measured 0.07 ms mean per heat
+  update at 3 000 vehicles on the town.
+
+- 2026-11-03, TASK-021 merged with two lead changes: restart regenerates the population only
+  when a place's kind, population or jobs changed or places were added or removed (the branch
+  regenerated on any places edit, which would have discarded the saved population after a
+  connector move), and a mangled character in the import fallback text was replaced.
+  maplibre-gl 6.16.0 is the one approved dependency (NOTICE entry present, loaded lazily with
+  the wizard). File upload, diagnostics and accept are covered by the gate2-import scenarios;
+  the Overpass path (cache hit, area cap, cancel) is unit-tested with a stubbed fetch and was
+  not exercised against the live endpoint by the lead.
+
+- 2026-11-03, wave 6 merge notes: four stylesheet merges each dropped a closing brace at the
+  conflict boundary, fixed in the follow-up commit. Playwright now runs with one worker: the
+  scenarios that step whole mornings starve parallel pages of the shared GPU process and made
+  unrelated scenarios time out. All 16 scenarios pass serially in about one minute.
 
 ## Owner decisions log
 

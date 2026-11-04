@@ -3,13 +3,13 @@ import type { CompiledCity } from '../../network';
 import { style } from '../style';
 import type { VehicleSnapshot } from '../types';
 
-/** A single light-to-dark teal ramp: darker roads carry slower traffic. */
+/** A single ramp from the plain road tone to dark teal: darker roads carry slower traffic. */
 export function heatColor(ratio: number): number {
   const t = Math.max(0, Math.min(1, ratio));
   let color = 0;
   for (const shift of [16, 8, 0]) {
     const slow = (style.selection >> shift) & 255;
-    const fast = (style.background >> shift) & 255;
+    const fast = (style.asphalt >> shift) & 255;
     color |= Math.round(slow + (fast - slow) * t) << shift;
   }
   return color;
