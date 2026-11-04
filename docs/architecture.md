@@ -757,6 +757,7 @@ type HostRequest =
   | { id: number; type: 'step'; steps: number }
   | { id: number; type: 'restart' }                              // same inputs, same seed
   | { id: number; type: 'snapshot' } | { id: number; type: 'metrics' }
+  | { id: number; type: 'metricsSeries' }
   | { id: number; type: 'inspect'; vehicleId: number } | { id: number; type: 'hash' };
 type HostReply = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 type HostEvent =
@@ -769,6 +770,14 @@ type HostEvent =
   UI shows the achieved speed, so throttling is visible rather than silent.
 - Snapshots are pulled: the main thread requests one per animation frame with at most one in
   flight; the worker replies with transferable buffers. `tick` events are pushed at 10 Hz.
+- TASK-041: snapshot replies additionally include optional `roadSpeedRatio`, transferred with
+  the matching vehicle arrays at most once per 500 ms of wall time. The renderer updates heat
+  and lane-end queues only with these replies. Load/restart resets the throttle.
+- `metricsSeries` returns the worker's history of `{ timeS, driving, queued, completed,
+  meanDelayS }`. Queued means origin plus destination queues; delay is the engine's cumulative
+  mean for completed trips. The loop samples on load and every 60 simulated seconds from the
+  scenario start, splitting manual step batches at sample boundaries. Load/restart clears the
+  history. The chart pulls on open or explicit Refresh; there is no main-thread polling timer.
 - The worker entry uses `postMessage(data, { transfer })`, which type-checks against the DOM
   lib and works in a worker; no WebWorker lib is added to the TypeScript config.
 - Wire form of `load`: a Flatbush index cannot be structured-cloned, so the client sends the
@@ -797,6 +806,9 @@ type HostEvent =
   `Route` to it (the lanes of `targetLanes` and the route's movements).
 - The renderer owns a structural copy of the `VehicleSnapshot` layout in `src/render/types.ts`
   so it does not depend on `src/sim`; the sim's type must stay assignable to it.
+- Layer visibility is presentation-only. Heat uses cached road shapes and a single teal ramp;
+  queue dots count cars below 0.5 m/s within 50 m of a lane end, appearing for two or more cars.
+  Disconnected lane highlights use `disconnected_component` diagnostic refs.
 
 `src/ui` is the React app with one Zustand store. Layout follows the brief:
 

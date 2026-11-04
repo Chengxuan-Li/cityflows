@@ -3,7 +3,8 @@ import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { Camera } from './camera';
 import { drawMovementSurface, drawNode, drawRoadJoins } from './layers/nodes';
-import { drawHeat, drawRoute, drawSelection } from './layers/overlay';
+import { drawRoute, drawSelection } from './layers/overlay';
+import { HeatLayer } from './layers/heat';
 import { drawPlaces } from './layers/places';
 import { drawMovementArrow, drawRoad } from './layers/roads';
 import { drawSignal } from './layers/signals';
@@ -12,6 +13,7 @@ import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { createPicker, pickVehicle } from './picking';
 import { style } from './style';
 import type { Pick, CityGeometry, Scene } from './types';
+import { defaultLayers, type LayerVisibility } from './types';
 
 function createGrade() {
   const group = new Container();
@@ -20,10 +22,20 @@ function createGrade() {
   const nodes = new Graphics();
   const arrows = new Graphics();
   const places = new Graphics();
+  const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
-  group.addChild(surfaces, markings, nodes, arrows, places, signals, vehicles.container);
-  return { group, surfaces, markings, nodes, arrows, places, signals, vehicles };
+  group.addChild(
+    surfaces,
+    markings,
+    nodes,
+    arrows,
+    connectors,
+    places,
+    signals,
+    vehicles.container,
+  );
+  return { group, surfaces, markings, nodes, arrows, places, connectors, signals, vehicles };
 }
 
 export function createScene(canvas: HTMLCanvasElement): Scene {
@@ -38,7 +50,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     .stroke({ width: 1.25, color: style.selection });
   vehicleRing.visible = false;
   const heatOverlay = new Graphics();
+  const heat = new HeatLayer();
+  heatOverlay.addChild(heat.roads, heat.queues);
+  const disconnectedOverlay = new Graphics();
   world.addChild(map, routeOverlay, selectionOverlay, vehicleRing, heatOverlay);
+  world.addChild(disconnectedOverlay);
   app.stage.addChild(world);
 
   const vehicles = new Vehicles();
@@ -49,6 +65,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let shapes: Place['shape'][] = [];
   let staticPick: ReturnType<typeof createPicker> | undefined;
   let updateSignals: ((timeS: number) => void)[] = [];
+  let layerVisibility: LayerVisibility = defaultLayers;
+  let visibleGrades: ReturnType<typeof createGrade>[] = [];
+
+  function applyVisibility() {
+    heat.roads.visible = layerVisibility.heat;
+    heat.queues.visible = layerVisibility.queues;
+    routeOverlay.visible = layerVisibility.routes;
+    disconnectedOverlay.visible = layerVisibility.disconnected;
+    for (const grade of visibleGrades) {
+      grade.places.visible = layerVisibility.places;
+      grade.connectors.visible = layerVisibility.connectors;
+      grade.signals.visible = layerVisibility.signals;
+    }
+  }
   let selection: Pick | null = null;
   let selectedVehicle = -1;
   let destroyed = false;
@@ -113,6 +143,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       selectionOverlay.clear();
       routeOverlay.clear();
       heatOverlay.clear();
+      heat.setCity(compiled);
+      disconnectedOverlay.clear();
       tiles?.container.removeFromParent();
       for (const child of map.removeChildren()) child.destroy({ children: true, context: true });
       updateSignals = [];
@@ -128,6 +160,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           .map((grade) => [grade, createGrade()]),
       );
       for (const { group } of grades.values()) map.addChild(group);
+      visibleGrades = [...grades.values()];
+      applyVisibility();
       shapes = city.places.map(
         ({ id, centroid }) => source?.places[id]?.shape ?? { kind: 'point', pos: centroid },
       );
@@ -149,7 +183,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         // A movement no phase ever serves is not a legal route for vehicles; routing skips it.
         if (!movement.neverGreen) drawMovementArrow(arrows, movement);
       }
-      drawPlaces(grades.get(0)!.places, city, shapes);
+      drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
       for (const update of updateSignals) update(0);
       vehicles.setLayers(
         [...grades.values()].map((grade) => grade.vehicles),
@@ -184,7 +218,27 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       if (city) drawRoute(routeOverlay, city, route);
     },
     setHeat(ratios) {
-      if (city) drawHeat(heatOverlay, city, ratios);
+      if (city) heat.setHeat(ratios);
+    },
+    setQueues(snapshot) {
+      if (city) heat.setQueues(snapshot);
+    },
+    setLayerVisibility(layers) {
+      layerVisibility = layers;
+      applyVisibility();
+    },
+    setDisconnected(lanes) {
+      disconnectedOverlay.clear();
+      if (!city) return;
+      for (const index of lanes) {
+        const lane = city.lanes[index]!;
+        disconnectedOverlay.poly(lane.polyline, false).stroke({
+          width: lane.widthM + 1,
+          color: style.signalAmber,
+          alpha: 0.8,
+          cap: 'round',
+        });
+      }
     },
     pick(screenX, screenY) {
       const point = camera.screenToWorld({ x: screenX, y: screenY });

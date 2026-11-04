@@ -27,6 +27,26 @@ export interface RouteOverlay {
   movements: readonly number[];
 }
 
+export interface LayerVisibility {
+  heat: boolean;
+  queues: boolean;
+  places: boolean;
+  connectors: boolean;
+  signals: boolean;
+  routes: boolean;
+  disconnected: boolean;
+}
+
+export const defaultLayers: LayerVisibility = {
+  heat: false,
+  queues: false,
+  places: true,
+  connectors: true,
+  signals: true,
+  routes: true,
+  disconnected: false,
+};
+
 export interface Scene {
   readonly ready: Promise<void>;
   readonly camera: Camera;
@@ -38,6 +58,9 @@ export interface Scene {
   setRouteOverlay(route: RouteOverlay | null): void;
   /** Speed divided by free-flow speed, indexed by compiled road. */
   setHeat(roadSpeedRatio: ArrayLike<number> | null): void;
+  setQueues(snapshot: VehicleSnapshot): void;
+  setLayerVisibility(layers: LayerVisibility): void;
+  setDisconnected(lanes: readonly number[]): void;
   /** Coordinates are CSS pixels from the top left of the canvas. */
   pick(screenX: number, screenY: number): Pick | null;
   destroy(): void;

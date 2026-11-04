@@ -8,6 +8,7 @@ import { openProject } from '../project/open';
 import { saveProject } from '../project/save';
 import type { Project } from '../project/types';
 import type { Pick as MapPick } from '../render/types';
+import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
 import type { Command, Person } from '../schema';
 import type { Metrics, VehicleDetail } from '../sim/types';
@@ -37,6 +38,12 @@ interface Run {
 type RunCommand = 'play' | 'pause' | 'step' | 'restart';
 
 interface AppState {
+  layers: LayerVisibility;
+  layersOpen: boolean;
+  metricsOpen: boolean;
+  toggleLayer: (layer: keyof LayerVisibility) => void;
+  toggleLayers: () => void;
+  toggleMetrics: () => void;
   session: Session | null;
   run: Run | null;
   selection: MapPick | null;
@@ -116,6 +123,14 @@ export const useAppStore = create<AppState>((set, get) => {
   }
 
   return {
+    layers: { ...defaultLayers },
+    layersOpen: false,
+    metricsOpen: false,
+    toggleLayer: (layer) =>
+      set(({ layers }) => ({ layers: { ...layers, [layer]: !layers[layer] } })),
+    toggleLayers: () => set(({ layersOpen }) => ({ layersOpen: !layersOpen, metricsOpen: false })),
+    toggleMetrics: () =>
+      set(({ metricsOpen }) => ({ metricsOpen: !metricsOpen, layersOpen: false })),
     session: null,
     run: null,
     selection: null,

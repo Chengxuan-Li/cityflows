@@ -1,5 +1,12 @@
-import type { Metrics, VehicleDetail, VehicleSnapshot } from '../sim/types';
-import type { HostEvent, HostReply, HostRequest, HostWireRequest } from './protocol';
+import type { Metrics, VehicleDetail } from '../sim/types';
+import type {
+  HostEvent,
+  HostReply,
+  HostRequest,
+  HostWireRequest,
+  HostSnapshot,
+  MetricsSample,
+} from './protocol';
 
 type LoadInput = Omit<Extract<HostRequest, { type: 'load' }>, 'id' | 'type'>;
 type WithoutId<T> = T extends HostWireRequest ? Omit<T, 'id'> : never;
@@ -11,8 +18,9 @@ export interface EngineClient {
   setSpeed(multiplier: number): Promise<void>;
   step(steps: number): Promise<void>;
   restart(): Promise<void>;
-  snapshot(): Promise<VehicleSnapshot>;
+  snapshot(): Promise<HostSnapshot>;
   metrics(): Promise<Metrics>;
+  metricsSeries(): Promise<MetricsSample[]>;
   inspect(id: number): Promise<VehicleDetail | null>;
   hash(): Promise<number>;
   onEvent(listener: (event: HostEvent) => void): () => void;
@@ -23,7 +31,7 @@ export function createEngineClient(worker: Worker): EngineClient {
   const pending = new Map<number, (reply: HostReply) => void>();
   const listeners = new Set<(event: HostEvent) => void>();
   let nextId = 1;
-  let snapshotInFlight: Promise<VehicleSnapshot> | undefined;
+  let snapshotInFlight: Promise<HostSnapshot> | undefined;
   let closed: string | undefined;
 
   function emit(event: HostEvent) {
@@ -96,11 +104,12 @@ export function createEngineClient(worker: Worker): EngineClient {
     step: (steps) => send({ type: 'step', steps }),
     restart: () => send({ type: 'restart' }),
     snapshot() {
-      return (snapshotInFlight ??= send<VehicleSnapshot>({ type: 'snapshot' }).finally(() => {
+      return (snapshotInFlight ??= send<HostSnapshot>({ type: 'snapshot' }).finally(() => {
         snapshotInFlight = undefined;
       }));
     },
     metrics: () => send({ type: 'metrics' }),
+    metricsSeries: () => send({ type: 'metricsSeries' }),
     inspect: (vehicleId) => send({ type: 'inspect', vehicleId }),
     hash: () => send({ type: 'hash' }),
     onEvent(listener) {

@@ -1,4 +1,6 @@
 import { useAppStore } from './store';
+import { Layers } from './layers';
+import { MetricsPanel } from './panels/metrics';
 
 const speeds = [1, 2, 5, 10, 20];
 
@@ -13,6 +15,9 @@ export function RunBar() {
   const busy = useAppStore((state) => state.busy);
   const diagnostics = useAppStore((state) => state.session?.diagnostics.length);
   const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
+  const layersOpen = useAppStore((state) => state.layersOpen);
+  const metricsOpen = useAppStore((state) => state.metricsOpen);
+  const { toggleLayers, toggleMetrics } = useAppStore.getState();
   const { control, setSpeed, toggleDiagnostics } = useAppStore.getState();
   const disabled = !run || busy;
   const counts = run?.counts;
@@ -69,6 +74,24 @@ export function RunBar() {
         {run?.status === 'finished' && <span>Finished</span>}
       </div>
       <div className="run-summary">
+        <button
+          disabled={!run}
+          aria-expanded={layersOpen}
+          aria-controls="layers"
+          onClick={toggleLayers}
+        >
+          Layers
+        </button>
+        <button
+          disabled={disabled}
+          aria-expanded={metricsOpen}
+          aria-controls="metrics-chart"
+          onClick={toggleMetrics}
+        >
+          Chart
+        </button>
+        {layersOpen && <Layers />}
+        {metricsOpen && <MetricsPanel />}
         {counts && (
           <details className="metrics">
             <summary>Trip counts</summary>

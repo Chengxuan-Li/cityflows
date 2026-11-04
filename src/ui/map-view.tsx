@@ -5,6 +5,7 @@ import { createScene } from '../render/scene';
 import { style } from '../render/style';
 import type { Pick, Scene, VehicleSnapshot } from '../render/types';
 import type { Route } from '../routing';
+import type { LaneId } from '../schema';
 import { useAppStore, type Session } from './store';
 
 function snapshotForMap(
@@ -198,11 +199,25 @@ export function MapView() {
       let inspectedTime = NaN;
       let pulling = false;
       let failed: Session | null = null;
+      let drawnLayers = getState().layers;
+      view.setLayerVisibility(drawnLayers);
 
       async function pull(session: Session) {
         const snapshot = await session.engine.snapshot();
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
+        if (snapshot.roadSpeedRatio) {
+          const ratios = snapshot.roadSpeedRatio;
+          view.setHeat(
+            session.compiled === session.loadedCompiled
+              ? ratios
+              : session.compiled.roads.map(({ id }) => {
+                  const index = session.loadedCompiled.index.road.get(id);
+                  return index === undefined ? NaN : ratios[index]!;
+                }),
+          );
+          view.setQueues(snapshotForMap(snapshot, session));
+        }
         if (snapshot.timeS !== snapshotTime) {
           view.setSnapshot(snapshotForMap(snapshot, session));
           snapshotTime = snapshot.timeS;
@@ -227,8 +242,20 @@ export function MapView() {
         pointer.advance(now);
         const { session, selection, vehicle, busy } = getState();
         if (!session || busy) return;
+        const layers = getState().layers;
+        if (layers !== drawnLayers) {
+          view.setLayerVisibility(layers);
+          drawnLayers = layers;
+        }
         if (drawn?.compiled !== session.compiled) {
           view.setCity(session.compiled, session.project.city);
+          view.setDisconnected(
+            session.diagnostics
+              .filter(({ code }) => code === 'disconnected_component')
+              .flatMap(({ refs }) => refs)
+              .map((id) => session.compiled.index.lane.get(id as LaneId))
+              .filter((index) => index !== undefined),
+          );
           if (drawn?.editor !== session.editor) {
             pointer.reset();
             fitCity(view, canvas, session);

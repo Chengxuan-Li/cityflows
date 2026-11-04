@@ -7,6 +7,8 @@ import { scenario, setup, trips } from '../sim/fixtures';
 afterEach(() => vi.unstubAllGlobals());
 
 test('round-trips every request through the worker and matches replies by ID', async () => {
+  let now = 0;
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
   const requests: HostWireRequest[] = [];
   const replies: HostReply[] = [];
   const main = new EventTarget();
@@ -76,7 +78,13 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect(requests.filter((request) => request.type === 'snapshot')).toHaveLength(1);
   expect(snapshot).toMatchObject({ timeS: 101, count: 1 });
   expect(snapshot.id.byteLength).toBe(4);
-  expect(transferred).toEqual(Array(8).fill(0));
+  expect(transferred).toEqual(Array(9).fill(0));
+  expect(snapshot.roadSpeedRatio).toHaveLength(input.compiled.roads.length);
+  now = 499;
+  expect((await client.snapshot()).roadSpeedRatio).toBeUndefined();
+  now = 500;
+  expect((await client.snapshot()).roadSpeedRatio).toHaveLength(input.compiled.roads.length);
+  expect(await client.metricsSeries()).toMatchObject([{ timeS: 100, driving: 0 }]);
 
   deferReplies = true;
   const metrics = client.metrics();
@@ -90,6 +98,8 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect(events).toEqual([{ type: 'finished', timeS: 101 }]);
   unsubscribe();
   await client.restart();
+  expect(await client.metricsSeries()).toHaveLength(1);
+  expect((await client.snapshot()).roadSpeedRatio).toBeDefined();
   expect(await client.hash()).toBe(initialHash);
   await client.step(10);
   expect(events).toHaveLength(1);
@@ -102,9 +112,14 @@ test('round-trips every request through the worker and matches replies by ID', a
     'pause',
     'step',
     'snapshot',
+    'snapshot',
+    'snapshot',
+    'metricsSeries',
     'metrics',
     'inspect',
     'restart',
+    'metricsSeries',
+    'snapshot',
     'hash',
     'step',
   ]);
@@ -112,4 +127,5 @@ test('round-trips every request through the worker and matches replies by ID', a
   client.terminate();
   await expect(pending).rejects.toThrow('terminated');
   expect(port.terminate).toHaveBeenCalledOnce();
+  clock.mockRestore();
 });
