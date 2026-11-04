@@ -8,14 +8,11 @@ import { openProject } from '../project/open';
 import { saveProject } from '../project/save';
 import type { Project } from '../project/types';
 import type { Pick as MapPick } from '../render/types';
+import { placeHue } from '../render/style';
 import type { Command, Person } from '../schema';
 import type { Metrics, VehicleDetail } from '../sim/types';
+import { bundledProject } from './bundled-projects';
 import { selectionAfterEdit } from './edit-selection';
-
-const bundledProjects = {
-  grid5x5: () => import('../../fixtures/projects/grid5x5.cityflows.json?raw'),
-  town: () => import('../../fixtures/projects/town.cityflows.json?raw'),
-};
 
 export interface Session {
   project: Project & { population: Person[] };
@@ -24,6 +21,7 @@ export interface Session {
   loadedCompiled: CompiledCity;
   diagnostics: Diagnostic[];
   engine: EngineClient;
+  vehicleHues: Uint32Array;
 }
 
 interface Run {
@@ -50,7 +48,7 @@ interface AppState {
   select: (selection: MapPick | null) => void;
   toggleDiagnostics: () => void;
   reportError: (error: unknown) => void;
-  open: (source?: File | keyof typeof bundledProjects) => Promise<void>;
+  open: (source?: File | string) => Promise<void>;
   save: () => Promise<void>;
   control: (command: RunCommand, steps?: number) => Promise<void>;
   commit: (command: Command) => Promise<void>;
@@ -128,24 +126,17 @@ export const useAppStore = create<AppState>((set, get) => {
     error: null,
     select: (selection) =>
       set({ selection, vehicle: null, diagnosticsOpen: false, rejectedEdit: [] }),
-    toggleDiagnostics: () =>
-      set(({ diagnosticsOpen }) => ({
-        diagnosticsOpen: !diagnosticsOpen,
-        selection: null,
-        vehicle: null,
-        rejectedEdit: [],
-      })),
+    toggleDiagnostics: () => set(({ diagnosticsOpen }) => ({ diagnosticsOpen: !diagnosticsOpen })),
     commit: (command) => edit((editor) => editor.apply(command)),
     undo: () => edit((editor) => editor.undo()),
     redo: () => edit((editor) => editor.redo()),
     reportError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
     open: (source = 'grid5x5') =>
       perform(async () => {
-        const data =
+        const result =
           typeof source === 'string'
-            ? (await bundledProjects[source]()).default
-            : new Uint8Array(await source.arrayBuffer());
-        const result = await openProject(data);
+            ? await bundledProject(source)
+            : await openProject(new Uint8Array(await source.arrayBuffer()));
         if (!result.ok) throw new Error(`${result.file} — ${result.error}`);
         const { project } = result;
         // The editor exposes the compiled city but does not retain the initial diagnostics.
@@ -173,6 +164,10 @@ export const useAppStore = create<AppState>((set, get) => {
               loadedCompiled: editor.compiled,
               diagnostics: validation.diagnostics,
               engine,
+              // Snapshot vehicle IDs are one-based indices into the loaded trip list.
+              vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
+                placeHue(destinationPlaceId),
+              ),
             },
             run: {
               status: 'paused',
@@ -221,7 +216,13 @@ export const useAppStore = create<AppState>((set, get) => {
           await engine.load({ compiled, trips, scenario });
           const { timeS, trips: counts } = await engine.metrics();
           set({
-            session: { ...session, loadedCompiled: compiled },
+            session: {
+              ...session,
+              loadedCompiled: compiled,
+              vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
+                placeHue(destinationPlaceId),
+              ),
+            },
             run: {
               ...run,
               status: 'paused',

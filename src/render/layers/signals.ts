@@ -31,9 +31,15 @@ export function drawSignal(
     const radius = spacing * 0.36;
     for (let i = 0; i < movements.length; i++) {
       const offset = (i - (movements.length - 1) / 2) * spacing;
+      const headX = x - alongX * 0.75 - alongY * offset;
+      const headY = y - alongY * 0.75 + alongX * offset;
       const graphic = container.addChild(
         new Graphics()
-          .circle(x - alongX * 0.75 - alongY * offset, y - alongY * 0.75 + alongX * offset, radius)
+          .circle(headX, headY, radius * 3.1)
+          .fill({ color: 0xffffff, alpha: 0.16 })
+          .circle(headX, headY, radius * 1.9)
+          .fill({ color: 0xffffff, alpha: 0.33 })
+          .circle(headX, headY, radius * 1.25)
           .fill(0xffffff),
       );
       heads.push({ graphic, movement: movements[i]! });

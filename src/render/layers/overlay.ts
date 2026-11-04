@@ -14,22 +14,24 @@ export function drawSelection(
 ): void {
   graphics.clear();
   if (!selection) return;
-  const stroke = { color: style.selection, width: 0.4 };
+  const stroke = { color: style.selection, width: 1.4, alpha: 0.55 };
   switch (selection.kind) {
     case 'lane': {
       const lane = city.lanes[selection.lane]!;
       graphics
         .poly(lane.polyline, false)
-        .stroke({ width: lane.widthM, color: style.selection, alpha: 0.35 });
+        .stroke({ ...stroke, width: lane.widthM + 0.8, cap: 'round' });
       break;
     }
     case 'node': {
       const { pos, radiusM } = city.nodes[selection.node]!;
-      graphics.circle(pos.x, pos.y, Math.max(1, radiusM)).stroke(stroke);
+      graphics.circle(pos.x, pos.y, Math.max(1, radiusM) + 0.65).stroke(stroke);
       break;
     }
     case 'place':
-      placePath(graphics, shapes[selection.place]!).stroke(stroke);
+      placePath(graphics, shapes[selection.place]!, city.places[selection.place]!.kind).stroke(
+        stroke,
+      );
       break;
     case 'connector': {
       const point = connectorPosition(city, city.connectors[selection.connector]!);
@@ -46,7 +48,13 @@ export function drawRoute(
 ): void {
   graphics.clear();
   if (!route) return;
-  const stroke = { width: 0.75, color: style.route, alpha: 0.87 };
+  const stroke = {
+    width: 2.7,
+    color: style.route,
+    alpha: 0.54,
+    cap: 'round',
+    join: 'round',
+  } as const;
   for (const index of route.lanes) graphics.poly(city.lanes[index]!.polyline, false).stroke(stroke);
   for (const index of route.movements)
     graphics.poly(city.movements[index]!.polyline, false).stroke(stroke);

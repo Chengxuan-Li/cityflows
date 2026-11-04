@@ -27,14 +27,7 @@ function Inspector() {
   if (diagnosticsOpen && timeS !== undefined) {
     return <Diagnostics diagnostics={diagnostics} engine={engine} timeS={timeS} />;
   }
-  if (!selection) {
-    return (
-      <>
-        <h2>Inspector</h2>
-        <p className="muted">Select an item on the map.</p>
-      </>
-    );
-  }
+  if (!selection) return null;
   switch (selection.kind) {
     case 'vehicle':
       return <VehicleInspector id={selection.id} detail={vehicle} city={city} />;
@@ -81,10 +74,18 @@ function Inspector() {
 export function App() {
   const error = useAppStore((state) => state.error);
   const rejectedEdit = useAppStore((state) => state.rejectedEdit);
+  const selection = useAppStore((state) => state.selection);
+  const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
+
+  function closeSheet() {
+    const { diagnosticsOpen, toggleDiagnostics, select } = useAppStore.getState();
+    if (diagnosticsOpen) toggleDiagnostics();
+    else select(null);
+  }
 
   useEffect(() => {
     function clear(event: KeyboardEvent) {
-      if (event.key === 'Escape') useAppStore.getState().select(null);
+      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) closeSheet();
     }
     window.addEventListener('keydown', clear);
     return () => window.removeEventListener('keydown', clear);
@@ -102,21 +103,30 @@ export function App() {
           </div>
         )}
       </main>
-      <aside className="inspector" id="inspector" aria-label="Inspector">
-        {rejectedEdit.length > 0 && (
-          <div className="edit-diagnostics" role="alert">
-            <strong>Edit rejected</strong>
-            <ul>
-              {rejectedEdit
-                .filter(({ severity }) => severity === 'error')
-                .map(({ message }, index) => (
-                  <li key={index}>{message}</li>
-                ))}
-            </ul>
-          </div>
-        )}
-        <Inspector />
-      </aside>
+      {(selection || diagnosticsOpen) && (
+        <aside
+          className="inspector"
+          id={diagnosticsOpen ? 'diagnostics' : 'inspector'}
+          aria-label="Inspector"
+        >
+          <button className="close-sheet" aria-label="Close inspector" onClick={closeSheet}>
+            ×
+          </button>
+          <Inspector />
+          {!diagnosticsOpen && rejectedEdit.length > 0 && (
+            <div className="edit-diagnostics" role="alert">
+              <strong>Edit rejected</strong>
+              <ul>
+                {rejectedEdit
+                  .filter(({ severity }) => severity === 'error')
+                  .map(({ message }, index) => (
+                    <li key={index}>{message}</li>
+                  ))}
+              </ul>
+            </div>
+          )}
+        </aside>
+      )}
       <RunBar />
     </div>
   );

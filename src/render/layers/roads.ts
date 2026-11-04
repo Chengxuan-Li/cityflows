@@ -2,7 +2,14 @@ import type { Graphics } from 'pixi.js';
 import { headingAtDistance, offsetPolyline, pointAtDistance } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CMovement, CompiledCity, CRoad } from '../../network';
-import { style } from '../style';
+import { roadStyle, style } from '../style';
+
+function fadeAtZoom(graphics: Graphics, from: number, to: number) {
+  graphics.onRender ??= () => {
+    const zoom = graphics.parent!.worldTransform.a;
+    graphics.alpha = Math.max(0, Math.min(1, (zoom - from) / (to - from)));
+  };
+}
 
 export function drawRoad(
   surface: Graphics,
@@ -10,23 +17,25 @@ export function drawRoad(
   city: CompiledCity,
   road: CRoad,
 ): void {
-  surface.poly(road.surface).fill(style.asphalt);
+  const { color, vergeM } = roadStyle(road);
+  surface
+    .poly(road.surface)
+    .fill(color)
+    .stroke({ color, width: vergeM * 2, join: 'round' });
+  fadeAtZoom(markings, 0.7, 2.2);
   const medianOnRight = city.drivingSide === 'left';
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
     if (lane.right >= 0) drawDashes(markings, offsetPolyline(lane.polyline, lane.widthM / 2));
-    for (const side of [-1, 1]) {
-      const right = side > 0;
-      if ((right ? lane.right : lane.left) >= 0) continue;
-      const median = road.streetGroupId !== null && right === medianOnRight;
-      markings.poly(offsetPolyline(lane.polyline, (side * lane.widthM) / 2), false).stroke({
-        color: median ? style.marking : style.roadEdge,
-        width: median ? style.dividerWidthM : style.edgeWidthM,
-        alpha: median ? 0.85 : 1,
-      });
+    if (road.streetGroupId !== null && (medianOnRight ? lane.right : lane.left) < 0) {
+      const offset = ((medianOnRight ? 1 : -1) * lane.widthM) / 2;
+      markings
+        .poly(offsetPolyline(lane.polyline, offset), false)
+        .stroke({ color: style.marking, width: style.dividerWidthM, alpha: 0.85 });
     }
   }
 }
+
 function drawDashes(graphics: Graphics, line: Vec2[]): void {
   const dashM = 2.7;
   const gapM = 3.1;
@@ -52,6 +61,7 @@ function drawDashes(graphics: Graphics, line: Vec2[]): void {
 }
 
 export function drawMovementArrow(graphics: Graphics, movement: CMovement): void {
+  fadeAtZoom(graphics, 2.2, 4.2);
   const { polyline, cumulative, lengthM } = movement;
   const start = lengthM * 0.13;
   const end = lengthM * 0.84;

@@ -10,11 +10,13 @@ function vehicleTexture(dot: boolean): Texture {
   context.fillStyle = '#ffffff';
   context.beginPath();
   if (dot) context.arc(16, 16, 16, 0, Math.PI * 2);
-  else context.roundRect(0, 0, 72, 32, 9);
+  else context.roundRect(0, 0, 72, 32, 16);
   context.fill();
   if (!dot) {
-    context.fillStyle = '#8a959a';
-    context.fillRect(48, 5, 8, 22);
+    context.fillStyle = '#c1c9c8';
+    context.beginPath();
+    context.roundRect(47, 6, 10, 20, 4);
+    context.fill();
   }
   return Texture.from(canvas);
 }
@@ -66,9 +68,9 @@ export class Vehicles {
     }
   }
 
-  update(snapshot: VehicleSnapshot): void {
+  update(snapshot: VehicleSnapshot & { vehicleHues?: Uint32Array }): void {
     this.snapshot = snapshot;
-    const { count, lane, x, y, heading, lateralM, state } = snapshot;
+    const { count, id, lane, x, y, heading, lateralM, vehicleHues } = snapshot;
     if (this.x.length < count) {
       this.x = new Float32Array(count);
       this.y = new Float32Array(count);
@@ -93,7 +95,7 @@ export class Vehicles {
       particle.x = this.x[i] = lateral === 0 ? x[i]! : x[i]! - Math.sin(angle) * lateral;
       particle.y = this.y[i] = lateral === 0 ? y[i]! : y[i]! + Math.cos(angle) * lateral;
       particle.rotation = angle;
-      const tint = state[i] === 2 ? style.queued : style.driving;
+      const tint = vehicleHues?.[id[i]! - 1] ?? style.driving;
       if (particle.tint !== tint) particle.tint = tint;
     }
     for (const { count, container, pool } of this.layers) {

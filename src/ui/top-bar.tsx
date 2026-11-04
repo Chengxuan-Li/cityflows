@@ -1,8 +1,10 @@
 import { useRef } from 'react';
+import { scenarios } from '../fixtures/scenarios';
 import { useAppStore } from './store';
 
 export function TopBar() {
   const input = useRef<HTMLInputElement>(null);
+  const picker = useRef<HTMLDialogElement>(null);
   const session = useAppStore((state) => state.session);
   const busy = useAppStore((state) => state.busy);
   const { open, save, undo, redo } = useAppStore.getState();
@@ -12,7 +14,7 @@ export function TopBar() {
     <header className="top-bar">
       <h1>{city?.name ?? 'CityFlows'}</h1>
       <div className="controls" role="group" aria-label="Project">
-        <button onClick={() => void open()} disabled={busy}>
+        <button onClick={() => picker.current?.showModal()} aria-haspopup="dialog" disabled={busy}>
           New
         </button>
         <button onClick={() => input.current?.click()} disabled={busy}>
@@ -43,6 +45,28 @@ export function TopBar() {
         </button>
       </div>
       {city?.geo && <small className="attribution">{city.geo.source.attribution}</small>}
+      <dialog ref={picker} className="new-picker" aria-labelledby="new-title">
+        <div className="sheet-heading">
+          <h2 id="new-title">New city</h2>
+          <button aria-label="Close New city" onClick={() => picker.current?.close()}>
+            ×
+          </button>
+        </div>
+        <ul className="scenario-list">
+          {scenarios.map(({ id, name }) => (
+            <li key={id}>
+              <button
+                onClick={() => {
+                  picker.current?.close();
+                  void open(id);
+                }}
+              >
+                {name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </dialog>
     </header>
   );
 }

@@ -1,12 +1,18 @@
 import { useEffect, useRef } from 'react';
+import type { Vec2 } from '../geo/vec2';
 import type { Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
+import { style } from '../render/style';
 import type { Pick, Scene, VehicleSnapshot } from '../render/types';
 import type { Route } from '../routing';
 import { useAppStore, type Session } from './store';
 
-function snapshotForMap(snapshot: VehicleSnapshot, { compiled, loadedCompiled }: Session) {
-  if (compiled === loadedCompiled) return snapshot;
+function snapshotForMap(
+  snapshot: VehicleSnapshot,
+  { compiled, loadedCompiled, vehicleHues }: Session,
+) {
+  const presentation = { ...snapshot, vehicleHues };
+  if (compiled === loadedCompiled) return presentation;
 
   // Positions stay in world coordinates. The renderer only needs the remapped index for layering.
   const lane = snapshot.lane.map((index) => {
@@ -17,7 +23,7 @@ function snapshotForMap(snapshot: VehicleSnapshot, { compiled, loadedCompiled }:
       ? (compiled.index.lane.get(loadedCompiled.lanes[movement.toLane]!.id) ?? 0)
       : -current - 1;
   });
-  return { ...snapshot, lane };
+  return { ...presentation, lane };
 }
 
 function routeForMap(route: Route, { compiled, loadedCompiled }: Session) {
@@ -48,7 +54,7 @@ function fitCity(scene: Scene, canvas: HTMLCanvasElement, { project, compiled }:
     bounds.maxX = Math.max(bounds.maxX, x);
     bounds.maxY = Math.max(bounds.maxY, y);
   }
-  if (points.length) scene.camera.fitToBounds(bounds, canvas.clientWidth, canvas.clientHeight, 55);
+  if (points.length) scene.camera.fitToBounds(bounds, canvas.clientWidth, canvas.clientHeight, 72);
 }
 
 function bindPointer(
@@ -58,13 +64,31 @@ function bindPointer(
   canPick: () => boolean,
 ) {
   const { getState } = useAppStore;
-  let drag: { id: number; x: number; y: number; moved: boolean } | null = null;
+  const { camera } = scene;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let drag: (Vec2 & { id: number; time: number; moved: boolean }) | null = null;
+  let vx = 0;
+  let vy = 0;
+  let zoom: { pointer: Vec2; target: number } | null = null;
+  let lastFrame = performance.now();
+
+  function reset() {
+    vx = vy = 0;
+    zoom = null;
+  }
 
   canvas.addEventListener(
     'pointerdown',
     (event) => {
       if (event.button !== 0 || drag) return;
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+      reset();
+      drag = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        time: event.timeStamp,
+        moved: false,
+      };
       canvas.setPointerCapture(event.pointerId);
     },
     { signal },
@@ -76,8 +100,11 @@ function bindPointer(
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
       if (!drag.moved && Math.hypot(dx, dy) < 3) return;
-      scene.camera.pan(dx, dy);
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: true };
+      camera.pan(dx, dy);
+      const elapsed = Math.max(8, event.timeStamp - drag.time);
+      vx = 0.4 * vx + (0.6 * dx) / elapsed;
+      vy = 0.4 * vy + (0.6 * dy) / elapsed;
+      drag = { ...drag, x: event.clientX, y: event.clientY, time: event.timeStamp, moved: true };
       canvas.classList.add('panning');
     },
     { signal },
@@ -85,12 +112,15 @@ function bindPointer(
   canvas.addEventListener(
     'pointerup',
     (event) => {
-      if (drag?.id !== event.pointerId || drag.moved || !canPick()) return;
+      if (drag?.id !== event.pointerId) return;
+      if (reducedMotion.matches || event.timeStamp - drag.time > 80) vx = vy = 0;
+      if (drag.moved || !canPick()) return;
       const rect = canvas.getBoundingClientRect();
       getState().select(scene.pick(event.clientX - rect.left, event.clientY - rect.top));
     },
     { signal },
   );
+  canvas.addEventListener('pointercancel', reset, { signal });
   canvas.addEventListener(
     'lostpointercapture',
     () => {
@@ -105,13 +135,39 @@ function bindPointer(
       event.preventDefault();
       const rect = canvas.getBoundingClientRect();
       const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
-      scene.camera.zoomAt(
-        { x: event.clientX - rect.left, y: event.clientY - rect.top },
-        Math.exp(-event.deltaY * units * 0.0015),
-      );
+      const pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      const factor = Math.exp(-event.deltaY * units * 0.0015);
+      vx = vy = 0;
+      if (reducedMotion.matches) {
+        zoom = null;
+        camera.zoomAt(pointer, factor);
+      } else {
+        const target = (zoom?.target ?? camera.zoom) * factor;
+        zoom = { pointer, target: Math.min(style.maxZoom, Math.max(style.minZoom, target)) };
+      }
     },
     { passive: false, signal },
   );
+
+  return {
+    reset,
+    advance(now: number) {
+      const elapsed = Math.max(0, Math.min(32, now - lastFrame));
+      lastFrame = now;
+      if (zoom) {
+        const distance = Math.log(zoom.target / camera.zoom);
+        const arrived = Math.abs(distance) < 0.001;
+        const fraction = arrived ? 1 : 1 - Math.exp(-elapsed / 65);
+        camera.zoomAt(zoom.pointer, Math.exp(distance * fraction));
+        if (arrived) zoom = null;
+      } else if (!drag && Math.hypot(vx, vy) > 0.015) {
+        const decay = Math.exp(-elapsed / 105);
+        camera.pan(vx * 105 * (1 - decay), vy * 105 * (1 - decay));
+        vx *= decay;
+        vy *= decay;
+      }
+    },
+  };
 }
 
 export function MapView() {
@@ -166,13 +222,17 @@ export function MapView() {
         }
       }
 
-      function frame() {
+      function frame(now: number) {
         animation = requestAnimationFrame(frame);
+        pointer.advance(now);
         const { session, selection, vehicle, busy } = getState();
         if (!session || busy) return;
         if (drawn?.compiled !== session.compiled) {
           view.setCity(session.compiled, session.project.city);
-          if (drawn?.editor !== session.editor) fitCity(view, canvas, session);
+          if (drawn?.editor !== session.editor) {
+            pointer.reset();
+            fitCity(view, canvas, session);
+          }
           drawn = session;
           drawnSelection = drawnRoute = null;
           snapshotTime = NaN;
@@ -199,11 +259,11 @@ export function MapView() {
           });
       }
 
-      bindPointer(canvas, view, signal, () => {
+      const pointer = bindPointer(canvas, view, signal, () => {
         const { session, busy } = getState();
         return !busy && session !== null && session.compiled === drawn?.compiled;
       });
-      frame();
+      animation = requestAnimationFrame(frame);
     }
 
     void mount().catch((error: unknown) => {

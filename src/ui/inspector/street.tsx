@@ -40,61 +40,67 @@ export function StreetInspector({ road, city, lane }: { road: Road; city: City; 
 
   return (
     <>
-      <h2>Street</h2>
-      <p className="entity-name">{road.name || road.id}</p>
-      <div className="edit-fields">
-        <label className="edit-field">
-          Road class
-          <select
-            value={road.roadClass}
-            onChange={(event) =>
-              void commit({
-                kind: 'setRoadAttributes',
-                roadId: road.id,
-                roadClass: event.currentTarget.value as RoadClass,
-              })
-            }
-          >
-            {roadSchema.shape.roadClass.options.map((kind) => (
-              <option key={kind} value={kind} className="capitalize">
-                {kind}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="edit-field">
-          Direction
-          <select
-            value={reverse ? 'both' : road.id}
-            onChange={({ currentTarget: { value: direction } }) => {
-              if (direction === 'reverse') void commit({ kind: 'reverseRoad', roadId: road.id });
-              else if (streetGroupId !== null) {
-                void commit({ kind: 'setStreetDirection', streetGroupId, direction });
-              }
-            }}
-          >
-            {streetGroupId !== null && <option value="both">Two-way</option>}
-            <option value={road.id}>
-              {road.from} → {road.to}
-            </option>
-            <option value={reverse?.id ?? 'reverse'}>
-              {road.to} → {road.from}
-            </option>
-          </select>
-        </label>
-        {laneCount(road, 'Lanes in this direction')}
-        {reverse && laneCount(reverse, 'Lanes in reverse')}
-        <NumberField
-          label="Speed limit (km/h)"
-          value={Number((road.speedLimitMps * 3.6).toFixed(3))}
-          onCommit={(speed) =>
-            void commit({ kind: 'setRoadAttributes', roadId: road.id, speedLimitMps: speed! / 3.6 })
-          }
-        />
-      </div>
+      <h2>{road.name || `Street ${road.id}`}</h2>
       <p className="muted">
         {road.from} → {road.to} · lane {lane + 1}
       </p>
+      <details className="disclosure">
+        <summary>Lanes and street settings</summary>
+        <div className="edit-fields">
+          <label className="edit-field">
+            Road class
+            <select
+              value={road.roadClass}
+              onChange={(event) =>
+                void commit({
+                  kind: 'setRoadAttributes',
+                  roadId: road.id,
+                  roadClass: event.currentTarget.value as RoadClass,
+                })
+              }
+            >
+              {roadSchema.shape.roadClass.options.map((kind) => (
+                <option key={kind} value={kind} className="capitalize">
+                  {kind}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="edit-field">
+            Direction
+            <select
+              value={reverse ? 'both' : road.id}
+              onChange={({ currentTarget: { value: direction } }) => {
+                if (direction === 'reverse') void commit({ kind: 'reverseRoad', roadId: road.id });
+                else if (streetGroupId !== null) {
+                  void commit({ kind: 'setStreetDirection', streetGroupId, direction });
+                }
+              }}
+            >
+              {streetGroupId !== null && <option value="both">Two-way</option>}
+              <option value={road.id}>
+                {road.from} → {road.to}
+              </option>
+              <option value={reverse?.id ?? 'reverse'}>
+                {road.to} → {road.from}
+              </option>
+            </select>
+          </label>
+          {laneCount(road, 'Lanes in this direction')}
+          {reverse && laneCount(reverse, 'Lanes in reverse')}
+          <NumberField
+            label="Speed limit (km/h)"
+            value={Number((road.speedLimitMps * 3.6).toFixed(3))}
+            onCommit={(speed) =>
+              void commit({
+                kind: 'setRoadAttributes',
+                roadId: road.id,
+                speedLimitMps: speed! / 3.6,
+              })
+            }
+          />
+        </div>
+      </details>
     </>
   );
 }

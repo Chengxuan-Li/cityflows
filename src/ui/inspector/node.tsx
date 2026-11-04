@@ -77,8 +77,9 @@ export function NodeInspector({
 
   return (
     <>
-      <h2>Node</h2>
-      <p className="entity-name">{nodeId}</p>
+      <h2>
+        {signal ? 'Signal' : 'Junction'} {nodeId}
+      </h2>
       <div className="edit-fields">
         <label className="edit-field">
           Control
@@ -101,8 +102,11 @@ export function NodeInspector({
             ))}
           </select>
         </label>
-        {signal && (
-          <>
+      </div>
+      {signal && (
+        <details className="disclosure">
+          <summary>Signal phases</summary>
+          <div className="edit-fields">
             <NumberField
               label="Amber (s)"
               value={signal.amberS}
@@ -113,12 +117,7 @@ export function NodeInspector({
               value={signal.allRedS}
               onCommit={(allRedS) => setSignal({ ...signal, allRedS: allRedS! })}
             />
-          </>
-        )}
-      </div>
-      {signal && (
-        <>
-          <h3>Signal phases</h3>
+          </div>
           <p className="muted">
             Cycle {node.signal!.cycleS} s · offset {signal.offsetS} s
           </p>
@@ -167,74 +166,78 @@ export function NodeInspector({
               );
             })}
           </ul>
-        </>
+        </details>
       )}
-      <h3>Turns</h3>
-      <p className="muted">Incoming → outgoing · lane 1 is leftmost</p>
-      {roadPairs.length === 0 && <p className="muted">No road pairs at this node.</p>}
-      <ul className="item-list turn-list">
-        {roadPairs.map(({ from, to, roads, movements }) => (
-          <li key={`${from.id}>${to.id}`}>
-            <strong>
-              {from.id} → {to.id}
-            </strong>
-            <div className="controls">
-              {from.lanes.flatMap((fromIndex) =>
-                to.lanes.map((toIndex) => {
-                  const a = compiled.lanes[fromIndex]!;
-                  const b = compiled.lanes[toIndex]!;
-                  if (!a.allowed.some((vehicle) => b.allowed.includes(vehicle))) return null;
-                  const id = movementId(a.id, b.id);
-                  const movementIndex = compiled.index.movement.get(id);
-                  const allowed = movementIndex !== undefined;
-                  const turn = movements.length
-                    ? compiled.movements[movements[0]!]!.turn
-                    : undefined;
-                  const rule = { ...roads, fromLane: a.lane, toLane: b.lane };
-                  const overridden = source.turnRules.some(
-                    (entry) =>
-                      samePair(entry, rule) && entry.fromLane === a.lane && entry.toLane === b.lane,
-                  );
-                  const label = `${from.id} lane ${a.lane + 1} → ${to.id} lane ${b.lane + 1}`;
-                  return (
-                    <div className="turn-toggle" key={id}>
-                      <button
-                        type="button"
-                        aria-label={label}
-                        aria-pressed={allowed}
-                        title={`${allowed ? 'Ban' : 'Allow'} ${label}`}
-                        onClick={() =>
-                          void commit({
-                            kind: 'setTurnRule',
-                            nodeId,
-                            rule: {
-                              ...rule,
-                              allowed: !allowed,
-                              provenance: { source: 'authored' },
-                            },
-                          })
-                        }
-                      >
-                        {a.lane + 1} {turn ? arrow[turn] : '→'} {b.lane + 1}
-                      </button>
-                      {overridden && (
+      <details className="disclosure">
+        <summary>Turns</summary>
+        <p className="muted">Incoming → outgoing · lane 1 is leftmost</p>
+        {roadPairs.length === 0 && <p className="muted">No road pairs at this node.</p>}
+        <ul className="item-list turn-list">
+          {roadPairs.map(({ from, to, roads, movements }) => (
+            <li key={`${from.id}>${to.id}`}>
+              <strong>
+                {from.id} → {to.id}
+              </strong>
+              <div className="controls">
+                {from.lanes.flatMap((fromIndex) =>
+                  to.lanes.map((toIndex) => {
+                    const a = compiled.lanes[fromIndex]!;
+                    const b = compiled.lanes[toIndex]!;
+                    if (!a.allowed.some((vehicle) => b.allowed.includes(vehicle))) return null;
+                    const id = movementId(a.id, b.id);
+                    const movementIndex = compiled.index.movement.get(id);
+                    const allowed = movementIndex !== undefined;
+                    const turn = movements.length
+                      ? compiled.movements[movements[0]!]!.turn
+                      : undefined;
+                    const rule = { ...roads, fromLane: a.lane, toLane: b.lane };
+                    const overridden = source.turnRules.some(
+                      (entry) =>
+                        samePair(entry, rule) &&
+                        entry.fromLane === a.lane &&
+                        entry.toLane === b.lane,
+                    );
+                    const label = `${from.id} lane ${a.lane + 1} → ${to.id} lane ${b.lane + 1}`;
+                    return (
+                      <div className="turn-toggle" key={id}>
                         <button
                           type="button"
-                          aria-label={`Reset ${label}`}
-                          title="Clear turn override"
-                          onClick={() => void commit({ kind: 'clearTurnRule', nodeId, rule })}
+                          aria-label={label}
+                          aria-pressed={allowed}
+                          title={`${allowed ? 'Ban' : 'Allow'} ${label}`}
+                          onClick={() =>
+                            void commit({
+                              kind: 'setTurnRule',
+                              nodeId,
+                              rule: {
+                                ...rule,
+                                allowed: !allowed,
+                                provenance: { source: 'authored' },
+                              },
+                            })
+                          }
                         >
-                          ×
+                          {a.lane + 1} {turn ? arrow[turn] : '→'} {b.lane + 1}
                         </button>
-                      )}
-                    </div>
-                  );
-                }),
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+                        {overridden && (
+                          <button
+                            type="button"
+                            aria-label={`Reset ${label}`}
+                            title="Clear turn override"
+                            onClick={() => void commit({ kind: 'clearTurnRule', nodeId, rule })}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }),
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </details>
     </>
   );
 }
