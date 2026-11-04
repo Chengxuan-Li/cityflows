@@ -49,9 +49,11 @@ export function consolidateJunctions(
     (a, b) => polylineLength(a.road.centerline) - polylineLength(b.road.centerline),
   )) {
     if (boundaries.has(road.from) || boundaries.has(road.to)) continue;
+    // Bridges keep their own junctions; roundabout rings are short arcs by design (TASK-049).
     if (
       (JSON.parse(attributes) as string[][]).some(
-        ([key, value]) => key === 'bridge' && value !== 'no',
+        ([key, value]) =>
+          (key === 'bridge' && value !== 'no') || (key === 'junction' && value === 'roundabout'),
       )
     )
       continue;
