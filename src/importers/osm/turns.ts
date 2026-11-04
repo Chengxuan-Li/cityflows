@@ -36,14 +36,16 @@ export function addLocalTurnarounds(node: Node, incident: JunctionRoads): void {
     return;
   const from = incident.incoming[0]!,
     to = incident.outgoing[0]!;
-  if (from.cutEnd || to.cutStart || !['residential', 'service'].includes(from.road.roadClass))
-    return;
+  if (!['residential', 'service'].includes(from.road.roadClass)) return;
   if (!from.road.streetGroupId || from.road.streetGroupId !== to.road.streetGroupId) return;
   node.turnRules.push({
     from: from.road.id,
     to: to.road.id,
     allowed: true,
-    provenance: { source: 'osm', inferred: ['localTurnaround'] },
+    provenance: {
+      source: 'osm',
+      inferred: [from.cutEnd || to.cutStart ? 'boundaryTurnaround' : 'localTurnaround'],
+    },
   });
 }
 

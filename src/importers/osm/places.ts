@@ -1,4 +1,5 @@
 import type { Vec2 } from '../../geo/vec2';
+import { lonLatToLocal } from '../../geo/projection';
 import type { CompiledCity } from '../../network';
 import { allocateId, type City, type Place, type RoadClass } from '../../schema';
 import { contains, type Bounds } from './clip';
@@ -16,7 +17,76 @@ const gatewayDemand: Record<RoadClass, number> = {
   ramp: 80,
 };
 
-function addPlace(
+// Place access uses actual movement paths, not a road-level approximation that can require
+// an impossible lane change on a short section. Keep disconnected roads, but do not seed
+// unreachable demand on them. Boundary lanes need only reach (or leave) the main component.
+export function networkAccess(compiled: CompiledCity) {
+  const out = compiled.lanes.map((): number[] => []);
+  const incoming = compiled.lanes.map((): number[] => []);
+  for (const m of compiled.movements) {
+    if (m.neverGreen) continue;
+    out[m.fromLane]!.push(m.toLane);
+    incoming[m.toLane]!.push(m.fromLane);
+  }
+  for (const road of compiled.roads) {
+    const lanes = road.lanes.map((i) => compiled.lanes[i]!);
+    if (lanes.some((l) => l.lengthM < (lanes.length - 1) * 30 + 10)) continue;
+    for (const lane of lanes)
+      for (const other of lanes) {
+        if (lane.idx === other.idx) continue;
+        out[lane.idx]!.push(other.idx);
+        incoming[other.idx]!.push(lane.idx);
+      }
+  }
+  const seen = new Set<number>(),
+    order: number[] = [];
+  for (const lane of compiled.lanes) {
+    if (seen.has(lane.idx)) continue;
+    const stack: [number, boolean][] = [[lane.idx, false]];
+    while (stack.length) {
+      const [id, finish] = stack.pop()!;
+      if (finish) {
+        order.push(id);
+        continue;
+      }
+      if (seen.has(id)) continue;
+      seen.add(id);
+      stack.push([id, true]);
+      for (const next of out[id]!) if (!seen.has(next)) stack.push([next, false]);
+    }
+  }
+  seen.clear();
+  let core: number[] = [];
+  for (const id of order.reverse()) {
+    if (seen.has(id)) continue;
+    const group = [id];
+    seen.add(id);
+    for (const lane of group)
+      for (const next of incoming[lane]!) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        group.push(next);
+      }
+    if (group.length > core.length) core = group;
+  }
+  // A simple clipped corridor has no cycle and still has valid directional portals.
+  if (new Set(core.map((i) => compiled.lanes[i]!.road)).size <= 1)
+    core = compiled.lanes.map((lane) => lane.idx);
+  const reach = (edges: number[][]) => {
+    const result = new Set(core),
+      queue = [...core];
+    for (const lane of queue)
+      for (const next of edges[lane]!) {
+        if (result.has(next)) continue;
+        result.add(next);
+        queue.push(next);
+      }
+    return result;
+  };
+  return { core: new Set(core), fromCore: reach(out), toCore: reach(incoming) };
+}
+
+export function addPlace(
   city: City,
   kind: Place['kind'],
   name: string,
@@ -44,41 +114,116 @@ function addPlace(
 }
 
 export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity): void {
-  const gateways = new Map<string, Place>();
-  for (const { road, wayId, cutStart, cutEnd } of roads) {
-    if (!cutStart && !cutEnd) continue;
-    const lanes = compiled.roads[compiled.index.road.get(road.id)!]!.lanes;
-    const lane = compiled.lanes[lanes[city.drivingSide === 'right' ? lanes.length - 1 : 0]!]!;
-    const inset = Math.min(5, lane.lengthM / 2);
-    for (const end of ['start', 'end'] as const) {
-      if (!(end === 'start' ? cutStart : cutEnd)) continue;
-      const nodeId = end === 'start' ? road.from : road.to;
-      const demand = gatewayDemand[road.roadClass];
-      let place = gateways.get(nodeId);
-      if (!place) {
-        place = addPlace(
-          city,
-          'gateway',
-          'Gateway',
-          { kind: 'point', pos: city.nodes[nodeId]!.pos },
-          {
-            source: 'osm',
-            osmIds: [],
-            inferred: ['population', 'jobs', 'attraction', 'throughputPerMin'],
-          },
-          demand,
-        );
-        gateways.set(nodeId, place);
-      }
-      if (!place.provenance.osmIds!.includes(wayId)) place.provenance.osmIds!.push(wayId);
-      place.population = place.jobs = Math.max(place.population, demand);
+  const access = networkAccess(compiled);
+  const [west, south, east, north] = city.geo!.bbox;
+  const nw = lonLatToLocal(city.geo!, { lon: west, lat: north });
+  const se = lonLatToLocal(city.geo!, { lon: east, lat: south });
+  const ends = roads.flatMap((source) => {
+    const { road } = source;
+    return (['start', 'end'] as const).flatMap((end) => {
+      if (!(end === 'start' ? source.cutStart : source.cutEnd)) return [];
+      const candidates = compiled.roads[compiled.index.road.get(road.id)!]!.lanes.map(
+        (i) => compiled.lanes[i]!,
+      ).filter((l) => (end === 'start' ? access.toCore : access.fromCore).has(l.idx));
+      if (!candidates.length) return [];
+      const lane = city.drivingSide === 'right' ? candidates.at(-1)! : candidates[0]!;
+      const node = city.nodes[end === 'start' ? road.from : road.to]!;
+      const distances = [
+        Math.abs(node.pos.x - nw.x),
+        Math.abs(node.pos.x - se.x),
+        Math.abs(node.pos.y - nw.y),
+        Math.abs(node.pos.y - se.y),
+      ];
+      const edge = distances.indexOf(Math.min(...distances));
+      return [{ source, end, lane, node, edge }];
+    });
+  });
+  type End = (typeof ends)[number];
+  const groups: End[][] = [];
+  for (const end of ends) {
+    const existing = groups.find((group) => group[0]!.node.id === end.node.id);
+    if (existing) existing.push(end);
+    else groups.push([end]);
+  }
+  const gap = (a: End[], b: End[]) =>
+    Math.hypot(a[0]!.node.pos.x - b[0]!.node.pos.x, a[0]!.node.pos.y - b[0]!.node.pos.y);
+  const has = (group: End[], direction: End['end']) => group.some((e) => e.end === direction);
+  const complementary = (a: End[], b: End[]) =>
+    (!has(a, 'start') && has(b, 'start')) || (!has(a, 'end') && has(b, 'end'));
+  // First pair named carriageways; then pair nearby one-way streets serving the same edge.
+  for (const named of [true, false]) {
+    for (const group of groups) {
+      if (!group.length || (has(group, 'start') && has(group, 'end'))) continue;
+      const first = group[0]!;
+      const candidates = groups
+        .filter(
+          (other) =>
+            other !== group &&
+            other.length &&
+            complementary(group, other) &&
+            first.edge === other[0]!.edge &&
+            gap(group, other) <= (named ? 150 : 300) &&
+            (!named ||
+              (first.source.road.name !== null &&
+                other[0]!.source.road.name === first.source.road.name &&
+                other[0]!.source.road.roadClass === first.source.road.roadClass)),
+        )
+        .sort((a, b) => gap(group, a) - gap(group, b));
+      if (candidates[0]) group.push(...candidates[0].splice(0));
+    }
+  }
+  // A clipped link belongs to its nearby parent gateway, and contributes no extra demand.
+  for (const group of groups) {
+    if (!group.length || !group.every((e) => e.source.road.roadClass === 'ramp')) continue;
+    const parent = groups
+      .filter(
+        (other) =>
+          other !== group &&
+          other.some((e) =>
+            ['motorway', 'trunk', 'primary', 'secondary'].includes(e.source.road.roadClass),
+          ) &&
+          other[0]!.edge === group[0]!.edge &&
+          gap(group, other) < 300,
+      )
+      .sort((a, b) => gap(group, a) - gap(group, b))[0];
+    if (parent) parent.push(...group.splice(0));
+  }
+  for (const group of groups) {
+    if (!group.length) continue;
+    const place = addPlace(
+      city,
+      'gateway',
+      'Gateway',
+      { kind: 'point', pos: group[0]!.node.pos },
+      {
+        source: 'osm',
+        osmIds: [...new Set(group.map((e) => e.source.wayId))],
+        inferred: ['population', 'jobs', 'attraction', 'throughputPerMin', 'gatewayPairing'],
+      },
+    );
+    const main = group.filter((e) => e.source.road.roadClass !== 'ramp');
+    const demandEnds = main.length ? main : group;
+    place.population = Math.max(
+      0,
+      ...demandEnds
+        .filter((e) => e.end === 'start')
+        .map((e) => gatewayDemand[e.source.road.roadClass] * e.source.road.lanes.length),
+    );
+    place.jobs = Math.max(
+      0,
+      ...demandEnds
+        .filter((e) => e.end === 'end')
+        .map((e) => gatewayDemand[e.source.road.roadClass] * e.source.road.lanes.length),
+    );
+    for (const { source, lane, end } of group) {
+      const inset = Math.min(5, lane.lengthM / 2);
       place.connectors.push({
         id: allocateId(city, 'c'),
-        roadId: road.id,
+        roadId: source.road.id,
         lane: lane.lane,
         positionM: end === 'start' ? inset : lane.lengthM - inset,
         direction: end === 'start' ? 'out' : 'in',
-        throughputPerMin: 30,
+        throughputPerMin: 30 * source.road.lanes.length,
       });
     }
   }

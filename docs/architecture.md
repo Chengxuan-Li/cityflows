@@ -1018,8 +1018,18 @@ Lives in `src/importers/osm`, runs inside an import worker.
    `highway=give_way` gives `yield`; else `uncontrolled`.
 8. Clip to the bbox: a road crossing the edge is cut there; the cut end becomes a node and a
    `gateway` place with an `out` connector (5 m into entering roads) or an `in` connector (5 m
-   before the end of leaving roads). Gateway population and jobs default from the road class
-   and are editable.
+   before the end of leaving roads). TASK-048 pairs same-name/class carriageways on the same
+   bbox edge within 150 m, then complementary one-way streets within 300 m. Nearby clipped
+   ramps share a parent arterial gateway and add no extra demand. Per-direction population
+   and jobs use the maximum class demand times lane count: motorway 400, trunk 300, primary
+   200, secondary 120, tertiary 80, residential 40, service 20, ramp 80 per lane. An entry-only
+   gateway has no jobs; an exit-only gateway has no residents. All values remain editable.
+   Portals must reach, or be reachable from, the main strongly connected lane component;
+   lane changes count only on sections long enough to traverse the lane block at 30 m per
+   change plus 10 m clearance. A corridor without a multi-road cycle retains its directional
+   portals. Isolated fragments retain their roads and diagnostics but generate no gateway
+   demand. Local two-way residential/service boundary ends have inferred turnarounds, allowing
+   a driver who misses a turn to return instead of stranding at the crop boundary.
 9. Places from OSM are limited to `amenity=parking` with a polygon, `railway=station`,
    `aeroway=aerodrome`, `amenity=school`, `shop=mall`: a `Place` with a connector snapped to the
    nearest lane. The user sets population and jobs; the wizard says so.
