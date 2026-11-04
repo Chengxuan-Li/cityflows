@@ -416,14 +416,16 @@ function createRun({
         if (remaining <= params.intersection.decisionDistanceM) {
           vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;
         }
-        // IDM approaches a standstill asymptotically. Settle before counting a full stop step.
+        // IDM approaches a standstill asymptotically. Settle before accumulating time at the stop line.
         if (remaining <= idm.minGapM + 0.1 && speed <= 0.1) position = previousPosition;
       }
       speed = (position - previousPosition) / dtS;
       vehicles.position[id] = position;
       vehicles.speed[id] = speed;
       vehicles.stopped[id] =
-        previousSpeed === 0 && speed === 0 && remaining <= idm.minGapM + 0.1 ? 1 : 0;
+        previousSpeed === 0 && speed === 0 && remaining <= idm.minGapM + 0.1
+          ? vehicles.stopped[id]! + dtS
+          : 0;
       if (speed === 0) vehicles.waiting[id] = vehicles.waiting[id]! + dtS;
 
       if (

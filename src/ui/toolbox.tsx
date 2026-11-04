@@ -36,6 +36,14 @@ export function Toolbox() {
       >
         Ramp
       </button>
+      <button
+        aria-pressed={tool === 'roundabout'}
+        disabled={disabled}
+        title="Drag from a junction to size a roundabout / Click its center to remove / Escape cancels"
+        onClick={() => useAppStore.getState().setTool('roundabout')}
+      >
+        Roundabout
+      </button>
     </nav>
   );
 }

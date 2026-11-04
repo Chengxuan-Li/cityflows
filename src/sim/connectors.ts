@@ -100,7 +100,7 @@ export function createConnectors(
       }
       ready[idx] = available;
       let i = head[idx]!;
-      while (i < available && canUse(connector, timeS) && hasGap(connector)) {
+      while (i < available) {
         // Cars still approaching a car park do not hold up already parked departures.
         let candidate = i;
         while (candidate < available) {
@@ -114,6 +114,25 @@ export function createConnectors(
           candidate++;
         }
         if (candidate === available) break;
+        const place = compiled.places[connector.place]!;
+        // A parked car must leave beyond its own arrival queue. Otherwise spawning at an
+        // upstream "both" portal fills the only lane needed to free the next parking slot.
+        const usable = (exit: CConnector) => {
+          if (!canUse(exit, timeS) || !hasGap(exit)) return false;
+          if (place.capacity === null) return true;
+          for (let car = vehicles.first(exit.lane); car !== -1; car = vehicles.next[car]!) {
+            if (vehicles.position[car]! < exit.positionM) break;
+            const destination = compiled.connectors[vehicles.destination[car]!];
+            if (destination?.place === exit.place) return false;
+          }
+          return true;
+        };
+        const exit = usable(connector)
+          ? connector
+          : place.capacity === null
+            ? undefined
+            : place.connectorsOut.map((idx) => compiled.connectors[idx]!).find(usable);
+        if (!exit) break;
         [queue[i], queue[candidate]] = [queue[candidate]!, queue[i]!];
         const id = queue[i++]!;
         const previous = previousArrival[id]!;
@@ -122,8 +141,8 @@ export function createConnectors(
           continue;
         }
         vehicles.waiting[id] = Math.max(0, timeS - queuedSince(id));
-        if (release(id, connector, timeS)) {
-          recordAdmission(connector, timeS);
+        if (release(id, exit, timeS)) {
+          recordAdmission(exit, timeS);
           if (inside[connector.place]! && (!tracked[connector.place] || previous !== -1))
             inside[connector.place]!--;
         }

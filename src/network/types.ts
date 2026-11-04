@@ -99,6 +99,7 @@ export interface CMovement {
   conflicts: number[];
   priority: number;
   neverGreen: boolean;
+  turnOnRed?: boolean;
 }
 export interface CSignal {
   offsetS: number;

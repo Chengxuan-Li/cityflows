@@ -101,7 +101,7 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
     arrived: numbers().fill(NaN),
     waiting: numbers(),
     junctionWaiting: numbers(),
-    stopped: new Uint8Array(count),
+    stopped: new Float64Array(count),
     freeFlow: numbers(),
     failReason: Array<FailReason | null>(count).fill(null),
   };

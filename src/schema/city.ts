@@ -27,6 +27,7 @@ export interface Node {
   control: Control;
   minorRoads: RoadId[]; // for yield/stop: incoming roads that must yield. Empty = by class.
   turnRules: TurnRule[];
+  roundabout?: Roundabout;
   signal: SignalProgram | null; // required when control === 'signal'
   provenance: Provenance;
 }
@@ -41,6 +42,7 @@ export interface TurnRule {
 }
 
 export interface SignalProgram {
+  turnOnRed?: boolean; // curb-side turn after a full stop; omitted = false
   offsetS: number;
   amberS: number; // follows every phase
   allRedS: number; // follows amber
@@ -128,4 +130,17 @@ export interface City {
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
   nextId: number; // single counter for all id kinds
+}
+
+/** Only entities changed by conversion; no recursive roundabout records. */
+export interface RoundaboutSnapshot {
+  nodes: Record<NodeId, Omit<Node, 'roundabout'>>;
+  roads: Record<RoadId, Road>;
+  connectors: Record<PlaceId, Connector[]>;
+}
+export interface Roundabout {
+  radiusM: number;
+  ringRoads: RoadId[];
+  before: RoundaboutSnapshot;
+  after: RoundaboutSnapshot;
 }

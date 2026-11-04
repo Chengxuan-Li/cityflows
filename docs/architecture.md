@@ -100,8 +100,19 @@ interface Node {
   control: Control;
   minorRoads: RoadId[];    // for yield/stop: incoming roads that must yield. Empty = by class.
   turnRules: TurnRule[];
+  roundabout?: Roundabout; // authored ring restoration, see section 6
   signal: SignalProgram | null;   // required when control === 'signal'
   provenance: Provenance;
+}
+
+interface RoundaboutSnapshot {
+  nodes: Record<NodeId, Omit<Node, 'roundabout'>>;
+  roads: Record<RoadId, Road>;
+  connectors: Record<PlaceId, Connector[]>;
+}
+interface Roundabout {
+  radiusM: number; ringRoads: RoadId[];
+  before: RoundaboutSnapshot; after: RoundaboutSnapshot;
 }
 
 interface TurnRule {
@@ -114,6 +125,7 @@ interface TurnRule {
 }
 
 interface SignalProgram {
+  turnOnRed?: boolean;     // omitted = false, curb-side turn after stopping
   offsetS: number;
   amberS: number;          // follows every phase
   allRedS: number;         // follows amber
@@ -254,7 +266,7 @@ interface CLane { idx: number; id: LaneId; road: number; lane: number; polyline:
 type Turn = 'through' | 'left' | 'right' | 'uturn' | 'merge' | 'diverge';
 interface CMovement { idx: number; id: MovementId; fromLane: number; toLane: number;
   node: number; turn: Turn; polyline: Vec2[]; cumulative: Float64Array; lengthM: number;
-  conflicts: number[]; priority: number; neverGreen: boolean; }
+  conflicts: number[]; priority: number; neverGreen: boolean; turnOnRed?: boolean; }
 interface CSignal { offsetS: number; amberS: number; allRedS: number; cycleS: number;
   phases: { durationS: number; movements: number[] }[]; }
 interface CConnector { idx: number; id: ConnectorId; place: number; lane: number;
@@ -334,6 +346,16 @@ movement between nearly collinear lanes (under 5 degrees) is a straight segment.
 
 ### 5.4 Signals
 
+- Optional `SignalProgram.turnOnRed` defaults to false. When enabled, the compiler marks
+  right turns under right-hand driving and left turns under left-hand driving with
+  `CMovement.turnOnRed`. These remain routable even if no phase serves them.
+- While red, marked turns stop at the line for one second before requesting entry, then
+  yield to all conflicting approaches with a gap below `gapS`, existing grants/occupants,
+  and blocked exits. Green candidates resolve first. A granted red turn may finish leaving
+  the stop line; a green grant that turns red must stop again. Amber rules are unchanged.
+- OSM imports set the flag only if explicit country tags are present: United States true,
+  all other or mixed countries false; absent country leaves the flag omitted.
+
 - Each phase's `groups` expand to every movement between the named road pair. A movement may
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
 - State at simulation time `t`: `((t + offsetS) mod cycleS)` locates the phase and whether it
@@ -381,6 +403,8 @@ type Command =
   | { kind: 'mergeRoads'; roadId: RoadId; otherRoadId: RoadId }                  // Gate 2
   | { kind: 'addRamp'; from: { roadId: RoadId; atM: number }; to: { roadId: RoadId; atM: number } }
   | { kind: 'removeRamp'; roadId: RoadId }
+  | { kind: 'addRoundabout'; nodeId: NodeId; radiusM: number }
+  | { kind: 'removeRoundabout'; nodeId: NodeId }
   | { kind: 'moveNode'; nodeId: NodeId; pos: Vec2 }                               // Gate 2
   | { kind: 'addPlace'; place: Omit<Place, 'id'> }
   | { kind: 'updatePlace'; placeId: PlaceId; patch: Partial<Omit<Place, 'id' | 'connectors'>> }
@@ -429,6 +453,23 @@ Semantics:
   limit. Paired streets split together. `removeRamp` removes the ramp and merges each
   endpoint's split pair; incompatible intervening edits reject the command atomically.
   Undo restores the exact pre-edit entities and `nextId`, except for the version bump.
+- `addRoundabout` replaces a junction with a one-way ring, counterclockwise in the
+  y-south frame for right-hand driving and clockwise for left-hand driving. Radius is at
+  least 20 m; each approach must have more than `2 * radiusM + 15` m available. Existing
+  streets split at twice the radius, with separate entry/exit legs meeting the ring.
+  The ring has one 3.5 m lane, 30 km/h, and the class of the incoming approach with most
+  lanes (class rank then ID break ties). Entry legs yield; every approach lane connects
+  to the ring, and every exit lane is served. Driving around the ring permits U-turns.
+- The original center remains selectable with optional `Node.roundabout` containing
+  `radiusM`, `ringRoads`, and bounded `before`/`after` snapshots of affected nodes, roads,
+  and place connectors. Snapshot nodes omit the roundabout field to avoid recursion.
+  This record is Zod-validated and saved in the city. `removeRoundabout` restores those
+  entities and removes the generated ones after checking they have not been edited or
+  newly attached to other roads/connectors. Unrelated edits remain. Removal preserves
+  the allocator; undo/redo restores exact entities and `nextId` as for other commands.
+- OSM `junction=roundabout` roads retain their imported geometry and direction. At their
+  joining nodes non-ring incoming roads are marked as minor yield approaches, preserving
+  explicit signals. Imported rings do not carry authored restoration records.
 - `addRoad` allocates `newNodes` in array order, then the road, using `nextId`; its endpoint
   references use those allocated ids or existing nodes. Drawing resolves explicit node/road
   snaps and adds both directions in one batch. Unsnapped crossings do not create junctions.
@@ -625,8 +666,9 @@ Step sequence, in this order every step:
      no vehicle holds a grant on or drives on a conflicting movement, the last vehicle on the
      exit lane is at least `vehicleLengthM + minGapM` along it (downstream blocking), and for
      yield and stop nodes every vehicle approaching on a conflicting higher-priority movement
-     is more than `gapS` away. Stop nodes also require a minor-approach vehicle to have been
-     standing for one step. Several vehicles may hold grants on the same movement (movements
+     is at least `gapS` away. Stop nodes require a minor-approach vehicle to stand at the
+     stop line continuously for at least one second before requesting entry. Waiting behind
+     another car away from the line does not count. Several vehicles may hold grants on the same movement (movements
      from one lane never conflict); car-following keeps their spacing. A grant persists until
      the vehicle leaves the movement, except that a signal change revokes grants of vehicles
      still on the approach whose movement can no longer be entered.
@@ -708,8 +750,12 @@ At parking and event places, a person's next departure waits for their preceding
 trip to complete; a failed inbound causes its dependent departure to fail as stranded.
 Waiting inbound cars do not block ready parked departures. Occupancy starts at zero and
 decreases only when a paired car successfully departs, so an unpaired departure cannot
-free another visitor's slot. Unpaired outbound event visitors represent cars already outside
-the modeled parking stock. No per-space circulation or inferred overnight parking is modeled.
+free another visitor's slot. At capacity-limited places a ready departure may retry another
+configured outbound connector in compiled index order when its seeded connector is blocked.
+It must have a free spawn gap and budget, and cannot spawn behind traffic arriving at the
+same place on that lane. Route planning starts at the actual outlet; its throughput is charged
+and occupancy decreases only after successful release. Unpaired outbound event visitors
+represent cars already outside the modeled parking stock. No per-space circulation or inferred overnight parking is modeled.
 
 ## 9. Demand
 

@@ -82,7 +82,7 @@ interface AppState {
   toggleLayers: () => void;
   toggleMetrics: () => void;
   toggleDemand: () => void;
-  tool: 'select' | 'road' | 'place' | 'ramp';
+  tool: 'select' | 'road' | 'place' | 'ramp' | 'roundabout';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
   session: Session | null;

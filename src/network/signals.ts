@@ -60,8 +60,10 @@ export function compileSignal(
   });
 
   for (const idx of node.movements) {
-    if (served.has(idx)) continue;
     const movement = city.movements[idx]!;
+    movement.turnOnRed =
+      !!program.turnOnRed && movement.turn === (city.drivingSide === 'right' ? 'right' : 'left');
+    if (served.has(idx) || movement.turnOnRed) continue;
     movement.neverGreen = true;
     diagnostics.push({
       severity: 'warning',

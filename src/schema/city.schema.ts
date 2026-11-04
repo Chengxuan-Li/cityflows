@@ -15,6 +15,7 @@ const provenance = z.object({
 });
 
 export const signalProgramSchema = z.object({
+  turnOnRed: z.boolean().optional(),
   offsetS: z.number(),
   amberS: nonnegative,
   allRedS: nonnegative,
@@ -28,7 +29,7 @@ export const signalProgramSchema = z.object({
     .min(1),
 });
 
-export const nodeSchema = z
+const junctionSchema = z
   .object({
     id: nodeId,
     pos: vec2,
@@ -130,6 +131,22 @@ export const placeSchema = z.object({
     }),
   ),
   provenance,
+});
+
+const roundaboutSnapshot = z.object({
+  nodes: z.record(nodeId, junctionSchema),
+  roads: z.record(roadId, roadSchema),
+  connectors: z.record(placeId, z.array(connectorSchema)),
+});
+export const nodeSchema = junctionSchema.safeExtend({
+  roundabout: z
+    .object({
+      radiusM: z.number().positive(),
+      ringRoads: z.array(roadId).min(3),
+      before: roundaboutSnapshot,
+      after: roundaboutSnapshot,
+    })
+    .optional(),
 });
 
 const geo = z.object({

@@ -188,3 +188,46 @@ test('T10 a parking departure waits for its arrival, releases a slot and drains 
   expect(engine.metrics().failedByReason.no_origin_connector).toBe(2);
   expect(engine.metrics().failedByReason.stranded).toBe(2);
 });
+
+test('T10 Station with a second bidirectional connector drains paired visits without spawning into arrivals', async () => {
+  const opened = await bundledProject('station');
+  if (!opened.ok) throw new Error('Station must open');
+  const { city, scenarios } = opened.project;
+  const station = Object.values(city.places).find((p) => p.kind === 'station')!;
+  station.connectors.push({
+    ...station.connectors[0]!,
+    id: `c:${city.nextId++}`,
+    positionM: 85,
+    direction: 'both',
+    throughputPerMin: 30,
+  });
+  const compiled = setup(city);
+  const scenario = scenarios[0]!;
+  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
+  const engine = createEngine(),
+    replay = createEngine();
+  engine.load({ compiled, trips, scenario });
+  replay.load({ compiled, trips, scenario });
+  while (engine.timeS < scenario.endS) {
+    engine.step(100);
+    replay.step(100);
+    expect(engine.stateHash()).toBe(replay.stateHash());
+  }
+  expect(engine.metrics().trips.failed).toBe(0);
+  expect(engine.metrics().trips.queuedDestination).toBe(0);
+  expect(engine.metrics().trips.queuedOrigin).toBe(0);
+  engine.step(6000);
+  replay.step(6000);
+  expect(engine.stateHash()).toBe(replay.stateHash());
+  expect(engine.metrics().trips.driving).toBe(0);
+  for (const [id, trip] of trips.entries()) {
+    if (trip.originPlaceId !== station.id) continue;
+    const inbound = trips.findIndex(
+      (t) => t.personId === trip.personId && t.destinationPlaceId === station.id,
+    );
+    if (inbound >= 0)
+      expect(engine.inspect(id + 1)!.departedS).toBeGreaterThanOrEqual(
+        engine.inspect(inbound + 1)!.arrivedS!,
+      );
+  }
+});
