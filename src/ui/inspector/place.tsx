@@ -1,9 +1,12 @@
 import type { Place } from '../../schema';
+import { useAppStore } from '../store';
+import { NumberField } from './number-field';
 
 const directions = { in: 'Arrivals', out: 'Departures', both: 'Arrivals and departures' };
 
 export function PlaceInspector({ place, connectorId }: { place: Place; connectorId?: string }) {
   const { profile } = place;
+  const { commit } = useAppStore.getState();
   return (
     <>
       <h2>Place</h2>
@@ -11,17 +14,58 @@ export function PlaceInspector({ place, connectorId }: { place: Place; connector
       <dl className="details">
         <dt>Type</dt>
         <dd className="capitalize">{place.kind}</dd>
-        <dt>Residents</dt>
-        <dd>{place.population}</dd>
-        <dt>Jobs</dt>
-        <dd>{place.jobs}</dd>
         <dt>Attraction</dt>
         <dd>{place.attraction}</dd>
-        <dt>Capacity</dt>
-        <dd>{place.capacity ?? 'Unlimited'}</dd>
         <dt>Profile</dt>
         <dd>{profile ? 'Hourly weights' : 'Default'}</dd>
       </dl>
+      <div className="edit-fields">
+        {(['population', 'jobs', 'capacity'] as const).map((field) => (
+          <NumberField
+            key={field}
+            label={{ population: 'Population', jobs: 'Jobs', capacity: 'Capacity' }[field]}
+            value={place[field]}
+            step={1}
+            nullable={field === 'capacity'}
+            onCommit={(value) =>
+              void commit({ kind: 'updatePlace', placeId: place.id, patch: { [field]: value } })
+            }
+          />
+        ))}
+      </div>
+      <h3>Connectors</h3>
+      {place.connectors.length ? (
+        <ul className="item-list">
+          {place.connectors.map((connector) => (
+            <li
+              key={connector.id}
+              className={connectorId === connector.id ? 'selected' : undefined}
+            >
+              <strong>{directions[connector.direction]}</strong>
+              <span>
+                {connector.roadId} · lane {connector.lane + 1}
+              </span>
+              <NumberField
+                label="Throughput (veh/min)"
+                value={connector.throughputPerMin}
+                onCommit={(throughputPerMin) =>
+                  void commit({
+                    kind: 'setConnectors',
+                    placeId: place.id,
+                    connectors: place.connectors.map((entry) =>
+                      entry === connector
+                        ? { ...entry, throughputPerMin: throughputPerMin! }
+                        : entry,
+                    ),
+                  })
+                }
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">No connectors.</p>
+      )}
       {profile && (
         <table>
           <caption>Hourly profile</caption>
@@ -42,25 +86,6 @@ export function PlaceInspector({ place, connectorId }: { place: Place; connector
             ))}
           </tbody>
         </table>
-      )}
-      <h3>Connectors</h3>
-      {place.connectors.length ? (
-        <ul className="item-list">
-          {place.connectors.map((connector) => (
-            <li
-              key={connector.id}
-              className={connectorId === connector.id ? 'selected' : undefined}
-            >
-              <strong>{directions[connector.direction]}</strong>
-              <span>
-                {connector.roadId} · lane {connector.lane + 1} · {connector.throughputPerMin}{' '}
-                veh/min
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">No connectors.</p>
       )}
     </>
   );

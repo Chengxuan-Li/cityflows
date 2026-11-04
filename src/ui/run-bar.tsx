@@ -27,7 +27,7 @@ export function RunBar() {
         <div className="controls" role="group" aria-label="Run controls">
           <button
             className="play"
-            disabled={disabled || run.status !== 'paused'}
+            disabled={disabled || run.stale || run.status !== 'paused'}
             onClick={() => void control('play')}
           >
             Play
@@ -39,7 +39,7 @@ export function RunBar() {
             Pause
           </button>
           <button
-            disabled={disabled || run.status !== 'paused'}
+            disabled={disabled || run.stale || run.status !== 'paused'}
             onClick={() => void control('step')}
           >
             Step
@@ -48,6 +48,11 @@ export function RunBar() {
             Restart
           </button>
         </div>
+        {run?.stale && (
+          <span className="restart-notice" role="status">
+            Restart to apply changes
+          </span>
+        )}
         <label className="speed">
           Speed
           <select

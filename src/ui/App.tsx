@@ -41,6 +41,7 @@ function Inspector() {
     case 'lane':
       return (
         <StreetInspector
+          key={compiled.roads[selection.road]!.id}
           road={city.roads[compiled.roads[selection.road]!.id]!}
           city={city}
           lane={compiled.lanes[selection.lane]!.lane}
@@ -48,14 +49,27 @@ function Inspector() {
       );
     case 'node': {
       const node = compiled.nodes[selection.node]!;
-      return <NodeInspector node={node} source={city.nodes[node.id]!} />;
+      return (
+        <NodeInspector
+          key={node.id}
+          node={node}
+          source={city.nodes[node.id]!}
+          compiled={compiled}
+        />
+      );
     }
     case 'place':
-      return <PlaceInspector place={city.places[compiled.places[selection.place]!.id]!} />;
+      return (
+        <PlaceInspector
+          key={compiled.places[selection.place]!.id}
+          place={city.places[compiled.places[selection.place]!.id]!}
+        />
+      );
     case 'connector': {
       const connector = compiled.connectors[selection.connector]!;
       return (
         <PlaceInspector
+          key={compiled.places[connector.place]!.id}
           place={city.places[compiled.places[connector.place]!.id]!}
           connectorId={connector.id}
         />
@@ -66,6 +80,7 @@ function Inspector() {
 
 export function App() {
   const error = useAppStore((state) => state.error);
+  const rejectedEdit = useAppStore((state) => state.rejectedEdit);
 
   useEffect(() => {
     function clear(event: KeyboardEvent) {
@@ -88,6 +103,18 @@ export function App() {
         )}
       </main>
       <aside className="inspector" id="inspector" aria-label="Inspector">
+        {rejectedEdit.length > 0 && (
+          <div className="edit-diagnostics" role="alert">
+            <strong>Edit rejected</strong>
+            <ul>
+              {rejectedEdit
+                .filter(({ severity }) => severity === 'error')
+                .map(({ message }, index) => (
+                  <li key={index}>{message}</li>
+                ))}
+            </ul>
+          </div>
+        )}
         <Inspector />
       </aside>
       <RunBar />
