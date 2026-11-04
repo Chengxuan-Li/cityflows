@@ -11,6 +11,8 @@ import { createDrawRoadTool, initialRoadOptions } from './tools/draw-road';
 import { RoadOptions } from './tools/road-options';
 import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
+import { createPlacePaintTool, type PaintKind } from './tools/place-paint';
+import { PlaceOptions } from './tools/place-options';
 
 function snapshotForMap(
   snapshot: VehicleSnapshot,
@@ -267,6 +269,12 @@ export function MapView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tool = useAppStore((state) => state.tool);
   const [options, setOptions] = useState(initialRoadOptions);
+  const [placeKind, setPlaceKind] = useState<PaintKind>('residential');
+  const [placeHint, setPlaceHint] = useState('');
+  const placeKindRef = useRef(placeKind);
+  useEffect(() => {
+    placeKindRef.current = placeKind;
+  }, [placeKind]);
   const optionsRef = useRef(options);
   useEffect(() => {
     optionsRef.current = options;
@@ -388,6 +396,7 @@ export function MapView() {
       const tools = {
         select: createSelectTool(view),
         road: createDrawRoadTool(view, () => optionsRef.current),
+        place: createPlacePaintTool(view, () => placeKindRef.current, setPlaceHint),
       };
       const pointer = bindPointer(
         canvas,
@@ -436,10 +445,13 @@ export function MapView() {
       <canvas
         ref={canvasRef}
         tabIndex={0}
-        className={`map${tool === 'road' ? ' drawing' : ''}`}
+        className={`map${tool !== 'select' ? ' drawing' : ''}`}
         aria-label="City map"
       />
       {tool === 'road' && <RoadOptions value={options} onChange={setOptions} />}
+      {tool === 'place' && (
+        <PlaceOptions value={placeKind} onChange={setPlaceKind} hint={placeHint} />
+      )}
     </>
   );
 }

@@ -20,6 +20,14 @@ export function Toolbox() {
       >
         Road
       </button>
+      <button
+        aria-pressed={tool === 'place'}
+        disabled={disabled}
+        title="Paint a place · Escape cancels"
+        onClick={() => useAppStore.getState().setTool('place')}
+      >
+        Place
+      </button>
     </nav>
   );
 }

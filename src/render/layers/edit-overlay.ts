@@ -3,6 +3,7 @@ import type { Vec2 } from '../../geo/vec2';
 import { style } from '../style';
 
 export interface EditOverlay {
+  polygon?: { ring: readonly Vec2[]; color: number };
   lines?: readonly (readonly Vec2[])[];
   vertices?: readonly Vec2[];
   snap?: { pos: Vec2; kind: 'node' | 'road' };
@@ -12,6 +13,12 @@ export interface EditOverlay {
 export function drawEditOverlay(graphics: Graphics, overlay: EditOverlay | null, zoom: number) {
   graphics.clear();
   if (!overlay) return;
+  if (overlay.polygon) {
+    graphics
+      .poly([...overlay.polygon.ring])
+      .fill({ color: overlay.polygon.color, alpha: 0.45 })
+      .stroke({ color: overlay.polygon.color, width: 5 / zoom, alpha: 0.25, join: 'round' });
+  }
   for (const line of overlay.lines ?? []) {
     if (line.length < 2) continue;
     graphics
