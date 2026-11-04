@@ -76,7 +76,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-047](tasks/TASK-047.md) | 5 | Renderer polish: junctions, motion, markings | `src/render/**`, snapshot handling in `map-view.tsx`, `layers.tsx`, chart and hint CSS | 044, 046 | screenshots, T16 unchanged | done |
 | [TASK-048](tasks/TASK-048.md) | 5 | Import quality on real OSM data | `src/importers/**`, compiler lane assignment, `bench/import-probe.ts`, `tests/importers` | 020, 030 | Munich baseline targets met | done |
 | [TASK-049](tasks/TASK-049.md) | 5 | Junction controls: yield, stop, turn on red, roundabouts | `src/sim`, `src/network/signals.ts`, `src/editor`, `src/ui/tools/roundabout.tsx`, `src/render/layers/signs.ts` | 032, 040, 046 | gate5-controls scenarios | done |
-| TASK-051 | 5 | Live edits with bounded rerouting (B8) | engine, host, store restart path | 047, 048, 049 and a design note | edits apply without restart | todo |
+| [TASK-051](tasks/TASK-051.md) | 5 | Live edits with bounded rerouting (B8) | `src/sim` (patch, reroute, link costs, types), `src/host/**`, `src/ui/store.ts` edit path, run-bar status, `tests/sim/T19*`, `tests/host`, `tests/e2e/gate1-edit.spec.ts` | 046, 048, 049, 055, 057; design in architecture 1, 6, 8, 10 | T19; an edit while playing applies without restart | todo |
 | TASK-052 | 5 | CI green on the Linux runner (lead) | `tests/e2e/gate3-paint.spec.ts`, `tests/e2e/gate3-places.spec.ts` | - | e2e green with wider fonts | done |
 | [TASK-053](tasks/TASK-053.md) | 5 | Import demand scale (B13) | `src/ui/import/*`, `bench/import-probe.ts`, `tests/e2e/gate2-import.spec.ts` | 021, 048 | Munich runs at the default scale without gridlock | done |
 | [TASK-054](tasks/TASK-054.md) | 5 | Signal junctions on import (B15) | `src/importers/osm/split.ts`, `controls.ts`, `index.ts` (junction seeds), `src/importers/signal-program.ts`, `tests/importers` | 048, 049 | no degree-two signal nodes on Munich | done |
@@ -85,6 +85,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-057](tasks/TASK-057.md) | 5 | Pass-through at conflict-free nodes (B18) | `src/sim/intersection.ts`, `src/sim/engine.ts` (grant path), `src/sim/vehicle.ts`, `tests/sim` | 046, 049 | split road drives like one road | done |
 | [TASK-058](tasks/TASK-058.md) | 5 | Sheets and inspector overlap (B14) | `src/ui/app.css`, `src/ui/run-bar.tsx`, `src/ui/App.tsx`, inspector container, `tests/e2e/gate3-places.spec.ts` | 050, 033 | no covered inspector control with a sheet open | done |
 | [TASK-059](tasks/TASK-059.md) | 5 | Roundabout removal as an inverse command | `src/editor/commands/roundabout.ts`, `src/schema` (approved), `docs/architecture.md` section 6, `tests/editor` | 049 | removal after approach edits | done |
+| [TASK-061](tasks/TASK-061.md) | 5 | Junction geometry: setbacks, curb arcs, tapers (B16) | `src/network/**` (lanes, movements, new `junctions.ts`, types), `src/geo/polyline.ts` (additive), `src/editor/commands/ramp.ts`, `src/render/layers/nodes.ts`, `roads.ts`, `signs.ts`, `scene.ts` picking, `src/fixtures/junctions.ts`, `tests/network/T20*`, `tests/render` | 047, 048, 049, 055; design in architecture 5.1, 5.2, 11 | T20; no overlapping lanes at Munich nodes | todo |
+| [TASK-062](tasks/TASK-062.md) | 5 | Routing throughput (B20) | `src/routing/**`, `tests/routing` | 055, 057 | routes per second back near the TASK-057 figures, audit zero, hashes unchanged | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -156,6 +158,15 @@ dependency of its tasks is merged to `main`.
   commit (the highway fixture's warning baseline, a diagnostic code in architecture 5.5, the
   pass-through probe moved to `bench/`, a layers test, and the import default fixed from the
   probe). Review entries below. Next: the wave 11 design notes.
+- Wave 11 (lead, 2026-11-04): TASK-051, TASK-061 and TASK-062 in parallel on disjoint
+  surfaces, branches `task/051-live-edits`, `task/061-junction-geometry` and
+  `task/062-routing-throughput` cut from `main` at the commit that carries the design notes
+  (architecture sections 1, 5.1, 5.2, 6, 8, 10, 11, 14). Boundaries: TASK-051 stays out of
+  `src/routing` and uses the `RouteProvider` as it is; TASK-062 stays out of `src/sim` and
+  keeps every returned route identical (the benchmark route hash); TASK-061 stays out of
+  `src/sim` and `src/routing` and reports engine or router defects by id. Merge order: 062,
+  051, 061. TASK-061 changes every lane length and with it every state hash, so it lands
+  last and the other two are verified against unchanged hashes.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -191,8 +202,8 @@ exists.
 ## Deferrals and open items
 
 - Lane changes are discrete in the model; the renderer animates them (architecture section 8).
-- Edits during a run pause the run and require a restart (T17); live signal timing edits are
-  not planned before Gate 4.
+- Edits during a run: TASK-051 patches the running engine (architecture section 8, live
+  edits); edits that change demand still need a restart.
 - `npm audit` reports moderate advisories in dev tooling only (minimatch under
   typescript-eslint); nothing ships to the browser. Revisit when upgrading tooling.
 

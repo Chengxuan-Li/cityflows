@@ -24,9 +24,9 @@ requirements R1 to R8 and tests T01 to T18 are binding and referenced below by I
 | 10 | Routing | Road-level search, then lane resolution with a feasibility check from the vehicle's current lane. Lane-level search is the fallback. A vehicle never teleports or takes an illegal movement; an infeasible plan becomes a legal movement plus a reroute with a reason code. | Road-level only: vehicles stuck in the wrong lane at a turn. |
 | 11 | Persistence | The canonical `City` snapshot is the authoritative saved state. Editor history is optional, separately versioned, and droppable. Migrations operate on snapshots. | Replaying a patch log on load: couples saved files to editor code history. |
 | 12 | Intersections | Vehicles explicitly occupy movement paths; entry needs free space on the exit lane; conflicts are resolved by deterministic arbitration each step; signals are conservative (enter on green with space). Permissive turns and finer gap acceptance come later. | Implicit intersections: gridlock and phantom collisions. |
-| 13 | Edits during a run | Release 1 requires a paused run; a committed topology or rule change marks the loaded run stale and the UI asks for a restart (T17). Live signal timing edits are a later option. | Live topology edits: invalid vehicle references. |
+| 13 | Edits during a run | Release 1 required a paused run and a restart (T17). TASK-051: a committed edit is patched into the running engine (section 8, live edits): the compiled city is swapped, vehicles are remapped by id or by position, and only vehicles whose remaining route touches a changed element reroute, staggered over the reroute interval. Edits that change demand (place kind, population, jobs, places added or removed) still regenerate the population and need a restart. | Live topology edits without remapping: invalid vehicle references. |
 | 14 | Demand | Persistent person-level home and work assignments with activity schedules, saved with the project. | Random origin-destination trips: no recognizable rush. |
-| 15 | Not in release 1 | Desktop wrapper, 3D view, transit vehicle operations, PBF import, live topology edits. | |
+| 15 | Not in release 1 | Desktop wrapper, 3D view, transit vehicle operations, PBF import. | |
 
 ## 2. Modules and data flow
 
@@ -290,6 +290,19 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   are trimmed by `radiusM` at each end along their road. A road shorter than `2 * radiusM + 5`
   is trimmed proportionally to keep at least 5 m and gets warning `road_too_short`.
 - `CRoad.surface` is the union outline of the lane block, for rendering only.
+- TASK-061 (junction geometry): the single `radiusM` becomes a per-road-end setback. At a
+  node with three or more road ends, or two ends that are not sections of one street, the
+  setback of a road end is the distance along its centerline from the node to the farthest
+  intersection of its lane-block edges with the lane-block edges of the two road ends
+  adjacent to it in angular order, plus 1.0 m, with a floor of `W/2 + 1`; where adjacent
+  edges do not intersect (nearly parallel ends, as at a ramp merge) the setback is the floor.
+  A node with two ends of one street has setback 0: the road draws and drives through.
+  Lanes are trimmed by their own road end's setback; `road_too_short` keeps its rule with the
+  two setbacks in place of `2 * radiusM`. `CNode.radiusM` stays as the largest setback, for
+  picking and the spatial index; `CNode.setbacks: number[]` (by incident road order) and
+  `CNode.outline: Vec2[]` are added. The outline is the closed polygon of the road-end edges
+  joined, between two adjacent road ends, by a curb arc: a circular arc tangent to both outer
+  lane edges with radius `min(8 m, half the gap between them)`, sampled every meter.
 
 ### 5.2 Movement generation
 
@@ -332,6 +345,15 @@ Movement ids are deterministic, so signal programs and tests can name them. Curv
 Bezier from the end of the from-lane (tangent along it) to the start of the to-lane, control
 distance `0.4 * chord`, sampled about every meter with at least four points; a through
 movement between nearly collinear lanes (under 5 degrees) is a straight segment.
+TASK-061: a movement's curve runs from the trimmed end of the from-lane to the trimmed start
+of the to-lane, so it spans both setbacks, with the lanes' tangents and control distance
+`0.4 * chord`; a through movement whose ends are within 5 degrees and 0.5 m of lateral
+offset is a straight segment. Stop lines and give-way markings sit at the trimmed lane end.
+A merge is not a point join: `addRamp` lays a taper, a split of the receiving road `taperM =
+60 m` past the join whose first section carries one extra curb-side lane that the ramp alone
+feeds and that drops at the split (the lane-drop rules of section 8 then apply); `removeRamp`
+removes the taper. The compiler invents no lanes: an imported merge gets a taper only where
+the OSM `lanes` tags carry one.
 
 ### 5.3 Conflicts and priority
 
@@ -492,8 +514,11 @@ Semantics:
   centerline and default offset.
 - `setRoadLanes` keeps lane-level turn rules whose indices still exist and drops the rest;
   connectors are clamped to the outermost remaining lane with a warning.
-- The run loaded in the engine is tied to a `city.version`. The UI marks it stale when the
-  editor's version moves ahead and offers restart; it never patches a running engine (T17).
+- The run loaded in the engine is tied to a `city.version`. After a commit the UI sends the
+  new compiled city to the engine as a patch (section 8, live edits; section 10, `patch`)
+  and the run goes on. It marks the run stale and offers restart only when the commit changed
+  demand (place kind, population, jobs, places added or removed) or the patch was refused
+  (T17 as amended by TASK-051).
 - Command handlers add their own warnings to the commit's diagnostics:
   `junction_references_removed` (turn rules, minor-road entries or signal groups that named a
   deleted or reversed road), `connector_lane_clamped`, `connector_removed`,
@@ -603,6 +628,7 @@ type FailReason = 'no_route' | 'unsupported_mode' | 'destination_unreachable' | 
 
 interface TrafficEngine {
   load(input: { compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario; params?: Partial<SimParams> }): void;
+  patch(compiled: CompiledCity): PatchResult;   // TASK-051, live edits below
   step(n?: number): void;
   readonly timeS: number;        // seconds since midnight of the scenario day
   snapshot(): VehicleSnapshot;
@@ -619,6 +645,13 @@ interface VehicleSnapshot {
   state: Uint8Array;                                  // 1 driving, 2 queued_destination
 }
 
+interface PatchResult {
+  version: number;        // compiled.version now loaded
+  relocated: number;      // vehicles moved by projection (see live edits)
+  stranded: number;       // vehicles that failed because their segment disappeared
+  rerouted: number;       // vehicles scheduled for an `edit` route check
+}
+
 interface Metrics {
   timeS: number;
   trips: { pending: number; queuedOrigin: number; driving: number; queuedDestination: number;
@@ -633,7 +666,7 @@ interface VehicleDetail {
   id: number; tripId: string; personId: string | null;
   originPlace: PlaceId; destinationPlace: PlaceId; state: VehicleState;
   lane: number; positionM: number; speedMps: number;
-  route: Route | null; routeReason: 'initial' | 'missed_turn' | 'congestion';
+  route: Route | null; routeReason: 'initial' | 'missed_turn' | 'congestion' | 'edit';
   waitingS: number; departedS: number | null; arrivedS: number | null;
   failReason: FailReason | null;
 }
@@ -766,6 +799,42 @@ same place on that lane. Route planning starts at the actual outlet; its through
 and occupancy decreases only after successful release. Unpaired outbound event visitors
 represent cars already outside the modeled parking stock. No per-space circulation or inferred overnight parking is modeled.
 
+Live edits (TASK-051). `patch(compiled)` replaces the engine's compiled city between two
+steps without touching the clock, the trip list, the seed or the random state, and returns
+`PatchResult` for the UI. Everything the engine indexes by compiled index is remapped by id:
+lanes by lane id, movements by movement id, roads (link costs, EWMA state, route cursors) by
+road id, connectors by connector id, signals by node id. Order of the patch:
+
+1. Costs: a surviving road keeps its EWMA travel time; a new road starts at free flow; the
+   cost version bumps so the routing caches rebuild for the new city.
+2. Vehicles, in id order. A vehicle whose lane or movement id survives keeps its position
+   (clamped to the new length) and speed. A vehicle whose segment id is gone is projected
+   from its world point onto the new city's lanes and movements (`laneSpatial`, nearest
+   polyline with a heading within 30 degrees, within 4 m): the lane that now occupies the
+   place where the car physically stands is the one it drove to, which is how a split, a
+   merge, a moved node or a lane count change keeps the car. The projection counts as an
+   instantaneous lane change: followers brake for it as for a cut-in. A vehicle with no
+   lane or movement within tolerance (its road was deleted) fails as `stranded`.
+3. Grants: every intersection grant at a node whose movement set changed is released; a
+   vehicle already on a surviving movement keeps it. A patched signal restarts its program
+   from the current time, so a phase edit shows at once.
+4. Routes: a route is remapped by ids. A vehicle whose remaining route (from its cursor) has
+   a missing road, movement or target lane, or that was relocated, reroutes with reason
+   `edit`: at once when the break is on its current road or its next movement, otherwise at
+   its next due check, which the patch spreads over `rerouteIntervalS` by id. A vehicle whose
+   remaining route touches a changed road (a surviving road whose lanes, speed limit or
+   movements at either end changed) gets the same staggered check with the normal
+   hysteresis; `edit` checks do not count against `maxReplans`. A vehicle whose route touches
+   nothing that changed is not checked.
+5. Queued and pending trips keep their place ids; connectors are resolved at release as
+   before, so a place that lost its connectors fails its trips at release with the existing
+   reasons.
+
+A patch is deterministic: the same patches at the same steps give the same state hash (T19).
+The engine never applies a patch mid-step; the host handles the request between loop ticks
+and pauses nothing. `restart` after a patch reloads the latest patched compiled city with the
+original trips and seed.
+
 ## 9. Demand
 
 Lives in `src/demand`. Population is persistent and saved with the project; trips are
@@ -869,6 +938,7 @@ type HostRequest =
   | { id: number; type: 'setSpeed'; multiplier: number }       // 1, 2, 5, 10, 20
   | { id: number; type: 'step'; steps: number }
   | { id: number; type: 'restart' }                              // same inputs, same seed
+  | { id: number; type: 'patch'; compiled: CompiledCity }        // TASK-051: live edit, replies PatchResult
   | { id: number; type: 'snapshot' } | { id: number; type: 'metrics' }
   | { id: number; type: 'metricsSeries' }
   | { id: number; type: 'runHeadless' }
@@ -933,6 +1003,11 @@ type HostEvent =
   steps the worker cannot keep up with are dropped rather than caught up later, and the
   fractional remainder is kept. `setSpeed` may be called before `load`. Concurrent `snapshot`
   calls share the one in flight and resolve to the same frame.
+- TASK-051: `patch` carries the compiled city in the same wire form as `load`. The worker
+  applies it between ticks whether playing or paused, stores it as the input `restart`
+  reloads, resets the heat throttle and the recorder's road statistics mapping, and replies
+  with the engine's `PatchResult`. A comparison worker in flight is terminated by the UI as
+  for any edit. `metricsSeries` continues across a patch.
 
 ## 11. Rendering and UI
 
@@ -946,6 +1021,10 @@ type HostEvent =
 - Picking: `laneSpatial` for roads and lanes, nearest snapshot vehicle within a pixel radius,
   place polygons by point-in-polygon.
 - Static geometry is rebuilt only when `compiled.version` changes.
+- TASK-061: node areas draw `CNode.outline` (road-end edges and curb arcs) instead of the
+  polygon through the lane-edge corners plus a disc; through nodes (setback 0) draw nothing,
+  the road runs through. Movement surfaces, stop lines, give-way triangles, arrows and
+  crossings follow the compiled geometry, so they move with the setbacks.
 - `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes and
   road and node layers are not in the compiled model. Grade groups draw from lowest to
   highest, with roads in compiled index order inside each grade.
@@ -1144,8 +1223,10 @@ Headless tests run in Vitest from fixtures in `src/fixtures` (generated) and `fi
 | T14 round-trip | project | grid-5x5 edited | TASK-008 |
 | T15 multimodal contract | demand, sim | grid-5x5 | TASK-011 |
 | T16 UI performance | e2e | grid-5x5, neighborhood | TASK-044 |
-| T17 edit live-state policy | ui, editor | grid-5x5 | TASK-010 |
+| T17 edit live-state policy | ui, editor | grid-5x5 | TASK-010, TASK-051 |
 | T18 import diagnostics | importers, network | broken fixtures | TASK-001, TASK-020 |
+| T19 live edit: conservation, determinism, bounded reroute | sim, host, e2e | grid-5x5, bypass | TASK-051 |
+| T20 junction geometry: no overlap, setback markings, taper | network, render | irregular junction fixture, Munich | TASK-061 |
 
 Synthetic fixtures (all generated by code with a seed, in `src/fixtures`):
 
@@ -1183,7 +1264,7 @@ Benchmark the sim step, worker transfer, and render time separately (TASK-044).
 
 ## 16. Deferred, explicitly
 
-Transit vehicles and GTFS, walking legs, PBF import and bulk extracts, live topology edits,
+Transit vehicles and GTFS, walking legs, PBF import and bulk extracts,
 permissive and actuated signals, adaptive routing beyond EWMA, 3D view, desktop packaging,
 parking circulation. R7's multimodal readiness is covered by `TripRequest.legs` and
 `TripMode` in section 9; nothing in the sim assumes a person equals a car.
