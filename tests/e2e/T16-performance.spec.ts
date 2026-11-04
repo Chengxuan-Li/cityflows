@@ -166,6 +166,12 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
       .toBe(input.scenario.startS);
     const loadMs = performance.now() - loadedAt;
     const beforePeak = await heap();
+    const renderer = await page.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>('canvas[aria-label="City map"]')!;
+      const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+      const debug = gl?.getExtension('WEBGL_debug_renderer_info');
+      return debug ? String(gl!.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : 'unavailable';
+    });
     // Manual stepping reaches the real morning cheaply; measurements below use the play loop.
     const sampleTimeS = 8 * 3600 + (name === 'grid5x5-stress' ? 4 * 60 : 0);
     await page.evaluate(
@@ -200,6 +206,19 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
       const { timeS } = await window.cityflows!.metrics();
       await window.cityflows!.step(Math.round((10 * 3600 - timeS) * 10));
     });
+    async function cycleDetail(capture = false) {
+      if (name !== 'town') return;
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const map = page.getByLabel('City map');
+      if (capture) await map.screenshot({ path: info.outputPath('overview.png') });
+      await map.hover();
+      await page.mouse.wheel(0, -1800);
+      await page.waitForTimeout(150);
+      if (capture) await map.screenshot({ path: info.outputPath('detail.png') });
+      await page.mouse.wheel(0, 1800);
+      await page.waitForTimeout(150);
+    }
+    await cycleDetail(true);
     const afterPeak = await heap();
     // Equal completed workloads across restart cycles separate legitimate retained trip
     // history from a leak. The first cycle warms GPU geometry, JIT and particle pools.
@@ -214,6 +233,7 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
         (10 * 3600 - input.scenario.startS) * 10,
       );
       await page.waitForTimeout(250);
+      await cycleDetail();
       retained.push(await heap());
     }
     const frames = distribution(end.samples.frames);
@@ -224,6 +244,7 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
         browser: browser.version(),
         cpu: cpus()[0]?.model,
         viewport: page.viewportSize(),
+        renderer,
       },
       workload: {
         nodes: Object.keys(input.city.nodes).length,

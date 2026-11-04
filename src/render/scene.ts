@@ -19,6 +19,7 @@ import { defaultLayers, type LayerVisibility } from './types';
 
 function createGrade() {
   const group = new Container();
+  const terrain = new Container();
   const surfaces = new Graphics();
   const markings = new Graphics();
   const nodes = new Graphics();
@@ -27,17 +28,22 @@ function createGrade() {
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
-  group.addChild(
+  terrain.addChild(surfaces, markings, nodes, arrows);
+  group.addChild(terrain, connectors, places, signals, vehicles.container);
+  return {
+    group,
+    terrain,
     surfaces,
     markings,
     nodes,
     arrows,
-    connectors,
     places,
+    connectors,
     signals,
-    vehicles.container,
-  );
-  return { group, surfaces, markings, nodes, arrows, places, connectors, signals, vehicles };
+    vehicles,
+    terrainSize: 0,
+    cacheResolution: 0,
+  };
 }
 
 export function createScene(canvas: HTMLCanvasElement): Scene {
@@ -73,6 +79,23 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let updateSignals: ((timeS: number) => void)[] = [];
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
+
+  function updateTerrainCache() {
+    // At overview zoom both markings and arrows are invisible. Rasterize the static
+    // terrain once at a power-of-two screen resolution, leaving cars/signals live.
+    // A 2048 px edge cap bounds texture storage; detailed views use vector geometry.
+    const overview = camera.zoom < 0.7;
+    const resolution = 2 ** Math.ceil(Math.log2(camera.zoom * window.devicePixelRatio));
+    for (const grade of visibleGrades) {
+      grade.markings.visible = !overview;
+      grade.arrows.visible = !overview;
+      const next = overview && grade.terrainSize * resolution <= 2048 ? resolution : 0;
+      if (next === grade.cacheResolution) continue;
+      grade.terrain.cacheAsTexture(false);
+      if (next) grade.terrain.cacheAsTexture({ resolution: next, antialias: true });
+      grade.cacheResolution = next;
+    }
+  }
 
   function applyVisibility() {
     heat.roads.visible = layerVisibility.heat;
@@ -140,6 +163,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     world.scale.set(camera.zoom);
     vehicleRing.scale.set(1 / camera.zoom);
     vehicles.setZoom(camera.zoom);
+    updateTerrainCache();
     drawEditOverlay(editOverlay, editPreview, camera.zoom);
   });
   vehicles.setZoom(camera.zoom);
@@ -208,6 +232,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         if (!movement.neverGreen) drawMovementArrow(arrows, movement);
       }
       drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
+      for (const grade of visibleGrades) {
+        const bounds = grade.terrain.getLocalBounds();
+        grade.terrainSize = Math.max(bounds.width, bounds.height);
+      }
+      updateTerrainCache();
       for (const update of updateSignals) update(0);
       vehicles.setLayers(
         [...grades.values()].map((grade) => grade.vehicles),
