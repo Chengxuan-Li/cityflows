@@ -1,14 +1,24 @@
 import { useAppStore } from './store';
 
 export function Toolbox() {
+  const tool = useAppStore((state) => state.tool);
+  const disabled = useAppStore((state) => state.busy || !state.session);
   return (
     <nav className="toolbox" aria-label="Toolbox">
       <button
-        aria-pressed="true"
+        aria-pressed={tool === 'select'}
         title="Select map items · Escape clears selection"
-        onClick={() => useAppStore.getState().select(null)}
+        onClick={() => useAppStore.getState().setTool('select')}
       >
         Select
+      </button>
+      <button
+        aria-pressed={tool === 'road'}
+        disabled={disabled}
+        title="Draw a street · Enter finishes · Escape cancels"
+        onClick={() => useAppStore.getState().setTool('road')}
+      >
+        Road
       </button>
     </nav>
   );

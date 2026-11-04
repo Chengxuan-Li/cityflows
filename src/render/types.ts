@@ -1,6 +1,7 @@
 import type { CompiledCity } from '../network';
 import type { City } from '../schema';
 import type { Camera } from './camera';
+import type { EditOverlay } from './layers/edit-overlay';
 
 export interface VehicleSnapshot {
   timeS: number;
@@ -57,6 +58,7 @@ export interface Scene {
   setSignalPreview(loaded: CompiledCity | null, timeS: number): void;
   setSelection(selection: Pick | null): void;
   setRouteOverlay(route: RouteOverlay | null): void;
+  setEditOverlay(overlay: EditOverlay | null): void;
   /** Speed divided by free-flow speed, indexed by compiled road. */
   setHeat(roadSpeedRatio: ArrayLike<number> | null): void;
   setQueues(snapshot: VehicleSnapshot): void;

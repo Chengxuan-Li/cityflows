@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Vec2 } from '../geo/vec2';
 import type { Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
@@ -7,6 +7,10 @@ import type { Pick, Scene, VehicleSnapshot } from '../render/types';
 import type { Route } from '../routing';
 import type { LaneId } from '../schema';
 import { useAppStore, type Session } from './store';
+import { createDrawRoadTool, initialRoadOptions } from './tools/draw-road';
+import { RoadOptions } from './tools/road-options';
+import { createSelectTool } from './tools/select';
+import type { MapTool } from './tools/pointer-tool';
 
 function snapshotForMap(
   snapshot: VehicleSnapshot,
@@ -63,11 +67,14 @@ function bindPointer(
   scene: Scene,
   signal: AbortSignal,
   canPick: () => boolean,
+  activeTool: () => MapTool,
 ) {
   const { getState } = useAppStore;
   const { camera } = scene;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let drag: (Vec2 & { id: number; time: number; moved: boolean }) | null = null;
+  let drag: (Vec2 & { id: number; time: number; moved: boolean; pick: boolean }) | null = null;
+  let gesture: { id: number; tool: MapTool } | null = null;
+  let space = false;
   let vx = 0;
   let vy = 0;
   let zoom: { pointer: Vec2; target: number } | null = null;
@@ -76,19 +83,42 @@ function bindPointer(
   function reset() {
     vx = vy = 0;
     zoom = null;
+    gesture?.tool.cancel();
+    gesture = null;
+    drag = null;
+    canvas.classList.remove('panning');
+  }
+
+  function point(event: MouseEvent) {
+    const rect = canvas.getBoundingClientRect();
+    const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    return {
+      screen,
+      world: camera.screenToWorld(screen),
+      pointerId: event instanceof PointerEvent ? event.pointerId : 0,
+    };
   }
 
   canvas.addEventListener(
     'pointerdown',
     (event) => {
-      if (event.button !== 0 || drag) return;
+      if ((event.button !== 0 && event.button !== 1) || drag || gesture) return;
+      event.preventDefault();
+      canvas.focus({ preventScroll: true });
       reset();
+      const navigation = event.button === 1 || space;
+      if (!navigation && canPick() && activeTool().pointerDown(point(event))) {
+        gesture = { id: event.pointerId, tool: activeTool() };
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
       drag = {
         id: event.pointerId,
         x: event.clientX,
         y: event.clientY,
         time: event.timeStamp,
         moved: false,
+        pick: !navigation,
       };
       canvas.setPointerCapture(event.pointerId);
     },
@@ -97,6 +127,11 @@ function bindPointer(
   canvas.addEventListener(
     'pointermove',
     (event) => {
+      if (gesture?.id === event.pointerId) {
+        gesture.tool.pointerMove(point(event));
+        return;
+      }
+      if (!drag && canPick() && !space) activeTool().pointerMove(point(event));
       if (drag?.id !== event.pointerId) return;
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
@@ -113,11 +148,24 @@ function bindPointer(
   canvas.addEventListener(
     'pointerup',
     (event) => {
+      if (gesture?.id === event.pointerId) {
+        const tool = gesture.tool;
+        gesture = null;
+        if (canPick()) tool.pointerUp(point(event));
+        else tool.cancel();
+        canvas.releasePointerCapture(event.pointerId);
+        return;
+      }
       if (drag?.id !== event.pointerId) return;
       if (reducedMotion.matches || event.timeStamp - drag.time > 80) vx = vy = 0;
-      if (drag.moved || !canPick()) return;
-      const rect = canvas.getBoundingClientRect();
-      getState().select(scene.pick(event.clientX - rect.left, event.clientY - rect.top));
+      if (!drag.moved && drag.pick && canPick()) {
+        const { world, screen } = point(event);
+        useAppStore.setState({ selectionPoint: world });
+        getState().select(scene.pick(screen.x, screen.y));
+      }
+      drag = null;
+      canvas.classList.remove('panning');
+      canvas.releasePointerCapture(event.pointerId);
     },
     { signal },
   );
@@ -125,8 +173,52 @@ function bindPointer(
   canvas.addEventListener(
     'lostpointercapture',
     () => {
+      gesture?.tool.cancel();
+      gesture = null;
       drag = null;
       canvas.classList.remove('panning');
+    },
+    { signal },
+  );
+  canvas.addEventListener(
+    'dblclick',
+    (event) => {
+      if (event.button === 0 && !space && canPick()) activeTool().doubleClick?.(point(event));
+    },
+    { signal },
+  );
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('input, textarea, select, button, [contenteditable="true"], dialog')
+      )
+        return;
+      if (event.code === 'Space') {
+        event.preventDefault();
+        space = true;
+        vx = vy = 0;
+        return;
+      }
+      if (event.key === 'Escape') reset();
+      if (canPick()) activeTool().keyDown?.(event);
+    },
+    { signal },
+  );
+  window.addEventListener(
+    'keyup',
+    (event) => {
+      if (event.code === 'Space') space = false;
+    },
+    { signal },
+  );
+  window.addEventListener(
+    'blur',
+    () => {
+      space = false;
+      reset();
+      activeTool().cancel();
     },
     { signal },
   );
@@ -173,6 +265,12 @@ function bindPointer(
 
 export function MapView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tool = useAppStore((state) => state.tool);
+  const [options, setOptions] = useState(initialRoadOptions);
+  const optionsRef = useRef(options);
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -287,10 +385,39 @@ export function MapView() {
           });
       }
 
-      const pointer = bindPointer(canvas, view, signal, () => {
-        const { session, busy } = getState();
-        return !busy && session !== null && session.compiled === drawn?.compiled;
+      const tools = {
+        select: createSelectTool(view),
+        road: createDrawRoadTool(view, () => optionsRef.current),
+      };
+      const pointer = bindPointer(
+        canvas,
+        view,
+        signal,
+        () => {
+          const { session, busy } = getState();
+          return (
+            !busy &&
+            session !== null &&
+            session.compiled === drawn?.compiled &&
+            !document.querySelector('dialog[open]')
+          );
+        },
+        () => tools[getState().tool],
+      );
+      const unsubscribe = useAppStore.subscribe((state, previous) => {
+        if (state.tool !== previous.tool || state.session?.editor !== previous.session?.editor) {
+          pointer.reset();
+          tools[previous.tool].cancel();
+          view.setEditOverlay(null);
+        }
+        if (
+          state.tool !== previous.tool ||
+          state.selection !== previous.selection ||
+          state.session?.compiled !== previous.session?.compiled
+        )
+          tools[state.tool].refresh();
       });
+      signal.addEventListener('abort', unsubscribe, { once: true });
       animation = requestAnimationFrame(frame);
     }
 
@@ -304,5 +431,15 @@ export function MapView() {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="map" aria-label="City map" />;
+  return (
+    <>
+      <canvas
+        ref={canvasRef}
+        tabIndex={0}
+        className={`map${tool === 'road' ? ' drawing' : ''}`}
+        aria-label="City map"
+      />
+      {tool === 'road' && <RoadOptions value={options} onChange={setOptions} />}
+    </>
+  );
 }

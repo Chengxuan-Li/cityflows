@@ -1,6 +1,7 @@
 import { roadSchema, type City, type Road, type RoadClass } from '../../schema';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
+import { StreetTopologyActions } from '../tools/topology-actions';
 
 export function StreetInspector({ road, city, lane }: { road: Road; city: City; lane: number }) {
   const { commit } = useAppStore.getState();
@@ -44,6 +45,7 @@ export function StreetInspector({ road, city, lane }: { road: Road; city: City; 
       <p className="muted">
         {road.from} → {road.to} · lane {lane + 1}
       </p>
+      <StreetTopologyActions road={road} />
       <details className="disclosure">
         <summary>Lanes and street settings</summary>
         <div className="edit-fields">
