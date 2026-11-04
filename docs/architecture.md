@@ -100,8 +100,19 @@ interface Node {
   control: Control;
   minorRoads: RoadId[];    // for yield/stop: incoming roads that must yield. Empty = by class.
   turnRules: TurnRule[];
+  roundabout?: Roundabout; // authored ring restoration, see section 6
   signal: SignalProgram | null;   // required when control === 'signal'
   provenance: Provenance;
+}
+
+interface RoundaboutSnapshot {
+  nodes: Record<NodeId, Omit<Node, 'roundabout'>>;
+  roads: Record<RoadId, Road>;
+  connectors: Record<PlaceId, Connector[]>;
+}
+interface Roundabout {
+  radiusM: number; ringRoads: RoadId[];
+  before: RoundaboutSnapshot; after: RoundaboutSnapshot;
 }
 
 interface TurnRule {
@@ -739,8 +750,12 @@ At parking and event places, a person's next departure waits for their preceding
 trip to complete; a failed inbound causes its dependent departure to fail as stranded.
 Waiting inbound cars do not block ready parked departures. Occupancy starts at zero and
 decreases only when a paired car successfully departs, so an unpaired departure cannot
-free another visitor's slot. Unpaired outbound event visitors represent cars already outside
-the modeled parking stock. No per-space circulation or inferred overnight parking is modeled.
+free another visitor's slot. At capacity-limited places a ready departure may retry another
+configured outbound connector in compiled index order when its seeded connector is blocked.
+It must have a free spawn gap and budget, and cannot spawn behind traffic arriving at the
+same place on that lane. Route planning starts at the actual outlet; its throughput is charged
+and occupancy decreases only after successful release. Unpaired outbound event visitors
+represent cars already outside the modeled parking stock. No per-space circulation or inferred overnight parking is modeled.
 
 ## 9. Demand
 
