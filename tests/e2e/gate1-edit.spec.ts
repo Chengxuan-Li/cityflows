@@ -8,7 +8,7 @@ const fixtureUrl = new URL('../../fixtures/projects/grid5x5.cityflows.json', imp
 async function pick(page: Page, x: number, y: number) {
   const map = page.getByLabel('City map');
   const bounds = (await map.boundingBox())!;
-  const scale = (bounds.height - 110) / 510;
+  const scale = (bounds.height - 144) / 510;
   await map.click({
     position: {
       x: bounds.width / 2 + (x - 240) * scale,
@@ -41,9 +41,12 @@ test('T17 pauses an edited run until restart and keeps its vehicles inspectable'
   page,
 }, testInfo) => {
   await pick(page, 60, 2);
+  await expect(page.getByLabel('Speed limit (km/h)')).toBeHidden();
+  await page.getByText('Lanes and street settings', { exact: true }).click();
   await expect(page.getByLabel('Speed limit (km/h)')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('street-inspector.png') });
   await pick(page, 120, 0);
+  await page.getByText('Turns', { exact: true }).click();
   const turn = button(page, 'r:26 lane 1 → r:30 lane 1');
   await expect(turn).toHaveAttribute('aria-pressed', 'true');
   await button(page, 'Play').click();
@@ -81,6 +84,7 @@ test('the first departing vehicle reroutes after banning a movement on its route
   const baseline = await hash(page);
   const baselineMetrics = await metrics(page);
   await pick(page, 120, 0);
+  await page.getByText('Turns', { exact: true }).click();
   await button(page, 'r:26 lane 1 → r:30 lane 1').click();
   await button(page, 'Restart').click();
   await expect(stale(page)).toBeHidden();
@@ -127,6 +131,7 @@ test('a five-second phase changes the queue at the same simulation time', async 
   await expect(page.getByRole('heading', { name: 'Signal queue' })).toBeVisible();
   await expect(button(page, 'Play')).toBeEnabled();
   await pick(page, 240, 240);
+  await page.getByText('Signal phases', { exact: true }).click();
   const phase = page.getByLabel('Phase 1 green (s)');
   await expect(phase).toBeVisible();
   const step = () => page.evaluate(() => window.cityflows!.step(910));
@@ -147,11 +152,13 @@ test('a rejected signal edit preserves history and valid edits can be undone and
   page,
 }, testInfo) => {
   await pick(page, 240, 240);
+  await page.getByText('Signal phases', { exact: true }).click();
   const phase = page.getByLabel('Phase 1 green (s)');
   const undo = button(page, 'Undo');
   const redo = button(page, 'Redo');
   const conflict = page.getByLabel('Phase 1 movement r:64 → r:53', { exact: true });
-  await page.screenshot({ path: testInfo.outputPath('node-inspector.png') });
+  await expect(phase).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('signal-selected.png') });
 
   await page.getByText('Phase 1 road pairs', { exact: true }).click();
   await conflict.click();

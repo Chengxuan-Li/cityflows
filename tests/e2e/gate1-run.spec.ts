@@ -54,7 +54,7 @@ test('runs, pauses, replays the same steps, and inspects the map', async ({ page
   const map = page.getByLabel('City map');
   const bounds = (await map.boundingBox())!;
   // The demo is centered on (240, 240), with 510 m north to south including the two places.
-  const scale = (bounds.height - 110) / 510;
+  const scale = (bounds.height - 144) / 510;
   async function pick(x: number, y: number) {
     await map.click({
       position: {
@@ -69,19 +69,22 @@ test('runs, pauses, replays the same steps, and inspects the map', async ({ page
   await expect(inspector.getByText(/\d+ roads/)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('vehicle-selected.png') });
   await page.keyboard.press('Escape');
-  await expect(inspector.getByText('Select an item on the map.')).toBeVisible();
+  await expect(inspector).toBeHidden();
 
   await pick(60, 2);
-  await expect(inspector.getByRole('heading', { name: 'Street' })).toBeVisible();
+  await expect(inspector.getByRole('heading', { name: /^Street / })).toBeVisible();
   await pick(240, 240);
-  await expect(inspector.getByRole('heading', { name: 'Node' })).toBeVisible();
+  await expect(inspector.getByRole('heading', { name: /^Signal / })).toBeVisible();
   await pick(465, 495);
-  await expect(inspector.getByRole('heading', { name: 'Place' })).toBeVisible();
+  await expect(inspector.getByRole('heading', { name: 'Offices' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select', exact: true })).toBeVisible();
 
   await page.getByRole('combobox', { name: 'Speed', exact: true }).selectOption('20');
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect.poll(async () => (await metrics(page)).stepsPerSecond).toBeGreaterThan(50);
+  await page.getByText('Trip counts', { exact: true }).click();
   await expect(page.getByText(/achieved ×[1-9]\d\./)).toBeVisible();
+  await page.getByText('Trip counts', { exact: true }).click();
   await expect.poll(async () => (await metrics(page)).timeS).toBeGreaterThan(paused.timeS + 8);
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   const stoppedHash = await page.evaluate(() => window.cityflows!.hash());
@@ -96,7 +99,7 @@ test('runs, pauses, replays the same steps, and inspects the map', async ({ page
   expect(await page.evaluate(() => window.cityflows!.hash())).toBe(stoppedHash);
 });
 
-test('opens JSON, downloads ZIP, and reopens the saved project', async ({ page }) => {
+test('opens JSON, downloads ZIP, and reopens the saved project', async ({ page }, testInfo) => {
   const fixture: {
     city: { name: string };
     manifest: { name: string; files: Record<string, string> };
@@ -111,14 +114,12 @@ test('opens JSON, downloads ZIP, and reopens the saved project', async ({ page }
     .update(JSON.stringify(fixture.city))
     .digest('hex');
   const open = page.getByLabel('Open project');
-  const runBar = page.getByRole('contentinfo', { name: 'Simulation' });
   await open.setInputFiles({
     name: 'scenario.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(fixture)),
   });
   await expect(page.getByRole('heading', { name: 'Saved traffic run' })).toBeVisible();
-  await expect(runBar.getByText('Saved traffic run')).toBeVisible();
 
   const downloading = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -126,8 +127,11 @@ test('opens JSON, downloads ZIP, and reopens the saved project', async ({ page }
   expect(download.suggestedFilename()).toMatch(/\.cityflows$/);
 
   await page.getByRole('button', { name: 'New', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'New city' });
+  await expect(picker.getByRole('button', { name: 'Four-way signal' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('new-picker.png') });
+  await picker.getByRole('button', { name: '5 × 5 grid', exact: true }).click();
   await expect(page.getByRole('heading', { name: '5 × 5 grid' })).toBeVisible();
   await open.setInputFiles((await download.path())!);
   await expect(page.getByRole('heading', { name: 'Saved traffic run' })).toBeVisible();
-  await expect(runBar.getByText('Saved traffic run')).toBeVisible();
 });

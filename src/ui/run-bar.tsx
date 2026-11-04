@@ -11,7 +11,6 @@ function clock(timeS: number) {
 export function RunBar() {
   const run = useAppStore((state) => state.run);
   const busy = useAppStore((state) => state.busy);
-  const projectName = useAppStore((state) => state.session?.project.city.name);
   const diagnostics = useAppStore((state) => state.session?.diagnostics.length);
   const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
   const { control, setSpeed, toggleDiagnostics } = useAppStore.getState();
@@ -67,48 +66,48 @@ export function RunBar() {
             ))}
           </select>
         </label>
-        <span className="achieved">
-          {run?.status === 'finished' ? 'Finished' : `achieved ×${(run?.achieved ?? 0).toFixed(1)}`}
-        </span>
+        {run?.status === 'finished' && <span>Finished</span>}
       </div>
       <div className="run-summary">
-        {projectName && (
-          <span className="run-project" title={projectName}>
-            {projectName}
-          </span>
-        )}
         {counts && (
-          <dl className="trip-counts" aria-label="Trip counts">
-            <div>
-              <dt>Pending</dt>
-              <dd>{counts.pending}</dd>
+          <details className="metrics">
+            <summary>Trip counts</summary>
+            <div className="metrics-sheet">
+              <dl className="trip-counts" aria-label="Trip counts">
+                <div>
+                  <dt>Pending</dt>
+                  <dd>{counts.pending}</dd>
+                </div>
+                <div>
+                  <dt>Driving</dt>
+                  <dd>{counts.driving}</dd>
+                </div>
+                <div>
+                  <dt>Queued at origin</dt>
+                  <dd>{counts.queuedOrigin}</dd>
+                </div>
+                <div>
+                  <dt>Queued at destination</dt>
+                  <dd>{counts.queuedDestination}</dd>
+                </div>
+                <div>
+                  <dt>Completed</dt>
+                  <dd>{counts.completed}</dd>
+                </div>
+                <div>
+                  <dt>Failed</dt>
+                  <dd>{counts.failed}</dd>
+                </div>
+              </dl>
+              <p className="muted">achieved ×{(run?.achieved ?? 0).toFixed(1)}</p>
+              <p className="muted">Synthetic traffic, not observed traffic</p>
             </div>
-            <div>
-              <dt>Driving</dt>
-              <dd>{counts.driving}</dd>
-            </div>
-            <div>
-              <dt>Queued at origin</dt>
-              <dd>{counts.queuedOrigin}</dd>
-            </div>
-            <div>
-              <dt>Queued at destination</dt>
-              <dd>{counts.queuedDestination}</dd>
-            </div>
-            <div>
-              <dt>Completed</dt>
-              <dd>{counts.completed}</dd>
-            </div>
-            <div>
-              <dt>Failed</dt>
-              <dd>{counts.failed}</dd>
-            </div>
-          </dl>
+          </details>
         )}
         <button
           disabled={diagnostics === undefined}
           aria-expanded={diagnosticsOpen}
-          aria-controls="inspector"
+          aria-controls={diagnosticsOpen ? 'diagnostics' : undefined}
           onClick={toggleDiagnostics}
         >
           Validation ({diagnostics ?? 0})

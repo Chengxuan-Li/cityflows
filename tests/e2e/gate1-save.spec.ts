@@ -6,6 +6,7 @@ async function pickCenterNode(page: Page) {
   const map = page.getByLabel('City map');
   const bounds = (await map.boundingBox())!;
   await map.click({ position: { x: bounds.width / 2, y: bounds.height / 2 } });
+  await page.getByText('Signal phases', { exact: true }).click();
   await expect(page.getByLabel('Phase 1 green (s)')).toBeVisible();
 }
 
@@ -25,6 +26,10 @@ test('an edited network survives save and reopen (Gate 1 item 7)', async ({ page
   const download = await downloading;
 
   await button(page, 'New').click();
+  await page
+    .getByRole('dialog', { name: 'New city' })
+    .getByRole('button', { name: '5 × 5 grid', exact: true })
+    .click();
   await expect(button(page, 'Play')).toBeEnabled();
   await pickCenterNode(page);
   await expect(phase).toHaveValue('25');

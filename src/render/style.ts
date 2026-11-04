@@ -1,28 +1,58 @@
+import type { RoadClass } from '../schema';
+
+const local = { color: 0xbcc8c4, vergeM: 0.25 };
+const avenue = { color: 0xa6b7b4, vergeM: 0.55 };
+const expressway = { color: 0x899fa5, vergeM: 0.9 };
+const roads: Record<RoadClass, typeof local> = {
+  motorway: expressway,
+  trunk: expressway,
+  primary: avenue,
+  secondary: avenue,
+  tertiary: { color: 0xb0bfb9, vergeM: 0.4 },
+  residential: local,
+  service: { color: 0xcad0c3, vergeM: 0.1 },
+  ramp: { color: 0xa1b2b4, vergeM: 0.4 },
+};
+
+export function roadStyle(road: { roadClass: RoadClass; lanes: readonly number[] }) {
+  return road.roadClass === 'residential' && road.lanes.length > 1 ? avenue : roads[road.roadClass];
+}
+
+const placePalette = [
+  0x78b397, // mint
+  0xd48a7e, // coral
+  0x849fd3, // periwinkle
+  0xc29b62, // honey
+  0xb893c4, // lilac
+  0x75aeb4, // lagoon
+] as const;
+
+export function placeHue(id: string): number {
+  // Hash the canonical ID so a place keeps its hue through edits, sorting and reopens.
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
+  return placePalette[(hash >>> 0) % placePalette.length]!;
+}
+
 export const style = {
-  background: 0x202a2b,
-  asphalt: 0x63686b,
-  roadEdge: 0x353e41,
-  marking: 0xf1efdf,
-  place: 0xa8c2b2,
-  home: 0x9dcbbb,
-  work: 0xe0c396,
-  connector: 0xd5dfd6,
-  selection: 0x83e0fd,
-  route: 0x66c8ed,
-  driving: 0xc1e2f0,
-  queued: 0xf7b86f,
-  signalRed: 0xf66861,
-  signalAmber: 0xffcc67,
-  signalGreen: 0x87efaa,
-  edgeWidthM: 0.24,
-  dividerWidthM: 0.14,
-  pointRadiusM: 4,
+  background: 0xf4f1e7,
+  asphalt: 0xaebdb8,
+  marking: 0xfffcf3,
+  connector: 0x6f827a,
+  selection: 0x4d8e94,
+  route: 0x588eac,
+  driving: 0x667c81,
+  signalRed: 0xc95656,
+  signalAmber: 0xe7a637,
+  signalGreen: 0x30926c,
+  dividerWidthM: 0.18,
+  pointRadiusM: 6,
   connectorRadiusM: 0.7,
   vehicleLengthM: 4.5,
   vehicleWidthM: 1.9,
-  vehicleDotRadiusPx: 1.35,
+  vehicleDotRadiusPx: 1.65,
   vehiclePickRadiusPx: 8,
-  detailZoom: 2,
+  detailZoom: 1.45,
   minZoom: 0.00001,
   maxZoom: 32,
 } as const;

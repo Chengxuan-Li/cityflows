@@ -1,13 +1,14 @@
 import type { Graphics } from 'pixi.js';
 import { headingAtDistance } from '../../geo/polyline';
 import type { CMovement, CNode, CompiledCity, CRoad } from '../../network';
-import { style } from '../style';
+import { roadStyle, style } from '../style';
 
 export function drawNode(graphics: Graphics, node: CNode): void {
   graphics.circle(node.pos.x, node.pos.y, Math.max(1, node.radiusM)).fill(style.asphalt);
 }
 
 export function drawRoadJoins(graphics: Graphics, city: CompiledCity, road: CRoad): void {
+  const { color, vergeM } = roadStyle(road);
   for (const [nodeIndex, atEnd] of [
     [road.from, false],
     [road.to, true],
@@ -20,7 +21,10 @@ export function drawRoadJoins(graphics: Graphics, city: CompiledCity, road: CRoa
       const offset = ((side === 0 ? -1 : 1) * lane.widthM) / 2;
       return { x: point.x - Math.sin(heading) * offset, y: point.y + Math.cos(heading) * offset };
     });
-    graphics.poly([node.pos, ...edges]).fill(style.asphalt);
+    graphics
+      .poly([node.pos, ...edges])
+      .fill(color)
+      .stroke({ color, width: vergeM * 2, join: 'round' });
   }
 }
 
@@ -33,5 +37,5 @@ export function drawMovementSurface(
     city.lanes[movement.fromLane]!.widthM,
     city.lanes[movement.toLane]!.widthM,
   );
-  graphics.poly(movement.polyline, false).stroke({ width, color: style.asphalt });
+  graphics.poly(movement.polyline, false).stroke({ width, color: style.asphalt, cap: 'round' });
 }
