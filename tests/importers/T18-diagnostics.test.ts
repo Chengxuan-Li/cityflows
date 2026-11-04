@@ -85,7 +85,7 @@ test.each([false, true])(
     expect(
       Object.values(result.city.nodes).find(({ provenance }) => provenance.osmIds?.includes(4))
         ?.control,
-    ).toBe('yield');
+    ).toBe('uncontrolled');
   },
 );
 

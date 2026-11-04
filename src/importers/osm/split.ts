@@ -2,6 +2,7 @@ import { distance, polylineLength } from '../../geo/polyline';
 import type { CompiledCity } from '../../network';
 import { allocateId, type City, type Road } from '../../schema';
 import type { OsmWay } from './parse';
+import { captureControls, relocateControls } from './controls';
 import type { OsmRoad } from './roads';
 import { roadHeading } from './turns';
 
@@ -13,6 +14,11 @@ export function consolidateJunctions(
   compiled: CompiledCity,
   signals: string[],
 ): string[] {
+  const capturedControls = captureControls(
+    city,
+    roads.map(({ road }) => road),
+    signals,
+  );
   const parent = new Map(Object.keys(city.nodes).map((id) => [id, id]));
   const members = new Map(Object.keys(city.nodes).map((id) => [id, [id]]));
   const root = (id: string): string => (parent.get(id) === id ? id : root(parent.get(id)!));
@@ -26,6 +32,11 @@ export function consolidateJunctions(
           incident.map(({ road }) => (road.from === node.id ? road.to : road.from)),
         );
         if (neighbors.size !== 2) return false;
+        if (
+          capturedControls.sources.some((s) => s.id === node.id) &&
+          new Set(incident.map((r) => r.attributes)).size > 1
+        )
+          return true;
         return (
           new Set(
             incident.map((r) =>
@@ -112,7 +123,7 @@ export function consolidateJunctions(
       ),
       inferred: [
         ...new Set([
-          ...node.provenance.inferred!,
+          ...group.flatMap((id) => city.nodes[id]!.provenance.inferred!),
           ...roads
             .filter(({ road }) => inside.has(road.id))
             .flatMap(({ road }) => road.provenance.inferred!),
@@ -171,7 +182,27 @@ export function consolidateJunctions(
     }
   }
   roads.splice(0, roads.length, ...roads.filter(({ road }) => city.roads[road.id]));
-  return [...new Set(signals.map((id) => representatives.get(id) ?? id))];
+  const signalIds = relocateControls(city, capturedControls, representatives);
+  mergeShortRoads(
+    city,
+    roads,
+    new Set([
+      ...signalIds,
+      ...Object.values(city.nodes)
+        .filter((n) =>
+          n.turnRules.some(
+            (rule) =>
+              !rule.provenance.inferred?.includes('junctionConsolidation') ||
+              rule.fromLane !== undefined ||
+              rule.toLane !== undefined ||
+              rule.allowed !== (city.roads[rule.from]!.from !== city.roads[rule.to]!.to),
+          ),
+        )
+        .map((n) => n.id),
+    ]),
+    new Set(capturedControls.sources.map(({ id }) => representatives.get(id) ?? id)),
+  );
+  return signalIds;
 }
 
 // A surface-street feeder must reach the opposing carriageway across a narrow median.
@@ -313,7 +344,12 @@ function equalAttributes(a: Road, b: Road): boolean {
 
 // Remove segmentation artifacts, retaining the original geometry and the downstream arrows.
 // Controls and restriction via nodes remain explicit junctions.
-export function mergeShortRoads(city: City, roads: OsmRoad[], protectedNodes: Set<string>): void {
+export function mergeShortRoads(
+  city: City,
+  roads: OsmRoad[],
+  protectedNodes: Set<string>,
+  removedControls = new Set<string>(),
+): void {
   let changed = true;
   while (changed) {
     changed = false;
@@ -327,7 +363,10 @@ export function mergeShortRoads(city: City, roads: OsmRoad[], protectedNodes: Se
       ]);
       if (neighbors.size !== 2 || incoming.length !== outgoing.length || incoming.length === 0)
         continue;
-      if (![...incoming, ...outgoing].some(({ road }) => polylineLength(road.centerline) < 30))
+      if (
+        !removedControls.has(node.id) &&
+        ![...incoming, ...outgoing].some(({ road }) => polylineLength(road.centerline) < 30)
+      )
         continue;
       const pairs = incoming.map((a) => ({
         a,
@@ -358,6 +397,15 @@ export function mergeShortRoads(city: City, roads: OsmRoad[], protectedNodes: Se
         a.cutEnd = b.cutEnd;
         a.turnLanes = b.turnLanes;
         a.wayId = b.wayId;
+        for (const endpoint of [city.nodes[a.road.from]!, city.nodes[a.road.to]!]) {
+          for (const rule of endpoint.turnRules) {
+            if (rule.from === b.road.id) rule.from = a.road.id;
+            if (rule.to === b.road.id) rule.to = a.road.id;
+          }
+          endpoint.minorRoads = endpoint.minorRoads.map((id) =>
+            id === b.road.id ? a.road.id : id,
+          );
+        }
         delete city.roads[b.road.id];
         roads.splice(roads.indexOf(b), 1);
       }

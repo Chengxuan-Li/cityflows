@@ -19,8 +19,6 @@ const remainingDeadEnds: Record<string, string> = {
     'Friedrich-von-Pauli-Straße faces a one-way approach; only its reverse carriageway leaves.',
   'r:672#0':
     'Two-way trunk link terminates against an incoming one-way link; ramp U-turns remain prohibited.',
-  'r:978#2':
-    'Landsberger Straße loses a receiving lane; this signal approach lane must merge upstream.',
 };
 
 test('Munich import satisfies topology, demand, route and morning-run targets', () => {
@@ -33,8 +31,19 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   const { city } = imported;
   const count = (code: string) => imported.diagnostics.filter((d) => d.code === code).length;
   expect(count('connector_unreachable')).toBe(0);
-  expect(count('road_too_short')).toBeLessThan(20);
-  expect(count('dead_end')).toBeLessThan(15);
+  expect(count('road_too_short')).toBeLessThanOrEqual(15);
+  expect(count('dead_end')).toBeLessThanOrEqual(7);
+  const roads = Object.values(city.roads);
+  const signals = Object.values(city.nodes).filter((n) => n.control === 'signal');
+  expect(signals).toHaveLength(14);
+  for (const node of signals) {
+    const ends = roads.filter((r) => r.from === node.id || r.to === node.id);
+    expect(
+      new Set(ends.map((r) => (r.from === node.id ? r.to : r.from))).size,
+    ).toBeGreaterThanOrEqual(3);
+    expect(new Set(ends.map((r) => r.name)).size).toBeGreaterThanOrEqual(2);
+    expect(node.signal).not.toBeNull();
+  }
   expect(
     imported.diagnostics
       .filter((d) => d.code === 'dead_end')
@@ -114,7 +123,8 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   const morning = probeMorning(city, compiled);
   console.info('Munich morning probe', morning);
   expect(morning.releasedTrips).toBeGreaterThan(10_000);
-  expect(morning.failedShareOfReleased).toBeLessThan(0.01);
+  expect(morning.failed).toBe(0);
+  expect(morning.failedShareOfReleased).toBe(0);
   expect(morning.completed).toBeGreaterThan(0);
   expect(morning.gatewayTraffic.trunk!.entered).toBeGreaterThan(0);
   expect(morning.gatewayTraffic.trunk!.left).toBeGreaterThan(0);
@@ -123,10 +133,11 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
 }, 600_000);
 
 test.each([
-  ['downtown', 207],
-  ['highway', 41],
-  ['suburb', 39],
-] as const)('%s retains no more warnings than the pre-TASK-048 baseline', (name, baseline) => {
+  ['downtown', 60],
+  ['highway', 17],
+  ['suburb', 7],
+  ['sindelfingen-a81', 53],
+] as const)('%s retains no more warnings than the TASK-054 baseline', (name, baseline) => {
   const { xml, options } = fixture(name);
   const result = importOsm(xml, options);
   expect(result.ok).toBe(true);
