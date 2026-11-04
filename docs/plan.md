@@ -72,6 +72,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-043](tasks/TASK-043.md) | 4 | Analysis and interchange exports | `src/project/export-*.ts`, export menu | 008, 041 | CSV and GeoJSON exports labelled synthetic | done |
 | [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | done |
 | [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | todo |
+| [TASK-046](tasks/TASK-046.md) | 4 | Simulation hotspots | `src/sim/reroute.ts`, `engine.ts`, `lane-change.ts`, `src/host/headless.ts`, `export-data.ts`, `bench/` | 044, 032 | bench gains with unchanged hashes | todo |
 
 ### Waves
 
@@ -117,6 +118,9 @@ dependency of its tasks is merged to `main`.
   panel) and TASK-046 (simulation hotspots from the TASK-044 profile: reroute scanning,
   prepareTravel, lane-change proposals, the stress grid's stranded trip) in parallel on
   disjoint surfaces; TASK-045 last.
+- Wave 8 execution (owner decision, 2026-11-03): the lead starts the agents as sessions from
+  the lead chat, one worktree per task cut from `main`; review and merge stay with the lead.
+  TASK-045 waits until TASK-033 and TASK-046 are in.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
