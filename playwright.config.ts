@@ -5,6 +5,8 @@ const port = 4173;
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
+  // Scenarios that step whole mornings starve parallel pages of the shared GPU process.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   use: { baseURL: `http://localhost:${port}`, trace: 'retain-on-failure' },
   webServer: {

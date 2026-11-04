@@ -644,6 +644,8 @@ dd {
   .chart-sheet {
     animation: none;
   }
+}
+
 .signal-editor .controls {
   flex-wrap: wrap;
 }
@@ -732,6 +734,8 @@ dd {
 }
 .signal-movement:focus-visible path {
   stroke-width: 0.8;
+}
+
 .map.drawing {
   cursor: crosshair;
 }
@@ -784,6 +788,8 @@ dd {
 
 .topology-actions {
   margin-top: 8px;
+}
+
 .import-wizard {
   width: min(34rem, calc(100% - 2 * var(--inset)));
 }

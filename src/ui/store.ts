@@ -16,6 +16,14 @@ import type { Metrics, VehicleDetail } from '../sim/types';
 import { bundledProject } from './bundled-projects';
 import { selectionAfterEdit } from './edit-selection';
 
+function demandKey(city: Project['city']) {
+  return JSON.stringify(
+    Object.values(city.places)
+      .map(({ id, kind, population, jobs }) => [id, kind, population, jobs])
+      .sort(),
+  );
+}
+
 export interface Session {
   project: Project & { population: Person[] };
   editor: Editor;
@@ -24,7 +32,8 @@ export interface Session {
   diagnostics: Diagnostic[];
   engine: EngineClient;
   vehicleHues: Uint32Array;
-  populationPlaces: Project['city']['places'];
+  /** Place demographics the population was generated from; restart regenerates when they change. */
+  populationKey: string;
 }
 
 interface Run {
@@ -149,7 +158,7 @@ export const useAppStore = create<AppState>((set, get) => {
       set({
         session: {
           project: { ...project, population },
-          populationPlaces: project.city.places,
+          populationKey: demandKey(project.city),
           editor,
           compiled: editor.compiled,
           loadedCompiled: editor.compiled,
@@ -243,7 +252,7 @@ export const useAppStore = create<AppState>((set, get) => {
           const scenario = project.scenarios[0]!;
           const compiled = editor.compiled;
           const population =
-            session.populationPlaces === editor.city.places
+            session.populationKey === demandKey(editor.city)
               ? project.population
               : generatePopulation(editor.city, scenario.demand);
           const trips = scheduleTrips(editor.city, population, scenario);
@@ -254,7 +263,7 @@ export const useAppStore = create<AppState>((set, get) => {
               ...session,
               loadedCompiled: compiled,
               project: { ...project, population },
-              populationPlaces: editor.city.places,
+              populationKey: demandKey(editor.city),
               vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
                 placeHue(destinationPlaceId),
               ),

@@ -52,7 +52,7 @@ export function TopBar() {
       </div>
       {city?.geo && <small className="attribution">{city.geo.source.attribution}</small>}
       {importing && (
-        <Suspense fallback={<p role="status">Loading import�</p>}>
+        <Suspense fallback={<p role="status">Loading import…</p>}>
           <ImportWizard onClose={() => setImporting(false)} />
         </Suspense>
       )}

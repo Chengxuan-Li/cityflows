@@ -743,6 +743,10 @@ function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripR
   jobs, or residential places by population when there are no other gateways. An event with
   visitors but no positive-weight endpoint fails clearly. Counts are absolute, independent of
   resident sampling and car share; visitors and through trips use cars. No transit is simulated.
+- Restart keeps the saved population unless a place was added or removed or a place's kind,
+  population or jobs changed since it was generated; then the population is regenerated from
+  the scenario demand so new places attract trips. TASK-034 adds explicit regeneration with a
+  chosen seed. Connector, road and signal edits never touch the population.
 - `scheduleTrips` rebuilds each person's `agenda` in place from the persistent assignments
   (persons without a workplace get a single home activity), then emits one `TripRequest` per
   agenda transition, mode `car` for persons with a car. Persons without a car get mode `walk`
