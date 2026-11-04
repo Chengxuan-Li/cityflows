@@ -3,6 +3,7 @@ import { Diagnostics } from './inspector/diagnostics';
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { StreetInspector } from './inspector/street';
+import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
 import { MapView } from './map-view';
 import { RunBar } from './run-bar';
@@ -12,6 +13,7 @@ import { TopBar } from './top-bar';
 import { NodeTopologyActions } from './tools/topology-actions';
 
 function Inspector() {
+  const selectedRoads = useAppStore((state) => state.selectedRoads);
   const session = useAppStore((state) => state.session);
   const selection = useAppStore((state) => state.selection);
   const vehicle = useAppStore((state) => state.vehicle);
@@ -28,6 +30,14 @@ function Inspector() {
   if (diagnosticsOpen && timeS !== undefined) {
     return <Diagnostics diagnostics={diagnostics} engine={engine} timeS={timeS} />;
   }
+  if (selectedRoads.length >= 2)
+    return (
+      <BatchInspector
+        key={`${city.version}:${selectedRoads.join(',')}`}
+        city={city}
+        roads={selectedRoads.map((id) => city.roads[id]!)}
+      />
+    );
   if (!selection) return null;
   switch (selection.kind) {
     case 'vehicle':

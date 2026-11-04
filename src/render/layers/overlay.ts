@@ -6,6 +6,22 @@ import { style } from '../style';
 import type { Pick, RouteOverlay } from '../types';
 import { placePath } from './places';
 
+export function drawMultiSelection(
+  graphics: Graphics,
+  city: CompiledCity,
+  roads: readonly number[],
+) {
+  graphics.clear();
+  for (const index of roads) {
+    graphics.poly(city.roads[index]!.surface).stroke({
+      color: style.selection,
+      width: 1.4,
+      alpha: 0.55,
+      join: 'round',
+    });
+  }
+}
+
 export function drawSelection(
   graphics: Graphics,
   city: CompiledCity,

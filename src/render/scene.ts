@@ -5,6 +5,7 @@ import { Camera } from './camera';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawMovementSurface, drawNode, drawRoadJoins } from './layers/nodes';
 import { drawRoute, drawSelection } from './layers/overlay';
+import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
 import { drawPlaces } from './layers/places';
 import { drawMovementArrow, drawRoad } from './layers/roads';
@@ -47,6 +48,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const map = new Container();
   const routeOverlay = new Graphics();
   const selectionOverlay = new Graphics();
+  const multiSelectionOverlay = new Graphics();
   const vehicleRing = new Graphics()
     .circle(0, 0, 6)
     .stroke({ width: 1.25, color: style.selection });
@@ -57,6 +59,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const disconnectedOverlay = new Graphics();
   const signalPreview = new Graphics();
   world.addChild(map, routeOverlay, selectionOverlay, vehicleRing, heatOverlay);
+  world.addChild(multiSelectionOverlay);
   world.addChild(disconnectedOverlay, signalPreview);
   const editOverlay = new Graphics();
   let editPreview: EditOverlay | null = null;
@@ -148,6 +151,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       selectedVehicle = -1;
       updateVehicleRing();
       selectionOverlay.clear();
+      multiSelectionOverlay.clear();
       routeOverlay.clear();
       heatOverlay.clear();
       heat.setCity(compiled);
@@ -225,6 +229,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           ? snapshot.id.subarray(0, snapshot.count).indexOf(selection.id)
           : -1;
       updateVehicleRing();
+    },
+    setMultiSelection(roads) {
+      if (city) drawMultiSelection(multiSelectionOverlay, city, roads);
     },
     setSignalPreview(loaded, timeS) {
       const nodeId = selection?.kind === 'node' ? city!.nodes[selection.node]!.id : null;

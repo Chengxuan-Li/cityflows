@@ -57,6 +57,7 @@ export interface Scene {
   setSnapshot(snapshot: VehicleSnapshot): void;
   setSignalPreview(loaded: CompiledCity | null, timeS: number): void;
   setSelection(selection: Pick | null): void;
+  setMultiSelection(roads: readonly number[]): void;
   setRouteOverlay(route: RouteOverlay | null): void;
   setEditOverlay(overlay: EditOverlay | null): void;
   /** Speed divided by free-flow speed, indexed by compiled road. */
