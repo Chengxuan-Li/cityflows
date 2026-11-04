@@ -3,6 +3,7 @@ import type { LayerVisibility } from '../render/types';
 import { useAppStore } from './store';
 
 const labels: [keyof LayerVisibility, string][] = [
+  ['basemap', 'Basemap'],
   ['difference', 'Comparison road usage'],
   ['heat', 'Road speeds'],
   ['queues', 'Queues'],
@@ -15,6 +16,7 @@ const labels: [keyof LayerVisibility, string][] = [
 
 export function Layers() {
   const layers = useAppStore((state) => state.layers);
+  const hasGeo = useAppStore((state) => Boolean(state.session?.project.city.geo));
   const { toggleLayer, toggleLayers } = useAppStore.getState();
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -25,12 +27,14 @@ export function Layers() {
   }, [toggleLayers]);
   return (
     <section id="layers" className="layers-sheet" aria-label="Map layers">
-      {labels.map(([key, label]) => (
-        <label key={key}>
-          <input type="checkbox" checked={layers[key]} onChange={() => toggleLayer(key)} />
-          {label}
-        </label>
-      ))}
+      {labels
+        .filter(([key]) => key !== 'basemap' || hasGeo)
+        .map(([key, label]) => (
+          <label key={key}>
+            <input type="checkbox" checked={layers[key]} onChange={() => toggleLayer(key)} />
+            {label}
+          </label>
+        ))}
       {layers.heat && (
         <p className="heat-key">
           <span /> Darker roads are slower

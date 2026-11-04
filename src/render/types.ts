@@ -36,6 +36,7 @@ export interface RouteOverlay {
 }
 
 export interface LayerVisibility {
+  basemap: boolean;
   difference: boolean;
   heat: boolean;
   queues: boolean;
@@ -47,6 +48,7 @@ export interface LayerVisibility {
 }
 
 export const defaultLayers: LayerVisibility = {
+  basemap: true,
   difference: false,
   heat: false,
   queues: false,

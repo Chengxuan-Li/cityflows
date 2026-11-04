@@ -315,6 +315,7 @@ export function MapView() {
       let drawnLayers = getState().layers;
       let drawnComparison = getState().comparison;
       view.setLayerVisibility(drawnLayers);
+      view.setTiles(drawnLayers.basemap);
 
       async function pull(session: Session) {
         const snapshot = await session.engine.snapshot();
@@ -364,6 +365,7 @@ export function MapView() {
         const layers = getState().layers;
         if (layers !== drawnLayers) {
           view.setLayerVisibility(layers);
+          view.setTiles(layers.basemap);
           drawnLayers = layers;
         }
         if (drawn?.compiled !== session.compiled) {
