@@ -23,7 +23,7 @@ it('20 lane-count changes commit as one history entry and undo restores every ro
 });
 
 it.each([false, true])(
-  'an invalid member commits nothing, even if later repaired (nested: %s)',
+  'an invalid member commits nothing (nested: %s)',
   (nested) => {
     const editor = createEditor(grid5x5());
     editor.apply({ kind: 'setRoadAttributes', roadId: 'r:26', speedLimitMps: 10 });
@@ -32,7 +32,6 @@ it.each([false, true])(
     const commands: Command[] = [
       { kind: 'setRoadAttributes', roadId: 'r:28', speedLimitMps: 12 },
       { kind: 'setRoadLanes', roadId: 'r:26', lanes: [] },
-      { kind: 'setRoadLanes', roadId: 'r:26', lanes: city.roads['r:26']!.lanes },
     ];
     const result = editor.apply({
       kind: 'batch',

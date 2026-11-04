@@ -832,10 +832,11 @@ type HostEvent =
   The additive, lazily materialized `Metrics.tripOutcomes` exposes departure, arrival,
   initial-route free-flow time and failure reason in input order. Unavailable times are null;
   exported completed-trip delay is `max(0, arrival - departure - freeFlow)`.
-- `roadStats` returns fixed-step observations: speed ratios averaged over vehicle observations
-  on each road (1 when unobserved), observed road exits into movements or completed trips,
-  and the maximum simultaneous queue across the road's lanes (speed below 0.5 m/s within
-  50 m of a lane end). Lane changes on the same road do not count as passes.
+- `roadStats` returns observations taken every tenth fixed step (one simulated second):
+  speed ratios averaged over vehicle observations on each road (1 when unobserved), observed
+  road exits into movements or completed trips (a road traversed within one second may be
+  missed), and the maximum simultaneous queue across the road's lanes (speed below 0.5 m/s
+  within 50 m of a lane end). Lane changes on the same road do not count as passes.
 - `trajectories` with `enabled` switches recording and returns `{ enabled, count }`; without
   it, returns samples. `trajectoryStatus` reads that status without copying samples. The
   first sample is 10 simulated seconds after enabling, then every 10 s, at the first fixed

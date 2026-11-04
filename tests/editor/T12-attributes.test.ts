@@ -116,7 +116,7 @@ const cases: { command: Command; setup?: Command; verify: (edited: City) => void
       kind: 'batch',
       label: 'Add and configure a place',
       commands: [
-        { kind: 'addPlace', place: { ...place, connectors: [], capacity: null } },
+        { kind: 'addPlace', place: { ...place, connectors: [], capacity: -1 } },
         { kind: 'updatePlace', placeId: addedPlaceId, patch: { capacity: 10 } },
       ],
     },

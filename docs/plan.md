@@ -313,14 +313,6 @@ exists.
 
 ## Owner decisions log
 
-- 2026-11-03, TASK-042 ready for review on `task/042-compare`: saved city/scenario/population
-  baseline, undoable restore (minimal editor handler approved by the owner), sequential
-  comparison in a separate worker, completed-trip travel-time/delay table and road-usage
-  difference layer. Baseline and patch metadata are optional format additions; old projects
-  still open. Both runs use the saved baseline's seed, scenario and trip demand. Removed trip
-  places require restoration or a new baseline; demographic edits are not resampled for the
-  variant. No simulation, importer, tool or inspector changes and no new dependencies.
-
 - 2026-11-03: foundation, renderer, repo shape, license, OSM access, workflow and audit depth
   decided; architecture approved with five adjustments (architecture section 1, rows 8 to 12).
 - 2026-11-03: Gate 1 defined as the interactive vertical slice above, not an engine-only

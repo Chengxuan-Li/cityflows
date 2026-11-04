@@ -26,7 +26,7 @@ export function tripRecords(engine: TrafficEngine, trips: readonly TripRequest[]
   });
 }
 
-/** Worker-owned observations at every fixed step, independent of rendering/pull frequency. */
+/** Worker-owned observations every tenth fixed step, independent of rendering/pull frequency. */
 export function createExportRecorder(engine: TrafficEngine, compiled: CompiledCity) {
   const stats: RoadStats[] = compiled.roads.map(({ id }) => ({
     id,
@@ -40,13 +40,17 @@ export function createExportRecorder(engine: TrafficEngine, compiled: CompiledCi
   const samples: TrajectoryRecord[] = [];
   let enabled = false;
   let nextSampleS = Infinity;
+  let step = 0;
+  const ends = compiled.lanes.map(({ polyline }) => polyline.at(-1)!);
 
   return {
     observe() {
+      const record = enabled && engine.timeS + 1e-8 >= nextSampleS;
+      // Road statistics are sampled every tenth step; trajectories at their own deadlines.
+      if (!record && ++step % 10 !== 0) return;
       const snapshot = engine.snapshot();
       const roads = new Map<number, number>();
       const queues = new Uint32Array(stats.length);
-      const record = enabled && engine.timeS + 1e-8 >= nextSampleS;
       for (let i = 0; i < snapshot.count; i++) {
         const id = snapshot.id[i]!;
         const field = snapshot.lane[i]!;
@@ -56,8 +60,10 @@ export function createExportRecorder(engine: TrafficEngine, compiled: CompiledCi
         if (lane) {
           speedSum[road] = speedSum[road]! + snapshot.speed[i]! / lane.speedLimitMps;
           observations[road] = observations[road]! + 1;
-          if (snapshot.speed[i]! < 0.5 && lane.lengthM - engine.inspect(id)!.positionM <= 50) {
-            queues[road] = queues[road]! + 1;
+          if (snapshot.speed[i]! < 0.5) {
+            const dx = snapshot.x[i]! - ends[field]!.x;
+            const dy = snapshot.y[i]! - ends[field]!.y;
+            if (dx * dx + dy * dy <= 2500) queues[road] = queues[road]! + 1;
           }
         }
         if (record)
