@@ -644,4 +644,92 @@ dd {
   .chart-sheet {
     animation: none;
   }
+.signal-editor .controls {
+  flex-wrap: wrap;
+}
+.signal-timeline {
+  display: flex;
+  height: 46px;
+  margin-top: 8px;
+  overflow-x: auto;
+}
+.signal-segment {
+  display: flex;
+  flex-basis: 0;
+  min-width: 44px;
+  border-right: 2px solid var(--paper);
+}
+.signal-segment > button:first-child {
+  flex-basis: 0;
+  padding: 2px;
+  border-radius: 4px 0 0 4px;
+  background: #dceae2;
+}
+.signal-segment > button[aria-pressed='true'] {
+  box-shadow: inset 0 -3px var(--accent);
+}
+.signal-segment small {
+  display: block;
+}
+.signal-segment .signal-duration {
+  flex: 0 0 9px;
+  padding: 0;
+  border-radius: 0;
+  background: #86b2a1;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.signal-amber {
+  flex-basis: 0;
+  background: #e8c98b;
+}
+.signal-red {
+  flex-basis: 0;
+  background: #cfa99d;
+}
+.signal-schematic {
+  display: block;
+  width: 100%;
+  max-height: 210px;
+  margin-top: 4px;
+  background: var(--canvas);
+  border-radius: 6px;
+}
+.signal-movement {
+  stroke: #8a9691;
+  cursor: pointer;
+  pointer-events: stroke;
+  opacity: 0.45;
+}
+.signal-movement path {
+  transition: stroke 120ms;
+}
+.signal-movement.served {
+  stroke: #286461;
+}
+.signal-movement.conflict {
+  stroke: #b54731;
+}
+.signal-movement:hover {
+  stroke: #162b28;
+}
+.signal-validation {
+  max-height: 7rem;
+  overflow: auto;
+  margin-block: 6px;
+  color: #713e2b;
+}
+.signal-validation p + p {
+  margin-top: 4px;
+}
+.signal-movement.served,
+.signal-movement.conflict,
+.signal-movement:focus-visible {
+  opacity: 1;
+}
+.signal-movement:focus {
+  outline: none;
+}
+.signal-movement:focus-visible path {
+  stroke-width: 0.8;
 }

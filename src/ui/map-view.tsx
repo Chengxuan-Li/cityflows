@@ -218,6 +218,7 @@ export function MapView() {
           );
           view.setQueues(snapshotForMap(snapshot, session));
         }
+        view.setSignalPreview(current.run?.stale ? null : session.loadedCompiled, snapshot.timeS);
         if (snapshot.timeS !== snapshotTime) {
           view.setSnapshot(snapshotForMap(snapshot, session));
           snapshotTime = snapshot.timeS;

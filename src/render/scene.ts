@@ -12,6 +12,7 @@ import { Tiles } from './layers/tiles';
 import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { createPicker, pickVehicle } from './picking';
 import { style } from './style';
+import { drawSignalPreview } from './layers/signal-preview';
 import type { Pick, CityGeometry, Scene } from './types';
 import { defaultLayers, type LayerVisibility } from './types';
 
@@ -53,8 +54,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const heat = new HeatLayer();
   heatOverlay.addChild(heat.roads, heat.queues);
   const disconnectedOverlay = new Graphics();
+  const signalPreview = new Graphics();
   world.addChild(map, routeOverlay, selectionOverlay, vehicleRing, heatOverlay);
-  world.addChild(disconnectedOverlay);
+  world.addChild(disconnectedOverlay, signalPreview);
   app.stage.addChild(world);
 
   const vehicles = new Vehicles();
@@ -145,6 +147,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       heatOverlay.clear();
       heat.setCity(compiled);
       disconnectedOverlay.clear();
+      signalPreview.clear();
       tiles?.container.removeFromParent();
       for (const child of map.removeChildren()) child.destroy({ children: true, context: true });
       updateSignals = [];
@@ -213,6 +216,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           ? snapshot.id.subarray(0, snapshot.count).indexOf(selection.id)
           : -1;
       updateVehicleRing();
+    },
+    setSignalPreview(loaded, timeS) {
+      const nodeId = selection?.kind === 'node' ? city!.nodes[selection.node]!.id : null;
+      const preview = drawSignalPreview(signalPreview, loaded, nodeId, timeS);
+      canvas.setAttribute(
+        'aria-description',
+        preview ? `Signal ${nodeId}: phase ${preview.phase + 1}, ${preview.state}` : '',
+      );
+      if (import.meta.env.MODE === 'test') canvas.dataset.signalPreview = JSON.stringify(preview);
     },
     setRouteOverlay(route) {
       if (city) drawRoute(routeOverlay, city, route);

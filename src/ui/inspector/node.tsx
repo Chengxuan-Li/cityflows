@@ -1,10 +1,10 @@
+import { generateSignalProgram } from '../../importers/signal-program';
 import type { CNode, CompiledCity, Turn } from '../../network';
 import { movementId, nodeSchema, type Control, type Node, type SignalProgram } from '../../schema';
 import { useAppStore } from '../store';
-import { NumberField } from './number-field';
+import { SignalInspector } from './signal';
 
 type RoadPair = SignalProgram['phases'][number]['groups'][number];
-type Pair = { roads: RoadPair; movements: number[] };
 const arrow: Record<Turn, string> = {
   through: '↑',
   left: '↰',
@@ -16,31 +16,6 @@ const arrow: Record<Turn, string> = {
 
 function samePair(a: RoadPair, b: RoadPair) {
   return a.from === b.from && a.to === b.to;
-}
-
-function defaultSignal(pairs: Pair[], compiled: CompiledCity): SignalProgram {
-  const phases: { groups: RoadPair[]; movements: Set<number> }[] = [];
-  for (const { roads, movements } of pairs) {
-    if (!movements.length) continue;
-    const conflicts = movements.flatMap((index) => compiled.movements[index]!.conflicts);
-    // A signal group covers the whole road pair, so it must be safe as a unit.
-    if (movements.some((index) => conflicts.includes(index))) continue;
-    let phase = phases.find(({ movements }) => conflicts.every((index) => !movements.has(index)));
-    if (!phase) {
-      phase = { groups: [], movements: new Set() };
-      phases.push(phase);
-    }
-    phase.groups.push(roads);
-    for (const index of movements) phase.movements.add(index);
-  }
-  return {
-    offsetS: 0,
-    amberS: 3,
-    allRedS: 1,
-    phases: phases.length
-      ? phases.map(({ groups }) => ({ durationS: 25, groups }))
-      : [{ durationS: 25, groups: [] }],
-  };
 }
 
 export function NodeInspector({
@@ -73,7 +48,6 @@ export function NodeInspector({
     })),
   );
   const signal = source.signal;
-  const setSignal = (signal: SignalProgram) => void commit({ kind: 'setSignal', nodeId, signal });
 
   return (
     <>
@@ -91,7 +65,15 @@ export function NodeInspector({
                 kind: 'setControl',
                 nodeId,
                 control,
-                ...(control === 'signal' && { signal: defaultSignal(roadPairs, compiled) }),
+                ...(control === 'signal' && {
+                  signal: generateSignalProgram(
+                    useAppStore.getState().session!.project.city,
+                    source,
+                    incoming.length,
+                    compiled,
+                    [],
+                  ),
+                }),
               });
             }}
           >
@@ -103,71 +85,7 @@ export function NodeInspector({
           </select>
         </label>
       </div>
-      {signal && (
-        <details className="disclosure">
-          <summary>Signal phases</summary>
-          <div className="edit-fields">
-            <NumberField
-              label="Amber (s)"
-              value={signal.amberS}
-              onCommit={(amberS) => setSignal({ ...signal, amberS: amberS! })}
-            />
-            <NumberField
-              label="All red (s)"
-              value={signal.allRedS}
-              onCommit={(allRedS) => setSignal({ ...signal, allRedS: allRedS! })}
-            />
-          </div>
-          <p className="muted">
-            Cycle {node.signal!.cycleS} s · offset {signal.offsetS} s
-          </p>
-          <ul className="item-list phase-list">
-            {signal.phases.map((phase, index) => {
-              const phaseName = `Phase ${index + 1}`;
-              const setPhase = (next: typeof phase) =>
-                setSignal({
-                  ...signal,
-                  phases: signal.phases.map((p, i) => (i === index ? next : p)),
-                });
-              return (
-                <li key={index}>
-                  <NumberField
-                    label={`${phaseName} green (s)`}
-                    value={phase.durationS}
-                    onCommit={(durationS) => setPhase({ ...phase, durationS: durationS! })}
-                  />
-                  <details>
-                    <summary>{phaseName} road pairs</summary>
-                    {roadPairs.map(({ roads, movements }) => {
-                      const checked = phase.groups.some((group) => samePair(roads, group));
-                      if (!checked && !movements.length) return null;
-                      const label = `${roads.from} → ${roads.to}`;
-                      return (
-                        <label className="phase-pair" key={label}>
-                          <input
-                            type="checkbox"
-                            aria-label={`${phaseName} movement ${label}`}
-                            checked={checked}
-                            onChange={() =>
-                              setPhase({
-                                ...phase,
-                                groups: checked
-                                  ? phase.groups.filter((group) => !samePair(roads, group))
-                                  : [...phase.groups, roads],
-                              })
-                            }
-                          />
-                          {label}
-                        </label>
-                      );
-                    })}
-                  </details>
-                </li>
-              );
-            })}
-          </ul>
-        </details>
-      )}
+      {signal && <SignalInspector node={node} source={source} compiled={compiled} />}
       <details className="disclosure">
         <summary>Turns</summary>
         <p className="muted">Incoming → outgoing · lane 1 is leftmost</p>
