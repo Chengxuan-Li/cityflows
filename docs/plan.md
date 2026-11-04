@@ -132,6 +132,8 @@ dependency of its tasks is merged to `main`.
   three after a lead design note amending the restart rule. Fixture
   `fixtures/osm/sindelfingen-a81.osm` (A81 junction, seven roundabouts) is the roundabout
   check for TASK-049.
+- Wave 9 outcome (2026-11-04): all three merged. Next: TASK-051 after the lead design note,
+  with B13 folded in.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -191,6 +193,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B10 | Yield and stop signs. | Model has `Control` yield and stop; check the gap-acceptance behaviour at both and add sign visuals and the node control in the inspector (already there) with a sign on the map. |
 | B11 | Signals may or may not allow right turn on red. | `SignalProgram.rightOnRed` (left on red under left-hand driving): a permitted turn on red yields like a stop sign; compiler marks those movements, signal editor toggle, importer default per country. |
 | B12 | Pedestrian crossing visuals. | Renderer: zebra markings at signalized junction approaches and at nodes tagged `crossing` by the importer; no pedestrian simulation. |
+| B13 | Imported cities gridlock at the default demand (one person per resident on 35 000 residents). | Import wizard: default `personsPerResident` for imports around 0.3 and a demand slider on the accept step; the probe takes a scale argument. Small. |
 
 Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
 
@@ -217,17 +220,7 @@ The import wave (B2, B3, B5) reports the same table after its changes; the targe
 unreachable connectors, every connector pair routable, under 1 percent failed trips, and
 residential and work places from buildings and land use.
 
-TASK-048 implementation (`task/048-import-quality`): topology normalization, paired boundary
-gateways and block demand are implemented. Owner-approved scope includes compact short-junction
-consolidation, local turnarounds, all-lane expectation updates in network/editor/routing/sim tests,
-and a simulation fallback reachability check with waiting for a safe required lane change.
-Architecture 5.2 amends single-lane
-receiving-lane assignment; sections 8 and 13 document the fallback and import rules. No new
-dependencies or changes to production UI, renderer, editor or routing code.
-Owner-approved browser-test updates retain the chart's morning window through 10:00 (the grid
-now peaks at 09:03 and completes all 2 000 morning trips by 11:00 without failures), and identify
-the uploaded performance workload uniquely before querying its worker. Performance thresholds
-are unchanged.
+After TASK-048, same probe (one person per resident, car share one):
 
 | Measure | Before | TASK-048 |
 | --- | ---: | ---: |
@@ -254,12 +247,6 @@ Trunk gateways recorded 743 departures and 12 completed arrivals; sampled ramp t
 rule is covered by the synthetic gateway regression. Original-fixture warning totals decreased:
 downtown 207 → 60, highway 41 → 17, suburb 39 → 7.
 
-Verification: `npm ci`, `npx playwright install chromium`, the full reference import probe,
-`npm run check` (186 tests passed, one existing skip, build green), and the final full
-`CITYFLOWS_TEST_PORT=4311 npm run test:e2e` (37/37 passed), including demo D, gate2-import and
-all three performance workloads. Work and four Conventional Commits remain on the local
-`task/048-import-quality` worktree branch; no remote, push or merge.
-
 Remaining Munich dead ends are asserted by lane id in `tests/importers/munich.test.ts`:
 
 | Lane id | Reason |
@@ -272,6 +259,36 @@ Remaining Munich dead ends are asserted by lane id in `tests/importers/munich.te
 | `r:672#0` | Two-way trunk link ends against an incoming one-way link; ramp U-turns remain prohibited. |
 | `r:978#2` | Landsberger Straße loses a receiving lane; this signal approach lane must merge upstream. |
 
+
+## Lead handover
+
+How the lead runs this project, for whoever takes the role on another machine. Everything
+else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
+
+- A wave is a set of tasks on disjoint file surfaces. For each task: write the contract in
+  `docs/tasks/TASK-<id>.md`, add its row to the task table, note the wave under "Waves",
+  commit, cut `task/<id>-<name>` from `main`, and give the agent a brief that names the
+  branch inside and outside the message, the files to read in order, what to deliver, the
+  surface it owns, the shared files it may touch additively, the tests, and the report
+  format. Agents work in their own worktree, commit with Conventional Commits, never push,
+  never merge, and set `CITYFLOWS_TEST_PORT` to a port of their own for Playwright.
+- Review on request: read the diff against `main` with the contract beside it; merge in
+  surface order (sim and host first, UI last); resolve conflicts, which are usually additive
+  blocks and a dropped closing brace in `app.css`; run `npm run check`, the full
+  `npm run test:e2e` (serial, about six minutes with T16) on a free port, and
+  `npm run import-probe` when the importer changed; exercise what changed in the browser
+  with `npm run dev`; fix contract-level problems in a lead commit; write the review entry
+  in the review log, set the row to done, commit, push `main`.
+- Agents sometimes write their own status into this file or the owner decisions log; replace
+  it with the review entry. Contract changes an agent made are accepted only when they are in
+  `docs/architecture.md` in the same branch and named in the review entry.
+- Measurements that gate work: the Performance section (benchmark and T16), the Munich
+  import baseline and its after-table, and the demos' metrics files under `test-results`,
+  which regenerate from the suite.
+- Known flaky point: the T16 grid scenario can fail once when the replacement project loads
+  before the previous worker ended; it passes on rerun.
+- Local-only state: `bench/latest.log` and the CPU profiles, `test-results`, the worktrees
+  under `.claude/worktrees` and the owner's Codex worktrees. None of it is needed.
 
 ## Review log
 
@@ -557,6 +574,25 @@ Remaining Munich dead ends are asserted by lane id in `tests/importers/munich.te
   stored on the node, which is more state than an inverse command; revisit if saved cities
   grow. The agent also noted a flaky first run of the T16 grid scenario (worker terminated
   while a replacement project loaded) that passed on rerun; watch it.
+
+- 2026-11-04, TASK-048 merged as delivered, with one scope note. The importer now merges
+  sub-30 m sections, consolidates short junction clusters (up to 60 m across, keeping bridges,
+  motorway junctions, controls and restriction nodes apart) into one junction with explicit
+  turn rules, joins feeders to both carriageways by proximity, gives single-lane approaches
+  every receiving lane (architecture 5.2 amended), defers turn:lanes arrows across way
+  boundaries, pairs boundary gateways per carriageway with demand by class and lane, and turns
+  buildings and land use into block places (defaults in architecture 13). On the reference
+  extract: 548 roads, 33 gateways, 91 block places with 35 400 residents and 30 200 jobs, zero
+  unreachable connectors, every connector pair routable, zero failed trips; short-road
+  warnings 173 to 15 and dead ends 65 to 7, each remaining one listed by id with a reason in
+  the Munich test. The existing fixtures lost warnings too (downtown 207 to 60). One lead
+  fix on merge: the new junction consolidation collapsed roundabout rings, whose arcs are
+  short by design, so rings are now excluded (the Sindelfingen scenario caught it). Out of the
+  stated surface and accepted after reading: a fallback movement now has to route to the
+  destination and a car whose route needs another lane waits for a safe change instead of
+  stranding (architecture 8), which changed the route-following tests and shifted the grid's
+  morning peak. Open: at one person per resident the imported city gridlocks (30 800 queued at
+  origin at 10:00), so the import wizard's default demand needs a scale (B13 below).
 
 ## Owner decisions log
 
