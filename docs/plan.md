@@ -49,7 +49,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-006](tasks/TASK-006.md) | 1 | Renderer | `src/render`, `dev/render.html` | 001 | drawn city, camera, picking, vehicles | done |
 | [TASK-007](tasks/TASK-007.md) | 1 | Editor core | `src/editor`, `tests/editor` | 001 | T12 (attribute and rule commands), T04 (editor side) | done |
 | [TASK-008](tasks/TASK-008.md) | 1 | Project persistence | `src/project`, `tests/project`, `fixtures/projects` | 001 | T14 | done |
-| [TASK-009](tasks/TASK-009.md) | 1 | App shell, run controls, inspectors | `src/ui`, `src/main.tsx`, `tests/e2e/gate1-run.spec.ts` | 005, 006, 008, 011 | Gate 1 items 1 to 4, 7 | todo |
+| [TASK-009](tasks/TASK-009.md) | 1 | App shell, run controls, inspectors | `src/ui`, `src/main.tsx`, `tests/e2e/gate1-run.spec.ts` | 005, 006, 008, 011 | Gate 1 items 1 to 4, 7 | done |
 | [TASK-010](tasks/TASK-010.md) | 1 | Editing UI and restart policy | `src/ui/inspector/*`, `src/ui/run-bar*`, `tests/e2e/gate1-edit.spec.ts` | 007, 009 | Gate 1 items 5, 6; T17 | todo |
 | [TASK-011](tasks/TASK-011.md) | 1 | Demand v1: population and commute trips | `src/demand`, `tests/demand` | 001 | T09 (commute), T15 (data side) | done |
 | [TASK-012](tasks/TASK-012.md) | 1 | Gate 1 integration and acceptance | anywhere (lead), `tests/e2e/gate1-*.spec.ts` | 004, 010 | Gate 1 checklist, CI green | todo |
@@ -177,6 +177,14 @@ exists.
   worker), the 25-step cap and snapshot coalescing. Accepted: grant release on lane change,
   creep as a speed clamp, the router-tolerance mismatch used by the short-turn tests, per-step
   allocations in the lane-change pass (TASK-044).
+
+- 2026-11-03, TASK-009 merged as delivered (check and both Playwright scenarios green). Lead
+  exercised the app in the browser: bundled grid loads, Play moves cars, speeds 1 to 20 with
+  the achieved multiplier, Pause and Step, vehicle inspector with the route overlay, street,
+  node and diagnostics panels, no console errors. Undo and Redo are present but inert until
+  TASK-010 binds them. Observation for TASK-012: the grid fixture's demand (100 to 150
+  residents spread over the morning) puts only one to three cars on the road at once; the
+  Gate 1 demo needs enough residents for visible queues.
 
 ## Owner decisions log
 
