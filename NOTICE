@@ -20,3 +20,9 @@ Map data
 Imported road data is © OpenStreetMap contributors, licensed under the Open
 Database License (ODbL) 1.0. https://www.openstreetmap.org/copyright
 Projects that embed OSM-derived data carry this attribution in their manifest.
+
+MapLibre GL JS 6.16.0
+Source: https://github.com/maplibre/maplibre-gl-js/tree/v6.16.0
+License: BSD-3-Clause (see node_modules/maplibre-gl/LICENSE.txt).
+Used as a dependency in src/ui/import/area-picker.tsx for the area selection map.
+No upstream source was copied.

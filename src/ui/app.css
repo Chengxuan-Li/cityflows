@@ -532,3 +532,26 @@ dd {
     animation: none;
   }
 }
+
+.import-wizard {
+  width: min(34rem, calc(100% - 2 * var(--inset)));
+}
+.import-wizard > :not(:first-child) {
+  margin-top: 10px;
+}
+.import-wizard section > p + p {
+  margin-top: 6px;
+}
+.import-map {
+  height: 230px;
+  margin-top: 8px;
+}
+.import-diagnostics {
+  max-height: 35vh;
+  overflow: auto;
+  padding-left: 20px;
+}
+.import-wizard .controls {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
