@@ -30,3 +30,27 @@ export function addSignal(
     );
   node.provenance.inferred!.push('signal');
 }
+
+/** Circulating OSM ways stay intact; only joining approaches give way. */
+export function markRoundaboutEntries(city: City, data: OsmData): void {
+  const ways = new Set(data.way.filter((w) => w.tag.junction === 'roundabout').map((w) => w.id));
+  const ring = new Set(
+    Object.values(city.roads)
+      .filter((r) => r.provenance.osmIds?.some((id) => ways.has(id)))
+      .map((r) => r.id),
+  );
+  const entries = new Set(
+    Object.values(city.roads)
+      .filter((r) => ring.has(r.id))
+      .map((r) => r.to),
+  );
+  for (const id of entries) {
+    const node = city.nodes[id]!;
+    const minor = Object.values(city.roads)
+      .filter((r) => r.to === id && !ring.has(r.id))
+      .map((r) => r.id);
+    if (!minor.length || node.control === 'signal') continue;
+    node.control = 'yield';
+    node.minorRoads = minor;
+  }
+}

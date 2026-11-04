@@ -392,6 +392,8 @@ type Command =
   | { kind: 'mergeRoads'; roadId: RoadId; otherRoadId: RoadId }                  // Gate 2
   | { kind: 'addRamp'; from: { roadId: RoadId; atM: number }; to: { roadId: RoadId; atM: number } }
   | { kind: 'removeRamp'; roadId: RoadId }
+  | { kind: 'addRoundabout'; nodeId: NodeId; radiusM: number }
+  | { kind: 'removeRoundabout'; nodeId: NodeId }
   | { kind: 'moveNode'; nodeId: NodeId; pos: Vec2 }                               // Gate 2
   | { kind: 'addPlace'; place: Omit<Place, 'id'> }
   | { kind: 'updatePlace'; placeId: PlaceId; patch: Partial<Omit<Place, 'id' | 'connectors'>> }
@@ -440,6 +442,23 @@ Semantics:
   limit. Paired streets split together. `removeRamp` removes the ramp and merges each
   endpoint's split pair; incompatible intervening edits reject the command atomically.
   Undo restores the exact pre-edit entities and `nextId`, except for the version bump.
+- `addRoundabout` replaces a junction with a one-way ring, counterclockwise in the
+  y-south frame for right-hand driving and clockwise for left-hand driving. Radius is at
+  least 20 m; each approach must have more than `2 * radiusM + 15` m available. Existing
+  streets split at twice the radius, with separate entry/exit legs meeting the ring.
+  The ring has one 3.5 m lane, 30 km/h, and the class of the incoming approach with most
+  lanes (class rank then ID break ties). Entry legs yield; every approach lane connects
+  to the ring, and every exit lane is served. Driving around the ring permits U-turns.
+- The original center remains selectable with optional `Node.roundabout` containing
+  `radiusM`, `ringRoads`, and bounded `before`/`after` snapshots of affected nodes, roads,
+  and place connectors. Snapshot nodes omit the roundabout field to avoid recursion.
+  This record is Zod-validated and saved in the city. `removeRoundabout` restores those
+  entities and removes the generated ones after checking they have not been edited or
+  newly attached to other roads/connectors. Unrelated edits remain. Removal preserves
+  the allocator; undo/redo restores exact entities and `nextId` as for other commands.
+- OSM `junction=roundabout` roads retain their imported geometry and direction. At their
+  joining nodes non-ring incoming roads are marked as minor yield approaches, preserving
+  explicit signals. Imported rings do not carry authored restoration records.
 - `addRoad` allocates `newNodes` in array order, then the road, using `nextId`; its endpoint
   references use those allocated ids or existing nodes. Drawing resolves explicit node/road
   snaps and adds both directions in one batch. Unsnapped crossings do not create junctions.

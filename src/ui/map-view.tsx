@@ -9,6 +9,7 @@ import type { LaneId } from '../schema';
 import { useAppStore, type Session } from './store';
 import { createDrawRoadTool, initialRoadOptions } from './tools/draw-road';
 import { createRampTool } from './tools/ramp';
+import { createRoundaboutTool } from './tools/roundabout';
 import { RoadOptions } from './tools/road-options';
 import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
@@ -417,6 +418,7 @@ export function MapView() {
         road: createDrawRoadTool(view, () => optionsRef.current),
         place: createPlacePaintTool(view, () => placeKindRef.current, setPlaceHint),
         ramp: createRampTool(view),
+        roundabout: createRoundaboutTool(view),
       };
       const pointer = bindPointer(
         canvas,

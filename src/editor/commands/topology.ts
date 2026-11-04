@@ -172,7 +172,7 @@ function replaceReferences(node: Node, before: string, after: string): Node {
 
 // Connector distances belong to trimmed, offset lanes, not the canonical centerline.
 // Keep their world positions, projecting to the edited lane (or the nearest split half).
-function relocateConnectors(
+export function relocateConnectors(
   city: City,
   patch: CommandPatch,
   replacements: Record<string, string[]> = {},

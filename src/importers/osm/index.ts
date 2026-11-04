@@ -4,7 +4,7 @@ import { compile, type Diagnostic } from '../../network';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
-import { addSignal } from './controls';
+import { addSignal, markRoundaboutEntries } from './controls';
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
 import { addGateways, addOsmPlaces } from './places';
@@ -159,6 +159,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addRestrictions(data.relation, nodes, incidents, diagnostics);
   for (const node of nodes.values())
     addLaneTurns(node, incidents.get(node.id)!, city.drivingSide, diagnostics);
+  markRoundaboutEntries(city, data);
   const base = compile(city);
   if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
   for (const node of signals) {
