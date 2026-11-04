@@ -776,6 +776,9 @@ type HostRequest =
   | { id: number; type: 'restart' }                              // same inputs, same seed
   | { id: number; type: 'snapshot' } | { id: number; type: 'metrics' }
   | { id: number; type: 'metricsSeries' }
+  | { id: number; type: 'tripRecords' } | { id: number; type: 'roadStats' }
+  | { id: number; type: 'trajectories'; enabled?: boolean }
+  | { id: number; type: 'trajectoryStatus' }
   | { id: number; type: 'inspect'; vehicleId: number } | { id: number; type: 'hash' };
 type HostReply = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 type HostEvent =
@@ -796,6 +799,20 @@ type HostEvent =
   mean for completed trips. The loop samples on load and every 60 simulated seconds from the
   scenario start, splitting manual step batches at sample boundaries. Load/restart clears the
   history. The chart pulls on open or explicit Refresh; there is no main-thread polling timer.
+- TASK-043: `tripRecords` returns one row per loaded trip, including pending and failed trips.
+  The additive, lazily materialized `Metrics.tripOutcomes` exposes departure, arrival,
+  initial-route free-flow time and failure reason in input order. Unavailable times are null;
+  exported completed-trip delay is `max(0, arrival - departure - freeFlow)`.
+- `roadStats` returns fixed-step observations: speed ratios averaged over vehicle observations
+  on each road (1 when unobserved), observed road exits into movements or completed trips,
+  and the maximum simultaneous queue across the road's lanes (speed below 0.5 m/s within
+  50 m of a lane end). Lane changes on the same road do not count as passes.
+- `trajectories` with `enabled` switches recording and returns `{ enabled, count }`; without
+  it, returns samples. `trajectoryStatus` reads that status without copying samples. The
+  first sample is 10 simulated seconds after enabling, then every 10 s, at the first fixed
+  step at or after each deadline. Lane values are canonical lane IDs or movement IDs at
+  junctions. Turning off retains samples; load/restart resets recording, samples and road
+  statistics. The loop's optional `afterStep` hook observes every step even in manual batches.
 - The worker entry uses `postMessage(data, { transfer })`, which type-checks against the DOM
   lib and works in a worker; no WebWorker lib is added to the TypeScript config.
 - Wire form of `load`: a Flatbush index cannot be structured-cloned, so the client sends the
@@ -874,6 +891,10 @@ view.json         { camera, layers, selection }                    optional
 - Exports (Gate 4): GeoJSON of roads and places (lossy, documented), CSV trip list, CSV of
   per-road metrics. All exports carry seed, engine version, schema version and the synthetic
   traffic notice.
+- TASK-043 CSVs (trips, road metrics, trajectories) begin with a `#` provenance comment,
+  followed by their header row; provenance also includes the fixed time step. Times are
+  simulation seconds, distances meters, speeds m/s. The export menu adds provenance to
+  the existing GeoJSON output and names files with the project name and scenario ID.
 
 ## 13. OSM import
 

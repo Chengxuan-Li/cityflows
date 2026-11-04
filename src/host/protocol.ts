@@ -10,6 +10,11 @@ export interface MetricsSample {
   meanDelayS: number;
 }
 
+export interface TrajectoryStatus {
+  enabled: boolean;
+  count: number;
+}
+
 export interface HostSnapshot extends VehicleSnapshot {
   /** Included at most twice per wall second, alongside the matching vehicle positions. */
   roadSpeedRatio?: Float32Array;
@@ -25,6 +30,10 @@ export type HostRequest =
   | { id: number; type: 'snapshot' }
   | { id: number; type: 'metrics' }
   | { id: number; type: 'metricsSeries' }
+  | { id: number; type: 'tripRecords' }
+  | { id: number; type: 'roadStats' }
+  | { id: number; type: 'trajectories'; enabled?: boolean }
+  | { id: number; type: 'trajectoryStatus' }
   | { id: number; type: 'inspect'; vehicleId: number }
   | { id: number; type: 'hash' };
 

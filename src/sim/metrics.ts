@@ -50,6 +50,14 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
       meanDelayS: trips.completed ? totalDelay / trips.completed : 0,
       roadSpeedRatio,
       stepsPerSecond: 0,
+      get tripOutcomes() {
+        return Array.from({ length: vehicles.count }, (_, id) => ({
+          departedS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.departed[id]!,
+          arrivedS: Number.isNaN(vehicles.arrived[id]) ? null : vehicles.arrived[id]!,
+          freeFlowS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.freeFlow[id]!,
+          failReason: vehicles.failReason[id]!,
+        }));
+      },
     };
   }
 

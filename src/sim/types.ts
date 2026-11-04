@@ -55,6 +55,15 @@ export interface Metrics {
   meanDelayS: number;
   roadSpeedRatio: Float32Array;
   stepsPerSecond: number;
+  /** Per loaded trip, in input order; materialized only when requested. */
+  readonly tripOutcomes?: TripOutcome[];
+}
+
+export interface TripOutcome {
+  departedS: number | null;
+  arrivedS: number | null;
+  freeFlowS: number | null;
+  failReason: FailReason | null;
 }
 
 export interface VehicleDetail {
