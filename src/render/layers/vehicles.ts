@@ -65,6 +65,21 @@ export function advanceAlong(segment: Segment, distance: number, speed: number, 
   };
 }
 
+export function laneChangePose(
+  lateralM: number,
+  widthM: number,
+  durationS: number,
+  elapsedS: number,
+) {
+  if (lateralM === 0 || durationS === 0) return { lateral: 0, yaw: 0 };
+  const progress = Math.min(1, Math.max(0, 1 - Math.abs(lateralM) / widthM + elapsedS / durationS));
+  const smooth = progress * progress * (3 - 2 * progress);
+  return {
+    lateral: Math.sign(lateralM) * widthM * (1 - smooth),
+    yaw: -Math.sign(lateralM) * 0.12 * 4 * progress * (1 - progress),
+  };
+}
+
 export class Vehicles {
   private readonly textures = { car: vehicleTexture(false), dot: vehicleTexture(true) };
   private layers: VehicleLayer[] = [];
@@ -73,6 +88,8 @@ export class Vehicles {
   private dot = false;
   private zoom = 1;
   private geometry: CompiledCity | undefined;
+  private laneChangeDurationS = 0;
+  private changeWidths = new Float32Array(0);
   private segments: Segment[] = [];
   private distances = new Float64Array(0);
   private particles: Particle[] = [];
@@ -80,8 +97,9 @@ export class Vehicles {
   x = new Float32Array(0);
   y = new Float32Array(0);
 
-  setGeometry(city: CompiledCity): void {
+  setGeometry(city: CompiledCity, laneChangeDurationS = this.laneChangeDurationS): void {
     this.geometry = city;
+    this.laneChangeDurationS = laneChangeDurationS;
   }
 
   setLayers(
@@ -110,11 +128,12 @@ export class Vehicles {
 
   update(snapshot: VehicleSnapshot & { vehicleHues?: Uint32Array; motionLane?: Int32Array }): void {
     this.snapshot = snapshot;
-    const { count, id, lane, x, y, heading, lateralM, vehicleHues } = snapshot;
+    const { count, id, lane, x, y, lateralM, vehicleHues } = snapshot;
     if (this.x.length < count) {
       this.x = new Float32Array(count);
       this.y = new Float32Array(count);
       this.distances = new Float64Array(count);
+      this.changeWidths = new Float32Array(count);
     }
 
     for (const layer of this.layers) layer.count = 0;
@@ -131,6 +150,11 @@ export class Vehicles {
           : this.geometry!.movements[-motionLane - 1]!;
       this.segments[i] = segment;
       this.distances[i] = distanceAlong(segment, x[i]!, y[i]!);
+      if (motionLane >= 0 && lateralM[i] !== 0) {
+        const target = this.geometry!.lanes[motionLane]!;
+        const source = this.geometry!.lanes[lateralM[i]! > 0 ? target.right : target.left]!;
+        this.changeWidths[i] = (source.widthM + target.widthM) / 2;
+      }
       let particle = layer.pool[index];
       if (!particle) {
         particle = new Particle({ texture: this.textures.car, anchorX: 0.5, anchorY: 0.5 });
@@ -139,15 +163,11 @@ export class Vehicles {
       }
       this.particles[i] = particle;
 
-      const angle = heading[i]!;
-      const lateral = lateralM[i]!;
-      particle.x = this.x[i] = lateral === 0 ? x[i]! : x[i]! - Math.sin(angle) * lateral;
-      particle.y = this.y[i] = lateral === 0 ? y[i]! : y[i]! + Math.cos(angle) * lateral;
-      particle.rotation = angle;
       const tint = vehicleHues?.[id[i]! - 1] ?? style.driving;
       if (particle.tint !== tint) particle.tint = tint;
     }
     this.segments.length = this.particles.length = count;
+    this.animate(0);
     for (const { count, container, pool } of this.layers) {
       const children = container.particleChildren;
       if (children.length === count) continue;
@@ -165,11 +185,16 @@ export class Vehicles {
         elapsedS > 0
           ? advanceAlong(this.segments[i]!, this.distances[i]!, snapshot.speed[i]!, elapsedS)
           : { x: snapshot.x[i]!, y: snapshot.y[i]!, heading: snapshot.heading[i]! };
-      const lateral = snapshot.lateralM[i]!;
+      const { lateral, yaw } = laneChangePose(
+        snapshot.lateralM[i]!,
+        this.changeWidths[i]!,
+        this.laneChangeDurationS,
+        elapsedS,
+      );
       const particle = this.particles[i]!;
       particle.x = this.x[i] = pose.x - Math.sin(pose.heading) * lateral;
       particle.y = this.y[i] = pose.y + Math.cos(pose.heading) * lateral;
-      particle.rotation = pose.heading;
+      particle.rotation = pose.heading + yaw;
     }
   }
 

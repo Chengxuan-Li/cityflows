@@ -6,6 +6,7 @@ import { style } from '../render/style';
 import type { Pick, Scene, VehicleSnapshot } from '../render/types';
 import type { Route } from '../routing';
 import type { LaneId } from '../schema';
+import { DEFAULT_SIM_PARAMS } from '../sim/params';
 import { useAppStore, type Session } from './store';
 import { createDrawRoadTool, initialRoadOptions } from './tools/draw-road';
 import { createRampTool } from './tools/ramp';
@@ -300,6 +301,7 @@ export function MapView() {
       if (signal.aborted) return;
 
       let drawn: Session | null = null;
+      let motionGeometry: Session['loadedCompiled'] | null = null;
       let drawnSelection: Pick | null = null;
       let drawnRoads: readonly string[] | null = null;
       let drawnRoute: Route | null = null;
@@ -366,7 +368,6 @@ export function MapView() {
         }
         if (drawn?.compiled !== session.compiled) {
           view.setCity(session.compiled, session.project.city);
-          view.setVehicleGeometry(session.loadedCompiled);
           view.setDisconnected(
             session.diagnostics
               .filter(({ code }) => code === 'disconnected_component')
@@ -385,6 +386,17 @@ export function MapView() {
           snapshotAgeS = 0;
           drawnComparison = null;
         }
+        if (motionGeometry !== session.loadedCompiled) {
+          motionGeometry = session.loadedCompiled;
+          snapshotTime = NaN;
+          snapshotAgeS = 0;
+        }
+        // Edits change the displayed city; paths stay with the loaded run until restart.
+        view.setVehicleGeometry(
+          session.loadedCompiled,
+          session.project.scenarios[0]!.simParams.laneChangeDurationS ??
+            DEFAULT_SIM_PARAMS.laneChangeDurationS,
+        );
         if (selection !== drawnSelection) {
           view.setSelection(selection);
           drawnSelection = selection;

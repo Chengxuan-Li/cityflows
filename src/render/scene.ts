@@ -48,7 +48,7 @@ function createGrade() {
 }
 
 export function createScene(canvas: HTMLCanvasElement): Scene & {
-  setVehicleGeometry(city: CompiledCity): void;
+  setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
   animateVehicles(elapsedS: number): void;
 } {
   const app = new Application();
@@ -281,8 +281,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         updateVehicleRing();
       }
     },
-    setVehicleGeometry(compiled) {
-      vehicles.setGeometry(compiled);
+    setVehicleGeometry(compiled, laneChangeDurationS) {
+      vehicles.setGeometry(compiled, laneChangeDurationS);
     },
     animateVehicles(elapsedS) {
       vehicles.animate(elapsedS);
