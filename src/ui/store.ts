@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import demo from '../../fixtures/projects/grid5x5.cityflows.json?raw';
 import { generatePopulation, scheduleTrips } from '../demand';
 import { createEditor, type CommitResult, type Editor } from '../editor';
 import { createEngineClient, type EngineClient } from '../host/client';
@@ -12,6 +11,11 @@ import type { Pick as MapPick } from '../render/types';
 import type { Command, Person } from '../schema';
 import type { Metrics, VehicleDetail } from '../sim/types';
 import { selectionAfterEdit } from './edit-selection';
+
+const bundledProjects = {
+  grid5x5: () => import('../../fixtures/projects/grid5x5.cityflows.json?raw'),
+  town: () => import('../../fixtures/projects/town.cityflows.json?raw'),
+};
 
 export interface Session {
   project: Project & { population: Person[] };
@@ -46,7 +50,7 @@ interface AppState {
   select: (selection: MapPick | null) => void;
   toggleDiagnostics: () => void;
   reportError: (error: unknown) => void;
-  open: (file?: File) => Promise<void>;
+  open: (source?: File | keyof typeof bundledProjects) => Promise<void>;
   save: () => Promise<void>;
   control: (command: RunCommand, steps?: number) => Promise<void>;
   commit: (command: Command) => Promise<void>;
@@ -135,9 +139,13 @@ export const useAppStore = create<AppState>((set, get) => {
     undo: () => edit((editor) => editor.undo()),
     redo: () => edit((editor) => editor.redo()),
     reportError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
-    open: (file) =>
+    open: (source = 'grid5x5') =>
       perform(async () => {
-        const result = await openProject(file ? new Uint8Array(await file.arrayBuffer()) : demo);
+        const data =
+          typeof source === 'string'
+            ? (await bundledProjects[source]()).default
+            : new Uint8Array(await source.arrayBuffer());
+        const result = await openProject(data);
         if (!result.ok) throw new Error(`${result.file} — ${result.error}`);
         const { project } = result;
         // The editor exposes the compiled city but does not retain the initial diagnostics.
