@@ -59,10 +59,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-023](tasks/TASK-023.md) | 2 | Multi-select and batch editing | `src/ui/selection`, `src/editor/commands/batch.ts` | 022 | bulk edits, one undo entry | todo |
 | [TASK-024](tasks/TASK-024.md) | 2 | Raster tile backdrop | `src/render/layers/tiles.ts`, layer toggle in `src/ui/layers*` | 006, 020 | tiles align with imported roads | done |
 | [TASK-025](tasks/TASK-025.md) | 2 | GeoJSON feature import and export | `src/importers/geojson`, `src/project/geojson.ts` | 008, 020 | documented interchange, id conflict handling | done |
-| [TASK-026](tasks/TASK-026.md) | 2 | Large synthetic city fixture | `src/fixtures/town.ts`, `src/fixtures/scenarios.ts`, `fixtures/projects/town.cityflows.json`, `tests/network/town.test.ts`, `tests/sim/town-day.test.ts` | 001 | compiles, full day under 1 percent failed, perf workload | todo |
-| [TASK-050](tasks/TASK-050.md) | 2 | Game-like UI redesign | `src/ui`, `src/render/style.ts`, `src/render/layers/*` visuals, `tests/e2e` names | 010 | all capabilities reachable, seven e2e scenarios green | todo |
+| [TASK-026](tasks/TASK-026.md) | 2 | Large synthetic city fixture | `src/fixtures/town.ts`, `src/fixtures/scenarios.ts`, `fixtures/projects/town.cityflows.json`, `tests/network/town.test.ts`, `tests/sim/town-day.test.ts` | 001 | compiles, full day under 1 percent failed, perf workload | done |
+| [TASK-050](tasks/TASK-050.md) | 2 | Game-like UI redesign | `src/ui`, `src/render/style.ts`, `src/render/layers/*` visuals, `tests/e2e` names | 010 | all capabilities reachable, seven e2e scenarios green | done |
 | [TASK-030](tasks/TASK-030.md) | 3 | Activity chains, through traffic, place events | `src/demand`, `src/sim/connectors.ts` (events, capacity), `tests/demand`, `tests/sim/T10*` | 011, 003 | T09 (full), T10 | todo |
-| [TASK-031](tasks/TASK-031.md) | 3 | Congestion-aware routing | `src/sim/link-costs.ts`, `src/sim/reroute.ts`, `src/routing` (costs) | 002, 004 | T06 | todo |
+| [TASK-031](tasks/TASK-031.md) | 3 | Congestion-aware routing | `src/sim/link-costs.ts`, `src/sim/reroute.ts`, `src/routing` (costs) | 002, 004 | T06 | done |
 | [TASK-032](tasks/TASK-032.md) | 3 | Ramps, merging, expressway construction | `src/sim/merge.ts`, `src/editor/commands/ramp.ts`, `src/ui/tools/ramp*`, `tests/sim/T07*` | 004, 022 | T07 (full), demo C | todo |
 | [TASK-033](tasks/TASK-033.md) | 3 | Place editor and demand panel | `src/ui/inspector/place*`, `src/ui/panels/demand*`, vehicle inspector reasons | 030, 010 | demos A and B reachable from the UI | todo |
 | [TASK-034](tasks/TASK-034.md) | 3 | Place painting and demand regeneration | `src/ui/tools/place-paint.tsx`, place controls, regenerate action, `tests/e2e/gate3-paint.spec.ts` | 050, 011 | painted place attracts trips after regenerate | todo |
@@ -97,7 +97,8 @@ dependency of its tasks is merged to `main`.
   fixtures). Wave 6, on the new design: TASK-021, TASK-022, TASK-034, TASK-040, TASK-041.
   Wave 7: TASK-023, TASK-032, TASK-033, TASK-042, TASK-043, TASK-044. TASK-045 last.
   TASK-031 owns `src/sim/engine.ts` in wave 5; TASK-030 stays in `src/demand` and
-  `src/sim/connectors.ts`.
+  `src/sim/connectors.ts`. Wave 5 outcome: TASK-026, TASK-031 and TASK-050 merged;
+  TASK-030 was not delivered and runs again alongside wave 6.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -134,7 +135,6 @@ exists.
 
 - Gate 1 demand is home-work-home only; chains, through traffic and events arrive in
   TASK-030.
-- Gate 1 routing uses free-flow travel times; congestion-aware rerouting arrives in TASK-031.
 - Lane changes are discrete in the model; the renderer animates them (architecture section 8).
 - Edits during a run pause the run and require a restart (T17); live signal timing edits are
   not planned before Gate 4.
@@ -216,6 +216,42 @@ exists.
   handoff's failure conditions are absent: cars carry state, roads are canonical topology,
   routing is by expected time with lane feasibility, edits change routes after restart, trips
   start and end only at connectors, and the project exports and reopens.
+
+- 2026-11-03, TASK-031 merged as delivered. Per-road EWMA of observed traversal times
+  (alpha 0.3, updated every 60 s, decaying to free flow when unobserved, partial traversals
+  normalized by distance), staggered route checks every 120 s with 15 percent hysteresis, at
+  most three congestion switches per trip and none inside the decision distance; route noise
+  0.1 is now on by default. T06 on the bypass: 73 of 600 vehicles rerouted, 17 diverted to
+  the local street during the blockage, at most one switch per vehicle, a return share under
+  25 percent per interval, identical twin hash. Six SimParams fields were added to the schema
+  with defaults (architecture section 8 updated by the agent). Accepted as noise: the routing
+  cost cache only copies the array when the version changes.
+
+- 2026-11-03, TASK-026 merged with one lead change. The town has 324 nodes, 1 137 roads,
+  1 409 lanes and 18 places: arterials every 400 m with two-phase signals at the 16 crossings
+  (left turns banned there and routed over the local streets), alternating one-way local
+  rows, two diagonal avenues; it compiles with no diagnostics and every departure reaches
+  every arrival. The agent had cut the town demand to 0.35 persons per resident; the lead
+  restored 1 and regenerated the bundled project after a full day at full demand: 12 640
+  trips requested, 12 571 completed, 0 failed, 0 stranded, peak 380 driving and 141 queued,
+  6 500 steps per second (at 0.35: 4 439 trips, peak 97 driving, 17 000 steps per second).
+  The store change in the branch was dropped in favor of the bundled-project loader of the
+  redesign.
+
+- 2026-11-03, TASK-050 merged as delivered. Light warm map, floating project bar, toolbox and
+  run controls, a contextual inspector sheet with Lanes and street settings, Signal phases,
+  Turns, Place settings and Connectors behind disclosures; places hued from a six-color
+  palette by a hash of their id, vehicles tinted by the hue of their destination, signal
+  glow, selection ring, route ribbon, markings and arrows fading with zoom, eased zoom at the
+  pointer and pan inertia; a New picker built from the bundled scenarios, Town included. The
+  seven Playwright scenarios pass with the disclosures opened in the tests; the lead
+  exercised run, zoom, pan, car, street and signal selection, the picker and the town in the
+  browser. Observation for wave 6: point places are 6 m shapes and nearly vanish at fit
+  zoom; TASK-034 should give places a minimum on-screen size.
+
+- 2026-11-03, TASK-030 not delivered: the branch `task/030-activities` holds no commits and
+  its worktree is clean. The brief stands and is re-issued with wave 6; the agent merges
+  `main` first, since the engine and the sim parameters changed under TASK-031.
 
 ## Owner decisions log
 

@@ -22,7 +22,7 @@ export function defaultScenario(id: FixtureId, seed = 1): Scenario {
     endS: 18 * 3600,
     demand: {
       seed,
-      personsPerResident: id === 'town' ? 0.35 : 1,
+      personsPerResident: 1,
       carShare: 1,
       workStart: { meanS: 8 * 3600, sdS: 30 * 60 },
       workDuration: { meanS: 9 * 3600, sdS: 3600 },

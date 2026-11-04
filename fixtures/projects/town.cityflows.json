@@ -8,7 +8,7 @@
     "savedAt": "2026-11-03T00:00:00.000Z",
     "files": {
       "city.json": "3deb37f036ed22315de2e0b8665020330a3ad2883d4535a94f590558e3dccbda",
-      "scenarios.json": "233c90ccd00db16c4b8512c21c38266314250b31429d239465b15cb1ab986686"
+      "scenarios.json": "c7b38aada5852936e5e7c514f7c1487b8f3e4a5c7355047b2b294618d9d2a8b4"
     },
     "licenses": [],
     "attribution": null
@@ -23626,7 +23626,7 @@
       "endS": 64800,
       "demand": {
         "seed": 1,
-        "personsPerResident": 0.35,
+        "personsPerResident": 1,
         "carShare": 1,
         "workStart": { "meanS": 28800, "sdS": 1800 },
         "workDuration": { "meanS": 32400, "sdS": 3600 },
