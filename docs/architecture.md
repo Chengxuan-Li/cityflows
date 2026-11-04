@@ -260,7 +260,7 @@ interface CSignal { offsetS: number; amberS: number; allRedS: number; cycleS: nu
 interface CConnector { idx: number; id: ConnectorId; place: number; lane: number;
   positionM: number; direction: 'in' | 'out' | 'both'; throughputPerMin: number; }
 interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
-  connectorsIn: number[]; connectorsOut: number[]; capacity: number | null; }
+  connectorsIn: number[]; connectorsOut: number[]; capacity: number | null; events: PlaceEvent[]; }
 ```
 
 ### 5.1 Lane layout
@@ -649,6 +649,21 @@ has departed (driving, queued at its destination, completed or failed after depa
 order, by `[id, lane field, round(positionM * 100), round(speedMps * 100)]`, then the six
 trip counts. Two runs with the same city version, scenario seed and trips produce equal hashes
 at every step (T02).
+
+TASK-030 admission windows: compiled places retain a copy of their events. Each event opens
+`arrivals` admission slots uniformly over its window (floor of the elapsed fraction times
+the count). Quotas add across events, are shared by all arrival connectors, and unused slots
+remain available after the window so road delays do not strand late visitors. Before the
+first window there are no event admissions. Physical `capacity` and connector throughput
+still apply; places without events keep the existing behavior. Event counts describe car
+visits in this gate, rather than rail passengers or transit legs.
+
+At parking and event places, a person's next departure waits for their preceding inbound
+trip to complete; a failed inbound causes its dependent departure to fail as stranded.
+Waiting inbound cars do not block ready parked departures. Occupancy starts at zero and
+decreases only when a paired car successfully departs, so an unpaired departure cannot
+free another visitor's slot. Unpaired outbound event visitors represent cars already outside
+the modeled parking stock. No per-space circulation or inferred overnight parking is modeled.
 
 ## 9. Demand
 

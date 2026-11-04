@@ -5,6 +5,7 @@ import { ramp } from '../fixtures/ramp';
 import { scenarios } from '../fixtures/scenarios';
 import { shortTurnLane } from '../fixtures/short-turn-lane';
 import { signalApproach } from '../fixtures/signal-approach';
+import { station } from '../fixtures/station';
 import { openProject } from '../project/open';
 import type { OpenResult } from '../project/types';
 import type { City } from '../schema';
@@ -20,6 +21,7 @@ const generators: Record<string, (seed: number) => City> = {
   dividedHighway,
   shortTurnLane,
   disconnected,
+  station,
 };
 
 export async function bundledProject(id: string): Promise<OpenResult> {

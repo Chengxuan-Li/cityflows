@@ -2,7 +2,7 @@ import { createRandom, type Random } from '../geo/random';
 import type { CConnector, CompiledCity } from '../network';
 import type { Scenario, SimParams, TripRequest } from '../schema';
 import type { createAccounting } from './metrics';
-import { QUEUED_ORIGIN, type Vehicles } from './vehicle';
+import { COMPLETED, FAILED, QUEUED_ORIGIN, type Vehicles } from './vehicle';
 
 function pickConnector(compiled: CompiledCity, choices: number[], random: Random): number {
   if (choices.length === 0) return -1;
@@ -29,6 +29,29 @@ export function createConnectors(
   const ready = new Uint32Array(queues.length);
   const nextAdmission = new Float64Array(queues.length).fill(-Infinity);
   const inside = new Uint32Array(compiled.places.length);
+  const admitted = new Uint32Array(compiled.places.length);
+  const previousArrival = new Int32Array(trips.length).fill(-1);
+  const tracked = compiled.places.map(
+    (place) => place.kind === 'parking' || place.events.length > 0,
+  );
+  const arrivals = new Map<string, Map<string, number>>();
+  // Pair visits once at load. A scheduled return must not free a slot before the car arrives.
+  const chronological = trips
+    .map((_, id) => id)
+    .sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
+  for (const id of chronological) {
+    const trip = trips[id]!;
+    if (trip.personId === null) continue;
+    let visits = arrivals.get(trip.personId);
+    if (!visits) arrivals.set(trip.personId, (visits = new Map()));
+    const origin = compiled.index.place.get(trip.originPlaceId)!;
+    if (tracked[origin]) {
+      previousArrival[id] = visits.get(trip.originPlaceId) ?? -1;
+      visits.delete(trip.originPlaceId);
+    }
+    if (tracked[compiled.index.place.get(trip.destinationPlaceId)!])
+      visits.set(trip.destinationPlaceId, id);
+  }
   const random = createRandom(scenario.seed);
   const queuedSince = (id: number) => Math.max(scenario.startS, trips[id]!.departS);
 
@@ -78,11 +101,31 @@ export function createConnectors(
       ready[idx] = available;
       let i = head[idx]!;
       while (i < available && canUse(connector, timeS) && hasGap(connector)) {
+        // Cars still approaching a car park do not hold up already parked departures.
+        let candidate = i;
+        while (candidate < available) {
+          const previous = previousArrival[queue[candidate]!]!;
+          if (
+            previous === -1 ||
+            vehicles.state[previous] === COMPLETED ||
+            vehicles.state[previous] === FAILED
+          )
+            break;
+          candidate++;
+        }
+        if (candidate === available) break;
+        [queue[i], queue[candidate]] = [queue[candidate]!, queue[i]!];
         const id = queue[i++]!;
+        const previous = previousArrival[id]!;
+        if (previous !== -1 && vehicles.state[previous] === FAILED) {
+          accounting.fail(id, 'stranded');
+          continue;
+        }
         vehicles.waiting[id] = Math.max(0, timeS - queuedSince(id));
         if (release(id, connector, timeS)) {
           recordAdmission(connector, timeS);
-          if (inside[connector.place]!) inside[connector.place]!--;
+          if (inside[connector.place]! && (!tracked[connector.place] || previous !== -1))
+            inside[connector.place]!--;
         }
       }
       head[idx] = i;
@@ -90,14 +133,28 @@ export function createConnectors(
   }
 
   function canArrive(connector: CConnector, timeS: number) {
-    const capacity = compiled.places[connector.place]!.capacity;
-    return (capacity === null || inside[connector.place]! < capacity) && canUse(connector, timeS);
+    const { capacity, events } = compiled.places[connector.place]!;
+    const allowance = events.reduce(
+      (sum, event) =>
+        sum +
+        Math.floor(
+          event.arrivals * Math.max(0, Math.min(1, (timeS - event.startS) / event.durationS)) +
+            1e-9,
+        ),
+      0,
+    );
+    return (
+      (capacity === null || inside[connector.place]! < capacity) &&
+      (events.length === 0 || admitted[connector.place]! < allowance) &&
+      canUse(connector, timeS)
+    );
   }
 
   function arrive(connector: CConnector, timeS: number) {
     if (!canArrive(connector, timeS)) return false;
     recordAdmission(connector, timeS);
     inside[connector.place]!++;
+    admitted[connector.place]!++;
     return true;
   }
 
