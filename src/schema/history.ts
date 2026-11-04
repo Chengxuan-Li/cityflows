@@ -12,9 +12,11 @@ import type {
   RoadClass,
   Control,
   SignalProgram,
+  City,
 } from './city';
 
 export type Command =
+  | { kind: 'restoreCity'; city: City }
   | { kind: 'setRoadLanes'; roadId: RoadId; lanes: Lane[] }
   | {
       kind: 'setRoadAttributes';
@@ -47,6 +49,7 @@ export type Command =
   | { kind: 'batch'; label: string; commands: Command[] }; // Gate 2
 
 export interface Patch {
+  metadata?: Pick<City, 'name' | 'drivingSide' | 'geo'>;
   set: {
     nodes?: Record<NodeId, Node>;
     roads?: Record<RoadId, Road>;

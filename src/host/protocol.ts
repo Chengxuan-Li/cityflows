@@ -15,6 +15,20 @@ export interface HostSnapshot extends VehicleSnapshot {
   roadSpeedRatio?: Float32Array;
 }
 
+export interface HeadlessResult {
+  series: MetricsSample[];
+  metrics: Metrics;
+  travelTime: {
+    travelTimesS: number[];
+    delaysS: number[];
+    meanS: number;
+    meanDelayS: number;
+    p90DelayS: number;
+  };
+  /** Unique vehicles observed on each road, keyed by canonical road ID. */
+  roadVehicleCounts: Record<string, number>;
+}
+
 export type HostRequest =
   | { id: number; type: 'load'; compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario }
   | { id: number; type: 'play' }
@@ -25,6 +39,7 @@ export type HostRequest =
   | { id: number; type: 'snapshot' }
   | { id: number; type: 'metrics' }
   | { id: number; type: 'metricsSeries' }
+  | { id: number; type: 'runHeadless' }
   | { id: number; type: 'inspect'; vehicleId: number }
   | { id: number; type: 'hash' };
 
@@ -32,6 +47,7 @@ export type HostReply =
   { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 
 export type HostEvent =
+  | { type: 'headlessProgress'; timeS: number }
   | { type: 'tick'; timeS: number; achievedMultiplier: number; counts: Metrics['trips'] }
   | { type: 'finished'; timeS: number }
   | { type: 'error'; message: string };

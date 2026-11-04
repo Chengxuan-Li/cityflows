@@ -363,6 +363,7 @@ Lives in `src/editor`. The editor owns one `City` and exposes:
 
 ```ts
 type Command =
+  | { kind: 'restoreCity'; city: City }
   | { kind: 'setRoadLanes'; roadId: RoadId; lanes: Lane[] }
   | { kind: 'setRoadAttributes'; roadId: RoadId; speedLimitMps?: number; roadClass?: RoadClass; name?: string | null }
   | { kind: 'setStreetDirection'; streetGroupId: string; direction: 'both' | RoadId }  // RoadId = keep only this direction
@@ -383,6 +384,7 @@ type Command =
   | { kind: 'batch'; label: string; commands: Command[] };                      // Gate 2
 
 interface Patch {
+  metadata?: Pick<City, 'name' | 'drivingSide' | 'geo'>;
   set: { nodes?: Record<NodeId, Node>; roads?: Record<RoadId, Road>; places?: Record<PlaceId, Place> };
   remove: { nodes?: NodeId[]; roads?: RoadId[]; places?: PlaceId[] };
   nextId?: number;
@@ -413,6 +415,10 @@ Semantics:
   shared copy, compiles, and commits only when compile has no errors. On rejection the city,
   compiled network and history are unchanged.
 - A commit bumps `city.version`. Undo and redo re-apply stored patches and recompile.
+- TASK-042 adds the approved `restoreCity` command. It diffs a saved city into an ordinary
+  reversible patch, restoring entity IDs, topology, `nextId` and city metadata. Optional
+  `Patch.metadata` carries `{ name, drivingSide, geo }`; older history entries remain valid.
+  The current editor version advances normally rather than reverting to the snapshot version.
 - `addRoad` allocates `newNodes` in array order, then the road, using `nextId`; its endpoint
   references use those allocated ids or existing nodes. Drawing resolves explicit node/road
   snaps and adds both directions in one batch. Unsnapped crossings do not create junctions.
@@ -712,6 +718,14 @@ function generatePopulation(city: City, config: DemandConfig): Person[];
 function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[];  // sorted by departS
 ```
 
+TASK-042 comparison saves a baseline `{ city, scenario, population? }`. The variant references
+the current editor `cityVersion`. Both runs use the baseline scenario, seed and the same trip
+list generated once from its saved population (or generated from its demand when absent).
+Road, turn, connector and signal changes therefore compare against fixed demand. Removing a
+trip's origin or destination place requires restoring that place or saving a new baseline;
+comparison reports this before running. New or changed population is not resampled for the
+variant. Saving a baseline captures current editor state, including unapplied live-run edits.
+
 - Persons are created per residential place (and gateway places, which stand in for external
   commuters) in proportion to `population * personsPerResident`. Work places are drawn by
   gravity: probability proportional to `jobs * exp(-distance / gravityScaleM)` over places with
@@ -776,9 +790,11 @@ type HostRequest =
   | { id: number; type: 'restart' }                              // same inputs, same seed
   | { id: number; type: 'snapshot' } | { id: number; type: 'metrics' }
   | { id: number; type: 'metricsSeries' }
+  | { id: number; type: 'runHeadless' }
   | { id: number; type: 'inspect'; vehicleId: number } | { id: number; type: 'hash' };
 type HostReply = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 type HostEvent =
+  | { type: 'headlessProgress'; timeS: number }
   | { type: 'tick'; timeS: number; achievedMultiplier: number; counts: Metrics['trips'] }
   | { type: 'finished'; timeS: number } | { type: 'error'; message: string };
 ```
@@ -796,6 +812,19 @@ type HostEvent =
   mean for completed trips. The loop samples on load and every 60 simulated seconds from the
   scenario start, splitting manual step batches at sample boundaries. Load/restart clears the
   history. The chart pulls on open or explicit Refresh; there is no main-thread polling timer.
+- `runHeadless` creates a fresh engine from the worker's loaded inputs and advances fixed
+  steps to `endS`. It returns minute metrics `series`, final `metrics`, completed-trip
+  `travelTime` (raw `travelTimesS` and `delaysS`, `meanS`, `meanDelayS`, nearest-rank
+  `p90DelayS`) and `roadVehicleCounts` keyed by canonical road ID. Counts are distinct
+  vehicles actually observed on each road, including unfinished trips, not planned routes.
+  Delay uses the initial route's physical free-flow time, matching simulation accounting;
+  the host decorates the injected route provider's result and captures it at departure.
+  Empty distributions return zero; the comparison table displays unavailable time values as
+  a dash. No snapshots or tick/finished events are emitted; progress is reported every 600
+  steps and at the endpoints. Interactive engine state and metrics history are unchanged.
+  The UI uses a second worker for baseline then variant sequentially, terminating it on
+  completion, cancellation, edits or project replacement. The interactive worker continues
+  independently. Results are invalidated by edits and new baselines.
 - The worker entry uses `postMessage(data, { transfer })`, which type-checks against the DOM
   lib and works in a worker; no WebWorker lib is added to the TypeScript config.
 - Wire form of `load`: a Flatbush index cannot be structured-cloned, so the client sends the
@@ -827,6 +856,9 @@ type HostEvent =
 - Layer visibility is presentation-only. Heat uses cached road shapes and a single teal ramp;
   queue dots count cars below 0.5 m/s within 50 m of a lane end, appearing for two or more cars.
   Disconnected lane highlights use `disconnected_component` diagnostic refs.
+- Comparison road usage is one additional Layers entry. A sibling of the heat layer draws
+  variant-minus-baseline unique vehicle counts in warm brown (up) and teal (down), below
+  vehicles. It includes baseline geometry for removed roads; unchanged roads have no tint.
 
 `src/ui` is the React app with one Zustand store. Layout follows the brief:
 
@@ -858,13 +890,19 @@ population.json   Person[]                  optional; absent = regenerate from t
 scenarios.json    Scenario[]                at least one
 history.json      { historyVersion: 1, entries: HistoryEntry[] }   optional, droppable
 view.json         { camera, layers, selection }                    optional
+baseline.json     { city: City, scenario: Scenario, population?: Person[] } optional
 ```
 
-- Single JSON: `{ manifest, city, population?, scenarios, history?, view? }`. Each member's
+- Single JSON: `{ manifest, city, population?, scenarios, history?, view?, baseline? }`. Each member's
   hash is computed over its compact JSON serialization, which is embedded verbatim, so the
   same manifest verifies both forms. `manifest.schemaVersion` is the city's schema version at
   save time; `openProject` passes `city.json` to `migrateCity` and ignores archive members
   outside the layout.
+- TASK-042 adds optional `baseline` to single JSON and optional `baseline.json` to the ZIP
+  manifest's hashed members. Both validate the saved city, scenario and optional population;
+  omitting them preserves existing project behavior. Schema version remains 1. Baseline is
+  separate from current `city.json`; restore history uses the normal history format with
+  optional patch metadata described in section 6.
 - `openProject(bytes)` verifies hashes, validates every file with Zod, runs
   `migrateCity(json)` keyed on `schemaVersion`, and returns a structured error naming the file
   and the first validation path on failure. Adding a schema version requires a fixture saved in

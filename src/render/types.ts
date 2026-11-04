@@ -2,6 +2,13 @@ import type { CompiledCity } from '../network';
 import type { City } from '../schema';
 import type { Camera } from './camera';
 import type { EditOverlay } from './layers/edit-overlay';
+import type { Vec2 } from '../geo/vec2';
+
+export interface RoadDifference {
+  id: string;
+  surface: Vec2[];
+  vehicles: number;
+}
 
 export interface VehicleSnapshot {
   timeS: number;
@@ -29,6 +36,7 @@ export interface RouteOverlay {
 }
 
 export interface LayerVisibility {
+  difference: boolean;
   heat: boolean;
   queues: boolean;
   places: boolean;
@@ -39,6 +47,7 @@ export interface LayerVisibility {
 }
 
 export const defaultLayers: LayerVisibility = {
+  difference: false,
   heat: false,
   queues: false,
   places: true,
@@ -62,6 +71,7 @@ export interface Scene {
   setEditOverlay(overlay: EditOverlay | null): void;
   /** Speed divided by free-flow speed, indexed by compiled road. */
   setHeat(roadSpeedRatio: ArrayLike<number> | null): void;
+  setDifference(roads: readonly RoadDifference[] | null): void;
   setQueues(snapshot: VehicleSnapshot): void;
   setLayerVisibility(layers: LayerVisibility): void;
   setDisconnected(lanes: readonly number[]): void;

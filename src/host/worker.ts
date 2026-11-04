@@ -2,6 +2,7 @@ import Flatbush from 'flatbush';
 import { createEngine } from '../sim/engine';
 import { DEFAULT_SIM_PARAMS } from '../sim/params';
 import { createPlayLoop } from './loop';
+import { runHeadless } from './headless';
 import type { HostEvent, HostReply, HostWireRequest } from './protocol';
 
 const engine = createEngine();
@@ -65,6 +66,11 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return { ...engine.metrics(), stepsPerSecond: loadedLoop().stepsPerSecond };
     case 'metricsSeries':
       return loadedLoop().metricsSeries();
+    case 'runHeadless':
+      if (!inputs) throw new Error('Load a scenario before using the traffic engine');
+      return runHeadless(inputs, (timeS) =>
+        self.postMessage({ type: 'headlessProgress', timeS } satisfies HostEvent),
+      );
     case 'inspect':
       return engine.inspect(request.vehicleId);
     case 'hash':

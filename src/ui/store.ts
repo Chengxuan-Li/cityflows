@@ -16,6 +16,16 @@ import type { RoadId } from '../schema';
 import type { Metrics, VehicleDetail } from '../sim/types';
 import { bundledProject } from './bundled-projects';
 import { selectionAfterEdit } from './edit-selection';
+import { comparisonTrips, restoreBaseline, saveBaseline, type Variant } from '../project/scenarios';
+import type { HeadlessResult } from '../host/protocol';
+import type { RoadDifference } from '../render/types';
+
+export interface Comparison {
+  baseline: HeadlessResult;
+  variant: HeadlessResult;
+  reference: Variant;
+  roads: RoadDifference[];
+}
 
 function demandKey(city: Project['city']) {
   return JSON.stringify(
@@ -51,6 +61,14 @@ interface Run {
 type RunCommand = 'play' | 'pause' | 'step' | 'restart';
 
 interface AppState {
+  compareOpen: boolean;
+  comparison: Comparison | null;
+  comparisonProgress: { run: 'Baseline' | 'Variant'; fraction: number } | null;
+  toggleCompare: () => void;
+  saveBaseline: () => void;
+  restoreBaseline: () => Promise<void>;
+  runComparison: () => Promise<void>;
+  cancelComparison: () => void;
   layers: LayerVisibility;
   layersOpen: boolean;
   metricsOpen: boolean;
@@ -85,6 +103,12 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set, get) => {
+  let comparisonWorker: EngineClient | null = null;
+  function cancelComparison() {
+    comparisonWorker?.terminate();
+    comparisonWorker = null;
+    set({ comparisonProgress: null });
+  }
   async function perform(action: () => Promise<void>) {
     if (get().busy) return;
     set({ busy: true, error: null });
@@ -98,6 +122,7 @@ export const useAppStore = create<AppState>((set, get) => {
   }
 
   function onEvent(engine: EngineClient, event: HostEvent) {
+    if (event.type === 'headlessProgress') return;
     const { session, run } = get();
     if (session?.engine !== engine || !run) return;
     if (event.type === 'tick') {
@@ -122,6 +147,8 @@ export const useAppStore = create<AppState>((set, get) => {
         return;
       }
       const { city, compiled, diagnostics } = result;
+      cancelComparison();
+      set({ comparison: null });
       const playing = run.status === 'playing';
       set({
         session: {
@@ -170,6 +197,8 @@ export const useAppStore = create<AppState>((set, get) => {
       const { timeS, trips: counts } = await engine.metrics();
       engine.onEvent((event) => onEvent(engine, event));
       get().session?.engine.terminate();
+      cancelComparison();
+      set({ comparison: null, compareOpen: false });
       set({
         session: {
           project: { ...project, population },
@@ -207,6 +236,115 @@ export const useAppStore = create<AppState>((set, get) => {
   }
 
   return {
+    compareOpen: false,
+    comparison: null,
+    comparisonProgress: null,
+    toggleCompare: () =>
+      set(({ compareOpen, layersOpen, metricsOpen }) => ({
+        compareOpen: layersOpen || metricsOpen || !compareOpen,
+        metricsOpen: false,
+        layersOpen: false,
+      })),
+    cancelComparison,
+    saveBaseline: () => {
+      const { session, busy } = get();
+      if (!session || busy) return;
+      cancelComparison();
+      const { editor, project } = session;
+      const scenario = project.scenarios[0]!;
+      const population =
+        session.populationKey === demandKey(editor.city)
+          ? project.population
+          : generatePopulation(editor.city, scenario.demand);
+      set({
+        session: {
+          ...session,
+          project: { ...project, baseline: saveBaseline(editor.city, scenario, population) },
+        },
+        comparison: null,
+      });
+    },
+    restoreBaseline: () =>
+      edit((editor) => {
+        const baseline = get().session?.project.baseline;
+        return baseline ? restoreBaseline(editor, baseline) : null;
+      }),
+    runComparison: async () => {
+      const session = get().session;
+      const baseline = session?.project.baseline;
+      if (!session || !baseline || get().busy || comparisonWorker) return;
+      const worker = createEngineClient(
+        new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' }),
+      );
+      comparisonWorker = worker;
+      set({ comparison: null, comparisonProgress: { run: 'Baseline', fraction: 0 }, error: null });
+      try {
+        const original = compile(baseline.city);
+        if (!original.ok)
+          throw new Error(original.diagnostics.map(({ message }) => message).join('\n'));
+        const trips = comparisonTrips(baseline);
+        for (const trip of trips) {
+          if (
+            !session.editor.city.places[trip.originPlaceId] ||
+            !session.editor.city.places[trip.destinationPlaceId]
+          ) {
+            throw new Error(
+              'Comparison needs the baseline trip places. Restore removed places or save a new baseline.',
+            );
+          }
+        }
+        let run: 'Baseline' | 'Variant' = 'Baseline';
+        worker.onEvent((event) => {
+          if (event.type === 'headlessProgress' && comparisonWorker === worker) {
+            const duration = baseline.scenario.endS - baseline.scenario.startS;
+            set({
+              comparisonProgress: {
+                run,
+                fraction:
+                  duration > 0
+                    ? Math.min(1, (event.timeS - baseline.scenario.startS) / duration)
+                    : 1,
+              },
+            });
+          }
+        });
+        await worker.load({ compiled: original.compiled, trips, scenario: baseline.scenario });
+        const baselineResult = await worker.runHeadless();
+        run = 'Variant';
+        set({ comparisonProgress: { run, fraction: 0 } });
+        await worker.load({ compiled: session.compiled, trips, scenario: baseline.scenario });
+        const variantResult = await worker.runHeadless();
+        const roads = new Map(original.compiled.roads.map((road) => [road.id, road]));
+        for (const road of session.compiled.roads) roads.set(road.id, road);
+        if (comparisonWorker === worker)
+          set({
+            comparison: {
+              baseline: baselineResult,
+              variant: variantResult,
+              reference: {
+                cityVersion: session.editor.city.version,
+                scenario: structuredClone(baseline.scenario),
+              },
+              roads: [...roads.values()].map(({ id, surface }) => ({
+                id,
+                surface,
+                vehicles:
+                  (variantResult.roadVehicleCounts[id] ?? 0) -
+                  (baselineResult.roadVehicleCounts[id] ?? 0),
+              })),
+            },
+            layers: { ...get().layers, difference: true },
+          });
+      } catch (error) {
+        if (comparisonWorker === worker) get().reportError(error);
+      } finally {
+        worker.terminate();
+        if (comparisonWorker === worker) {
+          comparisonWorker = null;
+          set({ comparisonProgress: null });
+        }
+      }
+    },
     layers: { ...defaultLayers },
     layersOpen: false,
     metricsOpen: false,

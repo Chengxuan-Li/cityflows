@@ -5,9 +5,12 @@ import { editPlace } from './place';
 import { editRoad } from './road';
 import { editTopology } from './topology';
 import type { CommandPatch } from './types';
+import { diffCity } from '../patch';
 
 export function dispatch(city: City, command: Command): CommandPatch {
   switch (command.kind) {
+    case 'restoreCity':
+      return diffCity(city, command.city);
     case 'setRoadLanes':
     case 'setRoadAttributes':
     case 'reverseRoad':

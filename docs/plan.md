@@ -68,7 +68,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-034](tasks/TASK-034.md) | 3 | Place painting and demand regeneration | `src/ui/tools/place-paint.tsx`, place controls, regenerate action, `tests/e2e/gate3-paint.spec.ts` | 050, 011 | painted place attracts trips after regenerate | todo |
 | [TASK-040](tasks/TASK-040.md) | 4 | Signal editor | `src/ui/inspector/signal*`, `src/render/layers/signal-preview.ts` | 010 | T13 through the UI | done |
 | [TASK-041](tasks/TASK-041.md) | 4 | Metrics, layers and charts | `src/ui/panels/metrics*`, `src/ui/layers*`, `src/render/layers/heat.ts` | 005, 006 | readable congestion feedback | done |
-| [TASK-042](tasks/TASK-042.md) | 4 | Scenario comparison | `src/ui/panels/compare*`, `src/project/scenarios.ts` | 008, 041 | same-seed baseline versus variant | todo |
+| [TASK-042](tasks/TASK-042.md) | 4 | Scenario comparison | `src/ui/panels/compare*`, `src/project/scenarios.ts` | 008, 041 | same-seed baseline versus variant | review |
 | [TASK-043](tasks/TASK-043.md) | 4 | Analysis and interchange exports | `src/project/export-*.ts`, export menu | 008, 041 | CSV and GeoJSON exports labelled synthetic | todo |
 | [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | todo |
 | [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | todo |
@@ -312,6 +312,14 @@ exists.
   unrelated scenarios time out. All 16 scenarios pass serially in about one minute.
 
 ## Owner decisions log
+
+- 2026-11-03, TASK-042 ready for review on `task/042-compare`: saved city/scenario/population
+  baseline, undoable restore (minimal editor handler approved by the owner), sequential
+  comparison in a separate worker, completed-trip travel-time/delay table and road-usage
+  difference layer. Baseline and patch metadata are optional format additions; old projects
+  still open. Both runs use the saved baseline's seed, scenario and trip demand. Removed trip
+  places require restoration or a new baseline; demographic edits are not resampled for the
+  variant. No simulation, importer, tool or inspector changes and no new dependencies.
 
 - 2026-11-03: foundation, renderer, repo shape, license, OSM access, workflow and audit depth
   decided; architecture approved with five adjustments (architecture section 1, rows 8 to 12).
