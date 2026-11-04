@@ -8,6 +8,7 @@ import type { Route } from '../routing';
 import type { LaneId } from '../schema';
 import { useAppStore, type Session } from './store';
 import { createDrawRoadTool, initialRoadOptions } from './tools/draw-road';
+import { createRampTool } from './tools/ramp';
 import { RoadOptions } from './tools/road-options';
 import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
@@ -388,6 +389,7 @@ export function MapView() {
       const tools = {
         select: createSelectTool(view),
         road: createDrawRoadTool(view, () => optionsRef.current),
+        ramp: createRampTool(view),
       };
       const pointer = bindPointer(
         canvas,
@@ -440,6 +442,11 @@ export function MapView() {
         aria-label="City map"
       />
       {tool === 'road' && <RoadOptions value={options} onChange={setOptions} />}
+      {tool === 'ramp' && (
+        <div className="ramp-hint">
+          Pick a start road, then an end road · Enter or click to build · Esc cancels
+        </div>
+      )}
     </>
   );
 }

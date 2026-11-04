@@ -286,9 +286,12 @@ For every node, incoming roads are those with `road.to === node`, outgoing those
 1. Classify the turn from the signed heading change `d` between the end of `i` and the start
    of `o`, normalized to (-pi, pi]: `|d| < 30 degrees` through; `30 to 150 degrees` right if
    `d > 0`, left if `d < 0` (y-south frame); `> 150 degrees` uturn. The two directions of one
-   `streetGroupId` always classify as uturn. When the node has exactly one outgoing road and
-   two or more incoming roads with small angles, the small-angle movements are `merge`; one
-   incoming and several small-angle outgoing roads give `diverge`.
+   `streetGroupId` always classify as uturn. For each pair, count non-U-turn outgoing
+   continuations from the incoming road and non-U-turn incoming approaches to the outgoing
+   road. Exactly one outgoing continuation and two or more small-angle incoming approaches
+   gives `merge`; one incoming approach and several small-angle outgoing continuations gives
+   `diverge`. Reverse carriageways at a split two-way street therefore do not suppress ramp
+   classification (TASK-032, approved).
 2. Pairs classified uturn are excluded unless a turn rule allows them (U-turns and hairpins
    off by default).
 3. Default lane assignment, before rules. Lane 0 is the leftmost lane under either driving
@@ -375,6 +378,8 @@ type Command =
   | { kind: 'deleteRoad'; roadId: RoadId }                                        // Gate 2
   | { kind: 'splitRoad'; roadId: RoadId; atM: number }                           // Gate 2
   | { kind: 'mergeRoads'; roadId: RoadId; otherRoadId: RoadId }                  // Gate 2
+  | { kind: 'addRamp'; from: { roadId: RoadId; atM: number }; to: { roadId: RoadId; atM: number } }
+  | { kind: 'removeRamp'; roadId: RoadId }
   | { kind: 'moveNode'; nodeId: NodeId; pos: Vec2 }                               // Gate 2
   | { kind: 'addPlace'; place: Omit<Place, 'id'> }
   | { kind: 'updatePlace'; placeId: PlaceId; patch: Partial<Omit<Place, 'id' | 'connectors'>> }
@@ -413,6 +418,11 @@ Semantics:
   shared copy, compiles, and commits only when compile has no errors. On rejection the city,
   compiled network and history are unchanged.
 - A commit bumps `city.version`. Undo and redo re-apply stored patches and recompile.
+- `addRamp` splits two distinct roads at interior centerline distances, then adds a one-lane
+  ramp with a sampled cubic curve tangent to both carriageways and the target road's speed
+  limit. Paired streets split together. `removeRamp` removes the ramp and merges each
+  endpoint's split pair; incompatible intervening edits reject the command atomically.
+  Undo restores the exact pre-edit entities and `nextId`, except for the version bump.
 - `addRoad` allocates `newNodes` in array order, then the road, using `nextId`; its endpoint
   references use those allocated ids or existing nodes. Drawing resolves explicit node/road
   snaps and adds both directions in one batch. Unsnapped crossings do not create junctions.
@@ -657,6 +667,22 @@ and only otherwise takes the cheapest legal movement and reroutes with `missed_t
 
 Lane changes are discrete in the model (the vehicle switches lane and keeps its position along
 the road); `lateralM` animates the switch over `laneChangeDurationS` for the renderer only.
+
+Ramps and lane drops (TASK-032): merge grants additionally require a target-lane bumper gap
+of at least `minGapM` and an IDM insertion acceleration no lower than `-safeDecelMps2`.
+A ramp waits for competing movement occupants/grants and for approaching mainline followers
+that cannot stop within that bound, including one step of reaction travel. An ungranted
+mainline follower that can stop yields to a requesting ramp; its merge stop-line acceleration
+is bounded by `safeDecelMps2`. Ordinary leader-following safety still takes precedence.
+Existing movement occupancy remains exclusive across conflicts, including the merge path.
+For a narrower small-angle continuation, lanes beyond the compiler's unclamped ordinal
+mapping (median-side for through, curb-side for merge/diverge) must change before the drop.
+They target surviving route-compatible lanes with the same urgency threshold as route-required
+changes and wait before the lane end if the safe gap is unavailable, rather than using the
+compiler's clamped/fallback movement from the dropped lane.
+Required diverge changes also wait before the junction and retry at the stop-line margin;
+holding releases an approach grant so it cannot block the lane the vehicle needs to join.
+The existing missed-turn fallback remains for ordinary turns.
 
 State hash: FNV-1a over the sequence `[round(timeS * 10)]` followed, for every vehicle that
 has departed (driving, queued at its destination, completed or failed after departing) in id

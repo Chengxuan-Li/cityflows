@@ -55,7 +55,7 @@ interface AppState {
   toggleLayer: (layer: keyof LayerVisibility) => void;
   toggleLayers: () => void;
   toggleMetrics: () => void;
-  tool: 'select' | 'road';
+  tool: 'select' | 'road' | 'ramp';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
   session: Session | null;

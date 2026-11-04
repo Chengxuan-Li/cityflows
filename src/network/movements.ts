@@ -90,10 +90,15 @@ export function generateMovements(
   const approachAngle = (from: CRoad, to: CRoad) =>
     signedAngle(headings[from.idx]!.end, headings[to.idx]!.start);
   const smallAngle = (from: CRoad, to: CRoad) => Math.abs(approachAngle(from, to)) < Math.PI / 6;
-  const merge =
-    outgoing.length === 1 && incoming.filter((from) => smallAngle(from, outgoing[0]!)).length >= 2;
-  const diverge =
-    incoming.length === 1 && outgoing.filter((to) => smallAngle(incoming[0]!, to)).length >= 2;
+  const isUturn = (from: CRoad, to: CRoad) =>
+    (from.streetGroupId !== null && from.streetGroupId === to.streetGroupId) ||
+    Math.abs(approachAngle(from, to)) > (5 * Math.PI) / 6;
+  const merge = (from: CRoad, to: CRoad) =>
+    outgoing.filter((road) => !isUturn(from, road)).length === 1 &&
+    incoming.filter((road) => smallAngle(road, to)).length >= 2;
+  const diverge = (from: CRoad, to: CRoad) =>
+    incoming.filter((road) => !isUturn(road, to)).length === 1 &&
+    outgoing.filter((road) => smallAngle(from, road)).length >= 2;
   const shareClass = (a: CLane, b: CLane) =>
     a.allowed.some((vehicle) => b.allowed.includes(vehicle));
 
@@ -147,8 +152,8 @@ export function generateMovements(
       to,
       turn: classify(
         approachAngle(from, to),
-        merge,
-        diverge,
+        merge(from, to),
+        diverge(from, to),
         to.streetGroupId !== null && to.streetGroupId === from.streetGroupId,
       ),
       rules: source.turnRules.filter((rule) => rule.from === from.id && rule.to === to.id),
