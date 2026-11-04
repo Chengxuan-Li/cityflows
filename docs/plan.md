@@ -70,7 +70,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-041](tasks/TASK-041.md) | 4 | Metrics, layers and charts | `src/ui/panels/metrics*`, `src/ui/layers*`, `src/render/layers/heat.ts` | 005, 006 | readable congestion feedback | done |
 | [TASK-042](tasks/TASK-042.md) | 4 | Scenario comparison | `src/ui/panels/compare*`, `src/project/scenarios.ts` | 008, 041 | same-seed baseline versus variant | done |
 | [TASK-043](tasks/TASK-043.md) | 4 | Analysis and interchange exports | `src/project/export-*.ts`, export menu | 008, 041 | CSV and GeoJSON exports labelled synthetic | done |
-| [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | todo |
+| [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | done |
 | [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | todo |
 
 ### Waves
@@ -113,9 +113,10 @@ dependency of its tasks is merged to `main`.
   trajectory sampling). TASK-044 measures and optimizes `src/render` and `src/routing` only this
   wave and reports `src/sim` hotspots for after TASK-032. TASK-033 follows TASK-034 (both edit
   the place inspector and the regenerate action); TASK-045 last.
-- Wave 7 status (2026-11-03): TASK-034, TASK-023, TASK-042, TASK-043 and TASK-032 merged;
-  TASK-044 still running. TASK-033 can start now on the merged place tool; the sim hotspots
-  from TASK-044 become a follow-up once it lands.
+- Wave 7 outcome (2026-11-03): all six merged. Wave 8: TASK-033 (place editor and demand
+  panel) and TASK-046 (simulation hotspots from the TASK-044 profile: reroute scanning,
+  prepareTravel, lane-change proposals, the stress grid's stranded trip) in parallel on
+  disjoint surfaces; TASK-045 last.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -361,6 +362,17 @@ exists.
   bar once TASK-043's Export button widened it; it now starts inside the map on the same line.
   The lead built a ramp from the top street onto a drawn expressway in the browser.
 
+- 2026-11-03, TASK-044 merged as delivered. `npm run bench` (Node type stripping, no new
+  dependency) runs four full-day workloads and prints one table; T16 samples eight seconds at
+  10x in the browser for the grid, a distributed 3 000-car stress grid and the town, with a
+  retained-heap guard across repeated mornings and a JSON report per scenario; the one shipped
+  optimization caches the static terrain as a texture below zoom 0.7, which took the town
+  overview from 12.8 to 60 FPS. The lead reran the benchmark on the merged tree (grid 69 200
+  steps per second over the day, stress 15 700, town 8 900, all trips reconciled, the known
+  single stranded trip on the stress grid) and all 28 Playwright scenarios pass; T16 adds about
+  three minutes to the suite. The measured section 15 status and the profiled simulation
+  hotspots are in the Performance section below; the sim follow-up is the next task.
+
 ## Owner decisions log
 
 - 2026-11-03: foundation, renderer, repo shape, license, OSM access, workflow and audit depth
@@ -471,8 +483,4 @@ the original 120 m grid and a 3 000-car town, time a large OSM import including 
 have the simulation owner replay the seed-1 stress case to diagnose its stranded
 trip after TASK-032.
 
-Verification: `npm run check` passes (146 tests, one opt-in slow test skipped;
-T02 and T06 included), `npm run bench` passes all four full-day workloads, and
-`npm run test:e2e` passes all 19 scenarios. The benchmark also typechecks directly
-with `tsc --ignoreConfig --noEmit --target ES2023 --module ESNext --moduleResolution
-bundler --types node --strict --skipLibCheck bench/sim.ts bench/register.ts`.
+Verification on the merged tree is in the review log entry for TASK-044.
