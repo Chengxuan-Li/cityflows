@@ -1,6 +1,7 @@
 import { cumulativeLengths, offsetPolyline, polylineLength, trimPolyline } from '../geo/polyline';
 import { laneId, type Road } from '../schema';
-import type { CLane, CNode, CRoad, Diagnostic } from './types';
+import type { Vec2 } from '../geo/vec2';
+import type { CLane, CRoad, Diagnostic } from './types';
 
 export function roadWidth(road: Road): number {
   return road.lanes.reduce((width, lane) => width + lane.widthM, 0);
@@ -9,25 +10,32 @@ export function roadWidth(road: Road): number {
 export function layoutRoad(
   road: Road,
   compiled: CRoad,
-  from: CNode,
-  to: CNode,
+  startSetback: number,
+  endSetback: number,
   lanes: CLane[],
   diagnostics: Diagnostic[],
+  continuation: { before?: Vec2; after?: Vec2 } = {},
 ): void {
   const width = roadWidth(road);
   const leftEdge = road.lateralOffsetM - width / 2;
-  const trim = from.radiusM + to.radiusM;
-  let shortened = false;
-  function trimToNodes(line: ReturnType<typeof offsetPolyline>) {
-    const length = polylineLength(line);
-    const scale = Math.min(1, Math.max(0, length - 5) / trim);
-    if (scale < 1) shortened = true;
-    return trimPolyline(line, from.radiusM * scale, to.radiusM * scale);
-  }
+  const trim = startSetback + endSetback;
+  const length = polylineLength(road.centerline);
+  const scale = trim === 0 ? 1 : Math.min(1, Math.max(0, length - 5) / trim);
+  const shortened = scale < 1;
+  const centerline = trimPolyline(road.centerline, startSetback * scale, endSetback * scale);
 
   let edge = leftEdge;
+  const extended = [
+    ...(continuation.before ? [continuation.before] : []),
+    ...centerline,
+    ...(continuation.after ? [continuation.after] : []),
+  ];
+  const offset = (value: number) => {
+    const line = offsetPolyline(extended, value);
+    return line.slice(continuation.before ? 1 : 0, continuation.after ? -1 : undefined);
+  };
   for (const [lane, spec] of road.lanes.entries()) {
-    const polyline = trimToNodes(offsetPolyline(road.centerline, edge + spec.widthM / 2));
+    const polyline = offset(edge + spec.widthM / 2);
     const cumulative = cumulativeLengths(polyline);
     const idx = lanes.length;
     compiled.lanes.push(idx);
@@ -51,16 +59,13 @@ export function layoutRoad(
     edge += spec.widthM;
   }
 
-  compiled.surface = [
-    ...trimToNodes(offsetPolyline(road.centerline, leftEdge)),
-    ...trimToNodes(offsetPolyline(road.centerline, leftEdge + width)).reverse(),
-  ];
+  compiled.surface = [...offset(leftEdge), ...offset(leftEdge + width).reverse()];
   if (shortened || compiled.lengthM < trim + 5) {
     diagnostics.push({
       severity: 'warning',
       code: 'road_too_short',
       refs: [road.id],
-      message: `Road ${road.id} is too short for full junction trimming`,
+      message: `Road ${road.id} is too short for setbacks ${startSetback.toFixed(2)} m + ${endSetback.toFixed(2)} m and 5 m of lane`,
     });
   }
 }

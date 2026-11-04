@@ -51,6 +51,8 @@ export interface CNode {
   id: NodeId;
   pos: Vec2;
   radiusM: number;
+  setbacks: number[]; // incident roads in compiled index order
+  outline: Vec2[]; // closed road-end edges and curb arcs; empty at through nodes
   control: Control;
   movements: number[];
   signal: CSignal | null;

@@ -3,7 +3,8 @@ import type { Vec2 } from '../geo/vec2';
 import type { City, Place, RoadClass } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
-import { layoutRoad, roadWidth } from './lanes';
+import { layoutRoad } from './lanes';
+import { junctionSetbacks, junctionOutline, containMovements } from './junctions';
 import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
@@ -76,6 +77,8 @@ export function compile(city: City): CompileResult {
     id,
     pos: { ...pos },
     radiusM: 0,
+    setbacks: [],
+    outline: [],
     control,
     movements: [],
     signal: null,
@@ -87,9 +90,6 @@ export function compile(city: City): CompileResult {
   const roads: CRoad[] = sourceRoads.map((road, idx) => {
     const from = nodeIndex.get(road.from)!;
     const to = nodeIndex.get(road.to)!;
-    const radius = roadWidth(road) / 2 + Math.abs(road.lateralOffsetM) + 1;
-    nodes[from]!.radiusM = Math.max(nodes[from]!.radiusM, radius);
-    nodes[to]!.radiusM = Math.max(nodes[to]!.radiusM, radius);
     const cumulative = cumulativeLengths(road.centerline);
     const lengthM = cumulative.at(-1)!;
     headings.push({
@@ -114,6 +114,20 @@ export function compile(city: City): CompileResult {
     return compiled;
   });
   const roadIndex = indices(roads);
+  const incident = nodes.map((node) =>
+    [...incoming[node.idx]!, ...outgoing[node.idx]!].sort((a, b) => a.idx - b.idx),
+  );
+  const trims = roads.map(() => ({ start: 0, end: 0 }));
+  for (const node of nodes) {
+    node.setbacks = junctionSetbacks(
+      node,
+      incident[node.idx]!.map((r) => sourceRoads[r.idx]!),
+    );
+    node.radiusM = Math.max(0, ...node.setbacks);
+    incident[node.idx]!.forEach((road, i) => {
+      trims[road.idx]![road.from === node.idx ? 'start' : 'end'] = node.setbacks[i]!;
+    });
+  }
   const lanes: CLane[] = [];
   // A ramp ranks one below the road it joins: the roads leaving its end node, or, when it only
   // leads into another ramp, the roads entering its start node. Other ramps do not count.
@@ -126,15 +140,27 @@ export function compile(city: City): CompileResult {
         (joinedRank(outgoing[road.to]!) || joinedRank(incoming[road.from]!)) - 1,
       );
     }
+    const before =
+      trims[road.idx]!.start === 0
+        ? incoming[road.from]!.find((r) => r.from !== road.to)
+        : undefined;
+    const after =
+      trims[road.idx]!.end === 0 ? outgoing[road.to]!.find((r) => r.to !== road.from) : undefined;
     layoutRoad(
       sourceRoads[road.idx]!,
       road,
-      nodes[road.from]!,
-      nodes[road.to]!,
+      trims[road.idx]!.start,
+      trims[road.idx]!.end,
       lanes,
       diagnostics,
+      {
+        before: before ? sourceRoads[before.idx]!.centerline.at(-2) : undefined,
+        after: after ? sourceRoads[after.idx]!.centerline[1] : undefined,
+      },
     );
   }
+
+  for (const node of nodes) node.outline = junctionOutline(node, incident[node.idx]!, lanes);
 
   const places: CPlace[] = [];
   const connectors: CConnector[] = [];
@@ -219,6 +245,7 @@ export function compile(city: City): CompileResult {
       city.drivingSide,
       movements,
     );
+    containMovements(node, movements, lanes);
     populateConflicts(node, movements);
   }
 

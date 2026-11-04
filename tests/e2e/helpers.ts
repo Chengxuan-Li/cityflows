@@ -110,7 +110,8 @@ export async function buildBypass(page: Page) {
   await page.mouse.move(hover.x, hover.y);
   await page.keyboard.press('Enter');
   await clickGrid(page, 360, 240);
-  await clickGrid(page, 478.5, 300);
+  // Leave 60 m for the taper and 50 m to change lanes before the grid's next lane drop.
+  await clickGrid(page, 478.5, 250);
   await button(page, 'Select').click();
 }
 

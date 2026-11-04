@@ -303,6 +303,15 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   `CNode.outline: Vec2[]` are added. The outline is the closed polygon of the road-end edges
   joined, between two adjacent road ends, by a curb arc: a circular arc tangent to both outer
   lane edges with radius `min(8 m, half the gap between them)`, sampled every meter.
+  TASK-061 clarification approved by the owner on 2026-11-04: intersections use the
+  road-end tangent edges; angles within 5 degrees of parallel use the floor. Opposing
+  carriageways of a street form one angular arm. Through cuts share the offset miter at
+  the seam. Fixed `0.4 * chord` movement curves can escape the curb boundary at unequal
+  cuts or irregular imported nodes. Only at those nodes, extend the outline to the convex
+  envelope of the curb outline and sampled movement surfaces; preserve setbacks and
+  movement curves. Other junctions retain their curb arcs. T20 reports canonical imported
+  road-body overlaps separately and requires zero remaining junction-end crossings;
+  this task does not repair duplicate or coincident source carriageways.
 
 ### 5.2 Movement generation
 

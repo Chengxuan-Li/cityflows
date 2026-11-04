@@ -1,4 +1,5 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container, Graphics, Polygon } from 'pixi.js';
+import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { Camera } from './camera';
@@ -21,6 +22,26 @@ import { defaultLayers, type LayerVisibility } from './types';
 
 export function orderedLayers(layers: readonly number[]): number[] {
   return [...new Set([0, ...layers])].sort((a, b) => a - b);
+}
+
+export function pickThroughNode(
+  city: CompiledCity,
+  point: Vec2,
+  zoom: number,
+  grades: number[],
+  minimumGrade: number,
+) {
+  let selected: CompiledCity['nodes'][number] | undefined;
+  let closest = Infinity;
+  for (const node of city.nodes) {
+    if (node.outline.length || !node.movements.length || grades[node.idx]! < minimumGrade) continue;
+    const distance = Math.hypot(point.x - node.pos.x, point.y - node.pos.y);
+    if (distance > 6 / zoom || (grades[node.idx] === minimumGrade && distance >= closest)) continue;
+    selected = node;
+    minimumGrade = grades[node.idx]!;
+    closest = distance;
+  }
+  return selected;
 }
 
 function createGrade(layer: number) {
@@ -237,18 +258,33 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ({ id, centroid }) => source?.places[id]?.shape ?? { kind: 'point', pos: centroid },
       );
       staticPick = createPicker(city, shapes, roadGrades);
+      const pickBase = staticPick;
+      const nodeAreas = city.nodes.map(
+        (node) => new Polygon(node.outline.flatMap(({ x, y }) => [x, y])),
+      );
+      staticPick = (point, zoom) => {
+        const hit = pickBase(point, zoom);
+        const minimumGrade = hit?.kind === 'lane' ? roadGrades[hit.road]! : -Infinity;
+        const through = pickThroughNode(compiled, point, zoom ?? 1, nodeGrades, minimumGrade);
+        if (through && (!hit || hit.kind === 'lane' || hit.kind === 'node'))
+          return { kind: 'node', node: through.idx };
+        if (hit && hit.kind !== 'node') return hit;
+        const node = nodeAreas.findIndex((area) => area.contains(point.x, point.y));
+        if (node >= 0) return { kind: 'node', node };
+        // Keep the center handle of an authored roundabout selectable for removal.
+        return hit?.kind === 'node' && source?.nodes[compiled.nodes[hit.node]!.id]?.roundabout
+          ? hit
+          : null;
+      };
 
-      const incidentRoads = city.nodes.map(() => [] as CompiledCity['roads']);
       for (const road of city.roads) {
-        incidentRoads[road.from]!.push(road);
-        incidentRoads[road.to]!.push(road);
         const { surfaces, markings, nodes } = grades.get(roadGrades[road.idx]!)!;
         drawRoad(surfaces, markings, city, road);
         drawRoadJoins(nodes, city, road);
       }
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
-        drawNode(grade.nodes, city, node, incidentRoads[node.idx]!);
+        drawNode(grade.nodes, node);
         drawSigns(city, node, grade.signals, () => camera.zoom);
         if (node.signal) updateSignals.push(drawSignal(city, node, grade.signals));
       }

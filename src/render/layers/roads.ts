@@ -81,16 +81,16 @@ function drawApproachMarkings(graphics: Graphics, city: CompiledCity, lane: CLan
   const half = lane.widthM * 0.44;
   if (marks.stop) {
     graphics
-      .poly([local(lane.lengthM, -0.35, -half), local(lane.lengthM, -0.35, half)], false)
+      .poly([local(lane.lengthM, 0, -half), local(lane.lengthM, 0, half)], false)
       .stroke({ color: style.marking, width: 0.28 });
   }
   if (marks.yield) {
     for (let side = -half + 0.4; side <= half - 0.2; side += 0.85) {
       graphics
         .poly([
-          local(lane.lengthM, -0.35, side),
-          local(lane.lengthM, -1.35, side - 0.3),
-          local(lane.lengthM, -1.35, side + 0.3),
+          local(lane.lengthM, 0, side),
+          local(lane.lengthM, -1, side - 0.3),
+          local(lane.lengthM, -1, side + 0.3),
         ])
         .fill(style.marking);
     }

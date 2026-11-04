@@ -21,9 +21,10 @@ test('demo C, bypass: an expressway with ramps carries a share of the commute an
   const built = await city(page);
   const motorways = Object.values(built.roads).filter(({ roadClass }) => roadClass === 'motorway');
   const ramps = Object.values(built.roads).filter(({ roadClass }) => roadClass === 'ramp');
-  expect(motorways).toHaveLength(3);
+  expect(motorways).toHaveLength(4);
   expect(ramps).toHaveLength(2);
-  expect(motorways.every(({ lanes }) => lanes.length === 2)).toBe(true);
+  expect(motorways.filter(({ lanes }) => lanes.length === 3)).toHaveLength(1);
+  expect(motorways.filter(({ lanes }) => lanes.length === 2)).toHaveLength(3);
   await page.screenshot({ path: info.outputPath('interchange.png') });
 
   await button(page, 'Restart').click();

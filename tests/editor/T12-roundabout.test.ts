@@ -52,7 +52,16 @@ test.each(['right', 'left'] as const)(
       { ...homes.connectors[0]!, roadId: entry.id, lane: 0, positionM: 3, direction: 'out' },
     ];
     testCity.places[work.id]!.connectors = [
-      { ...work.connectors[0]!, roadId: exit.id, lane: 0, positionM: 15, direction: 'in' },
+      {
+        ...work.connectors[0]!,
+        roadId: exit.id,
+        lane: 0,
+        positionM: Math.min(
+          15,
+          editor.compiled.lanes[editor.compiled.index.lane.get(`${exit.id}#0`)!]!.lengthM - 1,
+        ),
+        direction: 'in',
+      },
     ];
     const testEditor = createEditor(testCity);
     const engine = createEngine();

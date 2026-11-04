@@ -38,18 +38,19 @@ test('demo C: draw an expressway and ramps, restart, use the bypass and reduce t
   await page.keyboard.press('Enter');
   await expect.poll(ramps).toBe(1);
   await click(page, 360, 240);
-  await click(page, 478.5, 300);
+  await click(page, 478.5, 250);
   await expect.poll(ramps).toBe(2);
   const built = await page.evaluate(() => window.cityflows!.city!());
   const motorwayIds = Object.values(built.roads)
     .filter((r) => r.roadClass === 'motorway')
     .map((r) => r.id);
-  expect(motorwayIds.length).toBe(3);
+  expect(motorwayIds.length).toBe(4);
   expect(
     Object.values(built.roads)
       .filter((r) => r.roadClass === 'motorway')
-      .every((r) => r.lanes.length === 2),
-  ).toBe(true);
+      .map((r) => r.lanes.length)
+      .sort(),
+  ).toEqual([2, 2, 2, 3]);
   await button(page, 'Select').click();
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();

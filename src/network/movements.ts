@@ -108,11 +108,11 @@ export function generateMovements(
     const end = b.polyline[0]!;
     const startHeading = headingAtDistance(a.polyline, a.cumulative, a.lengthM);
     const endHeading = headingAtDistance(b.polyline, b.cumulative, 0);
-    const chordHeading = Math.atan2(end.y - start.y, end.x - start.x);
     const straight =
       turn === 'through' &&
-      Math.abs(signedAngle(startHeading, chordHeading)) < Math.PI / 36 &&
-      Math.abs(signedAngle(chordHeading, endHeading)) < Math.PI / 36 &&
+      Math.abs(
+        (end.x - start.x) * Math.sin(startHeading) - (end.y - start.y) * Math.cos(startHeading),
+      ) <= 0.5 &&
       Math.abs(signedAngle(startHeading, endHeading)) < Math.PI / 36;
     const control = distance(start, end) * 0.4;
     const polyline = straight

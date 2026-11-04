@@ -22,8 +22,8 @@ export function drawSigns(
     const heading = headingAtDistance(lane.polyline, lane.cumulative, lane.lengthM);
     const end = lane.polyline.at(-1)!;
     const curb = (city.drivingSide === 'right' ? 1 : -1) * (lane.widthM / 2 + 2.2);
-    const x = end.x - Math.cos(heading) * 2 - Math.sin(heading) * curb;
-    const y = end.y - Math.sin(heading) * 2 + Math.cos(heading) * curb;
+    const x = end.x - Math.sin(heading) * curb;
+    const y = end.y + Math.cos(heading) * curb;
     const count = node.control === 'stop' ? 8 : 3;
     const offset = node.control === 'stop' ? Math.PI / 8 : Math.PI / 2;
     signs
