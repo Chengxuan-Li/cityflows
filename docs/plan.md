@@ -416,6 +416,21 @@ process heap after forced GC; typed-array backing storage is reported separately
 | grid5x5, population scaled | 3 000 / 6 000 | 27 / 1 275 | 25 009 | 28 633 | 54 521 | 22.83 / 26.20 / 30.05 | 1.16 |
 | grid5x5, distributed stress | 3 120 / 6 240 | 3 044 / 1 881 | 7 783 | 19 274 | 72 460 | 23.64 / 26.79 / 29.88 | 1.22 |
 | town | 6 951 / 13 902 | 371 / 35 | 7 325 | 9 657 | 6 047 | 33.92 / 43.57 / 52.91 | 5.33 |
+| grid5x5, normal, after TASK-046 | 1 088 / 2 176 | 23 / 26 | 280 497 | 611 591 | 44 813 | 15.64 / 17.82 / 19.04 | 0.43 |
+| grid5x5, population scaled, after TASK-046 | 3 000 / 6 000 | 26 / 1 275 | 111 787 | 208 988 | 48 003 | 25.48 / 28.91 / 32.76 | 1.33 |
+| grid5x5, distributed stress, after TASK-046 | 3 120 / 6 240 | 3 036 / 1 881 | 8 777 | 43 681 | 59 771 | 30.78 / 33.86 / 36.95 | 1.73 |
+| town, after TASK-046 | 6 951 / 13 902 | 371 / 35 | 17 209 | 49 118 | 5 727 | 40.94 / 50.58 / 59.88 | 3.38 |
+
+The "after TASK-046" rows were measured 2026-11-03 on the same machine and Node
+version after the four TASK-046 engine commits. A same-day run of the previous
+engine on that machine gave 78 336 (grid), 24 892 (scaled), 15 811 (stress) and
+8 830 (town) 24 h steps/s, so the like-for-like gains are 7.8x, 8.4x, 2.8x and
+5.6x. State hashes in `bench/latest.log` are unchanged for the normal grid
+(1639643273), the scaled grid (3254820089) and the town (3932636798). The stress
+hash changes (1541856394 to 1071430910) only through the lane-drop fix below,
+and the stress day now completes 6 240 of 6 240 trips. The 18:00 town counts
+still match the review log (12 640 requested, 12 571 completed, 69 driving, 0
+failed). Routes/s is the unchanged routing benchmark and varies run to run.
 
 All trips reconcile throughout every run. Normal, population-scaled and town runs
 complete every trip without failures. Stress completes 6 239 trips and has one
@@ -488,3 +503,29 @@ have the simulation owner replay the seed-1 stress case to diagnose its stranded
 trip after TASK-032.
 
 Verification on the merged tree is in the review log entry for TASK-044.
+
+TASK-046 took the hotspots in share order. `reroute.update` keeps pending checks
+in a min-heap keyed by (next check, id) and visits only due vehicles (grid 78 336
+to 479 369, town 8 830 to 36 073 steps/s). The travel preparation and proposal
+passes walk an ordered list of occupied segments kept by the vehicle store; it
+was measured against the head scan it replaces (grid 479 369 to 601 801, town
+36 073 to 49 480). Lane-change proposals build no per-vehicle arrays and use
+precomputed lane survival (grid 601 801 to 642 472, town 49 480 to 50 138,
+stress 15 811 to 46 665). The headless comparison reads one snapshot per step
+plus the trip outcomes once instead of a `VehicleDetail` per active vehicle per
+step; old and new results are deep-equal on the grid, the stress grid and the
+town, and the town's two busiest hours take 10.0 s instead of 11.3 s, of which
+5.2 s is the engine and 2.4 s the snapshots. The export recorder keeps its
+`inspect` calls: they run once per vehicle that left the road since the previous
+sample, 6 951 calls costing 13.75 ms of 920 ms of `observe()` over the town
+morning, so they were left alone. The stress trip that never finished was an
+engine defect: a lane-level fallback route named only the dropped lane r:100#1,
+so no surviving target lane existed and no change was ever proposed; the car
+held two metres before the lane end from 08:03 to the end of the day. A route
+whose target lanes are all dropped now leaves by the nearest surviving lane that
+enters the next road and reroutes with `missed_turn`
+(`tests/sim/lane-drop-fallback-route.test.ts`). After these changes the morning
+profile shares are `engine.prepareTravel` 19 percent (grid) and 23 percent (town),
+`engine.commit` 9 percent, `lane-change.propose` 6 to 7 percent, and in the town
+the route searches of the checks themselves 24 percent; `intersection.signals`
+scans every vehicle for grants at 2.8 percent on the grid and was left as is.

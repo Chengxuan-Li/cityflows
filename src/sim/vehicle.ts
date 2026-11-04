@@ -31,12 +31,25 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
   const next = indices();
   const previous = indices();
   const segment = (laneField: number) => (laneField >= 0 ? laneField : laneCount - 1 - laneField);
+  // Segments holding at least one vehicle, ascending, so per-step passes skip empty ones.
+  const occupied: number[] = [];
+  function rank(bucket: number) {
+    let low = 0;
+    let high = occupied.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (occupied[mid]! < bucket) low = mid + 1;
+      else high = mid;
+    }
+    return low;
+  }
 
   // Lists are ordered front to back. Travel preserves that order within each segment.
   function insert(id: number, laneField: number, positionM: number) {
     const bucket = segment(laneField);
     lane[id] = laneField;
     position[id] = positionM;
+    if (head[bucket] === -1) occupied.splice(rank(bucket), 0, bucket);
     let behind = -1;
     let ahead = tail[bucket]!;
     while (ahead !== -1 && position[ahead]! < positionM) {
@@ -59,6 +72,7 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
     else next[ahead] = behind;
     if (behind === -1) tail[bucket] = ahead;
     else previous[behind] = ahead;
+    if (head[bucket] === -1) occupied.splice(rank(bucket), 1);
   }
 
   return {
@@ -66,6 +80,7 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
     lane,
     position,
     head,
+    occupied: occupied as readonly number[],
     next,
     previous,
     insert,

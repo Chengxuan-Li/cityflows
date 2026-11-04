@@ -2,7 +2,7 @@ import type { CompiledCity } from '../network';
 import type { LinkCosts, RouteProvider, RouteRequest } from '../routing';
 import { remainingRouteCost } from '../routing/costs';
 import type { SimParams } from '../schema';
-import { DRIVING, type Vehicles } from './vehicle';
+import { COMPLETED, DRIVING, FAILED, type Vehicles } from './vehicle';
 
 export function vehicleRouteRequest(
   vehicles: Vehicles,
@@ -31,21 +31,89 @@ export function createRerouter(
 ) {
   const replans = new Uint32Array(vehicles.count);
   const nextCheck = new Float64Array(vehicles.count).fill(Infinity);
+  // Min-heap of pending checks keyed by (nextCheck, id). A vehicle holds at most one entry
+  // from `start` until it is popped; it is re-queued after each check while it may still
+  // switch. Checks are independent within a step, so only due vehicles need a visit.
+  const heapKey = new Float64Array(vehicles.count);
+  const heapId = new Int32Array(vehicles.count);
+  let heapSize = 0;
+  // Popped while not driving: the check stays pending until the vehicle drives again, as the
+  // scan did; finished vehicles are dropped.
+  const deferred: number[] = [];
+  const due: number[] = [];
+
+  function before(i: number, j: number) {
+    return heapKey[i]! < heapKey[j]! || (heapKey[i] === heapKey[j] && heapId[i]! < heapId[j]!);
+  }
+  function swap(i: number, j: number) {
+    const key = heapKey[i]!;
+    const id = heapId[i]!;
+    heapKey[i] = heapKey[j]!;
+    heapId[i] = heapId[j]!;
+    heapKey[j] = key;
+    heapId[j] = id;
+  }
+  function push(id: number) {
+    let i = heapSize++;
+    heapKey[i] = nextCheck[id]!;
+    heapId[i] = id;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!before(i, parent)) break;
+      swap(i, parent);
+      i = parent;
+    }
+  }
+  function pop() {
+    const id = heapId[0]!;
+    heapSize--;
+    if (heapSize > 0) {
+      heapKey[0] = heapKey[heapSize]!;
+      heapId[0] = heapId[heapSize]!;
+      let i = 0;
+      for (;;) {
+        let smallest = i;
+        const left = 2 * i + 1;
+        const right = left + 1;
+        if (left < heapSize && before(left, smallest)) smallest = left;
+        if (right < heapSize && before(right, smallest)) smallest = right;
+        if (smallest === i) break;
+        swap(i, smallest);
+        i = smallest;
+      }
+    }
+    return id;
+  }
+
   return {
     start(id: number, timeS: number) {
       // Spread even adjacent vehicle ids across the interval, independently of the RNG stream.
       const phase = ((id + 1) * 0.6180339887498949) % 1;
       nextCheck[id] = timeS + params.rerouteIntervalS * phase;
+      push(id);
     },
     update(timeS: number, switched: (id: number) => void) {
-      for (let id = 0; id < vehicles.count; id++) {
-        if (
-          vehicles.state[id] !== DRIVING ||
-          replans[id]! >= params.maxReplans ||
-          timeS + 1e-9 < nextCheck[id]!
-        )
-          continue;
+      due.length = 0;
+      for (let i = 0; i < deferred.length;) {
+        const id = deferred[i]!;
+        const state = vehicles.state[id];
+        if (state === DRIVING) due.push(id);
+        if (state === DRIVING || state === COMPLETED || state === FAILED) {
+          deferred[i] = deferred[deferred.length - 1]!;
+          deferred.pop();
+        } else i++;
+      }
+      while (heapSize > 0 && timeS + 1e-9 >= heapKey[0]!) {
+        const id = pop();
+        const state = vehicles.state[id];
+        if (state === DRIVING) due.push(id);
+        else if (state !== COMPLETED && state !== FAILED) deferred.push(id);
+      }
+      if (due.length > 1) due.sort((a, b) => a - b);
+      for (const id of due) {
+        if (replans[id]! >= params.maxReplans) continue;
         nextCheck[id] = nextCheck[id]! + params.rerouteIntervalS;
+        push(id);
         const lane = compiled.lanes[vehicles.lane[id]!];
         if (!lane || lane.lengthM - vehicles.position[id]! <= params.intersection.decisionDistanceM)
           continue;
