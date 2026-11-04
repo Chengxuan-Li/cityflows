@@ -21,6 +21,8 @@ export interface OsmRoad {
   turnLanes: string | undefined;
   cutStart: boolean;
   cutEnd: boolean;
+  attributes: string;
+  layer: number;
 }
 
 export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagnostic[]) {
@@ -142,6 +144,12 @@ export function createRoads(
       turnLanes,
       cutStart: reversed ? part.cutEnd : part.cutStart,
       cutEnd: reversed ? part.cutStart : part.cutEnd,
+      attributes: JSON.stringify(
+        Object.entries(way.tag)
+          .filter(([key]) => !key.startsWith('turn:lanes'))
+          .sort(([a], [b]) => a.localeCompare(b)),
+      ),
+      layer: Number(way.tag.layer ?? 0),
     };
   });
 }

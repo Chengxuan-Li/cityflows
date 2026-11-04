@@ -300,9 +300,11 @@ For every node, incoming roads are those with `road.to === node`, outgoing those
    only which lane is at the curb (the last lane under right-hand traffic, lane 0 under
    left-hand traffic) and which at the median. Through: lanes pair by index counted from the
    median side, clamped to the last lane of `o`; when `o` has more lanes, the curb-side lane
-   of `i` also feeds the extra curb-side lanes. Merge and diverge: lanes pair one-to-one by
-   index counted from the curb side, with no clamping and no fan-out, so a one-lane ramp
-   joins or leaves only the curb-side lane. U-turns, when allowed, leave from the median-side
+   of `i` also feeds the extra curb-side lanes. A single-lane approach feeds every lane of
+   each legal non-U-turn outgoing direction, including merges and diverges (TASK-048
+   contract amendment). Explicit turn rules still take precedence. For multi-lane approaches,
+   merge and diverge: lanes pair one-to-one by
+   index counted from the curb side, with no clamping and no fan-out. U-turns, when allowed, leave from the median-side
    lane into the median-side lane. A single-lane road may do everything. Fallback: a lane that
    ends up with no movement while another lane of the same road has one inherits the
    non-U-turn movements of the nearest such lane (lower index wins ties), with the to-lane
@@ -973,7 +975,18 @@ Lives in `src/importers/osm`, runs inside an import worker.
    `traffic_signals`, `stop` or `give_way`, and `via` nodes of restriction relations. Split
    ways there.
 4. Project with a `GeoReference` at the bbox center. One `Node` per junction node, `layer`
-   from the tag. Connectivity comes from shared OSM node ids only.
+   from the tag. Connectivity starts from shared OSM node ids. TASK-048 adds inferred
+   crossings from a feeder to the opposing, same-name/class surface carriageway on the same
+   layer, within half the combined road width plus 12 m (capped at 30 m). Motorways, ramps
+   and restriction-via nodes are excluded from this proximity inference.
+   Equal-attribute sections shorter than 30 m join at uncontrolled degree-two nodes,
+   retaining their geometry and source way ids. With owner approval (TASK-048), connected
+   sub-30 m junction sections consolidate in clusters of at most 60 m diameter; bridges,
+   motorway junctions, cycleway attribute boundaries and restriction-via nodes stay separate.
+   External road-pair reachability through each cluster becomes explicit turn rules, and
+   signals move to its representative. Canonical lane assignment then applies at the combined
+   junction. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
+   in provenance; disconnected roads and remaining short-road/dead-end warnings stay visible.
 5. Roads: `oneway=yes` (or `-1`, or implied by motorway and roundabout) gives one road;
    otherwise two roads with mirrored centerlines sharing a `streetGroupId` per split section
    (`osm:way/<id>` for the first section, `osm:way/<id>/<n>` after), since one group per way
@@ -990,11 +1003,18 @@ Lives in `src/importers/osm`, runs inside an import worker.
    banned from the others; unmarked lanes keep the compiler defaults. Restriction relations
    (`no_*`, `only_*` with from, via node, to; `only_*_u_turn` becomes an allow) become
    road-level rules; unsupported or non-incident relations produce `osm_unsupported_tag`.
+   TASK-048 single-lane arrows permit every receiving lane of their direction. Arrows are
+   deferred at intermediate way boundaries; a same-name continuation bending less than 90
+   degrees counts as through. An arrow with no matching exit is recorded as `turnLanesDeferred`
+   instead of prohibiting every exit at an earlier junction. Relation bans still take priority.
 7. Control: `highway=traffic_signals` on the node gives `signal` with a generated program:
    two 30 s phases for the two opposing approach axes with amber 3 s and all-red 1 s; a
    road-pair group that conflicts with its phase, or a left turn at a node with four or more
-   approaches, gets an extra 15 s (left) or 30 s phase; a pair whose own lanes conflict is
-   left unserved with warning `osm_signal_group_conflict`. `highway=stop` gives `stop`;
+   approaches, gets an extra 15 s (left) or 30 s phase. TASK-048 resolves conflicting lanes
+   within a road-pair group before generating the program: keep the first nonconflicting
+   movement in deterministic compiler order, explicitly ban conflicting pairs and record
+   `signalLaneAssignment`. Drivers must merge on the approach; unresolved groups still get
+   `osm_signal_group_conflict`. `highway=stop` gives `stop`;
    `highway=give_way` gives `yield`; else `uncontrolled`.
 8. Clip to the bbox: a road crossing the edge is cut there; the cut end becomes a node and a
    `gateway` place with an `out` connector (5 m into entering roads) or an `in` connector (5 m

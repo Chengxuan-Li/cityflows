@@ -79,6 +79,15 @@ test('a grid vehicle changes lanes before the decision point and takes its plann
 
 test('a blocked short turn takes a legal fallback and attempts a missed-turn reroute', () => {
   const city = shortTurnLane();
+  const ramp = Object.values(city.roads).find((r) => r.roadClass === 'ramp')!;
+  const exit = Object.values(city.roads).find((r) => r.from === ramp.to)!;
+  city.nodes[ramp.to]!.turnRules.push({
+    from: ramp.id,
+    to: exit.id,
+    toLane: 0,
+    allowed: false,
+    provenance: { source: 'authored' },
+  });
   const [origin, destination] = Object.values(city.places);
   const approach = Object.values(city.roads).find(
     (road) => road.centerline[0]!.x === 0 && road.centerline[1]!.x === 24,
