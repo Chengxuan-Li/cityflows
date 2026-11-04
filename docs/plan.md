@@ -50,7 +50,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-007](tasks/TASK-007.md) | 1 | Editor core | `src/editor`, `tests/editor` | 001 | T12 (attribute and rule commands), T04 (editor side) | done |
 | [TASK-008](tasks/TASK-008.md) | 1 | Project persistence | `src/project`, `tests/project`, `fixtures/projects` | 001 | T14 | done |
 | [TASK-009](tasks/TASK-009.md) | 1 | App shell, run controls, inspectors | `src/ui`, `src/main.tsx`, `tests/e2e/gate1-run.spec.ts` | 005, 006, 008, 011 | Gate 1 items 1 to 4, 7 | done |
-| [TASK-010](tasks/TASK-010.md) | 1 | Editing UI and restart policy | `src/ui/inspector/*`, `src/ui/run-bar*`, `tests/e2e/gate1-edit.spec.ts` | 007, 009 | Gate 1 items 5, 6; T17 | todo |
+| [TASK-010](tasks/TASK-010.md) | 1 | Editing UI and restart policy | `src/ui/inspector/*`, `src/ui/run-bar*`, `tests/e2e/gate1-edit.spec.ts` | 007, 009 | Gate 1 items 5, 6; T17 | done |
 | [TASK-011](tasks/TASK-011.md) | 1 | Demand v1: population and commute trips | `src/demand`, `tests/demand` | 001 | T09 (commute), T15 (data side) | done |
 | [TASK-012](tasks/TASK-012.md) | 1 | Gate 1 integration and acceptance | anywhere (lead), `tests/e2e/gate1-*.spec.ts` | 004, 010 | Gate 1 checklist, CI green | todo |
 | [TASK-020](tasks/TASK-020.md) | 2 | OSM importer and fixtures | `src/importers/osm`, `src/importers/types.ts`, `fixtures/osm`, `tests/importers` | 001 | T11, T18 | done |
@@ -185,6 +185,15 @@ exists.
   TASK-010 binds them. Observation for TASK-012: the grid fixture's demand (100 to 150
   residents spread over the morning) puts only one to three cars on the road at once; the
   Gate 1 demo needs enough residents for visible queues.
+
+- 2026-11-03, TASK-010 merged as delivered (check and six Playwright scenarios green). Lead
+  exercised it in the browser: editing a signal phase while playing paused the run, showed
+  "Restart to apply changes" with Play and Step disabled, Restart replayed from the edited
+  network, Undo restored the program and re-staled the run. The store keeps the engine's
+  compiled city apart from the editor's so a paused run stays inspectable on the new map.
+  Accepted: per-phase road-pair checkboxes ahead of TASK-040, test hooks on window.cityflows,
+  vehicles on a deleted lane drawn in layer 0 until restart. With this, Gate 1 items 1 to 7
+  are implemented; TASK-012 verifies them end to end.
 
 ## Owner decisions log
 
