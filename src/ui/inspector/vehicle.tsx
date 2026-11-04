@@ -23,7 +23,7 @@ export function VehicleInspector({
   detail: VehicleDetail | null;
   city: City;
 }) {
-  // The engine drives the city loaded at the last restart, not the one being edited.
+  // Use the network acknowledged by the engine, including live patches.
   const compiled = useAppStore((state) => state.session!.loadedCompiled);
   const reason = detail && waitingReason(detail, compiled);
   return (
@@ -50,7 +50,9 @@ export function VehicleInspector({
           <dt>Route</dt>
           <dd>{detail.route ? `${detail.route.roads.length} roads` : 'Unavailable'}</dd>
           <dt>Route reason</dt>
-          <dd className="capitalize">{detail.routeReason.replaceAll('_', ' ')}</dd>
+          <dd className="capitalize">
+            {detail.routeReason === 'edit' ? 'Edit' : detail.routeReason.replaceAll('_', ' ')}
+          </dd>
           {detail.failReason && (
             <>
               <dt>Failure</dt>

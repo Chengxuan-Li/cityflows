@@ -19,12 +19,20 @@ export interface TrafficEngine {
     scenario: Scenario;
     params?: Partial<SimParams>;
   }): void;
+  patch(compiled: CompiledCity): PatchResult;
   step(n?: number): void;
   readonly timeS: number;
   snapshot(): VehicleSnapshot;
   metrics(): Metrics;
   inspect(vehicleId: number): VehicleDetail | null;
   stateHash(): number;
+}
+
+export interface PatchResult {
+  version: number;
+  relocated: number;
+  stranded: number;
+  rerouted: number;
 }
 
 export interface VehicleSnapshot {
@@ -77,7 +85,7 @@ export interface VehicleDetail {
   positionM: number;
   speedMps: number;
   route: Route | null;
-  routeReason: 'initial' | 'missed_turn' | 'congestion';
+  routeReason: 'initial' | 'missed_turn' | 'congestion' | 'edit';
   waitingS: number;
   departedS: number | null;
   arrivedS: number | null;

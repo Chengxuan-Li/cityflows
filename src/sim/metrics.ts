@@ -62,6 +62,9 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
   }
 
   return {
+    patch(next: CompiledCity) {
+      compiled = next;
+    },
     trips,
     transition,
     metrics,

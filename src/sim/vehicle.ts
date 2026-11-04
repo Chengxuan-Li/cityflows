@@ -26,8 +26,8 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
   const numbers = () => new Float64Array(count);
   const lane = indices();
   const position = numbers();
-  const head = new Int32Array(laneCount + movementCount).fill(-1);
-  const tail = head.slice();
+  let head = new Int32Array(laneCount + movementCount).fill(-1);
+  let tail = head.slice();
   const next = indices();
   const previous = indices();
   const segment = (laneField: number) => (laneField >= 0 ? laneField : laneCount - 1 - laneField);
@@ -80,6 +80,15 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
     lane,
     position,
     head,
+    resetSegments(lanes: number, movements: number) {
+      laneCount = lanes;
+      head = new Int32Array(lanes + movements).fill(-1);
+      this.head = head;
+      tail = head.slice();
+      next.fill(-1);
+      previous.fill(-1);
+      occupied.length = 0;
+    },
     occupied: occupied as readonly number[],
     next,
     previous,

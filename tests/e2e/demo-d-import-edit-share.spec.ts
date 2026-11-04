@@ -88,7 +88,7 @@ test('demo D, import-edit-share: import OSM, fix a turn restriction, save, reope
   const label = (await turn.getAttribute('aria-label'))!;
   await turn.click();
   await expect(turn).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   const [, fromLane, toLane] = label.match(/lane (\d+) → .* lane (\d+)$/)!;
   const fix = {
     from: ban.from,

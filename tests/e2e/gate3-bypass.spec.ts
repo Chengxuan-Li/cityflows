@@ -19,7 +19,7 @@ test('demo C: draw an expressway and ramps, restart, use the bypass and reduce t
   await click(page, 135, 15);
   await click(page, 450, 330);
   await page.keyboard.press('Enter');
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   await button(page, 'Ramp').click();
   const ramps = () =>
     page.evaluate(

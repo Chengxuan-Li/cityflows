@@ -41,6 +41,7 @@ export function createRerouter(
   // scan did; finished vehicles are dropped.
   const deferred: number[] = [];
   const due: number[] = [];
+  const edits = new Map<number, { dueS: number; invalid: boolean }>();
 
   function before(i: number, j: number) {
     return heapKey[i]! < heapKey[j]! || (heapKey[i] === heapKey[j] && heapId[i]! < heapId[j]!);
@@ -86,6 +87,60 @@ export function createRerouter(
   }
 
   return {
+    patch(next: CompiledCity) {
+      compiled = next;
+    },
+    scheduleEdit(id: number, timeS: number, invalid: boolean, immediate: boolean) {
+      const phase = ((id + 1) * 0.6180339887498949) % 1;
+      const previous = edits.get(id);
+      edits.set(id, {
+        dueS: Math.min(
+          previous?.dueS ?? Infinity,
+          timeS + (immediate ? 0 : params.rerouteIntervalS * phase),
+        ),
+        invalid: invalid || !!previous?.invalid,
+      });
+    },
+    updateEdits(timeS: number, checked: (id: number, failed: boolean) => void) {
+      for (const [id, edit] of edits) {
+        const state = vehicles.state[id];
+        if (state === COMPLETED || state === FAILED) {
+          edits.delete(id);
+          continue;
+        }
+        const lane = compiled.lanes[vehicles.lane[id]!];
+        if (state !== DRIVING || !lane) continue;
+        const route = vehicles.route[id]!;
+        const step = vehicles.routeStep[id]!;
+        const brokenHere =
+          route.roads[step] !== lane.road ||
+          route.targetLanes[step]?.length === 0 ||
+          route.movements[step] === -1 ||
+          compiled.movements[route.movements[step] ?? -1]?.neverGreen;
+        if (!brokenHere && timeS + 1e-9 < edit.dueS) continue;
+        edits.delete(id);
+        const request = vehicleRouteRequest(vehicles, params, id, lane.idx, vehicles.position[id]!);
+        const result = provider.route(compiled, costs, request);
+        if (!result.ok) {
+          if (edit.invalid) checked(id, true);
+          continue;
+        }
+        const sameRoads =
+          result.route.roads.length === route.roads.length - step &&
+          result.route.roads.every((road, i) => road === route.roads[step + i]);
+        if (
+          !edit.invalid &&
+          (sameRoads ||
+            result.route.costS >=
+              (1 - params.rerouteHysteresis) *
+                remainingRouteCost(compiled, costs, request, route, step))
+        )
+          continue;
+        vehicles.route[id] = result.route;
+        vehicles.routeStep[id] = 0;
+        checked(id, false);
+      }
+    },
     start(id: number, timeS: number) {
       // Spread even adjacent vehicle ids across the interval, independently of the RNG stream.
       const phase = ((id + 1) * 0.6180339887498949) % 1;
@@ -114,6 +169,7 @@ export function createRerouter(
         if (replans[id]! >= params.maxReplans) continue;
         nextCheck[id] = nextCheck[id]! + params.rerouteIntervalS;
         push(id);
+        if (edits.has(id)) continue;
         const lane = compiled.lanes[vehicles.lane[id]!];
         if (!lane || lane.lengthM - vehicles.position[id]! <= params.intersection.decisionDistanceM)
           continue;

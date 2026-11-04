@@ -24,16 +24,15 @@ export function createConnectors(
   vehicles: Vehicles,
   accounting: ReturnType<typeof createAccounting>,
 ) {
-  const queues = compiled.connectors.map((): number[] => []);
-  const head = new Uint32Array(queues.length);
-  const ready = new Uint32Array(queues.length);
-  const nextAdmission = new Float64Array(queues.length).fill(-Infinity);
-  const inside = new Uint32Array(compiled.places.length);
-  const admitted = new Uint32Array(compiled.places.length);
+  let queues = compiled.connectors.map((): number[] => []);
+  let head = new Uint32Array(queues.length);
+  let ready = new Uint32Array(queues.length);
+  let nextAdmission = new Float64Array(queues.length).fill(-Infinity);
+  let inside = new Uint32Array(compiled.places.length);
+  let admitted = new Uint32Array(compiled.places.length);
+  let disconnected: number[] = [];
   const previousArrival = new Int32Array(trips.length).fill(-1);
-  const tracked = compiled.places.map(
-    (place) => place.kind === 'parking' || place.events.length > 0,
-  );
+  let tracked = compiled.places.map((place) => place.kind === 'parking' || place.events.length > 0);
   const arrivals = new Map<string, Map<string, number>>();
   // Pair visits once at load. A scheduled return must not free a slot before the car arrives.
   const chronological = trips
@@ -79,7 +78,7 @@ export function createConnectors(
     queues[out]!.push(id);
   }
   for (const queue of queues) queue.sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
-  const origins = compiled.connectors.filter((c) => queues[c.idx]!.length);
+  let origins = compiled.connectors.filter((c) => queues[c.idx]!.length);
   const canUse = (connector: CConnector, timeS: number) =>
     timeS + 1e-9 >= nextAdmission[connector.idx]!;
   const recordAdmission = (connector: CConnector, timeS: number) => {
@@ -91,6 +90,11 @@ export function createConnectors(
     hasGap: (connector: CConnector) => boolean,
     release: (id: number, connector: CConnector, timeS: number) => boolean,
   ) {
+    disconnected = disconnected.filter((id) => {
+      if (queuedSince(id) > timeS + 1e-9) return true;
+      accounting.fail(id, 'no_origin_connector');
+      return false;
+    });
     for (const connector of origins) {
       const idx = connector.idx;
       const queue = queues[idx]!;
@@ -114,6 +118,12 @@ export function createConnectors(
           candidate++;
         }
         if (candidate === available) break;
+        const candidateId = queue[candidate]!;
+        if (vehicles.destination[candidateId] === -1) {
+          [queue[i], queue[candidate]] = [queue[candidate]!, queue[i]!];
+          accounting.fail(queue[i++]!, 'no_destination_connector');
+          continue;
+        }
         const place = compiled.places[connector.place]!;
         // A parked car must leave beyond its own arrival queue. Otherwise spawning at an
         // upstream "both" portal fills the only lane needed to free the next parking slot.
@@ -177,5 +187,42 @@ export function createConnectors(
     return true;
   }
 
-  return { spawn, canArrive, arrive, queuedSince };
+  function patch(next: CompiledCity) {
+    const nextQueues = next.connectors.map((): number[] => []);
+    const assign = (id: number, oldConnector?: CConnector) => {
+      const place = next.places[next.index.place.get(trips[id]!.originPlaceId)!]!;
+      const mapped = oldConnector && next.index.connector.get(oldConnector.id);
+      const out =
+        mapped !== undefined && place.connectorsOut.includes(mapped)
+          ? mapped
+          : place.connectorsOut[id % place.connectorsOut.length];
+      if (out === undefined) disconnected.push(id);
+      else nextQueues[out]!.push(id);
+    };
+    const orphaned = disconnected;
+    disconnected = [];
+    for (const id of orphaned) assign(id);
+    for (const connector of origins)
+      for (const id of queues[connector.idx]!.slice(head[connector.idx])) assign(id, connector);
+    for (const queue of nextQueues)
+      queue.sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
+    const budgets = new Float64Array(next.connectors.length).fill(-Infinity);
+    for (const connector of next.connectors) {
+      const old = compiled.index.connector.get(connector.id);
+      if (old !== undefined) budgets[connector.idx] = nextAdmission[old]!;
+    }
+    const remapPlaces = (values: Uint32Array) =>
+      Uint32Array.from(next.places, (place) => values[compiled.index.place.get(place.id)!] ?? 0);
+    inside = remapPlaces(inside);
+    admitted = remapPlaces(admitted);
+    tracked = next.places.map((place) => place.kind === 'parking' || place.events.length > 0);
+    queues = nextQueues;
+    head = new Uint32Array(queues.length);
+    ready = new Uint32Array(queues.length);
+    nextAdmission = budgets;
+    origins = next.connectors.filter((c) => queues[c.idx]!.length);
+    compiled = next;
+  }
+
+  return { spawn, canArrive, arrive, queuedSince, patch };
 }

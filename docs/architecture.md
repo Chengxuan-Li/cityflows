@@ -1008,6 +1008,9 @@ type HostEvent =
   reloads, resets the heat throttle and the recorder's road statistics mapping, and replies
   with the engine's `PatchResult`. A comparison worker in flight is terminated by the UI as
   for any edit. `metricsSeries` continues across a patch.
+  The host reply additionally carries `timeS`, the simulation time at which the patch was
+  applied. The UI uses that exact epoch for patched signal previews; restart restores the
+  canonical program offsets. The engine's `PatchResult` remains unchanged.
 
 ## 11. Rendering and UI
 

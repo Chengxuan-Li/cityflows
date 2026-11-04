@@ -3,6 +3,7 @@ import { version } from '../../package.json';
 import { exportGeoJson } from '../project/geojson';
 import { exportTripsCsv, exportRoadMetricsCsv, exportTrajectoriesCsv } from '../project/export-csv';
 import { DEFAULT_SIM_PARAMS } from '../sim/params';
+import { patchSignals } from '../sim/signals';
 import type { Vec2 } from '../geo/vec2';
 import { demandSummary, generatePopulation, scheduleTrips, type DemandSummary } from '../demand';
 import { createEditor, type CommitResult, type Editor } from '../editor';
@@ -17,7 +18,7 @@ import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
 import type { Command, Person } from '../schema';
 import type { RoadId } from '../schema';
-import type { Metrics, VehicleDetail } from '../sim/types';
+import type { Metrics, PatchResult, VehicleDetail } from '../sim/types';
 import { bundledProject } from './bundled-projects';
 import { selectionAfterEdit } from './edit-selection';
 import { comparisonTrips, restoreBaseline, saveBaseline, type Variant } from '../project/scenarios';
@@ -53,6 +54,7 @@ export interface Session {
 }
 
 interface Run {
+  patch?: PatchResult;
   stale: boolean;
   cityVersion: number;
   status: 'paused' | 'playing' | 'finished';
@@ -111,6 +113,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set, get) => {
+  const signalEpochs = new Map<string, number>();
   let comparisonWorker: EngineClient | null = null;
   function cancelComparison() {
     comparisonWorker?.terminate();
@@ -157,7 +160,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const { city, compiled, diagnostics } = result;
       cancelComparison();
       set({ comparison: null });
-      const playing = run.status === 'playing';
+      const stale = run.stale || session.populationKey !== demandKey(city);
       set({
         session: {
           ...session,
@@ -165,7 +168,7 @@ export const useAppStore = create<AppState>((set, get) => {
           compiled,
           diagnostics,
         },
-        run: { ...run, status: 'paused', achieved: 0, stale: true },
+        run: stale ? { ...run, status: 'paused', achieved: 0, stale: true, patch: undefined } : run,
         selection: selectionAfterEdit(selection, session.compiled, compiled),
         selectedRoads: [
           ...new Set(
@@ -179,7 +182,32 @@ export const useAppStore = create<AppState>((set, get) => {
         ],
         rejectedEdit: [],
       });
-      if (playing) {
+      if (!stale) {
+        try {
+          const patch = await engine.patch(compiled);
+          const loadedCompiled = patchSignals(
+            session.compiled,
+            compiled,
+            patch.timeS,
+            signalEpochs,
+          );
+          const { timeS, trips: counts } = await engine.metrics();
+          set(({ session, run, selection }) => ({
+            session: { ...session!, loadedCompiled },
+            run: { ...run!, cityVersion: patch.version, timeS, counts, patch },
+            vehicle: null,
+            selection: selection?.kind === 'vehicle' ? { ...selection } : selection,
+          }));
+          return;
+        } catch (error) {
+          set(({ run }) => ({
+            run: { ...run!, stale: true, status: 'paused', achieved: 0, patch: undefined },
+          }));
+          await engine.pause();
+          throw error;
+        }
+      }
+      if (run.status === 'playing') {
         await engine.pause();
         const { timeS, trips: counts } = await engine.metrics();
         set(({ run }) => ({ run: { ...run!, status: 'paused', timeS, counts, achieved: 0 } }));
@@ -205,6 +233,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const { timeS, trips: counts } = await engine.metrics();
       engine.onEvent((event) => onEvent(engine, event));
       get().session?.engine.terminate();
+      signalEpochs.clear();
       cancelComparison();
       set({ comparison: null, compareOpen: false });
       set({
@@ -527,6 +556,17 @@ export const useAppStore = create<AppState>((set, get) => {
         if (run.stale && command !== 'restart') return;
         const { engine, editor, project } = session;
         if (command === 'restart') {
+          if (!run.stale) {
+            await engine.restart();
+            signalEpochs.clear();
+            const { timeS, trips: counts } = await engine.metrics();
+            set({
+              session: { ...session, loadedCompiled: session.compiled },
+              run: { ...run, status: 'paused', achieved: 0, timeS, counts, patch: undefined },
+              ...(get().selection?.kind === 'vehicle' && { selection: null, vehicle: null }),
+            });
+            return;
+          }
           const scenario = project.scenarios[0]!;
           const compiled = editor.compiled;
           const population =
@@ -535,6 +575,7 @@ export const useAppStore = create<AppState>((set, get) => {
               : generatePopulation(editor.city, scenario.demand);
           const trips = scheduleTrips(editor.city, population, scenario);
           await engine.load({ compiled, trips, scenario });
+          signalEpochs.clear();
           const { timeS, trips: counts } = await engine.metrics();
           set({
             session: {
@@ -555,6 +596,7 @@ export const useAppStore = create<AppState>((set, get) => {
               timeS,
               counts,
               achieved: 0,
+              patch: undefined,
             },
             ...(get().selection?.kind === 'vehicle' && { selection: null, vehicle: null }),
           });
@@ -586,6 +628,7 @@ export const useAppStore = create<AppState>((set, get) => {
 declare global {
   interface Window {
     cityflows?: Pick<EngineClient, 'metrics' | 'hash' | 'inspect' | 'step'> & {
+      snapshot?: EngineClient['snapshot'];
       city?: () => Project['city'];
       commit?: (command: Command) => Promise<void>;
       movementId(index: number): string;

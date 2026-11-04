@@ -1,5 +1,5 @@
 import { headingAtDistance, pointAtDistance } from '../geo/polyline';
-import type { CConnector } from '../network';
+import type { CConnector, CompiledCity } from '../network';
 import {
   createRouteProvider,
   movementPenaltyS,
@@ -17,8 +17,16 @@ import { createLinkCosts } from './link-costs';
 import { createMerges } from './merge';
 import { createAccounting } from './metrics';
 import { DEFAULT_SIM_PARAMS } from './params';
+import { createProjector, patchChanges, remapRoute } from './patch';
+import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
-import type { TrafficEngine, VehicleDetail, VehicleSnapshot, VehicleState } from './types';
+import type {
+  PatchResult,
+  TrafficEngine,
+  VehicleDetail,
+  VehicleSnapshot,
+  VehicleState,
+} from './types';
 import { createVehicles, DRIVING, QUEUED_ORIGIN, QUEUED_DESTINATION, PENDING } from './vehicle';
 
 type LoadInput = Parameters<TrafficEngine['load']>[0] & {
@@ -47,10 +55,11 @@ function createRun({
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
   const accounting = createAccounting(compiled, vehicles);
   const connectors = createConnectors(compiled, trips, scenario, params, vehicles, accounting);
-  const merges = createMerges(compiled, vehicles, params);
-  const intersections = createIntersections(compiled, vehicles, params, merges.canEnter);
-  const laneChanges = createLaneChanges(compiled, vehicles, params);
-  const carLanes = compiled.lanes.map((lane) => lane.allowed.includes('car'));
+  let merges = createMerges(compiled, vehicles, params);
+  let intersections = createIntersections(compiled, vehicles, params, merges.canEnter);
+  let laneChanges = createLaneChanges(compiled, vehicles, params);
+  let carLanes = compiled.lanes.map((lane) => lane.allowed.includes('car'));
+  const signalEpochs = new Map<string, number>();
   const provider =
     routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
   const observedCosts = createLinkCosts(compiled, params, scenario.startS);
@@ -117,7 +126,7 @@ function createRun({
         const next = compiled.lanes[movement.toLane]!;
         if (
           next.road !== route.roads[step + 1] ||
-          !route.targetLanes[step]!.includes(lane) ||
+          !route.targetLanes[step]?.includes(lane) ||
           cost > routePenalty ||
           (cost === routePenalty && idx > alternate)
         )
@@ -140,7 +149,7 @@ function createRun({
       }
       if (alternate !== -1) vehicles.movement[id] = alternate;
       else if (vehicles.movement[id] !== -1) fallback[id] = 1;
-      else waitingForLane[id] = Number(!route.targetLanes[step]!.includes(lane));
+      else waitingForLane[id] = Number(!route.targetLanes[step]?.includes(lane));
     }
   }
 
@@ -543,14 +552,17 @@ function createRun({
       lane: vehicles.lane[id]!,
       positionM: vehicles.position[id]!,
       speedMps: vehicles.speed[id]!,
-      route: route
-        ? {
-            ...route,
-            roads: route.roads.slice(),
-            movements: route.movements.slice(),
-            targetLanes: route.targetLanes.map((lanes) => lanes.slice()),
-          }
-        : null,
+      // A deferred edit check can retain a broken internal plan until it is due. Do not
+      // publish its removed indices as a drawable route.
+      route:
+        route && !route.roads.includes(-1) && !route.movements.includes(-1)
+          ? {
+              ...route,
+              roads: route.roads.slice(),
+              movements: route.movements.slice(),
+              targetLanes: route.targetLanes.map((lanes) => lanes.slice()),
+            }
+          : null,
       routeReason: routeReasons[id]!,
       waitingS:
         state === QUEUED_ORIGIN
@@ -562,7 +574,178 @@ function createRun({
     };
   }
 
+  function editChecked(id: number, failed: boolean) {
+    if (intersections.grants[id] !== -1) intersections.release(id);
+    routeReasons[id] = 'edit';
+    if (failed) {
+      vehicles.remove(id);
+      vehicles.speed[id] = 0;
+      vehicles.route[id] = null;
+      accounting.fail(id, 'destination_unreachable');
+      return;
+    }
+    planLane(id, vehicles.lane[id]!, vehicles.position[id]!);
+    vehicles.stopped[id] = 0;
+    vehicles.junctionWaiting[id] = 0;
+  }
+
+  function patch(next: CompiledCity): PatchResult {
+    if (
+      next.places.length !== compiled.places.length ||
+      compiled.places.some((place) => !next.index.place.has(place.id))
+    )
+      throw new Error('Place additions and removals require a restart');
+    const before = compiled;
+    const changes = patchChanges(before, next);
+    const project = createProjector(next);
+    const oldGrants = intersections.grants.slice();
+    const oldRedGrants = intersections.redGrants.slice();
+    const result = { version: next.version, relocated: 0, stranded: 0, rerouted: 0 };
+    observedCosts.patch(next);
+    if (costs !== observedCosts.costs) {
+      const times = observedCosts.costs.roadTravelTimeS.slice();
+      for (const road of before.roads) {
+        const mapped = changes.roads[road.idx]!;
+        if (mapped !== -1) times[mapped] = costs.roadTravelTimeS[road.idx]!;
+      }
+      costs.roadTravelTimeS = times;
+      costs.version++;
+    }
+    connectors.patch(next);
+    accounting.patch(next);
+    compiled = next;
+    rerouter.patch(next);
+    vehicles.resetSegments(next.lanes.length, next.movements.length);
+    merges = createMerges(next, vehicles, params);
+    intersections = createIntersections(
+      patchSignals(before, next, time(), signalEpochs),
+      vehicles,
+      params,
+      merges.canEnter,
+    );
+    laneChanges = createLaneChanges(next, vehicles, params);
+    carLanes = next.lanes.map((lane) => lane.allowed.includes('car'));
+
+    for (let id = 0; id < vehicles.count; id++) {
+      const oldDestination = before.connectors[vehicles.destination[id]!];
+      const mappedDestination = oldDestination ? changes.connectors[oldDestination.idx] : undefined;
+      if (
+        mappedDestination !== undefined &&
+        mappedDestination !== -1 &&
+        next.connectors[mappedDestination]!.direction !== 'out'
+      ) {
+        vehicles.destination[id] = mappedDestination;
+      } else {
+        const destinationPlace = next.places[next.index.place.get(trips[id]!.destinationPlaceId)!]!;
+        vehicles.destination[id] =
+          destinationPlace.connectorsIn[id % destinationPlace.connectorsIn.length] ?? -1;
+      }
+      const route = vehicles.route[id];
+      const step = vehicles.routeStep[id]!;
+      if (route) vehicles.route[id] = remapRoute(route, changes);
+      vehicles.movement[id] = changes.movements[vehicles.movement[id]!] ?? -1;
+      vehicles.attemptedFallbacks[id] =
+        vehicles.attemptedFallbacks[id] &&
+        new Set(
+          [...vehicles.attemptedFallbacks[id]!]
+            .map((i) => changes.movements[i]!)
+            .filter((i) => i !== -1),
+        );
+      if (vehicles.state[id] !== DRIVING && vehicles.state[id] !== QUEUED_DESTINATION) continue;
+      const field = vehicles.lane[id]!;
+      const source = field >= 0 ? before.lanes[field]! : before.movements[-field - 1]!;
+      const mapped = field >= 0 ? changes.lanes[field]! : changes.movements[-field - 1]!;
+      const segment = field >= 0 ? next.lanes[mapped] : next.movements[mapped];
+      let relocated = false;
+      let newField = field >= 0 ? mapped : -mapped - 1;
+      let position = vehicles.position[id]!;
+      if (!segment || position > segment.lengthM + 1e-9) {
+        const projection = project(source, position);
+        if (projection) {
+          newField = projection.field;
+          position = projection.positionM;
+          relocated = true;
+          result.relocated++;
+        } else if (!segment) {
+          vehicles.speed[id] = 0;
+          vehicles.lane[id] = -1;
+          vehicles.route[id] = null;
+          accounting.fail(id, 'stranded');
+          result.stranded++;
+          continue;
+        } else position = segment.lengthM;
+      }
+      vehicles.insert(id, newField, position);
+      if (vehicles.destination[id] === -1) {
+        vehicles.remove(id);
+        vehicles.speed[id] = 0;
+        vehicles.route[id] = null;
+        accounting.fail(id, 'destination_unreachable');
+        continue;
+      }
+      if (relocated) {
+        roadEnteredS[id] = time();
+        roadEnteredM[id] = newField >= 0 ? position : 0;
+        vehicles.stopped[id] = 0;
+        vehicles.junctionWaiting[id] = 0;
+        if (vehicles.state[id] === QUEUED_DESTINATION) accounting.transition(id, DRIVING);
+      }
+      const mappedRoute = vehicles.route[id]!;
+      const invalid =
+        relocated ||
+        mappedRoute.roads.slice(step).includes(-1) ||
+        mappedRoute.movements.slice(step).some((i) => i === -1 || next.movements[i]!.neverGreen) ||
+        route!.targetLanes.slice(step).some((lanes) => lanes.some((i) => changes.lanes[i] === -1));
+      const destination = next.connectors[vehicles.destination[id]!]!;
+      const destinationChanged =
+        !oldDestination ||
+        mappedDestination !== destination.idx ||
+        changes.lanes[oldDestination.lane] !== destination.lane ||
+        oldDestination.positionM !== destination.positionM;
+      const affected =
+        invalid ||
+        destinationChanged ||
+        route!.roads.slice(step).some((i) => changes.changedRoads.has(i));
+      if (destinationChanged && vehicles.state[id] === QUEUED_DESTINATION)
+        accounting.transition(id, DRIVING);
+      if (affected) {
+        const immediate =
+          relocated ||
+          mappedRoute.roads[step] === -1 ||
+          mappedRoute.movements[step] === -1 ||
+          next.movements[mappedRoute.movements[step] ?? -1]?.neverGreen ||
+          mappedRoute.targetLanes[step]?.length === 0 ||
+          destinationChanged;
+        rerouter.scheduleEdit(id, time(), invalid || destinationChanged, immediate);
+        result.rerouted++;
+      }
+      arrival[id] = changes.connectors[arrival[id]!] ?? -1;
+      if (newField >= 0) {
+        if (relocated || destinationChanged || (vehicles.movement[id] === -1 && arrival[id] === -1))
+          planLane(id, newField, position);
+        if (vehicles.state[id] === QUEUED_DESTINATION && arrival[id] === -1)
+          accounting.transition(id, DRIVING);
+      } else {
+        vehicles.movement[id] = -newField - 1;
+        if (relocated) fallback[id] = 1;
+      }
+      const grant = newField < 0 ? -newField - 1 : (changes.movements[oldGrants[id]!] ?? -1);
+      if (
+        grant !== -1 &&
+        (newField < 0 || (!relocated && !changes.changedNodes.has(next.movements[grant]!.node)))
+      ) {
+        intersections.grants[id] = grant;
+        intersections.redGrants[id] = oldRedGrants[id]!;
+        intersections.occupancy[grant] = intersections.occupancy[grant]! + 1;
+      }
+    }
+    rerouter.updateEdits(time(), editChecked);
+    intersections.signals(time());
+    return result;
+  }
+
   return {
+    patch,
     time,
     snapshot,
     inspect,
@@ -573,6 +756,7 @@ function createRun({
         const timeS = time();
         intersections.signals(timeS);
         connectors.spawn(timeS, hasSpawnGap, releaseTrip);
+        rerouter.updateEdits(timeS, editChecked);
         rerouter.update(timeS, (id) => {
           if (intersections.grants[id] !== -1) intersections.release(id);
           routeReasons[id] = 'congestion';
@@ -600,6 +784,7 @@ export function createEngine() {
     load(input: LoadInput) {
       run = createRun(input);
     },
+    patch: (compiled) => loaded().patch(compiled),
     get timeS() {
       return loaded().time();
     },

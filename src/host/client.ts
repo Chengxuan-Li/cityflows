@@ -1,4 +1,5 @@
 import type { Metrics, VehicleDetail } from '../sim/types';
+import type { CompiledCity } from '../network';
 import type { RoadStats, TrajectoryRecord, TripRecord } from '../project/export-csv';
 import type {
   HostEvent,
@@ -9,6 +10,7 @@ import type {
   MetricsSample,
   HeadlessResult,
   TrajectoryStatus,
+  HostPatchResult,
 } from './protocol';
 
 type LoadInput = Omit<Extract<HostRequest, { type: 'load' }>, 'id' | 'type'>;
@@ -16,6 +18,7 @@ type WithoutId<T> = T extends HostWireRequest ? Omit<T, 'id'> : never;
 
 export interface EngineClient {
   load(input: LoadInput): Promise<void>;
+  patch(compiled: CompiledCity): Promise<HostPatchResult>;
   play(): Promise<void>;
   pause(): Promise<void>;
   setSpeed(multiplier: number): Promise<void>;
@@ -98,6 +101,10 @@ export function createEngineClient(worker: Worker): EngineClient {
   }
 
   return {
+    patch(compiled) {
+      const { data, byteOffset } = compiled.laneSpatial;
+      return send({ type: 'patch', compiled: { ...compiled, laneSpatial: { data, byteOffset } } });
+    },
     load({ compiled, trips, scenario }) {
       const { data, byteOffset } = compiled.laneSpatial;
       return send({

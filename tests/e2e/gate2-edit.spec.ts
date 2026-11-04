@@ -49,7 +49,7 @@ test('T12 draws a snapped two-way bypass and an inspected vehicle uses it after 
   await page.screenshot({ path: testInfo.outputPath('02-bypass-preview.png') });
   await page.mouse.click(end.x - 3, end.y + 2);
   await page.keyboard.press('Enter');
-  await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   const edited = await savedCity(page);
   const added = Object.values(edited.roads).filter((road) => !original.roads[road.id]);
   expect(added).toHaveLength(2);
