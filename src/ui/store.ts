@@ -589,6 +589,7 @@ declare global {
       city?: () => Project['city'];
       commit?: (command: Command) => Promise<void>;
       movementId(index: number): string;
+      resetHints?: () => void;
     };
   }
 }

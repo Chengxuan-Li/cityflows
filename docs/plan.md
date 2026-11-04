@@ -607,3 +607,23 @@ profile shares are `engine.prepareTravel` 19 percent (grid) and 23 percent (town
 `engine.commit` 9 percent, `lane-change.propose` 6 to 7 percent, and in the town
 the route searches of the checks themselves 24 percent; `intersection.signals`
 scans every vehicle for grants at 2.8 percent on the grid and was left as is.
+
+### Gate 4 verification
+
+TASK-045, measured 2026-11-04 on the same machine. The brief's four acceptance demos are
+Playwright scenarios that record a video and write a `metrics.json` next to their
+screenshots in `test-results/<scenario>/`; each is deterministic (seed 1, fixed steps
+through `window.cityflows.step`), and the closing seconds of playback in A and C are for
+the recording only, after the numbers are taken.
+
+| Demo | Scenario | Measured |
+|---|---|---|
+| A, morning commute | `tests/e2e/demo-a-commute.spec.ts` | Grid with 2 000 residents: trips peak at 08:00 (951 at 07:00, 960 at 08:00; 1 546 between 16:00 and 19:00). At 08:00, 22 driving, 240 queued at the Homes exit, 734 completed, one road below half its free speed; heat screenshots at 08:00 and 17:30; 3 355 completed and 0 failed by 17:30. |
+| B, terminal access | `tests/e2e/demo-b-airport.spec.ts` | Station city, 80 arrivals at 08:05: queue 0 before the event, peak 64 with one connector and 53 with an added arrival connector, which empties the queue by 08:16 while one connector still has 4 cars waiting at 08:20. |
+| C, bypass | `tests/e2e/demo-c-bypass.spec.ts` | Two-lane expressway with two ramps on the grid: 300 of 300 inspected routes use it; mean travel time 90.7 s to 60.0 s for the 07:00 to 09:00 morning, 1 063 completed and 0 failed in both runs. |
+| D, import-edit-share | `tests/e2e/demo-d-import-edit-share.spec.ts` | `fixtures/osm/downtown.osm` uploaded (712 roads, 0 errors, 207 warnings); an OSM-banned turn at junction n:241 lifted in the Turns list; the saved `.cityflows` reopened in a fresh browser context; after 15 replayed minutes both sides hash 4024860980 with equal trip counts. The second context's video is in `reopened/`. |
+
+Demo D's imported city fails 7 442 of its gateway trips in the first 15 minutes (reason
+counts are in its `metrics.json`); that is the import's demand, not the share, and stays a
+follow-up. `tests/e2e/demo-onboarding.spec.ts` follows the six first-run hints (New, Play,
+a car, a street's settings, Restart, Compare) and saves a screenshot of each.

@@ -1,24 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-
-const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
-async function point(page: Page, x: number, y: number) {
-  const bounds = (await page.getByLabel('City map').boundingBox())!;
-  const scale = (bounds.height - 144) / 510;
-  return {
-    x: bounds.x + bounds.width / 2 + (x - 240) * scale,
-    y: bounds.y + bounds.height / 2 + (y - 240) * scale,
-  };
-}
-async function click(page: Page, x: number, y: number) {
-  const p = await point(page, x, y);
-  await page.mouse.click(p.x, p.y);
-}
-async function runMorning(page: Page) {
-  await page.evaluate(async () => {
-    for (let i = 0; i < 12; i++) await window.cityflows!.step(6000);
-  });
-  return page.evaluate(() => window.cityflows!.metrics());
-}
+import { expect, test } from '@playwright/test';
+import { button, clickGrid as click, gridPoint as point, runMorning } from './helpers';
 
 test('demo C: draw an expressway and ramps, restart, use the bypass and reduce travel time', async ({
   page,

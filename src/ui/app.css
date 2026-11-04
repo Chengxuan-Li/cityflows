@@ -981,3 +981,41 @@ dd {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.hint,
+.hint-ring {
+  position: fixed;
+  z-index: 2;
+}
+
+.hint {
+  width: 15rem;
+  padding: 10px 12px 6px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  animation: sheet-in 140ms ease-out;
+}
+
+.hint .controls {
+  margin-top: 4px;
+  justify-content: flex-end;
+}
+
+.hint small {
+  margin-right: auto;
+}
+
+.hint-ring {
+  border-radius: 9px;
+  box-shadow: 0 0 0 3px #28646140;
+  pointer-events: none;
+}
+
+.show-hints {
+  position: absolute;
+  top: var(--inset);
+  right: var(--inset);
+  color: var(--muted);
+}

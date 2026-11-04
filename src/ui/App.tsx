@@ -6,6 +6,7 @@ import { StreetInspector } from './inspector/street';
 import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
 import { MapView } from './map-view';
+import { Onboarding } from './onboarding';
 import { RunBar } from './run-bar';
 import { useAppStore } from './store';
 import { Toolbox } from './toolbox';
@@ -146,6 +147,7 @@ export function App() {
         </aside>
       )}
       <RunBar />
+      <Onboarding />
     </div>
   );
 }
