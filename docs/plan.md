@@ -72,7 +72,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-043](tasks/TASK-043.md) | 4 | Analysis and interchange exports | `src/project/export-*.ts`, export menu | 008, 041 | CSV and GeoJSON exports labelled synthetic | done |
 | [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | done |
 | [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | todo |
-| [TASK-046](tasks/TASK-046.md) | 4 | Simulation hotspots | `src/sim/reroute.ts`, `engine.ts`, `lane-change.ts`, `src/host/headless.ts`, `export-data.ts`, `bench/` | 044, 032 | bench gains with unchanged hashes | todo |
+| [TASK-046](tasks/TASK-046.md) | 4 | Simulation hotspots | `src/sim/reroute.ts`, `engine.ts`, `lane-change.ts`, `src/host/headless.ts`, `export-data.ts`, `bench/` | 044, 032 | bench gains with unchanged hashes | done |
 
 ### Waves
 
@@ -376,6 +376,21 @@ exists.
   single stranded trip on the stress grid) and all 28 Playwright scenarios pass; T16 adds about
   three minutes to the suite. The measured section 15 status and the profiled simulation
   hotspots are in the Performance section below; the sim follow-up is the next task.
+
+- 2026-11-04, TASK-046 merged as delivered (first wave run as sessions from the lead chat).
+  The reroute check keeps a min-heap of due checks keyed by time and id instead of scanning
+  every trip every step; the travel and proposal passes walk an ordered list of occupied
+  segments; lane-change proposals allocate nothing per vehicle and use precomputed lane
+  survival; the headless comparison reads one snapshot per step and the trip outcomes once.
+  The stress grid's stuck trip was an engine defect: a lane-level fallback route whose only
+  target lane was dropped before a narrowing never proposed a lane change; a vehicle now leaves
+  by the nearest surviving lane that enters the next road and reroutes as missed_turn, with a
+  reproduction test. Lead benchmark on the merged tree, 24 h steps per second: grid 69 200 to
+  488 000, scaled grid 24 000 to 197 000, stress 15 700 to 39 800 with all 6 240 trips
+  completed, town 8 900 to 42 000; grid, scaled and town state hashes unchanged, the stress
+  hash changed only through the fix. Check (168 unit tests) and all 28 Playwright scenarios
+  pass. Left alone with numbers: the export recorder, the comparison snapshots, signal grant
+  scans and the IDM arithmetic.
 
 ## Owner decisions log
 
