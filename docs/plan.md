@@ -64,7 +64,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-030](tasks/TASK-030.md) | 3 | Activity chains, through traffic, place events | `src/demand`, `src/sim/connectors.ts` (events, capacity), `tests/demand`, `tests/sim/T10*` | 011, 003 | T09 (full), T10 | done |
 | [TASK-031](tasks/TASK-031.md) | 3 | Congestion-aware routing | `src/sim/link-costs.ts`, `src/sim/reroute.ts`, `src/routing` (costs) | 002, 004 | T06 | done |
 | [TASK-032](tasks/TASK-032.md) | 3 | Ramps, merging, expressway construction | `src/sim/merge.ts`, `src/editor/commands/ramp.ts`, `src/ui/tools/ramp*`, `tests/sim/T07*` | 004, 022 | T07 (full), demo C | done |
-| [TASK-033](tasks/TASK-033.md) | 3 | Place editor and demand panel | `src/ui/inspector/place*`, `src/ui/panels/demand*`, vehicle inspector reasons | 030, 010 | demos A and B reachable from the UI | todo |
+| [TASK-033](tasks/TASK-033.md) | 3 | Place editor and demand panel | `src/ui/inspector/place*`, `src/ui/panels/demand*`, vehicle inspector reasons | 030, 010 | demos A and B reachable from the UI | done |
 | [TASK-034](tasks/TASK-034.md) | 3 | Place painting and demand regeneration | `src/ui/tools/place-paint.tsx`, place controls, regenerate action, `tests/e2e/gate3-paint.spec.ts` | 050, 011 | painted place attracts trips after regenerate | done |
 | [TASK-040](tasks/TASK-040.md) | 4 | Signal editor | `src/ui/inspector/signal*`, `src/render/layers/signal-preview.ts` | 010 | T13 through the UI | done |
 | [TASK-041](tasks/TASK-041.md) | 4 | Metrics, layers and charts | `src/ui/panels/metrics*`, `src/ui/layers*`, `src/render/layers/heat.ts` | 005, 006 | readable congestion feedback | done |
@@ -121,6 +121,7 @@ dependency of its tasks is merged to `main`.
 - Wave 8 execution (owner decision, 2026-11-03): the lead starts the agents as sessions from
   the lead chat, one worktree per task cut from `main`; review and merge stay with the lead.
   TASK-045 waits until TASK-033 and TASK-046 are in.
+- Wave 8 outcome (2026-11-04): TASK-033 and TASK-046 merged. TASK-045 is the last task.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -391,6 +392,22 @@ exists.
   hash changed only through the fix. Check (168 unit tests) and all 28 Playwright scenarios
   pass. Left alone with numbers: the export recorder, the comparison snapshots, signal grant
   scans and the IDM arithmetic.
+
+- 2026-11-04, TASK-033 merged as delivered (session from the lead chat). The place inspector
+  gained a 24-bar hourly profile editor (drag or arrow keys; "Add profile" seeds a commute
+  shape by place kind; "Use default timing" clears it), an event list, a Type select,
+  editable attraction and a per-connector direction; "Add connector" falls back to a free slot
+  15 m along an already connected lane. The Demand panel in the run bar shows persons and
+  cars, trips by hour, trips per place, the regenerate control with its seed (moved out of
+  Trip counts) and the last run's origin queue and failures by reason; the vehicle inspector
+  derives a waiting reason in the UI. The gate3-places scenarios cover demo A (2 000
+  residents, morning peak, at least 10 driving at 08:00, the Homes exit being the limit) and
+  demo B on the bundled Station city (queue 0 before the 08:05 train, peak 64 after, about 53
+  with a second arrival connector; the 300-visitor variant is origin-bound at the gateway
+  exits, so the fixture's 80 stays). Check and all 31 Playwright scenarios pass on the merged
+  tree; the lead opened the panel and the editors in the browser. Two follow-ups noted: a
+  second connector with direction "both" on a capacity-limited place deadlocks its loop
+  (departures spawn into the arriving queue), and the demand chart oversizes below 900 px.
 
 ## Owner decisions log
 
