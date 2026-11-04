@@ -231,14 +231,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       );
       staticPick = createPicker(city, shapes, roadGrades);
 
+      const incidentRoads = city.nodes.map(() => [] as CompiledCity['roads']);
       for (const road of city.roads) {
+        incidentRoads[road.from]!.push(road);
+        incidentRoads[road.to]!.push(road);
         const { surfaces, markings, nodes } = grades.get(roadGrades[road.idx]!)!;
         drawRoad(surfaces, markings, city, road);
         drawRoadJoins(nodes, city, road);
       }
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
-        drawNode(grade.nodes, node);
+        drawNode(grade.nodes, city, node, incidentRoads[node.idx]!);
         if (node.signal) updateSignals.push(drawSignal(city, node, grade.signals));
       }
       for (const movement of city.movements) {
