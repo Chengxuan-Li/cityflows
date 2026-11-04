@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-const port = 4173;
+const port = Number(process.env.CITYFLOWS_TEST_PORT ?? 4173);
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -12,7 +12,7 @@ export default defineConfig({
   webServer: {
     command: `npm run build -- --mode test && npm run preview -- --port ${port} --strictPort`,
     url: `http://localhost:${port}`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
