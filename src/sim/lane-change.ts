@@ -61,6 +61,19 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
       if (!survives(target, nextRoad)) continue;
       distance = Math.min(distance, Math.abs(compiled.lanes[target]!.lane - ordinal));
     }
+    if (distance !== Infinity) return distance;
+    // The routing lane model keeps the compiler's clamped movement from a dropped lane, so a
+    // lane-level fallback route can name only dropped lanes. Leave by the nearest surviving
+    // lane that still enters the next road; planLane then takes its movement and reroutes.
+    for (const idx of compiled.roads[route.roads[step]!]!.lanes) {
+      if (!carLane[idx] || !survives(idx, nextRoad)) continue;
+      const lane = compiled.lanes[idx]!;
+      const enters = lane.out.some((movement) => {
+        const { toLane, neverGreen } = compiled.movements[movement]!;
+        return !neverGreen && compiled.lanes[toLane]!.road === nextRoad;
+      });
+      if (enters) distance = Math.min(distance, Math.abs(lane.lane - ordinal));
+    }
     return distance;
   }
 
