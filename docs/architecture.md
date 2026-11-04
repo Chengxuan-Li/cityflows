@@ -141,6 +141,7 @@ interface Road {
   id: RoadId;
   from: NodeId;
   to: NodeId;
+  layer?: number;          // visual grade; omitted uses the lower endpoint grade
   centerline: Vec2[];      // >= 2 points; first equals nodes[from].pos, last equals nodes[to].pos
   lateralOffsetM: number;  // lane block center relative to centerline; positive = right of travel
   lanes: Lane[];           // index 0 = leftmost in travel direction
@@ -945,7 +946,8 @@ type HostEvent =
   place polygons by point-in-polygon.
 - Static geometry is rebuilt only when `compiled.version` changes.
 - `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes and
-  node layers are not in the compiled model; grade-separated roads are drawn in layer order.
+  road and node layers are not in the compiled model. Grade groups draw from lowest to
+  highest, with roads in compiled index order inside each grade.
   `Scene.setRouteOverlay({ lanes, movements } | null)` takes compiled indices; the UI maps a
   `Route` to it (the lanes of `targetLanes` and the route's movements).
 - The renderer owns a structural copy of the `VehicleSnapshot` layout in `src/render/types.ts`
@@ -1025,8 +1027,11 @@ Lives in `src/importers/osm`, runs inside an import worker.
 3. Junction nodes: nodes shared by two or more kept ways, way ends, nodes tagged
    `traffic_signals`, `stop` or `give_way`, and `via` nodes of restriction relations. Split
    ways there.
-4. Project with a `GeoReference` at the bbox center. One `Node` per junction node, `layer`
-   from the tag. Connectivity starts from shared OSM node ids. TASK-048 adds inferred
+4. Project with a `GeoReference` at the bbox center. One `Node` per junction node, with its
+   tagged layer if present or the grade of the way it serves. At mixed grades, prefer a
+   through way, then a continuation across way boundaries, then ground in a tie. Bridge
+   endpoints without a deck continuation use ground. Connectivity starts from shared OSM
+   node ids. TASK-048 adds inferred
    crossings from a feeder to the opposing, same-name/class surface carriageway on the same
    layer, within half the combined road width plus 12 m (capped at 30 m). Motorways, ramps
    and restriction-via nodes are excluded from this proximity inference.
@@ -1039,7 +1044,10 @@ Lives in `src/importers/osm`, runs inside an import worker.
    signals move to its representative. Canonical lane assignment then applies at the combined
    junction. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
    in provenance; disconnected roads and remaining short-road/dead-end warnings stay visible.
-5. Roads: `oneway=yes` (or `-1`, or implied by motorway and roundabout) gives one road;
+5. Roads: an integer `layer` tag takes precedence. With the tag absent, a bridge other
+   than `bridge=no` uses +1, a tunnel other than `tunnel=no` or `covered=yes` uses −1,
+   and other roads use 0.
+   `oneway=yes` (or `-1`, or implied by motorway and roundabout) gives one road;
    otherwise two roads with mirrored centerlines sharing a `streetGroupId` per split section
    (`osm:way/<id>` for the first section, `osm:way/<id>/<n>` after), since one group per way
    would make the compiler treat continuing along the way as a U-turn. Lane counts from

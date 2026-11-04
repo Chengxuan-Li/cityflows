@@ -10,7 +10,7 @@ import { drivableClass } from './filter';
 import { parseOsm } from './parse';
 import { addGateways, addOsmPlaces } from './places';
 import { project } from './project';
-import { createRoads, roadSpecs, type OsmRoad } from './roads';
+import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
 import {
   consolidateJunctions,
   joinDividedFeeders,
@@ -35,20 +35,32 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   if (!kept.length) return fail('osm_no_drivable_ways', 'The extract has no drivable highways');
   const sourceNodes = new Map(data.node.map((node) => [node.id, node]));
   const used = new Set<number>();
-  const wayLayers = new Map<number, string>();
+  const wayLayers = new Map<
+    number,
+    { wayId: number; layer: number; through: boolean; bridge: boolean }[]
+  >();
   for (const { way } of kept) {
     if (way.nd.length < 2)
       return fail('road_degenerate', `OSM way ${way.id} needs at least two nodes`, [
         `way/${way.id}`,
       ]);
-    for (const ref of way.nd) {
+    const layer = osmLayer(way.tag) ?? 0;
+    const bridge = isBridge(way.tag);
+    for (const [index, ref] of way.nd.entries()) {
       if (!sourceNodes.has(ref))
         return fail('dangling_ref', `OSM way ${way.id} references missing node ${ref}`, [
           `way/${way.id}`,
           `node/${ref}`,
         ]);
       used.add(ref);
-      if (way.tag.layer !== undefined && !wayLayers.has(ref)) wayLayers.set(ref, way.tag.layer);
+      const layers = wayLayers.get(ref) ?? [];
+      layers.push({
+        wayId: way.id,
+        layer,
+        through: index > 0 && index < way.nd.length - 1,
+        bridge,
+      });
+      wayLayers.set(ref, layers);
     }
   }
   const geo = project(
@@ -90,21 +102,41 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const nodes = new Map<string, Node>();
   const incidents = new Map<string, JunctionRoads>();
   const signals: Node[] = [];
-  function addNode(point: RoadPoint, wayLayer: string | undefined, wayId: number) {
+  function addNode(point: RoadPoint, wayLayer: number, wayId: number) {
     const existing = nodes.get(point.key);
     if (existing) return existing.id;
     const tags = point.osmId === undefined ? undefined : sourceNodes.get(point.osmId)!.tag;
-    const layerTag =
-      point.osmId === undefined ? wayLayer : (tags?.layer ?? wayLayers.get(point.osmId));
-    const layer = layerTag && /^-?\d+$/.test(layerTag) ? Number(layerTag) : NaN;
-    const hasLayer = Number.isSafeInteger(layer);
-    if (layerTag !== undefined && !hasLayer)
+    const taggedLayer = tags?.layer === undefined ? undefined : osmLayer(tags);
+    if (tags?.layer !== undefined && taggedLayer === undefined)
       diagnostics.push({
         severity: 'warning',
         code: 'osm_unsupported_tag',
         refs: [`way/${wayId}`],
-        message: `Unsupported layer=${layerTag} at OSM node ${point.key}`,
+        message: `Unsupported layer=${tags.layer} at OSM node ${point.key}`,
       });
+    let layer = taggedLayer ?? wayLayer;
+    if (taggedLayer === undefined && point.osmId !== undefined) {
+      const layers = wayLayers.get(point.osmId)!;
+      // Use the through way first, then a continuation across way boundaries.
+      // A bridge endpoint without a deck continuation meets the ground.
+      const candidates = layers.map((candidate) => {
+        const continues = layers.some(
+          (other) => other.wayId !== candidate.wayId && other.layer === candidate.layer,
+        );
+        return {
+          wayId: candidate.wayId,
+          priority: candidate.through ? 2 : continues ? 1 : 0,
+          layer: candidate.bridge && !candidate.through && !continues ? 0 : candidate.layer,
+        };
+      });
+      candidates.sort(
+        (a, b) =>
+          b.priority - a.priority ||
+          Number(b.layer === 0) - Number(a.layer === 0) ||
+          a.wayId - b.wayId,
+      );
+      layer = candidates[0]!.layer;
+    }
     const control =
       tags?.highway === 'stop' ? 'stop' : tags?.highway === 'give_way' ? 'yield' : 'uncontrolled';
     // Only genuinely guessed attributes count as inferred; untagged layer and control are the
@@ -115,7 +147,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     const node: Node = {
       id,
       pos: point.pos,
-      layer: hasLayer ? layer : 0,
+      layer,
       control,
       minorRoads: [],
       turnRules: [],
@@ -151,8 +183,9 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
         const last = clipped.points.at(-1)!;
         if (first.key === last.key)
           return fail('road_degenerate', `OSM way ${way.id} has a self-loop`, [`way/${way.id}`]);
-        const from = addNode(first, way.tag.layer, way.id);
-        const to = addNode(last, way.tag.layer, way.id);
+        const wayLayer = osmLayer(way.tag) ?? 0;
+        const from = addNode(first, wayLayer, way.id);
+        const to = addNode(last, wayLayer, way.id);
         for (const road of createRoads(city, way, roadClass, specs, clipped, segment++, from, to)) {
           incidents.get(road.road.from)!.outgoing.push(road);
           incidents.get(road.road.to)!.incoming.push(road);

@@ -2,7 +2,7 @@ import { offsetPolyline } from '../../geo/polyline';
 import type { Diagnostic } from '../../network';
 import { allocateId, type City, type Road, type RoadClass } from '../../schema';
 import type { ClippedPart } from './clip';
-import type { OsmWay } from './parse';
+import type { OsmTags, OsmWay } from './parse';
 
 const speedKph: Record<RoadClass, number> = {
   motorway: 100,
@@ -23,6 +23,20 @@ export interface OsmRoad {
   cutEnd: boolean;
   attributes: string;
   layer: number;
+}
+
+export function isBridge(tag: OsmTags): boolean {
+  return tag.bridge !== undefined && tag.bridge !== 'no';
+}
+
+export function osmLayer(tag: OsmTags): number | undefined {
+  if (tag.layer !== undefined) {
+    const layer = /^-?\d+$/.test(tag.layer) ? Number(tag.layer) : NaN;
+    return Number.isSafeInteger(layer) ? layer : undefined;
+  }
+  if (isBridge(tag)) return 1;
+  if ((tag.tunnel !== undefined && tag.tunnel !== 'no') || tag.covered === 'yes') return -1;
+  return 0;
 }
 
 export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagnostic[]) {
@@ -68,6 +82,7 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
     Number(speed?.[1]) * (speed?.[2]?.toLowerCase() === 'mph' ? 0.44704 : 1 / 3.6);
   const hasSpeed = Number.isFinite(taggedSpeed) && taggedSpeed > 0;
   if (!hasSpeed && tag.maxspeed !== undefined) unsupported('maxspeed');
+  if (osmLayer(tag) === undefined) unsupported('layer');
   const widthM = roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
 
   return directions.map((direction) => {
@@ -113,6 +128,7 @@ export function createRoads(
   to: string,
 ): OsmRoad[] {
   const paired = specs.length === 2;
+  const layer = osmLayer(way.tag) ?? 0;
   // The compiler identifies U-turns by street group. Pair only the reverse of this section.
   const streetGroupId = paired ? `osm:way/${way.id}${segment === 0 ? '' : '/' + segment}` : null;
   return specs.map(({ direction, turnLanes, lanes, speedLimitMps, provenance }) => {
@@ -126,6 +142,7 @@ export function createRoads(
       id,
       from: reversed ? to : from,
       to: reversed ? from : to,
+      layer,
       centerline: reversed ? centerline.reverse() : centerline,
       lateralOffsetM: paired
         ? ((city.drivingSide === 'right' ? 1 : -1) * lanes.length * lanes[0]!.widthM) / 2
@@ -149,7 +166,7 @@ export function createRoads(
           .filter(([key]) => !key.startsWith('turn:lanes'))
           .sort(([a], [b]) => a.localeCompare(b)),
       ),
-      layer: Number(way.tag.layer ?? 0),
+      layer,
     };
   });
 }
