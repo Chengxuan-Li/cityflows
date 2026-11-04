@@ -132,8 +132,6 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   expect(morning.releasedTrips).toBeGreaterThan(10_000);
   expect(morning.failed).toBe(0);
   expect(morning.failedShareOfReleased).toBe(0);
-  expect(morning.completed).toBeGreaterThan(0);
-  expect(morning.failed).toBe(0);
   expect(morning.completed).toBeGreaterThanOrEqual(445);
   expect(morning.gatewayTraffic.trunk!.entered).toBeGreaterThan(0);
   expect(morning.gatewayTraffic.trunk!.left).toBeGreaterThan(0);
@@ -143,7 +141,7 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
 
 test.each([
   ['downtown', 60],
-  ['highway', 17],
+  ['highway', 19], // 17 after TASK-054 plus two lane_requires_merge warnings from TASK-055
   ['suburb', 7],
   ['sindelfingen-a81', 53],
 ] as const)('%s retains no more warnings than the TASK-054 baseline', (name, baseline) => {

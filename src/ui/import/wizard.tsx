@@ -22,7 +22,9 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
   );
   const [side, setSide] = useState<'left' | 'right'>('right');
   const [name, setName] = useState('OpenStreetMap import');
-  const [demandScale, setDemandScale] = useState(0.1);
+  // The largest 0.05 step at which the Munich reference extract does not gridlock (plan,
+  // "Reference extract and import baseline", wave 10 table).
+  const [demandScale, setDemandScale] = useState(0.15);
   const [progress, setProgress] = useState('');
   const [sourceNote, setSourceNote] = useState('');
   const [error, setError] = useState('');

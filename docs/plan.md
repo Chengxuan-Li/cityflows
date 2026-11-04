@@ -78,14 +78,14 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-049](tasks/TASK-049.md) | 5 | Junction controls: yield, stop, turn on red, roundabouts | `src/sim`, `src/network/signals.ts`, `src/editor`, `src/ui/tools/roundabout.tsx`, `src/render/layers/signs.ts` | 032, 040, 046 | gate5-controls scenarios | done |
 | TASK-051 | 5 | Live edits with bounded rerouting (B8) | engine, host, store restart path | 047, 048, 049 and a design note | edits apply without restart | todo |
 | TASK-052 | 5 | CI green on the Linux runner (lead) | `tests/e2e/gate3-paint.spec.ts`, `tests/e2e/gate3-places.spec.ts` | - | e2e green with wider fonts | done |
-| [TASK-053](tasks/TASK-053.md) | 5 | Import demand scale (B13) | `src/ui/import/*`, `bench/import-probe.ts`, `tests/e2e/gate2-import.spec.ts` | 021, 048 | Munich runs at the default scale without gridlock | todo |
-| [TASK-054](tasks/TASK-054.md) | 5 | Signal junctions on import (B15) | `src/importers/osm/split.ts`, `controls.ts`, `index.ts` (junction seeds), `src/importers/signal-program.ts`, `tests/importers` | 048, 049 | no degree-two signal nodes on Munich | todo |
-| [TASK-055](tasks/TASK-055.md) | 5 | Undrivable routes (B17) | `src/routing/**`, `src/network/**`, `bench/route-audit.ts`, `tests/routing`, `tests/network` | 031, 046, 048 | route audit zero on four cities | todo |
-| [TASK-056](tasks/TASK-056.md) | 5 | Draw order by level (B19) | `src/importers/osm/roads.ts` (layer), `index.ts` (`addNode` layer), `src/render/scene.ts`, `src/render/layers/roads.ts`, `nodes.ts`, `tests/render` | 047 | bridges draw over what they cross | todo |
-| [TASK-057](tasks/TASK-057.md) | 5 | Pass-through at conflict-free nodes (B18) | `src/sim/intersection.ts`, `src/sim/engine.ts` (grant path), `src/sim/vehicle.ts`, `tests/sim` | 046, 049 | split road drives like one road | todo |
-| [TASK-058](tasks/TASK-058.md) | 5 | Sheets and inspector overlap (B14) | `src/ui/app.css`, `src/ui/run-bar.tsx`, `src/ui/App.tsx`, inspector container, `tests/e2e/gate3-places.spec.ts` | 050, 033 | no covered inspector control with a sheet open | todo |
-| [TASK-059](tasks/TASK-059.md) | 5 | Roundabout removal as an inverse command | `src/editor/commands/roundabout.ts`, `src/schema` (approved), `docs/architecture.md` section 6, `tests/editor` | 049 | removal after approach edits | todo |
-| [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | todo |
+| [TASK-053](tasks/TASK-053.md) | 5 | Import demand scale (B13) | `src/ui/import/*`, `bench/import-probe.ts`, `tests/e2e/gate2-import.spec.ts` | 021, 048 | Munich runs at the default scale without gridlock | done |
+| [TASK-054](tasks/TASK-054.md) | 5 | Signal junctions on import (B15) | `src/importers/osm/split.ts`, `controls.ts`, `index.ts` (junction seeds), `src/importers/signal-program.ts`, `tests/importers` | 048, 049 | no degree-two signal nodes on Munich | done |
+| [TASK-055](tasks/TASK-055.md) | 5 | Undrivable routes (B17) | `src/routing/**`, `src/network/**`, `bench/route-audit.ts`, `tests/routing`, `tests/network` | 031, 046, 048 | route audit zero on four cities | done |
+| [TASK-056](tasks/TASK-056.md) | 5 | Draw order by level (B19) | `src/importers/osm/roads.ts` (layer), `index.ts` (`addNode` layer), `src/render/scene.ts`, `src/render/layers/roads.ts`, `nodes.ts`, `tests/render` | 047 | bridges draw over what they cross | done |
+| [TASK-057](tasks/TASK-057.md) | 5 | Pass-through at conflict-free nodes (B18) | `src/sim/intersection.ts`, `src/sim/engine.ts` (grant path), `src/sim/vehicle.ts`, `tests/sim` | 046, 049 | split road drives like one road | done |
+| [TASK-058](tasks/TASK-058.md) | 5 | Sheets and inspector overlap (B14) | `src/ui/app.css`, `src/ui/run-bar.tsx`, `src/ui/App.tsx`, inspector container, `tests/e2e/gate3-places.spec.ts` | 050, 033 | no covered inspector control with a sheet open | done |
+| [TASK-059](tasks/TASK-059.md) | 5 | Roundabout removal as an inverse command | `src/editor/commands/roundabout.ts`, `src/schema` (approved), `docs/architecture.md` section 6, `tests/editor` | 049 | removal after approach edits | done |
+| [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
 
@@ -152,6 +152,10 @@ dependency of its tasks is merged to `main`.
   instead of fixing them. Merge order: 057, 055, 054, 056, 059, 053, 058, 060. B13 leaves
   TASK-051; the B16 junction geometry task (TASK-061) and TASK-051 follow in wave 11 after
   the lead design notes.
+- Wave 10 outcome (2026-11-04): all eight merged in the planned order with one lead fix
+  commit (the highway fixture's warning baseline, a diagnostic code in architecture 5.5, the
+  pass-through probe moved to `bench/`, a layers test, and the import default fixed from the
+  probe). Review entries below. Next: the wave 11 design notes.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -218,6 +222,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B17 | Some routes look valid but cannot be driven, especially through irregular junctions and near the map edge. | Routing and compiler: find which lane-level routes the engine cannot follow (fallback movements, dropped lanes, clipped boundary roads), make them a diagnostic, and add the cases to the Munich test. |
 | B18 | A junction node behaves and looks too different from an ordinary stretch of road. | Investigate first: degree-two and through-street nodes should drive and draw like the road itself (no slowdown, no stop, no junction surface); real junctions keep their treatment. Overlaps B15 and B16. |
 | B19 | Roads that are on top in reality (bridges, flyovers) should be drawn on top; where the level is unknown, the order should at least be consistent. | Importer and renderer: carry OSM `layer`, `bridge` and `tunnel` into the road's grade and draw by grade, with a deterministic tie-break by id. |
+| B20 | After TASK-055 the router runs its lane-level search for nearly every request: routes per second fell 2 to 3 times and the town's engine rate by a third (TASK-055 review entry). | Routing: accept the road-level result whenever its lane resolution needs no change that the audit would reject, or make the lane search incremental; keep the audit at zero. Measure with `npm run bench` against the TASK-055 entry's numbers. |
 
 Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
 
@@ -281,7 +286,35 @@ Remaining Munich dead ends are asserted by lane id in `tests/importers/munich.te
 | `r:1173#0` | Westendstraße faces a one-way approach; its only outgoing road reverses its own street group. |
 | `r:350#0` | Friedrich-von-Pauli-Straße faces a one-way approach; only its reverse carriageway leaves. |
 | `r:672#0` | Two-way trunk link ends against an incoming one-way link; ramp U-turns remain prohibited. |
-| `r:978#2` | Landsberger Straße loses a receiving lane; this signal approach lane must merge upstream. |
+
+`r:978#2` (Landsberger Straße losing a receiving lane) left the list with TASK-054; its case
+is now the `lane_requires_merge` warning from TASK-055, of which the extract has 15.
+
+After wave 10 (TASK-054, 055, 057 change the network and the engine), same probe at scale 1:
+
+| Measure | TASK-048 | Wave 10 |
+| --- | ---: | ---: |
+| Roads / nodes / signals | 548 / 287 / 24 | 541 / 282 / 14 |
+| trunk / ramp / primary / secondary | 24 / 25 / 37 / 34 | 24 / 25 / 35 / 33 |
+| tertiary / residential / service | 26 / 262 / 140 | 26 / 260 / 138 |
+| Roads at layer −1 / 0 / 1 / 2 | - | 8 / 505 / 2 / 26 |
+| road_too_short / dead_end / connector_unreachable | 15 / 7 / 0 | 12 / 6 / 0 |
+| lane_requires_merge (new code) | - | 15 |
+| Routable connector pairs | 47 941 / 47 941 | 47 069 / 47 069 |
+| Route audit: infeasible routes | - | 0 |
+| Persons / completed / failed / peak driving | 35 422 / 445 / 0 / 4 157 | 35 422 / 530 / 0 / 4 177 |
+| Queued origins / driving at 10:00 | 30 818 / 4 157 | 30 712 / 4 177 |
+
+Places and demand are unchanged (33 gateways, 91 block places, 35 422 residents, 30 234
+jobs). The import wizard's demand scale (TASK-053) against the same probe:
+
+| Scale | Persons | Completed by 10:00 | Queued at origin at 10:00 | Peak driving |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 35 422 | 530 | 30 712 | 4 177 |
+| 0.3 | 10 626 | 1 500 | 5 710 | 3 415 |
+| 0.2 | 7 085 | 1 700 | 2 438 | 2 947 |
+| 0.15 | 5 314 | 2 120 | 1 012 | 2 182 |
+| 0.1 | 3 542 | 2 408 | 32 | 1 102 |
 
 
 ## Lead handover
@@ -307,8 +340,9 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   it with the review entry. Contract changes an agent made are accepted only when they are in
   `docs/architecture.md` in the same branch and named in the review entry.
 - Measurements that gate work: the Performance section (benchmark and T16), the Munich
-  import baseline and its after-table, and the demos' metrics files under `test-results`,
-  which regenerate from the suite.
+  import baseline and its after-tables, `npm run route-audit` (zero infeasible routes on the
+  grid, town, Sindelfingen and Munich), the probe's `--scale` for import demand, and the
+  demos' metrics files under `test-results`, which regenerate from the suite.
 - CI runs on Linux, whose fonts are wider than Windows' system UI font, so floating panels
   are larger there. A scenario that clicks or paints near a panel can pass locally and fail
   in CI. Check `gh run list --branch main` after each push. To reproduce locally, set the
@@ -631,6 +665,105 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   the uploaded grid. Verified with the root font switched to Verdana for the run: the two
   scenarios fail before the change and pass after, and the full suite passes. It also passes
   with the original font, and `npm run check` passes.
+
+- 2026-11-04, wave 10 merged (TASK-053 to TASK-060, owner-started agents in Codex
+  worktrees). Merge order 057, 055, 054, 056, 059, 053, 058, 060; git merged every branch
+  without a conflict; one semantic clash (below) fixed in the lead commit. Verified on the
+  merged tree: `npm run check` (265 unit tests), all 46 Playwright scenarios on port 4391,
+  the route audit, the Munich probe at four scales, and the benchmark; the wizard, the
+  Demand sheet with an inspector, and the Munich bridge checked in the browser.
+
+- TASK-057 merged as delivered. A movement at an uncontrolled node with no conflicts, no
+  signal, no merge, no never-green and no turn-on-red flag is a continuation: the engine
+  treats it as granted, the request chain lets a follower ask as soon as the car ahead is on
+  a continuation, `enterLane` releases only real grants, and the spawn-gap check looks across
+  a continuation because it holds no reservation. Tests: a platoon of one and ten through two
+  degree-two nodes and through a conflict-free one-way T arrive within one step of the
+  unsplit road; a blocked continuation keeps the following gap; a table test that only the
+  uncontrolled case bypasses reservations. The synthetic fixtures have no conflict-free
+  movement, so the four benchmark hashes and trip counts are unchanged (checked on a tree
+  with only this branch merged and on the merged tree); the effect shows on imports, where
+  the Munich morning at scale 1 completes 530 trips by 10:00 instead of 445 with zero
+  failures, a gain shared with TASK-054 and TASK-055 in the same wave. Engine rates on a
+  tree with only this branch merged (i7-14700F, idle, 24 h steps per second): grid 449 273,
+  scaled 102 374, stress 25 713, town 27 065, in line with the TASK-046 figures scaled to
+  this machine. The agent's measurement script was in `tests/sim`; the lead moved it to
+  `bench/passthrough-probe.ts`.
+
+- TASK-055 merged as delivered, with the diagnostic code added to architecture 5.5 by the
+  lead. `bench/route-audit.ts` (`npm run route-audit`) routes every connector pair and checks
+  each route independently of the router: lane changes reachable within the road length and
+  the change distance, every movement legal at its node, no clipped boundary stub. Causes
+  found and fixed: the lane search gave the same road length to the arrival at the connector
+  and to leaving the road, so a route could end on a lane it could not reach; the remaining
+  cost ignored lane changes; the road-level search's result was taken without checking that
+  it needed no lane changes; and a narrowing's clamped fallback movement was routable. The
+  compiler now warns `lane_requires_merge` for such a movement and the graph skips it; the
+  fallback rule no longer counts U-turns as served. Audit before and after is in the PR
+  branch's test output; after: zero on the grid, town, Sindelfingen and Munich (Sindelfingen
+  keeps 624 unroutable pairs across its clipped motorway ends, unchanged). The four
+  benchmark state hashes are unchanged (grid 1639643273, scaled 3254820089, stress
+  1071430910, town 3932636798): the synthetic fixtures had no infeasible route. Found by
+  the lead's benchmark and left open as B20: the road-level search result is now accepted
+  only when it needs no lane change and costs exactly the road path, so nearly every
+  request falls through to the lane-level search. On this machine (i7-14700F, idle), the
+  routing benchmark fell from 54 963 to 26 427 routes per second on the grid and from 5 064
+  to 1 548 on the town, and the town's 24 h rate from 27 065 to 18 764 steps per second
+  (morning 9 604 to 6 035), measured against a tree with only TASK-057 merged.
+
+- TASK-054 merged as delivered. The importer snapshots every signal, stop and give-way node
+  before junction consolidation, resets controls, and after consolidation moves each control
+  along directed roads to the first surviving junction within 60 m: a node where at least
+  two streets meet (degree three, or two roads that are not sections of one street). A
+  control that reaches no junction is dropped and its node merged away; transfers are
+  recorded as `controlTransferred:<tag>:node/<id>` in provenance. Munich: 24 signals to 14,
+  none of degree two, every one on at least two streets; `r:978#2` left the dead-end list.
+  The T18 case of a give-way node in the middle of a single way now expects an uncontrolled
+  node, which is the rule. Fixture warning baselines reset to the TASK-048 values plus
+  Sindelfingen (53).
+
+- TASK-056 merged with a lead commit for the work the agent left uncommitted in its worktree,
+  plus a layers test the task asked for. The task text was wrong about `Road.layer` existing;
+  the agent added it as an optional field (schema and architecture section 4 updated in the
+  branch, accepted) filled by the importer from `layer`, else +1 for a bridge, −1 for a
+  tunnel or covered way; node layers prefer the through way, then a continuation, else
+  ground, so bridge ends meet the street. The scene now orders grade groups by layer instead
+  of first-seen order. Munich has 26 roads at layer 2 (the Donnersbergerbrücke decks), 2 at
+  layer 1 and 8 at −1; in the browser the bridge draws over the streets it crosses.
+
+- TASK-059 merged as delivered. `removeRoundabout` rebuilds the junction from the current
+  ring: center at the ring's centroid, each entry and exit leg pair merged back through the
+  center with the outer road's attributes, controls, turn rules and signal groups remapped,
+  connectors projected onto surviving lanes with warnings; a broken ring refuses with the
+  road id. `Node.roundabout` is now `{ radiusM, ringRoads, restore }`; the city schema is
+  version 2 with a legacy schema that migrates version-1 files (and history patches) on
+  open, covered by a saved version-1 project in `tests/editor`. Accepted with a note: the
+  leg pairing recognizes `splitRoad`'s allocation pattern by id arithmetic, which ties it to
+  `topology.ts`.
+
+- TASK-053 merged with one lead change. The accept step of the wizard has a Demand range
+  input (0.05 to 1) with a residents × scale readout written to
+  `demand.personsPerResident`; the probe takes `--scale`. The agent shipped a default of
+  0.1 instead of the contract's 0.3 without saying why; the lead's probe runs explain it:
+  at 0.3 the morning still queues 5 710 of 10 625 trips at the origin at 10:00, at 0.2 a
+  third, at 0.15 under a fifth (1 012 of 5 314) and at 0.1 almost none. By the contract's
+  rule (the largest 0.05 step with under a quarter queued) the default is 0.15, set by the
+  lead in the wizard and the e2e scenario. The synthetic cities stay at 1.
+
+- TASK-058 merged as delivered. The run-bar sheets render inside one `.run-sheet` wrapper
+  whose height a `ResizeObserver` writes to `--run-sheet-space` on the app root; the
+  inspector's maximum height subtracts it, so it scrolls above the sheet instead of being
+  covered, and below 900 px it collapses to its heading while a sheet is open. The TASK-052
+  workaround is gone from gate3-places and two scenarios trial-click every enabled inspector
+  button with the Demand sheet open at 1280 × 720 and 1440 × 900. Seen in the browser at
+  1440 × 900 on the Munich import.
+
+- TASK-060 merged in part. The three workflow actions moved to their v7 releases (checked
+  against the release tags). The audit advisories cannot be cleared: `typescript-eslint`
+  8.72.1, `eslint` 10.14.0, `@eslint/js` 10.0.1 and `eslint-plugin-react-refresh` 0.5.7 are
+  the latest releases and all still reach the vulnerable `minimatch`; the twelve moderate
+  advisories stay in dev tooling only, as the deferral says. The agent left the workflow
+  change uncommitted and no report; the lead committed it.
 
 ## Owner decisions log
 

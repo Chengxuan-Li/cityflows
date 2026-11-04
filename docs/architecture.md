@@ -383,6 +383,8 @@ directions of one street, yet with no movement), `road_too_short`,
 `signal_unserved_movement`, `place_no_connector`, `connector_unreachable` (an `in` connector
 not reachable from any `out` connector, or an `out` connector that reaches no `in` connector,
 following movements and lane changes),
+`lane_requires_merge` (a lane whose only continuation into a narrower road is the clamped
+fallback movement; the router does not use it, so a car there must merge upstream),
 `inferred_attributes` (count of imported defaults, from provenance).
 
 ## 6. Editing

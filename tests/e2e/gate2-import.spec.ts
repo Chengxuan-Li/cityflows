@@ -4,7 +4,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import type { Person, Scenario } from '../../src/schema';
 
-for (const scale of [0.1, 0.5]) {
+for (const scale of [0.15, 0.5]) {
   test(`imports and saves demand at scale ${scale}`, async ({ page }, info) => {
     await page.route('https://**/*', (route) => route.abort());
     await page.goto('/');
@@ -15,12 +15,12 @@ for (const scale of [0.1, 0.5]) {
     await dialog.getByRole('button', { name: 'Continue' }).click();
     const demand = dialog.getByRole('slider', { name: 'Demand', exact: true });
     const readout = dialog.getByRole('status', { name: 'Demand persons' });
-    await expect(demand).toHaveValue('0.1');
+    await expect(demand).toHaveValue('0.15');
     await expect(demand).toHaveAttribute('min', '0.05');
     await expect(demand).toHaveAttribute('max', '1');
     await expect(demand).toHaveAttribute('step', '0.05');
     const initial = await readout.innerText();
-    if (scale !== 0.1) {
+    if (scale !== 0.15) {
       await demand.focus();
       await demand.press('End');
       await expect(demand).toHaveValue('1');
