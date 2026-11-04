@@ -322,3 +322,107 @@ exists.
   the plan: a large synthetic city (TASK-026), place painting and demand regeneration
   (TASK-034). TASK-022 stays one task; TASK-044 waits until the sim and renderer tasks of
   the next waves are in.
+
+## Performance
+
+TASK-044, measured 2026-11-03 on Windows, Intel Core Ultra 9 275HX, Node 24.14.1;
+Chromium 156.0.8078.4 at 1280 × 720 using ANGLE/SwiftShader software rendering.
+Seed 1, fixed 0.1 s steps. `npm run bench` uses Node's built-in type stripping and
+prints one table; `bench/latest.log` also retains the measurements as JSON.
+
+The normal grid and town are unchanged fixtures. Population scaling to 3 000 people
+does **not** produce 3 000 road vehicles: the two-place grid is ingress-limited.
+The separately labelled stress variant retains the grid's 25 nodes and 78 roads,
+lengthens its blocks from 120 to 1 200 m, and distributes 78 pairs of portals and
+3 120 residents across the roads. The large city is the existing town (324 nodes,
+1 137 roads), not another generated grid.
+
+Headless runs cover 24 simulated hours starting at 07:00. Morning throughput covers
+07:00–10:00; step timers exclude compilation, loading, metrics and snapshots. Peaks
+are sampled every 60 simulated seconds, so they are lower bounds on instantaneous
+peaks. Routing is the median of three 3 000-request batches after 1 000 warm-up
+requests, noise 0.1, with cost-version changes every 60 requests. Heap is retained
+process heap after forced GC; typed-array backing storage is reported separately.
+
+| Workload | People / trips | Sampled peak road / origin queue | Morning steps/s | 24 h steps/s | Routes/s | Heap MiB: load / 10:00 / end | Buffers MiB at end |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| grid5x5, normal | 1 088 / 2 176 | 24 / 26 | 75 553 | 86 935 | 53 897 | 15.57 / 17.70 / 18.93 | 0.57 |
+| grid5x5, population scaled | 3 000 / 6 000 | 27 / 1 275 | 25 009 | 28 633 | 54 521 | 22.83 / 26.20 / 30.05 | 1.16 |
+| grid5x5, distributed stress | 3 120 / 6 240 | 3 044 / 1 881 | 7 783 | 19 274 | 72 460 | 23.64 / 26.79 / 29.88 | 1.22 |
+| town | 6 951 / 13 902 | 371 / 35 | 7 325 | 9 657 | 6 047 | 33.92 / 43.57 / 52.91 | 5.33 |
+
+All trips reconcile throughout every run. Normal, population-scaled and town runs
+complete every trip without failures. Stress completes 6 239 trips and has one
+`stranded` failure, with nothing pending at the end; this remains a simulation
+follow-up. At 18:00 the town reproduces the review log's 12 640 requested trips,
+12 571 completed, 69 driving and zero failed (1 262 departures still pending).
+The corresponding step-only rate is 8 930/s; this is not an engine speedup claim
+against the older 6 500/s measurement, whose timer also included frequent metrics.
+Snapshot generation at 08:03 averages 0.010 ms for 23 grid cars, 0.238 ms for 2 915
+stress cars, and 0.059 ms for 347 town cars, separately from transport and rendering.
+
+T16 measures eight seconds at 10x after one second of warm-up. The stress sample
+starts at 08:04, after ingress has reached approximately 3 000 actual road vehicles.
+Frame intervals, synchronous renderer CPU time and worker snapshot round trips are
+separate measurements; round trips include generation, message scheduling and main
+thread delivery, not just buffer transfer. Per-scenario `performance.json` files
+and Playwright JSON attachments live under `test-results/T16-*`; CI uploads
+`test-results` on success and failure. `CITYFLOWS_TEST_PORT=4244` isolates this
+worktree's server; Playwright refuses to reuse another task's server.
+
+| Workload | Active at sample start | FPS | Frame ms p50 / p95 / p99 | Achieved multiplier | Mean render CPU ms | Mean snapshot round trip ms | Main heap MiB before / after peak | Worker heap MiB before / after peak |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| grid5x5 | 22 | 60.00 | 16.7 / 16.7 / 16.8 | 9.959x | 0.206 | 13.35 | 13.81 / 14.71 | 2.23 / 3.46 |
+| distributed stress | 3 044 | 60.00 | 16.7 / 16.7 / 16.8 | 9.956x | 0.309 | 12.63 | 18.25 / 20.43 | 4.09 / 6.34 |
+| town | 342 | 60.00 | 16.7 / 16.8 / 16.8 | 9.965x | 0.498 | 11.28 | 77.62 / 85.33 | 11.10 / 16.57 |
+
+Browser memory includes V8 heap plus backing storage in both isolates after forced
+GC, excluding GPU allocations. Four identical morning runs, with restarts and town
+overview/detail zoom cycles, stay within the hard bound of max(8 MiB, 15%) above
+the first post-peak sample. Maximum observed increases are 0.29 MiB in the page
+and 0.81 MiB in the worker. This is a finite retention regression guard. FPS and
+achieved-speed targets are soft reports (60 FPS tolerates 59; 10x tolerates 9.5x).
+
+The shipped optimization caches only static terrain below zoom 0.7, at a
+power-of-two resolution with a 2 048-pixel edge cap. Vehicles, signals and heat
+remain live, and detailed views use the original vectors. In the same T16 town
+workload, before/after measurements are 12.83 → 60.00 FPS, p95 frame interval
+100.0 → 16.8 ms, mean snapshot round trip 76.73 → 11.28 ms, and achieved speed
+10.02x → 9.97x. The renderer change is its own commit, `b699b8f`. Routing buffer
+reuse was evaluated but not retained because repeated town throughput results
+were inconsistent. Host and simulation code are unchanged; TASK-041's heat update
+cost did not justify rewriting that layer.
+
+`npm run bench -- --profile` samples the 07:00–10:00 engine workload at 1 ms using
+V8's CPU profiler, writes `bench/profiles/*.cpuprofile.log`, and reports exclusive
+time-weighted sample shares (including GC/other frames in the denominator).
+The following simulation hotspots are the brief for the owner after TASK-032:
+
+| Hotspot | Normal grid | Scaled population | Stress | Town | Follow-up |
+|---|---:|---:|---:|---:|---|
+| `reroute.update` | 57.59% | 71.04% | 23.56% | 50.57% | Iterate active/due vehicles instead of scanning every trip each step; preserve ID order and staggering. |
+| `engine.prepareTravel` | 7.97% | 5.10% | 17.73% | 12.26% | Measure an ordered active-segment list against scanning all lane/movement heads. |
+| `lane-change.propose` | 2.20% | 1.60% | 21.43% | 2.68% | Reduce per-vehicle temporary arrays/closures and repeated neighbor work without changing MOBIL decisions. |
+| `engine.commit` | 3.26% | 2.71% | 13.28% | 4.24% | Profile the dense active-vehicle pass before changing integration or connector semantics. |
+| `idmAcceleration` | 1.78% | 1.62% | 7.74% | 1.50% | Keep numerical behavior unchanged unless T02/T03 prove an equivalent optimization. |
+
+Section 15 status: the 30 FPS / 1x scale target is met on the 3 044-car stress
+workload (60 FPS at approximately 10x), and 10x is achieved on both normal grid
+and town. This establishes vehicle-count scaling on the stress grid; the town
+itself was not measured with 1 000–3 000 active cars. The normal grid renders at
+60 FPS, but its 22-car browser sample does
+not qualify the separate 100–300-active-car load point; that exact load remains
+unmeasured. Import progress/diagnostic regression scenarios pass, but large-import
+frame timing is not benchmarked here. The 24-hour runs conserve all trips and the
+retention guard passes; the single stress trip's stranded failure still needs a
+simulation fix. No claim is made about unlimited-duration or GPU memory stability.
+Next acceptance work: measure a 100–300-car burst with distributed portals inside
+the original 120 m grid and a 3 000-car town, time a large OSM import including progress frames, and
+have the simulation owner replay the seed-1 stress case to diagnose its stranded
+trip after TASK-032.
+
+Verification: `npm run check` passes (146 tests, one opt-in slow test skipped;
+T02 and T06 included), `npm run bench` passes all four full-day workloads, and
+`npm run test:e2e` passes all 19 scenarios. The benchmark also typechecks directly
+with `tsc --ignoreConfig --noEmit --target ES2023 --module ESNext --moduleResolution
+bundler --types node --strict --skipLibCheck bench/sim.ts bench/register.ts`.

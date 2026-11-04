@@ -17,6 +17,7 @@ import { workload, workloadNames } from './workloads';
 const selected = process.argv.find((arg) => arg.startsWith('--case='))?.slice(7);
 const profiling = process.argv.includes('--profile');
 const routesOnly = process.argv.includes('--routes-only');
+assert(globalThis.gc, 'Use npm run bench so retained heap is measured after GC');
 assert(
   !selected || workloadNames.some((name) => name === selected),
   `Unknown workload: ${selected}`,
@@ -33,11 +34,15 @@ console.info(
       ? 'Profile: 07:00–10:00 (not a 24-hour memory run)'
       : '24 simulated hours from 07:00; morning throughput covers 07:00–10:00',
 );
+if (!routesOnly)
+  console.info(
+    'Peak counts are sampled every 60 simulated seconds; step timers exclude metrics and snapshots.',
+  );
 
 for (const name of workloadNames) {
   if (selected && selected !== name) continue;
   const { city, scenario, population, trips } = workload(name);
-  scenario.endS = scenario.startS + durationS;
+  if (durationS) scenario.endS = scenario.startS + durationS;
   const result = compile(city);
   assert(result.ok, JSON.stringify(result.diagnostics));
   const { compiled } = result;
@@ -53,7 +58,7 @@ for (const name of workloadNames) {
   let snapshotMs = 0;
   let snapshotCount = 0;
   const heap = () => {
-    globalThis.gc?.();
+    globalThis.gc!();
     const usage = process.memoryUsage();
     return { heapMiB: mib(usage.heapUsed), arrayBuffersMiB: mib(usage.arrayBuffers) };
   };
@@ -141,7 +146,7 @@ for (const name of workloadNames) {
   const routeHash = createHash('sha256').update(JSON.stringify(routes)).digest('hex');
   const snapshotStart = performance.now();
   for (let i = 0; i < 1000; i++) engine.snapshot();
-  const emptySnapshotMs = (performance.now() - snapshotStart) / 1000;
+  const snapshotAtEndMs = (performance.now() - snapshotStart) / 1000;
   const row = {
     scenario: name,
     persons: population.length,
@@ -193,7 +198,7 @@ for (const name of workloadNames) {
     ...row,
     afterDay,
     hash: engine.stateHash(),
-    emptySnapshotMs,
+    snapshotAtEndMs,
     snapshotMs,
     snapshotCount,
     routeRates,
@@ -216,7 +221,7 @@ console.table(
 await writeFile(
   'bench/latest.log',
   JSON.stringify(
-    { environment: { node: process.version, cpu: cpus()[0]?.model }, reports },
+    { environment: { node: process.version, cpu: cpus()[0]?.model }, durationS, reports },
     null,
     2,
   ),
