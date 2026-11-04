@@ -104,9 +104,15 @@ dependency of its tasks is merged to `main`.
   the map pointer plumbing for a drawing tool; TASK-022 owns `src/ui/toolbox.tsx`,
   `src/ui/map-view.tsx` and the tool state in the store. Shared files (`store.ts`, `App.tsx`,
   `scene.ts`, `app.css`) take additive edits only; the lead resolves the merges.
-- Wave 6 outcome (2026-11-03): all five merged. Next: TASK-034 alone on the new tool
-  plumbing, then wave 7 (TASK-023, TASK-032, TASK-033, TASK-042, TASK-043, TASK-044) and
-  TASK-045 last.
+- Wave 6 outcome (2026-11-03): all five merged.
+- Wave 7 (lead, 2026-11-03): TASK-034, TASK-023, TASK-032, TASK-042, TASK-043 and TASK-044 in
+  parallel. Each tool task adds one tool file, one toolbox button, one entry in the map-view
+  tool map and one literal in the store's tool union; TASK-034 owns `src/ui/inspector/place.tsx`,
+  TASK-023 owns `src/ui/tools/select.tsx` and the selection model, TASK-032 owns `src/sim` and
+  `src/fixtures/ramp.ts`. TASK-042 and TASK-043 add to `src/host` additively (compare runs and
+  trajectory sampling). TASK-044 measures and optimizes `src/render` and `src/routing` only this
+  wave and reports `src/sim` hotspots for after TASK-032. TASK-033 follows TASK-034 (both edit
+  the place inspector and the regenerate action); TASK-045 last.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
