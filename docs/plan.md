@@ -78,6 +78,14 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-049](tasks/TASK-049.md) | 5 | Junction controls: yield, stop, turn on red, roundabouts | `src/sim`, `src/network/signals.ts`, `src/editor`, `src/ui/tools/roundabout.tsx`, `src/render/layers/signs.ts` | 032, 040, 046 | gate5-controls scenarios | done |
 | TASK-051 | 5 | Live edits with bounded rerouting (B8) | engine, host, store restart path | 047, 048, 049 and a design note | edits apply without restart | todo |
 | TASK-052 | 5 | CI green on the Linux runner (lead) | `tests/e2e/gate3-paint.spec.ts`, `tests/e2e/gate3-places.spec.ts` | - | e2e green with wider fonts | done |
+| [TASK-053](tasks/TASK-053.md) | 5 | Import demand scale (B13) | `src/ui/import/*`, `bench/import-probe.ts`, `tests/e2e/gate2-import.spec.ts` | 021, 048 | Munich runs at the default scale without gridlock | todo |
+| [TASK-054](tasks/TASK-054.md) | 5 | Signal junctions on import (B15) | `src/importers/osm/split.ts`, `controls.ts`, `index.ts` (junction seeds), `src/importers/signal-program.ts`, `tests/importers` | 048, 049 | no degree-two signal nodes on Munich | todo |
+| [TASK-055](tasks/TASK-055.md) | 5 | Undrivable routes (B17) | `src/routing/**`, `src/network/**`, `bench/route-audit.ts`, `tests/routing`, `tests/network` | 031, 046, 048 | route audit zero on four cities | todo |
+| [TASK-056](tasks/TASK-056.md) | 5 | Draw order by level (B19) | `src/importers/osm/roads.ts` (layer), `index.ts` (`addNode` layer), `src/render/scene.ts`, `src/render/layers/roads.ts`, `nodes.ts`, `tests/render` | 047 | bridges draw over what they cross | todo |
+| [TASK-057](tasks/TASK-057.md) | 5 | Pass-through at conflict-free nodes (B18) | `src/sim/intersection.ts`, `src/sim/engine.ts` (grant path), `src/sim/vehicle.ts`, `tests/sim` | 046, 049 | split road drives like one road | todo |
+| [TASK-058](tasks/TASK-058.md) | 5 | Sheets and inspector overlap (B14) | `src/ui/app.css`, `src/ui/run-bar.tsx`, `src/ui/App.tsx`, inspector container, `tests/e2e/gate3-places.spec.ts` | 050, 033 | no covered inspector control with a sheet open | todo |
+| [TASK-059](tasks/TASK-059.md) | 5 | Roundabout removal as an inverse command | `src/editor/commands/roundabout.ts`, `src/schema` (approved), `docs/architecture.md` section 6, `tests/editor` | 049 | removal after approach edits | todo |
+| [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | todo |
 
 ### Waves
 
@@ -135,6 +143,15 @@ dependency of its tasks is merged to `main`.
   check for TASK-049.
 - Wave 9 outcome (2026-11-04): all three merged. Next: TASK-051 after the lead design note,
   with B13 folded in.
+- Wave 10 (lead, 2026-11-04, owner-started agents on branches cut from `main`, one worktree
+  each): TASK-053 to TASK-060 in parallel on disjoint surfaces. Two pairs share a module but
+  not a file: TASK-054 and TASK-056 both edit `src/importers/osm/index.ts` (the junction seed
+  list versus `addNode`'s layer computation); TASK-053 and TASK-058 both live in `src/ui`
+  (the wizard versus the run bar, inspector container and stylesheet). TASK-055 stays out of
+  `src/sim` and TASK-057 out of `src/network`; each reports causes on the other's surface
+  instead of fixing them. Merge order: 057, 055, 054, 056, 059, 053, 058, 060. B13 leaves
+  TASK-051; the B16 junction geometry task (TASK-061) and TASK-051 follow in wave 11 after
+  the lead design notes.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
