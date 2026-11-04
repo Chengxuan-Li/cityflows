@@ -374,6 +374,7 @@ type Command =
   | { kind: 'addRoad'; road: Omit<Road, 'id'>; newNodes: Omit<Node, 'id'>[] }   // Gate 2
   | { kind: 'deleteRoad'; roadId: RoadId }                                        // Gate 2
   | { kind: 'splitRoad'; roadId: RoadId; atM: number }                           // Gate 2
+  | { kind: 'mergeRoads'; roadId: RoadId; otherRoadId: RoadId }                  // Gate 2
   | { kind: 'moveNode'; nodeId: NodeId; pos: Vec2 }                               // Gate 2
   | { kind: 'addPlace'; place: Omit<Place, 'id'> }
   | { kind: 'updatePlace'; placeId: PlaceId; patch: Partial<Omit<Place, 'id' | 'connectors'>> }
@@ -412,6 +413,18 @@ Semantics:
   shared copy, compiles, and commits only when compile has no errors. On rejection the city,
   compiled network and history are unchanged.
 - A commit bumps `city.version`. Undo and redo re-apply stored patches and recompile.
+- `addRoad` allocates `newNodes` in array order, then the road, using `nextId`; its endpoint
+  references use those allocated ids or existing nodes. Drawing resolves explicit node/road
+  snaps and adds both directions in one batch. Unsnapped crossings do not create junctions.
+- `splitRoad` keeps the original id on the upstream half and remaps downstream turn rules,
+  minor-road references and signal groups. A paired street with a shared centerline splits in
+  both directions, with a distinct street group for each section. Connectors are projected
+  from their old lane positions onto the new lanes; displacement produces a warning.
+- `mergeRoads` joins a continuous pair with equal road attributes at an uncontrolled degree-two
+  junction without explicit rules, retaining the upstream id. Paired reverse directions merge
+  together. `moveNode` updates incident endpoints; `deleteRoad` removes dependent junction
+  references, connectors and newly orphaned endpoints. All are undoable patches; history's
+  Zod schema validates patches, not a command-kind enum (including merge history).
 - Commands addressed to a `streetGroupId` act on both roads. `setStreetDirection` with a
   `RoadId` deletes the other road, removes rules referencing it, and sets
   `lateralOffsetM = 0` on the survivor; `'both'` recreates the opposite road with mirrored
@@ -422,7 +435,8 @@ Semantics:
   editor's version moves ahead and offers restart; it never patches a running engine (T17).
 - Command handlers add their own warnings to the commit's diagnostics:
   `junction_references_removed` (turn rules, minor-road entries or signal groups that named a
-  deleted or reversed road), `connector_lane_clamped`, `connector_removed`.
+  deleted or reversed road), `connector_lane_clamped`, `connector_removed`,
+  `connector_repositioned`, `orphan_node_removed`.
 - `reverseRoad` on one road of a street group dissolves the group (the two roads now run the
   same way). `createEditor` requires a city that compiles without errors; importers and
   fixtures guarantee that.

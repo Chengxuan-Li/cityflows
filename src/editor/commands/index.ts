@@ -3,6 +3,7 @@ import { batch } from './batch';
 import { editNode } from './node';
 import { editPlace } from './place';
 import { editRoad } from './road';
+import { editTopology } from './topology';
 import type { CommandPatch } from './types';
 
 export function dispatch(city: City, command: Command): CommandPatch {
@@ -27,7 +28,8 @@ export function dispatch(city: City, command: Command): CommandPatch {
     case 'addRoad':
     case 'deleteRoad':
     case 'splitRoad':
+    case 'mergeRoads':
     case 'moveNode':
-      throw new Error(`not implemented: ${command.kind}`);
+      return editTopology(city, command);
   }
 }

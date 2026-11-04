@@ -2,6 +2,7 @@ import { Application, Container, Graphics } from 'pixi.js';
 import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { Camera } from './camera';
+import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawMovementSurface, drawNode, drawRoadJoins } from './layers/nodes';
 import { drawHeat, drawRoute, drawSelection } from './layers/overlay';
 import { drawPlaces } from './layers/places';
@@ -39,6 +40,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   vehicleRing.visible = false;
   const heatOverlay = new Graphics();
   world.addChild(map, routeOverlay, selectionOverlay, vehicleRing, heatOverlay);
+  const editOverlay = new Graphics();
+  let editPreview: EditOverlay | null = null;
+  world.addChild(editOverlay);
   app.stage.addChild(world);
 
   const vehicles = new Vehicles();
@@ -92,6 +96,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     world.scale.set(camera.zoom);
     vehicleRing.scale.set(1 / camera.zoom);
     vehicles.setZoom(camera.zoom);
+    drawEditOverlay(editOverlay, editPreview, camera.zoom);
   });
   vehicles.setZoom(camera.zoom);
 
@@ -182,6 +187,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     },
     setRouteOverlay(route) {
       if (city) drawRoute(routeOverlay, city, route);
+    },
+    setEditOverlay(overlay) {
+      editPreview = overlay;
+      drawEditOverlay(editOverlay, overlay, camera.zoom);
     },
     setHeat(ratios) {
       if (city) drawHeat(heatOverlay, city, ratios);

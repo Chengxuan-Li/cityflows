@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { Vec2 } from '../geo/vec2';
 import { generatePopulation, scheduleTrips } from '../demand';
 import { createEditor, type CommitResult, type Editor } from '../editor';
 import { createEngineClient, type EngineClient } from '../host/client';
@@ -37,6 +38,9 @@ interface Run {
 type RunCommand = 'play' | 'pause' | 'step' | 'restart';
 
 interface AppState {
+  tool: 'select' | 'road';
+  setTool: (tool: AppState['tool']) => void;
+  selectionPoint: Vec2 | null;
   session: Session | null;
   run: Run | null;
   selection: MapPick | null;
@@ -116,6 +120,9 @@ export const useAppStore = create<AppState>((set, get) => {
   }
 
   return {
+    tool: 'select',
+    setTool: (tool) => set({ tool, selection: null, vehicle: null, selectionPoint: null }),
+    selectionPoint: null,
     session: null,
     run: null,
     selection: null,

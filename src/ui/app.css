@@ -532,3 +532,57 @@ dd {
     animation: none;
   }
 }
+
+.map.drawing {
+  cursor: crosshair;
+}
+
+.map.drawing.panning {
+  cursor: grabbing;
+}
+
+.map:focus-visible {
+  outline: none;
+}
+
+.road-options {
+  position: absolute;
+  top: 116px;
+  left: var(--inset);
+  max-width: calc(100% - 2 * var(--inset));
+  padding: 6px 8px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.road-option-fields,
+.road-option-fields label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.road-option-fields {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.road-option-fields input[type='number'] {
+  width: 56px;
+  min-height: 30px;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  color: inherit;
+  background: var(--paper);
+  font: inherit;
+}
+
+.road-options p {
+  margin-top: 4px;
+}
+
+.topology-actions {
+  margin-top: 8px;
+}

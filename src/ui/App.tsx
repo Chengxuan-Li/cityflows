@@ -9,6 +9,7 @@ import { RunBar } from './run-bar';
 import { useAppStore } from './store';
 import { Toolbox } from './toolbox';
 import { TopBar } from './top-bar';
+import { NodeTopologyActions } from './tools/topology-actions';
 
 function Inspector() {
   const session = useAppStore((state) => state.session);
@@ -113,6 +114,7 @@ export function App() {
             ×
           </button>
           <Inspector />
+          {!diagnosticsOpen && <NodeTopologyActions />}
           {!diagnosticsOpen && rejectedEdit.length > 0 && (
             <div className="edit-diagnostics" role="alert">
               <strong>Edit rejected</strong>
