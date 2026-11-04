@@ -24,7 +24,7 @@ requirements R1 to R8 and tests T01 to T18 are binding and referenced below by I
 | 10 | Routing | Road-level search, then lane resolution with a feasibility check from the vehicle's current lane. Lane-level search is the fallback. A vehicle never teleports or takes an illegal movement; an infeasible plan becomes a legal movement plus a reroute with a reason code. | Road-level only: vehicles stuck in the wrong lane at a turn. |
 | 11 | Persistence | The canonical `City` snapshot is the authoritative saved state. Editor history is optional, separately versioned, and droppable. Migrations operate on snapshots. | Replaying a patch log on load: couples saved files to editor code history. |
 | 12 | Intersections | Vehicles explicitly occupy movement paths; entry needs free space on the exit lane; conflicts are resolved by deterministic arbitration each step; signals are conservative (enter on green with space). Permissive turns and finer gap acceptance come later. | Implicit intersections: gridlock and phantom collisions. |
-| 13 | Edits during a run | Release 1 required a paused run and a restart (T17). TASK-051: a committed edit is patched into the running engine (section 8, live edits): the compiled city is swapped, vehicles are remapped by id or by position, and only vehicles whose remaining route touches a changed element reroute, staggered over the reroute interval. Edits that change demand (place kind, population, jobs, places added or removed) still regenerate the population and need a restart. | Live topology edits without remapping: invalid vehicle references. |
+| 13 | Edits during a run | Release 1 required a paused run and a restart (T17). TASK-051: a committed edit is patched into the running engine (section 8, live edits): the compiled city is swapped, vehicles are remapped by id or by position, and only vehicles whose remaining route touches a changed element reroute, staggered over the reroute interval. Edits that change demand (place kind, population, jobs, places added or removed) or trip scheduling (a place's profile, events or attraction) still need a restart, which regenerates the population only in the first case. | Live topology edits without remapping: invalid vehicle references. |
 | 14 | Demand | Persistent person-level home and work assignments with activity schedules, saved with the project. | Random origin-destination trips: no recognizable rush. |
 | 15 | Not in release 1 | Desktop wrapper, 3D view, transit vehicle operations, PBF import. | |
 
@@ -517,8 +517,9 @@ Semantics:
 - The run loaded in the engine is tied to a `city.version`. After a commit the UI sends the
   new compiled city to the engine as a patch (section 8, live edits; section 10, `patch`)
   and the run goes on. It marks the run stale and offers restart only when the commit changed
-  demand (place kind, population, jobs, places added or removed) or the patch was refused
-  (T17 as amended by TASK-051).
+  demand (place kind, population, jobs, places added or removed), trip scheduling (a place's
+  profile, events or attraction; restart reschedules the same population) or the patch was
+  refused (T17 as amended by TASK-051).
 - Command handlers add their own warnings to the commit's diagnostics:
   `junction_references_removed` (turn rules, minor-road entries or signal groups that named a
   deleted or reversed road), `connector_lane_clamped`, `connector_removed`,

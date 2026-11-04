@@ -40,6 +40,15 @@ function demandKey(city: Project['city']) {
   );
 }
 
+/** Trip scheduling inputs: a change here needs a restart, which reschedules the same population. */
+function scheduleKey(city: Project['city']) {
+  return JSON.stringify(
+    Object.values(city.places)
+      .map(({ id, profile, events, attraction }) => [id, profile, events, attraction])
+      .sort(),
+  );
+}
+
 export interface Session {
   project: Project & { population: Person[] };
   editor: Editor;
@@ -160,7 +169,10 @@ export const useAppStore = create<AppState>((set, get) => {
       const { city, compiled, diagnostics } = result;
       cancelComparison();
       set({ comparison: null });
-      const stale = run.stale || session.populationKey !== demandKey(city);
+      const stale =
+        run.stale ||
+        session.populationKey !== demandKey(city) ||
+        scheduleKey(project.city) !== scheduleKey(city);
       set({
         session: {
           ...session,

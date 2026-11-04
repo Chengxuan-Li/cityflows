@@ -161,7 +161,7 @@ test('demo B: the 08:05 train queues cars at the Station; a second arrival conne
   expect(errors).toEqual([]);
 });
 
-test('profile and event edits preserve trips until demand is regenerated', async ({
+test('profile and event editors commit through the inspector and move trips', async ({
   page,
 }, info) => {
   const errors: string[] = [];
@@ -194,10 +194,6 @@ test('profile and event edits preserve trips until demand is regenerated', async
   await button(page, 'Demand').click();
   await expect(page.getByRole('region', { name: 'Demand' })).toBeVisible();
   expect((await tripsByHour(page))[12]).toBe(0);
-  await button(page, 'Restart').click();
-  await expect(button(page, 'Step')).toBeEnabled();
-  expect((await tripsByHour(page))[12]).toBe(0);
-  await button(page, 'Regenerate demand').click();
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();
   const weighted = await tripsByHour(page);
@@ -246,10 +242,6 @@ test('profile and event edits preserve trips until demand is regenerated', async
     .getByRole('region', { name: 'Demand' })
     .getByRole('row', { name: /^Offices/ });
   await expect(ending).toContainText('1,088');
-  await button(page, 'Restart').click();
-  await expect(button(page, 'Step')).toBeEnabled();
-  await expect(ending).toContainText('1,088');
-  await button(page, 'Regenerate demand').click();
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();
   await expect(ending).toContainText('1,128');
