@@ -87,6 +87,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-059](tasks/TASK-059.md) | 5 | Roundabout removal as an inverse command | `src/editor/commands/roundabout.ts`, `src/schema` (approved), `docs/architecture.md` section 6, `tests/editor` | 049 | removal after approach edits | done |
 | [TASK-061](tasks/TASK-061.md) | 5 | Junction geometry: setbacks, curb arcs, tapers (B16) | `src/network/**` (lanes, movements, new `junctions.ts`, types), `src/geo/polyline.ts` (additive), `src/editor/commands/ramp.ts`, `src/render/layers/nodes.ts`, `roads.ts`, `signs.ts`, `scene.ts` picking, `src/fixtures/junctions.ts`, `tests/network/T20*`, `tests/render` | 047, 048, 049, 055; design in architecture 5.1, 5.2, 11 | T20; no overlapping lanes at Munich nodes | done |
 | [TASK-062](tasks/TASK-062.md) | 5 | Routing throughput (B20) | `src/routing/**`, `tests/routing` | 055, 057 | routes per second back near the TASK-057 figures, audit zero, hashes unchanged | done |
+| [TASK-063](tasks/TASK-063.md) | 5 | Junction surface, crossings, one asphalt colour (B21, B23, B24, B25) | `src/network/junctions.ts` (outline only), `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, `roads.ts`, `src/render/style.ts`, `scene.ts`, `types.ts` (layer flag), `src/ui/layers.tsx`, `tests/network/T20*`, `tests/render`, `tests/e2e/gate4-layers.spec.ts` | 061; design in architecture 5.1, 11 | T20 additions; hashes unchanged | todo |
+| [TASK-064](tasks/TASK-064.md) | 5 | Conflict zones instead of whole-movement conflicts (B26) | `src/network/conflicts.ts`, `src/network/types.ts` (additive), `src/sim/intersection.ts`, conflict reads in `engine.ts`, `merge.ts`, `patch.ts`, `tests/network/conflict-zones.test.ts`, `tests/sim` | 049, 051, 057, 061; design in architecture 5.3, 8 | T21; uncapped Munich at least as fast as capped | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -173,6 +175,14 @@ dependency of its tasks is merged to `main`.
   hashes turned out unchanged even after TASK-061. Review entries below. Next: an owner
   testing round on Munich with live edits and the new junctions, and the Gate 5 scope
   decision.
+- Wave 12 (lead, 2026-11-04, after the owner's Munich test, B23 to B26): TASK-063 and
+  TASK-064 in parallel, branches `task/063-junction-surface` and `task/064-conflict-zones`
+  cut from `main` at the commit that carries the design (architecture 5.1, 5.3, 8, 11, 14).
+  TASK-063 changes only how junctions are drawn (outline, crossings, colour) and keeps every
+  lane end, so the four state hashes stay; TASK-064 changes the grant rule and every hash,
+  and stays out of the geometry files. Merge order: 063, then 064, then a lead commit that
+  removes the setback cap once the uncapped Munich run is at least as fast as the capped
+  one. Both agents report in their commit messages: wave 11's branches carried none.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -242,6 +252,10 @@ triage by the lead; the agents' investigation may move items between groups.
 | B20 | After TASK-055 the router runs its lane-level search for nearly every request: routes per second fell 2 to 3 times and the town's engine rate by a third (TASK-055 review entry). | Routing: accept the road-level result whenever its lane resolution needs no change that the audit would reject, or make the lane search incremental; keep the audit at zero. Measure with `npm run bench` against the TASK-055 entry's numbers. |
 | B21 | At an acute approach the lane blocks of two roads still overlap on the map beyond the 10 m setback cap (Munich 24 nodes, Sindelfingen 16 after TASK-061). | Geometry: draw the overlap as one merge surface, a taper, and run the movement along it; the cap keeps the simulation honest meanwhile (TASK-061 review entry). |
 | B22 | The bundled grid opens with "Validation (15)": fifteen `lane_requires_merge` warnings since TASK-055, where its two-lane streets feed one-lane streets. | Fixture or compiler: give the grid's narrowings a proper lane drop, or stop warning where the clamped movement is the only continuation. Small. |
+| B23 | Owner, 2026-11-04 (Munich after wave 11): junctions still do not look right. A road's edge should run smoothly from one road segment through the junction to the next; today the surface is a polygon through the road-end corners, widened to a convex hull wherever a movement curve escapes it, so it shows corners and blobs. | Network geometry and renderer, with B21: the outline is road edge, curb fillet, next road edge for every pair of angularly adjacent ends, with no hull; an acute pair is a gore whose surface follows both lane blocks until they separate. |
+| B24 | Owner: queued cars stand on the zebra crossing. The crossing is drawn 1.8 to 4.2 m before the lane end and the stop line at the lane end, and an ungranted car stops `minGapM` (2 m) before the lane end, so its front is on the crossing. | Renderer: stop line, then crossing, then junction. Draw the crossing in the junction mouth just past the trimmed lane end (inside the setback) so the stop line is where cars stop. Small. |
+| B25 | Owner: the junction surface is a different colour from the roads it joins; road class tones (which the owner reads as speed-limit colouring) should be optional. Roads take a tone per class from `roadStyle`, the junction always `style.asphalt`. | Renderer and Layers: one asphalt colour for roads and junctions by default; a "Road classes" Layers entry turns the class tones on, and then a junction takes the tone of its highest-class road. Small. |
+| B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
 
 Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
 

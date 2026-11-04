@@ -296,11 +296,14 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   intersection of its lane-block edges with the lane-block edges of the two road ends
   adjacent to it in angular order, plus 1.0 m, with a floor of `W/2 + 1`; where adjacent
   edges do not intersect (nearly parallel ends, as at a ramp merge) the setback is the floor,
-  and a setback is never more than `max(floor, 10 m)` (`SETBACK_CAP_M`): at an acute
-  approach the lane blocks overlap beyond the cap and the junction surface covers them,
-  rather than holding cars ever farther from the junction on a movement that blocks every
-  conflicting one for its whole length (lead decision at the TASK-061 review, after the
-  Munich morning lost 40 percent of its completed trips to 50 to 115 m movements).
+  and a setback is never more than `max(floor, 10 m, the widest neighbouring road end's half
+  extent + 1)` (`SETBACK_CAP_M` = 10): at an acute approach the lane blocks overlap beyond
+  the cap and the junction surface covers them, rather than holding cars ever farther from
+  the junction on a movement that blocks every conflicting one for its whole length (lead
+  decision at the TASK-061 review, after the Munich morning lost 40 percent of its completed
+  trips to 50 to 115 m movements). The cap is temporary: once conflicts are resolved at
+  conflict zones (5.3, TASK-064) the lead removes it, so setbacks follow the geometry and an
+  acute approach stops where its lane block clears its neighbour's.
   A node with two ends of one street has setback 0: the road draws and drives through.
   Lanes are trimmed by their own road end's setback; `road_too_short` keeps its rule with the
   two setbacks in place of `2 * radiusM`. `CNode.radiusM` stays as the largest setback, for
@@ -317,6 +320,20 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   movement curves. Other junctions retain their curb arcs. T20 reports canonical imported
   road-body overlaps separately and requires zero remaining junction-end crossings;
   this task does not repair duplicate or coincident source carriageways.
+- TASK-063 (junction surface, replaces the convex envelope above). Walking the road ends in
+  angular order, the outline is: the trimmed end of one road end, then from its outer corner
+  a curb fillet tangent to that road's outer edge and to the facing outer edge of the next
+  road end, then the next trimmed end, and so on, closed. A fillet's radius is the largest
+  value up to 8 m that keeps every movement surface between those two ends inside the
+  outline (0.1 m tolerance); where no radius does, the join is the straight line between the
+  two corners, extended outward along both edges to their intersection when a movement
+  still escapes. No convex hull. An acute pair whose setback was capped (the two facing edges
+  intersect beyond the trimmed ends) is a gore: between them the outline runs out along the
+  first end's facing edge to the gore tip, where the facing edges meet, and back along the
+  second's, so the surface covers the overlapping lane blocks and their markings. The result
+  is a simple polygon whose boundary is smooth (tangent-continuous) from each road edge into
+  the next except at gore tips. Once the cap is lifted a gore tip coincides with the trimmed
+  corner and the rule reduces to the fillet.
 
 ### 5.2 Movement generation
 
@@ -382,6 +399,14 @@ the OSM `lanes` tags carry one.
   waiting time, then by vehicle id.
 - Default `minorRoads` when empty at a yield or stop node: incoming roads whose class rank is
   below the maximum rank among the node's incoming roads.
+
+- TASK-064 (conflict zones). Each conflict carries where it happens:
+  `CMovement.conflictZones: [startM, endM][]`, parallel to `conflicts`, in meters along this
+  movement. The zone is the stretch of this movement whose centerline is closer than
+  `(own lane width + other lane width) / 2` to the other movement's centerline; for two
+  movements ending in the same lane it runs from the first such point to `lengthM`. Zones are
+  computed from the sampled polylines (about one meter apart) and rounded outward to the
+  sample spacing, so they never under-cover a contact.
 
 ### 5.4 Signals
 
@@ -715,10 +740,15 @@ Step sequence, in this order every step:
      already accepted changes this step.
    - Per node, entry candidates are sorted by (priority desc, right-before-left, waiting time
      desc, id asc). A candidate is granted when its movement is green or uncontrolled-allowed,
-     no vehicle holds a grant on or drives on a conflicting movement, the last vehicle on the
+     no vehicle holds a grant on or drives on a conflicting movement (TASK-064: no vehicle
+     holds a grant on a conflicting movement while still on its approach lane, or drives on
+     it with its rear not yet past the end of that movement's conflict zone with the
+     candidate's movement, `position < endM + vehicleLengthM`; a vehicle that has cleared the
+     zone no longer blocks), the last vehicle on the
      exit lane is at least `vehicleLengthM + minGapM` along it (downstream blocking), and for
      yield and stop nodes every vehicle approaching on a conflicting higher-priority movement
-     is at least `gapS` away. Stop nodes require a minor-approach vehicle to stand at the
+     is at least `gapS` away (TASK-064: measured to the start of its conflict zone with the
+     candidate, the rest of its lane plus `startM`, not to its stop line). Stop nodes require a minor-approach vehicle to stand at the
      stop line continuously for at least one second before requesting entry. Waiting behind
      another car away from the line does not count. Several vehicles may hold grants on the same movement (movements
      from one lane never conflict); car-following keeps their spacing. A grant persists until
@@ -1043,6 +1073,15 @@ type HostEvent =
   polygon through the lane-edge corners plus a disc; through nodes (setback 0) draw nothing,
   the road runs through. Movement surfaces, stop lines, give-way triangles, arrows and
   crossings follow the compiled geometry, so they move with the setbacks.
+- TASK-063: the order along an approach is stop line at the trimmed lane end (where an
+  ungranted car stops, `minGapM` behind it), then the pedestrian crossing, then the junction.
+  The crossing is drawn in the junction mouth: 0.5 to 3.0 m past the trimmed end across the
+  road end's full width, inside the outline, or omitted where the setback leaves less than
+  3.5 m. Node areas draw above lane markings, so markings inside a gore are covered.
+- TASK-063: roads and junction surfaces share one asphalt colour by default. A Layers entry
+  "Road classes" (off by default) turns on the per-class tones of `roadStyle`; then a
+  junction takes the tone of its incident road with the highest `classRank`. Presentation
+  only, like every Layers entry.
 - `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes and
   road and node layers are not in the compiled model. Grade groups draw from lowest to
   highest, with roads in compiled index order inside each grade.
@@ -1244,7 +1283,8 @@ Headless tests run in Vitest from fixtures in `src/fixtures` (generated) and `fi
 | T17 edit live-state policy | ui, editor | grid-5x5 | TASK-010, TASK-051 |
 | T18 import diagnostics | importers, network | broken fixtures | TASK-001, TASK-020 |
 | T19 live edit: conservation, determinism, bounded reroute | sim, host, e2e | grid-5x5, bypass | TASK-051 |
-| T20 junction geometry: no overlap, setback markings, taper | network, render | irregular junction fixture, Munich | TASK-061 |
+| T20 junction geometry: no overlap, setback markings, taper | network, render | irregular junction fixture, Munich | TASK-061, TASK-063 |
+| T21 conflict zones: no two vehicles inside contacting zones at once; cleared zones free | network, sim | four-way signal, junction fixture, Munich | TASK-064 |
 
 Synthetic fixtures (all generated by code with a seed, in `src/fixtures`):
 
