@@ -162,6 +162,28 @@ exists.
 - `npm audit` reports moderate advisories in dev tooling only (minimatch under
   typescript-eslint); nothing ships to the browser. Revisit when upgrading tooling.
 
+## Owner findings from real OSM testing (2026-11-04)
+
+Logged as the backlog for the wave after TASK-045; planned once TASK-045 is merged. First
+triage by the lead; the agents' investigation may move items between groups.
+
+| Id | Finding | First triage |
+| --- | --- | --- |
+| B1 | Junctions render as a large disc with arrows instead of the junction shape. | Renderer: draw the junction surface as the union of the road ends and movement surfaces, no disc beyond the lane edges; disc only for degree-two nodes. |
+| B2 | OSM imports interlock: short segments form small junction loops; feeder roads join a major road in one direction only, or not to every lane of a direction. | Importer and compiler: merge sub-30 m segments between degree-two nodes, join feeders to both carriageways of a divided street, lane assignment for a single-lane approach into a multi-lane road. Needs a real extract as a fixture. |
+| B3 | Highways spawn no cars on OSM imports. | Demand on imports: gateway demand by road class exists (`src/importers/osm/places.ts`), check that motorway and trunk ends get gateways and that clipped ramps are not counted as ends. |
+| B4 | No way to hide the OSM basemap in OSM mode. | One Layers entry for tiles (`setTiles` exists on the Scene). Small. |
+| B5 | OSM places should also come from buildings and land use inside the area, not only the edges; edge gateways stay. | Importer: residential, commercial, industrial and retail land use and building footprints become places with population and jobs by area; gateways unchanged. |
+| B6 | Cars jump between positions; interpolate between simulation ticks without simulating intermediate steps. | Renderer: dead-reckon each car along its lane from the last snapshot (position plus speed times elapsed wall time scaled by the run speed) until the next snapshot arrives; vehicles layer only. |
+| B7 | Lane-change motion looks unnatural. | Renderer: ease the lateral offset (smoothstep over `laneChangeDurationS`) and turn the car heading slightly into the change; no model change. |
+| B8 | Every map edit asks for a restart; production needs on-the-fly edits with bounded rerouting. | Engine and host contract change (T17 and the "live topology edits" deferral): hot-swap the compiled city under a running engine, remap vehicles to surviving lanes, reroute only vehicles whose remaining route touches a changed road or movement, staggered over the reroute interval; edits that remove a lane under a car keep a short grace. Needs a design note before agents run. |
+| B9 | Lane markings and realistic junction markings; built-in roundabouts as a special object with their own routing. | Renderer for stop lines, give-way triangles and junction markings; roundabout as an editor object that builds a circulating one-way ring with yield-on-entry and `uturn` allowed, plus a Roundabout tool. |
+| B10 | Yield and stop signs. | Model has `Control` yield and stop; check the gap-acceptance behaviour at both and add sign visuals and the node control in the inspector (already there) with a sign on the map. |
+| B11 | Signals may or may not allow right turn on red. | `SignalProgram.rightOnRed` (left on red under left-hand driving): a permitted turn on red yields like a stop sign; compiler marks those movements, signal editor toggle, importer default per country. |
+| B12 | Pedestrian crossing visuals. | Renderer: zebra markings at signalized junction approaches and at nodes tagged `crossing` by the importer; no pedestrian simulation. |
+
+Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
+
 ## Review log
 
 - 2026-11-03, TASK-000 merged as delivered: pinned SHAs, line-anchored paths, destination
