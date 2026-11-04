@@ -10,6 +10,7 @@ import { HeatLayer } from './layers/heat';
 import { drawPlaces } from './layers/places';
 import { drawMovementArrow, drawRoad } from './layers/roads';
 import { drawSignal } from './layers/signals';
+import { drawSigns } from './layers/signs';
 import { Tiles } from './layers/tiles';
 import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { createPicker, pickVehicle } from './picking';
@@ -239,6 +240,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
         drawNode(grade.nodes, node);
+        drawSigns(city, node, grade.signals, () => camera.zoom);
         if (node.signal) updateSignals.push(drawSignal(city, node, grade.signals));
       }
       for (const movement of city.movements) {
