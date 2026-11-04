@@ -108,6 +108,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         app.renderer.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight));
       });
       resizeObserver.observe(canvas);
+      if (import.meta.env.MODE === 'test') {
+        const render = app.renderer.render.bind(app.renderer) as (
+          options: unknown,
+          legacyOptions?: unknown,
+        ) => void;
+        app.renderer.render = (options, legacyOptions?: unknown) => {
+          const start = performance.now();
+          render(options, legacyOptions);
+          performance.measure('cityflows:render', { start, end: performance.now() });
+          performance.clearMeasures('cityflows:render');
+        };
+      }
       app.ticker.add(({ deltaMS }) => {
         if (tilesEnabled && tiles) {
           const { width, height } = app.screen;
