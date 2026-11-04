@@ -118,9 +118,11 @@ test('T10 event windows accumulate shared admission quotas without bypassing cap
   expect(connectors.arrive(first!, 300)).toBe(true);
   expect(connectors.arrive(second!, 399)).toBe(false);
   expect(connectors.arrive(second!, 450)).toBe(true);
-  expect(connectors.arrive(first!, 600)).toBe(false);
   compiled.places[0]!.capacity = 4;
   expect(connectors.arrive(second!, 451)).toBe(false);
+  compiled.places[0]!.capacity = 3;
+  expect(connectors.arrive(first!, 600)).toBe(false);
+  compiled.places[0]!.capacity = 4;
   expect(connectors.arrive(first!, 600)).toBe(true);
 });
 
@@ -162,18 +164,27 @@ test('T10 a parking departure waits for its arrival, releases a slot and drains 
   const trips = [
     trip('in:a', 'a', gateway!.id, parking!.id, 100),
     trip('in:b', 'b', gateway!.id, parking!.id, 105),
-    trip('out:a', 'a', parking!.id, gateway!.id, 110),
-    trip('out:b', 'b', parking!.id, gateway!.id, 220),
+    trip('out:b', 'b', parking!.id, gateway!.id, 110),
+    trip('out:a', 'a', parking!.id, gateway!.id, 180),
   ];
   const compiled = setup(city);
   const engine = createEngine();
   engine.load({ compiled, trips, scenario: scenario() });
   engine.step(150);
   expect(engine.inspect(3)!.state).toBe('queued_origin');
-  engine.step(850);
-  expect(engine.inspect(3)!.departedS).toBeGreaterThanOrEqual(engine.inspect(1)!.arrivedS!);
-  expect(engine.inspect(2)!.arrivedS).toBeGreaterThanOrEqual(engine.inspect(3)!.departedS!);
-  engine.step(1500);
+  engine.step(450);
+  expect(engine.inspect(2)!.state).toBe('queued_destination');
+  engine.step(1900);
+  expect(engine.inspect(4)!.departedS).toBeGreaterThanOrEqual(engine.inspect(1)!.arrivedS!);
+  expect(engine.inspect(2)!.arrivedS).toBeGreaterThanOrEqual(engine.inspect(4)!.departedS!);
+  expect(engine.inspect(3)!.departedS).toBeGreaterThanOrEqual(engine.inspect(2)!.arrivedS!);
   expect(engine.metrics().trips.completed).toBe(4);
   expect(engine.metrics().trips.failed).toBe(0);
+
+  gateway!.connectors = gateway!.connectors.filter((c) => c.direction === 'in');
+  engine.load({ compiled: setup(city), trips, scenario: scenario() });
+  engine.step(1500);
+  expect(engine.metrics().trips.failed).toBe(4);
+  expect(engine.metrics().failedByReason.no_origin_connector).toBe(2);
+  expect(engine.metrics().failedByReason.stranded).toBe(2);
 });

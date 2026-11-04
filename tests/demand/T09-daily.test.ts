@@ -3,6 +3,7 @@ import { demandSummary, generatePopulation, scheduleTrips } from '../../src/dema
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import type { Place } from '../../src/schema';
+import { scenarioSchema } from '../../src/schema/demand.schema';
 
 function addPlace(city: ReturnType<typeof grid5x5>, kind: Place['kind'], weight = 1) {
   const id = `p:${city.nextId++}`;
@@ -32,6 +33,9 @@ test('T09 full chains reconcile directional peaks, attraction weights and person
   scenario.demand.workStart.sdS = 0;
   scenario.demand.workDuration.sdS = 0;
   scenario.demand.chains = { schoolShare: 0.25, shopShare: 0.5, leisureShare: 1 };
+  expect(scenarioSchema.parse(JSON.parse(JSON.stringify(scenario))).demand.chains).toEqual(
+    scenario.demand.chains,
+  );
   const persons = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, persons, scenario);
   const students = persons.filter((p) => p.agenda.some((a) => a.kind === 'school'));
@@ -89,6 +93,20 @@ test('T09 profiles set departures across midnight without clipping the scenario 
     expect(own[1]!.departS).toBeLessThan(27 * 3600);
   }
   expect(demandSummary(trips, city).byHour[2]).toBe(20);
+
+  home!.profile.departures.fill(0);
+  work!.profile.departures.fill(0);
+  const fallback = scheduleTrips(city, persons, scenario);
+  expect(
+    fallback
+      .filter((t) => t.originPlaceId === home!.id)
+      .every((t) => t.departS >= 7 * 3600 && t.departS < 8 * 3600),
+  ).toBe(true);
+  expect(
+    fallback
+      .filter((t) => t.originPlaceId === work!.id)
+      .every((t) => t.departS >= 27 * 3600 && t.departS < 28 * 3600),
+  ).toBe(true);
 });
 
 test('T09 through trips use distinct gateways, hourly totals and population/job weights', () => {
@@ -156,10 +174,10 @@ test('T09 events produce exact counts from a separate stable visitor population'
     id: 'later',
     name: 'Later',
     startS: 90000,
-    durationS: 0,
+    durationS: 1,
     arrivals: 3,
     departures: 0,
   });
   expect(scheduleTrips(city, persons, scenario).filter((t) => t.departS < 90000)).toEqual(trips);
-  expect(scheduleTrips(city, persons, scenario).filter((t) => t.departS === 90000)).toHaveLength(3);
+  expect(scheduleTrips(city, persons, scenario).filter((t) => t.departS >= 90000)).toHaveLength(3);
 });
