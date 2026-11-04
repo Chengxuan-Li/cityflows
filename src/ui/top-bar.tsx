@@ -1,11 +1,13 @@
 import { lazy, Suspense, useRef, useState } from 'react';
 import { scenarios } from '../fixtures/scenarios';
 import { useAppStore } from './store';
+import { ExportMenu } from './export-menu';
 
 const ImportWizard = lazy(() => import('./import/wizard'));
 
 export function TopBar() {
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLDialogElement>(null);
   const session = useAppStore((state) => state.session);
@@ -41,6 +43,17 @@ export function TopBar() {
         <button onClick={() => void save()} disabled={busy || !session}>
           Save
         </button>
+        <div className="export-control">
+          <button
+            onClick={() => setExporting(!exporting)}
+            disabled={busy || !session}
+            aria-expanded={exporting}
+            aria-controls="export-menu"
+          >
+            Export
+          </button>
+          {exporting && <ExportMenu onClose={() => setExporting(false)} />}
+        </div>
       </div>
       <div className="controls" role="group" aria-label="Edit history">
         <button onClick={() => void undo()} disabled={busy || !session?.editor.canUndo}>

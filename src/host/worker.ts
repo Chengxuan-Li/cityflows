@@ -3,6 +3,7 @@ import { createEngine } from '../sim/engine';
 import { DEFAULT_SIM_PARAMS } from '../sim/params';
 import { createPlayLoop } from './loop';
 import { runHeadless } from './headless';
+import { createExportRecorder, tripRecords } from './export-data';
 import type { HostEvent, HostReply, HostWireRequest } from './protocol';
 
 const engine = createEngine();
@@ -10,6 +11,12 @@ let inputs: Parameters<typeof engine.load>[0] | undefined;
 let loop: ReturnType<typeof createPlayLoop> | undefined;
 let multiplier = 1;
 let lastHeatMs = -Infinity;
+let recorder: ReturnType<typeof createExportRecorder> | undefined;
+
+function loadedRecorder() {
+  if (!recorder) throw new Error('Load a scenario before exporting traffic');
+  return recorder;
+}
 
 function loadedLoop() {
   if (!loop) throw new Error('Load a scenario before using the traffic engine');
@@ -24,11 +31,13 @@ function load(input: Parameters<typeof engine.load>[0]) {
   loop?.pause();
   inputs = input;
   lastHeatMs = -Infinity;
+  recorder = createExportRecorder(engine, input.compiled);
   loop = createPlayLoop(engine, {
     dtS,
     endS: scenario.endS,
     now: () => performance.now(),
     emit: (event: HostEvent) => self.postMessage(event),
+    afterStep: () => loadedRecorder().observe(),
   });
   loop.setSpeed(multiplier);
 }
@@ -71,6 +80,17 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return runHeadless(inputs, (timeS) =>
         self.postMessage({ type: 'headlessProgress', timeS } satisfies HostEvent),
       );
+    case 'tripRecords':
+      loadedLoop();
+      return tripRecords(engine, inputs!.trips);
+    case 'roadStats':
+      return loadedRecorder().roadStats();
+    case 'trajectories':
+      return request.enabled === undefined
+        ? loadedRecorder().trajectories()
+        : loadedRecorder().setTrajectories(request.enabled);
+    case 'trajectoryStatus':
+      return loadedRecorder().trajectoryStatus();
     case 'inspect':
       return engine.inspect(request.vehicleId);
     case 'hash':

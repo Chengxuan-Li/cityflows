@@ -1,4 +1,5 @@
 import type { Metrics, VehicleDetail } from '../sim/types';
+import type { RoadStats, TrajectoryRecord, TripRecord } from '../project/export-csv';
 import type {
   HostEvent,
   HostReply,
@@ -7,6 +8,7 @@ import type {
   HostSnapshot,
   MetricsSample,
   HeadlessResult,
+  TrajectoryStatus,
 } from './protocol';
 
 type LoadInput = Omit<Extract<HostRequest, { type: 'load' }>, 'id' | 'type'>;
@@ -23,6 +25,11 @@ export interface EngineClient {
   metrics(): Promise<Metrics>;
   metricsSeries(): Promise<MetricsSample[]>;
   runHeadless(): Promise<HeadlessResult>;
+  tripRecords(): Promise<TripRecord[]>;
+  roadStats(): Promise<RoadStats[]>;
+  trajectories(): Promise<TrajectoryRecord[]>;
+  setTrajectories(enabled: boolean): Promise<TrajectoryStatus>;
+  trajectoryStatus(): Promise<TrajectoryStatus>;
   inspect(id: number): Promise<VehicleDetail | null>;
   hash(): Promise<number>;
   onEvent(listener: (event: HostEvent) => void): () => void;
@@ -113,6 +120,11 @@ export function createEngineClient(worker: Worker): EngineClient {
     metrics: () => send({ type: 'metrics' }),
     metricsSeries: () => send({ type: 'metricsSeries' }),
     runHeadless: () => send({ type: 'runHeadless' }),
+    tripRecords: () => send({ type: 'tripRecords' }),
+    roadStats: () => send({ type: 'roadStats' }),
+    trajectories: () => send({ type: 'trajectories' }),
+    setTrajectories: (enabled) => send({ type: 'trajectories', enabled }),
+    trajectoryStatus: () => send({ type: 'trajectoryStatus' }),
     inspect: (vehicleId) => send({ type: 'inspect', vehicleId }),
     hash: () => send({ type: 'hash' }),
     onEvent(listener) {

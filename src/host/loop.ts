@@ -10,13 +10,17 @@ interface LoopOptions {
   endS: number;
   now: () => number; // monotonic milliseconds
   emit: (event: HostEvent) => void;
+  afterStep?: () => void;
 }
 
 type LoopEngine = Pick<TrafficEngine, 'timeS' | 'step'> & {
   metrics(): Pick<Metrics, 'trips' | 'meanDelayS'>;
 };
 
-export function createPlayLoop(engine: LoopEngine, { dtS, endS, now, emit }: LoopOptions) {
+export function createPlayLoop(
+  engine: LoopEngine,
+  { dtS, endS, now, emit, afterStep }: LoopOptions,
+) {
   let timer: ReturnType<typeof setInterval> | undefined;
   let lastTickMs = 0;
   let accountedMs = 0;
@@ -61,8 +65,9 @@ export function createPlayLoop(engine: LoopEngine, { dtS, endS, now, emit }: Loo
     // Split large manual steps too: each sample describes its actual minute, not the final state.
     while (remaining > 0) {
       const untilSample = Math.max(1, Math.ceil((nextSampleS - engine.timeS) / dtS - stepEpsilon));
-      const batch = Math.min(remaining, untilSample);
+      const batch = Math.min(remaining, untilSample, afterStep ? 1 : Infinity);
       engine.step(batch);
+      afterStep?.();
       remaining -= batch;
       if (engine.timeS + stepEpsilon >= nextSampleS) {
         sample();

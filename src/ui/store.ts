@@ -1,4 +1,8 @@
 import { create } from 'zustand';
+import { version } from '../../package.json';
+import { exportGeoJson } from '../project/geojson';
+import { exportTripsCsv, exportRoadMetricsCsv, exportTrajectoriesCsv } from '../project/export-csv';
+import { DEFAULT_SIM_PARAMS } from '../sim/params';
 import type { Vec2 } from '../geo/vec2';
 import { demandSummary, generatePopulation, scheduleTrips, type DemandSummary } from '../demand';
 import { createEditor, type CommitResult, type Editor } from '../editor';
@@ -59,6 +63,7 @@ interface Run {
 }
 
 type RunCommand = 'play' | 'pause' | 'step' | 'restart';
+export type ExportFormat = 'geojson' | 'trips' | 'road-metrics' | 'trajectories';
 
 interface AppState {
   compareOpen: boolean;
@@ -94,6 +99,7 @@ interface AppState {
   open: (source?: File | string) => Promise<void>;
   loadProject: (project: Project) => Promise<void>;
   save: () => Promise<void>;
+  exportData: (format: ExportFormat) => Promise<void>;
   control: (command: RunCommand, steps?: number) => Promise<void>;
   commit: (command: Command) => Promise<void>;
   undo: () => Promise<void>;
@@ -449,6 +455,59 @@ export const useAppStore = create<AppState>((set, get) => {
           },
           run: { ...run, status: 'paused', stale: true, achieved: 0, timeS, counts },
         });
+      }),
+    exportData: (format) =>
+      perform(async () => {
+        const { session, run } = get();
+        if (!session || !run) return;
+        if (format !== 'geojson' && run.stale)
+          throw new Error('Restart to export the edited scenario');
+        const { project, engine, loadedCompiled } = session;
+        const scenario = project.scenarios[0]!;
+        const provenance = {
+          seed: scenario.seed,
+          engineVersion: version,
+          schemaVersion: project.city.schemaVersion,
+          dtS: scenario.simParams.dtS ?? DEFAULT_SIM_PARAMS.dtS,
+        };
+        let content: string;
+        if (format === 'geojson') {
+          content = JSON.stringify({
+            ...exportGeoJson(project.city),
+            'cityflows:provenance': provenance,
+          });
+        } else if (format === 'trips') {
+          content = exportTripsCsv(await engine.tripRecords(), provenance);
+        } else if (format === 'road-metrics') {
+          const stats = await engine.roadStats();
+          content = exportRoadMetricsCsv(
+            stats.map((stat) => {
+              const road = project.city.roads[stat.id]!;
+              return {
+                ...stat,
+                name: road.name,
+                roadClass: road.roadClass,
+                length: loadedCompiled.roads[loadedCompiled.index.road.get(stat.id)!]!.lengthM,
+              };
+            }),
+            provenance,
+          );
+        } else {
+          const records = await engine.trajectories();
+          if (!records.length) throw new Error('Record trajectories before exporting');
+          content = exportTrajectoriesCsv(records, provenance);
+        }
+        const extension = format === 'geojson' ? 'geojson' : 'csv';
+        const type = format === 'geojson' ? 'application/geo+json' : 'text/csv;charset=utf-8';
+        const url = URL.createObjectURL(new Blob([content], { type }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${project.city.name}-${scenario.id}-${format}.${extension}`.replace(
+          /[<>:"/\\|?*]/g,
+          '-',
+        );
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
       }),
     control: (command, steps = 1) =>
       perform(async () => {
