@@ -10,4 +10,10 @@ export const DEFAULT_SIM_PARAMS: SimParams = {
   mandatoryUrgencyM: 10,
   intersection: { decisionDistanceM: 15, gapS: 4, creepSpeedMps: 1 },
   spawnMinGapM: 8,
+  linkCostAlpha: 0.3,
+  linkCostIntervalS: 60,
+  rerouteIntervalS: 120,
+  rerouteHysteresis: 0.15,
+  maxReplans: 3,
+  routeNoise: 0.1,
 };

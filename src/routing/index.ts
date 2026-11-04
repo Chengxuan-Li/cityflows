@@ -1,6 +1,6 @@
 import type { CompiledCity } from '../network';
 import type { VehicleClass } from '../schema';
-import { routeCosts } from './costs';
+import { createCostCache, routeCosts } from './costs';
 import { createGraphCache } from './graph';
 import { searchLanes } from './lane-search';
 import { resolveLanes } from './lanes';
@@ -47,6 +47,7 @@ export function createRouteProvider({
   laneChangeDistanceM = 30,
 }: RoutingParams = {}): RouteProvider {
   const graphFor = createGraphCache();
+  const costsFor = createCostCache();
   return {
     route(compiled, costs, request) {
       const destination = compiled.connectors[request.toConnector];
@@ -59,7 +60,7 @@ export function createRouteProvider({
       }
       const from = compiled.lanes[request.fromLane]!.road;
       const to = compiled.lanes[destination.lane]!.road;
-      const weights = routeCosts(compiled, costs, request);
+      const weights = routeCosts(compiled, costsFor(costs), request);
       const path = shortestPath(
         compiled.roads.length,
         from,

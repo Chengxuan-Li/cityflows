@@ -2,7 +2,6 @@ import { headingAtDistance, pointAtDistance } from '../geo/polyline';
 import type { CConnector } from '../network';
 import {
   createRouteProvider,
-  freeFlowLinkCosts,
   movementPenaltyS,
   reachableLanes,
   type LinkCosts,
@@ -14,8 +13,10 @@ import { stateHash } from './hash';
 import { idmAcceleration } from './idm';
 import { createIntersections } from './intersection';
 import { createLaneChanges } from './lane-change';
+import { createLinkCosts } from './link-costs';
 import { createAccounting } from './metrics';
 import { DEFAULT_SIM_PARAMS } from './params';
+import { createRerouter, vehicleRouteRequest } from './reroute';
 import type { TrafficEngine, VehicleDetail, VehicleSnapshot, VehicleState } from './types';
 import { createVehicles, DRIVING, QUEUED_ORIGIN, QUEUED_DESTINATION, PENDING } from './vehicle';
 
@@ -50,7 +51,12 @@ function createRun({
   const carLanes = compiled.lanes.map((lane) => lane.allowed.includes('car'));
   const provider =
     routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
-  const costs = linkCosts ?? freeFlowLinkCosts(compiled);
+  const observedCosts = createLinkCosts(compiled, params, scenario.startS);
+  const costs = linkCosts ?? observedCosts.costs;
+  const rerouter = createRerouter(compiled, vehicles, params, provider, costs);
+  const roadEnteredS = new Float64Array(trips.length);
+  const roadEnteredM = new Float64Array(trips.length);
+  const routeReasons: VehicleDetail['routeReason'][] = Array(trips.length).fill('initial');
   const fallback = new Uint8Array(trips.length);
   const arrival = new Int32Array(trips.length).fill(-1);
   const order = new Uint32Array(trips.length);
@@ -61,15 +67,19 @@ function createRun({
   const time = () => scenario.startS + tick * dtS;
 
   function routeFrom(id: number, lane: number, positionM: number) {
-    return provider.route(compiled, costs, {
-      fromLane: lane,
-      fromPosM: positionM,
-      toConnector: vehicles.destination[id]!,
-      vehicleClass: 'car',
-      desiredSpeedFactor: vehicles.speedFactor[id]!,
-      noise: 0,
-      seed: vehicles.routeSeed[id]!,
-    });
+    return provider.route(
+      compiled,
+      costs,
+      vehicleRouteRequest(vehicles, params, id, lane, positionM),
+    );
+  }
+
+  function leaveRoad(id: number, timeS: number, positionM: number) {
+    observedCosts.record(
+      compiled.lanes[vehicles.lane[id]!]!.road,
+      timeS - roadEnteredS[id]!,
+      positionM - roadEnteredM[id]!,
+    );
   }
 
   function planLane(id: number, lane: number, positionM: number) {
@@ -181,6 +191,9 @@ function createRun({
     vehicles.route[id] = result.route;
     vehicles.freeFlow[id] = freeFlow(id, connector);
     vehicles.departed[id] = timeS;
+    roadEnteredS[id] = timeS;
+    roadEnteredM[id] = positionM;
+    rerouter.start(id, timeS);
     planLane(id, lane, positionM);
     vehicles.insert(id, lane, positionM);
     accounting.transition(id, DRIVING);
@@ -311,6 +324,7 @@ function createRun({
     vehicles.position[id] = connector.positionM;
     vehicles.speed[id] = 0;
     if (connectors.arrive(connector, timeS)) {
+      leaveRoad(id, timeS, connector.positionM);
       vehicles.remove(id);
       accounting.complete(id, timeS);
     } else {
@@ -320,6 +334,8 @@ function createRun({
   }
 
   function enterLane(id: number, lane: number, position: number, timeS: number) {
+    roadEnteredS[id] = timeS;
+    roadEnteredM[id] = 0;
     intersections.release(id);
     vehicles.remove(id);
     if (fallback[id]) {
@@ -403,8 +419,10 @@ function createRun({
         if (granted !== -1) {
           if (fallback[id]) {
             vehicles.missedTurn[id] = 1;
+            routeReasons[id] = 'missed_turn';
             (vehicles.attemptedFallbacks[id] ??= new Set()).add(granted);
           }
+          leaveRoad(id, timeS, lane.lengthM);
           vehicles.remove(id);
           laneChanges.clearAnimation(id);
           vehicles.insert(
@@ -481,7 +499,7 @@ function createRun({
             targetLanes: route.targetLanes.map((lanes) => lanes.slice()),
           }
         : null,
-      routeReason: vehicles.missedTurn[id] ? 'missed_turn' : 'initial',
+      routeReason: routeReasons[id]!,
       waitingS:
         state === QUEUED_ORIGIN
           ? Math.max(0, time() - connectors.queuedSince(id))
@@ -503,10 +521,18 @@ function createRun({
         const timeS = time();
         intersections.signals(timeS);
         connectors.spawn(timeS, hasSpawnGap, releaseTrip);
+        rerouter.update(timeS, (id) => {
+          if (intersections.grants[id] !== -1) intersections.release(id);
+          routeReasons[id] = 'congestion';
+          planLane(id, vehicles.lane[id]!, vehicles.position[id]!);
+          vehicles.stopped[id] = 0;
+          vehicles.junctionWaiting[id] = 0;
+        });
         proposeLaneChanges();
         resolve(timeS);
         tick++;
         commit(time());
+        observedCosts.update(time());
       }
     },
   };
