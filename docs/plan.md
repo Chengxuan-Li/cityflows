@@ -73,9 +73,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | done |
 | [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | done |
 | [TASK-046](tasks/TASK-046.md) | 4 | Simulation hotspots | `src/sim/reroute.ts`, `engine.ts`, `lane-change.ts`, `src/host/headless.ts`, `export-data.ts`, `bench/` | 044, 032 | bench gains with unchanged hashes | done |
-| [TASK-047](tasks/TASK-047.md) | 5 | Renderer polish: junctions, motion, markings | `src/render/**`, snapshot handling in `map-view.tsx`, `layers.tsx`, chart and hint CSS | 044, 046 | screenshots, T16 unchanged | todo |
+| [TASK-047](tasks/TASK-047.md) | 5 | Renderer polish: junctions, motion, markings | `src/render/**`, snapshot handling in `map-view.tsx`, `layers.tsx`, chart and hint CSS | 044, 046 | screenshots, T16 unchanged | done |
 | [TASK-048](tasks/TASK-048.md) | 5 | Import quality on real OSM data | `src/importers/**`, compiler lane assignment, `bench/import-probe.ts`, `tests/importers` | 020, 030 | Munich baseline targets met | todo |
-| [TASK-049](tasks/TASK-049.md) | 5 | Junction controls: yield, stop, turn on red, roundabouts | `src/sim`, `src/network/signals.ts`, `src/editor`, `src/ui/tools/roundabout.tsx`, `src/render/layers/signs.ts` | 032, 040, 046 | gate5-controls scenarios | review |
+| [TASK-049](tasks/TASK-049.md) | 5 | Junction controls: yield, stop, turn on red, roundabouts | `src/sim`, `src/network/signals.ts`, `src/editor`, `src/ui/tools/roundabout.tsx`, `src/render/layers/signs.ts` | 032, 040, 046 | gate5-controls scenarios | done |
 | TASK-051 | 5 | Live edits with bounded rerouting (B8) | engine, host, store restart path | 047, 048, 049 and a design note | edits apply without restart | todo |
 
 ### Waves
@@ -478,6 +478,31 @@ residential and work places from buildings and land use.
   city's gateway trips fail in the first 15 minutes. With this, every task in the plan is
   merged; the backlog from real OSM testing is the next wave.
 
+- 2026-11-04, TASK-047 merged as delivered. Junctions are drawn as the polygon through the
+  lane-edge corners of every road end plus the movement surfaces, with a disc only at
+  degree-two nodes; cars advance along their lane or movement polyline between snapshots
+  by speed times elapsed wall time times the run multiplier and snap on the next snapshot;
+  lane changes ease with a smoothstep and a small yaw; stop lines, give-way triangles,
+  lane arrows and zebra crossings come from the compiled movements and fade with zoom;
+  Layers gains a Basemap toggle for georeferenced cities; the demand chart and the ramp
+  hint fit narrow windows. Two unit tests cover the markings rule and the interpolation.
+  The lead saw the grid signal with crossings, stop lines and arrows and interpolated
+  motion at x20 in the browser.
+
+- 2026-11-04, TASK-049 merged as delivered. Stop approaches wait a full second at the line
+  before requesting and yield gaps are inclusive of gapS (both hashes changed only in the
+  affected tests); optional SignalProgram.turnOnRed marks curb-side turns that stop, then
+  yield on red, with a toggle in the signal editor and an importer default from explicit
+  country tags; addRoundabout and removeRoundabout (approved) replace a junction with a
+  one-lane 30 km/h ring on split entry and exit legs with yield on entry, driven by a
+  Roundabout tool that drags the radius; imported junction=roundabout rings keep their
+  geometry and get yield entries; stop and yield signs fade with zoom in a signs layer; the
+  Station deadlock is fixed by letting a parked departure use another outlet of its place.
+  Accepted with a note: removal restores the junction from a before-and-after snapshot
+  stored on the node, which is more state than an inverse command; revisit if saved cities
+  grow. The agent also noted a flaky first run of the T16 grid scenario (worker terminated
+  while a replacement project loaded) that passed on rerun; watch it.
+
 ## Owner decisions log
 
 - 2026-11-03: foundation, renderer, repo shape, license, OSM access, workflow and audit depth
@@ -650,42 +675,3 @@ Demo D's imported city fails 7 442 of its gateway trips in the first 15 minutes 
 counts are in its `metrics.json`); that is the import's demand, not the share, and stays a
 follow-up. `tests/e2e/demo-onboarding.spec.ts` follows the six first-run hints (New, Play,
 a car, a street's settings, Restart, Compare) and saves a screenshot of each.
-
-
-### TASK-049 implementation (2026-11-04)
-
-Branch `task/049-junction-controls`, awaiting lead review. Stops wait at the line for one
-second before requesting; yield accepts gaps at least `gapS`. Optional `turnOnRed` is
-curb-side under the driving side, requires that stop, and respects conflicts/blocked exits.
-Authored roundabouts use split entry/exit legs, a one-lane 30 km/h ring and yield entries;
-the drag tool previews the radius. The approved optional Node restoration record preserves
-signals, turn rules, geometry and connectors through save/reopen and removal. Radius is at
-least 20 m, with more than twice the radius plus 15 m on each approach; incompatible later
-edits must be undone before removal. Imported rings keep their geometry and gain entry yield
-controls; imported rings have no authored restoration record. Signs fade with zoom.
-
-The Station deadlock regression reproduces a second bidirectional portal at 85 m ahead of
-the 100 m arrival and 130 m departure portals. A parked departure now retries a usable outlet
-of the same place rather than spawning behind its inbound queue; budgets, gaps, paired-arrival
-completion and capacity accounting remain enforced. T10 drains and replays deterministically.
-
-Focused browser acceptance: stop increases the queue, enabling turn on red decreases it,
-20 inspected grid routes use the ring and all 20 finish without stranding, and removal
-restores the junction. Import / OSM file accepts `sindelfingen-a81.osm`: 812 roads, zero errors,
-238 warnings. Screenshots are emitted by `tests/e2e/gate5-controls.spec.ts` for construction,
-stop/yield signs and the imported ring. No dependencies or fixture/golden hashes changed.
-
-Against base `5877bc2`, sampling every 100 steps: the unedited grid morning (72,000 steps)
-keeps hash 2978129876, and default Station (18,000 steps) keeps 4168587500. The stop test at
-100 s changes 1935258724 to 1283448049; enabled turn-on-red changes 4181331820 to 1778808601;
-Station with the extra bidirectional connector at 08:30 changes 2526193081 to 1723445294.
-Those changes follow the behavior fixes; the exact `gapS` equality correction is covered
-separately. Same-seed replay, T02, T06, T07 and T10 pass.
-
-
-Verification: `npm run check` passes (186 tests, one existing skip; typecheck, lint, formatting
-and build pass). The complete `CITYFLOWS_TEST_PORT=4312 npm run test:e2e` rerun passes all
-41 scenarios in 5.4 minutes. Its first run passed 40 and hit the existing T16 grid project-open
-race (`Traffic worker terminated` before the replacement project loaded); the unchanged
-full rerun passed. No host or performance-test edits were made. Five Conventional Commits
-are ready for review; nothing was pushed or merged.
