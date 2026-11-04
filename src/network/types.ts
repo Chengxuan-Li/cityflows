@@ -99,6 +99,7 @@ export interface CMovement {
   cumulative: Float64Array;
   lengthM: number;
   conflicts: number[];
+  conflictZones: [startM: number, endM: number][]; // parallel to conflicts, along this movement
   priority: number;
   neverGreen: boolean;
   turnOnRed?: boolean;

@@ -27,7 +27,10 @@ export function patchChanges(before: CompiledCity, after: CompiledCity) {
           a.priority !== b.priority ||
           a.neverGreen !== b.neverGreen ||
           a.turnOnRed !== b.turnOnRed ||
-          !sameMovements(a.conflicts, b.conflicts)
+          !sameMovements(a.conflicts, b.conflicts) ||
+          a.conflictZones.some(
+            ([start, end], i) => start !== b.conflictZones[i]![0] || end !== b.conflictZones[i]![1],
+          )
         );
       })
     )
