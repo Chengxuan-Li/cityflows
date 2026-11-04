@@ -56,7 +56,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-020](tasks/TASK-020.md) | 2 | OSM importer and fixtures | `src/importers/osm`, `src/importers/types.ts`, `fixtures/osm`, `tests/importers` | 001 | T11, T18 | done |
 | [TASK-021](tasks/TASK-021.md) | 2 | Import wizard, Overpass provider, file upload | `src/ui/import`, `src/importers/overpass.ts`, `src/importers/cache.ts`, `src/importers/worker.ts` | 020, 009 | import workflow end to end | done |
 | [TASK-022](tasks/TASK-022.md) | 2 | Topology editing: draw, split, delete, move | `src/editor/commands/topology.ts`, `src/ui/tools/*`, `src/render/layers/edit-overlay.ts`, `tests/editor/T12-topology.test.ts`, `tests/e2e/gate2-edit.spec.ts` | 007, 010 | T12 (full) | done |
-| [TASK-023](tasks/TASK-023.md) | 2 | Multi-select and batch editing | `src/ui/selection`, `src/editor/commands/batch.ts` | 022 | bulk edits, one undo entry | todo |
+| [TASK-023](tasks/TASK-023.md) | 2 | Multi-select and batch editing | `src/ui/selection`, `src/editor/commands/batch.ts` | 022 | bulk edits, one undo entry | done |
 | [TASK-024](tasks/TASK-024.md) | 2 | Raster tile backdrop | `src/render/layers/tiles.ts`, layer toggle in `src/ui/layers*` | 006, 020 | tiles align with imported roads | done |
 | [TASK-025](tasks/TASK-025.md) | 2 | GeoJSON feature import and export | `src/importers/geojson`, `src/project/geojson.ts` | 008, 020 | documented interchange, id conflict handling | done |
 | [TASK-026](tasks/TASK-026.md) | 2 | Large synthetic city fixture | `src/fixtures/town.ts`, `src/fixtures/scenarios.ts`, `fixtures/projects/town.cityflows.json`, `tests/network/town.test.ts`, `tests/sim/town-day.test.ts` | 001 | compiles, full day under 1 percent failed, perf workload | done |
@@ -65,7 +65,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-031](tasks/TASK-031.md) | 3 | Congestion-aware routing | `src/sim/link-costs.ts`, `src/sim/reroute.ts`, `src/routing` (costs) | 002, 004 | T06 | done |
 | [TASK-032](tasks/TASK-032.md) | 3 | Ramps, merging, expressway construction | `src/sim/merge.ts`, `src/editor/commands/ramp.ts`, `src/ui/tools/ramp*`, `tests/sim/T07*` | 004, 022 | T07 (full), demo C | todo |
 | [TASK-033](tasks/TASK-033.md) | 3 | Place editor and demand panel | `src/ui/inspector/place*`, `src/ui/panels/demand*`, vehicle inspector reasons | 030, 010 | demos A and B reachable from the UI | todo |
-| [TASK-034](tasks/TASK-034.md) | 3 | Place painting and demand regeneration | `src/ui/tools/place-paint.tsx`, place controls, regenerate action, `tests/e2e/gate3-paint.spec.ts` | 050, 011 | painted place attracts trips after regenerate | todo |
+| [TASK-034](tasks/TASK-034.md) | 3 | Place painting and demand regeneration | `src/ui/tools/place-paint.tsx`, place controls, regenerate action, `tests/e2e/gate3-paint.spec.ts` | 050, 011 | painted place attracts trips after regenerate | done |
 | [TASK-040](tasks/TASK-040.md) | 4 | Signal editor | `src/ui/inspector/signal*`, `src/render/layers/signal-preview.ts` | 010 | T13 through the UI | done |
 | [TASK-041](tasks/TASK-041.md) | 4 | Metrics, layers and charts | `src/ui/panels/metrics*`, `src/ui/layers*`, `src/render/layers/heat.ts` | 005, 006 | readable congestion feedback | done |
 | [TASK-042](tasks/TASK-042.md) | 4 | Scenario comparison | `src/ui/panels/compare*`, `src/project/scenarios.ts` | 008, 041 | same-seed baseline versus variant | done |
@@ -113,6 +113,8 @@ dependency of its tasks is merged to `main`.
   trajectory sampling). TASK-044 measures and optimizes `src/render` and `src/routing` only this
   wave and reports `src/sim` hotspots for after TASK-032. TASK-033 follows TASK-034 (both edit
   the place inspector and the regenerate action); TASK-045 last.
+- Wave 7 status (2026-11-03): TASK-034, TASK-023, TASK-042 and TASK-043 merged; TASK-032 and
+  TASK-044 still running. TASK-033 can start now on the merged place tool.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -310,6 +312,41 @@ exists.
   conflict boundary, fixed in the follow-up commit. Playwright now runs with one worker: the
   scenarios that step whole mornings starve parallel pages of the shared GPU process and made
   unrelated scenarios time out. All 16 scenarios pass serially in about one minute.
+
+- 2026-11-03, TASK-034 merged as delivered. A Place tool paints with a round brush (raster
+  union at 2 m, smoothed and simplified to at most 48 points), creates the place with
+  area-scaled residents or jobs and a connector snapped to the nearest car lane within 60 m,
+  extends an existing place of the same kind, and refuses to leave a dangling place. The place
+  inspector gained sliders, a demand readout, connector add, move and remove, and delete;
+  "Regenerate demand" with a seed sits behind Trip counts; point places now keep a minimum
+  on-screen size. The three gate3-paint scenarios pass; the lead painted a work place and
+  read its inspector in the browser.
+
+- 2026-11-03, TASK-023 merged with one lead change. Shift-click and Shift-drag box selection
+  of streets, a batch inspector with mixed values, and one batch command per apply; the
+  invalid-member test and the four gate2-batch scenarios pass. Removed: the branch compiled
+  the whole city after every batch member to reject batches that pass through an invalid
+  intermediate state, which cost one compile per member and broke the existing
+  add-then-configure batch in T12; the editor compiles the final draft once, as before.
+
+- 2026-11-03, TASK-042 merged as delivered. Baselines are saved in the project (optional
+  `baseline.json`, approved), restored through the approved `restoreCity` command as an
+  undoable patch with optional city metadata, and compared in a second worker with
+  `runHeadless` (approved protocol addition) on the trip list generated once from the
+  baseline; the table shows mean travel time, 90th percentile delay, completed and failed,
+  and a difference layer tints roads by unique-vehicle count change. Verified in the browser:
+  a banned movement on the first commute route moved the mean travel time and the 90th
+  percentile delay and painted the diverted roads. Noted for TASK-044: the headless run
+  inspects every active vehicle every step, slow on the town.
+
+- 2026-11-03, TASK-043 merged with one lead change. Trips, road metrics and trajectories CSVs
+  with a provenance comment line, an Export menu in the top bar with the GeoJSON exporter and
+  a trajectory recording toggle, and the approved `tripRecords`, `roadStats` and
+  `trajectories` requests with a lazily materialized `Metrics.tripOutcomes`. Changed: the
+  worker recorder took a snapshot and inspected every vehicle after every fixed step, which
+  would have slowed every interactive run; it now samples every tenth step from the snapshot
+  alone (documented in architecture section 10). Export tests pass; the lead did not download
+  the files by hand.
 
 ## Owner decisions log
 
