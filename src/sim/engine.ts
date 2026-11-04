@@ -203,7 +203,9 @@ function createRun({
   }
 
   function proposeLaneChanges() {
-    for (const lane of compiled.lanes) {
+    const { occupied } = vehicles;
+    for (let i = 0; i < occupied.length && occupied[i]! < compiled.lanes.length; i++) {
+      const lane = compiled.lanes[occupied[i]!]!;
       if (lane.left === -1 && lane.right === -1) continue;
       for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
         if (vehicles.state[id] !== DRIVING) continue;
@@ -217,9 +219,10 @@ function createRun({
 
   function prepareTravel(timeS: number) {
     orderCount = 0;
-    for (let segment = 0; segment < vehicles.head.length; segment++) {
+    const { occupied } = vehicles;
+    for (let i = 0; i < occupied.length; i++) {
+      const segment = occupied[i]!;
       const head = vehicles.head[segment]!;
-      if (head === -1) continue;
       const lane = compiled.lanes[segment];
       const path = lane ? null : compiled.movements[segment - compiled.lanes.length]!;
       const length = lane?.lengthM ?? path!.lengthM;
