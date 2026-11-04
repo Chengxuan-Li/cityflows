@@ -10,6 +10,17 @@ export function createIntersections(
   params: SimParams,
   mergeAllows: (id: number, movement: CMovement) => boolean = () => true,
 ) {
+  const continuations = compiled.movements.map((movement) => {
+    const node = compiled.nodes[movement.node]!;
+    return (
+      node.control === 'uncontrolled' &&
+      !node.signal &&
+      movement.conflicts.length === 0 &&
+      movement.turn !== 'merge' &&
+      !movement.neverGreen &&
+      !movement.turnOnRed
+    );
+  });
   const colors = new Uint8Array(compiled.movements.length);
   // Vehicles granted or driving on each movement. Several may share one movement (a platoon
   // through a green); entry is refused only while a conflicting movement is occupied.
@@ -153,5 +164,5 @@ export function createIntersections(
     activeNodes.length = 0;
   }
 
-  return { signals, request, resolve, release, grants, occupancy };
+  return { signals, request, resolve, release, grants, occupancy, continuations };
 }

@@ -164,11 +164,30 @@ function createRun({
   function hasSpawnGap(connector: CConnector) {
     const { lane, positionM } = connector;
     const spacing = vehicleLengthM + Math.max(spawnMinGapM, idm.minGapM);
-    if (
-      positionM < spacing &&
-      compiled.lanes[lane]!.in.some((idx) => intersections.occupancy[idx]! > 0)
-    )
-      return false;
+    if (positionM < spacing) {
+      for (const idx of compiled.lanes[lane]!.in) {
+        if (intersections.occupancy[idx]! > 0) return false;
+        if (!intersections.continuations[idx]) continue;
+        // Continuations have no reservations; protect the spawn gap across their boundary.
+        const movement = compiled.movements[idx]!;
+        const occupant = vehicles.first(-idx - 1);
+        if (
+          occupant !== -1 &&
+          positionM + movement.lengthM - vehicles.position[occupant]! < spacing
+        )
+          return false;
+        const approach = vehicles.first(movement.fromLane);
+        if (
+          approach !== -1 &&
+          positionM +
+            movement.lengthM +
+            compiled.lanes[movement.fromLane]!.lengthM -
+            vehicles.position[approach]! <
+            spacing
+        )
+          return false;
+      }
+    }
     for (
       let id = vehicles.last(lane);
       id !== -1 && vehicles.position[id]! <= positionM + spacing;
@@ -247,7 +266,9 @@ function createRun({
         const destination = compiled.connectors[arrival[id]!];
         const movement = compiled.movements[vehicles.movement[id]!];
         if (laneChanges.holding[id] && intersections.grants[id] !== -1) intersections.release(id);
-        const granted = intersections.grants[id] !== -1;
+        const granted =
+          intersections.grants[id] !== -1 ||
+          (movement !== undefined && intersections.continuations[movement.idx]);
         let leader = ahead;
         let offset = 0;
         if (leader === -1 && path) {
@@ -310,7 +331,7 @@ function createRun({
         }
 
         // Ask for entry before the ungranted stop line would force braking, and as soon as the
-        // car ahead on this lane holds its grant, so a platoon flows through a green.
+        // car ahead on this lane may enter, so a platoon flows through a green or continuation.
         const speed = vehicles.speed[id]!;
         const requestDistance = Math.max(
           params.intersection.decisionDistanceM,
@@ -321,7 +342,10 @@ function createRun({
           movement &&
           !laneChanges.holding[id] &&
           !granted &&
-          (ahead === -1 || intersections.grants[ahead] !== -1) &&
+          (ahead === -1 ||
+            intersections.grants[ahead] !== -1 ||
+            (intersections.continuations[vehicles.movement[ahead]!] &&
+              !laneChanges.holding[ahead])) &&
           length - position <= requestDistance
         ) {
           intersections.request(id, movement);
@@ -362,7 +386,7 @@ function createRun({
   function enterLane(id: number, lane: number, position: number, timeS: number) {
     roadEnteredS[id] = timeS;
     roadEnteredM[id] = 0;
-    intersections.release(id);
+    if (intersections.grants[id] !== -1) intersections.release(id);
     vehicles.remove(id);
     if (fallback[id]) {
       const result = routeFrom(id, lane, 0);
@@ -416,8 +440,8 @@ function createRun({
       }
       const lane = compiled.lanes[field]!;
       const remaining = lane.lengthM - previousPosition;
-      const granted = intersections.grants[id]!;
       const movement = vehicles.movement[id]!;
+      const granted = intersections.continuations[movement] ? movement : intersections.grants[id]!;
       if ((movement !== -1 && granted === -1) || laneChanges.holding[id] || waitingForLane[id]) {
         position = Math.min(position, Math.max(previousPosition, lane.lengthM - idm.minGapM));
         if (remaining <= params.intersection.decisionDistanceM) {
