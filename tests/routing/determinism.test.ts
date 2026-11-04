@@ -27,3 +27,25 @@ test('a version bump rebuilds adjacency after movement availability changes', ()
   if (!after.ok) throw new Error(after.reason);
   expect(after.route.roads).not.toEqual(first.route.roads);
 });
+
+test('cached lane expansions follow network versions and interleaved vehicle classes', () => {
+  const { compiled, request } = routingFixture(grid5x5());
+  const provider = createRouteProvider();
+  const costs = freeFlowLinkCosts(compiled);
+  const first = provider.route(compiled, costs, request);
+  if (!first.ok) throw new Error(first.reason);
+  const movement = compiled.movements[first.route.movements[1]!]!;
+  compiled.lanes[movement.toLane]!.allowed = ['car'];
+  compiled.version++;
+  for (const vehicleClass of ['truck', 'car', 'truck'] as const) {
+    const req = { ...request, vehicleClass };
+    expect(provider.route(compiled, costs, req)).toEqual(
+      createRouteProvider().route(compiled, costs, req),
+    );
+  }
+  movement.neverGreen = true;
+  compiled.version++;
+  const after = provider.route(compiled, costs, request);
+  expect(after).not.toEqual(first);
+  expect(after).toEqual(createRouteProvider().route(compiled, costs, request));
+});

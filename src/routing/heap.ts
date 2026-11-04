@@ -1,43 +1,60 @@
-interface Entry {
-  node: number;
-  cost: number;
-}
-
-function precedes(a: Entry, b: Entry): boolean {
-  return a.cost < b.cost || (a.cost === b.cost && a.node < b.node);
-}
-
 export class MinHeap {
-  private readonly entries: Entry[] = [];
+  private readonly nodes: number[] = [];
+  private readonly costs: number[] = [];
+  private size = 0;
+  cost = 0;
 
-  push(entry: Entry): void {
-    const entries = this.entries;
-    let index = entries.length;
-    entries.push(entry);
-    while (index > 0) {
-      const parent = (index - 1) >>> 1;
-      if (!precedes(entry, entries[parent]!)) break;
-      entries[index] = entries[parent]!;
-      index = parent;
-    }
-    entries[index] = entry;
+  clear(): void {
+    this.size = 0;
   }
 
-  pop(): Entry | undefined {
-    const entries = this.entries;
-    const first = entries[0];
-    const last = entries.pop();
-    if (!last || entries.length === 0) return first;
+  push(node: number, cost: number): void {
+    const { nodes, costs } = this;
+    let index = this.size++;
+    while (index > 0) {
+      const parent = (index - 1) >>> 1;
+      if (cost > costs[parent]! || (cost === costs[parent] && node >= nodes[parent]!)) break;
+      nodes[index] = nodes[parent]!;
+      costs[index] = costs[parent]!;
+      index = parent;
+    }
+    nodes[index] = node;
+    costs[index] = cost;
+  }
 
+  pop(): number | undefined {
+    if (this.size === 0) return undefined;
+    const { nodes, costs } = this;
+    const first = nodes[0]!;
+    this.cost = costs[0]!;
+    const size = --this.size;
+    const lastNode = nodes[size]!;
+    const lastCost = costs[size]!;
     let index = 0;
-    while (index * 2 + 1 < entries.length) {
+    // Move the smaller children up first, then insert the last entry from the
+    // bottom. This avoids comparing it at every level on the usual long descent.
+    while (index * 2 + 1 < size) {
       let child = index * 2 + 1;
-      if (child + 1 < entries.length && precedes(entries[child + 1]!, entries[child]!)) child++;
-      if (!precedes(entries[child]!, last)) break;
-      entries[index] = entries[child]!;
+      if (
+        child + 1 < size &&
+        (costs[child + 1]! < costs[child]! ||
+          (costs[child + 1] === costs[child] && nodes[child + 1]! < nodes[child]!))
+      )
+        child++;
+      nodes[index] = nodes[child]!;
+      costs[index] = costs[child]!;
       index = child;
     }
-    entries[index] = last;
+    while (index > 0) {
+      const parent = (index - 1) >>> 1;
+      if (lastCost > costs[parent]! || (lastCost === costs[parent] && lastNode >= nodes[parent]!))
+        break;
+      nodes[index] = nodes[parent]!;
+      costs[index] = costs[parent]!;
+      index = parent;
+    }
+    nodes[index] = lastNode;
+    costs[index] = lastCost;
     return first;
   }
 }

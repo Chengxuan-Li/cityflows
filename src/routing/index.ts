@@ -2,9 +2,9 @@ import type { CompiledCity } from '../network';
 import type { VehicleClass } from '../schema';
 import { createCostCache, routeCosts } from './costs';
 import { createGraphCache } from './graph';
-import { searchLanes } from './lane-search';
+import { createLaneSearch } from './lane-search';
 import { resolveLanes } from './lanes';
-import { shortestPath } from './search';
+import { createPathSearch } from './search';
 
 export { freeFlowLinkCosts, movementPenaltyS } from './costs';
 export { reachableLanes } from './lanes';
@@ -48,6 +48,8 @@ export function createRouteProvider({
 }: RoutingParams = {}): RouteProvider {
   const graphFor = createGraphCache();
   const costsFor = createCostCache();
+  const searchLanes = createLaneSearch(laneChangeDistanceM);
+  const shortestPath = createPathSearch();
   return {
     route(compiled, costs, request) {
       const destination = compiled.connectors[request.toConnector];
@@ -98,14 +100,7 @@ export function createRouteProvider({
           return { ok: true, route: { roads, ...lanes, costS: path.costS } };
       }
 
-      const route = searchLanes(
-        compiled,
-        graph,
-        weights,
-        request,
-        destination,
-        laneChangeDistanceM,
-      );
+      const route = searchLanes(compiled, graph, weights, request, destination);
       return route ? { ok: true, route } : { ok: false, reason: 'lane_infeasible' };
     },
   };
