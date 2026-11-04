@@ -80,6 +80,9 @@ input[type='checkbox'] {
 }
 
 .app {
+  --inspector-top: var(--inset);
+  --inspector-room: 10rem;
+  --run-sheet-gap: 8px;
   position: relative;
   height: 100%;
   overflow: hidden;
@@ -280,13 +283,17 @@ summary {
 }
 
 .inspector {
-  inset: var(--inset) var(--inset) auto auto;
+  inset: var(--inspector-top) var(--inset) auto auto;
   width: min(19rem, calc(100% - 2 * var(--inset)));
   max-height: calc(100% - 100px);
   padding: 12px;
   overflow: auto;
   overflow-wrap: anywhere;
   animation: sheet-in 140ms ease-out;
+}
+
+.app:has(.run-sheet) .inspector {
+  max-height: calc(100% - var(--inspector-top) - var(--run-sheet-space) - var(--run-sheet-gap));
 }
 
 .inspector h2 {
@@ -467,12 +474,26 @@ dd {
 }
 
 @media (max-width: 900px) {
+  .app {
+    --inspector-top: 68px;
+    --inspector-room: 4rem;
+  }
+
+  .app:has(.run-sheet) .inspector > :not(h2, .close-sheet) {
+    display: none;
+  }
+
+  .app:has(.run-sheet) .inspector h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .run-bar {
     justify-content: flex-start;
   }
 
   .inspector {
-    top: 68px;
     max-height: calc(100% - 155px);
   }
 }
@@ -491,8 +512,16 @@ dd {
     flex-basis: 100%;
   }
 
-  .toolbox,
-  .inspector {
+  .app {
+    --inspector-top: 76px;
+  }
+
+  .app:has(.run-sheet) {
+    /* The compact heading sits below the toolbox on phones. */
+    --inspector-top: 124px;
+  }
+
+  .toolbox {
     top: 76px;
   }
 
@@ -531,6 +560,21 @@ dd {
   .inspector {
     animation: none;
   }
+}
+
+.run-sheet {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--run-sheet-gap));
+}
+
+.run-sheet > :is(.layers-sheet, .chart-sheet) {
+  position: static;
+  max-height: calc(
+    100dvh - var(--run-sheet-bottom) - var(--inspector-top) - var(--inspector-room) -
+      var(--run-sheet-gap)
+  );
+  overflow: auto;
 }
 
 .layers-sheet,
@@ -630,6 +674,11 @@ dd {
 }
 
 @media (max-width: 680px) {
+  .run-sheet {
+    right: auto;
+    left: 0;
+  }
+
   .layers-sheet,
   .chart-sheet {
     right: auto;
