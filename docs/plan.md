@@ -77,6 +77,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-048](tasks/TASK-048.md) | 5 | Import quality on real OSM data | `src/importers/**`, compiler lane assignment, `bench/import-probe.ts`, `tests/importers` | 020, 030 | Munich baseline targets met | done |
 | [TASK-049](tasks/TASK-049.md) | 5 | Junction controls: yield, stop, turn on red, roundabouts | `src/sim`, `src/network/signals.ts`, `src/editor`, `src/ui/tools/roundabout.tsx`, `src/render/layers/signs.ts` | 032, 040, 046 | gate5-controls scenarios | done |
 | TASK-051 | 5 | Live edits with bounded rerouting (B8) | engine, host, store restart path | 047, 048, 049 and a design note | edits apply without restart | todo |
+| TASK-052 | 5 | CI green on the Linux runner (lead) | `tests/e2e/gate3-paint.spec.ts`, `tests/e2e/gate3-places.spec.ts` | - | e2e green with wider fonts | done |
 
 ### Waves
 
@@ -194,6 +195,12 @@ triage by the lead; the agents' investigation may move items between groups.
 | B11 | Signals may or may not allow right turn on red. | `SignalProgram.rightOnRed` (left on red under left-hand driving): a permitted turn on red yields like a stop sign; compiler marks those movements, signal editor toggle, importer default per country. |
 | B12 | Pedestrian crossing visuals. | Renderer: zebra markings at signalized junction approaches and at nodes tagged `crossing` by the importer; no pedestrian simulation. |
 | B13 | Imported cities gridlock at the default demand (one person per resident on 35 000 residents). | Import wizard: default `personsPerResident` for imports around 0.3 and a demand slider on the accept step; the probe takes a scale argument. Small. |
+| B14 | With wider fonts (Linux, DejaVu Sans) the Demand sheet covers the lower part of an open inspector at 1440 × 900, so controls there cannot be clicked until the sheet closes. | UI: keep run-bar sheets and the inspector from overlapping, for example by capping the inspector above an open sheet. Small. |
+| B15 | OSM import (owner, 2026-11-04): some points where a road is only split are classified as junctions with traffic lights. | Importer: a signal tag or a generated program only at nodes where streets actually cross or join; a node between two sections of one street stays plain. Check against the Munich extract. |
+| B16 | At irregular junctions roads still overlap each other. Junctions need real geometry: setback stop lines, rounded curb edges, and movement paths a real car would drive, such as a ramp's merge lane running alongside the expressway before it joins. | Network geometry and renderer: per-junction setback from the lane-edge intersections, curb arcs between adjacent approaches, movement curves built from the setback ends, and merges as parallel taper lanes instead of point joins. Large; needs a design note (architecture 5.1, 5.2, 11). |
+| B17 | Some routes look valid but cannot be driven, especially through irregular junctions and near the map edge. | Routing and compiler: find which lane-level routes the engine cannot follow (fallback movements, dropped lanes, clipped boundary roads), make them a diagnostic, and add the cases to the Munich test. |
+| B18 | A junction node behaves and looks too different from an ordinary stretch of road. | Investigate first: degree-two and through-street nodes should drive and draw like the road itself (no slowdown, no stop, no junction surface); real junctions keep their treatment. Overlaps B15 and B16. |
+| B19 | Roads that are on top in reality (bridges, flyovers) should be drawn on top; where the level is unknown, the order should at least be consistent. | Importer and renderer: carry OSM `layer`, `bridge` and `tunnel` into the road's grade and draw by grade, with a deterministic tie-break by id. |
 
 Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
 
@@ -285,8 +292,10 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 - Measurements that gate work: the Performance section (benchmark and T16), the Munich
   import baseline and its after-table, and the demos' metrics files under `test-results`,
   which regenerate from the suite.
-- Known flaky point: the T16 grid scenario can fail once when the replacement project loads
-  before the previous worker ended; it passes on rerun.
+- CI runs on Linux, whose fonts are wider than Windows' system UI font, so floating panels
+  are larger there. A scenario that clicks or paints near a panel can pass locally and fail
+  in CI. Check `gh run list --branch main` after each push. To reproduce locally, set the
+  root font in `src/ui/app.css` to Verdana for the run and revert it afterwards.
 - Local-only state: `bench/latest.log` and the CPU profiles, `test-results`, the worktrees
   under `.claude/worktrees` and the owner's Codex worktrees. None of it is needed.
 
@@ -593,6 +602,18 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   stranding (architecture 8), which changed the route-following tests and shifted the grid's
   morning peak. Open: at one person per resident the imported city gridlocks (30 800 queued at
   origin at 10:00), so the import wizard's default demand needs a scale (B13 below).
+
+- 2026-11-04, TASK-052 (lead, on taking over the lead role). GitHub CI on `main` had
+  failed on every push since `95a1af6`, while every local run on Windows passed. On the
+  runner's wider fonts two scenarios broke. In gate3-paint "extend…" the retail stroke at
+  map y 55 started on the Place tool's hint panel, so no place was painted; the strokes now
+  run one block lower (y 175 and 205). In gate3-places "profile and event editors" the
+  Demand sheet covered "Use default timing" in the inspector; the sheet now closes before
+  that click instead of before the Offices click (the overlap itself is B14). The T16 grid
+  failures in the same runs were a heading race that `9ea76ba` already removed by renaming
+  the uploaded grid. Verified with the root font switched to Verdana for the run: the two
+  scenarios fail before the change and pass after, and the full suite passes. It also passes
+  with the original font, and `npm run check` passes.
 
 ## Owner decisions log
 
