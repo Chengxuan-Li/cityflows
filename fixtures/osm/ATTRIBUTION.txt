@@ -29,3 +29,9 @@ OSM snapshot: 2026-11-04T05:53:36Z
 BBox: 11.525, 48.135, 11.545, 48.148
 Contents: every highway way and node, turn restriction relations, buildings, land use,
 amenities and stations in the bbox, so importer changes rerun without a download.
+
+sindelfingen-a81.osm — A81 junction Böblingen/Sindelfingen with roundabouts, Baden-Württemberg
+Source: https://overpass-api.de/api/interpreter
+OSM snapshot: 2026-11-04T06:18:55Z
+BBox: 8.98, 48.69, 9.0, 48.702
+Contents: highway ways and nodes, turn restrictions, buildings, land use and amenities.

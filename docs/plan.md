@@ -73,6 +73,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-044](tasks/TASK-044.md) | 4 | Performance and benchmark harness | `bench/`, hot paths in `src/sim`, `src/render` (coordinated), `tests/e2e/T16*` | 003, 004, 005, 006 | T16, targets in architecture section 15 | done |
 | [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | done |
 | [TASK-046](tasks/TASK-046.md) | 4 | Simulation hotspots | `src/sim/reroute.ts`, `engine.ts`, `lane-change.ts`, `src/host/headless.ts`, `export-data.ts`, `bench/` | 044, 032 | bench gains with unchanged hashes | done |
+| [TASK-047](tasks/TASK-047.md) | 5 | Renderer polish: junctions, motion, markings | `src/render/**`, snapshot handling in `map-view.tsx`, `layers.tsx`, chart and hint CSS | 044, 046 | screenshots, T16 unchanged | todo |
+| [TASK-048](tasks/TASK-048.md) | 5 | Import quality on real OSM data | `src/importers/**`, compiler lane assignment, `bench/import-probe.ts`, `tests/importers` | 020, 030 | Munich baseline targets met | todo |
+| [TASK-049](tasks/TASK-049.md) | 5 | Junction controls: yield, stop, turn on red, roundabouts | `src/sim`, `src/network/signals.ts`, `src/editor`, `src/ui/tools/roundabout.tsx`, `src/render/layers/signs.ts` | 032, 040, 046 | gate5-controls scenarios | todo |
+| TASK-051 | 5 | Live edits with bounded rerouting (B8) | engine, host, store restart path | 047, 048, 049 and a design note | edits apply without restart | todo |
 
 ### Waves
 
@@ -122,6 +126,12 @@ dependency of its tasks is merged to `main`.
   the lead chat, one worktree per task cut from `main`; review and merge stay with the lead.
   TASK-045 waits until TASK-033 and TASK-046 are in.
 - Wave 8 outcome (2026-11-04): TASK-033 and TASK-046 merged. TASK-045 is the last task.
+- Wave 9 (lead, 2026-11-04, owner-started agents as before): TASK-047, TASK-048 and
+  TASK-049 in parallel on disjoint surfaces (renderer; importer and compiler lane
+  assignment; sim, editor, signals and a signs layer). TASK-051 (live edits, B8) follows all
+  three after a lead design note amending the restart rule. Fixture
+  `fixtures/osm/sindelfingen-a81.osm` (A81 junction, seven roundabouts) is the roundabout
+  check for TASK-049.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
