@@ -203,6 +203,7 @@ export function MapView() {
         const snapshot = await session.engine.snapshot();
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
+        view.setSignalPreview(current.run?.stale ? null : session.loadedCompiled, snapshot.timeS);
         if (snapshot.timeS !== snapshotTime) {
           view.setSnapshot(snapshotForMap(snapshot, session));
           snapshotTime = snapshot.timeS;

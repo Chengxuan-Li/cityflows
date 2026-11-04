@@ -139,6 +139,7 @@ test('a five-second phase changes the queue at the same simulation time', async 
   const baseline = await metrics(page);
   await phase.fill('5');
   await phase.press('Enter');
+  await button(page, 'Apply signal program').click();
   await expect(stale(page)).toBeVisible();
   await button(page, 'Restart').click();
   await expect(stale(page)).toBeHidden();
@@ -163,14 +164,18 @@ test('a rejected signal edit preserves history and valid edits can be undone and
   await page.getByText('Phase 1 road pairs', { exact: true }).click();
   await conflict.click();
   await expect(page.getByRole('alert')).toContainText('serves conflicting movements');
-  await expect(conflict).not.toBeChecked();
+  await expect(conflict).toBeChecked();
+  await expect(button(page, 'Apply signal program')).toBeDisabled();
+  await conflict.click();
   await expect(undo).toBeDisabled();
   await expect(stale(page)).toBeHidden();
   await expect(phase).toHaveValue('25');
 
   await phase.fill('5');
   await phase.press('Enter');
+  await button(page, 'Apply signal program').click();
   await expect(undo).toBeEnabled();
+  await page.getByText('Phase 1 road pairs', { exact: true }).click();
   await conflict.click();
   await expect(page.getByRole('alert')).toContainText('serves conflicting movements');
   await expect(phase).toHaveValue('5');

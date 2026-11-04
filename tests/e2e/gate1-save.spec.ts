@@ -18,6 +18,7 @@ test('an edited network survives save and reopen (Gate 1 item 7)', async ({ page
   await expect(phase).toHaveValue('25');
   await phase.fill('5');
   await phase.press('Enter');
+  await button(page, 'Apply signal program').click();
   await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
   await expect(page.getByText('Cycle 96 s', { exact: false })).toBeVisible();
 
