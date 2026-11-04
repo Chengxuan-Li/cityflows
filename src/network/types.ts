@@ -12,6 +12,7 @@ import type {
   RoadClass,
   VehicleClass,
   PlaceKind,
+  PlaceEvent,
 } from '../schema';
 
 export type CompileResult =
@@ -123,4 +124,5 @@ export interface CPlace {
   connectorsIn: number[];
   connectorsOut: number[];
   capacity: number | null;
+  events: PlaceEvent[];
 }

@@ -41,6 +41,13 @@ export const demandConfigSchema = z.object({
   workDuration: distribution,
   gravityScaleM: z.number().positive(),
   throughTripsPerHour: z.array(z.number().nonnegative()).length(24),
+  chains: z
+    .object({
+      schoolShare: z.number().min(0).max(1).optional(),
+      shopShare: z.number().min(0).max(1).optional(),
+      leisureShare: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
 }) satisfies z.ZodType<DemandConfig>;
 
 export const simParamsSchema = z

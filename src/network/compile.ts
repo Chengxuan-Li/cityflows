@@ -157,6 +157,7 @@ export function compile(city: City): CompileResult {
       connectorsIn: [],
       connectorsOut: [],
       capacity: source.capacity,
+      events: source.events.map((event) => ({ ...event })),
     };
     places.push(place);
     if (!source.connectors.length) {
