@@ -27,10 +27,14 @@ test('a route whose only target lane is dropped still leaves by a surviving lane
       route(network, costs, request) {
         const result = provider.route(network, costs, request);
         if (!result.ok || request.fromLane !== dropped.idx) return result;
-        expect(result.route.targetLanes[0]).toContain(dropped.idx);
+        // Inject the historical undrivable route independently of the corrected router.
+        const movements = result.route.movements.slice();
+        movements[0] = dropped.out.find(
+          (idx) => network.lanes[network.movements[idx]!.toLane]!.road === result.route.roads[1],
+        )!;
         const targetLanes = result.route.targetLanes.slice();
         targetLanes[0] = [dropped.idx];
-        return { ok: true, route: { ...result.route, targetLanes } };
+        return { ok: true, route: { ...result.route, movements, targetLanes } };
       },
     },
   });

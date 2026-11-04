@@ -19,23 +19,28 @@ export function searchLanes(
   const path = shortestPath(goal + 1, origin, goal, costs.originCost, (node, relax) => {
     const entry = compiled.lanes[node === origin ? request.fromLane : node]!;
     const positionM = node === origin ? request.fromPosM : 0;
+    // Arrival stops at the connector, independently of the budget for leaving this road.
+    for (const { lane, changes } of reachableLanes(
+      compiled,
+      graph.allowed,
+      entry.idx,
+      destination.positionM,
+      changeDistanceM,
+      positionM,
+    )) {
+      if (lane === destination.lane) relax(goal, changes * laneChangePenaltyS);
+    }
     // Fold a run of adjacent changes into the next movement. The shared budget
     // prevents consecutive lane changes from each spending the same road length.
     for (const { lane, changes } of reachableLanes(
       compiled,
       graph.allowed,
       entry.idx,
-      entry.lengthM,
+      node === origin ? entry.lengthM : Math.max(0, compiled.roads[entry.road]!.lengthM - 10),
       changeDistanceM,
       positionM,
     )) {
       const changeCost = changes * laneChangePenaltyS;
-      if (
-        lane === destination.lane &&
-        changes * changeDistanceM <= destination.positionM - positionM
-      ) {
-        relax(goal, changeCost);
-      }
       for (const idx of graph.outgoing[lane]!) {
         const movement = compiled.movements[idx]!;
         const toRoad = compiled.lanes[movement.toLane]!.road;

@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { probeMorning } from '../../bench/import-probe';
+import { auditRoute } from '../../bench/route-audit';
 import { lonLatToLocal } from '../../src/geo/projection';
 import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
@@ -92,30 +93,38 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   const provider = createRouteProvider(),
     costs = freeFlowLinkCosts(compiled);
   const unroutable: string[] = [];
+  const infeasible: string[] = [];
   let pairs = 0;
   for (const origin of compiled.connectors.filter((c) => c.direction !== 'in')) {
     for (const destination of compiled.connectors.filter((c) => c.direction !== 'out')) {
       if (origin.place === destination.place) continue;
       pairs++;
-      const route = provider.route(compiled, costs, {
+      const request = {
         fromLane: origin.lane,
         fromPosM: origin.positionM,
         toConnector: destination.idx,
-        vehicleClass: 'car',
+        vehicleClass: 'car' as const,
         desiredSpeedFactor: 1,
         noise: 0,
         seed: 1,
-      });
+      };
+      const route = provider.route(compiled, costs, request);
       if (!route.ok) unroutable.push(`${origin.id}>${destination.id}: ${route.reason}`);
+      else
+        for (const issue of auditRoute(city, compiled, request, route.route))
+          infeasible.push(`${origin.id}>${destination.id}: ${JSON.stringify(issue)}`);
     }
   }
   expect(pairs).toBeGreaterThan(40_000);
   expect(unroutable).toEqual([]);
+  expect(infeasible).toEqual([]);
   const morning = probeMorning(city, compiled);
   console.info('Munich morning probe', morning);
   expect(morning.releasedTrips).toBeGreaterThan(10_000);
   expect(morning.failedShareOfReleased).toBeLessThan(0.01);
   expect(morning.completed).toBeGreaterThan(0);
+  expect(morning.failed).toBe(0);
+  expect(morning.completed).toBeGreaterThanOrEqual(445);
   expect(morning.gatewayTraffic.trunk!.entered).toBeGreaterThan(0);
   expect(morning.gatewayTraffic.trunk!.left).toBeGreaterThan(0);
   expect(morning.sampledRoadTraffic.ramp!.entered).toBeGreaterThan(0);

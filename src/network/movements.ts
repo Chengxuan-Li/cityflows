@@ -180,7 +180,9 @@ export function generateMovements(
 
     // Fallback (5.2 step 3): a lane left without any movement inherits its nearest served
     // lane's turns, so a two-lane road facing a single exit gets a dual turn.
-    const served = from.lanes.filter((idx) => lanes[idx]!.out.length > 0);
+    const served = from.lanes.filter((idx) =>
+      lanes[idx]!.out.some((idx) => movements[idx]!.turn !== 'uturn'),
+    );
     if (served.length === 0) continue;
     for (const fromIdx of from.lanes) {
       const a = lanes[fromIdx]!;
@@ -201,7 +203,8 @@ export function generateMovements(
         const b = lanes[target.to.lanes[shifted]!]!;
         if (bestRule(target.rules, a.lane, b.lane)?.allowed === false || !shareClass(a, b))
           continue;
-        add(a, b, template.turn, template.priority);
+        if (!a.out.some((idx) => movements[idx]!.toLane === b.idx))
+          add(a, b, template.turn, template.priority);
       }
     }
   }

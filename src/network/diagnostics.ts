@@ -8,6 +8,7 @@ import {
   type Road,
 } from '../schema';
 import type { CompiledCity, CRoad, Diagnostic } from './types';
+import { isLaneDrop } from './lane-drop';
 
 export function validateCity(
   city: City,
@@ -213,6 +214,20 @@ export function warnAboutConnectivity(city: CompiledCity, diagnostics: Diagnosti
   const out = lanes.map((): number[] => []);
   const incoming = lanes.map((): number[] => []);
   const links = lanes.map((): number[] => []);
+  const drops = new Set<string>();
+  for (const movement of movements) {
+    if (!isLaneDrop(city, movement)) continue;
+    const lane = lanes[movement.fromLane]!;
+    const road = city.roads[lanes[movement.toLane]!.road]!;
+    const key = `${lane.id}>${road.id}`;
+    if (drops.has(key)) continue;
+    drops.add(key);
+    warn(
+      'lane_requires_merge',
+      [lane.id, road.id, city.nodes[movement.node]!.id],
+      `Lane ${lane.id} must merge upstream before entering ${road.id}; its clamped movement is not a drivable route exit`,
+    );
+  }
   for (const { fromLane, toLane, neverGreen } of movements) {
     links[fromLane]!.push(toLane);
     links[toLane]!.push(fromLane);

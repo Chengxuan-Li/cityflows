@@ -81,7 +81,22 @@ export function createRouteProvider({
 
       const roads = path.nodes;
       const lanes = resolveLanes(compiled, graph, roads, request, destination, laneChangeDistanceM);
-      if (lanes) return { ok: true, route: { roads, ...lanes, costS: path.costS } };
+      // The road search is a lower bound. It is exact only when the chosen chain needs
+      // no lane changes and uses the cheapest movements; otherwise search arrival lanes
+      // so each expansion pays for the changes it can actually make on that road.
+      if (lanes) {
+        let entry = request.fromLane;
+        let exactCost = weights.originCost;
+        let unchanged = true;
+        for (const idx of lanes.movements) {
+          const movement = compiled.movements[idx]!;
+          unchanged &&= entry === movement.fromLane;
+          entry = movement.toLane;
+          exactCost += weights.transition(compiled.lanes[entry]!.road, graph.penalties[idx]!);
+        }
+        if (unchanged && entry === destination.lane && exactCost === path.costS)
+          return { ok: true, route: { roads, ...lanes, costS: path.costS } };
+      }
 
       const route = searchLanes(
         compiled,

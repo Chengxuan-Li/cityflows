@@ -1,4 +1,5 @@
 import type { CompiledCity } from '../network';
+import { isLaneDrop } from '../network/lane-drop';
 import type { VehicleClass } from '../schema';
 import { movementPenaltyS } from './costs';
 
@@ -22,7 +23,13 @@ function buildGraph(compiled: CompiledCity, vehicleClass: VehicleClass | null): 
   const penalties = new Float64Array(compiled.movements.length);
   const neighbors = compiled.roads.map(() => new Map<number, RoadEdge>());
   for (const movement of compiled.movements) {
-    if (movement.neverGreen || !allowed[movement.fromLane] || !allowed[movement.toLane]) continue;
+    if (
+      movement.neverGreen ||
+      !allowed[movement.fromLane] ||
+      !allowed[movement.toLane] ||
+      isLaneDrop(compiled, movement)
+    )
+      continue;
     const from = compiled.lanes[movement.fromLane]!.road;
     const to = compiled.lanes[movement.toLane]!.road;
     const penaltyS = movementPenaltyS(compiled, movement);

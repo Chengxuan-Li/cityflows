@@ -21,7 +21,8 @@
     "test:e2e": "playwright test",
     "bench": "node --experimental-strip-types --expose-gc --import ./bench/register.ts ./bench/sim.ts",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build",
-    "import-probe": "node --experimental-strip-types --import ./bench/register.ts ./bench/import-probe.ts"
+    "import-probe": "node --experimental-strip-types --import ./bench/register.ts ./bench/import-probe.ts",
+    "route-audit": "node --experimental-strip-types --import ./bench/register.ts ./bench/route-audit.ts"
   },
   "dependencies": {
     "fast-xml-parser": "5.11.2",

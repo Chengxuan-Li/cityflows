@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { buildCity } from '../../src/fixtures/build-city';
 import { ramp } from '../../src/fixtures/ramp';
 import { signalApproach } from '../../src/fixtures/signal-approach';
 import { compile, type CompiledCity, type CRoad } from '../../src/network';
@@ -123,4 +124,43 @@ it('gives a lane with no default movement the turns of its nearest served lane',
     ),
   );
   expect(toLanes).toEqual([[0], [1]]);
+});
+
+it('inherits a non-U-turn continuation past a nearer lane that only permits a U-turn', () => {
+  const { city, node, road } = buildCity('Consolidated turns', 1);
+  const start = node(-100, 0),
+    junction = node(0, 0);
+  const from = road(start, junction, { lanes: 3, streetGroupId: 'approach' });
+  const reverse = road(junction, start, { lanes: 3, streetGroupId: 'approach' });
+  const left = road(junction, node(0, -100), { lanes: 3 });
+  junction.turnRules.push({
+    from: from.id,
+    to: reverse.id,
+    fromLane: 1,
+    toLane: 1,
+    allowed: true,
+    provenance: junction.provenance,
+  });
+  const net = compiled(city);
+  expect(
+    net.lanes[net.index.lane.get(`${from.id}#2`)!]!.out.map((idx) => net.movements[idx]!.id),
+  ).toContain(`${from.id}#2>${left.id}#2`);
+});
+
+it('deduplicates fallback movements that clamp several receiving lanes to one', () => {
+  const { city, node, road } = buildCity('Clamped fallback', 1);
+  const junction = node(0, 0);
+  const from = road(node(-100, 0), junction, { lanes: 3 });
+  const to = road(junction, node(0, -100), { lanes: 2 });
+  junction.turnRules.push({
+    from: from.id,
+    to: to.id,
+    fromLane: 0,
+    toLane: 1,
+    allowed: true,
+    provenance: junction.provenance,
+  });
+  const net = compiled(city);
+  const ids = net.movements.map((m) => m.id);
+  expect(ids.length).toBe(new Set(ids).size);
 });
