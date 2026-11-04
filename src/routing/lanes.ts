@@ -74,7 +74,7 @@ export function resolveLanes(
     if (i > 0) {
       enterable = new Set<number>();
       for (const entry of road.lanes) {
-        for (const { lane } of reachable(entry, road.lengthM - 10)) {
+        for (const { lane } of reachable(entry, Math.max(0, road.lengthM - 10))) {
           if (!exits.has(lane)) continue;
           enterable.add(entry);
           break;
@@ -87,7 +87,9 @@ export function resolveLanes(
   let entryLane = request.fromLane;
   for (let i = 0; i < last; i++) {
     const endM =
-      i === 0 ? compiled.lanes[entryLane]!.lengthM : compiled.roads[roads[i]!]!.lengthM - 10;
+      i === 0
+        ? compiled.lanes[entryLane]!.lengthM
+        : Math.max(0, compiled.roads[roads[i]!]!.lengthM - 10);
     const startM = i === 0 ? request.fromPosM : 0;
     let movement: number | undefined;
     for (const { lane } of reachable(entryLane, endM, startM)) {

@@ -23,11 +23,11 @@ test.each(['on-ramp', 'mainline'])(
         movement.turn === 'diverge' &&
         compiled.roads[compiled.lanes[movement.toLane]!.road]!.roadClass === 'ramp',
     )!;
-    const merge = compiled.movements.find(
+    const merges = compiled.movements.filter(
       (movement) =>
         movement.turn === 'merge' &&
         compiled.roads[compiled.lanes[movement.fromLane]!.road]!.roadClass === 'ramp',
-    )!;
+    );
     const merged = new Set<number>();
     const exited = new Set<number>();
     let previous = new Int32Array(9).fill(-100);
@@ -39,7 +39,8 @@ test.each(['on-ramp', 'mainline'])(
       for (const [index, id] of snapshot.id.entries()) {
         const lane = snapshot.lane[index]!;
         lanes[id] = lane;
-        if (lane === -merge.idx - 1 && !merged.has(id)) {
+        const merge = lane < 0 ? compiled.movements[-lane - 1] : undefined;
+        if (merge && merges.includes(merge) && !merged.has(id)) {
           expect(previous[id]).toBe(merge.fromLane);
           merged.add(id);
         }
@@ -87,10 +88,10 @@ test('T07 mixed ramp/mainline traffic has safe entries and bounded merge braking
       idm: { ...DEFAULT_SIM_PARAMS.idm, desiredSpeedSd: 0 },
     },
   });
-  const merge = compiled.movements.find(
+  const merges = compiled.movements.filter(
     (m) =>
       m.turn === 'merge' && compiled.roads[compiled.lanes[m.fromLane]!.road]!.roadClass === 'ramp',
-  )!;
+  );
   const exit = compiled.movements.find(
     (m) =>
       m.turn === 'diverge' && compiled.roads[compiled.lanes[m.toLane]!.road]!.roadClass === 'ramp',
@@ -105,9 +106,12 @@ test('T07 mixed ramp/mainline traffic has safe entries and bounded merge braking
     for (const [i, car] of current.entries()) {
       if (!car || car.state !== 'driving') continue;
       const before = previous[i];
-      if (car.lane === -merge.idx - 1) merged.add(car.id);
-      if (i % 2 === 0 && car.lane === merge.toLane) expect(merged.has(car.id)).toBe(true);
-      if (car.lane === merge.toLane && before?.lane === -merge.idx - 1) {
+      const crossing = car.lane < 0 ? compiled.movements[-car.lane - 1] : undefined;
+      if (crossing && merges.includes(crossing)) merged.add(car.id);
+      if (i % 2 === 0 && merges.some((m) => car.lane === m.toLane))
+        expect(merged.has(car.id)).toBe(true);
+      const entered = before && before.lane < 0 ? compiled.movements[-before.lane - 1] : undefined;
+      if (entered && merges.includes(entered) && car.lane === entered.toLane) {
         for (const other of current) {
           if (!other || other.id === car.id || other.state !== 'driving' || other.lane !== car.lane)
             continue;

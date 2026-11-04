@@ -56,12 +56,15 @@ export function remainingRouteCost(
 ) {
   const weights = routeCosts(compiled, costs, request);
   let costS = weights.originCost;
+  let entry = compiled.lanes[request.fromLane]!;
   for (let i = step; i < route.movements.length; i++) {
-    costS += weights.transition(
-      route.roads[i + 1]!,
-      movementPenaltyS(compiled, compiled.movements[route.movements[i]!]!),
-    );
+    const movement = compiled.movements[route.movements[i]!]!;
+    costS += Math.abs(entry.lane - compiled.lanes[movement.fromLane]!.lane) * laneChangePenaltyS;
+    costS += weights.transition(route.roads[i + 1]!, movementPenaltyS(compiled, movement));
+    entry = compiled.lanes[movement.toLane]!;
   }
+  const destination = compiled.lanes[compiled.connectors[request.toConnector]!.lane]!;
+  costS += Math.abs(entry.lane - destination.lane) * laneChangePenaltyS;
   return costS;
 }
 
