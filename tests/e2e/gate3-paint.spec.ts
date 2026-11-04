@@ -102,11 +102,11 @@ test('painted work attracts inspected vehicles and same-seed regeneration replay
 test('extend, demographic controls, connectors and delete remain undoable', async ({ page }) => {
   await button(page, 'Place').click();
   await page.getByRole('combobox', { name: 'Kind', exact: true }).selectOption('retail');
-  await stroke(page, [40, 55], [70, 55]);
+  await stroke(page, [40, 175], [70, 175]);
   await expect(page.getByRole('heading', { name: 'Retail 3' })).toBeVisible();
   const before = (await saved(page)).city;
   const place = Object.values(before.places).find((p) => p.name === 'Retail 3')!;
-  await stroke(page, [70, 55], [90, 85]);
+  await stroke(page, [70, 175], [90, 205]);
   const after = (await saved(page)).city;
   expect(Object.keys(after.places)).toEqual(Object.keys(before.places));
   expect(after.places[place.id]!.jobs).toBeGreaterThan(place.jobs);

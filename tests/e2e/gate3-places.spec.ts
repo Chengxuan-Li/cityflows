@@ -198,13 +198,12 @@ test('profile and event editors commit through the inspector and move trips', as
   await expect(button(page, 'Step')).toBeEnabled();
   const weighted = await tripsByHour(page);
   expect(weighted[12]).toBeGreaterThan(100);
+  await button(page, 'Demand').click(); // the sheet overlaps the bottom of the inspector
   await button(page, 'Use default timing').click();
   expect((await city(page)).places['p:104']!.profile).toBeNull();
   await button(page, 'Undo').click();
   expect((await city(page)).places['p:104']!.profile!.arrivals[17]).toBe(9);
 
-  // The demand sheet covers the bottom-right corner of the map, where Offices sits.
-  await button(page, 'Demand').click();
   const offices = await gridPoint(page, 465, 495);
   await page.mouse.click(offices.x, offices.y);
   await expect(page.getByRole('heading', { name: 'Offices' })).toBeVisible();
