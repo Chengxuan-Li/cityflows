@@ -1030,9 +1030,24 @@ Lives in `src/importers/osm`, runs inside an import worker.
    portals. Isolated fragments retain their roads and diagnostics but generate no gateway
    demand. Local two-way residential/service boundary ends have inferred turnarounds, allowing
    a driver who misses a turn to return instead of stranding at the crop boundary.
-9. Places from OSM are limited to `amenity=parking` with a polygon, `railway=station`,
-   `aeroway=aerodrome`, `amenity=school`, `shop=mall`: a `Place` with a connector snapped to the
-   nearest lane. The user sets population and jobs; the wizard says so.
+9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
+   and `shop=mall`. TASK-048 also imports residential, office/commercial, retail and industrial
+   building footprints and land use, including multipolygon courtyards and bbox clipping.
+   Known building use wins; `building=yes` uses containing land use, otherwise residential.
+   Garages, sheds, roofs and other non-occupancy building types do not generate residents.
+   Positive `building:levels` up to 200 wins; defaults are four floors for apartments,
+   unspecified residential and commercial buildings, two for houses/detached/terraces, one
+   for retail/industrial. Gross floor area per person/job is 45 m² residential, 35 commercial,
+   45 retail and 80 industrial. A land-use polygon with no usable building footprints uses
+   35% footprint coverage and the same floor/occupancy defaults; it adds no extra floor area
+   when footprints already supply its demand. These are editable synthetic estimates.
+   Aggregate by bounded surface-street block and use (service accesses do not divide blocks).
+   At open map edges, use the containing land-use polygon or nearby footprints within 100 m
+   without crossing a street. Round only the aggregated counts. Parking and schools retain
+   their existing demand. All local places connect to the nearest car lane in the main
+   movement-connected component, inset at most 10 m from lane ends; this avoids snapping
+   to isolated accesses or relying on an immediate lane change after spawning. Inferences,
+   source ids and block aggregation are recorded in provenance.
 10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
     counts of inferred lanes and speeds. The wizard shows them before the city is accepted.
 

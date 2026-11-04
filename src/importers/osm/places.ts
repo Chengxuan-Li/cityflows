@@ -20,7 +20,7 @@ const gatewayDemand: Record<RoadClass, number> = {
 // Place access uses actual movement paths, not a road-level approximation that can require
 // an impossible lane change on a short section. Keep disconnected roads, but do not seed
 // unreachable demand on them. Boundary lanes need only reach (or leave) the main component.
-export function networkAccess(compiled: CompiledCity) {
+export function networkAccess(compiled: CompiledCity, laneChanges = true) {
   const out = compiled.lanes.map((): number[] => []);
   const incoming = compiled.lanes.map((): number[] => []);
   for (const m of compiled.movements) {
@@ -28,7 +28,7 @@ export function networkAccess(compiled: CompiledCity) {
     out[m.fromLane]!.push(m.toLane);
     incoming[m.toLane]!.push(m.fromLane);
   }
-  for (const road of compiled.roads) {
+  for (const road of laneChanges ? compiled.roads : []) {
     const lanes = road.lanes.map((i) => compiled.lanes[i]!);
     if (lanes.some((l) => l.lengthM < (lanes.length - 1) * 30 + 10)) continue;
     for (const lane of lanes)
@@ -238,7 +238,7 @@ function placeKind(tag: OsmTags): Place['kind'] | undefined {
   return undefined;
 }
 
-function polygonCenter(ring: Vec2[]): Vec2 | undefined {
+export function polygonCenter(ring: Vec2[]): Vec2 | undefined {
   const origin = ring[0]!;
   let area = 0,
     x = 0,
@@ -258,16 +258,13 @@ function polygonCenter(ring: Vec2[]): Vec2 | undefined {
   if (area !== 0) return { x: origin.x + x / (3 * area), y: origin.y + y / (3 * area) };
 }
 
-export function addOsmPlaces(
-  city: City,
-  data: OsmData,
-  positions: Map<number, Vec2>,
-  bounds: Bounds,
-  compiled: CompiledCity,
-): void {
-  const segments = compiled.lanes.flatMap((lane) =>
-    lane.polyline.slice(1).map((b, i) => ({ lane, a: lane.polyline[i]!, b, i })),
-  );
+export function placeConnector(city: City, compiled: CompiledCity) {
+  const { core } = networkAccess(compiled, false);
+  const segments = compiled.lanes
+    .filter((lane) => core.has(lane.idx) && lane.allowed.includes('car'))
+    .flatMap((lane) =>
+      lane.polyline.slice(1).map((b, i) => ({ lane, a: lane.polyline[i]!, b, i })),
+    );
   function snap(index: number, point: Vec2) {
     const { lane, a, b, i } = segments[index]!;
     const dx = b.x - a.x,
@@ -283,6 +280,32 @@ export function addOsmPlaces(
       distance: Math.hypot(point.x - a.x - t * dx, point.y - a.y - t * dy),
     };
   }
+  return (point: Vec2): Place['connectors'][number] => {
+    let best = snap(0, point);
+    for (let i = 1; i < segments.length; i++) {
+      const candidate = snap(i, point);
+      if (candidate.distance < best.distance) best = candidate;
+    }
+    const inset = Math.min(10, best.lane.lengthM / 2);
+    return {
+      id: allocateId(city, 'c'),
+      roadId: compiled.roads[best.lane.road]!.id,
+      lane: best.lane.lane,
+      positionM: Math.max(inset, Math.min(best.lane.lengthM - inset, best.positionM)),
+      direction: 'both',
+      throughputPerMin: 30,
+    };
+  };
+}
+
+export function addOsmPlaces(
+  city: City,
+  data: OsmData,
+  positions: Map<number, Vec2>,
+  bounds: Bounds,
+  compiled: CompiledCity,
+): void {
+  const connector = placeConnector(city, compiled);
   function add(id: number, tag: OsmTags, kind: Place['kind'], shape: Place['shape'], point: Vec2) {
     if (!contains(bounds, point)) return;
     const place = addPlace(city, kind, tag.name ?? kind, shape, {
@@ -290,22 +313,7 @@ export function addOsmPlaces(
       osmIds: [id],
       inferred: ['population', 'jobs', 'attraction', 'throughputPerMin'],
     });
-    const index = compiled.laneSpatial;
-    let best = snap(index.neighbors(point.x, point.y, 1)[0]!, point);
-    // The closest bounding box may enclose a distant diagonal segment.
-    const d = best.distance;
-    for (const candidate of index.search(point.x - d, point.y - d, point.x + d, point.y + d)) {
-      const next = snap(candidate, point);
-      if (next.distance < best.distance) best = next;
-    }
-    place.connectors.push({
-      id: allocateId(city, 'c'),
-      roadId: compiled.roads[best.lane.road]!.id,
-      lane: best.lane.lane,
-      positionM: best.positionM,
-      direction: 'both',
-      throughputPerMin: 30,
-    });
+    place.connectors.push(connector(point));
   }
 
   for (const { id, tag } of data.node) {
