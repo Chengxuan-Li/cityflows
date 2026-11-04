@@ -4,6 +4,7 @@ import { useAppStore } from './store';
 
 const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
+  ['roadClasses', 'Road classes'],
   ['difference', 'Comparison road usage'],
   ['heat', 'Road speeds'],
   ['queues', 'Queues'],

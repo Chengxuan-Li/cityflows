@@ -141,3 +141,22 @@ export function sampleArc(center: Vec2, radius: number, start: number, sweep: nu
     return { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) };
   });
 }
+
+export function pointInPolygon(point: Vec2, ring: readonly Vec2[], tolerance = 1e-6): boolean {
+  let contains = false;
+  for (let i = 1; i < ring.length; i++) {
+    const a = ring[i - 1]!,
+      b = ring[i]!;
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
+    const length2 = dx * dx + dy * dy;
+    const t =
+      length2 === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length2));
+    if (Math.hypot(point.x - a.x - t * dx, point.y - a.y - t * dy) <= tolerance) return true;
+    if (a.y > point.y !== b.y > point.y && point.x < a.x + (dx * (point.y - a.y)) / dy)
+      contains = !contains;
+  }
+  return contains;
+}

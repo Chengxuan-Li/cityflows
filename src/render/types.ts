@@ -36,6 +36,7 @@ export interface RouteOverlay {
 }
 
 export interface LayerVisibility {
+  roadClasses: boolean;
   basemap: boolean;
   difference: boolean;
   heat: boolean;
@@ -48,6 +49,7 @@ export interface LayerVisibility {
 }
 
 export const defaultLayers: LayerVisibility = {
+  roadClasses: false,
   basemap: true,
   difference: false,
   heat: false,

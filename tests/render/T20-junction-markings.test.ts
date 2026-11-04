@@ -1,38 +1,53 @@
 import { expect, test } from 'vitest';
 import type { Graphics } from 'pixi.js';
+import { junctions } from '../../src/fixtures/junctions';
 import { signalApproach } from '../../src/fixtures/signal-approach';
 import { buildCity } from '../../src/fixtures/build-city';
 import { compile } from '../../src/network';
-import { drawNode } from '../../src/render/layers/nodes';
-import { drawRoad } from '../../src/render/layers/roads';
-import { pickThroughNode } from '../../src/render/scene';
+import { drawNode, nodeColor } from '../../src/render/layers/nodes';
+import { drawRoad, crossingStripes } from '../../src/render/layers/roads';
+import { createGrade, pickThroughNode } from '../../src/render/scene';
 import { createPicker } from '../../src/render/picking';
+import { roadStyle, style } from '../../src/render/style';
+import { createEngine } from '../../src/sim/engine';
+import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
+import { scenario, trips } from '../sim/fixtures';
+import { defaultLayers } from '../../src/render/types';
+import { insideOutline } from '../network/junction-audit';
+import { headingAtDistance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 
 function recorder() {
   const polygons: Vec2[][] = [];
+  const fills: number[] = [];
+  const segments: Vec2[][] = [];
+  let previous = { x: 0, y: 0 };
   const graphics = {
     poly(points: Vec2[]) {
       polygons.push(points);
       return this;
     },
-    fill() {
+    fill(color: number) {
+      fills.push(color);
       return this;
     },
     stroke() {
       return this;
     },
-    moveTo() {
+    moveTo(x: number, y: number) {
+      previous = { x, y };
       return this;
     },
-    lineTo() {
+    lineTo(x: number, y: number) {
+      segments.push([previous, { x, y }]);
+      previous = { x, y };
       return this;
     },
     circle() {
       throw new Error('Node geometry must not use discs');
     },
   };
-  return { graphics: graphics as unknown as Graphics, polygons };
+  return { graphics: graphics as unknown as Graphics, polygons, fills, segments };
 }
 
 test('T20: a through-node handle stays behind an overpassing bridge', () => {
@@ -107,5 +122,120 @@ test.each(['signal', 'yield'] as const)('T20: %s marking meets the trimmed lane 
         points.some((p) => Math.abs((p.x - end.x) * dx + (p.y - end.y) * dy) < 0.01),
       ),
     ).toBe(true);
+  }
+});
+
+test('T20: signal crossings occupy the mouth beyond the stop line', () => {
+  const result = compile(signalApproach());
+  if (!result.ok) throw new Error('fixture');
+  const net = result.compiled;
+  const node = net.nodes.find((n) => n.signal)!;
+  for (const road of net.roads.filter((r) => r.to === node.idx)) {
+    const stripes = crossingStripes(net, road, true);
+    expect(stripes.length).toBeGreaterThan(0);
+    const lane = net.lanes[road.lanes[0]!]!;
+    const end = lane.polyline.at(-1)!;
+    const h = headingAtDistance(lane.polyline, lane.cumulative, lane.lengthM);
+    for (const stripe of stripes) {
+      expect(stripe.every((p) => insideOutline(p, node.outline))).toBe(true);
+      const along = stripe.map((p) => (p.x - end.x) * Math.cos(h) + (p.y - end.y) * Math.sin(h));
+      expect(Math.min(...along)).toBeCloseTo(0.5);
+      expect(Math.max(...along)).toBeCloseTo(3);
+    }
+  }
+});
+
+test('T20: one asphalt by default, optional class tones include the highest-class junction', () => {
+  const result = compile(signalApproach());
+  if (!result.ok) throw new Error('fixture');
+  const net = result.compiled;
+  const node = net.nodes.find((n) => n.signal)!;
+  const incident = net.roads.filter((r) => r.from === node.idx || r.to === node.idx);
+  incident[0]!.roadClass = 'motorway';
+  incident[0]!.classRank = 100;
+  expect(defaultLayers.roadClasses).toBe(false);
+  for (const road of net.roads) expect(roadStyle(road).color).toBe(style.asphalt);
+  expect(nodeColor(net, node)).toBe(style.asphalt);
+  expect(nodeColor(net, node, true)).toBe(roadStyle(incident[0]!, true).color);
+  expect(nodeColor(net, node, true)).not.toBe(style.asphalt);
+});
+
+test('T20: an actual red-light queue stops behind both the stop line and zebra', () => {
+  const city = signalApproach();
+  const result = compile(city);
+  if (!result.ok) throw new Error('fixture');
+  const compiled = result.compiled;
+  const engine = createEngine();
+  engine.load({
+    compiled,
+    scenario: { ...scenario(), startS: 29 },
+    trips: trips(city, 4, 0.5).map((t) => ({ ...t, departS: t.departS - 71 })),
+  });
+  engine.step(600);
+  const stopped = [...engine.snapshot().id]
+    .map((id) => engine.inspect(id)!)
+    .filter((v) => v.speedMps < 0.1);
+  expect(stopped.length).toBeGreaterThan(0);
+  for (const car of stopped) {
+    const lane = compiled.lanes[car.lane]!;
+    const road = compiled.roads[lane.road]!;
+    expect(car.positionM).toBeLessThanOrEqual(lane.lengthM - DEFAULT_SIM_PARAMS.idm.minGapM + 1e-6);
+    expect(crossingStripes(compiled, road, true).length).toBeGreaterThan(0);
+  }
+});
+
+test('T20: the gore covers road markings, with crossings above the node area', () => {
+  const grade = createGrade(0);
+  expect(grade.terrain.children.indexOf(grade.nodes)).toBeGreaterThan(
+    grade.terrain.children.indexOf(grade.markings),
+  );
+  expect(grade.terrain.children.indexOf(grade.crossings)).toBeGreaterThan(
+    grade.terrain.children.indexOf(grade.nodes),
+  );
+  const result = compile(junctions());
+  if (!result.ok) throw new Error('fixture');
+  const net = result.compiled;
+  const node = net.nodes[net.index.node.get('n:1')!]!;
+  for (const road of net.roads.filter((r) => r.from === node.idx || r.to === node.idx)) {
+    const marks = recorder();
+    drawRoad(recorder().graphics, marks.graphics, net, road);
+    for (const line of [...marks.polygons, ...marks.segments])
+      for (const p of line)
+        expect(
+          insideOutline(p, road.surface.concat([road.surface[0]!])) ||
+            insideOutline(p, node.outline),
+        ).toBe(true);
+  }
+  grade.group.destroy({ children: true });
+});
+
+test('T20: draw calls use the selected asphalt tone', () => {
+  const result = compile(signalApproach());
+  if (!result.ok) throw new Error('fixture');
+  const net = result.compiled;
+  for (const roadClasses of [false, true]) {
+    for (const road of net.roads) {
+      const surface = recorder();
+      drawRoad(surface.graphics, recorder().graphics, net, road, roadClasses);
+      expect(surface.fills).toEqual([roadStyle(road, roadClasses).color]);
+    }
+    for (const node of net.nodes) {
+      const record = recorder();
+      drawNode(record.graphics, node, nodeColor(net, node, roadClasses));
+      expect(record.fills).toEqual(node.outline.length ? [nodeColor(net, node, roadClasses)] : []);
+    }
+  }
+});
+
+test('T20: a served outer lane keeps the full-width crossing when lane zero is unserved', () => {
+  const result = compile(signalApproach());
+  if (!result.ok) throw new Error('fixture');
+  const net = result.compiled,
+    node = net.nodes.find((n) => n.signal)!;
+  for (const road of net.roads.filter((r) => r.from === node.idx || r.to === node.idx)) {
+    const atEnd = road.to === node.idx;
+    for (const i of atEnd ? net.lanes[road.lanes[0]!]!.out : net.lanes[road.lanes[0]!]!.in)
+      net.movements[i]!.neverGreen = true;
+    expect(crossingStripes(net, road, atEnd).length).toBeGreaterThan(0);
   }
 });

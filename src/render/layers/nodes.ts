@@ -13,12 +13,28 @@ export function roadEndEdges(city: CompiledCity, road: CRoad, atEnd: boolean) {
   });
 }
 
-export function drawNode(graphics: Graphics, node: CNode): void {
-  if (node.outline.length) graphics.poly(node.outline).fill(style.asphalt);
+export function nodeColor(city: CompiledCity, node: CNode, roadClasses = false): number {
+  if (!roadClasses) return style.asphalt;
+  const highest = city.roads
+    .filter((r) => r.from === node.idx || r.to === node.idx)
+    .reduce<CRoad | undefined>(
+      (best, road) => (!best || road.classRank > best.classRank ? road : best),
+      undefined,
+    );
+  return highest ? roadStyle(highest, true).color : style.asphalt;
 }
 
-export function drawRoadJoins(graphics: Graphics, city: CompiledCity, road: CRoad): void {
-  const { color, vergeM } = roadStyle(road);
+export function drawNode(graphics: Graphics, node: CNode, color: number = style.asphalt): void {
+  if (node.outline.length) graphics.poly(node.outline).fill(color);
+}
+
+export function drawRoadJoins(
+  graphics: Graphics,
+  city: CompiledCity,
+  road: CRoad,
+  roadClasses = false,
+): void {
+  const { color, vergeM } = roadStyle(road, roadClasses);
   for (const atEnd of [false, true]) {
     if (!city.nodes[atEnd ? road.to : road.from]!.outline.length) continue;
     const edges = roadEndEdges(city, road, atEnd);
@@ -30,11 +46,16 @@ export function drawMovementSurface(
   graphics: Graphics,
   city: CompiledCity,
   movement: CMovement,
+  roadClasses = false,
 ): void {
   if (!city.nodes[movement.node]!.outline.length) return;
   const width = Math.min(
     city.lanes[movement.fromLane]!.widthM,
     city.lanes[movement.toLane]!.widthM,
   );
-  graphics.poly(movement.polyline, false).stroke({ width, color: style.asphalt, cap: 'butt' });
+  graphics.poly(movement.polyline, false).stroke({
+    width,
+    color: nodeColor(city, city.nodes[movement.node]!, roadClasses),
+    cap: 'butt',
+  });
 }

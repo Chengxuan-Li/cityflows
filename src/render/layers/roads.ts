@@ -1,7 +1,13 @@
 import type { Graphics } from 'pixi.js';
-import { headingAtDistance, offsetPolyline, pointAtDistance } from '../../geo/polyline';
+import {
+  headingAtDistance,
+  offsetPolyline,
+  pointAtDistance,
+  pointInPolygon,
+} from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CLane, CMovement, CompiledCity, CRoad } from '../../network';
+import { roadEndEdges } from './nodes';
 import { roadStyle, style } from '../style';
 
 function fadeAtZoom(graphics: Graphics, from: number, to: number) {
@@ -16,8 +22,10 @@ export function drawRoad(
   markings: Graphics,
   city: CompiledCity,
   road: CRoad,
+  roadClasses = false,
+  controls: Graphics = markings,
 ): void {
-  const { color, vergeM } = roadStyle(road);
+  const { color, vergeM } = roadStyle(road, roadClasses);
   surface
     .poly(road.surface)
     .fill(color)
@@ -33,7 +41,7 @@ export function drawRoad(
         .poly(offsetPolyline(lane.polyline, offset), false)
         .stroke({ color: style.marking, width: style.dividerWidthM, alpha: 0.85 });
     }
-    drawApproachMarkings(markings, city, lane);
+    drawApproachMarkings(markings, city, lane, controls);
   }
 }
 
@@ -68,7 +76,12 @@ export function approachMarkings(city: CompiledCity, lane: CLane) {
   };
 }
 
-function drawApproachMarkings(graphics: Graphics, city: CompiledCity, lane: CLane): void {
+function drawApproachMarkings(
+  graphics: Graphics,
+  city: CompiledCity,
+  lane: CLane,
+  controls: Graphics,
+): void {
   const marks = approachMarkings(city, lane);
   const local = (distance: number, forward: number, side: number) => {
     const point = pointAtDistance(lane.polyline, lane.cumulative, distance);
@@ -80,33 +93,19 @@ function drawApproachMarkings(graphics: Graphics, city: CompiledCity, lane: CLan
   };
   const half = lane.widthM * 0.44;
   if (marks.stop) {
-    graphics
+    controls
       .poly([local(lane.lengthM, 0, -half), local(lane.lengthM, 0, half)], false)
       .stroke({ color: style.marking, width: 0.28 });
   }
   if (marks.yield) {
     for (let side = -half + 0.4; side <= half - 0.2; side += 0.85) {
-      graphics
+      controls
         .poly([
           local(lane.lengthM, 0, side),
           local(lane.lengthM, -1, side - 0.3),
           local(lane.lengthM, -1, side + 0.3),
         ])
         .fill(style.marking);
-    }
-  }
-  // Compress markings on short links so both approaches still fit inside the lane.
-  const crossingInset = Math.min(3, lane.lengthM / 4);
-  const crossingHalf = Math.min(1.2, lane.lengthM / 8);
-  for (const [enabled, distance] of [
-    [marks.crossingStart, crossingInset],
-    [marks.crossingEnd, lane.lengthM - crossingInset],
-  ] as const) {
-    if (!enabled) continue;
-    for (let side = -half + 0.3; side < half; side += 0.9) {
-      graphics
-        .poly([local(distance, -crossingHalf, side), local(distance, crossingHalf, side)], false)
-        .stroke({ color: style.marking, width: 0.45 });
     }
   }
   const scale = Math.min(1, lane.lengthM / 18);
@@ -213,4 +212,43 @@ export function drawMovementArrow(graphics: Graphics, movement: CMovement): void
       tip.y - dy - dx * 0.55,
     ])
     .fill({ color: style.marking, alpha: 0.9 });
+}
+
+/** Zebra rectangles in the junction mouth, beyond the vehicle stop line. */
+export function crossingStripes(city: CompiledCity, road: CRoad, atEnd: boolean): Vec2[][] {
+  const node = city.nodes[atEnd ? road.to : road.from]!;
+  if (!node.signal || !node.outline.length) return [];
+  const served = road.lanes.some((index) => {
+    const marks = approachMarkings(city, city.lanes[index]!);
+    return atEnd ? marks.crossingEnd : marks.crossingStart;
+  });
+  if (!served) return [];
+  const [left, right] = roadEndEdges(city, road, atEnd) as [Vec2, Vec2];
+  const width = Math.hypot(right.x - left.x, right.y - left.y);
+  const lateral = { x: (right.x - left.x) / width, y: (right.y - left.y) / width };
+  const sign = atEnd ? 1 : -1;
+  const forward = { x: lateral.y * sign, y: -lateral.x * sign };
+  if ((node.pos.x - left.x) * forward.x + (node.pos.y - left.y) * forward.y < 3.5) return [];
+  const local = (along: number, side: number): Vec2 => ({
+    x: left.x + forward.x * along + lateral.x * side,
+    y: left.y + forward.y * along + lateral.y * side,
+  });
+  const stripes: Vec2[][] = [];
+  for (let side = 0.225; side + 0.45 <= width; side += 0.9) {
+    const stripe = [
+      local(0.5, side),
+      local(3, side),
+      local(3, side + 0.45),
+      local(0.5, side + 0.45),
+    ];
+    if (stripe.every((p) => pointInPolygon(p, node.outline))) stripes.push(stripe);
+  }
+  return stripes;
+}
+
+export function drawCrossings(graphics: Graphics, city: CompiledCity, road: CRoad): void {
+  fadeAtZoom(graphics, 0.7, 2.2);
+  for (const atEnd of [false, true])
+    for (const stripe of crossingStripes(city, road, atEnd))
+      graphics.poly(stripe).fill(style.marking);
 }
