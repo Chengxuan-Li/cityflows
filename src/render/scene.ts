@@ -29,7 +29,7 @@ function createGrade() {
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
-  terrain.addChild(surfaces, markings, nodes, arrows);
+  terrain.addChild(surfaces, nodes, markings, arrows);
   group.addChild(terrain, connectors, places, signals, vehicles.container);
   return {
     group,
@@ -47,7 +47,10 @@ function createGrade() {
   };
 }
 
-export function createScene(canvas: HTMLCanvasElement): Scene {
+export function createScene(canvas: HTMLCanvasElement): Scene & {
+  setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
+  animateVehicles(elapsedS: number): void;
+} {
   const app = new Application();
   const world = new Container();
   world.eventMode = 'none';
@@ -186,6 +189,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // Versions identify edits within a city. Different source cities can share a version.
       if (city?.version === compiled.version && sourceGeometry === source) return;
       city = compiled;
+      vehicles.setGeometry(compiled);
       if (sourceGeometry?.geo !== source?.geo) {
         tiles?.destroy();
         tiles = source?.geo ? new Tiles(source.geo) : undefined;
@@ -231,14 +235,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       );
       staticPick = createPicker(city, shapes, roadGrades);
 
+      const incidentRoads = city.nodes.map(() => [] as CompiledCity['roads']);
       for (const road of city.roads) {
+        incidentRoads[road.from]!.push(road);
+        incidentRoads[road.to]!.push(road);
         const { surfaces, markings, nodes } = grades.get(roadGrades[road.idx]!)!;
         drawRoad(surfaces, markings, city, road);
         drawRoadJoins(nodes, city, road);
       }
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
-        drawNode(grade.nodes, node);
+        drawNode(grade.nodes, city, node, incidentRoads[node.idx]!);
         if (node.signal) updateSignals.push(drawSignal(city, node, grade.signals));
       }
       for (const movement of city.movements) {
@@ -273,6 +280,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         selectedVehicle = snapshot.id.subarray(0, snapshot.count).indexOf(selection.id);
         updateVehicleRing();
       }
+    },
+    setVehicleGeometry(compiled, laneChangeDurationS) {
+      vehicles.setGeometry(compiled, laneChangeDurationS);
+    },
+    animateVehicles(elapsedS) {
+      vehicles.animate(elapsedS);
+      updateVehicleRing();
     },
     setSelection(next) {
       selection = next;

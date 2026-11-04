@@ -881,9 +881,9 @@ dd {
 
 .ramp-hint {
   position: absolute;
-  left: 50%;
-  bottom: 76px;
-  transform: translateX(-50%);
+  top: 124px;
+  left: var(--inset);
+  max-width: calc(100% - 2 * var(--inset));
   padding: 6px 10px;
   background: var(--paper);
   pointer-events: none;
@@ -979,6 +979,16 @@ dd {
 @media (max-width: 1050px) {
   .demand-columns {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .demand-sheet {
+    width: calc(100vw - 2 * var(--inset));
+  }
+
+  .demand-columns svg {
+    width: calc((100% - 8px) / 2);
   }
 }
 

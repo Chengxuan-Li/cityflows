@@ -11,7 +11,6 @@ export function drawSignal(
   const signal = node.signal!;
   const phases = signal.phases.map(({ movements }) => new Set(movements));
   const heads: { graphic: Graphics; movement: number }[] = [];
-  const stopLines = container.addChild(new Graphics());
   const lanes = new Set(node.movements.map((movement) => city.movements[movement]!.fromLane));
   for (const index of lanes) {
     const lane = city.lanes[index]!;
@@ -22,10 +21,6 @@ export function drawSignal(
     const x = point.x - alongX * 0.18;
     const y = point.y - alongY * 0.18;
     const halfWidth = lane.widthM * 0.46;
-    stopLines
-      .moveTo(x + alongY * halfWidth, y - alongX * halfWidth)
-      .lineTo(x - alongY * halfWidth, y + alongX * halfWidth)
-      .stroke({ width: 0.22, color: style.marking });
     const movements = lane.out;
     const spacing = Math.min(0.92, (2 * halfWidth) / movements.length);
     const radius = spacing * 0.36;

@@ -6,6 +6,7 @@ import { style } from '../render/style';
 import type { Pick, Scene, VehicleSnapshot } from '../render/types';
 import type { Route } from '../routing';
 import type { LaneId } from '../schema';
+import { DEFAULT_SIM_PARAMS } from '../sim/params';
 import { useAppStore, type Session } from './store';
 import { createDrawRoadTool, initialRoadOptions } from './tools/draw-road';
 import { createRampTool } from './tools/ramp';
@@ -19,7 +20,7 @@ function snapshotForMap(
   snapshot: VehicleSnapshot,
   { compiled, loadedCompiled, vehicleHues }: Session,
 ) {
-  const presentation = { ...snapshot, vehicleHues };
+  const presentation = { ...snapshot, vehicleHues, motionLane: snapshot.lane };
   if (compiled === loadedCompiled) return presentation;
 
   // Positions stay in world coordinates. The renderer only needs the remapped index for layering.
@@ -300,10 +301,13 @@ export function MapView() {
       if (signal.aborted) return;
 
       let drawn: Session | null = null;
+      let motionGeometry: Session['loadedCompiled'] | null = null;
       let drawnSelection: Pick | null = null;
       let drawnRoads: readonly string[] | null = null;
       let drawnRoute: Route | null = null;
       let snapshotTime = NaN;
+      let snapshotAgeS = 0;
+      let lastFrame = performance.now();
       let inspected: Pick | null = null;
       let inspectedTime = NaN;
       let pulling = false;
@@ -311,6 +315,7 @@ export function MapView() {
       let drawnLayers = getState().layers;
       let drawnComparison = getState().comparison;
       view.setLayerVisibility(drawnLayers);
+      view.setTiles(drawnLayers.basemap);
 
       async function pull(session: Session) {
         const snapshot = await session.engine.snapshot();
@@ -332,6 +337,8 @@ export function MapView() {
         if (snapshot.timeS !== snapshotTime) {
           view.setSnapshot(snapshotForMap(snapshot, session));
           snapshotTime = snapshot.timeS;
+          snapshotAgeS = 0;
+          lastFrame = performance.now();
         }
         const { selection, run } = current;
         if (selection?.kind !== 'vehicle' || !run) return;
@@ -352,10 +359,13 @@ export function MapView() {
         animation = requestAnimationFrame(frame);
         pointer.advance(now);
         const { session, selection, vehicle, busy } = getState();
+        const elapsedS = Math.max(0, now - lastFrame) / 1000;
+        lastFrame = now;
         if (!session || busy) return;
         const layers = getState().layers;
         if (layers !== drawnLayers) {
           view.setLayerVisibility(layers);
+          view.setTiles(layers.basemap);
           drawnLayers = layers;
         }
         if (drawn?.compiled !== session.compiled) {
@@ -375,8 +385,20 @@ export function MapView() {
           drawnSelection = drawnRoute = null;
           drawnRoads = null;
           snapshotTime = NaN;
+          snapshotAgeS = 0;
           drawnComparison = null;
         }
+        if (motionGeometry !== session.loadedCompiled) {
+          motionGeometry = session.loadedCompiled;
+          snapshotTime = NaN;
+          snapshotAgeS = 0;
+        }
+        // Edits change the displayed city; paths stay with the loaded run until restart.
+        view.setVehicleGeometry(
+          session.loadedCompiled,
+          session.project.scenarios[0]!.simParams.laneChangeDurationS ??
+            DEFAULT_SIM_PARAMS.laneChangeDurationS,
+        );
         if (selection !== drawnSelection) {
           view.setSelection(selection);
           drawnSelection = selection;
@@ -399,6 +421,9 @@ export function MapView() {
           view.setRouteOverlay(route && routeForMap(route, session));
           drawnRoute = route;
         }
+        const run = getState().run;
+        snapshotAgeS = run?.status === 'playing' ? snapshotAgeS + elapsedS * run.speed : 0;
+        view.animateVehicles(snapshotAgeS);
         if (pulling || failed === session) return;
         pulling = true;
         void pull(session)
