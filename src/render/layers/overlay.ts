@@ -11,6 +11,7 @@ export function drawSelection(
   city: CompiledCity,
   shapes: readonly Place['shape'][],
   selection: Pick | null,
+  zoom = 1,
 ): void {
   graphics.clear();
   if (!selection) return;
@@ -29,9 +30,12 @@ export function drawSelection(
       break;
     }
     case 'place':
-      placePath(graphics, shapes[selection.place]!, city.places[selection.place]!.kind).stroke(
-        stroke,
-      );
+      placePath(
+        graphics,
+        shapes[selection.place]!,
+        city.places[selection.place]!.kind,
+        zoom,
+      ).stroke(stroke);
       break;
     case 'connector': {
       const point = connectorPosition(city, city.connectors[selection.connector]!);

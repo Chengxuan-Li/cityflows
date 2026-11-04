@@ -71,6 +71,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let shapes: Place['shape'][] = [];
   let staticPick: ReturnType<typeof createPicker> | undefined;
   let updateSignals: ((timeS: number) => void)[] = [];
+  let updatePlaces: ((zoom: number) => void) | undefined;
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
 
@@ -129,6 +130,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     vehicleRing.scale.set(1 / camera.zoom);
     vehicles.setZoom(camera.zoom);
     drawEditOverlay(editOverlay, editPreview, camera.zoom);
+    updatePlaces?.(camera.zoom);
+    if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
   });
   vehicles.setZoom(camera.zoom);
 
@@ -195,7 +198,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         // A movement no phase ever serves is not a legal route for vehicles; routing skips it.
         if (!movement.neverGreen) drawMovementArrow(arrows, movement);
       }
-      drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
+      updatePlaces = drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
+      updatePlaces(camera.zoom);
       for (const update of updateSignals) update(0);
       vehicles.setLayers(
         [...grades.values()].map((grade) => grade.vehicles),
@@ -218,7 +222,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     },
     setSelection(next) {
       selection = next;
-      if (city) drawSelection(selectionOverlay, city, shapes, selection);
+      if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
       const snapshot = vehicles.snapshot;
       selectedVehicle =
         snapshot && selection?.kind === 'vehicle'
@@ -271,7 +275,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const vehicle =
         snapshot &&
         pickVehicle(point, camera.zoom, snapshot.id, vehicles.x, vehicles.y, snapshot.count);
-      return vehicle ?? staticPick?.(point) ?? null;
+      return vehicle ?? staticPick?.(point, camera.zoom) ?? null;
     },
     destroy() {
       if (destroyed) return;

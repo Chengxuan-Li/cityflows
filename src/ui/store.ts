@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Vec2 } from '../geo/vec2';
-import { generatePopulation, scheduleTrips } from '../demand';
+import { demandSummary, generatePopulation, scheduleTrips, type DemandSummary } from '../demand';
 import { createEditor, type CommitResult, type Editor } from '../editor';
 import { createEngineClient, type EngineClient } from '../host/client';
 import type { HostEvent } from '../host/protocol';
@@ -34,6 +34,7 @@ export interface Session {
   vehicleHues: Uint32Array;
   /** Place demographics the population was generated from; restart regenerates when they change. */
   populationKey: string;
+  demandSummary: DemandSummary;
 }
 
 interface Run {
@@ -55,7 +56,7 @@ interface AppState {
   toggleLayer: (layer: keyof LayerVisibility) => void;
   toggleLayers: () => void;
   toggleMetrics: () => void;
-  tool: 'select' | 'road';
+  tool: 'select' | 'road' | 'place';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
   session: Session | null;
@@ -77,6 +78,7 @@ interface AppState {
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   setSpeed: (speed: number) => Promise<void>;
+  regenerateDemand: (seed: number) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -159,6 +161,7 @@ export const useAppStore = create<AppState>((set, get) => {
         session: {
           project: { ...project, population },
           populationKey: demandKey(project.city),
+          demandSummary: demandSummary(trips, project.city),
           editor,
           compiled: editor.compiled,
           loadedCompiled: editor.compiled,
@@ -242,6 +245,32 @@ export const useAppStore = create<AppState>((set, get) => {
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 0);
       }),
+    regenerateDemand: (seed) =>
+      perform(async () => {
+        const { session, run } = get();
+        if (!session || !run) return;
+        if (!Number.isSafeInteger(seed)) throw new Error('Seed must be a safe integer.');
+        const { project, engine } = session;
+        const current = project.scenarios[0]!;
+        const scenario = { ...current, seed, demand: { ...current.demand, seed } };
+        const population = generatePopulation(project.city, scenario.demand);
+        const trips = scheduleTrips(project.city, population, scenario);
+        await engine.pause();
+        const { timeS, trips: counts } = await engine.metrics();
+        set({
+          session: {
+            ...session,
+            project: {
+              ...project,
+              population,
+              scenarios: [scenario, ...project.scenarios.slice(1)],
+            },
+            populationKey: demandKey(project.city),
+            demandSummary: demandSummary(trips, project.city),
+          },
+          run: { ...run, status: 'paused', stale: true, achieved: 0, timeS, counts },
+        });
+      }),
     control: (command, steps = 1) =>
       perform(async () => {
         const { session, run } = get();
@@ -264,6 +293,7 @@ export const useAppStore = create<AppState>((set, get) => {
               loadedCompiled: compiled,
               project: { ...project, population },
               populationKey: demandKey(editor.city),
+              demandSummary: demandSummary(trips, editor.city),
               vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
                 placeHue(destinationPlaceId),
               ),

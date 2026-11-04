@@ -17,6 +17,7 @@ export function RunBar() {
   const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
   const layersOpen = useAppStore((state) => state.layersOpen);
   const metricsOpen = useAppStore((state) => state.metricsOpen);
+  const seed = useAppStore((state) => state.session?.project.scenarios[0]?.demand.seed);
   const { toggleLayers, toggleMetrics } = useAppStore.getState();
   const { control, setSpeed, toggleDiagnostics } = useAppStore.getState();
   const disabled = !run || busy;
@@ -123,6 +124,30 @@ export function RunBar() {
                 </div>
               </dl>
               <p className="muted">achieved ×{(run?.achieved ?? 0).toFixed(1)}</p>
+              <form
+                className="edit-fields"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const input = new FormData(event.currentTarget).get('seed');
+                  void useAppStore.getState().regenerateDemand(Number(input));
+                }}
+              >
+                <label className="edit-field">
+                  Demand seed
+                  <input
+                    key={seed}
+                    name="seed"
+                    type="number"
+                    min={Number.MIN_SAFE_INTEGER}
+                    max={Number.MAX_SAFE_INTEGER}
+                    step={1}
+                    required
+                    defaultValue={seed}
+                    disabled={disabled}
+                  />
+                </label>
+                <button disabled={disabled}>Regenerate demand</button>
+              </form>
               <p className="muted">Synthetic traffic, not observed traffic</p>
             </div>
           </details>

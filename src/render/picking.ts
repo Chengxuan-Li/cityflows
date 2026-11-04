@@ -48,7 +48,7 @@ export function createPicker(
   const radius = city.lanes.reduce((max, lane) => Math.max(max, lane.widthM / 2), 0);
   const connectors = city.connectors.map((connector) => connectorPosition(city, connector));
 
-  return (point: Vec2): Pick | null => {
+  return (point: Vec2, zoom = 1): Pick | null => {
     const { x, y } = point;
     let grade = -Infinity;
     let closest = Infinity;
@@ -78,7 +78,8 @@ export function createPicker(
       if (
         shape.kind === 'polygon'
           ? insideRing(point, shape.ring)
-          : (shape.pos.x - x) ** 2 + (shape.pos.y - y) ** 2 <= style.pointRadiusM ** 2
+          : (shape.pos.x - x) ** 2 + (shape.pos.y - y) ** 2 <=
+            Math.max(style.pointRadiusM, 8 / zoom) ** 2
       ) {
         return { kind: 'place', place };
       }
