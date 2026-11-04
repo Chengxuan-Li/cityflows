@@ -8,7 +8,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   use: { baseURL: `http://localhost:${port}`, trace: 'retain-on-failure' },
   webServer: {
-    command: `npm run build && npm run preview -- --port ${port} --strictPort`,
+    command: `npm run build -- --mode test && npm run preview -- --port ${port} --strictPort`,
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

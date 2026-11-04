@@ -1,0 +1,115 @@
+import { useAppStore } from './store';
+
+const speeds = [1, 2, 5, 10, 20];
+
+function clock(timeS: number) {
+  const pad = (value: number) => String(Math.floor(value)).padStart(2, '0');
+  const tenths = Math.round(timeS * 10);
+  return `${pad(tenths / 36000)}:${pad((tenths / 600) % 60)}:${pad((tenths / 10) % 60)}.${tenths % 10}`;
+}
+
+export function RunBar() {
+  const run = useAppStore((state) => state.run);
+  const busy = useAppStore((state) => state.busy);
+  const projectName = useAppStore((state) => state.session?.project.city.name);
+  const diagnostics = useAppStore((state) => state.session?.diagnostics.length);
+  const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
+  const { control, setSpeed, toggleDiagnostics } = useAppStore.getState();
+  const disabled = !run || busy;
+  const counts = run?.counts;
+
+  return (
+    <footer className="run-bar" aria-label="Simulation">
+      <div className="run-controls">
+        <output className="clock" aria-label="Simulation clock">
+          {run ? clock(run.timeS) : '—'}
+        </output>
+        <div className="controls" role="group" aria-label="Run controls">
+          <button
+            className="play"
+            disabled={disabled || run.status !== 'paused'}
+            onClick={() => void control('play')}
+          >
+            Play
+          </button>
+          <button
+            disabled={disabled || run.status !== 'playing'}
+            onClick={() => void control('pause')}
+          >
+            Pause
+          </button>
+          <button
+            disabled={disabled || run.status !== 'paused'}
+            onClick={() => void control('step')}
+          >
+            Step
+          </button>
+          <button disabled={disabled} onClick={() => void control('restart')}>
+            Restart
+          </button>
+        </div>
+        <label className="speed">
+          Speed
+          <select
+            disabled={disabled}
+            value={run?.speed ?? 1}
+            onChange={(event) => void setSpeed(Number(event.currentTarget.value))}
+          >
+            {speeds.map((speed) => (
+              <option key={speed} value={speed}>
+                ×{speed}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="achieved">
+          {run?.status === 'finished' ? 'Finished' : `achieved ×${(run?.achieved ?? 0).toFixed(1)}`}
+        </span>
+      </div>
+      <div className="run-summary">
+        {projectName && (
+          <span className="run-project" title={projectName}>
+            {projectName}
+          </span>
+        )}
+        {counts && (
+          <dl className="trip-counts" aria-label="Trip counts">
+            <div>
+              <dt>Pending</dt>
+              <dd>{counts.pending}</dd>
+            </div>
+            <div>
+              <dt>Driving</dt>
+              <dd>{counts.driving}</dd>
+            </div>
+            <div>
+              <dt>Queued at origin</dt>
+              <dd>{counts.queuedOrigin}</dd>
+            </div>
+            <div>
+              <dt>Queued at destination</dt>
+              <dd>{counts.queuedDestination}</dd>
+            </div>
+            <div>
+              <dt>Completed</dt>
+              <dd>{counts.completed}</dd>
+            </div>
+            <div>
+              <dt>Failed</dt>
+              <dd>{counts.failed}</dd>
+            </div>
+          </dl>
+        )}
+        <button
+          disabled={diagnostics === undefined}
+          aria-expanded={diagnosticsOpen}
+          aria-controls="inspector"
+          onClick={toggleDiagnostics}
+        >
+          Validation ({diagnostics ?? 0})
+        </button>
+        <small className="traffic-notice">Synthetic traffic, not observed traffic</small>
+      </div>
+    </footer>
+  );
+}
