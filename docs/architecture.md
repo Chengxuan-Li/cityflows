@@ -464,12 +464,11 @@ Semantics:
   lanes (class rank then ID break ties). Entry legs yield; every approach lane connects
   to the ring, and every exit lane is served. Driving around the ring permits U-turns.
 - The original center remains selectable with optional `Node.roundabout` containing
-  `radiusM`, `ringRoads`, and bounded `before`/`after` snapshots of affected nodes, roads,
-  and place connectors. Snapshot nodes omit the roundabout field to avoid recursion.
-  This record is Zod-validated and saved in the city. `removeRoundabout` restores those
-  entities and removes the generated ones after checking they have not been edited or
-  newly attached to other roads/connectors. Unrelated edits remain. Removal preserves
-  the allocator; undo/redo restores exact entities and `nextId` as for other commands.
+  `radiusM`, `ringRoads`, and `restore` with the original junction control, signal, minor
+  roads and turn rules. `removeRoundabout` rebuilds the junction at the current ring's
+  centroid, reconnects the approaches using their current outer road attributes, and
+  projects connectors onto surviving lanes. A broken ring blocks removal. Removal
+  preserves the allocator, and undo/redo restores exact entities and `nextId`.
 - OSM `junction=roundabout` roads retain their imported geometry and direction. At their
   joining nodes non-ring incoming roads are marked as minor yield approaches, preserving
   explicit signals. Imported rings do not carry authored restoration records.

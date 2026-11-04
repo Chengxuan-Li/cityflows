@@ -1,5 +1,5 @@
 import type { City } from './city';
-import { citySchema } from './city.schema';
+import { citySchema, legacyCitySchema } from './city.schema';
 
 export function migrateCity(json: unknown): City {
   const version =
@@ -8,6 +8,8 @@ export function migrateCity(json: unknown): City {
       : undefined;
   switch (version) {
     case 1:
+      return legacyCitySchema.parse(json);
+    case 2:
       return citySchema.parse(json);
     default:
       throw new Error(`Unsupported city schema version: ${String(version)}`);

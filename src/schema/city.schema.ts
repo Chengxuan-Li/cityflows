@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { City } from './city';
+import type { City, Node } from './city';
 
 const nodeId = z.string().regex(/^n:\d+$/);
 const roadId = z.string().regex(/^r:\d+$/);
@@ -29,30 +29,38 @@ export const signalProgramSchema = z.object({
     .min(1),
 });
 
+const junctionControls = z.object({
+  control: z.enum(['uncontrolled', 'yield', 'stop', 'signal']),
+  minorRoads: z.array(roadId),
+  turnRules: z.array(
+    z.object({
+      from: roadId,
+      to: roadId,
+      fromLane: count.optional(),
+      toLane: count.optional(),
+      allowed: z.boolean(),
+      provenance,
+    }),
+  ),
+  signal: signalProgramSchema.nullable(),
+});
+
+const requiresSignal = (node: z.infer<typeof junctionControls>) =>
+  node.control !== 'signal' || node.signal !== null;
+const signalRequired = {
+  path: ['signal'],
+  message: 'Signal-controlled nodes require a signal program',
+};
+
 const junctionSchema = z
   .object({
     id: nodeId,
     pos: vec2,
     layer: z.int(),
-    control: z.enum(['uncontrolled', 'yield', 'stop', 'signal']),
-    minorRoads: z.array(roadId),
-    turnRules: z.array(
-      z.object({
-        from: roadId,
-        to: roadId,
-        fromLane: count.optional(),
-        toLane: count.optional(),
-        allowed: z.boolean(),
-        provenance,
-      }),
-    ),
-    signal: signalProgramSchema.nullable(),
+    ...junctionControls.shape,
     provenance,
   })
-  .refine((node) => node.control !== 'signal' || node.signal !== null, {
-    path: ['signal'],
-    message: 'Signal-controlled nodes require a signal program',
-  });
+  .refine(requiresSignal, signalRequired);
 
 export const laneSchema = z.object({
   widthM: z.number().positive(),
@@ -134,21 +142,46 @@ export const placeSchema = z.object({
   provenance,
 });
 
-const roundaboutSnapshot = z.object({
-  nodes: z.record(nodeId, junctionSchema),
-  roads: z.record(roadId, roadSchema),
-  connectors: z.record(placeId, z.array(connectorSchema)),
+const restoreSchema = junctionControls.refine(requiresSignal, signalRequired);
+
+const roundaboutSchema = z.object({
+  radiusM: z.number().positive(),
+  ringRoads: z.array(roadId).min(3),
+  restore: restoreSchema,
 });
 export const nodeSchema = junctionSchema.safeExtend({
-  roundabout: z
-    .object({
-      radiusM: z.number().positive(),
-      ringRoads: z.array(roadId).min(3),
-      before: roundaboutSnapshot,
-      after: roundaboutSnapshot,
-    })
-    .optional(),
+  roundabout: roundaboutSchema.optional(),
 });
+
+const legacyNodeSchema = junctionSchema
+  .safeExtend({
+    roundabout: roundaboutSchema
+      .omit({ restore: true })
+      .extend({
+        before: z.object({ nodes: z.record(nodeId, restoreSchema) }),
+      })
+      .optional(),
+  })
+  .transform((node, context): Node => {
+    const { roundabout, ...junction } = node;
+    if (!roundabout) return junction;
+    const restore = roundabout.before.nodes[node.id];
+    if (!restore) {
+      context.addIssue({
+        code: 'custom',
+        path: ['roundabout', 'before', 'nodes', node.id],
+        message: 'Missing original roundabout center',
+      });
+      return z.NEVER;
+    }
+    return {
+      ...junction,
+      roundabout: { radiusM: roundabout.radiusM, ringRoads: roundabout.ringRoads, restore },
+    };
+  });
+
+// History patches have their own version and can contain nodes from either city schema.
+export const projectNodeSchema = z.union([nodeSchema, legacyNodeSchema]);
 
 const geo = z.object({
   origin: z.object({ lon: z.number().min(-180).max(180), lat: z.number().gt(-90).lt(90) }),
@@ -163,27 +196,34 @@ const geo = z.object({
   }),
 });
 
-export const citySchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    version: count,
-    name: z.string(),
-    drivingSide: z.enum(['right', 'left']),
-    geo: geo.nullable(),
-    nodes: z.record(nodeId, nodeSchema),
-    roads: z.record(roadId, roadSchema),
-    places: z.record(placeId, placeSchema),
-    nextId: count,
-  })
-  .superRefine((city, context) => {
-    for (const key of ['nodes', 'roads', 'places'] as const) {
-      for (const [id, entity] of Object.entries(city[key])) {
-        if (id !== entity.id)
-          context.addIssue({
-            code: 'custom',
-            path: [key, id, 'id'],
-            message: 'Record key must match entity id',
-          });
-      }
+const cityFields = {
+  version: count,
+  name: z.string(),
+  drivingSide: z.enum(['right', 'left']),
+  geo: geo.nullable(),
+  nodes: z.record(nodeId, nodeSchema),
+  roads: z.record(roadId, roadSchema),
+  places: z.record(placeId, placeSchema),
+  nextId: count,
+};
+
+function matchEntityIds(city: Pick<City, 'nodes' | 'roads' | 'places'>, context: z.RefinementCtx) {
+  for (const key of ['nodes', 'roads', 'places'] as const) {
+    for (const [id, entity] of Object.entries(city[key])) {
+      if (id !== entity.id)
+        context.addIssue({
+          code: 'custom',
+          path: [key, id, 'id'],
+          message: 'Record key must match entity id',
+        });
     }
-  }) satisfies z.ZodType<City>;
+  }
+}
+
+export const citySchema = z
+  .object({ schemaVersion: z.literal(2), ...cityFields })
+  .superRefine(matchEntityIds) satisfies z.ZodType<City>;
+export const legacyCitySchema = z
+  .object({ schemaVersion: z.literal(1), ...cityFields, nodes: z.record(nodeId, legacyNodeSchema) })
+  .superRefine(matchEntityIds)
+  .transform((city): City => ({ ...city, schemaVersion: 2 }));

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { citySchema, nodeSchema, placeSchema, roadSchema } from './city.schema';
+import { citySchema, projectNodeSchema, placeSchema, roadSchema } from './city.schema';
 import type { HistoryEntry } from './history';
 
 const nodeId = z.string().regex(/^n:\d+$/);
@@ -15,7 +15,7 @@ export const patchSchema = z.object({
     })
     .optional(),
   set: z.object({
-    nodes: z.record(nodeId, nodeSchema).optional(),
+    nodes: z.record(nodeId, projectNodeSchema).optional(),
     roads: z.record(roadId, roadSchema).optional(),
     places: z.record(placeId, placeSchema).optional(),
   }),
