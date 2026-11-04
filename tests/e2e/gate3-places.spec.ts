@@ -198,12 +198,12 @@ test('profile and event editors commit through the inspector and move trips', as
   await expect(button(page, 'Step')).toBeEnabled();
   const weighted = await tripsByHour(page);
   expect(weighted[12]).toBeGreaterThan(100);
-  await button(page, 'Demand').click(); // the sheet overlaps the bottom of the inspector
   await button(page, 'Use default timing').click();
   expect((await city(page)).places['p:104']!.profile).toBeNull();
   await button(page, 'Undo').click();
   expect((await city(page)).places['p:104']!.profile!.arrivals[17]).toBe(9);
 
+  await button(page, 'Close demand').click();
   const offices = await gridPoint(page, 465, 495);
   await page.mouse.click(offices.x, offices.y);
   await expect(page.getByRole('heading', { name: 'Offices' })).toBeVisible();
@@ -246,8 +246,37 @@ test('profile and event editors commit through the inspector and move trips', as
   await expect(button(page, 'Step')).toBeEnabled();
   await expect(ending).toContainText('1,128');
   expect((await tripsByHour(page))[12]).toBe(weighted[12]! + 40);
-  await button(page, 'Demand').click(); // the sheet overlaps the bottom of the inspector
   await button(page, 'Remove event').click();
   expect((await city(page)).places['p:107']!.events).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+for (const viewport of [
+  { width: 1280, height: 720 },
+  { width: 1440, height: 900 },
+]) {
+  test(`place inspector buttons are clickable with Demand open at ${viewport.width} × ${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    const homes = await gridPoint(page, 15, -15);
+    await page.mouse.click(homes.x, homes.y);
+    const inspector = page.getByRole('complementary', { name: 'Inspector' });
+    await expect(inspector.getByRole('heading', { name: 'Homes' })).toBeVisible();
+    await inspector.getByText('Hourly profile', { exact: true }).click();
+    await button(page, 'Add profile').click();
+    await inspector.getByText('Events', { exact: true }).click();
+    await button(page, 'Add event').click();
+    await inspector.getByText('Connectors', { exact: true }).click();
+    await expect(button(page, 'Restart')).toBeEnabled();
+
+    await button(page, 'Demand').click();
+    await expect(page.getByRole('region', { name: 'Demand' })).toBeVisible();
+    await expect(button(page, 'Use default timing')).toBeEnabled();
+    await expect(button(page, 'Remove event')).toBeEnabled();
+    // A disabled action (e.g. moving a connector already at the nearest lane) cannot be clicked.
+    for (const action of await inspector.getByRole('button', { disabled: false }).all()) {
+      await action.click({ trial: true, timeout: 3000 });
+    }
+  });
+}

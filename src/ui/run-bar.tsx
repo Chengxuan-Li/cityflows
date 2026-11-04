@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { useAppStore } from './store';
 import { Layers } from './layers';
 import { MetricsPanel } from './panels/metrics';
@@ -21,14 +22,47 @@ export function RunBar() {
   const metricsOpen = useAppStore((state) => state.metricsOpen);
   const demandOpen = useAppStore((state) => state.demandOpen);
   const compareOpen = useAppStore((state) => state.compareOpen);
+  const showCompare = compareOpen && !layersOpen && !metricsOpen && !demandOpen;
+  const sheetOpen = showCompare || layersOpen || metricsOpen || demandOpen;
+  const barRef = useRef<HTMLElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const { toggleCompare } = useAppStore.getState();
   const { toggleLayers, toggleMetrics, toggleDemand } = useAppStore.getState();
   const { control, setSpeed, toggleDiagnostics } = useAppStore.getState();
   const disabled = !run || busy;
   const counts = run?.counts;
 
+  useLayoutEffect(() => {
+    if (!sheetOpen) return;
+    const bar = barRef.current!;
+    const app = bar.parentElement!;
+    const sheet = sheetRef.current!;
+
+    function reserveSheetSpace() {
+      const bottom = app.getBoundingClientRect().bottom;
+      app.style.setProperty(
+        '--run-sheet-bottom',
+        `${bottom - sheet.getBoundingClientRect().bottom}px`,
+      );
+      // The wrapper stays still while the sheet animates inside it.
+      app.style.setProperty('--run-sheet-space', `${bottom - sheet.getBoundingClientRect().top}px`);
+    }
+
+    reserveSheetSpace();
+    const observer = new ResizeObserver(reserveSheetSpace);
+    observer.observe(app);
+    observer.observe(bar);
+    observer.observe(sheet.parentElement!);
+    observer.observe(sheet);
+    return () => {
+      observer.disconnect();
+      app.style.removeProperty('--run-sheet-bottom');
+      app.style.removeProperty('--run-sheet-space');
+    };
+  }, [sheetOpen]);
+
   return (
-    <footer className="run-bar" aria-label="Simulation">
+    <footer ref={barRef} className="run-bar" aria-label="Simulation">
       <div className="run-controls">
         <output className="clock" aria-label="Simulation clock">
           {run ? clock(run.timeS) : '—'}
@@ -81,13 +115,12 @@ export function RunBar() {
       <div className="run-summary">
         <button
           disabled={!run}
-          aria-expanded={compareOpen && !layersOpen && !metricsOpen && !demandOpen}
+          aria-expanded={showCompare}
           aria-controls="compare"
           onClick={toggleCompare}
         >
           Compare
         </button>
-        {compareOpen && !layersOpen && !metricsOpen && !demandOpen && <ComparePanel />}
         <button
           disabled={!run}
           aria-expanded={layersOpen}
@@ -112,9 +145,14 @@ export function RunBar() {
         >
           Demand
         </button>
-        {layersOpen && <Layers />}
-        {metricsOpen && <MetricsPanel />}
-        {demandOpen && <DemandPanel />}
+        {sheetOpen && (
+          <div className="run-sheet" ref={sheetRef}>
+            {showCompare && <ComparePanel />}
+            {layersOpen && <Layers />}
+            {metricsOpen && <MetricsPanel />}
+            {demandOpen && <DemandPanel />}
+          </div>
+        )}
         {counts && (
           <details className="metrics">
             <summary>Trip counts</summary>
