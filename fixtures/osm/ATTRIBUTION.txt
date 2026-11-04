@@ -22,3 +22,10 @@ suburb.osm — Levittown, Pennsylvania
 Source: https://maps.mail.ru/osm/tools/overpass/api/interpreter
 OSM snapshot: 2026-11-03T22:24:37Z
 BBox: -74.837, 40.147, -74.823, 40.157
+
+munich-donnersberger.osm — Donnersbergerbrücke and Mittlerer Ring, Munich, Bavaria
+Source: https://overpass-api.de/api/interpreter
+OSM snapshot: 2026-11-04T05:53:36Z
+BBox: 11.525, 48.135, 11.545, 48.148
+Contents: every highway way and node, turn restriction relations, buildings, land use,
+amenities and stations in the bbox, so importer changes rerun without a download.

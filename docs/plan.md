@@ -184,6 +184,30 @@ triage by the lead; the agents' investigation may move items between groups.
 
 Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
 
+### Reference extract and import baseline (2026-11-04)
+
+`fixtures/osm/munich-donnersberger.osm` is the reference extract for the backlog: the
+Donnersbergerbrücke and Mittlerer Ring in Munich, bbox 11.525, 48.135, 11.545, 48.148
+(2.15 km²), with every highway way and node, turn restriction relations, buildings, land use,
+amenities and stations, so importer changes rerun without another download (attribution in
+`fixtures/osm/ATTRIBUTION.txt`). `npm run import-probe -- fixtures/osm/munich-donnersberger.osm
+11.525 48.135 11.545 48.148` imports it, compiles it, routes every connector pair and runs
+07:00 to 10:00 headless. Baseline before the import wave:
+
+| Measure | Value |
+| --- | ---: |
+| Roads / nodes / signals | 837 / 465 / 40 |
+| Road classes | trunk 24, ramp 32, primary 45, secondary 50, tertiary 56, residential 368, service 262 |
+| Places | 150: 64 gateways, 80 parking, 5 schools, 1 station; no residential or work places (B5) |
+| Import and compile warnings | road_too_short 173, dead_end 65, connector_unreachable 7, disconnected_component 1 |
+| Connector pairs routable | 10 181 of 19 193 (53 percent) |
+| Morning run, 4 660 persons | 462 completed, 3 970 failed: no origin connector 1 560, no destination connector 1 066, no route 676, stranded 668; peak 235 driving |
+
+The import wave (B2, B3, B5) reports the same table after its changes; the targets are no
+unreachable connectors, every connector pair routable, under 1 percent failed trips, and
+residential and work places from buildings and land use.
+
+
 ## Review log
 
 - 2026-11-03, TASK-000 merged as delivered: pinned SHAs, line-anchored paths, destination
