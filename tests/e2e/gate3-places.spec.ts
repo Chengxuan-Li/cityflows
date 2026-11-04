@@ -1,78 +1,18 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { pointAtDistance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { station } from '../../src/fixtures/station';
-import { compile, type CompiledCity } from '../../src/network';
-import type { City } from '../../src/schema';
-
-const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
-const metrics = (page: Page) => page.evaluate(() => window.cityflows!.metrics());
-const city = (page: Page) => page.evaluate(() => window.cityflows!.city!());
-
-/** The map fits the city with a 72 px margin on load (see fitCity in map-view.tsx). */
-function fitted(compiled: CompiledCity, source: City) {
-  const points = [
-    ...compiled.roads.flatMap(({ surface }) => surface),
-    ...compiled.nodes.map(({ pos }) => pos),
-    ...Object.values(source.places).flatMap(({ shape }) =>
-      shape.kind === 'polygon' ? shape.ring : [shape.pos],
-    ),
-  ];
-  const xs = points.map(({ x }) => x);
-  const ys = points.map(({ y }) => y);
-  const bounds = {
-    minX: Math.min(...xs),
-    maxX: Math.max(...xs),
-    minY: Math.min(...ys),
-    maxY: Math.max(...ys),
-  };
-  return async (page: Page, world: Vec2) => {
-    const box = (await page.getByLabel('City map').boundingBox())!;
-    const scale = Math.min(
-      32,
-      (box.width - 144) / (bounds.maxX - bounds.minX),
-      (box.height - 144) / (bounds.maxY - bounds.minY),
-    );
-    return {
-      x: box.x + world.x * scale + (box.width - (bounds.minX + bounds.maxX) * scale) / 2,
-      y: box.y + world.y * scale + (box.height - (bounds.minY + bounds.maxY) * scale) / 2,
-    };
-  };
-}
-
-/** Grid places: Homes sits at (15, −15), Offices at (465, 495); the map centers on (240, 240). */
-async function gridPoint(page: Page, x: number, y: number) {
-  const box = (await page.getByLabel('City map').boundingBox())!;
-  const scale = (box.height - 144) / 510;
-  return {
-    x: box.x + box.width / 2 + (x - 240) * scale,
-    y: box.y + box.height / 2 + (y - 240) * scale,
-  };
-}
-
-async function setRange(page: Page, name: string, value: string) {
-  const slider = page.getByRole('slider', { name, exact: true });
-  await slider.fill(value);
-  await slider.blur();
-}
-
-const tripsByHour = (page: Page) =>
-  page
-    .getByRole('region', { name: 'Demand' })
-    .locator('[data-hour]')
-    .evaluateAll((bars) => bars.map((bar) => Number((bar as HTMLElement).dataset.trips)));
-
-/** Steps a simulated minute at a time and records queued trips at origins and destinations. */
-const sampleQueues = (page: Page, minutes: number) =>
-  page.evaluate(async (minutes) => {
-    const samples: { timeS: number; queue: number }[] = [];
-    for (let i = 0; i < minutes; i++) {
-      await window.cityflows!.step(600);
-      const { timeS, trips } = await window.cityflows!.metrics();
-      samples.push({ timeS, queue: trips.queuedOrigin + trips.queuedDestination });
-    }
-    return samples;
-  }, minutes);
+import { compile } from '../../src/network';
+import {
+  button,
+  city,
+  fitted,
+  gridPoint,
+  metrics,
+  sampleQueues,
+  setRange,
+  tripsByHour,
+} from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
