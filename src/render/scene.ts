@@ -29,7 +29,7 @@ function createGrade() {
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
-  terrain.addChild(surfaces, markings, nodes, arrows);
+  terrain.addChild(surfaces, nodes, markings, arrows);
   group.addChild(terrain, connectors, places, signals, vehicles.container);
   return {
     group,
