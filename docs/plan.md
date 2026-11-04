@@ -59,10 +59,13 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-023](tasks/TASK-023.md) | 2 | Multi-select and batch editing | `src/ui/selection`, `src/editor/commands/batch.ts` | 022 | bulk edits, one undo entry | todo |
 | [TASK-024](tasks/TASK-024.md) | 2 | Raster tile backdrop | `src/render/layers/tiles.ts`, layer toggle in `src/ui/layers*` | 006, 020 | tiles align with imported roads | done |
 | [TASK-025](tasks/TASK-025.md) | 2 | GeoJSON feature import and export | `src/importers/geojson`, `src/project/geojson.ts` | 008, 020 | documented interchange, id conflict handling | done |
+| [TASK-026](tasks/TASK-026.md) | 2 | Large synthetic city fixture | `src/fixtures/town.ts`, `src/fixtures/scenarios.ts`, `fixtures/projects/town.cityflows.json`, `tests/network/town.test.ts`, `tests/sim/town-day.test.ts` | 001 | compiles, full day under 1 percent failed, perf workload | todo |
+| [TASK-050](tasks/TASK-050.md) | 2 | Game-like UI redesign | `src/ui`, `src/render/style.ts`, `src/render/layers/*` visuals, `tests/e2e` names | 010 | all capabilities reachable, seven e2e scenarios green | todo |
 | [TASK-030](tasks/TASK-030.md) | 3 | Activity chains, through traffic, place events | `src/demand`, `src/sim/connectors.ts` (events, capacity), `tests/demand`, `tests/sim/T10*` | 011, 003 | T09 (full), T10 | todo |
 | [TASK-031](tasks/TASK-031.md) | 3 | Congestion-aware routing | `src/sim/link-costs.ts`, `src/sim/reroute.ts`, `src/routing` (costs) | 002, 004 | T06 | todo |
 | [TASK-032](tasks/TASK-032.md) | 3 | Ramps, merging, expressway construction | `src/sim/merge.ts`, `src/editor/commands/ramp.ts`, `src/ui/tools/ramp*`, `tests/sim/T07*` | 004, 022 | T07 (full), demo C | todo |
 | [TASK-033](tasks/TASK-033.md) | 3 | Place editor and demand panel | `src/ui/inspector/place*`, `src/ui/panels/demand*`, vehicle inspector reasons | 030, 010 | demos A and B reachable from the UI | todo |
+| [TASK-034](tasks/TASK-034.md) | 3 | Place painting and demand regeneration | `src/ui/tools/place-paint.tsx`, place controls, regenerate action, `tests/e2e/gate3-paint.spec.ts` | 050, 011 | painted place attracts trips after regenerate | todo |
 | [TASK-040](tasks/TASK-040.md) | 4 | Signal editor | `src/ui/inspector/signal*`, `src/render/layers/signal-preview.ts` | 010 | T13 through the UI | todo |
 | [TASK-041](tasks/TASK-041.md) | 4 | Metrics, layers and charts | `src/ui/panels/metrics*`, `src/ui/layers*`, `src/render/layers/heat.ts` | 005, 006 | readable congestion feedback | todo |
 | [TASK-042](tasks/TASK-042.md) | 4 | Scenario comparison | `src/ui/panels/compare*`, `src/project/scenarios.ts` | 008, 041 | same-seed baseline versus variant | todo |
@@ -88,6 +91,13 @@ dependency of its tasks is merged to `main`.
   030 and 010.
 - Gate 4: TASK-040, TASK-041 in parallel; TASK-042 and TASK-043 after 041; TASK-044 as soon
   as Gate 1 is done (it coordinates with whoever owns `src/sim` at that time); TASK-045 last.
+- Revised after Gate 1 (owner decision, 2026-11-03): the UI redesign TASK-050 lands before
+  any further UI feature, so wave 5 is TASK-050, TASK-030, TASK-031 and TASK-026 (disjoint
+  surfaces: ui and render visuals; demand and connectors; routing and the engine step;
+  fixtures). Wave 6, on the new design: TASK-021, TASK-022, TASK-034, TASK-040, TASK-041.
+  Wave 7: TASK-023, TASK-032, TASK-033, TASK-042, TASK-043, TASK-044. TASK-045 last.
+  TASK-031 owns `src/sim/engine.ts` in wave 5; TASK-030 stays in `src/demand` and
+  `src/sim/connectors.ts`.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -213,3 +223,8 @@ exists.
   decided; architecture approved with five adjustments (architecture section 1, rows 8 to 12).
 - 2026-11-03: Gate 1 defined as the interactive vertical slice above, not an engine-only
   milestone.
+- 2026-11-03, after Gate 1: the UI is redesigned in the spirit of Mini Motorways and Mini
+  Metro (TASK-050; direction recorded in `AGENTS.md`), with no loss of capability. Added to
+  the plan: a large synthetic city (TASK-026), place painting and demand regeneration
+  (TASK-034). TASK-022 stays one task; TASK-044 waits until the sim and renderer tasks of
+  the next waves are in.

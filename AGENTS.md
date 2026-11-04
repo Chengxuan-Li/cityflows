@@ -195,11 +195,28 @@ npm run format         # Prettier
   UI shows it. Bundled OSM fixtures include an `ATTRIBUTION.txt`.
 - Upstream screenshots are design references, never redistributed assets.
 
-## UI language
+## Design direction
 
-Top-down cartoon 2D. Roads are neutral grey surfaces with white lane markings and arrows drawn
-only for legal movements; vehicles are small rounded rectangles colored by state; signals are
-small heads at stop lines; places are soft tinted polygons. UI chrome is a dark neutral with a
-single accent color, compact spacing, native-feeling controls. Every control changes
-something the user can see. Metrics use plain words and carry the "synthetic traffic, not
-observed traffic" notice.
+CityFlows is a polished minimalist transportation game in the spirit of Mini Motorways and
+Mini Metro, not an engineering simulator, a GIS tool or a dashboard. The references are
+inspiration for an original CityFlows identity, not interfaces to copy.
+
+- The map is the interface. Panels, borders, buttons and labels are kept to the minimum that
+  still exposes every capability; advanced controls (lanes, turns, signals, demand,
+  diagnostics) appear contextually, one tap from the thing they belong to.
+- Soft pastel palette on a light, slightly warm background; clean geometric shapes; roads
+  with rounded ends whose width and tone show hierarchy; junctions as discs; places as simple
+  colored shapes, each with a hue from a fixed palette; vehicles as rounded pills tinted by
+  their destination's hue; signal state as a small glow; selection as a soft ring; lane
+  markings and arrows that fade out at low zoom. Arrows exist only for legal movements.
+- Motion matters: eased zoom at the pointer, inertia on pan, smooth lane-change animation,
+  subtle transitions when panels appear. The city should feel alive while idle.
+- Direct manipulation over forms: drag to pan, scroll to zoom, click to select, drag handles
+  to move connectors, draw to create. Compact floating run controls; metrics and
+  configuration only when asked for.
+- Restrained typography: the system UI font, two sizes, one weight contrast. No cards inside
+  cards, no decorative gradients, no emoji or icon packs, no headings that only name a panel,
+  no copy that repeats what a control already says, no AI-oriented or self-referential text.
+- Simplify how features are presented, never what the application can do. Every control
+  changes something visible. Metrics use plain words and carry the "synthetic traffic, not
+  observed traffic" notice.
