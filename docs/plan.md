@@ -722,8 +722,9 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   node, which is the rule. Fixture warning baselines reset to the TASK-048 values plus
   Sindelfingen (53).
 
-- TASK-056 merged with a lead commit for the work the agent left uncommitted in its worktree,
-  plus a layers test the task asked for. The task text was wrong about `Road.layer` existing;
+- TASK-056 merged with a lead commit for the work the agent left uncommitted in its worktree
+  (including its untracked `tests/importers/layers.test.ts` and
+  `tests/render/grade-order.test.ts`). The task text was wrong about `Road.layer` existing;
   the agent added it as an optional field (schema and architecture section 4 updated in the
   branch, accepted) filled by the importer from `layer`, else +1 for a bridge, −1 for a
   tunnel or covered way; node layers prefer the through way, then a continuation, else
