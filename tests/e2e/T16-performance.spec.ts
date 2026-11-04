@@ -138,6 +138,8 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
     const input = workload(name);
+    // Distinguish the uploaded grid from the identically named initial project.
+    input.city.name = `Performance: ${input.city.name}`;
     const { manifest } = JSON.parse(
       await readFile('fixtures/projects/grid5x5.cityflows.json', 'utf8'),
     );
@@ -161,6 +163,7 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
       buffer: Buffer.from(json),
     });
     await expect(page.getByRole('heading', { name: input.city.name, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
     await expect
       .poll(() => page.evaluate(() => window.cityflows!.metrics().then((m) => m.timeS)))
       .toBe(input.scenario.startS);

@@ -312,9 +312,11 @@ For every node, incoming roads are those with `road.to === node`, outgoing those
    only which lane is at the curb (the last lane under right-hand traffic, lane 0 under
    left-hand traffic) and which at the median. Through: lanes pair by index counted from the
    median side, clamped to the last lane of `o`; when `o` has more lanes, the curb-side lane
-   of `i` also feeds the extra curb-side lanes. Merge and diverge: lanes pair one-to-one by
-   index counted from the curb side, with no clamping and no fan-out, so a one-lane ramp
-   joins or leaves only the curb-side lane. U-turns, when allowed, leave from the median-side
+   of `i` also feeds the extra curb-side lanes. A single-lane approach feeds every lane of
+   each legal non-U-turn outgoing direction, including merges and diverges (TASK-048
+   contract amendment). Explicit turn rules still take precedence. For multi-lane approaches,
+   merge and diverge: lanes pair one-to-one by
+   index counted from the curb side, with no clamping and no fan-out. U-turns, when allowed, leave from the median-side
    lane into the median-side lane. A single-lane road may do everything. Fallback: a lane that
    ends up with no movement while another lane of the same road has one inherits the
    non-U-turn movements of the nearest such lane (lower index wins ties), with the to-lane
@@ -677,15 +679,19 @@ Step sequence, in this order every step:
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
    the connector position and blocks the lane behind it (T08). A vehicle at the end of a lane
    without any usable movement toward its route takes the legal movement with the lowest turn
-   penalty and gets a reroute with reason `missed_turn`; with no legal movement at all it fails
-   as `stranded`. Nothing is ever moved to a lane it did not drive to.
+   penalty whose landing lane can route to its destination (TASK-048, owner-approved simulation
+   exception) and gets a reroute with reason `missed_turn`. If no fallback reaches the
+   destination but the route needs another lane on this road, it stops before the junction
+   and waits for a safe mandatory lane change. Otherwise it fails as `stranded`.
+   Nothing is ever moved to a lane it did not drive to.
 6. Accounting, metrics, hash.
 
 Implementation notes (TASK-003 as merged): the commit clamps a vehicle's new position to the
 start-of-step leader rear minus `minGapM` and to an ungranted stop line, and derives the
 committed speed from the clamped displacement, so the integrator never overlaps a leader. A
 vehicle that takes a fallback movement remembers it and will not retry it from the same lane;
-when every exit has been tried it fails as `stranded`. Vehicle ids in snapshots, `inspect`
+when every exit has been tried it waits for a required lane change or fails as `stranded`
+as above. Vehicle ids in snapshots, `inspect`
 and the hash are the trip index plus one; `inspect` returns null for a pending trip. Trips
 naming a place that does not exist are an invariant violation and throw at load.
 
@@ -711,7 +717,8 @@ a queue at an arrival connector keeps blocking its lane. A forced change that is
 close leader or a faster follower caps the vehicle's speed at `creepSpeedMps` until it fits.
 When a vehicle cannot reach its planned movement, it prefers a movement from its current lane
 into the next road of its route whose landing lane can still reach the route's target lanes,
-and only otherwise takes the cheapest legal movement and reroutes with `missed_turn`.
+and only otherwise takes the cheapest legal movement with a feasible destination route and
+reroutes with `missed_turn`. This prevents a fallback from choosing an unrelated boundary exit.
 
 Lane changes are discrete in the model (the vehicle switches lane and keeps its position along
 the road); `lateralM` animates the switch over `laneChangeDurationS` for the renderer only.
@@ -1019,7 +1026,19 @@ Lives in `src/importers/osm`, runs inside an import worker.
    `traffic_signals`, `stop` or `give_way`, and `via` nodes of restriction relations. Split
    ways there.
 4. Project with a `GeoReference` at the bbox center. One `Node` per junction node, `layer`
-   from the tag. Connectivity comes from shared OSM node ids only.
+   from the tag. Connectivity starts from shared OSM node ids. TASK-048 adds inferred
+   crossings from a feeder to the opposing, same-name/class surface carriageway on the same
+   layer, within half the combined road width plus 12 m (capped at 30 m). Motorways, ramps
+   and restriction-via nodes are excluded from this proximity inference.
+   Equal-attribute sections shorter than 30 m join at uncontrolled degree-two nodes,
+   retaining their geometry and source way ids. With owner approval (TASK-048), connected
+   sub-30 m junction sections consolidate in clusters of at most 60 m diameter; bridges,
+   motorway junctions, stop/yield controls, cycleway attribute boundaries and restriction-via
+   nodes stay separate.
+   External road-pair reachability through each cluster becomes explicit turn rules, and
+   signals move to its representative. Canonical lane assignment then applies at the combined
+   junction. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
+   in provenance; disconnected roads and remaining short-road/dead-end warnings stay visible.
 5. Roads: `oneway=yes` (or `-1`, or implied by motorway and roundabout) gives one road;
    otherwise two roads with mirrored centerlines sharing a `streetGroupId` per split section
    (`osm:way/<id>` for the first section, `osm:way/<id>/<n>` after), since one group per way
@@ -1036,19 +1055,55 @@ Lives in `src/importers/osm`, runs inside an import worker.
    banned from the others; unmarked lanes keep the compiler defaults. Restriction relations
    (`no_*`, `only_*` with from, via node, to; `only_*_u_turn` becomes an allow) become
    road-level rules; unsupported or non-incident relations produce `osm_unsupported_tag`.
+   TASK-048 single-lane arrows permit every receiving lane of their direction. Through arrows
+   align within the through/unmarked lane group, excluding dedicated turn lanes from the
+   receiving-lane index. Arrows are
+   deferred at intermediate way boundaries; a same-name continuation bending less than 90
+   degrees counts as through. An arrow with no matching exit is recorded as `turnLanesDeferred`
+   instead of prohibiting every exit at an earlier junction. Relation bans still take priority.
 7. Control: `highway=traffic_signals` on the node gives `signal` with a generated program:
    two 30 s phases for the two opposing approach axes with amber 3 s and all-red 1 s; a
    road-pair group that conflicts with its phase, or a left turn at a node with four or more
-   approaches, gets an extra 15 s (left) or 30 s phase; a pair whose own lanes conflict is
-   left unserved with warning `osm_signal_group_conflict`. `highway=stop` gives `stop`;
+   approaches, gets an extra 15 s (left) or 30 s phase. TASK-048 resolves conflicting lanes
+   within a road-pair group before generating the program: keep the first nonconflicting
+   movement in deterministic compiler order, explicitly ban conflicting pairs and record
+   `signalLaneAssignment`. Drivers must merge on the approach; unresolved groups still get
+   `osm_signal_group_conflict`. `highway=stop` gives `stop`;
    `highway=give_way` gives `yield`; else `uncontrolled`.
 8. Clip to the bbox: a road crossing the edge is cut there; the cut end becomes a node and a
    `gateway` place with an `out` connector (5 m into entering roads) or an `in` connector (5 m
-   before the end of leaving roads). Gateway population and jobs default from the road class
-   and are editable.
-9. Places from OSM are limited to `amenity=parking` with a polygon, `railway=station`,
-   `aeroway=aerodrome`, `amenity=school`, `shop=mall`: a `Place` with a connector snapped to the
-   nearest lane. The user sets population and jobs; the wizard says so.
+   before the end of leaving roads). TASK-048 pairs same-name/class carriageways on the same
+   bbox edge within 150 m, then complementary one-way streets within 300 m. Nearby clipped
+   ramps share a parent arterial gateway and add no extra demand. Per-direction population
+   and jobs use the maximum class demand times lane count: motorway 400, trunk 300, primary
+   200, secondary 120, tertiary 80, residential 40, service 20, ramp 80 per lane. An entry-only
+   gateway has no jobs; an exit-only gateway has no residents. All values remain editable.
+   Portal lanes prefer paths to or from the main strongly connected lane component;
+   lane changes count only on sections long enough to traverse the lane block at 30 m per
+   change plus 10 m clearance. A corridor without a multi-road cycle retains its directional
+   portals. Every clipped motorway, trunk, primary and secondary end retains a portal even
+   when disconnected, with diagnostics exposing its lack of access. Isolated minor-road
+   fragments retain their roads and diagnostics but generate no gateway demand.
+   Local two-way residential/service boundary ends have inferred turnarounds, allowing
+   a driver who misses a turn to return instead of stranding at the crop boundary.
+9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
+   and `shop=mall`. TASK-048 also imports residential, office/commercial, retail and industrial
+   building footprints and land use, including multipolygon courtyards and bbox clipping.
+   Known building use wins; `building=yes` uses containing land use, otherwise residential.
+   Garages, sheds, roofs and other non-occupancy building types do not generate residents.
+   Positive `building:levels` up to 200 wins; defaults are four floors for apartments,
+   unspecified residential and commercial buildings, two for houses/detached/terraces, one
+   for retail/industrial. Gross floor area per person/job is 45 m² residential, 35 commercial,
+   45 retail and 80 industrial. A land-use polygon with no usable building footprints uses
+   35% footprint coverage and the same floor/occupancy defaults; it adds no extra floor area
+   when footprints already supply its demand. These are editable synthetic estimates.
+   Aggregate by bounded surface-street block and use (service accesses do not divide blocks).
+   At open map edges, use the containing land-use polygon or nearby footprints within 100 m
+   without crossing a street. Round only the aggregated counts. Parking and schools retain
+   their existing demand. All local places connect to the nearest car lane in the main
+   movement-connected component, inset at most 10 m from lane ends; this avoids snapping
+   to isolated accesses or relying on an immediate lane change after spawning. Inferences,
+   source ids and block aggregation are recorded in provenance.
 10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
     counts of inferred lanes and speeds. The wizard shows them before the city is accepted.
 

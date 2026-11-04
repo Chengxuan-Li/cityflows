@@ -22,6 +22,7 @@ function defaultPair(
   toCount: number,
   side: DrivingSide,
 ): boolean {
+  if (fromCount === 1 && turn !== 'uturn') return true;
   const fromCurb = side === 'right' ? fromCount - 1 - from : from;
   const toCurb = side === 'right' ? toCount - 1 - to : to;
   switch (turn) {

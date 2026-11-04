@@ -36,7 +36,7 @@ test.each(['right', 'left'] as const)(
       'diverge',
     ]);
     expect(editor.compiled.lanes[lane]!.out.map((i) => editor.compiled.movements[i]!.turn)).toEqual(
-      ['merge'],
+      ['merge', 'merge'],
     );
     const built = structuredClone(editor.city);
     expect(editor.apply({ kind: 'removeRamp', roadId: ramp.id }).ok).toBe(true);
@@ -66,7 +66,7 @@ test('invalid ramp endpoints leave city and history untouched', () => {
   expect(editor.canUndo).toBe(false);
 });
 
-test('ramps on paired streets compile as curb-side diverge and merge and undo exactly', () => {
+test('ramps on paired streets diverge from the curb, merge into both lanes and undo exactly', () => {
   const { city, node, street } = buildCity('Paired ramp', 1);
   const [from] = street(node(0, 0), node(400, 0), 2);
   const [to] = street(node(0, 100), node(400, 100), 2);
@@ -83,9 +83,9 @@ test('ramps on paired streets compile as curb-side diverge and merge and undo ex
   const entries = lane.in.map((i) => editor.compiled.movements[i]!);
   const exits = lane.out.map((i) => editor.compiled.movements[i]!);
   expect(entries.map((m) => m.turn)).toEqual(['diverge']);
-  expect(exits.map((m) => m.turn)).toEqual(['merge']);
+  expect(exits.map((m) => m.turn)).toEqual(['merge', 'merge']);
   expect(editor.compiled.lanes[entries[0]!.fromLane]!.lane).toBe(1);
-  expect(editor.compiled.lanes[exits[0]!.toLane]!.lane).toBe(1);
+  expect(exits.map((m) => editor.compiled.lanes[m.toLane]!.lane)).toEqual([0, 1]);
   expect(editor.undo()!.ok).toBe(true);
   expect(editor.city).toEqual({ ...city, version: editor.city.version });
 });

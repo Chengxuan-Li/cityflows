@@ -5,7 +5,7 @@ import { createEngine } from '../../src/sim/engine';
 import { scenario, setup, trips } from './fixtures';
 
 test.each([true, false])(
-  'a missed turn traverses a legal fallback before rerouting (reachable: %s)',
+  'a blocked turn uses a reachable fallback or waits for a safe lane change (detour: %s)',
   (reachable) => {
     const { city, node, road, place } = buildCity('Missed left turn', 1);
     const center = node(0, 0);
@@ -13,11 +13,14 @@ test.each([true, false])(
     const east = node(100, 0);
     const approach = road(node(-100, 0), center, { lanes: 2 });
     const left = road(center, north);
-    const fallback = road(center, east, { lanes: 2 });
+    road(center, east, { lanes: 2 }); // Cheapest turn, but an unrelated boundary exit.
     const destination = road(north, node(0, -200));
+    let fallback;
     if (reachable) {
+      const south = node(0, 100);
+      fallback = road(center, south);
       const corner = node(100, -100);
-      road(east, corner);
+      road(south, corner, { via: [{ x: 100, y: 100 }] });
       road(corner, north);
     }
     place('Homes', 'residential', { x: -80, y: 10 }, [
@@ -33,7 +36,9 @@ test.each([true, false])(
       { road: approach, positionM: 85, direction: 'in' },
     ]);
     const [, , blockerOrigin, blockerDestination] = Object.values(city.places);
-    blockerDestination!.capacity = 0;
+    blockerDestination!.events = [
+      { id: 'open', name: 'Open', startS: 180, durationS: 1, arrivals: 1, departures: 0 },
+    ];
     const compiled = setup(city);
     const engine = createEngine();
     const [trip] = trips(city, 1);
@@ -59,16 +64,26 @@ test.each([true, false])(
     expect(firstTurn.fromLane).not.toBe(initial.lane);
     let previous = initial.lane;
     let droveFallback = false;
+    let waited = false;
     for (let i = 0; i < 2000; i++) {
       engine.step();
       const detail = engine.inspect(1)!;
+      if (!reachable && engine.timeS > 170 && engine.timeS < 180) {
+        expect(detail.state).toBe('driving');
+        expect(detail.lane).toBe(initial.lane);
+        expect(detail.positionM).toBeLessThan(compiled.lanes[initial.lane]!.lengthM);
+        expect(detail.speedMps).toBeLessThan(0.1);
+        waited = true;
+      }
       if (detail.lane !== previous) {
-        if (previous >= 0) {
-          expect(detail.lane).toBeLessThan(0);
+        if (previous >= 0 && detail.lane >= 0) {
+          expect(reachable).toBe(false);
+          expect(compiled.lanes[detail.lane]!.road).toBe(compiled.lanes[previous]!.road);
+        } else if (previous >= 0) {
           const movement = compiled.movements[-detail.lane - 1]!;
           expect(movement.fromLane).toBe(previous);
-          if (!droveFallback) {
-            expect(compiled.roads[compiled.lanes[movement.toLane]!.road]!.id).toBe(fallback.id);
+          if (reachable && !droveFallback) {
+            expect(compiled.roads[compiled.lanes[movement.toLane]!.road]!.id).toBe(fallback!.id);
             expect(detail.routeReason).toBe('missed_turn');
             droveFallback = true;
           }
@@ -79,10 +94,11 @@ test.each([true, false])(
       }
       if (detail.state === 'completed' || detail.state === 'failed') break;
     }
-    expect(droveFallback).toBe(true);
+    expect(droveFallback).toBe(reachable);
+    expect(waited).toBe(!reachable);
     const final = engine.inspect(1)!;
-    expect(final.state).toBe(reachable ? 'completed' : 'failed');
-    expect(final.failReason).toBe(reachable ? null : 'stranded');
-    expect(final.routeReason).toBe('missed_turn');
+    expect(final.state).toBe('completed');
+    expect(final.failReason).toBe(null);
+    expect(final.routeReason).toBe(reachable ? 'missed_turn' : 'initial');
   },
 );

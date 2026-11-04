@@ -84,7 +84,7 @@ it('requires a shared vehicle class across the lane pair', () => {
   expect(pairs(city, incoming, left)).toHaveLength(1);
 });
 
-it('pairs merge and diverge lanes from the curb side without fan-out', () => {
+it('fans a single-lane merge into every lane and aligns multi-lane diverges from the curb', () => {
   const net = compiled(ramp());
   const out = (road: CRoad) =>
     road.lanes.flatMap((l) => net.lanes[l]!.out).map((i) => net.movements[i]!);
@@ -93,7 +93,7 @@ it('pairs merge and diverge lanes from the curb side without fan-out', () => {
   const [on, off] = net.roads
     .filter((r) => r.roadClass === 'ramp')
     .sort((a, b) => out(b).length - out(a).length);
-  expect(out(on!).map(describe)).toEqual(['0>motorway#1:merge']);
+  expect(out(on!).map(describe)).toEqual(['0>motorway#0:merge', '0>motorway#1:merge']);
   const offIn = off!.lanes.flatMap((l) => net.lanes[l]!.in).map((i) => net.movements[i]!);
   expect(offIn.map(describe)).toEqual(['1>ramp#0:diverge']);
   const mainline = net.roads.find(

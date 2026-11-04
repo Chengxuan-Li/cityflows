@@ -4,14 +4,21 @@ import { compile, type Diagnostic } from '../../network';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
-import { addSignal, markRoundaboutEntries } from './controls';
+import { addBuildings } from './buildings';
+import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
 import { addGateways, addOsmPlaces } from './places';
 import { project } from './project';
 import { createRoads, roadSpecs, type OsmRoad } from './roads';
-import { junctions, splitWay } from './split';
-import { addLaneTurns, addRestrictions, type JunctionRoads } from './turns';
+import {
+  consolidateJunctions,
+  joinDividedFeeders,
+  junctions,
+  mergeShortRoads,
+  splitWay,
+} from './split';
+import { addLaneTurns, addLocalTurnarounds, addRestrictions, type JunctionRoads } from './turns';
 
 export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const diagnostics: Diagnostic[] = [];
@@ -156,17 +163,59 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   }
   if (!roads.length) return fail('osm_no_drivable_ways', 'No drivable highways intersect the bbox');
 
+  const protectedNodes = new Set([
+    ...signals.map((node) => node.id),
+    ...data.relation.flatMap(({ member }) =>
+      member
+        .filter((m) => m.role === 'via' && m.type === 'node')
+        .flatMap((m) => (nodes.has(String(m.ref)) ? [nodes.get(String(m.ref))!.id] : [])),
+    ),
+  ]);
+  mergeShortRoads(city, roads, protectedNodes);
+  joinDividedFeeders(city, roads, protectedNodes);
+  for (const [key, node] of nodes) if (!city.nodes[node.id]) nodes.delete(key);
+  for (const node of Object.values(city.nodes)) {
+    if (![...nodes.values()].includes(node)) nodes.set(node.id, node);
+  }
+  incidents.clear();
+  for (const node of nodes.values()) incidents.set(node.id, { incoming: [], outgoing: [] });
+  for (const road of roads) {
+    incidents.get(road.road.from)!.outgoing.push(road);
+    incidents.get(road.road.to)!.incoming.push(road);
+  }
+
   addRestrictions(data.relation, nodes, incidents, diagnostics);
-  for (const node of nodes.values())
+  for (const node of nodes.values()) {
+    addLocalTurnarounds(node, incidents.get(node.id)!);
+  }
+  const beforeConsolidation = compile(city);
+  if (!beforeConsolidation.ok)
+    return { ok: false, diagnostics: [...diagnostics, ...beforeConsolidation.diagnostics] };
+  const signalIds = consolidateJunctions(
+    city,
+    roads,
+    beforeConsolidation.compiled,
+    signals.map((n) => n.id),
+  );
+  incidents.clear();
+  for (const node of Object.values(city.nodes))
+    incidents.set(node.id, { incoming: [], outgoing: [] });
+  for (const road of roads) {
+    incidents.get(road.road.from)!.outgoing.push(road);
+    incidents.get(road.road.to)!.incoming.push(road);
+  }
+  for (const node of Object.values(city.nodes))
     addLaneTurns(node, incidents.get(node.id)!, city.drivingSide, diagnostics);
   markRoundaboutEntries(city, data);
-  const base = compile(city);
+  let base = compile(city);
   if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
-  for (const node of signals) {
+  if (assignSignalLanes(city, signalIds, base.compiled)) base = compile(city);
+  if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
+  for (const id of signalIds) {
     addSignal(
       city,
-      node,
-      incidents.get(node.id)!.incoming.length,
+      city.nodes[id]!,
+      roads.filter(({ road }) => road.to === id).length,
       base.compiled,
       diagnostics,
       data,
@@ -174,6 +223,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   }
   addGateways(city, roads, base.compiled);
   addOsmPlaces(city, data, positions, bounds, base.compiled);
+  addBuildings(city, data, positions, bounds, base.compiled);
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)
@@ -198,6 +248,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   }
   geo.source.inferredCount = [
     ...Object.values(city.nodes),
+    ...Object.values(city.nodes).flatMap((node) => node.turnRules),
     ...Object.values(city.roads),
     ...Object.values(city.places),
   ].reduce((sum, entity) => sum + (entity.provenance.inferred?.length ?? 0), 0);

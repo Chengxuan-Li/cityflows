@@ -4,8 +4,22 @@ import { shortTurnLane } from '../../src/fixtures/short-turn-lane';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import { routingFixture } from './fixtures';
 
+function curbRestrictedTurn() {
+  const city = shortTurnLane();
+  const ramp = Object.values(city.roads).find((r) => r.roadClass === 'ramp')!;
+  const exit = Object.values(city.roads).find((r) => r.from === ramp.to)!;
+  city.nodes[ramp.to]!.turnRules.push({
+    from: ramp.id,
+    to: exit.id,
+    toLane: 0,
+    allowed: false,
+    provenance: { source: 'authored' },
+  });
+  return city;
+}
+
 test('the slip road reaches the left turn only with a shorter lane change distance', () => {
-  const { compiled, request } = routingFixture(shortTurnLane());
+  const { compiled, request } = routingFixture(curbRestrictedTurn());
   const costs = freeFlowLinkCosts(compiled);
   expect(createRouteProvider().route(compiled, costs, request)).toEqual({
     ok: false,
@@ -63,7 +77,7 @@ test('the lane fallback detours when the shortest turn is out of reach from the 
 });
 
 test('trimmed lanes cannot use the extra centerline length for a lane change', () => {
-  const city = shortTurnLane();
+  const city = curbRestrictedTurn();
   const middle = Object.values(city.roads).find(
     (road) => road.centerline[1]!.x === 24 && road.centerline[1]!.y === 0,
   )!;

@@ -60,6 +60,7 @@ function createRun({
   const roadEnteredM = new Float64Array(trips.length);
   const routeReasons: VehicleDetail['routeReason'][] = Array(trips.length).fill('initial');
   const fallback = new Uint8Array(trips.length);
+  const waitingForLane = new Uint8Array(trips.length);
   const arrival = new Int32Array(trips.length).fill(-1);
   const order = new Uint32Array(trips.length);
   const acceleration = new Float64Array(trips.length);
@@ -92,6 +93,7 @@ function createRun({
     arrival[id] = -1;
     vehicles.movement[id] = -1;
     fallback[id] = 0;
+    waitingForLane[id] = 0;
     if (destination.lane === lane && destination.positionM >= positionM) {
       arrival[id] = destination.idx;
     } else if (planned?.fromLane === lane) {
@@ -106,7 +108,8 @@ function createRun({
         const cost = movementPenaltyS(compiled, movement);
         if (
           !vehicles.attemptedFallbacks[id]?.has(idx) &&
-          (cost < penalty || (cost === penalty && idx < vehicles.movement[id]!))
+          (cost < penalty || (cost === penalty && idx < vehicles.movement[id]!)) &&
+          routeFrom(id, movement.toLane, 0).ok
         ) {
           penalty = cost;
           vehicles.movement[id] = idx;
@@ -137,6 +140,7 @@ function createRun({
       }
       if (alternate !== -1) vehicles.movement[id] = alternate;
       else if (vehicles.movement[id] !== -1) fallback[id] = 1;
+      else waitingForLane[id] = Number(!route.targetLanes[step]!.includes(lane));
     }
   }
 
@@ -275,7 +279,10 @@ function createRun({
         if (lane && destination && !connectors.canArrive(destination, timeS)) {
           // Put the virtual bumper beyond the portal so standstill occurs at the portal.
           stopAt = destination.positionM + idm.minGapM;
-        } else if (lane && ((movement && !granted) || laneChanges.holding[id])) {
+        } else if (
+          lane &&
+          ((movement && !granted) || laneChanges.holding[id] || waitingForLane[id])
+        ) {
           stopAt = length;
         }
         if (stopAt < obstacle) {
@@ -411,7 +418,7 @@ function createRun({
       const remaining = lane.lengthM - previousPosition;
       const granted = intersections.grants[id]!;
       const movement = vehicles.movement[id]!;
-      if ((movement !== -1 && granted === -1) || laneChanges.holding[id]) {
+      if ((movement !== -1 && granted === -1) || laneChanges.holding[id] || waitingForLane[id]) {
         position = Math.min(position, Math.max(previousPosition, lane.lengthM - idm.minGapM));
         if (remaining <= params.intersection.decisionDistanceM) {
           vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;

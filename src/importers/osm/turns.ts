@@ -31,6 +31,24 @@ export interface JunctionRoads {
   outgoing: OsmRoad[];
 }
 
+export function addLocalTurnarounds(node: Node, incident: JunctionRoads): void {
+  if (node.turnRules.length || incident.incoming.length !== 1 || incident.outgoing.length !== 1)
+    return;
+  const from = incident.incoming[0]!,
+    to = incident.outgoing[0]!;
+  if (!['residential', 'service'].includes(from.road.roadClass)) return;
+  if (!from.road.streetGroupId || from.road.streetGroupId !== to.road.streetGroupId) return;
+  node.turnRules.push({
+    from: from.road.id,
+    to: to.road.id,
+    allowed: true,
+    provenance: {
+      source: 'osm',
+      inferred: [from.cutEnd || to.cutStart ? 'boundaryTurnaround' : 'localTurnaround'],
+    },
+  });
+}
+
 export function addRestrictions(
   relations: OsmData['relation'],
   nodes: Map<string, Node>,
@@ -65,7 +83,9 @@ export function addRestrictions(
     const node = nodes.get(String(via[0]!.ref));
     const incident = node && roads.get(node.id)!;
     const approaches = incident
-      ? incident.incoming.filter(({ wayId }) => fromWays.some(({ ref }) => ref === wayId))
+      ? incident.incoming.filter(({ road }) =>
+          fromWays.some(({ ref }) => road.provenance.osmIds?.includes(ref)),
+        )
       : [];
     if (!node || !incident || !approaches.length) {
       diagnostics.push({
@@ -81,7 +101,7 @@ export function addRestrictions(
     for (const from of approaches) {
       for (const to of incident.outgoing) {
         const listed =
-          toWays.some(({ ref }) => ref === to.wayId) &&
+          toWays.some(({ ref }) => to.road.provenance.osmIds?.includes(ref)) &&
           (from.wayId !== to.wayId || (turn(from.road, to.road) === 'reverse') === uturn);
         if (only && listed && uturn) {
           // The compiler needs an explicit allow for a U-turn. Keep any prohibitions last.
@@ -136,6 +156,9 @@ export function addLaneTurns(
   const alignFromRight = merge || diverge ? side === 'right' : side === 'left';
   for (const { road: from, turnLanes, wayId, cutEnd } of incident.incoming) {
     if (turnLanes === undefined || cutEnd) continue;
+    // Arrows describe the next choice of direction, not intermediate way/tag boundaries.
+    const continuations = incident.outgoing.filter(({ road }) => turn(from, road) !== 'reverse');
+    if (continuations.length === 1 && turn(from, continuations[0]!.road) === 'through') continue;
     if (
       incident.outgoing.some(
         ({ road, wayId: nextWay }) => nextWay === wayId && turn(from, road) !== 'reverse',
@@ -163,10 +186,34 @@ export function addLaneTurns(
     const directions = markings.map((lane) =>
       lane.map((value) => indication[value]).filter(Boolean),
     );
+    const direction = (to: Road) => {
+      const basic = turn(from, to);
+      if (basic === 'reverse') return basic;
+      // OSM splits a curved named street into staggered junctions; its continuation is
+      // still the through arrow even when the short section crosses at an oblique angle.
+      if (from.name && from.name === to.name && Math.abs(turnAngle(from, to)) < Math.PI / 2)
+        return 'through';
+      const shallowFork =
+        continuations.length > 1 && continuations.every(({ road }) => shallow(from, road));
+      if (shallowFork && directions.some((lane) => lane.includes('left') || lane.includes('right')))
+        return turnAngle(from, to) < 0 ? 'left' : 'right';
+      return basic;
+    };
+    for (let i = 0; i < directions.length; i++) {
+      if (
+        directions[i]!.length &&
+        !incident.outgoing.some(({ road }) => directions[i]!.includes(direction(road)))
+      ) {
+        directions[i] = [];
+        from.provenance.inferred = [
+          ...new Set([...from.provenance.inferred!, 'turnLanesDeferred']),
+        ];
+      }
+    }
     for (const { road: to } of incident.outgoing) {
       // Lane rules have higher specificity in the compiler. A relation's ban must still win.
       if (bans.has(`${from.id}>${to.id}`)) continue;
-      const basic = turn(from, to);
+      const basic = direction(to);
       const rampExit =
         basic === 'through' &&
         to.roadClass === 'ramp' &&
@@ -193,11 +240,19 @@ export function addLaneTurns(
           provenance: { source: 'osm', osmIds: [wayId] },
         };
         if (rule.allowed) {
+          if (from.lanes.length === 1 && kind !== 'reverse') {
+            node.turnRules.push(rule);
+            continue;
+          }
           // Keep simultaneous lane movements ordered, using the rightmost target lanes on right turns.
           const start = kind === 'right' ? Math.max(0, to.lanes.length - allowedLanes.length) : 0;
+          const throughLanes = directions.flatMap((marks, index) =>
+            marks.length === 0 || marks.includes('through') ? [index] : [],
+          );
+          const throughIndex = throughLanes.indexOf(fromLane);
           const aligned = alignFromRight
-            ? to.lanes.length - from.lanes.length + fromLane
-            : fromLane;
+            ? to.lanes.length - throughLanes.length + throughIndex
+            : throughIndex;
           const target = kind === 'through' ? aligned : start + allowedLanes.indexOf(fromLane);
           const toLane = Math.max(0, Math.min(to.lanes.length - 1, target));
           for (let i = 0; i < to.lanes.length; i++) {
