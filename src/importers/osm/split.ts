@@ -19,6 +19,7 @@ export function consolidateJunctions(
   const boundaries = new Set(
     Object.values(city.nodes)
       .filter((node) => {
+        if (node.control !== 'uncontrolled') return true;
         const incident = roads.filter(({ road }) => road.from === node.id || road.to === node.id);
         if (incident.some(({ road }) => road.roadClass === 'motorway')) return true;
         const neighbors = new Set(
@@ -41,7 +42,7 @@ export function consolidateJunctions(
   );
   const restrictedNodes = new Set(
     Object.values(city.nodes)
-      .filter((n) => n.turnRules.some((r) => r.fromLane === undefined && !r.allowed))
+      .filter((n) => n.turnRules.some((r) => r.provenance.osmIds?.length))
       .map((n) => n.id),
   );
   for (const { road, attributes } of [...roads].sort(

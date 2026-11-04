@@ -637,15 +637,19 @@ Step sequence, in this order every step:
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
    the connector position and blocks the lane behind it (T08). A vehicle at the end of a lane
    without any usable movement toward its route takes the legal movement with the lowest turn
-   penalty and gets a reroute with reason `missed_turn`; with no legal movement at all it fails
-   as `stranded`. Nothing is ever moved to a lane it did not drive to.
+   penalty whose landing lane can route to its destination (TASK-048, owner-approved simulation
+   exception) and gets a reroute with reason `missed_turn`. If no fallback reaches the
+   destination but the route needs another lane on this road, it stops before the junction
+   and waits for a safe mandatory lane change. Otherwise it fails as `stranded`.
+   Nothing is ever moved to a lane it did not drive to.
 6. Accounting, metrics, hash.
 
 Implementation notes (TASK-003 as merged): the commit clamps a vehicle's new position to the
 start-of-step leader rear minus `minGapM` and to an ungranted stop line, and derives the
 committed speed from the clamped displacement, so the integrator never overlaps a leader. A
 vehicle that takes a fallback movement remembers it and will not retry it from the same lane;
-when every exit has been tried it fails as `stranded`. Vehicle ids in snapshots, `inspect`
+when every exit has been tried it waits for a required lane change or fails as `stranded`
+as above. Vehicle ids in snapshots, `inspect`
 and the hash are the trip index plus one; `inspect` returns null for a pending trip. Trips
 naming a place that does not exist are an invariant violation and throw at load.
 
@@ -671,7 +675,8 @@ a queue at an arrival connector keeps blocking its lane. A forced change that is
 close leader or a faster follower caps the vehicle's speed at `creepSpeedMps` until it fits.
 When a vehicle cannot reach its planned movement, it prefers a movement from its current lane
 into the next road of its route whose landing lane can still reach the route's target lanes,
-and only otherwise takes the cheapest legal movement and reroutes with `missed_turn`.
+and only otherwise takes the cheapest legal movement with a feasible destination route and
+reroutes with `missed_turn`. This prevents a fallback from choosing an unrelated boundary exit.
 
 Lane changes are discrete in the model (the vehicle switches lane and keeps its position along
 the road); `lateralM` animates the switch over `laneChangeDurationS` for the renderer only.
@@ -982,7 +987,8 @@ Lives in `src/importers/osm`, runs inside an import worker.
    Equal-attribute sections shorter than 30 m join at uncontrolled degree-two nodes,
    retaining their geometry and source way ids. With owner approval (TASK-048), connected
    sub-30 m junction sections consolidate in clusters of at most 60 m diameter; bridges,
-   motorway junctions, cycleway attribute boundaries and restriction-via nodes stay separate.
+   motorway junctions, stop/yield controls, cycleway attribute boundaries and restriction-via
+   nodes stay separate.
    External road-pair reachability through each cluster becomes explicit turn rules, and
    signals move to its representative. Canonical lane assignment then applies at the combined
    junction. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
@@ -1003,7 +1009,9 @@ Lives in `src/importers/osm`, runs inside an import worker.
    banned from the others; unmarked lanes keep the compiler defaults. Restriction relations
    (`no_*`, `only_*` with from, via node, to; `only_*_u_turn` becomes an allow) become
    road-level rules; unsupported or non-incident relations produce `osm_unsupported_tag`.
-   TASK-048 single-lane arrows permit every receiving lane of their direction. Arrows are
+   TASK-048 single-lane arrows permit every receiving lane of their direction. Through arrows
+   align within the through/unmarked lane group, excluding dedicated turn lanes from the
+   receiving-lane index. Arrows are
    deferred at intermediate way boundaries; a same-name continuation bending less than 90
    degrees counts as through. An arrow with no matching exit is recorded as `turnLanesDeferred`
    instead of prohibiting every exit at an earlier junction. Relation bans still take priority.
@@ -1024,11 +1032,13 @@ Lives in `src/importers/osm`, runs inside an import worker.
    and jobs use the maximum class demand times lane count: motorway 400, trunk 300, primary
    200, secondary 120, tertiary 80, residential 40, service 20, ramp 80 per lane. An entry-only
    gateway has no jobs; an exit-only gateway has no residents. All values remain editable.
-   Portals must reach, or be reachable from, the main strongly connected lane component;
+   Portal lanes prefer paths to or from the main strongly connected lane component;
    lane changes count only on sections long enough to traverse the lane block at 30 m per
    change plus 10 m clearance. A corridor without a multi-road cycle retains its directional
-   portals. Isolated fragments retain their roads and diagnostics but generate no gateway
-   demand. Local two-way residential/service boundary ends have inferred turnarounds, allowing
+   portals. Every clipped motorway, trunk, primary and secondary end retains a portal even
+   when disconnected, with diagnostics exposing its lack of access. Isolated minor-road
+   fragments retain their roads and diagnostics but generate no gateway demand.
+   Local two-way residential/service boundary ends have inferred turnarounds, allowing
    a driver who misses a turn to return instead of stranding at the crop boundary.
 9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
    and `shop=mall`. TASK-048 also imports residential, office/commercial, retail and industrial

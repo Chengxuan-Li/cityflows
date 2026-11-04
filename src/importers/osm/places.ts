@@ -122,9 +122,17 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
     const { road } = source;
     return (['start', 'end'] as const).flatMap((end) => {
       if (!(end === 'start' ? source.cutStart : source.cutEnd)) return [];
-      const candidates = compiled.roads[compiled.index.road.get(road.id)!]!.lanes.map(
+      const lanes = compiled.roads[compiled.index.road.get(road.id)!]!.lanes.map(
         (i) => compiled.lanes[i]!,
-      ).filter((l) => (end === 'start' ? access.toCore : access.fromCore).has(l.idx));
+      );
+      let candidates = lanes.filter((l) =>
+        (end === 'start' ? access.toCore : access.fromCore).has(l.idx),
+      );
+      if (
+        !candidates.length &&
+        ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass)
+      )
+        candidates = lanes;
       if (!candidates.length) return [];
       const lane = city.drivingSide === 'right' ? candidates.at(-1)! : candidates[0]!;
       const node = city.nodes[end === 'start' ? road.from : road.to]!;

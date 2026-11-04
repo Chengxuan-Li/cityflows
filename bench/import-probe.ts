@@ -133,9 +133,13 @@ export function probeMorning(city: City, compiled: CompiledCity) {
       (gatewayTraffic[cls] ??= { entered: 0, left: 0 }).left++;
     }
   }
+  const releasedTrips = trips.length - metrics.trips.pending;
   return {
     persons: population.length,
     trips: trips.length,
+    releasedTrips,
+    completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,
+    failedShareOfReleased: releasedTrips ? metrics.trips.failed / releasedTrips : 0,
     peakDriving: peak,
     ...metrics.trips,
     failedByReason: metrics.failedByReason,

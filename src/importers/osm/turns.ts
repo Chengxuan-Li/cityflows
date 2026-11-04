@@ -246,9 +246,13 @@ export function addLaneTurns(
           }
           // Keep simultaneous lane movements ordered, using the rightmost target lanes on right turns.
           const start = kind === 'right' ? Math.max(0, to.lanes.length - allowedLanes.length) : 0;
+          const throughLanes = directions.flatMap((marks, index) =>
+            marks.length === 0 || marks.includes('through') ? [index] : [],
+          );
+          const throughIndex = throughLanes.indexOf(fromLane);
           const aligned = alignFromRight
-            ? to.lanes.length - from.lanes.length + fromLane
-            : fromLane;
+            ? to.lanes.length - throughLanes.length + throughIndex
+            : throughIndex;
           const target = kind === 'through' ? aligned : start + allowedLanes.indexOf(fromLane);
           const toLane = Math.max(0, Math.min(to.lanes.length - 1, target));
           for (let i = 0; i < to.lanes.length; i++) {

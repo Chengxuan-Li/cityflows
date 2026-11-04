@@ -69,7 +69,7 @@ test('layer toggles leave the simulation unchanged; minute charts show the morni
     0,
   );
   expect(peak).toBeGreaterThan(15);
-  expect(peak).toBeLessThan(180);
+  expect(peak).toBeLessThan(240); // Morning peak before 10:00; recovered trips can queue past 09:00.
   expect(values[peak]![1]).toBeLessThan(values.at(-1)![1]! - 20);
   expect(await page.evaluate(() => window.cityflows!.hash())).toBe(finalHash);
   await page.screenshot({ path: testInfo.outputPath('morning-chart.png') });

@@ -74,7 +74,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-045](tasks/TASK-045.md) | 4 | Gameplay acceptance demos and onboarding | `tests/e2e/demo-*.spec.ts`, first-run hint in `src/ui` | all Gate 1 to 4 | demos A to D recorded | done |
 | [TASK-046](tasks/TASK-046.md) | 4 | Simulation hotspots | `src/sim/reroute.ts`, `engine.ts`, `lane-change.ts`, `src/host/headless.ts`, `export-data.ts`, `bench/` | 044, 032 | bench gains with unchanged hashes | done |
 | [TASK-047](tasks/TASK-047.md) | 5 | Renderer polish: junctions, motion, markings | `src/render/**`, snapshot handling in `map-view.tsx`, `layers.tsx`, chart and hint CSS | 044, 046 | screenshots, T16 unchanged | todo |
-| [TASK-048](tasks/TASK-048.md) | 5 | Import quality on real OSM data | `src/importers/**`, compiler lane assignment, `bench/import-probe.ts`, `tests/importers` | 020, 030 | Munich baseline targets met | todo |
+| [TASK-048](tasks/TASK-048.md) | 5 | Import quality on real OSM data | `src/importers/**`, compiler lane assignment, `bench/import-probe.ts`, `tests/importers` | 020, 030 | Munich baseline targets met | done |
 | [TASK-049](tasks/TASK-049.md) | 5 | Junction controls: yield, stop, turn on red, roundabouts | `src/sim`, `src/network/signals.ts`, `src/editor`, `src/ui/tools/roundabout.tsx`, `src/render/layers/signs.ts` | 032, 040, 046 | gate5-controls scenarios | todo |
 | TASK-051 | 5 | Live edits with bounded rerouting (B8) | engine, host, store restart path | 047, 048, 049 and a design note | edits apply without restart | todo |
 
@@ -216,6 +216,61 @@ amenities and stations, so importer changes rerun without another download (attr
 The import wave (B2, B3, B5) reports the same table after its changes; the targets are no
 unreachable connectors, every connector pair routable, under 1 percent failed trips, and
 residential and work places from buildings and land use.
+
+TASK-048 implementation (`task/048-import-quality`): topology normalization, paired boundary
+gateways and block demand are implemented. Owner-approved scope includes compact short-junction
+consolidation, local turnarounds, all-lane expectation updates in network/editor/routing/sim tests,
+and a simulation fallback reachability check with waiting for a safe required lane change.
+Architecture 5.2 amends single-lane
+receiving-lane assignment; sections 8 and 13 document the fallback and import rules. No new
+dependencies or changes to production UI, renderer, editor or routing code.
+Owner-approved browser-test updates retain the chart's morning window through 10:00 (the grid
+now peaks at 09:03 and completes all 2 000 morning trips by 11:00 without failures), and identify
+the uploaded performance workload uniquely before querying its worker. Performance thresholds
+are unchanged.
+
+| Measure | Before | TASK-048 |
+| --- | ---: | ---: |
+| Roads / nodes / signals | 837 / 465 / 40 | 548 / 287 / 24 |
+| trunk / ramp / primary / secondary | 24 / 32 / 45 / 50 | 24 / 25 / 37 / 34 |
+| tertiary / residential / service | 56 / 368 / 262 | 26 / 262 / 140 |
+| Gateways / parking / schools / station | 64 / 80 / 5 / 1 | 33 / 80 / 5 / 1 |
+| Residential / work / retail places | 0 / 0 / 0 | 48 / 38 / 5 |
+| Population / jobs | 4 660 / 4 660 | 35 422 / 30 234 |
+| road_too_short / dead_end / connector_unreachable | 173 / 65 / 7 | 15 / 7 / 0 |
+| disconnected_component | 1 | 1 |
+| Routable connector pairs | 10 181 / 19 193 | 47 941 / 47 941 |
+| Persons / completed / failed / peak driving | 4 660 / 462 / 3 970 / 235 | 35 422 / 445 / 0 / 4 157 |
+| No origin / no destination / no route / stranded | 1 560 / 1 066 / 676 / 668 | 0 / 0 / 0 / 0 |
+| Released trips / completed share / failed share | 4 660 / 9.91% / 85.19% | 35 420 / 1.26% / 0% |
+| Queued origins / driving at 10:00 | 0 / 228 | 30 818 / 4 157 |
+
+The unchanged full-sample, car-share-one probe remains heavily congested: zero failures does
+not mean good throughput. Shares use released trips, including origin queues, and exclude
+afternoon trips still pending. Buildings supply 31 182 residents and 25 025 work jobs (plus
+769 retail jobs); gateway demand supplies the remainder. There are 91 new block/use places.
+Trunk gateways recorded 743 departures and 12 completed arrivals; sampled ramp traffic recorded
+1 385 entries and 1 091 exits. The reference has no clipped ramps; the parent-ramp suppression
+rule is covered by the synthetic gateway regression. Original-fixture warning totals decreased:
+downtown 207 → 60, highway 41 → 17, suburb 39 → 7.
+
+Verification: `npm ci`, `npx playwright install chromium`, the full reference import probe,
+`npm run check` (186 tests passed, one existing skip, build green), and the final full
+`CITYFLOWS_TEST_PORT=4311 npm run test:e2e` (37/37 passed), including demo D, gate2-import and
+all three performance workloads. Work and four Conventional Commits remain on the local
+`task/048-import-quality` worktree branch; no remote, push or merge.
+
+Remaining Munich dead ends are asserted by lane id in `tests/importers/munich.test.ts`:
+
+| Lane id | Reason |
+| --- | --- |
+| `r:1095#0` | Service approach meets the reverse direction of Josef-Obenhin-Straße; every exit is a U-turn. |
+| `r:1103#0` | One-way Georg-Lindau-Straße fragment leaves the crop without a route from the main network. |
+| `r:1161#0` | Isolated service spur has no legal return through the retained Hansastraße boundary junction. |
+| `r:1173#0` | Westendstraße faces a one-way approach; its only outgoing road reverses its own street group. |
+| `r:350#0` | Friedrich-von-Pauli-Straße faces a one-way approach; only its reverse carriageway leaves. |
+| `r:672#0` | Two-way trunk link ends against an incoming one-way link; ramp U-turns remain prohibited. |
+| `r:978#2` | Landsberger Straße loses a receiving lane; this signal approach lane must merge upstream. |
 
 
 ## Review log
