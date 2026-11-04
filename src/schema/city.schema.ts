@@ -63,6 +63,7 @@ export const roadSchema = z.object({
   id: roadId,
   from: nodeId,
   to: nodeId,
+  layer: z.int().optional(),
   centerline: z.array(vec2).min(2),
   lateralOffsetM: z.number(),
   lanes: z.array(laneSchema).min(1),

@@ -72,11 +72,16 @@ test('T11 keeps the divided highway, bridge, and ramp movements separate', () =>
   expect(bridge).toHaveLength(2);
   const motorway = (road: Road) => road.roadClass === 'motorway';
   const motorwayNodes = new Set(roads.filter(motorway).flatMap(({ from, to }) => [from, to]));
-  for (const { from, to } of bridge) {
+  for (const { from, to, layer } of bridge) {
     expect(motorwayNodes.has(from)).toBe(false);
     expect(motorwayNodes.has(to)).toBe(false);
-    expect(city.nodes[from]!.layer).toBe(1);
+    expect(layer).toBe(1);
   }
+  const bridgeEnds = [bridge[0]!.from, bridge[0]!.to].map((id) => city.nodes[id]!);
+  const groundEnd = bridgeEnds.find((node) => node.provenance.osmIds?.includes(110413062));
+  expect(groundEnd?.layer).toBe(0);
+  // The bbox clips the other end mid-deck.
+  expect(bridgeEnds.find((node) => node !== groundEnd)?.layer).toBe(1);
   expect(
     movements.some(
       ({ from, to }) =>

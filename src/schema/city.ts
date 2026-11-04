@@ -58,6 +58,7 @@ export interface Road {
   id: RoadId;
   from: NodeId;
   to: NodeId;
+  layer?: number; // visual grade, independent of endpoint grades
   centerline: Vec2[]; // >= 2 points; first equals nodes[from].pos, last equals nodes[to].pos
   lateralOffsetM: number; // lane block center relative to centerline; positive = right of travel
   lanes: Lane[]; // index 0 = leftmost in travel direction

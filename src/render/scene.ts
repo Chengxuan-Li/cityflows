@@ -19,7 +19,11 @@ import { drawSignalPreview } from './layers/signal-preview';
 import type { Pick, CityGeometry, Scene } from './types';
 import { defaultLayers, type LayerVisibility } from './types';
 
-function createGrade() {
+export function orderedLayers(layers: readonly number[]): number[] {
+  return [...new Set([0, ...layers])].sort((a, b) => a - b);
+}
+
+function createGrade(layer: number) {
   const group = new Container();
   const terrain = new Container();
   const surfaces = new Graphics();
@@ -33,6 +37,7 @@ function createGrade() {
   terrain.addChild(surfaces, nodes, markings, arrows);
   group.addChild(terrain, connectors, places, signals, vehicles.container);
   return {
+    layer,
     group,
     terrain,
     surfaces,
@@ -217,19 +222,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
 
       if (tiles) map.addChild(tiles.container);
       const nodeGrades = city.nodes.map(({ id }) => source?.nodes[id]?.layer ?? 0);
-      const roadGrades = city.roads.map(({ from, to }) =>
-        Math.min(nodeGrades[from]!, nodeGrades[to]!),
+      const roadGrades = city.roads.map(
+        ({ id, from, to }) =>
+          source?.roads?.[id]?.layer ?? Math.min(nodeGrades[from]!, nodeGrades[to]!),
       );
-      const grades = new Map(
-        [...new Set([0, ...nodeGrades, ...roadGrades])]
-          .sort((a, b) => a - b)
-          .map((grade) => [grade, createGrade()]),
-      );
-      for (const { group } of grades.values()) map.addChild(group);
+      visibleGrades = orderedLayers([...nodeGrades, ...roadGrades]).map(createGrade);
+      const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
+      for (const { group } of visibleGrades) map.addChild(group);
       const base = grades.get(0)!;
       base.group.addChildAt(heat.roads, base.group.getChildIndex(base.connectors));
       base.group.addChildAt(difference, base.group.getChildIndex(base.connectors));
-      visibleGrades = [...grades.values()];
       applyVisibility();
       shapes = city.places.map(
         ({ id, centroid }) => source?.places[id]?.shape ?? { kind: 'point', pos: centroid },
@@ -265,7 +267,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateTerrainCache();
       for (const update of updateSignals) update(0);
       vehicles.setLayers(
-        [...grades.values()].map((grade) => grade.vehicles),
+        visibleGrades.map((grade) => grade.vehicles),
         city.lanes.map(({ road }) => grades.get(roadGrades[road]!)!.vehicles),
         city.movements.map(({ node }) => grades.get(nodeGrades[node]!)!.vehicles),
       );

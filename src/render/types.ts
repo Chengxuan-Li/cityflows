@@ -82,4 +82,9 @@ export interface Scene {
   destroy(): void;
 }
 
-export type CityGeometry = { nodes: City['nodes']; places: City['places']; geo?: City['geo'] };
+export type CityGeometry = {
+  nodes: City['nodes'];
+  roads?: City['roads'];
+  places: City['places'];
+  geo?: City['geo'];
+};
