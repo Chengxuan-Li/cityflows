@@ -673,6 +673,7 @@ interface DemandConfig {
   workDuration: { meanS: number; sdS: number };    // default 9 h, 1 h
   gravityScaleM: number;          // home-work distance decay, default 5000
   throughTripsPerHour: number[];  // 24 values, gateway to gateway (Gate 3)
+  chains?: { schoolShare?: number; shopShare?: number; leisureShare?: number }; // 0..1, omitted = 0
 }
 
 interface Scenario { id: string; name: string; seed: number; startS: number; endS: number;
@@ -689,6 +690,30 @@ function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripR
   car access until the population is regenerated on purpose.
 - Gate 1 agendas: home, work (start from `workStart`, duration from `workDuration`), home.
   Gate 3 adds shop, school, leisure legs, gateway through traffic and place events.
+- TASK-030 chains are opt-in: `schoolShare` replaces the work activity with a six-hour school
+  visit, `shopShare` adds a 30-minute stop before returning home, and `leisureShare` adds an
+  evening home-leisure-home outing (departure at 18:00–19:00 or later, two-hour stay).
+  School and retail choices use positive `attraction`; leisure uses retail and other places.
+  Home and the assigned workplace are excluded from these optional destinations. Without a
+  workplace the single-home rule below still applies. Shares omitted or zero preserve the
+  original commute draws; existing town and grid scenarios do not opt in.
+- For each transition, positive origin `profile.departures` weights override the default
+  departure time; otherwise positive destination `profile.arrivals` weights apply. Sample
+  uniformly within the chosen hour, conditioned on time at or after the current activity's
+  start (18:00 for evening outings). If no weighted time remains, use the next day. All-zero
+  profiles use the default timing. Activity starts denote scheduled transitions, not predicted
+  road arrivals; travel time is not subtracted. A profile overrides the default dwell duration.
+- Through demand draws origins by gateway population and distinct destinations by gateway
+  jobs. Gateways without a feasible positive-weight counterpart are excluded; without any
+  eligible pair there are no through trips. Integer hourly rates are exact; fractional rates
+  use seeded stochastic rounding. Times are uniform in each hour of the scenario day.
+- Each place event creates `max(arrivals, departures)` nonresident visitor identities on
+  separate streams keyed by place, event and visitor index. The first `min` visitors have
+  paired inbound/outbound trips with their two uniform window draws sorted chronologically;
+  excess visitors travel one way. Endpoints are other gateways weighted by population plus
+  jobs, or residential places by population when there are no other gateways. An event with
+  visitors but no positive-weight endpoint fails clearly. Counts are absolute, independent of
+  resident sampling and car share; visitors and through trips use cars. No transit is simulated.
 - `scheduleTrips` rebuilds each person's `agenda` in place from the persistent assignments
   (persons without a workplace get a single home activity), then emits one `TripRequest` per
   agenda transition, mode `car` for persons with a car. Persons without a car get mode `walk`

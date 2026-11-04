@@ -38,6 +38,7 @@ export interface DemandConfig {
   workDuration: { meanS: number; sdS: number }; // default 9 h, 1 h
   gravityScaleM: number; // home-work distance decay, default 5000
   throughTripsPerHour: number[]; // 24 values, gateway to gateway (Gate 3)
+  chains?: { schoolShare?: number; shopShare?: number; leisureShare?: number };
 }
 
 export interface Scenario {
