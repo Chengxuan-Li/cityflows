@@ -1,6 +1,6 @@
 import { createRandom } from '../geo/random';
 import type { CMovement, CompiledCity, Turn } from '../network';
-import type { LinkCosts, RouteRequest } from './index';
+import type { LinkCosts, Route, RouteRequest } from './index';
 
 const turnPenaltyS: Record<Turn, number> = {
   through: 2,
@@ -33,6 +33,36 @@ export function freeFlowLinkCosts(compiled: CompiledCity): LinkCosts {
     roadTravelTimeS: Float64Array.from(compiled.roads, (road) => road.lengthM / road.speedLimitMps),
     version: 0,
   };
+}
+
+export function createCostCache() {
+  const cache = new WeakMap<LinkCosts, LinkCosts>();
+  return (costs: LinkCosts): LinkCosts => {
+    let entry = cache.get(costs);
+    if (entry?.version !== costs.version) {
+      entry = { version: costs.version, roadTravelTimeS: costs.roadTravelTimeS.slice() };
+      cache.set(costs, entry);
+    }
+    return entry;
+  };
+}
+
+export function remainingRouteCost(
+  compiled: CompiledCity,
+  costs: LinkCosts,
+  request: RouteRequest,
+  route: Route,
+  step: number,
+) {
+  const weights = routeCosts(compiled, costs, request);
+  let costS = weights.originCost;
+  for (let i = step; i < route.movements.length; i++) {
+    costS += weights.transition(
+      route.roads[i + 1]!,
+      movementPenaltyS(compiled, compiled.movements[route.movements[i]!]!),
+    );
+  }
+  return costS;
 }
 
 export function routeCosts(compiled: CompiledCity, costs: LinkCosts, request: RouteRequest) {

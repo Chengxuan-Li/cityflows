@@ -68,6 +68,12 @@ export const simParamsSchema = z
       creepSpeedMps: z.number(),
     }),
     spawnMinGapM: z.number(),
+    linkCostAlpha: z.number().positive().max(1),
+    linkCostIntervalS: z.number().positive(),
+    rerouteIntervalS: z.number().positive(),
+    rerouteHysteresis: z.number().min(0).max(1),
+    maxReplans: z.int().nonnegative(),
+    routeNoise: z.number().min(0).max(1),
   })
   .partial() satisfies z.ZodType<Partial<SimParams>>;
 

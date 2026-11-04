@@ -514,6 +514,12 @@ interface SimParams {
   mandatoryUrgencyM: 10;         // extra margin before a required change becomes forced
   intersection: { decisionDistanceM: 15; gapS: 4; creepSpeedMps: 1.0 };
   spawnMinGapM: 8;
+  linkCostAlpha: 0.3;
+  linkCostIntervalS: 60;
+  rerouteIntervalS: 120;
+  rerouteHysteresis: 0.15;
+  maxReplans: 3;
+  routeNoise: 0.1;
 }
 
 type VehicleState = 'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed';
@@ -608,10 +614,21 @@ start-of-step leader rear minus `minGapM` and to an ungranted stop line, and der
 committed speed from the clamped displacement, so the integrator never overlaps a leader. A
 vehicle that takes a fallback movement remembers it and will not retry it from the same lane;
 when every exit has been tried it fails as `stranded`. Vehicle ids in snapshots, `inspect`
-and the hash are the trip index plus one; `inspect` returns null for a pending trip. Gate 1
-routes with `noise: 0`; `routeSeed` is drawn at load for the congestion-aware routing of
-TASK-031. Trips naming a place that does not exist are an invariant violation and throw at
-load.
+and the hash are the trip index plus one; `inspect` returns null for a pending trip. Trips
+naming a place that does not exist are an invariant violation and throw at load.
+
+Congestion routing (TASK-031): requests use `routeNoise` and the stable `routeSeed` drawn at
+load. Road exits (including completed arrivals at connectors) record elapsed travel time;
+partial traversals are normalized by distance to a full-road estimate. Accounting updates
+the road EWMA every `linkCostIntervalS`, using the interval's mean observation or free flow
+when unobserved. A queue contributes no sample until a vehicle leaves. Only cost arrays are
+refreshed on a `LinkCosts.version` change; the topology cache is unchanged. Before proposals,
+driving vehicles check routes at `rerouteIntervalS`, with an id-based initial phase after
+departure. Checks skip movements and the final `decisionDistanceM` of a lane. A different
+route must beat the remaining incumbent's cost, repriced with current costs and the same
+noise, by `rerouteHysteresis`; at most `maxReplans` congestion switches occur per trip.
+Switches release approach grants, reset the route cursor and lane plan, and set
+`routeReason: 'congestion'`.
 
 Lane changes (TASK-004 as merged): proposals are generated before the car-following pass and
 applied before it, so following distances and entry requests use the resolved lanes; a vehicle
