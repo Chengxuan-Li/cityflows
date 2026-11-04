@@ -66,6 +66,16 @@ lengths; it does not change here.
 
 ## Acceptance
 
+Owner clarification (2026-11-04): report canonical imported road-body overlaps separately
+from junction-end crossings. Where fixed movement curves escape the curb boundary, extend
+the outline to the convex envelope of the curb and sampled movement surfaces, without
+changing setbacks or curves (architecture 5.1). Geometry-dependent assertions in
+`tests/editor/ramp.test.ts`, `tests/editor/T12-roundabout.test.ts` and
+`tests/sim/node-passthrough.test.ts` may be updated while preserving their behavioral intent.
+The bypass browser fixtures may account for the extra taper section and leave enough road
+for the subsequent lane drop. The Munich completion floor has a 1 percent geometry tolerance
+(440 trips); connector reachability and zero failed trips remain required.
+
 - T20 passes; T07 and the roundabout scenarios pass; `npm run route-audit` zero on the four
   cities; the Munich probe keeps every connector pair routable and zero failed trips, with
   the `road_too_short` and `dead_end` lists updated with reasons where the setbacks changed

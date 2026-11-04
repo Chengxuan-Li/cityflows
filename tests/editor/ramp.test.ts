@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { createEditor } from '../../src/editor';
 import { buildCity } from '../../src/fixtures/build-city';
+import { pointAtDistance } from '../../src/geo/polyline';
 
 test.each(['right', 'left'] as const)(
   'ramp splits, compiles and undoes exactly (%s traffic)',
@@ -36,7 +37,7 @@ test.each(['right', 'left'] as const)(
       'diverge',
     ]);
     expect(editor.compiled.lanes[lane]!.out.map((i) => editor.compiled.movements[i]!.turn)).toEqual(
-      ['merge', 'merge'],
+      ['merge'],
     );
     const built = structuredClone(editor.city);
     expect(editor.apply({ kind: 'removeRamp', roadId: ramp.id }).ok).toBe(true);
@@ -66,7 +67,61 @@ test('invalid ramp endpoints leave city and history untouched', () => {
   expect(editor.canUndo).toBe(false);
 });
 
-test('ramps on paired streets diverge from the curb, merge into both lanes and undo exactly', () => {
+test('removing a taper does not discard intervening turn edits', () => {
+  const { city, node, road } = buildCity('Edited taper', 1);
+  const a = road(node(0, 0), node(400, 0), { lanes: 2 });
+  const b = road(node(0, 100), node(400, 100), { lanes: 2 });
+  const editor = createEditor(city);
+  expect(
+    editor.apply({
+      kind: 'addRamp',
+      from: { roadId: a.id, atM: 100 },
+      to: { roadId: b.id, atM: 200 },
+    }).ok,
+  ).toBe(true);
+  const ramp = Object.values(editor.city.roads).find((r) => r.roadClass === 'ramp')!;
+  const rule = editor.city.nodes[ramp.to]!.turnRules.find((r) => r.from !== ramp.id && r.allowed)!;
+  expect(
+    editor.apply({ kind: 'setTurnRule', nodeId: ramp.to, rule: { ...rule, allowed: false } }).ok,
+  ).toBe(true);
+  const before = editor.city;
+  expect(() => editor.apply({ kind: 'removeRamp', roadId: ramp.id })).toThrow(/intervening edits/);
+  expect(editor.city).toBe(before);
+});
+
+test.each(['right', 'left'] as const)(
+  'removing a taper preserves connector world positions (%s)',
+  (side) => {
+    const { city, node, road, place } = buildCity('Taper connector', 1);
+    city.drivingSide = side;
+    const a = road(node(0, 0), node(400, 0), { lanes: 2 });
+    const b = road(node(0, 100), node(400, 100), { lanes: 2 });
+    place('Destination', 'work', { x: 230, y: 100 }, [
+      { road: b, lane: 0, positionM: 230, direction: 'in' },
+    ]);
+    const editor = createEditor(city);
+    const position = () => {
+      const c = editor.compiled.connectors[0]!;
+      const lane = editor.compiled.lanes[c.lane]!;
+      return pointAtDistance(lane.polyline, lane.cumulative, c.positionM);
+    };
+    const before = position();
+    expect(
+      editor.apply({
+        kind: 'addRamp',
+        from: { roadId: a.id, atM: 100 },
+        to: { roadId: b.id, atM: 200 },
+      }).ok,
+    ).toBe(true);
+    expect(position().x).toBeCloseTo(before.x, 8);
+    const ramp = Object.values(editor.city.roads).find((r) => r.roadClass === 'ramp')!;
+    expect(editor.apply({ kind: 'removeRamp', roadId: ramp.id }).ok).toBe(true);
+    expect(position().x).toBeCloseTo(before.x, 8);
+    expect(position().y).toBeCloseTo(before.y, 8);
+  },
+);
+
+test('ramps on paired streets diverge from the curb, enter the taper lane and undo exactly', () => {
   const { city, node, street } = buildCity('Paired ramp', 1);
   const [from] = street(node(0, 0), node(400, 0), 2);
   const [to] = street(node(0, 100), node(400, 100), 2);
@@ -83,9 +138,9 @@ test('ramps on paired streets diverge from the curb, merge into both lanes and u
   const entries = lane.in.map((i) => editor.compiled.movements[i]!);
   const exits = lane.out.map((i) => editor.compiled.movements[i]!);
   expect(entries.map((m) => m.turn)).toEqual(['diverge']);
-  expect(exits.map((m) => m.turn)).toEqual(['merge', 'merge']);
+  expect(exits.map((m) => m.turn)).toEqual(['merge']);
   expect(editor.compiled.lanes[entries[0]!.fromLane]!.lane).toBe(1);
-  expect(exits.map((m) => editor.compiled.lanes[m.toLane]!.lane)).toEqual([0, 1]);
+  expect(exits.map((m) => editor.compiled.lanes[m.toLane]!.lane)).toEqual([2]);
   expect(editor.undo()!.ok).toBe(true);
   expect(editor.city).toEqual({ ...city, version: editor.city.version });
 });

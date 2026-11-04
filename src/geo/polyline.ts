@@ -118,3 +118,26 @@ export function segmentsIntersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
     return false;
   return side(a, b, c) * side(a, b, d) <= 0 && side(c, d, a) * side(c, d, b) <= 0;
 }
+
+/** Unique intersection of two closed segments; parallel/collinear segments have none. */
+export function segmentIntersection(a: Vec2, b: Vec2, c: Vec2, d: Vec2): Vec2 | null {
+  const ax = b.x - a.x,
+    ay = b.y - a.y;
+  const bx = d.x - c.x,
+    by = d.y - c.y;
+  const cross = ax * by - ay * bx;
+  if (Math.abs(cross) < 1e-9) return null;
+  const t = ((c.x - a.x) * by - (c.y - a.y) * bx) / cross;
+  const u = ((c.x - a.x) * ay - (c.y - a.y) * ax) / cross;
+  if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) return null;
+  return { x: a.x + t * ax, y: a.y + t * ay };
+}
+
+/** Circular arc including both ends, with at most one meter between samples. */
+export function sampleArc(center: Vec2, radius: number, start: number, sweep: number): Vec2[] {
+  const steps = Math.max(1, Math.ceil(Math.abs(sweep) * radius));
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const angle = start + (sweep * i) / steps;
+    return { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) };
+  });
+}

@@ -23,6 +23,11 @@ function corridor(split: boolean, branch = false) {
 function run(split: boolean, branch: boolean, count: number) {
   const city = corridor(split, branch);
   const compiled = setup(city);
+  // Compare the same world-space destination as the unsplit road (x = 282.5 m).
+  for (const connector of compiled.connectors) {
+    if (connector.direction === 'out') continue;
+    connector.positionM = 282.5 - compiled.lanes[connector.lane]!.polyline[0]!.x;
+  }
   expect(compiled.movements.every((movement) => movement.conflicts.length === 0)).toBe(true);
   const engine = createEngine();
   engine.load({
@@ -87,7 +92,8 @@ test('a blocked continuation follows the downstream rear across the node without
     }
   }
   expect(engine.inspect(1)?.state).toBe('queued_destination');
-  expect(engine.inspect(2)?.lane).toBe(-movement.idx - 1);
+  expect(movement.lengthM).toBe(0);
+  expect(engine.inspect(2)?.lane).toBe(approach.idx);
   target.capacity = null;
   engine.step(1500);
   expect(engine.metrics().trips.completed).toBe(10);

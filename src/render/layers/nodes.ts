@@ -13,32 +13,14 @@ export function roadEndEdges(city: CompiledCity, road: CRoad, atEnd: boolean) {
   });
 }
 
-export function drawNode(
-  graphics: Graphics,
-  city: CompiledCity,
-  node: CNode,
-  roads: CRoad[],
-): void {
-  const edges = roads.flatMap((road) => roadEndEdges(city, road, road.to === node.idx));
-  // Join adjacent lane-block edges, rather than extending a radius beyond their curbs.
-  edges.sort(
-    (a, b) =>
-      Math.atan2(a.y - node.pos.y, a.x - node.pos.x) -
-      Math.atan2(b.y - node.pos.y, b.x - node.pos.x),
-  );
-  if (edges.length >= 3) graphics.poly(edges).fill(style.asphalt);
-  const neighbors = new Set(roads.map((road) => (road.from === node.idx ? road.to : road.from)));
-  if (neighbors.size === 2) {
-    const width = Math.max(
-      ...roads.flatMap((road) => road.lanes.map((lane) => city.lanes[lane]!.widthM)),
-    );
-    graphics.circle(node.pos.x, node.pos.y, width / 2).fill(style.asphalt);
-  }
+export function drawNode(graphics: Graphics, node: CNode): void {
+  if (node.outline.length) graphics.poly(node.outline).fill(style.asphalt);
 }
 
 export function drawRoadJoins(graphics: Graphics, city: CompiledCity, road: CRoad): void {
   const { color, vergeM } = roadStyle(road);
   for (const atEnd of [false, true]) {
+    if (!city.nodes[atEnd ? road.to : road.from]!.outline.length) continue;
     const edges = roadEndEdges(city, road, atEnd);
     graphics.poly(edges, false).stroke({ color, width: vergeM * 2, cap: 'round' });
   }
@@ -49,6 +31,7 @@ export function drawMovementSurface(
   city: CompiledCity,
   movement: CMovement,
 ): void {
+  if (!city.nodes[movement.node]!.outline.length) return;
   const width = Math.min(
     city.lanes[movement.fromLane]!.widthM,
     city.lanes[movement.toLane]!.widthM,
