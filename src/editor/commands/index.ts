@@ -3,6 +3,7 @@ import { batch } from './batch';
 import { editNode } from './node';
 import { editPlace } from './place';
 import { editRoad } from './road';
+import { editRamp } from './ramp';
 import { editTopology } from './topology';
 import type { CommandPatch } from './types';
 import { diffCity } from '../patch';
@@ -11,6 +12,9 @@ export function dispatch(city: City, command: Command): CommandPatch {
   switch (command.kind) {
     case 'restoreCity':
       return diffCity(city, command.city);
+    case 'addRamp':
+    case 'removeRamp':
+      return editRamp(city, command);
     case 'setRoadLanes':
     case 'setRoadAttributes':
     case 'reverseRoad':

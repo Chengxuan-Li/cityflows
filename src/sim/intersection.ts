@@ -4,7 +4,12 @@ import type { SimParams } from '../schema';
 import { AMBER, GREEN, updateSignals } from './signals';
 import { DRIVING, type Vehicles } from './vehicle';
 
-export function createIntersections(compiled: CompiledCity, vehicles: Vehicles, params: SimParams) {
+export function createIntersections(
+  compiled: CompiledCity,
+  vehicles: Vehicles,
+  params: SimParams,
+  mergeAllows: (id: number, movement: CMovement) => boolean = () => true,
+) {
   const colors = new Uint8Array(compiled.movements.length);
   // Vehicles granted or driving on each movement. Several may share one movement (a platoon
   // through a green); entry is refused only while a conflicting movement is occupied.
@@ -76,7 +81,7 @@ export function createIntersections(compiled: CompiledCity, vehicles: Vehicles, 
         }
       }
     }
-    return true;
+    return mergeAllows(id, movement);
   }
 
   const movementOf = (id: number) => compiled.movements[vehicles.movement[id]!]!;

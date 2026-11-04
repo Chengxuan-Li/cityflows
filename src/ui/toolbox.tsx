@@ -28,6 +28,14 @@ export function Toolbox() {
       >
         Place
       </button>
+      <button
+        aria-pressed={tool === 'ramp'}
+        disabled={disabled}
+        title="Connect roads with a ramp · Enter or second click builds · Escape cancels"
+        onClick={() => useAppStore.getState().setTool('ramp')}
+      >
+        Ramp
+      </button>
     </nav>
   );
 }

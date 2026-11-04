@@ -878,3 +878,13 @@ dd {
 .export-sheet > button {
   text-align: left;
 }
+
+.ramp-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  background: var(--paper);
+  pointer-events: none;
+}

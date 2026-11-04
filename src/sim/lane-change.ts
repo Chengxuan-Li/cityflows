@@ -1,6 +1,7 @@
 import type { CLane, CompiledCity } from '../network';
 import type { SimParams } from '../schema';
 import { idmAcceleration } from './idm';
+import { laneSurvives } from './merge';
 import { DRIVING, type Vehicles } from './vehicle';
 
 interface Proposal {
@@ -13,6 +14,7 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
   const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM, vehicleLengthM } = params;
   const proposals: Proposal[] = [];
   const creeping = new Uint8Array(vehicles.count);
+  const holding = new Uint8Array(vehicles.count);
   const offsetM = new Float64Array(vehicles.count);
   const startTick = new Float64Array(vehicles.count);
   const clearance = vehicleLengthM + idm.minGapM;
@@ -81,17 +83,23 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
 
   function propose(id: number, source: CLane, tick: number, discretionary: boolean) {
     creeping[id] = 0;
+    holding[id] = 0;
     if (source.left === -1 && source.right === -1) return;
     const step = vehicles.routeStep[id]!;
     const route = vehicles.route[id]!;
     const destination = compiled.connectors[vehicles.destination[id]!]!;
     const finalRoad = step === route.roads.length - 1;
-    const targets = finalRoad ? [destination.lane] : route.targetLanes[step]!;
+    const targets = finalRoad
+      ? [destination.lane]
+      : route.targetLanes[step]!.filter((idx) =>
+          laneSurvives(compiled, compiled.lanes[idx]!, route.roads[step + 1]!),
+        );
+    holding[id] = Number(!finalRoad && !laneSurvives(compiled, source, route.roads[step + 1]!));
     const positionM = vehicles.position[id]!;
     if (positionM < vehicleLengthM) return;
     const cutoff = finalRoad ? Math.min(source.lengthM, destination.positionM) : source.lengthM;
     const remaining = cutoff - positionM;
-    if (remaining <= idm.minGapM) return;
+    if (remaining < 0) return;
     const distanceToTargets = (lane: CLane) => {
       let distance = Infinity;
       for (const target of targets) {
@@ -102,6 +110,8 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     const changesNeeded = distanceToTargets(source);
     const mandatory =
       changesNeeded > 0 && remaining < changesNeeded * laneChangeDistanceM + mandatoryUrgencyM;
+    if (mandatory && compiled.movements[route.movements[step] ?? -1]?.turn === 'diverge')
+      holding[id] = 1;
     const animating = lateralM(id, tick) !== 0;
     if (animating) {
       if (mandatory) creeping[id] = 1;
@@ -117,7 +127,7 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     let bestIncentive = mobil.thresholdMps2;
     for (const target of [source.left, source.right]) {
       const lane = compiled.lanes[target];
-      if (!lane || !lane.allowed.includes('car') || lane.lengthM - positionM <= idm.minGapM)
+      if (!lane || !lane.allowed.includes('car') || lane.lengthM - positionM < idm.minGapM - 1e-8)
         continue;
       const changesAfter = distanceToTargets(lane);
       if (
@@ -173,6 +183,7 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
       offsetM[id] = (Math.sign(source.lane - target.lane) * (source.widthM + target.widthM)) / 2;
       startTick[id] = tick;
       creeping[id] = 0;
+      holding[id] = 0;
       apply(id, lane, positionM);
     }
     proposals.length = 0;
@@ -183,6 +194,7 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     resolve,
     lateralM,
     creeping,
+    holding,
     clearAnimation: (id: number) => {
       offsetM[id] = 0;
       creeping[id] = 0;

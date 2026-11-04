@@ -41,6 +41,8 @@ export type Command =
   | { kind: 'deleteRoad'; roadId: RoadId } // Gate 2
   | { kind: 'splitRoad'; roadId: RoadId; atM: number } // Gate 2
   | { kind: 'mergeRoads'; roadId: RoadId; otherRoadId: RoadId }
+  | { kind: 'addRamp'; from: { roadId: RoadId; atM: number }; to: { roadId: RoadId; atM: number } }
+  | { kind: 'removeRamp'; roadId: RoadId }
   | { kind: 'moveNode'; nodeId: NodeId; pos: Vec2 } // Gate 2
   | { kind: 'addPlace'; place: Omit<Place, 'id'> }
   | { kind: 'updatePlace'; placeId: PlaceId; patch: Partial<Omit<Place, 'id' | 'connectors'>> }

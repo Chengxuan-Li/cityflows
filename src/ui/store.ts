@@ -80,7 +80,7 @@ interface AppState {
   toggleLayer: (layer: keyof LayerVisibility) => void;
   toggleLayers: () => void;
   toggleMetrics: () => void;
-  tool: 'select' | 'road' | 'place';
+  tool: 'select' | 'road' | 'place' | 'ramp';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
   session: Session | null;

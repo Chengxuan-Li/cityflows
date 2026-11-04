@@ -14,6 +14,7 @@ import { idmAcceleration } from './idm';
 import { createIntersections } from './intersection';
 import { createLaneChanges } from './lane-change';
 import { createLinkCosts } from './link-costs';
+import { createMerges } from './merge';
 import { createAccounting } from './metrics';
 import { DEFAULT_SIM_PARAMS } from './params';
 import { createRerouter, vehicleRouteRequest } from './reroute';
@@ -46,7 +47,8 @@ function createRun({
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
   const accounting = createAccounting(compiled, vehicles);
   const connectors = createConnectors(compiled, trips, scenario, params, vehicles, accounting);
-  const intersections = createIntersections(compiled, vehicles, params);
+  const merges = createMerges(compiled, vehicles, params);
+  const intersections = createIntersections(compiled, vehicles, params, merges.canEnter);
   const laneChanges = createLaneChanges(compiled, vehicles, params);
   const carLanes = compiled.lanes.map((lane) => lane.allowed.includes('car'));
   const provider =
@@ -237,6 +239,7 @@ function createRun({
         const position = vehicles.position[id]!;
         const destination = compiled.connectors[arrival[id]!];
         const movement = compiled.movements[vehicles.movement[id]!];
+        if (laneChanges.holding[id] && intersections.grants[id] !== -1) intersections.release(id);
         const granted = intersections.grants[id] !== -1;
         let leader = ahead;
         let offset = 0;
@@ -269,7 +272,7 @@ function createRun({
         if (lane && destination && !connectors.canArrive(destination, timeS)) {
           // Put the virtual bumper beyond the portal so standstill occurs at the portal.
           stopAt = destination.positionM + idm.minGapM;
-        } else if (lane && movement && !granted) {
+        } else if (lane && ((movement && !granted) || laneChanges.holding[id])) {
           stopAt = length;
         }
         if (stopAt < obstacle) {
@@ -283,6 +286,18 @@ function createRun({
           leaderSpeed,
           obstacle - position,
         );
+        if (movement?.turn === 'merge' && lane && !granted && stopAt < rear) {
+          acceleration[id] = Math.min(
+            merges.stopAcceleration(id, movement),
+            idmAcceleration(
+              idm,
+              vehicles.speed[id]!,
+              speedLimit * vehicles.speedFactor[id]!,
+              leader === -1 ? 0 : vehicles.speed[leader]!,
+              rear - position,
+            ),
+          );
+        }
 
         // Ask for entry before the ungranted stop line would force braking, and as soon as the
         // car ahead on this lane holds its grant, so a platoon flows through a green.
@@ -294,6 +309,7 @@ function createRun({
         if (
           lane &&
           movement &&
+          !laneChanges.holding[id] &&
           !granted &&
           (ahead === -1 || intersections.grants[ahead] !== -1) &&
           length - position <= requestDistance
@@ -392,7 +408,7 @@ function createRun({
       const remaining = lane.lengthM - previousPosition;
       const granted = intersections.grants[id]!;
       const movement = vehicles.movement[id]!;
-      if (movement !== -1 && granted === -1) {
+      if ((movement !== -1 && granted === -1) || laneChanges.holding[id]) {
         position = Math.min(position, Math.max(previousPosition, lane.lengthM - idm.minGapM));
         if (remaining <= params.intersection.decisionDistanceM) {
           vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;
