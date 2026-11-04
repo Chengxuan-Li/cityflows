@@ -1,7 +1,7 @@
 import { headingAtDistance } from '../geo/polyline';
 import type { CMovement, CompiledCity } from '../network';
 import type { SimParams } from '../schema';
-import { AMBER, GREEN, updateSignals } from './signals';
+import { AMBER, GREEN, RED, updateSignals } from './signals';
 import { DRIVING, type Vehicles } from './vehicle';
 
 export function createIntersections(
@@ -15,6 +15,11 @@ export function createIntersections(
   // through a green); entry is refused only while a conflicting movement is occupied.
   const occupancy = new Uint16Array(compiled.movements.length);
   const grants = new Int32Array(vehicles.count).fill(-1);
+  const redGrants = new Uint8Array(vehicles.count);
+  const onRed = (movement: CMovement) => !!movement.turnOnRed && colors[movement.idx] === RED;
+  const needsStop = (movement: CMovement) =>
+    onRed(movement) ||
+    (compiled.nodes[movement.node]!.control === 'stop' && movement.priority < 10);
   const candidates = compiled.nodes.map((): number[] => []);
   const activeNodes: number[] = [];
   const headings = compiled.lanes.map((lane) =>
@@ -25,6 +30,7 @@ export function createIntersections(
   function signalAllows(id: number, movement: CMovement) {
     if (movement.neverGreen) return false;
     if (!compiled.nodes[movement.node]!.signal || colors[movement.idx] === GREEN) return true;
+    if (onRed(movement)) return !!redGrants[id] || vehicles.stopped[id]! >= 1 - 1e-9;
     const distance = compiled.lanes[movement.fromLane]!.lengthM - vehicles.position[id]!;
     return (
       colors[movement.idx] === AMBER && vehicles.speed[id]! ** 2 > 2 * params.idm.bMps2 * distance
@@ -34,6 +40,7 @@ export function createIntersections(
   function release(id: number) {
     occupancy[grants[id]!] = occupancy[grants[id]!]! - 1;
     grants[id] = -1;
+    redGrants[id] = 0;
   }
 
   function signals(timeS: number) {
@@ -43,17 +50,13 @@ export function createIntersections(
       const idx = grants[id]!;
       if (idx === -1 || vehicles.lane[id]! < 0) continue;
       const movement = compiled.movements[idx]!;
+      if (colors[idx] === GREEN) redGrants[id] = 0;
       if (compiled.nodes[movement.node]!.signal && !signalAllows(id, movement)) release(id);
     }
   }
 
   function request(id: number, movement: CMovement) {
-    if (
-      compiled.nodes[movement.node]!.control === 'stop' &&
-      movement.priority < 10 &&
-      vehicles.stopped[id]! < 1 - 1e-9
-    )
-      return;
+    if (needsStop(movement) && vehicles.stopped[id]! < 1 - 1e-9) return;
     const queue = candidates[movement.node]!;
     if (!queue.length) activeNodes.push(movement.node);
     queue.push(id);
@@ -66,9 +69,11 @@ export function createIntersections(
     const control = compiled.nodes[movement.node]!.control;
     for (const idx of movement.conflicts) {
       if (occupancy[idx]! > 0) return false;
-      if (control !== 'yield' && control !== 'stop') continue;
+      if (control !== 'yield' && control !== 'stop' && !onRed(movement)) continue;
       const higher = compiled.movements[idx]!;
-      if (higher.priority <= movement.priority) continue;
+      if (onRed(movement)) {
+        if (colors[idx] === RED && !higher.turnOnRed) continue;
+      } else if (higher.priority <= movement.priority) continue;
       const length = compiled.lanes[higher.fromLane]!.lengthM;
       for (
         let approaching = vehicles.first(higher.fromLane);
@@ -90,8 +95,9 @@ export function createIntersections(
   }
 
   const movementOf = (id: number) => compiled.movements[vehicles.movement[id]!]!;
+  const priority = (id: number) => (onRed(movementOf(id)) ? -1 : movementOf(id).priority);
   const compare = (a: number, b: number) =>
-    movementOf(b).priority - movementOf(a).priority ||
+    priority(b) - priority(a) ||
     vehicles.junctionWaiting[b]! - vehicles.junctionWaiting[a]! ||
     a - b;
 
@@ -107,9 +113,9 @@ export function createIntersections(
       const queue = candidates[node]!;
       queue.sort(compare);
       for (let start = 0; start < queue.length;) {
-        const priority = movementOf(queue[start]!).priority;
+        const rank = priority(queue[start]!);
         let end = start + 1;
-        while (end < queue.length && movementOf(queue[end]!).priority === priority) end++;
+        while (end < queue.length && priority(queue[end]!) === rank) end++;
         // Give way to a contender on the favored side. A circular tie uses wait time and id.
         for (let remaining = end - start; remaining > 0; remaining--) {
           let first = -1;
@@ -137,6 +143,7 @@ export function createIntersections(
           const movement = movementOf(id);
           if (!canGrant(id, movement)) continue;
           grants[id] = movement.idx;
+          redGrants[id] = Number(onRed(movement));
           occupancy[movement.idx] = occupancy[movement.idx]! + 1;
         }
         start = end;

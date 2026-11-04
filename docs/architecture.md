@@ -114,6 +114,7 @@ interface TurnRule {
 }
 
 interface SignalProgram {
+  turnOnRed?: boolean;     // omitted = false, curb-side turn after stopping
   offsetS: number;
   amberS: number;          // follows every phase
   allRedS: number;         // follows amber
@@ -254,7 +255,7 @@ interface CLane { idx: number; id: LaneId; road: number; lane: number; polyline:
 type Turn = 'through' | 'left' | 'right' | 'uturn' | 'merge' | 'diverge';
 interface CMovement { idx: number; id: MovementId; fromLane: number; toLane: number;
   node: number; turn: Turn; polyline: Vec2[]; cumulative: Float64Array; lengthM: number;
-  conflicts: number[]; priority: number; neverGreen: boolean; }
+  conflicts: number[]; priority: number; neverGreen: boolean; turnOnRed?: boolean; }
 interface CSignal { offsetS: number; amberS: number; allRedS: number; cycleS: number;
   phases: { durationS: number; movements: number[] }[]; }
 interface CConnector { idx: number; id: ConnectorId; place: number; lane: number;
@@ -333,6 +334,16 @@ movement between nearly collinear lanes (under 5 degrees) is a straight segment.
   below the maximum rank among the node's incoming roads.
 
 ### 5.4 Signals
+
+- Optional `SignalProgram.turnOnRed` defaults to false. When enabled, the compiler marks
+  right turns under right-hand driving and left turns under left-hand driving with
+  `CMovement.turnOnRed`. These remain routable even if no phase serves them.
+- While red, marked turns stop at the line for one second before requesting entry, then
+  yield to all conflicting approaches with a gap below `gapS`, existing grants/occupants,
+  and blocked exits. Green candidates resolve first. A granted red turn may finish leaving
+  the stop line; a green grant that turns red must stop again. Amber rules are unchanged.
+- OSM imports set the flag only if explicit country tags are present: United States true,
+  all other or mixed countries false; absent country leaves the flag omitted.
 
 - Each phase's `groups` expand to every movement between the named road pair. A movement may
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.

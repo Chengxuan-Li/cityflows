@@ -66,6 +66,14 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
   return (
     <div className="signal-editor">
       <p className="muted">Cycle {cycle} s</p>
+      <label className="phase-pair">
+        <input
+          type="checkbox"
+          checked={draft.turnOnRed ?? false}
+          onChange={(event) => setDraft({ ...draft, turnOnRed: event.currentTarget.checked })}
+        />
+        {city.drivingSide === 'right' ? 'Right' : 'Left'} turn on red
+      </label>
       <div className="signal-timeline" aria-label="Signal timeline">
         {draft.phases.map((phase, index) => (
           <div

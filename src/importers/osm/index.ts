@@ -162,7 +162,14 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const base = compile(city);
   if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
   for (const node of signals) {
-    addSignal(city, node, incidents.get(node.id)!.incoming.length, base.compiled, diagnostics);
+    addSignal(
+      city,
+      node,
+      incidents.get(node.id)!.incoming.length,
+      base.compiled,
+      diagnostics,
+      data,
+    );
   }
   addGateways(city, roads, base.compiled);
   addOsmPlaces(city, data, positions, bounds, base.compiled);

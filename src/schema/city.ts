@@ -41,6 +41,7 @@ export interface TurnRule {
 }
 
 export interface SignalProgram {
+  turnOnRed?: boolean; // curb-side turn after a full stop; omitted = false
   offsetS: number;
   amberS: number; // follows every phase
   allRedS: number; // follows amber
