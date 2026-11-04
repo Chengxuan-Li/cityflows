@@ -24,6 +24,7 @@ export interface Session {
   diagnostics: Diagnostic[];
   engine: EngineClient;
   vehicleHues: Uint32Array;
+  populationPlaces: Project['city']['places'];
 }
 
 interface Run {
@@ -60,6 +61,7 @@ interface AppState {
   toggleDiagnostics: () => void;
   reportError: (error: unknown) => void;
   open: (source?: File | string) => Promise<void>;
+  loadProject: (project: Project) => Promise<void>;
   save: () => Promise<void>;
   control: (command: RunCommand, steps?: number) => Promise<void>;
   commit: (command: Command) => Promise<void>;
@@ -126,6 +128,58 @@ export const useAppStore = create<AppState>((set, get) => {
     });
   }
 
+  async function loadSession(project: Project) {
+    // The editor exposes the compiled city but does not retain the initial diagnostics.
+    const validation = compile(project.city);
+    if (!validation.ok) {
+      throw new Error(validation.diagnostics.map(({ message }) => message).join('\n'));
+    }
+    const editor = createEditor(project.city);
+    const scenario = project.scenarios[0]!;
+    const population = project.population ?? generatePopulation(editor.city, scenario.demand);
+    const trips = scheduleTrips(editor.city, population, scenario);
+    const engine = createEngineClient(
+      new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' }),
+    );
+    try {
+      await engine.load({ compiled: editor.compiled, trips, scenario });
+      const { timeS, trips: counts } = await engine.metrics();
+      engine.onEvent((event) => onEvent(engine, event));
+      get().session?.engine.terminate();
+      set({
+        session: {
+          project: { ...project, population },
+          populationPlaces: project.city.places,
+          editor,
+          compiled: editor.compiled,
+          loadedCompiled: editor.compiled,
+          diagnostics: validation.diagnostics,
+          engine,
+          // Snapshot vehicle IDs are one-based indices into the loaded trip list.
+          vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
+            placeHue(destinationPlaceId),
+          ),
+        },
+        run: {
+          status: 'paused',
+          stale: false,
+          cityVersion: editor.city.version,
+          timeS,
+          counts,
+          speed: 1,
+          achieved: 0,
+        },
+        selection: null,
+        vehicle: null,
+        diagnosticsOpen: false,
+        rejectedEdit: [],
+      });
+    } catch (error) {
+      engine.terminate();
+      throw error;
+    }
+  }
+
   return {
     layers: { ...defaultLayers },
     layersOpen: false,
@@ -161,55 +215,9 @@ export const useAppStore = create<AppState>((set, get) => {
             : await openProject(new Uint8Array(await source.arrayBuffer()));
         if (!result.ok) throw new Error(`${result.file} — ${result.error}`);
         const { project } = result;
-        // The editor exposes the compiled city but does not retain the initial diagnostics.
-        const validation = compile(project.city);
-        if (!validation.ok) {
-          throw new Error(validation.diagnostics.map(({ message }) => message).join('\n'));
-        }
-        const editor = createEditor(project.city);
-        const scenario = project.scenarios[0]!;
-        const population = project.population ?? generatePopulation(editor.city, scenario.demand);
-        const trips = scheduleTrips(editor.city, population, scenario);
-        const engine = createEngineClient(
-          new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' }),
-        );
-        try {
-          await engine.load({ compiled: editor.compiled, trips, scenario });
-          const { timeS, trips: counts } = await engine.metrics();
-          engine.onEvent((event) => onEvent(engine, event));
-          get().session?.engine.terminate();
-          set({
-            session: {
-              project: { ...project, population },
-              editor,
-              compiled: editor.compiled,
-              loadedCompiled: editor.compiled,
-              diagnostics: validation.diagnostics,
-              engine,
-              // Snapshot vehicle IDs are one-based indices into the loaded trip list.
-              vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
-                placeHue(destinationPlaceId),
-              ),
-            },
-            run: {
-              status: 'paused',
-              stale: false,
-              cityVersion: editor.city.version,
-              timeS,
-              counts,
-              speed: 1,
-              achieved: 0,
-            },
-            selection: null,
-            vehicle: null,
-            diagnosticsOpen: false,
-            rejectedEdit: [],
-          });
-        } catch (error) {
-          engine.terminate();
-          throw error;
-        }
+        await loadSession(project);
       }),
+    loadProject: (project) => perform(() => loadSession(project)),
     save: () =>
       perform(async () => {
         const { session } = get();
@@ -234,13 +242,19 @@ export const useAppStore = create<AppState>((set, get) => {
         if (command === 'restart') {
           const scenario = project.scenarios[0]!;
           const compiled = editor.compiled;
-          const trips = scheduleTrips(editor.city, project.population, scenario);
+          const population =
+            session.populationPlaces === editor.city.places
+              ? project.population
+              : generatePopulation(editor.city, scenario.demand);
+          const trips = scheduleTrips(editor.city, population, scenario);
           await engine.load({ compiled, trips, scenario });
           const { timeS, trips: counts } = await engine.metrics();
           set({
             session: {
               ...session,
               loadedCompiled: compiled,
+              project: { ...project, population },
+              populationPlaces: editor.city.places,
               vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
                 placeHue(destinationPlaceId),
               ),
@@ -284,6 +298,8 @@ export const useAppStore = create<AppState>((set, get) => {
 declare global {
   interface Window {
     cityflows?: Pick<EngineClient, 'metrics' | 'hash' | 'inspect' | 'step'> & {
+      city?: () => Project['city'];
+      commit?: (command: Command) => Promise<void>;
       movementId(index: number): string;
     };
   }

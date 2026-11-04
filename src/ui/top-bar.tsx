@@ -1,8 +1,11 @@
-import { useRef } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { scenarios } from '../fixtures/scenarios';
 import { useAppStore } from './store';
 
+const ImportWizard = lazy(() => import('./import/wizard'));
+
 export function TopBar() {
+  const [importing, setImporting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLDialogElement>(null);
   const session = useAppStore((state) => state.session);
@@ -16,6 +19,9 @@ export function TopBar() {
       <div className="controls" role="group" aria-label="Project">
         <button onClick={() => picker.current?.showModal()} aria-haspopup="dialog" disabled={busy}>
           New
+        </button>
+        <button onClick={() => setImporting(true)} aria-haspopup="dialog" disabled={busy}>
+          Import
         </button>
         <button onClick={() => input.current?.click()} disabled={busy}>
           Open
@@ -45,6 +51,11 @@ export function TopBar() {
         </button>
       </div>
       {city?.geo && <small className="attribution">{city.geo.source.attribution}</small>}
+      {importing && (
+        <Suspense fallback={<p role="status">Loading import�</p>}>
+          <ImportWizard onClose={() => setImporting(false)} />
+        </Suspense>
+      )}
       <dialog ref={picker} className="new-picker" aria-labelledby="new-title">
         <div className="sheet-heading">
           <h2 id="new-title">New city</h2>

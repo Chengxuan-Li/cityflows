@@ -73,6 +73,12 @@ function Inspector() {
 }
 
 export function App() {
+  useEffect(() => {
+    if (window.cityflows) {
+      window.cityflows.city = () => useAppStore.getState().session!.project.city;
+      window.cityflows.commit = (command) => useAppStore.getState().commit(command);
+    }
+  }, []);
   const error = useAppStore((state) => state.error);
   const rejectedEdit = useAppStore((state) => state.rejectedEdit);
   const selection = useAppStore((state) => state.selection);
