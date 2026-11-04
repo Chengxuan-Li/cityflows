@@ -18,6 +18,20 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
   const offsetM = new Float64Array(vehicles.count);
   const startTick = new Float64Array(vehicles.count);
   const clearance = vehicleLengthM + idm.minGapM;
+  const carLane = compiled.lanes.map((lane) => lane.allowed.includes('car'));
+  // Next roads before which each lane is dropped; survival is static per compiled city.
+  const dropsBefore = compiled.lanes.map((lane) => {
+    const dropped: number[] = [];
+    for (const idx of lane.out) {
+      const road = compiled.lanes[compiled.movements[idx]!.toLane]!.road;
+      if (!dropped.includes(road) && !laneSurvives(compiled, lane, road)) dropped.push(road);
+    }
+    return dropped;
+  });
+  const survives = (lane: number, nextRoad: number) => !dropsBefore[lane]!.includes(nextRoad);
+  // Neighbors on a target lane around a position, set by findNeighbors.
+  let nearLeader = -1;
+  let nearFollower = -1;
 
   function lateralM(id: number, tick: number) {
     if (offsetM[id] === 0 || params.laneChangeDurationS === 0) return 0;
@@ -25,14 +39,29 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     return offsetM[id]! * Math.max(0, 1 - progress);
   }
 
-  function neighbors(lane: number, positionM: number) {
-    let follower = -1;
-    let leader = vehicles.last(lane);
-    while (leader !== -1 && vehicles.position[leader]! < positionM) {
-      follower = leader;
-      leader = vehicles.previous[leader]!;
+  function findNeighbors(lane: number, positionM: number) {
+    nearFollower = -1;
+    nearLeader = vehicles.last(lane);
+    while (nearLeader !== -1 && vehicles.position[nearLeader]! < positionM) {
+      nearFollower = nearLeader;
+      nearLeader = vehicles.previous[nearLeader]!;
     }
-    return { leader, follower };
+  }
+
+  /** Lane changes from a lane ordinal to the nearest surviving target lane of the route step. */
+  function changesToTargets(id: number, ordinal: number, step: number, finalRoad: boolean) {
+    if (finalRoad) {
+      const destination = compiled.connectors[vehicles.destination[id]!]!;
+      return Math.abs(compiled.lanes[destination.lane]!.lane - ordinal);
+    }
+    const route = vehicles.route[id]!;
+    const nextRoad = route.roads[step + 1]!;
+    let distance = Infinity;
+    for (const target of route.targetLanes[step]!) {
+      if (!survives(target, nextRoad)) continue;
+      distance = Math.min(distance, Math.abs(compiled.lanes[target]!.lane - ordinal));
+    }
+    return distance;
   }
 
   function acceleration(id: number, lane: CLane, leader: number) {
@@ -89,25 +118,13 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     const route = vehicles.route[id]!;
     const destination = compiled.connectors[vehicles.destination[id]!]!;
     const finalRoad = step === route.roads.length - 1;
-    const targets = finalRoad
-      ? [destination.lane]
-      : route.targetLanes[step]!.filter((idx) =>
-          laneSurvives(compiled, compiled.lanes[idx]!, route.roads[step + 1]!),
-        );
-    holding[id] = Number(!finalRoad && !laneSurvives(compiled, source, route.roads[step + 1]!));
+    holding[id] = Number(!finalRoad && !survives(source.idx, route.roads[step + 1]!));
     const positionM = vehicles.position[id]!;
     if (positionM < vehicleLengthM) return;
     const cutoff = finalRoad ? Math.min(source.lengthM, destination.positionM) : source.lengthM;
     const remaining = cutoff - positionM;
     if (remaining < 0) return;
-    const distanceToTargets = (lane: CLane) => {
-      let distance = Infinity;
-      for (const target of targets) {
-        distance = Math.min(distance, Math.abs(compiled.lanes[target]!.lane - lane.lane));
-      }
-      return distance;
-    };
-    const changesNeeded = distanceToTargets(source);
+    const changesNeeded = changesToTargets(id, source.lane, step, finalRoad);
     const mandatory =
       changesNeeded > 0 && remaining < changesNeeded * laneChangeDistanceM + mandatoryUrgencyM;
     if (mandatory && compiled.movements[route.movements[step] ?? -1]?.turn === 'diverge')
@@ -125,18 +142,20 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     const oldFollower = vehicles.next[id]!;
     let bestLane = -1;
     let bestIncentive = mobil.thresholdMps2;
-    for (const target of [source.left, source.right]) {
+    for (let side = 0; side < 2; side++) {
+      const target = side === 0 ? source.left : source.right;
       const lane = compiled.lanes[target];
-      if (!lane || !lane.allowed.includes('car') || lane.lengthM - positionM < idm.minGapM - 1e-8)
-        continue;
-      const changesAfter = distanceToTargets(lane);
+      if (!lane || !carLane[target] || lane.lengthM - positionM < idm.minGapM - 1e-8) continue;
+      const changesAfter = changesToTargets(id, lane.lane, step, finalRoad);
       if (
         mandatory
           ? changesAfter >= changesNeeded
           : remaining < changesAfter * laneChangeDistanceM + mandatoryUrgencyM
       )
         continue;
-      const { leader, follower } = neighbors(target, positionM);
+      findNeighbors(target, positionM);
+      const leader = nearLeader;
+      const follower = nearFollower;
       if (!safeGap(id, lane, positionM, leader, follower)) {
         // Yield to a close leader or faster follower. An adjacent driver who can
         // pull ahead keeps moving, so both do not settle at creep speed.
@@ -177,8 +196,8 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
   function resolve(tick: number, apply: (id: number, lane: number, positionM: number) => void) {
     for (const { id, lane, positionM } of proposals) {
       const target = compiled.lanes[lane]!;
-      const { leader, follower } = neighbors(lane, positionM);
-      if (!safeGap(id, target, positionM, leader, follower)) continue;
+      findNeighbors(lane, positionM);
+      if (!safeGap(id, target, positionM, nearLeader, nearFollower)) continue;
       const source = compiled.lanes[vehicles.lane[id]!]!;
       offsetM[id] = (Math.sign(source.lane - target.lane) * (source.widthM + target.widthM)) / 2;
       startTick[id] = tick;
