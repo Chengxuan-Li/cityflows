@@ -63,7 +63,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-050](tasks/TASK-050.md) | 2 | Game-like UI redesign | `src/ui`, `src/render/style.ts`, `src/render/layers/*` visuals, `tests/e2e` names | 010 | all capabilities reachable, seven e2e scenarios green | done |
 | [TASK-030](tasks/TASK-030.md) | 3 | Activity chains, through traffic, place events | `src/demand`, `src/sim/connectors.ts` (events, capacity), `tests/demand`, `tests/sim/T10*` | 011, 003 | T09 (full), T10 | done |
 | [TASK-031](tasks/TASK-031.md) | 3 | Congestion-aware routing | `src/sim/link-costs.ts`, `src/sim/reroute.ts`, `src/routing` (costs) | 002, 004 | T06 | done |
-| [TASK-032](tasks/TASK-032.md) | 3 | Ramps, merging, expressway construction | `src/sim/merge.ts`, `src/editor/commands/ramp.ts`, `src/ui/tools/ramp*`, `tests/sim/T07*` | 004, 022 | T07 (full), demo C | todo |
+| [TASK-032](tasks/TASK-032.md) | 3 | Ramps, merging, expressway construction | `src/sim/merge.ts`, `src/editor/commands/ramp.ts`, `src/ui/tools/ramp*`, `tests/sim/T07*` | 004, 022 | T07 (full), demo C | done |
 | [TASK-033](tasks/TASK-033.md) | 3 | Place editor and demand panel | `src/ui/inspector/place*`, `src/ui/panels/demand*`, vehicle inspector reasons | 030, 010 | demos A and B reachable from the UI | todo |
 | [TASK-034](tasks/TASK-034.md) | 3 | Place painting and demand regeneration | `src/ui/tools/place-paint.tsx`, place controls, regenerate action, `tests/e2e/gate3-paint.spec.ts` | 050, 011 | painted place attracts trips after regenerate | done |
 | [TASK-040](tasks/TASK-040.md) | 4 | Signal editor | `src/ui/inspector/signal*`, `src/render/layers/signal-preview.ts` | 010 | T13 through the UI | done |
@@ -113,8 +113,9 @@ dependency of its tasks is merged to `main`.
   trajectory sampling). TASK-044 measures and optimizes `src/render` and `src/routing` only this
   wave and reports `src/sim` hotspots for after TASK-032. TASK-033 follows TASK-034 (both edit
   the place inspector and the regenerate action); TASK-045 last.
-- Wave 7 status (2026-11-03): TASK-034, TASK-023, TASK-042 and TASK-043 merged; TASK-032 and
-  TASK-044 still running. TASK-033 can start now on the merged place tool.
+- Wave 7 status (2026-11-03): TASK-034, TASK-023, TASK-042, TASK-043 and TASK-032 merged;
+  TASK-044 still running. TASK-033 can start now on the merged place tool; the sim hotspots
+  from TASK-044 become a follow-up once it lands.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -347,6 +348,18 @@ exists.
   would have slowed every interactive run; it now samples every tenth step from the snapshot
   alone (documented in architecture section 10). Export tests pass; the lead did not download
   the files by hand.
+
+- 2026-11-03, TASK-032 merged with one lead change. `src/sim/merge.ts` adds gap acceptance at
+  merge movements with cooperative mainline braking bounded by `safeDecelMps2`, and lane
+  drops become mandatory changes before the drop with a holding state instead of the
+  compiler's fallback movement; the merge and diverge classification now ignores reverse
+  carriageways (architecture 5.2, approved). `addRamp` and `removeRamp` (approved commands)
+  split both roads and lay a tangent cubic ramp; a Ramp tool picks start and end roads with a
+  preview. T07 in full, the ramp editor test and demo C pass: on the grid an expressway with
+  an on-ramp and an off-ramp cuts the mean travel time from 90.7 s to 60.0 s and every
+  inspected route uses it. Changed: the scenario's first expressway vertex sat under the top
+  bar once TASK-043's Export button widened it; it now starts inside the map on the same line.
+  The lead built a ramp from the top street onto a drawn expressway in the browser.
 
 ## Owner decisions log
 

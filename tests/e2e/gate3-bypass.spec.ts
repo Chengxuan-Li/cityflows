@@ -34,7 +34,8 @@ test('demo C: draw an expressway and ramps, restart, use the bypass and reduce t
   await page.getByLabel('Two-way').uncheck();
   await page.getByRole('combobox', { name: 'Class', exact: true }).selectOption('motorway');
   await page.getByLabel('Lanes per direction').selectOption('2');
-  await click(page, 90, -30);
+  // Start inside the map area: (90, -30) sits under the top bar once Export is in it.
+  await click(page, 135, 15);
   await click(page, 450, 330);
   await page.keyboard.press('Enter');
   await expect(page.getByText('Restart to apply changes', { exact: true })).toBeVisible();
