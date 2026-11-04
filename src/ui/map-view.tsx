@@ -98,6 +98,7 @@ function bindPointer(
       screen,
       world: camera.screenToWorld(screen),
       pointerId: event instanceof PointerEvent ? event.pointerId : 0,
+      shiftKey: event.shiftKey,
     };
   }
 
@@ -299,6 +300,7 @@ export function MapView() {
 
       let drawn: Session | null = null;
       let drawnSelection: Pick | null = null;
+      let drawnRoads: readonly string[] | null = null;
       let drawnRoute: Route | null = null;
       let snapshotTime = NaN;
       let inspected: Pick | null = null;
@@ -369,11 +371,21 @@ export function MapView() {
           }
           drawn = session;
           drawnSelection = drawnRoute = null;
+          drawnRoads = null;
           snapshotTime = NaN;
         }
         if (selection !== drawnSelection) {
           view.setSelection(selection);
           drawnSelection = selection;
+        }
+        const { selectedRoads } = getState();
+        if (selectedRoads !== drawnRoads) {
+          view.setMultiSelection(
+            selectedRoads
+              .map((id) => session.compiled.index.road.get(id)!)
+              .filter((index) => index !== undefined),
+          );
+          drawnRoads = selectedRoads;
         }
         const route = vehicle?.route ?? null;
         if (route !== drawnRoute) {

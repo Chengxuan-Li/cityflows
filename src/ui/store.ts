@@ -12,6 +12,7 @@ import type { Pick as MapPick } from '../render/types';
 import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
 import type { Command, Person } from '../schema';
+import type { RoadId } from '../schema';
 import type { Metrics, VehicleDetail } from '../sim/types';
 import { bundledProject } from './bundled-projects';
 import { selectionAfterEdit } from './edit-selection';
@@ -62,6 +63,8 @@ interface AppState {
   session: Session | null;
   run: Run | null;
   selection: MapPick | null;
+  selectedRoads: RoadId[];
+  selectRoads: (roads: RoadId[]) => void;
   vehicle: VehicleDetail | null;
   diagnosticsOpen: boolean;
   rejectedEdit: Diagnostic[];
@@ -129,6 +132,16 @@ export const useAppStore = create<AppState>((set, get) => {
         },
         run: { ...run, status: 'paused', achieved: 0, stale: true },
         selection: selectionAfterEdit(selection, session.compiled, compiled),
+        selectedRoads: [
+          ...new Set(
+            get().selectedRoads.flatMap((id) => {
+              if (city.roads[id]) return [id];
+              const group = project.city.roads[id]?.streetGroupId;
+              const survivor = group && compiled.roads.find((road) => road.streetGroupId === group);
+              return survivor ? [survivor.id] : [];
+            }),
+          ),
+        ],
         rejectedEdit: [],
       });
       if (playing) {
@@ -182,6 +195,7 @@ export const useAppStore = create<AppState>((set, get) => {
           achieved: 0,
         },
         selection: null,
+        selectedRoads: [],
         vehicle: null,
         diagnosticsOpen: false,
         rejectedEdit: [],
@@ -202,18 +216,45 @@ export const useAppStore = create<AppState>((set, get) => {
     toggleMetrics: () =>
       set(({ metricsOpen }) => ({ metricsOpen: !metricsOpen, layersOpen: false })),
     tool: 'select',
-    setTool: (tool) => set({ tool, selection: null, vehicle: null, selectionPoint: null }),
+    setTool: (tool) =>
+      set({ tool, selection: null, selectedRoads: [], vehicle: null, selectionPoint: null }),
     selectionPoint: null,
     session: null,
     run: null,
     selection: null,
+    selectedRoads: [],
+    selectRoads: (roads) => {
+      const compiled = get().session?.compiled;
+      const selectedRoads = [...new Set(roads)].filter((id) => compiled?.index.road.has(id));
+      const road = selectedRoads.length ? compiled!.index.road.get(selectedRoads[0]!)! : undefined;
+      set({
+        selectedRoads,
+        selection:
+          road === undefined
+            ? null
+            : {
+                kind: 'lane',
+                road,
+                lane: compiled!.roads[road]!.lanes[0]!,
+              },
+        vehicle: null,
+        diagnosticsOpen: false,
+        rejectedEdit: [],
+      });
+    },
     vehicle: null,
     diagnosticsOpen: false,
     rejectedEdit: [],
     busy: false,
     error: null,
     select: (selection) =>
-      set({ selection, vehicle: null, diagnosticsOpen: false, rejectedEdit: [] }),
+      set({
+        selection,
+        selectedRoads: [],
+        vehicle: null,
+        diagnosticsOpen: false,
+        rejectedEdit: [],
+      }),
     toggleDiagnostics: () => set(({ diagnosticsOpen }) => ({ diagnosticsOpen: !diagnosticsOpen })),
     commit: (command) => edit((editor) => editor.apply(command)),
     undo: () => edit((editor) => editor.undo()),
