@@ -9,11 +9,16 @@ import { createRouteProvider, freeFlowLinkCosts } from '../src/routing';
 import { createEngine } from '../src/sim/engine';
 
 // Import an OSM fixture, compile it, and run its morning headless: the baseline the import
-// wave measures against. Usage: npm run import-probe -- fixtures/osm/<name>.osm w s e n
+// wave measures against. Usage: npm run import-probe -- fixtures/osm/<name>.osm w s e n [--scale n]
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
-  const [file, ...bounds] = process.argv.slice(2);
-  if (!file || bounds.length !== 4) throw new Error('Usage: import-probe <file.osm> w s e n');
-  const bbox = bounds.map(Number) as [number, number, number, number];
+  const [file, ...args] = process.argv.slice(2);
+  if (!file || (args.length !== 4 && !(args.length === 6 && args[4] === '--scale')))
+    throw new Error('Usage: import-probe <file.osm> w s e n [--scale n]');
+  const scaleArg = args[5] ?? '1';
+  const scale = Number(scaleArg);
+  if (!scaleArg.trim() || !Number.isFinite(scale) || scale < 0)
+    throw new Error('--scale must be a finite, nonnegative number');
+  const bbox = args.slice(0, 4).map(Number) as [number, number, number, number];
   const xml = readFileSync(file, 'utf8');
   const imported = importOsm(xml, { importerVersion: '1', drivingSide: 'right', bbox });
   const byCode = new Map<string, number>();
@@ -69,11 +74,12 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
       if (route.ok) ok++;
     }
   console.info({ connectorPairs: total, routable: ok });
-  console.info(probeMorning(city, compiled));
+  console.info(probeMorning(city, compiled, scale));
 }
 
-export function probeMorning(city: City, compiled: CompiledCity) {
+export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
   const scenario = defaultScenario('grid5x5');
+  scenario.demand.personsPerResident = scale;
   scenario.startS = 7 * 3600;
   scenario.endS = 10 * 3600;
   const population = generatePopulation(city, scenario.demand);
@@ -135,6 +141,7 @@ export function probeMorning(city: City, compiled: CompiledCity) {
   }
   const releasedTrips = trips.length - metrics.trips.pending;
   return {
+    scale,
     persons: population.length,
     trips: trips.length,
     releasedTrips,

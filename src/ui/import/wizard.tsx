@@ -22,10 +22,18 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
   );
   const [side, setSide] = useState<'left' | 'right'>('right');
   const [name, setName] = useState('OpenStreetMap import');
+  const [demandScale, setDemandScale] = useState(0.1);
   const [progress, setProgress] = useState('');
   const [sourceNote, setSourceNote] = useState('');
   const [error, setError] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
+  const homes = result?.ok
+    ? Object.values(result.city.places).filter(
+        (place) => place.kind === 'residential' || place.kind === 'gateway',
+      )
+    : [];
+  const residents = homes.reduce((sum, place) => sum + place.population, 0);
+  const persons = homes.reduce((sum, place) => sum + Math.round(place.population * demandScale), 0);
   const busy = useAppStore((s) => s.busy);
   useEffect(() => {
     dialog.current?.showModal();
@@ -107,6 +115,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
     const scenario = defaultScenario('grid5x5');
     scenario.id = 'import';
     scenario.name = name.trim();
+    scenario.demand.personsPerResident = demandScale;
     await useAppStore
       .getState()
       .loadProject({ city: { ...result.city, name: name.trim() }, scenarios: [scenario] });
@@ -241,6 +250,26 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
             {name} · {Object.keys(result.city.roads).length} roads
           </p>
           <p>{result.city.geo?.source.attribution}</p>
+          <div className="edit-fields">
+            <label className="edit-field">
+              Demand
+              <input
+                id="import-demand"
+                type="range"
+                min="0.05"
+                max="1"
+                step="0.05"
+                value={demandScale}
+                disabled={busy}
+                aria-describedby="import-demand-persons"
+                onChange={(event) => setDemandScale(event.target.valueAsNumber)}
+              />
+            </label>
+            <output id="import-demand-persons" htmlFor="import-demand" aria-label="Demand persons">
+              {residents.toLocaleString()} residents × {demandScale} = {persons.toLocaleString()}{' '}
+              persons
+            </output>
+          </div>
           <p>The current city will be replaced. Save any changes you want to keep first.</p>
           <div className="controls">
             <button disabled={busy} onClick={() => setStep('diagnostics')}>

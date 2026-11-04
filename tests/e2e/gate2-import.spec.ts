@@ -1,4 +1,58 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import { strFromU8, unzipSync } from 'fflate';
+import { defaultScenario } from '../../src/fixtures/scenarios';
+import type { Person, Scenario } from '../../src/schema';
+
+for (const scale of [0.1, 0.5]) {
+  test(`imports and saves demand at scale ${scale}`, async ({ page }, info) => {
+    await page.route('https://**/*', (route) => route.abort());
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import city' });
+    await dialog.getByLabel('OSM file').setInputFiles('fixtures/osm/downtown.osm');
+    await dialog.getByRole('button', { name: 'Import roads' }).click();
+    await dialog.getByRole('button', { name: 'Continue' }).click();
+    const demand = dialog.getByRole('slider', { name: 'Demand', exact: true });
+    const readout = dialog.getByRole('status', { name: 'Demand persons' });
+    await expect(demand).toHaveValue('0.1');
+    await expect(demand).toHaveAttribute('min', '0.05');
+    await expect(demand).toHaveAttribute('max', '1');
+    await expect(demand).toHaveAttribute('step', '0.05');
+    const initial = await readout.innerText();
+    if (scale !== 0.1) {
+      await demand.focus();
+      await demand.press('End');
+      await expect(demand).toHaveValue('1');
+      await demand.press('Home');
+      await expect(demand).toHaveValue('0.05');
+      for (let i = 0; i < 9; i++) await demand.press('ArrowRight');
+      await expect(demand).toHaveValue('0.5');
+      await expect(readout).not.toHaveText(initial);
+      await dialog.getByRole('button', { name: 'Back', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Continue' }).click();
+      await expect(demand).toHaveValue('0.5');
+    }
+    const summary = await readout.innerText();
+    expect(summary).toMatch(new RegExp(`residents × ${scale} = [\\d,]+ persons$`));
+    const persons = Number(summary.match(/= ([\d,]+) persons$/)![1]!.replaceAll(',', ''));
+    expect(persons).toBeGreaterThan(0);
+    await page.screenshot({ path: info.outputPath('demand.png') });
+    await dialog.getByRole('button', { name: 'Accept city' }).click();
+    await expect(dialog).toBeHidden();
+    const downloading = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    const archive = unzipSync(await readFile((await (await downloading).path())!));
+    const scenarios = JSON.parse(strFromU8(archive['scenarios.json']!)) as Scenario[];
+    const population = JSON.parse(strFromU8(archive['population.json']!)) as Person[];
+    const expected = defaultScenario('grid5x5');
+    expected.id = 'import';
+    expected.name = 'OpenStreetMap import';
+    expected.demand.personsPerResident = scale;
+    expect(scenarios).toEqual([expected]);
+    expect(population).toHaveLength(persons);
+  });
+}
 
 test('imports the downtown fixture and generates traffic from added places', async ({
   page,
