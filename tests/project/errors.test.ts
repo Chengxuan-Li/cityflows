@@ -72,7 +72,7 @@ it('reports an unsupported city schema version from the migration entry point', 
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const city = JSON.parse(decoder.decode(entries['city.json']!));
-  city.schemaVersion = 2;
+  city.schemaVersion = 3;
   const bytes = encoder.encode(JSON.stringify(city));
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
   const manifest = JSON.parse(decoder.decode(entries['manifest.json']!));

@@ -7,7 +7,7 @@ function minimal(): City {
   const start = { x: 0, y: 0 };
   const end = { x: 30, y: 0 };
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     version: 0,
     name: 'Minimal',
     geo: null,
@@ -59,7 +59,7 @@ it('validates, migrates and compiles a hand-built minimal city', () => {
   expect(citySchema.safeParse(city).success).toBe(true);
   expect(migrateCity(JSON.parse(JSON.stringify(city)))).toEqual(city);
   expect(compile(city).ok).toBe(true);
-  expect(() => migrateCity({ ...city, schemaVersion: 2 })).toThrow(/version/i);
+  expect(() => migrateCity({ ...city, schemaVersion: 3 })).toThrow(/version/i);
 });
 
 it('reports each invalid entity and its reference', () => {

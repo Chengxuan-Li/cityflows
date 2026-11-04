@@ -121,7 +121,7 @@ export interface GeoSource {
 }
 
 export interface City {
-  schemaVersion: 1;
+  schemaVersion: 2;
   version: number; // bumps on every committed edit; caches key on it
   name: string;
   drivingSide: DrivingSide;
@@ -132,15 +132,8 @@ export interface City {
   nextId: number; // single counter for all id kinds
 }
 
-/** Only entities changed by conversion; no recursive roundabout records. */
-export interface RoundaboutSnapshot {
-  nodes: Record<NodeId, Omit<Node, 'roundabout'>>;
-  roads: Record<RoadId, Road>;
-  connectors: Record<PlaceId, Connector[]>;
-}
 export interface Roundabout {
   radiusM: number;
   ringRoads: RoadId[];
-  before: RoundaboutSnapshot;
-  after: RoundaboutSnapshot;
+  restore: Pick<Node, 'control' | 'signal' | 'minorRoads' | 'turnRules'>;
 }

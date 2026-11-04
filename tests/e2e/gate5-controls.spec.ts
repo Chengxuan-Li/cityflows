@@ -158,6 +158,24 @@ test('draw a roundabout, restart, inspect circulating routes and restore the jun
   expect(m.trips.completed).toBe(20);
   expect(m.trips.failed).toBe(0);
   expect(m.trips.driving + m.trips.queuedOrigin + m.trips.queuedDestination).toBe(0);
+  await button(page, 'Select').click();
+  await clickGrid(page, 245, 150);
+  await page.getByText('Lanes and street settings', { exact: true }).click();
+  const speed = page.getByLabel('Speed limit (km/h)');
+  await speed.fill('18');
+  await speed.blur();
+  const editedRoad = () =>
+    city(page).then((draft) => Object.values(draft.roads).find((road) => road.speedLimitMps === 5));
+  await expect.poll(async () => (await editedRoad())?.id).toBeDefined();
+  const approach = (await editedRoad())!;
+  const originalApproach = Object.values(original.roads).find(
+    (road) =>
+      (road.from === approach.from && road.to === 'n:13') ||
+      (road.to === approach.to && road.from === 'n:13'),
+  )!;
+  originalApproach.speedLimitMps = 5;
+  await button(page, 'Roundabout').click();
+
   await page.mouse.move(center.x, center.y);
   await page.mouse.wheel(0, -700);
   // The center stays at the zoom anchor, keeping the roundabout legible in the evidence.
@@ -168,6 +186,19 @@ test('draw a roundabout, restart, inspect circulating routes and restore the jun
   expect(restored.roads).toEqual(original.roads);
   expect(restored.nodes).toEqual(original.nodes);
   expect(errors).toEqual([]);
+});
+
+test('open a main-branch project with a v1 roundabout and remove it', async ({ page }) => {
+  await page.getByLabel('Open project').setInputFiles('tests/editor/main-v1-roundabout.cityflows');
+  await expect(page.getByRole('heading', { name: '5 × 5 grid' })).toBeVisible();
+  await expect
+    .poll(async () => (await city(page)).nodes['n:13']!.roundabout?.ringRoads.length)
+    .toBe(8);
+  expect((await city(page)).schemaVersion).toBe(2);
+  await button(page, 'Roundabout').click();
+  await clickGrid(page, 240, 240);
+  await expect.poll(async () => (await city(page)).nodes['n:13']!.control).toBe('signal');
+  expect((await city(page)).nodes['n:13']!.roundabout).toBeUndefined();
 });
 
 test('Import OSM file preserves Sindelfingen roundabouts and yield entries', async ({

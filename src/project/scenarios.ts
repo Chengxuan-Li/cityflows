@@ -10,8 +10,10 @@ import {
   type Person,
 } from '../schema';
 
+import { legacyCitySchema } from '../schema/city.schema';
+
 export const baselineSchema = z.object({
-  city: citySchema,
+  city: z.union([citySchema, legacyCitySchema]),
   scenario: scenarioSchema,
   population: z.array(personSchema).optional(),
 });

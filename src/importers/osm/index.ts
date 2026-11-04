@@ -63,7 +63,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     max: lonLatToLocal(geo, { lon: east, lat: south }),
   };
   const city: City = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     version: 0,
     name: 'OpenStreetMap import',
     drivingSide: options.drivingSide ?? 'right',

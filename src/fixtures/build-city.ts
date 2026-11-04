@@ -15,7 +15,7 @@ export const generated: Provenance = { source: 'generated' };
 export function buildCity(name: string, seed: number) {
   const random = createRandom(seed);
   const city: City = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     version: 0,
     name,
     drivingSide: 'right',
