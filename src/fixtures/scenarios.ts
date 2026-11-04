@@ -2,6 +2,7 @@ import type { Scenario } from '../schema';
 
 const names = {
   grid5x5: '5 × 5 grid',
+  town: 'Town',
   signalApproach: 'Four-way signal',
   bypass: 'Expressway bypass',
   ramp: 'Motorway ramps',
@@ -21,7 +22,7 @@ export function defaultScenario(id: FixtureId, seed = 1): Scenario {
     endS: 18 * 3600,
     demand: {
       seed,
-      personsPerResident: 1,
+      personsPerResident: id === 'town' ? 0.35 : 1,
       carShare: 1,
       workStart: { meanS: 8 * 3600, sdS: 30 * 60 },
       workDuration: { meanS: 9 * 3600, sdS: 3600 },
@@ -34,6 +35,7 @@ export function defaultScenario(id: FixtureId, seed = 1): Scenario {
 
 export const scenarios = [
   defaultScenario('grid5x5'),
+  defaultScenario('town'),
   defaultScenario('signalApproach'),
   defaultScenario('bypass'),
   defaultScenario('ramp'),
