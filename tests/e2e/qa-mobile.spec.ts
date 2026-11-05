@@ -27,7 +27,6 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('QA phone plays and selects a rendered car', async ({ page }) => {
-  test.fixme(true, 'QA073-001: the phone toolbox covers the Vehicle 1 inspector heading.');
   const errors = pageErrors(page);
   await reachable(button(page, 'Play'));
   await button(page, 'Play').click();
@@ -40,7 +39,6 @@ test('QA phone plays and selects a rendered car', async ({ page }) => {
 });
 
 test('QA phone selects a street', async ({ page }) => {
-  test.fixme(true, 'QA073-001: the phone toolbox covers the Street r:26 inspector heading.');
   const errors = pageErrors(page);
   await clickWorld(page, { x: 60, y: 2 });
   const inspector = page.getByRole('complementary', { name: 'Inspector' });
@@ -50,7 +48,6 @@ test('QA phone selects a street', async ({ page }) => {
 });
 
 test('QA phone selects a junction', async ({ page }) => {
-  test.fixme(true, 'QA073-001: the phone toolbox covers the Signal n:13 inspector heading.');
   const errors = pageErrors(page);
   const inspector = page.getByRole('complementary', { name: 'Inspector' });
   await clickWorld(page, { x: 240, y: 240 });
@@ -90,7 +87,6 @@ test('QA phone trip counts sheet is reachable', async ({ page }) => {
 });
 
 test('QA phone validation is reachable', async ({ page }) => {
-  test.fixme(true, 'QA073-003: Validation (0) extends to x=402 beyond the 390 px phone viewport.');
   const validation = page.getByRole('button', { name: /^Validation/ });
   await reachable(validation);
   await validation.click();

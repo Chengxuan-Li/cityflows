@@ -142,7 +142,8 @@ input[type='checkbox'] {
   inset: var(--inset) auto auto var(--inset);
   padding: 4px 5px 4px 12px;
   max-width: calc(100% - 2 * var(--inset));
-  z-index: 1;
+  /* Above the toolbox: the Export menu drops down over it. */
+  z-index: 2;
 }
 
 .top-bar h1 {
@@ -513,11 +514,7 @@ dd {
   }
 
   .app {
-    --inspector-top: 76px;
-  }
-
-  .app:has(.run-sheet) {
-    /* The compact heading sits below the toolbox on phones. */
+    /* Below the toolbox, which spans the width of a phone. */
     --inspector-top: 124px;
   }
 
@@ -539,6 +536,8 @@ dd {
   .run-summary {
     position: static;
     grid-row: 1;
+    flex-wrap: wrap;
+    max-width: calc(100vw - 2 * var(--inset));
   }
 
   .metrics-sheet {

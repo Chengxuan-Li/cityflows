@@ -132,10 +132,6 @@ test('QA every export downloads parseable data with columns, feature counts and 
 });
 
 test('QA GeoJSON export is clickable without the toolbox intercepting it', async ({ page }) => {
-  test.fixme(
-    true,
-    'QA073-002: the Roundabout toolbox button covers the GeoJSON export button center.',
-  );
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
   await button(page, 'Export').click();
