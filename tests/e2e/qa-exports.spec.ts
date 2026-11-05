@@ -43,8 +43,12 @@ test('QA every export downloads parseable data with columns, feature counts and 
   const start = (await metrics(page)).timeS;
   await expect.poll(async () => (await metrics(page)).timeS).toBeGreaterThan(start);
   await button(page, 'Pause').click();
+  // A step sent while Pause is still in flight is dropped (the store is busy).
+  await expect(button(page, 'Step')).toBeEnabled();
+  const paused = (await metrics(page)).timeS;
   await page.evaluate(() => window.cityflows!.step(600));
   const run = await metrics(page);
+  expect(run.timeS).toBeGreaterThanOrEqual(paused + 60);
   const headers = [
     [
       'Trips CSV',
