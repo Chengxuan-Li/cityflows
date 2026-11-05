@@ -16,6 +16,7 @@ import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
 import { createPlacePaintTool, type PaintKind } from './tools/place-paint';
 import { PlaceOptions } from './tools/place-options';
+import { pausedSnapshot } from './drawn-snapshot';
 
 function snapshotForMap(
   snapshot: VehicleSnapshot,
@@ -307,6 +308,11 @@ export function MapView() {
       let drawnRoads: readonly string[] | null = null;
       let drawnRoute: Route | null = null;
       let snapshotTime = NaN;
+      let drawnSnapshot: VehicleSnapshot | null = null;
+      if (window.cityflows) {
+        window.cityflows.drawnSnapshot = () => drawnSnapshot;
+        window.cityflows.worldToScreen = (point) => view.camera.worldToScreen(point);
+      }
       let snapshotAgeS = 0;
       let lastFrame = performance.now();
       let inspected: Pick | null = null;
@@ -337,6 +343,14 @@ export function MapView() {
         view.setSignalPreview(current.run?.stale ? null : session.loadedCompiled, snapshot.timeS);
         if (snapshot.timeS !== snapshotTime) {
           view.setSnapshot(snapshotForMap(snapshot, session));
+          if (window.cityflows) {
+            drawnSnapshot = pausedSnapshot(
+              snapshot,
+              session.loadedCompiled,
+              session.project.scenarios[0]!.simParams.laneChangeDurationS ??
+                DEFAULT_SIM_PARAMS.laneChangeDurationS,
+            );
+          }
           snapshotTime = snapshot.timeS;
           snapshotAgeS = 0;
           lastFrame = performance.now();
@@ -386,12 +400,14 @@ export function MapView() {
           drawnSelection = drawnRoute = null;
           drawnRoads = null;
           snapshotTime = NaN;
+          drawnSnapshot = null;
           snapshotAgeS = 0;
           drawnComparison = null;
         }
         if (motionGeometry !== session.loadedCompiled) {
           motionGeometry = session.loadedCompiled;
           snapshotTime = NaN;
+          drawnSnapshot = null;
           snapshotAgeS = 0;
         }
         // Edits change the displayed city; paths stay with the loaded run until restart.

@@ -28,9 +28,10 @@ it.each(['right', 'left'] as const)(
     const result = compile(city);
     expect(result.ok).toBe(true);
     const lane = `${from.id}#${side === 'right' ? 1 : 0}`;
-    const warnings = result.diagnostics.filter((d) => d.code === 'lane_requires_merge');
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]!.refs).toEqual([lane, to.id, join.id]);
-    expect(warnings[0]!.message).toContain(lane);
+    const notes = result.diagnostics.filter((d) => d.code === 'lane_requires_merge');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.severity).toBe('info');
+    expect(notes[0]!.refs).toEqual([lane, to.id, join.id]);
+    expect(notes[0]!.message).toContain(lane);
   },
 );

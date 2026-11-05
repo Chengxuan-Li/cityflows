@@ -13,7 +13,7 @@ import { compile, type CompiledCity, type Diagnostic } from '../network';
 import { openProject } from '../project/open';
 import { saveProject } from '../project/save';
 import type { Project } from '../project/types';
-import type { Pick as MapPick } from '../render/types';
+import type { Pick as MapPick, VehicleSnapshot } from '../render/types';
 import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
 import type { Command, Person } from '../schema';
@@ -641,6 +641,8 @@ declare global {
   interface Window {
     cityflows?: Pick<EngineClient, 'metrics' | 'hash' | 'inspect' | 'step'> & {
       snapshot?: EngineClient['snapshot'];
+      drawnSnapshot?: () => VehicleSnapshot | null;
+      worldToScreen?: (point: Vec2) => Vec2;
       city?: () => Project['city'];
       commit?: (command: Command) => Promise<void>;
       movementId(index: number): string;

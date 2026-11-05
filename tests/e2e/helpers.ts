@@ -62,6 +62,37 @@ export async function clickGrid(page: Page, x: number, y: number) {
   await page.mouse.click(p.x, p.y);
 }
 
+/** Picks from the paused renderer snapshot through the map's real pointer path. */
+export async function clickVehicle(page: Page, id: number) {
+  if (await button(page, 'Pause').isEnabled()) await button(page, 'Pause').click();
+  await expect(button(page, 'Step')).toBeEnabled();
+  const timeS = (await metrics(page)).timeS;
+  await expect
+    .poll(() => page.evaluate(() => window.cityflows!.drawnSnapshot!()?.timeS))
+    .toBe(timeS);
+
+  const heading = page.getByRole('heading', { name: `Vehicle ${id}`, exact: true });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const point = await page.evaluate((id) => {
+      const api = window.cityflows!;
+      const snapshot = api.drawnSnapshot!();
+      const index = snapshot?.id.subarray(0, snapshot.count).indexOf(id) ?? -1;
+      if (!snapshot || index < 0) throw new Error(`Vehicle ${id} is not in the drawn snapshot`);
+      return api.worldToScreen!({ x: snapshot.x[index]!, y: snapshot.y[index]! });
+    }, id);
+    await page.getByLabel('City map').click({ position: point });
+    try {
+      await expect(heading).toBeVisible({ timeout: 1000 });
+      return;
+    } catch (error) {
+      if (attempt === 1) throw error;
+      await page.evaluate(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+      );
+    }
+  }
+}
+
 export async function setRange(page: Page, name: string, value: string) {
   const slider = page.getByRole('slider', { name, exact: true });
   await slider.fill(value);

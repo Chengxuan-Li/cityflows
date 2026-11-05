@@ -16,11 +16,11 @@ import type {
 } from '../schema';
 
 export type CompileResult =
-  | { ok: true; compiled: CompiledCity; diagnostics: Diagnostic[] } // warnings only
+  | { ok: true; compiled: CompiledCity; diagnostics: Diagnostic[] } // warnings and notes
   | { ok: false; diagnostics: Diagnostic[] }; // contains errors
 
 export interface Diagnostic {
-  severity: 'error' | 'warning';
+  severity: 'error' | 'warning' | 'info';
   code: string; // architecture section 5.5
   message: string; // human readable, names the entities
   refs: string[]; // entity ids

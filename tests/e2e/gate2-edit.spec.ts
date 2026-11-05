@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { unzipSync, strFromU8 } from 'fflate';
 import type { City } from '../../src/schema';
+import { clickVehicle } from './helpers';
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 
@@ -71,7 +72,7 @@ test('T12 draws a snapped two-way bypass and an inspected vehicle uses it after 
   expect(movements.some((movement) => added.some((road) => movement.includes(`${road.id}#`)))).toBe(
     true,
   );
-  await clickWorld(page, 6, 2);
+  await clickVehicle(page, 1);
   await expect(page.getByRole('heading', { name: 'Vehicle 1' })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('03-vehicle-bypass-route.png') });
   expect(errors).toEqual([]);
