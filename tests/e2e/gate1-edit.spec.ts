@@ -126,7 +126,7 @@ test('a five-second phase changes the queue at the same simulation time', async 
   await page.getByText('Signal phases', { exact: true }).click();
   const phase = page.getByLabel('Phase 1 green (s)');
   await expect(phase).toBeVisible();
-  const step = () => page.evaluate(() => window.cityflows!.step(910));
+  const step = () => page.evaluate(() => window.cityflows!.step(1500));
   await step();
   const baseline = await metrics(page);
   await phase.fill('5');

@@ -258,7 +258,7 @@ function createRun({
         if (vehicles.state[id] !== DRIVING) continue;
         const discretionary =
           intersections.grants[id] === -1 &&
-          lane.lengthM - vehicles.position[id]! > params.intersection.decisionDistanceM;
+          lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM;
         laneChanges.propose(id, lane, tick, discretionary);
       }
     }
@@ -328,7 +328,7 @@ function createRun({
           lane &&
           ((movement && !granted) || laneChanges.holding[id] || waitingForLane[id])
         ) {
-          stopAt = length;
+          stopAt = lane.stopM;
         }
         if (path) stopAt = intersections.zoneStop(path, position) + idm.minGapM;
         if (stopAt < obstacle) {
@@ -381,7 +381,7 @@ function createRun({
             intersections.grants[ahead] !== -1 ||
             (intersections.continuations[vehicles.movement[ahead]!] &&
               !laneChanges.holding[ahead])) &&
-          length - position <= requestDistance
+          lane.stopM - position <= requestDistance
         ) {
           intersections.request(id, movement);
         }
@@ -490,11 +490,11 @@ function createRun({
         continue;
       }
       const lane = compiled.lanes[field]!;
-      const remaining = lane.lengthM - previousPosition;
+      const remaining = lane.stopM - previousPosition;
       const movement = vehicles.movement[id]!;
       const granted = intersections.continuations[movement] ? movement : intersections.grants[id]!;
       if ((movement !== -1 && granted === -1) || laneChanges.holding[id] || waitingForLane[id]) {
-        position = Math.min(position, Math.max(previousPosition, lane.lengthM - idm.minGapM));
+        position = Math.min(position, Math.max(previousPosition, lane.stopM - idm.minGapM));
         if (remaining <= params.intersection.decisionDistanceM) {
           vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;
         }

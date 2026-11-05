@@ -47,6 +47,7 @@ export function layoutRoad(
       polyline,
       cumulative,
       lengthM: cumulative.at(-1)!,
+      stopM: cumulative.at(-1)!,
       widthM: spec.widthM,
       allowed: [...spec.allowed],
       speedLimitMps: road.speedLimitMps,
