@@ -27,6 +27,12 @@ test.each(['right', 'left'] as const)(
     const taper = compiled.roads[compiled.lanes[entry.toLane]!.road]!;
     const curb = side === 'right' ? 2 : 0;
     expect(compiled.lanes[entry.toLane]!.lane).toBe(curb);
+    const exitRoads = new Set(
+      taper.lanes.flatMap((i) =>
+        compiled.lanes[i]!.out.map((m) => compiled.lanes[compiled.movements[m]!.toLane]!.road),
+      ),
+    );
+    const changed = new Set<number>();
     const engine = createEngine();
     engine.load({ compiled, scenario: scenario(), trips: trips(editor.city, 8, 3) });
     const entered = new Set<number>(),
@@ -37,7 +43,15 @@ test.each(['right', 'left'] as const)(
       for (const [i, id] of snapshot.id.entries()) {
         const lane = snapshot.lane[i]!;
         if (lane === entry.toLane) entered.add(id);
-        if (lane >= 0) continue;
+        if (lane >= 0) {
+          const current = compiled.lanes[lane]!;
+          if (current.road === taper.idx && current.lane !== curb) changed.add(id);
+          if (exitRoads.has(current.road)) {
+            expect(changed.has(id), `vehicle ${id} must merge upstream`).toBe(true);
+            passed.add(id);
+          }
+          continue;
+        }
         const movement = compiled.movements[-lane - 1]!;
         if (compiled.lanes[movement.fromLane]!.road !== taper.idx) continue;
         expect(compiled.lanes[movement.fromLane]!.lane, `vehicle ${id}, step ${step}`).not.toBe(

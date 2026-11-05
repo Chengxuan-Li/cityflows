@@ -40,9 +40,14 @@ test('a route whose only target lane is dropped still leaves by a surviving lane
   });
   let movementFrom = -1;
   for (let step = 0; step < 1200 && engine.metrics().trips.completed === 0; step++) {
+    const before = engine.inspect(1)?.lane;
     engine.step();
     const field = engine.inspect(1)!.lane;
     if (field < 0) movementFrom = compiled.movements[-field - 1]!.fromLane;
+    else if (
+      compiled.movements.some((m) => m.lengthM === 0 && m.fromLane === before && m.toLane === field)
+    )
+      movementFrom = before!;
   }
   expect(engine.metrics().trips).toMatchObject({ completed: 1, driving: 0, failed: 0 });
   expect(movementFrom).toBe(dropped.left);

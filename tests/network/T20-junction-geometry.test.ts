@@ -12,6 +12,7 @@ test('T20: fixture lanes do not cross and movements stay inside the outline', ()
   expect(junctionOverlaps(result.compiled)).toEqual([]);
   expect(movementsOutside(result.compiled)).toEqual([]);
   const merge = result.compiled.nodes.find((n) => n.pos.x === 550 && n.pos.y === 550)!;
+  // Both two-lane approaches overlap the same two exit lanes: crossing movements remain a junction.
   expect(merge.setbacks).toEqual([4.5, 4.5, 4.5]);
   const tees = result.compiled.nodes.filter((n) => n.pos.y === 550 && [0, 75].includes(n.pos.x));
   expect(
@@ -33,7 +34,7 @@ test('T20: through sections have zero setbacks and no junction surface', () => {
   expect(compiled.outline).toEqual([]);
 });
 
-test('T20: aligned centerlines with displaced lane blocks still need a junction surface', () => {
+test('T20: aligned displaced lane blocks ease into a continuous surface', () => {
   const { city, node, road } = buildCity('Displaced continuation', 1);
   const center = node(0, 0);
   road(node(-100, 0), center, { lanes: 2 });
@@ -41,19 +42,20 @@ test('T20: aligned centerlines with displaced lane blocks still need a junction 
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   const compiled = result.compiled.nodes[result.compiled.index.node.get(center.id)!]!;
-  expect(compiled.setbacks).toEqual([4, 4]);
-  expect(compiled.outline.length).toBeGreaterThan(0);
+  expect(compiled.setbacks).toEqual([0, 0]);
+  expect(compiled.outline).toEqual([]);
   expect(movementsOutside(result.compiled)).toEqual([]);
 });
 
-test.each([0.49, 0.51])('T20: straight movement lateral tolerance is 0.5 m (%s)', (offset) => {
+test.each([0.49, 0.51])('T20: continuation aligns small lateral offsets (%s)', (offset) => {
   const { city, node, road } = buildCity('Nearly collinear', 1);
   const center = node(0, 0);
   road(node(-100, 0), center);
   road(center, node(100, 0)).lateralOffsetM = offset;
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  expect(result.compiled.movements[0]!.polyline.length === 2).toBe(offset <= 0.5);
+  expect(result.compiled.movements[0]!.polyline).toHaveLength(2);
+  expect(result.compiled.movements[0]!.lengthM).toBeLessThan(0.01);
 });
 
 test.each(['right', 'left'] as const)(

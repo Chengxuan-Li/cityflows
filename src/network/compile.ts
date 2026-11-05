@@ -3,6 +3,7 @@ import type { Vec2 } from '../geo/vec2';
 import type { City, Place, RoadClass } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
+import { continuationLayout } from './continuity';
 import { layoutRoad } from './lanes';
 import { junctionSetbacks, junctionOutline, containMovements } from './junctions';
 import { generateMovements } from './movements';
@@ -103,6 +104,8 @@ export function compile(city: City): CompileResult {
       to,
       lanes: [],
       surface: [],
+      startOffsetM: 0,
+      endOffsetM: 0,
       lengthM,
       roadClass: road.roadClass,
       classRank: classRank[road.roadClass],
@@ -160,7 +163,124 @@ export function compile(city: City): CompileResult {
     );
   }
 
+  const laneHeadings = lanes.map((lane) => ({
+    start: headingAtDistance(lane.polyline, lane.cumulative, 0),
+    end: headingAtDistance(lane.polyline, lane.cumulative, lane.lengthM),
+  }));
+  const provisional: CMovement[] = [];
+  for (const node of nodes)
+    generateMovements(
+      node,
+      sourceNodes[node.idx]!,
+      incoming[node.idx]!,
+      outgoing[node.idx]!,
+      headings,
+      lanes,
+      city.drivingSide,
+      provisional,
+    );
+  const continuity = continuationLayout(
+    nodes,
+    roads,
+    lanes,
+    provisional,
+    sourceRoads,
+    headings,
+    city.drivingSide,
+    sourceNodes,
+  );
+  for (const road of roads) {
+    const trim = trims[road.idx]!;
+    const total = trim.start + trim.end;
+    const scale = total === 0 ? 1 : Math.min(1, Math.max(0, road.lengthM - 5) / total);
+    trim.start *= scale;
+    trim.end *= scale;
+  }
+  for (const node of nodes) {
+    if (continuity.pairs.has(node.idx)) {
+      node.setbacks = incident[node.idx]!.map(() => 0);
+      node.radiusM = 0;
+      for (const road of incident[node.idx]!)
+        trims[road.idx]![road.from === node.idx ? 'start' : 'end'] = 0;
+    }
+    node.movements = [];
+  }
+  for (const road of roads) {
+    const transition = continuity.ends[road.idx]!;
+    if (!transition.start && !transition.end) continue;
+    road.startOffsetM = transition.start?.offsetM ?? 0;
+    road.endOffsetM = transition.end?.offsetM ?? 0;
+    const rebuilt: CLane[] = [];
+    const copy = { ...road, lanes: [] as number[], surface: [] as Vec2[] };
+    const before =
+      !transition.start && trims[road.idx]!.start === 0
+        ? incoming[road.from]!.find((r) => r.from !== road.to)
+        : undefined;
+    const after =
+      !transition.end && trims[road.idx]!.end === 0
+        ? outgoing[road.to]!.find((r) => r.to !== road.from)
+        : undefined;
+    for (let i = diagnostics.length - 1; i >= 0; i--)
+      if (diagnostics[i]!.code === 'road_too_short' && diagnostics[i]!.refs.includes(road.id))
+        diagnostics.splice(i, 1);
+    layoutRoad(
+      sourceRoads[road.idx]!,
+      copy,
+      trims[road.idx]!.start,
+      trims[road.idx]!.end,
+      rebuilt,
+      diagnostics,
+      {
+        before: before ? sourceRoads[before.idx]!.centerline.at(-2) : undefined,
+        after: after ? sourceRoads[after.idx]!.centerline[1] : undefined,
+      },
+      transition,
+    );
+    for (const atEnd of [false, true]) {
+      if (atEnd ? transition.end : transition.start) continue;
+      const oldCut = atEnd ? road.surface.length / 2 : 0;
+      const newCut = atEnd ? copy.surface.length / 2 : 0;
+      for (const side of [-1, 0]) {
+        copy.surface[(newCut + side + copy.surface.length) % copy.surface.length] =
+          road.surface[(oldCut + side + road.surface.length) % road.surface.length]!;
+      }
+    }
+    road.surface = copy.surface;
+    for (const [i, lane] of rebuilt.entries()) {
+      const original = lanes[road.lanes[i]!]!;
+      if (!transition.start) lane.polyline[0] = original.polyline[0]!;
+      if (!transition.end) lane.polyline[lane.polyline.length - 1] = original.polyline.at(-1)!;
+      lane.cumulative = cumulativeLengths(lane.polyline);
+      lane.lengthM = lane.cumulative.at(-1)!;
+      original.polyline = lane.polyline;
+      original.cumulative = lane.cumulative;
+      original.lengthM = lane.lengthM;
+      original.taperStartM = lane.taperStartM;
+      original.taperEndM = lane.taperEndM;
+    }
+  }
+  for (const lane of lanes) {
+    lane.in = [];
+    lane.out = [];
+  }
   for (const node of nodes) node.outline = junctionOutline(node, incident[node.idx]!, lanes);
+  const movements: CMovement[] = [];
+  for (const node of nodes) {
+    generateMovements(
+      node,
+      sourceNodes[node.idx]!,
+      incoming[node.idx]!,
+      outgoing[node.idx]!,
+      headings,
+      lanes,
+      city.drivingSide,
+      movements,
+      continuity.pairs.get(node.idx),
+      continuity.pairs.has(node.idx) ? undefined : laneHeadings,
+    );
+    containMovements(node, movements, lanes);
+    populateConflicts(node, movements, lanes);
+  }
 
   const places: CPlace[] = [];
   const connectors: CConnector[] = [];
@@ -233,22 +353,6 @@ export function compile(city: City): CompileResult {
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM);
   }
 
-  const movements: CMovement[] = [];
-  for (const node of nodes) {
-    generateMovements(
-      node,
-      sourceNodes[node.idx]!,
-      incoming[node.idx]!,
-      outgoing[node.idx]!,
-      headings,
-      lanes,
-      city.drivingSide,
-      movements,
-    );
-    containMovements(node, movements, lanes);
-    populateConflicts(node, movements, lanes);
-  }
-
   const compiled: CompiledCity = {
     version: city.version,
     drivingSide: city.drivingSide,
@@ -274,6 +378,16 @@ export function compile(city: City): CompileResult {
     }
   }
   if (diagnostics.some((item) => item.severity === 'error')) return { ok: false, diagnostics };
+  for (const lane of lanes) {
+    if (!lane.taperEndM || lane.out.length) continue;
+    const node = nodes[roads[lane.road]!.to]!;
+    diagnostics.push({
+      severity: 'info',
+      code: 'lane_requires_merge',
+      refs: [lane.id, node.id],
+      message: `Lane ${lane.id} ends at ${node.id}; merge upstream within its ${lane.taperEndM} m taper`,
+    });
+  }
   warnAboutProvenance([...sourceNodes, ...sourceRoads, ...sourcePlaces], diagnostics);
   warnAboutConnectivity(compiled, diagnostics);
   return { ok: true, compiled, diagnostics };

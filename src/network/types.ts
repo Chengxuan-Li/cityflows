@@ -69,6 +69,8 @@ export interface CRoad {
   lengthM: number;
   streetGroupId: string | null;
   surface: Vec2[]; /* polygon for rendering */
+  startOffsetM: number; // change from canonical lateralOffsetM at a continuation
+  endOffsetM: number;
 }
 export interface CLane {
   idx: number;
@@ -79,6 +81,8 @@ export interface CLane {
   cumulative: Float64Array;
   lengthM: number;
   widthM: number;
+  taperStartM: number;
+  taperEndM: number;
   allowed: VehicleClass[];
   speedLimitMps: number;
   left: number; // adjacent lane idx or -1

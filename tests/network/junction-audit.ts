@@ -9,6 +9,8 @@ import type { Vec2 } from '../../src/geo/vec2';
 // r:140#0>r:476#0 (curved service ways, 47 m beyond the junction) became one with the cap.
 export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = {
   'munich-donnersberger': {
+    'r:196#0>r:416#2':
+      'The source ramp crosses the trunk lane body at n:194; TASK-071 removes the capped-setback classification at this continuation.',
     'r:1024#0>r:899#0':
       'The opposite coincident service-way lane pair shares the same realigned physical arm at n:894 and n:898.',
     'r:1027#0>r:900#0':

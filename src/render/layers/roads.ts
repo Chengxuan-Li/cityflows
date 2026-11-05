@@ -34,7 +34,11 @@ export function drawRoad(
   const medianOnRight = city.drivingSide === 'left';
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
-    if (lane.right >= 0) drawDashes(markings, offsetPolyline(lane.polyline, lane.widthM / 2));
+    if (
+      lane.right >= 0 &&
+      !road.lanes.some((i) => city.lanes[i]!.taperStartM || city.lanes[i]!.taperEndM)
+    )
+      drawDashes(markings, offsetPolyline(lane.polyline, lane.widthM / 2));
     if (road.streetGroupId !== null && (medianOnRight ? lane.right : lane.left) < 0) {
       const offset = ((medianOnRight ? 1 : -1) * lane.widthM) / 2;
       markings
