@@ -52,6 +52,14 @@ requirements R1 to R8 and tests T01 to T18 are binding and referenced below by I
 cities. Both go through the same compile and validation as hand edits. The layer rule in
 `AGENTS.md` is enforced by ESLint.
 
+Deployment (TASK-067): the app is a static site. CI builds it on every push to `main` and
+publishes it to GitHub Pages with the repository's base path; pull requests build but do not
+publish. Test hooks stay out of the production build (`MODE` is neither `development` nor
+`test`). The raster tile URL and the Overpass endpoint come from build-time variables
+(`VITE_TILE_URL`, `VITE_OVERPASS_URL`) defaulting to today's values, so a public deploy can
+point at a provider whose usage policy fits; OpenStreetMap attribution is shown wherever
+tiles or imported data are.
+
 ## 3. Coordinate frame and extent
 
 Internal coordinates are meters in a local frame: Web Mercator scaled by `cos(lat0)` around
@@ -652,7 +660,8 @@ interface SimParams {
   laneChangeDistanceM: 30;
   laneChangeDurationS: 2;
   mandatoryUrgencyM: 10;         // extra margin before a required change becomes forced
-  intersection: { decisionDistanceM: 15; gapS: 4; creepSpeedMps: 1.0 };
+  intersection: { decisionDistanceM: 15; gapS: 4; creepSpeedMps: 1.0;
+                  zoneMarginS: 1.0; boxWaitS: 10 };   // TASK-065, B27 and B28
   spawnMinGapM: 8;
   linkCostAlpha: 0.3;
   linkCostIntervalS: 60;
@@ -754,6 +763,25 @@ Step sequence, in this order every step:
      from one lane never conflict); car-following keeps their spacing. A grant persists until
      the vehicle leaves the movement, except that a signal change revokes grants of vehicles
      still on the approach whose movement can no longer be entered.
+   - TASK-065, zone reservations by time (B27). A vehicle holding a grant, on its approach
+     or on its movement and before a zone's end, no longer blocks a candidate outright. It
+     blocks only when its earliest possible arrival at the start of its conflict zone with
+     the candidate (accelerating at `idm.aMps2` from its current speed up to its lane's
+     speed limit, over the remaining approach plus `startM`) comes before the candidate's
+     expected exit from its own zone (rear past `endM`, accelerating at `idm.aMps2` from its
+     current speed, capped by the movement's speed) plus `zoneMarginS`. A vehicle whose rear
+     is past the zone end never blocks, as before. Safety backstop: a vehicle on a movement
+     treats the start of a conflict zone as a standing obstacle while another vehicle is
+     inside that zone (front past `startM`, rear not past `endM`), and the commit clamps it
+     there like an ungranted stop line; the run counts such hard zone stops in `Metrics`
+     (`zoneStops`), which T22 expects to be rare, not zero.
+   - TASK-065, keep the box clear (B28). A candidate whose exit lane does not have room for
+     its whole length past the movement (the rear of the exit lane's last vehicle, projected
+     forward by that vehicle's speed over the candidate's time to cross, at least
+     `vehicleLengthM + minGapM` along the lane) is not granted, so it waits at the stop line
+     rather than in the junction. After `boxWaitS` of waiting at the line it falls back to
+     the older rule (the last vehicle's front at least `vehicleLengthM + minGapM` along), so a
+     jammed junction still drains.
 5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
    its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
@@ -1251,6 +1279,17 @@ Lives in `src/importers/osm`, runs inside an import worker.
    source ids and block aggregation are recorded in provenance.
 10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
     counts of inferred lanes and speeds. The wizard shows them before the city is accepted.
+11. Smooth centerlines (TASK-066, B29). After topology, consolidation and splitting, every
+    interior vertex of an imported road's centerline becomes a circular-arc fillet tangent to
+    its two segments, and so does a degree-two node that joins two sections of one street
+    (the node moves onto the arc so both sections stay tangent at it). Junction nodes (three
+    or more road ends, any control, restriction via nodes, layer changes, gateways) never move
+    and are never filleted. The radius is the class radius (motorway 400 m, trunk 250,
+    primary 120, secondary 80, tertiary 50, ramp 60, residential 25, service 12), reduced so
+    the tangent length fits in half of each adjacent segment and the fillet strays at most
+    2 m from the original vertex; arcs are sampled at most 2 m or 5 degrees apart. Roundabout
+    rings and hand-drawn or GeoJSON roads are unchanged; provenance records
+    `smoothed:<count>` per road.
 
 Overpass provider: query drivable highways and restriction relations in a bbox capped at
 50 km squared, one request at a time, results cached in IndexedDB by bbox and query version,
@@ -1284,7 +1323,9 @@ Headless tests run in Vitest from fixtures in `src/fixtures` (generated) and `fi
 | T18 import diagnostics | importers, network | broken fixtures | TASK-001, TASK-020 |
 | T19 live edit: conservation, determinism, bounded reroute | sim, host, e2e | grid-5x5, bypass | TASK-051 |
 | T20 junction geometry: no overlap, setback markings, taper | network, render | irregular junction fixture, Munich | TASK-061, TASK-063 |
-| T21 conflict zones: no two vehicles inside contacting zones at once; cleared zones free | network, sim | four-way signal, junction fixture, Munich | TASK-064 |
+| T21 conflict zones: no two vehicles inside contacting zones at once; cleared zones free | network, sim | four-way signal, junction fixture, Munich | TASK-064, TASK-065 |
+| T22 zone timing and box: a far grant lets a crossing car through; no waiting in the box | sim | four-way signal, grid, Munich | TASK-065 |
+| T23 smooth imports: tangent continuity, bounded deviation, fixed junctions | importers | Munich, Sindelfingen, downtown | TASK-066 |
 
 Synthetic fixtures (all generated by code with a seed, in `src/fixtures`):
 

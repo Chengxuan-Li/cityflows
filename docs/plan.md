@@ -89,6 +89,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-062](tasks/TASK-062.md) | 5 | Routing throughput (B20) | `src/routing/**`, `tests/routing` | 055, 057 | routes per second back near the TASK-057 figures, audit zero, hashes unchanged | done |
 | [TASK-063](tasks/TASK-063.md) | 5 | Junction surface, crossings, one asphalt colour (B21, B23, B24, B25) | `src/network/junctions.ts` (outline only), `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, `roads.ts`, `src/render/style.ts`, `scene.ts`, `types.ts` (layer flag), `src/ui/layers.tsx`, `tests/network/T20*`, `tests/render`, `tests/e2e/gate4-layers.spec.ts` | 061; design in architecture 5.1, 11 | T20 additions; hashes unchanged | done |
 | [TASK-064](tasks/TASK-064.md) | 5 | Conflict zones instead of whole-movement conflicts (B26) | `src/network/conflicts.ts`, `src/network/types.ts` (additive), `src/sim/intersection.ts`, conflict reads in `engine.ts`, `merge.ts`, `patch.ts`, `tests/network/conflict-zones.test.ts`, `tests/sim` | 049, 051, 057, 061; design in architecture 5.3, 8 | T21; uncapped Munich at least as fast as capped | done (cap kept) |
+| [TASK-065](tasks/TASK-065.md) | 5 | Zone reservations by time and a clear junction box (B27, B28) | `src/sim/intersection.ts`, zone-stop and counter in `engine.ts`, `types.ts`, `metrics.ts`, `src/schema/sim.ts` and `src/sim/params.ts` (additive), `tests/sim` | 064; design in architecture 8 | T22; uncapped Munich at least as fast as capped | todo |
+| [TASK-066](tasks/TASK-066.md) | 5 | Smooth road curves on import (B29) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), `tests/importers`, imported lane-pair lists in `tests/network` | 048, 054, 056, 061; design in architecture 13 | T23; junction nodes fixed, 2 m deviation | todo |
+| [TASK-067](tasks/TASK-067.md) | 5 | Ship it: static deploy and user guide | `.github/workflows`, `vite.config.ts`, URL lines in `tiles.ts`, `area-picker.tsx`, `overpass.ts`, `README.md` | 060; design in architecture 2 | published build without test hooks | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -187,6 +190,15 @@ dependency of its tasks is merged to `main`.
   the two tasks added without changing any compiled geometry. The cap stays: with it lifted,
   Munich completes 1 285 trips by 10:00 against the capped 2 231 (B27 below). Next: B27 and
   B28 together, B29, shipping, then Gate 5.
+- Wave 13 (lead, 2026-11-04): TASK-065, TASK-066 and TASK-067 in parallel, branches
+  `task/065-zone-timing`, `task/066-smooth-roads` and `task/067-ship` cut from `main` at the
+  commit that carries the design (architecture 2, 8, 13, 14). Surfaces: the simulation; the
+  OSM importer and its tests; CI, Vite config, three URL lines and the README. TASK-066
+  changes imported geometry but not the synthetic fixtures, so the benchmark hashes stay;
+  TASK-065 may change them. Merge order: 067, 066, 065, then a lead commit that lifts the
+  setback cap if Munich at 0.15 uncapped completes at least as many trips as capped on the
+  merged tree, then the owner enables GitHub Pages. Owner decision: no long performance runs
+  unless they block.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
