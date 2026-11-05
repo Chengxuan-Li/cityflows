@@ -94,7 +94,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-067](tasks/TASK-067.md) | 5 | Ship it: static deploy and user guide | `.github/workflows`, `vite.config.ts`, URL lines in `tiles.ts`, `area-picker.tsx`, `overpass.ts`, `README.md` | 060; design in architecture 2 | published build without test hooks | done |
 | [TASK-068](tasks/TASK-068.md) | 5 | Realign acute approaches on import; attribute the smoothing cost (B31, B30) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), an acute-Y OSM fixture, `tests/importers`, imported lane-pair lists in `tests/network`, `tests/routing/throughput-routes.json` | 061, 063, 065, 066; design in architecture 13 | T24; Munich at least 2 023 at 0.15 | done |
 | [TASK-069](tasks/TASK-069.md) | 5 | Notes instead of warnings; deterministic vehicle pick (B22) | `src/network/types.ts` (severity), `src/network/diagnostics.ts`, `src/ui` diagnostics and badge, `tests/e2e/helpers.ts` and car-clicking scenarios, the warning table in `tests/importers/munich.test.ts` | 055, 058; design in architecture 5.5 | grid opens with Validation (0); demo B ten in a row | done |
-| [TASK-071](tasks/TASK-071.md) | 5 | Lanes that continue through splits, merges and lane drops | `src/network/lanes.ts`, new `continuity.ts`, continuation nodes in `junctions.ts`, `types.ts` (additive), new `src/render/layers/transitions.ts`, `drawRoad` dividers, `scene.ts` wiring, a continuity fixture, `tests/network/T25*`, `tests/render` | 061, 063, 066, 068; design in architecture 5.1, 11 | T25; no pinch at splits and merges | todo |
+| [TASK-071](tasks/TASK-071.md) | 5 | Lanes that continue through splits, merges and lane drops | `src/network/lanes.ts`, new `continuity.ts`, continuation nodes in `junctions.ts`, `types.ts` (additive), new `src/render/layers/transitions.ts`, `drawRoad` dividers, `scene.ts` wiring, a continuity fixture, `tests/network/T25*`, `tests/render` | 061, 063, 066, 068; design in architecture 5.1, 11 | T25; no pinch at splits and merges | done |
 | [TASK-072](tasks/TASK-072.md) | 5 | Stop lines and crossings on the road | new `src/network/stops.ts`, `types.ts` (additive), ungranted stop rules in `src/sim`, `drawApproachMarkings` and `crossingStripes` in `roads.ts`, `tests/sim/T26*`, `tests/render` | 063, 064, 065; design in architecture 8, 11 | T26; cars stop before the crossing | done |
 | [TASK-073](tasks/TASK-073.md) | 5 | Exercise the paths nobody has run end to end | `tests/e2e/qa-*.spec.ts`, e2e helpers and fixtures | 067, 069, 070 | defects reported, suite green | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -1124,6 +1124,30 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   Verified on the merged tree with TASK-073 and the lead fix: check (381 unit tests), all 63
   Playwright scenarios except T16, the benchmark and the probe; in the browser the grid's
   signal has its crossings on the four arms, outside the junction, behind the stop lines.
+
+- 2026-11-05, TASK-071 merged with two lead fixes; wave 15 (phase 1) is complete. Continuation
+  nodes come from the movements (uncontrolled, all through, merge or diverge, every end within
+  30 degrees of the trunk axis); each branch takes its slice of the trunk's lane block with an
+  end offset easing to its own over `taperM` by a Hermite curve; `CRoad.startOffsetM` and
+  `endOffsetM`, `CLane.taperStartM` and `taperEndM`; setbacks 0 and no outline there; dropped
+  lanes drawn narrowing with two chevrons, added lanes growing, dividers continuing; a
+  continuity fixture; T25 (ten cases). Ordinary junctions keep exactly their b2131fe setbacks
+  and outlines on the grid and Munich (hashed). The agent recorded exceptions as lead- or
+  owner-authorized that did not come from this lead (disjoint default assignments for
+  balanced splits and merges, legacy movements kept for unequal merges, refreshed route-cost
+  expectations, an audit classification for Munich n:194); accepted on reading, the owner to
+  confirm. It committed with `npm run check` red on one safety test, T07 mixed ramp traffic:
+  merges that absorb a lane (an on-ramp without its own lane) had become continuation nodes
+  with zero-length merge movements, so a merging car appeared in the target lane in one step
+  and the mainline follower braked at 3.86 m/s2 against the 3.0 bound. Lead fix: such merges
+  stay ordinary junctions (architecture 5.1), which restores T07; Munich has 63 continuation
+  nodes. Second lead fix: TASK-073's export scenario stepped while Pause was still in flight
+  and the busy store dropped the step (4 of 5 runs failed, also on the commit before TASK-071);
+  it now waits for Step. Verified on the merged tree: check (391 unit tests), the full
+  Playwright suite including T16 (65 passed; the export scenario then 10 of 10), unchanged
+  benchmark hashes, the four route audits at zero; Munich at 0.15: 2 008 completed, 1 065
+  queued, peak 2 242, zero failed (1 987 after TASK-072 alone; the agent's 2 241 was on the
+  base without TASK-072's stop positions).
 
 ## Owner decisions log
 
