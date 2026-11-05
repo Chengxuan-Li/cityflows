@@ -69,6 +69,8 @@ export const simParamsSchema = z
     laneChangeDistanceM: z.number(),
     laneChangeDurationS: z.number(),
     mandatoryUrgencyM: z.number(),
+    cooperativeYieldS: z.number().nonnegative(),
+    missedTurnAfterS: z.number().nonnegative(),
     intersection: z.object({
       decisionDistanceM: z.number(),
       gapS: z.number(),
@@ -77,6 +79,11 @@ export const simParamsSchema = z
       boxWaitS: z.number().nonnegative().default(10),
     }),
     spawnMinGapM: z.number(),
+    gridlock: z.object({
+      respawnS: z.number().positive().default(180),
+      fadeS: z.number().nonnegative().default(5),
+      maxRespawns: z.int().nonnegative().default(3),
+    }),
     linkCostAlpha: z.number().positive().max(1),
     linkCostIntervalS: z.number().positive(),
     rerouteIntervalS: z.number().positive(),

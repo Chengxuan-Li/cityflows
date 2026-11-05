@@ -21,7 +21,7 @@ requirements R1 to R8 and tests T01 to T18 are binding and referenced below by I
 | 7 | Upstream audit | Bounded, read-only, parallel to scaffolding (TASK-000). | Full Gate 0 with running every reference first: days of agent time before product code. |
 | 8 | Road geometry | Every directed carriageway owns its centerline. `streetGroupId` optionally groups the two directions of a simple street for editing. | Two directions sharing one centerline: cannot represent divided highways, medians, ramps or real OSM geometry. |
 | 9 | Movements | Lane-to-lane movements are generated at compile time from connectivity and lane rules; the canonical model stores only explicit allow/ban overrides. Structural errors block commits; connectivity problems are warnings that do not. | Every movement as a canonical entity: edits to lane counts would orphan thousands of records. |
-| 10 | Routing | Road-level search, then lane resolution with a feasibility check from the vehicle's current lane. Lane-level search is the fallback. A vehicle never teleports or takes an illegal movement; an infeasible plan becomes a legal movement plus a reroute with a reason code. | Road-level only: vehicles stuck in the wrong lane at a turn. |
+| 10 | Routing | Road-level search, then lane resolution with a feasibility check from the vehicle's current lane. Lane-level search is the fallback. A vehicle never teleports or takes an illegal movement; an infeasible plan becomes a legal movement plus a reroute with a reason code. Owner-approved exception (TASK-077): a car stuck at the head of a jam for `gridlock.respawnS` leaves the road and its trip starts again from its origin; it is never moved along the road. | Road-level only: vehicles stuck in the wrong lane at a turn. |
 | 11 | Persistence | The canonical `City` snapshot is the authoritative saved state. Editor history is optional, separately versioned, and droppable. Migrations operate on snapshots. | Replaying a patch log on load: couples saved files to editor code history. |
 | 12 | Intersections | Vehicles explicitly occupy movement paths; entry needs free space on the exit lane; conflicts are resolved by deterministic arbitration each step; signals are conservative (enter on green with space). Permissive turns and finer gap acceptance come later. | Implicit intersections: gridlock and phantom collisions. |
 | 13 | Edits during a run | Release 1 required a paused run and a restart (T17). TASK-051: a committed edit is patched into the running engine (section 8, live edits): the compiled city is swapped, vehicles are remapped by id or by position, and only vehicles whose remaining route touches a changed element reroute, staggered over the reroute interval. Edits that change demand (place kind, population, jobs, places added or removed) or trip scheduling (a place's profile, events or attraction) still need a restart, which regenerates the population only in the first case. | Live topology edits without remapping: invalid vehicle references. |
@@ -366,6 +366,17 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
     narrowing to zero width over the last `taperM` of its road; a lane added at a widening
     is drawn growing from zero over the first `taperM`. `CLane.taperStartM` and
     `CLane.taperEndM` (0 when none) carry the lengths.
+- TASK-074 (junction shapes, refines TASK-063 for ordinary junctions). Measured first: per
+  node, the area where two road surfaces of the node overlap outside the outline, outline
+  self-intersections, movement surfaces escaping the outline, road-end edges off the
+  outline, the largest tangent turn where a fillet meets a road edge, and corners sharper
+  than 30 degrees that are not gore tips. The shape follows SUMO netconvert's node-shape
+  computation: each road end's setback is where its curb lines meet the facing curb lines of
+  its angular neighbours (plus the fillet's tangent length), not a single radius per node;
+  with the 10 m cap kept, the part of a capped pair's overlap that the setbacks cannot
+  remove is covered by the outline (the TASK-063 gore) rather than left as two road
+  surfaces drawn over each other. Continuation nodes are unchanged. Acceptance and the
+  measures are T27.
 
 ### 5.2 Movement generation
 
@@ -660,6 +671,13 @@ Algorithm:
    road `i-1` that have a movement into `enterable[i]`, and the chosen movement per lane is
    the one with the lowest penalty. If any set is empty the road-level route is
    lane-infeasible.
+   TASK-076 (replaces the choice per lane): among a lane's movements into `enterable[i]`, the
+   chosen one is the movement whose landing lane needs the fewest lane changes to reach
+   `feasible[i]` (on the last road, the connector lane), then the lowest penalty, then the
+   lowest movement idx. In the forward pass, the reachable lanes of the entry lane are tried
+   in order of fewest changes, then left before right, so a route never plans a change it can
+   avoid (a lane that feeds two lanes of a short ramp lands in the one that serves the next
+   road).
 3. Origin check: the vehicle's lane must reach `feasible[0]` starting at `fromPosM` with
    budget `lengthM` of its lane.
 4. Fallback when 2 or 3 fail: Dijkstra over lanes, edges = movements (same costs) plus lane
@@ -690,9 +708,12 @@ interface SimParams {
   laneChangeDistanceM: 30;
   laneChangeDurationS: 2;
   mandatoryUrgencyM: 10;         // extra margin before a required change becomes forced
+  cooperativeYieldS: 3;          // TASK-076: held this long, a car gets a gap from behind
+  missedTurnAfterS: 30;          // TASK-076: held this long, it gives the change up
   intersection: { decisionDistanceM: 15; gapS: 4; creepSpeedMps: 1.0;
                   zoneMarginS: 1.0; boxWaitS: 10 };   // TASK-065, B27 and B28
   spawnMinGapM: 8;
+  gridlock: { respawnS: 180; fadeS: 5; maxRespawns: 3 };   // TASK-077
   linkCostAlpha: 0.3;
   linkCostIntervalS: 60;
   rerouteIntervalS: 120;
@@ -703,7 +724,8 @@ interface SimParams {
 
 type VehicleState = 'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed';
 type FailReason = 'no_route' | 'unsupported_mode' | 'destination_unreachable' | 'stranded'
-  | 'no_origin_connector' | 'no_destination_connector';
+  | 'no_origin_connector' | 'no_destination_connector'
+  | 'gridlocked';                                     // TASK-077, after maxRespawns
 
 interface TrafficEngine {
   load(input: { compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario; params?: Partial<SimParams> }): void;
@@ -722,6 +744,7 @@ interface VehicleSnapshot {
   speed: Float32Array; lateralM: Float32Array;       // lateral offset while changing lanes
   lane: Int32Array;                                   // lane idx, or -(movement idx + 1) on a movement
   state: Uint8Array;                                  // 1 driving, 2 queued_destination
+  fade: Float32Array;                                 // TASK-077: 1, or falling to 0 before a respawn
 }
 
 interface PatchResult {
@@ -739,15 +762,18 @@ interface Metrics {
   meanTravelTimeS: number; meanDelayS: number;        // delay = travel - free-flow estimate
   roadSpeedRatio: Float32Array;                       // mean speed / limit per compiled road, for heat
   stepsPerSecond: number;                             // measured by the host, 0 headless
+  respawns: number;                                   // TASK-077, over all trips
 }
 
 interface VehicleDetail {
   id: number; tripId: string; personId: string | null;
   originPlace: PlaceId; destinationPlace: PlaceId; state: VehicleState;
   lane: number; positionM: number; speedMps: number;
-  route: Route | null; routeReason: 'initial' | 'missed_turn' | 'congestion' | 'edit';
+  route: Route | null;
+  routeReason: 'initial' | 'missed_turn' | 'congestion' | 'edit' | 'respawn';   // TASK-077
   waitingS: number; departedS: number | null; arrivedS: number | null;
   failReason: FailReason | null;
+  respawns: number;                                   // TASK-077
 }
 ```
 
@@ -887,6 +913,33 @@ compiler's clamped/fallback movement from the dropped lane.
 Required diverge changes also wait before the junction and retry at the stop-line margin;
 holding releases an approach grant so it cannot block the lane the vehicle needs to join.
 The existing missed-turn fallback remains for ordinary turns.
+
+Mandatory changes (TASK-076). A car that needs a mandatory change and has stood (speed below
+0.1 m/s) at its stop position, or crept there, for `cooperativeYieldS` becomes a requester.
+In proposal order, each requester picks one yielder: the nearest driving vehicle behind its
+position on the target lane, within `laneChangeDistanceM`, that holds no grant and is not
+itself a requester or a yielder, and that can stop behind the requester's projected rear
+(its position on the target lane) at no more than `bMps2`. The yielder treats that projected
+rear as its leader (a virtual leader, `minGapM` behind it) until the requester changes lane,
+gives up, or the yielder would have to brake harder than `bMps2`; the ordinary safe-gap
+check then accepts the change. A requester that has been held for `missedTurnAfterS` gives
+the change up: it takes the TASK-048 fallback from its current lane (the cheapest legal
+movement whose landing lane routes to its destination), which now also applies when the
+route still needs another lane on this road and to a required diverge, and reroutes with
+`missed_turn`. With no such movement it keeps waiting, and gridlock recovery below applies.
+
+Gridlock recovery (TASK-077, owner-approved exception to section 1 row 10). A driving
+vehicle is a jam head while it is on a movement, or first on its lane, and not standing at a
+red signal for its own movement. Its jam time grows by `dtS` each step it is a jam head with
+speed below 0.1 m/s and resets to 0 when it moves or stops being a jam head. From
+`respawnS - fadeS` its snapshot `fade` falls linearly from 1 to 0 (1 again if it moves). At
+`respawnS` the commit removes it, in id order: its grants and zone occupancy are released, it
+leaves its lane or movement, and its trip returns to `queued_origin` at its origin connector,
+ahead of trips with later departure times, keeping its first `departedS` so travel time and
+delay include the stall. At release it gets a fresh route with `routeReason: 'respawn'`.
+`VehicleDetail.respawns` and `Metrics.respawns` count respawns; the respawn after
+`maxRespawns` fails the trip as `gridlocked` instead. Respawns are deterministic (T02) and
+keep T01's sums.
 
 State hash: FNV-1a over the sequence `[round(timeS * 10)]` followed, for every vehicle that
 has departed (driving, queued at its destination, completed or failed after departing) in id
@@ -1155,6 +1208,19 @@ type HostEvent =
 - TASK-071: at a continuation node no stop line, crossing or junction surface is drawn; lane
   dividers continue through it, the dividers beside a tapering lane converge or diverge with
   it, and a dropped lane carries two merge chevrons inside its taper.
+- TASK-074: a road's lane markings stop where its surface enters another road's surface or
+  its node's outline, so no divider is drawn on a neighbouring road.
+- TASK-075 (junction guide markings). At a node that is not signalized, has an outline, and
+  has a major road (two opposing groups of through movements whose priority is higher than
+  every other movement's, or one through group on a one-way major road), dashed guide lines
+  cross the junction along the major road, drawn above node areas: the dividers between
+  adjacent through movements of one direction (midway between their paths), the centre line
+  between the two directions (midway between the innermost through movements, where they are
+  within 30 degrees of each other), and the edge line across a side road's mouth (along the
+  outer edge of the outermost through movement). Short dashes (1.5 m, gap 1.5 m), the
+  divider width. A node without a major road (all-way stop, equal-priority crossing) and a
+  signalized node get none; turns get none.
+- TASK-077: a car's sprite alpha is the snapshot's `fade`.
 - TASK-063: roads and junction surfaces share one asphalt colour by default. A Layers entry
   "Road classes" (off by default) turns on the per-class tones of `roadStyle`; then a
   junction takes the tone of its incident road with the highest `classRank`. Presentation
@@ -1397,6 +1463,10 @@ Headless tests run in Vitest from fixtures in `src/fixtures` (generated) and `fi
 | T24 acute approaches: realigned to 60 degrees, merges untouched, shorter setbacks | importers, network | Munich, Sindelfingen, an acute-Y OSM fixture | TASK-068 |
 | T25 lane continuity: no pinch at splits and merges, tapers at drops | network, render | grid, a split-merge fixture, Munich | TASK-071 |
 | T26 stop positions: cars stop before the crossing, crossings on the road | network, sim, render | four-way signal, grid, Munich | TASK-072 |
+| T27 junction shapes: no overlap outside outlines, smooth curbs, markings clipped | network, render | grid, town, Sindelfingen, Munich | TASK-074 |
+| T28 junction guide markings: lanes continue dashed through junctions without signals | render | T-junction, four-way, grid, Munich | TASK-075 |
+| T29 mandatory changes: avoidable changes not planned, cooperative gaps, give-up | routing, sim | ramp fixture, platoon, Munich | TASK-076 |
+| T30 gridlock recovery: a stuck jam head fades and its trip starts again | sim, render | square deadlock, grid, Munich | TASK-077 |
 
 Synthetic fixtures (all generated by code with a seed, in `src/fixtures`):
 

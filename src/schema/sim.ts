@@ -7,6 +7,8 @@ export interface SimParams {
   laneChangeDistanceM: number;
   laneChangeDurationS: number;
   mandatoryUrgencyM: number; // extra margin before a required change becomes forced
+  cooperativeYieldS: number; // TASK-076: a car held this long for a mandatory change gets a gap
+  missedTurnAfterS: number; // TASK-076: then it gives up the change and takes a legal movement
   intersection: {
     decisionDistanceM: number;
     gapS: number;
@@ -15,6 +17,8 @@ export interface SimParams {
     boxWaitS: number;
   };
   spawnMinGapM: number;
+  /** TASK-077: a car stalled this long at the head of a jam fades and its trip respawns. */
+  gridlock: { respawnS: number; fadeS: number; maxRespawns: number };
   linkCostAlpha: number;
   linkCostIntervalS: number;
   rerouteIntervalS: number;

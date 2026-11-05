@@ -97,6 +97,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-071](tasks/TASK-071.md) | 5 | Lanes that continue through splits, merges and lane drops | `src/network/lanes.ts`, new `continuity.ts`, continuation nodes in `junctions.ts`, `types.ts` (additive), new `src/render/layers/transitions.ts`, `drawRoad` dividers, `scene.ts` wiring, a continuity fixture, `tests/network/T25*`, `tests/render` | 061, 063, 066, 068; design in architecture 5.1, 11 | T25; no pinch at splits and merges | done |
 | [TASK-072](tasks/TASK-072.md) | 5 | Stop lines and crossings on the road | new `src/network/stops.ts`, `types.ts` (additive), ungranted stop rules in `src/sim`, `drawApproachMarkings` and `crossingStripes` in `roads.ts`, `tests/sim/T26*`, `tests/render` | 063, 064, 065; design in architecture 8, 11 | T26; cars stop before the crossing | done |
 | [TASK-073](tasks/TASK-073.md) | 5 | Exercise the paths nobody has run end to end | `tests/e2e/qa-*.spec.ts`, e2e helpers and fixtures | 067, 069, 070 | defects reported, suite green | done |
+| [TASK-074](tasks/TASK-074.md) | 5 | Junction shapes, measured on the real cities | new `bench/junction-audit.ts`, `src/network/junctions.ts`, `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, the marking clip in `drawRoad`, `NOTICE`, `tests/network/T27*` | 063, 068, 071, 072; design in architecture 5.1, 11 | T27; overlap outside outlines halved | todo |
+| [TASK-075](tasks/TASK-075.md) | 5 | Lane markings through junctions without signals | new `src/render/layers/junction-markings.ts`, `scene.ts` wiring, `style.ts` (additive), `tests/render/T28*` | 061, 063, 071, 072; design in architecture 11 | T28; dashed guide lines on major roads | todo |
+| [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | todo |
+| [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -221,6 +225,15 @@ dependency of its tasks is merged to `main`.
   commit (the warning table, `realign_limited` as a note). B30 did not reproduce on current
   code. Munich at 0.15 completes 2 175 trips by 10:00, the best since the TASK-063 era
   (wave 12: 2 231 before smoothing). Next: the owner's test round and the Gate 5 decision.
+
+- Wave 16 (lead, 2026-11-05): the owner's second test round comes before Gate 5 (owner
+  decisions log). TASK-074, TASK-075 and TASK-076 in parallel, branches
+  `task/074-junction-shapes`, `task/075-junction-markings` and `task/076-exit-lanes` cut from
+  `main` at the commit that carries the design (architecture 1, 5.1, 7, 8, 11, 14; the new
+  `SimParams` fields with their defaults). Surfaces: network geometry with the node layer and
+  the marking clip in `drawRoad`; a new render layer and its `scene.ts` wiring; routing and
+  the lane-change parts of the simulation. TASK-077 also changes `src/sim`, so it starts once
+  TASK-076 is merged, on a branch cut then. Merge order: 076, 075, 074, then 077.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -415,7 +428,24 @@ separate fields), `src/render/layers/roads.ts` (071 the divider loop, 072 the ap
 markings) and `src/render/scene.ts` (wiring); the lead reconciles them. Merge order: 073,
 072, 071. Then the lead runs the whole suite with T16 once.
 
-Phase 2 (wave 16, after phase 1 and the owner's examples for point 1): TASK-074 junction
+Update after the owner's second test round (2026-11-05): phase 2 is now wave 16, the four
+owner items below, before any Gate 5 item. Walking legs and multimodal travel move to phase 3.
+
+- Round 2, point 1: lane markings continue through junctions without signals (TASK-075).
+- Round 2, point 2: keep improving junction shapes (TASK-074, measured by an audit instead of
+  waiting for the owner's examples; the owner may still send some during the wave).
+- Round 2, point 3: in Munich cars wait on the main road instead of turning into their exit,
+  and the city deadlocks. Lead probe on ce4e3f8 at 0.15: the first stalls are cars off their
+  target lane at the end of short ramps (`r:639` at `n:638`, `r:1299`, `r:968`, `r:884`),
+  held for a mandatory change that no gap ever allows, after lane resolution planned the
+  change although a lane needing none was available; from 09:30 all 2 241 cars on the road
+  stand still and completions stop at 2 008. b2131fe (before wave 15) locks the same way at
+  2 175. TASK-053's "no gridlock at the default scale" counted queued trips, not stalled cars,
+  and the probe's completed and failed counts hid the lock until now (TASK-076).
+- Round 2, point 4: a car deadlocked in a junction should fade, vanish and respawn from its
+  origin, as a general escape (TASK-077, after TASK-076).
+
+Phase 2 as first planned (wave 16, after phase 1 and the owner's examples for point 1): TASK-074 junction
 shape, the rest of point 1 and B21: the junction outline built the way SUMO's netconvert
 computes node shapes (EPL-2.0 or GPL-2.0-or-later, so its algorithm may be adapted with a
 NOTICE entry), sized from the owner's two or three worst junctions; `src/network/junctions.ts`
@@ -1150,6 +1180,12 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   base without TASK-072's stop positions).
 
 ## Owner decisions log
+
+- 2026-11-05, after testing wave 15: the four round 2 items (markings through junctions
+  without signals, junction shapes, cars missing their exit and the Munich deadlock, a
+  fade-and-respawn escape from gridlock) are fixed before walking legs and multimodal travel.
+  The respawn is the owner's request and an approved exception to architecture section 1
+  row 10.
 
 - 2026-11-05: GitHub Pages is enabled and the site is live at
   https://chengxuan-li.github.io/cityflows/ (default OpenStreetMap tiles). The outstanding
