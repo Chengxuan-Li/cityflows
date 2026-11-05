@@ -97,7 +97,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-071](tasks/TASK-071.md) | 5 | Lanes that continue through splits, merges and lane drops | `src/network/lanes.ts`, new `continuity.ts`, continuation nodes in `junctions.ts`, `types.ts` (additive), new `src/render/layers/transitions.ts`, `drawRoad` dividers, `scene.ts` wiring, a continuity fixture, `tests/network/T25*`, `tests/render` | 061, 063, 066, 068; design in architecture 5.1, 11 | T25; no pinch at splits and merges | done |
 | [TASK-072](tasks/TASK-072.md) | 5 | Stop lines and crossings on the road | new `src/network/stops.ts`, `types.ts` (additive), ungranted stop rules in `src/sim`, `drawApproachMarkings` and `crossingStripes` in `roads.ts`, `tests/sim/T26*`, `tests/render` | 063, 064, 065; design in architecture 8, 11 | T26; cars stop before the crossing | done |
 | [TASK-073](tasks/TASK-073.md) | 5 | Exercise the paths nobody has run end to end | `tests/e2e/qa-*.spec.ts`, e2e helpers and fixtures | 067, 069, 070 | defects reported, suite green | done |
-| [TASK-074](tasks/TASK-074.md) | 5 | Junction shapes, measured on the real cities | new `bench/junction-audit.ts`, `src/network/junctions.ts`, `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, the marking clip in `drawRoad`, `NOTICE`, `tests/network/T27*` | 063, 068, 071, 072; design in architecture 5.1, 11 | T27; overlap outside outlines halved | todo |
+| [TASK-074](tasks/TASK-074.md) | 5 | Junction shapes, measured on the real cities | new `bench/junction-audit.ts`, `src/network/junctions.ts`, `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, the marking clip in `drawRoad`, `NOTICE`, `tests/network/T27*` | 063, 068, 071, 072; design in architecture 5.1, 11 | T27; overlap outside outlines halved | done |
 | [TASK-075](tasks/TASK-075.md) | 5 | Lane markings through junctions without signals | new `src/render/layers/junction-markings.ts`, `scene.ts` wiring, `style.ts` (additive), `tests/render/T28*` | 061, 063, 071, 072; design in architecture 11 | T28; dashed guide lines on major roads | done |
 | [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | done |
 | [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | todo |
@@ -1213,6 +1213,28 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   left to TASK-077. T29 case 4 (no off-target hold over 40 s on Munich) is `test.fails` until
   the city no longer locks. Benchmark end hashes unchanged (every trip completes). Verified on
   the merged tree: check (399 unit tests), route audit zero on all four cities, the probe.
+
+- 2026-11-05, TASK-074 merged after two rounds, with a lead fix. `bench/junction-audit.ts`
+  measures every node of the four cities. Setbacks follow SUMO netconvert's node shapes
+  (`NOTICE`), curb radius 1 m (1.5 m cost Munich 400 trips), cap kept; the outline reaches at
+  most 11 m past a road end's cut and covers the remaining overlap with a gore. Round one's
+  marking clip erased whole roads' markings (n:721, n:104, n:823 in its own screenshots) and
+  let junctions swallow 40 m of road; returned. Round two: markings clip only at the road's
+  own outlines and at other roads' surfaces within 10 m of the cut, never against the
+  opposite direction or a road within 30 degrees, never arrows, stop lines or crossings;
+  marking length outside outlines is 100.5 to 101.5 percent of main on every city (T27).
+  Overlap at road ends: Munich 256.6 to 0 m2, Sindelfingen 55.7 to 15.6, grid and town 0;
+  no proper outline self-intersections. Open: on the capped east approaches of n:104 and
+  n:721 the arrows and stop lines lie under the junction surface; T27 names 49 residual
+  nodes (22 coincident source carriageways, an importer defect; 27 others: 6 stub roads, 3
+  bodies crossing away from the node, 18 other); T20's short unequal junction has 3 escaping
+  movements (main 2) and touches itself at a point; `compile.ts` calls the new setback
+  function while the importer keeps the old one (one signal grouping differs, n:949). Lead fix
+  at merge: TASK-075's guide dashes clipped to the outline and incident road surfaces (T28.3
+  failed at Munich n:266 on the merged tree). Benchmark hashes unchanged. Verified on the
+  merged tree: check green except 5 s time-outs under the TASK-077 agent's load (all pass
+  with a longer timeout), route audit zero, Munich at 0.15: 2 022 completed, still locked
+  (TASK-077).
 
 ## Owner decisions log
 
