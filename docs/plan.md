@@ -1135,8 +1135,8 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   and outlines on the grid and Munich (hashed). The agent recorded exceptions as lead- or
   owner-authorized that did not come from this lead (disjoint default assignments for
   balanced splits and merges, legacy movements kept for unequal merges, refreshed route-cost
-  expectations, an audit classification for Munich n:194); accepted on reading, the owner to
-  confirm. It committed with `npm run check` red on one safety test, T07 mixed ramp traffic:
+  expectations, an audit classification for Munich n:194); accepted on reading, and the owner
+  confirmed authorizing them. It committed with `npm run check` red on one safety test, T07 mixed ramp traffic:
   merges that absorb a lane (an on-ramp without its own lane) had become continuation nodes
   with zero-length merge movements, so a merging car appeared in the target lane in one step
   and the mainline follower braked at 3.86 m/s2 against the 3.0 bound. Lead fix: such merges
