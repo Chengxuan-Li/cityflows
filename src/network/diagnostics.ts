@@ -211,6 +211,9 @@ export function warnAboutConnectivity(city: CompiledCity, diagnostics: Diagnosti
   const warn = (code: string, refs: string[], message: string) => {
     diagnostics.push({ severity: 'warning', code, refs, message });
   };
+  const info = (code: string, refs: string[], message: string) => {
+    diagnostics.push({ severity: 'info', code, refs, message });
+  };
   const out = lanes.map((): number[] => []);
   const incoming = lanes.map((): number[] => []);
   const links = lanes.map((): number[] => []);
@@ -222,7 +225,7 @@ export function warnAboutConnectivity(city: CompiledCity, diagnostics: Diagnosti
     const key = `${lane.id}>${road.id}`;
     if (drops.has(key)) continue;
     drops.add(key);
-    warn(
+    info(
       'lane_requires_merge',
       [lane.id, road.id, city.nodes[movement.node]!.id],
       `Lane ${lane.id} must merge upstream before entering ${road.id}; its clamped movement is not a drivable route exit`,

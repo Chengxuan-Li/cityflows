@@ -1,7 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { pointAtDistance } from '../../src/geo/polyline';
-import { compile } from '../../src/network';
-import { button, city, clickGrid, fitted, pageErrors } from './helpers';
+import { button, clickGrid, clickVehicle, pageErrors } from './helpers';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -20,30 +18,6 @@ async function ringed(page: Page, target: Locator) {
       );
     })
     .toEqual([-3, -3, 6, 6]);
-}
-
-/** Clicks a car that is driving now; retried because the car moves between query and click. */
-async function clickCar(page: Page) {
-  const source = await city(page);
-  const compiled = compile(source);
-  if (!compiled.ok) throw new Error('City must compile');
-  const screen = fitted(compiled.compiled, source);
-  await expect(async () => {
-    const car = await page.evaluate(async () => {
-      for (let id = 1; id <= 200; id++) {
-        const detail = await window.cityflows!.inspect(id);
-        if (detail?.state === 'driving') return detail;
-      }
-      return null;
-    });
-    expect(car).not.toBeNull();
-    const lane = compiled.compiled.lanes[car!.lane]!;
-    const at = await screen(page, pointAtDistance(lane.polyline, lane.cumulative, car!.positionM));
-    await page.mouse.click(at.x, at.y);
-    await expect(page.getByRole('heading', { name: /^Vehicle \d+$/ })).toBeVisible({
-      timeout: 500,
-    });
-  }).toPass({ timeout: 20_000 });
 }
 
 test('a new player following only the hints completes the loop once', async ({ page }, info) => {
@@ -77,7 +51,11 @@ test('a new player following only the hints completes the loop once', async ({ p
 
   await expect(hint(page)).toContainText('Click a car to see its trip and why it waits.');
   await shot(3);
-  await clickCar(page);
+  await expect
+    .poll(() => page.evaluate(() => window.cityflows!.drawnSnapshot!()?.count ?? 0))
+    .toBeGreaterThan(0);
+  const id = await page.evaluate(() => window.cityflows!.drawnSnapshot!()!.id[0]!);
+  await clickVehicle(page, id);
 
   await expect(hint(page)).toContainText('Click a street, then open its settings');
   await shot(4);

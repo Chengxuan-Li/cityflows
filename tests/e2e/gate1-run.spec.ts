@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { clickVehicle } from './helpers';
 
 async function metrics(page: Page) {
   return page.evaluate(() => window.cityflows!.metrics());
@@ -20,6 +21,18 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(() => expect(errors).toEqual([]));
+
+test('the grid has no validation issues and lists its 15 lane drops under Notes', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Validation (0)', exact: true }).click();
+  const inspector = page.getByRole('complementary', { name: 'Inspector' });
+  await expect(inspector).toContainText('No network issues found.');
+  const notes = inspector.getByRole('region', { name: 'Notes', exact: true });
+  await expect(notes.getByRole('heading', { name: 'Notes' })).toBeVisible();
+  await expect(notes.getByRole('listitem')).toHaveCount(15);
+  await expect(notes.getByRole('listitem').first()).toContainText('must merge upstream');
+});
 
 test('runs, pauses, replays the same steps, and inspects the map', async ({ page }, testInfo) => {
   const start = await metrics(page);
@@ -63,7 +76,7 @@ test('runs, pauses, replays the same steps, and inspects the map', async ({ page
       },
     });
   }
-  await pick(6, 2);
+  await clickVehicle(page, 1);
   await expect(inspector.getByRole('heading', { name: 'Vehicle 1' })).toBeVisible();
   await expect(inspector.getByText(/^initial$/i)).toBeVisible();
   await expect(inspector.getByText(/\d+ roads/)).toBeVisible();

@@ -4,6 +4,7 @@ import { Layers } from './layers';
 import { MetricsPanel } from './panels/metrics';
 import { ComparePanel } from './panels/compare';
 import { DemandPanel } from './panels/demand';
+import { groupDiagnostics } from './diagnostics';
 
 const speeds = [1, 2, 5, 10, 20];
 
@@ -16,7 +17,9 @@ function clock(timeS: number) {
 export function RunBar() {
   const run = useAppStore((state) => state.run);
   const busy = useAppStore((state) => state.busy);
-  const diagnostics = useAppStore((state) => state.session?.diagnostics.length);
+  const diagnostics = useAppStore((state) =>
+    state.session ? groupDiagnostics(state.session.diagnostics).issues.length : undefined,
+  );
   const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
   const layersOpen = useAppStore((state) => state.layersOpen);
   const metricsOpen = useAppStore((state) => state.metricsOpen);

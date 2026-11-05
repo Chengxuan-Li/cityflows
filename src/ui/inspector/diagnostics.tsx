@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { EngineClient } from '../../host/client';
 import type { Diagnostic } from '../../network';
+import { groupDiagnostics } from '../diagnostics';
 
 export function Diagnostics({
   diagnostics,
@@ -13,6 +14,7 @@ export function Diagnostics({
 }) {
   const [hash, setHash] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { issues, notes } = groupDiagnostics(diagnostics);
 
   useEffect(() => {
     let active = true;
@@ -42,9 +44,9 @@ export function Diagnostics({
         </dd>
       </dl>
       <h3>Network validation</h3>
-      {diagnostics.length ? (
+      {issues.length ? (
         <ul className="item-list">
-          {diagnostics.map(({ severity, message }, index) => (
+          {issues.map(({ severity, message }, index) => (
             <li key={index}>
               <strong className="capitalize">{severity}</strong>
               <span>{message}</span>
@@ -53,6 +55,16 @@ export function Diagnostics({
         </ul>
       ) : (
         <p className="muted">No network issues found.</p>
+      )}
+      {notes.length > 0 && (
+        <section aria-label="Notes">
+          <h3>Notes</h3>
+          <ul className="item-list">
+            {notes.map(({ message }, index) => (
+              <li key={index}>{message}</li>
+            ))}
+          </ul>
+        </section>
       )}
     </>
   );

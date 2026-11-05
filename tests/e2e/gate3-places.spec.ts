@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { pointAtDistance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { station } from '../../src/fixtures/station';
 import { compile } from '../../src/network';
 import {
   button,
   city,
+  clickVehicle,
   fitted,
   gridPoint,
   metrics,
@@ -120,13 +120,7 @@ test('demo B: the 08:05 train queues cars at the Station; a second arrival conne
     return null;
   });
   expect(queued).not.toBeNull();
-  const lane = compiled.compiled.lanes[queued!.lane]!;
-  const car = await screen(
-    page,
-    pointAtDistance(lane.polyline, lane.cumulative, queued!.positionM),
-  );
-  await page.mouse.click(car.x, car.y);
-  await expect(page.getByRole('heading', { name: /^Vehicle \d+$/ })).toBeVisible();
+  await clickVehicle(page, queued!.id);
   await expect(page.getByText('Waiting because', { exact: true })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Inspector' })).toContainText(
     /Waiting for space at the destination|Waiting to enter at the origin|Yielding at a junction|Stopped at a signal/,

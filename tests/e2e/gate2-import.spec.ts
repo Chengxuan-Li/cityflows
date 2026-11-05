@@ -4,6 +4,32 @@ import { strFromU8, unzipSync } from 'fflate';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import type { Person, Scenario } from '../../src/schema';
 
+test('Munich import keeps lane drops in Notes after its warnings', async ({ page }, info) => {
+  await page.route('https://**/*', (route) => route.abort());
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import city' });
+  await dialog.getByLabel('OSM file').setInputFiles('fixtures/osm/munich-donnersberger.osm');
+  await dialog.getByRole('button', { name: 'Import roads' }).click();
+  const diagnostics = dialog.getByRole('region', { name: 'Import diagnostics' });
+  await expect(diagnostics.getByRole('status')).toContainText('0 errors');
+  const notes = diagnostics.getByRole('region', { name: 'Notes', exact: true });
+  await expect(notes).toBeVisible();
+  expect(await notes.getByRole('listitem').count()).toBeGreaterThan(0);
+  await expect(notes.getByRole('listitem').first()).toContainText('must merge upstream');
+  const issues = diagnostics.locator(':scope > ul > li');
+  await expect(issues.filter({ hasText: 'must merge upstream' })).toHaveCount(0);
+  const warnings = Number(
+    (await diagnostics.getByRole('status').innerText()).match(/(\d+) warnings/)![1],
+  );
+  await expect(issues).toHaveCount(warnings);
+  expect(await diagnostics.locator(':scope > :last-child').getAttribute('aria-label')).toBe(
+    'Notes',
+  );
+  await expect(dialog.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  await page.screenshot({ path: info.outputPath('munich-notes.png') });
+});
+
 for (const scale of [0.15, 0.5]) {
   test(`imports and saves demand at scale ${scale}`, async ({ page }, info) => {
     await page.route('https://**/*', (route) => route.abort());

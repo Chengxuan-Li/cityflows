@@ -1,7 +1,15 @@
 import { expect, test } from '@playwright/test';
 import type { Vec2 } from '../../src/geo/vec2';
 import { compile } from '../../src/network';
-import { button, city, fitted, pageErrors, sampleQueues, writeMetrics } from './helpers';
+import {
+  button,
+  city,
+  clickVehicle,
+  fitted,
+  pageErrors,
+  sampleQueues,
+  writeMetrics,
+} from './helpers';
 
 test.use({
   video: { mode: 'on', size: { width: 1440, height: 900 } },
@@ -52,6 +60,19 @@ test('demo B, terminal access: the 08:05 arrival wave queues cars; a dedicated a
   expect(peak(without)).toBeGreaterThan(40);
   await page.screenshot({ path: info.outputPath('queue-one-connector.png') });
 
+  const queuedId = await page.evaluate(() => {
+    const snapshot = window.cityflows!.drawnSnapshot!();
+    const index = snapshot?.state.subarray(0, snapshot.count).indexOf(2) ?? -1;
+    return index < 0 ? null : snapshot!.id[index]!;
+  });
+  expect(queuedId).not.toBeNull();
+  await clickVehicle(page, queuedId!);
+  await expect(page.getByRole('complementary', { name: 'Inspector' })).toContainText(
+    'Waiting for space at the destination',
+  );
+  await page.screenshot({ path: info.outputPath('vehicle-waiting.png') });
+  await page.keyboard.press('Escape');
+
   await page.mouse.click(at.x, at.y);
   await expect(page.getByRole('heading', { name: 'Station', level: 2 })).toBeVisible();
   await page.getByText('Connectors', { exact: true }).click();
@@ -89,6 +110,7 @@ test('demo B, terminal access: the 08:05 arrival wave queues cars; a dedicated a
     screenshots: [
       'event.png',
       'queue-one-connector.png',
+      'vehicle-waiting.png',
       'arrival-connector.png',
       'queue-two-connectors.png',
     ],

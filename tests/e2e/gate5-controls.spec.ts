@@ -5,7 +5,10 @@ import type { City, Scenario } from '../../src/schema';
 import { compile } from '../../src/network';
 import { button, city, clickGrid, gridPoint, metrics, pageErrors, fitted } from './helpers';
 
-const step = (page: Page, n: number) => page.evaluate((n) => window.cityflows!.step(n), n);
+async function step(page: Page, n: number) {
+  await expect(button(page, 'Step')).toBeEnabled();
+  await page.evaluate((n) => window.cityflows!.step(n), n);
+}
 async function openTraffic(page: Page, mode: 'stop' | 'red' | 'roundabout') {
   const project = JSON.parse(
     await readFile('fixtures/projects/grid5x5.cityflows.json', 'utf8'),
