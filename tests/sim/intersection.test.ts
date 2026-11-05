@@ -6,6 +6,7 @@ import { createIntersections } from '../../src/sim/intersection';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { scenario, setup, trips } from './fixtures';
+import { sampleConflictZones } from './conflict-zone-safety';
 
 function cross(control: Control, equalRank = false, leftHand = false, blocked = false) {
   const { city, node, road, place } = buildCity('Crossing traffic', 1);
@@ -62,14 +63,10 @@ test.each([
     for (let i = 0; i < 500; i++) {
       engine.step();
       const view = engine.snapshot();
-      const occupied = new Set<number>();
+      sampleConflictZones(engine, compiled);
       for (const [index, id] of view.id.entries()) {
         const field = view.lane[index]!;
         if (field >= 0) continue;
-        const path = compiled.movements[-field - 1]!;
-        for (const conflict of path.conflicts) expect(occupied.has(conflict)).toBe(false);
-        expect(occupied.has(path.idx)).toBe(false);
-        occupied.add(path.idx);
         if (!crossed.size) expect(id <= northRequests.length ? 'north' : 'west').toBe(winner);
         crossed.add(id);
       }
@@ -127,7 +124,12 @@ test('a yielding vehicle waits for a higher-priority approach outside the entry 
     if (!majorCrossed) expect(north.lane).toBe(northLane);
     if (north.lane < 0) {
       expect(majorCrossed).toBe(true);
-      expect(west.lane).toBeGreaterThanOrEqual(0);
+      if (west.lane < 0) {
+        const majorPath = compiled.movements[-west.lane - 1]!;
+        const minorPath = -north.lane - 1;
+        const end = majorPath.conflictZones[majorPath.conflicts.indexOf(minorPath)]![1];
+        expect(west.positionM).toBeGreaterThanOrEqual(end + DEFAULT_SIM_PARAMS.vehicleLengthM);
+      }
       minorCrossed = true;
       break;
     }

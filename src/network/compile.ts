@@ -246,7 +246,7 @@ export function compile(city: City): CompileResult {
       movements,
     );
     containMovements(node, movements, lanes);
-    populateConflicts(node, movements);
+    populateConflicts(node, movements, lanes);
   }
 
   const compiled: CompiledCity = {

@@ -57,6 +57,7 @@ test.each(['stop', 'yield'] as const)('T05 %s with an empty major approach', (co
 
 test.each([3.9, 4, 4.1])('T05 yield accepts a major gap of %s seconds iff at least gapS', (gap) => {
   const { compiled, movement, conflicting } = crossing('yield');
+  const zoneStart = conflicting.conflictZones[conflicting.conflicts.indexOf(movement.idx)]![0];
   const vehicles = createVehicles(2, compiled.lanes.length, compiled.movements.length);
   for (const [id, path] of [movement, conflicting].entries()) {
     vehicles.state[id] = DRIVING;
@@ -65,7 +66,7 @@ test.each([3.9, 4, 4.1])('T05 yield accepts a major gap of %s seconds iff at lea
     vehicles.insert(
       id,
       path.fromLane,
-      compiled.lanes[path.fromLane]!.lengthM - (id ? gap * 10 : 12),
+      compiled.lanes[path.fromLane]!.lengthM - (id ? gap * 10 - zoneStart : 12),
     );
   }
   const junctions = createIntersections(compiled, vehicles, DEFAULT_SIM_PARAMS);

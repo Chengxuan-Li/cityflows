@@ -139,6 +139,7 @@ export function generateMovements(
       cumulative,
       lengthM: cumulative.at(-1)!,
       conflicts: [],
+      conflictZones: [],
       priority,
       neverGreen: false,
     });

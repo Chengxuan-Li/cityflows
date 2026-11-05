@@ -22,8 +22,13 @@ export function createIntersections(
     );
   });
   const colors = new Uint8Array(compiled.movements.length);
-  // Vehicles granted or driving on each movement. Several may share one movement (a platoon
-  // through a green); entry is refused only while a conflicting movement is occupied.
+  const opposingZones = compiled.movements.map((movement) =>
+    movement.conflicts.map((idx) => {
+      const other = compiled.movements[idx]!;
+      return other.conflictZones[other.conflicts.indexOf(movement.idx)]!;
+    }),
+  );
+  // Grants persist to the movement exit, even after the rear clears a particular conflict.
   const occupancy = new Uint16Array(compiled.movements.length);
   const grants = new Int32Array(vehicles.count).fill(-1);
   const redGrants = new Uint8Array(vehicles.count);
@@ -78,8 +83,18 @@ export function createIntersections(
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1 && vehicles.position[exitTail]! < clearance) return false;
     const control = compiled.nodes[movement.node]!.control;
-    for (const idx of movement.conflicts) {
-      if (occupancy[idx]! > 0) return false;
+    for (let i = 0; i < movement.conflicts.length; i++) {
+      const idx = movement.conflicts[i]!;
+      const [start, end] = opposingZones[movement.idx]![i]!;
+      const tail = vehicles.last(-idx - 1);
+      if (tail !== -1 && vehicles.position[tail]! < end + params.vehicleLengthM) return false;
+      // Subtract occupants from all grants to find reservations still on the approach.
+      // The rearmost occupant suffices for clearance because segment lists are ordered.
+      let approachingGrants = occupancy[idx]!;
+      for (let car = tail; car !== -1 && approachingGrants > 0; car = vehicles.previous[car]!) {
+        approachingGrants--;
+      }
+      if (approachingGrants > 0) return false;
       if (control !== 'yield' && control !== 'stop' && !onRed(movement)) continue;
       const higher = compiled.movements[idx]!;
       if (onRed(movement)) {
@@ -95,7 +110,7 @@ export function createIntersections(
           vehicles.state[approaching] === DRIVING &&
           vehicles.movement[approaching] === idx &&
           vehicles.speed[approaching]! > 0 &&
-          length - vehicles.position[approaching]! <
+          length - vehicles.position[approaching]! + start <
             vehicles.speed[approaching]! * params.intersection.gapS
         ) {
           return false;
