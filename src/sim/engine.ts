@@ -50,7 +50,16 @@ function createRun({
   routeProvider,
   linkCosts,
 }: LoadInput) {
-  const params: SimParams = { ...DEFAULT_SIM_PARAMS, ...scenario.simParams, ...overrides };
+  const params: SimParams = {
+    ...DEFAULT_SIM_PARAMS,
+    ...scenario.simParams,
+    ...overrides,
+    intersection: {
+      ...DEFAULT_SIM_PARAMS.intersection,
+      ...scenario.simParams.intersection,
+      ...overrides?.intersection,
+    },
+  };
   const { dtS, vehicleLengthM, idm, spawnMinGapM } = params;
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
   const accounting = createAccounting(compiled, vehicles);
@@ -315,6 +324,7 @@ function createRun({
         ) {
           stopAt = length;
         }
+        if (path) stopAt = intersections.zoneStop(path, position) + idm.minGapM;
         if (stopAt < obstacle) {
           obstacle = stopAt;
           leaderSpeed = 0;
@@ -442,6 +452,12 @@ function createRun({
       let position = Math.min(previousPosition + speed * dtS, limit[id]!);
       if (field < 0) {
         const path = compiled.movements[-field - 1]!;
+        // Earlier commits may have entered a zone that was empty during proposals.
+        const zoneStart = intersections.zoneStop(path, previousPosition);
+        if (position > zoneStart) {
+          position = Math.max(previousPosition, zoneStart);
+          accounting.zoneStop();
+        }
         vehicles.speed[id] = (position - previousPosition) / dtS;
         if (position >= path.lengthM) enterLane(id, path.toLane, position - path.lengthM, timeS);
         else vehicles.position[id] = position;
@@ -482,6 +498,12 @@ function createRun({
             vehicles.missedTurn[id] = 1;
             routeReasons[id] = 'missed_turn';
             (vehicles.attemptedFallbacks[id] ??= new Set()).add(granted);
+          }
+          const zoneStart = intersections.zoneStop(compiled.movements[granted]!, 0);
+          if (position - lane.lengthM > zoneStart) {
+            position = lane.lengthM + Math.max(0, zoneStart);
+            vehicles.speed[id] = (position - previousPosition) / dtS;
+            accounting.zoneStop();
           }
           leaveRoad(id, timeS, lane.lengthM);
           vehicles.remove(id);

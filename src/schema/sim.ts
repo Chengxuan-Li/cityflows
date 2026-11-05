@@ -7,7 +7,13 @@ export interface SimParams {
   laneChangeDistanceM: number;
   laneChangeDurationS: number;
   mandatoryUrgencyM: number; // extra margin before a required change becomes forced
-  intersection: { decisionDistanceM: number; gapS: number; creepSpeedMps: number };
+  intersection: {
+    decisionDistanceM: number;
+    gapS: number;
+    creepSpeedMps: number;
+    zoneMarginS: number;
+    boxWaitS: number;
+  };
   spawnMinGapM: number;
   linkCostAlpha: number;
   linkCostIntervalS: number;

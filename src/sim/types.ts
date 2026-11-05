@@ -63,6 +63,8 @@ export interface Metrics {
   meanDelayS: number;
   roadSpeedRatio: Float32Array;
   stepsPerSecond: number;
+  /** Committed displacements clamped at occupied conflict-zone starts. */
+  zoneStops: number;
   /** Per loaded trip, in input order; materialized only when requested. */
   readonly tripOutcomes?: TripOutcome[];
 }

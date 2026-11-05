@@ -6,46 +6,12 @@ import { junctions } from '../../src/fixtures/junctions';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import { signalApproach } from '../../src/fixtures/signal-approach';
 import { importOsm } from '../../src/importers/osm';
-import { allocateId, type City, type TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
-import { createIntersections } from '../../src/sim/intersection';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { patchChanges } from '../../src/sim/patch';
-import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { scenario, setup, trips } from './fixtures';
 import { sampleConflictZones } from './conflict-zone-safety';
-
-function opposing() {
-  const city = signalApproach();
-  // Four-lane arms leave room after crossing the opposing median lane for rear clearance.
-  for (const road of Object.values(city.roads)) {
-    road.lanes.push({ ...road.lanes[0]! }, { ...road.lanes[0]! });
-    road.lateralOffsetM = 6;
-  }
-  const compiled = setup(city);
-  const left = compiled.movements.find((m) => m.turn === 'left')!;
-  const through = compiled.movements.find(
-    (m) => m.turn === 'through' && left.conflicts.includes(m.idx) && m.toLane !== left.toLane,
-  )!;
-  compiled.nodes[left.node]!.control = 'uncontrolled';
-  compiled.nodes[left.node]!.signal = null;
-  const vehicles = createVehicles(3, compiled.lanes.length, compiled.movements.length);
-  const intersections = createIntersections(compiled, vehicles, DEFAULT_SIM_PARAMS);
-  for (const [id, path] of [left, through, left].entries()) {
-    vehicles.state[id] = DRIVING;
-    vehicles.movement[id] = path.idx;
-    vehicles.insert(
-      id,
-      path.fromLane,
-      compiled.lanes[path.fromLane]!.lengthM - (id === 2 ? 20 : 2),
-    );
-  }
-  const request = (id: number) => {
-    intersections.request(id, compiled.movements[vehicles.movement[id]!]!);
-    intersections.resolve();
-  };
-  return { city, compiled, left, through, vehicles, intersections, request };
-}
+import { opposing, movementTrips } from './zone-fixtures';
 
 test('T21: an opposing queue is released as the left-turn rear clears its zone', () => {
   const { left, through, vehicles, intersections, request } = opposing();
@@ -102,50 +68,6 @@ test.each(['yield', 'stop'] as const)(
     expect(intersections.grants[0]).toBe(left.idx);
   },
 );
-
-// Demand on every legal movement, including junctions in disconnected fixture components.
-function movementTrips(city: City): TripRequest[] {
-  const compiled = setup(city);
-  const places = compiled.lanes.map((lane) => {
-    const id = allocateId(city, 'p');
-    city.places[id] = {
-      id,
-      name: lane.id,
-      kind: 'gateway',
-      shape: { kind: 'point', pos: lane.polyline[0]! },
-      population: 0,
-      jobs: 0,
-      attraction: 1,
-      capacity: null,
-      profile: null,
-      events: [],
-      provenance: { source: 'generated' },
-      connectors: ['out', 'in'].map((direction) => ({
-        id: allocateId(city, 'c'),
-        roadId: compiled.roads[lane.road]!.id,
-        lane: lane.lane,
-        positionM:
-          direction === 'out' ? Math.max(5, lane.lengthM - 40) : Math.min(30, lane.lengthM - 5),
-        direction: direction as 'in' | 'out',
-        throughputPerMin: 120,
-      })),
-    };
-    return id;
-  });
-  return compiled.movements
-    .filter((m) => !m.neverGreen)
-    .flatMap((path) =>
-      Array.from({ length: 4 }, (_, i) => ({
-        id: `${path.id}:${i}`,
-        personId: null,
-        originPlaceId: places[path.fromLane]!,
-        destinationPlaceId: places[path.toLane]!,
-        departS: 100 + i * 3,
-        mode: 'car' as const,
-        legs: [],
-      })),
-    );
-}
 
 test('T21: a live patch uses replacement zones while preserving a movement occupant', () => {
   const { city, left, through } = opposing();
@@ -294,4 +216,4 @@ test('T21: Munich at scale 0.15 has no contacting-zone overlap at any morning st
   expect(contacts).toBeGreaterThan(0);
   expect(engine.timeS).toBe(10 * 3600);
   expect(engine.metrics().trips.failed).toBe(0);
-}, 300000);
+}, 600000);

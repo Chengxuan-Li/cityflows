@@ -19,6 +19,7 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
     no_origin_connector: 0,
     no_destination_connector: 0,
   };
+  let zoneStops = 0;
   let totalTravel = 0;
   let totalDelay = 0;
 
@@ -50,6 +51,7 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
       meanDelayS: trips.completed ? totalDelay / trips.completed : 0,
       roadSpeedRatio,
       stepsPerSecond: 0,
+      zoneStops,
       get tripOutcomes() {
         return Array.from({ length: vehicles.count }, (_, id) => ({
           departedS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.departed[id]!,
@@ -66,6 +68,9 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
       compiled = next;
     },
     trips,
+    zoneStop() {
+      zoneStops++;
+    },
     transition,
     metrics,
     fail(id: number, reason: FailReason) {

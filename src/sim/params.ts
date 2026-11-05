@@ -8,7 +8,7 @@ export const DEFAULT_SIM_PARAMS: SimParams = {
   laneChangeDistanceM: 30,
   laneChangeDurationS: 2,
   mandatoryUrgencyM: 10,
-  intersection: { decisionDistanceM: 15, gapS: 4, creepSpeedMps: 1 },
+  intersection: { decisionDistanceM: 15, gapS: 4, creepSpeedMps: 1, zoneMarginS: 1, boxWaitS: 10 },
   spawnMinGapM: 8,
   linkCostAlpha: 0.3,
   linkCostIntervalS: 60,

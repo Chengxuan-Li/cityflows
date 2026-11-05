@@ -4,6 +4,16 @@ import type { SimParams } from '../schema';
 import { AMBER, GREEN, RED, updateSignals } from './signals';
 import { DRIVING, type Vehicles } from './vehicle';
 
+/** Travel at maximum acceleration, then at the speed cap. */
+function travelTime(distance: number, speed: number, cap: number, acceleration: number) {
+  if (distance <= 0) return 0;
+  speed = Math.min(speed, cap);
+  const acceleratingDistance = (cap * cap - speed * speed) / (2 * acceleration);
+  if (distance <= acceleratingDistance)
+    return (2 * distance) / (Math.sqrt(speed * speed + 2 * acceleration * distance) + speed);
+  return (cap - speed) / acceleration + (distance - acceleratingDistance) / cap;
+}
+
 export function createIntersections(
   compiled: CompiledCity,
   vehicles: Vehicles,
@@ -78,23 +88,66 @@ export function createIntersections(
     queue.push(id);
   }
 
+  const movementSpeed = (movement: CMovement) =>
+    Math.min(
+      compiled.lanes[movement.fromLane]!.speedLimitMps,
+      compiled.lanes[movement.toLane]!.speedLimitMps,
+    );
+  const candidateTime = (id: number, movement: CMovement, distance: number) =>
+    travelTime(
+      compiled.lanes[movement.fromLane]!.lengthM - vehicles.position[id]! + distance,
+      vehicles.speed[id]!,
+      movementSpeed(movement),
+      params.idm.aMps2,
+    );
+
   function canGrant(id: number, movement: CMovement) {
     if (!signalAllows(id, movement)) return false;
     const exitTail = vehicles.last(movement.toLane);
-    if (exitTail !== -1 && vehicles.position[exitTail]! < clearance) return false;
+    if (exitTail !== -1) {
+      const space =
+        vehicles.stopped[id]! >= params.intersection.boxWaitS
+          ? vehicles.position[exitTail]!
+          : vehicles.position[exitTail]! -
+            params.vehicleLengthM +
+            vehicles.speed[exitTail]! * candidateTime(id, movement, movement.lengthM);
+      if (space < clearance) return false;
+    }
     const control = compiled.nodes[movement.node]!.control;
     for (let i = 0; i < movement.conflicts.length; i++) {
       const idx = movement.conflicts[i]!;
+      const other = compiled.movements[idx]!;
       const [start, end] = opposingZones[movement.idx]![i]!;
-      const tail = vehicles.last(-idx - 1);
-      if (tail !== -1 && vehicles.position[tail]! < end + params.vehicleLengthM) return false;
-      // Subtract occupants from all grants to find reservations still on the approach.
-      // The rearmost occupant suffices for clearance because segment lists are ordered.
-      let approachingGrants = occupancy[idx]!;
-      for (let car = tail; car !== -1 && approachingGrants > 0; car = vehicles.previous[car]!) {
-        approachingGrants--;
+      const exit =
+        candidateTime(id, movement, movement.conflictZones[i]![1] + params.vehicleLengthM) +
+        params.intersection.zoneMarginS;
+      for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!) {
+        if (vehicles.position[car]! >= end + params.vehicleLengthM) continue;
+        if (
+          travelTime(
+            start - vehicles.position[car]!,
+            vehicles.speed[car]!,
+            movementSpeed(other),
+            params.idm.aMps2,
+          ) < exit
+        )
+          return false;
       }
-      if (approachingGrants > 0) return false;
+      if (occupancy[idx]! > 0) {
+        const lane = compiled.lanes[other.fromLane]!;
+        for (let car = vehicles.first(lane.idx); car !== -1; car = vehicles.next[car]!) {
+          if (grants[car] !== idx) continue;
+          if (
+            travelTime(
+              lane.lengthM - vehicles.position[car]! + start,
+              vehicles.speed[car]!,
+              lane.speedLimitMps,
+              params.idm.aMps2,
+            ) < exit
+          )
+            return false;
+        }
+      }
       if (control !== 'yield' && control !== 'stop' && !onRed(movement)) continue;
       const higher = compiled.movements[idx]!;
       if (onRed(movement)) {
@@ -118,6 +171,28 @@ export function createIntersections(
       }
     }
     return mergeAllows(id, movement);
+  }
+
+  function zoneStop(movement: CMovement, position: number) {
+    let stop = Infinity;
+    for (let i = 0; i < movement.conflicts.length; i++) {
+      const start = movement.conflictZones[i]![0];
+      if (position > start || start >= stop) continue;
+      const [otherStart, otherEnd] = opposingZones[movement.idx]![i]!;
+      for (
+        let car = vehicles.first(-movement.conflicts[i]! - 1);
+        car !== -1;
+        car = vehicles.next[car]!
+      ) {
+        const front = vehicles.position[car]!;
+        if (front <= otherStart) break;
+        if (front < otherEnd + params.vehicleLengthM) {
+          stop = start;
+          break;
+        }
+      }
+    }
+    return stop;
   }
 
   const movementOf = (id: number) => compiled.movements[vehicles.movement[id]!]!;
@@ -179,5 +254,15 @@ export function createIntersections(
     activeNodes.length = 0;
   }
 
-  return { signals, request, resolve, release, grants, redGrants, occupancy, continuations };
+  return {
+    signals,
+    request,
+    resolve,
+    release,
+    zoneStop,
+    grants,
+    redGrants,
+    occupancy,
+    continuations,
+  };
 }

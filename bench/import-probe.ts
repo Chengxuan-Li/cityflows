@@ -148,6 +148,7 @@ export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
     completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,
     failedShareOfReleased: releasedTrips ? metrics.trips.failed / releasedTrips : 0,
     peakDriving: peak,
+    zoneStops: metrics.zoneStops,
     ...metrics.trips,
     failedByReason: metrics.failedByReason,
     gatewayTraffic,

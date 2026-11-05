@@ -2,7 +2,7 @@ import type { CompiledCity } from '../../src/network';
 import type { TrafficEngine } from '../../src/sim/types';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 
-/** Check both front entry and rear clearance, including every vehicle in a platoon. */
+/** Front past the start and rear before the end: a car clamped exactly at the start is outside. */
 export function sampleConflictZones(engine: TrafficEngine, compiled: CompiledCity) {
   const occupied = new Map<number, number[]>();
   const snapshot = engine.snapshot();
@@ -19,7 +19,7 @@ export function sampleConflictZones(engine: TrafficEngine, compiled: CompiledCit
     const path = compiled.movements[idx]!;
     path.conflicts.forEach((otherIdx, i) => {
       const [start, end] = path.conflictZones[i]!;
-      if (!positions.some((p) => p >= start && p < end + DEFAULT_SIM_PARAMS.vehicleLengthM)) return;
+      if (!positions.some((p) => p > start && p < end + DEFAULT_SIM_PARAMS.vehicleLengthM)) return;
       contacts++;
       const otherPositions = occupied.get(otherIdx);
       if (!otherPositions) return;
@@ -27,7 +27,7 @@ export function sampleConflictZones(engine: TrafficEngine, compiled: CompiledCit
       const [otherStart, otherEnd] = other.conflictZones[other.conflicts.indexOf(idx)]!;
       if (
         otherPositions.some(
-          (p) => p >= otherStart && p < otherEnd + DEFAULT_SIM_PARAMS.vehicleLengthM,
+          (p) => p > otherStart && p < otherEnd + DEFAULT_SIM_PARAMS.vehicleLengthM,
         )
       ) {
         throw new Error(
