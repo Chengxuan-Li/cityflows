@@ -152,3 +152,34 @@ export async function writeMetrics(info: TestInfo, data: unknown) {
   await writeFile(info.outputPath('metrics.json'), body);
   await info.attach('metrics', { body, contentType: 'application/json' });
 }
+
+export async function importOsm(page: Page, path: string) {
+  await button(page, 'Import').click();
+  const dialog = page.getByRole('dialog', { name: 'Import city' });
+  await dialog.getByLabel('OSM file').setInputFiles(path);
+  await button(page, 'Import roads').click();
+  await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
+    '0 errors',
+  );
+  await button(page, 'Continue').click();
+  await button(page, 'Accept city').click();
+  await expect(dialog).toBeHidden();
+  await expect(button(page, 'Play')).toBeEnabled();
+}
+
+/** Uses the current camera, including the width-limited fit on a phone. */
+export async function clickWorld(page: Page, point: Vec2) {
+  const position = await page.evaluate((point) => window.cityflows!.worldToScreen!(point), point);
+  await page.getByLabel('City map').click({ position });
+}
+
+export async function downloadText(page: Page, label: string, keyboard = false) {
+  const downloading = page.waitForEvent('download');
+  if (keyboard) await button(page, label).press('Enter');
+  else await button(page, label).click();
+  const download = await downloading;
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  return { name: download.suggestedFilename(), text: Buffer.concat(chunks).toString('utf8') };
+}
