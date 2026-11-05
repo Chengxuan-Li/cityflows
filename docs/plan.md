@@ -87,8 +87,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-059](tasks/TASK-059.md) | 5 | Roundabout removal as an inverse command | `src/editor/commands/roundabout.ts`, `src/schema` (approved), `docs/architecture.md` section 6, `tests/editor` | 049 | removal after approach edits | done |
 | [TASK-061](tasks/TASK-061.md) | 5 | Junction geometry: setbacks, curb arcs, tapers (B16) | `src/network/**` (lanes, movements, new `junctions.ts`, types), `src/geo/polyline.ts` (additive), `src/editor/commands/ramp.ts`, `src/render/layers/nodes.ts`, `roads.ts`, `signs.ts`, `scene.ts` picking, `src/fixtures/junctions.ts`, `tests/network/T20*`, `tests/render` | 047, 048, 049, 055; design in architecture 5.1, 5.2, 11 | T20; no overlapping lanes at Munich nodes | done |
 | [TASK-062](tasks/TASK-062.md) | 5 | Routing throughput (B20) | `src/routing/**`, `tests/routing` | 055, 057 | routes per second back near the TASK-057 figures, audit zero, hashes unchanged | done |
-| [TASK-063](tasks/TASK-063.md) | 5 | Junction surface, crossings, one asphalt colour (B21, B23, B24, B25) | `src/network/junctions.ts` (outline only), `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, `roads.ts`, `src/render/style.ts`, `scene.ts`, `types.ts` (layer flag), `src/ui/layers.tsx`, `tests/network/T20*`, `tests/render`, `tests/e2e/gate4-layers.spec.ts` | 061; design in architecture 5.1, 11 | T20 additions; hashes unchanged | todo |
-| [TASK-064](tasks/TASK-064.md) | 5 | Conflict zones instead of whole-movement conflicts (B26) | `src/network/conflicts.ts`, `src/network/types.ts` (additive), `src/sim/intersection.ts`, conflict reads in `engine.ts`, `merge.ts`, `patch.ts`, `tests/network/conflict-zones.test.ts`, `tests/sim` | 049, 051, 057, 061; design in architecture 5.3, 8 | T21; uncapped Munich at least as fast as capped | todo |
+| [TASK-063](tasks/TASK-063.md) | 5 | Junction surface, crossings, one asphalt colour (B21, B23, B24, B25) | `src/network/junctions.ts` (outline only), `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, `roads.ts`, `src/render/style.ts`, `scene.ts`, `types.ts` (layer flag), `src/ui/layers.tsx`, `tests/network/T20*`, `tests/render`, `tests/e2e/gate4-layers.spec.ts` | 061; design in architecture 5.1, 11 | T20 additions; hashes unchanged | done |
+| [TASK-064](tasks/TASK-064.md) | 5 | Conflict zones instead of whole-movement conflicts (B26) | `src/network/conflicts.ts`, `src/network/types.ts` (additive), `src/sim/intersection.ts`, conflict reads in `engine.ts`, `merge.ts`, `patch.ts`, `tests/network/conflict-zones.test.ts`, `tests/sim` | 049, 051, 057, 061; design in architecture 5.3, 8 | T21; uncapped Munich at least as fast as capped | done (cap kept) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -183,6 +183,10 @@ dependency of its tasks is merged to `main`.
   and stays out of the geometry files. Merge order: 063, then 064, then a lead commit that
   removes the setback cap once the uncapped Munich run is at least as fast as the capped
   one. Both agents report in their commit messages: wave 11's branches carried none.
+- Wave 12 outcome (2026-11-04): both merged, plus a lead commit that cut the compile cost
+  the two tasks added without changing any compiled geometry. The cap stays: with it lifted,
+  Munich completes 1 285 trips by 10:00 against the capped 2 231 (B27 below). Next: B27 and
+  B28 together, B29, shipping, then Gate 5.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -255,6 +259,9 @@ triage by the lead; the agents' investigation may move items between groups.
 | B23 | Owner, 2026-11-04 (Munich after wave 11): junctions still do not look right. A road's edge should run smoothly from one road segment through the junction to the next; today the surface is a polygon through the road-end corners, widened to a convex hull wherever a movement curve escapes it, so it shows corners and blobs. | Network geometry and renderer, with B21: the outline is road edge, curb fillet, next road edge for every pair of angularly adjacent ends, with no hull; an acute pair is a gore whose surface follows both lane blocks until they separate. |
 | B24 | Owner: queued cars stand on the zebra crossing. The crossing is drawn 1.8 to 4.2 m before the lane end and the stop line at the lane end, and an ungranted car stops `minGapM` (2 m) before the lane end, so its front is on the crossing. | Renderer: stop line, then crossing, then junction. Draw the crossing in the junction mouth just past the trimmed lane end (inside the setback) so the stop line is where cars stop. Small. |
 | B25 | Owner: the junction surface is a different colour from the roads it joins; road class tones (which the owner reads as speed-limit colouring) should be optional. Roads take a tone per class from `roadStyle`, the junction always `style.asphalt`. | Renderer and Layers: one asphalt colour for roads and junctions by default; a "Road classes" Layers entry turns the class tones on, and then a junction takes the tone of its highest-class road. Small. |
+| B27 | Owner, 2026-11-04 (with B26): a granted car still far from a conflict zone blocks a crossing car that would clear the zone before it arrives, which is why the uncapped Munich run loses 40 percent of its trips even with conflict zones (TASK-064 review). | Simulation: reserve conflict zones by time window (estimated entry and exit from current speed and distance) instead of by grant, so a crossing car may use a zone that a granted car will reach only later; then lift the setback cap (B26, B21). Needs a design note for architecture 8. |
+| B28 | Owner: restrict, without banning, entry into a junction when the car is likely to wait inside it for the cars ahead to move ("don't block the box"). Today only the exit lane's first `vehicleLengthM + minGapM` must be free. | Simulation: grant entry only when the exit lane has room for the whole car past the movement, estimated from the exit queue's tail and speed; allow it anyway after a waiting time, so a jammed junction still drains. Belongs with B27 in `src/sim/intersection.ts`. |
+| B29 | Owner: roads should be smooth curves with realistic curvature, not the piecewise linear segments exported from OSM. | Importer or compiler: fit the OSM centerline with a smoothing spline or circular arcs (bounded deviation, a minimum radius by road class), sampled for lanes; keep node positions. Lanes, movements and every hash change. Medium; touches `src/importers/osm` or `src/network/lanes.ts`. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
 
 Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
@@ -877,12 +884,53 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   committed while playing applied live with "11 cars rerouted · 0 removed". The agents left
   no reports in any of the three branches; the numbers in these entries are the lead's.
 
+- 2026-11-04, TASK-063 merged with a lead performance commit. Junction outlines are built
+  from road edges and curb fillets per adjacent pair (largest radius up to 8 m keeping the
+  pair's movement surfaces inside), with straight and bounded extended joins as fallbacks,
+  gores at capped acute pairs, and no convex hull; Munich has 127 fillet, 84 extended and
+  35 gore outlines and 36 through nodes, every outline simple and containing its movements.
+  Node areas draw above lane markings, crossings sit 0.5 to 3 m past the trimmed lane end in
+  the junction mouth (omitted where the setback leaves less than 3.5 m), roads and junctions
+  share one asphalt colour, and a "Road classes" Layers entry restores the class tones with
+  a junction taking its highest-class road's tone. Lane and movement geometry and the four
+  state hashes are unchanged. The owner confirmed the contract exceptions the agent recorded
+  as approved (extended cuts and the near-parallel fallback). Not supported, as reported:
+  an authored short unequal-width junction whose movement width crosses a road's outer edge
+  stays slightly outside the outline. Found by the lead: the outline search made a full
+  compile six times slower (Munich 30 to 179 ms, town 58 to 265 ms), paid on every edit; see
+  the TASK-064 entry for the shared fix. Seen in the browser on the Munich import: the
+  signal junctions north of the Donnersbergerbrücke with crossings beyond the stop lines and
+  queued cars behind them.
+
+- 2026-11-04, TASK-064 merged as delivered; the cap stays. `CMovement.conflictZones` comes
+  from the sampled paths with outward rounding; a car blocks a conflicting movement while
+  its grant is on the approach or its rear is before the zone end, and yield, stop and
+  turn-on-red gaps are measured to the zone start; live patches carry the zones and revoke
+  approach grants when a zone grows. T21 sampled 192 000 steps (four-way signal, junction
+  fixture, grid, Munich morning) with no two cars in contacting zones at once. The owner
+  confirmed the two integration lines in `compile.ts` and `movements.ts`. Munich at 0.15:
+  2 231 completed by 10:00, 959 queued, peak 2 124 with the cap (wave 11: 2 078, 1 108,
+  2 128); 1 285 completed with the cap lifted, so the cap stays and B27 takes the rest. The
+  four state hashes are unchanged, though town peak driving moved (371 to 391): the hash
+  covers end-of-day state. The agent's reported 20 percent engine slowdown did not reproduce
+  on the lead's idle runs (24 h steps per second, main then merged: grid 497 985 / 483 511,
+  scaled 154 305 / 151 652, stress 37 135 / 34 313, town 34 522 / 34 225). Lead commit for
+  both tasks: a prepared polygon test bucketed by y for the outline search, recomputing
+  outside points only after an accepted change, and a bounding-box prefilter in the zone
+  contact test; outlines, zones and lane and movement polylines hash identically on five
+  cities, and a full compile takes town 352 to 152 ms and Munich 176 to 54 ms (main 58 and
+  30). Verified on the merged tree: check (334 unit tests), all 47 Playwright scenarios,
+  the four route audits at zero and the probe above.
+
 ## Owner decisions log
 
 - 2026-11-03: foundation, renderer, repo shape, license, OSM access, workflow and audit depth
   decided; architecture approved with five adjustments (architecture section 1, rows 8 to 12).
 - 2026-11-03: Gate 1 defined as the interactive vertical slice above, not an engine-only
   milestone.
+- 2026-11-04, after wave 12: performance measurements and long test runs are deferred
+  unless they block the next stage; old agent worktrees and merged branches are removed;
+  shipping (a static deploy plus a user README) is wanted.
 - 2026-11-03, after Gate 1: the UI is redesigned in the spirit of Mini Motorways and Mini
   Metro (TASK-050; direction recorded in `AGENTS.md`), with no loss of capability. Added to
   the plan: a large synthetic city (TASK-026), place painting and demand regeneration
