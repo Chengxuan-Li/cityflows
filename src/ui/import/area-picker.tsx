@@ -29,7 +29,9 @@ export function AreaPicker({ bbox, onChange }: { bbox: Bbox; onChange: (bbox: Bb
           sources: {
             osm: {
               type: 'raster',
-              tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+              tiles: [
+                import.meta.env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              ],
               tileSize: 256,
               attribution: '© OpenStreetMap contributors',
             },

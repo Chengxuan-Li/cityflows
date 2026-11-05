@@ -1,12 +1,27 @@
 # CityFlows
 
-A browser-based city traffic sandbox. Individual vehicles drive on lane-level road networks
-that are imported from OpenStreetMap or drawn by hand, following car-following and
-lane-changing rules, legal turn movements, signals and right-of-way, between places where
-people live and work. You edit the network, restart with the same seed, and watch what
-changes.
+## Use it
 
-All traffic is synthetic. Nothing here predicts real congestion.
+[Open CityFlows on GitHub Pages](https://chengxuan-li.github.io/cityflows/).
+
+CityFlows is a traffic sandbox that runs in your browser. Cars travel between homes and
+workplaces on lane-level streets you draw or import from OpenStreetMap. You can change
+streets and signals and see how the same commute plays out on the edited network.
+
+- The 5 × 5 grid opens by default. You can also choose it from **New**. Press **Play**,
+  pick a speed, and click a moving car to inspect its route.
+- While the simulation runs, select a street to edit its lanes or a junction to edit its
+  signal phases.
+- To try a real city, choose **Import** → **Choose map area**, then Shift-drag to select
+  an area up to 50 km². You can also upload an `.osm` file.
+- For a before-and-after comparison, open **Compare** and select **Save as baseline**.
+  Make an edit, then return to **Compare** and select **Run comparison** to see how travel
+  times and trip counts changed.
+- Use **Export** to download the street network as GeoJSON or the simulation results as
+  CSV. Use **Save** to download a project you can reopen later.
+
+**Synthetic traffic, not observed traffic.** Map tiles and imported map data are credited
+to [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
 ## Run it
 

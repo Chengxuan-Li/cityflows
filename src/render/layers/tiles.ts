@@ -3,7 +3,7 @@ import { lonLatToLocal, type GeoReference } from '../../geo/projection';
 import type { Camera } from '../camera';
 
 export const tileSettings = {
-  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  urlTemplate: import.meta.env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   attribution: '© OpenStreetMap contributors',
   attributionUrl: 'https://www.openstreetmap.org/copyright',
 } as const;
