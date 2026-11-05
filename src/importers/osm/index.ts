@@ -12,6 +12,7 @@ import { addGateways, addOsmPlaces } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
 import { smoothRoads } from './smooth';
+import { realignRoads } from './realign';
 import {
   consolidateJunctions,
   joinDividedFeeders,
@@ -239,6 +240,13 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     roads,
     new Set([...protectedNodes, ...originalControls, ...signalIds]),
     new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
+  );
+  realignRoads(
+    city,
+    roads,
+    new Set([...protectedNodes, ...originalControls, ...signalIds]),
+    new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
+    diagnostics,
   );
   incidents.clear();
   for (const node of Object.values(city.nodes))

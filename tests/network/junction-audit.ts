@@ -9,19 +9,25 @@ import type { Vec2 } from '../../src/geo/vec2';
 // r:140#0>r:476#0 (curved service ways, 47 m beyond the junction) became one with the cap.
 export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = {
   'munich-donnersberger': {
+    'r:1024#0>r:899#0':
+      'The opposite coincident service-way lane pair shares the same realigned physical arm at n:894 and n:898.',
+    'r:1027#0>r:900#0':
+      'Coincident service-way directions are realigned together; shorter cuts expose their duplicate lane bodies at n:894 and n:898.',
+    'r:1354#0>r:447#0':
+      'Opposing Arnulfstraße source carriageways cross along the body; n:446 is no longer capped after realignment.',
+    'r:565#0>r:589#0':
+      'The other coincident service-way lane pair is exposed by the shorter neighboring setback; both source centerlines are unchanged.',
     'r:566#0>r:588#0':
       'Distinct source service ways have identical direction, centerline and offset.',
     'r:1277#0>r:1362#0': 'Separate zero-offset Landsberger carriageways cross along the road body.',
     'r:368#0>r:480#1':
       'Marsstraße source carriageways have reversed identical centerlines and zero offsets.',
-    'r:368#1>r:480#0':
-      'Marsstraße source carriageways have reversed identical centerlines and zero offsets.',
   },
   'sindelfingen-a81': {
+    'r:650#0>r:80#0':
+      'The existing source carriageway crossing at n:620 is exposed when its neighboring setback no longer reaches the cap.',
     'r:1029#0>r:1178#0': 'Separate source streets cross 114/124 m from their shared endpoints.',
     'r:499#0>r:876#0': 'Curved zero-offset source roads cross 25 m beyond their common junction.',
-    'r:505#0>r:665#0':
-      'Two short source ways overlap at n:501. The crossing stays 21 m away after smoothing, but the setbacks now reach the cap.',
     'r:746#0>r:803#1': 'Opposing source carriageways have coincident centerlines and zero offsets.',
     'r:746#1>r:803#0': 'Opposing source carriageways have coincident centerlines and zero offsets.',
     'r:574#0>r:971#0': 'Separate zero-offset source carriageways cross along their road bodies.',

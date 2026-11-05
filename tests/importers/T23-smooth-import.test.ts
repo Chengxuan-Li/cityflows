@@ -18,6 +18,9 @@ const observed = vi.hoisted(() => ({
   }[],
 }));
 
+// T23 checks step 11's two-metre bound; step 12 has its own eight-metre contract (T24).
+vi.mock(import('../../src/importers/osm/realign'), () => ({ realignRoads() {} }));
+
 vi.mock(import('../../src/importers/osm/smooth'), async (load) => {
   const { smoothRoads } = await load();
   return {
