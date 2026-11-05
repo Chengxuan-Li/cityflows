@@ -309,9 +309,10 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   the cap and the junction surface covers them, rather than holding cars ever farther from
   the junction on a movement that blocks every conflicting one for its whole length (lead
   decision at the TASK-061 review, after the Munich morning lost 40 percent of its completed
-  trips to 50 to 115 m movements). The cap is temporary: once conflicts are resolved at
-  conflict zones (5.3, TASK-064) the lead removes it, so setbacks follow the geometry and an
-  acute approach stops where its lane block clears its neighbour's.
+  trips to 50 to 115 m movements). The cap stays: with conflict zones (TASK-064) and timed
+  reservations (TASK-065) the uncapped Munich morning still completes a quarter fewer trips,
+  because uncapped setbacks cut acute approach lanes to stubs (4.8 m where 41.5 m stood) and
+  remove their queue storage. Acute approaches are to be realigned instead (B31).
   A node with two ends of one street has setback 0: the road draws and drives through.
   Lanes are trimmed by their own road end's setback; `road_too_short` keeps its rule with the
   two setbacks in place of `2 * radiusM`. `CNode.radiusM` stays as the largest setback, for
@@ -764,13 +765,15 @@ Step sequence, in this order every step:
      the vehicle leaves the movement, except that a signal change revokes grants of vehicles
      still on the approach whose movement can no longer be entered.
    - TASK-065, zone reservations by time (B27). A vehicle holding a grant, on its approach
-     or on its movement and before a zone's end, no longer blocks a candidate outright. It
-     blocks only when its earliest possible arrival at the start of its conflict zone with
-     the candidate (accelerating at `idm.aMps2` from its current speed up to its lane's
-     speed limit, over the remaining approach plus `startM`) comes before the candidate's
-     expected exit from its own zone (rear past `endM`, accelerating at `idm.aMps2` from its
-     current speed, capped by the movement's speed) plus `zoneMarginS`. A vehicle whose rear
-     is past the zone end never blocks, as before. Safety backstop: a vehicle on a movement
+     or on its movement and before a zone's end, no longer blocks a candidate outright. Both
+     occupancy windows are forecast from current speed with the car's current IDM
+     acceleration, the approach and the movement each at their own speed limit: the holder's
+     from reaching `startM` to its rear passing `endM`, the candidate's likewise for its own
+     zone. The candidate is refused when the two windows, each widened by `zoneMarginS`,
+     overlap; it may go before a distant holder or after one that will have cleared. A
+     vehicle whose rear is past the zone end never blocks, as before. (As merged: expected
+     arrival rather than the earliest possible one, which the backstop below makes safe;
+     T21 sampling found no overlap.) Safety backstop: a vehicle on a movement
      treats the start of a conflict zone as a standing obstacle while another vehicle is
      inside that zone (front past `startM`, rear not past `endM`), and the commit clamps it
      there like an ungranted stop line; the run counts such hard zone stops in `Metrics`

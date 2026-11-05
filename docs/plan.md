@@ -89,7 +89,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-062](tasks/TASK-062.md) | 5 | Routing throughput (B20) | `src/routing/**`, `tests/routing` | 055, 057 | routes per second back near the TASK-057 figures, audit zero, hashes unchanged | done |
 | [TASK-063](tasks/TASK-063.md) | 5 | Junction surface, crossings, one asphalt colour (B21, B23, B24, B25) | `src/network/junctions.ts` (outline only), `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, `roads.ts`, `src/render/style.ts`, `scene.ts`, `types.ts` (layer flag), `src/ui/layers.tsx`, `tests/network/T20*`, `tests/render`, `tests/e2e/gate4-layers.spec.ts` | 061; design in architecture 5.1, 11 | T20 additions; hashes unchanged | done |
 | [TASK-064](tasks/TASK-064.md) | 5 | Conflict zones instead of whole-movement conflicts (B26) | `src/network/conflicts.ts`, `src/network/types.ts` (additive), `src/sim/intersection.ts`, conflict reads in `engine.ts`, `merge.ts`, `patch.ts`, `tests/network/conflict-zones.test.ts`, `tests/sim` | 049, 051, 057, 061; design in architecture 5.3, 8 | T21; uncapped Munich at least as fast as capped | done (cap kept) |
-| [TASK-065](tasks/TASK-065.md) | 5 | Zone reservations by time and a clear junction box (B27, B28) | `src/sim/intersection.ts`, zone-stop and counter in `engine.ts`, `types.ts`, `metrics.ts`, `src/schema/sim.ts` and `src/sim/params.ts` (additive), `tests/sim` | 064; design in architecture 8 | T22; uncapped Munich at least as fast as capped | active (returned) |
+| [TASK-065](tasks/TASK-065.md) | 5 | Zone reservations by time and a clear junction box (B27, B28) | `src/sim/intersection.ts`, zone-stop and counter in `engine.ts`, `types.ts`, `metrics.ts`, `src/schema/sim.ts` and `src/sim/params.ts` (additive), `tests/sim` | 064; design in architecture 8 | T22; uncapped Munich at least as fast as capped | done (cap kept) |
 | [TASK-066](tasks/TASK-066.md) | 5 | Smooth road curves on import (B29) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), `tests/importers`, imported lane-pair lists in `tests/network` | 048, 054, 056, 061; design in architecture 13 | T23; junction nodes fixed, 2 m deviation | done |
 | [TASK-067](tasks/TASK-067.md) | 5 | Ship it: static deploy and user guide | `.github/workflows`, `vite.config.ts`, URL lines in `tiles.ts`, `area-picker.tsx`, `overpass.ts`, `README.md` | 060; design in architecture 2 | published build without test hooks | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -203,6 +203,9 @@ dependency of its tasks is merged to `main`.
   back uncommitted, without a report and not typechecking, and it misses its merge goal, so
   it is returned to its agent in its worktree; the cap stays. Next: TASK-065 again, the owner
   enables Pages.
+- Wave 13 completion (2026-11-05): TASK-065 merged on its second round with the cap kept.
+  Lifting the cap is abandoned as the route to B26: it shortens acute approach lanes too far.
+  Next: B31 (realign acute approaches on import), B30, Gate 5.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -278,6 +281,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B27 | Owner, 2026-11-04 (with B26): a granted car still far from a conflict zone blocks a crossing car that would clear the zone before it arrives, which is why the uncapped Munich run loses 40 percent of its trips even with conflict zones (TASK-064 review). | Simulation: reserve conflict zones by time window (estimated entry and exit from current speed and distance) instead of by grant, so a crossing car may use a zone that a granted car will reach only later; then lift the setback cap (B26, B21). Needs a design note for architecture 8. |
 | B28 | Owner: restrict, without banning, entry into a junction when the car is likely to wait inside it for the cars ahead to move ("don't block the box"). Today only the exit lane's first `vehicleLengthM + minGapM` must be free. | Simulation: grant entry only when the exit lane has room for the whole car past the movement, estimated from the exit queue's tail and speed; allow it anyway after a waiting time, so a jammed junction still drains. Belongs with B27 in `src/sim/intersection.ts`. |
 | B29 | Owner: roads should be smooth curves with realistic curvature, not the piecewise linear segments exported from OSM. | Importer or compiler: fit the OSM centerline with a smoothing spline or circular arcs (bounded deviation, a minimum radius by road class), sampled for lanes; keep node positions. Lanes, movements and every hash change. Medium; touches `src/importers/osm` or `src/network/lanes.ts`. |
+| B31 | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
 
@@ -976,6 +980,28 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   lead on that worktree, Munich at 0.15: 2 185 completed with the cap and 1 638 with it
   lifted (TASK-064: 1 285), `zoneStops` 0 in both. The cap stays; the agent continues in the
   same worktree.
+
+- 2026-11-05, TASK-065 merged on its second round; the cap stays. Holders' and candidates'
+  zone occupancy windows are forecast from current speed and IDM acceleration (approach and
+  movement speed limits separately) and a grant is refused only when the windows, widened by
+  `zoneMarginS`, overlap, so a crossing car may go before a distant holder or after one that
+  will have cleared; a car on a movement stops at an occupied zone, including a zone a
+  departing car's rear still covers on its exit lane, clamped in the commit and counted as
+  `Metrics.zoneStops`; the box rule needs room for the whole car past the movement and falls
+  back to the older rule after `boxWaitS`; `zoneMarginS` and `boxWaitS` are in the scenario
+  schema with defaults for older projects; `bench/zone-probe.ts` samples refusal reasons. The
+  agent merged `main` into its branch as asked (smoothed imports). T22 has 21 cases; T21 keeps
+  per-step contact sampling on four networks with no overlap. Benchmark: same completions,
+  zero failures, unchanged hashes, `zoneStops` 0, 0, 190 and 173 over four full days. Munich
+  at 0.15: 2 023 completed with the cap (main 2 005), 1 518 with it lifted; the agent's nine
+  measured variants and probe show the uncapped loss in storage and manoeuvring geometry
+  (approach lanes cut to stubs, a three-lane approach too short to change lanes, exit storage
+  lost), not in arbitration, so B31 replaces the cap removal. Test changes, each with a
+  reason in the report: three T21 cases rewritten for timed grants, one destination portal
+  moved from 30 to 40 m, a contact-boundary inequality made strict, the Munich safety
+  timeout raised to 600 s. Verified on the merged tree: check (361 unit tests), 44 Playwright
+  scenarios (T16 skipped by owner decision), the benchmark and the probe above. Architecture
+  8 now describes the forecast as merged and 5.1 the cap as permanent.
 
 ## Owner decisions log
 
