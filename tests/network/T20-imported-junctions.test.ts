@@ -13,7 +13,18 @@ import {
 const expected = {
   'sindelfingen-a81': {
     movementsOutside: [] as string[],
-    crossings: ['n:498:20/28', 'n:81:64/75'],
+    // Where a fan of overlapping ramps crosses itself the outline is walked so that it only
+    // touches itself at one point (bench/junction-audit.ts counts no proper crossing there).
+    crossings: [
+      'n:434:6/10',
+      'n:434:6/11',
+      'n:434:7/10',
+      'n:434:7/11',
+      'n:68:23/27',
+      'n:68:23/28',
+      'n:68:24/27',
+      'n:68:24/28',
+    ],
     // Dead-end caps across two road ends cut at different distances, and a curb that follows a
     // movement's edge.
     tangents: ['n:161:0', 'n:161:0', 'n:996:2.999999999999966'],
@@ -25,18 +36,15 @@ const expected = {
       'r:596#0>r:494#0',
       'r:80#0>r:82#0',
       'r:1061#1>r:966#0',
-      'r:645#0>r:86#0',
       'r:82#0>r:647#0',
     ],
   },
   'munich-donnersberger': {
     movementsOutside: ['r:1163#0>r:1121#0', 'r:1276#0>r:1368#0', 'r:973#0>r:972#0'],
-    crossings: ['n:201:61/67'],
+    crossings: [] as string[],
     // Dead-end caps across two road ends cut at different distances, and curbs that follow a
     // movement's edge where a road end is a short stub.
     tangents: [
-      'n:1123:0',
-      'n:1123:0',
       'n:212:0',
       'n:425:0',
       'n:425:0',
@@ -44,20 +52,15 @@ const expected = {
       'n:971:2.9999999999999902',
     ],
     widthsOutside: [
-      'r:107#0>r:964#2',
-      'r:476#1>r:964#2',
       'r:1163#0>r:1121#0',
       'r:1163#0>r:1164#0',
       'r:1163#0>r:415#0',
       'r:1163#0>r:781#0',
       'r:1163#0>r:792#0',
-      'r:414#0>r:1121#0',
-      'r:780#0>r:1121#0',
-      'r:793#0>r:1121#0',
       'r:988#1>r:1044#1',
       'r:988#1>r:353#0',
-      'r:715#1>r:140#0',
-      'r:715#1>r:386#1',
+      'r:716#1>r:958#3',
+      'r:184#0>r:1173#0',
       'r:671#0>r:267#0',
       'r:1188#2>r:307#3',
       'r:676#1>r:307#3',
@@ -65,8 +68,9 @@ const expected = {
       'r:1330#0>r:327#0',
       'r:1269#0>r:41#0',
       'r:1273#0>r:1230#0',
+      'r:517#0>r:1230#0',
+      'r:523#0>r:1230#0',
       'r:192#0>r:57#0',
-      'r:1334#1>r:724#1',
       'r:978#2>r:984#1',
       'r:1276#0>r:1368#0',
       'r:1362#0>r:1368#0',

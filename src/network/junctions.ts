@@ -171,10 +171,6 @@ const EXTEND_M = 50;
  * direction: SUMO joins within 20 degrees, and up to 60 degrees where the curbs never meet
  * (carriageways that run on top of each other, as realigned approaches can). */
 const SAME_DIRECTION = (60 * Math.PI) / 180;
-/** Two overlapping ends of one direction move their mouths out to where they part only when
- * that is this close to the node: farther, they stay two roads, their markings clipped where
- * they cross (architecture 11), rather than a long blank junction surface. */
-const MOUTH_REACH_M = 2 * SETBACK_CAP_M;
 /** Road ends within 3 degrees of each other run the same way: one can shadow the other. */
 const COINCIDENT = Math.cos(Math.PI / 60);
 /** Curbs within 5 degrees of parallel never form a corner (TASK-061 clarification). */
@@ -472,6 +468,10 @@ type Mouth = {
   leftStart: Vec2;
   rightStart: Vec2;
   setback: number;
+  /** How far the mouth has moved out past the road end's cut. */
+  moved: number;
+  /** Between its corners, the gore over two merged ends' overlap (TASK-063 way). */
+  gore?: Vec2[];
 };
 
 type Shape = { mouths: Mouth[]; armOf: number[]; single: boolean; origin: Vec2 };
@@ -527,6 +527,64 @@ function denseArc(center: Vec2, radius: number, start: number, sweep: number): V
     ...ends.map((t) => at(1 - t)).reverse(),
     arc.at(-1)!,
   ];
+}
+
+/** Where two ends of one mouth overlap past it, their overlap is a gore (TASK-063 way): from
+ * where the second end's left edge leaves the mouth, out to where it meets the first end's
+ * right edge, and back along that edge to the mouth. */
+function overlapGore(
+  left: Vec2,
+  right: Vec2,
+  aRight: Vec2[],
+  bLeft: Vec2[],
+  direction: Vec2,
+  origin: Vec2,
+): Vec2[] | undefined {
+  const across = [left, right];
+  const enter = polylineCrossings(extended(bLeft), across)[0];
+  const leave = polylineCrossings(extended(aRight), across)[0];
+  // The first crossing out from the mouth, however shallow.
+  const tip = polylineCrossings(aRight, bLeft)
+    .filter((hit) => distance(hit.point, origin) <= CORNER_REACH_M)
+    .map((hit) => ({ point: hit.point, a: hit.alongA, b: hit.alongB }))
+    .reduce<{ point: Vec2; a: number; b: number } | undefined>(
+      (best, hit) => (!best || Math.max(hit.a, hit.b) < Math.max(best.a, best.b) ? hit : best),
+      undefined,
+    );
+  if (!enter || !leave || !tip || tip.a <= 0.01 || tip.b <= 0.01) return undefined;
+  const ahead = (from: Vec2) => (p: Vec2) =>
+    (p.x - from.x) * direction.x + (p.y - from.y) * direction.y > 0;
+  return [
+    enter.point,
+    ...edgeUpTo(bLeft, tip.b).filter(ahead(enter.point)),
+    tip.point,
+    ...edgeUpTo(aRight, tip.a).filter(ahead(leave.point)).reverse(),
+    leave.point,
+  ];
+}
+
+/** The outline may run along a road end at most this far past the end's own cut (a capped
+ * corner, an overlap of one direction, a movement held in): farther overlap is covered the
+ * TASK-063 way, by a gore along the facing edges, instead of swallowing the road. */
+const MOUTH_MOVE_M = SETBACK_CAP_M + CURB_RADIUS_M;
+
+/** Move a mouth out along its road end, within `MOUTH_MOVE_M` in all and half the road. */
+function moveMouth(mouth: Mouth, out: number): void {
+  const room = Math.min(
+    MOUTH_MOVE_M - mouth.moved,
+    // A stub shorter than its setbacks may be covered up to a metre from its far end.
+    ...[mouth.leftEdge, mouth.rightEdge].map((e) => {
+      const length = cumulativeLengths(e).at(-1)!;
+      return length < 2 * MOUTH_MOVE_M ? length - 1 : length / 2;
+    }),
+  );
+  const step = Math.min(out, room);
+  if (step <= 0.01) return;
+  mouth.leftEdge = edgeFrom(mouth.leftEdge, step);
+  mouth.rightEdge = edgeFrom(mouth.rightEdge, step);
+  mouth.left = mouth.leftEdge[0]!;
+  mouth.right = mouth.rightEdge[0]!;
+  mouth.moved += step;
 }
 
 /** The part of an outward edge beyond `station`. */
@@ -644,6 +702,7 @@ export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Ve
       leftStart: left,
       rightStart: right,
       setback: node.setbacks[index]!,
+      moved: 0,
     };
   });
   const arms = directions(
@@ -671,11 +730,7 @@ export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Ve
         [a, hit.alongA],
         [b, hit.alongB],
       ] as const) {
-        if (out <= 0.01 || distance(hit.point, node.pos) > MOUTH_REACH_M) continue;
-        end.leftEdge = edgeFrom(end.leftEdge, out);
-        end.rightEdge = edgeFrom(end.rightEdge, out);
-        end.left = end.leftEdge[0]!;
-        end.right = end.rightEdge[0]!;
+        if (out > 0.01) moveMouth(end, out);
       }
     }
   // An end lying within another end of its direction (a coincident source carriageway, which
@@ -713,7 +768,12 @@ export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Ve
           last.leftEdge = edgeFrom(last.leftEdge, -gap);
           last.left = last.leftEdge[0]!;
         }
-        Object.assign(last, { right: rightEdge[0]!, rightEdge, roads });
+        Object.assign(last, {
+          gore: overlapGore(last.left, rightEdge[0]!, last.rightEdge, end.leftEdge, d, node.pos),
+          right: rightEdge[0]!,
+          rightEdge,
+          roads,
+        });
       }
     }
   });
@@ -733,16 +793,70 @@ export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Ve
     if (hit.b + t > 0.01) extra[j] = Math.max(extra[j]!, hit.b + t);
   });
   mouths.forEach((mouth, k) => {
-    const lengths = [mouth.leftEdge, mouth.rightEdge].map((e) => cumulativeLengths(e).at(-1)!);
-    const out = Math.min(extra[k]!, ...lengths.map((l) => l / 2));
-    if (out <= 0.01) return;
-    mouth.leftEdge = edgeFrom(mouth.leftEdge, out);
-    mouth.rightEdge = edgeFrom(mouth.rightEdge, out);
-    mouth.left = mouth.leftEdge[0]!;
-    mouth.right = mouth.rightEdge[0]!;
+    if (extra[k]! > 0.01) moveMouth(mouth, extra[k]!);
   });
+  // Neighbouring mouths that still overlap side by side, their corners crossed (two
+  // carriageways on top of each other at an angle, their corner beyond reach), become one mouth
+  // across both where the outline would otherwise cross itself: their remaining overlap stays
+  // two roads (reported by the audit) rather than a self-crossing outline.
+  const crossings = () =>
+    selfCrossings(
+      assemble(mouths, buildJoins({ mouths, armOf, single: arms.length === 1, origin: node.pos })),
+    );
+  let crossed = crossings();
+  for (let k = 0; crossed && mouths.length > 2 && k < mouths.length; k++) {
+    const j = (k + 1) % mouths.length;
+    const a = mouths[k]!,
+      b = mouths[j]!;
+    if (armOf[k] === armOf[j]) continue;
+    // Crossed: b's left corner within a's width, or a's right corner within b's.
+    const lateral = (p: Vec2, m: Mouth) =>
+      -(p.x - m.left.x) * m.direction.y + (p.y - m.left.y) * m.direction.x;
+    if (
+      a.direction.x * b.direction.x + a.direction.y * b.direction.y < 0 ||
+      (lateral(b.left, a) > distance(a.left, a.right) - 0.05 && lateral(a.right, b) < 0.05)
+    )
+      continue;
+    const saved = { mouths: mouths.map((m) => ({ ...m })), armOf: [...armOf] };
+    Object.assign(a, {
+      gore: overlapGore(a.left, b.right, a.rightEdge, b.leftEdge, a.direction, node.pos),
+      right: b.right,
+      rightEdge: b.rightEdge,
+      roads: [...a.roads, ...b.roads],
+    });
+    mouths.splice(j, 1);
+    armOf.splice(j, 1);
+    let now = crossings();
+    if (now >= crossed && a.gore) {
+      a.gore = undefined;
+      now = crossings();
+    }
+    if (now < crossed) {
+      crossed = now;
+      k = -1;
+    } else {
+      mouths.splice(0, mouths.length, ...saved.mouths);
+      armOf.splice(0, armOf.length, ...saved.armOf);
+    }
+  }
   const shape = { mouths, armOf, single: arms.length === 1, origin: node.pos };
   const joins = buildJoins(shape);
+  // A curb that loops across its neighbour (stub road ends whose edges are too short to say
+  // where their curbs meet) falls back to a straight join.
+  let loops = selfCrossings(assemble(mouths, joins));
+  for (let k = 0; loops && k < joins.length; k++) {
+    const join = joins[k]!;
+    if (join.kind !== 'fillet' && join.kind !== 'gore') continue;
+    joins[k] = {
+      kind: 'straight',
+      points: [join.points[0]!, join.points.at(-1)!],
+      radius: 0,
+      directions: join.directions,
+    };
+    const now = selfCrossings(assemble(mouths, joins));
+    if (now < loops) loops = now;
+    else joins[k] = join;
+  }
   const laneEnds = roads.flatMap((road) =>
     road.lanes.map((index) => {
       const lane = lanes[index]!;
@@ -753,15 +867,20 @@ export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Ve
   const limit = Math.max(
     0,
     ...laneEnds.map((d) => d + 8),
-    ...joins.filter((j) => j.kind === 'gore').map((j) => distance(node.pos, j.control!)),
+    ...joins
+      .filter((j) => j.kind === 'gore')
+      .flatMap((j) => j.points.map((p) => distance(node.pos, p))),
     ...mouths.flatMap((m) => [m.left, m.right].map((p) => distance(node.pos, p) + 8)),
+    ...mouths.flatMap((m) => (m.gore ?? []).map((p) => distance(node.pos, p))),
   );
   pendingJoins.set(node, { shape, joins, limit, roads });
-  return assemble(mouths, joins);
+  return untangle(assemble(mouths, joins));
 }
 
 function assemble(mouths: Mouth[], joins: CurbJoin[]): Vec2[] {
-  return closeOutline(mouths.flatMap((mouth, k) => [mouth.left, ...joins[k]!.points]));
+  return closeOutline(
+    mouths.flatMap((mouth, k) => [mouth.left, ...(mouth.gore ?? []), ...joins[k]!.points]),
+  );
 }
 
 /** A movement's surface samples: centre and both edges at every vertex, across the curve's
@@ -854,6 +973,9 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
   const { shape, limit, roads } = pending;
   const { mouths } = shape;
   let joins = pending.joins;
+  // Work on the assembled ring; it is untangled again at the end.
+  node.outline = assemble(mouths, joins);
+  let crossed = selfCrossings(node.outline);
   // Only samples off the movements' own roads can need more junction surface; that test is
   // made once per sample, and only for samples some candidate outline leaves out.
   const surfaces = new Map<number, (p: Vec2) => boolean>();
@@ -904,48 +1026,45 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
   };
   const count = (f: boolean[]) => f.reduce((n, x) => n + (x ? 1 : 0), 0);
   let missing = listed(flags);
-  for (let pass = 0; pass < 3 && missing.length; pass++) {
+  for (let pass = 0; pass < 6 && missing.length; pass++) {
     if (pass > 0) {
       // Last resort: a mouth that a movement surface crosses moves out past it (as the TASK-063
       // surface cuts did), its road end then lying under the outline; lanes never move.
       const shift = mouths.map(() => 0);
       for (const p of missing) {
+        // The mouth the sample lies beyond, within its width; the nearest such.
         let best = -1,
-          nearest = Infinity;
+          shallowest = Infinity;
         mouths.forEach((m, k) => {
-          const away = distanceToLine(p, [m.left, m.right]);
-          if (away < nearest) {
-            nearest = away;
+          const width = distance(m.left, m.right);
+          const n = { x: -m.direction.y, y: m.direction.x };
+          const lateral = (p.x - m.left.x) * n.x + (p.y - m.left.y) * n.y;
+          const depth = (p.x - m.left.x) * m.direction.x + (p.y - m.left.y) * m.direction.y;
+          if (lateral < -0.5 || lateral > width + 0.5 || depth <= 0) return;
+          if (depth < shallowest) {
+            shallowest = depth;
             best = k;
           }
         });
-        const m = mouths[best]!;
-        const depth = (p.x - m.left.x) * m.direction.x + (p.y - m.left.y) * m.direction.y;
-        if (nearest < 2 && depth > 0) shift[best] = Math.max(shift[best]!, depth + 0.15);
+        if (best >= 0) shift[best] = Math.max(shift[best]!, shallowest + 0.15);
       }
       if (shift.every((d) => d === 0)) break;
       const saved = mouths.map((m) => ({ ...m }));
       shift.forEach((out, k) => {
-        const m = mouths[k]!;
-        const room = Math.min(
-          ...[m.leftEdge, m.rightEdge].map((e) => cumulativeLengths(e).at(-1)! / 2),
-        );
-        if (out <= 0 || out > room) return;
-        m.leftEdge = edgeFrom(m.leftEdge, out);
-        m.rightEdge = edgeFrom(m.rightEdge, out);
-        m.left = m.leftEdge[0]!;
-        m.right = m.rightEdge[0]!;
+        if (out > 0) moveMouth(mouths[k]!, out);
       });
       const rebuilt = buildJoins(shape);
       const ring = assemble(mouths, rebuilt);
-      if (!simpleOutline(ring)) {
+      const inside = preparePolygon(untangle(ring), 0.1);
+      const result = points.map((s) => off(s, inside));
+      if (count(result) >= missing.length) {
         saved.forEach((m, k) => Object.assign(mouths[k]!, m));
         break;
       }
       joins = rebuilt;
       node.outline = ring;
-      const inside = preparePolygon(ring, 0.1);
-      flags = points.map((s) => off(s, inside));
+      crossed = selfCrossings(ring);
+      flags = result;
       missing = listed(flags);
     }
     for (let k = 0; k < joins.length && missing.length; k++) {
@@ -978,7 +1097,7 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
         if (!nearer) next.left = moved(b);
         const ring = assemble(mouths, joins);
         const result = trial(ring, [a, b], [moved(a), moved(b)]);
-        if (count(result) < missing.length && simpleOutline(ring)) {
+        if (count(result) < missing.length && selfCrossings(ring) <= crossed) {
           node.outline = ring;
           flags = result;
           missing = listed(flags);
@@ -995,7 +1114,7 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
         const ring = assemble(mouths, joins);
         const result = trial(ring, join.points, candidate.points);
         const left = count(result);
-        if (left < best.left && simpleOutline(ring))
+        if (left < best.left && selfCrossings(ring) <= crossed)
           best = { join: candidate, ring, flags: result, left };
       };
       for (const handle of join.shape.handles.slice(1))
@@ -1017,13 +1136,109 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
       missing = listed(flags);
     }
   }
+  node.outline = untangle(node.outline);
   return {
     joins,
-    limit,
+    // Mouths moved out to hold a movement reach as far as their own 8 m.
+    limit: Math.max(
+      limit,
+      ...mouths.flatMap((m) => [m.left, m.right].map((p) => distance(node.pos, p) + 8)),
+    ),
     get contained() {
       return !missing.length && simpleOutline(node.outline);
     },
   };
+}
+
+/** Last resort for a ring that still crosses itself (crossed stub road ends, a fan of
+ * overlapping ramps): at each crossing a sliver loop is cut off, and a larger loop between the
+ * two passes is walked the other way, so the ring touches itself there instead of crossing and
+ * still covers both loops. */
+function untangle(ring: Vec2[]): Vec2[] {
+  const area = (loop: Vec2[]) =>
+    Math.abs(
+      loop.reduce((sum, p, k) => {
+        const q = loop[(k + 1) % loop.length]!;
+        return sum + p.x * q.y - q.x * p.y;
+      }, 0),
+    ) / 2;
+  let points = ring.slice(0, -1);
+  const strict = (a: Vec2, b: Vec2, c: Vec2, d: Vec2) => {
+    const ax = b.x - a.x,
+      ay = b.y - a.y,
+      bx = d.x - c.x,
+      by = d.y - c.y;
+    const det = ax * by - ay * bx;
+    if (Math.abs(det) < 1e-12) return undefined;
+    const t = ((c.x - a.x) * by - (c.y - a.y) * bx) / det;
+    const u = ((c.x - a.x) * ay - (c.y - a.y) * ax) / det;
+    return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9
+      ? { x: a.x + t * ax, y: a.y + t * ay }
+      : undefined;
+  };
+  for (let guard = 0; guard < 50; guard++) {
+    const n = points.length;
+    let found: { i: number; j: number; at: Vec2 } | undefined;
+    for (const [i, j] of candidatePairs([...points, points[0]!])) {
+      const at = strict(points[i]!, points[i + 1]!, points[j]!, points[(j + 1) % n]!);
+      if (at) {
+        found = { i, j, at };
+        break;
+      }
+    }
+    if (!found) break;
+    const { i, j, at } = found;
+    const outer = [...points.slice(0, i + 1), at, ...points.slice(j + 1)];
+    const inner = [at, ...points.slice(i + 1, j + 1)];
+    // A sliver loop is cut off; a loop with area is kept, walked the other way.
+    if (Math.min(area(outer), area(inner)) < 2) points = area(outer) >= area(inner) ? outer : inner;
+    else
+      points = [
+        ...points.slice(0, i + 1),
+        at,
+        ...points.slice(i + 1, j + 1).reverse(),
+        at,
+        ...points.slice(j + 1),
+      ];
+  }
+  return closeOutline(points);
+}
+
+/** Pairs of non-adjacent segments of a closed ring (segment k runs from ring[k] to ring[k+1])
+ * whose bounding boxes overlap, found with a sweep along x. */
+function candidatePairs(ring: Vec2[]): [number, number][] {
+  const n = ring.length - 1;
+  const order = Array.from({ length: n }, (_, k) => k).sort(
+    (a, b) => Math.min(ring[a]!.x, ring[a + 1]!.x) - Math.min(ring[b]!.x, ring[b + 1]!.x),
+  );
+  const pairs: [number, number][] = [];
+  const active: number[] = [];
+  for (const k of order) {
+    const minX = Math.min(ring[k]!.x, ring[k + 1]!.x);
+    for (let a = active.length - 1; a >= 0; a--)
+      if (Math.max(ring[active[a]!]!.x, ring[active[a]! + 1]!.x) < minX) active.splice(a, 1);
+    const minY = Math.min(ring[k]!.y, ring[k + 1]!.y),
+      maxY = Math.max(ring[k]!.y, ring[k + 1]!.y);
+    for (const other of active) {
+      const i = Math.min(k, other),
+        j = Math.max(k, other);
+      if (j - i < 2 || (i === 0 && j === n - 1)) continue;
+      if (
+        Math.max(ring[other]!.y, ring[other + 1]!.y) < minY ||
+        Math.min(ring[other]!.y, ring[other + 1]!.y) > maxY
+      )
+        continue;
+      pairs.push([i, j]);
+    }
+    active.push(k);
+  }
+  return pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+}
+
+function selfCrossings(ring: Vec2[]): number {
+  return candidatePairs(ring).filter(([i, j]) =>
+    segmentsIntersect(ring[i]!, ring[i + 1]!, ring[j]!, ring[j + 1]!),
+  ).length;
 }
 
 function simpleOutline(ring: Vec2[]): boolean {

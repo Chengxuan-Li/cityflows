@@ -1,7 +1,7 @@
 import type { Graphics } from 'pixi.js';
 import {
   clipOutside,
-  deepInside,
+  cumulativeLengths,
   headingAtDistance,
   offsetPolyline,
   pointAtDistance,
@@ -9,6 +9,7 @@ import {
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CLane, CMovement, CompiledCity, CRoad } from '../../network';
+import { SETBACK_CAP_M } from '../../network/junctions';
 import { roadStyle, style } from '../style';
 
 function fadeAtZoom(graphics: Graphics, from: number, to: number) {
@@ -49,20 +50,71 @@ export function drawRoad(
           .poly(piece, false)
           .stroke({ color: style.marking, width: style.dividerWidthM, alpha: 0.85 });
     }
-    drawApproachMarkings(markings, city, lane, controls, clips);
+    drawApproachMarkings(markings, city, lane, controls);
   }
 }
 
-/** TASK-074: a road's markings stop where its surface enters another surface of its nodes, a
- * neighbouring road's or a junction outline, so no divider is drawn on a neighbouring road. */
+/** TASK-074: a road's dividers and centre lines stop where they enter its nodes' outlines, or
+ * another road's surface within that road's junction mouth (its first `SETBACK_CAP_M` past its
+ * cut). Roads running the same way at the node (the opposite direction of the street, a
+ * coincident or overlapping carriageway) never clip each other. */
 export function markingClips(city: CompiledCity, road: CRoad): Vec2[][] {
-  const nodes = [road.from, road.to];
-  return [
-    ...nodes.map((n) => city.nodes[n]!.outline).filter((outline) => outline.length),
-    ...city.roads
-      .filter((other) => other !== road && (nodes.includes(other.from) || nodes.includes(other.to)))
-      .map((other) => [...other.surface, other.surface[0]!]),
-  ];
+  const rings: Vec2[][] = [];
+  for (const node of [road.from, road.to]) {
+    const outline = city.nodes[node]!.outline;
+    if (!outline.length) continue;
+    rings.push(outline);
+    const own = endDirection(road, road.to === node);
+    for (const other of city.roads) {
+      if (other === road || (other.from !== node && other.to !== node)) continue;
+      if (other.streetGroupId !== null && other.streetGroupId === road.streetGroupId) continue;
+      const atEnd = other.to === node;
+      const d = endDirection(other, atEnd);
+      if (d.x * own.x + d.y * own.y > Math.cos(Math.PI / 6)) continue;
+      rings.push(mouthPiece(other, atEnd));
+    }
+  }
+  return rings;
+}
+
+/** The surface edges of a road end, outward from the node. */
+function endEdges(road: CRoad, atEnd: boolean): [Vec2[], Vec2[]] {
+  const half = road.surface.length / 2;
+  const left = road.surface.slice(0, half),
+    right = road.surface.slice(half).reverse();
+  return atEnd ? [right.reverse(), left.reverse()] : [left, right];
+}
+
+/** A road end's outward direction over its first few metres. */
+function endDirection(road: CRoad, atEnd: boolean): Vec2 {
+  const [left, right] = endEdges(road, atEnd);
+  const ahead = (edge: Vec2[]) =>
+    edge.find((p) => Math.hypot(p.x - edge[0]!.x, p.y - edge[0]!.y) >= 3) ?? edge.at(-1)!;
+  const dx = (ahead(left).x + ahead(right).x - left[0]!.x - right[0]!.x) / 2,
+    dy = (ahead(left).y + ahead(right).y - left[0]!.y - right[0]!.y) / 2;
+  const length = Math.hypot(dx, dy);
+  return { x: dx / length, y: dy / length };
+}
+
+/** A road end's surface from its cut out to `SETBACK_CAP_M`, as a closed ring. */
+function mouthPiece(road: CRoad, atEnd: boolean): Vec2[] {
+  const sides = endEdges(road, atEnd).map((edge) => {
+    const lengths = cumulativeLengths(edge);
+    const kept: Vec2[] = [edge[0]!];
+    for (let i = 1; i < edge.length; i++) {
+      if (lengths[i]! < SETBACK_CAP_M) {
+        kept.push(edge[i]!);
+        continue;
+      }
+      const t = (SETBACK_CAP_M - lengths[i - 1]!) / (lengths[i]! - lengths[i - 1]!);
+      const a = edge[i - 1]!,
+        b = edge[i]!;
+      kept.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      break;
+    }
+    return kept;
+  });
+  return [...sides[0]!, ...sides[1]!.reverse(), sides[0]![0]!];
 }
 
 export function approachMarkings(city: CompiledCity, lane: CLane) {
@@ -101,11 +153,8 @@ function drawApproachMarkings(
   city: CompiledCity,
   lane: CLane,
   controls: Graphics,
-  clips: Vec2[][],
 ): void {
   const marks = approachMarkings(city, lane);
-  const hidden = (points: Vec2[]) =>
-    points.some((p) => clips.some((ring) => deepInside(p, ring, 0.05)));
   const local = (distance: number, forward: number, side: number) => {
     const point = pointAtDistance(lane.polyline, lane.cumulative, distance);
     const heading = headingAtDistance(lane.polyline, lane.cumulative, distance);
@@ -115,7 +164,6 @@ function drawApproachMarkings(
     };
   };
   const half = lane.widthM * 0.44;
-  // Stop and give-way lines stay at the stop position, under an outline too: cars stop there.
   if (marks.stop) {
     controls
       .poly([local(lane.stopM, 0, -half), local(lane.stopM, 0, half)], false)
@@ -175,8 +223,6 @@ function drawApproachMarkings(
         tip[1] - Math.sin(heading) * back - Math.cos(heading) * 0.4,
       ),
     ];
-    // An arrow on another road's surface or under an outline is left out whole.
-    if (hidden([...shaft, ...head])) continue;
     graphics
       .poly(shaft, false)
       .stroke({ color: style.marking, width: 0.22 * scale, join: 'round' });

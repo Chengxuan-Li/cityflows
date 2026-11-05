@@ -183,7 +183,7 @@ test.each([
   // Before TASK-074: c1b2bf4d… (grid) and 1ee92a0e… (Munich).
   ['grid', 0, '082eb0366297a4daf673c250674ccbf6c94b52f424fdca70263b5acc38885b9e'],
   // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
-  ['Munich', 63, '73152dc799045fd757ee2f781ec6bc8e77eb96a00164c7996b89c8d3bd62639e'],
+  ['Munich', 63, '28e9d7b3f6fe13b6b3f72b06a0e6180b0d1f9e719bd2192582991486e401b701'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {

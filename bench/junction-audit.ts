@@ -2,11 +2,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { grid5x5 } from '../src/fixtures/grid5x5';
 import { town } from '../src/fixtures/town';
-import { cumulativeLengths, headingAtDistance, preparePolygon } from '../src/geo/polyline';
+import type { Graphics } from 'pixi.js';
+import {
+  clipOutside,
+  cumulativeLengths,
+  headingAtDistance,
+  polylineLength,
+  preparePolygon,
+} from '../src/geo/polyline';
 import type { Vec2 } from '../src/geo/vec2';
 import { importOsm } from '../src/importers/osm';
 import { compile, type CMovement, type CompiledCity, type CNode, type CRoad } from '../src/network';
 import { SETBACK_CAP_M } from '../src/network/junctions';
+import { drawRoad } from '../src/render/layers/roads';
 import type { City } from '../src/schema';
 
 // Junction shape audit (TASK-074, architecture 5.1): per node, how far the drawn junction is
@@ -425,6 +433,48 @@ export function auditJunctions(net: CompiledCity): NodeAudit[] {
   return net.nodes.map((node) => auditNode(net, node));
 }
 
+/** Length of the lane markings `drawRoad` strokes (dividers, centre lines, stop lines, arrow
+ * shafts; fills such as arrow heads not counted), in all and outside its nodes' outlines. */
+export function markingLengths(net: CompiledCity) {
+  let total = 0,
+    outside = 0;
+  for (const road of net.roads) {
+    const lines: Vec2[][] = [];
+    let previous = { x: 0, y: 0 };
+    const graphics = {
+      poly(points: Vec2[]) {
+        lines.push(points);
+        return this;
+      },
+      fill() {
+        lines.pop();
+        return this;
+      },
+      stroke() {
+        return this;
+      },
+      moveTo(x: number, y: number) {
+        previous = { x, y };
+        return this;
+      },
+      lineTo(x: number, y: number) {
+        lines.push([previous, { x, y }]);
+        previous = { x, y };
+        return this;
+      },
+    } as unknown as Graphics;
+    drawRoad(graphics, graphics, net, road, false, graphics);
+    const outlines = [road.from, road.to]
+      .map((n) => net.nodes[n]!.outline)
+      .filter((outline) => outline.length);
+    for (const line of lines) {
+      total += polylineLength(line);
+      for (const piece of clipOutside(line, outlines, 0)) outside += polylineLength(piece);
+    }
+  }
+  return { markingM: Math.round(total), markingOutsideM: Math.round(outside) };
+}
+
 export function summarize(audits: NodeAudit[]) {
   const sum = (key: keyof NodeAudit) => audits.reduce((total, a) => total + (a[key] as number), 0);
   return {
@@ -453,10 +503,17 @@ export function worstNodes(audits: NodeAudit[], count = 20): NodeAudit[] {
 
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('/junction-audit.ts')) {
   const json = process.argv.indexOf('--json');
-  const report: Record<string, { summary: ReturnType<typeof summarize>; nodes: NodeAudit[] }> = {};
+  const report: Record<
+    string,
+    {
+      summary: ReturnType<typeof summarize> & ReturnType<typeof markingLengths>;
+      nodes: NodeAudit[];
+    }
+  > = {};
   for (const name of auditCities) {
-    const audits = auditJunctions(compileAuditCity(name));
-    report[name] = { summary: summarize(audits), nodes: audits };
+    const net = compileAuditCity(name);
+    const audits = auditJunctions(net);
+    report[name] = { summary: { ...summarize(audits), ...markingLengths(net) }, nodes: audits };
   }
   console.table(Object.fromEntries(Object.entries(report).map(([k, v]) => [k, v.summary])));
   for (const name of auditCities) {

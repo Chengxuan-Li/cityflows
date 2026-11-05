@@ -51,15 +51,9 @@ test('T20: reports fixed movement widths that escape an outer road edge', () => 
     net.lanes,
   );
   expect(containMovements(copy, net.movements, net.lanes).contained).toBe(false);
-  // TASK-074 makes this unsupported case worse: the 16 m arm is shorter than its setbacks, and
-  // with flush mouths six movements leave the outline and the outline crosses itself there.
-  expect(surfaceAudit(net).widthsOutside).toEqual([
-    'r:10#2>r:3#1',
-    'r:10#3>r:3#1',
-    'r:10#3>r:6#2',
-    'r:4#1>r:9#3',
-    'r:4#0>r:9#2',
-    'r:7#2>r:9#3',
-  ]);
-  expect(outlineCrossings(net)).toEqual(['n:1:2/20', 'n:1:2/29', 'n:1:19/29']);
+  // TASK-074: the 16 m arm is shorter than its setbacks and its stub lies across the 313 degree
+  // arm's mouth: three movements into r:9 leave the outline (main: two from r:10), and the
+  // outline touches itself at one point where its two loops meet (no proper crossing).
+  expect(surfaceAudit(net).widthsOutside).toEqual(['r:4#1>r:9#3', 'r:4#0>r:9#2', 'r:7#2>r:9#3']);
+  expect(outlineCrossings(net)).toEqual(['n:1:2/5', 'n:1:2/6', 'n:1:3/5', 'n:1:3/6']);
 });
