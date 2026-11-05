@@ -45,6 +45,33 @@ test('layer toggles leave the simulation unchanged; minute charts show the morni
   const hash = await page.evaluate(() => window.cityflows!.hash());
   await page.getByRole('button', { name: 'Layers', exact: true }).click();
   const layers = page.getByRole('region', { name: 'Map layers' });
+  await expect(layers.getByLabel('Road classes', { exact: true })).not.toBeChecked();
+  // Wait for the paused snapshot throttle before comparing presentation-only changes.
+  await page.waitForTimeout(550);
+  const asphalt = await page
+    .getByLabel('City map', { exact: true })
+    .screenshot({ mask: [layers, page.getByRole('button', { name: 'Layers', exact: true })] });
+  await layers.getByLabel('Road classes', { exact: true }).check();
+  await expect
+    .poll(async () =>
+      (
+        await page
+          .getByLabel('City map', { exact: true })
+          .screenshot({ mask: [layers, page.getByRole('button', { name: 'Layers', exact: true })] })
+      ).equals(asphalt),
+    )
+    .toBe(false);
+  expect(await page.evaluate(() => window.cityflows!.hash())).toBe(hash);
+  await layers.getByLabel('Road classes', { exact: true }).uncheck();
+  await expect
+    .poll(async () =>
+      (
+        await page
+          .getByLabel('City map', { exact: true })
+          .screenshot({ mask: [layers, page.getByRole('button', { name: 'Layers', exact: true })] })
+      ).equals(asphalt),
+    )
+    .toBe(true);
   for (const checkbox of await layers.getByRole('checkbox').all()) {
     await checkbox.click();
     expect(await page.evaluate(() => window.cityflows!.hash())).toBe(hash);

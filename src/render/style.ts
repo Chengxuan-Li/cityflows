@@ -14,8 +14,13 @@ const roads: Record<RoadClass, typeof local> = {
   ramp: { color: 0xa1b2b4, vergeM: 0.4 },
 };
 
-export function roadStyle(road: { roadClass: RoadClass; lanes: readonly number[] }) {
-  return road.roadClass === 'residential' && road.lanes.length > 1 ? avenue : roads[road.roadClass];
+export function roadStyle(
+  road: { roadClass: RoadClass; lanes: readonly number[] },
+  roadClasses = false,
+) {
+  const tone =
+    road.roadClass === 'residential' && road.lanes.length > 1 ? avenue : roads[road.roadClass];
+  return { ...tone, color: roadClasses ? tone.color : style.asphalt };
 }
 
 const placePalette = [

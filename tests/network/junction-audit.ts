@@ -1,6 +1,6 @@
-import { segmentsIntersect } from '../../src/geo/polyline';
+import { segmentsIntersect, headingAtDistance } from '../../src/geo/polyline';
 import type { CompiledCity } from '../../src/network';
-import { SETBACK_CAP_M } from '../../src/network/junctions';
+import { SETBACK_CAP_M, junctionOutline, containMovements } from '../../src/network/junctions';
 import type { Vec2 } from '../../src/geo/vec2';
 
 // Canonical road-body defects, outside TASK-061's junction geometry surface.
@@ -60,6 +60,21 @@ export function movementsOutside(net: CompiledCity) {
     .map((m) => m.id);
 }
 
+export function outlineCrossings(net: CompiledCity) {
+  return net.nodes.flatMap((node) => {
+    const ring = node.outline;
+    const crossings: string[] = [];
+    for (let i = 1; i < ring.length; i++) {
+      for (let j = i + 2; j < ring.length; j++) {
+        if (i === 1 && j === ring.length - 1) continue;
+        if (segmentsIntersect(ring[i - 1]!, ring[i]!, ring[j - 1]!, ring[j]!))
+          crossings.push(`${node.id}:${i}/${j}`);
+      }
+    }
+    return crossings;
+  });
+}
+
 /** Lane pairs of distinct incident roads with a proper crossing (shared ends excluded).
  * `capped` marks a crossing at a node where a road end's setback hit `SETBACK_CAP_M`: an
  * acute approach the junction surface covers instead of a longer setback (architecture 5.1). */
@@ -95,4 +110,75 @@ export function junctionOverlaps(net: CompiledCity) {
     }
   }
   return overlaps;
+}
+
+export function surfaceAudit(net: CompiledCity) {
+  const widthsOutside: string[] = [],
+    oversized: string[] = [],
+    tangents: string[] = [];
+  const classes = { fillet: 0, straight: 0, extended: 0, gore: 0, through: 0 };
+  for (const original of net.nodes) {
+    const node = { ...original };
+    node.outline = junctionOutline(
+      node,
+      net.roads.filter((r) => r.from === node.idx || r.to === node.idx),
+      net.lanes,
+    );
+    const { joins, limit } = containMovements(node, net.movements, net.lanes);
+    const shape = !node.outline.length
+      ? 'through'
+      : joins.some((j) => j.kind === 'gore')
+        ? 'gore'
+        : joins.some((j) => j.kind === 'extended')
+          ? 'extended'
+          : joins.some((j) => j.kind === 'fillet')
+            ? 'fillet'
+            : 'straight';
+    classes[shape]++;
+    if (node.outline.some((p) => Math.hypot(p.x - node.pos.x, p.y - node.pos.y) > limit + 1e-6))
+      oversized.push(node.id);
+    for (const join of joins) {
+      if (join.kind !== 'fillet') continue;
+      const line = join.points.filter(
+        (p, i) =>
+          i === 0 || Math.hypot(p.x - join.points[i - 1]!.x, p.y - join.points[i - 1]!.y) > 1e-6,
+      );
+      for (const [point, direction, start] of [
+        [join.first!, join.directions[0], true],
+        [join.last!, join.directions[1], false],
+      ] as const) {
+        const i = line.findIndex((p) => Math.hypot(p.x - point.x, p.y - point.y) < 1e-5);
+        const other = line[i + (start ? 1 : -1)];
+        if (!other) {
+          tangents.push(`${node.id}:missing tangent`);
+          continue;
+        }
+        const dx = point.x - other.x;
+        const dy = point.y - other.y;
+        const cosine = (dx * direction.x + dy * direction.y) / Math.hypot(dx, dy);
+        if (cosine < Math.cos((2 * Math.PI) / 180) - 1e-6)
+          tangents.push(`${node.id}:${join.radius}`);
+      }
+    }
+    if (!node.outline.length) continue;
+    for (const index of node.movements) {
+      const m = net.movements[index]!;
+      const width = Math.min(net.lanes[m.fromLane]!.widthM, net.lanes[m.toLane]!.widthM) / 2;
+      const escaped = m.polyline.some((p, i) => {
+        const heading = headingAtDistance(m.polyline, m.cumulative, m.cumulative[i]!);
+        return [-1, 1].some(
+          (side) =>
+            !insideOutline(
+              {
+                x: p.x - Math.sin(heading) * width * side,
+                y: p.y + Math.cos(heading) * width * side,
+              },
+              node.outline,
+            ),
+        );
+      });
+      if (escaped) widthsOutside.push(m.id);
+    }
+  }
+  return { widthsOutside, oversized, tangents, classes };
 }

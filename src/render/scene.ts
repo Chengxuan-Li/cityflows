@@ -4,12 +4,12 @@ import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { Camera } from './camera';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
-import { drawMovementSurface, drawNode, drawRoadJoins } from './layers/nodes';
+import { drawNode, drawRoadJoins, nodeColor } from './layers/nodes';
 import { drawRoute, drawSelection } from './layers/overlay';
 import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
 import { drawPlaces } from './layers/places';
-import { drawMovementArrow, drawRoad } from './layers/roads';
+import { drawMovementArrow, drawRoad, drawCrossings } from './layers/roads';
 import { drawSignal } from './layers/signals';
 import { drawSigns } from './layers/signs';
 import { Tiles } from './layers/tiles';
@@ -44,18 +44,19 @@ export function pickThroughNode(
   return selected;
 }
 
-function createGrade(layer: number) {
+export function createGrade(layer: number) {
   const group = new Container();
   const terrain = new Container();
   const surfaces = new Graphics();
   const markings = new Graphics();
   const nodes = new Graphics();
   const arrows = new Graphics();
+  const crossings = new Graphics();
   const places = new Graphics();
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
-  terrain.addChild(surfaces, nodes, markings, arrows);
+  terrain.addChild(surfaces, markings, arrows, nodes, crossings);
   group.addChild(terrain, connectors, places, signals, vehicles.container);
   return {
     layer,
@@ -65,6 +66,7 @@ function createGrade(layer: number) {
     markings,
     nodes,
     arrows,
+    crossings,
     places,
     connectors,
     signals,
@@ -116,6 +118,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
 
+  let redrawTerrain = () => {};
+
   function updateTerrainCache() {
     // At overview zoom both markings and arrows are invisible. Rasterize the static
     // terrain once at a power-of-two screen resolution, leaving cars/signals live.
@@ -125,6 +129,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     for (const grade of visibleGrades) {
       grade.markings.visible = !overview;
       grade.arrows.visible = !overview;
+      grade.crossings.visible = !overview;
       const next = overview && grade.terrainSize * resolution <= 2048 ? resolution : 0;
       if (next === grade.cacheResolution) continue;
       grade.terrain.cacheAsTexture(false);
@@ -277,22 +282,50 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           : null;
       };
 
-      for (const road of city.roads) {
-        const { surfaces, markings, nodes } = grades.get(roadGrades[road.idx]!)!;
-        drawRoad(surfaces, markings, city, road);
-        drawRoadJoins(nodes, city, road);
-      }
+      redrawTerrain = () => {
+        for (const grade of visibleGrades) {
+          grade.terrain.cacheAsTexture(false);
+          grade.cacheResolution = 0;
+          for (const graphics of [
+            grade.surfaces,
+            grade.markings,
+            grade.arrows,
+            grade.nodes,
+            grade.crossings,
+          ])
+            graphics.clear();
+        }
+        for (const road of compiled.roads) {
+          const grade = grades.get(roadGrades[road.idx]!)!;
+          drawRoad(
+            grade.surfaces,
+            grade.markings,
+            compiled,
+            road,
+            layerVisibility.roadClasses,
+            grade.crossings,
+          );
+          drawRoadJoins(grade.surfaces, compiled, road, layerVisibility.roadClasses);
+          drawCrossings(grade.crossings, compiled, road);
+        }
+        for (const node of compiled.nodes) {
+          drawNode(
+            grades.get(nodeGrades[node.idx]!)!.nodes,
+            node,
+            nodeColor(compiled, node, layerVisibility.roadClasses),
+          );
+        }
+        for (const movement of compiled.movements) {
+          if (!movement.neverGreen)
+            drawMovementArrow(grades.get(nodeGrades[movement.node]!)!.arrows, movement);
+        }
+        updateTerrainCache();
+      };
+      redrawTerrain();
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
-        drawNode(grade.nodes, node);
         drawSigns(city, node, grade.signals, () => camera.zoom);
         if (node.signal) updateSignals.push(drawSignal(city, node, grade.signals));
-      }
-      for (const movement of city.movements) {
-        const { nodes, arrows } = grades.get(nodeGrades[movement.node]!)!;
-        drawMovementSurface(nodes, city, movement);
-        // A movement no phase ever serves is not a legal route for vehicles; routing skips it.
-        if (!movement.neverGreen) drawMovementArrow(arrows, movement);
       }
       updatePlaces = drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
       updatePlaces(camera.zoom);
@@ -378,7 +411,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (city) heat.setQueues(snapshot);
     },
     setLayerVisibility(layers) {
+      const recolor = layers.roadClasses !== layerVisibility.roadClasses;
       layerVisibility = layers;
+      if (recolor) redrawTerrain();
       applyVisibility();
     },
     setDisconnected(lanes) {
