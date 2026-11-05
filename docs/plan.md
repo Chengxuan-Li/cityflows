@@ -95,8 +95,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-068](tasks/TASK-068.md) | 5 | Realign acute approaches on import; attribute the smoothing cost (B31, B30) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), an acute-Y OSM fixture, `tests/importers`, imported lane-pair lists in `tests/network`, `tests/routing/throughput-routes.json` | 061, 063, 065, 066; design in architecture 13 | T24; Munich at least 2 023 at 0.15 | done |
 | [TASK-069](tasks/TASK-069.md) | 5 | Notes instead of warnings; deterministic vehicle pick (B22) | `src/network/types.ts` (severity), `src/network/diagnostics.ts`, `src/ui` diagnostics and badge, `tests/e2e/helpers.ts` and car-clicking scenarios, the warning table in `tests/importers/munich.test.ts` | 055, 058; design in architecture 5.5 | grid opens with Validation (0); demo B ten in a row | done |
 | [TASK-071](tasks/TASK-071.md) | 5 | Lanes that continue through splits, merges and lane drops | `src/network/lanes.ts`, new `continuity.ts`, continuation nodes in `junctions.ts`, `types.ts` (additive), new `src/render/layers/transitions.ts`, `drawRoad` dividers, `scene.ts` wiring, a continuity fixture, `tests/network/T25*`, `tests/render` | 061, 063, 066, 068; design in architecture 5.1, 11 | T25; no pinch at splits and merges | todo |
-| [TASK-072](tasks/TASK-072.md) | 5 | Stop lines and crossings on the road | new `src/network/stops.ts`, `types.ts` (additive), ungranted stop rules in `src/sim`, `drawApproachMarkings` and `crossingStripes` in `roads.ts`, `tests/sim/T26*`, `tests/render` | 063, 064, 065; design in architecture 8, 11 | T26; cars stop before the crossing | todo |
-| [TASK-073](tasks/TASK-073.md) | 5 | Exercise the paths nobody has run end to end | `tests/e2e/qa-*.spec.ts`, e2e helpers and fixtures | 067, 069, 070 | defects reported, suite green | todo |
+| [TASK-072](tasks/TASK-072.md) | 5 | Stop lines and crossings on the road | new `src/network/stops.ts`, `types.ts` (additive), ungranted stop rules in `src/sim`, `drawApproachMarkings` and `crossingStripes` in `roads.ts`, `tests/sim/T26*`, `tests/render` | 063, 064, 065; design in architecture 8, 11 | T26; cars stop before the crossing | done |
+| [TASK-073](tasks/TASK-073.md) | 5 | Exercise the paths nobody has run end to end | `tests/e2e/qa-*.spec.ts`, e2e helpers and fixtures | 067, 069, 070 | defects reported, suite green | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1092,6 +1092,38 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   check (373 unit tests), the import e2e scenarios, and in the browser a suburb extract with
   39 nodes removed imported with 193 roads and the warning. If a file still fails, its
   error code identifies the next case.
+
+- 2026-11-05, TASK-073 merged with a lead fix for the defects it found. Seventeen scenarios
+  in five `qa-*` files: the area picker with Overpass answered from a recorded response, the
+  persistent cache on a second import, and a 503 leaving the city untouched; all four exports
+  downloaded and parsed (2 176 trips, 78 road rows, trajectory samples, 80 GeoJSON features)
+  with their provenance line; Munich imported, edited live, saved and reopened in a fresh
+  context with an identical replay hash and its smoothing and realignment provenance; a
+  390 x 844 phone; and the production build under `/cityflows/` without test hooks, as a
+  second Playwright project with its own server. Defects: QA073-002 the toolbox covered the
+  Export menu's GeoJSON button at 1280 x 720 (the top bar and toolbox shared `z-index: 1`);
+  QA073-001 the phone toolbox covered the inspector heading; QA073-003 the phone run
+  summary ran 12 px past the screen. Lead fix commit: the top bar stacks above the toolbox,
+  the phone inspector always starts below the toolbox, and the phone run summary wraps; the
+  five scenarios marked fixme now run and pass.
+
+- 2026-11-05, TASK-072 merged as delivered. `CLane.stopM` (`src/network/stops.ts`) is 3 m
+  before the lane end on served signal approaches of lanes 10 m or longer; every ungranted
+  stop rule uses it (standing obstacle, clamp, entry request, stop standing time, junction
+  waiting, amber, merge stopping, discretionary changes near the line, yield and stop gaps),
+  granted travel and zones do not. Stop lines and give-way marks are at `stopM`, approach
+  crossings on the road between `stopM` and the lane end, exit crossings on the exit road's
+  first 3 m; a crossing that would fall inside a neighbouring junction outline is left out
+  (Munich n:382, r:383, reported). T26 has six simulation and two render cases; T21's sampled
+  safety holds. Benchmark completions and hashes unchanged (`zoneStops` 0, 0, 185, 273).
+  Munich at 0.15: 1 987 completed, 1 116 queued, peak 2 212, zero failed, against 2 175:
+  stopping 3 m back costs queue storage and start-up distance at every signal; reverting the
+  rules one at a time did not restore it, reverting all did. The agent recorded the owner's
+  approval of that result and of two edits outside its surface (one `stopM` initializer in
+  `lanes.ts`; the gate1 five-second-phase scenario now samples at 150 s instead of 91 s).
+  Verified on the merged tree with TASK-073 and the lead fix: check (381 unit tests), all 63
+  Playwright scenarios except T16, the benchmark and the probe; in the browser the grid's
+  signal has its crossings on the four arms, outside the junction, behind the stop lines.
 
 ## Owner decisions log
 
