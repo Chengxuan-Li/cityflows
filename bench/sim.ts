@@ -161,6 +161,7 @@ for (const name of workloadNames) {
     'heap 10h MiB': afterPeak.heapMiB,
     'heap end MiB': afterDay.heapMiB,
     'buffers end MiB': afterDay.arrayBuffersMiB,
+    zoneStops: metrics.zoneStops,
     completed: metrics.trips.completed,
     failed: metrics.trips.failed,
     unfinished: trips.length - metrics.trips.completed - metrics.trips.failed,

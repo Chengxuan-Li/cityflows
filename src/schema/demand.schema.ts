@@ -73,6 +73,8 @@ export const simParamsSchema = z
       decisionDistanceM: z.number(),
       gapS: z.number(),
       creepSpeedMps: z.number(),
+      zoneMarginS: z.number().nonnegative().default(1),
+      boxWaitS: z.number().nonnegative().default(10),
     }),
     spawnMinGapM: z.number(),
     linkCostAlpha: z.number().positive().max(1),

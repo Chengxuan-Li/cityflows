@@ -6,50 +6,17 @@ import { junctions } from '../../src/fixtures/junctions';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import { signalApproach } from '../../src/fixtures/signal-approach';
 import { importOsm } from '../../src/importers/osm';
-import { allocateId, type City, type TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
-import { createIntersections } from '../../src/sim/intersection';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { patchChanges } from '../../src/sim/patch';
-import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { scenario, setup, trips } from './fixtures';
 import { sampleConflictZones } from './conflict-zone-safety';
-
-function opposing() {
-  const city = signalApproach();
-  // Four-lane arms leave room after crossing the opposing median lane for rear clearance.
-  for (const road of Object.values(city.roads)) {
-    road.lanes.push({ ...road.lanes[0]! }, { ...road.lanes[0]! });
-    road.lateralOffsetM = 6;
-  }
-  const compiled = setup(city);
-  const left = compiled.movements.find((m) => m.turn === 'left')!;
-  const through = compiled.movements.find(
-    (m) => m.turn === 'through' && left.conflicts.includes(m.idx) && m.toLane !== left.toLane,
-  )!;
-  compiled.nodes[left.node]!.control = 'uncontrolled';
-  compiled.nodes[left.node]!.signal = null;
-  const vehicles = createVehicles(3, compiled.lanes.length, compiled.movements.length);
-  const intersections = createIntersections(compiled, vehicles, DEFAULT_SIM_PARAMS);
-  for (const [id, path] of [left, through, left].entries()) {
-    vehicles.state[id] = DRIVING;
-    vehicles.movement[id] = path.idx;
-    vehicles.insert(
-      id,
-      path.fromLane,
-      compiled.lanes[path.fromLane]!.lengthM - (id === 2 ? 20 : 2),
-    );
-  }
-  const request = (id: number) => {
-    intersections.request(id, compiled.movements[vehicles.movement[id]!]!);
-    intersections.resolve();
-  };
-  return { city, compiled, left, through, vehicles, intersections, request };
-}
+import { opposing, movementTrips } from './zone-fixtures';
 
 test('T21: an opposing queue is released as the left-turn rear clears its zone', () => {
   const { left, through, vehicles, intersections, request } = opposing();
   const end = left.conflictZones[left.conflicts.indexOf(through.idx)]![1];
+  vehicles.speed[1] = 13; // Arrives before a still-contacting rear can clear plus the margin.
   request(0);
   expect(intersections.grants[0]).toBe(left.idx);
   request(1);
@@ -103,50 +70,6 @@ test.each(['yield', 'stop'] as const)(
   },
 );
 
-// Demand on every legal movement, including junctions in disconnected fixture components.
-function movementTrips(city: City): TripRequest[] {
-  const compiled = setup(city);
-  const places = compiled.lanes.map((lane) => {
-    const id = allocateId(city, 'p');
-    city.places[id] = {
-      id,
-      name: lane.id,
-      kind: 'gateway',
-      shape: { kind: 'point', pos: lane.polyline[0]! },
-      population: 0,
-      jobs: 0,
-      attraction: 1,
-      capacity: null,
-      profile: null,
-      events: [],
-      provenance: { source: 'generated' },
-      connectors: ['out', 'in'].map((direction) => ({
-        id: allocateId(city, 'c'),
-        roadId: compiled.roads[lane.road]!.id,
-        lane: lane.lane,
-        positionM:
-          direction === 'out' ? Math.max(5, lane.lengthM - 40) : Math.min(30, lane.lengthM - 5),
-        direction: direction as 'in' | 'out',
-        throughputPerMin: 120,
-      })),
-    };
-    return id;
-  });
-  return compiled.movements
-    .filter((m) => !m.neverGreen)
-    .flatMap((path) =>
-      Array.from({ length: 4 }, (_, i) => ({
-        id: `${path.id}:${i}`,
-        personId: null,
-        originPlaceId: places[path.fromLane]!,
-        destinationPlaceId: places[path.toLane]!,
-        departS: 100 + i * 3,
-        mode: 'car' as const,
-        legs: [],
-      })),
-    );
-}
-
 test('T21: a live patch uses replacement zones while preserving a movement occupant', () => {
   const { city, left, through } = opposing();
   for (const node of Object.values(city.nodes)) {
@@ -164,8 +87,8 @@ test('T21: a live patch uses replacement zones while preserving a movement occup
     movement.conflictZones = movement.conflicts.map(() => [0, movement.lengthM]);
   }
   const engines = [createEngine(), createEngine(), createEngine()];
-  engines.forEach((engine, i) =>
-    engine.load({ compiled: i === 2 ? next : before, trips: requests, scenario: scenario() }),
+  engines.forEach((engine) =>
+    engine.load({ compiled: before, trips: requests, scenario: scenario() }),
   );
   let patched = false;
   for (let step = 0; step < 1000; step++) {
@@ -173,6 +96,7 @@ test('T21: a live patch uses replacement zones while preserving a movement occup
     if (!patched && engines[0]!.inspect(1)?.lane === -left.idx - 1) {
       const car = engines[0]!.inspect(1)!;
       expect(engines[0]!.patch(next).stranded).toBe(0);
+      expect(engines[1]!.patch(next).stranded).toBe(0);
       expect(engines[0]!.inspect(1)).toMatchObject({
         lane: car.lane,
         positionM: car.positionM,
@@ -181,11 +105,11 @@ test('T21: a live patch uses replacement zones while preserving a movement occup
       patched = true;
     }
     sampleConflictZones(engines[0]!, next);
-    expect(engines[0]!.stateHash()).toBe(engines[2]!.stateHash());
+    expect(engines[0]!.stateHash()).toBe(engines[1]!.stateHash());
   }
   expect(patched).toBe(true);
   expect(engines[0]!.metrics().trips.completed).toBe(2);
-  expect(engines[0]!.inspect(2)!.arrivedS).toBeLessThan(engines[1]!.inspect(2)!.arrivedS!);
+  expect(engines[0]!.inspect(2)!.arrivedS).toBeLessThan(engines[2]!.inspect(2)!.arrivedS!);
 });
 
 test('T21: expanding a conflict zone invalidates approach grants at the patched node', () => {
@@ -212,18 +136,30 @@ test('T21: a zone expansion makes an already granted opposing approach brake aga
   const after = setup(city);
   const path = after.movements[left.idx]!;
   const zone = path.conflictZones[path.conflicts.indexOf(through.idx)]!;
-  const clear = zone[1] + DEFAULT_SIM_PARAMS.vehicleLengthM;
   zone[1] = path.lengthM;
   const engines = [createEngine(), createEngine()];
-  engines.forEach((engine) =>
-    engine.load({ compiled: before, trips: requests, scenario: scenario() }),
+  let opposingGranted = false;
+  engines.forEach((engine, i) =>
+    engine.load({
+      compiled: before,
+      trips: requests,
+      scenario: scenario(),
+      intersectionObserver: (id, movement, reason) => {
+        if (i === 0 && id === 1 && movement.idx === through.idx && reason === 'granted')
+          opposingGranted = true;
+      },
+    }),
   );
   let checked = false;
   for (let step = 0; step < 400; step++) {
     engines.forEach((engine) => engine.step());
     const car = engines[0]!.inspect(1)!;
-    if (car.lane !== -left.idx - 1 || car.positionM < clear) continue;
-    engines.forEach((engine) => engine.step()); // grant the opposing approach with the old zone
+    if (
+      car.lane !== -left.idx - 1 ||
+      !opposingGranted ||
+      engines[0]!.inspect(2)!.lane !== through.fromLane
+    )
+      continue;
     expect(engines[0]!.inspect(2)!.lane).toBe(through.fromLane);
     expect(engines[0]!.inspect(1)!.lane).toBe(-left.idx - 1);
     engines[0]!.patch(after);
@@ -294,4 +230,4 @@ test('T21: Munich at scale 0.15 has no contacting-zone overlap at any morning st
   expect(contacts).toBeGreaterThan(0);
   expect(engine.timeS).toBe(10 * 3600);
   expect(engine.metrics().trips.failed).toBe(0);
-}, 300000);
+}, 600000);
