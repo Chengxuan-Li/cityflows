@@ -4,21 +4,35 @@ import type { SimParams } from '../schema';
 import { AMBER, GREEN, RED, updateSignals } from './signals';
 import { DRIVING, type Vehicles } from './vehicle';
 
-/** Travel at maximum acceleration, then at the speed cap. */
+/** Constant current acceleration, then the speed cap; a stop short of the target is unreachable. */
 function travelTime(distance: number, speed: number, cap: number, acceleration: number) {
   if (distance <= 0) return 0;
   speed = Math.min(speed, cap);
+  if (Math.abs(acceleration) < 1e-9) return speed > 0 ? distance / speed : Infinity;
+  if (acceleration < 0) {
+    const squared = speed * speed + 2 * acceleration * distance;
+    return squared < 0 ? Infinity : (2 * distance) / (speed + Math.sqrt(squared));
+  }
   const acceleratingDistance = (cap * cap - speed * speed) / (2 * acceleration);
   if (distance <= acceleratingDistance)
     return (2 * distance) / (Math.sqrt(speed * speed + 2 * acceleration * distance) + speed);
   return (cap - speed) / acceleration + (distance - acceleratingDistance) / cap;
 }
 
+export type IntersectionObserver = (
+  id: number,
+  movement: CMovement,
+  reason:
+    'signal' | 'stop' | 'box' | 'exit-full' | 'movement' | 'approach' | 'gap' | 'merge' | 'granted',
+  other?: CMovement,
+) => void;
+
 export function createIntersections(
   compiled: CompiledCity,
   vehicles: Vehicles,
   params: SimParams,
   mergeAllows: (id: number, movement: CMovement) => boolean = () => true,
+  options: { onDecision?: IntersectionObserver; acceleration?: (id: number) => number } = {},
 ) {
   const continuations = compiled.movements.map((movement) => {
     const node = compiled.nodes[movement.node]!;
@@ -42,6 +56,8 @@ export function createIntersections(
   const occupancy = new Uint16Array(compiled.movements.length);
   const grants = new Int32Array(vehicles.count).fill(-1);
   const redGrants = new Uint8Array(vehicles.count);
+  // Retain provenance until the rear clears the exit, without treating same-path leaders as conflicts.
+  const exitedFrom = new Int32Array(vehicles.count).fill(-1);
   const onRed = (movement: CMovement) => !!movement.turnOnRed && colors[movement.idx] === RED;
   const needsStop = (movement: CMovement) =>
     onRed(movement) ||
@@ -64,6 +80,7 @@ export function createIntersections(
   }
 
   function release(id: number) {
+    if (vehicles.lane[id]! < 0) exitedFrom[id] = grants[id]!;
     occupancy[grants[id]!] = occupancy[grants[id]!]! - 1;
     grants[id] = -1;
     redGrants[id] = 0;
@@ -82,7 +99,10 @@ export function createIntersections(
   }
 
   function request(id: number, movement: CMovement) {
-    if (needsStop(movement) && vehicles.stopped[id]! < 1 - 1e-9) return;
+    if (needsStop(movement) && vehicles.stopped[id]! < 1 - 1e-9) {
+      options.onDecision?.(id, movement, 'stop');
+      return;
+    }
     const queue = candidates[movement.node]!;
     if (!queue.length) activeNodes.push(movement.node);
     queue.push(id);
@@ -101,8 +121,18 @@ export function createIntersections(
       params.idm.aMps2,
     );
 
+  function refuse(
+    id: number,
+    movement: CMovement,
+    reason: Parameters<IntersectionObserver>[2],
+    other?: CMovement,
+  ) {
+    options.onDecision?.(id, movement, reason, other);
+    return false;
+  }
+
   function canGrant(id: number, movement: CMovement) {
-    if (!signalAllows(id, movement)) return false;
+    if (!signalAllows(id, movement)) return refuse(id, movement, 'signal');
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1) {
       const space =
@@ -111,41 +141,49 @@ export function createIntersections(
           : vehicles.position[exitTail]! -
             params.vehicleLengthM +
             vehicles.speed[exitTail]! * candidateTime(id, movement, movement.lengthM);
-      if (space < clearance) return false;
+      if (space < clearance)
+        return refuse(id, movement, vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box');
     }
     const control = compiled.nodes[movement.node]!.control;
     for (let i = 0; i < movement.conflicts.length; i++) {
       const idx = movement.conflicts[i]!;
       const other = compiled.movements[idx]!;
       const [start, end] = opposingZones[movement.idx]![i]!;
-      const exit =
-        candidateTime(id, movement, movement.conflictZones[i]![1] + params.vehicleLengthM) +
-        params.intersection.zoneMarginS;
+      const entry = candidateTime(id, movement, movement.conflictZones[i]![0]);
+      const exit = candidateTime(
+        id,
+        movement,
+        movement.conflictZones[i]![1] + params.vehicleLengthM,
+      );
+      const overlaps = (car: number, remaining: number) => {
+        const acceleration = options.acceleration?.(car) ?? params.idm.aMps2;
+        let speed = vehicles.speed[car]!;
+        let approachTime = 0;
+        if (vehicles.lane[car]! >= 0) {
+          const cap = compiled.lanes[other.fromLane]!.speedLimitMps;
+          approachTime = travelTime(remaining, speed, cap, acceleration);
+          if (!Number.isFinite(approachTime)) return false;
+          speed = Math.max(0, Math.min(cap, speed + acceleration * approachTime));
+          remaining = 0;
+        }
+        const cap = movementSpeed(other);
+        const arrival = approachTime + travelTime(remaining + start, speed, cap, acceleration);
+        if (arrival >= exit + params.intersection.zoneMarginS) return false;
+        const clearance =
+          approachTime +
+          travelTime(remaining + end + params.vehicleLengthM, speed, cap, acceleration);
+        return entry < clearance + params.intersection.zoneMarginS;
+      };
       for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!) {
         if (vehicles.position[car]! >= end + params.vehicleLengthM) continue;
-        if (
-          travelTime(
-            start - vehicles.position[car]!,
-            vehicles.speed[car]!,
-            movementSpeed(other),
-            params.idm.aMps2,
-          ) < exit
-        )
-          return false;
+        if (overlaps(car, -vehicles.position[car]!)) return refuse(id, movement, 'movement', other);
       }
       if (occupancy[idx]! > 0) {
         const lane = compiled.lanes[other.fromLane]!;
         for (let car = vehicles.first(lane.idx); car !== -1; car = vehicles.next[car]!) {
           if (grants[car] !== idx) continue;
-          if (
-            travelTime(
-              lane.lengthM - vehicles.position[car]! + start,
-              vehicles.speed[car]!,
-              lane.speedLimitMps,
-              params.idm.aMps2,
-            ) < exit
-          )
-            return false;
+          if (overlaps(car, lane.lengthM - vehicles.position[car]!))
+            return refuse(id, movement, 'approach', other);
         }
       }
       if (control !== 'yield' && control !== 'stop' && !onRed(movement)) continue;
@@ -166,11 +204,11 @@ export function createIntersections(
           length - vehicles.position[approaching]! + start <
             vehicles.speed[approaching]! * params.intersection.gapS
         ) {
-          return false;
+          return refuse(id, movement, 'gap', higher);
         }
       }
     }
-    return mergeAllows(id, movement);
+    return mergeAllows(id, movement) || refuse(id, movement, 'merge');
   }
 
   function zoneStop(movement: CMovement, position: number) {
@@ -179,6 +217,18 @@ export function createIntersections(
       const start = movement.conflictZones[i]![0];
       if (position > start || start >= stop) continue;
       const [otherStart, otherEnd] = opposingZones[movement.idx]![i]!;
+      const other = compiled.movements[movement.conflicts[i]!]!;
+      const exitTail = vehicles.last(other.toLane);
+      // A front on the exit lane can leave its rear in an end-reaching zone.
+      if (
+        exitTail !== -1 &&
+        exitedFrom[exitTail] === other.idx &&
+        other.lengthM + vehicles.position[exitTail]! > otherStart &&
+        other.lengthM + vehicles.position[exitTail]! < otherEnd + params.vehicleLengthM
+      ) {
+        stop = start;
+        continue;
+      }
       for (
         let car = vehicles.first(-movement.conflicts[i]! - 1);
         car !== -1;
@@ -243,6 +293,7 @@ export function createIntersections(
           queue[winner] = -1;
           const movement = movementOf(id);
           if (!canGrant(id, movement)) continue;
+          options.onDecision?.(id, movement, 'granted');
           grants[id] = movement.idx;
           redGrants[id] = Number(onRed(movement));
           occupancy[movement.idx] = occupancy[movement.idx]! + 1;
@@ -262,6 +313,7 @@ export function createIntersections(
     zoneStop,
     grants,
     redGrants,
+    exitedFrom,
     occupancy,
     continuations,
   };

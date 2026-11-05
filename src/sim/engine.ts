@@ -11,7 +11,7 @@ import type { SimParams, TripRequest } from '../schema';
 import { createConnectors } from './connectors';
 import { stateHash } from './hash';
 import { idmAcceleration } from './idm';
-import { createIntersections } from './intersection';
+import { createIntersections, type IntersectionObserver } from './intersection';
 import { createLaneChanges } from './lane-change';
 import { createLinkCosts } from './link-costs';
 import { createMerges } from './merge';
@@ -32,6 +32,7 @@ import { createVehicles, DRIVING, QUEUED_ORIGIN, QUEUED_DESTINATION, PENDING } f
 type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   routeProvider?: RouteProvider;
   linkCosts?: LinkCosts;
+  intersectionObserver?: IntersectionObserver;
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -49,6 +50,7 @@ function createRun({
   params: overrides,
   routeProvider,
   linkCosts,
+  intersectionObserver,
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -62,10 +64,14 @@ function createRun({
   };
   const { dtS, vehicleLengthM, idm, spawnMinGapM } = params;
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
+  const reservationAcceleration = new Float64Array(trips.length);
   const accounting = createAccounting(compiled, vehicles);
   const connectors = createConnectors(compiled, trips, scenario, params, vehicles, accounting);
   let merges = createMerges(compiled, vehicles, params);
-  let intersections = createIntersections(compiled, vehicles, params, merges.canEnter);
+  let intersections = createIntersections(compiled, vehicles, params, merges.canEnter, {
+    onDecision: intersectionObserver,
+    acceleration: (id) => reservationAcceleration[id]!,
+  });
   let laneChanges = createLaneChanges(compiled, vehicles, params);
   let carLanes = compiled.lanes.map((lane) => lane.allowed.includes('car'));
   const signalEpochs = new Map<string, number>();
@@ -336,6 +342,16 @@ function createRun({
           leaderSpeed,
           obstacle - position,
         );
+        // A grant removes the virtual stop line on the next step. Predict its motion
+        // from physical following, including for grants awarded later in this resolve.
+        // Evaluate at the capped speed: free-flow braking toward a lower limit is not a stop.
+        reservationAcceleration[id] = idmAcceleration(
+          idm,
+          Math.min(vehicles.speed[id]!, speedLimit * vehicles.speedFactor[id]!),
+          speedLimit * vehicles.speedFactor[id]!,
+          lane && !granted ? (leader === -1 ? 0 : vehicles.speed[leader]!) : leaderSpeed,
+          (lane && !granted ? rear : obstacle) - position,
+        );
         if (movement?.turn === 'merge' && lane && !granted && stopAt < rear) {
           acceleration[id] = Math.min(
             merges.stopAcceleration(id, movement),
@@ -452,6 +468,16 @@ function createRun({
       let position = Math.min(previousPosition + speed * dtS, limit[id]!);
       if (field < 0) {
         const path = compiled.movements[-field - 1]!;
+        // A competing movement may have entered this lane earlier in the same commit.
+        const exitTail = vehicles.last(path.toLane);
+        if (exitTail !== -1)
+          position = Math.max(
+            previousPosition,
+            Math.min(
+              position,
+              path.lengthM + vehicles.position[exitTail]! - vehicleLengthM - idm.minGapM,
+            ),
+          );
         // Earlier commits may have entered a zone that was empty during proposals.
         const zoneStart = intersections.zoneStop(path, previousPosition);
         if (position > zoneStart) {
@@ -474,6 +500,22 @@ function createRun({
         }
         // IDM approaches a standstill asymptotically. Settle before accumulating time at the stop line.
         if (remaining <= idm.minGapM + 0.1 && speed <= 0.1) position = previousPosition;
+      }
+      if (granted !== -1 && position >= lane.lengthM) {
+        const path = compiled.movements[granted]!;
+        const exitTail = vehicles.last(path.toLane);
+        if (exitTail !== -1)
+          position = Math.max(
+            previousPosition,
+            Math.min(
+              position,
+              lane.lengthM +
+                path.lengthM +
+                vehicles.position[exitTail]! -
+                vehicleLengthM -
+                idm.minGapM,
+            ),
+          );
       }
       speed = (position - previousPosition) / dtS;
       vehicles.position[id] = position;
@@ -626,6 +668,7 @@ function createRun({
     const project = createProjector(next);
     const oldGrants = intersections.grants.slice();
     const oldRedGrants = intersections.redGrants.slice();
+    const oldExits = intersections.exitedFrom.slice();
     const result = { version: next.version, relocated: 0, stranded: 0, rerouted: 0 };
     observedCosts.patch(next);
     if (costs !== observedCosts.costs) {
@@ -648,11 +691,13 @@ function createRun({
       vehicles,
       params,
       merges.canEnter,
+      { onDecision: intersectionObserver, acceleration: (id) => reservationAcceleration[id]! },
     );
     laneChanges = createLaneChanges(next, vehicles, params);
     carLanes = next.lanes.map((lane) => lane.allowed.includes('car'));
 
     for (let id = 0; id < vehicles.count; id++) {
+      intersections.exitedFrom[id] = changes.movements[oldExits[id]!] ?? -1;
       const oldDestination = before.connectors[vehicles.destination[id]!];
       const mappedDestination = oldDestination ? changes.connectors[oldDestination.idx] : undefined;
       if (
@@ -710,6 +755,7 @@ function createRun({
         continue;
       }
       if (relocated) {
+        intersections.exitedFrom[id] = -1;
         roadEnteredS[id] = time();
         roadEnteredM[id] = newField >= 0 ? position : 0;
         vehicles.stopped[id] = 0;

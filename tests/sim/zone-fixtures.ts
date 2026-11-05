@@ -5,7 +5,10 @@ import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { setup } from './fixtures';
 
-export function opposing(params = DEFAULT_SIM_PARAMS) {
+export function opposing(
+  params = DEFAULT_SIM_PARAMS,
+  options: Parameters<typeof createIntersections>[4] = {},
+) {
   const city = signalApproach();
   // Four-lane arms leave room after crossing the opposing median lane for rear clearance.
   for (const road of Object.values(city.roads)) {
@@ -20,7 +23,7 @@ export function opposing(params = DEFAULT_SIM_PARAMS) {
   compiled.nodes[left.node]!.control = 'uncontrolled';
   compiled.nodes[left.node]!.signal = null;
   const vehicles = createVehicles(3, compiled.lanes.length, compiled.movements.length);
-  const intersections = createIntersections(compiled, vehicles, params);
+  const intersections = createIntersections(compiled, vehicles, params, undefined, options);
   for (const [id, path] of [left, through, left].entries()) {
     vehicles.state[id] = DRIVING;
     vehicles.movement[id] = path.idx;
@@ -54,12 +57,13 @@ export function movementTrips(city: City): TripRequest[] {
       profile: null,
       events: [],
       provenance: { source: 'generated' },
+      // Leave a lane change plus entry overflow before the destination portal.
       connectors: ['out', 'in'].map((direction) => ({
         id: allocateId(city, 'c'),
         roadId: compiled.roads[lane.road]!.id,
         lane: lane.lane,
         positionM:
-          direction === 'out' ? Math.max(5, lane.lengthM - 40) : Math.min(30, lane.lengthM - 5),
+          direction === 'out' ? Math.max(5, lane.lengthM - 40) : Math.min(40, lane.lengthM - 5),
         direction: direction as 'in' | 'out',
         throughputPerMin: 120,
       })),

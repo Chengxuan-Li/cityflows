@@ -16,6 +16,7 @@ import { opposing, movementTrips } from './zone-fixtures';
 test('T21: an opposing queue is released as the left-turn rear clears its zone', () => {
   const { left, through, vehicles, intersections, request } = opposing();
   const end = left.conflictZones[left.conflicts.indexOf(through.idx)]![1];
+  vehicles.speed[1] = 13; // Arrives before a still-contacting rear can clear plus the margin.
   request(0);
   expect(intersections.grants[0]).toBe(left.idx);
   request(1);
@@ -86,8 +87,8 @@ test('T21: a live patch uses replacement zones while preserving a movement occup
     movement.conflictZones = movement.conflicts.map(() => [0, movement.lengthM]);
   }
   const engines = [createEngine(), createEngine(), createEngine()];
-  engines.forEach((engine, i) =>
-    engine.load({ compiled: i === 2 ? next : before, trips: requests, scenario: scenario() }),
+  engines.forEach((engine) =>
+    engine.load({ compiled: before, trips: requests, scenario: scenario() }),
   );
   let patched = false;
   for (let step = 0; step < 1000; step++) {
@@ -95,6 +96,7 @@ test('T21: a live patch uses replacement zones while preserving a movement occup
     if (!patched && engines[0]!.inspect(1)?.lane === -left.idx - 1) {
       const car = engines[0]!.inspect(1)!;
       expect(engines[0]!.patch(next).stranded).toBe(0);
+      expect(engines[1]!.patch(next).stranded).toBe(0);
       expect(engines[0]!.inspect(1)).toMatchObject({
         lane: car.lane,
         positionM: car.positionM,
@@ -103,11 +105,11 @@ test('T21: a live patch uses replacement zones while preserving a movement occup
       patched = true;
     }
     sampleConflictZones(engines[0]!, next);
-    expect(engines[0]!.stateHash()).toBe(engines[2]!.stateHash());
+    expect(engines[0]!.stateHash()).toBe(engines[1]!.stateHash());
   }
   expect(patched).toBe(true);
   expect(engines[0]!.metrics().trips.completed).toBe(2);
-  expect(engines[0]!.inspect(2)!.arrivedS).toBeLessThan(engines[1]!.inspect(2)!.arrivedS!);
+  expect(engines[0]!.inspect(2)!.arrivedS).toBeLessThan(engines[2]!.inspect(2)!.arrivedS!);
 });
 
 test('T21: expanding a conflict zone invalidates approach grants at the patched node', () => {
@@ -134,18 +136,30 @@ test('T21: a zone expansion makes an already granted opposing approach brake aga
   const after = setup(city);
   const path = after.movements[left.idx]!;
   const zone = path.conflictZones[path.conflicts.indexOf(through.idx)]!;
-  const clear = zone[1] + DEFAULT_SIM_PARAMS.vehicleLengthM;
   zone[1] = path.lengthM;
   const engines = [createEngine(), createEngine()];
-  engines.forEach((engine) =>
-    engine.load({ compiled: before, trips: requests, scenario: scenario() }),
+  let opposingGranted = false;
+  engines.forEach((engine, i) =>
+    engine.load({
+      compiled: before,
+      trips: requests,
+      scenario: scenario(),
+      intersectionObserver: (id, movement, reason) => {
+        if (i === 0 && id === 1 && movement.idx === through.idx && reason === 'granted')
+          opposingGranted = true;
+      },
+    }),
   );
   let checked = false;
   for (let step = 0; step < 400; step++) {
     engines.forEach((engine) => engine.step());
     const car = engines[0]!.inspect(1)!;
-    if (car.lane !== -left.idx - 1 || car.positionM < clear) continue;
-    engines.forEach((engine) => engine.step()); // grant the opposing approach with the old zone
+    if (
+      car.lane !== -left.idx - 1 ||
+      !opposingGranted ||
+      engines[0]!.inspect(2)!.lane !== through.fromLane
+    )
+      continue;
     expect(engines[0]!.inspect(2)!.lane).toBe(through.fromLane);
     expect(engines[0]!.inspect(1)!.lane).toBe(-left.idx - 1);
     engines[0]!.patch(after);

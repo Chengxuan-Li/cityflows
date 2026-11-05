@@ -19,13 +19,23 @@ with a margin. Back that up with a hard rule that no car enters a zone another c
 inside. Separately, the owner wants cars held back, not banned, from entering a junction
 when they would likely wait inside it for the cars ahead (B28).
 
+## Continuation review
+
+The lead permits expected arrival from current speed and IDM acceleration in place of
+full-throttle earliest arrival. Compare both ends of the predicted occupancy windows, so a
+candidate may also follow a holder that will clear before it arrives. The occupied-zone
+backstop remains mandatory, including a departing rear on an exit lane. Preserve the existing ramp
+merge braking guarantees. Forecast approach and movement speed limits separately; braking
+toward a lower desired speed must not imply a permanent stop in the reservation forecast.
+The scenario Zod schema must supply the two new defaults when opening legacy projects.
+
 ## In scope
 
 - `src/sim/intersection.ts`: the timed blocking test and the junction-box rule per section 8.
 - `src/sim/engine.ts`: the zone-start standing obstacle for a car on a movement and its
   clamp in the commit, the `zoneStops` counter; `src/sim/types.ts` and `src/sim/metrics.ts`
   for `Metrics.zoneStops` (additive).
-- `src/schema/sim.ts` and `src/sim/params.ts`: `intersection.zoneMarginS` (1.0) and
+- `src/schema/sim.ts`, `src/schema/demand.schema.ts` and `src/sim/params.ts`: `intersection.zoneMarginS` (1.0) and
   `intersection.boxWaitS` (10), additive with defaults, as in section 8.
 - Tests: `tests/sim/T22-zone-timing.test.ts` (new), `tests/sim/T21-conflict-zones.test.ts`
   (keep its safety sampling, now with the backstop), any `tests/sim` expectation that moves
@@ -45,7 +55,7 @@ when they would likely wait inside it for the cars ahead (B28).
    from its zone does not stop an opposing through car that clears the zone well before the
    left turner can arrive; before this task it does.
 2. Margin: the same scenario with the through car slow enough that its exit comes within
-   `zoneMarginS` of the turner's earliest arrival is refused.
+   `zoneMarginS` of the turner's expected arrival is refused.
 3. Backstop: when a car is inside a zone, a car on the conflicting movement approaching the
    zone stops at the zone start, and `zoneStops` counts it; T21's sampled safety (no two cars
    inside contacting zones at once) still holds on the four-way signal, the junction fixture,
