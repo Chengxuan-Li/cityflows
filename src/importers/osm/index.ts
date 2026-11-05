@@ -30,30 +30,59 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   });
   const data = parseOsm(xml);
   if (typeof data === 'string') return fail('osm_parse_error', data);
+  const sourceNodes = new Map(data.node.map((node) => [node.id, node]));
+  // Extracts clipped by osmium, osmconvert and similar tools keep references to nodes outside
+  // the file, and mappers leave one-node ways. Keep each way's longest run of present nodes
+  // (one piece per way, since street groups are named by way id) and drop what cannot be a road.
+  const trimmed: number[] = [];
+  const dropped: number[] = [];
   const kept = data.way.flatMap((way) => {
     const roadClass = drivableClass(way);
-    return roadClass ? [{ way, roadClass }] : [];
+    if (!roadClass) return [];
+    let best: number[] = [];
+    let run: number[] = [];
+    for (const ref of [...way.nd, NaN]) {
+      if (sourceNodes.has(ref)) {
+        run.push(ref);
+        continue;
+      }
+      if (run.length > best.length) best = run;
+      run = [];
+    }
+    if (best.length < 2) {
+      dropped.push(way.id);
+      return [];
+    }
+    if (best.length < way.nd.length) trimmed.push(way.id);
+    return [{ way: { ...way, nd: best }, roadClass }];
   });
+  if (trimmed.length || dropped.length) {
+    const names = (ids: number[]) =>
+      ids.length > 5 ? `${ids.slice(0, 5).join(', ')} and ${ids.length - 5} more` : ids.join(', ');
+    diagnostics.push({
+      severity: 'warning',
+      code: 'osm_incomplete_way',
+      refs: [...trimmed, ...dropped].slice(0, 20).map((id) => `way/${id}`),
+      message: [
+        trimmed.length &&
+          `Trimmed ${trimmed.length} ways to the nodes present in the file (${names(trimmed)})`,
+        dropped.length &&
+          `dropped ${dropped.length} ways with fewer than two present nodes (${names(dropped)})`,
+      ]
+        .filter(Boolean)
+        .join('; '),
+    });
+  }
   if (!kept.length) return fail('osm_no_drivable_ways', 'The extract has no drivable highways');
-  const sourceNodes = new Map(data.node.map((node) => [node.id, node]));
   const used = new Set<number>();
   const wayLayers = new Map<
     number,
     { wayId: number; layer: number; through: boolean; bridge: boolean }[]
   >();
   for (const { way } of kept) {
-    if (way.nd.length < 2)
-      return fail('road_degenerate', `OSM way ${way.id} needs at least two nodes`, [
-        `way/${way.id}`,
-      ]);
     const layer = osmLayer(way.tag) ?? 0;
     const bridge = isBridge(way.tag);
     for (const [index, ref] of way.nd.entries()) {
-      if (!sourceNodes.has(ref))
-        return fail('dangling_ref', `OSM way ${way.id} references missing node ${ref}`, [
-          `way/${way.id}`,
-          `node/${ref}`,
-        ]);
       used.add(ref);
       const layers = wayLayers.get(ref) ?? [];
       layers.push({

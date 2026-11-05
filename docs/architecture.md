@@ -1288,6 +1288,10 @@ Lives in `src/importers/osm`, runs inside an import worker.
    source ids and block aggregation are recorded in provenance.
 10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
     counts of inferred lanes and speeds. The wizard shows them before the city is accepted.
+    `osm_incomplete_way` (TASK-070): a drivable way that references nodes missing from the
+    file, as extracts clipped by osmium or osmconvert do, keeps its longest run of present
+    nodes; a way left with fewer than two is dropped. One warning lists both; the import
+    fails only when no drivable way remains.
 11. Smooth centerlines (TASK-066, B29). After topology, consolidation and splitting, every
     interior vertex of an imported road's centerline becomes a circular-arc fillet tangent to
     its two segments, and so does a degree-two node that joins two sections of one street
