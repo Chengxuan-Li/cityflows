@@ -5,6 +5,7 @@ import { town } from '../src/fixtures/town';
 import { lonLatToLocal } from '../src/geo/projection';
 import { importOsm } from '../src/importers/osm';
 import { compile, type CompiledCity } from '../src/network';
+import { isLaneDrop } from '../src/network/lane-drop';
 import { readZip } from '../src/project/zip';
 import { migrateCity } from '../src/schema/migrate';
 import {
@@ -139,15 +140,7 @@ export function auditRoute(
     )
       add('illegal_movement', i);
     if (!canReach(from.idx) || !route.targetLanes[i]?.includes(from.idx)) add('lane_distance', i);
-    if (
-      nextRoad.lanes.length < road.lanes.length &&
-      ['through', 'merge', 'diverge'].includes(movement.turn)
-    ) {
-      const fromLeft =
-        movement.turn === 'through' ? net.drivingSide === 'right' : net.drivingSide === 'left';
-      const ordinal = fromLeft ? from.lane : road.lanes.length - 1 - from.lane;
-      if (ordinal >= nextRoad.lanes.length) add('dropped_lane', i, from.idx);
-    }
+    if (isLaneDrop(net, movement)) add('dropped_lane', i, from.idx);
     entry = to;
   }
   if (route.movements.length !== route.roads.length - 1) add('illegal_movement', 0);

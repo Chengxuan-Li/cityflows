@@ -87,6 +87,10 @@ export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
   const engine = createEngine();
   engine.load({ compiled, trips, scenario });
   let peak = 0;
+  const completedByHalfHour: number[] = [];
+  let completedBefore = 0;
+  // Where each vehicle was at a sample and since when, to find heads that stand still.
+  const still = new Map<number, { lane: number; x: number; y: number; sinceS: number }>();
   const initialRoad = new Map<number, number>();
   const lastRoad = new Map<number, number>();
   const sampledRoadTraffic: Record<string, { entered: number; left: number }> = {};
@@ -96,8 +100,19 @@ export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
   };
   for (let step = 0; step < 3 * 36000; step += 600) {
     engine.step(600);
-    peak = Math.max(peak, engine.metrics().trips.driving);
+    const { trips: counts } = engine.metrics();
+    peak = Math.max(peak, counts.driving);
+    if ((step + 600) % 18000 === 0) {
+      completedByHalfHour.push(counts.completed - completedBefore);
+      completedBefore = counts.completed;
+    }
     const snapshot = engine.snapshot();
+    for (const [index, id] of snapshot.id.entries()) {
+      const [lane, x, y] = [snapshot.lane[index]!, snapshot.x[index]!, snapshot.y[index]!];
+      const last = still.get(id);
+      if (!last || last.lane !== lane || last.x !== x || last.y !== y)
+        still.set(id, { lane, x, y, sinceS: snapshot.timeS });
+    }
     for (const [index, id] of snapshot.id.entries()) {
       if (!initialRoad.has(id)) {
         const road = engine.inspect(id)?.route?.roads[0];
@@ -115,6 +130,22 @@ export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
     }
   }
   const metrics = engine.metrics();
+  // Driving vehicles on a movement or first on their lane that have not moved for 300 s.
+  const end = engine.snapshot();
+  const front = new Map<number, number>();
+  for (const [index, id] of end.id.entries()) {
+    const lane = end.lane[index]!;
+    if (lane < 0) continue;
+    const ahead = front.get(lane);
+    if (ahead === undefined || engine.inspect(id)!.positionM > engine.inspect(ahead)!.positionM)
+      front.set(lane, id);
+  }
+  let stalledHeads = 0;
+  for (const [index, id] of end.id.entries()) {
+    const lane = end.lane[index]!;
+    if (end.state[index] !== 1 || (lane >= 0 && front.get(lane) !== id)) continue;
+    if (end.timeS - still.get(id)!.sinceS >= 300) stalledHeads++;
+  }
   const gatewayTraffic: Record<string, { entered: number; left: number }> = {};
   const failures = new Map<string, number>();
   for (const [i, trip] of trips.entries()) {
@@ -148,6 +179,8 @@ export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
     completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,
     failedShareOfReleased: releasedTrips ? metrics.trips.failed / releasedTrips : 0,
     peakDriving: peak,
+    completedByHalfHour,
+    stalledHeads,
     zoneStops: metrics.zoneStops,
     ...metrics.trips,
     failedByReason: metrics.failedByReason,

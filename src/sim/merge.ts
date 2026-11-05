@@ -1,25 +1,7 @@
-import type { CLane, CMovement, CompiledCity } from '../network';
+import type { CMovement, CompiledCity } from '../network';
 import type { SimParams } from '../schema';
 import { idmAcceleration } from './idm';
 import { DRIVING, type Vehicles } from './vehicle';
-
-/** The compiler retains fallback/clamped movements; a lane drop must happen upstream. */
-export function laneSurvives(compiled: CompiledCity, lane: CLane, nextRoad: number) {
-  const source = compiled.roads[lane.road]!;
-  const target = compiled.roads[nextRoad]!;
-  if (target.lanes.length >= source.lanes.length) return true;
-  const movementIndex = lane.out.find(
-    (i) => compiled.lanes[compiled.movements[i]!.toLane]!.road === nextRoad,
-  );
-  const movement = compiled.movements[movementIndex ?? -1];
-  if (!movement || !['through', 'merge', 'diverge'].includes(movement.turn)) return true;
-  const fromLeft =
-    movement.turn === 'through'
-      ? compiled.drivingSide === 'right'
-      : compiled.drivingSide === 'left';
-  const ordinal = fromLeft ? lane.lane : source.lanes.length - 1 - lane.lane;
-  return ordinal < target.lanes.length;
-}
 
 export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params: SimParams) {
   const { idm, mobil, vehicleLengthM, dtS } = params;
