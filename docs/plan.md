@@ -98,7 +98,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-072](tasks/TASK-072.md) | 5 | Stop lines and crossings on the road | new `src/network/stops.ts`, `types.ts` (additive), ungranted stop rules in `src/sim`, `drawApproachMarkings` and `crossingStripes` in `roads.ts`, `tests/sim/T26*`, `tests/render` | 063, 064, 065; design in architecture 8, 11 | T26; cars stop before the crossing | done |
 | [TASK-073](tasks/TASK-073.md) | 5 | Exercise the paths nobody has run end to end | `tests/e2e/qa-*.spec.ts`, e2e helpers and fixtures | 067, 069, 070 | defects reported, suite green | done |
 | [TASK-074](tasks/TASK-074.md) | 5 | Junction shapes, measured on the real cities | new `bench/junction-audit.ts`, `src/network/junctions.ts`, `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, the marking clip in `drawRoad`, `NOTICE`, `tests/network/T27*` | 063, 068, 071, 072; design in architecture 5.1, 11 | T27; overlap outside outlines halved | todo |
-| [TASK-075](tasks/TASK-075.md) | 5 | Lane markings through junctions without signals | new `src/render/layers/junction-markings.ts`, `scene.ts` wiring, `style.ts` (additive), `tests/render/T28*` | 061, 063, 071, 072; design in architecture 11 | T28; dashed guide lines on major roads | todo |
+| [TASK-075](tasks/TASK-075.md) | 5 | Lane markings through junctions without signals | new `src/render/layers/junction-markings.ts`, `scene.ts` wiring, `style.ts` (additive), `tests/render/T28*` | 061, 063, 071, 072; design in architecture 11 | T28; dashed guide lines on major roads | done |
 | [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | todo |
 | [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -1178,6 +1178,20 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   benchmark hashes, the four route audits at zero; Munich at 0.15: 2 008 completed, 1 065
   queued, peak 2 242, zero failed (1 987 after TASK-072 alone; the agent's 2 241 was on the
   base without TASK-072's stop positions).
+
+- 2026-11-05, TASK-075 merged as delivered (wave 16 run by the lead's subagents in worktrees
+  under `D:\cityflows-wt`, at the owner's request). A `guides` layer above node areas draws
+  the major road's dividers, centre line and side-road edge line dashed (1.5 m, gap 1.5 m)
+  through junctions without signals; built once per compiled version. Two checks beyond the
+  contract: the two directions must be side by side (Munich n:400, n:405, n:719 have opposing
+  carriageways on one centreline, an importer defect, and get none), and a one-way major road
+  also gets the median-side edge line. Munich: 24 of 282 nodes, 114 dashes, under 3 ms to
+  build; the grid none (equal-priority crossings and one signal). Open: many Munich priority
+  roads get none because the compiler gives the other direction a turn of equal priority
+  (n:1375, n:138, n:324, n:33, n:774), so no road is major; the centre line follows the
+  innermost through paths, so it sits off centre beside a left-turn lane. Verified on the
+  merged tree: check (395 unit tests; one run failed a test under load from the other two
+  agents and passed on rerun), the screenshots.
 
 ## Owner decisions log
 
