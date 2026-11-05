@@ -927,6 +927,16 @@ the change up: it takes the TASK-048 fallback from its current lane (the cheapes
 movement whose landing lane routes to its destination), which now also applies when the
 route still needs another lane on this road and to a required diverge, and reroutes with
 `missed_turn`. With no such movement it keeps waiting, and gridlock recovery below applies.
+TASK-076, second round (lead, after the first round's Munich trace): a discretionary (MOBIL)
+change is never proposed to a lane from which the car needs more changes to reach its route's
+target lanes than from its current lane, on any road of the route, not only the last (on
+Munich `r:639` cars landed on the one lane that serves their next road and then changed off
+it by MOBIL). A lane is dropped before a narrower next road (`isLaneDrop` in the compiler,
+`laneSurvives` in the simulation, one shared rule) only by its ordinal among the lanes of its
+road that have a through, merge or diverge movement into that next road, counted from the
+side the section 8 ramp rule names, against the next road's lane count; lanes that only turn
+elsewhere do not count (on `r:968` a through lane beside two turn lanes was treated as
+dropped and its cars held for a change they did not need).
 
 Gridlock recovery (TASK-077, owner-approved exception to section 1 row 10). A driving
 vehicle is a jam head while it is on a movement, or first on its lane, and not standing at a

@@ -4,6 +4,7 @@ import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { Camera } from './camera';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
+import { drawJunctionMarkings } from './layers/junction-markings';
 import { drawNode, drawRoadJoins, nodeColor } from './layers/nodes';
 import { drawRoute, drawSelection } from './layers/overlay';
 import { drawMultiSelection } from './layers/overlay';
@@ -51,13 +52,14 @@ export function createGrade(layer: number) {
   const surfaces = new Graphics();
   const markings = new Graphics();
   const nodes = new Graphics();
+  const guides = new Graphics();
   const arrows = new Graphics();
   const crossings = new Graphics();
   const places = new Graphics();
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
-  terrain.addChild(surfaces, markings, arrows, nodes, crossings);
+  terrain.addChild(surfaces, markings, arrows, nodes, guides, crossings);
   group.addChild(terrain, connectors, places, signals, vehicles.container);
   return {
     layer,
@@ -66,6 +68,7 @@ export function createGrade(layer: number) {
     surfaces,
     markings,
     nodes,
+    guides,
     arrows,
     crossings,
     places,
@@ -129,6 +132,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     const resolution = 2 ** Math.ceil(Math.log2(camera.zoom * window.devicePixelRatio));
     for (const grade of visibleGrades) {
       grade.markings.visible = !overview;
+      grade.guides.visible = !overview;
       grade.arrows.visible = !overview;
       grade.crossings.visible = !overview;
       const next = overview && grade.terrainSize * resolution <= 2048 ? resolution : 0;
@@ -329,6 +333,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         }
         updateTerrainCache();
       };
+      // Guide lines do not depend on road-class tones, so they are drawn once per version.
+      for (const node of city.nodes)
+        drawJunctionMarkings(grades.get(nodeGrades[node.idx]!)!.guides, city, node);
       redrawTerrain();
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
