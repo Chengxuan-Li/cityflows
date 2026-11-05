@@ -164,7 +164,8 @@ test('T25: lane edges retain shared miter corners away from a taper', () => {
 
 test.each([
   ['grid', 0, 'c1b2bf4df6fee7d3d7ea957c5243cac6a9c292d4435f0155b117292d250c9339'],
-  ['Munich', 66, '1ee92a0e22464460f307241a9b5ddeff65b3f618147ca563472cc9ba4f4ec84d'],
+  // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
+  ['Munich', 63, '1ee92a0e22464460f307241a9b5ddeff65b3f618147ca563472cc9ba4f4ec84d'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {

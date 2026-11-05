@@ -346,7 +346,9 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
 - TASK-071 (lane continuity). A continuation node is an uncontrolled node whose movements are
   all through, merge or diverge, with every road end within 30 degrees of one axis: a road
   splitting into branches (5 lanes into 3 + 2), branches joining (3 + 2 into 5), a narrowing
-  or a widening. At such a node lanes sit side by side across the node instead of each road
+  or a widening. Branches joining into fewer lanes than they bring (an on-ramp without a lane
+  of its own) are not a continuation: the merge keeps its junction and a movement long enough
+  for gap acceptance. At such a node lanes sit side by side across the node instead of each road
   being centred on the node:
   - The trunk (the one road on its side of the node) keeps its lanes. The branches on the
     other side are ordered left to right across the axis, and each takes the slice of the

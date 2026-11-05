@@ -89,6 +89,13 @@ export function continuationLayout(
         return angle(a) - angle(b) || a.idx - b.idx;
       });
       const balanced = branches.reduce((sum, r) => sum + r.lanes.length, 0) === trunk.lanes.length;
+      // A merge that must absorb lanes (an on-ramp joining without a lane of its own) keeps its
+      // junction: a zero-length merge movement would put the merging car straight into the
+      // target lane, with no stretch for gap acceptance (T07's bounded mainline braking).
+      if (!split && branches.length > 1 && !balanced) {
+        valid = false;
+        break;
+      }
       const usedTrunk = new Set<number>();
       let cursor = 0;
       const trunkSource = sources[trunk.idx]!;
