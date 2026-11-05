@@ -51,6 +51,8 @@ export const style = {
   signalAmber: 0xe7a637,
   signalGreen: 0x30926c,
   dividerWidthM: 0.18,
+  guideDashM: 1.5,
+  guideGapM: 1.5,
   pointRadiusM: 6,
   connectorRadiusM: 0.7,
   vehicleLengthM: 4.5,
