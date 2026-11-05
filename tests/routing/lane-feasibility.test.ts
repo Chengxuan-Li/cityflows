@@ -3,6 +3,8 @@ import { buildCity } from '../../src/fixtures/build-city';
 import { shortTurnLane } from '../../src/fixtures/short-turn-lane';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import { remainingRouteCost } from '../../src/routing/costs';
+import { createGraphCache } from '../../src/routing/graph';
+import { resolveLanes } from '../../src/routing/lanes';
 import { routingFixture } from './fixtures';
 
 function curbRestrictedTurn() {
@@ -150,4 +152,47 @@ test('the fallback reserves the same ten-metre intermediate-road margin as lane 
     ok: false,
     reason: 'lane_infeasible',
   });
+});
+
+test('lane resolution leaves by the exit lane with the fewest changes', () => {
+  // Four lanes; only the outer two continue into the next road. From lane 2 the right exit
+  // is one change away and the left one two (the generator yields that one first).
+  const { city, node, road, place } = buildCity('Outer exits', 1);
+  const junction = node(200, 0);
+  const from = road(node(0, 0), junction, { lanes: 4 });
+  const to = road(junction, node(400, 0), { lanes: 4 });
+  const side = road(junction, node(200, 200));
+  const provenance = { source: 'authored' } as const;
+  junction.turnRules.push(
+    { from: from.id, to: to.id, allowed: false, provenance },
+    { from: from.id, to: to.id, fromLane: 0, toLane: 0, allowed: true, provenance },
+    { from: from.id, to: to.id, fromLane: 3, toLane: 3, allowed: true, provenance },
+    { from: from.id, to: side.id, allowed: false, provenance },
+    { from: from.id, to: side.id, fromLane: 1, toLane: 0, allowed: true, provenance },
+    { from: from.id, to: side.id, fromLane: 2, toLane: 0, allowed: true, provenance },
+  );
+  place('Origin', 'residential', { x: 0, y: 0 }, [
+    { road: from, lane: 2, positionM: 5, direction: 'out' },
+  ]);
+  place('Destination', 'work', { x: 400, y: 0 }, [
+    { road: to, lane: 3, direction: 'in', positionM: 150 },
+  ]);
+  const { compiled, request } = routingFixture(city);
+  const roads = [from, to].map((r) => compiled.index.road.get(r.id)!);
+  const destination = compiled.connectors[request.toConnector]!;
+  const lanes = resolveLanes(
+    compiled,
+    createGraphCache()(compiled, 'car'),
+    roads,
+    request,
+    destination,
+    30,
+  );
+  expect(lanes).not.toBeNull();
+  const movement = compiled.movements[lanes!.movements[0]!]!;
+  expect(compiled.lanes[movement.fromLane]!.id).toBe(`${from.id}#3`);
+  expect(lanes!.targetLanes[0]!.map((idx) => compiled.lanes[idx]!.id).sort()).toEqual([
+    `${from.id}#0`,
+    `${from.id}#3`,
+  ]);
 });

@@ -42,43 +42,55 @@ export function resolveLanes(
 ) {
   const last = roads.length - 1;
   const targetLanes: number[][] = new Array(roads.length);
+  // Fewest changes first, then left before right (a stable sort keeps the generator's order).
   const reachable = (lane: number, endM: number, startM = 0) =>
-    reachableLanes(compiled, graph.allowed, lane, endM, changeDistanceM, startM);
-  const canArrive = (lane: number, startM = 0) => {
-    for (const candidate of reachable(lane, destination.positionM, startM)) {
-      if (candidate.lane === destination.lane) return true;
-    }
-    return false;
-  };
+    [...reachableLanes(compiled, graph.allowed, lane, endM, changeDistanceM, startM)].sort(
+      (a, b) => a.changes - b.changes,
+    );
+  const arrivalChanges = (lane: number, startM = 0) =>
+    reachable(lane, destination.positionM, startM).find((c) => c.lane === destination.lane)
+      ?.changes;
 
-  targetLanes[last] = compiled.roads[roads[last]!]!.lanes.filter((lane) => canArrive(lane));
-  if (last === 0 && !canArrive(request.fromLane, request.fromPosM)) return null;
+  if (last === 0 && arrivalChanges(request.fromLane, request.fromPosM) === undefined) return null;
+  // Lanes of the next road that the route can enter, with the fewest changes each needs to
+  // reach that road's target lanes. An arrival uses the connector as its cutoff; there is no
+  // extra distance for lane changes.
+  let enterable = new Map<number, number>();
+  for (const lane of compiled.roads[roads[last]!]!.lanes) {
+    const changes = arrivalChanges(lane);
+    if (changes !== undefined) enterable.set(lane, changes);
+  }
+  targetLanes[last] = [...enterable.keys()];
 
   const choices: Map<number, number>[] = new Array(last);
-  // An arrival uses the connector as its cutoff; there is no extra distance for lane changes.
-  let enterable = new Set(targetLanes[last]);
   for (let i = last - 1; i >= 0; i--) {
     const road = compiled.roads[roads[i]!]!;
     const exits = new Map<number, number>();
+    // TASK-076: land where the next road needs the fewest changes, then the lowest penalty.
+    const better = (a: number, b: number) => {
+      const changes = (idx: number) => enterable.get(compiled.movements[idx]!.toLane)!;
+      if (changes(a) !== changes(b)) return changes(a) < changes(b);
+      if (graph.penalties[a] !== graph.penalties[b])
+        return graph.penalties[a]! < graph.penalties[b]!;
+      return a < b;
+    };
     for (const lane of road.lanes) {
       for (const idx of graph.outgoing[lane]!) {
         if (!enterable.has(compiled.movements[idx]!.toLane)) continue;
         const best = exits.get(lane);
-        if (best === undefined || graph.penalties[idx]! < graph.penalties[best]!)
-          exits.set(lane, idx);
+        if (best === undefined || better(idx, best)) exits.set(lane, idx);
       }
     }
     if (!exits.size) return null;
     choices[i] = exits;
     targetLanes[i] = [...exits.keys()];
     if (i > 0) {
-      enterable = new Set<number>();
+      enterable = new Map<number, number>();
       for (const entry of road.lanes) {
-        for (const { lane } of reachable(entry, Math.max(0, road.lengthM - 10))) {
-          if (!exits.has(lane)) continue;
-          enterable.add(entry);
-          break;
-        }
+        const exit = reachable(entry, Math.max(0, road.lengthM - 10)).find(({ lane }) =>
+          exits.has(lane),
+        );
+        if (exit) enterable.set(entry, exit.changes);
       }
     }
   }

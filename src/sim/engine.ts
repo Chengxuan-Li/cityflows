@@ -72,7 +72,8 @@ function createRun({
     onDecision: intersectionObserver,
     acceleration: (id) => reservationAcceleration[id]!,
   });
-  let laneChanges = createLaneChanges(compiled, vehicles, params);
+  const hasGrant = (id: number) => intersections.grants[id] !== -1;
+  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
   let carLanes = compiled.lanes.map((lane) => lane.allowed.includes('car'));
   const signalEpochs = new Map<string, number>();
   const provider =
@@ -162,7 +163,8 @@ function createRun({
           break;
         }
       }
-      if (alternate !== -1) vehicles.movement[id] = alternate;
+      // TASK-076: a car that gave its held change up takes the fallback and reroutes.
+      if (alternate !== -1 && !laneChanges.gaveUp[id]) vehicles.movement[id] = alternate;
       else if (vehicles.movement[id] !== -1) fallback[id] = 1;
       else waitingForLane[id] = Number(!route.targetLanes[step]?.includes(lane));
     }
@@ -251,6 +253,7 @@ function createRun({
 
   function proposeLaneChanges() {
     const { occupied } = vehicles;
+    laneChanges.startProposals();
     for (let i = 0; i < occupied.length && occupied[i]! < compiled.lanes.length; i++) {
       const lane = compiled.lanes[occupied[i]!]!;
       if (lane.left === -1 && lane.right === -1) continue;
@@ -259,7 +262,10 @@ function createRun({
         const discretionary =
           intersections.grants[id] === -1 &&
           lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM;
-        laneChanges.propose(id, lane, tick, discretionary);
+        if (!laneChanges.propose(id, lane, tick, discretionary)) continue;
+        // Gave the change up: take the TASK-048 fallback from this lane, if there is one.
+        planLane(id, lane.idx, vehicles.position[id]!);
+        if (!fallback[id]) laneChanges.gaveUp[id] = 0;
       }
     }
   }
@@ -342,6 +348,26 @@ function createRun({
           leaderSpeed,
           obstacle - position,
         );
+        const requester = lane ? laneChanges.yieldingTo[id]! : -1;
+        if (requester !== -1) {
+          // TASK-076: the requester's projected rear is a standing leader, braked for at no
+          // more than bMps2 (the yielder was picked only if that suffices).
+          const virtualRear = vehicles.position[requester]! - vehicleLengthM;
+          limit[id] = Math.min(limit[id]!, Math.max(position, virtualRear - idm.minGapM));
+          acceleration[id] = Math.min(
+            acceleration[id]!,
+            Math.max(
+              -idm.bMps2,
+              idmAcceleration(
+                idm,
+                vehicles.speed[id]!,
+                speedLimit * vehicles.speedFactor[id]!,
+                0,
+                virtualRear - position,
+              ),
+            ),
+          );
+        }
         // A grant removes the virtual stop line on the next step. Predict its motion
         // from physical following, including for grants awarded later in this resolve.
         // Evaluate at the capped speed: free-flow braking toward a lower limit is not a stop.
@@ -376,6 +402,7 @@ function createRun({
           lane &&
           movement &&
           !laneChanges.holding[id] &&
+          requester === -1 &&
           !granted &&
           (ahead === -1 ||
             intersections.grants[ahead] !== -1 ||
@@ -549,7 +576,7 @@ function createRun({
           }
           leaveRoad(id, timeS, lane.lengthM);
           vehicles.remove(id);
-          laneChanges.clearAnimation(id);
+          laneChanges.leaveLane(id);
           vehicles.insert(
             id,
             -granted - 1,
@@ -693,7 +720,7 @@ function createRun({
       merges.canEnter,
       { onDecision: intersectionObserver, acceleration: (id) => reservationAcceleration[id]! },
     );
-    laneChanges = createLaneChanges(next, vehicles, params);
+    laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
     carLanes = next.lanes.map((lane) => lane.allowed.includes('car'));
 
     for (let id = 0; id < vehicles.count; id++) {

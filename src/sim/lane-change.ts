@@ -10,11 +10,23 @@ interface Proposal {
   positionM: number;
 }
 
-export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, params: SimParams) {
+export function createLaneChanges(
+  compiled: CompiledCity,
+  vehicles: Vehicles,
+  params: SimParams,
+  hasGrant: (id: number) => boolean = () => false,
+) {
   const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM, vehicleLengthM } = params;
   const proposals: Proposal[] = [];
   const creeping = new Uint8Array(vehicles.count);
   const holding = new Uint8Array(vehicles.count);
+  // TASK-076: time held for a mandatory change (creeping or standing), the change given up
+  // on the current lane, and the cooperative pairs (yielder -> requester, requester -> yielder).
+  const heldS = new Float64Array(vehicles.count);
+  const gaveUp = new Uint8Array(vehicles.count);
+  const yieldingTo = new Int32Array(vehicles.count).fill(-1);
+  const yielderOf = new Int32Array(vehicles.count).fill(-1);
+  const yielders: number[] = [];
   const offsetM = new Float64Array(vehicles.count);
   const startTick = new Float64Array(vehicles.count);
   const clearance = vehicleLengthM + idm.minGapM;
@@ -123,33 +135,78 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     return true;
   }
 
+  /** The nearest vehicle behind on the target lane that can stop behind the requester's rear. */
+  function pickYielder(id: number, positionM: number) {
+    const stopM = positionM - clearance;
+    for (
+      let candidate = nearFollower;
+      candidate !== -1 && vehicles.position[candidate]! >= positionM - laneChangeDistanceM;
+      candidate = vehicles.next[candidate]!
+    ) {
+      const distance = stopM - vehicles.position[candidate]!;
+      const speed = vehicles.speed[candidate]!;
+      if (
+        vehicles.state[candidate] !== DRIVING ||
+        hasGrant(candidate) ||
+        heldS[candidate]! >= params.cooperativeYieldS ||
+        yieldingTo[candidate] !== -1 ||
+        distance < 0 ||
+        speed * speed > 2 * idm.bMps2 * distance
+      )
+        continue;
+      yieldingTo[candidate] = id;
+      yielderOf[id] = candidate;
+      yielders.push(candidate);
+      return;
+    }
+  }
+
+  /** Clears last step's cooperative pairs; every requester picks again in proposal order. */
+  function startProposals() {
+    for (const id of yielders) {
+      yielderOf[yieldingTo[id]!] = -1;
+      yieldingTo[id] = -1;
+    }
+    yielders.length = 0;
+  }
+
+  /** Returns true when the vehicle gives its mandatory change up in this step. */
   function propose(id: number, source: CLane, tick: number, discretionary: boolean) {
+    const crept = creeping[id]!;
     creeping[id] = 0;
     holding[id] = 0;
-    if (source.left === -1 && source.right === -1) return;
+    if (gaveUp[id] || (source.left === -1 && source.right === -1)) return false;
     const step = vehicles.routeStep[id]!;
     const route = vehicles.route[id]!;
     const destination = compiled.connectors[vehicles.destination[id]!]!;
     const finalRoad = step === route.roads.length - 1;
     holding[id] = Number(!finalRoad && !survives(source.idx, route.roads[step + 1]!));
     const positionM = vehicles.position[id]!;
-    if (positionM < vehicleLengthM) return;
     const cutoff = finalRoad ? Math.min(source.lengthM, destination.positionM) : source.lengthM;
     const remaining = cutoff - positionM;
-    if (remaining < 0) return;
     const changesNeeded = changesToTargets(id, source.lane, step, finalRoad);
     const mandatory =
-      changesNeeded > 0 && remaining < changesNeeded * laneChangeDistanceM + mandatoryUrgencyM;
+      remaining >= 0 &&
+      changesNeeded > 0 &&
+      remaining < changesNeeded * laneChangeDistanceM + mandatoryUrgencyM;
+    // Held: creeping for the change, or standing at the stop position (where `stopped` counts).
+    heldS[id] = mandatory && (crept || vehicles.stopped[id]! > 0) ? heldS[id]! + params.dtS : 0;
+    if (!finalRoad && heldS[id]! >= params.missedTurnAfterS) {
+      gaveUp[id] = 1;
+      heldS[id] = 0;
+      return true;
+    }
+    if (positionM < vehicleLengthM || remaining < 0) return false;
     if (mandatory && compiled.movements[route.movements[step] ?? -1]?.turn === 'diverge')
       holding[id] = 1;
     const animating = lateralM(id, tick) !== 0;
     if (animating) {
       if (mandatory) creeping[id] = 1;
-      return;
+      return false;
     }
     // Discretionary changes are off near the stop line, while holding a grant, and on the
     // destination lane of the final road: a queue at the connector must hold the lane (T08).
-    if (!mandatory && (!discretionary || (finalRoad && changesNeeded === 0))) return;
+    if (!mandatory && (!discretionary || (finalRoad && changesNeeded === 0))) return false;
 
     const oldLeader = vehicles.previous[id]!;
     const oldFollower = vehicles.next[id]!;
@@ -158,7 +215,15 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
     for (let side = 0; side < 2; side++) {
       const target = side === 0 ? source.left : source.right;
       const lane = compiled.lanes[target];
-      if (!lane || !carLane[target] || lane.lengthM - positionM < idm.minGapM - 1e-8) continue;
+      // A car standing at its own stop position for a mandatory change may be past the end of
+      // a shorter neighbor's setback; it may still land up to that neighbor's stop position.
+      const standing = mandatory && vehicles.speed[id]! < 0.1;
+      if (
+        !lane ||
+        !carLane[target] ||
+        (standing ? positionM > lane.stopM + 1e-8 : lane.lengthM - positionM < idm.minGapM - 1e-8)
+      )
+        continue;
       const changesAfter = changesToTargets(id, lane.lane, step, finalRoad);
       if (
         mandatory
@@ -179,6 +244,8 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
         ) {
           creeping[id] = 1;
         }
+        if (mandatory && heldS[id]! >= params.cooperativeYieldS && yielderOf[id] === -1)
+          pickYielder(id, positionM);
         continue;
       }
       if (mandatory) {
@@ -204,6 +271,7 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
       }
     }
     if (bestLane !== -1) proposals.push({ id, lane: bestLane, positionM });
+    return false;
   }
 
   function resolve(tick: number, apply: (id: number, lane: number, positionM: number) => void) {
@@ -216,20 +284,27 @@ export function createLaneChanges(compiled: CompiledCity, vehicles: Vehicles, pa
       startTick[id] = tick;
       creeping[id] = 0;
       holding[id] = 0;
+      heldS[id] = 0;
       apply(id, lane, positionM);
     }
     proposals.length = 0;
   }
 
   return {
+    startProposals,
     propose,
     resolve,
     lateralM,
     creeping,
     holding,
-    clearAnimation: (id: number) => {
+    gaveUp,
+    yieldingTo,
+    /** The vehicle leaves its lane for a movement. */
+    leaveLane: (id: number) => {
       offsetM[id] = 0;
       creeping[id] = 0;
+      heldS[id] = 0;
+      gaveUp[id] = 0;
     },
   };
 }
