@@ -343,6 +343,27 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   is a simple polygon whose boundary is smooth (tangent-continuous) from each road edge into
   the next except at gore tips. Once the cap is lifted a gore tip coincides with the trimmed
   corner and the rule reduces to the fillet.
+- TASK-071 (lane continuity). A continuation node is an uncontrolled node whose movements are
+  all through, merge or diverge, with every road end within 30 degrees of one axis: a road
+  splitting into branches (5 lanes into 3 + 2), branches joining (3 + 2 into 5), a narrowing
+  or a widening. At such a node lanes sit side by side across the node instead of each road
+  being centred on the node:
+  - The trunk (the one road on its side of the node) keeps its lanes. The branches on the
+    other side are ordered left to right across the axis, and each takes the slice of the
+    trunk's lane block that its lanes connect to through the movements; its end at the node
+    gets the lateral offset that puts its lanes exactly where those trunk lanes end.
+  - From that end offset the branch eases back to its own `lateralOffsetM` over
+    `taperM = min(60 m, half the road)` with a smoothstep, so its lanes leave the trunk's
+    line gradually. `CRoad.startOffsetM` and `CRoad.endOffsetM` carry the end offsets (0
+    where nothing changes); lane polylines and `CRoad.surface` follow the varying offset.
+  - Setbacks are 0 and the outline is empty at a continuation node; every movement there is
+    a straight join of coincident lane ends, as at a through node, so the road reads as one
+    continuous surface with no pinch.
+  - A lane with no through continuation at a narrowing (a dropped lane) keeps its polyline
+    and its simulation behaviour (vehicles change out before its end, section 8) but is drawn
+    narrowing to zero width over the last `taperM` of its road; a lane added at a widening
+    is drawn growing from zero over the first `taperM`. `CLane.taperStartM` and
+    `CLane.taperEndM` (0 when none) carry the lengths.
 
 ### 5.2 Movement generation
 
@@ -740,8 +761,8 @@ Step sequence, in this order every step:
    state at the start of the step:
    - Leader: the next vehicle ahead on the same lane, else on the movement the vehicle will
      take, else on the lane after it. A red or ungranted movement is a standing obstacle at
-     the lane end; an arrival connector is a standing obstacle at its position when the place
-     cannot accept the vehicle.
+     the lane end (TASK-072: at the lane's `stopM`, see below); an arrival connector is a
+     standing obstacle at its position when the place cannot accept the vehicle.
    - Acceleration from IDM.
    - Lane change proposal: mandatory toward `targetLanes` when the distance to the lane end is
      below `changesNeeded * laneChangeDistanceM + mandatoryUrgencyM` (accepts gaps down to
@@ -824,6 +845,15 @@ route must beat the remaining incumbent's cost, repriced with current costs and 
 noise, by `rerouteHysteresis`; at most `maxReplans` congestion switches occur per trip.
 Switches release approach grants, reset the route cursor and lane plan, and set
 `routeReason: 'congestion'`.
+
+Stop positions (TASK-072). `CLane.stopM` is where an ungranted vehicle stops: `lengthM`
+minus `crossingM = 3.0` (a 2.5 m crossing and 0.5 m clearance) when the lane's approach has a
+pedestrian crossing (the section 11 rule), else `lengthM`; a lane shorter than 10 m gets no
+crossing. Every rule that treats the lane end as the stop line for an ungranted vehicle uses
+`stopM` instead: the standing obstacle, the commit clamp, the stop sign's one second at the
+line, the entry request distance, junction waiting time, and the distance a yield or stop
+gap is measured over. A granted vehicle drives on to `lengthM` and onto its movement as
+before; conflict zones, grants and movements are unchanged.
 
 Lane changes (TASK-004 as merged): proposals are generated before the car-following pass and
 applied before it, so following distances and entry requests use the resolved lanes; a vehicle
@@ -1115,6 +1145,14 @@ type HostEvent =
   The crossing is drawn in the junction mouth: 0.5 to 3.0 m past the trimmed end across the
   road end's full width, inside the outline, or omitted where the setback leaves less than
   3.5 m. Node areas draw above lane markings, so markings inside a gore are covered.
+- TASK-072 (replaces the crossing placement above): the crossing is on the road, not in the
+  junction. The stop line is at `stopM`; the crossing spans `stopM + 0.25` to `lengthM - 0.25`
+  across the road's full width; the junction surface begins at the lane end. The crossing on
+  the exit side of a signalized junction lies on the exit road's first 0.25 to 2.75 m. Same
+  serving rule as before (a signalized approach with a served movement).
+- TASK-071: at a continuation node no stop line, crossing or junction surface is drawn; lane
+  dividers continue through it, the dividers beside a tapering lane converge or diverge with
+  it, and a dropped lane carries two merge chevrons inside its taper.
 - TASK-063: roads and junction surfaces share one asphalt colour by default. A Layers entry
   "Road classes" (off by default) turns on the per-class tones of `roadStyle`; then a
   junction takes the tone of its incident road with the highest `classRank`. Presentation
@@ -1355,6 +1393,8 @@ Headless tests run in Vitest from fixtures in `src/fixtures` (generated) and `fi
 | T22 zone timing and box: a far grant lets a crossing car through; no waiting in the box | sim | four-way signal, grid, Munich | TASK-065 |
 | T23 smooth imports: tangent continuity, bounded deviation, fixed junctions | importers | Munich, Sindelfingen, downtown | TASK-066 |
 | T24 acute approaches: realigned to 60 degrees, merges untouched, shorter setbacks | importers, network | Munich, Sindelfingen, an acute-Y OSM fixture | TASK-068 |
+| T25 lane continuity: no pinch at splits and merges, tapers at drops | network, render | grid, a split-merge fixture, Munich | TASK-071 |
+| T26 stop positions: cars stop before the crossing, crossings on the road | network, sim, render | four-way signal, grid, Munich | TASK-072 |
 
 Synthetic fixtures (all generated by code with a seed, in `src/fixtures`):
 

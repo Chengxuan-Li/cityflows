@@ -94,6 +94,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-067](tasks/TASK-067.md) | 5 | Ship it: static deploy and user guide | `.github/workflows`, `vite.config.ts`, URL lines in `tiles.ts`, `area-picker.tsx`, `overpass.ts`, `README.md` | 060; design in architecture 2 | published build without test hooks | done |
 | [TASK-068](tasks/TASK-068.md) | 5 | Realign acute approaches on import; attribute the smoothing cost (B31, B30) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), an acute-Y OSM fixture, `tests/importers`, imported lane-pair lists in `tests/network`, `tests/routing/throughput-routes.json` | 061, 063, 065, 066; design in architecture 13 | T24; Munich at least 2 023 at 0.15 | done |
 | [TASK-069](tasks/TASK-069.md) | 5 | Notes instead of warnings; deterministic vehicle pick (B22) | `src/network/types.ts` (severity), `src/network/diagnostics.ts`, `src/ui` diagnostics and badge, `tests/e2e/helpers.ts` and car-clicking scenarios, the warning table in `tests/importers/munich.test.ts` | 055, 058; design in architecture 5.5 | grid opens with Validation (0); demo B ten in a row | done |
+| [TASK-071](tasks/TASK-071.md) | 5 | Lanes that continue through splits, merges and lane drops | `src/network/lanes.ts`, new `continuity.ts`, continuation nodes in `junctions.ts`, `types.ts` (additive), new `src/render/layers/transitions.ts`, `drawRoad` dividers, `scene.ts` wiring, a continuity fixture, `tests/network/T25*`, `tests/render` | 061, 063, 066, 068; design in architecture 5.1, 11 | T25; no pinch at splits and merges | todo |
+| [TASK-072](tasks/TASK-072.md) | 5 | Stop lines and crossings on the road | new `src/network/stops.ts`, `types.ts` (additive), ungranted stop rules in `src/sim`, `drawApproachMarkings` and `crossingStripes` in `roads.ts`, `tests/sim/T26*`, `tests/render` | 063, 064, 065; design in architecture 8, 11 | T26; cars stop before the crossing | todo |
+| [TASK-073](tasks/TASK-073.md) | 5 | Exercise the paths nobody has run end to end | `tests/e2e/qa-*.spec.ts`, e2e helpers and fixtures | 067, 069, 070 | defects reported, suite green | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -396,6 +399,38 @@ neutral here), same probe: roads, nodes, places and routable pairs unchanged
 577 completed by 10:00, 30 713 queued at origin, peak 4 129 driving (wave 10: 530, 30 712,
 4 177). At the wizard's default 0.15: 2 078 completed, 1 108 queued, peak 2 128 (TASK-053
 table: 2 120, 1 012, 2 182). Before the cap, the same geometry gave 444 and 1 275 completed.
+
+## Roadmap after wave 14 (lead, 2026-11-05)
+
+Outstanding work, from the owner's findings after TASK-070 (points 1 to 4), the backlog and
+the review log, in phases whose tasks run in parallel on disjoint surfaces.
+
+Phase 1 (wave 15, now): TASK-071 lane continuity (owner points 3 and 4: splits, merges and
+lane drops without the pinch, with tapers and markings; network geometry and a new render
+layer), TASK-072 stop positions (owner point 2: crossings on the road, cars stop before
+them; a new `stopM` used by the simulation and the markings), TASK-073 end-to-end QA of the
+paths never run (Overpass download and cache, exports, a real city saved and reopened, a
+phone-sized screen, the Pages build). Shared files: `src/network/types.ts` (071 and 072 add
+separate fields), `src/render/layers/roads.ts` (071 the divider loop, 072 the approach
+markings) and `src/render/scene.ts` (wiring); the lead reconciles them. Merge order: 073,
+072, 071. Then the lead runs the whole suite with T16 once.
+
+Phase 2 (wave 16, after phase 1 and the owner's examples for point 1): TASK-074 junction
+shape, the rest of point 1 and B21: the junction outline built the way SUMO's netconvert
+computes node shapes (EPL-2.0 or GPL-2.0-or-later, so its algorithm may be adapted with a
+NOTICE entry), sized from the owner's two or three worst junctions; `src/network/junctions.ts`
+and the node layer. In parallel, the first Gate 5 item the owner picks, on `src/sim` and
+`src/demand`: actuated signals (detectors, extend-and-gap-out phases in the signal editor),
+or walking legs (a person walks to a stop or a parking place, then drives or rides). The
+lead in parallel: measurement debt from the Performance section, and the handover archive
+regenerated at the new `main`.
+
+Phase 3 (wave 17): the second Gate 5 item, and polish from the owner's next test round. Not
+planned: desktop packaging and 3D (architecture 16).
+
+Kept open, no task yet: the twelve dev-tooling audit advisories (waiting on upstream
+`minimatch`), the 101 Munich road ends still at the setback cap (phase 2), empty agent
+worktree folders that Windows keeps locked.
 
 ## Lead handover
 
@@ -1059,6 +1094,10 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   error code identifies the next case.
 
 ## Owner decisions log
+
+- 2026-11-05: GitHub Pages is enabled and the site is live at
+  https://chengxuan-li.github.io/cityflows/ (default OpenStreetMap tiles). The outstanding
+  work is planned in parallel phases (Roadmap after wave 14).
 
 - 2026-11-03: foundation, renderer, repo shape, license, OSM access, workflow and audit depth
   decided; architecture approved with five adjustments (architecture section 1, rows 8 to 12).
