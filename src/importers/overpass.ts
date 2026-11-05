@@ -2,7 +2,8 @@ import type { ImportOptions } from './types';
 
 export type Bbox = NonNullable<ImportOptions['bbox']>;
 export const queryVersion = 1;
-export const defaultEndpoint = 'https://overpass-api.de/api/interpreter';
+export const defaultEndpoint =
+  import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 let active = false;
 
 export function areaError([west, south, east, north]: Bbox): string | null {
