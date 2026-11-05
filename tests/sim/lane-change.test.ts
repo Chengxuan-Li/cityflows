@@ -174,8 +174,14 @@ test('a blocked short turn takes a legal fallback and attempts a missed-turn rer
         crept = true;
       }
     }
-    if (after?.state !== 'driving' || after.lane >= 0) continue;
-    const movement = compiled.movements[-after.lane - 1]!;
+    if (after?.state !== 'driving') continue;
+    const movement =
+      after.lane < 0
+        ? compiled.movements[-after.lane - 1]
+        : compiled.movements.find(
+            (m) => m.lengthM === 0 && m.fromLane === before?.lane && m.toLane === after.lane,
+          );
+    if (!movement) continue;
     expect(compiled.lanes[movement.fromLane]!.out).toContain(movement.idx);
     expect(movement.neverGreen).toBe(false);
     expect(compiled.lanes[movement.toLane]!.allowed).toContain('car');

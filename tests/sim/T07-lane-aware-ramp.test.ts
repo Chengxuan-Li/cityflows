@@ -39,12 +39,21 @@ test.each(['on-ramp', 'mainline'])(
       for (const [index, id] of snapshot.id.entries()) {
         const lane = snapshot.lane[index]!;
         lanes[id] = lane;
-        const merge = lane < 0 ? compiled.movements[-lane - 1] : undefined;
+        const merge =
+          lane < 0
+            ? compiled.movements[-lane - 1]
+            : merges.find(
+                (m) => m.lengthM === 0 && m.fromLane === previous[id] && m.toLane === lane,
+              );
         if (merge && merges.includes(merge) && !merged.has(id)) {
           expect(previous[id]).toBe(merge.fromLane);
           merged.add(id);
         }
-        if (lane === -exit.idx - 1 && !exited.has(id)) {
+        if (
+          (lane === -exit.idx - 1 ||
+            (exit.lengthM === 0 && previous[id] === exit.fromLane && lane === exit.toLane)) &&
+          !exited.has(id)
+        ) {
           expect(previous[id]).toBe(exit.fromLane);
           exited.add(id);
         }
@@ -106,11 +115,16 @@ test('T07 mixed ramp/mainline traffic has safe entries and bounded merge braking
     for (const [i, car] of current.entries()) {
       if (!car || car.state !== 'driving') continue;
       const before = previous[i];
-      const crossing = car.lane < 0 ? compiled.movements[-car.lane - 1] : undefined;
+      const crossing =
+        car.lane < 0
+          ? compiled.movements[-car.lane - 1]
+          : merges.find(
+              (m) => m.lengthM === 0 && m.fromLane === before?.lane && m.toLane === car.lane,
+            );
       if (crossing && merges.includes(crossing)) merged.add(car.id);
       if (i % 2 === 0 && merges.some((m) => car.lane === m.toLane))
         expect(merged.has(car.id)).toBe(true);
-      const entered = before && before.lane < 0 ? compiled.movements[-before.lane - 1] : undefined;
+      const entered = before && before.lane < 0 ? compiled.movements[-before.lane - 1] : crossing;
       if (entered && merges.includes(entered) && car.lane === entered.toLane) {
         for (const other of current) {
           if (!other || other.id === car.id || other.state !== 'driving' || other.lane !== car.lane)
@@ -118,7 +132,11 @@ test('T07 mixed ramp/mainline traffic has safe entries and bounded merge braking
           expect(Math.abs(other.positionM - car.positionM)).toBeGreaterThanOrEqual(6.5 - 1e-8);
         }
       }
-      if (car.lane === -exit.idx - 1 && !exited.has(car.id)) {
+      if (
+        (car.lane === -exit.idx - 1 ||
+          (exit.lengthM === 0 && before?.lane === exit.fromLane && car.lane === exit.toLane)) &&
+        !exited.has(car.id)
+      ) {
         expect(before!.lane).toBe(exit.fromLane);
         exited.add(car.id);
       }
@@ -130,7 +148,10 @@ test('T07 mixed ramp/mainline traffic has safe entries and bounded merge braking
       ) {
         const acceleration = (car.speedMps - before.speedMps) / 0.1;
         if (acceleration < -0.1) braking++;
-        expect(acceleration).toBeGreaterThanOrEqual(-DEFAULT_SIM_PARAMS.mobil.safeDecelMps2 - 1e-8);
+        expect(
+          acceleration,
+          `vehicle ${car.id}, lane ${compiled.lanes[before.lane]!.id}, node ${compiled.nodes[compiled.roads[compiled.lanes[before.lane]!.road]!.to]!.id}, step ${step}, speed ${before.speedMps} -> ${car.speedMps}`,
+        ).toBeGreaterThanOrEqual(-DEFAULT_SIM_PARAMS.mobil.safeDecelMps2 - 1e-8);
       }
     }
     previous = current;
@@ -159,15 +180,23 @@ test.each(['right', 'left'] as const)(
     const engine = createEngine();
     engine.load({ compiled, scenario: scenario(), trips: trips(city, 4, 3) });
     const passed = new Set<number>();
+    const previous = new Map<number, number>();
     for (let step = 0; step < 1500; step++) {
       engine.step();
       const snapshot = engine.snapshot();
       for (const [i, id] of snapshot.id.entries()) {
         const field = snapshot.lane[i]!;
-        if (field >= 0) continue;
-        const movement = compiled.movements[-field - 1]!;
-        expect(compiled.lanes[movement.fromLane]!.lane).not.toBe(dropped);
-        passed.add(id);
+        const movement =
+          field < 0
+            ? compiled.movements[-field - 1]
+            : compiled.movements.find(
+                (m) => m.lengthM === 0 && m.fromLane === previous.get(id) && m.toLane === field,
+              );
+        if (movement) {
+          expect(compiled.lanes[movement.fromLane]!.lane).not.toBe(dropped);
+          passed.add(id);
+        }
+        previous.set(id, field);
       }
     }
     expect(passed.size).toBe(4);

@@ -10,6 +10,7 @@ import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
 import { drawPlaces } from './layers/places';
 import { drawMovementArrow, drawRoad, drawCrossings } from './layers/roads';
+import { drawTransitions } from './layers/transitions';
 import { drawSignal } from './layers/signals';
 import { drawSigns } from './layers/signs';
 import { Tiles } from './layers/tiles';
@@ -305,6 +306,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             layerVisibility.roadClasses,
             grade.crossings,
           );
+          drawTransitions(
+            grade.surfaces,
+            grade.markings,
+            compiled,
+            road,
+            layerVisibility.roadClasses,
+          );
           drawRoadJoins(grade.surfaces, compiled, road, layerVisibility.roadClasses);
           drawCrossings(grade.crossings, compiled, road);
         }
@@ -316,7 +324,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           );
         }
         for (const movement of compiled.movements) {
-          if (!movement.neverGreen)
+          if (!movement.neverGreen && compiled.nodes[movement.node]!.outline.length)
             drawMovementArrow(grades.get(nodeGrades[movement.node]!)!.arrows, movement);
         }
         updateTerrainCache();

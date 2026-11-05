@@ -1,5 +1,6 @@
 import { cumulativeLengths, distance, headingAtDistance, sampleBezier } from '../geo/polyline';
 import { movementId, type DrivingSide, type Node, type TurnRule } from '../schema';
+import { roadPair, type ContinuationPairs } from './continuity';
 import type { CLane, CMovement, CNode, CRoad, Turn } from './types';
 
 function signedAngle(from: number, to: number): number {
@@ -83,6 +84,8 @@ export function generateMovements(
   lanes: CLane[],
   side: DrivingSide,
   movements: CMovement[],
+  continuation?: ContinuationPairs,
+  preservedHeadings?: { start: number; end: number }[],
 ): void {
   const highestRank = Math.max(0, ...incoming.map((road) => road.classRank));
   const isMinor = (road: CRoad) =>
@@ -106,14 +109,17 @@ export function generateMovements(
   const add = (a: CLane, b: CLane, turn: Turn, priority: number) => {
     const start = a.polyline.at(-1)!;
     const end = b.polyline[0]!;
-    const startHeading = headingAtDistance(a.polyline, a.cumulative, a.lengthM);
-    const endHeading = headingAtDistance(b.polyline, b.cumulative, 0);
+    const startHeading =
+      preservedHeadings?.[a.idx]?.end ?? headingAtDistance(a.polyline, a.cumulative, a.lengthM);
+    const endHeading =
+      preservedHeadings?.[b.idx]?.start ?? headingAtDistance(b.polyline, b.cumulative, 0);
     const straight =
-      turn === 'through' &&
-      Math.abs(
-        (end.x - start.x) * Math.sin(startHeading) - (end.y - start.y) * Math.cos(startHeading),
-      ) <= 0.5 &&
-      Math.abs(signedAngle(startHeading, endHeading)) < Math.PI / 36;
+      distance(start, end) < 0.01 ||
+      (turn === 'through' &&
+        Math.abs(
+          (end.x - start.x) * Math.sin(startHeading) - (end.y - start.y) * Math.cos(startHeading),
+        ) <= 0.5 &&
+        Math.abs(signedAngle(startHeading, endHeading)) < Math.PI / 36);
     const control = distance(start, end) * 0.4;
     const polyline = straight
       ? [start, end]
@@ -170,7 +176,9 @@ export function generateMovements(
           const explicitLane = rule?.fromLane !== undefined || rule?.toLane !== undefined;
           if (
             !explicitLane &&
-            !defaultPair(turn, a.lane, b.lane, from.lanes.length, to.lanes.length, side)
+            !(continuation?.has(roadPair(from, to))
+              ? continuation.get(roadPair(from, to))!.has(`${a.lane}:${b.lane}`)
+              : defaultPair(turn, a.lane, b.lane, from.lanes.length, to.lanes.length, side))
           )
             continue;
           if (!shareClass(a, b)) continue;
@@ -181,6 +189,7 @@ export function generateMovements(
 
     // Fallback (5.2 step 3): a lane left without any movement inherits its nearest served
     // lane's turns, so a two-lane road facing a single exit gets a dual turn.
+    if (continuation && targets.some(({ to }) => continuation.has(roadPair(from, to)))) continue;
     const served = from.lanes.filter((idx) =>
       lanes[idx]!.out.some((idx) => movements[idx]!.turn !== 'uturn'),
     );
