@@ -92,6 +92,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-065](tasks/TASK-065.md) | 5 | Zone reservations by time and a clear junction box (B27, B28) | `src/sim/intersection.ts`, zone-stop and counter in `engine.ts`, `types.ts`, `metrics.ts`, `src/schema/sim.ts` and `src/sim/params.ts` (additive), `tests/sim` | 064; design in architecture 8 | T22; uncapped Munich at least as fast as capped | done (cap kept) |
 | [TASK-066](tasks/TASK-066.md) | 5 | Smooth road curves on import (B29) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), `tests/importers`, imported lane-pair lists in `tests/network` | 048, 054, 056, 061; design in architecture 13 | T23; junction nodes fixed, 2 m deviation | done |
 | [TASK-067](tasks/TASK-067.md) | 5 | Ship it: static deploy and user guide | `.github/workflows`, `vite.config.ts`, URL lines in `tiles.ts`, `area-picker.tsx`, `overpass.ts`, `README.md` | 060; design in architecture 2 | published build without test hooks | done |
+| [TASK-068](tasks/TASK-068.md) | 5 | Realign acute approaches on import; attribute the smoothing cost (B31, B30) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), an acute-Y OSM fixture, `tests/importers`, imported lane-pair lists in `tests/network`, `tests/routing/throughput-routes.json` | 061, 063, 065, 066; design in architecture 13 | T24; Munich at least 2 023 at 0.15 | todo |
+| [TASK-069](tasks/TASK-069.md) | 5 | Notes instead of warnings; deterministic vehicle pick (B22) | `src/network/types.ts` (severity), `src/network/diagnostics.ts`, `src/ui` diagnostics and badge, `tests/e2e/helpers.ts` and car-clicking scenarios, the warning table in `tests/importers/munich.test.ts` | 055, 058; design in architecture 5.5 | grid opens with Validation (0); demo B ten in a row | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -206,6 +208,12 @@ dependency of its tasks is merged to `main`.
 - Wave 13 completion (2026-11-05): TASK-065 merged on its second round with the cap kept.
   Lifting the cap is abandoned as the route to B26: it shortens acute approach lanes too far.
   Next: B31 (realign acute approaches on import), B30, Gate 5.
+- Wave 14 (lead, 2026-11-05): TASK-068 and TASK-069 in parallel, branches
+  `task/068-acute-approaches` and `task/069-notes-and-picks` cut from `main` at the commit
+  that carries the design (architecture 5.5, 13 step 12, 14). Surfaces: the OSM importer;
+  the diagnostic severity, its UI and the e2e helpers. Both may change the warning-count
+  table in `tests/importers/munich.test.ts`; the lead reconciles it at merge. Merge order:
+  069, then 068. GitHub Pages waits for the owner.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
