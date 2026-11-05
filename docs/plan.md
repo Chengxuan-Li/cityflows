@@ -1046,6 +1046,18 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   probe. In the browser an Arnulfstraße approach bends into its junction and its queue
   stops at the mouth.
 
+- 2026-11-05, TASK-070 (lead, owner bug report: OSM files other than the Munich extract
+  could not be imported). Every bundled extract imported, compiled and opened through the
+  wizard, so the failing files were others. Synthetic cases showed two hard failures on a
+  single way: a drivable way referencing a node missing from the file (`dangling_ref`), as
+  in extracts clipped by osmium or osmconvert, and a one-node way (`road_degenerate`). A way
+  now keeps its longest run of present nodes, unusable ways are dropped, and one
+  `osm_incomplete_way` warning lists both (architecture 13 step 10). Closed service loops,
+  isolated rings, duplicate nodes and openstreetmap.org exports already imported. Verified:
+  check (373 unit tests), the import e2e scenarios, and in the browser a suburb extract with
+  39 nodes removed imported with 193 roads and the warning. If a file still fails, its
+  error code identifies the next case.
+
 ## Owner decisions log
 
 - 2026-11-03: foundation, renderer, repo shape, license, OSM access, workflow and audit depth
