@@ -89,9 +89,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-062](tasks/TASK-062.md) | 5 | Routing throughput (B20) | `src/routing/**`, `tests/routing` | 055, 057 | routes per second back near the TASK-057 figures, audit zero, hashes unchanged | done |
 | [TASK-063](tasks/TASK-063.md) | 5 | Junction surface, crossings, one asphalt colour (B21, B23, B24, B25) | `src/network/junctions.ts` (outline only), `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, `roads.ts`, `src/render/style.ts`, `scene.ts`, `types.ts` (layer flag), `src/ui/layers.tsx`, `tests/network/T20*`, `tests/render`, `tests/e2e/gate4-layers.spec.ts` | 061; design in architecture 5.1, 11 | T20 additions; hashes unchanged | done |
 | [TASK-064](tasks/TASK-064.md) | 5 | Conflict zones instead of whole-movement conflicts (B26) | `src/network/conflicts.ts`, `src/network/types.ts` (additive), `src/sim/intersection.ts`, conflict reads in `engine.ts`, `merge.ts`, `patch.ts`, `tests/network/conflict-zones.test.ts`, `tests/sim` | 049, 051, 057, 061; design in architecture 5.3, 8 | T21; uncapped Munich at least as fast as capped | done (cap kept) |
-| [TASK-065](tasks/TASK-065.md) | 5 | Zone reservations by time and a clear junction box (B27, B28) | `src/sim/intersection.ts`, zone-stop and counter in `engine.ts`, `types.ts`, `metrics.ts`, `src/schema/sim.ts` and `src/sim/params.ts` (additive), `tests/sim` | 064; design in architecture 8 | T22; uncapped Munich at least as fast as capped | todo |
-| [TASK-066](tasks/TASK-066.md) | 5 | Smooth road curves on import (B29) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), `tests/importers`, imported lane-pair lists in `tests/network` | 048, 054, 056, 061; design in architecture 13 | T23; junction nodes fixed, 2 m deviation | todo |
-| [TASK-067](tasks/TASK-067.md) | 5 | Ship it: static deploy and user guide | `.github/workflows`, `vite.config.ts`, URL lines in `tiles.ts`, `area-picker.tsx`, `overpass.ts`, `README.md` | 060; design in architecture 2 | published build without test hooks | todo |
+| [TASK-065](tasks/TASK-065.md) | 5 | Zone reservations by time and a clear junction box (B27, B28) | `src/sim/intersection.ts`, zone-stop and counter in `engine.ts`, `types.ts`, `metrics.ts`, `src/schema/sim.ts` and `src/sim/params.ts` (additive), `tests/sim` | 064; design in architecture 8 | T22; uncapped Munich at least as fast as capped | active (returned) |
+| [TASK-066](tasks/TASK-066.md) | 5 | Smooth road curves on import (B29) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), `tests/importers`, imported lane-pair lists in `tests/network` | 048, 054, 056, 061; design in architecture 13 | T23; junction nodes fixed, 2 m deviation | done |
+| [TASK-067](tasks/TASK-067.md) | 5 | Ship it: static deploy and user guide | `.github/workflows`, `vite.config.ts`, URL lines in `tiles.ts`, `area-picker.tsx`, `overpass.ts`, `README.md` | 060; design in architecture 2 | published build without test hooks | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -199,6 +199,10 @@ dependency of its tasks is merged to `main`.
   setback cap if Munich at 0.15 uncapped completes at least as many trips as capped on the
   merged tree, then the owner enables GitHub Pages. Owner decision: no long performance runs
   unless they block.
+- Wave 13 outcome (2026-11-04): TASK-067 and TASK-066 merged with lead fixes. TASK-065 came
+  back uncommitted, without a report and not typechecking, and it misses its merge goal, so
+  it is returned to its agent in its worktree; the cap stays. Next: TASK-065 again, the owner
+  enables Pages.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -274,6 +278,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B27 | Owner, 2026-11-04 (with B26): a granted car still far from a conflict zone blocks a crossing car that would clear the zone before it arrives, which is why the uncapped Munich run loses 40 percent of its trips even with conflict zones (TASK-064 review). | Simulation: reserve conflict zones by time window (estimated entry and exit from current speed and distance) instead of by grant, so a crossing car may use a zone that a granted car will reach only later; then lift the setback cap (B26, B21). Needs a design note for architecture 8. |
 | B28 | Owner: restrict, without banning, entry into a junction when the car is likely to wait inside it for the cars ahead to move ("don't block the box"). Today only the exit lane's first `vehicleLengthM + minGapM` must be free. | Simulation: grant entry only when the exit lane has room for the whole car past the movement, estimated from the exit queue's tail and speed; allow it anyway after a waiting time, so a jammed junction still drains. Belongs with B27 in `src/sim/intersection.ts`. |
 | B29 | Owner: roads should be smooth curves with realistic curvature, not the piecewise linear segments exported from OSM. | Importer or compiler: fit the OSM centerline with a smoothing spline or circular arcs (bounded deviation, a minimum radius by road class), sampled for lanes; keep node positions. Lanes, movements and every hash change. Medium; touches `src/importers/osm` or `src/network/lanes.ts`. |
+| B30 | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
 
 Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
@@ -933,6 +938,44 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   cities, and a full compile takes town 352 to 152 ms and Munich 176 to 54 ms (main 58 and
   30). Verified on the merged tree: check (334 unit tests), all 47 Playwright scenarios,
   the four route audits at zero and the probe above.
+
+- 2026-11-04, TASK-067 merged with one lead change. A deploy job after the check job
+  publishes `dist` to GitHub Pages on pushes to `main` only, with Pages and OIDC permissions on
+  that job alone; the Pages build sets `CITYFLOWS_BASE_PATH` from `configure-pages`, so dev,
+  preview and Playwright keep `/`; `VITE_TILE_URL` and `VITE_OVERPASS_URL` come from repository
+  variables with today's defaults; the README opens with a "Use it" guide, the published link,
+  the synthetic-traffic notice and the attribution. The agent served a `/cityflows/` build
+  locally: the grid ran, the town opened, downtown imported, `window.cityflows` was undefined,
+  and every asset used the base path. Changed: the job's `concurrency.queue: max` became the
+  documented `cancel-in-progress: false`, since an unrecognized key would fail every CI run.
+  Owner steps: enable Pages with GitHub Actions as the source, and decide whether the public
+  site may use `tile.openstreetmap.org` (light, attributed use only) or set `VITE_TILE_URL`.
+
+- 2026-11-04, TASK-066 merged with lead fixes. The agent worked in a re-cloned folder, not a
+  worktree of this repository; its commit was fetched from there. After splitting and
+  consolidation, every interior vertex of an OSM road and every seam node joining two
+  sections of one street becomes a tangent circular fillet at the class radius, reduced to
+  half of each adjacent segment and a 2 m deviation, sampled at 1 degree; junctions, gateway
+  cuts, layer changes, controls and restriction vias stay fixed; roundabout rings and non-OSM
+  roads are untouched. T23 holds on Munich, Sindelfingen and downtown (junction nodes fixed,
+  at most 2.000 m deviation, heading steps under 1 degree, deterministic). Accepted with
+  reasons: a fold on a Sindelfingen service loop whose two ways share both end nodes (n:26),
+  one movement edge sample outside the n:501 outline, and one more Sindelfingen merge warning.
+  Lead fixes: a fillet tighter than the road's lateral extent plus 0.5 m keeps the corner
+  (none on these extracts, a guard for narrow corners), and the TASK-062 pinned routes were
+  captured again (they matched exactly with smoothing off). The agent's `npm run check`
+  failed on timeouts while three agents ran at once; on the lead's merged tree check (340
+  unit tests), all 47 Playwright scenarios, both route audits and the four unchanged
+  benchmark hashes pass. Munich at 0.15: 2 005 completed, 1 118 queued, peak 2 192 (B30). In
+  the browser the Landsberger Straße bend and the side streets are continuous curves.
+
+- 2026-11-04, TASK-065 returned. The work was left uncommitted in its worktree with no
+  report: the timed blocking test, the zone-stop backstop with `zoneStops`, the box rule and
+  the two SimParams fields are there, but the project-file schema lacks the new fields, so
+  the project open path does not typecheck and T22's own schema case fails. Measured by the
+  lead on that worktree, Munich at 0.15: 2 185 completed with the cap and 1 638 with it
+  lifted (TASK-064: 1 285), `zoneStops` 0 in both. The cap stays; the agent continues in the
+  same worktree.
 
 ## Owner decisions log
 
