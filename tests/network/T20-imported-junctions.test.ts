@@ -39,6 +39,8 @@ test.each([
             // The forced radius on service way 7973188 is smaller than the inner
             // lane offset. The compiler's offset folds across the zero-setback seam.
             { node: 'n:26', lanes: ['r:28#0', 'r:30#0'], capped: false },
+            // The same unchanged seam crossing is now visible from uncapped n:696.
+            { node: 'n:696', lanes: ['r:28#0', 'r:30#0'], capped: false },
           ]
         : [];
     expect(overlaps.filter((pair) => !sourceDefects[pair.lanes.join('>')])).toEqual(
@@ -51,9 +53,8 @@ test.each([
     expect(outlineCrossings(result.compiled)).toEqual([]);
     const surfaces = surfaceAudit(result.compiled);
     console.info(name, 'shape classes', surfaces.classes);
-    // At Sindelfingen n:501 the smoothed approaches change the cuts and the
-    // movement curve; one outer edge sample escapes the compiled outline.
-    expect(surfaces.widthsOutside).toEqual(name === 'sindelfingen-a81' ? ['r:502#0>r:504#0'] : []);
+    // Realigning n:501 also contains its former movement-width escape.
+    expect(surfaces.widthsOutside).toEqual([]);
     expect(surfaces.oversized).toEqual([]);
     expect(surfaces.tangents).toEqual([]);
     // These uncapped/near-parallel pairs used to produce distant false gore tips.

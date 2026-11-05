@@ -173,10 +173,11 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
 }, 600_000);
 
 test.each([
+  // Warnings only: lane_requires_merge (TASK-069) and realign_limited (TASK-068) are notes.
   ['downtown', 28],
   ['highway', 11],
   ['suburb', 7],
-  ['sindelfingen-a81', 42],
+  ['sindelfingen-a81', 41], // TASK-068's realignment removed one dead end.
 ] as const)('%s stays within its import warning baseline', (name, baseline) => {
   const { xml, options } = fixture(name);
   const result = importOsm(xml, options);

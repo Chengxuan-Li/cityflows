@@ -446,7 +446,8 @@ Errors (compile fails, editor rejects the commit):
 TASK-069: a third severity, `info`, for facts that need no action. `Diagnostic.severity`
 is `'error' | 'warning' | 'info'`. The validation badge counts errors and warnings only; the
 panel lists infos last, under "Notes". `lane_requires_merge` is an info: an ordinary lane
-drop, such as a two-lane street narrowing to one, is how roads are built.
+drop, such as a two-lane street narrowing to one, is how roads are built. So is
+`realign_limited` (13 step 12): it reports what the importer did, nothing to act on.
 
 Warnings (compile succeeds, shown in the validation panel):
 `disconnected_component` (lanes outside the largest weakly connected component, where
@@ -1310,7 +1311,7 @@ Lives in `src/importers/osm`, runs inside an import worker.
     more from the neighbour, bending away from it, with a lateral shift of at most 8 m from
     the original line. Both directions of a two-way street change identically. The node,
     the neighbour and every other road stay where they are. Where the bounds stop short of
-    60 degrees the arm gets as far as they allow and a `realign_limited` warning names it.
+    60 degrees the arm gets as far as they allow and a `realign_limited` info names it.
     Provenance records `realigned:<degrees>`. Roundabout rings, layer changes and controlled
     nodes whose control would change meaning are left alone.
 

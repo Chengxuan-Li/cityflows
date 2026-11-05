@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation, scheduleTrips } from '../src/demand';
 import { defaultScenario } from '../src/fixtures/scenarios';
@@ -55,6 +55,7 @@ engine.load({
   },
 });
 let peakDriving = 0;
+const queueSamples = new Map<string, number>();
 const last = new Map<number, { lane: number; position: number; since: number }>();
 for (let step = 0; step < 108000; step += 600) {
   engine.step(599);
@@ -64,6 +65,10 @@ for (let step = 0; step < 108000; step += 600) {
   peakDriving = Math.max(peakDriving, engine.metrics().trips.driving);
   for (const id of engine.snapshot().id) {
     const car = engine.inspect(id)!;
+    if (car.lane >= 0 && car.speedMps < 0.1) {
+      const node = compiled.nodes[compiled.roads[compiled.lanes[car.lane]!.road]!.to]!.id;
+      queueSamples.set(node, (queueSamples.get(node) ?? 0) + 1);
+    }
     const before = last.get(id);
     if (!before || before.lane !== car.lane || Math.abs(before.position - car.positionM) > 1)
       last.set(id, { lane: car.lane, position: car.positionM, since: engine.timeS });
@@ -78,6 +83,19 @@ for (const id of engine.snapshot().id) {
   groups.set(car.lane, group);
 }
 const active = [...engine.snapshot().id].map((id) => engine.inspect(id)!);
+const output = process.argv.find((arg) => arg.startsWith('--output='))?.slice(9);
+if (output)
+  writeFileSync(
+    output,
+    JSON.stringify({
+      city,
+      compiled,
+      trips: engine.metrics().trips,
+      peakDriving,
+      queueSamples: Object.fromEntries(queueSamples),
+      refusals: Object.fromEntries(refusals),
+    }),
+  );
 const blocked = [...groups]
   .map(([field, ids]) => {
     ids.sort((a, b) => engine.inspect(b)!.positionM - engine.inspect(a)!.positionM);

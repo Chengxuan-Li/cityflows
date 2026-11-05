@@ -16,7 +16,9 @@ test('Munich import keeps lane drops in Notes after its warnings', async ({ page
   const notes = diagnostics.getByRole('region', { name: 'Notes', exact: true });
   await expect(notes).toBeVisible();
   expect(await notes.getByRole('listitem').count()).toBeGreaterThan(0);
-  await expect(notes.getByRole('listitem').first()).toContainText('must merge upstream');
+  await expect(
+    notes.getByRole('listitem').filter({ hasText: 'must merge upstream' }),
+  ).not.toHaveCount(0);
   const issues = diagnostics.locator(':scope > ul > li');
   await expect(issues.filter({ hasText: 'must merge upstream' })).toHaveCount(0);
   const warnings = Number(
