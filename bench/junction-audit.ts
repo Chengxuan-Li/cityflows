@@ -5,7 +5,7 @@ import { town } from '../src/fixtures/town';
 import { cumulativeLengths, headingAtDistance, preparePolygon } from '../src/geo/polyline';
 import type { Vec2 } from '../src/geo/vec2';
 import { importOsm } from '../src/importers/osm';
-import { compile, type CompiledCity, type CNode, type CRoad } from '../src/network';
+import { compile, type CMovement, type CompiledCity, type CNode, type CRoad } from '../src/network';
 import { SETBACK_CAP_M } from '../src/network/junctions';
 import type { City } from '../src/schema';
 
@@ -40,13 +40,27 @@ export function compileAuditCity(name: AuditCity): CompiledCity {
 
 export interface NodeAudit {
   id: string;
-  /** m², cells covered by two or more incident road surfaces and not by the outline. */
+  /** m², cells covered by two or more incident road ends, connected to a road end's cut and
+   * not covered by the outline. */
   overlapM2: number;
+  /** m², the same at a node without an outline (through and continuation nodes, TASK-071, where
+   * the roads read as one surface by design). */
+  continuationOverlapM2: number;
+  /** m², overlap not connected to either road end's cut: road bodies crossing away from the
+   * node (a realigned approach bending back over its neighbour). */
+  awayOverlapM2: number;
+  /** m², pairs whose surfaces still overlap where the near ends stop: coincident or crossing
+   * road bodies from the source data (architecture 5.1), not junction shape. */
+  bodyOverlapM2: number;
   /** Road ids of the pair with the largest share of `overlapM2`. */
   worstPair: string;
   selfIntersections: number;
   movementsEscaping: number;
+  /** Road ends whose trimmed edge leaves the outline: a gap, or a road poking past it. */
   edgesOff: number;
+  /** Road ends whose trimmed edge lies under the outline, not on it: the junction is drawn over
+   * the road's end (capped ends reaching for their corner, strips beside a step). */
+  edgesUnder: number;
   /** Degrees, largest heading change where the curb leaves a road edge (gore tips excluded). */
   curbTurnDeg: number;
   curbKinks: number;
@@ -59,7 +73,7 @@ const CELL_M = 0.25;
 // through a cell centre.
 const OFFSET_X = 0.0123,
   OFFSET_Y = 0.0371;
-const NEAR_M = 60;
+const NEAR_M = 50;
 
 /** The road end's surface from the node out to `NEAR_M` (or half the road), as a closed ring,
  * and probe points across it 0.5 m before that far cut. */
@@ -162,15 +176,47 @@ function roadEnds(net: CompiledCity, node: CNode) {
           rightEdge = ring.slice(half).reverse();
         const left = atEnd ? leftEdge.at(-1)! : leftEdge[0]!;
         const right = atEnd ? rightEdge.at(-1)! : rightEdge[0]!;
+        const inner = (edge: Vec2[]) => (atEnd ? edge.at(-2)! : edge[1]!);
+        const mid = { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 };
+        const ahead = {
+          x: (inner(leftEdge).x + inner(rightEdge).x) / 2 - mid.x,
+          y: (inner(leftEdge).y + inner(rightEdge).y) / 2 - mid.y,
+        };
+        const length = Math.hypot(ahead.x, ahead.y);
         return {
           road,
           atEnd,
+          out: { x: ahead.x / length, y: ahead.y / length },
           corners: [left, right],
           edges: [leftEdge, rightEdge],
           near: nearSurface(road, atEnd),
         };
       }),
   );
+}
+
+/** A movement's surface samples: centre and both edges at every vertex, across the curve's
+ * tangent (the lanes' own directions at the two ends). A sample on the movement's own approach
+ * or exit road (a hairpin sweeping back behind its stop line) is road, not junction. */
+export function movementSurface(net: CompiledCity, m: CMovement): Vec2[] {
+  const from = net.lanes[m.fromLane]!,
+    to = net.lanes[m.toLane]!;
+  const width = Math.min(from.widthM, to.widthM) / 2;
+  const last = m.polyline.length - 1;
+  return m.polyline.flatMap((p, k) => {
+    let h: number;
+    if (k === 0) h = headingAtDistance(from.polyline, from.cumulative, from.lengthM);
+    else if (k === last) h = headingAtDistance(to.polyline, to.cumulative, 0);
+    else {
+      const a = m.polyline[k - 1]!,
+        b = m.polyline[k + 1]!;
+      h = Math.atan2(b.y - a.y, b.x - a.x);
+    }
+    return [-1, 0, 1].map((side) => ({
+      x: p.x - Math.sin(h) * width * side,
+      y: p.y + Math.cos(h) * width * side,
+    }));
+  });
 }
 
 export function auditNode(net: CompiledCity, node: CNode): NodeAudit {
@@ -184,6 +230,7 @@ export function auditNode(net: CompiledCity, node: CNode): NodeAudit {
     probes: end.near.probes,
   }));
   const cells = new Set<number>(),
+    awayCells = new Set<number>(),
     bodyCells = new Set<number>();
   const byPair = new Map<string, number>();
   for (let i = 0; i < ends.length; i++)
@@ -197,7 +244,9 @@ export function auditNode(net: CompiledCity, node: CNode): NodeAudit {
       if (minX >= maxX || minY >= maxY) continue;
       const body =
         pieces[i]!.probes.some(pieces[j]!.inside) || pieces[j]!.probes.some(pieces[i]!.inside);
-      let pair = 0;
+      // Overlap cells of the pair, outline or not; those connected to either road end's cut
+      // are the road ends overlapping, the rest are road bodies crossing away from the node.
+      const shared = new Map<number, Vec2>();
       for (let ix = Math.floor((minX - OFFSET_X) / CELL_M); ; ix++) {
         const x = (ix + 0.5) * CELL_M + OFFSET_X;
         if (x > maxX) break;
@@ -205,44 +254,72 @@ export function auditNode(net: CompiledCity, node: CNode): NodeAudit {
           const y = (iy + 0.5) * CELL_M + OFFSET_Y;
           if (y > maxY) break;
           const p = { x, y };
-          if (!pieces[i]!.inside(p) || !pieces[j]!.inside(p) || covered(p)) continue;
-          pair++;
-          (body ? bodyCells : cells).add(ix * 4_194_304 + iy);
+          if (pieces[i]!.inside(p) && pieces[j]!.inside(p)) shared.set(ix * 4_194_304 + iy, p);
         }
       }
-      if (pair && !body) {
+      const cuts = [ends[i]!.corners, ends[j]!.corners];
+      const queue = [...shared.keys()].filter((key) =>
+        cuts.some(([l, r]) => segmentDistance(shared.get(key)!, l!, r!) <= 0.6),
+      );
+      const reached = new Set(queue);
+      while (queue.length) {
+        const key = queue.pop()!;
+        for (const step of [1, -1, 4_194_304, -4_194_304]) {
+          const next = key + step;
+          if (shared.has(next) && !reached.has(next)) {
+            reached.add(next);
+            queue.push(next);
+          }
+        }
+      }
+      let pair = 0;
+      for (const [key, p] of shared) {
+        if (covered(p)) continue;
+        if (body) bodyCells.add(key);
+        else if (reached.has(key)) {
+          cells.add(key);
+          pair++;
+        } else awayCells.add(key);
+      }
+      if (pair) {
         const key = `${ends[i]!.road.id}/${ends[j]!.road.id}`;
         byPair.set(key, (byPair.get(key) ?? 0) + pair);
       }
     }
+  const junction = [...cells].filter((cell) => !bodyCells.has(cell)).length;
   const worstPair = [...byPair].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0] ?? '';
   const audit: NodeAudit = {
     id: node.id,
-    overlapM2: [...cells].filter((cell) => !bodyCells.has(cell)).length * CELL_M * CELL_M,
+    overlapM2: outline.length ? junction * CELL_M * CELL_M : 0,
+    continuationOverlapM2: outline.length ? 0 : junction * CELL_M * CELL_M,
+    awayOverlapM2:
+      [...awayCells].filter((c) => !bodyCells.has(c) && !cells.has(c)).length * CELL_M * CELL_M,
     bodyOverlapM2: bodyCells.size * CELL_M * CELL_M,
     worstPair,
     selfIntersections: selfIntersections(outline),
     movementsEscaping: 0,
     edgesOff: 0,
+    edgesUnder: 0,
     curbTurnDeg: 0,
     curbKinks: 0,
     sharpCorners: 0,
     cappedEnds: node.setbacks.filter((s) => s >= SETBACK_CAP_M - 1e-6).length,
   };
   if (!outline.length) return audit;
-  const inside = preparePolygon(outline, 0.1);
+  const covers = preparePolygon(outline, 0.1);
+  const surfaces = new Map(
+    ends.map((end) => [
+      end.road.idx,
+      preparePolygon([...end.road.surface, end.road.surface[0]!], 0.1),
+    ]),
+  );
   for (const index of node.movements) {
     const m = net.movements[index]!;
-    const width = Math.min(net.lanes[m.fromLane]!.widthM, net.lanes[m.toLane]!.widthM) / 2;
-    const escapes = m.polyline.some((p, k) => {
-      const h = headingAtDistance(m.polyline, m.cumulative, m.cumulative[k]!);
-      return [-1, 0, 1].some(
-        (side) =>
-          !inside({ x: p.x - Math.sin(h) * width * side, y: p.y + Math.cos(h) * width * side }),
-      );
-    });
-    if (escapes) audit.movementsEscaping++;
+    const own = [m.fromLane, m.toLane].map((lane) => surfaces.get(net.lanes[lane]!.road)!);
+    if (movementSurface(net, m).some((p) => !covers(p) && !own.some((on) => on(p))))
+      audit.movementsEscaping++;
   }
+  const under = preparePolygon(outline, 0.1);
   const ring = outline.filter(
     (p, i) => i === 0 || Math.hypot(p.x - outline[i - 1]!.x, p.y - outline[i - 1]!.y) > 1e-6,
   );
@@ -259,7 +336,9 @@ export function auditNode(net: CompiledCity, node: CNode): NodeAudit {
   for (const end of ends) {
     const [left, right] = end.corners;
     const middle = { x: (left!.x + right!.x) / 2, y: (left!.y + right!.y) / 2 };
-    if ([left!, right!, middle].some((p) => lineDistance(p, outline) > 0.1)) audit.edgesOff++;
+    const cut = [left!, right!, middle];
+    if (cut.some((p) => !under(p))) audit.edgesOff++;
+    else if (cut.some((p) => lineDistance(p, outline) > 0.1)) audit.edgesUnder++;
     for (const side of [0, 1]) {
       const corner = end.corners[side]!;
       let k = -1,
@@ -287,6 +366,16 @@ export function auditNode(net: CompiledCity, node: CNode): NodeAudit {
         at = (at + step + n) % n;
       const departure = ring[at]!,
         next = ring[(at + step + n) % n]!;
+      // A step between two ends of one direction is no curb.
+      let reached: (typeof ends)[number] | undefined;
+      for (let i = 1, j = (at + step + n) % n; i < n && !reached; i++, j = (j + step + n) % n)
+        reached = ends.find(
+          (other) =>
+            other !== end &&
+            other.corners.some((c) => Math.hypot(c.x - ring[j]!.x, c.y - ring[j]!.y) <= 0.1),
+        );
+      if (reached && reached.out.x * end.out.x + reached.out.y * end.out.y > Math.cos(Math.PI / 9))
+        continue;
       if (onSurfaces(departure) >= 2 && at !== k) continue; // gore tip
       // Traversal along the edge runs toward the node, then into the curb.
       let direction = { x: -out.x, y: -out.y };
@@ -342,10 +431,13 @@ export function summarize(audits: NodeAudit[]) {
     nodes: audits.length,
     overlapM2: Math.round(sum('overlapM2') * 100) / 100,
     overlapNodes: audits.filter((a) => a.overlapM2 > 0).length,
+    continuationOverlapM2: Math.round(sum('continuationOverlapM2') * 100) / 100,
+    awayOverlapM2: Math.round(sum('awayOverlapM2') * 100) / 100,
     bodyOverlapM2: Math.round(sum('bodyOverlapM2') * 100) / 100,
     selfIntersections: sum('selfIntersections'),
     movementsEscaping: sum('movementsEscaping'),
     edgesOff: sum('edgesOff'),
+    edgesUnder: sum('edgesUnder'),
     curbTurnDeg: Math.round(Math.max(0, ...audits.map((a) => a.curbTurnDeg)) * 10) / 10,
     curbKinks: sum('curbKinks'),
     sharpCorners: sum('sharpCorners'),
@@ -373,6 +465,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/junction-audit.ts')) {
       worstNodes(report[name]!.nodes).map((a) => ({
         ...a,
         overlapM2: Math.round(a.overlapM2 * 100) / 100,
+        continuationOverlapM2: Math.round(a.continuationOverlapM2 * 100) / 100,
+        awayOverlapM2: Math.round(a.awayOverlapM2 * 100) / 100,
         bodyOverlapM2: Math.round(a.bodyOverlapM2 * 100) / 100,
         curbTurnDeg: Math.round(a.curbTurnDeg * 10) / 10,
       })),

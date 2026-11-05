@@ -1,6 +1,11 @@
-import { segmentsIntersect, headingAtDistance } from '../../src/geo/polyline';
+import { segmentsIntersect } from '../../src/geo/polyline';
 import type { CompiledCity } from '../../src/network';
-import { SETBACK_CAP_M, junctionOutline, containMovements } from '../../src/network/junctions';
+import {
+  SETBACK_CAP_M,
+  containMovements,
+  escapingSamples,
+  junctionOutline,
+} from '../../src/network/junctions';
 import type { Vec2 } from '../../src/geo/vec2';
 
 // Canonical road-body defects, outside TASK-061's junction geometry surface.
@@ -19,11 +24,18 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
       'Opposing Arnulfstraße source carriageways cross along the body; n:446 is no longer capped after realignment.',
     'r:565#0>r:589#0':
       'The other coincident service-way lane pair is exposed by the shorter neighboring setback; both source centerlines are unchanged.',
-    'r:566#0>r:588#0':
-      'Distinct source service ways have identical direction, centerline and offset.',
     'r:1277#0>r:1362#0': 'Separate zero-offset Landsberger carriageways cross along the road body.',
     'r:368#0>r:480#1':
       'Marsstraße source carriageways have reversed identical centerlines and zero offsets.',
+    // TASK-074: r:566#0>r:588#0 no longer crosses: of two coincident ends the shadowed one keeps
+    // its own floor setback. The pairs below are no longer behind a capped setback at their
+    // node, so they are listed here.
+    'r:368#1>r:480#0':
+      'Marsstraße source carriageways have reversed identical centerlines and zero offsets.',
+    'r:1372#0>r:845#0':
+      'Separate Marsstraße carriageways cross 30 m from n:823 after the realigned one bends back.',
+    'r:325#0>r:941#0':
+      'Separate Landsberger Straße carriageways cross 117 to 126 m from n:322, near their far ends.',
   },
   'sindelfingen-a81': {
     'r:650#0>r:80#0':
@@ -59,11 +71,22 @@ export function insideOutline(point: Vec2, ring: Vec2[], tolerance = 0.1) {
   return inside;
 }
 
+/** Movements with a centre-line point outside their node's outline. TASK-074: a point on the
+ * movement's own approach or exit road (a hairpin behind its stop line) is on the road. */
 export function movementsOutside(net: CompiledCity) {
   return net.movements
     .filter((m) => {
       const outline = net.nodes[m.node]!.outline;
-      return outline.length > 0 && m.polyline.some((p) => !insideOutline(p, outline));
+      const own = [m.fromLane, m.toLane].map((lane) => {
+        const surface = net.roads[net.lanes[lane]!.road]!.surface;
+        return [...surface, surface[0]!];
+      });
+      return (
+        outline.length > 0 &&
+        m.polyline.some(
+          (p) => !insideOutline(p, outline) && !own.some((ring) => insideOutline(p, ring)),
+        )
+      );
     })
     .map((m) => m.id);
 }
@@ -164,29 +187,19 @@ export function surfaceAudit(net: CompiledCity) {
         const dx = point.x - other.x;
         const dy = point.y - other.y;
         const cosine = (dx * direction.x + dy * direction.y) / Math.hypot(dx, dy);
-        if (cosine < Math.cos((2 * Math.PI) / 180) - 1e-6)
+        // TASK-074: 5 degrees, as T27 (a curb meets a slanted or curved road end at its tangent
+        // over the end's first half meter, not its first chord).
+        if (cosine < Math.cos((5 * Math.PI) / 180) - 1e-6)
           tangents.push(`${node.id}:${join.radius}`);
       }
     }
     if (!node.outline.length) continue;
-    for (const index of node.movements) {
-      const m = net.movements[index]!;
-      const width = Math.min(net.lanes[m.fromLane]!.widthM, net.lanes[m.toLane]!.widthM) / 2;
-      const escaped = m.polyline.some((p, i) => {
-        const heading = headingAtDistance(m.polyline, m.cumulative, m.cumulative[i]!);
-        return [-1, 1].some(
-          (side) =>
-            !insideOutline(
-              {
-                x: p.x - Math.sin(heading) * width * side,
-                y: p.y + Math.cos(heading) * width * side,
-              },
-              node.outline,
-            ),
-        );
-      });
-      if (escaped) widthsOutside.push(m.id);
-    }
+    // TASK-074: widths across the curve's own tangent (the lanes' directions at both ends, not
+    // the first chord's), and a hairpin sweeping back over its own road counts as on the road.
+    const roads = net.roads.filter((r) => r.from === node.idx || r.to === node.idx);
+    escapingSamples(node, net.movements, net.lanes, roads, node.outline).forEach((samples, i) => {
+      if (samples.length) widthsOutside.push(net.movements[node.movements[i]!]!.id);
+    });
   }
   return { widthsOutside, oversized, tangents, classes };
 }

@@ -1,5 +1,7 @@
 import type { Graphics } from 'pixi.js';
 import {
+  clipOutside,
+  deepInside,
   headingAtDistance,
   offsetPolyline,
   pointAtDistance,
@@ -31,21 +33,36 @@ export function drawRoad(
     .stroke({ color, width: vergeM * 2, join: 'round' });
   fadeAtZoom(markings, 0.7, 2.2);
   const medianOnRight = city.drivingSide === 'left';
+  const clips = markingClips(city, road);
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
     if (
       lane.right >= 0 &&
       !road.lanes.some((i) => city.lanes[i]!.taperStartM || city.lanes[i]!.taperEndM)
     )
-      drawDashes(markings, offsetPolyline(lane.polyline, lane.widthM / 2));
+      for (const piece of clipOutside(offsetPolyline(lane.polyline, lane.widthM / 2), clips, 0.05))
+        drawDashes(markings, piece);
     if (road.streetGroupId !== null && (medianOnRight ? lane.right : lane.left) < 0) {
       const offset = ((medianOnRight ? 1 : -1) * lane.widthM) / 2;
-      markings
-        .poly(offsetPolyline(lane.polyline, offset), false)
-        .stroke({ color: style.marking, width: style.dividerWidthM, alpha: 0.85 });
+      for (const piece of clipOutside(offsetPolyline(lane.polyline, offset), clips, 0.05))
+        markings
+          .poly(piece, false)
+          .stroke({ color: style.marking, width: style.dividerWidthM, alpha: 0.85 });
     }
-    drawApproachMarkings(markings, city, lane, controls);
+    drawApproachMarkings(markings, city, lane, controls, clips);
   }
+}
+
+/** TASK-074: a road's markings stop where its surface enters another surface of its nodes, a
+ * neighbouring road's or a junction outline, so no divider is drawn on a neighbouring road. */
+export function markingClips(city: CompiledCity, road: CRoad): Vec2[][] {
+  const nodes = [road.from, road.to];
+  return [
+    ...nodes.map((n) => city.nodes[n]!.outline).filter((outline) => outline.length),
+    ...city.roads
+      .filter((other) => other !== road && (nodes.includes(other.from) || nodes.includes(other.to)))
+      .map((other) => [...other.surface, other.surface[0]!]),
+  ];
 }
 
 export function approachMarkings(city: CompiledCity, lane: CLane) {
@@ -84,8 +101,11 @@ function drawApproachMarkings(
   city: CompiledCity,
   lane: CLane,
   controls: Graphics,
+  clips: Vec2[][],
 ): void {
   const marks = approachMarkings(city, lane);
+  const hidden = (points: Vec2[]) =>
+    points.some((p) => clips.some((ring) => deepInside(p, ring, 0.05)));
   const local = (distance: number, forward: number, side: number) => {
     const point = pointAtDistance(lane.polyline, lane.cumulative, distance);
     const heading = headingAtDistance(lane.polyline, lane.cumulative, distance);
@@ -95,6 +115,7 @@ function drawApproachMarkings(
     };
   };
   const half = lane.widthM * 0.44;
+  // Stop and give-way lines stay at the stop position, under an outline too: cars stop there.
   if (marks.stop) {
     controls
       .poly([local(lane.stopM, 0, -half), local(lane.stopM, 0, half)], false)
@@ -138,29 +159,28 @@ function drawApproachMarkings(
               [0.5, 0],
               [0.5, side * 1.2],
             ];
-    graphics
-      .poly(
-        points.map(([f, s]) => arrowPoint(f, s)),
-        false,
-      )
-      .stroke({ color: style.marking, width: 0.22 * scale, join: 'round' });
     const tip = points.at(-1)!;
     const previous = points.at(-2)!;
     const heading = Math.atan2(tip[1] - previous[1], tip[0] - previous[0]);
     const back = 0.65;
+    const shaft = points.map(([f, s]) => arrowPoint(f, s));
+    const head = [
+      arrowPoint(...tip),
+      arrowPoint(
+        tip[0] - Math.cos(heading) * back - Math.sin(heading) * 0.4,
+        tip[1] - Math.sin(heading) * back + Math.cos(heading) * 0.4,
+      ),
+      arrowPoint(
+        tip[0] - Math.cos(heading) * back + Math.sin(heading) * 0.4,
+        tip[1] - Math.sin(heading) * back - Math.cos(heading) * 0.4,
+      ),
+    ];
+    // An arrow on another road's surface or under an outline is left out whole.
+    if (hidden([...shaft, ...head])) continue;
     graphics
-      .poly([
-        arrowPoint(...tip),
-        arrowPoint(
-          tip[0] - Math.cos(heading) * back - Math.sin(heading) * 0.4,
-          tip[1] - Math.sin(heading) * back + Math.cos(heading) * 0.4,
-        ),
-        arrowPoint(
-          tip[0] - Math.cos(heading) * back + Math.sin(heading) * 0.4,
-          tip[1] - Math.sin(heading) * back - Math.cos(heading) * 0.4,
-        ),
-      ])
-      .fill(style.marking);
+      .poly(shaft, false)
+      .stroke({ color: style.marking, width: 0.22 * scale, join: 'round' });
+    graphics.poly(head).fill(style.marking);
   }
 }
 

@@ -1,5 +1,6 @@
 import type { Graphics } from 'pixi.js';
-import { headingAtDistance } from '../../geo/polyline';
+import { distance as distanceOf, headingAtDistance } from '../../geo/polyline';
+import type { Vec2 } from '../../geo/vec2';
 import type { CMovement, CNode, CompiledCity, CRoad } from '../../network';
 import { roadStyle, style } from '../style';
 
@@ -36,10 +37,62 @@ export function drawRoadJoins(
 ): void {
   const { color, vergeM } = roadStyle(road, roadClasses);
   for (const atEnd of [false, true]) {
-    if (!city.nodes[atEnd ? road.to : road.from]!.outline.length) continue;
+    const node = city.nodes[atEnd ? road.to : road.from]!;
+    if (!node.outline.length) continue;
     const edges = roadEndEdges(city, road, atEnd);
     graphics.poly(edges, false).stroke({ color, width: vergeM * 2, cap: 'round' });
+    // The road's verge runs on along the curb to its middle, so the curb has no step where the
+    // junction surface takes over from the road (TASK-074).
+    for (const curb of curbHalves(city, node, edges))
+      graphics.poly(curb, false).stroke({ color, width: vergeM * 2, cap: 'round', join: 'round' });
   }
+}
+
+/** From each of a road end's corners on the outline, the first half of the curb toward the
+ * next road end's corner. */
+export function curbHalves(city: CompiledCity, node: CNode, corners: Vec2[]): Vec2[][] {
+  const ring = node.outline.slice(0, -1);
+  const n = ring.length;
+  const others = city.roads
+    .filter((r) => r.from === node.idx || r.to === node.idx)
+    .flatMap((r) => [
+      ...(r.from === node.idx ? roadEndEdges(city, r, false) : []),
+      ...(r.to === node.idx ? roadEndEdges(city, r, true) : []),
+    ]);
+  const near = (p: Vec2, q: Vec2) => Math.hypot(p.x - q.x, p.y - q.y) <= 0.15;
+  return corners.flatMap((corner, side) => {
+    const k = ring.findIndex((p) => near(p, corner));
+    if (k < 0) return [];
+    const other = corners[1 - side]!;
+    const along = (step: number) => {
+      const p = ring[(k + step + n) % n]!;
+      return (p.x - corner.x) * (other.x - corner.x) + (p.y - corner.y) * (other.y - corner.y);
+    };
+    const step = along(1) < along(-1) ? 1 : -1;
+    const curb = [corner];
+    for (let i = 1; i < n; i++) {
+      const p = ring[(k + step * i + n * n) % n]!;
+      curb.push(p);
+      if (others.some((q) => near(p, q))) break;
+    }
+    let total = 0;
+    for (let i = 1; i < curb.length; i++) total += distanceOf(curb[i - 1]!, curb[i]!);
+    const half: Vec2[] = [curb[0]!];
+    let run = 0;
+    for (let i = 1; i < curb.length; i++) {
+      const segment = distanceOf(curb[i - 1]!, curb[i]!);
+      if (run + segment >= total / 2) {
+        const t = (total / 2 - run) / segment;
+        const a = curb[i - 1]!,
+          b = curb[i]!;
+        half.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+        break;
+      }
+      half.push(curb[i]!);
+      run += segment;
+    }
+    return half.length > 1 ? [half] : [];
+  });
 }
 
 export function drawMovementSurface(
