@@ -11,6 +11,7 @@ import { parseOsm } from './parse';
 import { addGateways, addOsmPlaces } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
+import { smoothRoads } from './smooth';
 import {
   consolidateJunctions,
   joinDividedFeeders,
@@ -224,11 +225,20 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const beforeConsolidation = compile(city);
   if (!beforeConsolidation.ok)
     return { ok: false, diagnostics: [...diagnostics, ...beforeConsolidation.diagnostics] };
+  const originalControls = Object.values(city.nodes)
+    .filter((node) => node.control !== 'uncontrolled')
+    .map((node) => node.id);
   const signalIds = consolidateJunctions(
     city,
     roads,
     beforeConsolidation.compiled,
     signals.map((n) => n.id),
+  );
+  smoothRoads(
+    city,
+    roads,
+    new Set([...protectedNodes, ...originalControls, ...signalIds]),
+    new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
   );
   incidents.clear();
   for (const node of Object.values(city.nodes))

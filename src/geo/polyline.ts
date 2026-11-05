@@ -142,6 +142,47 @@ export function sampleArc(center: Vec2, radius: number, start: number, sweep: nu
   });
 }
 
+/** A tangent circular fillet for a noncollinear corner, with a sample at its midpoint. */
+export function circularFillet(a: Vec2, b: Vec2, c: Vec2, targetRadius: number) {
+  const before = distance(a, b);
+  const after = distance(b, c);
+  if (before === 0 || after === 0) return;
+  const ux = (b.x - a.x) / before;
+  const uy = (b.y - a.y) / before;
+  const vx = (c.x - b.x) / after;
+  const vy = (c.y - b.y) / after;
+  const cross = ux * vy - uy * vx;
+  // Straight segments need no fillet, and a reversal has no unique tangent circle.
+  if (Math.abs(cross) < 1e-9) return;
+  const sweep = Math.atan2(cross, ux * vx + uy * vy);
+  const half = Math.abs(sweep) / 2;
+  const tangentPerRadius = Math.tan(half);
+  // The corner's nearest point on the arc is on the bisector: R * (sec(half) - 1).
+  const deviationPerRadius = (2 * Math.sin(half / 2) ** 2) / Math.cos(half);
+  const radius = Math.min(
+    targetRadius,
+    Math.min(before, after) / (2 * tangentPerRadius),
+    2 / deviationPerRadius,
+  );
+  const tangent = radius * tangentPerRadius;
+  const entry = { x: b.x - tangent * ux, y: b.y - tangent * uy };
+  const exit = { x: b.x + tangent * vx, y: b.y + tangent * vy };
+  const sign = Math.sign(sweep);
+  // One-degree steps also keep the sampled headings continuous at the joins.
+  const steps = 2 * Math.ceil(Math.max((radius * half) / 2, (half * 180) / Math.PI));
+  const points = Array.from({ length: steps + 1 }, (_, i) => {
+    const angle = (sweep * i) / steps;
+    const along = radius * sign * Math.sin(angle);
+    const across = radius * sign * 2 * Math.sin(angle / 2) ** 2;
+    return {
+      x: entry.x + along * ux - across * uy,
+      y: entry.y + along * uy + across * ux,
+    };
+  });
+  points[steps] = exit;
+  return { points, radius };
+}
+
 /** `pointInPolygon` for many points against one ring: edges are bucketed by y, so a query
  * tests only the edges that can span or touch its y. Same expressions, same answers. */
 export function preparePolygon(ring: readonly Vec2[], tolerance = 1e-6) {

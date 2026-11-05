@@ -21,7 +21,7 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     'r:1029#0>r:1178#0': 'Separate source streets cross 114/124 m from their shared endpoints.',
     'r:499#0>r:876#0': 'Curved zero-offset source roads cross 25 m beyond their common junction.',
     'r:505#0>r:665#0':
-      'Two short source ways leave n:501 on top of each other for their whole length.',
+      'Two short source ways overlap at n:501. The crossing stays 21 m away after smoothing, but the setbacks now reach the cap.',
     'r:746#0>r:803#1': 'Opposing source carriageways have coincident centerlines and zero offsets.',
     'r:746#1>r:803#0': 'Opposing source carriageways have coincident centerlines and zero offsets.',
     'r:574#0>r:971#0': 'Separate zero-offset source carriageways cross along their road bodies.',
