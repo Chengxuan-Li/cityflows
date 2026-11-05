@@ -92,8 +92,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-065](tasks/TASK-065.md) | 5 | Zone reservations by time and a clear junction box (B27, B28) | `src/sim/intersection.ts`, zone-stop and counter in `engine.ts`, `types.ts`, `metrics.ts`, `src/schema/sim.ts` and `src/sim/params.ts` (additive), `tests/sim` | 064; design in architecture 8 | T22; uncapped Munich at least as fast as capped | done (cap kept) |
 | [TASK-066](tasks/TASK-066.md) | 5 | Smooth road curves on import (B29) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), `tests/importers`, imported lane-pair lists in `tests/network` | 048, 054, 056, 061; design in architecture 13 | T23; junction nodes fixed, 2 m deviation | done |
 | [TASK-067](tasks/TASK-067.md) | 5 | Ship it: static deploy and user guide | `.github/workflows`, `vite.config.ts`, URL lines in `tiles.ts`, `area-picker.tsx`, `overpass.ts`, `README.md` | 060; design in architecture 2 | published build without test hooks | done |
-| [TASK-068](tasks/TASK-068.md) | 5 | Realign acute approaches on import; attribute the smoothing cost (B31, B30) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), an acute-Y OSM fixture, `tests/importers`, imported lane-pair lists in `tests/network`, `tests/routing/throughput-routes.json` | 061, 063, 065, 066; design in architecture 13 | T24; Munich at least 2 023 at 0.15 | todo |
-| [TASK-069](tasks/TASK-069.md) | 5 | Notes instead of warnings; deterministic vehicle pick (B22) | `src/network/types.ts` (severity), `src/network/diagnostics.ts`, `src/ui` diagnostics and badge, `tests/e2e/helpers.ts` and car-clicking scenarios, the warning table in `tests/importers/munich.test.ts` | 055, 058; design in architecture 5.5 | grid opens with Validation (0); demo B ten in a row | todo |
+| [TASK-068](tasks/TASK-068.md) | 5 | Realign acute approaches on import; attribute the smoothing cost (B31, B30) | `src/importers/osm/**`, `src/geo/polyline.ts` (additive), an acute-Y OSM fixture, `tests/importers`, imported lane-pair lists in `tests/network`, `tests/routing/throughput-routes.json` | 061, 063, 065, 066; design in architecture 13 | T24; Munich at least 2 023 at 0.15 | done |
+| [TASK-069](tasks/TASK-069.md) | 5 | Notes instead of warnings; deterministic vehicle pick (B22) | `src/network/types.ts` (severity), `src/network/diagnostics.ts`, `src/ui` diagnostics and badge, `tests/e2e/helpers.ts` and car-clicking scenarios, the warning table in `tests/importers/munich.test.ts` | 055, 058; design in architecture 5.5 | grid opens with Validation (0); demo B ten in a row | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -214,6 +214,10 @@ dependency of its tasks is merged to `main`.
   the diagnostic severity, its UI and the e2e helpers. Both may change the warning-count
   table in `tests/importers/munich.test.ts`; the lead reconciles it at merge. Merge order:
   069, then 068. GitHub Pages waits for the owner.
+- Wave 14 outcome (2026-11-05): both merged, 069 as delivered and 068 with a lead merge
+  commit (the warning table, `realign_limited` as a note). B30 did not reproduce on current
+  code. Munich at 0.15 completes 2 175 trips by 10:00, the best since the TASK-063 era
+  (wave 12: 2 231 before smoothing). Next: the owner's test round and the Gate 5 decision.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -289,8 +293,8 @@ triage by the lead; the agents' investigation may move items between groups.
 | B27 | Owner, 2026-11-04 (with B26): a granted car still far from a conflict zone blocks a crossing car that would clear the zone before it arrives, which is why the uncapped Munich run loses 40 percent of its trips even with conflict zones (TASK-064 review). | Simulation: reserve conflict zones by time window (estimated entry and exit from current speed and distance) instead of by grant, so a crossing car may use a zone that a granted car will reach only later; then lift the setback cap (B26, B21). Needs a design note for architecture 8. |
 | B28 | Owner: restrict, without banning, entry into a junction when the car is likely to wait inside it for the cars ahead to move ("don't block the box"). Today only the exit lane's first `vehicleLengthM + minGapM` must be free. | Simulation: grant entry only when the exit lane has room for the whole car past the movement, estimated from the exit queue's tail and speed; allow it anyway after a waiting time, so a jammed junction still drains. Belongs with B27 in `src/sim/intersection.ts`. |
 | B29 | Owner: roads should be smooth curves with realistic curvature, not the piecewise linear segments exported from OSM. | Importer or compiler: fit the OSM centerline with a smoothing spline or circular arcs (bounded deviation, a minimum radius by road class), sampled for lanes; keep node positions. Lanes, movements and every hash change. Medium; touches `src/importers/osm` or `src/network/lanes.ts`. |
-| B31 | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
-| B30 | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
+| B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
+| B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
 
 Grouping for the next wave, to confirm after TASK-045: a renderer wave (B1, B6, B7, B9 markings, B12 and B4 together), an import wave (B2, B3, B5 with a real extract fixture), a control wave (B10, B11, B9 roundabouts) and B8 on its own with a contract amendment first.
@@ -1010,6 +1014,37 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   timeout raised to 600 s. Verified on the merged tree: check (361 unit tests), 44 Playwright
   scenarios (T16 skipped by owner decision), the benchmark and the probe above. Architecture
   8 now describes the forecast as merged and 5.1 the cap as permanent.
+
+- 2026-11-05, TASK-069 merged as delivered. `Diagnostic.severity` adds `info`;
+  `lane_requires_merge` is one; the Validation badge counts errors and warnings, and the
+  diagnostics panel and the import wizard list notes last under "Notes". `clickVehicle` in
+  the e2e helpers pauses, reads the snapshot the renderer last drew (with its lane-change
+  offset) through test-only hooks, clicks through the canvas and waits for that vehicle's
+  inspector, retrying once; seven scenarios use it, demo B passed ten runs in a row, and a
+  Restart/Step race in the roundabout scenario surfaced and was fixed by waiting for Step.
+  In the browser the grid opens with "Validation (0)", "No network issues found" and 15
+  notes; Munich's wizard shows 20 warnings (35 before) with the notes after them.
+
+- 2026-11-05, TASK-068 merged with a lead merge commit. B30 first: on current main, Munich
+  at 0.15 completes 2 023 trips with smoothing and 1 921 with only the smoothing pass
+  skipped, so smoothing helps; the earlier 2 231 to 2 005 drop compared different code, and
+  the per-junction queue changes were traced to spillback, not to setbacks or movement
+  lengths (closed). Then step 12: acute adjacent arms under 45 degrees, merges and diverges
+  left alone, the minor arm bent by a two-handle cubic over up to 25 m and half the road to
+  reach 60 degrees where an 8 m shift and lane-block curvature allow, both directions
+  identical, node and neighbour fixed; 52 Munich roads realigned. T24 (seven cases) covers
+  the angle, shift, fixed node, reverse identity, merges in both cities, determinism and
+  short bends. Munich: road ends at the setback cap 132 to 101; approach lanes under 10 m
+  15 to 15, a shortfall against the contract the owner accepted together with bends under
+  15 m on short roads. Munich at 0.15: 2 175 completed, 1 008 queued, peak 2 131, zero
+  failed; route audits zero. The acute-Y fixture is hand-written, not OSM data. Lead merge
+  commit: `realign_limited` is a note rather than a warning (architecture 5.5 and 13), the
+  import warning table counts warnings only and was measured on the merged tree (downtown
+  28, highway 11, suburb 7, Sindelfingen 41), and the Munich import scenario checks that the
+  notes include a lane drop. Verified on the merged tree: check (371 unit tests), 46
+  Playwright scenarios (T16 skipped), unchanged benchmark hashes, both route audits and the
+  probe. In the browser an Arnulfstraße approach bends into its junction and its queue
+  stops at the mouth.
 
 ## Owner decisions log
 
