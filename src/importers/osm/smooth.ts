@@ -1,6 +1,6 @@
 import { circularFillet, distance } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import type { City, RoadClass } from '../../schema';
+import type { City, Road, RoadClass } from '../../schema';
 import type { OsmRoad } from './roads';
 
 const radii: Record<RoadClass, number> = {
@@ -13,6 +13,10 @@ const radii: Record<RoadClass, number> = {
   residential: 25,
   service: 12,
 };
+
+/** Lanes reach this far from the centerline; a tighter arc folds the inner ones. */
+const extent = (road: Road) =>
+  Math.abs(road.lateralOffsetM) + road.lanes.reduce((w, lane) => w + lane.widthM, 0) / 2 + 0.5;
 
 interface End {
   source: OsmRoad;
@@ -77,7 +81,13 @@ export function smoothRoads(
       continue;
     // At a class change, use the more demanding target for the shared arc.
     const radius = Math.max(radii[left.roadClass], radii[right.roadClass]);
-    const arc = circularFillet(a[0]!.neighbor, node.pos, b[0]!.neighbor, radius);
+    const arc = circularFillet(
+      a[0]!.neighbor,
+      node.pos,
+      b[0]!.neighbor,
+      radius,
+      Math.max(...[...a, ...b].map(({ source }) => extent(source.road))),
+    );
     if (!arc) continue;
     const middle = (arc.points.length - 1) / 2;
     node.pos = arc.points[middle]!;
@@ -104,7 +114,13 @@ export function smoothRoads(
       const [a, b, c] = [original[i - 1]!, original[i]!, original[i + 1]!];
       // Sample a mirrored two-way centerline identically in both directions.
       const reverse = a.x > c.x || (a.x === c.x && a.y > c.y);
-      const arc = circularFillet(reverse ? c : a, b, reverse ? a : c, radii[road.roadClass]);
+      const arc = circularFillet(
+        reverse ? c : a,
+        b,
+        reverse ? a : c,
+        radii[road.roadClass],
+        extent(road),
+      );
       if (arc) {
         count++;
         points.push(...(reverse ? arc.points.reverse() : arc.points));

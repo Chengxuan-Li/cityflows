@@ -143,7 +143,7 @@ export function sampleArc(center: Vec2, radius: number, start: number, sweep: nu
 }
 
 /** A tangent circular fillet for a noncollinear corner, with a sample at its midpoint. */
-export function circularFillet(a: Vec2, b: Vec2, c: Vec2, targetRadius: number) {
+export function circularFillet(a: Vec2, b: Vec2, c: Vec2, targetRadius: number, minimumRadius = 0) {
   const before = distance(a, b);
   const after = distance(b, c);
   if (before === 0 || after === 0) return;
@@ -164,6 +164,8 @@ export function circularFillet(a: Vec2, b: Vec2, c: Vec2, targetRadius: number) 
     Math.min(before, after) / (2 * tangentPerRadius),
     2 / deviationPerRadius,
   );
+  // A fillet tighter than the road is wide would fold its inner lanes; keep the corner.
+  if (radius < minimumRadius) return;
   const tangent = radius * tangentPerRadius;
   const entry = { x: b.x - tangent * ux, y: b.y - tangent * uy };
   const exit = { x: b.x + tangent * vx, y: b.y + tangent * vy };
