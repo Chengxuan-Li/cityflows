@@ -5,7 +5,7 @@ import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
 import { continuationLayout } from './continuity';
 import { layoutRoad } from './lanes';
-import { junctionSetbacks, junctionOutline, containMovements } from './junctions';
+import { roadEndSetbacks, junctionOutline, containMovements } from './junctions';
 import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
@@ -123,7 +123,7 @@ export function compile(city: City): CompileResult {
   );
   const trims = roads.map(() => ({ start: 0, end: 0 }));
   for (const node of nodes) {
-    node.setbacks = junctionSetbacks(
+    node.setbacks = roadEndSetbacks(
       node,
       incident[node.idx]!.map((r) => sourceRoads[r.idx]!),
     );

@@ -13,7 +13,15 @@ license and the file it landed in. Add an entry in the same change that copies
 the code.
 Study-only references (no code copied) are listed in docs/references/upstream-audit.md.
 
-(none yet)
+Eclipse SUMO netconvert node-shape computation
+Source: https://github.com/eclipse-sumo/sumo/blob/70b06ec2cce815c413ddc5c060d639183943b015/src/netbuild/NBNodeShapeComputer.cpp
+(latest commit to the file as read on 2026-11-05)
+License: EPL-2.0 OR GPL-2.0-or-later (used under GPL-2.0-or-later).
+Adapted, not copied, in src/network/junctions.ts (roadEndSetbacks, directions, meet,
+junctionOutline): curb lines extrapolated toward the node, angular neighbours whose curbs do
+not meet joined into one direction, each road end cut where its curb meets the neighbour's
+facing curb plus a radius term clamped at right-angle turns, and smooth corners built on the
+intersection of the extended curbs.
 
 Map data
 --------

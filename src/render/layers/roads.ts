@@ -1,5 +1,7 @@
 import type { Graphics } from 'pixi.js';
 import {
+  clipOutside,
+  cumulativeLengths,
   headingAtDistance,
   offsetPolyline,
   pointAtDistance,
@@ -7,6 +9,7 @@ import {
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CLane, CMovement, CompiledCity, CRoad } from '../../network';
+import { SETBACK_CAP_M } from '../../network/junctions';
 import { roadStyle, style } from '../style';
 
 function fadeAtZoom(graphics: Graphics, from: number, to: number) {
@@ -31,21 +34,87 @@ export function drawRoad(
     .stroke({ color, width: vergeM * 2, join: 'round' });
   fadeAtZoom(markings, 0.7, 2.2);
   const medianOnRight = city.drivingSide === 'left';
+  const clips = markingClips(city, road);
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
     if (
       lane.right >= 0 &&
       !road.lanes.some((i) => city.lanes[i]!.taperStartM || city.lanes[i]!.taperEndM)
     )
-      drawDashes(markings, offsetPolyline(lane.polyline, lane.widthM / 2));
+      for (const piece of clipOutside(offsetPolyline(lane.polyline, lane.widthM / 2), clips, 0.05))
+        drawDashes(markings, piece);
     if (road.streetGroupId !== null && (medianOnRight ? lane.right : lane.left) < 0) {
       const offset = ((medianOnRight ? 1 : -1) * lane.widthM) / 2;
-      markings
-        .poly(offsetPolyline(lane.polyline, offset), false)
-        .stroke({ color: style.marking, width: style.dividerWidthM, alpha: 0.85 });
+      for (const piece of clipOutside(offsetPolyline(lane.polyline, offset), clips, 0.05))
+        markings
+          .poly(piece, false)
+          .stroke({ color: style.marking, width: style.dividerWidthM, alpha: 0.85 });
     }
     drawApproachMarkings(markings, city, lane, controls);
   }
+}
+
+/** TASK-074: a road's dividers and centre lines stop where they enter its nodes' outlines, or
+ * another road's surface within that road's junction mouth (its first `SETBACK_CAP_M` past its
+ * cut). Roads running the same way at the node (the opposite direction of the street, a
+ * coincident or overlapping carriageway) never clip each other. */
+export function markingClips(city: CompiledCity, road: CRoad): Vec2[][] {
+  const rings: Vec2[][] = [];
+  for (const node of [road.from, road.to]) {
+    const outline = city.nodes[node]!.outline;
+    if (!outline.length) continue;
+    rings.push(outline);
+    const own = endDirection(road, road.to === node);
+    for (const other of city.roads) {
+      if (other === road || (other.from !== node && other.to !== node)) continue;
+      if (other.streetGroupId !== null && other.streetGroupId === road.streetGroupId) continue;
+      const atEnd = other.to === node;
+      const d = endDirection(other, atEnd);
+      if (d.x * own.x + d.y * own.y > Math.cos(Math.PI / 6)) continue;
+      rings.push(mouthPiece(other, atEnd));
+    }
+  }
+  return rings;
+}
+
+/** The surface edges of a road end, outward from the node. */
+function endEdges(road: CRoad, atEnd: boolean): [Vec2[], Vec2[]] {
+  const half = road.surface.length / 2;
+  const left = road.surface.slice(0, half),
+    right = road.surface.slice(half).reverse();
+  return atEnd ? [right.reverse(), left.reverse()] : [left, right];
+}
+
+/** A road end's outward direction over its first few metres. */
+function endDirection(road: CRoad, atEnd: boolean): Vec2 {
+  const [left, right] = endEdges(road, atEnd);
+  const ahead = (edge: Vec2[]) =>
+    edge.find((p) => Math.hypot(p.x - edge[0]!.x, p.y - edge[0]!.y) >= 3) ?? edge.at(-1)!;
+  const dx = (ahead(left).x + ahead(right).x - left[0]!.x - right[0]!.x) / 2,
+    dy = (ahead(left).y + ahead(right).y - left[0]!.y - right[0]!.y) / 2;
+  const length = Math.hypot(dx, dy);
+  return { x: dx / length, y: dy / length };
+}
+
+/** A road end's surface from its cut out to `SETBACK_CAP_M`, as a closed ring. */
+function mouthPiece(road: CRoad, atEnd: boolean): Vec2[] {
+  const sides = endEdges(road, atEnd).map((edge) => {
+    const lengths = cumulativeLengths(edge);
+    const kept: Vec2[] = [edge[0]!];
+    for (let i = 1; i < edge.length; i++) {
+      if (lengths[i]! < SETBACK_CAP_M) {
+        kept.push(edge[i]!);
+        continue;
+      }
+      const t = (SETBACK_CAP_M - lengths[i - 1]!) / (lengths[i]! - lengths[i - 1]!);
+      const a = edge[i - 1]!,
+        b = edge[i]!;
+      kept.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      break;
+    }
+    return kept;
+  });
+  return [...sides[0]!, ...sides[1]!.reverse(), sides[0]![0]!];
 }
 
 export function approachMarkings(city: CompiledCity, lane: CLane) {
@@ -138,29 +207,26 @@ function drawApproachMarkings(
               [0.5, 0],
               [0.5, side * 1.2],
             ];
-    graphics
-      .poly(
-        points.map(([f, s]) => arrowPoint(f, s)),
-        false,
-      )
-      .stroke({ color: style.marking, width: 0.22 * scale, join: 'round' });
     const tip = points.at(-1)!;
     const previous = points.at(-2)!;
     const heading = Math.atan2(tip[1] - previous[1], tip[0] - previous[0]);
     const back = 0.65;
+    const shaft = points.map(([f, s]) => arrowPoint(f, s));
+    const head = [
+      arrowPoint(...tip),
+      arrowPoint(
+        tip[0] - Math.cos(heading) * back - Math.sin(heading) * 0.4,
+        tip[1] - Math.sin(heading) * back + Math.cos(heading) * 0.4,
+      ),
+      arrowPoint(
+        tip[0] - Math.cos(heading) * back + Math.sin(heading) * 0.4,
+        tip[1] - Math.sin(heading) * back - Math.cos(heading) * 0.4,
+      ),
+    ];
     graphics
-      .poly([
-        arrowPoint(...tip),
-        arrowPoint(
-          tip[0] - Math.cos(heading) * back - Math.sin(heading) * 0.4,
-          tip[1] - Math.sin(heading) * back + Math.cos(heading) * 0.4,
-        ),
-        arrowPoint(
-          tip[0] - Math.cos(heading) * back + Math.sin(heading) * 0.4,
-          tip[1] - Math.sin(heading) * back - Math.cos(heading) * 0.4,
-        ),
-      ])
-      .fill(style.marking);
+      .poly(shaft, false)
+      .stroke({ color: style.marking, width: 0.22 * scale, join: 'round' });
+    graphics.poly(head).fill(style.marking);
   }
 }
 
