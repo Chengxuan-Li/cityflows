@@ -14,9 +14,22 @@ function pointSegmentDistanceSquared(p: Vec2, a: Vec2, b: Vec2): number {
 }
 
 function contacts(a: Vec2, b: Vec2, path: Vec2[], widthSquared: number): boolean {
+  // Segments whose bounding boxes are at least the contact width apart cannot touch.
+  const width = Math.sqrt(widthSquared);
+  const minX = Math.min(a.x, b.x) - width,
+    maxX = Math.max(a.x, b.x) + width,
+    minY = Math.min(a.y, b.y) - width,
+    maxY = Math.max(a.y, b.y) + width;
   for (let j = 1; j < path.length; j++) {
     const c = path[j - 1]!;
     const d = path[j]!;
+    if (
+      (c.x < minX && d.x < minX) ||
+      (c.x > maxX && d.x > maxX) ||
+      (c.y < minY && d.y < minY) ||
+      (c.y > maxY && d.y > maxY)
+    )
+      continue;
     if (
       segmentsIntersect(a, b, c, d) ||
       Math.min(

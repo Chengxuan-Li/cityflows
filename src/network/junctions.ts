@@ -2,7 +2,7 @@ import {
   cumulativeLengths,
   distance,
   headingAtDistance,
-  pointInPolygon,
+  preparePolygon,
   segmentIntersection,
   segmentsIntersect,
 } from '../geo/polyline';
@@ -552,6 +552,9 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
     });
     const outline = () => closeOutline(ends.flatMap((end, i) => [end.left, ...joins[i]!.points]));
     node.outline = outline();
+    // Containment only changes when an accepted candidate replaces the outline.
+    let tested: Vec2[] | undefined;
+    let outside: Vec2[] = [];
     for (let i = 0; i < joins.length; i++) {
       const end = ends[i]!,
         next = ends[(i + 1) % ends.length]!;
@@ -559,7 +562,11 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
         db = next.leftDirection ?? next.direction;
       const a = end.right,
         b = next.left;
-      const outside = points.filter((p) => !pointInPolygon(p, node.outline, 0.1));
+      if (tested !== node.outline) {
+        tested = node.outline;
+        const inside = preparePolygon(node.outline, 0.1);
+        outside = points.filter((p) => !inside(p));
+      }
       if (!outside.length) break;
       const outsideSet = new Set(outside);
       const contained = points.filter((p) => !outsideSet.has(p));
@@ -571,13 +578,15 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
       if (!needed.length) continue;
       const previous = joins[i]!;
       if (previous.kind === 'gore') continue;
+      let inside: (p: Vec2) => boolean;
       const accept = (candidate: CurbJoin) => {
         joins[i] = candidate;
         const ring = outline();
         if (
           ring.every((p) => distance(p, node.pos) <= limit + 1e-6) &&
-          needed.every((p) => pointInPolygon(p, ring, 0.1)) &&
-          contained.every((p) => pointInPolygon(p, ring, 0.1)) &&
+          (inside = preparePolygon(ring, 0.1)) &&
+          needed.every(inside) &&
+          contained.every(inside) &&
           simpleOutline(ring)
         ) {
           node.outline = ring;
@@ -637,15 +646,18 @@ export function containMovements(node: CNode, movements: CMovement[], lanes: CLa
     return { joins, limit };
   };
   const result = solve();
-  const missing = () => points.filter((p) => !pointInPolygon(p, node.outline, 0.1));
+  const missing = () => {
+    const inside = preparePolygon(node.outline, 0.1);
+    return points.filter((p) => !inside(p));
+  };
   let outside = missing();
   if (!outside.length && simpleOutline(node.outline)) return { ...result, contained: true };
   // Fixed Beziers can need an exterior wedge beyond a surface cut. Adjust the
   // whole mouth, then rebuild both neighboring curbs; never move lane geometry.
   const score = () => {
     let error = simpleOutline(node.outline) ? 0 : 1e6;
-    for (const p of points)
-      if (!pointInPolygon(p, node.outline, 0.1)) error += 1 + distanceToLine(p, node.outline);
+    const inside = preparePolygon(node.outline, 0.1);
+    for (const p of points) if (!inside(p)) error += 1 + distanceToLine(p, node.outline);
     return error;
   };
   const initialCuts = ends.map(

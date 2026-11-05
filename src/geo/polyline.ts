@@ -142,6 +142,48 @@ export function sampleArc(center: Vec2, radius: number, start: number, sweep: nu
   });
 }
 
+/** `pointInPolygon` for many points against one ring: edges are bucketed by y, so a query
+ * tests only the edges that can span or touch its y. Same expressions, same answers. */
+export function preparePolygon(ring: readonly Vec2[], tolerance = 1e-6) {
+  let minY = Infinity,
+    maxY = -Infinity;
+  for (const p of ring) {
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  }
+  const count = Math.max(1, Math.min(256, ring.length));
+  const size = Math.max((maxY - minY + 2 * tolerance) / count, 1e-9);
+  const base = minY - tolerance;
+  const buckets: number[][] = Array.from({ length: count }, () => []);
+  const bucket = (y: number) => Math.min(count - 1, Math.max(0, Math.floor((y - base) / size)));
+  for (let i = 1; i < ring.length; i++) {
+    const a = ring[i - 1]!,
+      b = ring[i]!;
+    const low = bucket(Math.min(a.y, b.y) - tolerance),
+      high = bucket(Math.max(a.y, b.y) + tolerance);
+    for (let k = low; k <= high; k++) buckets[k]!.push(i);
+  }
+  return (point: Vec2): boolean => {
+    if (point.y < minY - tolerance || point.y > maxY + tolerance) return false;
+    let contains = false;
+    for (const i of buckets[bucket(point.y)]!) {
+      const a = ring[i - 1]!,
+        b = ring[i]!;
+      const dx = b.x - a.x,
+        dy = b.y - a.y;
+      const length2 = dx * dx + dy * dy;
+      const t =
+        length2 === 0
+          ? 0
+          : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length2));
+      if (Math.hypot(point.x - a.x - t * dx, point.y - a.y - t * dy) <= tolerance) return true;
+      if (a.y > point.y !== b.y > point.y && point.x < a.x + (dx * (point.y - a.y)) / dy)
+        contains = !contains;
+    }
+    return contains;
+  };
+}
+
 export function pointInPolygon(point: Vec2, ring: readonly Vec2[], tolerance = 1e-6): boolean {
   let contains = false;
   for (let i = 1; i < ring.length; i++) {
