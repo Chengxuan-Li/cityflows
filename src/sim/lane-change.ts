@@ -1,7 +1,7 @@
 import type { CLane, CompiledCity } from '../network';
 import type { SimParams } from '../schema';
 import { idmAcceleration } from './idm';
-import { laneSurvives } from './merge';
+import { isDroppedLane } from '../network/lane-drop';
 import { DRIVING, type Vehicles } from './vehicle';
 
 interface Proposal {
@@ -36,7 +36,7 @@ export function createLaneChanges(
     const dropped: number[] = [];
     for (const idx of lane.out) {
       const road = compiled.lanes[compiled.movements[idx]!.toLane]!.road;
-      if (!dropped.includes(road) && !laneSurvives(compiled, lane, road)) dropped.push(road);
+      if (!dropped.includes(road) && isDroppedLane(compiled, lane, road)) dropped.push(road);
     }
     return dropped;
   });
@@ -225,10 +225,12 @@ export function createLaneChanges(
       )
         continue;
       const changesAfter = changesToTargets(id, lane.lane, step, finalRoad);
+      // A discretionary change never adds a needed change, on any road (TASK-076).
       if (
         mandatory
           ? changesAfter >= changesNeeded
-          : remaining < changesAfter * laneChangeDistanceM + mandatoryUrgencyM
+          : changesAfter > changesNeeded ||
+            remaining < changesAfter * laneChangeDistanceM + mandatoryUrgencyM
       )
         continue;
       findNeighbors(target, positionM);

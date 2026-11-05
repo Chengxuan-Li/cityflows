@@ -174,14 +174,10 @@ test('T29 a car held at the end of its lane beside a steady platoon gets a gap f
   const { city, node, road, place } = buildCity('Platoon', 1);
   const junction = node(1000, 0);
   const main = road(node(0, 0), junction, { lanes: 2, speedKmh: 30 });
-  // Two onward lanes: the sim and routing treat a lone through lane beside a turn lane that
-  // continues into a narrower road as a dropped lane.
-  const onward = road(junction, node(1300, 0), { lanes: 2, speedKmh: 30 });
+  const onward = road(junction, node(1300, 0), { speedKmh: 30 });
   onlyLanes(junction, main, road(junction, node(1000, -200), { speedKmh: 30 }), [[0, 0]]);
-  onlyLanes(junction, main, onward, [[1, 1]]);
-  place('Work', 'work', { x: 1300, y: 0 }, [
-    { road: onward, lane: 1, direction: 'in', positionM: 250 },
-  ]);
+  onlyLanes(junction, main, onward, [[1, 0]]);
+  place('Work', 'work', { x: 1300, y: 0 }, [{ road: onward, direction: 'in', positionM: 250 }]);
   const { trips, depart } = departures(city, place, main);
   // A standing queue that starts together is a platoon after 700 m: at 6 to 7 m/s about
   // 3.3 s between fronts, 2.6 s between bumpers (IDM's discharge from a standstill leaves it
@@ -242,9 +238,7 @@ test('T29 a car held at the end of its lane beside a steady platoon gets a gap f
     return { engine, heldS, changedS, yielder, yielderBraking, maxBraking, passed };
   }
 
-  // No discretionary changes: platoon cars would otherwise pass through the left lane.
-  const keepLanes = { mobil: { ...mobil, thresholdMps2: Infinity } };
-  const cooperative = observe(keepLanes);
+  const cooperative = observe({});
   expect(cooperative.heldS).toBeGreaterThan(0);
   // The platoon is passing the held car.
   const headways = cooperative.passed
@@ -261,7 +255,7 @@ test('T29 a car held at the end of its lane beside a steady platoon gets a gap f
   expect(cooperative.engine.metrics().trips).toMatchObject({ completed: 25, failed: 0 });
 
   // Without a yielder it waits much longer for a gap the platoon happens to leave.
-  const alone = observe({ ...keepLanes, cooperativeYieldS: Infinity });
+  const alone = observe({ cooperativeYieldS: Infinity });
   expect(alone.heldS).toBe(cooperative.heldS);
   expect(alone.changedS - alone.heldS).toBeGreaterThan(cooperativeYieldS + 10);
 });
@@ -297,39 +291,31 @@ test('T29 a held car whose target lane is blocked for good gives the exit up and
   let leftS = NaN;
   let taken = -1;
   let queueToEnd = true;
-  // No discretionary changes, so the queue keeps to the exit lane.
-  const keepLanes = { mobil: { ...mobil, thresholdMps2: Infinity } };
   let previous = -1;
-  const engine = run(
-    compiled,
-    trips,
-    9000,
-    (engine) => {
-      const car = engine.inspect(requester);
-      if (car?.state !== 'driving' || !Number.isNaN(leftS)) return;
-      if (Number.isNaN(heldS) && held(compiled, car, left)) heldS = engine.timeS;
-      if (car.lane !== left && previous === left) {
-        leftS = engine.timeS;
-        // A movement, or the next lane when the movement has no length.
-        taken =
-          car.lane < 0
-            ? -car.lane - 1
-            : compiled.movements.findIndex((m) => m.fromLane === left && m.toLane === car.lane);
+  const engine = run(compiled, trips, 9000, (engine) => {
+    const car = engine.inspect(requester);
+    if (car?.state !== 'driving' || !Number.isNaN(leftS)) return;
+    if (Number.isNaN(heldS) && held(compiled, car, left)) heldS = engine.timeS;
+    if (car.lane !== left && previous === left) {
+      leftS = engine.timeS;
+      // A movement, or the next lane when the movement has no length.
+      taken =
+        car.lane < 0
+          ? -car.lane - 1
+          : compiled.movements.findIndex((m) => m.fromLane === left && m.toLane === car.lane);
+    }
+    previous = car.lane;
+    if (Number.isNaN(heldS) || !Number.isNaN(leftS)) return;
+    // Beside the held car the right lane stays a standing queue, with no room to cut in.
+    const snapshot = engine.snapshot();
+    let front = -Infinity;
+    for (const [index, id] of snapshot.id.entries())
+      if (snapshot.lane[index] === right) {
+        front = Math.max(front, engine.inspect(id)!.positionM);
+        queueToEnd &&= snapshot.speed[index]! < 0.1;
       }
-      previous = car.lane;
-      if (Number.isNaN(heldS) || !Number.isNaN(leftS)) return;
-      // Beside the held car the right lane stays a standing queue, with no room to cut in.
-      const snapshot = engine.snapshot();
-      let front = -Infinity;
-      for (const [index, id] of snapshot.id.entries())
-        if (snapshot.lane[index] === right) {
-          front = Math.max(front, engine.inspect(id)!.positionM);
-          queueToEnd &&= snapshot.speed[index]! < 0.1;
-        }
-      queueToEnd &&= front > car.positionM - vehicleLengthM - idm.minGapM;
-    },
-    keepLanes,
-  );
+    queueToEnd &&= front > car.positionM - vehicleLengthM - idm.minGapM;
+  });
   expect(queueToEnd).toBe(true);
   expect(leftS - heldS).toBeGreaterThanOrEqual(missedTurnAfterS);
   expect(leftS - heldS).toBeLessThan(missedTurnAfterS + 10);
@@ -342,10 +328,9 @@ test('T29 a held car whose target lane is blocked for good gives the exit up and
 });
 
 // Known to fail (TASK-076 report): Munich still gridlocks from about 08:00, and from then cars
-// off their target lanes stand in the queues for hours. The first long stops are on-target
-// queues at signals n:967 and n:262 and the residential spillback of n:328; at r:639 cars
-// bound for r:680 still wait on lane 1, where discretionary changes took them off lane 2 and
-// no movement routes them on. Turn this into `test` once the city no longer locks.
+// off their target lanes stand in the jammed queues for hours (TASK-077's respawn is the
+// escape). Before the lock the longest off-target hold at the end of a lane is on r:639, about
+// 70 s. Turn this into `test` once the city no longer locks.
 test.fails(
   'T29 Munich at 0.15: no car off its target lanes stands still for long',
   () => {
