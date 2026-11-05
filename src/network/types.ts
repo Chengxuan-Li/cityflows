@@ -78,6 +78,7 @@ export interface CLane {
   polyline: Vec2[];
   cumulative: Float64Array;
   lengthM: number;
+  stopM: number; // ungranted stop line; granted travel continues to lengthM
   widthM: number;
   allowed: VehicleClass[];
   speedLimitMps: number;

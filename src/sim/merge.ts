@@ -26,7 +26,7 @@ export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params:
   const isRamp = (movement: CMovement) =>
     compiled.roads[compiled.lanes[movement.fromLane]!.road]!.roadClass === 'ramp';
   const remaining = (id: number, movement: CMovement) =>
-    compiled.lanes[movement.fromLane]!.lengthM - vehicles.position[id]!;
+    compiled.lanes[movement.fromLane]!.stopM - vehicles.position[id]!;
   function canStop(id: number, movement: CMovement) {
     const speed = vehicles.speed[id]!;
     // One step of travel is reserved because grants resolve after acceleration proposals.

@@ -7,7 +7,6 @@ import {
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CLane, CMovement, CompiledCity, CRoad } from '../../network';
-import { roadEndEdges } from './nodes';
 import { roadStyle, style } from '../style';
 
 function fadeAtZoom(graphics: Graphics, from: number, to: number) {
@@ -94,16 +93,16 @@ function drawApproachMarkings(
   const half = lane.widthM * 0.44;
   if (marks.stop) {
     controls
-      .poly([local(lane.lengthM, 0, -half), local(lane.lengthM, 0, half)], false)
+      .poly([local(lane.stopM, 0, -half), local(lane.stopM, 0, half)], false)
       .stroke({ color: style.marking, width: 0.28 });
   }
   if (marks.yield) {
     for (let side = -half + 0.4; side <= half - 0.2; side += 0.85) {
       controls
         .poly([
-          local(lane.lengthM, 0, side),
-          local(lane.lengthM, -1, side - 0.3),
-          local(lane.lengthM, -1, side + 0.3),
+          local(lane.stopM, 0, side),
+          local(lane.stopM, -1, side - 0.3),
+          local(lane.stopM, -1, side + 0.3),
         ])
         .fill(style.marking);
     }
@@ -214,34 +213,53 @@ export function drawMovementArrow(graphics: Graphics, movement: CMovement): void
     .fill({ color: style.marking, alpha: 0.9 });
 }
 
-/** Zebra rectangles in the junction mouth, beyond the vehicle stop line. */
+/** Zebra stripes follow the road surface between the stop line and junction. */
 export function crossingStripes(city: CompiledCity, road: CRoad, atEnd: boolean): Vec2[][] {
   const node = city.nodes[atEnd ? road.to : road.from]!;
   if (!node.signal || !node.outline.length) return [];
-  const served = road.lanes.some((index) => {
-    const marks = approachMarkings(city, city.lanes[index]!);
+  const lanes = road.lanes.map((index) => city.lanes[index]!);
+  const served = lanes.some((lane) => {
+    const marks = approachMarkings(city, lane);
     return atEnd ? marks.crossingEnd : marks.crossingStart;
   });
   if (!served) return [];
-  const [left, right] = roadEndEdges(city, road, atEnd) as [Vec2, Vec2];
-  const width = Math.hypot(right.x - left.x, right.y - left.y);
-  const lateral = { x: (right.x - left.x) / width, y: (right.y - left.y) / width };
-  const sign = atEnd ? 1 : -1;
-  const forward = { x: lateral.y * sign, y: -lateral.x * sign };
-  if ((node.pos.x - left.x) * forward.x + (node.pos.y - left.y) * forward.y < 3.5) return [];
-  const local = (along: number, side: number): Vec2 => ({
-    x: left.x + forward.x * along + lateral.x * side,
-    y: left.y + forward.y * along + lateral.y * side,
-  });
+  const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
+  const local = (along: number, side: number): Vec2 => {
+    let edge = 0;
+    const lane = lanes.find((lane) => {
+      if (side <= edge + lane.widthM) return true;
+      edge += lane.widthM;
+      return false;
+    })!;
+    const distance = atEnd ? lane.stopM + along : along;
+    const point = pointAtDistance(lane.polyline, lane.cumulative, distance);
+    const heading = headingAtDistance(lane.polyline, lane.cumulative, distance);
+    const offset = side - edge - lane.widthM / 2;
+    return { x: point.x - Math.sin(heading) * offset, y: point.y + Math.cos(heading) * offset };
+  };
   const stripes: Vec2[][] = [];
   for (let side = 0.225; side + 0.45 <= width; side += 0.9) {
+    let edge = 0;
+    const short = lanes.some((lane) => {
+      const overlaps = side < edge + lane.widthM && side + 0.45 > edge;
+      edge += lane.widthM;
+      return overlaps && lane.lengthM < 10;
+    });
+    if (short) continue;
     const stripe = [
-      local(0.5, side),
-      local(3, side),
-      local(3, side + 0.45),
-      local(0.5, side + 0.45),
+      local(0.25, side),
+      local(2.75, side),
+      local(2.75, side + 0.45),
+      local(0.25, side + 0.45),
     ];
-    if (stripe.every((p) => pointInPolygon(p, node.outline))) stripes.push(stripe);
+    if (
+      stripe.every(
+        (p) =>
+          pointInPolygon(p, [...road.surface, road.surface[0]!]) &&
+          !pointInPolygon(p, node.outline),
+      )
+    )
+      stripes.push(stripe);
   }
   return stripes;
 }

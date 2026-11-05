@@ -8,6 +8,7 @@ import { junctionSetbacks, junctionOutline, containMovements } from './junctions
 import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
+import { populateStops } from './stops';
 import type {
   CConnector,
   CLane,
@@ -275,6 +276,7 @@ export function compile(city: City): CompileResult {
   }
   if (diagnostics.some((item) => item.severity === 'error')) return { ok: false, diagnostics };
   warnAboutProvenance([...sourceNodes, ...sourceRoads, ...sourcePlaces], diagnostics);
+  populateStops(compiled);
   warnAboutConnectivity(compiled, diagnostics);
   return { ok: true, compiled, diagnostics };
 }

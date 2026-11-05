@@ -9,7 +9,7 @@ function waitingReason(detail: VehicleDetail, compiled: CompiledCity): string | 
   if (detail.state === 'queued_destination') return 'Waiting for space at the destination';
   if (detail.state !== 'driving' || detail.speedMps >= 0.5) return null;
   const lane = compiled.lanes[detail.lane];
-  if (!lane || lane.lengthM - detail.positionM > 20) return null;
+  if (!lane || lane.stopM - detail.positionM > 20) return null;
   const node = compiled.nodes[compiled.roads[lane.road]!.to]!;
   return node.signal ? 'Stopped at a signal' : 'Yielding at a junction';
 }

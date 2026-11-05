@@ -14,7 +14,7 @@ import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { scenario, trips } from '../sim/fixtures';
 import { defaultLayers } from '../../src/render/types';
 import { insideOutline } from '../network/junction-audit';
-import { headingAtDistance } from '../../src/geo/polyline';
+import { headingAtDistance, pointAtDistance, pointInPolygon } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 
 function recorder() {
@@ -89,7 +89,7 @@ test('T20: renderer draws the compiled outline and no area at a through node', (
   expect(empty.polygons).toEqual([]);
 });
 
-test.each(['signal', 'yield'] as const)('T20: %s marking meets the trimmed lane end', (control) => {
+test.each(['signal', 'yield'] as const)('T20: %s marking meets the stop position', (control) => {
   const result = compile(signalApproach());
   if (!result.ok) throw new Error('fixture');
   const net = result.compiled;
@@ -98,6 +98,7 @@ test.each(['signal', 'yield'] as const)('T20: %s marking meets the trimmed lane 
   if (control === 'yield') {
     node.signal = null;
     node.control = 'yield';
+    for (const lane of net.lanes) lane.stopM = lane.lengthM;
     node.movements.forEach((i) => {
       net.movements[i]!.priority = 2;
     });
@@ -106,7 +107,7 @@ test.each(['signal', 'yield'] as const)('T20: %s marking meets the trimmed lane 
   drawRoad(recorder().graphics, marks.graphics, net, road);
   for (const i of road.lanes) {
     const lane = net.lanes[i]!;
-    const end = lane.polyline.at(-1)!,
+    const end = pointAtDistance(lane.polyline, lane.cumulative, lane.stopM),
       prev = lane.polyline.at(-2)!;
     const length = Math.hypot(end.x - prev.x, end.y - prev.y);
     const dx = (end.x - prev.x) / length,
@@ -125,7 +126,7 @@ test.each(['signal', 'yield'] as const)('T20: %s marking meets the trimmed lane 
   }
 });
 
-test('T20: signal crossings occupy the mouth beyond the stop line', () => {
+test('T20: signal crossings lie on the road between stop position and junction', () => {
   const result = compile(signalApproach());
   if (!result.ok) throw new Error('fixture');
   const net = result.compiled;
@@ -137,10 +138,13 @@ test('T20: signal crossings occupy the mouth beyond the stop line', () => {
     const end = lane.polyline.at(-1)!;
     const h = headingAtDistance(lane.polyline, lane.cumulative, lane.lengthM);
     for (const stripe of stripes) {
-      expect(stripe.every((p) => insideOutline(p, node.outline))).toBe(true);
+      expect(stripe.every((p) => pointInPolygon(p, [...road.surface, road.surface[0]!]))).toBe(
+        true,
+      );
+      expect(stripe.some((p) => pointInPolygon(p, node.outline))).toBe(false);
       const along = stripe.map((p) => (p.x - end.x) * Math.cos(h) + (p.y - end.y) * Math.sin(h));
-      expect(Math.min(...along)).toBeCloseTo(0.5);
-      expect(Math.max(...along)).toBeCloseTo(3);
+      expect(Math.min(...along)).toBeCloseTo(-2.75);
+      expect(Math.max(...along)).toBeCloseTo(-0.25);
     }
   }
 });
@@ -179,7 +183,7 @@ test('T20: an actual red-light queue stops behind both the stop line and zebra',
   for (const car of stopped) {
     const lane = compiled.lanes[car.lane]!;
     const road = compiled.roads[lane.road]!;
-    expect(car.positionM).toBeLessThanOrEqual(lane.lengthM - DEFAULT_SIM_PARAMS.idm.minGapM + 1e-6);
+    expect(car.positionM).toBeLessThanOrEqual(lane.stopM - DEFAULT_SIM_PARAMS.idm.minGapM + 1e-6);
     expect(crossingStripes(compiled, road, true).length).toBeGreaterThan(0);
   }
 });
@@ -237,5 +241,49 @@ test('T20: a served outer lane keeps the full-width crossing when lane zero is u
     for (const i of atEnd ? net.lanes[road.lanes[0]!]!.out : net.lanes[road.lanes[0]!]!.in)
       net.movements[i]!.neverGreen = true;
     expect(crossingStripes(net, road, atEnd).length).toBeGreaterThan(0);
+  }
+});
+
+test('T26: exit crossings occupy the first 0.25 to 2.75 m of the exit road', () => {
+  const result = compile(signalApproach());
+  if (!result.ok) throw new Error('fixture');
+  const net = result.compiled;
+  const node = net.nodes.find((n) => n.signal)!;
+  for (const road of net.roads.filter((r) => r.from === node.idx)) {
+    const lane = net.lanes[road.lanes[0]!]!;
+    const start = lane.polyline[0]!;
+    const h = headingAtDistance(lane.polyline, lane.cumulative, 0);
+    const stripes = crossingStripes(net, road, false);
+    expect(stripes.length).toBeGreaterThan(0);
+    for (const stripe of stripes) {
+      expect(stripe.every((p) => pointInPolygon(p, [...road.surface, road.surface[0]!]))).toBe(
+        true,
+      );
+      expect(stripe.some((p) => pointInPolygon(p, node.outline))).toBe(false);
+      const along = stripe.map(
+        (p) => (p.x - start.x) * Math.cos(h) + (p.y - start.y) * Math.sin(h),
+      );
+      expect(Math.min(...along)).toBeCloseTo(0.25);
+      expect(Math.max(...along)).toBeCloseTo(2.75);
+    }
+  }
+});
+
+test('T26: short signal roads have neither approach nor exit crossings', () => {
+  const city = signalApproach();
+  city.places = {};
+  for (const node of Object.values(city.nodes))
+    node.pos = { x: node.pos.x / 10, y: node.pos.y / 10 };
+  for (const road of Object.values(city.roads))
+    road.centerline = road.centerline.map((p) => ({ x: p.x / 10, y: p.y / 10 }));
+  const result = compile(city);
+  if (!result.ok) throw new Error('fixture');
+  for (const lane of result.compiled.lanes) {
+    expect(lane.lengthM).toBeLessThan(10);
+    expect(lane.stopM).toBe(lane.lengthM);
+  }
+  for (const road of result.compiled.roads) {
+    expect(crossingStripes(result.compiled, road, true)).toEqual([]);
+    expect(crossingStripes(result.compiled, road, false)).toEqual([]);
   }
 });

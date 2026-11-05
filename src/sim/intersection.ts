@@ -73,7 +73,7 @@ export function createIntersections(
     if (movement.neverGreen) return false;
     if (!compiled.nodes[movement.node]!.signal || colors[movement.idx] === GREEN) return true;
     if (onRed(movement)) return !!redGrants[id] || vehicles.stopped[id]! >= 1 - 1e-9;
-    const distance = compiled.lanes[movement.fromLane]!.lengthM - vehicles.position[id]!;
+    const distance = compiled.lanes[movement.fromLane]!.stopM - vehicles.position[id]!;
     return (
       colors[movement.idx] === AMBER && vehicles.speed[id]! ** 2 > 2 * params.idm.bMps2 * distance
     );
@@ -191,7 +191,7 @@ export function createIntersections(
       if (onRed(movement)) {
         if (colors[idx] === RED && !higher.turnOnRed) continue;
       } else if (higher.priority <= movement.priority) continue;
-      const length = compiled.lanes[higher.fromLane]!.lengthM;
+      const length = compiled.lanes[higher.fromLane]!.stopM;
       for (
         let approaching = vehicles.first(higher.fromLane);
         approaching !== -1;
