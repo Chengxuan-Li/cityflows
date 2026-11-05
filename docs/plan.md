@@ -99,7 +99,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-073](tasks/TASK-073.md) | 5 | Exercise the paths nobody has run end to end | `tests/e2e/qa-*.spec.ts`, e2e helpers and fixtures | 067, 069, 070 | defects reported, suite green | done |
 | [TASK-074](tasks/TASK-074.md) | 5 | Junction shapes, measured on the real cities | new `bench/junction-audit.ts`, `src/network/junctions.ts`, `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, the marking clip in `drawRoad`, `NOTICE`, `tests/network/T27*` | 063, 068, 071, 072; design in architecture 5.1, 11 | T27; overlap outside outlines halved | todo |
 | [TASK-075](tasks/TASK-075.md) | 5 | Lane markings through junctions without signals | new `src/render/layers/junction-markings.ts`, `scene.ts` wiring, `style.ts` (additive), `tests/render/T28*` | 061, 063, 071, 072; design in architecture 11 | T28; dashed guide lines on major roads | done |
-| [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | todo |
+| [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | done |
 | [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -1192,6 +1192,27 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   innermost through paths, so it sits off centre beside a left-turn lane. Verified on the
   merged tree: check (395 unit tests; one run failed a test under load from the other two
   agents and passed on rerun), the screenshots.
+
+- 2026-11-05, TASK-076 merged after two rounds. Round one: lane resolution lands where the
+  next road needs the fewest changes (then penalty, then idx); a car held 3 s for a mandatory
+  change gets one yielder behind it (virtual leader, braking at most `bMps2`); after 30 s it
+  takes the TASK-048 fallback and reroutes with `missed_turn`; a car standing at its stop may
+  change up to a shorter neighbour's `stopM`; the probe reports `completedByHalfHour` and
+  `stalledHeads`. Accepted deviation: ordinary off-target cars with a fallback still take it
+  when granted rather than waiting 30 s (waiting held cars on the `r:307`/`r:1259` weave).
+  The agent traced two causes outside its contract, and the lead added them to section 8
+  (7f0b478) for round two: no discretionary change that adds a needed change on any road of
+  the route (`r:639`: cars landed on the right lane, then MOBIL moved them off it), and one
+  lane-drop rule counting only the lanes that feed the next road (`isDroppedLane` in
+  `lane-drop.ts`, used by the compiler, routing, the simulation and `bench/route-audit.ts`;
+  `r:968`'s through lane beside turn lanes had counted as dropped). `lane_requires_merge`
+  notes: Munich 15 to 6, downtown 6 to 0, highway 6 to 3. Off-target holds over 40 s on
+  Munich 81 to 20; `r:639` longest 463 s to 72 s, `r:968` and `r:1299` none. Munich at 0.15:
+  2 044 completed (round one 2 143, main 2 008), still locked from about 09:00: the first
+  stalls are now on-target saturation queues at `n:262`, `n:774`, `n:186`, `n:263`, `n:1303`,
+  left to TASK-077. T29 case 4 (no off-target hold over 40 s on Munich) is `test.fails` until
+  the city no longer locks. Benchmark end hashes unchanged (every trip completes). Verified on
+  the merged tree: check (399 unit tests), route audit zero on all four cities, the probe.
 
 ## Owner decisions log
 
