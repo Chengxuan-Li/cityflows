@@ -75,7 +75,14 @@ export function realignRoads(
     for (const source of incident) {
       const r = source.road;
       const other = r.from === node.id ? r.to : r.from;
-      const key = r.streetGroupId === null ? r.id : `${r.streetGroupId}:${other}`;
+      // A corridor's carriageways approaching the node together (a two-way street, a divided
+      // pair, a dual carriageway) are one arm: bending one away from the other only splays the
+      // street into lobes beside a side road (G2, TASK-083).
+      const key = r.corridorId
+        ? `corridor:${r.corridorId}`
+        : r.streetGroupId === null
+          ? r.id
+          : `${r.streetGroupId}:${other}`;
       const group = grouped.get(key) ?? [];
       group.push(source);
       grouped.set(key, group);
