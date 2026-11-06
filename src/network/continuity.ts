@@ -637,45 +637,6 @@ function trailingMean(values: number[], window: number): number[] {
   });
 }
 
-/** A smooth profile at or above `values` (a shift by distance from the node, zero after its
- * end): two centred running means over a quarter of `taper`, mirrored at the node so the first
- * value keeps zero slope there, and no lower than the values anywhere. The values are a gap's
- * shortfall, convex where the carriageways part at a steady angle, so the means lie above them
- * there and follow them closely (no lag widening the median); they reach zero half a taper
- * beyond the last non-zero value. */
-function easeAbove(values: number[], taper: number, peaks = false): number[] {
-  const n = Math.max(1, Math.round(taper / 4 / SHIFT_STEP_M));
-  const raw = (i: number) => {
-    const k = Math.abs(i);
-    return k < values.length ? values[k]! : 0;
-  };
-  // With `peaks`, a running maximum over twice the means' reach first: the means of that lie at
-  // or above the values without the final maximum, which would leave kinks where the values are
-  // not convex.
-  const length = values.length + (peaks ? 4 : 2) * n + 1;
-  // Each stage tabulated from index -reach to length + reach (the means read n either side).
-  const table = (from: number, to: number, get: (i: number) => number) => {
-    const out = new Float64Array(to - from + 1);
-    for (let i = from; i <= to; i++) out[i - from] = get(i);
-    return (i: number) => out[i - from]!;
-  };
-  const at = peaks
-    ? table(-2 * n, length + 2 * n, (i) => {
-        let best = 0;
-        for (let j = i - 2 * n; j <= i + 2 * n; j++) best = Math.max(best, raw(j));
-        return best;
-      })
-    : raw;
-  const mean = (get: (i: number) => number) => (i: number) => {
-    let sum = 0;
-    for (let j = i - n; j <= i + n; j++) sum += get(j);
-    return sum / (2 * n + 1);
-  };
-  const once = table(-n, length + n, mean(at));
-  const twice = mean(once);
-  return Array.from({ length }, (_, i) => (peaks ? twice(i) : Math.max(twice(i), at(i))));
-}
-
 /** `value` held to `hold` from the node, then eased to zero over `taper` by two trailing means
  * (zero slope at both ends of the ease). */
 function holdRamp(value: number, hold: number, taper: number): number[] {
@@ -829,13 +790,11 @@ export function convergingShifts(
         d: { x: (far.x - near.x) / chord, y: (far.y - near.y) / chord },
       };
     });
-    const parent = ends.map((_, i) => i);
-    const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
     // Pairs converging without overlapping beyond their cuts: set side by side too where another
     // pair of the node is (the street's carriageways meet the junction side by side on every arm,
     // owner's n:104 sketch).
     const quiet: [number, number][] = [];
-    let overlapping = false;
+    const joined: [number, number][] = [];
     for (const [i, a] of ends.entries())
       for (const [j, b] of ends.entries()) {
         if (!a.incoming || b.incoming || a.road === b.road) continue;
@@ -862,43 +821,105 @@ export function convergingShifts(
           quiet.push([i, j]);
           continue;
         }
-        parent[find(i)] = find(j);
-        overlapping = true;
+        joined.push([i, j]);
       }
-    if (overlapping) for (const [i, j] of quiet) parent[find(i)] = find(j);
-    // Ends on one reference line running the same way (a same-direction pair) move as one.
-    for (const [i, a] of ends.entries())
-      for (const [j, b] of ends.entries())
-        if (
-          i < j &&
-          a.incoming === b.incoming &&
-          references[a.road.idx]!.source === references[b.road.idx]!.source
-        )
-          parent[find(i)] = find(j);
-    const members = new Map<number, ConvergingEnd[]>();
-    ends.forEach((e, i) => members.set(find(i), [...(members.get(find(i)) ?? []), e]));
-    for (const group of members.values()) {
-      const ins = group.filter((e) => e.incoming),
-        outs = group.filter((e) => !e.incoming);
-      const junction = ends.some(
-        (e) =>
-          !group.includes(e) && group.every((m) => Math.abs(e.d.x * m.d.x + e.d.y * m.d.y) < ALONG),
-      );
-      // A block shifted toward another road end close beside it (a ramp, a fork) would run into
-      // it: such a street keeps its carriageways as drawn.
-      const crowded = group.some((m) => {
-        const toward = m.incoming === sigma > 0 ? { x: m.d.y, y: -m.d.x } : { x: -m.d.y, y: m.d.x };
-        return ends.some(
+    // Ends grouped from the pairs given, with the ends on one reference line running the same way;
+    // the groups that may be split (at a junction, not crowded).
+    const form = (pairs: [number, number][]) => {
+      const parent = ends.map((_, i) => i);
+      const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
+      for (const [i, j] of pairs) parent[find(i)] = find(j);
+      // Ends on one reference line running the same way (a same-direction pair) move as one.
+      for (const [i, a] of ends.entries())
+        for (const [j, b] of ends.entries())
+          if (
+            i < j &&
+            a.incoming === b.incoming &&
+            references[a.road.idx]!.source === references[b.road.idx]!.source
+          )
+            parent[find(i)] = find(j);
+      const formed: { node: CNode; ins: ConvergingEnd[]; outs: ConvergingEnd[] }[] = [];
+      const members = new Map<number, ConvergingEnd[]>();
+      ends.forEach((e, i) => members.set(find(i), [...(members.get(find(i)) ?? []), e]));
+      for (const group of members.values()) {
+        const ins = group.filter((e) => e.incoming),
+          outs = group.filter((e) => !e.incoming);
+        const junction = ends.some(
           (e) =>
             !group.includes(e) &&
-            e.d.x * m.d.x + e.d.y * m.d.y > NEIGHBOUR &&
-            e.d.x * toward.x + e.d.y * toward.y > 0,
+            group.every((m) => Math.abs(e.d.x * m.d.x + e.d.y * m.d.y) < ALONG),
         );
-      });
-      if (!ins.length || !outs.length || !junction || crowded) continue;
-      groups.push({ node, ins, outs });
-      for (const e of group) grouped.add(key(e.road.idx, e.incoming));
+        // A block shifted toward another road end close beside it (a ramp, a fork) would run into
+        // it: such a street keeps its carriageways as drawn.
+        const crowded = group.some((m) => {
+          const toward =
+            m.incoming === sigma > 0 ? { x: m.d.y, y: -m.d.x } : { x: -m.d.y, y: m.d.x };
+          return ends.some(
+            (e) =>
+              !group.includes(e) &&
+              e.d.x * m.d.x + e.d.y * m.d.y > NEIGHBOUR &&
+              e.d.x * toward.x + e.d.y * toward.y > 0,
+          );
+        });
+        if (!ins.length || !outs.length || !junction || crowded) continue;
+        formed.push({ node, ins, outs });
+      }
+      return formed;
+    };
+    // The arms of a crossing that converge without overlapping beyond their cuts join only where
+    // a pair of the node that does overlap is split itself (n:104's west arm, not n:1303's
+    // carriageway forking away beside an unsplit pair).
+    const strict = form(joined);
+    const chosen = strict.length ? form([...joined, ...quiet]) : strict;
+    for (const g of chosen) {
+      groups.push(g);
+      for (const e of [...g.ins, ...g.outs]) grouped.add(key(e.road.idx, e.incoming));
     }
+  }
+  // A member running straight on (on 20 m chords, as TASK-083 pairs through roads) into a road
+  // that is not split, whose lanes would jog by more than 5 m across the node, keeps its pair as
+  // drawn (Sindelfingen n:78: the 4-lane r:1061 into r:80).
+  const chord = (road: CRoad, incoming: boolean) => {
+    const near = outwardFrame(references[road.idx]!, incoming, 0).p;
+    const far = outwardFrame(references[road.idx]!, incoming, Math.min(20, length(road.idx) / 2)).p;
+    const l = Math.hypot(far.x - near.x, far.y - near.y) || 1;
+    return { x: (far.x - near.x) / l, y: (far.y - near.y) / l };
+  };
+  const blockEdge = (set: ConvergingEnd[]) =>
+    sigma > 0
+      ? Math.min(
+          ...set.map(
+            (e) => sources[e.road.idx]!.lateralOffsetM - roadWidth(sources[e.road.idx]!) / 2,
+          ),
+        )
+      : Math.max(
+          ...set.map(
+            (e) => sources[e.road.idx]!.lateralOffsetM + roadWidth(sources[e.road.idx]!) / 2,
+          ),
+        );
+  const jogging = groups.filter(({ node, ins, outs }) =>
+    [...ins, ...outs].some((m) => {
+      const f = outwardFrame(references[m.road.idx]!, m.incoming, 0);
+      const n = m.incoming ? { x: -f.n.x, y: -f.n.y } : f.n;
+      const off = (f.p.x - node.pos.x) * n.x + (f.p.y - node.pos.y) * n.y;
+      const shift = (sigma * MEDIAN_M) / 2 - blockEdge(m.incoming ? ins : outs) - off;
+      const median =
+        sources[m.road.idx]!.lateralOffsetM + shift - (sigma * roadWidth(sources[m.road.idx]!)) / 2;
+      const t = chord(m.road, m.incoming);
+      return incident[node.idx]!.some((e) => {
+        const incoming = e.to === node.idx;
+        if (e.from === e.to || incoming === m.incoming || grouped.has(key(e.idx, incoming)))
+          return false;
+        const d = chord(e, incoming);
+        if (d.x * t.x + d.y * t.y > -ALONG) return false;
+        const other = sources[e.idx]!.lateralOffsetM - (sigma * roadWidth(sources[e.idx]!)) / 2;
+        return Math.abs(median - other) > 5;
+      });
+    }),
+  );
+  for (const g of jogging) {
+    groups.splice(groups.indexOf(g), 1);
+    for (const e of [...g.ins, ...g.outs]) grouped.delete(key(e.road.idx, e.incoming));
   }
   const result = groups.map(({ node, ins, outs }) => ({
     node: node.idx,
@@ -962,15 +983,16 @@ export function convergingShifts(
     );
   for (const { node, ins, outs } of groups) {
     const all = [...ins, ...outs];
-    // Along each end's chain: out to half its last road where that converges at its far node
-    // too, to a taper and the cut short of a far junction (to the junction itself on a road too
+    // Along each end's chain: to its end where that converges at its far node too (the two
+    // nodes' shifts meet there, the larger kept, so the pair never closes in between), to a
+    // taper and the cut short of a far junction (to the junction itself on a road too
     // short to hold and ease before it), else to a taper short of the chain's end.
     const limit = Math.min(
       CONVERGE_REACH_M,
       ...all.map(({ road, incoming }) => {
         const chain = chainOf(road.idx, incoming);
         const last = chain.roads.at(-1)!;
-        if (grouped.has(key(last, !incoming))) return chain.offsets.at(-1)! + length(last) / 2;
+        if (grouped.has(key(last, !incoming))) return chain.length;
         const far = farNode(last, incoming);
         const ends = incident[far]!.filter((r) => r.from !== r.to).length;
         const taperLast = taperLength(sources[last]!);
@@ -1026,32 +1048,42 @@ export function convergingShifts(
     };
     const hold = Math.max(0, Math.min(MOUTH_M, limit - taper));
     const total = sigma * (atTheNode(ins[0]!) + atTheNode(outs[0]!));
-    let held = holdRamp(1, hold, taper);
-    if (total > 1e-6) {
-      // Beyond the mouth, where the pair's own lines already part, the split needs no more than
-      // the pair's shortfall: the hold is lowered to it and eased by two trailing means (which
-      // keep its value at the node), so the median does not open into a lens there.
-      const mouth = Math.round(hold / SHIFT_STEP_M);
-      const capped = [
-        ...held.map((v, i) => (i <= mouth ? v : Math.min(v, Math.max(0, needed[i] ?? 0) / total))),
-        // Room for the means' lag.
-        ...Array.from({ length: Math.ceil(taper / SHIFT_STEP_M) + 2 }, () => 0),
-      ];
-      held = trailingMean(trailingMean(capped, taper / 4), taper / 4);
-    }
-    const apart = (i: number) => (held[i] ?? 0) * total;
-    const rest = easeAbove(
-      needed.map((v, i) => Math.max(0, v - apart(i))),
-      taper,
-      true,
+    const held = holdRamp(1, hold, taper);
+    // The split the pair needs from the node out: its full split held over the mouth and eased
+    // over the taper, and no less than the shortfall anywhere farther out (its non-increasing
+    // envelope), eased by two trailing means: never increasing, so no lane edge turns back.
+    const envelope = needed.map((v) => Math.max(0, v));
+    for (let i = envelope.length - 2; i >= 0; i--)
+      envelope[i] = Math.max(envelope[i]!, envelope[i + 1]!);
+    const size = Math.max(held.length, envelope.length) + Math.ceil(taper / SHIFT_STEP_M) + 2;
+    const split = trailingMean(
+      trailingMean(
+        Array.from({ length: size }, (_, i) =>
+          Math.max(envelope[i] ?? 0, Math.max(0, total) * (held[i] ?? 0)),
+        ),
+        taper / 2,
+      ),
+      taper / 2,
     );
-    const size = Math.max(held.length, rest.length);
+    // Each side's shift never turns back. A side whose end moves toward the other at the node
+    // (its line ends beyond its place) eases that move out over the hold; the other takes the
+    // rest of the split. Where both move apart, each takes its end's share of the split all
+    // along. Where the pair needs more farther out than at the node, its ends at the node are
+    // that much farther apart (a wider median there).
+    const values = new Map(all.map((e) => [e, sigma * atTheNode(e)]));
+    const [vIn, vOut] = [values.get(ins[0]!)!, values.get(outs[0]!)!];
     const profileOf = (e: ConvergingEnd) => {
-      const value = atTheNode(e);
-      return Array.from(
-        { length: size },
-        (_, i) => value * (held[i] ?? 0) + sigma * portion(e.incoming) * (rest[i] ?? 0),
-      );
+      const v = values.get(e)!;
+      const other = e.incoming ? vOut : vIn;
+      const own = (i: number) =>
+        total <= 0.05
+          ? v * (held[i] ?? 0) + portion(e.incoming) * split[i]!
+          : v < 0
+            ? v * (held[i] ?? 0)
+            : other < 0
+              ? split[i]! - other * (held[i] ?? 0)
+              : (v * split[i]!) / total;
+      return Array.from({ length: size }, (_, i) => sigma * own(i));
     };
     for (const e of all) {
       const { road, incoming } = e;

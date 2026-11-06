@@ -730,6 +730,9 @@ interface PolygonEnd {
   left: Vec2[];
   right: Vec2[];
   setback: number;
+  incoming: boolean;
+  /** TASK-089: the end is shifted at this node (a split converging carriageway). */
+  split: boolean;
 }
 
 function polygonEnd(node: CNode, road: CRoad, setback: number): PolygonEnd {
@@ -748,6 +751,8 @@ function polygonEnd(node: CNode, road: CRoad, setback: number): PolygonEnd {
     left: near(incoming ? [...travelRight].reverse() : travelLeft),
     right: near(incoming ? [...travelLeft].reverse() : travelRight),
     setback,
+    incoming,
+    split: (incoming ? road.endShift : road.startShift).length > 0,
   };
 }
 
@@ -814,6 +819,10 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
   let da = leaving(a.right),
     db = leaving(b.left);
   const roads: [number, number] = [a.road.idx, b.road.idx];
+  // TASK-089 (owner's sketch): the median between a street's two carriageways split at the node
+  // ends at the junction edge, the cut line between their cut corners; no curb runs it out.
+  if (a.split && b.split && a.incoming !== b.incoming && dot(da, db) > Math.SQRT1_2)
+    return undefined;
   // Edges within 30 degrees of running on into each other (a road continuing into a narrower or
   // wider one, two ends side by side across the node): an S-curve tangent to both, which
   // replaces the chord between the cuts (`cutRegion`).
