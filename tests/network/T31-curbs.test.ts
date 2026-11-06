@@ -166,12 +166,13 @@ function fingerprint(net: CompiledCity) {
   return hash.digest('hex').slice(0, 16);
 }
 
-// Measured with this function on main (5024a83), before TASK-078.
+// Measured with this function on main (5024a83), before TASK-078; Sindelfingen and Munich
+// re-measured after TASK-080's shorter tapers and side-by-side branches moved their lanes.
 const mainFingerprints: Record<AuditCity, string> = {
   grid: '56deba638330bc89',
   town: 'a9cf734107d1e3f0',
-  sindelfingen: '603173c3cad423d3',
-  munich: '670eb6eda5167efa',
+  sindelfingen: 'c6ff38c41895d357',
+  munich: '7949ab181ce05d46',
 };
 
 test.each(auditCities)(
