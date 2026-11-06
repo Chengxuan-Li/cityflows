@@ -6,6 +6,16 @@ import { compile } from '../../src/network';
 import type { City } from '../../src/schema';
 
 const observed = vi.hoisted(() => ({ before: undefined as City | undefined, skip: false }));
+// Step 12 alone: the separation of coincident pairs and the relaxation that follow it (TASK-084)
+// have their own contract (T36).
+vi.mock(import('../../src/importers/osm/corridors'), async (load) => ({
+  ...(await load()),
+  separateCoincident() {},
+}));
+vi.mock(import('../../src/importers/osm/relax'), async (load) => ({
+  ...(await load()),
+  relaxRoads() {},
+}));
 vi.mock(import('../../src/importers/osm/realign'), async (load) => {
   const actual = await load();
   return {

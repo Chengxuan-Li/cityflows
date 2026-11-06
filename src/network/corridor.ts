@@ -52,6 +52,8 @@ const CHORD_TOLERANCE_M = 0.01;
 const MAX_TURN = (4 * Math.PI) / 180;
 /** An eased bend's radius exceeds the offset on its inside by this much. */
 const MARGIN_M = 0.25;
+/** A rounded corner's by this much more, where its segments allow. */
+const ROUNDING_MARGIN_M = 0.75;
 const TIGHT_RADIUS_M = 30;
 /** Spacing limits: where the radius is under `TIGHT_RADIUS_M`, and elsewhere. */
 const TIGHT_SPACING_M = 1;
@@ -273,7 +275,11 @@ export function referenceLine(source: readonly Vec2[], needLeft: number, needRig
       const half = Math.abs(sweep) / 2;
       const fit = Math.min(distance(a, b), distance(b, c)) / 2 / Math.tan(half);
       const tolerance = FILLET_TOLERANCE_M / (1 / Math.cos(half) - 1);
-      const radius = Math.min(fit, Math.max(tolerance, need(sweep)));
+      // Where that stays within 5 cm of the corner, the radius is a metre more than the inside
+      // offset, so the inside edge does not curl around the centre of its arc.
+      const roomy = need(sweep) + ROUNDING_MARGIN_M;
+      const floor = roomy * (1 / Math.cos(half) - 1) <= 0.05 ? roomy : need(sweep);
+      const radius = Math.min(fit, Math.max(tolerance, floor));
       const u = unit(sub(b, a));
       const tangent = radius * Math.tan(half);
       const points = arc({ x: b.x - u.x * tangent, y: b.y - u.y * tangent }, u, sweep, radius);

@@ -9,4 +9,7 @@ export interface ImportOptions {
   bbox?: [number, number, number, number];
   drivingSide?: DrivingSide;
   importerVersion: string;
+  /** OSM only: largest displacement of the relaxation of overlapping roads, m (TASK-084);
+   * internal, not shown in the UI. 0 turns it off; `Infinity` leaves it unbounded. */
+  relaxMaxM?: number;
 }

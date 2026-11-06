@@ -143,7 +143,8 @@ export function parallelOffset(points: readonly Vec2[], offset: number): Vec2[] 
  * incoming chord by half that chord's arc and from the outgoing chord back by half the outgoing
  * chord's arc; the turn neither accounts for is split evenly. A chord's arc is its length times
  * the curvature of the circle through it and the neighbouring chord at whichever of its ends has
- * the neighbour closer in length (none at the line's ends: curvature 0). So a circular arc gets
+ * the neighbour closer in length (curvature 0 when both neighbours, or the only one, differ in
+ * length by more than a factor of 4). So a circular arc gets
  * its exact tangents, a corner between two straights its bisector, and the vertex where a finely
  * sampled arc meets a long straight the straight's direction. The two ends take their segment's
  * normal. A zero-length segment takes its neighbour's direction. */
@@ -175,7 +176,8 @@ export function vertexNormals(points: readonly Vec2[]): Vec2[] {
   const halfArc = length.map((h, j) => {
     const atStart = j === 0 ? Infinity : ratio(h, length[j - 1]!);
     const atEnd = j + 1 === n - 1 ? Infinity : ratio(h, length[j + 1]!);
-    if (atStart === Infinity && atEnd === Infinity) return 0;
+    // A chord much longer or shorter than both neighbours is no part of their arc: straight.
+    if (Math.min(atStart, atEnd) > 4) return 0;
     return (h * (atStart <= atEnd ? fit[j]! : fit[j + 1]!)) / 2;
   });
   return points.map((_, i) => {

@@ -30,29 +30,30 @@ type Measure =
 // Residual defects after TASK-074, node by node, each with its class (bench/junction-audit.ts):
 // coincident = two source carriageways on top of each other at the node (an importer defect,
 // architecture 5.1); stub = a road end shorter than its setbacks; crossing = a road body
-// crossing its neighbour away from the node; other = none of these (listed in the report).
+// crossing its neighbour away from the node; other = none of these (listed in the report);
+// separated = a coincident pair TASK-084 separated into a divided pair, which the junction still
+// treats as two arms (corridor-aware junctions are TASK-083): the u-turn between its carriageways
+// leaves the outline, and the wider arm kinks a curb.
+// TASK-082 (lanes and surfaces offset from corridor reference lines) moved road-end edges by a
+// few centimetres, which moves `junctionOutline`'s and the audit's 0.05 to 0.1 m thresholds:
+// nodes marked TASK-082 joined a list, and those named in the comments left one.
 const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
   grid: {
     // other: a left turn from the one-lane west arm of an edge T, 1.1 cm past the tolerance.
     movementsEscaping: ['n:3'],
   },
   town: {},
-  // TASK-082 (lanes and surfaces offset from corridor reference lines): the classes below are
-  // as measured on main; the nodes marked TASK-082 joined a list because their road ends' edges
-  // moved by a few centimetres (normals of the resampled reference instead of mitres of the
-  // densely smoothed centerline), which moves `junctionOutline`'s and the audit's thresholds
-  // (0.05 to 0.1 m), not because a junction got a new shape class. Stage 3 (TASK-083) replaces
-  // the outline and the curbs.
   sindelfingen: {
     movementsEscaping: [
+      // TASK-082 resolved n:294, n:78 and n:81.
       'n:14', // coincident (TASK-080: side by side into an absorbing merge, 2.5 m setbacks)
-      'n:161', // TASK-082
       'n:276', // coincident
       'n:371', // other
       'n:375', // other
       'n:493', // other
-      'n:594', // TASK-082
-      'n:81', // other
+      'n:594', // separated (r:595/r:880)
+      'n:620', // coincident
+      'n:792', // separated (r:746/r:803)
     ],
     edgesOff: [
       'n:1161', // TASK-082
@@ -65,37 +66,17 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:792', // coincident
       'n:915', // stub
     ],
+    // TASK-082 resolved n:294 and n:501.
     curbKinks: [
-      'n:1075', // TASK-082
-      'n:1105', // TASK-082
-      'n:1202', // TASK-082
       'n:139', // coincident
-      'n:209', // TASK-082
-      'n:21', // TASK-082
-      'n:211', // TASK-082
-      'n:267', // TASK-082
-      'n:32', // TASK-082
       'n:355', // other
-      'n:393', // TASK-082
       'n:490', // other
-      'n:501', // coincident
-      'n:512', // TASK-082
-      'n:580', // TASK-082
-      'n:584', // TASK-082
+      'n:498', // separated (r:595/r:880)
+      'n:594', // coincident
       'n:620', // coincident
       'n:628', // coincident
-      'n:658', // TASK-082
-      'n:696', // TASK-082
       'n:78', // coincident
-      'n:784', // TASK-082
       'n:792', // coincident
-      'n:8', // TASK-082
-      'n:867', // TASK-082
-      'n:875', // TASK-082
-      'n:887', // TASK-082
-      'n:893', // TASK-082
-      'n:902', // TASK-082
-      'n:99', // TASK-082
     ],
     sharpCorners: [
       'n:434', // crossing
@@ -104,7 +85,7 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
   },
   munich: {
     // TASK-080 resolved n:305 and n:726 (branches side by side, B36) and n:774 (r:1368's
-    // shorter transition at n:936). TASK-082 resolved n:516 and n:970.
+    // shorter transition at n:936); TASK-082 n:516 and n:970.
     movementsEscaping: [
       'n:1123', // coincident
       'n:1375', // other
@@ -112,59 +93,77 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:182', // stub
       'n:266', // other
       'n:324', // coincident
+      'n:391', // separated (Arnulfstraße r:395/r:450, r:451/r:1342)
       'n:40', // other
-      'n:431', // TASK-082
+      'n:400', // separated (Arnulfstraße r:392/r:402, r:451/r:1342)
+      'n:405', // separated (Arnulfstraße r:388/r:408, r:406/r:1346)
+      'n:446', // separated (Arnulfstraße r:395/r:450)
       'n:55', // other
+      'n:721', // separated (Landsberger Straße r:1280/r:1334)
       'n:974', // stub
       'n:975', // stub
       'n:989', // other
     ],
-    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping).
+    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping); TASK-084 n:823
+    // (Marsstraße separated).
     edgesOff: [
       'n:1123', // coincident
-      'n:1303', // TASK-082
       'n:1375', // other
       'n:322', // coincident
       'n:324', // coincident
       'n:719', // coincident
-      'n:823', // coincident
-      'n:898', // TASK-082
       'n:949', // coincident
     ],
-    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping). TASK-082 resolved n:235.
+    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping); TASK-084 n:823
+    // (Marsstraße separated); TASK-082 n:104, n:235 and n:516.
     curbKinks: [
-      'n:104', // other
       'n:1123', // coincident
-      'n:154', // TASK-082
       'n:180', // TASK-082
-      'n:324', // TASK-082
       'n:33', // other
       'n:344', // stub
       'n:387', // coincident
-      'n:425', // TASK-082
-      'n:431', // TASK-082
+      'n:391', // separated (Arnulfstraße r:395/r:450, r:451/r:1342)
+      'n:407', // separated (Arnulfstraße r:388/r:408)
       'n:440', // coincident
       'n:446', // coincident
-      'n:510', // TASK-082
-      'n:516', // other
-      'n:548', // TASK-082
-      'n:590', // TASK-082
+      'n:536', // TASK-082
       'n:621', // other
-      'n:661', // TASK-082
       'n:719', // coincident
-      'n:823', // coincident
-      'n:894', // TASK-082
-      'n:898', // TASK-082
-      'n:949', // TASK-082
+      'n:721', // separated (Landsberger Straße r:1280/r:1334)
     ],
   },
 };
 
 // Coincident source carriageways (architecture 5.1 does not repair them, T20 lists them): of two
 // road ends on top of each other the shared mouth now clears both neighbours, not one each.
+// TASK-084 separates opposite one-way pairs on one centerline into divided pairs (r:368/r:480
+// left this list): the street they form is 14.5 m wide instead of 7 m, so the setbacks of the
+// lanes that meet it grow by about 3.75 m, as at any two-way street of that width.
+const meetsSeparated = (pair: string, node: string) =>
+  `Meets the separated ${pair} at ${node}: the divided street is 14.5 m wide, not 7 m.`;
 const storageExceptions: Record<string, string> = {
-  'r:368#0': 'Marsstraße r:368/r:480: reversed identical centerlines, zero offsets.',
-  'r:368#1': 'Marsstraße r:368/r:480: reversed identical centerlines, zero offsets.',
+  'r:1049#0': meetsSeparated('Landsberger Straße r:1280/r:1334', 'n:719'),
+  'r:343#0': meetsSeparated('Landsberger Straße r:1280/r:1334', 'n:719'),
+  'r:342#0': meetsSeparated('Landsberger Straße r:1280/r:1334', 'n:719 (lane start)'),
+  'r:761#0': meetsSeparated('Landsberger Straße r:1280/r:1334', 'n:721 (lane start)'),
+  'r:1202#0': meetsSeparated('Arnulfstraße r:392/r:402, r:406/r:1346', 'n:387'),
+  'r:753#0': meetsSeparated('Arnulfstraße r:392/r:402, r:406/r:1346', 'n:387'),
+  'r:1203#0': meetsSeparated('Arnulfstraße r:392/r:402, r:406/r:1346', 'n:387 (lane start)'),
+  'r:752#0': meetsSeparated('Arnulfstraße r:392/r:402, r:406/r:1346', 'n:387 (lane start)'),
+  'r:159#0': meetsSeparated('Arnulfstraße r:388/r:408', 'n:407'),
+  'r:160#0': meetsSeparated('Arnulfstraße r:388/r:408', 'n:407 (lane start)'),
+  'r:807#0': meetsSeparated('Arnulfstraße r:388/r:408', 'n:407 (lane start)'),
+  'r:802#0': meetsSeparated('Arnulfstraße r:392/r:402, r:451/r:1342', 'n:400'),
+  'r:803#0': meetsSeparated('Arnulfstraße r:392/r:402, r:451/r:1342', 'n:400 (lane start)'),
+  'r:804#0': meetsSeparated('Arnulfstraße r:388/r:408, r:406/r:1346', 'n:405'),
+  'r:805#0': meetsSeparated('Arnulfstraße r:388/r:408, r:406/r:1346', 'n:405 (lane start)'),
+  'r:1212#0': meetsSeparated('Arnulfstraße r:395/r:450, r:451/r:1342', 'n:391 (lane start)'),
+  'r:538#0': meetsSeparated('Arnulfstraße r:395/r:450', 'n:446'),
+  'r:537#0': meetsSeparated('Arnulfstraße r:395/r:450', 'n:446 (lane start)'),
+  'r:1354#1': meetsSeparated('Arnulfstraße r:395/r:450', 'n:446 (lane start)'),
+  'r:934#0': meetsSeparated('Marsstraße r:368/r:480', 'n:823 (lane start)'),
+  'r:934#1': meetsSeparated('Marsstraße r:368/r:480', 'n:823 (lane start)'),
+  'r:480#0': meetsSeparated('Marsstraße pair, its own lane,', 'n:949 (the signal)'),
   'r:565#0': 'Service ways r:565/r:589 share one centerline.',
   'r:566#0': 'Service ways r:566/r:588: identical direction, centerline and offset.',
   'r:1024#0': 'Service ways r:1024/r:899 share one realigned arm.',
@@ -176,14 +175,6 @@ const storageExceptions: Record<string, string> = {
   'r:839#0': 'Eased corner of r:839/r:840 (3.2 m off its centerline).',
   'r:840#0': 'Eased corner of r:839/r:840 (3.2 m off its centerline).',
   'r:867#0': 'Eased corner of r:866/r:867 (2.0 m off its centerline).',
-};
-
-// TASK-082: dividers or centre lines that reach past the 0.1 m margin into another road's mouth
-// or under an outline, at junctions whose outline moved with the new road edges (stage 3,
-// TASK-083, replaces the outline): Sindelfingen r:624 by 0.13 m, Munich r:155 by 0.63 m.
-const markingExceptions: Partial<Record<AuditCity, string[]>> = {
-  sindelfingen: ['r:624'],
-  munich: ['r:155'],
 };
 
 const audited = new Map<AuditCity, { net: CompiledCity; audits: NodeAudit[] }>();
@@ -289,7 +280,7 @@ test.each(auditCities)(
       if (points.some((p) => rings.some((ring) => deepInside(p, ring, 0.1))))
         offending.push(road.id);
     }
-    expect(offending).toEqual(markingExceptions[name] ?? []);
+    expect(offending).toEqual([]);
   },
   120_000,
 );

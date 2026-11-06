@@ -25,7 +25,8 @@ import type { City } from '../src/schema';
 export const auditCities = ['grid', 'town', 'sindelfingen', 'munich'] as const;
 export type AuditCity = (typeof auditCities)[number];
 
-export function loadAuditCity(name: AuditCity): City {
+/** `relaxMaxM` overrides the importer's default (TASK-084 experiments). */
+export function loadAuditCity(name: AuditCity, relaxMaxM?: number): City {
   if (name === 'grid') return grid5x5();
   if (name === 'town') return town();
   const [file, bbox] =
@@ -36,6 +37,7 @@ export function loadAuditCity(name: AuditCity): City {
     importerVersion: '1',
     drivingSide: 'right',
     bbox: [...bbox],
+    ...(relaxMaxM === undefined ? {} : { relaxMaxM }),
   });
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   return result.city;

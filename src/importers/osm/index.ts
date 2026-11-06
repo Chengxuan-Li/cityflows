@@ -13,6 +13,8 @@ import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
 import { smoothRoads } from './smooth';
 import { realignRoads } from './realign';
+import { assignCorridors, separateCoincident } from './corridors';
+import { DEFAULT_RELAX_MAX_M, relaxRoads } from './relax';
 import {
   consolidateJunctions,
   joinDividedFeeders,
@@ -264,6 +266,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     beforeConsolidation.compiled,
     signals.map((n) => n.id),
   );
+  const coincident = assignCorridors(roads);
   smoothRoads(
     city,
     roads,
@@ -277,6 +280,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
     diagnostics,
   );
+  separateCoincident(city, coincident);
+  relaxRoads(city, roads, options.relaxMaxM ?? DEFAULT_RELAX_MAX_M);
   incidents.clear();
   for (const node of Object.values(city.nodes))
     incidents.set(node.id, { incoming: [], outgoing: [] });
