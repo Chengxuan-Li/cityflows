@@ -109,9 +109,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-084](tasks/TASK-084.md) | 5 | Importer: corridors, separated carriageways, relaxation | `src/importers/osm` (new `corridors.ts`, `relax.ts`), import options, `tests/importers/T36*` | 066, 068, 070, 081; plan "Geometry rework" | T36; relaxation value by experiment | done |
 | [TASK-085](tasks/TASK-085.md) | 5 | Through movements at multi-lane splits and merges (B39) | `src/network/movements.ts`, `tests/network/T37*` | 071, 076, 080; plan "Geometry rework" | T37 | done |
 | [TASK-083](tasks/TASK-083.md) | 5 | Junction polygons, osm2streets-style: through roads keep their line (G2) | `src/network/junctions.ts` (rewritten), through-movement geometry in `movements.ts`, `types.ts`, `compile.ts`, `drawNode`, `realign.ts` call, `tests/network/T38*`, T20/T27/T31 | 081, 082, 084, 085; plan "Geometry rework" | T38; G2 within 0.1 m | done |
-| [TASK-087](tasks/TASK-087.md) | 5 | Importer: no overlapping carriageways near junctions (B41, B42) | `src/importers/osm/**`, audit measure 9 in `bench/geometry-audit.ts`, `tests/importers/T39*`, `tests/network/junction-audit.ts` lists | 083, 084; plan "Geometry rework" | T39; no corridor lane overlap outside outlines | todo |
+| [TASK-087](tasks/TASK-087.md) | 5 | Importer: no overlapping carriageways near junctions (B41, B42) | `src/importers/osm/**`, audit measure 9 in `bench/geometry-audit.ts`, `tests/importers/T39*`, `tests/network/junction-audit.ts` lists | 083, 084; plan "Geometry rework" | T39; no corridor lane overlap outside outlines | done (partial, rest in TASK-089) |
 | [TASK-088](tasks/TASK-088.md) | 5 | Lane dividers across multi-lane splits; markings at n:1181 (B44) | `src/render/layers/roads.ts`, `junction-markings.ts`, `tests/render/T40*` | 075, 083, 085 | T40 | done |
-| [TASK-089](tasks/TASK-089.md) | 5 | Through alignments that reach, a constant median, clean curb ends (B43, B42) | `src/network/junctions.ts`, `movements.ts`, `nodes.ts`, `tests/network/T38*` | 083, 087 | T38 extended | todo |
+| [TASK-089](tasks/TASK-089.md) | 5 | Converging carriageways side by side, through alignments that reach, a constant median, clean curb ends (B41, B43, B42) | `src/network/junctions.ts`, `movements.ts`, `nodes.ts`, `tests/network/T38*` | 083, 087 | T38 extended | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -338,8 +338,8 @@ triage by the lead; the agents' investigation may move items between groups.
 | B38 (done, TASK-082) | TASK-079 review: some lane polylines step backwards by 4 to 26 m (Munich `r:1025`/`r:1026`, `r:839`/`r:840`, `r:866`/`r:867`; Sindelfingen `r:1053`/`r:1054`, `r:1116`/`r:1117`), so the markings drawn from them are off there. | Geometry (`lanes.ts`) or the importer's smoothing: find where the offset lane polyline folds back and remove the fold. |
 | B39 (movements done, TASK-085; drawing B44) | TASK-080 review: at multi-lane splits and merges that stay ordinary junctions (Munich n:312, n:305, n:201, n:194) the stretch between the road ends is a junction surface with no lane markings, and some lanes there have no movement into the lane beside them (`r:313` has none into `r:692`). | Network movements and guide markings: generate the missing through movements at such splits, then let TASK-075's guide lines (or continuation) draw dividers across them. |
 | B40 (done, lead fix 44d871c) | TASK-084 review: the engine computes a conflict zone's entry position as `(lane.lengthM + zoneStart) - lane.lengthM`, which can round past `zoneStart`; T21 failed once by 2e-15 m on an intermediate tree. | Simulation: clamp the entry position to `zoneStart` (a rounding fix, no rule change); confirm the benchmark hashes. |
-| B41 | TASK-083 review: dual carriageways the source draws closer than their lane blocks (Landsberger at `n:104`, `n:324`, `n:721`, `n:774`; Arnulfstraße at `n:446`, `n:949`) overlap and their lanes cross near the node. | Importer: separate such pairs as TASK-084 separates coincident ones (a lateral push to the median), then let TASK-083 treat them as one approach. |
-| B42 | TASK-083 review (R3-6, `n:138`): with Arnulfstraße's carriageways one arm, the realignment of acute approaches bends Donnersbergerstraße within 25 m of the node instead, and two curb ends on the south road show 1 px nubs. | Importer realignment and curb drawing: check which arm the acute rule should bend at `n:138` and remove the nubs. |
+| B41 (partly done, TASK-087; rest in TASK-089) | TASK-083 review: dual carriageways the source draws closer than their lane blocks (Landsberger at `n:104`, `n:324`, `n:721`, `n:774`; Arnulfstraße at `n:446`, `n:949`) overlap and their lanes cross near the node. | Importer: separate such pairs as TASK-084 separates coincident ones (a lateral push to the median), then let TASK-083 treat them as one approach. |
+| B42 (done, TASK-087; curb nubs in TASK-089) | TASK-083 review (R3-6, `n:138`): with Arnulfstraße's carriageways one arm, the realignment of acute approaches bends Donnersbergerstraße within 25 m of the node instead, and two curb ends on the south road show 1 px nubs. | Importer realignment and curb drawing: check which arm the acute rule should bend at `n:138` and remove the nubs. |
 | B43 | TASK-083 review: through pairs whose joined alignment passes more than 2 m from the node keep their centerline (16 of 127 in Munich, 14 of 114 in Sindelfingen; `n:30`, the `n:823` Y), and divided pairs continuing into two carriageways widen their median near the node (`r:1280`/`r:1334` 0.5 to 0.93 m). | Network: let through alignments move farther where side-road storage allows, and keep a divided pair's median constant across the node. |
 | B44 (done, TASK-088) | TASK-083 review: multi-lane splits that stay ordinary junctions (B39, `n:201`, `n:312`) now draw a smooth surface but still carry no lane dividers across it; R3-1 `n:1181` shows zebra and stop markings at two approaches where they were hidden before. | Renderer (`roads.ts`, junction markings): draw dividers along TASK-085's through movements at such splits; check the markings at `n:1181`. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
@@ -1568,6 +1568,25 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   importer defects found there went to TASK-087 (`r:981`/`r:1358` overlap 2.8 m at the cut,
   `r:729` runs 5 m past `r:984`'s cut). Benchmark hashes unchanged; render tests and the
   agent's full suite (30 s timeout, 504) green; e2e 63.
+- 2026-11-06, TASK-087 merged as a partial delivery (B41, B42), the rest moved to TASK-089.
+  The owner: "You have not fixed the overlapping lanes at close to junction". New audit
+  measure 9 (lane overlap outside node outlines, every pair). Dual carriageways that meet at
+  both nodes are pushed apart to the 0.5 m median and kept side by side to both nodes;
+  `r:729`/`r:984` (one three-lane carriageway drawn as two ways) are one corridor; unnamed
+  Sindelfingen pairs between the same nodes join corridors where they can be pushed. B42: the
+  realignment no longer bends Donnersbergerstraße at `n:138` (one Munich and three Sindelfingen
+  arms changed which arm is bent). Measure 9 Munich 2 827 to 1 856 m2, same-corridor 2 244 m2
+  over 11 pairs to 1 273 over 8; the Landsberger pairs at `n:324` and `n:721` 761, 127 and
+  84 m2 to 0; Sindelfingen corridor pairs 0. The agent stopped correctly on the rest: a road
+  has one `lateralOffsetM` and ends exactly at its nodes, so a pair that meets at one node only
+  (`n:104`, `n:774` west, `n:949`, `n:823`, `n:1181` both sides, `n:382`, Sindelfingen
+  `r:574`/`r:971`) cannot be put side by side there without moving its lanes 3.75 to 5.5 m at
+  the far node; the network must give converging carriageways end offsets (TASK-089
+  amendment, lead decision; no schema change expected, approved if needed). Regression named:
+  `r:476`'s exit zebra at `n:1181` 5 to 4 of 8 stripes until then; seven Munich lanes lose
+  over 2 m (T38.4, named; `r:729` 7.3 m it used to run on into `n:1181`). Lead verification on
+  the merged tree: Munich at 0.15 3 863 completed, 42 failed, all gridlocked, stalledHeads 0;
+  vitest 510 (30 s timeout); route audit zero; benchmark hashes unchanged (agent).
 
 ## Owner decisions log
 
