@@ -128,7 +128,7 @@ export class Vehicles {
 
   update(snapshot: VehicleSnapshot & { vehicleHues?: Uint32Array; motionLane?: Int32Array }): void {
     this.snapshot = snapshot;
-    const { count, id, lane, x, y, lateralM, vehicleHues } = snapshot;
+    const { count, id, lane, x, y, lateralM, fade, vehicleHues } = snapshot;
     if (this.x.length < count) {
       this.x = new Float32Array(count);
       this.y = new Float32Array(count);
@@ -165,6 +165,7 @@ export class Vehicles {
 
       const tint = vehicleHues?.[id[i]! - 1] ?? style.driving;
       if (particle.tint !== tint) particle.tint = tint;
+      if (particle.alpha !== fade[i]) particle.alpha = fade[i]!;
     }
     this.segments.length = this.particles.length = count;
     this.animate(0);

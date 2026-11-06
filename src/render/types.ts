@@ -21,6 +21,7 @@ export interface VehicleSnapshot {
   lateralM: Float32Array;
   lane: Int32Array; // lane index, or -(movement index + 1)
   state: Uint8Array; // 1 driving, 2 queued_destination
+  fade: Float32Array; // sprite alpha: 1, falling to 0 before a gridlock respawn (TASK-077)
 }
 
 export type Pick =

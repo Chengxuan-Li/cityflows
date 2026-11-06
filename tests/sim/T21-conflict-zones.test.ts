@@ -229,5 +229,7 @@ test('T21: Munich at scale 0.15 has no contacting-zone overlap at any morning st
   }
   expect(contacts).toBeGreaterThan(0);
   expect(engine.timeS).toBe(10 * 3600);
-  expect(engine.metrics().trips.failed).toBe(0);
+  // The only failures are trips stuck at a jam head again after their last respawn (TASK-077).
+  const { trips, failedByReason } = engine.metrics();
+  expect(trips.failed).toBe(failedByReason.gridlocked);
 }, 600000);

@@ -292,30 +292,38 @@ test('T29 a held car whose target lane is blocked for good gives the exit up and
   let taken = -1;
   let queueToEnd = true;
   let previous = -1;
-  const engine = run(compiled, trips, 9000, (engine) => {
-    const car = engine.inspect(requester);
-    if (car?.state !== 'driving' || !Number.isNaN(leftS)) return;
-    if (Number.isNaN(heldS) && held(compiled, car, left)) heldS = engine.timeS;
-    if (car.lane !== left && previous === left) {
-      leftS = engine.timeS;
-      // A movement, or the next lane when the movement has no length.
-      taken =
-        car.lane < 0
-          ? -car.lane - 1
-          : compiled.movements.findIndex((m) => m.fromLane === left && m.toLane === car.lane);
-    }
-    previous = car.lane;
-    if (Number.isNaN(heldS) || !Number.isNaN(leftS)) return;
-    // Beside the held car the right lane stays a standing queue, with no room to cut in.
-    const snapshot = engine.snapshot();
-    let front = -Infinity;
-    for (const [index, id] of snapshot.id.entries())
-      if (snapshot.lane[index] === right) {
-        front = Math.max(front, engine.inspect(id)!.positionM);
-        queueToEnd &&= snapshot.speed[index]! < 0.1;
+  // Blocked for good only without gridlock recovery: the head of the right lane's queue stands
+  // behind the exit's queue and would respawn after 180 s (TASK-077).
+  const engine = run(
+    compiled,
+    trips,
+    9000,
+    (engine) => {
+      const car = engine.inspect(requester);
+      if (car?.state !== 'driving' || !Number.isNaN(leftS)) return;
+      if (Number.isNaN(heldS) && held(compiled, car, left)) heldS = engine.timeS;
+      if (car.lane !== left && previous === left) {
+        leftS = engine.timeS;
+        // A movement, or the next lane when the movement has no length.
+        taken =
+          car.lane < 0
+            ? -car.lane - 1
+            : compiled.movements.findIndex((m) => m.fromLane === left && m.toLane === car.lane);
       }
-    queueToEnd &&= front > car.positionM - vehicleLengthM - idm.minGapM;
-  });
+      previous = car.lane;
+      if (Number.isNaN(heldS) || !Number.isNaN(leftS)) return;
+      // Beside the held car the right lane stays a standing queue, with no room to cut in.
+      const snapshot = engine.snapshot();
+      let front = -Infinity;
+      for (const [index, id] of snapshot.id.entries())
+        if (snapshot.lane[index] === right) {
+          front = Math.max(front, engine.inspect(id)!.positionM);
+          queueToEnd &&= snapshot.speed[index]! < 0.1;
+        }
+      queueToEnd &&= front > car.positionM - vehicleLengthM - idm.minGapM;
+    },
+    { gridlock: { ...DEFAULT_SIM_PARAMS.gridlock, respawnS: Infinity } },
+  );
   expect(queueToEnd).toBe(true);
   expect(leftS - heldS).toBeGreaterThanOrEqual(missedTurnAfterS);
   expect(leftS - heldS).toBeLessThan(missedTurnAfterS + 10);

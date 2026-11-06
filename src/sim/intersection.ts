@@ -307,6 +307,11 @@ export function createIntersections(
 
   return {
     signals,
+    /** TASK-077: the movement's signal does not show green (no movement, or no signal: false). */
+    red: (movement: number) =>
+      movement !== -1 &&
+      !!compiled.nodes[compiled.movements[movement]!.node]!.signal &&
+      colors[movement] !== GREEN,
     request,
     resolve,
     release,

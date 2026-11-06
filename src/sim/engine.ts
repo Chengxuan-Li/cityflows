@@ -90,6 +90,7 @@ function createRun({
   const order = new Uint32Array(trips.length);
   const acceleration = new Float64Array(trips.length);
   const limit = new Float64Array(trips.length);
+  const respawning: number[] = [];
   let orderCount = 0;
   let tick = 0;
   const time = () => scenario.startS + tick * dtS;
@@ -240,11 +241,17 @@ function createRun({
       return false;
     }
     vehicles.route[id] = result.route;
-    vehicles.freeFlow[id] = freeFlow(id, connector);
-    vehicles.departed[id] = timeS;
+    vehicles.routeStep[id] = 0;
+    if (vehicles.respawns[id]) {
+      // A respawned trip keeps its first departure, free-flow time and reroute schedule.
+      routeReasons[id] = 'respawn';
+    } else {
+      vehicles.freeFlow[id] = freeFlow(id, connector);
+      vehicles.departed[id] = timeS;
+      rerouter.start(id, timeS);
+    }
     roadEnteredS[id] = timeS;
     roadEnteredM[id] = positionM;
-    rerouter.start(id, timeS);
     planLane(id, lane, positionM);
     vehicles.insert(id, lane, positionM);
     accounting.transition(id, DRIVING);
@@ -596,7 +603,55 @@ function createRun({
     }
   }
 
+  /**
+   * TASK-077: jam heads (on a movement, or first on their lane) standing still for `respawnS`
+   * leave the road in id order; the trip starts again. A red for the car's own movement neither
+   * starts nor stops the timer: a car arriving at red waits without one, a head that stood
+   * through green with its exit full keeps counting through the red after it.
+   */
+  function recoverGridlock(timeS: number) {
+    const { respawnS, maxRespawns } = params.gridlock;
+    respawning.length = 0;
+    for (let i = 0; i < orderCount; i++) {
+      const id = order[i]!;
+      if (vehicles.state[id] !== DRIVING) continue;
+      const field = vehicles.lane[id]!;
+      if ((field >= 0 && vehicles.first(field) !== id) || vehicles.speed[id]! >= 0.1) {
+        vehicles.jamS[id] = 0;
+        continue;
+      }
+      if (field >= 0 && vehicles.jamS[id] === 0 && intersections.red(vehicles.movement[id]!))
+        continue;
+      vehicles.jamS[id] = vehicles.jamS[id]! + dtS;
+      if (vehicles.jamS[id]! >= respawnS - 1e-9) respawning.push(id);
+    }
+    respawning.sort((a, b) => a - b);
+    for (const id of respawning) {
+      if (intersections.grants[id] !== -1) intersections.release(id);
+      intersections.exitedFrom[id] = -1;
+      if (vehicles.lane[id]! >= 0) leaveRoad(id, timeS, vehicles.position[id]!);
+      vehicles.remove(id);
+      laneChanges.leaveLane(id);
+      laneChanges.holding[id] = 0;
+      vehicles.speed[id] = 0;
+      vehicles.jamS[id] = 0;
+      vehicles.stopped[id] = 0;
+      vehicles.junctionWaiting[id] = 0;
+      if (vehicles.respawns[id]! >= maxRespawns) {
+        accounting.fail(id, 'gridlocked');
+        continue;
+      }
+      vehicles.lane[id] = -1;
+      vehicles.position[id] = 0;
+      vehicles.route[id] = null;
+      vehicles.attemptedFallbacks[id] = undefined;
+      accounting.respawn(id);
+      connectors.requeue(id, timeS);
+    }
+  }
+
   function snapshot(): VehicleSnapshot {
+    const { respawnS, fadeS } = params.gridlock;
     const count = accounting.trips.driving + accounting.trips.queuedDestination;
     const snapshot: VehicleSnapshot = {
       timeS: time(),
@@ -609,6 +664,7 @@ function createRun({
       lateralM: new Float32Array(count),
       lane: new Int32Array(count),
       state: new Uint8Array(count),
+      fade: new Float32Array(count),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
@@ -626,6 +682,7 @@ function createRun({
       snapshot.lateralM[i] = laneChanges.lateralM(id, tick);
       snapshot.lane[i] = field;
       snapshot.state[i] = state;
+      snapshot.fade[i] = fadeS > 0 ? Math.min(1, (respawnS - vehicles.jamS[id]!) / fadeS) : 1;
       i++;
     }
     return snapshot;
@@ -666,6 +723,7 @@ function createRun({
       departedS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.departed[id]!,
       arrivedS: Number.isNaN(vehicles.arrived[id]) ? null : vehicles.arrived[id]!,
       failReason: vehicles.failReason[id]!,
+      respawns: vehicles.respawns[id]!,
     };
   }
 
@@ -867,6 +925,7 @@ function createRun({
         resolve(timeS);
         tick++;
         commit(time());
+        recoverGridlock(time());
         observedCosts.update(time());
       }
     },

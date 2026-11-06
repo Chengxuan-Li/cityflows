@@ -32,6 +32,11 @@ export function createConnectors(
   let admitted = new Uint32Array(compiled.places.length);
   let disconnected: number[] = [];
   const previousArrival = new Int32Array(trips.length).fill(-1);
+  // TASK-077: the queue a trip was released from, whether its release freed a slot at its
+  // origin place, and when a respawned trip rejoined its queue.
+  let releasedFrom = new Int32Array(trips.length).fill(-1);
+  const freedSlot = new Uint8Array(trips.length);
+  const requeuedS = new Float64Array(trips.length).fill(-Infinity);
   let tracked = compiled.places.map((place) => place.kind === 'parking' || place.events.length > 0);
   const arrivals = new Map<string, Map<string, number>>();
   // Pair visits once at load. A scheduled return must not free a slot before the car arrives.
@@ -52,7 +57,7 @@ export function createConnectors(
       visits.set(trip.destinationPlaceId, id);
   }
   const random = createRandom(scenario.seed);
-  const queuedSince = (id: number) => Math.max(scenario.startS, trips[id]!.departS);
+  const queuedSince = (id: number) => Math.max(scenario.startS, trips[id]!.departS, requeuedS[id]!);
 
   for (const [id, trip] of trips.entries()) {
     if (trip.mode !== 'car') {
@@ -150,11 +155,15 @@ export function createConnectors(
           accounting.fail(id, 'stranded');
           continue;
         }
-        vehicles.waiting[id] = Math.max(0, timeS - queuedSince(id));
+        vehicles.waiting[id] = vehicles.waiting[id]! + Math.max(0, timeS - queuedSince(id));
         if (release(id, exit, timeS)) {
           recordAdmission(exit, timeS);
-          if (inside[connector.place]! && (!tracked[connector.place] || previous !== -1))
+          releasedFrom[id] = idx;
+          freedSlot[id] = 0;
+          if (inside[connector.place]! && (!tracked[connector.place] || previous !== -1)) {
             inside[connector.place]!--;
+            freedSlot[id] = 1;
+          }
         }
       }
       head[idx] = i;
@@ -187,6 +196,36 @@ export function createConnectors(
     return true;
   }
 
+  /**
+   * TASK-077: a respawned trip rejoins the queue it was released from, ahead of trips with
+   * later departure times, and its car is back inside its origin place.
+   */
+  function requeue(id: number, timeS: number) {
+    const place = compiled.places[compiled.index.place.get(trips[id]!.originPlaceId)!]!;
+    if (freedSlot[id]) inside[place.idx]!++;
+    freedSlot[id] = 0;
+    requeuedS[id] = timeS;
+    const out = place.connectorsOut.includes(releasedFrom[id]!)
+      ? releasedFrom[id]!
+      : place.connectorsOut[id % place.connectorsOut.length];
+    if (out === undefined) {
+      disconnected.push(id);
+      return;
+    }
+    const queue = queues[out]!;
+    const { departS } = trips[id]!;
+    let i = head[out]!;
+    while (
+      i < ready[out]! &&
+      (trips[queue[i]!]!.departS < departS ||
+        (trips[queue[i]!]!.departS === departS && queue[i]! < id))
+    )
+      i++;
+    queue.splice(i, 0, id);
+    ready[out]!++;
+    if (queue.length === 1) origins = compiled.connectors.filter((c) => queues[c.idx]!.length);
+  }
+
   function patch(next: CompiledCity) {
     const nextQueues = next.connectors.map((): number[] => []);
     const assign = (id: number, oldConnector?: CConnector) => {
@@ -217,6 +256,9 @@ export function createConnectors(
     admitted = remapPlaces(admitted);
     tracked = next.places.map((place) => place.kind === 'parking' || place.events.length > 0);
     queues = nextQueues;
+    releasedFrom = releasedFrom.map((old) =>
+      old === -1 ? -1 : (next.index.connector.get(compiled.connectors[old]!.id) ?? -1),
+    );
     head = new Uint32Array(queues.length);
     ready = new Uint32Array(queues.length);
     nextAdmission = budgets;
@@ -224,5 +266,5 @@ export function createConnectors(
     compiled = next;
   }
 
-  return { spawn, canArrive, arrive, queuedSince, patch };
+  return { spawn, canArrive, arrive, queuedSince, requeue, patch };
 }

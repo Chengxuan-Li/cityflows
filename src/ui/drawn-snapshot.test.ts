@@ -22,6 +22,7 @@ it('exposes the paused rendered position during lane changes in both directions'
     lateralM: new Float32Array([width / 4, -width / 4]),
     lane: new Int32Array([0, 1]),
     state: new Uint8Array([1, 1]),
+    fade: new Float32Array([1, 1]),
   };
   const drawn = pausedSnapshot(snapshot, result.compiled, 2);
   expect(drawn.x).toEqual(snapshot.x);
