@@ -6,7 +6,7 @@ import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diag
 import { continuationLayout } from './continuity';
 import { continuingRoad, corridorReferences, corridorSurfaces, EASED_NOTE_M } from './corridor';
 import { layoutRoad, type ContinuationEnd } from './lanes';
-import { roadEndSetbacks, junctionOutline, containMovements, junctionCurbs } from './junctions';
+import { junctionCuts, junctionPolygon, throughAlignments, throughPath } from './junctions';
 import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
@@ -82,7 +82,6 @@ export function compile(city: City): CompileResult {
     radiusM: 0,
     setbacks: [],
     outline: [],
-    curbs: [],
     control,
     movements: [],
     signal: null,
@@ -127,31 +126,33 @@ export function compile(city: City): CompileResult {
   const incident = nodes.map((node) =>
     [...incoming[node.idx]!, ...outgoing[node.idx]!].sort((a, b) => a.idx - b.idx),
   );
+  // A ramp ranks one below the road it joins: the roads leaving its end node, or, when it only
+  // leads into another ramp, the roads entering its start node. Other ramps do not count.
+  const joinedRank = (neighbors: CRoad[]) =>
+    Math.max(0, ...neighbors.map((next) => (next.roadClass === 'ramp' ? 0 : next.classRank)));
+  for (const road of roads)
+    if (road.roadClass === 'ramp')
+      road.classRank = Math.max(
+        1,
+        (joinedRank(outgoing[road.to]!) || joinedRank(incoming[road.from]!)) - 1,
+      );
+  const references = corridorReferences(sourceRoads, diagnostics);
+  // TASK-083: through roads keep their line across junctions; the cuts follow the new lines.
+  const through = throughAlignments(nodes, incident, sourceRoads, references);
+  const approaches = nodes.map(() => ({ approaches: [] as number[][], hidden: [] as number[] }));
   const trims = roads.map(() => ({ start: 0, end: 0 }));
   for (const node of nodes) {
-    node.setbacks = roadEndSetbacks(
-      node,
-      incident[node.idx]!.map((r) => sourceRoads[r.idx]!),
-    );
+    const cuts = junctionCuts(node, incident[node.idx]!, sourceRoads, references);
+    node.setbacks = cuts.setbacks;
+    approaches[node.idx] = cuts;
     node.radiusM = Math.max(0, ...node.setbacks);
     incident[node.idx]!.forEach((road, i) => {
       trims[road.idx]![road.from === node.idx ? 'start' : 'end'] = node.setbacks[i]!;
     });
   }
-  const references = corridorReferences(sourceRoads, diagnostics);
   const jointDeviations = roads.map(() => 0);
   const lanes: CLane[] = [];
-  // A ramp ranks one below the road it joins: the roads leaving its end node, or, when it only
-  // leads into another ramp, the roads entering its start node. Other ramps do not count.
-  const joinedRank = (neighbors: CRoad[]) =>
-    Math.max(0, ...neighbors.map((next) => (next.roadClass === 'ramp' ? 0 : next.classRank)));
   for (const road of roads) {
-    if (road.roadClass === 'ramp') {
-      road.classRank = Math.max(
-        1,
-        (joinedRank(outgoing[road.to]!) || joinedRank(incoming[road.from]!)) - 1,
-      );
-    }
     const before =
       trims[road.idx]!.start === 0
         ? continuingRoad(references, road, incoming[road.from]!, false)
@@ -293,9 +294,9 @@ export function compile(city: City): CompileResult {
     lane.in = [];
     lane.out = [];
   }
-  for (const node of nodes) node.outline = junctionOutline(node, incident[node.idx]!, lanes);
   const movements: CMovement[] = [];
   for (const node of nodes) {
+    const pairs = new Set(through[node.idx]!.map((p) => `${p.from}>${p.to}`));
     generateMovements(
       node,
       sourceNodes[node.idx]!,
@@ -307,11 +308,24 @@ export function compile(city: City): CompileResult {
       movements,
       continuity.pairs.get(node.idx),
       continuity.pairs.has(node.idx) ? undefined : laneHeadings,
+      pairs.size
+        ? (a, b) =>
+            pairs.has(`${a.road}>${b.road}`)
+              ? throughPath(roads[a.road]!, roads[b.road]!, a, b)
+              : undefined
+        : undefined,
     );
-    containMovements(node, movements, lanes);
+    node.outline = junctionPolygon(
+      node,
+      incident[node.idx]!,
+      approaches[node.idx]!.approaches,
+      approaches[node.idx]!.hidden,
+      through[node.idx]!,
+      lanes,
+      movements,
+    );
     populateConflicts(node, movements, lanes);
   }
-  junctionCurbs(nodes, roads);
   corridorSurfaces(roads);
   for (const road of roads)
     if (jointDeviations[road.idx]! > EASED_NOTE_M)

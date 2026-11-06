@@ -579,12 +579,11 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
   const rings = [
     ...incident.map((r) => closed(r.surface)),
     ...(node.outline.length ? [closed(node.outline)] : []),
-    ...node.curbs.map(closed),
   ];
   const inside = rings.map((ring) => preparePolygon(ring, 0));
   const inD = (p: Vec2) => inside.some((test) => test(p));
   const corridors = pairs.map(([a, b]) => corridor(city, node, a, b));
-  const extentPoints = [...node.outline, ...node.curbs.flat()];
+  const extentPoints = node.outline;
   const result: ThroughDeviation = {
     node: node.id,
     pair: '',
@@ -931,7 +930,8 @@ export function junctionShapeAudit(
 ): JunctionShape | null {
   if (!node.outline.length) return null;
   const outline = closed(node.outline);
-  const curbs = node.curbs.map(closed);
+  // TASK-083: the curbs are part of the outline.
+  const curbs: Vec2[][] = [];
   const ends = roadEnds(net, node).map((end) => {
     const d = outward(city, end.road, end.atEnd);
     return { ...end, angle: Math.atan2(d.y, d.x), d };

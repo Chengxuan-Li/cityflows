@@ -255,10 +255,31 @@ test.each(auditCities)(
     let easedRoads = 0;
     for (const road of net.roads) {
       const source = city.roads[road.id]!.centerline;
-      if (distance(road.reference[0]!, source[0]!) > 1e-9) failures.push(`${road.id}: start moved`);
-      if (distance(road.reference.at(-1)!, source.at(-1)!) > 1e-9)
-        failures.push(`${road.id}: end moved`);
-      const deviation = Math.max(...source.map((p) => nearestOnPolyline(road.reference, p).away));
+      // TASK-083: at a junction a through road keeps its alignment, so within 20 m of the node
+      // (at most half the road) its reference line may leave the source by up to 2 m and no
+      // longer end at the node point.
+      const lengths = cumulativeLengths(source);
+      const total = lengths.at(-1)!;
+      const aligned = [false, true].map((atEnd) => {
+        const [p, q] = atEnd
+          ? [road.reference.at(-1)!, source.at(-1)!]
+          : [road.reference[0]!, source[0]!];
+        if (distance(p, q) <= 1e-9) return false;
+        const node = net.nodes[atEnd ? road.to : road.from]!;
+        if (!node.outline.length || distance(p, q) > 2 + 1e-9)
+          failures.push(`${road.id}: ${atEnd ? 'end' : 'start'} moved`);
+        return true;
+      });
+      const reach = Math.min(20, total / 2) + 0.5;
+      const deviation = Math.max(
+        0,
+        ...source
+          .filter(
+            (_, i) =>
+              !(aligned[0] && lengths[i]! < reach) && !(aligned[1] && total - lengths[i]! < reach),
+          )
+          .map((p) => nearestOnPolyline(road.reference, p).away),
+      );
       if (deviation > 0.05) {
         easedRoads++;
         if (!noted.has(road.id)) failures.push(`${road.id}: ${deviation.toFixed(3)} m, no note`);

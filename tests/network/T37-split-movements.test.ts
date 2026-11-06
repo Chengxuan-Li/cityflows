@@ -185,8 +185,12 @@ test('T37: the lanes that line up at Munich n:312, n:305, n:201 and n:194 contin
 // missing (n:253 r:482#0>r:321#0; n:305 r:1188#0-2>r:307#0-2; n:308 r:1259#1>r:310#1,
 // r:1259#2>r:310#2; n:312 r:313#0>r:692#0, r:313#1>r:692#1); Sindelfingen 93 of 94, missing
 // n:918 r:1000#0>r:920#0. Movements 1327 to 1335 and 1123 to 1124; nodes of the kind 70 and 48.
+// TASK-083: Munich 1335 to 1340. The realignment no longer bends one carriageway of a corridor
+// away from the other, so at n:104, n:324, n:446, n:721, n:774 and n:823 the through road is
+// classified through again (its curb lanes gain the through pairing; e.g. r:1276#0>r:1277#0)
+// and turns between a corridor's two carriageways are u-turns, not lefts.
 test.each([
-  ['Munich', 70, 161, 1, 1335],
+  ['Munich', 70, 161, 1, 1340],
   ['Sindelfingen', 48, 94, 0, 1124],
 ] as const)(
   'T37: %s gives every lined-up trunk and branch lane a movement unless banned',

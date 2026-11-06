@@ -4,11 +4,13 @@ import {
   headingAtDistance,
   pointAtDistance,
   polylineLength,
+  segmentIntersection,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { Diagnostic } from '../../network';
-import { junctionSetbacks } from '../../network/junctions';
-import type { City, RoadClass } from '../../schema';
+import { SETBACK_CAP_M } from '../../network/junctions';
+import { roadWidth } from '../../network/lanes';
+import type { City, Node, Road, RoadClass } from '../../schema';
 import type { OsmRoad } from './roads';
 
 const degree = Math.PI / 180;
@@ -48,6 +50,134 @@ function deviation(points: Vec2[], original: Vec2[]): number {
   );
 }
 
+function outwardLine(road: Road, node: Pick<Node, 'id'>) {
+  return road.from === node.id ? road.centerline : [...road.centerline].reverse();
+}
+
+/** The TASK-061 rule (straight edges from the node, farthest crossing plus 1 m), with which the
+ * realignment sizes its straight mouth, so imported geometry stays as it was before the
+ * compiler's junction rules changed (TASK-074, TASK-083). Setbacks follow `roads`' order. */
+function straightSetbacks(node: Pick<Node, 'id' | 'pos' | 'control'>, roads: Road[]): number[] {
+  const ends = roads.map((road, index) => {
+    const line = outwardLine(road, node);
+    const lengths = cumulativeLengths(line);
+    const heading = headingAtDistance(line, lengths, 0);
+    const width = roadWidth(road);
+    const offset = road.lateralOffsetM * (road.from === node.id ? 1 : -1);
+    return {
+      road,
+      index,
+      line,
+      lengths,
+      heading,
+      width,
+      extent: Math.max(Math.abs(offset - width / 2), Math.abs(offset + width / 2)),
+      edges: [-1, 1].map((side) => {
+        const lateral = offset + (side * width) / 2;
+        const start = {
+          x: node.pos.x - Math.sin(heading) * lateral,
+          y: node.pos.y + Math.cos(heading) * lateral,
+        };
+        return [
+          start,
+          {
+            x: start.x + Math.cos(heading) * lengths.at(-1)!,
+            y: start.y + Math.sin(heading) * lengths.at(-1)!,
+          },
+        ];
+      }),
+    };
+  });
+  // Opposite carriageways form one physical street end; splitting a two-way street
+  // therefore still gives a through node with four directed roads.
+  const groups = new Map<string, typeof ends>();
+  for (const end of ends) {
+    const other = end.road.from === node.id ? end.road.to : end.road.from;
+    const key =
+      end.road.streetGroupId === null ? end.road.id : `${end.road.streetGroupId}:${other}`;
+    const group = groups.get(key) ?? [];
+    group.push(end);
+    groups.set(key, group);
+  }
+  const arms = [...groups.values()].sort((a, b) => a[0]!.heading - b[0]!.heading);
+  if (arms.length === 2 && node.control === 'uncontrolled') {
+    const a = arms[0]!,
+      b = arms[1]!;
+    if (
+      a.length === b.length &&
+      a.every((end) =>
+        b.some(
+          (other) =>
+            (end.road.to === node.id) !== (other.road.to === node.id) &&
+            end.road.name === other.road.name &&
+            end.road.roadClass === other.road.roadClass &&
+            end.road.lateralOffsetM === other.road.lateralOffsetM &&
+            end.road.lanes.length === other.road.lanes.length &&
+            end.road.lanes.every((lane, i) => lane.widthM === other.road.lanes[i]!.widthM) &&
+            end.width === other.width &&
+            Math.cos(end.heading - other.heading) < -Math.cos(Math.PI / 36),
+        ),
+      )
+    )
+      return roads.map(() => 0);
+  }
+  const setbacks = ends.map((end) => end.width / 2 + 1);
+  for (let i = 0; i < arms.length; i++) {
+    const arm = arms[i]!;
+    const neighbors =
+      arms.length > 1
+        ? [arms[(i + 1) % arms.length]!, arms[(i + arms.length - 1) % arms.length]!]
+        : [];
+    for (const end of arm) {
+      const cap = Math.max(
+        end.width / 2 + 1,
+        SETBACK_CAP_M,
+        ...neighbors.flatMap((neighbor) => neighbor.map((other) => other.extent + 1)),
+      );
+      for (const neighbor of new Set(neighbors))
+        for (const other of neighbor) {
+          if (Math.abs(Math.sin(end.heading - other.heading)) < Math.sin(Math.PI / 36)) continue;
+          for (const edge of end.edges) {
+            for (const otherEdge of other.edges) {
+              for (let j = 1; j < edge.length; j++)
+                for (let k = 1; k < otherEdge.length; k++) {
+                  const hit = segmentIntersection(
+                    edge[j - 1]!,
+                    edge[j]!,
+                    otherEdge[k - 1]!,
+                    otherEdge[k]!,
+                  );
+                  if (hit) {
+                    let nearest = Infinity,
+                      along = 0;
+                    for (let s = 1; s < end.line.length; s++) {
+                      const a = end.line[s - 1]!,
+                        b = end.line[s]!;
+                      const dx = b.x - a.x,
+                        dy = b.y - a.y;
+                      const segment = Math.hypot(dx, dy);
+                      if (segment === 0) continue;
+                      const t = Math.max(
+                        0,
+                        Math.min(1, ((hit.x - a.x) * dx + (hit.y - a.y) * dy) / segment ** 2),
+                      );
+                      const away = Math.hypot(hit.x - a.x - t * dx, hit.y - a.y - t * dy);
+                      if (away < nearest) {
+                        nearest = away;
+                        along = end.lengths[s - 1]! + t * segment;
+                      }
+                    }
+                    setbacks[end.index] = Math.min(cap, Math.max(setbacks[end.index]!, along + 1));
+                  }
+                }
+            }
+          }
+        }
+    }
+  }
+  return setbacks;
+}
+
 interface Arm {
   sources: OsmRoad[];
   line: Vec2[];
@@ -75,7 +205,14 @@ export function realignRoads(
     for (const source of incident) {
       const r = source.road;
       const other = r.from === node.id ? r.to : r.from;
-      const key = r.streetGroupId === null ? r.id : `${r.streetGroupId}:${other}`;
+      // A corridor's carriageways approaching the node together (a two-way street, a divided
+      // pair, a dual carriageway) are one arm: bending one away from the other only splays the
+      // street into lobes beside a side road (G2, TASK-083).
+      const key = r.corridorId
+        ? `corridor:${r.corridorId}`
+        : r.streetGroupId === null
+          ? r.id
+          : `${r.streetGroupId}:${other}`;
       const group = grouped.get(key) ?? [];
       group.push(source);
       grouped.set(key, group);
@@ -172,19 +309,9 @@ export function realignRoads(
             )
           )
             break;
-          // Reuse the compiler's capped rule so the straight mouth reaches the actual cut.
-          const setbacks = junctionSetbacks(
-            {
-              idx: 0,
-              id: node.id,
-              pos: node.pos,
-              radiusM: 0,
-              setbacks: [],
-              outline: [],
-              control: node.control,
-              movements: [],
-              signal: null,
-            },
+          // The TASK-061 capped rule sizes the straight mouth.
+          const setbacks = straightSetbacks(
+            node,
             incident.map((source) => {
               if (!arm.sources.includes(source)) return source.road;
               const line = [node.pos, along(node.pos, heading, length)];

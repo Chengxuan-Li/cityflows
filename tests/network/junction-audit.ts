@@ -1,11 +1,6 @@
 import { segmentsIntersect } from '../../src/geo/polyline';
 import type { CompiledCity } from '../../src/network';
-import {
-  SETBACK_CAP_M,
-  containMovements,
-  escapingSamples,
-  junctionOutline,
-} from '../../src/network/junctions';
+import { SETBACK_CAP_M } from '../../src/network/junctions';
 import type { Vec2 } from '../../src/geo/vec2';
 
 // Canonical road-body defects, outside TASK-061's junction geometry surface.
@@ -18,8 +13,8 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
       'The source ramp crosses the trunk lane body at n:194; TASK-071 removes the capped-setback classification at this continuation.',
     'r:1354#0>r:447#0':
       'Opposing Arnulfstraße source carriageways cross along the body; n:446 is no longer capped after realignment.',
-    'r:565#0>r:589#0':
-      'The other coincident service-way lane pair is exposed by the shorter neighboring setback; both source centerlines are unchanged.',
+    // TASK-083: r:565#0>r:589#0 and r:325#0>r:941#0 no longer cross (r:565/r:589 lie on each
+    // other; r:325/r:941 part where they used to cross once the realignment leaves corridors whole).
     'r:1277#0>r:1362#0': 'Separate zero-offset Landsberger carriageways cross along the road body.',
     // TASK-074: r:566#0>r:588#0 no longer crosses: of two coincident ends the shadowed one keeps
     // its own floor setback. The pairs below are no longer behind a capped setback at their
@@ -30,8 +25,18 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     // the same vertices and no longer register as crossing.
     'r:1372#0>r:845#0':
       'Separate Marsstraße carriageways cross 30 m from n:823 after the realigned one bends back.',
-    'r:325#0>r:941#0':
-      'Separate Landsberger Straße carriageways cross 117 to 126 m from n:322, near their far ends.',
+    // TASK-083: the two carriageways of one corridor converging on a node at under 20 degrees
+    // (dual carriageways the source draws closer than their lane blocks) are one approach: they
+    // no longer cut each other to the cap, so their lanes cross near the node, under the polygon's
+    // gore where they part within 25 m.
+    'r:644#0>r:964#0': 'Landsberger Straße carriageways converge on n:104 at 11 degrees.',
+    'r:1330#0>r:327#0': 'Landsberger Straße carriageways converge on n:324 at 12 degrees.',
+    'r:1279#0>r:724#0': 'Landsberger Straße carriageways converge on n:721.',
+    'r:1276#0>r:1368#0': 'Landsberger Straße carriageways converge on n:774 (G2).',
+    'r:636#0>r:950#0': 'Arnulfstraße carriageways converge on the signal n:949.',
+    'r:636#0>r:950#1': 'Arnulfstraße carriageways converge on the signal n:949.',
+    'r:636#1>r:950#0': 'Arnulfstraße carriageways converge on the signal n:949.',
+    'r:712#0>r:955#0': 'Arnulfstraße carriageways converge on the signal n:949.',
   },
   'sindelfingen-a81': {
     'r:650#0>r:80#0':
@@ -87,21 +92,6 @@ export function movementsOutside(net: CompiledCity) {
     .map((m) => m.id);
 }
 
-export function outlineCrossings(net: CompiledCity) {
-  return net.nodes.flatMap((node) => {
-    const ring = node.outline;
-    const crossings: string[] = [];
-    for (let i = 1; i < ring.length; i++) {
-      for (let j = i + 2; j < ring.length; j++) {
-        if (i === 1 && j === ring.length - 1) continue;
-        if (segmentsIntersect(ring[i - 1]!, ring[i]!, ring[j - 1]!, ring[j]!))
-          crossings.push(`${node.id}:${i}/${j}`);
-      }
-    }
-    return crossings;
-  });
-}
-
 /** Lane pairs of distinct incident roads with a proper crossing (shared ends excluded).
  * `capped` marks a crossing at a node where a road end's setback hit `SETBACK_CAP_M`: an
  * acute approach the junction surface covers instead of a longer setback (architecture 5.1). */
@@ -137,65 +127,4 @@ export function junctionOverlaps(net: CompiledCity) {
     }
   }
   return overlaps;
-}
-
-export function surfaceAudit(net: CompiledCity) {
-  const widthsOutside: string[] = [],
-    oversized: string[] = [],
-    tangents: string[] = [];
-  const classes = { fillet: 0, straight: 0, extended: 0, gore: 0, through: 0 };
-  for (const original of net.nodes) {
-    const node = { ...original };
-    node.outline = junctionOutline(
-      node,
-      net.roads.filter((r) => r.from === node.idx || r.to === node.idx),
-      net.lanes,
-    );
-    const { joins, limit } = containMovements(node, net.movements, net.lanes);
-    const shape = !node.outline.length
-      ? 'through'
-      : joins.some((j) => j.kind === 'gore')
-        ? 'gore'
-        : joins.some((j) => j.kind === 'extended')
-          ? 'extended'
-          : joins.some((j) => j.kind === 'fillet')
-            ? 'fillet'
-            : 'straight';
-    classes[shape]++;
-    if (node.outline.some((p) => Math.hypot(p.x - node.pos.x, p.y - node.pos.y) > limit + 1e-6))
-      oversized.push(node.id);
-    for (const join of joins) {
-      if (join.kind !== 'fillet') continue;
-      const line = join.points.filter(
-        (p, i) =>
-          i === 0 || Math.hypot(p.x - join.points[i - 1]!.x, p.y - join.points[i - 1]!.y) > 1e-6,
-      );
-      for (const [point, direction, start] of [
-        [join.first!, join.directions[0], true],
-        [join.last!, join.directions[1], false],
-      ] as const) {
-        const i = line.findIndex((p) => Math.hypot(p.x - point.x, p.y - point.y) < 1e-5);
-        const other = line[i + (start ? 1 : -1)];
-        if (!other) {
-          tangents.push(`${node.id}:missing tangent`);
-          continue;
-        }
-        const dx = point.x - other.x;
-        const dy = point.y - other.y;
-        const cosine = (dx * direction.x + dy * direction.y) / Math.hypot(dx, dy);
-        // TASK-074: 5 degrees, as T27 (a curb meets a slanted or curved road end at its tangent
-        // over the end's first half meter, not its first chord).
-        if (cosine < Math.cos((5 * Math.PI) / 180) - 1e-6)
-          tangents.push(`${node.id}:${join.radius}`);
-      }
-    }
-    if (!node.outline.length) continue;
-    // TASK-074: widths across the curve's own tangent (the lanes' directions at both ends, not
-    // the first chord's), and a hairpin sweeping back over its own road counts as on the road.
-    const roads = net.roads.filter((r) => r.from === node.idx || r.to === node.idx);
-    escapingSamples(node, net.movements, net.lanes, roads, node.outline).forEach((samples, i) => {
-      if (samples.length) widthsOutside.push(net.movements[node.movements[i]!]!.id);
-    });
-  }
-  return { widthsOutside, oversized, tangents, classes };
 }

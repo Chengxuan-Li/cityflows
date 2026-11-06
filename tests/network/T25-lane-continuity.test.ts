@@ -200,7 +200,11 @@ test.each([
   // TASK-074 moved these on purpose: ordinary junctions take the SUMO-style setbacks and
   // outlines (architecture 5.1); the continuation nodes (the count) are unchanged.
   // Before TASK-074: c1b2bf4d… (grid) and 1ee92a0e… (Munich).
-  ['grid', 0, '082eb0366297a4daf673c250674ccbf6c94b52f424fdca70263b5acc38885b9e'],
+  // TASK-083 moved both (082eb036… grid, b066db45… Munich before): setbacks are cut by the
+  // corridor-approach rule and outlines are the clipper union of the cut region, curbs and
+  // movement surfaces; in Munich the realignment also keeps corridors' carriageways together.
+  // The continuation nodes (the count) are unchanged.
+  ['grid', 0, 'afb09038b66ed5736e3193eaa2317ce8f5eb4d1b5f98345d1acc755d1e3be715'],
   // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
   // TASK-080 moved the hash (28e9d7b3… before): setbacks are unchanged everywhere, but the
   // outlines of n:726 and n:1181 follow r:729 and r:984 laid side by side between them (B36),
@@ -213,7 +217,7 @@ test.each([
   // trunk roads r:1030, r:687 and r:685 beyond their fixed junction zones.
   // TASK-082 moved the outlines again (they follow road edges offset from corridor reference
   // lines); the setbacks and the movement set are unchanged by it (33c175d7… before).
-  ['Munich', 63, 'b066db45ca130f83a0860691ccd9c5ad160074299b29643c3d447be827b813ee'],
+  ['Munich', 63, '9f01320569d2006d42127339260295d1186929050cf308c6d3cab82a8b5afca3'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {

@@ -1,4 +1,5 @@
 import { cumulativeLengths, distance, headingAtDistance, sampleBezier } from '../geo/polyline';
+import type { Vec2 } from '../geo/vec2';
 import { movementId, type DrivingSide, type Node, type TurnRule } from '../schema';
 import { defaultSlice, orderBranches, roadPair, type ContinuationPairs } from './continuity';
 import type { CLane, CMovement, CNode, CRoad, Turn } from './types';
@@ -88,6 +89,8 @@ export function generateMovements(
   movements: CMovement[],
   continuation?: ContinuationPairs,
   preservedHeadings?: { start: number; end: number }[],
+  /** TASK-083: the path of a through movement on a through road, along its reference lines. */
+  throughPath?: (a: CLane, b: CLane) => Vec2[] | undefined,
 ): void {
   const highestRank = Math.max(0, ...incoming.map((road) => road.classRank));
   const isMinor = (road: CRoad) =>
@@ -123,17 +126,23 @@ export function generateMovements(
         ) <= 0.5 &&
         Math.abs(signedAngle(startHeading, endHeading)) < Math.PI / 36);
     const control = distance(start, end) * 0.4;
-    const polyline = straight
-      ? [start, end]
-      : sampleBezier(
-          start,
-          {
-            x: start.x + control * Math.cos(startHeading),
-            y: start.y + control * Math.sin(startHeading),
-          },
-          { x: end.x - control * Math.cos(endHeading), y: end.y - control * Math.sin(endHeading) },
-          end,
-        );
+    const along = continuing(turn) ? throughPath?.(a, b) : undefined;
+    const polyline = along
+      ? along
+      : straight
+        ? [start, end]
+        : sampleBezier(
+            start,
+            {
+              x: start.x + control * Math.cos(startHeading),
+              y: start.y + control * Math.sin(startHeading),
+            },
+            {
+              x: end.x - control * Math.cos(endHeading),
+              y: end.y - control * Math.sin(endHeading),
+            },
+            end,
+          );
     const cumulative = cumulativeLengths(polyline);
     const idx = movements.length;
     movements.push({

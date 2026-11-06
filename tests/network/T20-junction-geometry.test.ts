@@ -15,7 +15,10 @@ test('T20: fixture lanes do not cross and movements stay inside the outline', ()
   // Both two-lane approaches overlap the same two exit lanes: crossing movements remain a junction.
   // TASK-074: the approaches are one direction now, and the slip road's curved block crosses
   // the motorway's 15 to 20 m out, so the TASK-061 rule between them caps both (was 4.5).
-  expect(merge.setbacks).toEqual([10, 4.5, 10]);
+  // TASK-083: the cut is square to the road's own reference line and measured along it, and the
+  // cap is the widest neighbouring end's extent plus 1 m where that exceeds 10 m (as before), so
+  // the first approach is cut at 11.5 m.
+  expect(merge.setbacks).toEqual([11.5, 4.5, 10]);
   const tees = result.compiled.nodes.filter((n) => n.pos.y === 550 && [0, 75].includes(n.pos.x));
   expect(
     result.compiled.roads.filter(
