@@ -13,7 +13,7 @@ import {
 import type { Vec2 } from '../src/geo/vec2';
 import { importOsm } from '../src/importers/osm';
 import { compile, type CMovement, type CompiledCity, type CNode, type CRoad } from '../src/network';
-import { SETBACK_CAP_M } from '../src/network/junctions';
+import { SETBACK_CAP_M, junctionCurbs } from '../src/network/junctions';
 import { drawRoad } from '../src/render/layers/roads';
 import type { City } from '../src/schema';
 
@@ -495,6 +495,64 @@ export function summarize(audits: NodeAudit[]) {
   };
 }
 
+/** Curb aprons (TASK-078): how many, the radius used against the class radius, how often shrunk,
+ * and the area (0.25 m cells) each shares with a road surface or another apron. */
+export function apronAudit(net: CompiledCity) {
+  const aprons = junctionCurbs(net.nodes, net.roads);
+  const surfaces = net.roads.map((road) => {
+    const ring = [...road.surface, road.surface[0]!];
+    return { box: bounds(ring), inside: preparePolygon(ring, 0) };
+  });
+  const rings = aprons.map((a) => ({ box: bounds(a.ring), inside: preparePolygon(a.ring, 0) }));
+  let roadM2 = 0,
+    apronM2 = 0;
+  const meet = (a: ReturnType<typeof bounds>, b: ReturnType<typeof bounds>) =>
+    a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+  rings.forEach(({ box, inside }, k) => {
+    const roads = surfaces.filter((s) => meet(s.box, box));
+    const others = rings.filter((r, j) => j !== k && meet(r.box, box));
+    for (let ix = Math.floor((box.minX - OFFSET_X) / CELL_M); ; ix++) {
+      const x = (ix + 0.5) * CELL_M + OFFSET_X;
+      if (x > box.maxX) break;
+      for (let iy = Math.floor((box.minY - OFFSET_Y) / CELL_M); ; iy++) {
+        const y = (iy + 0.5) * CELL_M + OFFSET_Y;
+        if (y > box.maxY) break;
+        const p = { x, y };
+        if (!inside(p)) continue;
+        if (roads.some((r) => r.inside(p))) roadM2 += CELL_M ** 2;
+        // Each shared cell is met from both aprons.
+        if (others.some((r) => r.inside(p))) apronM2 += CELL_M ** 2 / 2;
+      }
+    }
+  });
+  const byClass = Object.fromEntries(
+    [6, 9, 12].map((classRadius) => {
+      const of = aprons.filter((a) => a.classRadius === classRadius);
+      const shrunk = of.filter((a) => a.radius < a.classRadius);
+      return [
+        `${classRadius} m`,
+        {
+          aprons: of.length,
+          shrunk: shrunk.length,
+          meanRadiusM: of.length
+            ? Math.round((of.reduce((sum, a) => sum + a.radius, 0) / of.length) * 100) / 100
+            : 0,
+          smallestM: of.length ? Math.round(Math.min(...of.map((a) => a.radius)) * 100) / 100 : 0,
+        },
+      ];
+    }),
+  );
+  return {
+    nodesWithOutline: net.nodes.filter((n) => n.outline.length).length,
+    nodesWithAprons: new Set(aprons.map((a) => a.node)).size,
+    aprons: aprons.length,
+    shrunk: aprons.filter((a) => a.radius < a.classRadius).length,
+    byClass,
+    overlapRoadM2: Math.round(roadM2 * 100) / 100,
+    overlapApronM2: Math.round(apronM2 * 100) / 100,
+  };
+}
+
 export function worstNodes(audits: NodeAudit[], count = 20): NodeAudit[] {
   return [...audits]
     .sort((a, b) => b.overlapM2 - a.overlapM2 || (a.id < b.id ? -1 : 1))
@@ -507,15 +565,40 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/junction-audit.ts')) {
     string,
     {
       summary: ReturnType<typeof summarize> & ReturnType<typeof markingLengths>;
+      aprons: ReturnType<typeof apronAudit>;
       nodes: NodeAudit[];
     }
   > = {};
   for (const name of auditCities) {
     const net = compileAuditCity(name);
     const audits = auditJunctions(net);
-    report[name] = { summary: { ...summarize(audits), ...markingLengths(net) }, nodes: audits };
+    report[name] = {
+      summary: { ...summarize(audits), ...markingLengths(net) },
+      aprons: apronAudit(net),
+      nodes: audits,
+    };
   }
   console.table(Object.fromEntries(Object.entries(report).map(([k, v]) => [k, v.summary])));
+  console.info('Curb aprons (TASK-078)');
+  console.table(
+    Object.fromEntries(
+      Object.entries(report).map(([k, { aprons }]) => {
+        const { byClass, ...rest } = aprons;
+        return [
+          k,
+          {
+            ...rest,
+            ...Object.fromEntries(
+              Object.entries(byClass).map(([c, v]) => [
+                c,
+                `${v.aprons} (${v.shrunk} shrunk, mean ${v.meanRadiusM}, min ${v.smallestM})`,
+              ]),
+            ),
+          },
+        ];
+      }),
+    ),
+  );
   for (const name of auditCities) {
     console.info(`${name}: 20 worst nodes by overlap area`);
     console.table(
