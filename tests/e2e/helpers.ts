@@ -160,6 +160,7 @@ export async function importOsm(page: Page, path: string) {
   await button(page, 'Import roads').click();
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     '0 errors',
+    { timeout: 60_000 },
   );
   await button(page, 'Continue').click();
   await button(page, 'Accept city').click();

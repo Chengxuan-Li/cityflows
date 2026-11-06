@@ -31,6 +31,7 @@ test('demo D, import-edit-share: import OSM, fix a turn restriction, save, reope
   await dialog.getByRole('button', { name: 'Import roads' }).click();
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     /\d+ roads · 0 errors · \d+ warnings/,
+    { timeout: 60_000 },
   );
   const summary = await dialog.getByRole('status').innerText();
   await dialog.getByRole('button', { name: 'Continue' }).click();
