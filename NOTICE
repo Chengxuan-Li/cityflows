@@ -34,3 +34,9 @@ Source: https://github.com/maplibre/maplibre-gl-js/tree/v6.16.0
 License: BSD-3-Clause (see node_modules/maplibre-gl/LICENSE.txt).
 Used as a dependency in src/ui/import/area-picker.tsx for the area selection map.
 No upstream source was copied.
+
+clipper2-ts 2.0.1-18 (TypeScript port of Clipper2 by Angus Johnson)
+Source: https://github.com/countertype/clipper2-ts
+License: Boost Software License 1.0 (see node_modules/clipper2-ts/LICENSE).
+Used as a dependency in src/network for road corridor and junction polygon operations
+(geometry rework). No upstream source was copied.
