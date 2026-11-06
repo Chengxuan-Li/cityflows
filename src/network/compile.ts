@@ -4,7 +4,7 @@ import type { City, Place, RoadClass } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
 import { continuationLayout } from './continuity';
-import { corridorReferences, corridorSurfaces, EASED_NOTE_M } from './corridor';
+import { continuingRoad, corridorReferences, corridorSurfaces, EASED_NOTE_M } from './corridor';
 import { layoutRoad, type ContinuationEnd } from './lanes';
 import { roadEndSetbacks, junctionOutline, containMovements, junctionCurbs } from './junctions';
 import { generateMovements } from './movements';
@@ -154,10 +154,12 @@ export function compile(city: City): CompileResult {
     }
     const before =
       trims[road.idx]!.start === 0
-        ? incoming[road.from]!.find((r) => r.from !== road.to)
+        ? continuingRoad(references, road, incoming[road.from]!, false)
         : undefined;
     const after =
-      trims[road.idx]!.end === 0 ? outgoing[road.to]!.find((r) => r.to !== road.from) : undefined;
+      trims[road.idx]!.end === 0
+        ? continuingRoad(references, road, outgoing[road.to]!, true)
+        : undefined;
     jointDeviations[road.idx] = layoutRoad(
       sourceRoads[road.idx]!,
       road,
@@ -239,11 +241,11 @@ export function compile(city: City): CompileResult {
     const copy = { ...road, lanes: [] as number[], surface: [] as Vec2[] };
     const before =
       !transition.start && trims[road.idx]!.start === 0
-        ? incoming[road.from]!.find((r) => r.from !== road.to)
+        ? continuingRoad(references, road, incoming[road.from]!, false)
         : undefined;
     const after =
       !transition.end && trims[road.idx]!.end === 0
-        ? outgoing[road.to]!.find((r) => r.to !== road.from)
+        ? continuingRoad(references, road, outgoing[road.to]!, true)
         : undefined;
     for (let i = diagnostics.length - 1; i >= 0; i--)
       if (diagnostics[i]!.code === 'road_too_short' && diagnostics[i]!.refs.includes(road.id))

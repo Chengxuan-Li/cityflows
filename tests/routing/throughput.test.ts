@@ -8,8 +8,8 @@ import { throughputCities, throughputFixture, throughputRequests } from './throu
 // 12 Munich costs moved. Captured again for TASK-084 (separated coincident pairs, relaxed
 // roads): the same roads everywhere, one Munich route through other movements, 30 Sindelfingen
 // and 14 Munich costs moved. Again for TASK-082 (lanes offset from corridor reference lines):
-// the same roads, movements and lanes everywhere, 41 Sindelfingen and 52 Munich costs moved by
-// at most 0.04 percent.
+// the same roads, movements and lanes everywhere, 8 Sindelfingen and 6 Munich costs moved by
+// at most 0.01 percent.
 // Includes the complete result, not just road IDs: equal-cost ties, movements, target lanes and
 // exact costs matter.
 const expected = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<

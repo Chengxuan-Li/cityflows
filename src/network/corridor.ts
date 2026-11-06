@@ -39,14 +39,23 @@ export interface Reference {
   needM: number;
   /** The line runs against the source centerline it was built from (a reverse direction). */
   reversed: boolean;
+  /** Index of the road whose centerline the line was built from: roads sharing it have one. */
+  source: number;
 }
 
 /** Source points closer than this to the previous kept point are dropped. */
 const MERGE_M = 0.2;
 /** A corner rounded within this distance of the source is resampling, not easing. */
 const FILLET_TOLERANCE_M = 0.02;
-/** How far a joint easing (`jointReference`) may leave the centerline when it is lengthened. */
-export const JOINT_TOLERANCE_M = FILLET_TOLERANCE_M;
+/** A joint ease (`jointReference`) is at least this long and keeps at least this radius. */
+const JOINT_LENGTH_M = 10;
+const JOINT_RADIUS_M = 30;
+/** Joints that turn more than this are corners, not continuations: no ease. */
+const MAX_JOINT_TURN = Math.PI / 4;
+/** The ease's shape, `u (1 - u)³ (1 + 3u)`: slope 1 and no curvature at the node (u = 0), back
+ * on the line with slope and curvature 0 at u = 1; its largest curvature (at u = 0.24). */
+const jointShape = (u: number) => u * (1 - u) ** 3 * (1 + 3 * u);
+const JOINT_SHAPE_CURVATURE = 3.9403;
 /** An easing that leaves the centerline by more than this is reported (`reference_eased`). */
 export const EASED_NOTE_M = 0.05;
 const CHORD_TOLERANCE_M = 0.01;
@@ -375,7 +384,7 @@ function dedupe(line: Vec2[], spans: { first: Vec2; last: Vec2 }[]): Vec2[] {
 const samePoints = (a: readonly Vec2[], b: readonly Vec2[]) =>
   a.length === b.length && a.every((p, i) => distance(p, b[i]!) < 1e-6);
 
-function reference(points: Vec2[], eased: Easing[], needM: number): Reference {
+function reference(points: Vec2[], eased: Easing[], needM: number, source: number): Reference {
   return {
     points,
     lengths: cumulativeLengths(points),
@@ -383,6 +392,7 @@ function reference(points: Vec2[], eased: Easing[], needM: number): Reference {
     eased,
     needM,
     reversed: false,
+    source,
   };
 }
 
@@ -430,7 +440,7 @@ export function corridorReferences(sources: readonly Road[], diagnostics: Diagno
       needRight = Math.max(needRight, ...edges);
     }
     const { points, eased } = referenceLine(road.centerline, needLeft, needRight);
-    const forward = reference(points, eased, Math.max(needLeft, needRight));
+    const forward = reference(points, eased, Math.max(needLeft, needRight), idx);
     for (const o of same) references[o] = forward;
     if (back.length) {
       const backward = reverse(forward);
@@ -450,14 +460,47 @@ export function corridorReferences(sources: readonly Road[], diagnostics: Diagno
   return references;
 }
 
+/** The road a road continues into (`atEnd`) or from at its node: of the candidates (the roads
+ * leaving or entering there), not the road's own other direction (sharing its reference
+ * reversed), the one whose reference turns least across the node. A road returning the other
+ * way on a centerline of its own (a loop's other half) is a candidate like any other;
+ * `jointReference` leaves joints that turn more than 45 degrees alone. */
+export function continuingRoad<T extends { idx: number }>(
+  references: readonly Reference[],
+  road: T,
+  candidates: readonly T[],
+  atEnd: boolean,
+): T | undefined {
+  const own = references[road.idx]!;
+  const heading = (a: Vec2, b: Vec2) => Math.atan2(b.y - a.y, b.x - a.x);
+  let best: { road: T; turn: number } | undefined;
+  for (const other of candidates) {
+    if (other === road) continue;
+    const ref = references[other.idx]!;
+    if (ref.source === own.source && ref.reversed !== own.reversed) continue;
+    const a = atEnd ? own : ref,
+      b = atEnd ? ref : own;
+    const turn = Math.abs(
+      Math.atan2(
+        Math.sin(heading(b.points[0]!, b.points[1]!) - heading(a.points.at(-2)!, a.points.at(-1)!)),
+        Math.cos(heading(b.points[0]!, b.points[1]!) - heading(a.points.at(-2)!, a.points.at(-1)!)),
+      ),
+    );
+    if (!best || turn < best.turn) best = { road: other, turn };
+  }
+  return best?.road;
+}
+
 /** `ref` joined at a through or continuation node to the next road, whose reference passes
  * through `before` (the point before this road's start) or `after` (after its end): the line is
  * eased over `blendM` from the end so that at the node it heads along the bisector of the two
- * roads' end segments, both roads' offsets meet there with one normal and their lanes join
- * without a kink. The ease is `x (1 - x / blendM)²` times the tangent of half the turn, x the
- * distance from the node; `blendM` keeps its radius above `needM` plus the margin and is as long
- * as `JOINT_TOLERANCE_M` allows, at most half the road. The node point stays; the largest
- * displacement is returned. */
+ * roads' end segments (both roads compute the same), both roads' offsets meet there with one
+ * normal and their lanes join without a kink or a step. The ease is `blendM` times the tangent
+ * of half the turn times `jointShape(x / blendM)`, x the distance from the node; it has no
+ * curvature at the node, so the lanes on both sides leave it straight. `blendM` is
+ * `JOINT_LENGTH_M`, or what keeps the radius above `JOINT_RADIUS_M` (and the corridor's offsets
+ * plus the margin), at most half the road. Joints turning more than 45 degrees are left alone.
+ * The node point stays; the largest displacement is returned. */
 export function jointReference(ref: Reference, before?: Vec2, after?: Vec2) {
   let line = ref;
   let deviationM = 0;
@@ -473,21 +516,19 @@ export function jointReference(ref: Reference, before?: Vec2, after?: Vec2) {
     if (distance(node, outside) < 1e-9 || distance(node, inner) < 1e-9) continue;
     // Both in travel direction: the turn from the first segment into the second.
     const turn = atEnd ? turnAt(inner, node, outside) : turnAt(outside, node, inner);
-    if (Math.abs(turn) < 1e-6 || Math.abs(turn) > Math.PI / 2) continue;
+    if (Math.abs(turn) < 1e-6 || Math.abs(turn) > MAX_JOINT_TURN) continue;
     const t = Math.tan(turn / 2);
-    // As long as the ease stays within the tolerance (its largest displacement is 4/27 of t times
-    // its length), longer is smoother; it is never shorter than its radius allows.
+    // From the unblended line, so both directions of a street ease alike.
     const blendM = Math.min(
-      total / 2,
+      ref.lengths.at(-1)! / 2,
       Math.max(
-        1,
-        4 * Math.abs(t) * (ref.needM + MARGIN_M),
-        JOINT_TOLERANCE_M / ((4 / 27) * Math.abs(t)),
+        JOINT_LENGTH_M,
+        Math.abs(t) * JOINT_SHAPE_CURVATURE * Math.max(JOINT_RADIUS_M, ref.needM + MARGIN_M),
       ),
     );
     // Displacement to the right at distance x from the node, so that the line at the node turns
     // by half the joint's turn toward the other road.
-    const delta = (x: number) => -t * x * (1 - x / blendM) ** 2;
+    const delta = (x: number) => -t * blendM * jointShape(Math.min(1, x / blendM));
     const steps = Math.max(2, Math.ceil(blendM / Math.min(0.5, blendM / 8)));
     const zone = Array.from({ length: steps }, (_, i) => (blendM * i) / steps);
     const stations = (atEnd ? zone.map((x) => total - x).reverse() : zone).filter(

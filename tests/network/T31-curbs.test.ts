@@ -186,8 +186,8 @@ function fingerprint(net: CompiledCity) {
 const mainFingerprints: Record<AuditCity, string> = {
   grid: '56deba638330bc89',
   town: 'fc657fc34fe56206',
-  sindelfingen: 'da321bad6f1276ce',
-  munich: '4b37b3b037f72311',
+  sindelfingen: '9406c542b3054ff5',
+  munich: '330eb51540ef21b3',
 };
 
 test.each(auditCities)(

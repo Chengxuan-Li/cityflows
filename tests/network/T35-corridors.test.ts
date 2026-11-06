@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import {
   directionPairs,
   frame,
+  joinAudit,
   laneFoldAudit,
   pairGapAudit,
   rayCrossings,
@@ -47,6 +48,7 @@ const asReference = (road: CRoad): Reference => ({
   eased: [],
   needM: 0,
   reversed: false,
+  source: 0,
 });
 
 const EASED_M = 0.02;
@@ -177,8 +179,10 @@ test.each(auditCities)(
 test('T35.1: G1, the hairpin service roads, keep their width and centre line', () => {
   const { city, net } = load('munich');
   const at = (id: string) => net.roads[net.index.road.get(id as never)!]!;
+  // Outside the eases at n:919 and n:355 (joints of 15 degrees in the source, eased over
+  // about 16 m to share the node's tangent, about 0.4 m off the centerline).
   for (const id of ['r:917', 'r:921', 'r:1059', 'r:1060'])
-    expect(roadWidthAudit(city, net, at(id)).audit.maxM, id).toBeLessThan(0.05);
+    expect(widthOutsideTransitions(city, net, at(id)).errorM, id).toBeLessThan(0.05);
   for (const [a, b] of [
     ['r:917', 'r:921'],
     ['r:1059', 'r:1060'],
@@ -186,6 +190,30 @@ test('T35.1: G1, the hairpin service roads, keep their width and centre line', (
     const gap = pairGapAudit(net, at(a), at(b), 'two-way', [0, 0]);
     expect(gap.maxM, `${a}/${b}`).toBeLessThan(0.02);
   }
+}, 120_000);
+
+test('T35.1: at G1 n:919 the two streets share one tangent: no gap, no kink', () => {
+  const { net } = load('munich');
+  const node = net.nodes[net.index.node.get('n:919' as never)!]!;
+  expect(node.outline).toEqual([]);
+  const through = node.movements.map((i) => net.movements[i]!);
+  expect(through.length).toBe(2);
+  for (const m of through) {
+    const from = net.lanes[m.fromLane]!,
+      to = net.lanes[m.toLane]!;
+    // The lane ends meet, and so do the edges either side of them.
+    expect(distance(from.polyline.at(-1)!, to.polyline[0]!)).toBeLessThan(1e-9);
+    const heading = (a: Vec2, b: Vec2) => Math.atan2(b.y - a.y, b.x - a.x);
+    const turn =
+      heading(to.polyline[0]!, to.polyline[1]!) -
+      heading(from.polyline.at(-2)!, from.polyline.at(-1)!);
+    expect((Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) * 180) / Math.PI).toBeLessThan(2);
+    const [la, ra] = surfaceEdges(net.roads[from.road]!),
+      [lb, rb] = surfaceEdges(net.roads[to.road]!);
+    expect(distance(la.at(-1)!, lb[0]!)).toBeLessThan(1e-9);
+    expect(distance(ra.at(-1)!, rb[0]!)).toBeLessThan(1e-9);
+  }
+  expect(joinAudit(net, node)!.maxM).toBeLessThanOrEqual(0.05);
 }, 120_000);
 
 test.each(auditCities)(
@@ -307,6 +335,7 @@ function folds(points: Vec2[], need: number) {
     eased: [],
     needM: need,
     reversed: false,
+    source: 0,
   };
   let count = 0;
   for (const lateral of [-need, need]) {

@@ -133,19 +133,10 @@ test.each([
       'crossings beyond a capped setback',
       all.length - overlaps.length,
     );
-    const derivedCrossings =
-      name === 'sindelfingen-a81'
-        ? [
-            // The forced radius on service way 7973188 is smaller than the inner
-            // lane offset. The compiler's offset folds across the zero-setback seam.
-            { node: 'n:26', lanes: ['r:28#0', 'r:30#0'], capped: false },
-            // The same unchanged seam crossing is now visible from uncapped n:696.
-            { node: 'n:696', lanes: ['r:28#0', 'r:30#0'], capped: false },
-          ]
-        : [];
-    expect(overlaps.filter((pair) => !sourceDefects[pair.lanes.join('>')])).toEqual(
-      derivedCrossings,
-    );
+    // TASK-082: the seam crossing of service way 7973188 (r:28#0 and r:30#0 at n:26 and n:696,
+    // the offset folding across its zero-setback seam) is gone: the loop's two halves now join
+    // with one tangent at their nodes.
+    expect(overlaps.filter((pair) => !sourceDefects[pair.lanes.join('>')])).toEqual([]);
     // Every listed source defect still crosses somewhere, capped node or not.
     const keys = new Set(all.map((pair) => pair.lanes.join('>')));
     expect(Object.keys(sourceDefects).filter((key) => !keys.has(key))).toEqual([]);
