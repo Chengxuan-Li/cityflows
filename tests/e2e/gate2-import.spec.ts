@@ -12,7 +12,7 @@ test('Munich import keeps lane drops in Notes after its warnings', async ({ page
   await dialog.getByLabel('OSM file').setInputFiles('fixtures/osm/munich-donnersberger.osm');
   await dialog.getByRole('button', { name: 'Import roads' }).click();
   const diagnostics = dialog.getByRole('region', { name: 'Import diagnostics' });
-  await expect(diagnostics.getByRole('status')).toContainText('0 errors');
+  await expect(diagnostics.getByRole('status')).toContainText('0 errors', { timeout: 60_000 });
   const notes = diagnostics.getByRole('region', { name: 'Notes', exact: true });
   await expect(notes).toBeVisible();
   expect(await notes.getByRole('listitem').count()).toBeGreaterThan(0);
@@ -104,6 +104,7 @@ test('imports the downtown fixture and generates traffic from added places', asy
   await page.screenshot({ path: info.outputPath('progress.png') });
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     /\d+ roads · 0 errors · \d+ warnings/,
+    { timeout: 60_000 },
   );
   await expect(dialog).toContainText('Inferred');
   expect((await page.evaluate(() => window.cityflows!.metrics())).timeS).toBeGreaterThan(

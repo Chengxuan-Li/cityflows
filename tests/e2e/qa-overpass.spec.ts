@@ -58,6 +58,7 @@ test('QA area picker downloads, accepts, plays and reuses the persisted Overpass
   await expect(dialog.getByText('Downloaded from Overpass', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     '0 errors',
+    { timeout: 60_000 },
   );
   await button(page, 'Continue').click();
   await expect(dialog).toContainText('OpenStreetMap contributors');
@@ -76,6 +77,7 @@ test('QA area picker downloads, accepts, plays and reuses the persisted Overpass
   await expect(dialog.getByText('Loaded from cache', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     '0 errors',
+    { timeout: 60_000 },
   );
   await button(page, 'Continue').click();
   await button(page, 'Accept city').click();

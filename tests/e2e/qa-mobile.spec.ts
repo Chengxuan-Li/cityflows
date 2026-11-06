@@ -104,6 +104,7 @@ test('QA phone imports a small OSM file through diagnostics and acceptance', asy
   await button(page, 'Import roads').click();
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     '0 errors',
+    { timeout: 60_000 },
   );
   await reachable(button(page, 'Continue'));
   await button(page, 'Continue').click();

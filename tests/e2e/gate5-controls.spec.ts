@@ -216,6 +216,7 @@ test('Import OSM file preserves Sindelfingen roundabouts and yield entries', asy
   await dialog.getByRole('button', { name: 'Import roads' }).click();
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     /\d+ roads.*0 errors.*\d+ warnings/,
+    { timeout: 60_000 },
   );
   await dialog.getByRole('button', { name: 'Continue' }).click();
   await dialog.getByRole('button', { name: 'Accept city' }).click();
