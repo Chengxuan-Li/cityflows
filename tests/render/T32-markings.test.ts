@@ -180,14 +180,27 @@ test('T32.2: the owner’s X-marked arrows on Munich’s Marsstraße below n:823
   // On 5024a83 the two one-way carriageways r:368 (n:949 to n:823) and r:480 (n:823 to n:949),
   // which the importer realigned onto one centreline, carried arrows of both directions on the
   // same two lanes: r:368#0 u-turn and left, r:368#1 right (at the Y-junction n:823); r:480#0
-  // left, r:480#1 through (at the signal n:949). The lanes do differ, so section 11's rule alone
-  // keeps all but the u-turn; an arrow on a road running the other way is not drawn either.
+  // left, r:480#1 through (at the signal n:949). TASK-079 then drew none on either road. Since
+  // TASK-084 the pair is a divided street, each block on its own side of a 0.5 m median, so each
+  // lane carries its own direction's arrows (the u-turn is never drawn) and no lane of one road
+  // lies under the other's.
   const city = net('munich');
+  const expected: Record<string, string[]> = {
+    'r:368#0': ['left'],
+    'r:368#1': ['right'],
+    'r:480#0': ['left'],
+    'r:480#1': ['through'],
+  };
   for (const id of ['r:368', 'r:480']) {
     const road = city.roads[city.index.road.get(id)!]!;
-    for (const index of road.lanes)
-      expect(approachMarkings(city, city.lanes[index]!).turns).toEqual([]);
-    expect(record(city, road).arrows).toEqual([]);
+    const other = city.roads[city.index.road.get(id === 'r:368' ? 'r:480' : 'r:368')!]!;
+    for (const index of road.lanes) {
+      const lane = city.lanes[index]!;
+      expect(approachMarkings(city, lane).turns).toEqual(expected[lane.id]);
+      for (const p of lane.polyline)
+        expect(pointInPolygon(p, [...other.surface, other.surface[0]!], 0)).toBe(false);
+    }
+    expect(record(city, road).arrows.length).toBeGreaterThan(0);
   }
 });
 

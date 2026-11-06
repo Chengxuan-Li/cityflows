@@ -23,7 +23,7 @@ import { auditCities, loadAuditCity, markingLengths, type AuditCity } from './ju
 
 // Geometry audit (TASK-081, docs/plan.md "Geometry rework"): eight measures of how far the drawn
 // roads, lanes and junctions are from the corridors their canonical centerlines describe, per
-// city and per named case. Usage: npm run geometry-audit -- [out.json]
+// city and per named case. Usage: npm run geometry-audit -- [out.json] [--relax-max-m <m>]
 //
 // Conventions: stations are arc lengths along a polyline; the right-hand normal of heading
 // (dx, dy) is (-dy, dx) (y-south, architecture 5.1); a lateral offset is signed, positive to the
@@ -1451,8 +1451,8 @@ export function caseAudit(net: CompiledCity, audit: GeometryAudit, c: GeometryCa
   };
 }
 
-export function compileCity(name: AuditCity) {
-  const city = loadAuditCity(name);
+export function compileCity(name: AuditCity, relaxMaxM?: number) {
+  const city = loadAuditCity(name, relaxMaxM);
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
   return { city, net: result.compiled };
@@ -1474,7 +1474,11 @@ function compact(list: object[], key: string, value: string): string {
 }
 
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
-  const out = process.argv[2];
+  // [out.json] [--relax-max-m <m>]: the second overrides the importer's relaxation cap (TASK-084).
+  const args = process.argv.slice(2);
+  const flag = args.indexOf('--relax-max-m');
+  const relaxMaxM = flag < 0 ? undefined : Number(args[flag + 1]);
+  const out = args.find((arg, i) => !arg.startsWith('--') && (flag < 0 || i !== flag + 1));
   const started = performance.now();
   const report: Record<string, unknown> = { cities: {}, cases: {} };
   const cityTotals: Record<string, ReturnType<typeof totals>> = {};
@@ -1482,7 +1486,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
   const caseDetail: Record<string, unknown> = {};
   const lines: string[] = [];
   for (const name of auditCities) {
-    const { city, net } = compileCity(name);
+    const { city, net } = compileCity(name, relaxMaxM);
     const audit = auditGeometry(city, net);
     cityTotals[name] = totals(audit);
     const top = worst(audit);

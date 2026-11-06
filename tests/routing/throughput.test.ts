@@ -5,7 +5,9 @@ import { throughputCities, throughputFixture, throughputRequests } from './throu
 
 // Captured before TASK-062 from main at 1a14d7a, and again for TASK-074, whose setbacks move lane
 // lengths: the same roads everywhere, one Sindelfingen route on other lanes, 7 Sindelfingen and
-// 12 Munich costs moved.
+// 12 Munich costs moved. Captured again for TASK-084 (separated coincident pairs, relaxed
+// roads): the same roads everywhere, one Munich route through other movements, 30 Sindelfingen
+// and 14 Munich costs moved.
 // Includes the complete result, not just road IDs: equal-cost ties, movements, target lanes and
 // exact costs matter.
 const expected = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<

@@ -30,7 +30,10 @@ type Measure =
 // Residual defects after TASK-074, node by node, each with its class (bench/junction-audit.ts):
 // coincident = two source carriageways on top of each other at the node (an importer defect,
 // architecture 5.1); stub = a road end shorter than its setbacks; crossing = a road body
-// crossing its neighbour away from the node; other = none of these (listed in the report).
+// crossing its neighbour away from the node; other = none of these (listed in the report);
+// separated = a coincident pair TASK-084 separated into a divided pair, which the junction still
+// treats as two arms (corridor-aware junctions are TASK-083): the u-turn between its carriageways
+// leaves the outline, and the wider arm kinks a curb.
 const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
   grid: {
     // other: a left turn from the one-lane west arm of an edge T, 1.1 cm past the tolerance.
@@ -45,8 +48,10 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:371', // other
       'n:375', // other
       'n:493', // other
+      'n:594', // separated (r:595/r:880)
       'n:620', // coincident
       'n:78', // coincident
+      'n:792', // separated (r:746/r:803)
       'n:81', // other
     ],
     edgesOff: [
@@ -64,6 +69,7 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:294', // crossing
       'n:355', // other
       'n:490', // other
+      'n:498', // separated (r:595/r:880)
       'n:501', // coincident
       'n:594', // coincident
       'n:620', // coincident
@@ -86,25 +92,31 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:182', // stub
       'n:266', // other
       'n:324', // coincident
+      'n:391', // separated (Arnulfstraße r:395/r:450, r:451/r:1342)
       'n:40', // other
+      'n:400', // separated (Arnulfstraße r:392/r:402, r:451/r:1342)
+      'n:405', // separated (Arnulfstraße r:388/r:408, r:406/r:1346)
+      'n:446', // separated (Arnulfstraße r:395/r:450)
       'n:516', // other
       'n:55', // other
+      'n:721', // separated (Landsberger Straße r:1280/r:1334)
       'n:970', // stub
       'n:974', // stub
       'n:975', // stub
       'n:989', // other
     ],
-    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping).
+    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping); TASK-084 n:823
+    // (Marsstraße separated).
     edgesOff: [
       'n:1123', // coincident
       'n:1375', // other
       'n:322', // coincident
       'n:324', // coincident
       'n:719', // coincident
-      'n:823', // coincident
       'n:949', // coincident
     ],
-    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping).
+    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping); TASK-084 n:823
+    // (Marsstraße separated).
     curbKinks: [
       'n:104', // other
       'n:1123', // coincident
@@ -112,21 +124,48 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:33', // other
       'n:344', // stub
       'n:387', // coincident
+      'n:391', // separated (Arnulfstraße r:395/r:450, r:451/r:1342)
+      'n:407', // separated (Arnulfstraße r:388/r:408)
       'n:440', // coincident
       'n:446', // coincident
       'n:516', // other
       'n:621', // other
       'n:719', // coincident
-      'n:823', // coincident
+      'n:721', // separated (Landsberger Straße r:1280/r:1334)
     ],
   },
 };
 
 // Coincident source carriageways (architecture 5.1 does not repair them, T20 lists them): of two
 // road ends on top of each other the shared mouth now clears both neighbours, not one each.
+// TASK-084 separates opposite one-way pairs on one centerline into divided pairs (r:368/r:480
+// left this list): the street they form is 14.5 m wide instead of 7 m, so the setbacks of the
+// lanes that meet it grow by about 3.75 m, as at any two-way street of that width.
+const meetsSeparated = (pair: string, node: string) =>
+  `Meets the separated ${pair} at ${node}: the divided street is 14.5 m wide, not 7 m.`;
 const storageExceptions: Record<string, string> = {
-  'r:368#0': 'Marsstraße r:368/r:480: reversed identical centerlines, zero offsets.',
-  'r:368#1': 'Marsstraße r:368/r:480: reversed identical centerlines, zero offsets.',
+  'r:1049#0': meetsSeparated('Landsberger Straße r:1280/r:1334', 'n:719'),
+  'r:343#0': meetsSeparated('Landsberger Straße r:1280/r:1334', 'n:719'),
+  'r:342#0': meetsSeparated('Landsberger Straße r:1280/r:1334', 'n:719 (lane start)'),
+  'r:761#0': meetsSeparated('Landsberger Straße r:1280/r:1334', 'n:721 (lane start)'),
+  'r:1202#0': meetsSeparated('Arnulfstraße r:392/r:402, r:406/r:1346', 'n:387'),
+  'r:753#0': meetsSeparated('Arnulfstraße r:392/r:402, r:406/r:1346', 'n:387'),
+  'r:1203#0': meetsSeparated('Arnulfstraße r:392/r:402, r:406/r:1346', 'n:387 (lane start)'),
+  'r:752#0': meetsSeparated('Arnulfstraße r:392/r:402, r:406/r:1346', 'n:387 (lane start)'),
+  'r:159#0': meetsSeparated('Arnulfstraße r:388/r:408', 'n:407'),
+  'r:160#0': meetsSeparated('Arnulfstraße r:388/r:408', 'n:407 (lane start)'),
+  'r:807#0': meetsSeparated('Arnulfstraße r:388/r:408', 'n:407 (lane start)'),
+  'r:802#0': meetsSeparated('Arnulfstraße r:392/r:402, r:451/r:1342', 'n:400'),
+  'r:803#0': meetsSeparated('Arnulfstraße r:392/r:402, r:451/r:1342', 'n:400 (lane start)'),
+  'r:804#0': meetsSeparated('Arnulfstraße r:388/r:408, r:406/r:1346', 'n:405'),
+  'r:805#0': meetsSeparated('Arnulfstraße r:388/r:408, r:406/r:1346', 'n:405 (lane start)'),
+  'r:1212#0': meetsSeparated('Arnulfstraße r:395/r:450, r:451/r:1342', 'n:391 (lane start)'),
+  'r:538#0': meetsSeparated('Arnulfstraße r:395/r:450', 'n:446'),
+  'r:537#0': meetsSeparated('Arnulfstraße r:395/r:450', 'n:446 (lane start)'),
+  'r:1354#1': meetsSeparated('Arnulfstraße r:395/r:450', 'n:446 (lane start)'),
+  'r:934#0': meetsSeparated('Marsstraße r:368/r:480', 'n:823 (lane start)'),
+  'r:934#1': meetsSeparated('Marsstraße r:368/r:480', 'n:823 (lane start)'),
+  'r:480#0': meetsSeparated('Marsstraße pair, its own lane,', 'n:949 (the signal)'),
   'r:565#0': 'Service ways r:565/r:589 share one centerline.',
   'r:566#0': 'Service ways r:566/r:588: identical direction, centerline and offset.',
   'r:1024#0': 'Service ways r:1024/r:899 share one realigned arm.',

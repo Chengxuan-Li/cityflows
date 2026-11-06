@@ -207,7 +207,11 @@ test.each([
   // n:9 follows r:254 (B36 at n:253), and n:1375, n:33, n:638, n:774 and n:967 follow lanes
   // reshaped by the shorter tapers and holds at the far ends of r:1044, r:944, r:639/r:654,
   // r:1368 and r:961. The continuation nodes (the count) are unchanged.
-  ['Munich', 63, '55e48b24e1f79a1411aa8a54cbef07beb175cc0f8c493660ff5181a7fa6447fd'],
+  // TASK-084 moved it again (55e48b24… before): the nodes of the seven separated coincident
+  // pairs (n:387, n:391, n:400, n:405, n:407, n:446, n:719, n:721, n:823, n:949) see 14.5 m
+  // divided streets instead of 7 m overlapping ones, and n:201 and n:1029 follow the relaxed
+  // trunk roads r:1030, r:687 and r:685 beyond their fixed junction zones.
+  ['Munich', 63, '33c175d7fa0270f83f6aff9b8f4b692239c9a23e5fec25ba6fce300d5f5841dd'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {
