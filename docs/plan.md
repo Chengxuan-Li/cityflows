@@ -482,6 +482,104 @@ Kept open, no task yet: the twelve dev-tooling audit advisories (waiting on upst
 `minimatch`), the 101 Munich road ends still at the setback cap (phase 2), empty agent
 worktree folders that Windows keeps locked.
 
+## Geometry rework (lead, 2026-11-06)
+
+The owner's round 4 test: markings and edges still are not parallel on a long curve, and
+the through road still bulges at side-street junctions; the owner proposed corridor-first
+geometry, osm2streets-style junction polygons and collision-based relaxation of
+overlapping roads (owner decisions log, 2026-11-06). The lead runs it in this session with
+subagents in worktrees under `D:\cityflows-wt`, advancing on its own between the owner's
+check-ins by the rules below.
+
+Regression cases (the owner's, Munich extract `fixtures/osm/munich-donnersberger.osm`):
+
+- G1, the hairpin (round 4 screenshot 1): service-road pairs `r:917`/`r:921` (220 m, 369
+  centerline points) and `r:1059`/`r:1060` (246 m, 243 points), node `n:919`. Lanes and
+  surfaces are offset vertex by vertex from a densely smoothed centerline, so the width
+  breathes and the two directions' centre lines part.
+- G2, the T-junctions on Landsberger Straße (round 4 screenshot 2): `n:774`, where service
+  road `r:777` meets `r:1276`, `r:1277`, `r:1362`, `r:1368`, and the next side-street junction
+  east of it in that screenshot. The through road bulges and its lanes dip toward the node.
+- Also kept as cases: B38's folded lane polylines, B39's unmarked multi-lane splits (`n:312`,
+  `n:305`, `n:201`, `n:194`), Marsstraße's coincident carriageways (`r:368`/`r:480`), and the
+  round 3 screenshots in `docs/findings/2026-11-06/`.
+
+Road corridors (owner, 2026-11-06): the engine must know which roads run side by side as one
+street, so that junction building, relaxation and markings can use it. A new canonical field
+`Road.corridorId: string | null` (schema and project migration added by the lead with stage
+1's design; existing projects get `corridorId = streetGroupId`) groups the carriageways of one
+street: the two directions of a two-way way (as `streetGroupId` does today), a pair of
+opposite one-way ways drawn on one centerline, and a dual carriageway (opposite one-way ways
+of one name running parallel within a median's distance), and other parallel segments of one
+street. `streetGroupId` keeps its editing meaning (toggling a simple two-way street's
+direction). The importer sets `corridorId` (TASK-084); the editor sets it with
+`streetGroupId` for drawn two-way streets; the compiler carries it as `CRoad.corridorId` and
+the corridor module (TASK-082) and the junction builder (TASK-083) treat a corridor's
+carriageways as one approach with a median.
+
+Stages (each a task contract written before it starts; tasks on one line run in parallel):
+
+1. TASK-081 geometry audit and visual regression harness. `bench/geometry-audit.ts`
+   (extends the junction audit) measures, per city and per case: corridor width error (edge
+   to centerline against W/2), the two directions' centre-line gap, lane-polyline folds and
+   self-intersections, through-road deviation from its OSM alignment across a junction,
+   overlap between unrelated same-grade corridors, junction polygon validity and bulge (area
+   outside the corridors' trimmed ends and curb arcs), and discontinuities between
+   consecutive road ends. A Playwright script captures fixed-camera images of every case.
+   Baseline on `main`. Every later stage reports these tables before and after.
+2. TASK-082 corridors first (B38, G1) ∥ TASK-084 importer separation and relaxation ∥
+   TASK-085 missing through movements at multi-lane splits (B39).
+   - TASK-082 (`src/network`: a new corridor module, `lanes.ts`; `src/geo`; `clipper2-ts`):
+     one corridor per street (both directions of a two-way street share it), its centerline
+     resampled by curvature so dense smoothing output does not drive the offsets; lanes at
+     fixed offsets from that centerline by a robust parallel offset (arc-length and curvature
+     aware, no per-vertex miter); road and corridor surfaces from `clipper2-ts` offsetting.
+     Target: width error under 0.05 m and centre-line gap under 0.02 m on every road outside
+     tapers; no folds.
+   - TASK-084 (`src/importers/osm`): `corridorId` for every corridor; opposite one-way
+     carriageways drawn on one centerline are separated into a divided pair, keeping OSM
+     topology and ids and their shared `corridorId`; then a deterministic,
+     bounded position-based relaxation pushes apart unrelated same-grade corridors that
+     overlap or come closer than a clearance, minimizing displacement, keeping smoothness and
+     connectivity, exempting junction zones and grade-separated crossings, recorded as
+     inferred provenance. The maximum displacement is an internal parameter for now; the
+     stage runs it at several values (1, 3, 5, 10 m, unbounded) and reports overlap,
+     displacement and traffic for each; the lead picks the value from the results and records
+     it (the owner: not limited in advance, decide after experiments, an import option later).
+   - TASK-085 (`src/network/movements.ts`): the through movements a multi-lane split lacks
+     (`r:313` to `r:692`), so lanes can continue and be marked across it.
+3. TASK-083 junction polygons, osm2streets-style (G2, B39 drawing), after TASK-082. Each
+   road end is cut square to its own corridor where it meets its neighbours' corridors; the
+   junction polygon is the region between the cut ends with curb arcs (class radius), built
+   with `clipper2-ts`; a through road (two ends within 30 degrees of opposite, the higher
+   class) keeps its alignment and its far edge straight across a side road's mouth; turning
+   paths run between the cut boundaries. Replaces the TASK-063/074 outline and the TASK-078
+   aprons (one polygon, curbs included); setback cap and gores revisited under the new rule.
+   Target: G2's through road within 0.1 m of its OSM alignment; no bulge; no approach loses
+   more than 2 m of storage against stage 2. The old outline and apron code and their tests
+   are deleted once the polygon passes the gates (owner).
+4. Integration: the relaxation value chosen, all cases re-captured and sent to the owner,
+   the backlog items these stages close marked done, the owner's test round.
+
+Gates the lead applies to every merge, without asking:
+
+- Geometry: the stage's targets above, measured by TASK-081's audit on the merged tree.
+- Traffic (owner-approved tolerance): Munich at `--scale 0.15` with `stalledHeads` 0 and no failures other than
+  `gridlocked`; `gridlocked` at most 1.5 times main's; completed at least 90 percent of
+  main's (the count swings several percent with geometry alone, TASK-080 review); every
+  benchmark trip completes; `npm run route-audit` zero on all four cities.
+- Checks: `npm run check` green (rerun 5 s time-outs under load with a longer timeout and
+  say so); the full Playwright suite with T16 at the end of each stage.
+- A task that misses a gate goes back to its agent with the measured failure, at most twice;
+  small integration fixes are lead commits. Schema stays as it is: compiled types in
+  `src/network/types.ts` may grow, `src/schema` may not without the owner.
+
+The lead stops and asks the owner when: a stage needs a `src/schema` or project-format
+change, a dependency other than `clipper2-ts`, or a change to simulation rules; a gate still
+fails after two rounds; a target turns out to be wrong for the owner's cases; or the work
+would change something outside this repository. Otherwise it merges, pushes `main` (Pages
+redeploys) and reports after each merge.
+
 ## Lead handover
 
 How the lead runs this project, for whoever takes the role on another machine. Everything
@@ -1333,6 +1431,17 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   and the full Playwright suite with T16. Open from the wave: B38 (folded lane polylines), B39.
 
 ## Owner decisions log
+
+- 2026-11-06, round 4: markings and edges are still not parallel on long curves and through
+  roads still bulge at side streets; the owner proposed corridor-first geometry,
+  osm2streets-style junction polygons and collision-based relaxation. Decisions: `clipper2-ts`
+  may be added; relaxation's maximum displacement is not limited in advance but decided after
+  experiments, as a parameter (an import option later, not now); opposite one-way
+  carriageways on one centerline are separated, and the engine must know which roads are
+  paired or parallel parts of one street (`Road.corridorId`); the old junction outline and
+  apron code is deleted once replaced; the traffic gate's 90 percent tolerance; push `main`
+  after each merge. The lead runs the work in this session with subagents it drives, by the
+  plan in "Geometry rework".
 
 - 2026-11-05, after testing wave 15: the four round 2 items (markings through junctions
   without signals, junction shapes, cars missing their exit and the Munich deadlock, a
