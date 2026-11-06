@@ -11,11 +11,8 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
   'munich-donnersberger': {
     'r:196#0>r:416#2':
       'The source ramp crosses the trunk lane body at n:194; TASK-071 removes the capped-setback classification at this continuation.',
-    'r:1354#0>r:447#0':
-      'Opposing Arnulfstraße source carriageways cross along the body; n:446 is no longer capped after realignment.',
     // TASK-083: r:565#0>r:589#0 and r:325#0>r:941#0 no longer cross (r:565/r:589 lie on each
     // other; r:325/r:941 part where they used to cross once the realignment leaves corridors whole).
-    'r:1277#0>r:1362#0': 'Separate zero-offset Landsberger carriageways cross along the road body.',
     // TASK-074: r:566#0>r:588#0 no longer crosses: of two coincident ends the shadowed one keeps
     // its own floor setback. The pairs below are no longer behind a capped setback at their
     // node, so they are listed here. TASK-084 separated Marsstraße's coincident carriageways
@@ -23,23 +20,12 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     // TASK-082: the coincident service ways r:1024/r:899 and r:1027/r:900 (r:1024#0>r:899#0,
     // r:1027#0>r:900#0 before) share one reference line, so their lanes lie on each other with
     // the same vertices and no longer register as crossing.
-    'r:1372#0>r:845#0':
-      'Separate Marsstraße carriageways cross 30 m from n:823 after the realigned one bends back.',
-    // TASK-083: the two carriageways of one corridor converging on a node at under 20 degrees
-    // (dual carriageways the source draws closer than their lane blocks) are one approach: they
-    // no longer cut each other to the cap, so their lanes cross near the node, under the polygon's
-    // gore where they part within 25 m.
-    'r:644#0>r:964#0': 'Landsberger Straße carriageways converge on n:104 at 11 degrees.',
     // TASK-087: r:1330#0>r:327#0 (n:324) and r:1279#0>r:724#0 (n:721) no longer cross: the
-    // pairs meet at both their nodes and are pushed apart side by side (separateDual). The pairs
-    // below meet a node from one side only (n:104, n:774, n:949: one lateral offset per road
-    // cannot set them side by side there without moving their lanes at the far end) or have a
-    // centred continuation across a node (r:1277/r:1362 at n:774, r:1354/r:447 at n:382).
-    'r:1276#0>r:1368#0': 'Landsberger Straße carriageways converge on n:774 (G2).',
-    'r:636#0>r:950#0': 'Arnulfstraße carriageways converge on the signal n:949.',
-    'r:636#0>r:950#1': 'Arnulfstraße carriageways converge on the signal n:949.',
-    'r:636#1>r:950#0': 'Arnulfstraße carriageways converge on the signal n:949.',
-    'r:712#0>r:955#0': 'Arnulfstraße carriageways converge on the signal n:949.',
+    // pairs meet at both their nodes and are pushed apart side by side (separateDual). TASK-089:
+    // nor do the carriageways converging on a node from one side only, which the network sets side
+    // by side there (r:644/r:964 at n:104, r:1276/r:1368 at n:774, r:636/r:950 and r:712/r:955 at
+    // n:949, r:1372/r:845 at n:823), nor the pairs the importer now pushes because their
+    // continuation is set side by side (r:1277/r:1362 at n:774, r:1354/r:447 at n:382).
   },
   'sindelfingen-a81': {
     'r:650#0>r:80#0':
@@ -48,11 +34,15 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     'r:499#0>r:876#0': 'Curved zero-offset source roads cross 25 m beyond their common junction.',
     // TASK-084 separated the coincident pair r:746/r:803 (r:746#0>r:803#1, r:746#1>r:803#0
     // before) into a divided pair; it no longer crosses.
-    'r:574#0>r:971#0': 'Separate zero-offset source carriageways cross along their road bodies.',
-    'r:1155#0>r:574#0':
-      'Service access crosses the separate source carriageway 57 m from the junction.',
+    // TASK-089: the importer now pushes r:574/r:971 apart into one corridor (`pushable` lets a
+    // pair be pushed where the network sets its continuation side by side), so r:574#0>r:971#0
+    // and r:1155#0>r:574#0 no longer cross; the service way r:1155/r:1156, drawn 1.7 degrees off
+    // the pair at n:792, lies across the pushed r:971.
     'r:1155#0>r:971#1':
       'Service access crosses the separate source carriageway 113 m from the junction.',
+    'r:1155#0>r:971#0':
+      'Service access r:1155, drawn 1.7 degrees off the pushed r:971 at n:792, lies across it.',
+    'r:1156#0>r:971#1': 'As r:1155#0>r:971#0, the service access in the other direction.',
   },
 };
 

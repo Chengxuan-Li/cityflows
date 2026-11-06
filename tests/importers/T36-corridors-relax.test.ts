@@ -114,8 +114,10 @@ test('T36.1: corridors of two-way ways, coincident pairs and dual carriageways, 
   expect(kinds.coincident).toBe(7);
   expect(kinds.dual).toBeGreaterThan(0);
   // TASK-087 (T39): three dual carriageways pushed apart (Landsberger r:325/r:941, r:327/r:1330,
-  // r:724/r:1279) and the same-direction Landsberger pair r:729/r:984.
-  expect(kinds.pushed).toBe(3);
+  // r:724/r:1279) and the same-direction Landsberger pair r:729/r:984. TASK-089: two more whose
+  // continuation across a node the network now sets side by side (Landsberger r:1277/r:1362 at
+  // n:774, Arnulfstraße r:1354/r:447 at n:382).
+  expect(kinds.pushed).toBe(5);
   expect(kinds.sameDirection).toBe(1);
 }, 120_000);
 

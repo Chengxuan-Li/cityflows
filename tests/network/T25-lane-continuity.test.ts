@@ -204,7 +204,9 @@ test.each([
   // corridor-approach rule and outlines are the clipper union of the cut region, curbs and
   // movement surfaces; in Munich the realignment also keeps corridors' carriageways together.
   // The continuation nodes (the count) are unchanged.
-  ['grid', 0, 'afb09038b66ed5736e3193eaa2317ce8f5eb4d1b5f98345d1acc755d1e3be715'],
+  // TASK-089 moved it (afb09038… before): the curbs are edge-following cubics that leave the road
+  // edges tangentially (B42), so every outline moves; the setbacks are unchanged.
+  ['grid', 0, 'a2e7b60da9f7d91f537db6aecc5ccdc6979ff259d6f666132d7516f25f2c115d'],
   // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
   // TASK-080 moved the hash (28e9d7b3… before): setbacks are unchanged everywhere, but the
   // outlines of n:726 and n:1181 follow r:729 and r:984 laid side by side between them (B36),
@@ -219,7 +221,11 @@ test.each([
   // lines); the setbacks and the movement set are unchanged by it (33c175d7… before).
   // TASK-087 moved it again (9f013205… before): n:322, n:324, n:328 and n:721 see Landsberger
   // Straße's carriageways side by side, n:726 and n:1181 the pair r:729/r:984 laid side by side.
-  ['Munich', 63, 'c4e35356f38d3697d494a375dba5869392e1058a1e12a2c73d5e06bb7cc17e50'],
+  // TASK-089 moved it (c4e35356… before): the B42 curbs move every outline, and at the nodes where
+  // a street's carriageways converge (n:104, n:774, n:949, n:823, n:1181, n:382, n:33, n:1303,
+  // n:1375, n:407, n:967) each carriageway has its own end, so those cuts and outlines move;
+  // n:446 and n:774 see the pairs the importer now separates.
+  ['Munich', 63, '4ded6f487b0fa5a2d526a734f9eeef333541b07d1f1bd67f8bda57a5f8583ce9'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {
