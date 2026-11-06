@@ -38,8 +38,13 @@ const expected = {
       'r:597#0>r:888#0',
       'r:494#0>r:377#0',
       'r:596#0>r:494#0',
+      // TASK-084: u-turns between the carriageways of a separated coincident pair (r:595/r:880,
+      // r:746/r:803), now as wide as the divided street, run outside the outline of a node that
+      // still treats the pair as two arms (corridor-aware junctions are TASK-083).
+      'r:595#0>r:880#0',
       'r:80#0>r:82#0',
       'r:1061#1>r:966#0',
+      'r:803#0>r:746#0',
       'r:82#0>r:647#0',
     ],
   },
@@ -73,11 +78,25 @@ const expected = {
       'r:671#0>r:267#0',
       'r:1076#0>r:941#0',
       'r:1330#0>r:327#0',
+      // TASK-084: u-turns between the carriageways of the separated Arnulfstraße and Landsberger
+      // Straße pairs (r:1342/r:451, r:450/r:395, r:392/r:402, r:388/r:408, r:406/r:1346,
+      // r:1334/r:1280), now as wide as the divided street, run outside the outline of a node
+      // that still treats the pair as two arms (corridor-aware junctions are TASK-083); at n:446
+      // the separated r:395/r:450 widen their arm and the turns into r:1354 leave the outline.
+      'r:1342#0>r:451#0',
+      'r:450#0>r:395#0',
       'r:1269#0>r:41#0',
+      'r:392#0>r:402#0',
+      'r:451#0>r:1342#0',
+      'r:388#0>r:408#0',
+      'r:406#0>r:1346#0',
+      'r:447#0>r:1354#0',
+      'r:542#0>r:1354#0',
       'r:1273#0>r:1230#0',
       'r:517#0>r:1230#0',
       'r:523#0>r:1230#0',
       'r:192#0>r:57#0',
+      'r:1334#0>r:1280#0',
       'r:973#0>r:972#0',
       'r:977#0>r:976#0',
       'r:976#0>r:1081#0',

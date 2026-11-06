@@ -25,13 +25,10 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     'r:565#0>r:589#0':
       'The other coincident service-way lane pair is exposed by the shorter neighboring setback; both source centerlines are unchanged.',
     'r:1277#0>r:1362#0': 'Separate zero-offset Landsberger carriageways cross along the road body.',
-    'r:368#0>r:480#1':
-      'Marsstraße source carriageways have reversed identical centerlines and zero offsets.',
     // TASK-074: r:566#0>r:588#0 no longer crosses: of two coincident ends the shadowed one keeps
     // its own floor setback. The pairs below are no longer behind a capped setback at their
-    // node, so they are listed here.
-    'r:368#1>r:480#0':
-      'Marsstraße source carriageways have reversed identical centerlines and zero offsets.',
+    // node, so they are listed here. TASK-084 separated Marsstraße's coincident carriageways
+    // (r:368#0>r:480#1, r:368#1>r:480#0 before) into a divided pair; they no longer cross.
     'r:1372#0>r:845#0':
       'Separate Marsstraße carriageways cross 30 m from n:823 after the realigned one bends back.',
     'r:325#0>r:941#0':
@@ -42,8 +39,8 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
       'The existing source carriageway crossing at n:620 is exposed when its neighboring setback no longer reaches the cap.',
     'r:1029#0>r:1178#0': 'Separate source streets cross 114/124 m from their shared endpoints.',
     'r:499#0>r:876#0': 'Curved zero-offset source roads cross 25 m beyond their common junction.',
-    'r:746#0>r:803#1': 'Opposing source carriageways have coincident centerlines and zero offsets.',
-    'r:746#1>r:803#0': 'Opposing source carriageways have coincident centerlines and zero offsets.',
+    // TASK-084 separated the coincident pair r:746/r:803 (r:746#0>r:803#1, r:746#1>r:803#0
+    // before) into a divided pair; it no longer crosses.
     'r:574#0>r:971#0': 'Separate zero-offset source carriageways cross along their road bodies.',
     'r:1155#0>r:574#0':
       'Service access crosses the separate source carriageway 57 m from the junction.',
