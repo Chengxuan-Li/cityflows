@@ -13,7 +13,9 @@ test('T20: fixture lanes do not cross and movements stay inside the outline', ()
   expect(movementsOutside(result.compiled)).toEqual([]);
   const merge = result.compiled.nodes.find((n) => n.pos.x === 550 && n.pos.y === 550)!;
   // Both two-lane approaches overlap the same two exit lanes: crossing movements remain a junction.
-  expect(merge.setbacks).toEqual([4.5, 4.5, 4.5]);
+  // TASK-074: the approaches are one direction now, and the slip road's curved block crosses
+  // the motorway's 15 to 20 m out, so the TASK-061 rule between them caps both (was 4.5).
+  expect(merge.setbacks).toEqual([10, 4.5, 10]);
   const tees = result.compiled.nodes.filter((n) => n.pos.y === 550 && [0, 75].includes(n.pos.x));
   expect(
     result.compiled.roads.filter(

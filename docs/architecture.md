@@ -941,7 +941,11 @@ dropped and its cars held for a change they did not need).
 Gridlock recovery (TASK-077, owner-approved exception to section 1 row 10). A driving
 vehicle is a jam head while it is on a movement, or first on its lane, and not standing at a
 red signal for its own movement. Its jam time grows by `dtS` each step it is a jam head with
-speed below 0.1 m/s and resets to 0 when it moves or stops being a jam head. From
+speed below 0.1 m/s and resets to 0 when it moves or stops being a jam head. TASK-077 as
+merged (lead, after the agent's Munich measurements): a red for its own movement neither
+starts nor stops the timer. A car that arrives at red waits without a timer; a head that
+stood through green with its exit full keeps counting through the red that follows, so a
+ring of queues through signals (Munich `n:262`, `n:963`, `n:967`) unlocks like any other. From
 `respawnS - fadeS` its snapshot `fade` falls linearly from 1 to 0 (1 again if it moves). At
 `respawnS` the commit removes it, in id order: its grants and zone occupancy are released, it
 leaves its lane or movement, and its trip returns to `queued_origin` at its origin connector,

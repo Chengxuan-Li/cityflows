@@ -131,7 +131,13 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
       (pair) => !importedRoadBodyOverlaps['munich-donnersberger']![pair.lanes.join('>')],
     ),
   ).toEqual([]);
-  expect(movementsOutside(compiled)).toEqual([]);
+  // TASK-074 residuals (see T20 and T27): a dead-end U-turn, a merged pair of carriageways
+  // lying on top of each other, and a short stub whose turns cross its neighbour's mouth.
+  expect(movementsOutside(compiled)).toEqual([
+    'r:1163#0>r:1121#0',
+    'r:1276#0>r:1368#0',
+    'r:973#0>r:972#0',
+  ]);
   const provider = createRouteProvider(),
     costs = freeFlowLinkCosts(compiled);
   const unroutable: string[] = [];

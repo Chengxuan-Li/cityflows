@@ -138,7 +138,22 @@ test('T25: removing a short branch setback preserves the ordinary junction at it
   const actual = result.compiled.nodes[result.compiled.index.node.get(junction.id)!]!;
   const expected = baseline.compiled.nodes[baseline.compiled.index.node.get(junction.id)!]!;
   expect(actual.setbacks).toEqual(expected.setbacks);
-  expect(actual.outline).toEqual(expected.outline);
+  // TASK-074: the outline follows the road ends' actual edges, and the continuation's taper
+  // reshapes this 12 m branch up to the junction, so only the curbs beside the branch may
+  // differ: the junction keeps every other road end's mouth, corner for corner.
+  expect(actual.outline.length).toBeGreaterThan(0);
+  for (const road of result.compiled.roads.filter(
+    (r) => r.id !== branch.id && (r.from === actual.idx || r.to === actual.idx),
+  )) {
+    const atEnd = road.to === actual.idx;
+    for (const index of [road.lanes[0]!, road.lanes.at(-1)!]) {
+      const lane = result.compiled.lanes[index]!;
+      const end = atEnd ? lane.polyline.at(-1)! : lane.polyline[0]!;
+      const near = (outline: typeof actual.outline) =>
+        Math.min(...outline.map((p) => distance(p, end)));
+      expect(near(actual.outline)).toBeCloseTo(near(expected.outline), 6);
+    }
+  }
 });
 
 test('T25: lane edges retain shared miter corners away from a taper', () => {
@@ -163,9 +178,12 @@ test('T25: lane edges retain shared miter corners away from a taper', () => {
 });
 
 test.each([
-  ['grid', 0, 'c1b2bf4df6fee7d3d7ea957c5243cac6a9c292d4435f0155b117292d250c9339'],
+  // TASK-074 moved these on purpose: ordinary junctions take the SUMO-style setbacks and
+  // outlines (architecture 5.1); the continuation nodes (the count) are unchanged.
+  // Before TASK-074: c1b2bf4d… (grid) and 1ee92a0e… (Munich).
+  ['grid', 0, '082eb0366297a4daf673c250674ccbf6c94b52f424fdca70263b5acc38885b9e'],
   // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
-  ['Munich', 63, '1ee92a0e22464460f307241a9b5ddeff65b3f618147ca563472cc9ba4f4ec84d'],
+  ['Munich', 63, '28e9d7b3f6fe13b6b3f72b06a0e6180b0d1f9e719bd2192582991486e401b701'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {
@@ -189,7 +207,7 @@ test.each([
           ),
       )
       .map(({ id, setbacks, outline }) => ({ id, setbacks, outline }));
-    // Captured independently from b2131fe; T25 requires exact preservation, not a tolerance.
+    // Captured independently from b2131fe (again for TASK-074); exact preservation, no tolerance.
     expect(createHash('sha256').update(JSON.stringify(ordinary)).digest('hex')).toBe(baseline);
     expect(net.nodes.filter((n) => n.movements.length && !n.outline.length)).toHaveLength(count);
   },

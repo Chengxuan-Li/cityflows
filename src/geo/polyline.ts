@@ -245,3 +245,145 @@ export function pointInPolygon(point: Vec2, ring: readonly Vec2[], tolerance = 1
   }
   return contains;
 }
+
+/** Every crossing of two polylines: the point, the distance along each from its start, and
+ * the index of the crossing segment's end vertex in each. */
+export function polylineCrossings(a: readonly Vec2[], b: readonly Vec2[]) {
+  const lengthsA = cumulativeLengths(a),
+    lengthsB = cumulativeLengths(b);
+  const crossings: { point: Vec2; alongA: number; alongB: number; i: number; j: number }[] = [];
+  for (let i = 1; i < a.length; i++) {
+    const p = a[i - 1]!,
+      q = a[i]!;
+    for (let j = 1; j < b.length; j++) {
+      const r = b[j - 1]!,
+        s = b[j]!;
+      if (
+        Math.max(p.x, q.x) < Math.min(r.x, s.x) ||
+        Math.max(r.x, s.x) < Math.min(p.x, q.x) ||
+        Math.max(p.y, q.y) < Math.min(r.y, s.y) ||
+        Math.max(r.y, s.y) < Math.min(p.y, q.y)
+      )
+        continue;
+      const point = segmentIntersection(p, q, r, s);
+      if (point)
+        crossings.push({
+          point,
+          alongA: lengthsA[i - 1]! + distance(p, point),
+          alongB: lengthsB[j - 1]! + distance(r, point),
+          i,
+          j,
+        });
+    }
+  }
+  return crossings;
+}
+
+/** Cubic Bezier from `a` to `d` with controls `b`, `c`, about one sample per meter plus dense
+ * samples at both ends, so its first and last chords follow the end tangents to a degree. */
+export function sampleCubic(a: Vec2, b: Vec2, c: Vec2, d: Vec2): Vec2[] {
+  const steps = Math.max(4, Math.ceil(distance(a, b) + distance(b, c) + distance(c, d)));
+  const ends = [0.001, 0.004, 0.01, 0.02].filter((t) => t < 0.5 / steps);
+  const ts = [
+    0,
+    ...ends,
+    ...Array.from({ length: steps - 1 }, (_, i) => (i + 1) / steps),
+    ...ends.map((t) => 1 - t).reverse(),
+    1,
+  ];
+  return ts.map((t) => {
+    const u = 1 - t;
+    const w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+    return {
+      x: w[0]! * a.x + w[1]! * b.x + w[2]! * c.x + w[3]! * d.x,
+      y: w[0]! * a.y + w[1]! * b.y + w[2]! * c.y + w[3]! * d.y,
+    };
+  });
+}
+
+/** The parts of `line` that are not deeper than `margin` inside any closed ring; a part lying
+ * on or near a ring's boundary is kept. */
+export function clipOutside(line: readonly Vec2[], rings: readonly Vec2[][], margin: number) {
+  const boxes = rings.map((ring) => {
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const p of ring) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+    return { minX, minY, maxX, maxY };
+  });
+  const deep = (p: Vec2) =>
+    rings.some((ring, k) => {
+      const box = boxes[k]!;
+      if (p.x < box.minX || p.x > box.maxX || p.y < box.minY || p.y > box.maxY) return false;
+      return deepInside(p, ring, margin);
+    });
+  const pieces: Vec2[][] = [];
+  let current: Vec2[] = [];
+  const keep = (p: Vec2) => {
+    const last = current.at(-1);
+    if (!last || distance(last, p) > 1e-9) current.push(p);
+  };
+  const flush = () => {
+    if (current.length > 1) pieces.push(current);
+    current = [];
+  };
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!,
+      b = line[i]!;
+    const ts = [0, 1];
+    rings.forEach((ring, k) => {
+      const box = boxes[k]!;
+      if (
+        Math.max(a.x, b.x) < box.minX ||
+        Math.min(a.x, b.x) > box.maxX ||
+        Math.max(a.y, b.y) < box.minY ||
+        Math.min(a.y, b.y) > box.maxY
+      )
+        return;
+      for (let j = 1; j < ring.length; j++) {
+        const hit = segmentIntersection(a, b, ring[j - 1]!, ring[j]!);
+        if (hit) ts.push(distance(a, hit) / Math.max(distance(a, b), 1e-12));
+      }
+    });
+    ts.sort((x, y) => x - y);
+    for (let k = 1; k < ts.length; k++) {
+      const t0 = ts[k - 1]!,
+        t1 = ts[k]!;
+      if (t1 - t0 < 1e-9) continue;
+      const at = (t: number) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      if (deep(at((t0 + t1) / 2))) {
+        flush();
+        continue;
+      }
+      keep(at(t0));
+      keep(at(t1));
+    }
+  }
+  flush();
+  return pieces;
+}
+
+/** Inside a closed ring and farther than `margin` from its boundary. */
+export function deepInside(p: Vec2, ring: readonly Vec2[], margin: number): boolean {
+  return pointInPolygon(p, ring, 0) && !nearBoundary(p, ring, margin);
+}
+
+function nearBoundary(p: Vec2, ring: readonly Vec2[], margin: number): boolean {
+  for (let i = 1; i < ring.length; i++) {
+    const a = ring[i - 1]!,
+      b = ring[i]!;
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
+    const length2 = dx * dx + dy * dy;
+    const t =
+      length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
+    if (Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy) <= margin) return true;
+  }
+  return false;
+}

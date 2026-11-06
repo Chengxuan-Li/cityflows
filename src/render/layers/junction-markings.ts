@@ -3,6 +3,7 @@ import {
   cumulativeLengths,
   headingAtDistance,
   pointAtDistance,
+  pointInPolygon,
   trimPolyline,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
@@ -180,7 +181,41 @@ export function junctionGuides(city: CompiledCity, node: CNode): Guide[] {
   if (groups.length === 2)
     for (const line of midway(groups[0]![0]!, groups[1]![0]!, true))
       lines.push({ kind: 'centre', line });
-  return lines.map((guide) => ({ ...guide, dashes: dashes(guide.line) }));
+  // The junction outline may stop short of a capped road end (TASK-074); keep only the parts
+  // of each dash that lie on the junction or on one of its roads.
+  const rings = [
+    node.outline,
+    ...city.roads
+      .filter((road) => road.from === node.idx || road.to === node.idx)
+      .map((road) => road.surface),
+  ]
+    .filter((ring) => ring.length > 2)
+    .map((ring) => [...ring, ring[0]!]);
+  const inside = (p: Vec2) => rings.some((ring) => pointInPolygon(p, ring, 0.05));
+  return lines.map((guide) => ({
+    ...guide,
+    dashes: dashes(guide.line).flatMap((dash) => keepInside(dash, inside)),
+  }));
+}
+
+/** The runs of a dash whose sampled points all lie inside; runs under 0.5 m are dropped. */
+function keepInside(dash: Vec2[], inside: (p: Vec2) => boolean): Vec2[][] {
+  if (dash.every(inside)) return [dash];
+  const cumulative = cumulativeLengths(dash);
+  const total = cumulative.at(-1)!;
+  const step = 0.1;
+  const runs: Vec2[][] = [];
+  let run: Vec2[] = [];
+  for (let s = 0; s <= total + 1e-9; s += step) {
+    const p = pointAtDistance(dash, cumulative, Math.min(s, total));
+    if (inside(p)) run.push(p);
+    else if (run.length) {
+      runs.push(run);
+      run = [];
+    }
+  }
+  if (run.length) runs.push(run);
+  return runs.filter((r) => r.length > 1 && (r.length - 1) * step >= 0.5);
 }
 
 function fadeAtZoom(graphics: Graphics, from: number, to: number) {
