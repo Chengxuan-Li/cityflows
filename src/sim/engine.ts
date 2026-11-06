@@ -604,8 +604,10 @@ function createRun({
   }
 
   /**
-   * TASK-077: jam heads (on a movement, or first on their lane and not at a red for their own
-   * movement) standing still for `respawnS` leave the road in id order; the trip starts again.
+   * TASK-077: jam heads (on a movement, or first on their lane) standing still for `respawnS`
+   * leave the road in id order; the trip starts again. A red for the car's own movement neither
+   * starts nor stops the timer: a car arriving at red waits without one, a head that stood
+   * through green with its exit full keeps counting through the red after it.
    */
   function recoverGridlock(timeS: number) {
     const { respawnS, maxRespawns } = params.gridlock;
@@ -614,12 +616,12 @@ function createRun({
       const id = order[i]!;
       if (vehicles.state[id] !== DRIVING) continue;
       const field = vehicles.lane[id]!;
-      const head =
-        field < 0 || (vehicles.first(field) === id && !intersections.red(vehicles.movement[id]!));
-      if (!head || vehicles.speed[id]! >= 0.1) {
+      if ((field >= 0 && vehicles.first(field) !== id) || vehicles.speed[id]! >= 0.1) {
         vehicles.jamS[id] = 0;
         continue;
       }
+      if (field >= 0 && vehicles.jamS[id] === 0 && intersections.red(vehicles.movement[id]!))
+        continue;
       vehicles.jamS[id] = vehicles.jamS[id]! + dtS;
       if (vehicles.jamS[id]! >= respawnS - 1e-9) respawning.push(id);
     }

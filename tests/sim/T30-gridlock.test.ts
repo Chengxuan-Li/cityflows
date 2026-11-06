@@ -141,7 +141,7 @@ test('T30 a square deadlock unlocks: the jam heads fade out, respawn at their or
     expect(outcomes[head - 1]).toMatchObject({ departedS: 100, respawns: 1 });
 });
 
-test('T30 a car at a red light or behind another car never fades; a jam head that moves is opaque again', () => {
+test('T30 a car arriving at a red light, or behind another car, never fades; a jam head that moves is opaque again', () => {
   // A 60 m approach to a signal that is red from 100 s to 304 s; its queue backs up across the
   // node before it onto the upstream road.
   const { city, node, road, place, signal } = buildCity('Red queue', 1);
@@ -201,6 +201,56 @@ test('T30 a car at a red light or behind another car never fades; a jam head tha
   expect(opaqueAgain).toBeGreaterThan(0);
   expect(engine.metrics().respawns).toBe(0);
   expect(engine.metrics().trips.completed).toBeGreaterThan(0);
+});
+
+test('T30 a head that stands through green with its exit full keeps counting through the red', () => {
+  // The approach is green from 100 s to 160 s, then red from 164 s to 468 s. A car for a closed
+  // place crosses first and stands at its connector 3 m into the exit; the next car reaches the
+  // stop line on green and can never enter.
+  const { city, node, road, place, signal } = buildCity('Green then red', 1);
+  const signalized = node(100, 0);
+  const approach = road(node(0, 0), signalized, { speedKmh: 30 });
+  const onward = road(signalized, node(300, 0), { speedKmh: 30 });
+  const crossIn = road(node(100, -200), signalized, { speedKmh: 30 });
+  const crossOut = road(signalized, node(100, 200), { speedKmh: 30 });
+  signal(signalized, [
+    [approach, crossOut],
+    [crossIn, onward],
+  ]);
+  const program = signalized.signal!;
+  program.phases[0]!.durationS = 60;
+  program.phases[1]!.durationS = 300;
+  program.offsetS = -100;
+  const redFromS = 100 + 60 + program.amberS + program.allRedS;
+  place('Work', 'work', { x: 300, y: 0 }, [{ road: onward, direction: 'in', positionM: 150 }]);
+  place('Closed', 'work', { x: 200, y: 0 }, [{ road: onward, direction: 'in', positionM: 3 }]);
+  place('Home', 'residential', { x: 0, y: 0 }, [{ road: approach, direction: 'out' }]);
+  const [work, closed, home] = Object.values(city.places);
+  closed!.capacity = 0;
+  const trips = [trip(0, home!.id, closed!.id), trip(1, home!.id, work!.id, 104)];
+  // Fade from 30 s of jam time, respawn at 60 s.
+  const gridlock: SimParams['gridlock'] = { respawnS: 60, fadeS: 30, maxRespawns };
+  const engine = load({ compiled: setup(city), trips }, { gridlock });
+  let fadeAtRed = NaN;
+  let respawnedS = NaN;
+  while (engine.timeS < 300) {
+    engine.step();
+    const fade = fades(engine).get(2);
+    if (Number.isNaN(fadeAtRed) && engine.timeS >= redFromS) fadeAtRed = fade ?? NaN;
+    if (Number.isNaN(respawnedS) && engine.metrics().respawns === 1) respawnedS = engine.timeS;
+  }
+  expect(engine.inspect(1)!.state).toBe('queued_destination');
+  // It began counting on green, so it already fades when the light turns red ...
+  expect(fadeAtRed).toBeLessThan(1);
+  // ... and keeps counting through the red until it respawns, mid-red.
+  expect(respawnedS).toBeGreaterThan(redFromS);
+  expect(respawnedS).toBeLessThan(redFromS + 60);
+  expect(engine.inspect(2)!.respawns).toBe(1);
+  // Released again, it reaches the line at red and waits there without a timer.
+  const detail = engine.inspect(2)!;
+  expect(detail.state).toBe('driving');
+  expect(detail.speedMps).toBeLessThan(0.1);
+  expect(fades(engine).get(2)).toBe(1);
 });
 
 test('T30 a trip stuck again after its last respawn fails as gridlocked', () => {
