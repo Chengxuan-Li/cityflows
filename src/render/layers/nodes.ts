@@ -1,5 +1,5 @@
 import type { Graphics } from 'pixi.js';
-import { distance as distanceOf, headingAtDistance } from '../../geo/polyline';
+import { distance as distanceOf, headingAtDistance, nearestOnPolyline } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CMovement, CNode, CompiledCity, CRoad } from '../../network';
 import { roadStyle, style } from '../style';
@@ -46,9 +46,10 @@ export function drawRoadJoins(
     const edges = roadEndEdges(city, road, atEnd);
     graphics.poly(edges, false).stroke({ color, width: vergeM * 2, cap: 'round' });
     // The road's verge runs on along the curb to its middle, so the curb has no step where the
-    // junction surface takes over from the road (TASK-074).
-    for (const curb of curbHalves(city, node, edges))
-      graphics.poly(curb, false).stroke({ color, width: vergeM * 2, cap: 'round', join: 'round' });
+    // junction surface takes over from the road (TASK-074). TASK-083: its width eases into the
+    // next road's verge, so the two halves meet at the middle with one width and no cap.
+    for (const band of curbBands(city, node, road, edges, roadClasses))
+      graphics.poly(band).fill(color);
   }
 }
 
@@ -100,18 +101,27 @@ export function curbTaper(city: CompiledCity, node: CNode) {
   };
 }
 
-/** From each of a road end's corners on the outline, the first half of the curb toward the
- * next road end's corner. */
-export function curbHalves(city: CompiledCity, node: CNode, corners: Vec2[]): Vec2[][] {
+/** From each of a road end's corners on the outline, the first half of the curb toward the next
+ * road end's corner, as a band around the curb whose half width eases (smoothstep along the whole
+ * curb) from this road's verge at its corner to the other road's at that one: the other road's
+ * band meets it at the middle with the same width and cross-section. */
+export function curbBands(
+  city: CompiledCity,
+  node: CNode,
+  road: CRoad,
+  corners: Vec2[],
+  roadClasses = false,
+): Vec2[][] {
   const ring = node.outline.slice(0, -1);
   const n = ring.length;
   const others = city.roads
     .filter((r) => r.from === node.idx || r.to === node.idx)
     .flatMap((r) => [
-      ...(r.from === node.idx ? roadEndEdges(city, r, false) : []),
-      ...(r.to === node.idx ? roadEndEdges(city, r, true) : []),
+      ...(r.from === node.idx ? roadEndEdges(city, r, false).map((p) => ({ p, r })) : []),
+      ...(r.to === node.idx ? roadEndEdges(city, r, true).map((p) => ({ p, r })) : []),
     ]);
   const near = (p: Vec2, q: Vec2) => Math.hypot(p.x - q.x, p.y - q.y) <= 0.15;
+  const own = roadStyle(road, roadClasses).vergeM;
   return corners.flatMap((corner, side) => {
     const k = ring.findIndex((p) => near(p, corner));
     if (k < 0) return [];
@@ -122,28 +132,72 @@ export function curbHalves(city: CompiledCity, node: CNode, corners: Vec2[]): Ve
     };
     const step = along(1) < along(-1) ? 1 : -1;
     const curb = [corner];
+    let end: CRoad | undefined;
     for (let i = 1; i < n; i++) {
       const p = ring[(k + step * i + n * n) % n]!;
       curb.push(p);
-      if (others.some((q) => near(p, q))) break;
+      // The next road end's corner; the ring can repeat a corner within millimetres.
+      end = others.find((q) => near(p, q.p) && !near(q.p, corner))?.r;
+      if (end) break;
     }
-    let total = 0;
-    for (let i = 1; i < curb.length; i++) total += distanceOf(curb[i - 1]!, curb[i]!);
-    const half: Vec2[] = [curb[0]!];
-    let run = 0;
+    if (!end) return [];
+    // A curb runs out along each road edge to its tangent point and turns back there along the
+    // arc: the band covers the arc only, the roads' own verges drawing their edges.
+    const alongEdge = (r: CRoad, p: Vec2) => {
+      const h = r.surface.length / 2;
+      return [r.surface.slice(0, h), r.surface.slice(h)].some(
+        (edge) => nearestOnPolyline(edge, p).away < 0.05,
+      );
+    };
+    const trim = (path: Vec2[], r: CRoad) => {
+      let i = 0;
+      while (i + 1 < path.length && alongEdge(r, path[i + 1]!)) i++;
+      path.splice(0, i);
+    };
+    trim(curb, road);
+    curb.reverse();
+    trim(curb, end);
+    curb.reverse();
+    if (curb.length < 2) return [];
+    const lengths = [0];
+    for (let i = 1; i < curb.length; i++)
+      lengths.push(lengths[i - 1]! + distanceOf(curb[i - 1]!, curb[i]!));
+    const total = lengths.at(-1)!;
+    if (total < 1e-6) return [];
+    const theirs = roadStyle(end, roadClasses).vergeM;
+    const width = (s: number) => {
+      const t = Math.max(0, Math.min(1, s / total));
+      return own + (theirs - own) * t * t * (3 - 2 * t);
+    };
+    // The curb's first half, cut at its middle point, and both sides of it at the width there.
+    const half: { p: Vec2; s: number }[] = [{ p: curb[0]!, s: 0 }];
     for (let i = 1; i < curb.length; i++) {
-      const segment = distanceOf(curb[i - 1]!, curb[i]!);
-      if (run + segment >= total / 2) {
-        const t = (total / 2 - run) / segment;
+      if (lengths[i]! >= total / 2) {
+        const t = (total / 2 - lengths[i - 1]!) / (lengths[i]! - lengths[i - 1]!);
         const a = curb[i - 1]!,
           b = curb[i]!;
-        half.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+        half.push({ p: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, s: total / 2 });
         break;
       }
-      half.push(curb[i]!);
-      run += segment;
+      half.push({ p: curb[i]!, s: lengths[i]! });
     }
-    return half.length > 1 ? [half] : [];
+    // Cross-sections at the half's vertices, across the curb's direction there; at the middle,
+    // across the segment holding it, which the other half shares.
+    const direction = (i: number) => {
+      const a = i === 0 ? half[0]!.p : half[i - 1]!.p;
+      const b = i === half.length - 1 ? half[i]!.p : half[i + 1]!.p;
+      const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      return { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
+    };
+    const left: Vec2[] = [],
+      right: Vec2[] = [];
+    half.forEach(({ p, s }, i) => {
+      const d = direction(i);
+      const w = width(s);
+      left.push({ x: p.x - d.y * w, y: p.y + d.x * w });
+      right.push({ x: p.x + d.y * w, y: p.y - d.x * w });
+    });
+    return [[...left, ...right.reverse()]];
   });
 }
 

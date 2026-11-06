@@ -685,14 +685,26 @@ function edgeUpTo(edge: Vec2[], station: number): Vec2[] {
   return edge.filter((_, i) => i > 0 && lengths[i]! < station - 1e-6);
 }
 
-/** The corner between one approach's right edge `a` and the next approach's left edge `b`: a
- * curb arc where the edges meet in front of the node behind both cuts (a concave corner), a gore
- * where they cross beyond a cut (a capped acute pair: the TASK-063 gore covers the overlap), the
- * outer corner where the edges meet behind the node (a convex corner, more than 180 degrees
- * between the approaches), nothing where they run parallel. */
+/** The interior points of the shorter arc of the circle (`o`, `radius`) from `a` to `b`, at most
+ * 3 degrees and 1 m apart. */
+function arcBetween(o: Vec2, radius: number, a: Vec2, b: Vec2): Vec2[] {
+  const start = Math.atan2(a.y - o.y, a.x - o.x);
+  let sweep = Math.atan2(b.y - o.y, b.x - o.x) - start;
+  sweep = Math.atan2(Math.sin(sweep), Math.cos(sweep));
+  const steps = Math.max(
+    2,
+    Math.ceil(Math.abs(sweep) / ARC_STEP),
+    Math.ceil(Math.abs(sweep) * radius),
+  );
+  return Array.from({ length: steps - 1 }, (_, k) => {
+    const angle = start + (sweep * (k + 1)) / steps;
+    return { x: o.x + radius * Math.cos(angle), y: o.y + radius * Math.sin(angle) };
+  });
+}
+
 /** The corner between two neighbouring approaches (T38.3 reads the curbs). */
 export interface JunctionCorner {
-  kind: 'curb' | 'gore' | 'outer';
+  kind: 'curb' | 'gore' | 'outer' | 'step';
   /** Compiled road indices: the road whose right edge (outward) and the road whose left edge
    * the corner joins. */
   roads: [number, number];
@@ -700,19 +712,41 @@ export interface JunctionCorner {
   /** Curbs: what set the tangent length (the class radius; a cut farther from the corner than
    * the class tangent, the arc then meeting that cut's corner; the class radius beyond the
    * nearer cut, which keeps the curb from bulging past its road ends; the first 40 percent of a
-   * road), the class radius, the radius used, the arc's centre and its tangent points. */
-  limit?: 'class' | 'cut' | 'lobe' | 'road';
+   * road; a movement surface it would cut into), the class radius, the radius used, the arc's centre and its tangent points. */
+  limit?: 'class' | 'cut' | 'lobe' | 'road' | 'turn';
   classRadius?: number;
   radius?: number;
   centre?: Vec2;
   tangents?: [Vec2, Vec2];
 }
 
-function corner(a: PolygonEnd, b: PolygonEnd): JunctionCorner | undefined {
+/** The corner between one approach's right edge `a` and the next approach's left edge `b`: a
+ * curb arc where the edges meet in front of the node behind both cuts (a concave corner), a gore
+ * where they cross beyond a cut (a capped acute pair: the TASK-063 gore covers the overlap), a
+ * rounded outer corner where the edges meet behind the node (a convex corner, more than 180
+ * degrees between the approaches), an S-curve where the edges run on into each other, nothing
+ * where they run parallel side by side. */
+function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCorner | undefined {
   const ka = a.right[0]!,
     kb = b.left[0]!;
   let da = leaving(a.right),
     db = leaving(b.left);
+  const roads: [number, number] = [a.road.idx, b.road.idx];
+  // Edges within 30 degrees of running on into each other (a road continuing into a narrower or
+  // wider one, two ends side by side across the node): an S-curve tangent to both, which
+  // replaces the chord between the cuts (`cutRegion`).
+  if (dot(da, db) < -ALONG) {
+    const length = distance(ka, kb);
+    if (length < 1e-3) return undefined;
+    const h = length / 3;
+    const curve = sampleHalf([
+      ka,
+      { x: ka.x - da.x * h, y: ka.y - da.y * h },
+      { x: kb.x - db.x * h, y: kb.y - db.y * h },
+      kb,
+    ]);
+    return { kind: 'step', roads, ring: curve };
+  }
   const c = cross(da, db);
   if (Math.abs(c) < 0.02) return undefined;
   // Where the lines through the cut corners along the edges meet; sa, sb: along each from its
@@ -720,12 +754,23 @@ function corner(a: PolygonEnd, b: PolygonEnd): JunctionCorner | undefined {
   const w = sub(kb, ka);
   const sa = cross(w, db) / c,
     sb = cross(w, da) / c;
-  const apex = { x: ka.x + da.x * sa, y: ka.y + da.y * sa };
-  const roads: [number, number] = [a.road.idx, b.road.idx];
-  if (c < 0)
-    return sa < 0 && sb < 0 && -sa < REACH_M && -sb < REACH_M
-      ? { kind: 'outer', roads, ring: [ka, apex, kb] }
-      : undefined;
+  // An outer corner (more than 180 degrees between the approaches) is rounded: an arc tangent to
+  // both edges' lines at the nearer cut corner and as far from their meeting point on the other.
+  if (c < 0) {
+    if (sa >= 0 || sb >= 0 || -sa > REACH_M || -sb > REACH_M) return undefined;
+    const apex = { x: ka.x + da.x * sa, y: ka.y + da.y * sa };
+    const t = Math.min(-sa, -sb);
+    const ta = { x: apex.x + da.x * t, y: apex.y + da.y * t },
+      tb = { x: apex.x + db.x * t, y: apex.y + db.y * t };
+    const theta = Math.acos(Math.max(-1, Math.min(1, dot(da, db))));
+    const radius = t * Math.tan(theta / 2);
+    const bisector = unit({ x: da.x + db.x, y: da.y + db.y });
+    const o = {
+      x: apex.x + (bisector.x * radius) / Math.sin(theta / 2),
+      y: apex.y + (bisector.y * radius) / Math.sin(theta / 2),
+    };
+    return { kind: 'outer', roads, ring: [ka, ta, ...arcBetween(o, radius, ta, tb), tb, kb] };
+  }
   if (sa > 0.01 || sb > 0.01) {
     const hit = polylineCrossings(a.right, b.left)
       .filter((h) => distance(h.point, ka) <= REACH_M)
@@ -800,7 +845,31 @@ function corner(a: PolygonEnd, b: PolygonEnd): JunctionCorner | undefined {
     if (next.c <= 0.02 || next.sa > 0.01 || next.sb > 0.01) break;
     [best, da, db] = [next, ra, rb];
   }
-  const { p, theta, perRadius, limit, tangent } = best;
+  const { p, theta, perRadius } = best;
+  let { limit, tangent } = best;
+  const bisector = unit({ x: da.x + db.x, y: da.y + db.y });
+  const centre = (t: number) => {
+    const d = t / perRadius / Math.sin(theta / 2);
+    return { x: p.x + bisector.x * d, y: p.y + bisector.y * d };
+  };
+  // No movement surface may reach into the curb's disc (beyond the arc, the corner block): the
+  // arc shrinks (bisection on the tangent length) until none does.
+  const intrudes = (t: number) => {
+    const o = centre(t),
+      r = t / perRadius;
+    return surface.some((q) => distance(q, o) < r - 0.05);
+  };
+  if (intrudes(tangent)) {
+    let low = 0,
+      high = tangent;
+    for (let k = 0; k < 10; k++) {
+      const mid = (low + high) / 2;
+      if (intrudes(mid)) high = mid;
+      else low = mid;
+    }
+    [tangent, limit] = [low, 'turn'];
+    if (tangent < Math.max(0, -best.sa, -best.sb) - 0.5) return undefined;
+  }
   const radius = tangent / perRadius;
   if (radius < MIN_CURB_M) return undefined;
   const ta = { x: p.x + da.x * tangent, y: p.y + da.y * tangent },
@@ -810,21 +879,8 @@ function corner(a: PolygonEnd, b: PolygonEnd): JunctionCorner | undefined {
   const onEdge = (edge: Vec2[], t: Vec2, d: Vec2) =>
     nearestOnPolyline([{ x: edge[0]!.x - d.x, y: edge[0]!.y - d.y }, ...edge], t).away <= FIT_M;
   if (!onEdge(a.right, ta, da) || !onEdge(b.left, tb, db)) return undefined;
-  const bisector = unit({ x: da.x + db.x, y: da.y + db.y });
-  const centreDistance = radius / Math.sin(theta / 2);
-  const o = { x: p.x + bisector.x * centreDistance, y: p.y + bisector.y * centreDistance };
-  const start = Math.atan2(ta.y - o.y, ta.x - o.x);
-  let sweep = Math.atan2(tb.y - o.y, tb.x - o.x) - start;
-  sweep = Math.atan2(Math.sin(sweep), Math.cos(sweep));
-  const steps = Math.max(
-    2,
-    Math.ceil(Math.abs(sweep) / ARC_STEP),
-    Math.ceil(Math.abs(sweep) * radius),
-  );
-  const arc = Array.from({ length: steps - 1 }, (_, k) => {
-    const angle = start + (sweep * (k + 1)) / steps;
-    return { x: o.x + radius * Math.cos(angle), y: o.y + radius * Math.sin(angle) };
-  });
+  const o = centre(tangent);
+  const arc = arcBetween(o, radius, ta, tb);
   return {
     kind: 'curb',
     roads,
@@ -897,6 +953,7 @@ function cutRegion(
   approaches: number[][],
   hidden: number[],
   through: ThroughPair[],
+  surface: Vec2[],
 ) {
   const ends = roads.map((road, i) => polygonEnd(node, road, node.setbacks[i]!));
   const groups = approaches.map((approach) => approach.map((i) => ends[i]!));
@@ -932,7 +989,13 @@ function cutRegion(
       )
         corners.push(piece);
     });
-    if (!far(group, next)) fan.push([centre, group.at(-1)!.right[0]!, next[0]!.left[0]!]);
+    if (far(group, next)) return;
+    const step = corner(group.at(-1)!, next[0]!);
+    fan.push(
+      step?.kind === 'step'
+        ? [centre, ...step.ring]
+        : [centre, group.at(-1)!.right[0]!, next[0]!.left[0]!],
+    );
   });
   // Corners between the approaches' outer road ends; a shadowed end (`junctionCuts`) is not one.
   const shadowed = new Set(hidden.map((i) => ends[i]!));
@@ -941,8 +1004,8 @@ function cutRegion(
     facing.forEach((group, i) => {
       const next = facing[(i + 1) % facing.length]!;
       if (far(group, next)) return;
-      const piece = corner(group.at(-1)!, next[0]!);
-      if (piece) corners.push(piece);
+      const piece = corner(group.at(-1)!, next[0]!, surface);
+      if (piece && piece.kind !== 'step') corners.push(piece);
     });
   return { fan, corners };
 }
@@ -996,14 +1059,7 @@ export function junctionPolygon(
   movements: CMovement[],
 ): Vec2[] {
   if (node.setbacks.every((s) => s === 0)) return [];
-  const { fan, corners } = cutRegion(node, roads, approaches, hidden, through);
-  cornersByNode.set(node, corners);
-  const pieces: PathD[] = [...fan, ...corners.map((c) => c.ring)];
-  for (const pair of through) {
-    const from = roads.find((r) => r.idx === pair.from)!,
-      to = roads.find((r) => r.idx === pair.to)!;
-    pieces.push(throughStrip(from, to));
-  }
+  const surfaces: Vec2[][] = [];
   // Each movement's surface: both edges across the curve's tangent, which is the lanes' own
   // direction at its two ends, so the surface ends on the cuts (a hairpin's inner edge folds:
   // the union's non-zero fill keeps both of its lobes).
@@ -1031,12 +1087,51 @@ export function junctionPolygon(
       ] as const;
     });
     const ring = [...sides.map(([l]) => l), ...sides.map(([, r]) => r).reverse()];
-    pieces.push(ring);
+    surfaces.push(ring);
   }
+  // The surfaces' boundaries every half metre, which no curb may cut into.
+  const samples = surfaces.flatMap((ring) =>
+    ring.flatMap((q, k) => {
+      const r = ring[(k + 1) % ring.length]!;
+      const steps = Math.max(1, Math.ceil(distance(q, r) / SAMPLE_M));
+      return Array.from({ length: steps }, (_, j) => ({
+        x: q.x + ((r.x - q.x) * j) / steps,
+        y: q.y + ((r.y - q.y) * j) / steps,
+      }));
+    }),
+  );
+  const { fan, corners } = cutRegion(node, roads, approaches, hidden, through, samples);
+  cornersByNode.set(node, corners);
+  const pieces: PathD[] = [...fan, ...corners.map((c) => c.ring), ...surfaces];
+  for (const pair of through) {
+    const from = roads.find((r) => r.idx === pair.from)!,
+      to = roads.find((r) => r.idx === pair.to)!;
+    pieces.push(throughStrip(from, to));
+  }
+  // A piece crossing itself (a hairpin's folded surface, a curb or strip on a sharply curving
+  // edge) is cleaned on its own first, so none of its lobes is wound against another piece.
   const oriented = pieces
-    .filter((p) => p.length >= 3 && Math.abs(areaD(p)) > 1e-6)
+    .filter((p) => p.length >= 3)
+    .flatMap((p) =>
+      crossesItself(p) ? booleanOpD(ClipType.Union, [p], null, FillRule.NonZero, PRECISION) : [p],
+    )
+    .filter((p) => Math.abs(areaD(p)) > 1e-6)
     .map((p) => (areaD(p) < 0 ? [...p].reverse() : p));
   let union = booleanOpD(ClipType.Union, oriented, null, FillRule.NonZero, PRECISION);
+  // A curb's disc is the corner block: the fan's chord between deep cuts may reach into it, so
+  // the discs are taken out (movement surfaces stay clear of them, `corner`).
+  const discs = corners.flatMap((c) =>
+    c.kind === 'curb'
+      ? [
+          Array.from({ length: 120 }, (_, k) => ({
+            x: c.centre!.x + (c.radius! - 0.002) * Math.cos((k * Math.PI) / 60),
+            y: c.centre!.y + (c.radius! - 0.002) * Math.sin((k * Math.PI) / 60),
+          })),
+        ]
+      : [],
+  );
+  if (discs.length)
+    union = booleanOpD(ClipType.Difference, union, discs, FillRule.NonZero, PRECISION);
   // Where pieces only touch, rounding can leave the ring crossing itself at a pinch: a closing by
   // 1 cm merges them.
   if (union.some(crossesItself))

@@ -222,6 +222,77 @@ test.each(auditCities)(
   120_000,
 );
 
+const turnDegrees = (a: Vec2, p: Vec2, b: Vec2) => {
+  const h1 = Math.atan2(p.y - a.y, p.x - a.x),
+    h2 = Math.atan2(b.y - p.y, b.x - p.x);
+  return (Math.abs(Math.atan2(Math.sin(h2 - h1), Math.cos(h2 - h1))) * 180) / Math.PI;
+};
+
+test.each(auditCities)(
+  'T38.3: %s draws continuation joints, outer corners and steps without a turn over 20 degrees',
+  (name) => {
+    const { net } = load(name);
+    const failures: string[] = [];
+    // Through, merge and diverge joins at nodes without an outline (TASK-071/080/082): the outer
+    // surface edges of the two roads meet within 20 degrees.
+    for (const n of net.nodes) {
+      if (n.outline.length) continue;
+      for (const i of n.movements) {
+        const m = net.movements[i]!;
+        if (!['through', 'merge', 'diverge'].includes(m.turn)) continue;
+        const from = net.lanes[m.fromLane]!,
+          to = net.lanes[m.toLane]!;
+        const a = net.roads[from.road]!,
+          b = net.roads[to.road]!;
+        for (const side of [0, 1]) {
+          const outer = (road: typeof a, lane: number) =>
+            side ? road.lanes.at(-1) === lane : road.lanes[0] === lane;
+          if (!outer(a, from.idx) || !outer(b, to.idx)) continue;
+          const edge = (road: typeof a) => {
+            const h = road.surface.length / 2;
+            return side ? road.surface.slice(h).reverse() : road.surface.slice(0, h);
+          };
+          const ea = edge(a),
+            eb = edge(b);
+          if (distance(ea.at(-1)!, eb[0]!) > 0.5) continue;
+          const turn = turnDegrees(ea.at(-2)!, ea.at(-1)!, eb[1]!);
+          if (turn > 20) failures.push(`${n.id} ${m.id} side ${side}: ${turn.toFixed(1)}`);
+        }
+      }
+    }
+    // At junctions: an outer corner or a step runs from one road edge into the next with no
+    // vertex turning more than 20 degrees, the road edges' first metre included.
+    for (const n of net.nodes) {
+      for (const c of junctionCorners(n)) {
+        if (c.kind !== 'outer' && c.kind !== 'step') continue;
+        const [ra, rb] = c.roads.map((r) => net.roads[r]!);
+        const outward = (road: NonNullable<typeof ra>, right: boolean) => {
+          const ring = road.surface;
+          const h = ring.length / 2;
+          const tl = ring.slice(0, h),
+            tr = ring.slice(h).reverse();
+          const atEnd = road.to === n.idx;
+          return right ? (atEnd ? [...tl].reverse() : tr) : atEnd ? [...tr].reverse() : tl;
+        };
+        const ea = outward(ra!, true),
+          eb = outward(rb!, false);
+        const path = [ea[1]!, ...c.ring, eb[1]!];
+        for (let i = 1; i + 1 < path.length; i++) {
+          if (distance(path[i - 1]!, path[i]!) < 1e-6 || distance(path[i]!, path[i + 1]!) < 1e-6)
+            continue;
+          const turn = turnDegrees(path[i - 1]!, path[i]!, path[i + 1]!);
+          if (turn > 20) {
+            failures.push(`${n.id} ${c.kind} ${ra!.id}>${rb!.id} at ${i}: ${turn.toFixed(1)}`);
+            break;
+          }
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  },
+  120_000,
+);
+
 test('T38.3: class radii at a residential crossing, a side street and a primary crossing', () => {
   const { city, node: at, road, street } = buildCity('Curb classes', 1);
   const two = (
@@ -383,10 +454,10 @@ function fingerprint(net: CompiledCity) {
 // grid 56deba638330bc89, town fc657fc34fe56206, Sindelfingen 9406c542b3054ff5, Munich
 // 330eb51540ef21b3 (T31, with the aprons left out).
 const fingerprints: Record<AuditCity, string> = {
-  grid: 'ec021284f090050b',
-  town: '0c11cf7ac73392c1',
-  sindelfingen: '2aee03f24b3f080c',
-  munich: '4c20ace7aaab741d',
+  grid: '550abeb39a410ed8',
+  town: '21bcc4f206cea7a5',
+  sindelfingen: 'e0d07f9df3ecf65f',
+  munich: '946d523f0505c680',
 };
 
 test.each(auditCities)(
