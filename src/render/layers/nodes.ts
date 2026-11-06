@@ -43,6 +43,8 @@ export function drawRoadJoins(
   for (const atEnd of [false, true]) {
     const node = city.nodes[atEnd ? road.to : road.from]!;
     if (!node.outline.length) continue;
+    const taper = curbTaper(city, node);
+    if (taper && taper.trunk === road) graphics.poly(taper.ring).fill(color);
     const edges = roadEndEdges(city, road, atEnd);
     graphics.poly(edges, false).stroke({ color, width: vergeM * 2, cap: 'round' });
     // The road's verge runs on along the curb to its middle, so the curb has no step where the
@@ -50,6 +52,54 @@ export function drawRoadJoins(
     for (const curb of curbHalves(city, node, edges))
       graphics.poly(curb, false).stroke({ color, width: vergeM * 2, cap: 'round', join: 'round' });
   }
+}
+
+/** TASK-080 (B36): at a split or merge whose branches run side by side wider than the trunk (an
+ * absorbing merge, a lane added at an exit), the curb-side edge eases from the outermost branch
+ * to the trunk as one smooth taper over the trunk's `taperM`, drawn under the junction surface.
+ * The ring spans from the taper curve to 2 m inside the trunk's edge line. */
+export function curbTaper(city: CompiledCity, node: CNode) {
+  if (node.control !== 'uncontrolled') return null;
+  const incoming = city.roads.filter((r) => r.to === node.idx && r.from !== node.idx);
+  const outgoing = city.roads.filter((r) => r.from === node.idx && r.to !== node.idx);
+  const merge = outgoing.length === 1 && incoming.length > 1;
+  if (!merge && !(incoming.length === 1 && outgoing.length > 1)) return null;
+  const trunk = (merge ? outgoing : incoming)[0]!;
+  const side = city.drivingSide === 'right' ? 1 : 0;
+  const sign = side ? 1 : -1;
+  const lane = city.lanes[trunk.lanes[side ? trunk.lanes.length - 1 : 0]!]!;
+  const h = headingAtDistance(lane.polyline, lane.cumulative, merge ? 0 : lane.lengthM);
+  const corner = roadEndEdges(city, trunk, !merge)[side]!;
+  const frame = (p: Vec2) => ({
+    u: (p.x - corner.x) * Math.cos(h) + (p.y - corner.y) * Math.sin(h),
+    v: sign * (-(p.x - corner.x) * Math.sin(h) + (p.y - corner.y) * Math.cos(h)),
+  });
+  const world = (u: number, v: number) => ({
+    x: corner.x + u * Math.cos(h) - sign * v * Math.sin(h),
+    y: corner.y + u * Math.sin(h) + sign * v * Math.cos(h),
+  });
+  const branches = merge ? incoming : outgoing;
+  const along = branches.every((b) => {
+    const l = city.lanes[b.lanes[0]!]!;
+    const heading = headingAtDistance(l.polyline, l.cumulative, merge ? l.lengthM : 0);
+    return Math.cos(heading - h) > Math.cos(Math.PI / 6);
+  });
+  if (!along) return null;
+  const outer = branches
+    .map((b) => frame(roadEndEdges(city, b, merge)[side]!))
+    .reduce((a, b) => (b.v > a.v ? b : a));
+  if (outer.v < 0.3 || (merge ? outer.u > 0 : outer.u < 0)) return null;
+  const taperM = Math.max(15, Math.min(40, 0.4 * trunk.speedLimitMps * 3.6));
+  const direction = merge ? 1 : -1;
+  const curve: Vec2[] = [];
+  for (let i = 0; i <= 40; i++) {
+    const t = i / 40;
+    curve.push(world(outer.u + direction * taperM * t, outer.v * (1 - t * t * (3 - 2 * t))));
+  }
+  return {
+    trunk,
+    ring: [...curve, world(outer.u + direction * taperM, -2), world(outer.u, -2)],
+  };
 }
 
 /** From each of a road end's corners on the outline, the first half of the curb toward the

@@ -11,9 +11,25 @@ import type { Vec2 } from '../geo/vec2';
 import type { CLane, CRoad, Diagnostic } from './types';
 
 export interface ContinuationEnd {
+  /** Travel heading of the reference line at the node. */
   heading: number;
+  /** Lateral shift of the lane block from the road's own offsets to its place in the
+   * side-by-side block, measured from the reference line. */
   offsetM: number;
   tapers: number[];
+  /** Distance from the road's (trimmed) end over which the block follows the reference line
+   * before it eases onto its own offsets over `taperM` (TASK-080). Negative when the branches
+   * separate before the cut. Both 0 at an end that only marks that the transition of the
+   * road's other end reaches it (that end is then not reset to the road's own offsets). */
+  holdM: number;
+  taperM: number;
+  /** A shift to the right that the side-by-side block takes over the first `taperM`: a branch
+   * that starts on a trunk lane it shares with its left neighbour moves off it. */
+  splitM?: number;
+  /** The line the side-by-side block follows, in travel direction, starting (start end) or
+   * ending (end end) at the road's trimmed end: a ray along `heading` from a continuation node,
+   * the branches' mean line elsewhere. */
+  reference: Vec2[];
 }
 
 export interface RoadContinuity {
@@ -26,14 +42,37 @@ export function smoothstep(t: number): number {
   return u * u * (3 - 2 * u);
 }
 
+/** TASK-080 (B37): every taper is short and scaled by speed, at most half the road. */
+export function taperLength(road: Road): number {
+  const kmh = road.speedLimitMps * 3.6;
+  return Math.min(polylineLength(road.centerline) / 2, Math.max(15, Math.min(40, 0.4 * kmh)));
+}
+
+/** A point `lateral` to the right of the end's reference line, `away` from the road's end. */
+function referencePoint(end: ContinuationEnd, atEnd: boolean, away: number, lateral: number) {
+  const lengths = cumulativeLengths(end.reference);
+  const total = lengths.at(-1)!;
+  const s = Math.max(0, Math.min(total, atEnd ? total - away : away));
+  const origin = pointAtDistance(end.reference, lengths, s);
+  const heading = headingAtDistance(end.reference, lengths, s);
+  return {
+    x: origin.x - Math.sin(heading) * lateral,
+    y: origin.y + Math.cos(heading) * lateral,
+  };
+}
+
 export function roadWidth(road: Road): number {
   return road.lanes.reduce((width, lane) => width + lane.widthM, 0);
 }
 
 /** Painted lane edges collapse onto the nearest surviving lane; driving polylines stay put. */
-export function laneEdges(lane: CLane, roadLanes: CLane[]): { left: Vec2[]; right: Vec2[] } {
+export function laneEdges(
+  lane: CLane,
+  roadLanes: CLane[],
+  offset: (points: readonly Vec2[], offset: number) => Vec2[] = offsetPolyline,
+): { left: Vec2[]; right: Vec2[] } {
   const edges = (side: number) => {
-    const line = offsetPolyline(lane.polyline, (lane.widthM / 2) * side);
+    const line = offset(lane.polyline, (lane.widthM / 2) * side);
     const lengths = cumulativeLengths(line);
     return line.map((point, i) => {
       const at = (lengths[i]! / lengths.at(-1)!) * lane.lengthM;
@@ -92,13 +131,14 @@ export function layoutRoad(
     if (!transition.start && !transition.end) return original;
     const lengths = cumulativeLengths(centerline);
     const total = lengths.at(-1)!;
-    const taper = Math.min(60, length / 2);
     const stations = new Set([...lengths]);
     for (const atEnd of [false, true]) {
-      if (!(atEnd ? transition.end : transition.start)) continue;
-      const count = Math.ceil(taper / 0.5);
-      for (let i = 0; i <= count; i++) {
-        const s = (taper * i) / count;
+      const end = atEnd ? transition.end : transition.start;
+      if (!end) continue;
+      const span = Math.min(total, Math.max(0, end.holdM + end.taperM));
+      const count = Math.ceil(span / 0.5);
+      for (let i = 1; i <= count; i++) {
+        const s = (span * i) / count;
         stations.add(atEnd ? total - s : s);
       }
     }
@@ -117,35 +157,14 @@ export function layoutRoad(
         for (const atEnd of [false, true]) {
           const end = atEnd ? transition.end : transition.start;
           const away = atEnd ? total - s : s;
-          if (!end || away > taper) continue;
-          const t = away / taper;
-          const f = smoothstep(t);
-          const origin = atEnd ? centerline.at(-1)! : centerline[0]!;
-          const targetS = atEnd ? total - taper : taper;
-          const target = pointAtDistance(centerline, lengths, targetS);
-          const targetHeading = headingAtDistance(centerline, lengths, targetS);
-          const sign = atEnd ? -1 : 1;
-          // A Hermite centerline leaves on the trunk tangent and meets the source road
-          // tangentially. Its lateral lane-block correction uses the same smoothstep.
-          const first = sign * taper * t * (1 - t) ** 2;
-          const last = sign * taper * t * t * (t - 1);
-          const lateral = value + end.offsetM * (1 - f);
-          const normalX = -Math.sin(end.heading) * (1 - f) - Math.sin(targetHeading) * f;
-          const normalY = Math.cos(end.heading) * (1 - f) + Math.cos(targetHeading) * f;
-          result = {
-            x:
-              origin.x * (1 - f) +
-              target.x * f +
-              Math.cos(end.heading) * first +
-              Math.cos(targetHeading) * last +
-              normalX * lateral,
-            y:
-              origin.y * (1 - f) +
-              target.y * f +
-              Math.sin(end.heading) * first +
-              Math.sin(targetHeading) * last +
-              normalY * lateral,
-          };
+          if (!end || away >= end.holdM + end.taperM) continue;
+          // Up to `holdM` the lane keeps its place in the side-by-side block along the reference
+          // line; over the next `taperM` it eases onto its own offset. Both paths are smooth and
+          // the smoothstep has zero slope at both ends, so the heading stays continuous.
+          const f = smoothstep((away - end.holdM) / end.taperM);
+          const split = (end.splitM ?? 0) * smoothstep(away / end.taperM);
+          const side = referencePoint(end, atEnd, away, value + end.offsetM + split);
+          result = { x: side.x * (1 - f) + result.x * f, y: side.y * (1 - f) + result.y * f };
         }
         return result;
       });
@@ -165,8 +184,8 @@ export function layoutRoad(
       lengthM: cumulative.at(-1)!,
       stopM: cumulative.at(-1)!,
       widthM: spec.widthM,
-      taperStartM: transition.start?.tapers.includes(lane) ? Math.min(60, length / 2) : 0,
-      taperEndM: transition.end?.tapers.includes(lane) ? Math.min(60, length / 2) : 0,
+      taperStartM: transition.start?.tapers.includes(lane) ? taperLength(road) : 0,
+      taperEndM: transition.end?.tapers.includes(lane) ? taperLength(road) : 0,
       allowed: [...spec.allowed],
       speedLimitMps: road.speedLimitMps,
       left: lane === 0 ? -1 : idx - 1,

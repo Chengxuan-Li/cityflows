@@ -39,6 +39,7 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
   town: {},
   sindelfingen: {
     movementsEscaping: [
+      'n:14', // coincident (TASK-080: side by side into an absorbing merge, 2.5 m setbacks)
       'n:276', // coincident
       'n:294', // crossing
       'n:371', // other
@@ -76,40 +77,38 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
     ],
   },
   munich: {
+    // TASK-080 resolved n:305 and n:726 (branches side by side, B36) and n:774 (r:1368's
+    // shorter transition at n:936).
     movementsEscaping: [
       'n:1123', // coincident
       'n:1375', // other
       'n:138', // other
       'n:182', // stub
       'n:266', // other
-      'n:305', // coincident
       'n:324', // coincident
       'n:40', // other
       'n:516', // other
       'n:55', // other
-      'n:726', // coincident
-      'n:774', // coincident
       'n:970', // stub
       'n:974', // stub
       'n:975', // stub
       'n:989', // other
     ],
+    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping).
     edgesOff: [
       'n:1123', // coincident
       'n:1375', // other
-      'n:305', // coincident
       'n:322', // coincident
       'n:324', // coincident
       'n:719', // coincident
-      'n:774', // coincident
       'n:823', // coincident
       'n:949', // coincident
     ],
+    // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping).
     curbKinks: [
       'n:104', // other
       'n:1123', // coincident
       'n:235', // other
-      'n:305', // coincident
       'n:33', // other
       'n:344', // stub
       'n:387', // coincident
@@ -118,7 +117,6 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:516', // other
       'n:621', // other
       'n:719', // coincident
-      'n:774', // coincident
       'n:823', // coincident
     ],
   },
