@@ -1,6 +1,6 @@
 import { cumulativeLengths, distance, headingAtDistance, sampleBezier } from '../geo/polyline';
 import { movementId, type DrivingSide, type Node, type TurnRule } from '../schema';
-import { roadPair, type ContinuationPairs } from './continuity';
+import { defaultSlice, orderBranches, roadPair, type ContinuationPairs } from './continuity';
 import type { CLane, CMovement, CNode, CRoad, Turn } from './types';
 
 function signedAngle(from: number, to: number): number {
@@ -65,6 +65,8 @@ function bestRule(rules: TurnRule[], from: number, to: number): TurnRule | undef
   }
   return best;
 }
+
+const continuing = (turn: Turn) => turn === 'through' || turn === 'merge' || turn === 'diverge';
 
 const turnRank: Record<Turn, number> = {
   through: 2,
@@ -215,6 +217,74 @@ export function generateMovements(
           continue;
         if (!a.out.some((idx) => movements[idx]!.toLane === b.idx))
           add(a, b, template.turn, template.priority);
+      }
+    }
+  }
+
+  // TASK-085 (B39): at a split, merge, narrowing or widening as TASK-071 classifies it
+  // (uncontrolled, every movement through, merge or diverge, every road end within 30 degrees
+  // of one axis), every trunk lane that lines up with a branch lane under TASK-071's default
+  // slice gets a movement into it unless a rule bans it, so lanes continue as they physically
+  // do even where lane rules or the curb-side pairing left a branch lane unfed. Nothing is
+  // removed.
+  if (
+    node.control !== 'uncontrolled' ||
+    !node.movements.length ||
+    node.movements.some((idx) => !continuing(movements[idx]!.turn))
+  )
+    return;
+  const ends = [
+    ...incoming.map((road) => ({ road, entering: true, heading: headings[road.idx]!.end })),
+    ...outgoing.map((road) => ({ road, entering: false, heading: headings[road.idx]!.start })),
+  ];
+  const groups = [true, false].map((forward) =>
+    ends.filter((end) => Math.cos(end.heading - ends[0]!.heading) > 0 === forward),
+  );
+  let axis: number | undefined;
+  const slices: { split: boolean; trunk: CRoad; branches: CRoad[]; heading: number }[] = [];
+  for (const group of groups) {
+    if (!group.length) continue;
+    const into = group.filter((end) => end.entering).map((end) => end.road);
+    const out = group.filter((end) => !end.entering).map((end) => end.road);
+    if (!into.length || !out.length || (into.length > 1 && out.length > 1)) return;
+    const split =
+      into.length === 1 && (out.length > 1 || into[0]!.lanes.length >= out[0]!.lanes.length);
+    const trunk = (split ? into : out)[0]!;
+    const trunkHeading = headings[trunk.idx]![split ? 'end' : 'start'];
+    axis ??= trunkHeading;
+    const heading = axis + (Math.cos(trunkHeading - axis) < 0 ? Math.PI : 0);
+    slices.push({ split, trunk, branches: split ? out : into, heading });
+  }
+  if (ends.some((end) => Math.abs(Math.cos(end.heading - axis!)) < Math.cos(Math.PI / 6) - 1e-9))
+    return;
+  for (const { split, trunk, branches, heading } of slices) {
+    const ordered = orderBranches(branches, headings, heading, split);
+    let cursor = 0;
+    for (const [position, branch] of ordered.entries()) {
+      const matches = defaultSlice(
+        trunk.lanes.length,
+        ordered.map((road) => road.lanes.length),
+        position,
+        cursor,
+        side,
+      );
+      if (matches.length) cursor = matches.at(-1)![0] + 1;
+      const from = split ? trunk : branch,
+        to = split ? branch : trunk;
+      const turn = classify(
+        approachAngle(from, to),
+        merge(from, to),
+        diverge(from, to),
+        to.streetGroupId !== null && to.streetGroupId === from.streetGroupId,
+      );
+      if (!continuing(turn)) continue;
+      const rules = source.turnRules.filter((rule) => rule.from === from.id && rule.to === to.id);
+      for (const [trunkLane, branchLane] of matches) {
+        const a = lanes[from.lanes[split ? trunkLane : branchLane]!]!;
+        const b = lanes[to.lanes[split ? branchLane : trunkLane]!]!;
+        if (a.out.some((idx) => movements[idx]!.toLane === b.idx)) continue;
+        if (bestRule(rules, a.lane, b.lane)?.allowed === false || !shareClass(a, b)) continue;
+        add(a, b, turn, from.classRank * 10 + turnRank[turn]);
       }
     }
   }
