@@ -211,7 +211,9 @@ test.each([
   // pairs (n:387, n:391, n:400, n:405, n:407, n:446, n:719, n:721, n:823, n:949) see 14.5 m
   // divided streets instead of 7 m overlapping ones, and n:201 and n:1029 follow the relaxed
   // trunk roads r:1030, r:687 and r:685 beyond their fixed junction zones.
-  ['Munich', 63, '33c175d7fa0270f83f6aff9b8f4b692239c9a23e5fec25ba6fce300d5f5841dd'],
+  // TASK-082 moved the outlines again (they follow road edges offset from corridor reference
+  // lines); the setbacks and the movement set are unchanged by it (33c175d7… before).
+  ['Munich', 63, 'b066db45ca130f83a0860691ccd9c5ad160074299b29643c3d447be827b813ee'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {

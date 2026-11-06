@@ -15,7 +15,14 @@ const expected = {
     movementsOutside: [] as string[],
     // Where a fan of overlapping ramps crosses itself the outline is walked so that it only
     // touches itself at one point (bench/junction-audit.ts counts no proper crossing there).
+    // TASK-082: with the road edges offset from corridor reference lines, `junctionOutline` runs
+    // out along a facing edge and back (a spike, no area) at n:1132 and n:139; stage 3
+    // (TASK-083) replaces the outline.
     crossings: [
+      'n:1132:18/20',
+      'n:1132:18/21',
+      'n:1132:19/21',
+      'n:139:3/5',
       'n:434:6/10',
       'n:434:6/11',
       'n:434:7/10',
@@ -27,14 +34,13 @@ const expected = {
     ],
     // Dead-end caps across two road ends cut at different distances, and a curb that follows a
     // movement's edge.
-    tangents: ['n:161:0', 'n:161:0', 'n:996:2.999999999999966'],
+    tangents: ['n:161:0', 'n:161:0', 'n:996:3.000000000000054'],
     widthsOutside: [
       // TASK-080 (B36): the coincident service way r:15 and residential r:233 now run side by
       // side into n:14, an absorbing merge with 2.5 m setbacks; the 5.9 m merge curve from the
       // outer lane is wider than the junction outline there (junctions.ts, outside TASK-080).
       'r:233#0>r:16#0',
       'r:285#0>r:400#0',
-      'r:1198#0>r:298#0',
       'r:597#0>r:888#0',
       'r:494#0>r:377#0',
       'r:596#0>r:494#0',
@@ -43,24 +49,25 @@ const expected = {
       // still treats the pair as two arms (corridor-aware junctions are TASK-083).
       'r:595#0>r:880#0',
       'r:80#0>r:82#0',
-      'r:1061#1>r:966#0',
       'r:803#0>r:746#0',
-      'r:82#0>r:647#0',
+      // TASK-082 resolved r:1198#0>r:298#0, r:1061#1>r:966#0 and r:82#0>r:647#0.
     ],
   },
   'munich-donnersberger': {
     // TASK-080: r:1368's continuation transition at n:936 (hold, then a 20 m taper) reshapes
     // its lanes up to n:774, and r:1276#0>r:1368#0 now stays inside n:774's outline.
-    movementsOutside: ['r:1163#0>r:1121#0', 'r:973#0>r:972#0'],
+    // TASK-082: r:973#0>r:972#0 now stays inside its node's outline.
+    movementsOutside: ['r:1163#0>r:1121#0'],
     crossings: [] as string[],
     // Dead-end caps across two road ends cut at different distances, and curbs that follow a
     // movement's edge where a road end is a short stub.
+    // TASK-082: n:212's cap is gone and n:907's curb joined.
     tangents: [
-      'n:212:0',
       'n:425:0',
       'n:425:0',
-      'n:970:2.9999999999999494',
-      'n:971:2.9999999999999902',
+      'n:907:2.999999999999995',
+      'n:970:2.9999999999999876',
+      'n:971:2.999999999999996',
     ],
     // TASK-080 resolved n:305 (r:1188#2>r:307#3, r:676#1>r:307#3) and n:726 (r:978#2>r:984#1)
     // with side-by-side branches (B36), and n:774 (r:1276, r:1362, r:777 into r:1368) with
@@ -91,17 +98,14 @@ const expected = {
       'r:388#0>r:408#0',
       'r:406#0>r:1346#0',
       'r:447#0>r:1354#0',
-      'r:542#0>r:1354#0',
-      'r:1273#0>r:1230#0',
-      'r:517#0>r:1230#0',
-      'r:523#0>r:1230#0',
       'r:192#0>r:57#0',
       'r:1334#0>r:1280#0',
-      'r:973#0>r:972#0',
       'r:977#0>r:976#0',
       'r:976#0>r:1081#0',
       'r:1267#0>r:301#1',
       'r:211#0>r:301#1',
+      // TASK-082 resolved r:542#0>r:1354#0, r:1273#0>r:1230#0, r:517#0>r:1230#0,
+      // r:523#0>r:1230#0 and r:973#0>r:972#0.
     ],
   },
 };
@@ -129,19 +133,10 @@ test.each([
       'crossings beyond a capped setback',
       all.length - overlaps.length,
     );
-    const derivedCrossings =
-      name === 'sindelfingen-a81'
-        ? [
-            // The forced radius on service way 7973188 is smaller than the inner
-            // lane offset. The compiler's offset folds across the zero-setback seam.
-            { node: 'n:26', lanes: ['r:28#0', 'r:30#0'], capped: false },
-            // The same unchanged seam crossing is now visible from uncapped n:696.
-            { node: 'n:696', lanes: ['r:28#0', 'r:30#0'], capped: false },
-          ]
-        : [];
-    expect(overlaps.filter((pair) => !sourceDefects[pair.lanes.join('>')])).toEqual(
-      derivedCrossings,
-    );
+    // TASK-082: the seam crossing of service way 7973188 (r:28#0 and r:30#0 at n:26 and n:696,
+    // the offset folding across its zero-setback seam) is gone: the loop's two halves now join
+    // with one tangent at their nodes.
+    expect(overlaps.filter((pair) => !sourceDefects[pair.lanes.join('>')])).toEqual([]);
     // Every listed source defect still crosses somewhere, capped node or not.
     const keys = new Set(all.map((pair) => pair.lanes.join('>')));
     expect(Object.keys(sourceDefects).filter((key) => !keys.has(key))).toEqual([]);

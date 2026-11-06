@@ -73,7 +73,15 @@ export interface CRoad {
   lengthM: number;
   streetGroupId: string | null;
   corridorId: string | null; // canonical corridorId, else streetGroupId
-  surface: Vec2[]; /* polygon for rendering */
+  surface: Vec2[]; /* polygon for rendering: left edge, then right edge reversed, in travel direction */
+  /** TASK-082: the union of the surfaces of the road's corridor (its own when it has none),
+   * cleaned by clipper2-ts; outer rings and holes. */
+  corridorSurface: Vec2[][];
+  /** TASK-082: the reference line the lanes are offset from, in travel direction, untrimmed;
+   * shared (reversed) by the roads of a corridor drawn on one centerline. */
+  reference: Vec2[];
+  /** Station on `reference` of each vertex of the road's lane polylines and surface edges. */
+  stations: Float64Array;
   startOffsetM: number; // change from canonical lateralOffsetM at a continuation
   endOffsetM: number;
 }

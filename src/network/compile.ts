@@ -4,7 +4,8 @@ import type { City, Place, RoadClass } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
 import { continuationLayout } from './continuity';
-import { layoutRoad } from './lanes';
+import { continuingRoad, corridorReferences, corridorSurfaces, EASED_NOTE_M } from './corridor';
+import { layoutRoad, type ContinuationEnd } from './lanes';
 import { roadEndSetbacks, junctionOutline, containMovements, junctionCurbs } from './junctions';
 import { generateMovements } from './movements';
 import { compileSignal } from './signals';
@@ -106,6 +107,9 @@ export function compile(city: City): CompileResult {
       to,
       lanes: [],
       surface: [],
+      corridorSurface: [],
+      reference: [],
+      stations: new Float64Array(0),
       startOffsetM: 0,
       endOffsetM: 0,
       lengthM,
@@ -134,6 +138,8 @@ export function compile(city: City): CompileResult {
       trims[road.idx]![road.from === node.idx ? 'start' : 'end'] = node.setbacks[i]!;
     });
   }
+  const references = corridorReferences(sourceRoads, diagnostics);
+  const jointDeviations = roads.map(() => 0);
   const lanes: CLane[] = [];
   // A ramp ranks one below the road it joins: the roads leaving its end node, or, when it only
   // leads into another ramp, the roads entering its start node. Other ramps do not count.
@@ -148,22 +154,25 @@ export function compile(city: City): CompileResult {
     }
     const before =
       trims[road.idx]!.start === 0
-        ? incoming[road.from]!.find((r) => r.from !== road.to)
+        ? continuingRoad(references, road, incoming[road.from]!, false)
         : undefined;
     const after =
-      trims[road.idx]!.end === 0 ? outgoing[road.to]!.find((r) => r.to !== road.from) : undefined;
-    layoutRoad(
+      trims[road.idx]!.end === 0
+        ? continuingRoad(references, road, outgoing[road.to]!, true)
+        : undefined;
+    jointDeviations[road.idx] = layoutRoad(
       sourceRoads[road.idx]!,
       road,
+      references[road.idx]!,
       trims[road.idx]!.start,
       trims[road.idx]!.end,
       lanes,
       diagnostics,
       {
-        before: before ? sourceRoads[before.idx]!.centerline.at(-2) : undefined,
-        after: after ? sourceRoads[after.idx]!.centerline[1] : undefined,
+        before: before ? references[before.idx]!.points.at(-2) : undefined,
+        after: after ? references[after.idx]!.points[1] : undefined,
       },
-    );
+    ).jointDeviationM;
   }
 
   const laneHeadings = lanes.map((lane) => ({
@@ -208,39 +217,55 @@ export function compile(city: City): CompileResult {
     }
     node.movements = [];
   }
+  // TASK-082: at a continuation node where no end shifts, tapers or splits (a street continuing
+  // into the next with the same lanes), the lanes run along their own corridors and meet at the
+  // node's mitre, as at a through node, instead of easing onto a straight ray along the node's
+  // heading, which pulls them off a curving road.
+  const shifts = (end: ContinuationEnd | undefined) =>
+    !!end && (end.offsetM !== 0 || !!end.splitM || end.tapers.length > 0);
+  const plain = nodes.map(() => true);
   for (const road of roads) {
-    const transition = continuity.ends[road.idx]!;
-    if (!transition.start && !transition.end) continue;
+    const { start, end } = continuity.ends[road.idx]!;
+    if (shifts(start)) plain[road.from] = false;
+    if (shifts(end)) plain[road.to] = false;
+  }
+  for (const road of roads) {
+    const ends = continuity.ends[road.idx]!;
+    const moving = (end: ContinuationEnd | undefined, node: number) =>
+      end && (!plain[node] || end.holdM + end.taperM === 0) ? end : undefined;
+    if (!ends.start && !ends.end) continue;
+    const transition = { start: moving(ends.start, road.from), end: moving(ends.end, road.to) };
     road.startOffsetM = transition.start?.offsetM ?? 0;
     road.endOffsetM = transition.end?.offsetM ?? 0;
     const rebuilt: CLane[] = [];
     const copy = { ...road, lanes: [] as number[], surface: [] as Vec2[] };
     const before =
       !transition.start && trims[road.idx]!.start === 0
-        ? incoming[road.from]!.find((r) => r.from !== road.to)
+        ? continuingRoad(references, road, incoming[road.from]!, false)
         : undefined;
     const after =
       !transition.end && trims[road.idx]!.end === 0
-        ? outgoing[road.to]!.find((r) => r.to !== road.from)
+        ? continuingRoad(references, road, outgoing[road.to]!, true)
         : undefined;
     for (let i = diagnostics.length - 1; i >= 0; i--)
       if (diagnostics[i]!.code === 'road_too_short' && diagnostics[i]!.refs.includes(road.id))
         diagnostics.splice(i, 1);
-    layoutRoad(
+    jointDeviations[road.idx] = layoutRoad(
       sourceRoads[road.idx]!,
       copy,
+      references[road.idx]!,
       trims[road.idx]!.start,
       trims[road.idx]!.end,
       rebuilt,
       diagnostics,
       {
-        before: before ? sourceRoads[before.idx]!.centerline.at(-2) : undefined,
-        after: after ? sourceRoads[after.idx]!.centerline[1] : undefined,
+        before: before ? references[before.idx]!.points.at(-2) : undefined,
+        after: after ? references[after.idx]!.points[1] : undefined,
       },
       transition,
-    );
+    ).jointDeviationM;
     for (const atEnd of [false, true]) {
-      if (atEnd ? transition.end : transition.start) continue;
+      if (atEnd ? ends.end : ends.start) continue;
       const oldCut = atEnd ? road.surface.length / 2 : 0;
       const newCut = atEnd ? copy.surface.length / 2 : 0;
       for (const side of [-1, 0]) {
@@ -249,10 +274,12 @@ export function compile(city: City): CompileResult {
       }
     }
     road.surface = copy.surface;
+    road.reference = copy.reference;
+    road.stations = copy.stations;
     for (const [i, lane] of rebuilt.entries()) {
       const original = lanes[road.lanes[i]!]!;
-      if (!transition.start) lane.polyline[0] = original.polyline[0]!;
-      if (!transition.end) lane.polyline[lane.polyline.length - 1] = original.polyline.at(-1)!;
+      if (!ends.start) lane.polyline[0] = original.polyline[0]!;
+      if (!ends.end) lane.polyline[lane.polyline.length - 1] = original.polyline.at(-1)!;
       lane.cumulative = cumulativeLengths(lane.polyline);
       lane.lengthM = lane.cumulative.at(-1)!;
       original.polyline = lane.polyline;
@@ -285,6 +312,15 @@ export function compile(city: City): CompileResult {
     populateConflicts(node, movements, lanes);
   }
   junctionCurbs(nodes, roads);
+  corridorSurfaces(roads);
+  for (const road of roads)
+    if (jointDeviations[road.idx]! > EASED_NOTE_M)
+      diagnostics.push({
+        severity: 'info',
+        code: 'reference_eased',
+        refs: [road.id],
+        message: `${road.id} is eased up to ${jointDeviations[road.idx]!.toFixed(2)} m off its centerline where it joins the next road, so their lanes meet without a kink`,
+      });
 
   const places: CPlace[] = [];
   const connectors: CConnector[] = [];

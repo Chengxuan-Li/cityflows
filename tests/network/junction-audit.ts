@@ -16,10 +16,6 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
   'munich-donnersberger': {
     'r:196#0>r:416#2':
       'The source ramp crosses the trunk lane body at n:194; TASK-071 removes the capped-setback classification at this continuation.',
-    'r:1024#0>r:899#0':
-      'The opposite coincident service-way lane pair shares the same realigned physical arm at n:894 and n:898.',
-    'r:1027#0>r:900#0':
-      'Coincident service-way directions are realigned together; shorter cuts expose their duplicate lane bodies at n:894 and n:898.',
     'r:1354#0>r:447#0':
       'Opposing Arnulfstraße source carriageways cross along the body; n:446 is no longer capped after realignment.',
     'r:565#0>r:589#0':
@@ -29,6 +25,9 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     // its own floor setback. The pairs below are no longer behind a capped setback at their
     // node, so they are listed here. TASK-084 separated Marsstraße's coincident carriageways
     // (r:368#0>r:480#1, r:368#1>r:480#0 before) into a divided pair; they no longer cross.
+    // TASK-082: the coincident service ways r:1024/r:899 and r:1027/r:900 (r:1024#0>r:899#0,
+    // r:1027#0>r:900#0 before) share one reference line, so their lanes lie on each other with
+    // the same vertices and no longer register as crossing.
     'r:1372#0>r:845#0':
       'Separate Marsstraße carriageways cross 30 m from n:823 after the realigned one bends back.',
     'r:325#0>r:941#0':

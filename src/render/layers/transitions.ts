@@ -2,7 +2,6 @@ import type { Graphics } from 'pixi.js';
 import {
   cumulativeLengths,
   headingAtDistance,
-  parallelOffset,
   pointAtDistance,
   trimPolyline,
 } from '../../geo/polyline';
@@ -50,15 +49,11 @@ export function transitionGeometry(city: CompiledCity, road: CRoad) {
     }
     return { lane: lane.idx, ...edges, chevrons };
   });
-  // Dividers run to the lane's stop position, like every other road's (TASK-079), offset with
-  // `parallelOffset` so they stay beside the lane through curves.
-  const dividers = roadLanes
-    .slice(0, -1)
-    .map((lane) => toStop(lane, painted(lane, roadLanes).right));
+  // Dividers run to the lane's stop position, like every other road's (TASK-079), on the lane
+  // edges, which keep their offset through curves (TASK-082).
+  const dividers = roadLanes.slice(0, -1).map((lane, i) => toStop(lane, lanes[i]!.right));
   return { lanes, dividers };
 }
-
-const painted = (lane: CLane, roadLanes: CLane[]) => laneEdges(lane, roadLanes, parallelOffset);
 
 /** The part of one of a lane's edges up to the lane's stop position. */
 function toStop(lane: CLane, edge: Vec2[]): Vec2[] {
@@ -106,7 +101,7 @@ export function seams(city: CompiledCity, road: CRoad): Vec2[][] {
   const hit = cached.get(road.idx);
   if (hit) return hit;
   const roadLanes = road.lanes.map((i) => city.lanes[i]!);
-  const edge = toStop(roadLanes.at(-1)!, painted(roadLanes.at(-1)!, roadLanes).right);
+  const edge = toStop(roadLanes.at(-1)!, laneEdges(roadLanes.at(-1)!, roadLanes).right);
   const lengths = cumulativeLengths(edge);
   const owner = segmentLanes(city);
   const candidates = new Set<number>();

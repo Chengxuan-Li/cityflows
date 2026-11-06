@@ -213,8 +213,10 @@ const munichCases: [string, string, string, number, number][] = [
   // Continuation nodes. n:194: the ramp r:196 leaves on the trunk's right lane, where r:416
   // gains its added lane over the same metres, and its own line stays within r:416's lane block
   // for all of its 45 m (no lane to share, nothing to part from); not changed by TASK-080.
-  ['n:194', 'r:416', 'r:196', 90.1, 92],
-  ['n:734', 'r:1189', 'r:735', 31.5, 7],
+  // TASK-082: 92.1 m2 with the edges offset from the corridor reference line.
+  ['n:194', 'r:416', 'r:196', 90.1, 92.5],
+  // TASK-082: 7.1 m2 at n:734 with the edges offset from the corridor reference.
+  ['n:734', 'r:1189', 'r:735', 31.5, 7.5],
 ];
 
 test('T33.3: Munich splits and merges run side by side with dividers to where they part', () => {

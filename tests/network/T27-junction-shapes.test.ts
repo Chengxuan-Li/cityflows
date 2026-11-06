@@ -34,6 +34,9 @@ type Measure =
 // separated = a coincident pair TASK-084 separated into a divided pair, which the junction still
 // treats as two arms (corridor-aware junctions are TASK-083): the u-turn between its carriageways
 // leaves the outline, and the wider arm kinks a curb.
+// TASK-082 (lanes and surfaces offset from corridor reference lines) moved road-end edges by a
+// few centimetres, which moves `junctionOutline`'s and the audit's 0.05 to 0.1 m thresholds:
+// nodes marked TASK-082 joined a list, and those named in the comments left one.
 const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
   grid: {
     // other: a left turn from the one-lane west arm of an edge T, 1.1 cm past the tolerance.
@@ -42,19 +45,18 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
   town: {},
   sindelfingen: {
     movementsEscaping: [
+      // TASK-082 resolved n:294, n:78 and n:81.
       'n:14', // coincident (TASK-080: side by side into an absorbing merge, 2.5 m setbacks)
       'n:276', // coincident
-      'n:294', // crossing
       'n:371', // other
       'n:375', // other
       'n:493', // other
       'n:594', // separated (r:595/r:880)
       'n:620', // coincident
-      'n:78', // coincident
       'n:792', // separated (r:746/r:803)
-      'n:81', // other
     ],
     edgesOff: [
+      'n:1161', // TASK-082
       'n:1162', // coincident
       'n:139', // coincident
       'n:434', // crossing
@@ -64,13 +66,12 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:792', // coincident
       'n:915', // stub
     ],
+    // TASK-082 resolved n:294 and n:501.
     curbKinks: [
       'n:139', // coincident
-      'n:294', // crossing
       'n:355', // other
       'n:490', // other
       'n:498', // separated (r:595/r:880)
-      'n:501', // coincident
       'n:594', // coincident
       'n:620', // coincident
       'n:628', // coincident
@@ -84,7 +85,7 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
   },
   munich: {
     // TASK-080 resolved n:305 and n:726 (branches side by side, B36) and n:774 (r:1368's
-    // shorter transition at n:936).
+    // shorter transition at n:936); TASK-082 n:516 and n:970.
     movementsEscaping: [
       'n:1123', // coincident
       'n:1375', // other
@@ -97,10 +98,8 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:400', // separated (Arnulfstraße r:392/r:402, r:451/r:1342)
       'n:405', // separated (Arnulfstraße r:388/r:408, r:406/r:1346)
       'n:446', // separated (Arnulfstraße r:395/r:450)
-      'n:516', // other
       'n:55', // other
       'n:721', // separated (Landsberger Straße r:1280/r:1334)
-      'n:970', // stub
       'n:974', // stub
       'n:975', // stub
       'n:989', // other
@@ -116,11 +115,10 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:949', // coincident
     ],
     // TASK-080 resolved n:305 (B36) and n:774 (see movementsEscaping); TASK-084 n:823
-    // (Marsstraße separated).
+    // (Marsstraße separated); TASK-082 n:104, n:235 and n:516.
     curbKinks: [
-      'n:104', // other
       'n:1123', // coincident
-      'n:235', // other
+      'n:180', // TASK-082
       'n:33', // other
       'n:344', // stub
       'n:387', // coincident
@@ -128,7 +126,7 @@ const residual: Record<AuditCity, Partial<Record<Measure, string[]>>> = {
       'n:407', // separated (Arnulfstraße r:388/r:408)
       'n:440', // coincident
       'n:446', // coincident
-      'n:516', // other
+      'n:536', // TASK-082
       'n:621', // other
       'n:719', // coincident
       'n:721', // separated (Landsberger Straße r:1280/r:1334)
@@ -169,6 +167,14 @@ const storageExceptions: Record<string, string> = {
   'r:565#0': 'Service ways r:565/r:589 share one centerline.',
   'r:566#0': 'Service ways r:566/r:588: identical direction, centerline and offset.',
   'r:1024#0': 'Service ways r:1024/r:899 share one realigned arm.',
+  // TASK-082: bends too tight for these service and residential streets' lanes are eased to a
+  // radius their inside edge can take (each a `reference_eased` note); the arc is shorter than
+  // the source's corner.
+  'r:1026#0': 'Eased corner of r:1025/r:1026 (2.2 m off its centerline).',
+  'r:1075#0': 'Eased corner of r:1075/r:1076 (1.4 m off its centerline).',
+  'r:839#0': 'Eased corner of r:839/r:840 (3.2 m off its centerline).',
+  'r:840#0': 'Eased corner of r:839/r:840 (3.2 m off its centerline).',
+  'r:867#0': 'Eased corner of r:866/r:867 (2.0 m off its centerline).',
 };
 
 const audited = new Map<AuditCity, { net: CompiledCity; audits: NodeAudit[] }>();
