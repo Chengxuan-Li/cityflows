@@ -171,12 +171,15 @@ function fingerprint(net: CompiledCity) {
 }
 
 // Measured with this function on main (5024a83), before TASK-078; Sindelfingen and Munich
-// re-measured after TASK-080's shorter tapers and side-by-side branches moved their lanes.
+// re-measured after TASK-080's shorter tapers and side-by-side branches moved their lanes, and
+// again after TASK-085 added the through movements of lanes that line up at splits and merges
+// (Sindelfingen 1, Munich 8; setbacks, outlines and lanes unchanged). Before TASK-085:
+// c6ff38c41895d357 (Sindelfingen), 7949ab181ce05d46 (Munich).
 const mainFingerprints: Record<AuditCity, string> = {
   grid: '56deba638330bc89',
   town: 'a9cf734107d1e3f0',
-  sindelfingen: 'c6ff38c41895d357',
-  munich: '7949ab181ce05d46',
+  sindelfingen: '0f06379ed7b5ad3b',
+  munich: '6a5199aac9c0f1bc',
 };
 
 test.each(auditCities)(

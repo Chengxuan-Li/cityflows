@@ -33,9 +33,16 @@ test.each(['right', 'left'] as const)(
     expect(ramp.speedLimitMps).toBe(to.speedLimitMps);
     expect(ramp.centerline.length).toBeGreaterThan(2);
     const lane = editor.compiled.index.lane.get(`${ramp.id}#0`)!;
-    expect(editor.compiled.lanes[lane]!.in.map((i) => editor.compiled.movements[i]!.turn)).toEqual([
-      'diverge',
-    ]);
+    // Right traffic: the curb lane feeds the ramp. Left traffic: the curb lane (lane 0) still
+    // does, and since TASK-085 so does lane 1, which lines up with the ramp on its right.
+    expect(
+      editor.compiled.lanes[lane]!.in.map(
+        (i) => editor.compiled.lanes[editor.compiled.movements[i]!.fromLane]!.id,
+      ),
+    ).toEqual(side === 'right' ? [`${from.id}#1`] : [`${from.id}#0`, `${from.id}#1`]);
+    expect(editor.compiled.lanes[lane]!.in.map((i) => editor.compiled.movements[i]!.turn)).toEqual(
+      side === 'right' ? ['diverge'] : ['diverge', 'diverge'],
+    );
     expect(editor.compiled.lanes[lane]!.out.map((i) => editor.compiled.movements[i]!.turn)).toEqual(
       ['merge'],
     );

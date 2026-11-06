@@ -80,6 +80,47 @@ function ray(at: Vec2, heading: number, atEnd: boolean, length: number): Vec2[] 
   return atEnd ? [far, at] : [at, far];
 }
 
+/** TASK-071: a split's or merge's branches ordered left to right across `heading`, the axis in
+ * the group's travel direction. */
+export function orderBranches(
+  branches: CRoad[],
+  headings: { start: number; end: number }[],
+  heading: number,
+  split: boolean,
+): CRoad[] {
+  const angle = (r: CRoad) =>
+    (split ? 1 : -1) * Math.sin(headings[r.idx]![split ? 'start' : 'end'] - heading);
+  return [...branches].sort((a, b) => angle(a) - angle(b) || a.idx - b.idx);
+}
+
+/** TASK-071's default slice: the [trunk lane, branch lane] pairs that line up for the branch at
+ * `position` (left to right), `cursor` being the first trunk lane right of the slices before
+ * it. Balanced branches take consecutive slices; when the lane counts differ the first branch
+ * keeps the trunk's left lanes and the others its right lanes. */
+export function defaultSlice(
+  trunkLanes: number,
+  branchLanes: number[],
+  position: number,
+  cursor: number,
+  side: 'left' | 'right',
+): [number, number][] {
+  const lanes = branchLanes[position]!;
+  const balanced = branchLanes.reduce((sum, n) => sum + n, 0) === trunkLanes;
+  if (!balanced && branchLanes.length > 1) {
+    const shared = Math.min(lanes, trunkLanes);
+    return Array.from({ length: shared }, (_, i) =>
+      position === 0 ? [i, i] : [trunkLanes - shared + i, lanes - shared + i],
+    );
+  }
+  const count = Math.min(
+    lanes,
+    Math.max(0, trunkLanes - cursor - (branchLanes.length - position - 1)),
+  );
+  const start = branchLanes.length === 1 && side === 'left' ? trunkLanes - count : cursor;
+  const branchStart = side === 'left' ? lanes - count : 0;
+  return Array.from({ length: count }, (_, i) => [start + i, branchStart + i]);
+}
+
 /** Movement topology determines eligibility; road geometry orders physical branch slices. */
 export function continuationLayout(
   nodes: CNode[],
@@ -150,11 +191,7 @@ export function continuationLayout(
         valid = false;
         break;
       }
-      const branches = [...(split ? outgoing : incoming)].sort((a, b) => {
-        const angle = (r: CRoad) =>
-          (split ? 1 : -1) * Math.sin(headings[r.idx]![split ? 'start' : 'end'] - heading);
-        return angle(a) - angle(b) || a.idx - b.idx;
-      });
+      const branches = orderBranches(split ? outgoing : incoming, headings, heading, split);
       const balanced = branches.reduce((sum, r) => sum + r.lanes.length, 0) === trunk.lanes.length;
       // A merge that must absorb lanes (an on-ramp joining without a lane of its own) keeps its
       // junction: a zero-length merge movement would put the merging car straight into the
@@ -173,10 +210,6 @@ export function continuationLayout(
         const source = sources[branch.idx]!;
         const explicit = legal.filter(
           (m) => lanes[m.fromLane]!.road === from.idx && lanes[m.toLane]!.road === to.idx,
-        );
-        const count = Math.min(
-          branch.lanes.length,
-          Math.max(0, trunk.lanes.length - cursor - (branches.length - position - 1)),
         );
         const matches: [number, number][] = [];
         // Explicit lane rules are already reflected by the generated movements. A unique
@@ -204,24 +237,22 @@ export function continuationLayout(
           valid = false;
           break;
         }
-        if (!balanced && branches.length > 1 && !constrained) {
-          const shared = Math.min(branch.lanes.length, trunk.lanes.length);
-          for (let i = 0; i < shared; i++)
-            matches.push([
-              position === 0 ? i : trunk.lanes.length - shared + i,
-              position === 0 ? i : branch.lanes.length - shared + i,
-            ]);
-        } else if (exact && (branches.length === 1 || constrained)) {
+        if (exact && (branches.length === 1 || constrained)) {
           for (const m of explicit)
             matches.push([
               lanes[split ? m.fromLane : m.toLane]!.lane,
               lanes[split ? m.toLane : m.fromLane]!.lane,
             ]);
         } else {
-          const start =
-            branches.length === 1 && side === 'left' ? trunk.lanes.length - count : cursor;
-          const branchStart = side === 'left' ? branch.lanes.length - count : 0;
-          for (let i = 0; i < count; i++) matches.push([start + i, branchStart + i]);
+          matches.push(
+            ...defaultSlice(
+              trunk.lanes.length,
+              branches.map((r) => r.lanes.length),
+              position,
+              cursor,
+              side,
+            ),
+          );
         }
         matches.sort((a, b) => a[0] - b[0]);
         if (!matches.length || (balanced && branches.length > 1 && matches[0]![0] < cursor)) {
