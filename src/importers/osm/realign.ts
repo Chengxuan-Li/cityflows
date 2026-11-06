@@ -181,6 +181,8 @@ function straightSetbacks(node: Pick<Node, 'id' | 'pos' | 'control'>, roads: Roa
 interface Arm {
   sources: OsmRoad[];
   line: Vec2[];
+  /** The sources run on more than one centerline. */
+  split: boolean;
   heading: number;
 }
 
@@ -235,13 +237,22 @@ export function realignRoads(
     }
     const arms: Arm[] = groups
       .map((sources) => {
-        const r = sources[0]!.road;
-        const line = r.from === node.id ? r.centerline : [...r.centerline].reverse();
-        return {
-          sources,
-          line,
-          heading: Math.atan2(line[1]!.y - node.pos.y, line[1]!.x - node.pos.x),
-        };
+        const lines = sources.map(outward);
+        const line = lines[0]!;
+        // A corridor whose carriageways run on separate lines (a dual carriageway) points along
+        // their mean direction (TASK-087, B42) and is not bent: one curve cannot replace both.
+        const split = lines.some(
+          (other) =>
+            other.length !== line.length || other.some((p, k) => distance(p, line[k]!) >= 1e-6),
+        );
+        const d = lines.reduce(
+          (sum, l) => {
+            const h = Math.atan2(l[1]!.y - node.pos.y, l[1]!.x - node.pos.x);
+            return { x: sum.x + Math.cos(h), y: sum.y + Math.sin(h) };
+          },
+          { x: 0, y: 0 },
+        );
+        return { sources, line, split, heading: Math.atan2(d.y, d.x) };
       })
       .sort((a, b) => a.heading - b.heading);
     if (arms.length < 2) continue;
@@ -283,7 +294,7 @@ export function realignRoads(
         const lengths = cumulativeLengths(arm.line);
         const length = Math.min(...arm.sources.map(({ road }) => bendLengths.get(road.id)!));
         let best = { line: arm.line, heading: arm.heading, shift: 0 };
-        if (fixed.has(arm) || changed.has(arm)) return best;
+        if (fixed.has(arm) || changed.has(arm) || arm.split) return best;
         const anchor = pointAtDistance(arm.line, lengths, length);
         const tangent = headingAtDistance(arm.line, lengths, length);
         const originalGap = angle(arm.heading, neighbor.heading);

@@ -15,15 +15,15 @@ import {
 } from '../src/geo/polyline';
 import type { Vec2 } from '../src/geo/vec2';
 import { compile, type CLane, type CompiledCity, type CNode, type CRoad } from '../src/network';
-import { roadWidth } from '../src/network/lanes';
+import { laneEdges, roadWidth } from '../src/network/lanes';
 import { drawRoad } from '../src/render/layers/roads';
 import { style } from '../src/render/style';
 import type { City, Road, RoadClass } from '../src/schema';
 import { auditCities, loadAuditCity, markingLengths, type AuditCity } from './junction-audit';
 
-// Geometry audit (TASK-081, docs/plan.md "Geometry rework"): eight measures of how far the drawn
+// Geometry audit (TASK-081, docs/plan.md "Geometry rework"): nine measures of how far the drawn
 // roads, lanes and junctions are from the corridors their canonical centerlines describe, per
-// city and per named case. Usage: npm run geometry-audit -- [out.json] [--relax-max-m <m>]
+// city and per named case (the ninth, lane overlap, from TASK-087). Usage: npm run geometry-audit -- [out.json] [--relax-max-m <m>]
 //
 // Conventions: stations are arc lengths along a polyline; the right-hand normal of heading
 // (dx, dy) is (-dy, dx) (y-south, architecture 5.1); a lateral offset is signed, positive to the
@@ -1158,6 +1158,171 @@ export function markingAudit(
 }
 
 // ---------------------------------------------------------------------------------------------
+// 9. Lane overlap (TASK-087)
+
+export interface LaneOverlap {
+  roads: string;
+  areaM2: number;
+  /** The two roads share a `corridorId` (the carriageways of one street). */
+  corridor: boolean;
+  /** The node nearest to the overlap and its distance from the nearest overlapping point. */
+  node: string;
+  nodeM: number;
+}
+
+/** Edges shared by two lane surfaces (side by side lanes, a lane seam) are not overlap. */
+const LANE_TOUCH_M = 0.02;
+
+/** x-intervals of a closed ring on the cell rows (y = OFFSET_Y + k * CELL_M) it spans, by row,
+ * shrunk by `inset` at each end (even-odd rule). */
+function rowIntervals(ring: readonly Vec2[], inset: number, out: Map<number, number[][]>) {
+  const crossings = new Map<number, number[]>();
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i]!,
+      b = ring[(i + 1) % ring.length]!;
+    if (a.y === b.y) continue;
+    const [lo, hi] = a.y < b.y ? [a, b] : [b, a];
+    for (let k = Math.ceil((lo.y - OFFSET_Y) / CELL_M); OFFSET_Y + k * CELL_M < hi.y; k++) {
+      const y = OFFSET_Y + k * CELL_M;
+      const x = lo.x + ((hi.x - lo.x) * (y - lo.y)) / (hi.y - lo.y);
+      const row = crossings.get(k);
+      if (row) row.push(x);
+      else crossings.set(k, [x]);
+    }
+  }
+  for (const [k, xs] of crossings) {
+    xs.sort((x, y) => x - y);
+    const row = out.get(k) ?? [];
+    for (let i = 0; i + 1 < xs.length; i += 2)
+      if (xs[i + 1]! - xs[i]! > 2 * inset) row.push([xs[i]! + inset, xs[i + 1]! - inset]);
+    out.set(k, row);
+  }
+}
+
+/** Sorted, merged union of intervals. */
+function union(intervals: number[][]): number[][] {
+  const sorted = [...intervals].sort((a, b) => a[0]! - b[0]!);
+  const out: number[][] = [];
+  for (const [x0, x1] of sorted) {
+    const last = out.at(-1);
+    if (last && x0! <= last[1]!) last[1] = Math.max(last[1]!, x1!);
+    else out.push([x0!, x1!]);
+  }
+  return out;
+}
+
+/** Length of [x0, x1] outside the sorted, merged `holes`, and a point of it (NaN when none). */
+function outside(x0: number, x1: number, holes: number[][]): { length: number; x: number } {
+  let length = 0,
+    x = NaN,
+    from = x0;
+  for (const [h0, h1] of holes) {
+    if (h1! <= from) continue;
+    if (h0! >= x1) break;
+    if (h0! > from) {
+      length += h0! - from;
+      x = (from + h0!) / 2;
+    }
+    from = Math.max(from, h1!);
+    if (from >= x1) break;
+  }
+  if (from < x1) {
+    length += x1 - from;
+    x = (from + x1) / 2;
+  }
+  return { length, x };
+}
+
+/** Measure 9. The area where the drawn lane surfaces (`laneEdges`, tapers included, each shrunk
+ * by `LANE_TOUCH_M`) of two different roads of one grade overlap outside every node outline,
+ * per road pair, except a movement's own from and to roads (their lanes meet end to end) when
+ * they are not of one corridor. A u-turn exempts nothing: its two roads run side by side.
+ * Same corridor pairs are marked. With `outsideOutlines` false the node outlines are not left out (a
+ * lane lying on another under a junction polygon, as zebra stripes there show). Integrated along the 0.25 m cell rows; the nearest
+ * node is taken over the midpoints of the overlapping row pieces. */
+export function laneOverlaps(city: City, net: CompiledCity, outsideOutlines = true): LaneOverlap[] {
+  const lanes = new Map<number, number[][]>(); // row -> [x0, x1, road]
+  for (const road of net.roads) {
+    const roadLanes = road.lanes.map((i) => net.lanes[i]!);
+    for (const lane of roadLanes) {
+      const { left, right } = laneEdges(lane, roadLanes);
+      const rows = new Map<number, number[][]>();
+      rowIntervals([...left, ...right.reverse()], LANE_TOUCH_M, rows);
+      for (const [k, intervals] of rows) {
+        const row = lanes.get(k) ?? [];
+        for (const [a, b] of intervals) row.push([a!, b!, road.idx]);
+        lanes.set(k, row);
+      }
+    }
+  }
+  const outlines = new Map<number, number[][]>();
+  if (outsideOutlines)
+    for (const node of net.nodes)
+      if (node.outline.length > 2) rowIntervals(node.outline, 0, outlines);
+  const joined = new Set(
+    net.movements.flatMap((m) => {
+      if (m.turn === 'uturn') return [];
+      const [a, b] = [net.lanes[m.fromLane]!.road, net.lanes[m.toLane]!.road];
+      return [`${a}|${b}`, `${b}|${a}`];
+    }),
+  );
+  const grades = net.roads.map((road) => grade(city, city.roads[road.id]!));
+  const sameCorridor = (a: number, b: number) =>
+    net.roads[a]!.corridorId !== null && net.roads[a]!.corridorId === net.roads[b]!.corridorId;
+  const pairs = new Map<string, { a: number; b: number; area: number; points: Vec2[] }>();
+  for (const [k, list] of lanes) {
+    const y = OFFSET_Y + k * CELL_M;
+    const holes = union(outlines.get(k) ?? []);
+    const byRoad = new Map<number, number[][]>();
+    for (const [x0, x1, road] of list) {
+      const intervals = byRoad.get(road!) ?? [];
+      intervals.push([x0!, x1!]);
+      byRoad.set(road!, intervals);
+    }
+    const merged = [...byRoad].flatMap(([road, intervals]) =>
+      union(intervals).map(([x0, x1]) => ({ x0: x0!, x1: x1!, road })),
+    );
+    merged.sort((p, q) => p.x0 - q.x0);
+    for (let i = 0; i < merged.length; i++) {
+      const p = merged[i]!;
+      for (let j = i + 1; j < merged.length && merged[j]!.x0 < p.x1; j++) {
+        const q = merged[j]!;
+        if (q.road === p.road || grades[p.road] !== grades[q.road]) continue;
+        if (joined.has(`${p.road}|${q.road}`) && !sameCorridor(p.road, q.road)) continue;
+        const piece = outside(q.x0, Math.min(p.x1, q.x1), holes);
+        if (piece.length <= 0) continue;
+        const [a, b] = p.road < q.road ? [p.road, q.road] : [q.road, p.road];
+        const key = `${a}|${b}`;
+        const entry = pairs.get(key) ?? { a, b, area: 0, points: [] };
+        entry.area += piece.length * CELL_M;
+        entry.points.push({ x: piece.x, y });
+        pairs.set(key, entry);
+      }
+    }
+  }
+  return [...pairs.values()]
+    .map(({ a, b, area, points }) => {
+      const [ra, rb] = [net.roads[a]!, net.roads[b]!];
+      let node = net.nodes[0]!,
+        nodeM = Infinity;
+      for (const p of points)
+        for (const n of net.nodes) {
+          const d = Math.hypot(p.x - n.pos.x, p.y - n.pos.y);
+          if (d < nodeM) [node, nodeM] = [n, d];
+        }
+      return {
+        roads: `${ra.id}/${rb.id}`,
+        areaM2: round(area, 2),
+        corridor: sameCorridor(a, b),
+        node: node.id,
+        nodeM: round(nodeM, 1),
+      };
+    })
+    .filter((o) => o.areaM2 > 0)
+    .sort((a, b) => (a.roads < b.roads ? -1 : 1));
+}
+
+// ---------------------------------------------------------------------------------------------
 // The audit
 
 export interface GeometryAudit {
@@ -1169,6 +1334,7 @@ export interface GeometryAudit {
   junctions: JunctionShape[];
   joins: JoinGap[];
   markings: MarkingOffset[];
+  laneOverlaps: LaneOverlap[];
   /** Marking lengths (TASK-074/079's measure) of the whole city; null for a case. */
   lengths: ReturnType<typeof markingLengths> | null;
   /** Every width sample's error, for percentiles over a set of roads (not written to JSON). */
@@ -1196,6 +1362,7 @@ export function auditGeometry(city: City, net: CompiledCity): GeometryAudit {
     junctions: net.nodes.flatMap((node) => junctionShapeAudit(city, net, node) ?? []),
     joins: net.nodes.flatMap((node) => joinAudit(net, node) ?? []),
     markings: net.roads.flatMap((road) => markingAudit(net, road) ?? []),
+    laneOverlaps: laneOverlaps(city, net),
     lengths: markingLengths(net),
     widthErrors,
   };
@@ -1209,7 +1376,9 @@ export function totals(audit: GeometryAudit, roads?: Set<string>) {
   const errors = [...audit.widthErrors]
     .filter(([id]) => !roads || roads.has(id))
     .flatMap(([, e]) => e);
-  const { widths, gaps, folds, through, overlaps, junctions, joins, markings } = audit;
+  const { widths, gaps, folds, through, overlaps, junctions, joins, markings, laneOverlaps } =
+    audit;
+  const corridorLanes = laneOverlaps.filter((o) => o.corridor);
   return {
     widthMaxM: round(max(widths, (w) => w.maxM)),
     widthP95M: round(percentile(errors, 0.95)),
@@ -1252,6 +1421,16 @@ export function totals(audit: GeometryAudit, roads?: Set<string>) {
     joinsOver5cm: sum(joins, (j) => j.over),
     markingMaxM: round(max(markings, (m) => m.maxM)),
     markingLinesOver5cm: sum(markings, (m) => m.over),
+    laneOverlapM2: round(
+      sum(laneOverlaps, (o) => o.areaM2),
+      2,
+    ),
+    laneOverlapPairs: laneOverlaps.length,
+    laneOverlapCorridorM2: round(
+      sum(corridorLanes, (o) => o.areaM2),
+      2,
+    ),
+    laneOverlapCorridorPairs: corridorLanes.length,
     lineOutsideM: audit.lengths?.lineOutsideM ?? null,
     markingOutsideM: audit.lengths?.markingOutsideM ?? null,
   };
@@ -1307,6 +1486,11 @@ export function worst(audit: GeometryAudit, count = 20) {
       audit.markings,
       (m) => m.maxM,
       (m) => m.road,
+    ),
+    laneOverlap: top(
+      audit.laneOverlaps,
+      (o) => o.areaM2,
+      (o) => o.roads,
     ),
   };
 }
@@ -1446,6 +1630,7 @@ export function caseAudit(net: CompiledCity, audit: GeometryAudit, c: GeometryCa
     junctions: audit.junctions.filter((j) => nodes.has(j.node)),
     joins: audit.joins.filter((j) => nodes.has(j.node)),
     markings: audit.markings.filter((m) => roads.has(m.road)),
+    laneOverlaps: audit.laneOverlaps.filter((o) => pair(o.roads)),
     lengths: null,
     widthErrors: new Map([...audit.widthErrors].filter(([id]) => roads.has(id))),
   };
@@ -1460,8 +1645,9 @@ export function compileCity(name: AuditCity, relaxMaxM?: number) {
 
 /** The per-entity records of an audit, as written to JSON. */
 function entities(audit: GeometryAudit) {
-  const { widths, gaps, folds, through, overlaps, junctions, joins, markings } = audit;
-  return { widths, gaps, folds, through, overlaps, junctions, joins, markings };
+  const { widths, gaps, folds, through, overlaps, junctions, joins, markings, laneOverlaps } =
+    audit;
+  return { widths, gaps, folds, through, overlaps, junctions, joins, markings, laneOverlaps };
 }
 
 function compact(list: object[], key: string, value: string): string {
@@ -1511,6 +1697,9 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
     );
     lines.push(`  joins maxM: ${compact(top.joins, 'node', 'maxM')}`);
     lines.push(`  markings maxM: ${compact(top.markings, 'road', 'maxM')}`);
+    lines.push(
+      `  lane overlap m2 (corridor *, nearest node m): ${top.laneOverlap.map((o) => `${o.roads}${o.corridor ? '*' : ''} ${o.areaM2} (${o.node} ${o.nodeM})`).join(', ')}`,
+    );
     for (const c of geometryCases.filter((c) => c.city === name)) {
       const restricted = caseAudit(net, audit, c);
       caseTotals[c.id] = totals(restricted);

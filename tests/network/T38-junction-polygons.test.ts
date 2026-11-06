@@ -399,6 +399,16 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
     'r:716#0':
       'Arnulfstraße at n:138, 41 degrees from its other carriageway r:386, now a separate approach: its far edge crosses r:386 at the cap (stage 2 7.1 m).',
     'r:716#1': 'As r:716#0.',
+    // TASK-087: Landsberger Straße's carriageways meet n:322 and n:328 side by side, a 14.5 m
+    // divided street instead of 7 m converging ones, so the side streets are cut farther out.
+    'r:281#0': 'Max-Friedlaender-Bogen at n:322 meets the 14.5 m Landsberger pair (3.9 m).',
+    'r:282#0': 'As r:281#0, its other direction (3.3 m).',
+    'r:487#0': 'Max-Friedlaender-Bogen at the signal n:328, beside the pushed pairs (3.4 m).',
+    'r:488#0': 'As r:487#0, its other direction (2.6 m).',
+    'r:762#0': 'Schrenkstraße at the signal n:328, beside the pushed pairs (2.7 m).',
+    'r:763#0': 'As r:762#0, its other direction (2.5 m).',
+    'r:729#0':
+      'Lies beside r:984 at n:1181, no longer on it, so it is cut where r:984 is instead of running 7.3 m on into the junction (TASK-088, R3-1).',
   },
 };
 
@@ -456,8 +466,10 @@ function fingerprint(net: CompiledCity) {
 const fingerprints: Record<AuditCity, string> = {
   grid: '550abeb39a410ed8',
   town: '21bcc4f206cea7a5',
-  sindelfingen: 'e0d07f9df3ecf65f',
-  munich: '946d523f0505c680',
+  // TASK-087: pushed dual carriageways, r:729/r:984 side by side (Sindelfingen e0d07f9df3ecf65f
+  // and Munich 946d523f0505c680 before).
+  sindelfingen: 'b1d2ca6d8b7927c8',
+  munich: '7c5b29366d96e789',
 };
 
 test.each(auditCities)(

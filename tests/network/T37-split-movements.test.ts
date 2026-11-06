@@ -191,7 +191,10 @@ test('T37: the lanes that line up at Munich n:312, n:305, n:201 and n:194 contin
 // and turns between a corridor's two carriageways are u-turns, not lefts.
 test.each([
   ['Munich', 70, 161, 1, 1340],
-  ['Sindelfingen', 48, 94, 0, 1124],
+  // TASK-087: Sindelfingen's n:580 becomes a continuation node (r:585/r:586 runs on into the
+  // unnamed pair r:582/r:583, now side by side): its two lined-up pairs are added, r:586>r:582
+  // is classified through, and the turn r:583#0>r:582#0 between the pair's carriageways goes.
+  ['Sindelfingen', 49, 96, 0, 1123],
 ] as const)(
   'T37: %s gives every lined-up trunk and branch lane a movement unless banned',
   (name, nodeCount, pairCount, bannedCount, movementCount) => {

@@ -94,7 +94,7 @@ test('T36.1: corridors of two-way ways, coincident pairs and dual carriageways, 
 
   const ids = (c: City) => Object.values(c.roads).map((r) => [r.id, r.corridorId]);
   expect(ids(munich())).toEqual(ids(city));
-  const kinds = { twoWay: 0, coincident: 0, dual: 0, none: 0 };
+  const kinds = { twoWay: 0, coincident: 0, dual: 0, pushed: 0, sameDirection: 0, none: 0 };
   const members = new Map<string, Road[]>();
   for (const road of Object.values(roads)) {
     if (road.corridorId === null) kinds.none++;
@@ -102,13 +102,21 @@ test('T36.1: corridors of two-way ways, coincident pairs and dual carriageways, 
   }
   for (const [id, list] of members) {
     expect(list).toHaveLength(2);
+    const [x, y] = list as [Road, Road];
     if (!id.startsWith('corridor:')) kinds.twoWay++;
-    else if (list[0]!.provenance.inferred!.includes('separated')) kinds.coincident++;
-    else kinds.dual++;
+    else if (x.from === y.from) kinds.sameDirection++;
+    else if (!x.provenance.inferred!.includes('separated')) kinds.dual++;
+    else if (JSON.stringify(x.centerline) === JSON.stringify([...y.centerline].reverse()))
+      kinds.coincident++;
+    else kinds.pushed++;
   }
   console.info('T36.1 Munich corridors', kinds);
   expect(kinds.coincident).toBe(7);
   expect(kinds.dual).toBeGreaterThan(0);
+  // TASK-087 (T39): three dual carriageways pushed apart (Landsberger r:325/r:941, r:327/r:1330,
+  // r:724/r:1279) and the same-direction Landsberger pair r:729/r:984.
+  expect(kinds.pushed).toBe(3);
+  expect(kinds.sameDirection).toBe(1);
 }, 120_000);
 
 test('T36.2: Marsstraße becomes a divided pair with a 0.5 m median, topology unchanged', () => {

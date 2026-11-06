@@ -217,7 +217,9 @@ test.each([
   // trunk roads r:1030, r:687 and r:685 beyond their fixed junction zones.
   // TASK-082 moved the outlines again (they follow road edges offset from corridor reference
   // lines); the setbacks and the movement set are unchanged by it (33c175d7… before).
-  ['Munich', 63, '9f01320569d2006d42127339260295d1186929050cf308c6d3cab82a8b5afca3'],
+  // TASK-087 moved it again (9f013205… before): n:322, n:324, n:328 and n:721 see Landsberger
+  // Straße's carriageways side by side, n:726 and n:1181 the pair r:729/r:984 laid side by side.
+  ['Munich', 63, 'c4e35356f38d3697d494a375dba5869392e1058a1e12a2c73d5e06bb7cc17e50'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {

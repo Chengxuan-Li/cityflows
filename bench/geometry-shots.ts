@@ -31,6 +31,12 @@ export const shots: { id: string; cases: string[]; centre: [number, number]; zoo
   { id: 'R3-4-n308', cases: ['R3-4'], centre: [-12.5, -184.5], zoom: 8 },
   { id: 'R3-4-n726', cases: ['R3-4'], centre: [-482, 114.5], zoom: 10 },
   { id: 'R3-6-n138', cases: ['R3-6'], centre: [-21, -536], zoom: 10 },
+  // TASK-087 (B41): carriageways of one street converging on a node.
+  { id: 'B41-n104', cases: [], centre: [-278.5, 142], zoom: 10 },
+  { id: 'B41-n324', cases: [], centre: [556, 218], zoom: 6 },
+  { id: 'B41-n721', cases: [], centre: [305.5, 194], zoom: 10 },
+  { id: 'B41-n446', cases: [], centre: [-462, -643.5], zoom: 10 },
+  { id: 'B41-n949', cases: ['R3-7'], centre: [478, -405.5], zoom: 10 },
 ];
 
 export const VIEWPORT = { width: 1280, height: 800 };
@@ -45,6 +51,10 @@ const anchors: Record<string, [number, number]> = {
   'n:823': [497.5, -448.85],
   'n:1181': [-509.67, 128.4],
   'n:138': [-16.37, -535.48],
+  'n:104': [-278.45, 141.89],
+  'n:324': [610.01, 223.17],
+  'n:721': [305.64, 194.23],
+  'n:446': [-462.12, -643.47],
 };
 
 async function freePort(): Promise<number> {
