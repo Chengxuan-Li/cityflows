@@ -111,6 +111,9 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
     waiting: numbers(),
     junctionWaiting: numbers(),
     stopped: new Float64Array(count),
+    // TASK-077: time standing still at the head of a jam, and respawns of the trip so far.
+    jamS: numbers(),
+    respawns: new Uint8Array(count),
     freeFlow: numbers(),
     failReason: Array<FailReason | null>(count).fill(null),
   };

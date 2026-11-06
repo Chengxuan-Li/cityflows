@@ -148,6 +148,7 @@ async function start() {
     lateralM: new Float32Array(count),
     lane: new Int32Array(count),
     state: new Uint8Array(count),
+    fade: new Float32Array(count).fill(1),
   };
   const moving = Array.from({ length: count }, (_, i) => {
     const lane = compiled.lanes[i % compiled.lanes.length]!;

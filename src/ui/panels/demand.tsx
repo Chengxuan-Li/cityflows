@@ -9,6 +9,7 @@ const failReasons: Record<FailReason, string> = {
   stranded: 'Stranded on the way',
   no_origin_connector: 'Origin has no exit',
   no_destination_connector: 'Destination has no entrance',
+  gridlocked: 'Stuck in gridlock too often',
 };
 
 function clock(timeS: number) {
@@ -27,6 +28,7 @@ export function DemandPanel() {
     engine: typeof engine;
     at: number;
     failedByReason: Metrics['failedByReason'];
+    respawns: number;
   } | null>(null);
   const pausedTime = run.status === 'playing' ? null : run.timeS;
   // Trip counts arrive with every tick; the failure breakdown is read on open, after each
@@ -36,8 +38,8 @@ export function DemandPanel() {
     const read = () =>
       void engine
         .metrics()
-        .then(({ timeS, failedByReason }) => {
-          if (active) setFailed({ engine, at: timeS, failedByReason });
+        .then(({ timeS, failedByReason, respawns }) => {
+          if (active) setFailed({ engine, at: timeS, failedByReason, respawns });
         })
         .catch((error: unknown) => {
           if (active) reportError(error);
@@ -122,6 +124,12 @@ export function DemandPanel() {
                 <dd>{failed!.failedByReason[reason].toLocaleString()}</dd>
               </Fragment>
             ))}
+            {failed?.engine === engine && (
+              <>
+                <dt>Restarted after standing in a gridlock</dt>
+                <dd>{failed.respawns.toLocaleString()}</dd>
+              </>
+            )}
           </dl>
         </figure>
         <div>

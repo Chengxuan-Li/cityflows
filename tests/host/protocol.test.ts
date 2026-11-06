@@ -80,7 +80,7 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect(requests.filter((request) => request.type === 'snapshot')).toHaveLength(1);
   expect(snapshot).toMatchObject({ timeS: 101, count: 1 });
   expect(snapshot.id.byteLength).toBe(4);
-  expect(transferred).toEqual(Array(9).fill(0));
+  expect(transferred).toEqual(Array(10).fill(0));
   expect(snapshot.roadSpeedRatio).toHaveLength(input.compiled.roads.length);
   now = 499;
   expect((await client.snapshot()).roadSpeedRatio).toBeUndefined();

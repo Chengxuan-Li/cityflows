@@ -73,7 +73,7 @@ test('trip export retains every loaded trip and engine outcomes, with nonnegativ
   });
   const rows = lines(exportTripsCsv(records, provenance));
   expect(rows[0]).toBe(
-    'id,person,origin,destination,departure,arrival,travel time,delay,fail reason',
+    'id,person,origin,destination,departure,arrival,travel time,delay,fail reason,respawns',
   );
   expect(rows).toHaveLength(requests.length + 1);
 });

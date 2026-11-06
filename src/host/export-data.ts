@@ -22,6 +22,7 @@ export function tripRecords(engine: TrafficEngine, trips: readonly TripRequest[]
       travelTime,
       delay: travelTime === null ? null : Math.max(0, travelTime - outcome.freeFlowS!),
       failReason: outcome.failReason,
+      respawns: outcome.respawns,
     };
   });
 }

@@ -53,6 +53,8 @@ export function VehicleInspector({
           <dd className="capitalize">
             {detail.routeReason === 'edit' ? 'Edit' : detail.routeReason.replaceAll('_', ' ')}
           </dd>
+          <dt>Restarts after gridlock</dt>
+          <dd>{detail.respawns}</dd>
           {detail.failReason && (
             <>
               <dt>Failure</dt>

@@ -1,6 +1,13 @@
 import type { CompiledCity } from '../network';
 import type { FailReason, Metrics } from './types';
-import { COMPLETED, FAILED, tripStates, type TripState, type Vehicles } from './vehicle';
+import {
+  COMPLETED,
+  FAILED,
+  QUEUED_ORIGIN,
+  tripStates,
+  type TripState,
+  type Vehicles,
+} from './vehicle';
 
 export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
   const trips = {
@@ -18,8 +25,10 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
     stranded: 0,
     no_origin_connector: 0,
     no_destination_connector: 0,
+    gridlocked: 0,
   };
   let zoneStops = 0;
+  let respawns = 0;
   let totalTravel = 0;
   let totalDelay = 0;
 
@@ -52,12 +61,14 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
       roadSpeedRatio,
       stepsPerSecond: 0,
       zoneStops,
+      respawns,
       get tripOutcomes() {
         return Array.from({ length: vehicles.count }, (_, id) => ({
           departedS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.departed[id]!,
           arrivedS: Number.isNaN(vehicles.arrived[id]) ? null : vehicles.arrived[id]!,
           freeFlowS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.freeFlow[id]!,
           failReason: vehicles.failReason[id]!,
+          respawns: vehicles.respawns[id]!,
         }));
       },
     };
@@ -70,6 +81,12 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
     trips,
     zoneStop() {
       zoneStops++;
+    },
+    /** A driving trip goes back to its origin queue (TASK-077). */
+    respawn(id: number) {
+      transition(id, QUEUED_ORIGIN);
+      vehicles.respawns[id]!++;
+      respawns++;
     },
     transition,
     metrics,

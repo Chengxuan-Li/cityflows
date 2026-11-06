@@ -62,6 +62,7 @@ test('QA every export downloads parseable data with columns, feature counts and 
         'travel time',
         'delay',
         'fail reason',
+        'respawns',
       ],
     ],
     [

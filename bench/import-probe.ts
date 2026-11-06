@@ -182,6 +182,7 @@ export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
     completedByHalfHour,
     stalledHeads,
     zoneStops: metrics.zoneStops,
+    respawns: metrics.respawns,
     ...metrics.trips,
     failedByReason: metrics.failedByReason,
     gatewayTraffic,

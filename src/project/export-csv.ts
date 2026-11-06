@@ -15,6 +15,7 @@ export interface TripRecord {
   travelTime: number | null;
   delay: number | null;
   failReason: string | null;
+  respawns: number;
 }
 
 export interface RoadStats {
@@ -73,6 +74,7 @@ export function exportTripsCsv(records: readonly TripRecord[], provenance: Expor
       'travel time',
       'delay',
       'fail reason',
+      'respawns',
     ],
     records.map((r) => [
       r.id,
@@ -84,6 +86,7 @@ export function exportTripsCsv(records: readonly TripRecord[], provenance: Expor
       r.travelTime,
       r.delay,
       r.failReason,
+      r.respawns,
     ]),
   );
 }

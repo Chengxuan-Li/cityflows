@@ -10,7 +10,8 @@ export type FailReason =
   | 'destination_unreachable'
   | 'stranded'
   | 'no_origin_connector'
-  | 'no_destination_connector';
+  | 'no_destination_connector'
+  | 'gridlocked';
 
 export interface TrafficEngine {
   load(input: {
@@ -46,6 +47,8 @@ export interface VehicleSnapshot {
   lateralM: Float32Array;
   lane: Int32Array;
   state: Uint8Array;
+  /** TASK-077: 1, or falling to 0 over the last `gridlock.fadeS` before a respawn. */
+  fade: Float32Array;
 }
 
 export interface Metrics {
@@ -65,6 +68,8 @@ export interface Metrics {
   stepsPerSecond: number;
   /** Committed displacements clamped at occupied conflict-zone starts. */
   zoneStops: number;
+  /** TASK-077: respawns over all trips. */
+  respawns: number;
   /** Per loaded trip, in input order; materialized only when requested. */
   readonly tripOutcomes?: TripOutcome[];
 }
@@ -74,6 +79,7 @@ export interface TripOutcome {
   arrivedS: number | null;
   freeFlowS: number | null;
   failReason: FailReason | null;
+  respawns: number;
 }
 
 export interface VehicleDetail {
@@ -87,9 +93,10 @@ export interface VehicleDetail {
   positionM: number;
   speedMps: number;
   route: Route | null;
-  routeReason: 'initial' | 'missed_turn' | 'congestion' | 'edit';
+  routeReason: 'initial' | 'missed_turn' | 'congestion' | 'edit' | 'respawn';
   waitingS: number;
   departedS: number | null;
   arrivedS: number | null;
   failReason: FailReason | null;
+  respawns: number;
 }
