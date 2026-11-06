@@ -30,8 +30,11 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     // no longer cut each other to the cap, so their lanes cross near the node, under the polygon's
     // gore where they part within 25 m.
     'r:644#0>r:964#0': 'Landsberger Straße carriageways converge on n:104 at 11 degrees.',
-    'r:1330#0>r:327#0': 'Landsberger Straße carriageways converge on n:324 at 12 degrees.',
-    'r:1279#0>r:724#0': 'Landsberger Straße carriageways converge on n:721.',
+    // TASK-087: r:1330#0>r:327#0 (n:324) and r:1279#0>r:724#0 (n:721) no longer cross: the
+    // pairs meet at both their nodes and are pushed apart side by side (separateDual). The pairs
+    // below meet a node from one side only (n:104, n:774, n:949: one lateral offset per road
+    // cannot set them side by side there without moving their lanes at the far end) or have a
+    // centred continuation across a node (r:1277/r:1362 at n:774, r:1354/r:447 at n:382).
     'r:1276#0>r:1368#0': 'Landsberger Straße carriageways converge on n:774 (G2).',
     'r:636#0>r:950#0': 'Arnulfstraße carriageways converge on the signal n:949.',
     'r:636#0>r:950#1': 'Arnulfstraße carriageways converge on the signal n:949.',

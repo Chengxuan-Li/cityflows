@@ -19,11 +19,14 @@ const observed = vi.hoisted(() => ({
 }));
 
 // T23 checks step 11's two-metre bound; step 12 has its own eight-metre contract (T24), the
-// separation of coincident pairs and the relaxation (TASK-084) theirs (T36).
+// separation of coincident pairs and the relaxation (TASK-084) theirs (T36), the separation of
+// close dual carriageways (TASK-087) its own (T39).
 vi.mock(import('../../src/importers/osm/realign'), () => ({ realignRoads() {} }));
 vi.mock(import('../../src/importers/osm/corridors'), async (load) => ({
   ...(await load()),
   separateCoincident() {},
+  separateDual() {},
+  sampleSameDirection() {},
 }));
 vi.mock(import('../../src/importers/osm/relax'), async (load) => ({
   ...(await load()),
