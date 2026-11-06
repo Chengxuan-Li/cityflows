@@ -100,7 +100,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-074](tasks/TASK-074.md) | 5 | Junction shapes, measured on the real cities | new `bench/junction-audit.ts`, `src/network/junctions.ts`, `src/geo/polyline.ts` (additive), `src/render/layers/nodes.ts`, the marking clip in `drawRoad`, `NOTICE`, `tests/network/T27*` | 063, 068, 071, 072; design in architecture 5.1, 11 | T27; overlap outside outlines halved | done |
 | [TASK-075](tasks/TASK-075.md) | 5 | Lane markings through junctions without signals | new `src/render/layers/junction-markings.ts`, `scene.ts` wiring, `style.ts` (additive), `tests/render/T28*` | 061, 063, 071, 072; design in architecture 11 | T28; dashed guide lines on major roads | done |
 | [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | done |
-| [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | todo |
+| [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1235,6 +1235,35 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   merged tree: check green except 5 s time-outs under the TASK-077 agent's load (all pass
   with a longer timeout), route audit zero, Munich at 0.15: 2 022 completed, still locked
   (TASK-077).
+
+- 2026-11-05, TASK-077 merged after two rounds; wave 16 is complete. A jam head (on a
+  movement or first on its lane, below 0.1 m/s) that stands for `gridlock.respawnS` fades over
+  `fadeS`, leaves the road (grants, zone occupancy, TASK-076 lane-change state released; its
+  partial road traversal recorded as a link-cost sample), and its trip rejoins its origin
+  queue ahead of later departures with its first `departedS`, a fresh route (`respawn`), and
+  the place slot it freed; the fourth stall fails it as `gridlocked`. `fade` reaches the host,
+  the vehicle sprites' alpha, the inspector ("Restarts after gridlock"), the Demand panel, the
+  trips CSV (`respawns` column) and the probe. Round one followed section 8 as written (a red
+  for the car's own movement reset the timer) and left 17 Munich heads frozen 6 to 72 minutes
+  in rings of queues through signals (`n:262`, `n:963`, `n:967`); the agent measured three
+  rules and the lead adopted the one that reaches zero (2b840bc: a red neither starts nor stops
+  the timer). Munich at 0.15 on the merged tree: 3 720 completed (2 022 before), 59 failed,
+  all `gridlocked`, 1 975 respawns, `completedByHalfHour` [701, 1209, 678, 496, 373, 263],
+  `stalledHeads` 0 (298 before). Benchmark end hashes unchanged; the town respawns 19 cars in
+  its 08:00 peak (`n:224`, `n:225`, `n:228`, `n:207`), the grids none. Changed expectations:
+  Munich failures at scale 1 (246) and in T21 and T27 must all be `gridlocked`; T29 case 3 runs
+  without respawns; protocol buffers 9 to 10; the trips CSV header. Open: T29 case 4 stays
+  `test.fails` (963 Munich cars held off-target over 40 s, worst 380 s on `r:639#0`, inside
+  slow queues rather than at heads); 1 975 respawns in three hours says the default import
+  demand of 0.15 is beyond Munich's capacity. Verified on the merged tree: check (426 unit
+  tests), the full Playwright suite with T16, route audit zero, the probe.
+
+- Wave 16 outcome (2026-11-05): the owner's four round 2 items are merged (TASK-074, 075, 076,
+  077), run by the lead's subagents in worktrees under `D:\cityflows-wt`. Next: the owner's
+  test round, then phase 3 (walking legs and multimodal travel). Candidates from the reviews:
+  junction priority classification so more priority roads get guide lines (TASK-075 open
+  item), the importer's coincident source carriageways (TASK-074's 22 residual nodes), and the
+  default import demand against Munich's capacity (TASK-077).
 
 ## Owner decisions log
 
