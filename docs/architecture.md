@@ -1263,6 +1263,14 @@ type HostEvent =
   marking keeps its offset through curves: a marking is built from the road centerline at
   its offset with arc-length resampling (at most 1 m spacing, joins by angle bisector), so
   its distance to the lane polyline stays within 0.05 m except at tapers.
+  As merged: markings use `parallelOffset` (`src/geo/polyline.ts`) with mitred joins on both
+  sides, so the two directions' centre lines coincide, rather than 1 m resampling; the stretch
+  of an approach under its own node outline (82 Munich lanes, where the outline reaches back
+  over the lane) is drawn above the junction surface with its arrows and stop line; and no
+  arrow is drawn where it would lie on a road running the other way (coincident one-way
+  carriageways from the importer, such as Marsstraße `r:368`/`r:480`, the owner's X marks).
+  The TASK-074 marking-length measure counts dividers and centre lines only (`lineOutsideM`),
+  since arrows are now drawn on far fewer lanes.
 - TASK-063: roads and junction surfaces share one asphalt colour by default. A Layers entry
   "Road classes" (off by default) turns on the per-class tones of `roadStyle`; then a
   junction takes the tone of its incident road with the highest `classRank`. Presentation

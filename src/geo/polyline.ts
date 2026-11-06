@@ -81,6 +81,74 @@ export function offsetPolyline(points: readonly Vec2[], offset: number): Vec2[] 
   });
 }
 
+/** The line at a constant distance `offset` from `points` (positive to the right in the y-south
+ * frame), joined like `offsetPolyline` (a mitre on the angle bisector, two points past 120
+ * degrees) so it stays parallel to lanes and surfaces built by it. `offsetPolyline` throws a
+ * vertex up to twice the offset off at a reversed millimetre step or a short segment between
+ * two bends; here vertices closer than 0.1 m merge and a step under 1 m that turns back more
+ * than 90 degrees (a cusp) is dropped before offsetting, and points that land nearer the line
+ * than the offset (offset segments reversed inside a tight bend) are dropped after. */
+export function parallelOffset(points: readonly Vec2[], offset: number): Vec2[] {
+  const line: Vec2[] = [];
+  for (const point of points) {
+    if (!line.length || distance(point, line.at(-1)!) >= 0.1) line.push(point);
+    else if (point === points.at(-1) && line.length > 1) line[line.length - 1] = point;
+    while (line.length >= 3) {
+      const [a, b, c] = line.slice(-3) as [Vec2, Vec2, Vec2];
+      if (Math.min(distance(a, b), distance(b, c)) >= 1) break;
+      if ((b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y) >= 0) break;
+      line.splice(-2, 1);
+    }
+  }
+  if (offset === 0 || line.length < 2) return line;
+  const lengths = cumulativeLengths(line);
+  const normals = line.slice(1).map((point, i) => {
+    const prev = line[i]!;
+    const len = distance(point, prev);
+    return { x: (prev.y - point.y) / len, y: (point.x - prev.x) / len };
+  });
+  const out: { p: Vec2; at: number }[] = [];
+  const push = (at: number, n: Vec2, scale = 1) =>
+    out.push({
+      p: { x: line[at]!.x + offset * scale * n.x, y: line[at]!.y + offset * scale * n.y },
+      at,
+    });
+  push(0, normals[0]!);
+  for (let i = 1; i < line.length - 1; i++) {
+    const before = normals[i - 1]!,
+      after = normals[i]!;
+    const denominator = 1 + before.x * after.x + before.y * after.y;
+    if (denominator < 0.5) {
+      push(i, before);
+      push(i, after);
+    } else push(i, { x: before.x + after.x, y: before.y + after.y }, 1 / denominator);
+  }
+  push(line.length - 1, normals.at(-1)!);
+  const reach = Math.abs(offset) * 4 + 1;
+  const tooNear = (p: Vec2, j: number) =>
+    segmentDistance(p, line[j - 1]!, line[j]!) < Math.abs(offset) - 1e-3;
+  return out
+    .filter(({ p, at }, k) => {
+      if (k === 0 || k === out.length - 1) return true;
+      for (let j = at; j > 0 && lengths[at]! - lengths[j]! < reach; j--)
+        if (tooNear(p, j)) return false;
+      for (let j = at + 1; j < line.length && lengths[j - 1]! - lengths[at]! < reach; j++)
+        if (tooNear(p, j)) return false;
+      return true;
+    })
+    .map(({ p }) => p);
+}
+
+/** Distance from `p` to the segment `a`-`b`. */
+export function segmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x,
+    dy = b.y - a.y;
+  const length2 = dx * dx + dy * dy;
+  const t =
+    length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+
 export function trimPolyline(points: readonly Vec2[], startM: number, endM: number): Vec2[] {
   const lengths = cumulativeLengths(points);
   const stop = lengths.at(-1)! - endM;

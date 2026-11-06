@@ -102,7 +102,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | done |
 | [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | done |
 | [TASK-078](tasks/TASK-078.md) | 5 | Junction curbs with a realistic radius, lanes untouched (B32) | `src/network/junctions.ts` (curbs only), `types.ts` (additive), `src/geo/polyline.ts` (additive), `drawNode` in `nodes.ts`, `bench/junction-audit.ts`, `tests/network/T31*` | 063, 074; design in architecture 5.1 | T31; hashes unchanged | todo |
-| [TASK-079](tasks/TASK-079.md) | 5 | Markings up to the junction, arrows once, offsets on curves (B33 to B35) | `src/render/layers/roads.ts`, a marking-offset export in `src/geo/polyline.ts`, `tests/render/T32*` | 072, 074, 075; design in architecture 11 | T32 | todo |
+| [TASK-079](tasks/TASK-079.md) | 5 | Markings up to the junction, arrows once, offsets on curves (B33 to B35) | `src/render/layers/roads.ts`, a marking-offset export in `src/geo/polyline.ts`, `tests/render/T32*` | 072, 074, 075; design in architecture 11 | T32 | done |
 | [TASK-080](tasks/TASK-080.md) | 5 | Short transitions, lanes through the remaining splits and merges (B36, B37) | `src/network/continuity.ts`, `lanes.ts`, `transitions.ts`, `drawRoadJoins` in `nodes.ts`, `tests/network/T33*` | 071, 074, 076; design in architecture 5.1 | T33 | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -327,6 +327,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B35 | Owner, round 3 (2), clarified: on a long curve the centre line and the boundary (edge) lines are not drawn properly; they should follow the curve at their offsets. | Renderer and geometry: markings come from `offsetPolyline` of the lane polylines (per-vertex miter, clamped), which drifts on tight, densely sampled curves; measure the offset error of every marking on the four cities and draw markings that keep their offset through curves. |
 | B37 | Owner, round 3 (3), clarified: where a road gains a lane the widening should happen over a short section, not a long gradual change. | Geometry: TASK-071's taper is `min(60 m, half the road)`; make it short, scaled by speed (about 20 m in town, up to 40 m on fast roads), for added and dropped lanes and branch offsets alike. |
 | B36 | Owner, round 3 (4, 5): carriageway splits and merges that TASK-071 does not cover draw as two overlapping surfaces without lane markings (4), or with a jagged edge where a ramp joins (5). | Network and renderer: lanes continue side by side with dividers through such splits and merges, and an absorbing merge draws as a smooth taper. |
+| B38 | TASK-079 review: some lane polylines step backwards by 4 to 26 m (Munich `r:1025`/`r:1026`, `r:839`/`r:840`, `r:866`/`r:867`; Sindelfingen `r:1053`/`r:1054`, `r:1116`/`r:1117`), so the markings drawn from them are off there. | Geometry (`lanes.ts`) or the importer's smoothing: find where the offset lane polyline folds back and remove the fold. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
@@ -1282,6 +1283,23 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   junction priority classification so more priority roads get guide lines (TASK-075 open
   item), the importer's coincident source carriageways (TASK-074's 22 residual nodes), and the
   default import demand against Munich's capacity (TASK-077).
+
+- 2026-11-06, TASK-079 merged as delivered (B33 to B35). B33: junction 1 is Munich n:1181;
+  the node outline reaches back over the last stretch of 82 Munich approach lanes and node
+  areas draw above markings, so dividers vanished there, and the dash pattern could end 3.1 m
+  short. Dividers and centre lines now run to `stopM`, and the stretch under the road's own
+  outline is drawn above the junction surface with its arrows and stop line. B34: the owner's
+  X-marked arrows lay on Marsstraße, where the importer laid two one-way carriageways on one
+  centreline (`r:368` at n:823, `r:480` at the signal n:949), so both directions' arrows sat on
+  the same lanes; besides section 11's rule (arrows once, 6 to 9 m before `stopM`, only where
+  lanes differ), no arrow is drawn on a road running the other way (35 Munich lanes, 8 in
+  Sindelfingen). Munich arrow length 2 730 to 308 m. B35: `parallelOffset` replaces the
+  per-vertex miter for markings; lines off by more than 0.05 m: Munich 51 of 519 (worst
+  1.75 m) to 0 outside lane corners, Sindelfingen 42 to 4, the hairpin fixture 1.75 m to
+  0.005 m. The marking-length measure now counts lines only (`lineOutsideM`, 99.2 to 99.8
+  percent of main); T27's baseline moved to 5024a83 line lengths. New: B38, folded lane
+  polylines. Verified on the merged tree: typecheck, lint, format, build, and all unit tests
+  with a 30 s timeout (437; the 5 s default times out under the other two agents' load).
 
 ## Owner decisions log
 

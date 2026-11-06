@@ -242,16 +242,17 @@ test.each(auditCities)(
   120_000,
 );
 
-// bed19c1 measured with bench/junction-audit.ts: metres of lane marking drawRoad strokes
-// outside its nodes' outlines.
-const mainMarkingOutsideM = { grid: 10507, town: 107602, sindelfingen: 48201, munich: 41036 };
+// 5024a83 measured with bench/junction-audit.ts: metres of dividers and centre lines drawRoad
+// strokes outside its nodes' outlines. TASK-079 draws turn arrows only where a road's lanes
+// differ (B34), so all strokes together fall by design; the clip never acted on arrows.
+const mainLineOutsideM = { grid: 9880, town: 101643, sindelfingen: 46174, munich: 38684 };
 
 test.each(auditCities)(
-  'T27: %s keeps at least 98 % of main’s lane markings outside outlines',
+  'T27: %s keeps at least 98 % of main’s lane lines outside outlines',
   (name) => {
     const lengths = markingLengths(audit(name).net);
-    console.info('T27 markings', name, lengths, 'main outside', mainMarkingOutsideM[name]);
-    expect(lengths.markingOutsideM).toBeGreaterThanOrEqual(0.98 * mainMarkingOutsideM[name]);
+    console.info('T27 markings', name, lengths, 'main lines outside', mainLineOutsideM[name]);
+    expect(lengths.lineOutsideM).toBeGreaterThanOrEqual(0.98 * mainLineOutsideM[name]);
   },
   120_000,
 );
