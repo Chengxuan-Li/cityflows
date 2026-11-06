@@ -76,9 +76,8 @@ test('T20: renderer draws the compiled outline and no area at a through node', (
   const n = net.nodes.find((n) => n.signal)!;
   const record = recorder();
   drawNode(record.graphics, n);
-  // TASK-078: the curb aprons are drawn with the outline.
-  expect(n.curbs.length).toBeGreaterThan(0);
-  expect(record.polygons).toEqual([n.outline, ...n.curbs]);
+  // TASK-083: the curbs are part of the outline.
+  expect(record.polygons).toEqual([n.outline]);
   const { city, node, road } = buildCity('Through', 1);
   const middle = node(0, 0);
   road(node(-100, 0), middle);

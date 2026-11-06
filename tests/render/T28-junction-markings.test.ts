@@ -229,6 +229,12 @@ test('T28.4: a two-lane one-way priority road gets one divider following its cur
   const line = dividers[0]!.line;
   const heading = (i: number) =>
     Math.atan2(line[i + 1]!.y - line[i]!.y, line[i + 1]!.x - line[i]!.x);
-  // The divider turns with the road (the bend is 20 degrees to the left).
-  expect(heading(0) - heading(line.length - 2)).toBeGreaterThan((10 * Math.PI) / 180);
+  // The divider turns with the road (the bend is 20 degrees to the left). TASK-083: the through
+  // road keeps its alignment, which spreads the bend over 20 m either side of the node, so across
+  // the junction the divider turns as its through movements do, about 4 degrees.
+  const turn = (l: Vec2[]) =>
+    Math.atan2(l[1]!.y - l[0]!.y, l[1]!.x - l[0]!.x) -
+    Math.atan2(l.at(-1)!.y - l.at(-2)!.y, l.at(-1)!.x - l.at(-2)!.x);
+  expect(heading(0) - heading(line.length - 2)).toBeGreaterThan((3 * Math.PI) / 180);
+  expect(heading(0) - heading(line.length - 2)).toBeCloseTo(turn(a!.polyline), 1);
 });

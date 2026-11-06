@@ -1,293 +1,118 @@
 import {
+  areaD,
+  booleanOpD,
+  ClipType,
+  EndType,
+  FillRule,
+  inflatePathsD,
+  JoinType,
+  type PathD,
+} from 'clipper2-ts';
+import {
   cumulativeLengths,
   distance,
   headingAtDistance,
   nearestOnPolyline,
-  offsetPolyline,
-  polylineCrossings,
   pointAtDistance,
-  polylineLength,
-  prepareRing,
-  preparePolygon,
-  ringsOverlap,
-  type PreparedRing,
-  sampleArc,
-  sampleCubic,
-  segmentIntersection,
-  segmentsIntersect,
-  trimPolyline,
+  polylineCrossings,
+  vertexNormals,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { Road, RoadClass } from '../schema';
-import { roadWidth } from './lanes';
+import { offsetLine, type Reference } from './corridor';
+import { roadWidth, smoothstep } from './lanes';
 import type { CLane, CMovement, CNode, CRoad } from './types';
 
-function outward(road: Road, node: Pick<CNode, 'id'>) {
-  return road.from === node.id ? road.centerline : [...road.centerline].reverse();
-}
+// Junction polygons (TASK-083, architecture 5.1), osm2streets-style on TASK-082's corridors. The
+// road ends of one corridor approaching a node together form one approach; each road end is cut
+// square to its own reference line where its edges cross a neighbouring approach's; a through
+// road keeps its alignment across the node; the junction is the clipper union of the region
+// between the cuts, the curb arcs between neighbouring approaches and every movement surface.
 
-/** Longest setback at acute approaches beyond what clearing the widest neighbouring road
- * end at a right angle needs: past it the roads merge as one surface instead of stopping
- * cars ever farther from the junction (lead decision at the TASK-061 review). */
+/** Longest setback at acute approaches beyond what clearing the widest neighbouring road end at
+ * a right angle needs: past it the roads merge as one surface instead of stopping cars ever
+ * farther from the junction (lead decision at the TASK-061 review); the polygon covers the
+ * overlap beyond it (the TASK-063 gore). */
 export const SETBACK_CAP_M = 10;
 
-/** The TASK-061 rule (straight edges from the node, farthest crossing plus 1 m). The compiler
- * uses `roadEndSetbacks`; the importer's realignment (TASK-068) still sizes its straight mouth
- * with this rule, so imported geometry is unchanged by TASK-074. Setback array follows
- * incident road index order, independently of angular sorting. */
-export function junctionSetbacks(node: Omit<CNode, 'curbs'>, roads: Road[]): number[] {
-  const ends = roads.map((road, index) => {
-    const line = outward(road, node);
-    const lengths = cumulativeLengths(line);
-    const heading = headingAtDistance(line, lengths, 0);
-    const width = roadWidth(road);
-    const offset = road.lateralOffsetM * (road.from === node.id ? 1 : -1);
-    return {
-      road,
-      index,
-      line,
-      lengths,
-      heading,
-      width,
-      extent: Math.max(Math.abs(offset - width / 2), Math.abs(offset + width / 2)),
-      edges: [-1, 1].map((side) => {
-        const lateral = offset + (side * width) / 2;
-        const start = {
-          x: node.pos.x - Math.sin(heading) * lateral,
-          y: node.pos.y + Math.cos(heading) * lateral,
-        };
-        return [
-          start,
-          {
-            x: start.x + Math.cos(heading) * lengths.at(-1)!,
-            y: start.y + Math.sin(heading) * lengths.at(-1)!,
-          },
-        ];
-      }),
-    };
-  });
-  // Opposite carriageways form one physical street end; splitting a two-way street
-  // therefore still gives a through node with four directed roads.
-  const groups = new Map<string, typeof ends>();
-  for (const end of ends) {
-    const other = end.road.from === node.id ? end.road.to : end.road.from;
-    const key =
-      end.road.streetGroupId === null ? end.road.id : `${end.road.streetGroupId}:${other}`;
-    const group = groups.get(key) ?? [];
-    group.push(end);
-    groups.set(key, group);
-  }
-  const arms = [...groups.values()].sort((a, b) => a[0]!.heading - b[0]!.heading);
-  if (arms.length === 2 && node.control === 'uncontrolled') {
-    const a = arms[0]!,
-      b = arms[1]!;
-    if (
-      a.length === b.length &&
-      a.every((end) =>
-        b.some(
-          (other) =>
-            (end.road.to === node.id) !== (other.road.to === node.id) &&
-            end.road.name === other.road.name &&
-            end.road.roadClass === other.road.roadClass &&
-            end.road.lateralOffsetM === other.road.lateralOffsetM &&
-            end.road.lanes.length === other.road.lanes.length &&
-            end.road.lanes.every((lane, i) => lane.widthM === other.road.lanes[i]!.widthM) &&
-            end.width === other.width &&
-            Math.cos(end.heading - other.heading) < -Math.cos(Math.PI / 36),
-        ),
-      )
-    )
-      return roads.map(() => 0);
-  }
-  const setbacks = ends.map((end) => end.width / 2 + 1);
-  for (let i = 0; i < arms.length; i++) {
-    const arm = arms[i]!;
-    const neighbors =
-      arms.length > 1
-        ? [arms[(i + 1) % arms.length]!, arms[(i + arms.length - 1) % arms.length]!]
-        : [];
-    for (const end of arm) {
-      const cap = Math.max(
-        end.width / 2 + 1,
-        SETBACK_CAP_M,
-        ...neighbors.flatMap((neighbor) => neighbor.map((other) => other.extent + 1)),
-      );
-      for (const neighbor of new Set(neighbors))
-        for (const other of neighbor) {
-          if (Math.abs(Math.sin(end.heading - other.heading)) < Math.sin(Math.PI / 36)) continue;
-          for (const edge of end.edges) {
-            for (const otherEdge of other.edges) {
-              for (let j = 1; j < edge.length; j++)
-                for (let k = 1; k < otherEdge.length; k++) {
-                  const hit = segmentIntersection(
-                    edge[j - 1]!,
-                    edge[j]!,
-                    otherEdge[k - 1]!,
-                    otherEdge[k]!,
-                  );
-                  if (hit) {
-                    let nearest = Infinity,
-                      along = 0;
-                    for (let s = 1; s < end.line.length; s++) {
-                      const a = end.line[s - 1]!,
-                        b = end.line[s]!;
-                      const dx = b.x - a.x,
-                        dy = b.y - a.y;
-                      const segment = Math.hypot(dx, dy);
-                      if (segment === 0) continue;
-                      const t = Math.max(
-                        0,
-                        Math.min(1, ((hit.x - a.x) * dx + (hit.y - a.y) * dy) / segment ** 2),
-                      );
-                      const away = Math.hypot(hit.x - a.x - t * dx, hit.y - a.y - t * dy);
-                      if (away < nearest) {
-                        nearest = away;
-                        along = end.lengths[s - 1]! + t * segment;
-                      }
-                    }
-                    setbacks[end.index] = Math.min(cap, Math.max(setbacks[end.index]!, along + 1));
-                  }
-                }
-            }
-          }
-        }
-    }
-  }
-  return setbacks;
-}
+/** Curb radius of a corner by the lower-ranked road's class (TASK-078). */
+export const CURB_RADIUS_M: Record<RoadClass, number> = {
+  service: 6,
+  residential: 6,
+  tertiary: 9,
+  secondary: 9,
+  primary: 12,
+  trunk: 12,
+  motorway: 12,
+  ramp: 12,
+};
 
-// TASK-074 junction shapes, adapted from SUMO netconvert's node-shape computation
-// (NBNodeShapeComputer, see NOTICE): curb lines extrapolated toward the node, angular
-// neighbours joined into one direction when their curbs never meet, each road end cut where
-// its curb meets the neighbour's facing curb plus a radius term, and smooth corners built on
-// the intersection of the extended curbs. The 10 m cap and the gore are CityFlows rules.
-
-/** Curb radius of a concave corner (SUMO's junction radius). Its tangent length, clamped at
- * right-angle turns as SUMO clamps its default radius, is added to the setback of the road end
- * that owns the curb: 1 m at a right angle, as the TASK-061 margin, less at obtuse corners. A
- * larger radius costs approach lanes their queue storage (TASK-065 review): Munich at 0.15
- * completed 1 705 trips by 10:00 with 1.5 m and 1 901 with 1.2 m, against 2 008 on main. */
-const CURB_RADIUS_M = 1;
-/** A corner farther from the node than this is no corner: the two ends are one direction. */
-const CORNER_REACH_M = 50;
-/** Curb lines are extrapolated this far toward and past the node, so that every pair meets. */
-const EXTEND_M = 50;
-/** Angular neighbours closer than this whose curbs do not meet near the node form one
- * direction: SUMO joins within 20 degrees, and up to 60 degrees where the curbs never meet
- * (carriageways that run on top of each other, as realigned approaches can). */
+/** Radius whose tangent length is added to a cut beyond the crossing it clears: 1 m at a right
+ * angle, the TASK-061 margin. A class radius there would cost every approach up to 11 m of queue
+ * storage (T38.4); the class-radius curb instead runs on along the road edges beyond the cut. */
+const MARGIN_RADIUS_M = 1;
+/** Crossings and corners farther from the node than this are not the junction's. */
+const REACH_M = 50;
+/** How far out a road end's direction is taken for its angular place. */
+const FACING_M = 5;
+/** How far out a through road's alignment is taken on each side (the audit's `APPROACH_M`). */
+const ALIGNMENT_M = 20;
+/** A through road keeps its alignment where it passes the node within this distance: moving it
+ * moves the side roads' cuts as much, and T38.4 allows no lane to lose more than 2 m. Farther
+ * off, the node is not on the road's line (a Y, a node between two carriageways) and the road
+ * keeps its centerline. */
+const MAX_SHIFT_M = 2;
+/** Road ends of one corridor within this angle of each other approach the node together; two
+ * carriageways farther apart are two approaches with a curb (or a gore) between them. */
+const SAME_APPROACH = (20 * Math.PI) / 180;
+/** Neighbours closer than this whose facing edges never meet are one direction (TASK-074). */
 const SAME_DIRECTION = (60 * Math.PI) / 180;
-/** Road ends within 3 degrees of each other run the same way: one can shadow the other. */
+/** Ends within 3 degrees of each other run the same way: one can shadow the other. */
 const COINCIDENT = Math.cos(Math.PI / 60);
-/** Curbs within 5 degrees of parallel never form a corner (TASK-061 clarification). */
+/** Ends within 5 degrees of parallel never cut each other (TASK-061 clarification). */
 const PARALLEL = Math.sin(Math.PI / 36);
-/** Curbs within 30 degrees of opposite never form a corner: the curb runs on through. */
-const STRAIGHT = Math.cos(Math.PI / 6);
-/** Handle lengths of a curb's cubic as a share of the distance to its corner, the first a
- * circular fillet when both cuts are equally far from the corner; containment tries the rest. */
-const CORNER_HANDLES = [0.5523, 0.45, 0.35, 0.25, 0.15, 0.65, 0.8];
-/** Handle lengths of an S-curve curb as a share of the distance between its two ends. */
-const STEP_HANDLES = [0.4, 0.25, 0.55, 0.15, 0.7, 0.85, 1];
+const OPPOSITE = Math.cos((150 * Math.PI) / 180);
+const ALONG = Math.cos(Math.PI / 6);
+/** A smaller curb is no curb: the corner stays the chord between the cuts. A curb's tangent
+ * points lie within `FIT_M` of the road edges. */
+const FIT_M = 0.25;
+const MIN_CURB_M = 0.5;
+/** A curb's tangent point lies within this share of its road, counted from the node. */
+const CURB_REACH = 0.4;
+/** Spacing of the samples of a through road's alignment and of curb arcs. */
+const SAMPLE_M = 0.5;
+const ARC_STEP = (3 * Math.PI) / 180;
+/** clipper2-ts precision (decimal places). */
+const PRECISION = 3;
 
-type Corner = { point: Vec2; a: number; b: number; da: Vec2; db: Vec2 };
-
-function unit(from: Vec2, to: Vec2): Vec2 {
-  const length = distance(from, to);
-  return { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
-}
-
+const sub = (a: Vec2, b: Vec2) => ({ x: a.x - b.x, y: a.y - b.y });
+const dot = (a: Vec2, b: Vec2) => a.x * b.x + a.y * b.y;
 const cross = (a: Vec2, b: Vec2) => a.x * b.y - a.y * b.x;
+const unit = (v: Vec2) => {
+  const length = Math.hypot(v.x, v.y);
+  return { x: v.x / length, y: v.y / length };
+};
+const reach = (total: number, m: number) => Math.min(m, total / 2);
 
-/** An outward edge's direction at its start, over its first half meter: a restored corner
- * (compile keeps a continuation road's old corners) can sit a hair off the edge beyond it. */
-function leaving(edge: Vec2[]): Vec2 {
-  const ahead = edge.find((p, i) => i > 0 && distance(p, edge[0]!) >= 0.5) ?? edge.at(-1)!;
-  return unit(edge[0]!, ahead);
-}
+// ---------------------------------------------------------------------------------------------
+// Through nodes: two ends of one street, setback 0, no outline (TASK-061, unchanged).
 
-/** An outward edge with a straight run of `EXTEND_M` prepended toward the node. */
-function extended(edge: Vec2[]): Vec2[] {
-  const d = leaving(edge);
-  return [{ x: edge[0]!.x - d.x * EXTEND_M, y: edge[0]!.y - d.y * EXTEND_M }, ...edge];
-}
-
-/** Where two extended curbs first meet near the node; `a` and `b` are the distances past each
- * edge's start (negative on the extension) and `da`, `db` the outward edge directions there. */
-function meet(a: Vec2[], b: Vec2[], origin: Vec2): Corner | undefined {
-  let best: Corner | undefined;
-  for (const hit of polylineCrossings(a, b)) {
-    if (distance(hit.point, origin) > CORNER_REACH_M) continue;
-    const corner = {
-      point: hit.point,
-      a: hit.alongA - EXTEND_M,
-      b: hit.alongB - EXTEND_M,
-      da: unit(a[hit.i - 1]!, a[hit.i]!),
-      db: unit(b[hit.j - 1]!, b[hit.j]!),
-    };
-    if (Math.abs(cross(corner.da, corner.db)) < PARALLEL) continue;
-    // Nearly opposite curbs (a bend or a lateral step in a through road) form no corner.
-    if (corner.da.x * corner.db.x + corner.da.y * corner.db.y < -STRAIGHT) continue;
-    if (!best || Math.max(corner.a, corner.b) < Math.max(best.a, best.b)) best = corner;
+function isThroughNode(node: CNode, roads: Road[]): boolean {
+  if (node.control !== 'uncontrolled') return false;
+  const arms = new Map<string, { road: Road; heading: number; width: number }[]>();
+  for (const road of roads) {
+    const outgoing = road.from === node.id;
+    const line = outgoing ? road.centerline : [...road.centerline].reverse();
+    const heading = Math.atan2(line[1]!.y - line[0]!.y, line[1]!.x - line[0]!.x);
+    const other = outgoing ? road.to : road.from;
+    const key = road.streetGroupId === null ? road.id : `${road.streetGroupId}:${other}`;
+    arms.set(key, [...(arms.get(key) ?? []), { road, heading, width: roadWidth(road) }]);
   }
-  return best;
-}
-
-/** Group road ends into physical arms (opposite carriageways of a street are one arm), sort
- * them by heading, then join angular neighbours that are one direction. Ends inside a
- * direction are ordered left to right. */
-type Sided = { arm: string; direction: Vec2; leftStart: Vec2; rightStart: Vec2 };
-
-/** The end of a direction whose left (side -1) or right (side 1) edge is outermost. */
-function outer<E extends Sided>(arm: E[], side: number, origin: Vec2): E {
-  const dx = arm.reduce((s, e) => s + e.direction.x, 0),
-    dy = arm.reduce((s, e) => s + e.direction.y, 0);
-  const lateral = (e: E) => {
-    const p = side < 0 ? e.leftStart : e.rightStart;
-    return side * (-(p.x - origin.x) * dy + (p.y - origin.y) * dx);
-  };
-  return arm.reduce((best, e) => (lateral(e) > lateral(best) + 1e-9 ? e : best));
-}
-
-function directions<E extends Sided>(
-  ends: E[],
-  origin: Vec2,
-  left: (end: E) => Vec2[],
-  right: (end: E) => Vec2[],
-): E[][] {
-  const groups = new Map<string, E[]>();
-  for (const end of ends) groups.set(end.arm, [...(groups.get(end.arm) ?? []), end]);
-  const heading = (arm: E[]) => {
-    const sum = arm.reduce((s, e) => ({ x: s.x + e.direction.x, y: s.y + e.direction.y }), {
-      x: 0,
-      y: 0,
-    });
-    return Math.atan2(sum.y, sum.x);
-  };
-  const order = (arm: E[]) => {
-    const h = heading(arm);
-    const lateral = (e: E) =>
-      -(e.leftStart.x - origin.x) * Math.sin(h) + (e.leftStart.y - origin.y) * Math.cos(h);
-    return arm.sort((a, b) => lateral(a) - lateral(b));
-  };
-  const arms = [...groups.values()].map(order).sort((a, b) => heading(a) - heading(b));
-  for (let i = 0; arms.length > 1 && i < arms.length; i++) {
-    const j = (i + 1) % arms.length;
-    const gap = (heading(arms[j]!) - heading(arms[i]!) + 2 * Math.PI) % (2 * Math.PI);
-    if (
-      gap >= SAME_DIRECTION ||
-      meet(right(outer(arms[i]!, 1, origin)), left(outer(arms[j]!, -1, origin)), origin)
-    )
-      continue;
-    arms[i] = order([...arms[i]!, ...arms[j]!]);
-    arms.splice(j, 1);
-    i = -1;
-  }
-  return arms;
-}
-
-function throughArms(node: CNode, arms: { road: Road; heading: number; width: number }[][]) {
-  if (arms.length !== 2 || node.control !== 'uncontrolled') return false;
-  const a = arms[0]!,
-    b = arms[1]!;
+  if (arms.size !== 2) return false;
+  const [a, b] = [...arms.values()] as [
+    { road: Road; heading: number; width: number }[],
+    { road: Road; heading: number; width: number }[],
+  ];
   return (
     a.length === b.length &&
     a.every((end) =>
@@ -306,208 +131,552 @@ function throughArms(node: CNode, arms: { road: Road; heading: number; width: nu
   );
 }
 
-/** Setbacks by incident road order (architecture 5.1, TASK-074). A road end is cut where its
- * curb meets the facing curb of its angular neighbour, plus the corner's tangent length; an
- * inner edge crossing a neighbour's curb keeps the 1 m margin; the floor and the cap stay. */
-export function roadEndSetbacks(node: CNode, roads: Road[]): number[] {
-  const ends = roads.map((road, index) => {
-    // Corners are looked for within reach of the node only.
-    const whole = outward(road, node);
-    const line = trimPolyline(whole, 0, Math.max(0, polylineLength(whole) - CORNER_REACH_M - 10));
-    const lengths = cumulativeLengths(line);
-    const heading = headingAtDistance(line, lengths, 0);
-    const width = roadWidth(road);
-    const offset = road.lateralOffsetM * (road.from === node.id ? 1 : -1);
-    const left = extended(offsetPolyline(line, offset - width / 2));
-    const right = extended(offsetPolyline(line, offset + width / 2));
-    return {
-      road,
-      index,
-      line,
-      lengths,
-      heading,
-      width,
-      extent: Math.max(Math.abs(offset - width / 2), Math.abs(offset + width / 2)),
-      left,
-      right,
-      direction: { x: Math.cos(heading), y: Math.sin(heading) },
-      leftStart: left[1]!,
-      rightStart: right[1]!,
-      arm:
-        road.streetGroupId === null
-          ? road.id
-          : `${road.streetGroupId}:${road.from === node.id ? road.to : road.from}`,
-    };
-  });
-  const streets = new Map<string, typeof ends>();
-  for (const end of ends) streets.set(end.arm, [...(streets.get(end.arm) ?? []), end]);
-  if (throughArms(node, [...streets.values()])) return roads.map(() => 0);
-  const arms = directions(
-    ends,
-    node.pos,
-    (e) => e.left,
-    (e) => e.right,
-  );
-  const along = (end: (typeof ends)[number], p: Vec2, station: number) => {
-    if (station <= 0) return station;
-    let nearest = Infinity,
-      result = 0;
-    for (let s = 1; s < end.line.length; s++) {
-      const a = end.line[s - 1]!,
-        b = end.line[s]!;
-      const dx = b.x - a.x,
-        dy = b.y - a.y;
-      const segment = Math.hypot(dx, dy);
-      if (segment === 0) continue;
-      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / segment ** 2));
-      const away = Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
-      if (away < nearest) {
-        nearest = away;
-        result = end.lengths[s - 1]! + t * segment;
-      }
-    }
-    return result;
+// ---------------------------------------------------------------------------------------------
+// Through roads keep their alignment.
+
+/** An incoming and an outgoing road at a node whose reference lines meet at `at` with one
+ * tangent: the through road runs on along its own line there. */
+export interface ThroughPair {
+  from: number;
+  to: number;
+  at: Vec2;
+}
+
+/** A replacement of the first (`start`) or last `lengthM` of a source reference line, in the
+ * source's orientation, with the normal at its node end. */
+interface Replacement {
+  lengthM: number;
+  points: Vec2[];
+  normal: Vec2;
+}
+
+function cubicPoint(c: Vec2[], t: number): Vec2 {
+  const u = 1 - t;
+  const w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+  return {
+    x: w[0]! * c[0]!.x + w[1]! * c[1]!.x + w[2]! * c[2]!.x + w[3]! * c[3]!.x,
+    y: w[0]! * c[0]!.y + w[1]! * c[1]!.y + w[2]! * c[2]!.y + w[3]! * c[3]!.y,
   };
-  const setbacks = ends.map((end) => end.width / 2 + 1);
-  // An end lying within another end of its direction and running the same way (a coincident
-  // source carriageway) is shadowed by it: the other end's cut and the outline's mouth hold
-  // it, not the neighbours.
-  const hidden = new Set(
-    arms.flatMap((arm) => {
-      const dx = arm.reduce((s, e) => s + e.direction.x, 0),
-        dy = arm.reduce((s, e) => s + e.direction.y, 0);
-      const lateral = (p: Vec2) => -(p.x - node.pos.x) * dy + (p.y - node.pos.y) * dx;
-      const scale = Math.hypot(dx, dy);
-      return arm.filter((end, k) =>
-        arm.some(
-          (other, j) =>
-            j !== k &&
-            other.direction.x * end.direction.x + other.direction.y * end.direction.y >
-              COINCIDENT &&
-            (lateral(other.leftStart) - lateral(end.leftStart)) / scale <= 0.05 &&
-            (lateral(end.rightStart) - lateral(other.rightStart)) / scale <= 0.05 &&
-            (j < k ||
-              (lateral(other.leftStart) - lateral(end.leftStart)) / scale < -0.05 ||
-              (lateral(end.rightStart) - lateral(other.rightStart)) / scale < -0.05),
-        ),
-      );
-    }),
+}
+
+/** The two halves of a cubic split at `t` (de Casteljau). */
+function splitCubic(c: Vec2[], t: number): [Vec2[], Vec2[]] {
+  const mix = (a: Vec2, b: Vec2) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  const [p0, p1, p2, p3] = c as [Vec2, Vec2, Vec2, Vec2];
+  const a = mix(p0, p1),
+    b = mix(p1, p2),
+    d = mix(p2, p3);
+  const e = mix(a, b),
+    f = mix(b, d);
+  const g = mix(e, f);
+  return [
+    [p0, a, e, g],
+    [g, f, d, p3],
+  ];
+}
+
+function sampleHalf(c: Vec2[]): Vec2[] {
+  const length = distance(c[0]!, c[1]!) + distance(c[1]!, c[2]!) + distance(c[2]!, c[3]!);
+  const steps = Math.max(2, Math.ceil(length / SAMPLE_M));
+  return Array.from({ length: steps + 1 }, (_, i) => cubicPoint(c, i / steps));
+}
+
+/** Point and unit tangent of a reference at station `s`, the tangent the chord over ±1 m. */
+function frameAt(ref: Reference, s: number) {
+  const total = ref.lengths.at(-1)!;
+  const p = pointAtDistance(ref.points, ref.lengths, s);
+  const a = pointAtDistance(ref.points, ref.lengths, Math.max(0, s - 1));
+  const b = pointAtDistance(ref.points, ref.lengths, Math.min(total, s + 1));
+  return { p, t: unit(sub(b, a)) };
+}
+
+/** Outward unit direction of a road end: the chord from the node to its reference's point `m`
+ * out (at most half the road). */
+function outwardChord(ref: Reference, incoming: boolean, m: number): Vec2 {
+  const total = ref.lengths.at(-1)!;
+  const node = incoming ? ref.points.at(-1)! : ref.points[0]!;
+  const far = pointAtDistance(
+    ref.points,
+    ref.lengths,
+    incoming ? total - reach(total, m) : reach(total, m),
   );
-  arms.forEach((arm, i) => {
-    const neighbors =
-      arms.length > 1
+  return unit(sub(far, node));
+}
+
+function rebuilt(ref: Reference, points: Vec2[], normals: Vec2[]): Reference {
+  return { ...ref, points, lengths: cumulativeLengths(points), normals, reversed: false };
+}
+
+function reversed(ref: Reference): Reference {
+  const total = ref.lengths.at(-1)!;
+  return {
+    ...ref,
+    reversed: !ref.reversed,
+    points: [...ref.points].reverse(),
+    lengths: Float64Array.from(ref.lengths, (s) => total - s).reverse(),
+    normals: ref.normals.map((n) => ({ x: -n.x, y: -n.y })).reverse(),
+    eased: ref.eased.map((e) => ({ ...e, fromM: total - e.toM, toM: total - e.fromM })),
+  };
+}
+
+/** At every junction (a node with a side road end, not within 30 degrees of a through road), the
+ * through roads keep their line: an incoming and an outgoing road end within 30 degrees of
+ * opposite, both of the node's highest class (the audit's through pairs), each road end in at
+ * most one pair, most nearly opposite first. Within `ALIGNMENT_M` of the node (at most half the
+ * road) both reference lines are replaced by one cubic (handles a third of the chord) from the
+ * incoming line `ALIGNMENT_M` before the node to the outgoing line as far after it, split where
+ * it passes the node most closely, so the road no longer dips toward the node point; where that
+ * is more than `MAX_SHIFT_M` from the node the pair keeps its lines. Mutates
+ * `references`; returns each node's pairs. */
+export function throughAlignments(
+  nodes: CNode[],
+  incident: CRoad[][],
+  sources: Road[],
+  references: Reference[],
+): ThroughPair[][] {
+  const bySource = new Map<number, number[]>();
+  references.forEach((ref, idx) =>
+    bySource.set(ref.source, [...(bySource.get(ref.source) ?? []), idx]),
+  );
+  // The carriageways of a divided pair (TASK-084: a median between their lane blocks) may follow
+  // different lines across a junction; the two directions of a street, side by side, may not.
+  const divided = (source: number) =>
+    bySource
+      .get(source)!
+      .every((r) => Math.abs(sources[r]!.lateralOffsetM) - roadWidth(sources[r]!) / 2 > 0.1);
+  // The curve key each source line end at a node is replaced with.
+  const claimed = new Map<string, string>();
+  // Each pair's curve by its key, the two source line ends it replaces (a street's two
+  // directions, sharing their reference lines, find the same curve), as the replacement of each.
+  const curves = new Map<string, { at: Vec2; ends: Map<string, Replacement> }>();
+  // Per road: the curve key and replacement of its source line's start and end.
+  const replaced = new Map<
+    number,
+    { start?: [string, Replacement]; end?: [string, Replacement] }
+  >();
+  const result = nodes.map((node): ThroughPair[] => {
+    const roads = incident[node.idx]!.filter((r) => r.from !== r.to);
+    if (roads.length < 3) return [];
+    const ends = roads.map((road) => {
+      const incoming = road.to === node.idx;
+      return { road, incoming, d: outwardChord(references[road.idx]!, incoming, ALIGNMENT_M) };
+    });
+    const top = Math.max(...roads.map((r) => r.classRank));
+    const candidates = ends
+      .flatMap((a) =>
+        ends
+          .filter((b) => a.incoming && !b.incoming && a.road !== b.road)
+          .filter((b) => a.road.classRank === top && b.road.classRank === top)
+          .map((b) => ({ a, b, cos: dot(a.d, b.d) })),
+      )
+      .filter((p) => p.cos < OPPOSITE)
+      .sort((x, y) => x.cos - y.cos || x.a.road.idx - y.a.road.idx || x.b.road.idx - y.b.road.idx);
+    const arms = candidates.flatMap((p) => [p.a.d, p.b.d]);
+    if (!ends.some((e) => arms.every((arm) => dot(arm, e.d) <= ALONG))) return [];
+    const used = new Set<CRoad>();
+    const pairs: ThroughPair[] = [];
+    for (const { a, b } of candidates) {
+      if (used.has(a.road) || used.has(b.road)) continue;
+      const ra = references[a.road.idx]!,
+        rb = references[b.road.idx]!;
+      const endA = ra.reversed ? 'start' : 'end',
+        endB = rb.reversed ? 'end' : 'start';
+      const ka = `${ra.source}:${endA}`,
+        kb = `${rb.source}:${endB}`;
+      const key = [ka, kb].sort().join('|');
+      const taken = (k: string, source: number) =>
+        claimed.has(k) && claimed.get(k) !== key && !divided(source);
+      if (taken(ka, ra.source) || taken(kb, rb.source)) continue;
+      let curve = curves.get(key);
+      if (!curve) {
+        const la = ra.lengths.at(-1)!,
+          lb = rb.lengths.at(-1)!;
+        const da = reach(la, ALIGNMENT_M),
+          db = reach(lb, ALIGNMENT_M);
+        const start = frameAt(ra, la - da),
+          end = frameAt(rb, db);
+        const handle = distance(start.p, end.p) / 3;
+        const cubic = [
+          start.p,
+          { x: start.p.x + start.t.x * handle, y: start.p.y + start.t.y * handle },
+          { x: end.p.x - end.t.x * handle, y: end.p.y - end.t.y * handle },
+          end.p,
+        ];
+        // Where the curve passes the node most closely.
+        let t = 0,
+          best = Infinity;
+        for (let i = 0; i <= 200; i++) {
+          const d = distance(cubicPoint(cubic, i / 200), node.pos);
+          if (d < best) [best, t] = [d, i / 200];
+        }
+        for (let step = 1 / 400; step > 1e-7; step /= 2)
+          for (const next of [t - step, t + step])
+            if (next > 0 && next < 1 && distance(cubicPoint(cubic, next), node.pos) < best)
+              [best, t] = [distance(cubicPoint(cubic, next), node.pos), next];
+        const [before, after] = splitCubic(cubic, t);
+        const at = before[3]!;
+        const tangent = unit(sub(after[1]!, at));
+        const normal = { x: -tangent.y, y: tangent.x };
+        // In the source line's orientation: a reversed reference runs against its source.
+        const replacement = (ref: Reference, lengthM: number, points: Vec2[]): Replacement => ({
+          lengthM,
+          points: ref.reversed ? [...points].reverse() : points,
+          normal: ref.reversed ? { x: -normal.x, y: -normal.y } : normal,
+        });
+        curve = {
+          at,
+          ends: new Map([
+            [ka, replacement(ra, da, sampleHalf(before))],
+            [kb, replacement(rb, db, sampleHalf(after))],
+          ]),
+        };
+        curves.set(key, curve);
+      }
+      if (distance(curve.at, node.pos) > MAX_SHIFT_M) continue;
+      claimed.set(ka, key);
+      claimed.set(kb, key);
+      used.add(a.road);
+      used.add(b.road);
+      for (const [road, end, k] of [
+        [a.road, endA, ka],
+        [b.road, endB, kb],
+      ] as const)
+        replaced.set(road.idx, { ...replaced.get(road.idx), [end]: [key, curve.ends.get(k)!] });
+      pairs.push({ from: a.road.idx, to: b.road.idx, at: curve.at });
+    }
+    return pairs;
+  });
+  // Roads sharing a source line share the rebuilt line (a street's two directions, whichever of
+  // them is paired); the carriageways of a divided pair paired otherwise (continuing into two
+  // carriageways) each get their own near that node.
+  for (const [source, members] of bySource) {
+    const groups = new Map<string, number[]>();
+    const merged: { start?: [string, Replacement]; end?: [string, Replacement] } = {};
+    for (const idx of members) {
+      const entry = replaced.get(idx);
+      if (!entry) continue;
+      const signature = `${entry.start?.[0] ?? ''}|${entry.end?.[0] ?? ''}`;
+      groups.set(signature, [...(groups.get(signature) ?? []), idx]);
+      merged.start ??= entry.start;
+      merged.end ??= entry.end;
+    }
+    if (!groups.size) continue;
+    if (!divided(source)) {
+      groups.clear();
+      groups.set('', members);
+      for (const idx of members) replaced.set(idx, merged);
+    }
+    for (const group of groups.values()) {
+      const { start, end } = replaced.get(group[0]!)!;
+      const any = references[group[0]!]!;
+      const forward = any.reversed ? reversed(any) : any;
+      const total = forward.lengths.at(-1)!;
+      const lo = start ? start[1].lengthM + 0.05 : -1,
+        hi = end ? total - end[1].lengthM - 0.05 : total + 1;
+      const points = [
+        ...(start?.[1].points ?? []),
+        ...forward.points.filter((_, i) => forward.lengths[i]! > lo && forward.lengths[i]! < hi),
+        ...(end?.[1].points ?? []),
+      ];
+      const normals = vertexNormals(points);
+      if (start) normals[0] = start[1].normal;
+      if (end) normals[normals.length - 1] = end[1].normal;
+      const line = rebuilt(forward, points, normals);
+      const back = reversed(line);
+      for (const idx of group) references[idx] = references[idx]!.reversed ? back : line;
+    }
+  }
+  return result;
+}
+
+/** A through movement on a through road follows the road's reference lines across the node,
+ * offset by the lanes' lateral positions (eased by a smoothstep where they differ), from the
+ * from-lane's end to the to-lane's start exactly. */
+/** The reference lines of a through pair joined across the node, from the incoming road's cut to
+ * the outgoing road's cut, with their normals and stations. */
+function acrossNode(from: CRoad, to: CRoad) {
+  const sa = from.stations.at(-1)!,
+    sb = to.stations[0]!;
+  const la = cumulativeLengths(from.reference),
+    lb = cumulativeLengths(to.reference);
+  const centre = [
+    pointAtDistance(from.reference, la, sa),
+    ...from.reference.filter((_, i) => la[i]! > sa + 0.05),
+    ...to.reference.filter((_, i) => i > 0 && lb[i]! < sb - 0.05),
+    pointAtDistance(to.reference, lb, sb),
+  ];
+  const lengths = cumulativeLengths(centre);
+  return { centre, normals: vertexNormals(centre), lengths, total: lengths.at(-1)! };
+}
+
+export function throughPath(from: CRoad, to: CRoad, a: CLane, b: CLane): Vec2[] {
+  const { centre, normals, lengths, total } = acrossNode(from, to);
+  const start = a.polyline.at(-1)!,
+    end = b.polyline[0]!;
+  const latA = dot(sub(start, centre[0]!), normals[0]!),
+    latB = dot(sub(end, centre.at(-1)!), normals.at(-1)!);
+  const path = centre.map((p, k) => {
+    const lateral = latA + (latB - latA) * smoothstep(total > 0 ? lengths[k]! / total : 1);
+    return { x: p.x + normals[k]!.x * lateral, y: p.y + normals[k]!.y * lateral };
+  });
+  path[0] = start;
+  path[path.length - 1] = end;
+  return path;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Cuts.
+
+interface CutEnd {
+  index: number;
+  road: CRoad;
+  /** The reference line and the road's surface edges, outward from the node. */
+  line: Vec2[];
+  left: Vec2[];
+  right: Vec2[];
+  heading: number;
+  /** The road's lane block `FACING_M` out: its middle and its left and right edges. */
+  probe: Vec2;
+  sides: [Vec2, Vec2];
+  width: number;
+  extent: number;
+}
+
+function cutEnd(node: CNode, road: CRoad, source: Road, ref: Reference, index: number): CutEnd {
+  const incoming = road.to === node.idx;
+  const total = ref.lengths.at(-1)!;
+  const limit = Math.min(total, REACH_M + 10);
+  const stations = incoming
+    ? [total - limit, ...[...ref.lengths].filter((s) => s > total - limit && s < total), total]
+    : [0, ...[...ref.lengths].filter((s) => s > 0 && s < limit), limit];
+  const width = roadWidth(source);
+  const offset = source.lateralOffsetM;
+  const at = (lateral: number) => {
+    const line = offsetLine(ref, stations, lateral);
+    return incoming ? line.reverse() : line;
+  };
+  const travelLeft = at(offset - width / 2),
+    travelRight = at(offset + width / 2);
+  const line = at(0);
+  const lengths = cumulativeLengths(line);
+  const s = reach(lengths.at(-1)!, FACING_M);
+  const far = pointAtDistance(line, lengths, s);
+  const left = incoming ? travelRight : travelLeft,
+    right = incoming ? travelLeft : travelRight;
+  const ll = cumulativeLengths(left),
+    lr = cumulativeLengths(right);
+  const pl = pointAtDistance(left, ll, Math.min(s, ll.at(-1)!)),
+    pr = pointAtDistance(right, lr, Math.min(s, lr.at(-1)!));
+  return {
+    index,
+    road,
+    line,
+    left,
+    right,
+    heading: Math.atan2(far.y - node.pos.y, far.x - node.pos.x),
+    probe: { x: (pl.x + pr.x) / 2, y: (pl.y + pr.y) / 2 },
+    sides: [pl, pr],
+    width,
+    extent: Math.abs(offset) + width / 2,
+  };
+}
+
+/** Road ends in angular order (increasing heading: each next one lies to the right), grouped into
+ * approaches: consecutive ends of one corridor within 60 degrees of each other. Within an
+ * approach the ends are ordered left to right. */
+function approachesOf<E extends { road: CRoad; heading: number; probe: Vec2 }>(
+  ends: E[],
+  origin: Vec2,
+): E[][] {
+  const sorted = [...ends].sort((a, b) => a.heading - b.heading || a.road.idx - b.road.idx);
+  const n = sorted.length;
+  const joins = (a: E, b: E) =>
+    a.road.corridorId !== null &&
+    a.road.corridorId === b.road.corridorId &&
+    (b.heading - a.heading + 2 * Math.PI) % (2 * Math.PI) < SAME_APPROACH;
+  const start = sorted.findIndex((e, i) => !joins(sorted[(i + n - 1) % n]!, e));
+  const groups: E[][] = [];
+  for (let k = 0; k < n; k++) {
+    const i = (Math.max(0, start) + k) % n;
+    if (k > 0 && joins(sorted[(i + n - 1) % n]!, sorted[i]!)) groups.at(-1)!.push(sorted[i]!);
+    else groups.push([sorted[i]!]);
+  }
+  return groups.map((group) => {
+    const d = group.reduce(
+      (s, e) => ({ x: s.x + Math.cos(e.heading), y: s.y + Math.sin(e.heading) }),
+      {
+        x: 0,
+        y: 0,
+      },
+    );
+    const lateral = (e: E) => -(e.probe.x - origin.x) * d.y + (e.probe.y - origin.y) * d.x;
+    const order = new Map(group.map((e, k) => [e, k]));
+    return [...group].sort(
+      (a, b) =>
+        (Math.abs(lateral(a) - lateral(b)) > 0.05 ? lateral(a) - lateral(b) : 0) ||
+        order.get(a)! - order.get(b)!,
+    );
+  });
+}
+
+/** Setbacks by incident road order and the node's approaches (incident indices, angular order,
+ * each left to right). Each road end is cut square to its reference line where either of its
+ * edges first meets the facing edge of a neighbouring approach (its right neighbour's leftmost
+ * left edge, its left neighbour's rightmost right edge) at a concave corner, plus the tangent
+ * length of a 1 m radius there (1 m for its far edge), with a floor of W/2 + 1 and the cap
+ * (TASK-061 and TASK-074's rules on corridor approaches). Ends within 5 degrees of parallel, or
+ * within 30 degrees of opposite, form no corner; the road ends of one approach do not cut each
+ * other (the polygon covers the median between them). */
+export function junctionCuts(
+  node: CNode,
+  incident: CRoad[],
+  sources: Road[],
+  references: Reference[],
+): { setbacks: number[]; approaches: number[][]; hidden: number[] } {
+  if (
+    isThroughNode(
+      node,
+      incident.map((r) => sources[r.idx]!),
+    )
+  )
+    return { setbacks: incident.map(() => 0), approaches: [], hidden: [] };
+  const ends = incident.map((road, i) =>
+    cutEnd(node, road, sources[road.idx]!, references[road.idx]!, i),
+  );
+  const approaches = approachesOf(ends, node.pos);
+  const setbacks = ends.map((e) => e.width / 2 + 1);
+  // An end lying within another end running the same way (coincident source carriageways of two
+  // corridors) is shadowed by it: it keeps the floor and faces no neighbour; the other end's cut
+  // and the polygon hold it (TASK-074).
+  const hidden = new Set(
+    ends.filter((e) =>
+      ends.some((o) => {
+        if (o === e || Math.cos(o.heading - e.heading) < COINCIDENT) return false;
+        const d = { x: Math.cos(o.heading), y: Math.sin(o.heading) };
+        const lateral = (p: Vec2) => -(p.x - node.pos.x) * d.y + (p.y - node.pos.y) * d.x;
+        const [el, er] = e.sides.map(lateral) as [number, number];
+        const [ol, or] = o.sides.map(lateral) as [number, number];
+        return (
+          el >= ol - 0.05 &&
+          er <= or + 0.05 &&
+          (o.index < e.index || el > ol + 0.05 || er < or - 0.05)
+        );
+      }),
+    ),
+  );
+  const facing = approaches.map((a) => a.filter((e) => !hidden.has(e))).filter((a) => a.length);
+  facing.forEach((approach, i) => {
+    const approaches = facing;
+    const m = approaches.length;
+    const sides =
+      m > 1
         ? [
-            { other: arms[(i + 1) % arms.length]!, side: 1 },
-            { other: arms[(i + arms.length - 1) % arms.length]!, side: -1 },
+            { other: approaches[(i + 1) % m]!, side: 1 },
+            { other: approaches[(i + m - 1) % m]!, side: -1 },
           ]
         : [];
-    for (const end of arm) {
-      if (hidden.has(end)) continue;
+    for (const end of approach) {
       const cap = Math.max(
         end.width / 2 + 1,
         SETBACK_CAP_M,
-        ...neighbors.flatMap(({ other }) => other.map((o) => o.extent + 1)),
+        ...sides.flatMap(({ other }) => other.map((o) => o.extent + 1)),
       );
-      for (const { other, side } of neighbors) {
-        const facing = side > 0 ? outer(other, -1, node.pos).left : outer(other, 1, node.pos).right;
-        for (const edge of [-1, 1]) {
-          const hit = meet(edge < 0 ? end.left : end.right, facing, node.pos);
-          // Only a concave corner on both ends' edges, in front of the node, holds a road end
-          // back: a convex one is rounded off behind the cut, and a crossing on an extension
-          // is no overlap of the two surfaces.
-          if (!hit || side * cross(hit.da, hit.db) <= 0 || Math.min(hit.a, hit.b) < 0) continue;
-          let extra = 1;
-          if (edge === side && end === outer(arm, side, node.pos)) {
-            const cosine = Math.max(-1, Math.min(1, hit.da.x * hit.db.x + hit.da.y * hit.db.y));
-            const turn = Math.PI - Math.acos(cosine);
-            extra = CURB_RADIUS_M * Math.tan(Math.min(Math.PI / 2, turn) / 2);
-          }
-          setbacks[end.index] = Math.min(
-            cap,
-            Math.max(setbacks[end.index]!, along(end, hit.point, hit.a) + extra),
-          );
+      let s = setbacks[end.index]!;
+      for (const { other, side } of sides) {
+        const facingEnd = side > 0 ? other[0]! : other.at(-1)!;
+        const facing = side > 0 ? facingEnd.left : facingEnd.right;
+        const parallel = Math.abs(Math.sin(end.heading - facingEnd.heading)) < PARALLEL;
+        for (const own of parallel ? [] : [end.left, end.right]) {
+          const hit = polylineCrossings(own, facing)
+            .filter((h) => distance(h.point, node.pos) <= REACH_M)
+            .reduce<ReturnType<typeof polylineCrossings>[number] | undefined>(
+              (best, h) =>
+                !best || Math.max(h.alongA, h.alongB) < Math.max(best.alongA, best.alongB)
+                  ? h
+                  : best,
+              undefined,
+            );
+          if (!hit) continue;
+          const da = unit(sub(own[hit.i]!, own[hit.i - 1]!)),
+            db = unit(sub(facing[hit.j]!, facing[hit.j - 1]!));
+          if (side * cross(da, db) <= 0 || dot(da, db) < -ALONG) continue;
+          const turn = Math.PI - Math.acos(Math.max(-1, Math.min(1, dot(da, db))));
+          const margin =
+            own === (side > 0 ? end.right : end.left)
+              ? MARGIN_RADIUS_M * Math.tan(Math.min(Math.PI / 2, turn) / 2)
+              : 1;
+          s = Math.max(s, nearestOnPolyline(end.line, hit.point).along + margin);
         }
+        // Neighbours within 60 degrees whose facing edges do not meet near the node (a merge,
+        // carriageways at an acute angle) are one direction (TASK-074): the end is cut at the
+        // farthest crossing of its edges with theirs, plus 1 m (TASK-061), within the cap.
+        // As TASK-074 did, on the facing edges extended straight toward and past the node.
+        const back = (edge: Vec2[]) => {
+          const d = unit(sub(edge[1]!, edge[0]!));
+          return [{ x: edge[0]!.x - d.x * REACH_M, y: edge[0]!.y - d.y * REACH_M }, ...edge];
+        };
+        const cornered = polylineCrossings(
+          back(side > 0 ? end.right : end.left),
+          back(facing),
+        ).some((h) => distance(h.point, node.pos) <= REACH_M);
+        const gap = Math.abs(
+          Math.atan2(
+            Math.sin(end.heading - facingEnd.heading),
+            Math.cos(end.heading - facingEnd.heading),
+          ),
+        );
+        if (cornered || gap >= SAME_DIRECTION) continue;
+        for (const o of other)
+          for (const a of [end.left, end.right])
+            for (const b of [o.left, o.right])
+              for (const hit of polylineCrossings(a, b))
+                if (distance(hit.point, node.pos) <= REACH_M)
+                  s = Math.max(s, nearestOnPolyline(end.line, hit.point).along + 1);
       }
-      // Ends of other streets joined into this direction keep the TASK-061 rule between them:
-      // the farthest crossing of their edges, plus 1 m, within the cap.
-      for (const other of arm) {
-        if (other.arm === end.arm || hidden.has(other)) continue;
-        for (const a of [end.left, end.right])
-          for (const b of [other.left, other.right])
-            for (const hit of polylineCrossings(a, b)) {
-              const station = hit.alongA - EXTEND_M;
-              if (station < 0 || hit.alongB < EXTEND_M) continue;
-              if (distance(hit.point, node.pos) > CORNER_REACH_M) continue;
-              setbacks[end.index] = Math.min(
-                cap,
-                Math.max(setbacks[end.index]!, along(end, hit.point, station) + 1),
-              );
-            }
-      }
+      setbacks[end.index] = Math.min(cap, s);
     }
   });
-  return setbacks;
+  return {
+    setbacks,
+    approaches: approaches.map((a) => a.map((e) => e.index)),
+    hidden: [...hidden].map((e) => e.index),
+  };
 }
 
-export interface CurbJoin {
-  kind: 'fillet' | 'straight' | 'extended' | 'gore';
-  points: Vec2[];
-  radius: number;
-  first?: Vec2;
-  last?: Vec2;
-  directions: [Vec2, Vec2];
-  control?: Vec2;
-  shape?: Curb;
-  /** Between two ends of one direction, along their shared edge. */
-  step?: boolean;
-}
+// ---------------------------------------------------------------------------------------------
+// The polygon.
 
-type Mouth = {
-  roads: number[];
-  arm: string;
-  left: Vec2;
-  right: Vec2;
-  leftEdge: Vec2[];
-  rightEdge: Vec2[];
-  direction: Vec2;
-  leftStart: Vec2;
-  rightStart: Vec2;
+interface PolygonEnd {
+  road: CRoad;
+  /** Cut corners and the surface edges outward from them. */
+  left: Vec2[];
+  right: Vec2[];
   setback: number;
-  /** How far the mouth has moved out past the road end's cut. */
-  moved: number;
-  /** Between its corners, the gore over two merged ends' overlap (TASK-063 way). */
-  gore?: Vec2[];
-};
-
-type Shape = { mouths: Mouth[]; armOf: number[]; single: boolean; origin: Vec2 };
-const pendingJoins = new WeakMap<
-  CNode,
-  { shape: Shape; joins: CurbJoin[]; limit: number; roads: CRoad[] }
->();
-
-function buildJoins({ mouths, armOf, single, origin }: Shape): CurbJoin[] {
-  return mouths.map((mouth, k): CurbJoin => {
-    const next = mouths[(k + 1) % mouths.length]!;
-    const wraps = k === mouths.length - 1;
-    if (mouths.length > 1 && armOf[k] === armOf[(k + 1) % mouths.length] && !(wraps && single))
-      return {
-        kind: 'straight',
-        step: true,
-        points: [mouth.right, next.left],
-        radius: 0,
-        directions: [mouth.direction, next.direction],
-      };
-    return curbJoin(mouth.rightEdge, next.leftEdge, origin, single);
-  });
 }
 
-function closeOutline(points: Vec2[]): Vec2[] {
-  const ring = points.filter((p, i) => i === 0 || distance(p, points[i - 1]!) > 1e-6);
-  if (ring.length) {
-    if (distance(ring[0]!, ring.at(-1)!) <= 1e-6) ring.pop();
-    ring.push(ring[0]!);
-  }
-  return ring;
+function polygonEnd(node: CNode, road: CRoad, setback: number): PolygonEnd {
+  const ring = road.surface;
+  const half = ring.length / 2;
+  const travelLeft = ring.slice(0, half),
+    travelRight = ring.slice(half).reverse();
+  const incoming = road.to === node.idx;
+  const near = (edge: Vec2[]) => {
+    const lengths = cumulativeLengths(edge);
+    const beyond = edge.findIndex((_, i) => i > 1 && lengths[i]! > REACH_M);
+    return beyond < 0 ? edge : edge.slice(0, beyond + 1);
+  };
+  return {
+    road,
+    left: near(incoming ? [...travelRight].reverse() : travelLeft),
+    right: near(incoming ? [...travelLeft].reverse() : travelRight),
+    setback,
+  };
+}
+
+/** An outward edge's direction at its start, over its first half metre. */
+function leaving(edge: Vec2[]): Vec2 {
+  const ahead = edge.find((p, i) => i > 0 && distance(p, edge[0]!) >= 0.5) ?? edge.at(-1)!;
+  return unit(sub(ahead, edge[0]!));
 }
 
 /** The interior vertices of an outward edge closer to its start than `station`. */
@@ -516,1001 +685,381 @@ function edgeUpTo(edge: Vec2[], station: number): Vec2[] {
   return edge.filter((_, i) => i > 0 && lengths[i]! < station - 1e-6);
 }
 
-/** A circular arc with dense samples at both ends, so its end chords follow the tangents. */
-function denseArc(center: Vec2, radius: number, start: number, sweep: number): Vec2[] {
-  const arc = sampleArc(center, radius, start, sweep);
-  const at = (t: number) => ({
-    x: center.x + radius * Math.cos(start + sweep * t),
-    y: center.y + radius * Math.sin(start + sweep * t),
-  });
-  const first = 1 / (arc.length - 1);
-  const ends = [0.001, 0.004, 0.01, 0.02].filter((t) => t < first / 2);
-  return [
-    arc[0]!,
-    ...ends.map(at),
-    ...arc.slice(1, -1),
-    ...ends.map((t) => at(1 - t)).reverse(),
-    arc.at(-1)!,
-  ];
+/** The corner between one approach's right edge `a` and the next approach's left edge `b`: a
+ * curb arc where the edges meet in front of the node behind both cuts (a concave corner), a gore
+ * where they cross beyond a cut (a capped acute pair: the TASK-063 gore covers the overlap), the
+ * outer corner where the edges meet behind the node (a convex corner, more than 180 degrees
+ * between the approaches), nothing where they run parallel. */
+/** The corner between two neighbouring approaches (T38.3 reads the curbs). */
+export interface JunctionCorner {
+  kind: 'curb' | 'gore' | 'outer';
+  /** Compiled road indices: the road whose right edge (outward) and the road whose left edge
+   * the corner joins. */
+  roads: [number, number];
+  ring: Vec2[];
+  /** Curbs: what set the tangent length (the class radius; a cut farther from the corner than
+   * the class tangent, the arc then meeting that cut's corner; the class radius beyond the
+   * nearer cut, which keeps the curb from bulging past its road ends; the first 40 percent of a
+   * road), the class radius, the radius used, the arc's centre and its tangent points. */
+  limit?: 'class' | 'cut' | 'lobe' | 'road';
+  classRadius?: number;
+  radius?: number;
+  centre?: Vec2;
+  tangents?: [Vec2, Vec2];
 }
 
-/** Where two ends of one mouth overlap past it, their overlap is a gore (TASK-063 way): from
- * where the second end's left edge leaves the mouth, out to where it meets the first end's
- * right edge, and back along that edge to the mouth. */
-function overlapGore(
-  left: Vec2,
-  right: Vec2,
-  aRight: Vec2[],
-  bLeft: Vec2[],
-  direction: Vec2,
-  origin: Vec2,
-): Vec2[] | undefined {
-  const across = [left, right];
-  const enter = polylineCrossings(extended(bLeft), across)[0];
-  const leave = polylineCrossings(extended(aRight), across)[0];
-  // The first crossing out from the mouth, however shallow.
-  const tip = polylineCrossings(aRight, bLeft)
-    .filter((hit) => distance(hit.point, origin) <= CORNER_REACH_M)
-    .map((hit) => ({ point: hit.point, a: hit.alongA, b: hit.alongB }))
-    .reduce<{ point: Vec2; a: number; b: number } | undefined>(
-      (best, hit) => (!best || Math.max(hit.a, hit.b) < Math.max(best.a, best.b) ? hit : best),
-      undefined,
-    );
-  if (!enter || !leave || !tip || tip.a <= 0.01 || tip.b <= 0.01) return undefined;
-  const ahead = (from: Vec2) => (p: Vec2) =>
-    (p.x - from.x) * direction.x + (p.y - from.y) * direction.y > 0;
-  return [
-    enter.point,
-    ...edgeUpTo(bLeft, tip.b).filter(ahead(enter.point)),
-    tip.point,
-    ...edgeUpTo(aRight, tip.a).filter(ahead(leave.point)).reverse(),
-    leave.point,
-  ];
-}
-
-/** The outline may run along a road end at most this far past the end's own cut (a capped
- * corner, an overlap of one direction, a movement held in): farther overlap is covered the
- * TASK-063 way, by a gore along the facing edges, instead of swallowing the road. */
-const MOUTH_MOVE_M = SETBACK_CAP_M + CURB_RADIUS_M;
-
-/** Move a mouth out along its road end, within `MOUTH_MOVE_M` in all and half the road. */
-function moveMouth(mouth: Mouth, out: number): void {
-  const room = Math.min(
-    MOUTH_MOVE_M - mouth.moved,
-    // A stub shorter than its setbacks may be covered up to a metre from its far end.
-    ...[mouth.leftEdge, mouth.rightEdge].map((e) => {
-      const length = cumulativeLengths(e).at(-1)!;
-      return length < 2 * MOUTH_MOVE_M ? length - 1 : length / 2;
-    }),
-  );
-  const step = Math.min(out, room);
-  if (step <= 0.01) return;
-  mouth.leftEdge = edgeFrom(mouth.leftEdge, step);
-  mouth.rightEdge = edgeFrom(mouth.rightEdge, step);
-  mouth.left = mouth.leftEdge[0]!;
-  mouth.right = mouth.rightEdge[0]!;
-  mouth.moved += step;
-}
-
-/** The part of an outward edge beyond `station`. */
-function edgeFrom(edge: Vec2[], station: number): Vec2[] {
-  const lengths = cumulativeLengths(edge);
-  const i = Math.max(
-    1,
-    lengths.findIndex((l) => l > station),
-  );
-  const a = edge[i - 1]!,
-    b = edge[i]!;
-  const t = Math.min(
-    1,
-    (station - lengths[i - 1]!) / Math.max(lengths[i]! - lengths[i - 1]!, 1e-12),
-  );
-  return [{ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, ...edge.slice(i)];
-}
-
-/** The curb from one road end's right corner to the next end's left corner. */
-function curbJoin(a: Vec2[], b: Vec2[], origin: Vec2, deadEnd: boolean): CurbJoin {
-  const directions: [Vec2, Vec2] = [leaving(a), leaving(b)];
-  const straight: CurbJoin = { kind: 'straight', points: [a[0]!, b[0]!], radius: 0, directions };
-  if (deadEnd) {
-    const center = { x: (a[0]!.x + b[0]!.x) / 2, y: (a[0]!.y + b[0]!.y) / 2 };
-    const radius = distance(a[0]!, b[0]!) / 2;
-    const start = Math.atan2(a[0]!.y - center.y, a[0]!.x - center.x);
-    // The cap bulges back toward the node, away from the road.
-    const half = start + Math.PI / 2;
-    const sweep =
-      Math.cos(half) * directions[0].x + Math.sin(half) * directions[0].y < 0 ? Math.PI : -Math.PI;
+function corner(a: PolygonEnd, b: PolygonEnd): JunctionCorner | undefined {
+  const ka = a.right[0]!,
+    kb = b.left[0]!;
+  let da = leaving(a.right),
+    db = leaving(b.left);
+  const c = cross(da, db);
+  if (Math.abs(c) < 0.02) return undefined;
+  // Where the lines through the cut corners along the edges meet; sa, sb: along each from its
+  // corner (negative behind the cut).
+  const w = sub(kb, ka);
+  const sa = cross(w, db) / c,
+    sb = cross(w, da) / c;
+  const apex = { x: ka.x + da.x * sa, y: ka.y + da.y * sa };
+  const roads: [number, number] = [a.road.idx, b.road.idx];
+  if (c < 0)
+    return sa < 0 && sb < 0 && -sa < REACH_M && -sb < REACH_M
+      ? { kind: 'outer', roads, ring: [ka, apex, kb] }
+      : undefined;
+  if (sa > 0.01 || sb > 0.01) {
+    const hit = polylineCrossings(a.right, b.left)
+      .filter((h) => distance(h.point, ka) <= REACH_M)
+      .reduce<{ point: Vec2; alongA: number; alongB: number } | undefined>(
+        (best, h) =>
+          !best || Math.max(h.alongA, h.alongB) < Math.max(best.alongA, best.alongB) ? h : best,
+        undefined,
+      );
+    if (!hit) return undefined;
     return {
-      ...straight,
-      kind: 'fillet',
-      radius,
-      first: a[0],
-      last: b[0],
-      points: denseArc(center, radius, start, sweep),
-    };
-  }
-  const hit = meet(extended(a), extended(b), origin);
-  if (hit && cross(hit.da, hit.db) > 0 && (hit.a > 0.01 || hit.b > 0.01))
-    return {
-      ...straight,
       kind: 'gore',
-      control: hit.point,
-      points: [a[0]!, ...edgeUpTo(a, hit.a), hit.point, ...edgeUpTo(b, hit.b).reverse(), b[0]!],
+      roads,
+      ring: [
+        ka,
+        ...edgeUpTo(a.right, hit.alongA),
+        hit.point,
+        ...edgeUpTo(b.left, hit.alongB).reverse(),
+        kb,
+      ],
     };
-  // A corner behind both cuts takes a fillet toward it; curbs that never meet near the node
-  // (a lateral step, opposite arms) take an S-curve along both edges.
-  const span = distance(a[0]!, b[0]!);
-  const shape: Curb =
-    hit && hit.a < -0.05 && hit.b < -0.05
-      ? {
-          va: { x: hit.point.x - a[0]!.x, y: hit.point.y - a[0]!.y },
-          vb: { x: hit.point.x - b[0]!.x, y: hit.point.y - b[0]!.y },
-          handles: CORNER_HANDLES,
-        }
-      : {
-          va: { x: -directions[0].x * span, y: -directions[0].y * span },
-          vb: { x: -directions[1].x * span, y: -directions[1].y * span },
-          handles: STEP_HANDLES,
-        };
-  if (span < 1e-6) return straight;
-  return {
-    ...straight,
-    kind: 'fillet',
-    control: hit?.point,
-    shape,
-    first: a[0],
-    last: b[0],
-    points: curbPoints(a[0]!, b[0]!, shape, shape.handles[0]!),
-  };
-}
-
-type Curb = { va: Vec2; vb: Vec2; handles: number[] };
-
-function curbPoints(a: Vec2, b: Vec2, shape: Curb, handle: number): Vec2[] {
-  return sampleCubic(
-    a,
-    { x: a.x + shape.va.x * handle, y: a.y + shape.va.y * handle },
-    { x: b.x + shape.vb.x * handle, y: b.y + shape.vb.y * handle },
-    b,
-  );
-}
-
-/** Each road end at the node with its outward surface edges, near the node, from its cut. */
-function roadMouths(node: CNode, roads: CRoad[]): Mouth[] {
-  const reach = CORNER_REACH_M + 10;
-  const near = (edge: Vec2[]) => {
-    const beyond = edge.findIndex((p, i) => i > 1 && distance(p, node.pos) > reach);
-    return beyond < 0 ? edge : edge.slice(0, beyond + 1);
-  };
-  return roads.map((road, index): Mouth => {
-    const ring = road.surface;
-    const half = ring.length / 2;
-    const incoming = road.to === node.idx;
-    const travelLeft = ring.slice(0, half),
-      travelRight = ring.slice(half).reverse();
-    const leftEdge = near(incoming ? [...travelRight].reverse() : travelLeft);
-    const rightEdge = near(incoming ? [...travelLeft].reverse() : travelRight);
-    const left = leftEdge[0]!,
-      right = rightEdge[0]!;
-    const width = distance(left, right);
+  }
+  // A curb arc of the class radius of the lower-ranked road, its tangent points on both road
+  // edges at or beyond their cuts, at most the class radius beyond the nearer cut (no lobe) and
+  // within the first 40 percent of either road; the radius follows. The edges' directions are
+  // then taken as the chords from the cut corners to those tangent points and the arc is fitted
+  // again, so on a curving road it still meets the edges.
+  const lower =
+    a.road.classRank < b.road.classRank
+      ? [a.road]
+      : b.road.classRank < a.road.classRank
+        ? [b.road]
+        : [a.road, b.road];
+  const classRadius = Math.min(...lower.map((r) => CURB_RADIUS_M[r.roadClass]));
+  const room = (edge: Vec2[], end: PolygonEnd, s: number) =>
+    Math.min(CURB_REACH * end.road.lengthM - end.setback, cumulativeLengths(edge).at(-1)!) - s;
+  const fit = (da: Vec2, db: Vec2) => {
+    const c = cross(da, db);
+    const sa = cross(w, db) / c,
+      sb = cross(w, da) / c;
+    const p = { x: ka.x + da.x * sa, y: ka.y + da.y * sa };
+    const theta = Math.acos(Math.max(-1, Math.min(1, dot(da, db))));
+    const perRadius = 1 / Math.tan(theta / 2);
+    const lo = Math.max(0, -sa, -sb);
+    const limits: [NonNullable<JunctionCorner['limit']>, number][] = [
+      ['class', classRadius * perRadius],
+      ['lobe', classRadius + Math.min(-sa, -sb)],
+      ['road', Math.min(room(a.right, a, sa), room(b.left, b, sb))],
+    ];
+    const [binding, upper] = limits.reduce((x, y) => (y[1] < x[1] ? y : x));
     return {
-      roads: [road.idx],
-      arm:
-        road.streetGroupId === null
-          ? road.id
-          : `${road.streetGroupId}:${incoming ? road.from : road.to}`,
-      left,
-      right,
-      leftEdge,
-      rightEdge,
-      direction: { x: (right.y - left.y) / width, y: (left.x - right.x) / width },
-      leftStart: left,
-      rightStart: right,
-      setback: node.setbacks[index]!,
-      moved: 0,
+      c,
+      sa,
+      sb,
+      p,
+      theta,
+      perRadius,
+      limit: lo > upper ? ('cut' as const) : binding,
+      tangent: Math.max(lo, upper),
     };
-  });
-}
-
-export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Vec2[] {
-  if (node.setbacks.every((s) => s === 0)) return [];
-  const ends = roadMouths(node, roads);
-  const arms = directions(
-    ends,
-    node.pos,
-    (e) => extended(e.leftEdge),
-    (e) => extended(e.rightEdge),
-  );
-  // Two ends of one direction that overlap at their mouths and part further out: both mouths
-  // move out to where their facing edges part, so the junction covers their overlap.
-  for (const arm of arms)
-    for (let k = 1; k < arm.length; k++) {
-      const a = arm[k - 1]!,
-        b = arm[k]!;
-      const d = a.direction;
-      if ((b.left.x - a.right.x) * -d.y + (b.left.y - a.right.y) * d.x > -0.05) continue;
-      const hits = polylineCrossings(a.rightEdge, b.leftEdge).filter(
-        (hit) => distance(hit.point, node.pos) <= CORNER_REACH_M,
-      );
-      if (!hits.length) continue;
-      const hit = hits.reduce((x, y) =>
-        Math.max(y.alongA, y.alongB) < Math.max(x.alongA, x.alongB) ? y : x,
-      );
-      for (const [end, out] of [
-        [a, hit.alongA],
-        [b, hit.alongB],
-      ] as const) {
-        if (out > 0.01) moveMouth(end, out);
-      }
-    }
-  // An end lying within another end of its direction (a coincident source carriageway, which
-  // architecture 5.1 does not repair) has no mouth of its own; partly overlapping ends share one.
-  const mouths: Mouth[] = [];
-  const armOf: number[] = [];
-  arms.forEach((arm, k) => {
-    const d = arm.reduce((s, e) => ({ x: s.x + e.direction.x, y: s.y + e.direction.y }), {
-      x: 0,
-      y: 0,
-    });
-    const lateral = (p: Vec2) => -(p.x - node.pos.x) * d.y + (p.y - node.pos.y) * d.x;
-    let last: Mouth | undefined;
-    for (const end of arm) {
-      if (!last || lateral(end.left) >= lateral(last.right) - 0.05) {
-        last = { ...end, roads: [...end.roads] };
-        mouths.push(last);
-        armOf.push(k);
-        continue;
-      }
-      const roads = [...last.roads, ...end.roads];
-      const within = lateral(end.right) <= lateral(last.right) + 0.05;
-      const around = lateral(end.left) <= lateral(last.left) + 0.05;
-      // Of two coincident ends the one cut farther out is the mouth; the other lies under it.
-      if (within && !(around && end.setback > last.setback)) last.roads = roads;
-      else if (around) Object.assign(last, end, { roads });
-      else {
-        // Partly overlapping ends share one mouth, at the cut farther out.
-        const along = (p: Vec2) => (p.x - node.pos.x) * d.x + (p.y - node.pos.y) * d.y;
-        const scale = Math.hypot(d.x, d.y);
-        const gap = (along(last.right) - along(end.right)) / scale;
-        let rightEdge = end.rightEdge;
-        if (gap > 0.01) rightEdge = edgeFrom(rightEdge, gap);
-        else if (gap < -0.01) {
-          last.leftEdge = edgeFrom(last.leftEdge, -gap);
-          last.left = last.leftEdge[0]!;
-        }
-        Object.assign(last, {
-          gore: overlapGore(last.left, rightEdge[0]!, last.rightEdge, end.leftEdge, d, node.pos),
-          right: rightEdge[0]!,
-          rightEdge,
-          roads,
-        });
-      }
-    }
-  });
-  // A cut held short of its corner by the cap: the outline's mouth moves out to where the
-  // uncapped cut would be, so the junction surface covers the capped pair's overlap (and the
-  // road surface under it) while the lanes keep their storage (architecture 5.1, TASK-074).
-  const extra = mouths.map(() => 0);
-  mouths.forEach((mouth, k) => {
-    const j = (k + 1) % mouths.length;
-    if (mouths.length < 2 || armOf[k] === armOf[j]) return;
-    const next = mouths[j]!;
-    const hit = meet(extended(mouth.rightEdge), extended(next.leftEdge), node.pos);
-    if (!hit || cross(hit.da, hit.db) <= 0) return;
-    const cosine = Math.max(-1, Math.min(1, hit.da.x * hit.db.x + hit.da.y * hit.db.y));
-    const t = CURB_RADIUS_M * Math.tan(Math.min(Math.PI / 2, Math.PI - Math.acos(cosine)) / 2);
-    if (hit.a + t > 0.01) extra[k] = Math.max(extra[k]!, hit.a + t);
-    if (hit.b + t > 0.01) extra[j] = Math.max(extra[j]!, hit.b + t);
-  });
-  mouths.forEach((mouth, k) => {
-    if (extra[k]! > 0.01) moveMouth(mouth, extra[k]!);
-  });
-  // Neighbouring mouths that still overlap side by side, their corners crossed (two
-  // carriageways on top of each other at an angle, their corner beyond reach), become one mouth
-  // across both where the outline would otherwise cross itself: their remaining overlap stays
-  // two roads (reported by the audit) rather than a self-crossing outline.
-  const crossings = () =>
-    selfCrossings(
-      assemble(mouths, buildJoins({ mouths, armOf, single: arms.length === 1, origin: node.pos })),
-    );
-  let crossed = crossings();
-  for (let k = 0; crossed && mouths.length > 2 && k < mouths.length; k++) {
-    const j = (k + 1) % mouths.length;
-    const a = mouths[k]!,
-      b = mouths[j]!;
-    if (armOf[k] === armOf[j]) continue;
-    // Crossed: b's left corner within a's width, or a's right corner within b's.
-    const lateral = (p: Vec2, m: Mouth) =>
-      -(p.x - m.left.x) * m.direction.y + (p.y - m.left.y) * m.direction.x;
-    if (
-      a.direction.x * b.direction.x + a.direction.y * b.direction.y < 0 ||
-      (lateral(b.left, a) > distance(a.left, a.right) - 0.05 && lateral(a.right, b) < 0.05)
-    )
-      continue;
-    const saved = { mouths: mouths.map((m) => ({ ...m })), armOf: [...armOf] };
-    Object.assign(a, {
-      gore: overlapGore(a.left, b.right, a.rightEdge, b.leftEdge, a.direction, node.pos),
-      right: b.right,
-      rightEdge: b.rightEdge,
-      roads: [...a.roads, ...b.roads],
-    });
-    mouths.splice(j, 1);
-    armOf.splice(j, 1);
-    let now = crossings();
-    if (now >= crossed && a.gore) {
-      a.gore = undefined;
-      now = crossings();
-    }
-    if (now < crossed) {
-      crossed = now;
-      k = -1;
-    } else {
-      mouths.splice(0, mouths.length, ...saved.mouths);
-      armOf.splice(0, armOf.length, ...saved.armOf);
-    }
+  };
+  const chord = (edge: Vec2[], s: number) => {
+    const lengths = cumulativeLengths(edge);
+    return unit(sub(pointAtDistance(edge, lengths, Math.max(1, s)), edge[0]!));
+  };
+  let best = fit(da, db);
+  for (let pass = 0; pass < 4; pass++) {
+    const [ra, rb] = [
+      chord(a.right, best.sa + best.tangent),
+      chord(b.left, best.sb + best.tangent),
+    ];
+    const next = fit(ra, rb);
+    if (next.c <= 0.02 || next.sa > 0.01 || next.sb > 0.01) break;
+    [best, da, db] = [next, ra, rb];
   }
-  const shape = { mouths, armOf, single: arms.length === 1, origin: node.pos };
-  const joins = buildJoins(shape);
-  // A curb that loops across its neighbour (stub road ends whose edges are too short to say
-  // where their curbs meet) falls back to a straight join.
-  let loops = selfCrossings(assemble(mouths, joins));
-  for (let k = 0; loops && k < joins.length; k++) {
-    const join = joins[k]!;
-    if (join.kind !== 'fillet' && join.kind !== 'gore') continue;
-    joins[k] = {
-      kind: 'straight',
-      points: [join.points[0]!, join.points.at(-1)!],
-      radius: 0,
-      directions: join.directions,
-    };
-    const now = selfCrossings(assemble(mouths, joins));
-    if (now < loops) loops = now;
-    else joins[k] = join;
-  }
-  const laneEnds = roads.flatMap((road) =>
-    road.lanes.map((index) => {
-      const lane = lanes[index]!;
-      return distance(node.pos, road.to === node.idx ? lane.polyline.at(-1)! : lane.polyline[0]!);
-    }),
+  const { p, theta, perRadius, limit, tangent } = best;
+  const radius = tangent / perRadius;
+  if (radius < MIN_CURB_M) return undefined;
+  const ta = { x: p.x + da.x * tangent, y: p.y + da.y * tangent },
+    tb = { x: p.x + db.x * tangent, y: p.y + db.y * tangent };
+  // An edge bending away within the curb's reach (a road turning right after the junction) takes
+  // no arc: none fits tangent to it.
+  const onEdge = (edge: Vec2[], t: Vec2, d: Vec2) =>
+    nearestOnPolyline([{ x: edge[0]!.x - d.x, y: edge[0]!.y - d.y }, ...edge], t).away <= FIT_M;
+  if (!onEdge(a.right, ta, da) || !onEdge(b.left, tb, db)) return undefined;
+  const bisector = unit({ x: da.x + db.x, y: da.y + db.y });
+  const centreDistance = radius / Math.sin(theta / 2);
+  const o = { x: p.x + bisector.x * centreDistance, y: p.y + bisector.y * centreDistance };
+  const start = Math.atan2(ta.y - o.y, ta.x - o.x);
+  let sweep = Math.atan2(tb.y - o.y, tb.x - o.x) - start;
+  sweep = Math.atan2(Math.sin(sweep), Math.cos(sweep));
+  const steps = Math.max(
+    2,
+    Math.ceil(Math.abs(sweep) / ARC_STEP),
+    Math.ceil(Math.abs(sweep) * radius),
   );
-  // The outline stays within 8 m of the lane ends, or reaches a gore tip or a moved mouth.
-  const limit = Math.max(
-    0,
-    ...laneEnds.map((d) => d + 8),
-    ...joins
-      .filter((j) => j.kind === 'gore')
-      .flatMap((j) => j.points.map((p) => distance(node.pos, p))),
-    ...mouths.flatMap((m) => [m.left, m.right].map((p) => distance(node.pos, p) + 8)),
-    ...mouths.flatMap((m) => (m.gore ?? []).map((p) => distance(node.pos, p))),
-  );
-  pendingJoins.set(node, { shape, joins, limit, roads });
-  return untangle(assemble(mouths, joins));
+  const arc = Array.from({ length: steps - 1 }, (_, k) => {
+    const angle = start + (sweep * (k + 1)) / steps;
+    return { x: o.x + radius * Math.cos(angle), y: o.y + radius * Math.sin(angle) };
+  });
+  return {
+    kind: 'curb',
+    roads,
+    ring: [p, ta, ...arc, tb],
+    limit,
+    classRadius,
+    radius,
+    centre: o,
+    tangents: [ta, tb],
+  };
 }
 
-function assemble(mouths: Mouth[], joins: CurbJoin[]): Vec2[] {
-  return closeOutline(
-    mouths.flatMap((mouth, k) => [mouth.left, ...(mouth.gore ?? []), ...joins[k]!.points]),
-  );
-}
-
-/** A movement's surface samples: centre and both edges at every vertex, across the curve's
- * tangent (the lanes' own directions at the two ends, where the movement meets them). */
-export function movementSamples(m: CMovement, lanes: CLane[]): Vec2[] {
-  const from = lanes[m.fromLane]!,
-    to = lanes[m.toLane]!;
-  const width = Math.min(from.widthM, to.widthM) / 2;
-  const last = m.polyline.length - 1;
-  const along = (heading: number) => ({ x: Math.cos(heading), y: Math.sin(heading) });
-  return m.polyline.flatMap((p, k) => {
-    const d =
-      k === 0
-        ? along(headingAtDistance(from.polyline, from.cumulative, from.lengthM))
-        : k === last
-          ? along(headingAtDistance(to.polyline, to.cumulative, 0))
-          : unit(m.polyline[k - 1]!, m.polyline[k + 1]!);
-    return [-1, 0, 1].map((side) => ({
-      x: p.x - d.y * width * side,
-      y: p.y + d.x * width * side,
-    }));
+/** Half a disc on the segment `a`-`b`, on the side away from `outward`. */
+function cap(a: Vec2, b: Vec2, outward: Vec2): PathD {
+  const centre = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const radius = distance(a, b) / 2;
+  const start = Math.atan2(a.y - centre.y, a.x - centre.x);
+  const mid = start + Math.PI / 2;
+  const sweep = Math.cos(mid) * outward.x + Math.sin(mid) * outward.y < 0 ? Math.PI : -Math.PI;
+  const steps = Math.max(8, Math.ceil(Math.PI / ARC_STEP));
+  return Array.from({ length: steps + 1 }, (_, k) => {
+    const angle = start + (sweep * k) / steps;
+    return { x: centre.x + radius * Math.cos(angle), y: centre.y + radius * Math.sin(angle) };
   });
 }
 
-/** Samples of the node's movement surfaces that lie neither in `outline` nor on the surface of
- * the movement's own approach or exit road: a hairpin tighter than its half width sweeps back
- * over its own lanes behind the stop line, which is road, not junction (0.1 m tolerance). */
-export function escapingSamples(
+/** A through road's surface across the node, between the two road ends' cuts. */
+function throughStrip(from: CRoad, to: CRoad): PathD {
+  const { centre, normals, lengths, total: length } = acrossNode(from, to);
+  const half = (road: CRoad, atEnd: boolean) => {
+    const ring = road.surface;
+    const n = ring.length / 2;
+    return atEnd ? [ring[n - 1]!, ring[n]!] : [ring[0]!, ring.at(-1)!];
+  };
+  const [al, ar] = half(from, true) as [Vec2, Vec2];
+  const [bl, br] = half(to, false) as [Vec2, Vec2];
+  const lateral = (p: Vec2, k: number) => dot(sub(p, centre[k]!), normals[k]!);
+  const last = centre.length - 1;
+  const total = length || 1;
+  const edge = (a: number, b: number) =>
+    centre.map((p, k) => {
+      const lat = a + ((b - a) * lengths[k]!) / total;
+      return { x: p.x + normals[k]!.x * lat, y: p.y + normals[k]!.y * lat };
+    });
+  const left = edge(lateral(al, 0), lateral(bl, last)),
+    right = edge(lateral(ar, 0), lateral(br, last));
+  left[0] = al;
+  left[last] = bl;
+  right[0] = ar;
+  right[last] = br;
+  return [...left, ...right.reverse()];
+}
+
+function nodeCentre(node: CNode, through: ThroughPair[]): Vec2 {
+  return through.length
+    ? {
+        x: through.reduce((s, p) => s + p.at.x, 0) / through.length,
+        y: through.reduce((s, p) => s + p.at.y, 0) / through.length,
+      }
+    : node.pos;
+}
+
+/** The region between a node's cuts as pieces: a fan from its centre (the node, or the mean of
+ * where its through roads pass it) over the cut corners in angular order, each approach's corner
+ * with the next (`corner`), or a cap when the node has one approach (a dead end). The far side of
+ * a through road (two neighbouring approaches joined by a through pair) is left to its strip. */
+function cutRegion(
   node: CNode,
-  movements: CMovement[],
-  lanes: CLane[],
   roads: CRoad[],
-  outline: Vec2[],
-): Vec2[][] {
-  const inside = preparePolygon(outline, 0.1);
-  const surfaces = new Map(
-    roads.map((road) => [road.idx, preparePolygon([...road.surface, road.surface[0]!], 0.1)]),
-  );
-  return node.movements.map((i) => {
-    const m = movements[i]!;
-    const own = [lanes[m.fromLane]!.road, lanes[m.toLane]!.road].map((r) => surfaces.get(r)!);
-    return movementSamples(m, lanes).filter((p) => !inside(p) && !own.some((on) => on(p)));
+  approaches: number[][],
+  hidden: number[],
+  through: ThroughPair[],
+) {
+  const ends = roads.map((road, i) => polygonEnd(node, road, node.setbacks[i]!));
+  const groups = approaches.map((approach) => approach.map((i) => ends[i]!));
+  const fan: PathD[] = [];
+  const corners: JunctionCorner[] = [];
+  const centre = nodeCentre(node, through);
+  if (groups.length === 1) {
+    const group = groups[0]!;
+    const a = group[0]!.left[0]!,
+      b = group.at(-1)!.right[0]!;
+    if (distance(a, b) > 1e-6) fan.push(cap(a, b, leaving(group[0]!.left)));
+    return { fan, corners };
+  }
+  const far = (x: PolygonEnd[], y: PolygonEnd[]) =>
+    through.some(
+      (p) =>
+        (x.some((e) => e.road.idx === p.from) && y.some((e) => e.road.idx === p.to)) ||
+        (y.some((e) => e.road.idx === p.from) && x.some((e) => e.road.idx === p.to)),
+    );
+  groups.forEach((group, i) => {
+    const next = groups[(i + 1) % groups.length]!;
+    group.forEach((end, k) => {
+      fan.push([centre, end.left[0]!, end.right[0]!]);
+      if (k + 1 === group.length) return;
+      fan.push([centre, end.right[0]!, group[k + 1]!.left[0]!]);
+      // Two carriageways of the approach overlapping beyond their cuts and parting within the
+      // junction zone (the cap and 5 m): the gore covers the overlap. Carriageways lying on each
+      // other farther out are a source defect the polygon does not follow.
+      const piece = corner(end, group[k + 1]!);
+      if (
+        piece?.kind === 'gore' &&
+        piece.ring.every((p) => distance(p, node.pos) <= 2.5 * SETBACK_CAP_M)
+      )
+        corners.push(piece);
+    });
+    if (!far(group, next)) fan.push([centre, group.at(-1)!.right[0]!, next[0]!.left[0]!]);
   });
+  // Corners between the approaches' outer road ends; a shadowed end (`junctionCuts`) is not one.
+  const shadowed = new Set(hidden.map((i) => ends[i]!));
+  const facing = groups.map((g) => g.filter((e) => !shadowed.has(e))).filter((g) => g.length);
+  if (facing.length > 1)
+    facing.forEach((group, i) => {
+      const next = facing[(i + 1) % facing.length]!;
+      if (far(group, next)) return;
+      const piece = corner(group.at(-1)!, next[0]!);
+      if (piece) corners.push(piece);
+    });
+  return { fan, corners };
 }
 
-/** Both outer edges of every movement, slightly wider than its surface, along the movement's cubic
- * (architecture 5.2: control distance 0.4 chord along the lanes) sampled densely at its ends. */
-function movementEdges(node: CNode, movements: CMovement[], lanes: CLane[]): Vec2[][] {
-  return node.movements.flatMap((i) => {
+const cornersByNode = new WeakMap<CNode, JunctionCorner[]>();
+
+/** The corners `junctionPolygon` built the node's outline with (curbs, gores, outer corners). */
+export function junctionCorners(node: CNode): JunctionCorner[] {
+  return cornersByNode.get(node) ?? [];
+}
+
+/** Whether a closed ring has a proper crossing between two of its edges (a sweep along x). */
+function crossesItself(ring: PathD): boolean {
+  const n = ring.length;
+  const side = (a: Vec2, b: Vec2, c: Vec2) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const edges = Array.from({ length: n }, (_, i) => i).sort(
+    (i, j) =>
+      Math.min(ring[i]!.x, ring[(i + 1) % n]!.x) - Math.min(ring[j]!.x, ring[(j + 1) % n]!.x),
+  );
+  const active: number[] = [];
+  for (const i of edges) {
+    const a = ring[i]!,
+      b = ring[(i + 1) % n]!;
+    const minX = Math.min(a.x, b.x);
+    for (let k = active.length - 1; k >= 0; k--) {
+      const j = active[k]!;
+      if (Math.max(ring[j]!.x, ring[(j + 1) % n]!.x) < minX) active.splice(k, 1);
+    }
+    for (const j of active) {
+      if (Math.abs(i - j) < 2 || Math.abs(i - j) === n - 1) continue;
+      const c = ring[j]!,
+        d = ring[(j + 1) % n]!;
+      if (side(a, b, c) * side(a, b, d) < -1e-12 && side(c, d, a) * side(c, d, b) < -1e-12)
+        return true;
+    }
+    active.push(i);
+  }
+  return false;
+}
+
+/** `CNode.outline` (architecture 5.1, TASK-083): the clipper union of the region between the road
+ * ends' cuts (`cutRegion`), each through road's surface across the node and every movement
+ * surface; the outer ring of the union, closed. Empty at through and continuation nodes. */
+export function junctionPolygon(
+  node: CNode,
+  roads: CRoad[],
+  approaches: number[][],
+  hidden: number[],
+  through: ThroughPair[],
+  lanes: CLane[],
+  movements: CMovement[],
+): Vec2[] {
+  if (node.setbacks.every((s) => s === 0)) return [];
+  const { fan, corners } = cutRegion(node, roads, approaches, hidden, through);
+  cornersByNode.set(node, corners);
+  const pieces: PathD[] = [...fan, ...corners.map((c) => c.ring)];
+  for (const pair of through) {
+    const from = roads.find((r) => r.idx === pair.from)!,
+      to = roads.find((r) => r.idx === pair.to)!;
+    pieces.push(throughStrip(from, to));
+  }
+  // Each movement's surface: both edges across the curve's tangent, which is the lanes' own
+  // direction at its two ends, so the surface ends on the cuts (a hairpin's inner edge folds:
+  // the union's non-zero fill keeps both of its lobes).
+  for (const i of node.movements) {
     const m = movements[i]!;
+    if (m.lengthM < 0.01) continue;
     const from = lanes[m.fromLane]!,
       to = lanes[m.toLane]!;
-    const start = m.polyline[0]!,
-      end = m.polyline.at(-1)!;
-    const h0 = headingAtDistance(from.polyline, from.cumulative, from.lengthM),
-      h1 = headingAtDistance(to.polyline, to.cumulative, 0);
-    const control = distance(start, end) * 0.4;
-    if (control < 1e-6) return [];
-    const curve = sampleCubic(
-      start,
-      { x: start.x + Math.cos(h0) * control, y: start.y + Math.sin(h0) * control },
-      { x: end.x - Math.cos(h1) * control, y: end.y - Math.sin(h1) * control },
-      end,
-    );
-    const width = Math.min(from.widthM, to.widthM) / 2;
-    const lengths = cumulativeLengths(curve);
-    return [-1, 1].map((side) =>
-      curve.map((p, k) => {
-        // 3 cm of margin in the middle, none at the ends, so the curb meets the corners tangent.
-        const u = lengths[k]! / lengths.at(-1)!;
-        const offset = (width + 0.12 * u * (1 - u)) * side;
-        const d =
-          k === 0
-            ? { x: Math.cos(h0), y: Math.sin(h0) }
-            : k === curve.length - 1
-              ? { x: Math.cos(h1), y: Math.sin(h1) }
-              : unit(curve[k - 1]!, curve[k + 1]!);
-        return { x: p.x - d.y * offset, y: p.y + d.x * offset };
-      }),
-    );
-  });
-}
-
-/** After movement generation: a fillet that leaves part of a movement surface outside takes
- * shorter handles, cutting deeper into the corner. Lane geometry and mouths never move. */
-export function containMovements(node: CNode, movements: CMovement[], lanes: CLane[]) {
-  const pending = pendingJoins.get(node);
-  pendingJoins.delete(node);
-  if (!pending) return { joins: [] as CurbJoin[], limit: 0, contained: true };
-  const { shape, limit, roads } = pending;
-  const { mouths } = shape;
-  let joins = pending.joins;
-  // Work on the assembled ring; it is untangled again at the end.
-  node.outline = assemble(mouths, joins);
-  let crossed = selfCrossings(node.outline);
-  // Only samples off the movements' own roads can need more junction surface; that test is
-  // made once per sample, and only for samples some candidate outline leaves out.
-  const surfaces = new Map<number, (p: Vec2) => boolean>();
-  const surface = (road: number) => {
-    let inside = surfaces.get(road);
-    if (!inside) {
-      const ring = roads.find((r) => r.idx === road)!.surface;
-      surfaces.set(road, (inside = preparePolygon([...ring, ring[0]!], 0.1)));
-    }
-    return inside;
-  };
-  const points = node.movements.flatMap((i) => {
-    const m = movements[i]!;
-    const own = [lanes[m.fromLane]!.road, lanes[m.toLane]!.road];
-    return movementSamples(m, lanes).map((p) => ({
-      p,
-      own,
-      road: undefined as boolean | undefined,
-    }));
-  });
-  const off = (s: (typeof points)[number], inside: (p: Vec2) => boolean) => {
-    if (inside(s.p)) return false;
-    s.road ??= s.own.some((r) => surface(r)(s.p));
-    return !s.road;
-  };
-  // Which samples the outline leaves out; a candidate changes one join, so only samples near
-  // the old and new join can change.
-  let flags = (() => {
-    const inside = preparePolygon(node.outline, 0.1);
-    return points.map((s) => off(s, inside));
-  })();
-  const listed = (f: boolean[]) => points.filter((_, i) => f[i]).map((s) => s.p);
-  const trial = (ring: Vec2[], before: Vec2[], after: Vec2[]) => {
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-    for (const p of [...before, ...after]) {
-      minX = Math.min(minX, p.x - 0.2);
-      minY = Math.min(minY, p.y - 0.2);
-      maxX = Math.max(maxX, p.x + 0.2);
-      maxY = Math.max(maxY, p.y + 0.2);
-    }
-    const inside = preparePolygon(ring, 0.1);
-    return points.map((s, i) =>
-      s.p.x < minX || s.p.x > maxX || s.p.y < minY || s.p.y > maxY ? flags[i]! : off(s, inside),
-    );
-  };
-  const count = (f: boolean[]) => f.reduce((n, x) => n + (x ? 1 : 0), 0);
-  let missing = listed(flags);
-  for (let pass = 0; pass < 6 && missing.length; pass++) {
-    if (pass > 0) {
-      // Last resort: a mouth that a movement surface crosses moves out past it (as the TASK-063
-      // surface cuts did), its road end then lying under the outline; lanes never move.
-      const shift = mouths.map(() => 0);
-      for (const p of missing) {
-        // The mouth the sample lies beyond, within its width; the nearest such.
-        let best = -1,
-          shallowest = Infinity;
-        mouths.forEach((m, k) => {
-          const width = distance(m.left, m.right);
-          const n = { x: -m.direction.y, y: m.direction.x };
-          const lateral = (p.x - m.left.x) * n.x + (p.y - m.left.y) * n.y;
-          const depth = (p.x - m.left.x) * m.direction.x + (p.y - m.left.y) * m.direction.y;
-          if (lateral < -0.5 || lateral > width + 0.5 || depth <= 0) return;
-          if (depth < shallowest) {
-            shallowest = depth;
-            best = k;
-          }
-        });
-        if (best >= 0) shift[best] = Math.max(shift[best]!, shallowest + 0.15);
-      }
-      if (shift.every((d) => d === 0)) break;
-      const saved = mouths.map((m) => ({ ...m }));
-      shift.forEach((out, k) => {
-        if (out > 0) moveMouth(mouths[k]!, out);
-      });
-      const rebuilt = buildJoins(shape);
-      const ring = assemble(mouths, rebuilt);
-      const inside = preparePolygon(untangle(ring), 0.1);
-      const result = points.map((s) => off(s, inside));
-      if (count(result) >= missing.length) {
-        saved.forEach((m, k) => Object.assign(mouths[k]!, m));
-        break;
-      }
-      joins = rebuilt;
-      node.outline = ring;
-      crossed = selfCrossings(ring);
-      flags = result;
-      missing = listed(flags);
-    }
-    for (let k = 0; k < joins.length && missing.length; k++) {
-      const join = joins[k]!;
-      const nearest = missing.filter(
-        (p) =>
-          distanceToLine(p, join.points) <=
-          Math.min(...joins.map((j) => distanceToLine(p, j.points))) + 1e-6,
-      );
-      if (!nearest.length) continue;
-      if (join.step) {
-        // A movement crossing the shorter end's surface beside the step: a strip of that surface,
-        // along the step and as wide as needed, joins the junction; both mouths stay whole.
-        const next = mouths[(k + 1) % mouths.length]!,
-          mouth = mouths[k]!;
-        const [a, b] = join.points as [Vec2, Vec2];
-        const d = mouth.direction;
-        const nearer = (a.x - b.x) * d.x + (a.y - b.y) * d.y < 0;
-        const corner = nearer ? a : b;
-        const across = nearer ? unit(a, mouth.left) : unit(b, next.right);
-        const depth = Math.max(
-          ...nearest.map((p) => (p.x - corner.x) * across.x + (p.y - corner.y) * across.y),
-        );
-        if (!(depth > 0) || depth > distance(mouth.left, mouth.right)) continue;
-        const shift = { x: across.x * (depth + 0.05), y: across.y * (depth + 0.05) };
-        const moved = (p: Vec2) => ({ x: p.x + shift.x, y: p.y + shift.y });
-        // The strip's side of the shorter mouth replaces its corner, so the mouth stays one line.
-        const saved = next.left;
-        joins[k] = { ...join, points: nearer ? [moved(a), moved(b), b] : [a, moved(a)] };
-        if (!nearer) next.left = moved(b);
-        const ring = assemble(mouths, joins);
-        const result = trial(ring, [a, b], [moved(a), moved(b)]);
-        if (count(result) < missing.length && selfCrossings(ring) <= crossed) {
-          node.outline = ring;
-          flags = result;
-          missing = listed(flags);
-        } else {
-          joins[k] = join;
-          next.left = saved;
-        }
-        continue;
-      }
-      if (!join.shape) continue;
-      let best = { join, ring: node.outline, flags, left: missing.length };
-      const consider = (candidate: CurbJoin) => {
-        joins[k] = candidate;
-        const ring = assemble(mouths, joins);
-        const result = trial(ring, join.points, candidate.points);
-        const left = count(result);
-        if (left < best.left && selfCrossings(ring) <= crossed)
-          best = { join: candidate, ring, flags: result, left };
-      };
-      for (const handle of join.shape.handles.slice(1))
-        consider({
-          ...join,
-          points: curbPoints(join.points[0]!, join.points.at(-1)!, join.shape, handle),
-        });
-      // Last, the curb follows the outer edge of a movement that runs from corner to corner.
-      const a = join.points[0]!,
-        b = join.points.at(-1)!;
-      for (const line of best.left ? movementEdges(node, movements, lanes) : []) {
-        const edge = distance(line[0]!, a) < distance(line.at(-1)!, a) ? line : [...line].reverse();
-        if (distance(edge[0]!, a) > 0.15 || distance(edge.at(-1)!, b) > 0.15) continue;
-        consider({ ...join, points: [a, ...edge.slice(1, -1), b] });
-      }
-      joins[k] = best.join;
-      node.outline = best.ring;
-      flags = best.flags;
-      missing = listed(flags);
-    }
-  }
-  node.outline = untangle(node.outline);
-  return {
-    joins,
-    // Mouths moved out to hold a movement reach as far as their own 8 m.
-    limit: Math.max(
-      limit,
-      ...mouths.flatMap((m) => [m.left, m.right].map((p) => distance(node.pos, p) + 8)),
-    ),
-    get contained() {
-      return !missing.length && simpleOutline(node.outline);
-    },
-  };
-}
-
-/** Last resort for a ring that still crosses itself (crossed stub road ends, a fan of
- * overlapping ramps): at each crossing a sliver loop is cut off, and a larger loop between the
- * two passes is walked the other way, so the ring touches itself there instead of crossing and
- * still covers both loops. */
-function untangle(ring: Vec2[]): Vec2[] {
-  const area = (loop: Vec2[]) =>
-    Math.abs(
-      loop.reduce((sum, p, k) => {
-        const q = loop[(k + 1) % loop.length]!;
-        return sum + p.x * q.y - q.x * p.y;
-      }, 0),
-    ) / 2;
-  let points = ring.slice(0, -1);
-  const strict = (a: Vec2, b: Vec2, c: Vec2, d: Vec2) => {
-    const ax = b.x - a.x,
-      ay = b.y - a.y,
-      bx = d.x - c.x,
-      by = d.y - c.y;
-    const det = ax * by - ay * bx;
-    if (Math.abs(det) < 1e-12) return undefined;
-    const t = ((c.x - a.x) * by - (c.y - a.y) * bx) / det;
-    const u = ((c.x - a.x) * ay - (c.y - a.y) * ax) / det;
-    return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9
-      ? { x: a.x + t * ax, y: a.y + t * ay }
-      : undefined;
-  };
-  for (let guard = 0; guard < 50; guard++) {
-    const n = points.length;
-    let found: { i: number; j: number; at: Vec2 } | undefined;
-    for (const [i, j] of candidatePairs([...points, points[0]!])) {
-      const at = strict(points[i]!, points[i + 1]!, points[j]!, points[(j + 1) % n]!);
-      if (at) {
-        found = { i, j, at };
-        break;
-      }
-    }
-    if (!found) break;
-    const { i, j, at } = found;
-    const outer = [...points.slice(0, i + 1), at, ...points.slice(j + 1)];
-    const inner = [at, ...points.slice(i + 1, j + 1)];
-    // A sliver loop is cut off; a loop with area is kept, walked the other way.
-    if (Math.min(area(outer), area(inner)) < 2) points = area(outer) >= area(inner) ? outer : inner;
-    else
-      points = [
-        ...points.slice(0, i + 1),
-        at,
-        ...points.slice(i + 1, j + 1).reverse(),
-        at,
-        ...points.slice(j + 1),
-      ];
-  }
-  return closeOutline(points);
-}
-
-/** Pairs of non-adjacent segments of a closed ring (segment k runs from ring[k] to ring[k+1])
- * whose bounding boxes overlap, found with a sweep along x. */
-function candidatePairs(ring: Vec2[]): [number, number][] {
-  const n = ring.length - 1;
-  const order = Array.from({ length: n }, (_, k) => k).sort(
-    (a, b) => Math.min(ring[a]!.x, ring[a + 1]!.x) - Math.min(ring[b]!.x, ring[b + 1]!.x),
-  );
-  const pairs: [number, number][] = [];
-  const active: number[] = [];
-  for (const k of order) {
-    const minX = Math.min(ring[k]!.x, ring[k + 1]!.x);
-    for (let a = active.length - 1; a >= 0; a--)
-      if (Math.max(ring[active[a]!]!.x, ring[active[a]! + 1]!.x) < minX) active.splice(a, 1);
-    const minY = Math.min(ring[k]!.y, ring[k + 1]!.y),
-      maxY = Math.max(ring[k]!.y, ring[k + 1]!.y);
-    for (const other of active) {
-      const i = Math.min(k, other),
-        j = Math.max(k, other);
-      if (j - i < 2 || (i === 0 && j === n - 1)) continue;
-      if (
-        Math.max(ring[other]!.y, ring[other + 1]!.y) < minY ||
-        Math.min(ring[other]!.y, ring[other + 1]!.y) > maxY
-      )
-        continue;
-      pairs.push([i, j]);
-    }
-    active.push(k);
-  }
-  return pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-}
-
-function selfCrossings(ring: Vec2[]): number {
-  return candidatePairs(ring).filter(([i, j]) =>
-    segmentsIntersect(ring[i]!, ring[i + 1]!, ring[j]!, ring[j + 1]!),
-  ).length;
-}
-
-function simpleOutline(ring: Vec2[]): boolean {
-  for (let i = 1; i < ring.length; i++)
-    for (let j = i + 2; j < ring.length; j++) {
-      if (i === 1 && j === ring.length - 1) continue;
-      if (segmentsIntersect(ring[i - 1]!, ring[i]!, ring[j - 1]!, ring[j]!)) return false;
-    }
-  return true;
-}
-
-function distanceToLine(p: Vec2, points: Vec2[]): number {
-  let closest = Infinity;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!,
-      b = points[i]!;
-    const dx = b.x - a.x,
-      dy = b.y - a.y;
-    const length2 = dx * dx + dy * dy;
-    const t =
-      length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
-    closest = Math.min(closest, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
-  }
-  return closest;
-}
-
-// TASK-078 curb aprons (architecture 5.1). The drawn curb is separate from the setback: a
-// circular arc with a realistic radius, tangent to two neighbouring road ends' facing edges, and
-// the apron between it and the corner, outside both road surfaces. Setbacks, outlines, lanes and
-// movements are not touched, so lane storage and the simulation stay as compiled.
-
-/** Curb radius by the lower-ranked road's class. */
-const APRON_RADIUS_M: Record<RoadClass, number> = {
-  service: 6,
-  residential: 6,
-  tertiary: 9,
-  secondary: 9,
-  primary: 12,
-  trunk: 12,
-  motorway: 12,
-  ramp: 12,
-};
-/** A tangent point lies within this share of its road, counted from the node. */
-const APRON_REACH = 0.4;
-/** A smaller apron adds nothing to the outline's own curb. */
-const APRON_MIN_M = 1.5;
-/** Arc samples at most 3 degrees (and 1 m) apart, and a quarter degree from either end. */
-const APRON_STEP = (3 * Math.PI) / 180;
-const APRON_END = (0.25 * Math.PI) / 180;
-/** Sine of the largest angle between the arc and an edge where they meet. */
-const APRON_TANGENT = Math.sin((1.5 * Math.PI) / 180);
-/** Depth below which touching a road surface or another apron is not an overlap. */
-const APRON_MARGIN_M = 0.02;
-
-export interface CurbApron {
-  node: number;
-  /** Compiled road indices: the road whose right edge (outward) and the road whose left edge
-   * the arc joins. */
-  roads: [number, number];
-  /** The class radius, before shrinking. */
-  classRadius: number;
-  radius: number;
-  ring: Vec2[];
-}
-
-/** An outward edge without reversals: where compile restores a road end's old corner, the
- * surface edge can step back a few centimetres before running on. */
-function forward(edge: Vec2[]): Vec2[] {
-  const kept = [edge[0]!];
-  for (const p of edge.slice(1)) {
-    while (kept.length > 1) {
-      const a = kept.at(-2)!,
-        b = kept.at(-1)!;
-      if ((b.x - a.x) * (p.x - b.x) + (b.y - a.y) * (p.y - b.y) >= 0) break;
-      kept.pop();
-    }
-    if (distance(kept.at(-1)!, p) > 1e-9) kept.push(p);
-  }
-  return kept;
-}
-
-function boxOf(points: readonly Vec2[]) {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  for (const p of points) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  }
-  return { minX, minY, maxX, maxY };
-}
-
-type Box = ReturnType<typeof boxOf>;
-const boxesMeet = (a: Box, b: Box) =>
-  a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
-
-/** Sets `CNode.curbs` on every node with an outline and returns the aprons. A corner's radius
- * is its class radius, shrunk (by bisection) until the arc is tangent to both edges, its tangent
- * points lie within the first 40 percent of their roads and the apron overlaps no road surface
- * and no earlier apron (nodes in index order). A tangent point may fall short of its road's cut,
- * on the edge's extension under the junction surface, as long as the other one does not. */
-export function junctionCurbs(nodes: CNode[], roads: CRoad[]): CurbApron[] {
-  const incident = nodes.map((): CRoad[] => []);
-  for (const road of roads) {
-    incident[road.to]!.push(road);
-    incident[road.from]!.push(road);
-  }
-  const surfaceBoxes = roads.map((road) => boxOf(road.surface));
-  const surfaces: (PreparedRing | undefined)[] = [];
-  const surface = (k: number) =>
-    (surfaces[k] ??= prepareRing([...roads[k]!.surface, roads[k]!.surface[0]!]));
-  const aprons: CurbApron[] = [];
-  const prepared: PreparedRing[] = [];
-  for (const node of nodes) {
-    node.curbs = [];
-    if (!node.outline.length) continue;
-    const arms = directions(
-      roadMouths(node, incident[node.idx]!),
-      node.pos,
-      (e) => extended(e.leftEdge),
-      (e) => extended(e.rightEdge),
-    );
-    if (arms.length < 2) continue;
-    const covered = preparePolygon(node.outline, 0.05);
-    arms.forEach((arm, i) => {
-      const a = outer(arm, 1, node.pos),
-        b = outer(arms[(i + 1) % arms.length]!, -1, node.pos);
-      const edgeA = forward(a.rightEdge),
-        edgeB = forward(b.leftEdge);
-      const ea = extended(edgeA),
-        eb = extended(edgeB);
-      const corner = meet(ea, eb, node.pos);
-      // A convex corner, edges that run on (a bend, opposite arms) or a gore get no apron.
-      if (!corner || cross(corner.da, corner.db) <= 0 || corner.a > 0.01 || corner.b > 0.01) return;
-      const ra = roads[a.roads[0]!]!,
-        rb = roads[b.roads[0]!]!;
-      const lower =
-        ra.classRank < rb.classRank ? [ra] : rb.classRank < ra.classRank ? [rb] : [ra, rb];
-      const classRadius = Math.min(...lower.map((r) => APRON_RADIUS_M[r.roadClass]));
-      // How far along its edge, from the cut, a tangent point may lie.
-      const room = (road: CRoad, end: Mouth) =>
-        APRON_REACH * road.lengthM -
-        ((end.left.x + end.right.x) / 2 - node.pos.x) * end.direction.x -
-        ((end.left.y + end.right.y) / 2 - node.pos.y) * end.direction.y;
-      const roomA = room(ra, a),
-        roomB = room(rb, b);
-      // The edges as far as a tangent point may lie, and a metre more.
-      const upTo = (edge: Vec2[], room: number) => {
-        const lengths = cumulativeLengths(edge);
-        const end = Math.max(0, room) + 1;
-        return extended(
-          end >= lengths.at(-1)!
-            ? edge
-            : [edge[0]!, ...edgeUpTo(edge, end), pointAtDistance(edge, lengths, end)],
-        );
-      };
-      const fa = upTo(edgeA, roomA),
-        fb = upTo(edgeB, roomB);
-      const fit = (radius: number): PreparedRing | 'small' | 'large' => {
-        const centre = polylineCrossings(offsetPolyline(fa, radius), offsetPolyline(fb, -radius))
-          .filter((hit) => hit.alongA > EXTEND_M + corner.a && hit.alongB > EXTEND_M + corner.b)
-          .reduce<{ point: Vec2; far: number } | undefined>((best, hit) => {
-            const far = Math.max(hit.alongA, hit.alongB);
-            return !best || far < best.far ? { point: hit.point, far } : best;
-          }, undefined)?.point;
-        if (!centre) return 'large';
-        const ta = nearestOnPolyline(fa, centre),
-          tb = nearestOnPolyline(fb, centre);
-        // The arc must touch each edge tangentially: not across a bend of the edge's polyline.
-        for (const t of [ta, tb]) {
-          const along =
-            (t.point.x - centre.x) * t.direction.x + (t.point.y - centre.y) * t.direction.y;
-          if (Math.abs(t.away - radius) > 0.005 || Math.abs(along) > t.away * APRON_TANGENT)
-            return 'large';
-        }
-        const sa = ta.along - EXTEND_M,
-          sb = tb.along - EXTEND_M;
-        // A tangent point short of its road's cut lies on the edge's extension along the
-        // junction mouth (a capped or held-back cut): the arc leaves the outline there.
-        if (Math.max(sa, sb) < 0.1) return 'small';
-        if (sa > roomA || sb > roomB) return 'large';
-        const start = Math.atan2(ta.point.y - centre.y, ta.point.x - centre.x);
-        const turn = Math.atan2(tb.point.y - centre.y, tb.point.x - centre.x) - start;
-        const sweep =
-          turn > Math.PI ? turn - 2 * Math.PI : turn < -Math.PI ? turn + 2 * Math.PI : turn;
-        const steps = Math.max(
-          2,
-          Math.ceil(Math.abs(sweep) * radius),
-          Math.ceil(Math.abs(sweep) / APRON_STEP),
-        );
-        // A sample a quarter degree from each end, so the arc leaves both edges along them.
-        const end = APRON_END / Math.abs(sweep);
-        const arc = [
-          end,
-          ...Array.from({ length: steps - 1 }, (_, k) => (k + 1) / steps),
-          1 - end,
-        ].map((t) => ({
-          x: centre.x + radius * Math.cos(start + sweep * t),
-          y: centre.y + radius * Math.sin(start + sweep * t),
-        }));
-        // An arc under the junction surface draws nothing; a smaller one would not either.
-        if ([ta.point, ...arc, tb.point].every(covered)) return 'small';
-        const ring = closeOutline([
-          corner.point,
-          ...(sa > 0 ? [a.right, ...edgeUpTo(edgeA, sa)] : []),
-          ta.point,
-          ...arc,
-          tb.point,
-          ...(sb > 0 ? [...edgeUpTo(edgeB, sb).reverse(), b.left] : []),
-        ]);
-        // An edge curving more tightly than the arc runs inside it before the tangent point.
-        if (selfCrossings(ring)) return 'large';
-        const apron = prepareRing(ring);
-        // The two roads' own edges bound the apron, so they can reach into it only across the
-        // arc: for them, the segment between the arc and its chord stands for the apron.
-        const segment = prepareRing(closeOutline([ta.point, ...arc, tb.point]));
-        for (let k = 0; k < roads.length; k++) {
-          const own = k === ra.idx || k === rb.idx;
-          if (
-            boxesMeet(apron.box, surfaceBoxes[k]!) &&
-            ringsOverlap(own ? segment : apron, surface(k), APRON_MARGIN_M)
-          )
-            return 'large';
-        }
-        for (const other of prepared)
-          if (boxesMeet(apron.box, other.box) && ringsOverlap(apron, other, APRON_MARGIN_M))
-            return 'large';
-        return apron;
-      };
-      let radius = classRadius;
-      let apron = fit(radius);
-      if (apron === 'small') return;
-      if (apron === 'large') {
-        let low = 0,
-          high = classRadius;
-        for (let k = 0; k < 5; k++) {
-          const mid = (low + high) / 2;
-          const trial = fit(mid);
-          if (trial === 'large') high = mid;
-          else {
-            low = mid;
-            if (trial !== 'small') {
-              radius = mid;
-              apron = trial;
-            }
-          }
-        }
-        if (typeof apron === 'string' || radius < APRON_MIN_M) return;
-      }
-      aprons.push({
-        node: node.idx,
-        roads: [ra.idx, rb.idx],
-        classRadius,
-        radius,
-        ring: apron.ring,
-      });
-      prepared.push(apron);
-      node.curbs.push(apron.ring);
+    const half = Math.min(from.widthM, to.widthM) / 2;
+    const last = m.polyline.length - 1;
+    const sides = m.polyline.map((p, k) => {
+      const h =
+        k === 0
+          ? headingAtDistance(from.polyline, from.cumulative, from.lengthM)
+          : k === last
+            ? headingAtDistance(to.polyline, to.cumulative, 0)
+            : Math.atan2(
+                m.polyline[k + 1]!.y - m.polyline[k - 1]!.y,
+                m.polyline[k + 1]!.x - m.polyline[k - 1]!.x,
+              );
+      const n = { x: -Math.sin(h) * half, y: Math.cos(h) * half };
+      return [
+        { x: p.x - n.x, y: p.y - n.y },
+        { x: p.x + n.x, y: p.y + n.y },
+      ] as const;
     });
+    const ring = [...sides.map(([l]) => l), ...sides.map(([, r]) => r).reverse()];
+    pieces.push(ring);
   }
-  return aprons;
+  const oriented = pieces
+    .filter((p) => p.length >= 3 && Math.abs(areaD(p)) > 1e-6)
+    .map((p) => (areaD(p) < 0 ? [...p].reverse() : p));
+  let union = booleanOpD(ClipType.Union, oriented, null, FillRule.NonZero, PRECISION);
+  // Where pieces only touch, rounding can leave the ring crossing itself at a pinch: a closing by
+  // 1 cm merges them.
+  if (union.some(crossesItself))
+    union = inflatePathsD(
+      inflatePathsD(union, 0.01, JoinType.Round, EndType.Polygon, 2, PRECISION, 0.002),
+      -0.01,
+      JoinType.Round,
+      EndType.Polygon,
+      2,
+      PRECISION,
+      0.002,
+    );
+  const outer = union.reduce<PathD | undefined>(
+    (best, ring) => (!best || Math.abs(areaD(ring)) > Math.abs(areaD(best)) ? ring : best),
+    undefined,
+  );
+  if (!outer) return [];
+  // Vertices within 2 mm merge, so a curb's cusp at its tangent point (the boundary returns along
+  // the arc beside the road edge it came out on) touches itself instead of crossing at rounding.
+  const ring: Vec2[] = [];
+  for (const { x, y } of outer)
+    if (!ring.length || distance(ring.at(-1)!, { x, y }) > 0.002) ring.push({ x, y });
+  if (ring.length > 1 && distance(ring[0]!, ring.at(-1)!) <= 0.002) ring.pop();
+  ring.push(ring[0]!);
+  return ring;
 }
