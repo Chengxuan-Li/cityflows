@@ -30,9 +30,14 @@ interface Arm {
 
 /** On a road's own lane block, `a` metres from the node: the left edge (-1), the centre (0) or
  * the right edge (1) in travel direction, with the travel heading there. */
+// Centerline lengths for the current `continuationLayout` call (importers edit centerlines in
+// place between compiles, so nothing is kept across calls).
+let centerlineLengths = new Map<readonly Vec2[], Float64Array>();
+
 function blockPoint(arm: Arm, a: number, side: number) {
   const line = arm.source.centerline;
-  const lengths = cumulativeLengths(line);
+  let lengths = centerlineLengths.get(line);
+  if (!lengths) centerlineLengths.set(line, (lengths = cumulativeLengths(line)));
   const total = lengths.at(-1)!;
   const s = Math.max(0, Math.min(total, arm.atEnd ? total - a : a));
   const p = pointAtDistance(line, lengths, s);
@@ -86,6 +91,7 @@ export function continuationLayout(
   side: 'left' | 'right',
   sourceNodes: Node[],
 ) {
+  centerlineLengths = new Map();
   const ends: RoadContinuity[] = roads.map(() => ({}));
   const pairs = new Map<number, ContinuationPairs>();
   for (const node of nodes) {
