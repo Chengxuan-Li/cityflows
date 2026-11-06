@@ -101,6 +101,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-075](tasks/TASK-075.md) | 5 | Lane markings through junctions without signals | new `src/render/layers/junction-markings.ts`, `scene.ts` wiring, `style.ts` (additive), `tests/render/T28*` | 061, 063, 071, 072; design in architecture 11 | T28; dashed guide lines on major roads | done |
 | [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | done |
 | [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | done |
+| [TASK-078](tasks/TASK-078.md) | 5 | Junction curbs with a realistic radius, lanes untouched (B32) | `src/network/junctions.ts` (curbs only), `types.ts` (additive), `src/geo/polyline.ts` (additive), `drawNode` in `nodes.ts`, `bench/junction-audit.ts`, `tests/network/T31*` | 063, 074; design in architecture 5.1 | T31; hashes unchanged | todo |
+| [TASK-079](tasks/TASK-079.md) | 5 | Markings up to the junction, arrows once, offsets on curves (B33 to B35) | `src/render/layers/roads.ts`, a marking-offset export in `src/geo/polyline.ts`, `tests/render/T32*` | 072, 074, 075; design in architecture 11 | T32 | todo |
+| [TASK-080](tasks/TASK-080.md) | 5 | Short transitions, lanes through the remaining splits and merges (B36, B37) | `src/network/continuity.ts`, `lanes.ts`, `transitions.ts`, `drawRoadJoins` in `nodes.ts`, `tests/network/T33*` | 071, 074, 076; design in architecture 5.1 | T33 | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -234,6 +237,15 @@ dependency of its tasks is merged to `main`.
   the marking clip in `drawRoad`; a new render layer and its `scene.ts` wiring; routing and
   the lane-change parts of the simulation. TASK-077 also changes `src/sim`, so it starts once
   TASK-076 is merged, on a branch cut then. Merge order: 076, 075, 074, then 077.
+
+- Wave 17 (lead, 2026-11-06): the owner's round 3 findings (B32 to B37, screenshots in
+  `docs/findings/2026-11-06/`). TASK-078, TASK-079 and TASK-080 in parallel on branches
+  `task/078-curbs`, `task/079-junction-markings` and `task/080-transitions`, run by the lead's
+  subagents in worktrees under `D:\cityflows-wt`. Surfaces: curb aprons in the network and
+  `drawNode`; the road markings in `roads.ts`; tapers and continuity in the network with
+  `transitions.ts` and `drawRoadJoins`. Shared: `src/geo/polyline.ts` (078 and 079 add
+  exports), `nodes.ts` (078 `drawNode`, 080 `drawRoadJoins`); the lead reconciles. Merge
+  order: 079, 078, 080.
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
