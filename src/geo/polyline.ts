@@ -455,3 +455,145 @@ function nearBoundary(p: Vec2, ring: readonly Vec2[], margin: number): boolean {
   }
   return false;
 }
+
+/** The point of a polyline nearest to `p`, its distance along the polyline, and the direction
+ * of the segment it lies on (at a vertex, the segment ending there). */
+export function nearestOnPolyline(points: readonly Vec2[], p: Vec2) {
+  let best = { point: points[0]!, along: 0, away: Infinity, direction: { x: 1, y: 0 } };
+  let run = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!,
+      b = points[i]!;
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    const t =
+      length === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length ** 2));
+    const point = { x: a.x + t * dx, y: a.y + t * dy };
+    const away = distance(p, point);
+    if (away < best.away && length > 0)
+      best = {
+        point,
+        along: run + t * length,
+        away,
+        direction: { x: dx / length, y: dy / length },
+      };
+    run += length;
+  }
+  return best;
+}
+
+type Box = { minX: number; minY: number; maxX: number; maxY: number };
+
+function boxOf(points: readonly Vec2[], from = 0, to = points.length): Box {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (let i = from; i < to; i++) {
+    const p = points[i]!;
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+const boxesMeet = (a: Box, b: Box) =>
+  a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+
+/** A closed ring with its bounding box and the boxes of runs of 32 edges (edge `i` runs from
+ * vertex `i - 1` to `i`), for `ringsOverlap`. */
+export function prepareRing(ring: Vec2[]) {
+  const runs: { from: number; to: number; box: Box }[] = [];
+  for (let from = 1; from < ring.length; from += 32) {
+    const to = Math.min(ring.length, from + 32);
+    runs.push({ from, to, box: boxOf(ring, from - 1, to) });
+  }
+  return { ring, box: boxOf(ring), runs };
+}
+export type PreparedRing = ReturnType<typeof prepareRing>;
+
+/** Even-odd test along a ray toward +x, over the runs the ray can cross. */
+function insideRing({ ring, runs }: PreparedRing, p: Vec2): boolean {
+  let inside = false;
+  for (const run of runs) {
+    if (run.box.maxX < p.x || run.box.minY > p.y || run.box.maxY < p.y) continue;
+    for (let i = run.from; i < run.to; i++) {
+      const a = ring[i - 1]!,
+        b = ring[i]!;
+      if (a.y > p.y !== b.y > p.y && p.x < a.x + ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y))
+        inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/** Whether two closed rings overlap: part of either boundary lies inside the other ring and
+ * farther than `margin` from its boundary. Rings that touch or share an edge do not. */
+export function ringsOverlap(a: PreparedRing, b: PreparedRing, margin: number): boolean {
+  return deepBoundary(a, b, margin) || deepBoundary(b, a, margin);
+}
+
+/** The edges of a prepared ring whose boxes meet `box`. */
+function edgesNear({ ring, runs }: PreparedRing, box: Box): number[] {
+  const edges: number[] = [];
+  for (const run of runs) {
+    if (!boxesMeet(run.box, box)) continue;
+    for (let i = run.from; i < run.to; i++)
+      if (boxesMeet(boxOf(ring, i - 1, i + 1), box)) edges.push(i);
+  }
+  return edges;
+}
+
+function deepBoundary(of: PreparedRing, within: PreparedRing, margin: number): boolean {
+  const line = of.ring,
+    ring = within.ring;
+  const inside = (p: Vec2) => insideRing(within, p);
+  const grown = (b: Box) => ({
+    minX: b.minX - margin,
+    minY: b.minY - margin,
+    maxX: b.maxX + margin,
+    maxY: b.maxY + margin,
+  });
+  const outer = grown(within.box);
+  // Only ring edges near the line can be within the margin of a point on it.
+  const near = edgesNear(within, grown(of.box));
+  // No ring edge near the line: the whole line lies on one side of the ring, beyond the margin.
+  if (!near.length) return inside(line[0]!);
+  const deep = (p: Vec2) => {
+    if (p.x < outer.minX || p.x > outer.maxX || p.y < outer.minY || p.y > outer.maxY) return false;
+    if (!inside(p)) return false;
+    for (const i of near) {
+      const a = ring[i - 1]!,
+        b = ring[i]!;
+      const dx = b.x - a.x,
+        dy = b.y - a.y;
+      const length2 = dx * dx + dy * dy;
+      const t =
+        length2 === 0
+          ? 0
+          : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
+      if (Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy) <= margin) return false;
+    }
+    return true;
+  };
+  for (const k of edgesNear(of, outer)) {
+    const p = line[k - 1]!,
+      q = line[k]!;
+    const ts = [0, 1];
+    for (const i of near) {
+      const hit = segmentIntersection(p, q, ring[i - 1]!, ring[i]!);
+      if (hit) ts.push(distance(p, hit) / Math.max(distance(p, q), 1e-12));
+    }
+    ts.sort((x, y) => x - y);
+    const at = (t: number) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+    if (deep(p)) return true;
+    for (let j = 1; j < ts.length; j++)
+      if (ts[j]! - ts[j - 1]! > 1e-9 && deep(at((ts[j - 1]! + ts[j]!) / 2))) return true;
+  }
+  return false;
+}
