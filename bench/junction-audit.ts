@@ -15,6 +15,7 @@ import { importOsm } from '../src/importers/osm';
 import { compile, type CMovement, type CompiledCity, type CNode, type CRoad } from '../src/network';
 import { SETBACK_CAP_M } from '../src/network/junctions';
 import { drawRoad } from '../src/render/layers/roads';
+import { style } from '../src/render/style';
 import type { City } from '../src/schema';
 
 // Junction shape audit (TASK-074, architecture 5.1): per node, how far the drawn junction is
@@ -434,23 +435,30 @@ export function auditJunctions(net: CompiledCity): NodeAudit[] {
 }
 
 /** Length of the lane markings `drawRoad` strokes (dividers, centre lines, stop lines, arrow
- * shafts; fills such as arrow heads not counted), in all and outside its nodes' outlines. */
+ * shafts; fills such as arrow heads not counted), in all and outside its nodes' outlines, and
+ * of its dividers and centre lines (strokes of the divider width) outside them: TASK-079 draws
+ * arrows only where lanes differ, which the outline clip never touched. */
 export function markingLengths(net: CompiledCity) {
   let total = 0,
-    outside = 0;
+    outside = 0,
+    lineOutside = 0;
   for (const road of net.roads) {
-    const lines: Vec2[][] = [];
+    const lines: { line: Vec2[]; divider: boolean }[] = [];
+    let stroked = 0;
     let previous = { x: 0, y: 0 };
     const graphics = {
       poly(points: Vec2[]) {
-        lines.push(points);
+        lines.push({ line: points, divider: false });
         return this;
       },
       fill() {
         lines.pop();
+        stroked = Math.min(stroked, lines.length);
         return this;
       },
-      stroke() {
+      stroke({ width }: { width: number }) {
+        for (const entry of lines.slice(stroked)) entry.divider = width === style.dividerWidthM;
+        stroked = lines.length;
         return this;
       },
       moveTo(x: number, y: number) {
@@ -458,7 +466,7 @@ export function markingLengths(net: CompiledCity) {
         return this;
       },
       lineTo(x: number, y: number) {
-        lines.push([previous, { x, y }]);
+        lines.push({ line: [previous, { x, y }], divider: false });
         previous = { x, y };
         return this;
       },
@@ -467,12 +475,19 @@ export function markingLengths(net: CompiledCity) {
     const outlines = [road.from, road.to]
       .map((n) => net.nodes[n]!.outline)
       .filter((outline) => outline.length);
-    for (const line of lines) {
+    for (const { line, divider } of lines) {
       total += polylineLength(line);
-      for (const piece of clipOutside(line, outlines, 0)) outside += polylineLength(piece);
+      for (const piece of clipOutside(line, outlines, 0)) {
+        outside += polylineLength(piece);
+        if (divider) lineOutside += polylineLength(piece);
+      }
     }
   }
-  return { markingM: Math.round(total), markingOutsideM: Math.round(outside) };
+  return {
+    markingM: Math.round(total),
+    markingOutsideM: Math.round(outside),
+    lineOutsideM: Math.round(lineOutside),
+  };
 }
 
 export function summarize(audits: NodeAudit[]) {
