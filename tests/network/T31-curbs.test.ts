@@ -159,7 +159,11 @@ function fingerprint(net: CompiledCity) {
   const hash = createHash('sha256');
   const plain = (value: unknown) =>
     JSON.stringify(value, (key, v: unknown) =>
-      key === 'curbs' ? undefined : v instanceof Float64Array ? Array.from(v) : v,
+      key === 'curbs' || key === 'corridorId'
+        ? undefined
+        : v instanceof Float64Array
+          ? Array.from(v)
+          : v,
     );
   for (const list of [net.nodes, net.roads, net.lanes, net.movements, net.places, net.connectors])
     for (const item of list) hash.update(plain(item));

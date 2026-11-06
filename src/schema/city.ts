@@ -66,6 +66,9 @@ export interface Road {
   speedLimitMps: number;
   name: string | null;
   streetGroupId: string | null; // groups the two directions of a simple two-way street
+  /** The carriageways of one street, side by side: the two directions of a two-way street,
+   * a divided pair, a dual carriageway (geometry rework). Absent means `streetGroupId`. */
+  corridorId?: string | null;
   provenance: Provenance;
 }
 

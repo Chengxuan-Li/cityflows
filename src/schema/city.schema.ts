@@ -88,6 +88,7 @@ export const roadSchema = z.object({
   speedLimitMps: z.number().positive(),
   name: z.string().nullable(),
   streetGroupId: z.string().nullable(),
+  corridorId: z.string().nullable().optional(),
   provenance,
 });
 

@@ -113,6 +113,7 @@ export function compile(city: City): CompileResult {
       classRank: classRank[road.roadClass],
       speedLimitMps: road.speedLimitMps,
       streetGroupId: road.streetGroupId,
+      corridorId: road.corridorId ?? road.streetGroupId,
     };
     incoming[to]!.push(compiled);
     outgoing[from]!.push(compiled);

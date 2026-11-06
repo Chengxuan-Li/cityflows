@@ -72,6 +72,7 @@ export interface CRoad {
   speedLimitMps: number;
   lengthM: number;
   streetGroupId: string | null;
+  corridorId: string | null; // canonical corridorId, else streetGroupId
   surface: Vec2[]; /* polygon for rendering */
   startOffsetM: number; // change from canonical lateralOffsetM at a continuation
   endOffsetM: number;

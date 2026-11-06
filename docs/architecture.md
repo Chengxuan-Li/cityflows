@@ -19,7 +19,7 @@ requirements R1 to R8 and tests T01 to T18 are binding and referenced below by I
 | 5 | OSM data access | Bundled attributed fixtures, upload of `.osm` XML or GeoJSON, and small-bbox Overpass queries with an IndexedDB cache and a swappable endpoint. No PBF parsing in the browser. | Upload only: the "pick a city" step becomes a chore. Local import service: not needed for first-release map sizes. |
 | 6 | Workflow | GitHub remote, branch per task, PR, GitHub Actions CI, lead review of semantic compatibility. | Local-only merging. |
 | 7 | Upstream audit | Bounded, read-only, parallel to scaffolding (TASK-000). | Full Gate 0 with running every reference first: days of agent time before product code. |
-| 8 | Road geometry | Every directed carriageway owns its centerline. `streetGroupId` optionally groups the two directions of a simple street for editing. | Two directions sharing one centerline: cannot represent divided highways, medians, ramps or real OSM geometry. |
+| 8 | Road geometry | Every directed carriageway owns its centerline. `streetGroupId` optionally groups the two directions of a simple street for editing; `corridorId` (geometry rework, owner 2026-11-06) groups every carriageway of one street, including divided pairs and dual carriageways, for geometry. | Two directions sharing one centerline: cannot represent divided highways, medians, ramps or real OSM geometry. |
 | 9 | Movements | Lane-to-lane movements are generated at compile time from connectivity and lane rules; the canonical model stores only explicit allow/ban overrides. Structural errors block commits; connectivity problems are warnings that do not. | Every movement as a canonical entity: edits to lane counts would orphan thousands of records. |
 | 10 | Routing | Road-level search, then lane resolution with a feasibility check from the vehicle's current lane. Lane-level search is the fallback. A vehicle never teleports or takes an illegal movement; an infeasible plan becomes a legal movement plus a reroute with a reason code. Owner-approved exception (TASK-077): a car stuck at the head of a jam for `gridlock.respawnS` leaves the road and its trip starts again from its origin; it is never moved along the road. | Road-level only: vehicles stuck in the wrong lane at a turn. |
 | 11 | Persistence | The canonical `City` snapshot is the authoritative saved state. Editor history is optional, separately versioned, and droppable. Migrations operate on snapshots. | Replaying a patch log on load: couples saved files to editor code history. |
@@ -157,6 +157,7 @@ interface Road {
   speedLimitMps: number;
   name: string | null;
   streetGroupId: string | null;  // groups the two directions of a simple two-way street
+  corridorId?: string | null;    // carriageways of one street side by side; absent = streetGroupId
   provenance: Provenance;
 }
 
@@ -266,7 +267,8 @@ interface CNode { idx: number; id: NodeId; pos: Vec2; radiusM: number; control: 
   movements: number[]; signal: CSignal | null; }
 interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[];
   roadClass: RoadClass; classRank: number; speedLimitMps: number; lengthM: number;
-  streetGroupId: string | null; surface: Vec2[]; /* polygon for rendering */ }
+  streetGroupId: string | null; corridorId: string | null;   // corridorId ?? streetGroupId
+  surface: Vec2[]; /* polygon for rendering */ }
 interface CLane { idx: number; id: LaneId; road: number; lane: number; polyline: Vec2[];
   cumulative: Float64Array; lengthM: number; widthM: number; allowed: VehicleClass[];
   speedLimitMps: number; left: number; right: number;   // adjacent lane idx or -1
