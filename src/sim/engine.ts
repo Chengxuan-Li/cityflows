@@ -576,23 +576,24 @@ function createRun({
             (vehicles.attemptedFallbacks[id] ??= new Set()).add(granted);
           }
           const zoneStart = intersections.zoneStop(compiled.movements[granted]!, 0);
-          if (position - lane.lengthM > zoneStart) {
-            position = lane.lengthM + Math.max(0, zoneStart);
+          // The overflow into the movement, computed once (B40): re-deriving it from
+          // `lane.lengthM + zoneStart` can round past `zoneStart`, and a car held a hair past
+          // a zone's start is no longer held by it on the next step.
+          let entry = position - lane.lengthM;
+          if (entry > zoneStart) {
+            entry = Math.max(0, zoneStart);
+            position = lane.lengthM + entry;
             vehicles.speed[id] = (position - previousPosition) / dtS;
             accounting.zoneStop();
           }
           leaveRoad(id, timeS, lane.lengthM);
           vehicles.remove(id);
           laneChanges.leaveLane(id);
-          vehicles.insert(
-            id,
-            -granted - 1,
-            Math.min(position - lane.lengthM, compiled.movements[granted]!.lengthM),
-          );
+          vehicles.insert(id, -granted - 1, Math.min(entry, compiled.movements[granted]!.lengthM));
           // A through node's movement has no length (TASK-061): carry the overflow into the
           // next lane in the same step, so a split road drives like one road.
           if (compiled.movements[granted]!.lengthM === 0)
-            enterLane(id, compiled.movements[granted]!.toLane, position - lane.lengthM, timeS);
+            enterLane(id, compiled.movements[granted]!.toLane, entry, timeS);
         } else if (movement === -1) {
           vehicles.remove(id);
           vehicles.position[id] = lane.lengthM;
