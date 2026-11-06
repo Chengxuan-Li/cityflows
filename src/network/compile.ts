@@ -4,7 +4,7 @@ import type { City, Place, RoadClass } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
 import { continuationLayout } from './continuity';
-import { corridorReferences, corridorSurfaces, JOINT_TOLERANCE_M } from './corridor';
+import { corridorReferences, corridorSurfaces, EASED_NOTE_M } from './corridor';
 import { layoutRoad, type ContinuationEnd } from './lanes';
 import { roadEndSetbacks, junctionOutline, containMovements, junctionCurbs } from './junctions';
 import { generateMovements } from './movements';
@@ -312,7 +312,7 @@ export function compile(city: City): CompileResult {
   junctionCurbs(nodes, roads);
   corridorSurfaces(roads);
   for (const road of roads)
-    if (jointDeviations[road.idx]! > JOINT_TOLERANCE_M)
+    if (jointDeviations[road.idx]! > EASED_NOTE_M)
       diagnostics.push({
         severity: 'info',
         code: 'reference_eased',

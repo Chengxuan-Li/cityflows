@@ -15,8 +15,8 @@ import type { CRoad, Diagnostic } from './types';
 // lane, lane edge, road edge and taper is a parallel offset of it by arc length: the point at
 // station s on any of them lies on the reference line's normal at station s.
 
-/** A stretch where the reference line leaves its source centerline by more than the resampling
- * tolerance, because an offset the corridor needs exceeds the radius on the inside of a bend. */
+/** A stretch where the reference line leaves its source centerline by more than `EASED_NOTE_M`,
+ * because an offset the corridor needs exceeds the radius on the inside of a bend. */
 export interface Easing {
   fromM: number;
   toM: number;
@@ -45,8 +45,10 @@ export interface Reference {
 const MERGE_M = 0.2;
 /** A corner rounded within this distance of the source is resampling, not easing. */
 const FILLET_TOLERANCE_M = 0.02;
-/** A joint easing (`jointReference`) farther than this from the centerline is reported. */
+/** How far a joint easing (`jointReference`) may leave the centerline when it is lengthened. */
 export const JOINT_TOLERANCE_M = FILLET_TOLERANCE_M;
+/** An easing that leaves the centerline by more than this is reported (`reference_eased`). */
+export const EASED_NOTE_M = 0.05;
 const CHORD_TOLERANCE_M = 0.01;
 /** Most turning a vertex of the reference line keeps (normal offsets stay within millimetres). */
 const MAX_TURN = (4 * Math.PI) / 180;
@@ -155,10 +157,11 @@ function splice(line: Vec2[], replacements: Replacement[]) {
 /** The reference line of a source centerline whose corridor needs offsets up to `needLeft` to
  * the left and `needRight` to the right: merged and cleaned, bends whose inside radius is below
  * the offset there eased to a circular arc of that offset plus `MARGIN_M` (bounded by the road's
- * vertices; each easing recorded), other corners rounded within `FILLET_TOLERANCE_M`, then
- * resampled by curvature (vertices turn at most `MAX_TURN`, chords within `CHORD_TOLERANCE_M`,
- * spacing at most 1 m where the radius is under 30 m and 5 m elsewhere, a longer straight source
- * segment kept whole). Both endpoints are kept exactly. */
+ * vertices; each easing beyond `EASED_NOTE_M` recorded), other corners rounded within
+ * `FILLET_TOLERANCE_M` (a metre wider where that stays within 5 cm), then resampled by curvature
+ * (vertices turn at most `MAX_TURN`, chords within `CHORD_TOLERANCE_M`, spacing at most 1 m where
+ * the radius is under 30 m and 5 m elsewhere, a longer straight source segment kept whole). Both
+ * endpoints are kept exactly. */
 export function referenceLine(source: readonly Vec2[], needLeft: number, needRight: number) {
   const need = (sweep: number) => (sweep > 0 ? needRight : needLeft) + MARGIN_M;
   let line = clean(source);
@@ -255,9 +258,7 @@ export function referenceLine(source: readonly Vec2[], needLeft: number, needRig
     const path = [p, ...points, line[hi + 1]!];
     const deviationM = Math.max(...line.slice(lo, hi + 1).map((q) => lineDistance(q, path)));
     const easing =
-      limited || deviationM > FILLET_TOLERANCE_M
-        ? { deviationM, radiusM: radius, limited }
-        : undefined;
+      limited || deviationM > EASED_NOTE_M ? { deviationM, radiusM: radius, limited } : undefined;
     return { lo, hi, points, easing };
   }
 
@@ -290,7 +291,7 @@ export function referenceLine(source: readonly Vec2[], needLeft: number, needRig
         hi: i,
         points,
         easing:
-          deviationM > FILLET_TOLERANCE_M + 1e-9 || limited
+          deviationM > EASED_NOTE_M || limited
             ? { deviationM, radiusM: radius, limited }
             : undefined,
       });
