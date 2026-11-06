@@ -562,12 +562,18 @@ export function jointReference(ref: Reference, before?: Vec2, after?: Vec2) {
   return { line, deviationM };
 }
 
-/** The points `lateral` to the right of `ref` at increasing `stations`: each on the normal at its
- * station, interpolated between the vertex normals (direction and length). */
-export function offsetLine(ref: Reference, stations: readonly number[], lateral: number): Vec2[] {
+/** The points `lateral` to the right of `ref` at increasing `stations` (one lateral, or one per
+ * station): each on the normal at its station, interpolated between the vertex normals
+ * (direction and length). */
+export function offsetLine(
+  ref: Reference,
+  stations: readonly number[],
+  lateral: number | ArrayLike<number>,
+): Vec2[] {
   const { points, lengths, normals } = ref;
   let k = 0;
-  return stations.map((s) => {
+  return stations.map((s, i) => {
+    const offset = typeof lateral === 'number' ? lateral : lateral[i]!;
     while (k < lengths.length - 2 && lengths[k + 1]! < s) k++;
     const span = lengths[k + 1]! - lengths[k]!;
     const t = span > 0 ? Math.max(0, Math.min(1, (s - lengths[k]!) / span)) : 0;
@@ -580,8 +586,8 @@ export function offsetLine(ref: Reference, stations: readonly number[], lateral:
     const scale =
       (Math.hypot(na.x, na.y) * (1 - t) + Math.hypot(nb.x, nb.y) * t) / (Math.hypot(nx, ny) || 1);
     return {
-      x: a.x + (b.x - a.x) * t + lateral * nx * scale,
-      y: a.y + (b.y - a.y) * t + lateral * ny * scale,
+      x: a.x + (b.x - a.x) * t + offset * nx * scale,
+      y: a.y + (b.y - a.y) * t + offset * ny * scale,
     };
   });
 }

@@ -293,6 +293,51 @@ test.each(auditCities)(
   120_000,
 );
 
+test.each(auditCities)(
+  'T38.3: %s curbs leave and meet their road edges within 20 degrees (B42)',
+  (name) => {
+    const { net } = load(name);
+    const failures: string[] = [];
+    // TASK-089 (B42, n:138's nubs): a curb's curve starts on the first road's right edge and ends
+    // on the second's left edge, running along each edge there (its tangent, estimated from its
+    // first three samples, within 20 degrees of the edge's direction): no jog or tooth where the
+    // curb meets the road.
+    for (const n of net.nodes) {
+      for (const c of junctionCorners(n)) {
+        if (c.kind !== 'curb' || !c.curve || c.curve.length < 3) continue;
+        const where = `${n.id} ${c.roads.map((r) => net.roads[r]!.id).join('>')}`;
+        const [ra, rb] = c.roads.map((r) => net.roads[r]!);
+        const outward = (road: NonNullable<typeof ra>, right: boolean, k: number) => {
+          const ring = road.surface;
+          const h = ring.length / 2;
+          const tl = ring.slice(0, h),
+            tr = ring.slice(h).reverse();
+          const atEnd = road.to === n.idx && (road.from !== n.idx || k === 0);
+          return right ? (atEnd ? [...tl].reverse() : tr) : atEnd ? [...tr].reverse() : tl;
+        };
+        const curve = c.curve;
+        for (const [k, edge, [p0, p1, p2]] of [
+          [0, outward(ra!, true, 0), [curve[0]!, curve[1]!, curve[2]!]],
+          [1, outward(rb!, false, 1), [curve.at(-1)!, curve.at(-2)!, curve.at(-3)!]],
+        ] as const) {
+          const hit = nearestOnPolyline(edge, p0);
+          if (hit.away > 0.01) failures.push(`${where}: end ${k} ${hit.away.toFixed(3)} m off`);
+          // The curve's direction into the corner at p0 (quadratic through the first three
+          // samples); outward along the edge is the opposite.
+          const t = { x: 4 * (p1.x - p0.x) - (p2.x - p0.x), y: 4 * (p1.y - p0.y) - (p2.y - p0.y) };
+          const l = Math.hypot(t.x, t.y);
+          if (l < 1e-9) continue;
+          const cos = -(t.x * hit.direction.x + t.y * hit.direction.y) / l;
+          const angle = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
+          if (angle > 20) failures.push(`${where}: end ${k} at ${angle.toFixed(1)} degrees`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  },
+  120_000,
+);
+
 test('T38.3: class radii at a residential crossing, a side street and a primary crossing', () => {
   const { city, node: at, road, street } = buildCity('Curb classes', 1);
   const two = (
@@ -387,18 +432,16 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
   sindelfingen: {
     'r:521#0':
       'Leaves n:139 between approaches 58 degrees apart; its edge meets r:476 5.9 m out (stage 2 joined the two as one direction and cut it at 4.2 m).',
+    // TASK-089.
+    'r:1109#0':
+      'n:594: r:1061/r:966 converge there and are set side by side, so the side street meets a wider approach (2.1 m).',
   },
   munich: {
     'r:1024#0':
       'n:894: the service way lies on r:899 (shadowed) and is cut to the cap where it crosses Richelstraße r:1001/r:1002, 60 degrees away.',
     'r:1027#0': 'As r:1024, its other direction.',
-    'r:1354#1':
-      'Arnulfstraße at n:446 is no longer bent away from its other carriageway by the realignment: the road is 4 m shorter.',
     'r:715#1':
       'Arnulfstraße at n:138: both ends at the cap as in stage 2; the lane follows the through alignment to r:958 and is 2.3 m shorter.',
-    'r:716#0':
-      'Arnulfstraße at n:138, 41 degrees from its other carriageway r:386, now a separate approach: its far edge crosses r:386 at the cap (stage 2 7.1 m).',
-    'r:716#1': 'As r:716#0.',
     // TASK-087: Landsberger Straße's carriageways meet n:322 and n:328 side by side, a 14.5 m
     // divided street instead of 7 m converging ones, so the side streets are cut farther out.
     'r:281#0': 'Max-Friedlaender-Bogen at n:322 meets the 14.5 m Landsberger pair (3.9 m).',
@@ -407,8 +450,30 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
     'r:488#0': 'As r:487#0, its other direction (2.6 m).',
     'r:762#0': 'Schrenkstraße at the signal n:328, beside the pushed pairs (2.7 m).',
     'r:763#0': 'As r:762#0, its other direction (2.5 m).',
-    'r:729#0':
-      'Lies beside r:984 at n:1181, no longer on it, so it is cut where r:984 is instead of running 7.3 m on into the junction (TASK-088, R3-1).',
+    // TASK-089: side streets at junctions where a street's carriageways converge and are set side
+    // by side (each its own end, half the corridor separation off the node), or where B43 keeps a
+    // divided pair's median: they meet a wider approach and are cut farther out.
+    'r:1050#0': 'n:719: Landsberger Straße keeps its 0.5 m median at the node (B43) (3.8 m).',
+    'r:1182#0': 'n:1181, the side street between the converging pairs (3.8 m).',
+    'r:1183#0': 'As r:1182#0, its other direction (4.4 m).',
+    'r:1260#0': 'n:382, the stub beside the converging r:383/r:399 (3.8 m).',
+    'r:1261#0': 'As r:1260#0, its other direction (3.7 m).',
+    'r:1262#0': 'n:382, the other stub (3.5 m).',
+    'r:1263#0': 'As r:1262#0, its other direction (4.3 m).',
+    'r:36#0': 'n:33, beside the converging r:845/r:944 and r:946/r:948 (3.3 m).',
+    'r:368#0':
+      'Marsstraße between n:949 and n:823, both converging nodes: cut farther out at n:949 (2.7 m).',
+    'r:368#1': 'As r:368#0 (2.7 m).',
+    'r:480#0': 'As r:368#0, its other direction (3.7 m).',
+    'r:480#1': 'As r:480#0 (3.7 m).',
+    'r:422#0': 'n:949, the side street beside the converging pairs (2.7 m).',
+    'r:423#0': 'As r:422#0, its other direction (3.5 m).',
+    'r:542#0':
+      'n:446: Arnulfstraße r:1354/r:447 is separated by the importer now, a wider approach (3.7 m).',
+    'r:543#0': 'As r:542#0, its other direction (3.1 m).',
+    'r:806#0': 'n:407, beside the converging r:386/r:716 (3.6 m).',
+    'r:824#0': 'n:823, beside the converging r:1372/r:845 (3.2 m).',
+    'r:946#1': 'n:33, the inner lane of the split r:946 beside r:948, cut 2.2 m farther out.',
   },
 };
 
@@ -463,13 +528,17 @@ function fingerprint(net: CompiledCity) {
 // Re-measured after TASK-083 (cuts, through alignments, polygons, through movements). Before:
 // grid 56deba638330bc89, town fc657fc34fe56206, Sindelfingen 9406c542b3054ff5, Munich
 // 330eb51540ef21b3 (T31, with the aprons left out).
+// TASK-089 moved all four (grid 550abeb39a410ed8, town 21bcc4f206cea7a5, Sindelfingen
+// b1d2ca6d8b7927c8, Munich 7c5b29366d96e789 before): every road carries its converging shifts
+// (empty in the grid and the town) and every lane its reference normals, and the curbs at the
+// nodes are edge-following cubics (B42), so every outline moves; the grid's and the town's
+// setbacks and movements are unchanged. Sindelfingen and Munich also have their converging
+// carriageways set side by side, and Munich the importer's newly separated pairs.
 const fingerprints: Record<AuditCity, string> = {
-  grid: '550abeb39a410ed8',
-  town: '21bcc4f206cea7a5',
-  // TASK-087: pushed dual carriageways, r:729/r:984 side by side (Sindelfingen e0d07f9df3ecf65f
-  // and Munich 946d523f0505c680 before).
-  sindelfingen: 'b1d2ca6d8b7927c8',
-  munich: '7c5b29366d96e789',
+  grid: '119e12ba38491e6f',
+  town: 'd742fc9c03a237ed',
+  sindelfingen: '315a1a0c8920856d',
+  munich: '2ef7091167826274',
 };
 
 test.each(auditCities)(

@@ -10,6 +10,7 @@ import {
   segmentDistance,
   segmentIntersection,
   trimPolyline,
+  nearestOnPolyline,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CLane, CMovement, CompiledCity, CRoad, Turn } from '../../network';
@@ -62,6 +63,12 @@ export function drawRoad(
     strokeLines(markings, below, alpha);
     strokeLines(controls, above, alpha);
   };
+  const partners =
+    road.streetGroupId === null && road.corridorId !== null
+      ? city.roads
+          .filter((r) => r !== road && r.corridorId === road.corridorId && r.streetGroupId === null)
+          .map((r) => [...r.surface, r.surface[0]!])
+      : [];
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
     const along = trimPolyline(lane.polyline, 0, lane.lengthM - lane.stopM);
@@ -71,8 +78,42 @@ export function drawRoad(
       draw(dashes(parallelOffset(along, lane.widthM / 2), !tapered), 0.78, !tapered);
     if (road.streetGroupId !== null && (medianOnRight ? lane.right : lane.left) < 0)
       draw([parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2)], 0.85);
+    // TASK-089: a carriageway beside another of its corridor (a separated or side-by-side pair)
+    // draws its median edge solid where that one runs within 1.5 m: two lines, a double line;
+    // the strip between them is paved (no hairline of verge-less median between the lines).
+    else if (partners.length && (medianOnRight ? lane.right : lane.left) < 0) {
+      const runs = besidePartners(
+        parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2),
+        partners,
+      );
+      for (const run of runs) {
+        const facing = run.map(
+          (p) =>
+            partners
+              .map((ring) => nearestOnPolyline(ring, p))
+              .reduce((a, b) => (b.away < a.away ? b : a)).point,
+        );
+        surface.poly([...run, ...facing.reverse()]).fill(color);
+      }
+      draw(runs, 0.85);
+    }
     drawApproachMarkings(controls, city, lane);
   }
+}
+
+/** The runs of `line` whose points lie within 1.5 m of one of the closed `rings`. */
+function besidePartners(line: Vec2[], rings: Vec2[][]): Vec2[][] {
+  const runs: Vec2[][] = [];
+  let run: Vec2[] = [];
+  for (const p of line) {
+    if (rings.some((ring) => nearestOnPolyline(ring, p).away <= 1.5)) run.push(p);
+    else if (run.length) {
+      if (run.length > 1) runs.push(run);
+      run = [];
+    }
+  }
+  if (run.length > 1) runs.push(run);
+  return runs;
 }
 
 /** TASK-074: a road's dividers and centre lines stay out of its nodes' outlines and out of
@@ -394,31 +435,46 @@ export function crossingStripes(city: CompiledCity, road: CRoad, atEnd: boolean)
     const offset = side - edge - lane.widthM / 2;
     return { x: point.x - Math.sin(heading) * offset, y: point.y + Math.cos(heading) * offset };
   };
-  const stripes: Vec2[][] = [];
-  for (let side = 0.225; side + 0.45 <= width; side += 0.9) {
-    let edge = 0;
-    const short = lanes.some((lane) => {
-      const overlaps = side < edge + lane.widthM && side + 0.45 > edge;
-      edge += lane.widthM;
-      return overlaps && lane.lengthM < 10;
-    });
-    if (short) continue;
-    const stripe = [
-      local(0.25, side),
-      local(2.75, side),
-      local(2.75, side + 0.45),
-      local(0.25, side + 0.45),
-    ];
-    if (
-      stripe.every(
-        (p) =>
-          pointInPolygon(p, [...road.surface, road.surface[0]!]) &&
-          !pointInPolygon(p, node.outline),
+  // TASK-089: where the junction outline reaches over the road beyond its cut (a split
+  // carriageway's turn surfaces, a curb), the crossing moves out along the road, all its stripes
+  // together, to the first place that clears the outline as far as any place does (up to 6 m).
+  const at = (offset: number) => {
+    const stripes: Vec2[][] = [];
+    for (let side = 0.225; side + 0.45 <= width; side += 0.9) {
+      let edge = 0;
+      const short = lanes.some((lane) => {
+        const overlaps = side < edge + lane.widthM && side + 0.45 > edge;
+        edge += lane.widthM;
+        return overlaps && lane.lengthM < 10 + offset;
+      });
+      if (short) continue;
+      const stripe = [
+        local(0.25 + offset, side),
+        local(2.75 + offset, side),
+        local(2.75 + offset, side + 0.45),
+        local(0.25 + offset, side + 0.45),
+      ];
+      if (
+        stripe.every(
+          (p) =>
+            pointInPolygon(p, [...road.surface, road.surface[0]!]) &&
+            !pointInPolygon(p, node.outline),
+        )
       )
-    )
-      stripes.push(stripe);
+        stripes.push(stripe);
+    }
+    return stripes;
+  };
+  let best = at(0);
+  for (
+    let offset = 0.25;
+    offset <= 6 + 1e-9 && best.length < Math.floor((width - 0.225) / 0.9 + 0.5);
+    offset += 0.25
+  ) {
+    const stripes = at(offset);
+    if (stripes.length > best.length) best = stripes;
   }
-  return stripes;
+  return best;
 }
 
 export function drawCrossings(graphics: Graphics, city: CompiledCity, road: CRoad): void {

@@ -20,7 +20,7 @@ import {
 import type { Vec2 } from '../geo/vec2';
 import type { Road, RoadClass } from '../schema';
 import { offsetLine, type Reference } from './corridor';
-import { roadWidth, smoothstep } from './lanes';
+import { CONVERGING, roadWidth, sameStreet, shiftAt, smoothstep } from './lanes';
 import type { CLane, CMovement, CNode, CRoad } from './types';
 
 // Junction polygons (TASK-083, architecture 5.1), osm2streets-style on TASK-082's corridors. The
@@ -59,9 +59,9 @@ const FACING_M = 5;
 const ALIGNMENT_M = 20;
 /** A through road keeps its alignment where it passes the node within this distance: moving it
  * moves the side roads' cuts as much, and T38.4 allows no lane to lose more than 2 m. Farther
- * off, the node is not on the road's line (a Y, a node between two carriageways) and the road
- * keeps its centerline. */
-const MAX_SHIFT_M = 2;
+ * off (a Y, a node between two carriageways) it keeps it only where the side roads' cuts move
+ * with it by no more than that (B43, `farThrough`); else the road keeps its centerline. */
+export const MAX_SHIFT_M = 2;
 /** Road ends of one corridor within this angle of each other approach the node together; two
  * carriageways farther apart are two approaches with a curb (or a gore) between them. */
 const SAME_APPROACH = (20 * Math.PI) / 180;
@@ -93,6 +93,9 @@ const unit = (v: Vec2) => {
   return { x: v.x / length, y: v.y / length };
 };
 const reach = (total: number, m: number) => Math.min(m, total / 2);
+const neg = (v: Vec2) => ({ x: -v.x, y: -v.y });
+/** A road with a converging shift (TASK-089) at either end. */
+const shifted = (road: CRoad) => road.startShift.length > 0 || road.endShift.length > 0;
 
 // ---------------------------------------------------------------------------------------------
 // Through nodes: two ends of one street, setback 0, no outline (TASK-061, unchanged).
@@ -175,6 +178,24 @@ function splitCubic(c: Vec2[], t: number): [Vec2[], Vec2[]] {
   ];
 }
 
+/** A cubic split where it passes `pos` most closely: the two halves, the split point and the
+ * unit tangent there. */
+function splitNearest(cubic: Vec2[], pos: Vec2) {
+  let t = 0,
+    best = Infinity;
+  for (let i = 0; i <= 200; i++) {
+    const d = distance(cubicPoint(cubic, i / 200), pos);
+    if (d < best) [best, t] = [d, i / 200];
+  }
+  for (let step = 1 / 400; step > 1e-7; step /= 2)
+    for (const next of [t - step, t + step])
+      if (next > 0 && next < 1 && distance(cubicPoint(cubic, next), pos) < best)
+        [best, t] = [distance(cubicPoint(cubic, next), pos), next];
+  const [before, after] = splitCubic(cubic, t);
+  const at = before[3]!;
+  return { before, after, at, tangent: unit(sub(after[1]!, at)) };
+}
+
 function sampleHalf(c: Vec2[]): Vec2[] {
   const length = distance(c[0]!, c[1]!) + distance(c[1]!, c[2]!) + distance(c[2]!, c[3]!);
   const steps = Math.max(2, Math.ceil(length / SAMPLE_M));
@@ -226,13 +247,15 @@ function reversed(ref: Reference): Reference {
  * road) both reference lines are replaced by one cubic (handles a third of the chord) from the
  * incoming line `ALIGNMENT_M` before the node to the outgoing line as far after it, split where
  * it passes the node most closely, so the road no longer dips toward the node point; where that
- * is more than `MAX_SHIFT_M` from the node the pair keeps its lines. Mutates
- * `references`; returns each node's pairs. */
+ * is more than `maxShift` (by node, `MAX_SHIFT_M` by default) from the node the pair keeps its
+ * lines. Mutates `references`; returns each node's pairs. */
 export function throughAlignments(
   nodes: CNode[],
   incident: CRoad[][],
   sources: Road[],
   references: Reference[],
+  maxShift: (node: CNode) => number = () => MAX_SHIFT_M,
+  flows: [number, number][][] = [],
 ): ThroughPair[][] {
   const bySource = new Map<number, number[]>();
   references.forEach((ref, idx) =>
@@ -271,6 +294,14 @@ export function throughAlignments(
       )
       .filter((p) => p.cos < OPPOSITE)
       .sort((x, y) => x.cos - y.cos || x.a.road.idx - y.a.road.idx || x.b.road.idx - y.b.road.idx);
+    // TASK-089: the flows of converging carriageways (`convergingFlows`) come first, whatever
+    // their angle and distance from the node.
+    const forced = (flows[node.idx] ?? []).flatMap(([from, to]) => {
+      const a = ends.find((e) => e.road.idx === from && e.incoming),
+        b = ends.find((e) => e.road.idx === to && !e.incoming);
+      return a && b ? [{ a, b, cos: -Infinity }] : [];
+    });
+    candidates.unshift(...forced);
     const arms = candidates.flatMap((p) => [p.a.d, p.b.d]);
     if (!ends.some((e) => arms.every((arm) => dot(arm, e.d) <= ALONG))) return [];
     const used = new Set<CRoad>();
@@ -302,20 +333,7 @@ export function throughAlignments(
           { x: end.p.x - end.t.x * handle, y: end.p.y - end.t.y * handle },
           end.p,
         ];
-        // Where the curve passes the node most closely.
-        let t = 0,
-          best = Infinity;
-        for (let i = 0; i <= 200; i++) {
-          const d = distance(cubicPoint(cubic, i / 200), node.pos);
-          if (d < best) [best, t] = [d, i / 200];
-        }
-        for (let step = 1 / 400; step > 1e-7; step /= 2)
-          for (const next of [t - step, t + step])
-            if (next > 0 && next < 1 && distance(cubicPoint(cubic, next), node.pos) < best)
-              [best, t] = [distance(cubicPoint(cubic, next), node.pos), next];
-        const [before, after] = splitCubic(cubic, t);
-        const at = before[3]!;
-        const tangent = unit(sub(after[1]!, at));
+        const { before, after, at, tangent } = splitNearest(cubic, node.pos);
         const normal = { x: -tangent.y, y: tangent.x };
         // In the source line's orientation: a reversed reference runs against its source.
         const replacement = (ref: Reference, lengthM: number, points: Vec2[]): Replacement => ({
@@ -332,7 +350,11 @@ export function throughAlignments(
         };
         curves.set(key, curve);
       }
-      if (distance(curve.at, node.pos) > MAX_SHIFT_M) continue;
+      if (
+        distance(curve.at, node.pos) >
+        (forced.some((f) => f.a === a && f.b === b) ? Infinity : maxShift(node))
+      )
+        continue;
       claimed.set(ka, key);
       claimed.set(kb, key);
       used.add(a.road);
@@ -387,6 +409,42 @@ export function throughAlignments(
     }
   }
   return result;
+}
+
+/** B43: the nodes whose through roads may keep their alignment farther than `MAX_SHIFT_M` from
+ * the node: trying every through alignment, those whose road ends' cuts (as `junctionCuts`)
+ * grow by no more than `storageM` against the alignments within `MAX_SHIFT_M`, except forks. */
+export function farThrough(
+  nodes: CNode[],
+  incident: CRoad[][],
+  sources: Road[],
+  references: readonly Reference[],
+  storageM: number,
+): Set<number> {
+  const near = [...references],
+    far = [...references];
+  const nearPairs = throughAlignments(nodes, incident, sources, near);
+  const farPairs = throughAlignments(nodes, incident, sources, far, () => Infinity);
+  const allowed = new Set<number>();
+  for (const node of nodes) {
+    if (farPairs[node.idx]!.length <= nearPairs[node.idx]!.length) continue;
+    // Not at a fork, where a road continues into two ends nearly in line (a Y): the alignment
+    // would follow one of them only.
+    const ends = incident[node.idx]!.filter((r) => r.from !== r.to);
+    const direction = (r: CRoad) =>
+      outwardChord(references[r.idx]!, r.to === node.idx, ALIGNMENT_M);
+    const fork = farPairs[node.idx]!.some((pair) =>
+      [pair.from, pair.to].some((idx) => {
+        const own = direction(ends.find((r) => r.idx === idx)!);
+        return ends.some((e) => e.idx !== idx && dot(direction(e), own) > ALONG);
+      }),
+    );
+    if (fork) continue;
+    const before = junctionCuts(node, incident[node.idx]!, sources, near).setbacks;
+    const after = junctionCuts(node, incident[node.idx]!, sources, far).setbacks;
+    if (after.every((s, i) => s - before[i]! <= storageM)) allowed.add(node.idx);
+  }
+  return allowed;
 }
 
 /** A through movement on a through road follows the road's reference lines across the node,
@@ -450,13 +508,16 @@ function cutEnd(node: CNode, road: CRoad, source: Road, ref: Reference, index: n
     ? [total - limit, ...[...ref.lengths].filter((s) => s > total - limit && s < total), total]
     : [0, ...[...ref.lengths].filter((s) => s > 0 && s < limit), limit];
   const width = roadWidth(source);
-  const offset = source.lateralOffsetM;
-  const at = (lateral: number) => {
+  // The edges follow the converging shift (TASK-089).
+  const shifts = stations.map((s) => shiftAt(road, s, total));
+  const at = (lateral: number | number[]) => {
     const line = offsetLine(ref, stations, lateral);
     return incoming ? line.reverse() : line;
   };
-  const travelLeft = at(offset - width / 2),
-    travelRight = at(offset + width / 2);
+  const edge = (side: number) =>
+    at(shifts.map((shift) => source.lateralOffsetM + shift + (side * width) / 2));
+  const travelLeft = edge(-1),
+    travelRight = edge(1);
   const line = at(0);
   const lengths = cumulativeLengths(line);
   const s = reach(lengths.at(-1)!, FACING_M);
@@ -477,7 +538,8 @@ function cutEnd(node: CNode, road: CRoad, source: Road, ref: Reference, index: n
     probe: { x: (pl.x + pr.x) / 2, y: (pl.y + pr.y) / 2 },
     sides: [pl, pr],
     width,
-    extent: Math.abs(offset) + width / 2,
+    // The setback cap clears the unshifted block: a converging shift would cut side roads farther.
+    extent: Math.abs(source.lateralOffsetM) + width / 2,
   };
 }
 
@@ -487,13 +549,19 @@ function cutEnd(node: CNode, road: CRoad, source: Road, ref: Reference, index: n
 function approachesOf<E extends { road: CRoad; heading: number; probe: Vec2 }>(
   ends: E[],
   origin: Vec2,
+  together: (a: E, b: E) => boolean = () => false,
 ): E[][] {
   const sorted = [...ends].sort((a, b) => a.heading - b.heading || a.road.idx - b.road.idx);
   const n = sorted.length;
-  const joins = (a: E, b: E) =>
-    a.road.corridorId !== null &&
-    a.road.corridorId === b.road.corridorId &&
-    (b.heading - a.heading + 2 * Math.PI) % (2 * Math.PI) < SAME_APPROACH;
+  const joins = (a: E, b: E) => {
+    const gap = (b.heading - a.heading + 2 * Math.PI) % (2 * Math.PI);
+    return (
+      (a.road.corridorId !== null &&
+        a.road.corridorId === b.road.corridorId &&
+        gap < SAME_APPROACH) ||
+      (together(a, b) && gap < Math.acos(CONVERGING))
+    );
+  };
   const start = sorted.findIndex((e, i) => !joins(sorted[(i + n - 1) % n]!, e));
   const groups: E[][] = [];
   for (let k = 0; k < n; k++) {
@@ -543,7 +611,17 @@ export function junctionCuts(
   const ends = incident.map((road, i) =>
     cutEnd(node, road, sources[road.idx]!, references[road.idx]!, i),
   );
-  const approaches = approachesOf(ends, node.pos);
+  // TASK-089: the carriageways of one street set side by side here (both shifted) approach
+  // together, so no curb fills the median between them.
+  const shiftedHere = (r: CRoad) => (r.to === node.idx ? r.endShift : r.startShift).length > 0;
+  const approaches = approachesOf(
+    ends,
+    node.pos,
+    (a, b) =>
+      shiftedHere(a.road) &&
+      shiftedHere(b.road) &&
+      sameStreet(sources[a.road.idx]!, sources[b.road.idx]!),
+  );
   const setbacks = ends.map((e) => e.width / 2 + 1);
   // An end lying within another end running the same way (coincident source carriageways of two
   // corridors) is shadowed by it: it keeps the floor and faces no neighbour; the other end's cut
@@ -652,6 +730,9 @@ interface PolygonEnd {
   left: Vec2[];
   right: Vec2[];
   setback: number;
+  incoming: boolean;
+  /** TASK-089: the end is shifted at this node (a split converging carriageway). */
+  split: boolean;
 }
 
 function polygonEnd(node: CNode, road: CRoad, setback: number): PolygonEnd {
@@ -670,6 +751,8 @@ function polygonEnd(node: CNode, road: CRoad, setback: number): PolygonEnd {
     left: near(incoming ? [...travelRight].reverse() : travelLeft),
     right: near(incoming ? [...travelLeft].reverse() : travelRight),
     setback,
+    incoming,
+    split: (incoming ? road.endShift : road.startShift).length > 0,
   };
 }
 
@@ -714,6 +797,10 @@ export interface JunctionCorner {
    * nearer cut, which keeps the curb from bulging past its road ends; the first 40 percent of a
    * road; a movement surface it would cut into), the class radius, the radius used, the arc's centre and its tangent points. */
   limit?: 'class' | 'cut' | 'lobe' | 'road' | 'turn';
+  /** Curbs: the curb's boundary, from the first road's edge to the second's, leaving and meeting
+   * each along it; and the region beyond it, between the road edges, taken out of the polygon. */
+  curve?: Vec2[];
+  cut?: Vec2[];
   classRadius?: number;
   radius?: number;
   centre?: Vec2;
@@ -732,6 +819,10 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
   let da = leaving(a.right),
     db = leaving(b.left);
   const roads: [number, number] = [a.road.idx, b.road.idx];
+  // TASK-089 (owner's sketch): the median between a street's two carriageways split at the node
+  // ends at the junction edge, the cut line between their cut corners; no curb runs it out.
+  if (a.split && b.split && a.incoming !== b.incoming && dot(da, db) > Math.SQRT1_2)
+    return undefined;
   // Edges within 30 degrees of running on into each other (a road continuing into a narrower or
   // wider one, two ends side by side across the node): an S-curve tangent to both, which
   // replaces the chord between the cuts (`cutRegion`).
@@ -880,11 +971,46 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     nearestOnPolyline([{ x: edge[0]!.x - d.x, y: edge[0]!.y - d.y }, ...edge], t).away <= FIT_M;
   if (!onEdge(a.right, ta, da) || !onEdge(b.left, tb, db)) return undefined;
   const o = centre(tangent);
-  const arc = arcBetween(o, radius, ta, tb);
+  // The corner block (TASK-089, B42): from the cut corners along the road edges to the points
+  // nearest the tangent points, joined by a cubic that leaves and meets each edge along the edge
+  // itself (a circular arc's handles for its turn and chord): a tangent point lies off its edge by
+  // up to `FIT_M` (n:138's 0.18 m), and on an edge curving with a converging shift the fitted arc
+  // meets the edge at an angle, which drew nubs and teeth at the curb's ends. The block follows
+  // the edges rather than fanning from the corner (an apex far behind the cuts, edges nearly
+  // parallel as where converging carriageways part, would reach over the roads); the region
+  // beyond the curve, between the edges, is taken out of the polygon (`cut`).
+  const na = nearestOnPolyline(a.right, ta),
+    nb = nearestOnPolyline(b.left, tb);
+  const leave = neg(na.direction),
+    arrive = nb.direction;
+  const turn = Math.acos(Math.max(-1, Math.min(1, dot(leave, arrive))));
+  const chordLength = distance(na.point, nb.point);
+  const handle =
+    turn > 1e-6 ? (4 / 3) * Math.tan(turn / 4) * (chordLength / (2 * Math.sin(turn / 2))) : 0;
+  const curve = sampleHalf([
+    na.point,
+    { x: na.point.x + leave.x * handle, y: na.point.y + leave.y * handle },
+    { x: nb.point.x - arrive.x * handle, y: nb.point.y - arrive.y * handle },
+    nb.point,
+  ]);
+  const block = [
+    ka,
+    ...edgeUpTo(a.right, na.along),
+    ...curve,
+    ...edgeUpTo(b.left, nb.along).reverse(),
+    kb,
+  ];
+  const far = 2 * (radius + chordLength) + 1;
   return {
     kind: 'curb',
     roads,
-    ring: [p, ta, ...arc, tb],
+    ring: block,
+    curve,
+    cut: [
+      ...curve,
+      { x: nb.point.x + arrive.x * far, y: nb.point.y + arrive.y * far },
+      { x: na.point.x - leave.x * far, y: na.point.y - leave.y * far },
+    ],
     limit,
     classRadius,
     radius,
@@ -1060,9 +1186,20 @@ export function junctionPolygon(
 ): Vec2[] {
   if (node.setbacks.every((s) => s === 0)) return [];
   const surfaces: Vec2[][] = [];
-  // Each movement's surface: both edges across the curve's tangent, which is the lanes' own
-  // direction at its two ends, so the surface ends on the cuts (a hairpin's inner edge folds:
-  // the union's non-zero fill keeps both of its lobes).
+  // Each movement's surface: both edges across the curve's tangent, and at its two ends along the
+  // lanes' reference normal, so the surface ends on the cuts (also where a converging shift
+  // curves the lanes there, TASK-089; a hairpin's inner edge folds: the union's non-zero fill
+  // keeps both of its lobes).
+  const across = (lane: CLane, atEnd: boolean, half: number) => {
+    const n = atEnd ? lane.normals.at(-1) : lane.normals[0];
+    const road = roads.find((r) => r.idx === lane.road);
+    if (n && road && shifted(road) && lane.normals.length === lane.polyline.length) {
+      const length = Math.hypot(n.x, n.y) || 1;
+      return { x: (n.x / length) * half, y: (n.y / length) * half };
+    }
+    const h = headingAtDistance(lane.polyline, lane.cumulative, atEnd ? lane.lengthM : 0);
+    return { x: -Math.sin(h) * half, y: Math.cos(h) * half };
+  };
   for (const i of node.movements) {
     const m = movements[i]!;
     if (m.lengthM < 0.01) continue;
@@ -1071,16 +1208,16 @@ export function junctionPolygon(
     const half = Math.min(from.widthM, to.widthM) / 2;
     const last = m.polyline.length - 1;
     const sides = m.polyline.map((p, k) => {
-      const h =
+      const h = Math.atan2(
+        m.polyline[Math.min(last, k + 1)]!.y - m.polyline[Math.max(0, k - 1)]!.y,
+        m.polyline[Math.min(last, k + 1)]!.x - m.polyline[Math.max(0, k - 1)]!.x,
+      );
+      const n =
         k === 0
-          ? headingAtDistance(from.polyline, from.cumulative, from.lengthM)
+          ? across(from, true, half)
           : k === last
-            ? headingAtDistance(to.polyline, to.cumulative, 0)
-            : Math.atan2(
-                m.polyline[k + 1]!.y - m.polyline[k - 1]!.y,
-                m.polyline[k + 1]!.x - m.polyline[k - 1]!.x,
-              );
-      const n = { x: -Math.sin(h) * half, y: Math.cos(h) * half };
+            ? across(to, false, half)
+            : { x: -Math.sin(h) * half, y: Math.cos(h) * half };
       return [
         { x: p.x - n.x, y: p.y - n.y },
         { x: p.x + n.x, y: p.y + n.y },
@@ -1102,7 +1239,20 @@ export function junctionPolygon(
   );
   const { fan, corners } = cutRegion(node, roads, approaches, hidden, through, samples);
   cornersByNode.set(node, corners);
-  const pieces: PathD[] = [...fan, ...corners.map((c) => c.ring), ...surfaces];
+  // A curb never covers its two roads (TASK-089: where a converging shift curves an edge, the curb
+  // curve can run on its road side near its ends).
+  const curbs = corners.flatMap((c) =>
+    c.kind === 'curb' && c.roads.some((r) => shifted(roads.find((road) => road.idx === r)!))
+      ? booleanOpD(
+          ClipType.Difference,
+          [c.ring],
+          c.roads.map((r) => roads.find((road) => road.idx === r)!.surface),
+          FillRule.NonZero,
+          PRECISION,
+        )
+      : [c.ring],
+  );
+  const pieces: PathD[] = [...fan, ...curbs, ...surfaces];
   for (const pair of through) {
     const from = roads.find((r) => r.idx === pair.from)!,
       to = roads.find((r) => r.idx === pair.to)!;
@@ -1118,43 +1268,40 @@ export function junctionPolygon(
     .filter((p) => Math.abs(areaD(p)) > 1e-6)
     .map((p) => (areaD(p) < 0 ? [...p].reverse() : p));
   let union = booleanOpD(ClipType.Union, oriented, null, FillRule.NonZero, PRECISION);
-  // A curb's disc is the corner block: the fan's chord between deep cuts may reach into it, so
-  // the discs are taken out (movement surfaces stay clear of them, `corner`).
-  const discs = corners.flatMap((c) =>
-    c.kind === 'curb'
-      ? [
-          Array.from({ length: 120 }, (_, k) => ({
-            x: c.centre!.x + (c.radius! - 0.002) * Math.cos((k * Math.PI) / 60),
-            y: c.centre!.y + (c.radius! - 0.002) * Math.sin((k * Math.PI) / 60),
-          })),
-        ]
-      : [],
-  );
+  // Beyond a curb is the corner block: the fan's chord between deep cuts may reach into it, so
+  // it is taken out (movement surfaces stay clear of the curb's disc, `corner`).
+  const discs = corners.flatMap((c) => (c.cut ? [c.cut] : []));
   if (discs.length)
     union = booleanOpD(ClipType.Difference, union, discs, FillRule.NonZero, PRECISION);
   // Where pieces only touch, rounding can leave the ring crossing itself at a pinch: a closing by
   // 1 cm merges them.
-  if (union.some(crossesItself))
-    union = inflatePathsD(
-      inflatePathsD(union, 0.01, JoinType.Round, EndType.Polygon, 2, PRECISION, 0.002),
-      -0.01,
-      JoinType.Round,
-      EndType.Polygon,
-      2,
-      PRECISION,
-      0.002,
+  const grow = (paths: PathD[], by: number) =>
+    inflatePathsD(paths, by, JoinType.Round, EndType.Polygon, 2, PRECISION, 0.002);
+  const closing = (paths: PathD[]) => grow(grow(paths, 0.01), -0.01);
+  if (union.some(crossesItself)) union = closing(union);
+  // The outer ring, its vertices within 2 mm merged, so a curb's cusp at its tangent point (the
+  // boundary returns along the arc beside the road edge it came out on) touches itself instead of
+  // crossing at rounding; a cusp still crossing gets the closing too, where that clears it.
+  const outerRing = (paths: PathD[]) => {
+    const outer = paths.reduce<PathD | undefined>(
+      (best, ring) => (!best || Math.abs(areaD(ring)) > Math.abs(areaD(best)) ? ring : best),
+      undefined,
     );
-  const outer = union.reduce<PathD | undefined>(
-    (best, ring) => (!best || Math.abs(areaD(ring)) > Math.abs(areaD(best)) ? ring : best),
-    undefined,
-  );
-  if (!outer) return [];
-  // Vertices within 2 mm merge, so a curb's cusp at its tangent point (the boundary returns along
-  // the arc beside the road edge it came out on) touches itself instead of crossing at rounding.
-  const ring: Vec2[] = [];
-  for (const { x, y } of outer)
-    if (!ring.length || distance(ring.at(-1)!, { x, y }) > 0.002) ring.push({ x, y });
-  if (ring.length > 1 && distance(ring[0]!, ring.at(-1)!) <= 0.002) ring.pop();
+    if (!outer) return [];
+    const ring: Vec2[] = [];
+    for (const { x, y } of outer)
+      if (!ring.length || distance(ring.at(-1)!, { x, y }) > 0.002) ring.push({ x, y });
+    if (ring.length > 1 && distance(ring[0]!, ring.at(-1)!) <= 0.002) ring.pop();
+    return ring;
+  };
+  // A needle (a curb's horn along an edge curving off its arc) is opened away by 1 cm.
+  let ring = outerRing(union);
+  for (const cleaned of [() => closing(union), () => closing(grow(grow(union, -0.01), 0.01))]) {
+    if (!crossesItself(ring)) break;
+    const next = outerRing(cleaned());
+    if (!crossesItself(next)) ring = next;
+  }
+  if (!ring.length) return [];
   ring.push(ring[0]!);
   return ring;
 }

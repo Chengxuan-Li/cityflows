@@ -194,6 +194,7 @@ test.each([
   // TASK-087: Sindelfingen's n:580 becomes a continuation node (r:585/r:586 runs on into the
   // unnamed pair r:582/r:583, now side by side): its two lined-up pairs are added, r:586>r:582
   // is classified through, and the turn r:583#0>r:582#0 between the pair's carriageways goes.
+  // TASK-089: unchanged (the network keeps every movement where it splits converging nodes).
   ['Sindelfingen', 49, 96, 0, 1123],
 ] as const)(
   'T37: %s gives every lined-up trunk and branch lane a movement unless banned',

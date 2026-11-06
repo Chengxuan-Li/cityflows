@@ -15,7 +15,7 @@ import {
 } from '../src/geo/polyline';
 import type { Vec2 } from '../src/geo/vec2';
 import { compile, type CLane, type CompiledCity, type CNode, type CRoad } from '../src/network';
-import { laneEdges, roadWidth } from '../src/network/lanes';
+import { laneEdges, roadWidth, shiftAt } from '../src/network/lanes';
 import { drawRoad } from '../src/render/layers/roads';
 import { style } from '../src/render/style';
 import type { City, Road, RoadClass } from '../src/schema';
@@ -133,9 +133,10 @@ export interface RoadWidth {
 
 /** Measure 1. Stations every 0.5 m along the road's canonical centerline, from 0.5 m past the
  * projection of the surface's start cut to 0.5 m before its end cut. Expected edge offsets are
- * `lateralOffsetM - W/2` (left) and `lateralOffsetM + W/2` (right), W the sum of lane widths; the
- * measured offset is the ray crossing of that surface edge nearest the expected one. Transitions
- * are left out: at a road end with an end offset (`startOffsetM`/`endOffsetM`) or a tapering
+ * `lateralOffsetM - W/2` (left) and `lateralOffsetM + W/2` (right), W the sum of lane widths, plus
+ * the converging shift there (TASK-089, `shiftAt` at the station's projection on the reference
+ * line); the measured offset is the ray crossing of that surface edge nearest the expected one.
+ * Transitions are left out: at a road end with an end offset (`startOffsetM`/`endOffsetM`) or a tapering
  * lane, the run of stations from the cut over which some lane polyline lies more than 0.05 m from
  * its nominal offset, or which lies within that end's taper length. */
 export function roadWidthAudit(city: City, net: CompiledCity, road: CRoad) {
@@ -160,11 +161,20 @@ export function roadWidthAudit(city: City, net: CompiledCity, road: CRoad) {
     edge += lane.widthM;
   }
   const frames = stations.map((s) => frame(center, lengths, s));
+  // TASK-089: converging carriageways' lane blocks are shifted near their nodes, by station on
+  // the road's reference line.
+  const referenceLength = cumulativeLengths(road.reference).at(-1)!;
+  const shifts = frames.map(({ p }) =>
+    road.startShift.length || road.endShift.length
+      ? shiftAt(road, nearestOnPolyline(road.reference, p).along, referenceLength)
+      : 0,
+  );
   const deviates = (k: number) =>
     lanes.some((lane, i) => {
       const { p, n } = frames[k]!;
-      const hit = nearestTo(rayCrossings(p, n, lane.polyline, width + 10), nominal[i]!);
-      return hit === null || Math.abs(hit - nominal[i]!) > TRANSITION_M;
+      const target = nominal[i]! + shifts[k]!;
+      const hit = nearestTo(rayCrossings(p, n, lane.polyline, width + 10), target);
+      return hit === null || Math.abs(hit - target) > TRANSITION_M;
     });
   const zone = (atEnd: boolean) => {
     const offset = atEnd ? road.endOffsetM : road.startOffsetM;
@@ -190,7 +200,7 @@ export function roadWidthAudit(city: City, net: CompiledCity, road: CRoad) {
       ['left', left],
       ['right', right],
     ] as const) {
-      const target = expected[side];
+      const target = expected[side] + shifts[k]!;
       const hits = rayCrossings(p, n, line, Math.abs(target) + width + 2).filter(
         (l) => Math.abs(l - target) <= width + 2,
       );
@@ -545,7 +555,8 @@ export function throughPairs(city: City, net: CompiledCity, node: CNode) {
 
 /** Measure 4 at a junction: a node with a through pair and at least one side road end (an end
  * not within 30 degrees of either arm of a through pair). For each through pair (a, b), C is its
- * through alignment (`corridor`) and the expected edges are C offset by `lateralOffsetM ± W/2`:
+ * through alignment (`corridor`) and the expected edges are C offset by `lateralOffsetM ± W/2`
+ * plus the road's converging shift (TASK-089) at the station:
  * a's up to the projection of a's cut onto C, b's from b's cut, linear between (they differ only
  * where the width or offset changes at the node). Stations every 0.5 m over the extent of the
  * node's outline and curbs projected onto C (±10 m around the node where it has none). The drawn
@@ -638,11 +649,23 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
       surfaceEdges(c.a).map((edge) => edge.at(-1)!),
       surfaceEdges(c.b).map((edge) => edge[0]!),
     ].map(([l, r]) => near(median(l!, r!)).along) as [number, number];
+    // TASK-089: each road's converging shift, at the station's projection on its reference
+    // line, up to its cut.
+    const shiftOf = (road: CRoad, s: number) => {
+      if (!road.startShift.length && !road.endShift.length) return 0;
+      const p = frame(c.line, c.lengths, s).p;
+      const length = cumulativeLengths(road.reference).at(-1)!;
+      return shiftAt(road, nearestOnPolyline(road.reference, p).along, length);
+    };
     const band = (s: number): [number, number] => {
       const [ea, eb] = c.edges;
+      const [sa, sb] = [shiftOf(c.a, Math.min(s, cutA)), shiftOf(c.b, Math.max(s, cutB))];
       const f =
         cutB > cutA ? Math.max(0, Math.min(1, (s - cutA) / (cutB - cutA))) : s < c.at ? 0 : 1;
-      return [ea[0] + (eb[0] - ea[0]) * f, ea[1] + (eb[1] - ea[1]) * f];
+      return [
+        ea[0] + sa + (eb[0] + sb - ea[0] - sa) * f,
+        ea[1] + sa + (eb[1] + sb - ea[1] - sa) * f,
+      ];
     };
     // Side roads: incident roads with an end at the node not within 30 degrees of either arm.
     const arms = [outward(city, c.a, true), outward(city, c.b, false)];
@@ -673,6 +696,7 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
         const source = city.roads[r.id]!;
         const w = roadWidth(source);
         return {
+          road: r,
           line: source.centerline,
           total: cumulativeLengths(source.centerline).at(-1)!,
           lo: source.lateralOffsetM - w / 2,
@@ -689,7 +713,17 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
         if (hit.along >= o.total - 1e-9 && overshoot > STEP_M) return false;
         const lateral =
           (q.x - hit.point.x) * -hit.direction.y + (q.y - hit.point.y) * hit.direction.x;
-        return lateral >= o.lo - BAND_TOLERANCE_M && lateral <= o.hi + BAND_TOLERANCE_M;
+        const shift =
+          o.road.startShift.length || o.road.endShift.length
+            ? shiftAt(
+                o.road,
+                nearestOnPolyline(o.road.reference, hit.point).along,
+                cumulativeLengths(o.road.reference).at(-1)!,
+              )
+            : 0;
+        return (
+          lateral >= o.lo + shift - BAND_TOLERANCE_M && lateral <= o.hi + shift + BAND_TOLERANCE_M
+        );
       });
     const stations: number[] = [];
     for (let k = 0; from + k * STEP_M <= to + 1e-9; k++) stations.push(from + k * STEP_M);
@@ -748,9 +782,10 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
           const s = c.at + (before ? -k : k) * STEP_M;
           if (s < 0 || s > total) break;
           const { p, n } = frame(c.line, c.lengths, s);
-          const hit = nearestTo(rayCrossings(p, n, lane.polyline, Math.abs(nominal) + 8), nominal);
-          if (hit !== null && Math.abs(hit - nominal) <= roadWidth(source))
-            result.laneM = Math.max(result.laneM, Math.abs(hit - nominal));
+          const target = nominal + shiftOf(road, s);
+          const hit = nearestTo(rayCrossings(p, n, lane.polyline, Math.abs(target) + 8), target);
+          if (hit !== null && Math.abs(hit - target) <= roadWidth(source))
+            result.laneM = Math.max(result.laneM, Math.abs(hit - target));
         }
       }
     }

@@ -249,6 +249,31 @@ test.each(auditCities)(
   120_000,
 );
 
+/** TASK-089: reference ends that move farther than 2 m, with the most they may. Through
+ * alignments of a converging flow (the owner's n:104 rule: the carriageway passing a converging
+ * node runs on straight, so its continuation's reference ends where the through line meets the
+ * node, half the corridor separation off the node point), and B43 far through alignments whose
+ * cuts grow by at most 2 m (`farThrough`), which may move an end a little past 2 m. */
+const farther: Record<string, number> = {
+  // Munich, converging flows: n:104 r:644 > r:1308; n:1181 r:729 and r:984 > r:1358; n:33
+  // r:944 > r:948.
+  'munich r:644:end': 5,
+  'munich r:1308:start': 5,
+  'munich r:729:end': 5,
+  'munich r:984:end': 5,
+  'munich r:1358:start': 5,
+  'munich r:944:end': 6.5,
+  'munich r:948:start': 6.5,
+  // Far through alignments: Munich n:635 r:934 > r:699; Sindelfingen n:658 r:1033 > r:1035 and
+  // n:81 r:82 > r:86.
+  'munich r:934:end': 2.5,
+  'munich r:699:start': 2.5,
+  'sindelfingen r:1033:end': 2.5,
+  'sindelfingen r:1035:start': 2.5,
+  'sindelfingen r:82:end': 2.5,
+  'sindelfingen r:86:start': 2.5,
+};
+
 test.each(auditCities)(
   'T35.2: %s reference lines keep their endpoints and stay within 5 cm of the source unless eased',
   (name) => {
@@ -271,7 +296,8 @@ test.each(auditCities)(
           : [road.reference[0]!, source[0]!];
         if (distance(p, q) <= 1e-9) return false;
         const node = net.nodes[atEnd ? road.to : road.from]!;
-        if (!node.outline.length || distance(p, q) > 2 + 1e-9)
+        const end = `${name} ${road.id}:${atEnd ? 'end' : 'start'}`;
+        if (!node.outline.length || distance(p, q) > (farther[end] ?? 2) + 1e-9)
           failures.push(`${road.id}: ${atEnd ? 'end' : 'start'} moved`);
         return true;
       });

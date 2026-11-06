@@ -1,6 +1,6 @@
 import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import { smoothstep, taperLength } from '../../network/lanes';
+import { CONVERGING, sameStreet, smoothstep, taperLength } from '../../network/lanes';
 import type { City, Road } from '../../schema';
 import { JUNCTION_ZONE_M, resample, vertexNormals } from './relax';
 import type { OsmRoad } from './roads';
@@ -109,9 +109,17 @@ export function assignCorridors(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
   const pairs = match(coincident);
   const duals = match(dual);
   const unnamed = duals.filter(([a]) => a.road.name === null);
-  const kept = pushable(city, roads, closePairs(roads));
+  // TASK-089: a pair pushable only because its continuation converges with its own other
+  // carriageway joins its corridor after the realignment (`separateDual`), which bends a
+  // corridor's carriageways as one arm: as two arms there, the realignment and the turns it
+  // classifies stay as before the pair was pushed.
+  const kept = pushable(city, roads, closePairs(roads), false);
   for (const pair of unnamed)
-    if (!kept.has(pair[0].road)) for (const { road } of pair) road.corridorId = null;
+    if (!kept.has(pair[0].road))
+      for (const { road } of pair) {
+        if (road.corridorId) deferredCorridor.set(road, road.corridorId);
+        road.corridorId = null;
+      }
   return pairs;
 }
 
@@ -246,10 +254,19 @@ function closePairs(roads: OsmRoad[]): [OsmRoad, OsmRoad][] {
  * across a node must carry its block on the same side of the node, its median-side edge within
  * 0.5 m of the pushed one's (a separated pair, a two-way street, another pushed pair): a centred
  * continuation (a dual carriageway meeting the node from one side only, whose far ends lie
- * apart) would make the through lanes jog by the offset across the node. Pairs with such a
- * continuation are dropped until none is left.
+ * apart) would make the through lanes jog by the offset across the node, unless the network sets
+ * that continuation side by side with its own other carriageway there (TASK-089). Pairs with such
+ * a continuation are dropped until none is left.
  */
-function pushable(city: City, roads: OsmRoad[], pairs: [OsmRoad, OsmRoad][]): Set<Road> {
+/** Corridor ids of unnamed pairs that may join their corridor after the realignment. */
+const deferredCorridor = new WeakMap<Road, string>();
+
+function pushable(
+  city: City,
+  roads: OsmRoad[],
+  pairs: [OsmRoad, OsmRoad][],
+  exempt = true,
+): Set<Road> {
   const side = city.drivingSide === 'right' ? 1 : -1;
   const outward = (road: Road, node: string) => {
     const line = road.from === node ? road.centerline : [...road.centerline].reverse();
@@ -258,6 +275,33 @@ function pushable(city: City, roads: OsmRoad[], pairs: [OsmRoad, OsmRoad][]): Se
     const origin = city.nodes[node]!.pos;
     return Math.atan2(p.y - origin.y, p.x - origin.x);
   };
+  // A continuation converging on the node with its other carriageway is set side by side there
+  // by the network, lined up with the pushed pair (TASK-089 `convergingShifts`).
+  // As the network decides (`convergingShifts`): not where a block would move toward another road
+  // end within 60 degrees beside it.
+  const crowded = (members: Road[], node: string) =>
+    members.some((m) => {
+      const heading = outward(m, node);
+      // The side the block moves to: its travel right.
+      const toward = heading + (side * (m.to === node ? -1 : 1) * Math.PI) / 2;
+      return roads.some(
+        ({ road: e }) =>
+          !members.includes(e) &&
+          (e.from === node || e.to === node) &&
+          Math.cos(outward(e, node) - heading) > Math.cos(Math.PI / 3) &&
+          Math.cos(outward(e, node) - toward) > 0,
+      );
+    });
+  const converging = (other: Road, node: string, pair: [OsmRoad, OsmRoad]) =>
+    roads.some(
+      ({ road: partner }) =>
+        partner !== other &&
+        !pair.some((p) => p.road === partner) &&
+        (other.to === node ? partner.from === node : partner.to === node) &&
+        sameStreet(other, partner) &&
+        Math.cos(outward(other, node) - outward(partner, node)) >= CONVERGING &&
+        !crowded([other, partner], node),
+    );
   const pushed = new Set(pairs.flatMap((pair) => pair.map(({ road }) => road)));
   for (let changed = true; changed;) {
     changed = false;
@@ -269,6 +313,7 @@ function pushable(city: City, roads: OsmRoad[], pairs: [OsmRoad, OsmRoad][]): Se
             if (pair.some((p) => p.road === other)) return false;
             if (!(road.to === node ? other.from === node : other.to === node)) return false;
             if (Math.cos(outward(road, node) - outward(other, node)) > -cosine30) return false;
+            if (exempt && converging(other, node, pair)) return false;
             const edge = pushed.has(other)
               ? MEDIAN_M / 2
               : side * other.lateralOffsetM - halfBlock(other);
@@ -308,6 +353,7 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
   for (const pair of pairs) {
     const [a, b] = pair;
     if (!pushed.has(a.road)) continue;
+    for (const { road } of pair) road.corridorId ??= deferredCorridor.get(road) ?? null;
     const shares = [a, b].map(({ road }) => halfBlock(road) + MEDIAN_M / 2);
     const clearance = shares[0]! + shares[1]!;
     // Both roads are sampled at the first one's points p and their nearest points q on the

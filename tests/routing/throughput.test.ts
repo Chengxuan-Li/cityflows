@@ -12,7 +12,11 @@ import { throughputCities, throughputFixture, throughputRequests } from './throu
 // at most 0.01 percent. Again for TASK-087 (dual carriageways pushed apart, r:729/r:984 side by
 // side): Munich has 259 connectors (260 before), so its fixed sample of connector pairs shifts
 // and 90 of its 96 requests are others; Sindelfingen's requests are the same and route on the
-// same roads, 87 through renumbered movements (n:580 loses one).
+// same roads, 87 through renumbered movements (n:580 loses one). Again for TASK-089 (converging
+// carriageways set side by side): Munich keeps its 259 connectors and movements, but lanes at
+// the split junctions are cut farther out, so some connectors sit a few metres along and 12 of
+// its 96 routes take other roads (9 costs on the same roads moved, by at most 3.5 percent);
+// Sindelfingen keeps its requests, roads and movements, 2 costs moved by at most 0.23 percent.
 // Includes the complete result, not just road IDs: equal-cost ties, movements, target lanes and
 // exact costs matter.
 const expected = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<

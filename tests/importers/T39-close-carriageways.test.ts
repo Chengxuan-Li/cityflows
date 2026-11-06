@@ -1,9 +1,16 @@
 import { expect, test } from 'vitest';
 import { laneOverlaps } from '../../bench/geometry-audit';
 import { auditCities, loadAuditCity, type AuditCity } from '../../bench/junction-audit';
-import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../src/geo/polyline';
+import {
+  cumulativeLengths,
+  nearestOnPolyline,
+  parallelOffset,
+  pointAtDistance,
+} from '../../src/geo/polyline';
+import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity } from '../../src/network';
+import { crossingStripes } from '../../src/render/layers/roads';
 import type { City, Road } from '../../src/schema';
 import { junctionOverlaps } from '../network/junction-audit';
 
@@ -163,6 +170,8 @@ const unrelated: Record<AuditCity, Record<string, number>> = {
   town: {},
   sindelfingen: {
     'r:1004/r:435': 22.64,
+    // TASK-089: r:1055 continues r:966 and lines up with its split end at n:78, onto r:80.
+    'r:1055/r:80': 2.14,
     'r:1029/r:1179': 112,
     'r:1030/r:1178': 113.39,
     'r:1091/r:892': 7.3,
@@ -197,7 +206,8 @@ const unrelated: Record<AuditCity, Record<string, number>> = {
     'r:1027/r:900': 83.69,
     'r:1030/r:416': 33.56,
     'r:1030/r:687': 4.09,
-    'r:1093/r:1094': 21.97,
+    // TASK-089: n:1091's curbs leave the road edges along them (B42), 0.18 m2 more outside.
+    'r:1093/r:1094': 22.15,
     'r:1093/r:1095': 20.87,
     'r:1189/r:735': 6.28,
     'r:196/r:259': 4.59,
@@ -210,18 +220,12 @@ const unrelated: Record<AuditCity, Record<string, number>> = {
     'r:735/r:925': 6.89,
   },
 };
-/** Corridor pairs whose lanes still overlap outside the outlines, and why. Each needs its two
- * ends side by side at a node where a single `lateralOffsetM` per road cannot put them (the
- * pair meets that node from one side only, or a centred continuation would jog across it). */
+/** Corridor pairs whose lanes still overlap outside the outlines, and why. TASK-089 set the
+ * carriageways meeting a node from one side only side by side there (`convergingShifts`); the
+ * importer pushes the pairs whose continuation the network now lines up (r:1277/r:1362 at n:774,
+ * r:1354/r:447 at n:382). */
 const corridorResiduals: Record<string, string> = {
-  'r:1276/r:1368': 'Landsberger meets n:774 from the west only (far ends n:967, n:936).',
-  'r:1277/r:1362': 'Landsberger n:774 to n:719: pushing it would jog through r:1276 at n:774.',
-  'r:1354/r:447': 'Arnulfstraße n:446 to n:382: pushing it would jog through r:383/r:399 at n:382.',
-  'r:1372/r:845': 'Marsstraße meets n:823 from one side only (far ends n:367, n:33).',
   'r:259/r:694': 'Trappentreustraße shares no node; the blocks touch near n:257.',
-  'r:636/r:950': 'Arnulfstraße meets the signal n:949 from one side only.',
-  'r:644/r:964': 'Landsberger meets n:104 from the east only (far ends n:642, n:963).',
-  'r:712/r:955': 'Arnulfstraße meets the signal n:949 from one side only.',
 };
 
 test.each(auditCities)(
@@ -246,6 +250,126 @@ test.each(auditCities)(
   120_000,
 );
 
+/** B43: divided pairs (an incoming and an outgoing carriageway of one corridor at a node) whose
+ * median-side edges run within 1 m of each other 40 m out, with their median just past the
+ * later cut and 40 m beyond it where the two differ by more than 0.05 m. */
+function medianChanges(net: CompiledCity): string[] {
+  const out: string[] = [];
+  const edge = (road: CompiledCity['roads'][number], node: number) => {
+    const h = road.surface.length / 2;
+    const side = road.surface.slice(0, h);
+    return road.to === node ? [...side].reverse() : side;
+  };
+  for (const node of net.nodes) {
+    const incident = net.roads.filter(
+      (r) => (r.from === node.idx || r.to === node.idx) && r.from !== r.to,
+    );
+    for (const a of incident)
+      for (const b of incident) {
+        if (a.to !== node.idx || b.from !== node.idx || a === b) continue;
+        if (!a.corridorId || a.corridorId !== b.corridorId || a.streetGroupId) continue;
+        const ea = edge(a, node.idx),
+          eb = edge(b, node.idx);
+        const lengths = cumulativeLengths(ea);
+        const start = nearestOnPolyline(ea, eb[0]!).along + 0.5;
+        if (lengths.at(-1)! < start + 41) continue;
+        const median = (d: number) => nearestOnPolyline(eb, pointAtDistance(ea, lengths, d)).away;
+        const [near, far] = [median(start), median(start + 40)];
+        if (far <= 1 && Math.abs(near - far) > 0.05)
+          out.push(`${node.id} ${a.id}/${b.id} ${near.toFixed(2)} vs ${far.toFixed(2)}`);
+      }
+  }
+  return out;
+}
+
+test.each(auditCities)(
+  'T39.4: %s divided pairs keep their median at the node (B43)',
+  (name) => {
+    const { net } = load(name);
+    // Main before TASK-089: Munich n:104, n:407, n:719, n:721, n:774 and Sindelfingen n:156. The
+    // one left: n:156's r:157/r:510 meet the node 10 degrees apart and their median is set at one
+    // station just past the cuts, 0.43 m at r:510's cut against 0.67 m 40 m out (1.43 m on main).
+    expect(medianChanges(net).map((m) => m.split(' ').slice(0, 2).join(' '))).toEqual(
+      name === 'sindelfingen' ? ['n:156 r:157/r:510'] : [],
+    );
+  },
+  120_000,
+);
+
+/** TASK-089: how often each lane edge of a road split at a node (shifted at that end) changes
+ * the sign of its curvature within 60 m of the node, sampled every 2 m and counting bends
+ * sharper than a 100 m radius: an edge easing once changes sign at most once. */
+function wobbles(net: CompiledCity): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const node of net.nodes)
+    for (const road of net.roads) {
+      const atEnd = road.to === node.idx;
+      if (!(atEnd ? road.endShift : road.from === node.idx ? road.startShift : []).length) continue;
+      for (const index of road.lanes) {
+        const lane = net.lanes[index]!;
+        for (const [side, offset] of [
+          ['L', -lane.widthM / 2],
+          ['R', lane.widthM / 2],
+        ] as const) {
+          const line = parallelOffset(lane.polyline, offset);
+          const lengths = cumulativeLengths(line);
+          const total = lengths.at(-1)!;
+          const points: Vec2[] = [];
+          for (
+            let s = atEnd ? Math.max(0, total - 60) : 0;
+            s <= (atEnd ? total : Math.min(total, 60));
+            s += 2
+          )
+            points.push(pointAtDistance(line, lengths, s));
+          const signs: number[] = [];
+          for (let i = 1; i + 1 < points.length; i++) {
+            const [a, p, b] = [points[i - 1]!, points[i]!, points[i + 1]!];
+            const turn = Math.atan2(
+              (p.x - a.x) * (b.y - p.y) - (p.y - a.y) * (b.x - p.x),
+              (p.x - a.x) * (b.x - p.x) + (p.y - a.y) * (b.y - p.y),
+            );
+            if (Math.abs(turn) / 2 > 0.01 && signs.at(-1) !== Math.sign(turn))
+              signs.push(Math.sign(turn));
+          }
+          if (signs.length > 2) out[`${node.id} ${lane.id}${side}`] = signs.length - 1;
+        }
+      }
+    }
+  return out;
+}
+
+// Edges that change curvature sign more than once near a split node, each with its reason.
+const wobbling: Record<AuditCity, Record<string, string>> = {
+  grid: {},
+  town: {},
+  sindelfingen: {},
+  munich: {
+    'n:104 r:1308#1R': 'The source line bends twice within 60 m of n:104 (2 on main too).',
+    'n:328 r:1330#1R': 'The source line bends three times within 60 m of n:328 (3 on main too).',
+    'n:33 r:946#0L': 'The source line bends twice within 60 m of n:33 (2 on main too).',
+    'n:33 r:946#0R': 'As r:946#0L.',
+    'n:33 r:946#1L': 'As r:946#0L.',
+    'n:33 r:946#1R': 'As r:946#0L.',
+    'n:33 r:845#1L':
+      'n:33 splits two pairs side by side (r:845/r:944 and r:946/r:948): their eases meet on the bend of the source lines (1 on main).',
+    'n:33 r:944#2L': 'As r:845#1L (1 on main).',
+    'n:33 r:944#2R': 'As r:845#1L (1 on main).',
+    'n:33 r:948#0L': 'As r:845#1L (1 on main).',
+    'n:33 r:948#0R': 'As r:845#1L (1 on main).',
+    'n:33 r:948#1L': 'As r:845#1L (1 on main).',
+    'n:33 r:948#1R': 'As r:845#1L (1 on main).',
+  },
+};
+
+test.each(auditCities)(
+  'T39.5: %s lane edges near a split node ease without wobbling',
+  (name) => {
+    const { net } = load(name);
+    expect(Object.keys(wobbles(net)).sort()).toEqual(Object.keys(wobbling[name]).sort());
+  },
+  120_000,
+);
+
 /** Lane pairs of the node's roads crossing within `reach` of the node. */
 function crossingsNear(net: CompiledCity, id: string, reach = 40) {
   const node = net.nodes[net.index.node.get(id as `n:${number}`)!]!;
@@ -262,24 +386,42 @@ function crossingsNear(net: CompiledCity, id: string, reach = 40) {
 
 test('T39.3: the named Munich nodes, n:1181 and B42 at n:138', () => {
   const { city, net } = load('munich');
-  // Pushed apart: no two lanes cross within 40 m.
-  for (const id of ['n:324', 'n:721']) expect(crossingsNear(net, id), id).toEqual([]);
-  // Met from one side only, or behind a centred continuation (`corridorResiduals`): the lanes of
-  // the two carriageways still cross near the node.
-  for (const id of ['n:104', 'n:774', 'n:446', 'n:949'])
-    expect(crossingsNear(net, id).length, id).toBeGreaterThan(0);
-  // n:1181: r:729 lies beside r:984, not on it, and is cut where r:984 is, so it no longer runs
-  // under r:476's exit crossing (TASK-088's R3-1 finding).
+  // Pushed apart (TASK-087), or set side by side where they converge (TASK-089): no two lanes
+  // cross within 40 m.
+  for (const id of [
+    'n:324',
+    'n:721',
+    'n:104',
+    'n:774',
+    'n:446',
+    'n:949',
+    'n:823',
+    'n:1181',
+    'n:382',
+  ])
+    expect(crossingsNear(net, id), id).toEqual([]);
+  // n:1181: r:729 lies beside r:984, not on it, and no longer runs under r:476's exit crossing
+  // (TASK-088's R3-1 finding). TASK-089: the two and r:476 are one approach, set side by side,
+  // each cut by its own edges; r:729 is cut no farther out than r:984 (1.75 m nearer the node),
+  // and the exit crossing shows all its stripes, as does r:984's (r:729's lies under its turn
+  // into r:476, none on main either).
   const node = net.nodes[net.index.node.get('n:1181')!]!;
   const incident = net.roads.filter((r) => r.from === node.idx || r.to === node.idx);
   const setback = (id: string) => node.setbacks[incident.findIndex((r) => r.id === id)]!;
-  expect(setback('r:729')).toBeCloseTo(setback('r:984'), 6);
+  expect(setback('r:729')).toBeLessThan(setback('r:984') + 0.5);
+  for (const [id, stripes] of [
+    ['r:476', 8],
+    ['r:984', 8],
+  ] as const) {
+    const road = net.roads[net.index.road.get(id)!]!;
+    expect(crossingStripes(net, road, road.to === node.idx).length, id).toBe(stripes);
+  }
   expect(city.roads['r:729']!.lateralOffsetM).toBe(-3.5);
   expect(city.roads['r:984']!.lateralOffsetM).toBe(1.75);
   expect(laneOverlaps(city, net, false).filter((o) => /r:(729|984)\b/.test(o.roads))).toEqual([]);
-  // The west carriageways r:981/r:1358 meet n:1181 from one side only: they still overlap under
-  // the polygon's gore, which the network has to set side by side.
-  expect(laneOverlaps(city, net, false).map((o) => o.roads)).toContain('r:1358/r:981');
+  // TASK-089: the west carriageways r:981/r:1358 meet n:1181 from one side only; the network sets
+  // them side by side there, so they no longer overlap under the polygon either.
+  expect(laneOverlaps(city, net, false).map((o) => o.roads)).not.toContain('r:1358/r:981');
   // B42: Arnulfstraße west of n:138 is one corridor arm pointing along its carriageways' mean
   // direction, 60 degrees from Donnersbergerstraße, so Donnersbergerstraße is not bent.
   for (const id of ['r:140', 'r:141'])
