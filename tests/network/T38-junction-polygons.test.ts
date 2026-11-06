@@ -435,12 +435,6 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
     // TASK-089.
     'r:1109#0':
       'n:594: r:1061/r:966 converge there and are set side by side, so the side street meets a wider approach (2.1 m).',
-    'r:1155#0':
-      'n:792: the service road leaves 1.7 degrees from r:574/r:971, which the importer now separates (14.5 m instead of 7 m), so it is cut where it clears r:971 (7.3 m).',
-    'r:1156#0': 'As r:1155#0, its other direction (7.3 m).',
-    'r:971#0':
-      'n:792: separated from r:574 now, it lies along the service road r:1155/r:1156 1.7 degrees away and is cut where it clears it (3.2 m).',
-    'r:971#1': 'As r:971#0 (5.3 m).',
   },
   munich: {
     'r:1024#0':
@@ -462,13 +456,10 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
     'r:1050#0': 'n:719: Landsberger Straße keeps its 0.5 m median at the node (B43) (3.8 m).',
     'r:1182#0': 'n:1181, the side street between the converging pairs (3.8 m).',
     'r:1183#0': 'As r:1182#0, its other direction (4.4 m).',
-    'r:126#0': 'n:1303, beside the converging r:680/r:697 (3.2 m).',
     'r:1260#0': 'n:382, the stub beside the converging r:383/r:399 (3.8 m).',
     'r:1261#0': 'As r:1260#0, its other direction (3.7 m).',
     'r:1262#0': 'n:382, the other stub (3.5 m).',
     'r:1263#0': 'As r:1262#0, its other direction (4.3 m).',
-    'r:352#0': 'n:1375, beside the converging r:1044/r:1358 (3.2 m).',
-    'r:353#0': 'As r:352#0, its other direction (4.2 m).',
     'r:36#0': 'n:33, beside the converging r:845/r:944 and r:946/r:948 (3.3 m).',
     'r:368#0':
       'Marsstraße between n:949 and n:823, both converging nodes: cut farther out at n:949 (2.7 m).',
@@ -477,13 +468,12 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
     'r:480#1': 'As r:480#0 (3.7 m).',
     'r:422#0': 'n:949, the side street beside the converging pairs (2.7 m).',
     'r:423#0': 'As r:422#0, its other direction (3.5 m).',
-    'r:53#0': 'n:1303, the side street beside the converging r:680/r:697 (3.4 m).',
-    'r:54#0': 'As r:53#0, its other direction (3.2 m).',
     'r:542#0':
       'n:446: Arnulfstraße r:1354/r:447 is separated by the importer now, a wider approach (3.7 m).',
     'r:543#0': 'As r:542#0, its other direction (3.1 m).',
     'r:806#0': 'n:407, beside the converging r:386/r:716 (3.6 m).',
     'r:824#0': 'n:823, beside the converging r:1372/r:845 (3.2 m).',
+    'r:946#1': 'n:33, the inner lane of the split r:946 beside r:948, cut 2.2 m farther out.',
   },
 };
 
@@ -543,12 +533,12 @@ function fingerprint(net: CompiledCity) {
 // (empty in the grid and the town) and every lane its reference normals, and the curbs at the
 // nodes are edge-following cubics (B42), so every outline moves; the grid's and the town's
 // setbacks and movements are unchanged. Sindelfingen and Munich also have their converging
-// carriageways set side by side and the importer's newly separated pairs.
+// carriageways set side by side, and Munich the importer's newly separated pairs.
 const fingerprints: Record<AuditCity, string> = {
   grid: '119e12ba38491e6f',
   town: 'd742fc9c03a237ed',
-  sindelfingen: '66ce9cc3c8680b0d',
-  munich: '7a662c2cd6b5dd4b',
+  sindelfingen: '315a1a0c8920856d',
+  munich: '2ef7091167826274',
 };
 
 test.each(auditCities)(

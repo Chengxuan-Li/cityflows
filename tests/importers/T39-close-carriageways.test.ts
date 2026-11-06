@@ -1,7 +1,13 @@
 import { expect, test } from 'vitest';
 import { laneOverlaps } from '../../bench/geometry-audit';
 import { auditCities, loadAuditCity, type AuditCity } from '../../bench/junction-audit';
-import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../src/geo/polyline';
+import {
+  cumulativeLengths,
+  nearestOnPolyline,
+  parallelOffset,
+  pointAtDistance,
+} from '../../src/geo/polyline';
+import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity } from '../../src/network';
 import { crossingStripes } from '../../src/render/layers/roads';
@@ -164,6 +170,8 @@ const unrelated: Record<AuditCity, Record<string, number>> = {
   town: {},
   sindelfingen: {
     'r:1004/r:435': 22.64,
+    // TASK-089: r:1055 continues r:966 and lines up with its split end at n:78, onto r:80.
+    'r:1055/r:80': 2.14,
     'r:1029/r:1179': 112,
     'r:1030/r:1178': 113.39,
     'r:1091/r:892': 7.3,
@@ -284,6 +292,80 @@ test.each(auditCities)(
     expect(medianChanges(net).map((m) => m.split(' ').slice(0, 2).join(' '))).toEqual(
       name === 'sindelfingen' ? ['n:156 r:157/r:510'] : [],
     );
+  },
+  120_000,
+);
+
+/** TASK-089: how often each lane edge of a road split at a node (shifted at that end) changes
+ * the sign of its curvature within 60 m of the node, sampled every 2 m and counting bends
+ * sharper than a 100 m radius: an edge easing once changes sign at most once. */
+function wobbles(net: CompiledCity): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const node of net.nodes)
+    for (const road of net.roads) {
+      const atEnd = road.to === node.idx;
+      if (!(atEnd ? road.endShift : road.from === node.idx ? road.startShift : []).length) continue;
+      for (const index of road.lanes) {
+        const lane = net.lanes[index]!;
+        for (const [side, offset] of [
+          ['L', -lane.widthM / 2],
+          ['R', lane.widthM / 2],
+        ] as const) {
+          const line = parallelOffset(lane.polyline, offset);
+          const lengths = cumulativeLengths(line);
+          const total = lengths.at(-1)!;
+          const points: Vec2[] = [];
+          for (
+            let s = atEnd ? Math.max(0, total - 60) : 0;
+            s <= (atEnd ? total : Math.min(total, 60));
+            s += 2
+          )
+            points.push(pointAtDistance(line, lengths, s));
+          const signs: number[] = [];
+          for (let i = 1; i + 1 < points.length; i++) {
+            const [a, p, b] = [points[i - 1]!, points[i]!, points[i + 1]!];
+            const turn = Math.atan2(
+              (p.x - a.x) * (b.y - p.y) - (p.y - a.y) * (b.x - p.x),
+              (p.x - a.x) * (b.x - p.x) + (p.y - a.y) * (b.y - p.y),
+            );
+            if (Math.abs(turn) / 2 > 0.01 && signs.at(-1) !== Math.sign(turn))
+              signs.push(Math.sign(turn));
+          }
+          if (signs.length > 2) out[`${node.id} ${lane.id}${side}`] = signs.length - 1;
+        }
+      }
+    }
+  return out;
+}
+
+// Edges that change curvature sign more than once near a split node, each with its reason.
+const wobbling: Record<AuditCity, Record<string, string>> = {
+  grid: {},
+  town: {},
+  sindelfingen: {},
+  munich: {
+    'n:104 r:1308#1R': 'The source line bends twice within 60 m of n:104 (2 on main too).',
+    'n:328 r:1330#1R': 'The source line bends three times within 60 m of n:328 (3 on main too).',
+    'n:33 r:946#0L': 'The source line bends twice within 60 m of n:33 (2 on main too).',
+    'n:33 r:946#0R': 'As r:946#0L.',
+    'n:33 r:946#1L': 'As r:946#0L.',
+    'n:33 r:946#1R': 'As r:946#0L.',
+    'n:33 r:845#1L':
+      'n:33 splits two pairs side by side (r:845/r:944 and r:946/r:948): their eases meet on the bend of the source lines (1 on main).',
+    'n:33 r:944#2L': 'As r:845#1L (1 on main).',
+    'n:33 r:944#2R': 'As r:845#1L (1 on main).',
+    'n:33 r:948#0L': 'As r:845#1L (1 on main).',
+    'n:33 r:948#0R': 'As r:845#1L (1 on main).',
+    'n:33 r:948#1L': 'As r:845#1L (1 on main).',
+    'n:33 r:948#1R': 'As r:845#1L (1 on main).',
+  },
+};
+
+test.each(auditCities)(
+  'T39.5: %s lane edges near a split node ease without wobbling',
+  (name) => {
+    const { net } = load(name);
+    expect(Object.keys(wobbles(net)).sort()).toEqual(Object.keys(wobbling[name]).sort());
   },
   120_000,
 );

@@ -222,10 +222,10 @@ test.each([
   // TASK-087 moved it again (9f013205… before): n:322, n:324, n:328 and n:721 see Landsberger
   // Straße's carriageways side by side, n:726 and n:1181 the pair r:729/r:984 laid side by side.
   // TASK-089 moved it (c4e35356… before): the B42 curbs move every outline, and at the nodes where
-  // a street's carriageways converge (n:104, n:774, n:949, n:823, n:1181, n:382, n:33, n:1303,
-  // n:1375, n:407, n:967) each carriageway has its own end, so those cuts and outlines move;
+  // a street's carriageways converge (n:104, n:774, n:949, n:823, n:1181, n:382, n:33, n:407,
+  // n:328, n:721) each carriageway has its own end, so those cuts and outlines move;
   // n:446 and n:774 see the pairs the importer now separates.
-  ['Munich', 63, '4ded6f487b0fa5a2d526a734f9eeef333541b07d1f1bd67f8bda57a5f8583ce9'],
+  ['Munich', 63, '28f2a8006491928b92c2d124d223b03d1cecb86db2367e703a1731e82059b3bb'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {

@@ -194,11 +194,8 @@ test.each([
   // TASK-087: Sindelfingen's n:580 becomes a continuation node (r:585/r:586 runs on into the
   // unnamed pair r:582/r:583, now side by side): its two lined-up pairs are added, r:586>r:582
   // is classified through, and the turn r:583#0>r:582#0 between the pair's carriageways goes.
-  // TASK-089: 1122. The importer separates r:574/r:971 (their continuation at n:78 converges
-  // with its other carriageway, which the network sets side by side), so n:78's realignment
-  // bends r:966 instead of r:1061: r:1061>r:966 turns more than 150 degrees, a u-turn from the
-  // inner lane only (r:1061#1>r:966#0 goes), and r:574#0>r:971#0 is a u-turn too.
-  ['Sindelfingen', 49, 96, 0, 1122],
+  // TASK-089: unchanged (the network keeps every movement where it splits converging nodes).
+  ['Sindelfingen', 49, 96, 0, 1123],
 ] as const)(
   'T37: %s gives every lined-up trunk and branch lane a movement unless banned',
   (name, nodeCount, pairCount, bannedCount, movementCount) => {

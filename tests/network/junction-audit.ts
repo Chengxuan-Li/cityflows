@@ -25,7 +25,8 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     // nor do the carriageways converging on a node from one side only, which the network sets side
     // by side there (r:644/r:964 at n:104, r:1276/r:1368 at n:774, r:636/r:950 and r:712/r:955 at
     // n:949, r:1372/r:845 at n:823), nor the pairs the importer now pushes because their
-    // continuation is set side by side (r:1277/r:1362 at n:774, r:1354/r:447 at n:382).
+    // continuation is set side by side (r:1277/r:1362 at n:774, r:1354/r:447 at n:382; such an
+    // unnamed pair joins its corridor only after the realignment, which leaves turns as on main).
   },
   'sindelfingen-a81': {
     'r:650#0>r:80#0':
@@ -34,15 +35,14 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     'r:499#0>r:876#0': 'Curved zero-offset source roads cross 25 m beyond their common junction.',
     // TASK-084 separated the coincident pair r:746/r:803 (r:746#0>r:803#1, r:746#1>r:803#0
     // before) into a divided pair; it no longer crosses.
-    // TASK-089: the importer now pushes r:574/r:971 apart into one corridor (`pushable` lets a
-    // pair be pushed where the network sets its continuation side by side), so r:574#0>r:971#0
-    // and r:1155#0>r:574#0 no longer cross; the service way r:1155/r:1156, drawn 1.7 degrees off
-    // the pair at n:792, lies across the pushed r:971.
+    'r:574#0>r:971#0': 'Separate zero-offset source carriageways cross along their road bodies.',
+    'r:1155#0>r:574#0':
+      'Service access crosses the separate source carriageway 57 m from the junction.',
     'r:1155#0>r:971#1':
       'Service access crosses the separate source carriageway 113 m from the junction.',
-    'r:1155#0>r:971#0':
-      'Service access r:1155, drawn 1.7 degrees off the pushed r:971 at n:792, lies across it.',
-    'r:1156#0>r:971#1': 'As r:1155#0>r:971#0, the service access in the other direction.',
+    // TASK-089: r:574/r:971 stay as drawn (main): pushing them changes n:78's realignment and
+    // so its turns (the network must stay unchanged), and the network cannot split them at
+    // n:792, where the service way r:1155 runs 1.7 degrees beside them.
   },
 };
 
