@@ -104,6 +104,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-078](tasks/TASK-078.md) | 5 | Junction curbs with a realistic radius, lanes untouched (B32) | `src/network/junctions.ts` (curbs only), `types.ts` (additive), `src/geo/polyline.ts` (additive), `drawNode` in `nodes.ts`, `bench/junction-audit.ts`, `tests/network/T31*` | 063, 074; design in architecture 5.1 | T31; hashes unchanged | done |
 | [TASK-079](tasks/TASK-079.md) | 5 | Markings up to the junction, arrows once, offsets on curves (B33 to B35) | `src/render/layers/roads.ts`, a marking-offset export in `src/geo/polyline.ts`, `tests/render/T32*` | 072, 074, 075; design in architecture 11 | T32 | done |
 | [TASK-080](tasks/TASK-080.md) | 5 | Short transitions, lanes through the remaining splits and merges (B36, B37) | `src/network/continuity.ts`, `lanes.ts`, `transitions.ts`, `drawRoadJoins` in `nodes.ts`, `tests/network/T33*` | 071, 074, 076; design in architecture 5.1 | T33 | done |
+| [TASK-081](tasks/TASK-081.md) | 5 | Geometry audit and visual regression harness | new `bench/geometry-audit.ts`, `bench/geometry-shots.ts`, `package.json` scripts, `tests/bench/T34*` | 074, 078, 079, 080; plan "Geometry rework" | T34; baseline of G1, G2 | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -571,11 +572,10 @@ Gates the lead applies to every merge, without asking:
 - Checks: `npm run check` green (rerun 5 s time-outs under load with a longer timeout and
   say so); the full Playwright suite with T16 at the end of each stage.
 - A task that misses a gate goes back to its agent with the measured failure, at most twice;
-  small integration fixes are lead commits. Schema stays as it is: compiled types in
-  `src/network/types.ts` may grow, `src/schema` may not without the owner.
+  small integration fixes are lead commits. New dependencies and `src/schema` or project
+  format changes (with a migration) need no owner check (owner, 2026-11-06).
 
-The lead stops and asks the owner when: a stage needs a `src/schema` or project-format
-change, a dependency other than `clipper2-ts`, or a change to simulation rules; a gate still
+The lead stops and asks the owner when: a stage needs a change to simulation rules; a gate still
 fails after two rounds; a target turns out to be wrong for the owner's cases; or the work
 would change something outside this repository. Otherwise it merges, pushes `main` (Pages
 redeploys) and reports after each merge.
@@ -1441,7 +1441,8 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   paired or parallel parts of one street (`Road.corridorId`); the old junction outline and
   apron code is deleted once replaced; the traffic gate's 90 percent tolerance; push `main`
   after each merge. The lead runs the work in this session with subagents it drives, by the
-  plan in "Geometry rework".
+  plan in "Geometry rework". Later the same day: new dependencies and schema or project
+  format changes need no owner check either; the plan starts.
 
 - 2026-11-05, after testing wave 15: the four round 2 items (markings through junctions
   without signals, junction shapes, cars missing their exit and the Munich deadlock, a
