@@ -101,9 +101,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-075](tasks/TASK-075.md) | 5 | Lane markings through junctions without signals | new `src/render/layers/junction-markings.ts`, `scene.ts` wiring, `style.ts` (additive), `tests/render/T28*` | 061, 063, 071, 072; design in architecture 11 | T28; dashed guide lines on major roads | done |
 | [TASK-076](tasks/TASK-076.md) | 5 | Cars reach their exit: lane choice, cooperative gaps, give-up | `src/routing/lanes.ts`, `src/sim/lane-change.ts`, the proposal pass and `planLane` in `engine.ts`, `bench/import-probe.ts`, `tests/sim/T29*` | 032, 048, 071, 072; design in architecture 7, 8 | T29; no car held off its target lanes | done |
 | [TASK-077](tasks/TASK-077.md) | 5 | Gridlock recovery: a stuck jam head fades and respawns | commit and removal in `engine.ts`, `connectors.ts`, `vehicle.ts`, `metrics.ts`, `types.ts`, snapshot transfer in `src/host`, `layers/vehicles.ts`, inspector and exports, `tests/sim/T30*` | 064, 065, 072, 076; design in architecture 1, 8, 11 | T30; Munich never locks | done |
-| [TASK-078](tasks/TASK-078.md) | 5 | Junction curbs with a realistic radius, lanes untouched (B32) | `src/network/junctions.ts` (curbs only), `types.ts` (additive), `src/geo/polyline.ts` (additive), `drawNode` in `nodes.ts`, `bench/junction-audit.ts`, `tests/network/T31*` | 063, 074; design in architecture 5.1 | T31; hashes unchanged | todo |
+| [TASK-078](tasks/TASK-078.md) | 5 | Junction curbs with a realistic radius, lanes untouched (B32) | `src/network/junctions.ts` (curbs only), `types.ts` (additive), `src/geo/polyline.ts` (additive), `drawNode` in `nodes.ts`, `bench/junction-audit.ts`, `tests/network/T31*` | 063, 074; design in architecture 5.1 | T31; hashes unchanged | done |
 | [TASK-079](tasks/TASK-079.md) | 5 | Markings up to the junction, arrows once, offsets on curves (B33 to B35) | `src/render/layers/roads.ts`, a marking-offset export in `src/geo/polyline.ts`, `tests/render/T32*` | 072, 074, 075; design in architecture 11 | T32 | done |
-| [TASK-080](tasks/TASK-080.md) | 5 | Short transitions, lanes through the remaining splits and merges (B36, B37) | `src/network/continuity.ts`, `lanes.ts`, `transitions.ts`, `drawRoadJoins` in `nodes.ts`, `tests/network/T33*` | 071, 074, 076; design in architecture 5.1 | T33 | todo |
+| [TASK-080](tasks/TASK-080.md) | 5 | Short transitions, lanes through the remaining splits and merges (B36, B37) | `src/network/continuity.ts`, `lanes.ts`, `transitions.ts`, `drawRoadJoins` in `nodes.ts`, `tests/network/T33*` | 071, 074, 076; design in architecture 5.1 | T33 | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -328,6 +328,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B37 | Owner, round 3 (3), clarified: where a road gains a lane the widening should happen over a short section, not a long gradual change. | Geometry: TASK-071's taper is `min(60 m, half the road)`; make it short, scaled by speed (about 20 m in town, up to 40 m on fast roads), for added and dropped lanes and branch offsets alike. |
 | B36 | Owner, round 3 (4, 5): carriageway splits and merges that TASK-071 does not cover draw as two overlapping surfaces without lane markings (4), or with a jagged edge where a ramp joins (5). | Network and renderer: lanes continue side by side with dividers through such splits and merges, and an absorbing merge draws as a smooth taper. |
 | B38 | TASK-079 review: some lane polylines step backwards by 4 to 26 m (Munich `r:1025`/`r:1026`, `r:839`/`r:840`, `r:866`/`r:867`; Sindelfingen `r:1053`/`r:1054`, `r:1116`/`r:1117`), so the markings drawn from them are off there. | Geometry (`lanes.ts`) or the importer's smoothing: find where the offset lane polyline folds back and remove the fold. |
+| B39 | TASK-080 review: at multi-lane splits and merges that stay ordinary junctions (Munich n:312, n:305, n:201, n:194) the stretch between the road ends is a junction surface with no lane markings, and some lanes there have no movement into the lane beside them (`r:313` has none into `r:692`). | Network movements and guide markings: generate the missing through movements at such splits, then let TASK-075's guide lines (or continuation) draw dividers across them. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
@@ -1300,6 +1301,36 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   percent of main); T27's baseline moved to 5024a83 line lengths. New: B38, folded lane
   polylines. Verified on the merged tree: typecheck, lint, format, build, and all unit tests
   with a 30 s timeout (437; the 5 s default times out under the other two agents' load).
+
+- 2026-11-06, TASK-078 merged as delivered (B32). Curb aprons: each concave corner at a node
+  with an outline gets an arc tangent to both facing road edges, radius 6, 9 or 12 m by the
+  lower-ranked road's class, shrunk to fit, outside both road surfaces and overlapping no other
+  road or apron; `CNode.curbs`, drawn by `drawNode` with the outline in one fill. Departures:
+  one tangent point may lie on the edge's extension under the junction surface (otherwise most
+  signal corners, such as n:949's, got none); `compile.ts` calls `junctionCurbs`; the importer
+  keeps the old setback call. Munich 273 aprons at 114 of 219 nodes, Sindelfingen 257, the
+  town 1 191, the grid 64; zero overlap. Setbacks, outlines, lanes, movements, the benchmark
+  hashes and the Munich probe identical to main (T31 fingerprints). Costs 28 to 35 ms per
+  Munich compile (about a quarter). Limits: acute non-gore pairs (n:104, n:138) get a rounded
+  median nose; with Road classes on an apron takes the node's darker tone; aprons have no verge.
+
+- 2026-11-06, TASK-080 merged with a lead test update (B36, B37). Every taper is
+  `min(half the road, clamp(0.4 x km/h, 15, 40))` (60 m before; 20 m at 50 km/h);
+  continuation branches keep their trunk slice until their blocks part; splits and merges
+  outside the continuation rule draw their branches side by side with a dashed divider until
+  they part, an absorbing merge's outer edge as one smooth taper; continuation membership and
+  movement sets unchanged (63 nodes). Transition dividers run to `stopM` with `parallelOffset`
+  (TASK-079's note: r:981 was 1.04 m short). Overlap of the two surfaces to 0 at n:305, n:308,
+  n:312, n:726, n:253, n:28; n:201 54.5 to 28.2, n:734 31.5 to 6.9; n:194 unchanged (needs a
+  type change). Munich at 0.15: 3 564 completed (main 3 720), 55 failed, `stalledHeads` 0;
+  the agent showed the morning's gridlock rings swing the count from 3 434 to 3 946 with the
+  layout at one node alone, so the lead accepted the drop as within that sensitivity. Lead
+  update: TASK-078's T31 fingerprints re-measured for Sindelfingen and Munich (TASK-080 moved
+  their lanes, as intended). Open: B39 (unmarked junction surface at multi-lane splits).
+
+- Wave 17 outcome (2026-11-06): TASK-078, 079 and 080 merged. Verified on the merged tree:
+  typecheck, lint, format, build, all unit tests (30 s timeout), route audit zero, the probe,
+  and the full Playwright suite with T16. Open from the wave: B38 (folded lane polylines), B39.
 
 ## Owner decisions log
 
