@@ -106,7 +106,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-080](tasks/TASK-080.md) | 5 | Short transitions, lanes through the remaining splits and merges (B36, B37) | `src/network/continuity.ts`, `lanes.ts`, `transitions.ts`, `drawRoadJoins` in `nodes.ts`, `tests/network/T33*` | 071, 074, 076; design in architecture 5.1 | T33 | done |
 | [TASK-081](tasks/TASK-081.md) | 5 | Geometry audit and visual regression harness | new `bench/geometry-audit.ts`, `bench/geometry-shots.ts`, `package.json` scripts, `tests/bench/T34*` | 074, 078, 079, 080; plan "Geometry rework" | T34; baseline of G1, G2 | done |
 | [TASK-082](tasks/TASK-082.md) | 5 | Corridors first: lanes and surfaces at a constant offset (G1, B38) | new `src/network/corridor.ts`, `lanes.ts`, `compile.ts` wiring, `types.ts` (additive), `src/geo` (additive), offsets read in `roads.ts`/`transitions.ts`, `tests/network/T35*` | 071, 079, 080, 081; plan "Geometry rework" | T35; width error under 0.05 m | todo |
-| [TASK-084](tasks/TASK-084.md) | 5 | Importer: corridors, separated carriageways, relaxation | `src/importers/osm` (new `corridors.ts`, `relax.ts`), import options, `tests/importers/T36*` | 066, 068, 070, 081; plan "Geometry rework" | T36; relaxation value by experiment | todo |
+| [TASK-084](tasks/TASK-084.md) | 5 | Importer: corridors, separated carriageways, relaxation | `src/importers/osm` (new `corridors.ts`, `relax.ts`), import options, `tests/importers/T36*` | 066, 068, 070, 081; plan "Geometry rework" | T36; relaxation value by experiment | done |
 | [TASK-085](tasks/TASK-085.md) | 5 | Through movements at multi-lane splits and merges (B39) | `src/network/movements.ts`, `tests/network/T37*` | 071, 076, 080; plan "Geometry rework" | T37 | done |
 | [TASK-083](tasks/TASK-083.md) | 5 | Junction polygons, osm2streets-style: through roads keep their line (G2) | `src/network/junctions.ts` (rewritten), through-movement geometry in `movements.ts`, `types.ts`, `compile.ts`, `drawNode`, `realign.ts` call, `tests/network/T38*`, T20/T27/T31 | 081, 082, 084, 085; plan "Geometry rework" | T38; G2 within 0.1 m | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -334,6 +334,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B36 | Owner, round 3 (4, 5): carriageway splits and merges that TASK-071 does not cover draw as two overlapping surfaces without lane markings (4), or with a jagged edge where a ramp joins (5). | Network and renderer: lanes continue side by side with dividers through such splits and merges, and an absorbing merge draws as a smooth taper. |
 | B38 | TASK-079 review: some lane polylines step backwards by 4 to 26 m (Munich `r:1025`/`r:1026`, `r:839`/`r:840`, `r:866`/`r:867`; Sindelfingen `r:1053`/`r:1054`, `r:1116`/`r:1117`), so the markings drawn from them are off there. | Geometry (`lanes.ts`) or the importer's smoothing: find where the offset lane polyline folds back and remove the fold. |
 | B39 | TASK-080 review: at multi-lane splits and merges that stay ordinary junctions (Munich n:312, n:305, n:201, n:194) the stretch between the road ends is a junction surface with no lane markings, and some lanes there have no movement into the lane beside them (`r:313` has none into `r:692`). | Network movements and guide markings: generate the missing through movements at such splits, then let TASK-075's guide lines (or continuation) draw dividers across them. |
+| B40 | TASK-084 review: the engine computes a conflict zone's entry position as `(lane.lengthM + zoneStart) - lane.lengthM`, which can round past `zoneStart`; T21 failed once by 2e-15 m on an intermediate tree. | Simulation: clamp the entry position to `zoneStart` (a rounding fix, no rule change); confirm the benchmark hashes. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
@@ -1461,6 +1462,32 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   only near the ends, so the owner's parting lines may come from a different extract); G2
   bulge 65.3 m2 at n:774, lanes dipping 1.7 m there and 2.2 m at n:719. B38 does not step
   back on this tree; its roads have one corner sharper than 90 degrees each.
+- 2026-11-06, TASK-084 merged as delivered (geometry rework stage 2, importer). Every imported
+  road has a `corridorId`: Munich 186 two-way, 7 coincident pairs (Marsstraße `r:368`/`r:480`,
+  Landsberger `r:1280`/`r:1334`, five Arnulfstraße pairs), 21 dual carriageways; Sindelfingen
+  203, 2, 2. All nine coincident pairs run between the same two nodes, so separation gives the
+  pair one shared centerline and each road a lateral offset of half its block plus 0.25 m (a
+  0.5 m median up to the junctions; provenance `separated`); the easing for pairs on separate
+  nodes is tested only synthetically. Relaxation (`src/importers/osm/relax.ts`): capsules of
+  the lane blocks plus 0.3 m, displacement a cubic B-spline held at zero in the junction zones
+  (setback cap plus 5 m), 100 fixed-order iterations, lower class moves more, slope at most
+  0.2, byte-identical on rerun. Experiment (relaxMaxM 0, 1, 3, 5, 10, unbounded): Munich
+  overlap 446 to 128 m2 at 1 m and 115 m2 from 3 m on, Sindelfingen 614 to 83 and 50 m2; no
+  road needs more than 2 m, so 3 m and above are identical. Lead decision: `relaxMaxM` = 3 m
+  (the import default), the smallest value that reaches the unbounded result, about a lane
+  width at most from the OSM line in other extracts. Munich probe on the agent's tree at 3 m:
+  3 732 completed (96 percent of main), 60 failed, all gridlocked, stalledHeads 0; route audit
+  zero; benchmarks complete. Lead verification on the merged tree: typecheck, lint, format,
+  build, vitest (30 s timeout), route audit zero, geometry audit (Marsstraße gap 7.0 to 0.5 m,
+  the median; Munich overlap 115 m2, of which 61 m2 is the Trappentreustraße dual corridor
+  `r:259`/`r:694`, excluded from relaxation by the contract). Expected regressions until
+  TASK-082/083: the network treats a separated pair as two arms, so no median line is drawn,
+  u-turns between the carriageways leave the outline, some curbs kink and the through-road
+  measure reads 10.4 m at `n:721` (named residuals in T20 and T27); 22 approach lanes meeting
+  the 14.5 m divided streets lose 2 to 4 m of storage (named in T27). Not paired: the
+  same-direction coincident Landsberger `r:729`/`r:984`. New: B40, a rounding slip in the
+  engine's conflict-zone entry position (the agent saw T21 fail once by 2e-15 m on an
+  intermediate tree: `(lane.lengthM + zoneStart) - lane.lengthM` can round past `zoneStart`).
 
 ## Owner decisions log
 
