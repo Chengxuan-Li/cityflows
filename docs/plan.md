@@ -107,7 +107,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-081](tasks/TASK-081.md) | 5 | Geometry audit and visual regression harness | new `bench/geometry-audit.ts`, `bench/geometry-shots.ts`, `package.json` scripts, `tests/bench/T34*` | 074, 078, 079, 080; plan "Geometry rework" | T34; baseline of G1, G2 | todo |
 | [TASK-082](tasks/TASK-082.md) | 5 | Corridors first: lanes and surfaces at a constant offset (G1, B38) | new `src/network/corridor.ts`, `lanes.ts`, `compile.ts` wiring, `types.ts` (additive), `src/geo` (additive), offsets read in `roads.ts`/`transitions.ts`, `tests/network/T35*` | 071, 079, 080, 081; plan "Geometry rework" | T35; width error under 0.05 m | todo |
 | [TASK-084](tasks/TASK-084.md) | 5 | Importer: corridors, separated carriageways, relaxation | `src/importers/osm` (new `corridors.ts`, `relax.ts`), import options, `tests/importers/T36*` | 066, 068, 070, 081; plan "Geometry rework" | T36; relaxation value by experiment | todo |
-| [TASK-085](tasks/TASK-085.md) | 5 | Through movements at multi-lane splits and merges (B39) | `src/network/movements.ts`, `tests/network/T37*` | 071, 076, 080; plan "Geometry rework" | T37 | todo |
+| [TASK-085](tasks/TASK-085.md) | 5 | Through movements at multi-lane splits and merges (B39) | `src/network/movements.ts`, `tests/network/T37*` | 071, 076, 080; plan "Geometry rework" | T37 | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1432,6 +1432,19 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 - Wave 17 outcome (2026-11-06): TASK-078, 079 and 080 merged. Verified on the merged tree:
   typecheck, lint, format, build, all unit tests (30 s timeout), route audit zero, the probe,
   and the full Playwright suite with T16. Open from the wave: B38 (folded lane polylines), B39.
+
+- 2026-11-06, TASK-085 merged as delivered (B39, movements). Why `r:313` had none into
+  `r:692` at `n:312`: the default pairing counts a multi-lane split's lanes from the curb, so
+  only `r:313#2` and `#3` default into the two-lane `r:692`, and OSM turn:lanes (way 27764289)
+  bans exactly those; the fallback then copied lane 2's turn onto lanes 0 and 1. Now every
+  trunk lane that lines up with a branch lane under TASK-071's slice gets a movement unless a
+  rule bans it, at uncontrolled through/merge/diverge nodes; nothing is removed (`orderBranches`
+  and `defaultSlice` shared from `continuity.ts`). Added: Munich `n:312` (2), `n:305` (3),
+  `n:308` (2), `n:253` (1), Sindelfingen `n:918` (1); `n:201` and `n:194` had nothing to add
+  (one pair banned by OSM). Geometry and continuation membership unchanged. Munich at 0.15:
+  3 886 completed (main 3 564), 56 failed, all `gridlocked`, `stalledHeads` 0; benchmark
+  hashes unchanged; route audit zero. Verified on the merged tree: typecheck, lint, format,
+  build, all unit tests (30 s timeout; 460), the audit and the probe.
 
 ## Owner decisions log
 
