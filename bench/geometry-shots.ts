@@ -37,6 +37,18 @@ export const shots: { id: string; cases: string[]; centre: [number, number]; zoo
   { id: 'B41-n721', cases: [], centre: [305.5, 194], zoom: 10 },
   { id: 'B41-n446', cases: [], centre: [-462, -643.5], zoom: 10 },
   { id: 'B41-n949', cases: ['R3-7'], centre: [478, -405.5], zoom: 10 },
+  // TASK-089: the other converging nodes, n:1181's crossings close up, two ordinary four-ways.
+  { id: 'B41-n823', cases: ['R3-8'], centre: [497.5, -449], zoom: 12 },
+  { id: 'B41-n382', cases: [], centre: [-540, -697.5], zoom: 10 },
+  { id: 'B41-n1181', cases: ['R3-1'], centre: [-505, 128], zoom: 18 },
+  { id: 'B41-n967', cases: [], centre: [-19.5, 172], zoom: 8 },
+  { id: 'B41-n638', cases: [], centre: [75, -535], zoom: 6 },
+  { id: 'B41-n33', cases: [], centre: [663, -605], zoom: 8 },
+  { id: 'B41-n1375', cases: [], centre: [-706.5, 97.5], zoom: 8 },
+  { id: 'B41-n1303', cases: [], centre: [266, -486.5], zoom: 8 },
+  { id: 'B41-n328', cases: [], centre: [502, 213.5], zoom: 8 },
+  { id: 'X-n79', cases: [], centre: [405, 534], zoom: 12 },
+  { id: 'X-n189', cases: [], centre: [200.5, 373], zoom: 12 },
 ];
 
 export const VIEWPORT = { width: 1280, height: 800 };

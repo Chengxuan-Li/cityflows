@@ -3,10 +3,17 @@ import type { Vec2 } from '../geo/vec2';
 import type { City, Place, RoadClass } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
-import { continuationLayout } from './continuity';
+import { continuationLayout, convergingFlows, convergingShifts } from './continuity';
 import { continuingRoad, corridorReferences, corridorSurfaces, EASED_NOTE_M } from './corridor';
 import { layoutRoad, type ContinuationEnd } from './lanes';
-import { junctionCuts, junctionPolygon, throughAlignments, throughPath } from './junctions';
+import {
+  farThrough,
+  junctionCuts,
+  junctionPolygon,
+  MAX_SHIFT_M,
+  throughAlignments,
+  throughPath,
+} from './junctions';
 import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
@@ -111,6 +118,8 @@ export function compile(city: City): CompileResult {
       stations: new Float64Array(0),
       startOffsetM: 0,
       endOffsetM: 0,
+      startShift: new Float64Array(0),
+      endShift: new Float64Array(0),
       lengthM,
       roadClass: road.roadClass,
       classRank: classRank[road.roadClass],
@@ -138,7 +147,47 @@ export function compile(city: City): CompileResult {
       );
   const references = corridorReferences(sourceRoads, diagnostics);
   // TASK-083: through roads keep their line across junctions; the cuts follow the new lines.
-  const through = throughAlignments(nodes, incident, sourceRoads, references);
+  // TASK-089: converging carriageways, found on the lines as drawn, cross their node as strips:
+  // each direction's two carriageways join as a through pair (`convergingFlows`).
+  const drawn = [...references];
+  const unshifted = nodes.map(
+    (node) => junctionCuts(node, incident[node.idx]!, sourceRoads, drawn).setbacks,
+  );
+  const converging = convergingShifts(
+    nodes,
+    incident,
+    sourceRoads,
+    drawn,
+    nodes.map(() => []),
+    unshifted,
+    city.drivingSide,
+  ).groups;
+  const flows = convergingFlows(converging, sourceRoads);
+  // B43: a through road may keep its line farther from the node where the side roads' cuts move
+  // with it by at most 2 m (T38.4's storage allowance).
+  const far = farThrough(nodes, incident, sourceRoads, references, 2);
+  const through = throughAlignments(
+    nodes,
+    incident,
+    sourceRoads,
+    references,
+    (node) => (far.has(node.idx) ? Infinity : MAX_SHIFT_M),
+    flows,
+  );
+  // Their lane blocks set side by side; the cuts and lanes follow the shifts.
+  convergingShifts(
+    nodes,
+    incident,
+    sourceRoads,
+    references,
+    through,
+    unshifted,
+    city.drivingSide,
+    converging,
+  ).shifts.forEach(({ start, end }, idx) => {
+    roads[idx]!.startShift = start;
+    roads[idx]!.endShift = end;
+  });
   const approaches = nodes.map(() => ({ approaches: [] as number[][], hidden: [] as number[] }));
   const trims = roads.map(() => ({ start: 0, end: 0 }));
   for (const node of nodes) {
@@ -284,6 +333,7 @@ export function compile(city: City): CompileResult {
       lane.cumulative = cumulativeLengths(lane.polyline);
       lane.lengthM = lane.cumulative.at(-1)!;
       original.polyline = lane.polyline;
+      original.normals = lane.normals;
       original.cumulative = lane.cumulative;
       original.lengthM = lane.lengthM;
       original.taperStartM = lane.taperStartM;

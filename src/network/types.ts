@@ -82,6 +82,12 @@ export interface CRoad {
   stations: Float64Array;
   startOffsetM: number; // change from canonical lateralOffsetM at a continuation
   endOffsetM: number;
+  /** TASK-089: the lane block's shift to the right of travel from `lateralOffsetM`, by distance
+   * along `reference` from the start (end) node every `SHIFT_STEP_M`, where the road converges
+   * there with its other carriageway or continues one that does (`convergingShifts`); zero
+   * beyond the last value, empty when none. */
+  startShift: Float64Array;
+  endShift: Float64Array;
 }
 export interface CLane {
   idx: number;
@@ -89,6 +95,9 @@ export interface CLane {
   road: number;
   lane: number;
   polyline: Vec2[];
+  /** The road's reference normal at each polyline vertex: the lanes and edges of a road are
+   * offsets along it (TASK-082), also where a converging shift curves them (TASK-089). */
+  normals: Vec2[];
   cumulative: Float64Array;
   lengthM: number;
   stopM: number; // ungranted stop line; granted travel continues to lengthM

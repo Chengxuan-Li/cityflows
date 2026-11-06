@@ -4,14 +4,12 @@ import type { Vec2 } from '../../geo/vec2';
 import type { CMovement, CNode, CompiledCity, CRoad } from '../../network';
 import { roadStyle, style } from '../style';
 
-export function roadEndEdges(city: CompiledCity, road: CRoad, atEnd: boolean) {
-  return [road.lanes[0]!, road.lanes.at(-1)!].map((index, side) => {
-    const lane = city.lanes[index]!;
-    const point = atEnd ? lane.polyline.at(-1)! : lane.polyline[0]!;
-    const heading = headingAtDistance(lane.polyline, lane.cumulative, atEnd ? lane.lengthM : 0);
-    const offset = ((side === 0 ? -1 : 1) * lane.widthM) / 2;
-    return { x: point.x - Math.sin(heading) * offset, y: point.y + Math.cos(heading) * offset };
-  });
+export function roadEndEdges(_city: CompiledCity, road: CRoad, atEnd: boolean) {
+  // The surface's cut corners, left then right in travel direction: the junction polygon's
+  // corners there (TASK-089: a lane curving with a converging shift is not square to its cut).
+  const ring = road.surface;
+  const half = ring.length / 2;
+  return atEnd ? [ring[half - 1]!, ring[half]!] : [ring[0]!, ring.at(-1)!];
 }
 
 export function nodeColor(city: CompiledCity, node: CNode, roadClasses = false): number {
@@ -123,11 +121,18 @@ export function curbBands(
   const near = (p: Vec2, q: Vec2) => Math.hypot(p.x - q.x, p.y - q.y) <= 0.15;
   const own = roadStyle(road, roadClasses).vergeM;
   return corners.flatMap((corner, side) => {
-    const k = ring.findIndex((p) => near(p, corner));
+    // The outline vertex nearest the corner, and the way along the outline away from the road's
+    // other corner, judged a little way off (the outline can repeat a corner within millimetres).
+    let k = -1;
+    ring.forEach((p, i) => {
+      if (near(p, corner) && (k < 0 || distanceOf(p, corner) < distanceOf(ring[k]!, corner))) k = i;
+    });
     if (k < 0) return [];
     const other = corners[1 - side]!;
     const along = (step: number) => {
-      const p = ring[(k + step + n) % n]!;
+      let i = 1;
+      while (i < n - 1 && distanceOf(ring[(k + step * i + n * n) % n]!, corner) < 0.3) i++;
+      const p = ring[(k + step * i + n * n) % n]!;
       return (p.x - corner.x) * (other.x - corner.x) + (p.y - corner.y) * (other.y - corner.y);
     };
     const step = along(1) < along(-1) ? 1 : -1;

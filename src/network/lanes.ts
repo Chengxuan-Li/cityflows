@@ -61,6 +61,44 @@ function referencePoint(end: ContinuationEnd, atEnd: boolean, away: number, late
   };
 }
 
+/** Spacing of `CRoad.startShift` and `CRoad.endShift`. */
+export const SHIFT_STEP_M = 0.5;
+
+function profileAt(profile: ArrayLike<number>, d: number): number {
+  const x = Math.max(0, d) / SHIFT_STEP_M;
+  const i = Math.floor(x);
+  if (i + 1 >= profile.length) return i < profile.length ? profile[i]! : 0;
+  return profile[i]! + (profile[i + 1]! - profile[i]!) * (x - i);
+}
+
+/** A road's converging shift (TASK-089) at station `s` of a reference `total` long: the larger of
+ * its two ends' shifts where they overlap (a pair converging at both its nodes). */
+export function shiftAt(
+  road: { startShift: ArrayLike<number>; endShift: ArrayLike<number> },
+  s: number,
+  total: number,
+): number {
+  const a = profileAt(road.startShift, s),
+    b = profileAt(road.endShift, total - s);
+  return Math.sign(a) === Math.sign(b) ? (Math.abs(a) > Math.abs(b) ? a : b) : a + b;
+}
+
+/** Length from the node over which a shift profile is non-zero. */
+export const shiftLength = (profile: ArrayLike<number>) =>
+  profile.length ? (profile.length - 1) * SHIFT_STEP_M : 0;
+
+/** Carriageways converging at more than this angle are not set side by side. */
+export const CONVERGING = Math.cos(Math.PI / 4);
+
+/** Two one-way roads that can be carriageways of one street: one corridor, or one name and one
+ * grade, or (unnamed) one class between the same two nodes, as the importer pairs them. */
+export function sameStreet(a: Road, b: Road): boolean {
+  if (a.streetGroupId !== null || b.streetGroupId !== null || a.layer !== b.layer) return false;
+  if (a.corridorId && a.corridorId === b.corridorId) return true;
+  if (a.name !== null) return a.name === b.name;
+  return b.name === null && a.roadClass === b.roadClass && a.from === b.to && a.to === b.from;
+}
+
 export function roadWidth(road: Road): number {
   return road.lanes.reduce((width, lane) => width + lane.widthM, 0);
 }
@@ -101,12 +139,15 @@ export function laneEdges(lane: CLane, roadLanes: CLane[]): { left: Vec2[]; righ
 
 /** A lane's normals: across its road's lane block where the outer lanes sit at their nominal
  * spacing (the reference line's normal there, the same for every lane, so neighbouring lanes'
- * edges coincide), else its own `vertexNormals`. */
+ * edges coincide), else its own `vertexNormals`; a single lane's are the reference normals. */
 function laneNormals(lane: CLane, roadLanes: CLane[]): Vec2[] {
   const own = vertexNormals(lane.polyline);
   const first = roadLanes[0]!,
     last = roadLanes.at(-1)!;
-  if (first === last) return own;
+  // One lane: the reference normal, as its road's surface and a road beside it on one reference
+  // line (a same-direction pair) are offset (TASK-089: its own normals shear off them where a
+  // converging shift curves the lane).
+  if (first === last) return lane.normals.length === own.length ? lane.normals : own;
   const spacing =
     roadLanes.reduce((sum, l) => sum + l.widthM, 0) - (first.widthM + last.widthM) / 2;
   return own.map((n, k) => {
@@ -159,8 +200,12 @@ export function layoutRoad(
   const phase = (s: number) => (joined.reversed ? refLength - s : s) / GRID_M;
   for (const atEnd of [false, true]) {
     const end = atEnd ? transition.end : transition.start;
-    if (!end) continue;
-    const span = Math.min(total, Math.max(0, end.holdM + end.taperM));
+    const shifted = shiftLength(atEnd ? compiled.endShift : compiled.startShift);
+    if (!end && !shifted) continue;
+    const span = Math.min(
+      total,
+      Math.max(0, end ? end.holdM + end.taperM : 0, shifted - (atEnd ? refLength - s1 : s0)),
+    );
     grid.push(atEnd ? s1 - span : s0 + span);
     const [a, b] = [phase(atEnd ? s1 - span : s0), phase(atEnd ? s1 : s0 + span)].sort(
       (x, y) => x - y,
@@ -207,10 +252,12 @@ export function layoutRoad(
     y: p.y - base[k]!.y,
   }));
   let edge = leftEdge;
+  const shifts = unique.map((s) => shiftAt(compiled, s, refLength));
+  const nodeShift = [shiftAt(compiled, 0, refLength), shiftAt(compiled, refLength, refLength)];
   const offset = (value: number) => {
     const line = base.map((p, k) => ({
-      x: p.x + normal[k]!.x * value,
-      y: p.y + normal[k]!.y * value,
+      x: p.x + normal[k]!.x * (value + shifts[k]!),
+      y: p.y + normal[k]!.y * (value + shifts[k]!),
     }));
     if (!transition.start && !transition.end) return line;
     return unique.map((s, k) => {
@@ -224,7 +271,13 @@ export function layoutRoad(
         // the smoothstep has zero slope at both ends, so the heading stays continuous.
         const f = smoothstep((away - end.holdM) / end.taperM);
         const split = (end.splitM ?? 0) * smoothstep(away / end.taperM);
-        const side = referencePoint(end, atEnd, away, value + end.offsetM + split);
+        // A converging shift reaching the node (TASK-089) moves the side-by-side block with it.
+        const side = referencePoint(
+          end,
+          atEnd,
+          away,
+          value + end.offsetM + split + nodeShift[atEnd ? 1 : 0]!,
+        );
         result = { x: side.x * (1 - f) + result.x * f, y: side.y * (1 - f) + result.y * f };
       }
       return result;
@@ -241,6 +294,7 @@ export function layoutRoad(
       road: compiled.idx,
       lane,
       polyline,
+      normals: normal,
       cumulative,
       lengthM: cumulative.at(-1)!,
       stopM: cumulative.at(-1)!,

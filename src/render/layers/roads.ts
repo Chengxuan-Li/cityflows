@@ -10,6 +10,7 @@ import {
   segmentDistance,
   segmentIntersection,
   trimPolyline,
+  nearestOnPolyline,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CLane, CMovement, CompiledCity, CRoad, Turn } from '../../network';
@@ -62,6 +63,12 @@ export function drawRoad(
     strokeLines(markings, below, alpha);
     strokeLines(controls, above, alpha);
   };
+  const partners =
+    road.streetGroupId === null && road.corridorId !== null
+      ? city.roads
+          .filter((r) => r !== road && r.corridorId === road.corridorId && r.streetGroupId === null)
+          .map((r) => [...r.surface, r.surface[0]!])
+      : [];
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
     const along = trimPolyline(lane.polyline, 0, lane.lengthM - lane.stopM);
@@ -71,8 +78,33 @@ export function drawRoad(
       draw(dashes(parallelOffset(along, lane.widthM / 2), !tapered), 0.78, !tapered);
     if (road.streetGroupId !== null && (medianOnRight ? lane.right : lane.left) < 0)
       draw([parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2)], 0.85);
+    // TASK-089: a carriageway beside another of its corridor (a separated or side-by-side pair)
+    // draws its median edge solid where that one runs within 1.5 m: two lines, a double line.
+    else if (partners.length && (medianOnRight ? lane.right : lane.left) < 0)
+      draw(
+        besidePartners(
+          parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2),
+          partners,
+        ),
+        0.85,
+      );
     drawApproachMarkings(controls, city, lane);
   }
+}
+
+/** The runs of `line` whose points lie within 1.5 m of one of the closed `rings`. */
+function besidePartners(line: Vec2[], rings: Vec2[][]): Vec2[][] {
+  const runs: Vec2[][] = [];
+  let run: Vec2[] = [];
+  for (const p of line) {
+    if (rings.some((ring) => nearestOnPolyline(ring, p).away <= 1.5)) run.push(p);
+    else if (run.length) {
+      if (run.length > 1) runs.push(run);
+      run = [];
+    }
+  }
+  if (run.length > 1) runs.push(run);
+  return runs;
 }
 
 /** TASK-074: a road's dividers and centre lines stay out of its nodes' outlines and out of
