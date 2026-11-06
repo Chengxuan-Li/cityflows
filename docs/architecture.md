@@ -292,7 +292,22 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   lateral offset `lateralOffsetM - W/2 + sum(widths before i) + widths[i]/2`, positive to the
   right of travel. The right-hand normal of heading `(dx, dy)` is `(-dy, dx)`.
 - Offsetting a polyline uses per-vertex miter joins with the miter length clamped to twice the
-  offset; sharper vertices get a bevel. Good enough for a cartoon look.
+  offset; sharper vertices get a bevel. Good enough for a cartoon look. As merged (TASK-082,
+  `src/network/corridor.ts`), network geometry no longer uses it: the roads of one corridor
+  that share a source centerline share one reference line, resampled by curvature (points
+  under 0.2 m apart dropped, spacing at most 1 m where the radius is under 30 m and 5 m
+  elsewhere, endpoints exact). Every lane centerline, lane edge, road edge and taper is an
+  offset of it by arc length, so station s of each lies on the reference normal at station s.
+  Where the corridor's outermost offset exceeds the radius on the inside of a bend the
+  reference line is eased into a fillet that keeps the offset (bounded; a `reference_eased`
+  info when it leaves the source by over 5 cm). At a continuation joint (two roads meeting
+  end to end, setback 0, turning at most 45 degrees) both reference lines take the bisector
+  as their tangent at the node, the node point exact, and ease back to the source over 10 m or
+  what a 30 m radius needs (at most half the road), so lanes and edges meet without a step.
+  `CRoad.reference` and the stations of its lane vertices are kept; `CRoad.surface` keeps its
+  left-edge/right-edge layout, checked as one clean ring with `clipper2-ts`, and
+  `CRoad.corridorSurface` is the clipper union of the corridor's road surfaces (for TASK-083).
+  Inside TASK-071/080 transitions lanes follow the lane block's own line.
 - Default `lateralOffsetM` for a two-way street made of two roads with one shared geometry:
   `+W/2` of each road under right-hand traffic, `-W/2` under left-hand traffic, so the two lane
   blocks sit side by side. One-way and divided carriageways use 0.
@@ -502,7 +517,8 @@ TASK-069: a third severity, `info`, for facts that need no action. `Diagnostic.s
 is `'error' | 'warning' | 'info'`. The validation badge counts errors and warnings only; the
 panel lists infos last, under "Notes". `lane_requires_merge` is an info: an ordinary lane
 drop, such as a two-lane street narrowing to one, is how roads are built. So is
-`realign_limited` (13 step 12): it reports what the importer did, nothing to act on.
+`realign_limited` (13 step 12): it reports what the importer did, nothing to act on. So is
+`reference_eased` (TASK-082, 5.1): a reference line eased more than 5 cm from its source.
 
 Warnings (compile succeeds, shown in the validation panel):
 `disconnected_component` (lanes outside the largest weakly connected component, where

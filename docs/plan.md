@@ -105,7 +105,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-079](tasks/TASK-079.md) | 5 | Markings up to the junction, arrows once, offsets on curves (B33 to B35) | `src/render/layers/roads.ts`, a marking-offset export in `src/geo/polyline.ts`, `tests/render/T32*` | 072, 074, 075; design in architecture 11 | T32 | done |
 | [TASK-080](tasks/TASK-080.md) | 5 | Short transitions, lanes through the remaining splits and merges (B36, B37) | `src/network/continuity.ts`, `lanes.ts`, `transitions.ts`, `drawRoadJoins` in `nodes.ts`, `tests/network/T33*` | 071, 074, 076; design in architecture 5.1 | T33 | done |
 | [TASK-081](tasks/TASK-081.md) | 5 | Geometry audit and visual regression harness | new `bench/geometry-audit.ts`, `bench/geometry-shots.ts`, `package.json` scripts, `tests/bench/T34*` | 074, 078, 079, 080; plan "Geometry rework" | T34; baseline of G1, G2 | done |
-| [TASK-082](tasks/TASK-082.md) | 5 | Corridors first: lanes and surfaces at a constant offset (G1, B38) | new `src/network/corridor.ts`, `lanes.ts`, `compile.ts` wiring, `types.ts` (additive), `src/geo` (additive), offsets read in `roads.ts`/`transitions.ts`, `tests/network/T35*` | 071, 079, 080, 081; plan "Geometry rework" | T35; width error under 0.05 m | todo |
+| [TASK-082](tasks/TASK-082.md) | 5 | Corridors first: lanes and surfaces at a constant offset (G1, B38) | new `src/network/corridor.ts`, `lanes.ts`, `compile.ts` wiring, `types.ts` (additive), `src/geo` (additive), offsets read in `roads.ts`/`transitions.ts`, `tests/network/T35*` | 071, 079, 080, 081; plan "Geometry rework" | T35; width error under 0.05 m | done |
 | [TASK-084](tasks/TASK-084.md) | 5 | Importer: corridors, separated carriageways, relaxation | `src/importers/osm` (new `corridors.ts`, `relax.ts`), import options, `tests/importers/T36*` | 066, 068, 070, 081; plan "Geometry rework" | T36; relaxation value by experiment | done |
 | [TASK-085](tasks/TASK-085.md) | 5 | Through movements at multi-lane splits and merges (B39) | `src/network/movements.ts`, `tests/network/T37*` | 071, 076, 080; plan "Geometry rework" | T37 | done |
 | [TASK-083](tasks/TASK-083.md) | 5 | Junction polygons, osm2streets-style: through roads keep their line (G2) | `src/network/junctions.ts` (rewritten), through-movement geometry in `movements.ts`, `types.ts`, `compile.ts`, `drawNode`, `realign.ts` call, `tests/network/T38*`, T20/T27/T31 | 081, 082, 084, 085; plan "Geometry rework" | T38; G2 within 0.1 m | todo |
@@ -1498,6 +1498,29 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   zone stop no longer held it. The commit now computes the offset once. No rule change: the
   backstop works as architecture section 8 states. Benchmark hashes unchanged, vitest green on
   main, T21 green on TASK-082's tree.
+- 2026-11-06, TASK-082 merged after one return (geometry rework stage 2, G1, B38). Each
+  corridor's roads that share a source centerline share one curvature-resampled reference line
+  (`src/network/corridor.ts`); lanes, edges and tapers are arc-length offsets of it, eased into
+  fillets where a bend is tighter than the corridor's offset (architecture 5.1). Round 1 met
+  the width and gap targets but lanes stepped at continuation joints that the source kinks
+  (Munich joins max 0.141 to 0.387 m, visible at G1's `n:919`); returned. Round 2: joints share
+  the bisector tangent and ease back over 10 m or a 30 m radius, and `continuingRoad` now joins
+  the two halves of a loop (Munich `n:814`, Sindelfingen `n:26`, `n:696`). Results on the
+  merged tree, main before in brackets: lane folds Munich 0 (51 back-steps), Sindelfingen 0
+  (47); G1 width error by T35's rays 0.031 m (1.055), centre-line gaps r:1059/r:1060 0.002 m
+  (0.109), r:917/r:921 0.004 m (0.080); corridor gap max 0.008 m Munich, 0.012 m Sindelfingen
+  (the separated pairs at the 0.5 m median by design); joins Munich max 0.047 m (0.141),
+  Sindelfingen over 5 cm 28 to 12 (`n:918` stays 3 m, a TASK-071 blend). The audit's width
+  column, measured from the original centerline, still reads up to 5 m because it counts the
+  eases and TASK-080's side-by-side blocks (largest ease 1.09 m at a continuation joint, 4 m
+  at the B38 hairpin `r:839`); T35's width measure excludes them, 0.020 m Munich and 0.024 m
+  Sindelfingen. T21 failed on round 2's tree; the cause was B40, fixed by the lead (above).
+  Accepted: `CRoad.surface` checked, not replaced, by clipper; `corridorSurface` unused until
+  TASK-083; spikes in the outlines of Sindelfingen `n:1132`, `n:139` and an apron at Munich's
+  gore `n:721` from `junctions.ts` reacting to centimetre edge moves, left for TASK-083 (T20,
+  T31 exceptions). Architecture 5.1 and 5.5 amended by the lead. Lead verification on the
+  merged tree: Munich at 0.15 3 686 completed (98.8 percent of main after TASK-084), 58 failed,
+  all gridlocked, stalledHeads 0; route audit zero; geometry audit as above.
 
 ## Owner decisions log
 
