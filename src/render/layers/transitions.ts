@@ -2,12 +2,13 @@ import type { Graphics } from 'pixi.js';
 import {
   cumulativeLengths,
   headingAtDistance,
+  parallelOffset,
   pointAtDistance,
   trimPolyline,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import { laneEdges } from '../../network/lanes';
-import type { CompiledCity, CRoad } from '../../network';
+import type { CLane, CompiledCity, CRoad } from '../../network';
 import { roadStyle, style } from '../style';
 
 export function transitionGeometry(city: CompiledCity, road: CRoad) {
@@ -49,7 +50,20 @@ export function transitionGeometry(city: CompiledCity, road: CRoad) {
     }
     return { lane: lane.idx, ...edges, chevrons };
   });
-  return { lanes, dividers: lanes.slice(0, -1).map((l) => l.right) };
+  // Dividers run to the lane's stop position, like every other road's (TASK-079), offset with
+  // `parallelOffset` so they stay beside the lane through curves.
+  const dividers = roadLanes
+    .slice(0, -1)
+    .map((lane) => toStop(lane, painted(lane, roadLanes).right));
+  return { lanes, dividers };
+}
+
+const painted = (lane: CLane, roadLanes: CLane[]) => laneEdges(lane, roadLanes, parallelOffset);
+
+/** The part of one of a lane's edges up to the lane's stop position. */
+function toStop(lane: CLane, edge: Vec2[]): Vec2[] {
+  const total = cumulativeLengths(edge).at(-1)!;
+  return trimPolyline(edge, 0, total * (1 - lane.stopM / lane.lengthM));
 }
 
 const laneOfSegment = new WeakMap<CompiledCity, Int32Array>();
@@ -92,7 +106,7 @@ export function seams(city: CompiledCity, road: CRoad): Vec2[][] {
   const hit = cached.get(road.idx);
   if (hit) return hit;
   const roadLanes = road.lanes.map((i) => city.lanes[i]!);
-  const edge = laneEdges(roadLanes.at(-1)!, roadLanes).right;
+  const edge = toStop(roadLanes.at(-1)!, painted(roadLanes.at(-1)!, roadLanes).right);
   const lengths = cumulativeLengths(edge);
   const owner = segmentLanes(city);
   const candidates = new Set<number>();
@@ -145,11 +159,12 @@ function sameWay(run: Vec2[], left: Vec2[]): boolean {
   return (b.x - a.x) * (d.x - c.x) + (b.y - a.y) * (d.y - c.y) > 0;
 }
 
+/** Dashes 2.7 m long every 5.8 m, the last one ending at the line's end (the stop position). */
 function drawDashed(markings: Graphics, line: Vec2[]) {
   const total = cumulativeLengths(line).at(-1)!;
-  for (let s = 0; s < total; s += 5.8)
+  for (let end = total; end > 0; end -= 5.8)
     markings
-      .poly(trimPolyline(line, s, Math.max(0, total - s - 2.7)), false)
+      .poly(trimPolyline(line, Math.max(0, end - 2.7), total - end), false)
       .stroke({ color: style.marking, width: style.dividerWidthM, alpha: 0.78 });
 }
 

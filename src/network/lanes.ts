@@ -19,7 +19,8 @@ export interface ContinuationEnd {
   tapers: number[];
   /** Distance from the road's (trimmed) end over which the block follows the reference line
    * before it eases onto its own offsets over `taperM` (TASK-080). Negative when the branches
-   * separate before the cut. */
+   * separate before the cut. Both 0 at an end that only marks that the transition of the
+   * road's other end reaches it (that end is then not reset to the road's own offsets). */
   holdM: number;
   taperM: number;
   /** A shift to the right that the side-by-side block takes over the first `taperM`: a branch
@@ -65,9 +66,13 @@ export function roadWidth(road: Road): number {
 }
 
 /** Painted lane edges collapse onto the nearest surviving lane; driving polylines stay put. */
-export function laneEdges(lane: CLane, roadLanes: CLane[]): { left: Vec2[]; right: Vec2[] } {
+export function laneEdges(
+  lane: CLane,
+  roadLanes: CLane[],
+  offset: (points: readonly Vec2[], offset: number) => Vec2[] = offsetPolyline,
+): { left: Vec2[]; right: Vec2[] } {
   const edges = (side: number) => {
-    const line = offsetPolyline(lane.polyline, (lane.widthM / 2) * side);
+    const line = offset(lane.polyline, (lane.widthM / 2) * side);
     const lengths = cumulativeLengths(line);
     return line.map((point, i) => {
       const at = (lengths[i]! / lengths.at(-1)!) * lane.lengthM;

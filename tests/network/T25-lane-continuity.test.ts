@@ -10,6 +10,7 @@ import {
 import { compile } from '../../src/network';
 import { buildCity } from '../../src/fixtures/build-city';
 import { laneEdges } from '../../src/network/lanes';
+import { separation } from '../../src/network/continuity';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
@@ -67,18 +68,36 @@ test('T25: lane geometry has no self intersections and tapers identify the dropp
   }
   const dropped = net.lanes.filter((l) => l.taperEndM > 0);
   const added = net.lanes.filter((l) => l.taperStartM > 0);
-  expect(dropped.map((l) => [l.lane, l.taperEndM])).toEqual([[2, 60]]);
-  expect(added.map((l) => [l.lane, l.taperStartM])).toEqual([[2, 60]]);
+  // TASK-080 (B37): tapers take min(half the road, clamp(0.4 * km/h, 15, 40)), 20 m at the
+  // fixture's 50 km/h (60 m under TASK-071).
+  expect(dropped.map((l) => [l.lane, l.taperEndM])).toEqual([[2, expect.closeTo(20, 9)]]);
+  expect(added.map((l) => [l.lane, l.taperStartM])).toEqual([[2, expect.closeTo(20, 9)]]);
 });
 
-test('T25: branch offsets finish at 60 m with a continuous heading', () => {
+// TASK-080: a branch keeps its trunk slice until its own lane block parts from its neighbour's
+// (`separation`), then eases over the 20 m taper (TASK-071: eased from the node over 60 m).
+test('T25: branch offsets finish where the branches part plus the taper, heading continuous', () => {
   const source = continuity();
   const net = fixture();
+  const at = (x: number, y: number) =>
+    Object.values(source.roads).filter((r) =>
+      [r.centerline[0]!, r.centerline.at(-1)!].some((p) => p.x === x && p.y === y),
+    );
+  const hold = (y: number, atEnd: boolean) => {
+    const [left, right] = at(0, y)
+      .filter((r) => (atEnd ? r.centerline.at(-1)! : r.centerline[0]!).y === y)
+      .filter((r) => (atEnd ? r.centerline[0]! : r.centerline.at(-1)!).y !== y)
+      .sort((a, b) => a.centerline[atEnd ? 0 : 1]!.y - b.centerline[atEnd ? 0 : 1]!.y);
+    return separation({ source: left!, atEnd }, { source: right!, atEnd });
+  };
   for (const road of net.roads.filter((r) => r.startOffsetM || r.endOffsetM)) {
     const canonical = source.roads[road.id]!;
     const cumulative = cumulativeLengths(canonical.centerline);
     const atEnd = road.endOffsetM !== 0;
-    const s = atEnd ? road.lengthM - 60 : 60;
+    // The narrowing and the widening have one branch each: nothing to part from.
+    const y = (atEnd ? canonical.centerline.at(-1)! : canonical.centerline[0]!).y;
+    const window = (y === 0 || y === 160 ? hold(y, atEnd) : 0) + 20;
+    const s = atEnd ? road.lengthM - window : window;
     const p = pointAtDistance(canonical.centerline, cumulative, s);
     const h = headingAtDistance(canonical.centerline, cumulative, s);
     let lateral = -canonical.lanes.reduce((sum, l) => sum + l.widthM, 0) / 2;
@@ -183,7 +202,12 @@ test.each([
   // Before TASK-074: c1b2bf4d… (grid) and 1ee92a0e… (Munich).
   ['grid', 0, '082eb0366297a4daf673c250674ccbf6c94b52f424fdca70263b5acc38885b9e'],
   // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
-  ['Munich', 63, '28e9d7b3f6fe13b6b3f72b06a0e6180b0d1f9e719bd2192582991486e401b701'],
+  // TASK-080 moved the hash (28e9d7b3… before): setbacks are unchanged everywhere, but the
+  // outlines of n:726 and n:1181 follow r:729 and r:984 laid side by side between them (B36),
+  // n:9 follows r:254 (B36 at n:253), and n:1375, n:33, n:638, n:774 and n:967 follow lanes
+  // reshaped by the shorter tapers and holds at the far ends of r:1044, r:944, r:639/r:654,
+  // r:1368 and r:961. The continuation nodes (the count) are unchanged.
+  ['Munich', 63, '55e48b24e1f79a1411aa8a54cbef07beb175cc0f8c493660ff5181a7fa6447fd'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {

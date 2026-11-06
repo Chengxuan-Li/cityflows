@@ -55,6 +55,7 @@ export function drawRoadJoins(
  * to the trunk as one smooth taper over the trunk's `taperM`, drawn under the junction surface.
  * The ring spans from the taper curve to 2 m inside the trunk's edge line. */
 export function curbTaper(city: CompiledCity, node: CNode) {
+  if (node.control !== 'uncontrolled') return null;
   const incoming = city.roads.filter((r) => r.to === node.idx && r.from !== node.idx);
   const outgoing = city.roads.filter((r) => r.from === node.idx && r.to !== node.idx);
   const merge = outgoing.length === 1 && incoming.length > 1;

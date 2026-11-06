@@ -29,6 +29,10 @@ const expected = {
     // movement's edge.
     tangents: ['n:161:0', 'n:161:0', 'n:996:2.999999999999966'],
     widthsOutside: [
+      // TASK-080 (B36): the coincident service way r:15 and residential r:233 now run side by
+      // side into n:14, an absorbing merge with 2.5 m setbacks; the 5.9 m merge curve from the
+      // outer lane is wider than the junction outline there (junctions.ts, outside TASK-080).
+      'r:233#0>r:16#0',
       'r:285#0>r:400#0',
       'r:1198#0>r:298#0',
       'r:597#0>r:888#0',
@@ -40,7 +44,9 @@ const expected = {
     ],
   },
   'munich-donnersberger': {
-    movementsOutside: ['r:1163#0>r:1121#0', 'r:1276#0>r:1368#0', 'r:973#0>r:972#0'],
+    // TASK-080: r:1368's continuation transition at n:936 (hold, then a 20 m taper) reshapes
+    // its lanes up to n:774, and r:1276#0>r:1368#0 now stays inside n:774's outline.
+    movementsOutside: ['r:1163#0>r:1121#0', 'r:973#0>r:972#0'],
     crossings: [] as string[],
     // Dead-end caps across two road ends cut at different distances, and curbs that follow a
     // movement's edge where a road end is a short stub.
@@ -51,6 +57,9 @@ const expected = {
       'n:970:2.9999999999999494',
       'n:971:2.9999999999999902',
     ],
+    // TASK-080 resolved n:305 (r:1188#2>r:307#3, r:676#1>r:307#3) and n:726 (r:978#2>r:984#1)
+    // with side-by-side branches (B36), and n:774 (r:1276, r:1362, r:777 into r:1368) with
+    // r:1368's shorter transition at n:936.
     widthsOutside: [
       'r:1163#0>r:1121#0',
       'r:1163#0>r:1164#0',
@@ -62,8 +71,6 @@ const expected = {
       'r:716#1>r:958#3',
       'r:184#0>r:1173#0',
       'r:671#0>r:267#0',
-      'r:1188#2>r:307#3',
-      'r:676#1>r:307#3',
       'r:1076#0>r:941#0',
       'r:1330#0>r:327#0',
       'r:1269#0>r:41#0',
@@ -71,10 +78,6 @@ const expected = {
       'r:517#0>r:1230#0',
       'r:523#0>r:1230#0',
       'r:192#0>r:57#0',
-      'r:978#2>r:984#1',
-      'r:1276#0>r:1368#0',
-      'r:1362#0>r:1368#0',
-      'r:777#0>r:1368#0',
       'r:973#0>r:972#0',
       'r:977#0>r:976#0',
       'r:976#0>r:1081#0',
