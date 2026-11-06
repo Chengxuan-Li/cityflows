@@ -53,6 +53,10 @@ export interface CNode {
   radiusM: number;
   setbacks: number[]; // incident roads in compiled index order
   outline: Vec2[]; // closed road-end edges and curb arcs; empty at through nodes
+  /** Closed curb aprons (TASK-078), drawn with the outline: each runs from the corner where two
+   * neighbouring road ends' facing edges meet, out along one edge, around the curb arc and back
+   * along the other edge. Empty where the outline is. */
+  curbs: Vec2[][];
   control: Control;
   movements: number[];
   signal: CSignal | null;

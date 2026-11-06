@@ -25,8 +25,12 @@ export function nodeColor(city: CompiledCity, node: CNode, roadClasses = false):
   return highest ? roadStyle(highest, true).color : style.asphalt;
 }
 
+/** The junction surface and its curb aprons (TASK-078), in one fill. */
 export function drawNode(graphics: Graphics, node: CNode, color: number = style.asphalt): void {
-  if (node.outline.length) graphics.poly(node.outline).fill(color);
+  if (!node.outline.length) return;
+  graphics.poly(node.outline);
+  for (const curb of node.curbs) graphics.poly(curb);
+  graphics.fill(color);
 }
 
 export function drawRoadJoins(

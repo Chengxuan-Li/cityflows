@@ -2,10 +2,15 @@ import {
   cumulativeLengths,
   distance,
   headingAtDistance,
+  nearestOnPolyline,
   offsetPolyline,
   polylineCrossings,
+  pointAtDistance,
   polylineLength,
+  prepareRing,
   preparePolygon,
+  ringsOverlap,
+  type PreparedRing,
   sampleArc,
   sampleCubic,
   segmentIntersection,
@@ -13,11 +18,11 @@ import {
   trimPolyline,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { Road } from '../schema';
+import type { Road, RoadClass } from '../schema';
 import { roadWidth } from './lanes';
 import type { CLane, CMovement, CNode, CRoad } from './types';
 
-function outward(road: Road, node: CNode) {
+function outward(road: Road, node: Pick<CNode, 'id'>) {
   return road.from === node.id ? road.centerline : [...road.centerline].reverse();
 }
 
@@ -30,7 +35,7 @@ export const SETBACK_CAP_M = 10;
  * uses `roadEndSetbacks`; the importer's realignment (TASK-068) still sizes its straight mouth
  * with this rule, so imported geometry is unchanged by TASK-074. Setback array follows
  * incident road index order, independently of angular sorting. */
-export function junctionSetbacks(node: CNode, roads: Road[]): number[] {
+export function junctionSetbacks(node: Omit<CNode, 'curbs'>, roads: Road[]): number[] {
   const ends = roads.map((road, index) => {
     const line = outward(road, node);
     const lengths = cumulativeLengths(line);
@@ -670,14 +675,14 @@ function curbPoints(a: Vec2, b: Vec2, shape: Curb, handle: number): Vec2[] {
   );
 }
 
-export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Vec2[] {
-  if (node.setbacks.every((s) => s === 0)) return [];
+/** Each road end at the node with its outward surface edges, near the node, from its cut. */
+function roadMouths(node: CNode, roads: CRoad[]): Mouth[] {
   const reach = CORNER_REACH_M + 10;
   const near = (edge: Vec2[]) => {
     const beyond = edge.findIndex((p, i) => i > 1 && distance(p, node.pos) > reach);
     return beyond < 0 ? edge : edge.slice(0, beyond + 1);
   };
-  const ends = roads.map((road, index): Mouth => {
+  return roads.map((road, index): Mouth => {
     const ring = road.surface;
     const half = ring.length / 2;
     const incoming = road.to === node.idx;
@@ -705,6 +710,11 @@ export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Ve
       moved: 0,
     };
   });
+}
+
+export function junctionOutline(node: CNode, roads: CRoad[], lanes: CLane[]): Vec2[] {
+  if (node.setbacks.every((s) => s === 0)) return [];
+  const ends = roadMouths(node, roads);
   const arms = directions(
     ends,
     node.pos,
@@ -1263,4 +1273,239 @@ function distanceToLine(p: Vec2, points: Vec2[]): number {
     closest = Math.min(closest, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
   }
   return closest;
+}
+
+// TASK-078 curb aprons (architecture 5.1). The drawn curb is separate from the setback: a
+// circular arc with a realistic radius, tangent to two neighbouring road ends' facing edges, and
+// the apron between it and the corner, outside both road surfaces. Setbacks, outlines, lanes and
+// movements are not touched, so lane storage and the simulation stay as compiled.
+
+/** Curb radius by the lower-ranked road's class. */
+const APRON_RADIUS_M: Record<RoadClass, number> = {
+  service: 6,
+  residential: 6,
+  tertiary: 9,
+  secondary: 9,
+  primary: 12,
+  trunk: 12,
+  motorway: 12,
+  ramp: 12,
+};
+/** A tangent point lies within this share of its road, counted from the node. */
+const APRON_REACH = 0.4;
+/** A smaller apron adds nothing to the outline's own curb. */
+const APRON_MIN_M = 1.5;
+/** Arc samples at most 3 degrees (and 1 m) apart, and a quarter degree from either end. */
+const APRON_STEP = (3 * Math.PI) / 180;
+const APRON_END = (0.25 * Math.PI) / 180;
+/** Sine of the largest angle between the arc and an edge where they meet. */
+const APRON_TANGENT = Math.sin((1.5 * Math.PI) / 180);
+/** Depth below which touching a road surface or another apron is not an overlap. */
+const APRON_MARGIN_M = 0.02;
+
+export interface CurbApron {
+  node: number;
+  /** Compiled road indices: the road whose right edge (outward) and the road whose left edge
+   * the arc joins. */
+  roads: [number, number];
+  /** The class radius, before shrinking. */
+  classRadius: number;
+  radius: number;
+  ring: Vec2[];
+}
+
+/** An outward edge without reversals: where compile restores a road end's old corner, the
+ * surface edge can step back a few centimetres before running on. */
+function forward(edge: Vec2[]): Vec2[] {
+  const kept = [edge[0]!];
+  for (const p of edge.slice(1)) {
+    while (kept.length > 1) {
+      const a = kept.at(-2)!,
+        b = kept.at(-1)!;
+      if ((b.x - a.x) * (p.x - b.x) + (b.y - a.y) * (p.y - b.y) >= 0) break;
+      kept.pop();
+    }
+    if (distance(kept.at(-1)!, p) > 1e-9) kept.push(p);
+  }
+  return kept;
+}
+
+function boxOf(points: readonly Vec2[]) {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const p of points) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+type Box = ReturnType<typeof boxOf>;
+const boxesMeet = (a: Box, b: Box) =>
+  a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+
+/** Sets `CNode.curbs` on every node with an outline and returns the aprons. A corner's radius
+ * is its class radius, shrunk (by bisection) until the arc is tangent to both edges, its tangent
+ * points lie within the first 40 percent of their roads and the apron overlaps no road surface
+ * and no earlier apron (nodes in index order). A tangent point may fall short of its road's cut,
+ * on the edge's extension under the junction surface, as long as the other one does not. */
+export function junctionCurbs(nodes: CNode[], roads: CRoad[]): CurbApron[] {
+  const incident = nodes.map((): CRoad[] => []);
+  for (const road of roads) {
+    incident[road.to]!.push(road);
+    incident[road.from]!.push(road);
+  }
+  const surfaceBoxes = roads.map((road) => boxOf(road.surface));
+  const surfaces: (PreparedRing | undefined)[] = [];
+  const surface = (k: number) =>
+    (surfaces[k] ??= prepareRing([...roads[k]!.surface, roads[k]!.surface[0]!]));
+  const aprons: CurbApron[] = [];
+  const prepared: PreparedRing[] = [];
+  for (const node of nodes) {
+    node.curbs = [];
+    if (!node.outline.length) continue;
+    const arms = directions(
+      roadMouths(node, incident[node.idx]!),
+      node.pos,
+      (e) => extended(e.leftEdge),
+      (e) => extended(e.rightEdge),
+    );
+    if (arms.length < 2) continue;
+    const covered = preparePolygon(node.outline, 0.05);
+    arms.forEach((arm, i) => {
+      const a = outer(arm, 1, node.pos),
+        b = outer(arms[(i + 1) % arms.length]!, -1, node.pos);
+      const edgeA = forward(a.rightEdge),
+        edgeB = forward(b.leftEdge);
+      const ea = extended(edgeA),
+        eb = extended(edgeB);
+      const corner = meet(ea, eb, node.pos);
+      // A convex corner, edges that run on (a bend, opposite arms) or a gore get no apron.
+      if (!corner || cross(corner.da, corner.db) <= 0 || corner.a > 0.01 || corner.b > 0.01) return;
+      const ra = roads[a.roads[0]!]!,
+        rb = roads[b.roads[0]!]!;
+      const lower =
+        ra.classRank < rb.classRank ? [ra] : rb.classRank < ra.classRank ? [rb] : [ra, rb];
+      const classRadius = Math.min(...lower.map((r) => APRON_RADIUS_M[r.roadClass]));
+      // How far along its edge, from the cut, a tangent point may lie.
+      const room = (road: CRoad, end: Mouth) =>
+        APRON_REACH * road.lengthM -
+        ((end.left.x + end.right.x) / 2 - node.pos.x) * end.direction.x -
+        ((end.left.y + end.right.y) / 2 - node.pos.y) * end.direction.y;
+      const roomA = room(ra, a),
+        roomB = room(rb, b);
+      // The edges as far as a tangent point may lie, and a metre more.
+      const upTo = (edge: Vec2[], room: number) => {
+        const lengths = cumulativeLengths(edge);
+        const end = Math.max(0, room) + 1;
+        return extended(
+          end >= lengths.at(-1)!
+            ? edge
+            : [edge[0]!, ...edgeUpTo(edge, end), pointAtDistance(edge, lengths, end)],
+        );
+      };
+      const fa = upTo(edgeA, roomA),
+        fb = upTo(edgeB, roomB);
+      const fit = (radius: number): PreparedRing | 'small' | 'large' => {
+        const centre = polylineCrossings(offsetPolyline(fa, radius), offsetPolyline(fb, -radius))
+          .filter((hit) => hit.alongA > EXTEND_M + corner.a && hit.alongB > EXTEND_M + corner.b)
+          .reduce<{ point: Vec2; far: number } | undefined>((best, hit) => {
+            const far = Math.max(hit.alongA, hit.alongB);
+            return !best || far < best.far ? { point: hit.point, far } : best;
+          }, undefined)?.point;
+        if (!centre) return 'large';
+        const ta = nearestOnPolyline(fa, centre),
+          tb = nearestOnPolyline(fb, centre);
+        // The arc must touch each edge tangentially: not across a bend of the edge's polyline.
+        for (const t of [ta, tb]) {
+          const along =
+            (t.point.x - centre.x) * t.direction.x + (t.point.y - centre.y) * t.direction.y;
+          if (Math.abs(t.away - radius) > 0.005 || Math.abs(along) > t.away * APRON_TANGENT)
+            return 'large';
+        }
+        const sa = ta.along - EXTEND_M,
+          sb = tb.along - EXTEND_M;
+        // A tangent point short of its road's cut lies on the edge's extension along the
+        // junction mouth (a capped or held-back cut): the arc leaves the outline there.
+        if (Math.max(sa, sb) < 0.1) return 'small';
+        if (sa > roomA || sb > roomB) return 'large';
+        const start = Math.atan2(ta.point.y - centre.y, ta.point.x - centre.x);
+        const turn = Math.atan2(tb.point.y - centre.y, tb.point.x - centre.x) - start;
+        const sweep =
+          turn > Math.PI ? turn - 2 * Math.PI : turn < -Math.PI ? turn + 2 * Math.PI : turn;
+        const steps = Math.max(
+          2,
+          Math.ceil(Math.abs(sweep) * radius),
+          Math.ceil(Math.abs(sweep) / APRON_STEP),
+        );
+        // A sample a quarter degree from each end, so the arc leaves both edges along them.
+        const end = APRON_END / Math.abs(sweep);
+        const arc = [
+          end,
+          ...Array.from({ length: steps - 1 }, (_, k) => (k + 1) / steps),
+          1 - end,
+        ].map((t) => ({
+          x: centre.x + radius * Math.cos(start + sweep * t),
+          y: centre.y + radius * Math.sin(start + sweep * t),
+        }));
+        // An arc under the junction surface draws nothing; a smaller one would not either.
+        if ([ta.point, ...arc, tb.point].every(covered)) return 'small';
+        const ring = closeOutline([
+          corner.point,
+          ...(sa > 0 ? [a.right, ...edgeUpTo(edgeA, sa)] : []),
+          ta.point,
+          ...arc,
+          tb.point,
+          ...(sb > 0 ? [...edgeUpTo(edgeB, sb).reverse(), b.left] : []),
+        ]);
+        // An edge curving more tightly than the arc runs inside it before the tangent point.
+        if (selfCrossings(ring)) return 'large';
+        const apron = prepareRing(ring);
+        for (let k = 0; k < roads.length; k++)
+          if (
+            boxesMeet(apron.box, surfaceBoxes[k]!) &&
+            ringsOverlap(apron, surface(k), APRON_MARGIN_M)
+          )
+            return 'large';
+        for (const other of prepared)
+          if (boxesMeet(apron.box, other.box) && ringsOverlap(apron, other, APRON_MARGIN_M))
+            return 'large';
+        return apron;
+      };
+      let radius = classRadius;
+      let apron = fit(radius);
+      if (apron === 'small') return;
+      if (apron === 'large') {
+        let low = 0,
+          high = classRadius;
+        for (let k = 0; k < 5; k++) {
+          const mid = (low + high) / 2;
+          const trial = fit(mid);
+          if (trial === 'large') high = mid;
+          else {
+            low = mid;
+            if (trial !== 'small') {
+              radius = mid;
+              apron = trial;
+            }
+          }
+        }
+        if (typeof apron === 'string' || radius < APRON_MIN_M) return;
+      }
+      aprons.push({
+        node: node.idx,
+        roads: [ra.idx, rb.idx],
+        classRadius,
+        radius,
+        ring: apron.ring,
+      });
+      prepared.push(apron);
+      node.curbs.push(apron.ring);
+    });
+  }
+  return aprons;
 }

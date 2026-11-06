@@ -5,7 +5,7 @@ import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
 import { continuationLayout } from './continuity';
 import { layoutRoad } from './lanes';
-import { roadEndSetbacks, junctionOutline, containMovements } from './junctions';
+import { roadEndSetbacks, junctionOutline, containMovements, junctionCurbs } from './junctions';
 import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
@@ -81,6 +81,7 @@ export function compile(city: City): CompileResult {
     radiusM: 0,
     setbacks: [],
     outline: [],
+    curbs: [],
     control,
     movements: [],
     signal: null,
@@ -282,6 +283,7 @@ export function compile(city: City): CompileResult {
     containMovements(node, movements, lanes);
     populateConflicts(node, movements, lanes);
   }
+  junctionCurbs(nodes, roads);
 
   const places: CPlace[] = [];
   const connectors: CConnector[] = [];
