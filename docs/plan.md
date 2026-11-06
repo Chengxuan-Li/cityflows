@@ -104,7 +104,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-078](tasks/TASK-078.md) | 5 | Junction curbs with a realistic radius, lanes untouched (B32) | `src/network/junctions.ts` (curbs only), `types.ts` (additive), `src/geo/polyline.ts` (additive), `drawNode` in `nodes.ts`, `bench/junction-audit.ts`, `tests/network/T31*` | 063, 074; design in architecture 5.1 | T31; hashes unchanged | done |
 | [TASK-079](tasks/TASK-079.md) | 5 | Markings up to the junction, arrows once, offsets on curves (B33 to B35) | `src/render/layers/roads.ts`, a marking-offset export in `src/geo/polyline.ts`, `tests/render/T32*` | 072, 074, 075; design in architecture 11 | T32 | done |
 | [TASK-080](tasks/TASK-080.md) | 5 | Short transitions, lanes through the remaining splits and merges (B36, B37) | `src/network/continuity.ts`, `lanes.ts`, `transitions.ts`, `drawRoadJoins` in `nodes.ts`, `tests/network/T33*` | 071, 074, 076; design in architecture 5.1 | T33 | done |
-| [TASK-081](tasks/TASK-081.md) | 5 | Geometry audit and visual regression harness | new `bench/geometry-audit.ts`, `bench/geometry-shots.ts`, `package.json` scripts, `tests/bench/T34*` | 074, 078, 079, 080; plan "Geometry rework" | T34; baseline of G1, G2 | todo |
+| [TASK-081](tasks/TASK-081.md) | 5 | Geometry audit and visual regression harness | new `bench/geometry-audit.ts`, `bench/geometry-shots.ts`, `package.json` scripts, `tests/bench/T34*` | 074, 078, 079, 080; plan "Geometry rework" | T34; baseline of G1, G2 | done |
 | [TASK-082](tasks/TASK-082.md) | 5 | Corridors first: lanes and surfaces at a constant offset (G1, B38) | new `src/network/corridor.ts`, `lanes.ts`, `compile.ts` wiring, `types.ts` (additive), `src/geo` (additive), offsets read in `roads.ts`/`transitions.ts`, `tests/network/T35*` | 071, 079, 080, 081; plan "Geometry rework" | T35; width error under 0.05 m | todo |
 | [TASK-084](tasks/TASK-084.md) | 5 | Importer: corridors, separated carriageways, relaxation | `src/importers/osm` (new `corridors.ts`, `relax.ts`), import options, `tests/importers/T36*` | 066, 068, 070, 081; plan "Geometry rework" | T36; relaxation value by experiment | todo |
 | [TASK-085](tasks/TASK-085.md) | 5 | Through movements at multi-lane splits and merges (B39) | `src/network/movements.ts`, `tests/network/T37*` | 071, 076, 080; plan "Geometry rework" | T37 | done |
@@ -1445,6 +1445,21 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   3 886 completed (main 3 564), 56 failed, all `gridlocked`, `stalledHeads` 0; benchmark
   hashes unchanged; route audit zero. Verified on the merged tree: typecheck, lint, format,
   build, all unit tests (30 s timeout; 460), the audit and the probe.
+
+- 2026-11-06, TASK-081 merged as delivered (geometry rework stage 1). `npm run geometry-audit
+  -- [out.json]` measures the eight quantities on the four cities and 13 named cases in about
+  9 s with byte-identical output; `npm run geometry-shots -- <dir>` captures 18 fixed-camera
+  images of Munich through the app (pixel-identical between runs); T34 plants each defect.
+  Accepted choices: through-road deviation is measured against the road's alignment 20 m out
+  on each side joined smoothly across the junction (the canonical centerline itself dips at
+  G2 after realignment), with a lane-dip value; bulge split into outline and curb parts. The
+  baseline on main after TASK-085: Munich width error up to 5 m on 39 roads, 52 lane
+  back-steps, 12 corridor pairs whose centre lines part by over 2 cm (up to 7 m, the
+  coincident Marsstraße pair), 446 m2 of unrelated overlap, 908 m2 of bulge; G1 width error
+  1.055 m within about 15 m of n:919 (its centre lines coincide along the curve, 0.109 m apart
+  only near the ends, so the owner's parting lines may come from a different extract); G2
+  bulge 65.3 m2 at n:774, lanes dipping 1.7 m there and 2.2 m at n:719. B38 does not step
+  back on this tree; its roads have one corner sharper than 90 degrees each.
 
 ## Owner decisions log
 
