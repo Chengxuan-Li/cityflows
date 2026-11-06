@@ -206,8 +206,11 @@ test.each([
   // outlines of n:726 and n:1181 follow r:729 and r:984 laid side by side between them (B36),
   // n:9 follows r:254 (B36 at n:253), and n:1375, n:33, n:638, n:774 and n:967 follow lanes
   // reshaped by the shorter tapers and holds at the far ends of r:1044, r:944, r:639/r:654,
-  // r:1368 and r:961. The continuation nodes (the count) are unchanged.
-  ['Munich', 63, '55e48b24e1f79a1411aa8a54cbef07beb175cc0f8c493660ff5181a7fa6447fd'],
+  // r:1368 and r:961. The continuation nodes (the count) are unchanged. TASK-082 moved the
+  // outlines again (they follow road edges offset from corridor reference lines); every setback
+  // and the movement set are unchanged. Before TASK-082:
+  // 55e48b24e1f79a1411aa8a54cbef07beb175cc0f8c493660ff5181a7fa6447fd.
+  ['Munich', 63, 'a326708fea5d06336f242fb0dace57a880b7af27fa4186494f4d6b552fcebfb0'],
 ] as const)(
   'T25: %s preserves the exact baseline setbacks and outlines of ordinary junctions',
   (name, count, baseline) => {

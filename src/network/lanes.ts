@@ -2,12 +2,12 @@ import {
   cumulativeLengths,
   headingAtDistance,
   pointAtDistance,
-  offsetPolyline,
   polylineLength,
-  trimPolyline,
+  vertexNormals,
 } from '../geo/polyline';
 import { laneId, type Road } from '../schema';
 import type { Vec2 } from '../geo/vec2';
+import { jointReference, offsetLine, type Reference } from './corridor';
 import type { CLane, CRoad, Diagnostic } from './types';
 
 export interface ContinuationEnd {
@@ -65,109 +65,170 @@ export function roadWidth(road: Road): number {
   return road.lanes.reduce((width, lane) => width + lane.widthM, 0);
 }
 
-/** Painted lane edges collapse onto the nearest surviving lane; driving polylines stay put. */
-export function laneEdges(
-  lane: CLane,
-  roadLanes: CLane[],
-  offset: (points: readonly Vec2[], offset: number) => Vec2[] = offsetPolyline,
-): { left: Vec2[]; right: Vec2[] } {
-  const edges = (side: number) => {
-    const line = offset(lane.polyline, (lane.widthM / 2) * side);
-    const lengths = cumulativeLengths(line);
-    return line.map((point, i) => {
-      const at = (lengths[i]! / lengths.at(-1)!) * lane.lengthM;
-      let p = point;
-      for (const start of [true, false]) {
-        const taper = start ? lane.taperStartM : lane.taperEndM;
-        const away = start ? at : lane.lengthM - at;
-        if (!taper || away > taper) continue;
-        const surviving = roadLanes.filter((l) => !(start ? l.taperStartM : l.taperEndM));
-        const neighbor = surviving.reduce((a, b) =>
-          Math.abs(a.lane - lane.lane) <= Math.abs(b.lane - lane.lane) ? a : b,
-        );
-        const s = (at / lane.lengthM) * neighbor.lengthM;
-        const center = pointAtDistance(neighbor.polyline, neighbor.cumulative, s);
-        const h = headingAtDistance(neighbor.polyline, neighbor.cumulative, s);
-        const offset = (Math.sign(lane.lane - neighbor.lane) * neighbor.widthM) / 2;
+/** Painted lane edges collapse onto the nearest surviving lane; driving polylines stay put. Both
+ * edges are `normalOffset`s of the lane polyline, so vertex `i` of an edge, of the lane and of
+ * every other lane of the road lie on one normal of the road's reference line (TASK-082). */
+export function laneEdges(lane: CLane, roadLanes: CLane[]): { left: Vec2[]; right: Vec2[] } {
+  const normals = laneNormals(lane, roadLanes);
+  const tapers = [true, false].flatMap((start) => {
+    const taper = start ? lane.taperStartM : lane.taperEndM;
+    if (!taper) return [];
+    const neighbor = roadLanes
+      .filter((l) => !(start ? l.taperStartM : l.taperEndM))
+      .reduce((a, b) => (Math.abs(a.lane - lane.lane) <= Math.abs(b.lane - lane.lane) ? a : b));
+    const offset = (Math.sign(lane.lane - neighbor.lane) * neighbor.widthM) / 2;
+    const across = laneNormals(neighbor, roadLanes);
+    const line = neighbor.polyline.map((p, i) => ({
+      x: p.x + across[i]!.x * offset,
+      y: p.y + across[i]!.y * offset,
+    }));
+    return [{ start, taper, line }];
+  });
+  const edges = (side: number) =>
+    lane.polyline.map((point, i) => {
+      const half = (lane.widthM / 2) * side;
+      let p = { x: point.x + normals[i]!.x * half, y: point.y + normals[i]!.y * half };
+      for (const { start, taper, line } of tapers) {
+        const away = start ? lane.cumulative[i]! : lane.lengthM - lane.cumulative[i]!;
+        if (away > taper) continue;
         const f = smoothstep(away / taper);
-        p = {
-          x: p.x * f + (center.x - Math.sin(h) * offset) * (1 - f),
-          y: p.y * f + (center.y + Math.cos(h) * offset) * (1 - f),
-        };
+        p = { x: p.x * f + line[i]!.x * (1 - f), y: p.y * f + line[i]!.y * (1 - f) };
       }
       return p;
     });
-  };
   return { left: edges(-1), right: edges(1) };
 }
+
+/** A lane's normals: across its road's lane block where the outer lanes sit at their nominal
+ * spacing (the reference line's normal there, the same for every lane, so neighbouring lanes'
+ * edges coincide), else its own `vertexNormals`. */
+function laneNormals(lane: CLane, roadLanes: CLane[]): Vec2[] {
+  const own = vertexNormals(lane.polyline);
+  const first = roadLanes[0]!,
+    last = roadLanes.at(-1)!;
+  if (first === last) return own;
+  const spacing =
+    roadLanes.reduce((sum, l) => sum + l.widthM, 0) - (first.widthM + last.widthM) / 2;
+  return own.map((n, k) => {
+    const a = first.polyline[k],
+      b = last.polyline[k];
+    if (!a || !b) return n;
+    const dx = b.x - a.x,
+      dy = b.y - a.y,
+      d = Math.hypot(dx, dy);
+    return Math.abs(d - spacing) < 0.01 ? { x: dx / d, y: dy / d } : n;
+  });
+}
+
+/** Stations closer than this to a cut are left out of the road's stations. */
+const CUT_GAP_M = 0.05;
+const MIN_STEP_M = 0.1;
+const GRID_M = 0.5;
 
 export function layoutRoad(
   road: Road,
   compiled: CRoad,
+  reference: Reference,
   startSetback: number,
   endSetback: number,
   lanes: CLane[],
   diagnostics: Diagnostic[],
   continuation: { before?: Vec2; after?: Vec2 } = {},
   transition: RoadContinuity = {},
-): void {
+): { jointDeviationM: number } {
   const width = roadWidth(road);
   const leftEdge = road.lateralOffsetM - width / 2;
   const trim = startSetback + endSetback;
   const length = polylineLength(road.centerline);
   const scale = trim === 0 ? 1 : Math.min(1, Math.max(0, length - 5) / trim);
   const shortened = scale < 1;
-  const centerline = trimPolyline(road.centerline, startSetback * scale, endSetback * scale);
-
-  let edge = leftEdge;
-  const extended = [
-    ...(continuation.before ? [continuation.before] : []),
-    ...centerline,
-    ...(continuation.after ? [continuation.after] : []),
-  ];
-  const offset = (value: number) => {
-    const line = offsetPolyline(extended, value);
-    const original = line.slice(continuation.before ? 1 : 0, continuation.after ? -1 : undefined);
-    if (!transition.start && !transition.end) return original;
-    const lengths = cumulativeLengths(centerline);
-    const total = lengths.at(-1)!;
-    const stations = new Set([...lengths]);
-    for (const atEnd of [false, true]) {
-      const end = atEnd ? transition.end : transition.start;
-      if (!end) continue;
-      const span = Math.min(total, Math.max(0, end.holdM + end.taperM));
-      const count = Math.ceil(span / 0.5);
-      for (let i = 1; i <= count; i++) {
-        const s = (span * i) / count;
-        stations.add(atEnd ? total - s : s);
-      }
+  // The road's stations on its reference line: its two cuts, the reference's vertices between
+  // them and, over each transition, one every half metre.
+  const { line: joined, deviationM } = jointReference(
+    reference,
+    startSetback === 0 ? continuation.before : undefined,
+    endSetback === 0 ? continuation.after : undefined,
+  );
+  const s0 = startSetback * scale;
+  const s1 = Math.max(s0, joined.lengths.at(-1)! - endSetback * scale);
+  const total = s1 - s0;
+  // A transition gets a station every half metre of the reference, counted from its source
+  // start, so the two directions of a street, whose cuts differ, still share them.
+  const grid = [s0, s1];
+  const refLength = joined.lengths.at(-1)!;
+  const phase = (s: number) => (joined.reversed ? refLength - s : s) / GRID_M;
+  for (const atEnd of [false, true]) {
+    const end = atEnd ? transition.end : transition.start;
+    if (!end) continue;
+    const span = Math.min(total, Math.max(0, end.holdM + end.taperM));
+    grid.push(atEnd ? s1 - span : s0 + span);
+    const [a, b] = [phase(atEnd ? s1 - span : s0), phase(atEnd ? s1 : s0 + span)].sort(
+      (x, y) => x - y,
+    ) as [number, number];
+    for (let k = Math.ceil(a); k <= b; k++) {
+      const s = joined.reversed ? refLength - k * GRID_M : k * GRID_M;
+      if (s > s0 && s < s1) grid.push(s);
     }
-    return [...stations]
-      .sort((a, b) => a - b)
-      .map((s) => {
-        // Sample each original offset segment by the corresponding centerline station.
-        const p = pointAtDistance(centerline, lengths, s);
-        const h = headingAtDistance(centerline, lengths, s);
-        let result =
-          original.length === centerline.length
-            ? pointAtDistance(original, lengths, s)
-            : { x: p.x - Math.sin(h) * value, y: p.y + Math.cos(h) * value };
-        if (s === 0) result = original[0]!;
-        if (s === total) result = original.at(-1)!;
-        for (const atEnd of [false, true]) {
-          const end = atEnd ? transition.end : transition.start;
-          const away = atEnd ? total - s : s;
-          if (!end || away >= end.holdM + end.taperM) continue;
-          // Up to `holdM` the lane keeps its place in the side-by-side block along the reference
-          // line; over the next `taperM` it eases onto its own offset. Both paths are smooth and
-          // the smoothstep has zero slope at both ends, so the heading stays continuous.
-          const f = smoothstep((away - end.holdM) / end.taperM);
-          const split = (end.splitM ?? 0) * smoothstep(away / end.taperM);
-          const side = referencePoint(end, atEnd, away, value + end.offsetM + split);
-          result = { x: side.x * (1 - f) + result.x * f, y: side.y * (1 - f) + result.y * f };
-        }
-        return result;
-      });
+  }
+  grid.sort((a, b) => a - b);
+  // Stations closer than `MIN_STEP_M` merge (the short chords between them turn the normals of
+  // the lane polylines noisily): grid stations into their mean (a cut stays), and a reference
+  // vertex near a grid station is left out. Both rules read the same from either end, so the
+  // two directions of a street get the same stations.
+  const merged: number[][] = [];
+  for (const s of grid) {
+    const last = merged.at(-1);
+    if (last && s - last.at(-1)! < MIN_STEP_M) last.push(s);
+    else merged.push([s]);
+  }
+  const fixed = merged.map((group) =>
+    group.includes(s0)
+      ? s0
+      : group.includes(s1)
+        ? s1
+        : group.reduce((a, b) => a + b) / group.length,
+  );
+  const unique = [
+    ...fixed,
+    ...[...joined.lengths].filter(
+      (s) =>
+        s > s0 + CUT_GAP_M &&
+        s < s1 - CUT_GAP_M &&
+        !fixed.some((g) => Math.abs(g - s) < MIN_STEP_M),
+    ),
+  ].sort((a, b) => a - b);
+  compiled.reference = joined.points;
+  compiled.stations = Float64Array.from(unique);
+
+  // The road's own reference and unit normals at its stations.
+  const base = offsetLine(joined, unique, 0);
+  const normal = offsetLine(joined, unique, 1).map((p, k) => ({
+    x: p.x - base[k]!.x,
+    y: p.y - base[k]!.y,
+  }));
+  let edge = leftEdge;
+  const offset = (value: number) => {
+    const line = base.map((p, k) => ({
+      x: p.x + normal[k]!.x * value,
+      y: p.y + normal[k]!.y * value,
+    }));
+    if (!transition.start && !transition.end) return line;
+    return unique.map((s, k) => {
+      let result = line[k]!;
+      for (const atEnd of [false, true]) {
+        const end = atEnd ? transition.end : transition.start;
+        const away = atEnd ? s1 - s : s - s0;
+        if (!end || away >= end.holdM + end.taperM) continue;
+        // Up to `holdM` the lane keeps its place in the side-by-side block along the reference
+        // line; over the next `taperM` it eases onto its own offset. Both paths are smooth and
+        // the smoothstep has zero slope at both ends, so the heading stays continuous.
+        const f = smoothstep((away - end.holdM) / end.taperM);
+        const split = (end.splitM ?? 0) * smoothstep(away / end.taperM);
+        const side = referencePoint(end, atEnd, away, value + end.offsetM + split);
+        result = { x: side.x * (1 - f) + result.x * f, y: side.y * (1 - f) + result.y * f };
+      }
+      return result;
+    });
   };
   for (const [lane, spec] of road.lanes.entries()) {
     const polyline = offset(edge + spec.widthM / 2);
@@ -228,4 +289,5 @@ export function layoutRoad(
       message: `Road ${road.id} is too short for setbacks ${startSetback.toFixed(2)} m + ${endSetback.toFixed(2)} m and 5 m of lane`,
     });
   }
+  return { jointDeviationM: deviationM };
 }

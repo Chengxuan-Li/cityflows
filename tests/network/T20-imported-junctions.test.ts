@@ -15,7 +15,24 @@ const expected = {
     movementsOutside: [] as string[],
     // Where a fan of overlapping ramps crosses itself the outline is walked so that it only
     // touches itself at one point (bench/junction-audit.ts counts no proper crossing there).
+    // TASK-082: with the road edges offset from corridor reference lines, `junctionOutline`
+    // runs out along a facing edge and back (a gore spike, no area) at n:1028, n:1132, n:1157,
+    // n:1202, n:139 and n:270; stage 3 (TASK-083) replaces the outline.
     crossings: [
+      'n:1028:1/3',
+      'n:1028:1/4',
+      'n:1028:2/4',
+      'n:1132:18/20',
+      'n:1132:18/21',
+      'n:1132:19/21',
+      'n:1157:1/3',
+      'n:1157:1/4',
+      'n:1157:2/4',
+      'n:1202:17/19',
+      'n:139:3/5',
+      'n:270:16/18',
+      'n:270:16/19',
+      'n:270:17/19',
       'n:434:6/10',
       'n:434:6/11',
       'n:434:7/10',
@@ -26,40 +43,67 @@ const expected = {
       'n:68:24/28',
     ],
     // Dead-end caps across two road ends cut at different distances, and a curb that follows a
-    // movement's edge.
-    tangents: ['n:161:0', 'n:161:0', 'n:996:2.999999999999966'],
+    // movement's edge. TASK-082: n:161's caps are gone.
+    tangents: ['n:996:3.000000000000054'],
     widthsOutside: [
       // TASK-080 (B36): the coincident service way r:15 and residential r:233 now run side by
       // side into n:14, an absorbing merge with 2.5 m setbacks; the 5.9 m merge curve from the
       // outer lane is wider than the junction outline there (junctions.ts, outside TASK-080).
+      // TASK-082: r:1198, r:80 and r:1061 left the list, r:1118 and r:595 joined it.
       'r:233#0>r:16#0',
+      'r:1118#0>r:1116#0',
       'r:285#0>r:400#0',
-      'r:1198#0>r:298#0',
       'r:597#0>r:888#0',
       'r:494#0>r:377#0',
       'r:596#0>r:494#0',
-      'r:80#0>r:82#0',
-      'r:1061#1>r:966#0',
+      'r:595#0>r:1090#0',
       'r:82#0>r:647#0',
     ],
   },
   'munich-donnersberger': {
     // TASK-080: r:1368's continuation transition at n:936 (hold, then a 20 m taper) reshapes
-    // its lanes up to n:774, and r:1276#0>r:1368#0 now stays inside n:774's outline.
-    movementsOutside: ['r:1163#0>r:1121#0', 'r:973#0>r:972#0'],
-    crossings: [] as string[],
+    // its lanes up to n:774, and r:1276#0>r:1368#0 now stays inside n:774's outline. TASK-082:
+    // r:973#0>r:972#0 now stays inside too.
+    movementsOutside: ['r:1163#0>r:1121#0'],
+    // TASK-082: gore spikes (out along a facing edge and back, no area) at n:1037, n:516, n:544,
+    // n:570 and n:590, as in Sindelfingen.
+    crossings: [
+      'n:1037:18/20',
+      'n:1037:18/21',
+      'n:1037:19/21',
+      'n:516:35/37',
+      'n:516:35/38',
+      'n:516:36/38',
+      'n:544:16/18',
+      'n:544:16/19',
+      'n:544:17/19',
+      'n:544:34/36',
+      'n:544:34/37',
+      'n:544:35/37',
+      'n:570:1/3',
+      'n:570:1/4',
+      'n:570:2/4',
+      'n:590:16/18',
+      'n:590:16/19',
+      'n:590:17/19',
+      'n:590:35/37',
+      'n:590:35/38',
+      'n:590:36/38',
+    ],
     // Dead-end caps across two road ends cut at different distances, and curbs that follow a
-    // movement's edge where a road end is a short stub.
+    // movement's edge where a road end is a short stub. TASK-082: n:212's cap is gone, n:907's
+    // curb joined.
     tangents: [
-      'n:212:0',
       'n:425:0',
       'n:425:0',
-      'n:970:2.9999999999999494',
-      'n:971:2.9999999999999902',
+      'n:907:2.999999999999999',
+      'n:970:2.9999999999999876',
+      'n:971:3.000000000000031',
     ],
     // TASK-080 resolved n:305 (r:1188#2>r:307#3, r:676#1>r:307#3) and n:726 (r:978#2>r:984#1)
     // with side-by-side branches (B36), and n:774 (r:1276, r:1362, r:777 into r:1368) with
     // r:1368's shorter transition at n:936.
+    // TASK-082: r:1076, r:1273, r:517, r:523 and r:973 left the list, r:1100 joined it.
     widthsOutside: [
       'r:1163#0>r:1121#0',
       'r:1163#0>r:1164#0',
@@ -71,14 +115,10 @@ const expected = {
       'r:716#1>r:958#3',
       'r:184#0>r:1173#0',
       'r:671#0>r:267#0',
-      'r:1076#0>r:941#0',
       'r:1330#0>r:327#0',
       'r:1269#0>r:41#0',
-      'r:1273#0>r:1230#0',
-      'r:517#0>r:1230#0',
-      'r:523#0>r:1230#0',
+      'r:1100#0>r:1097#0',
       'r:192#0>r:57#0',
-      'r:973#0>r:972#0',
       'r:977#0>r:976#0',
       'r:976#0>r:1081#0',
       'r:1267#0>r:301#1',

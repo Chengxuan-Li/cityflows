@@ -223,8 +223,10 @@ test('T32.3: on the hairpin fixture every lane line and edge keeps its offset', 
   for (const lane of city.lanes) {
     for (const offset of [-lane.widthM / 2, lane.widthM / 2]) {
       expect(offsetError(lane, parallelOffset(lane.polyline, offset), offset)).toBeLessThan(0.05);
-      // B35 as drawn before: per-vertex mitres thrown off at the fillets' millimetre steps.
-      expect(offsetError(lane, offsetPolyline(lane.polyline, offset), offset)).toBeGreaterThan(1);
+      // B35 drew per-vertex mitres thrown off at the fillets' millimetre steps (over 1 m off).
+      // TASK-082 resamples the reference line the lanes are offset from, so the lane polylines
+      // have no such steps left and even the mitre stays within 5 cm.
+      expect(offsetError(lane, offsetPolyline(lane.polyline, offset), offset)).toBeLessThan(0.05);
     }
   }
   for (const road of city.roads) {
