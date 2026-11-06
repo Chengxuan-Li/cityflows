@@ -437,17 +437,32 @@ function boxOf(points: readonly Vec2[], from = 0, to = points.length): Box {
 const boxesMeet = (a: Box, b: Box) =>
   a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
 
-/** A closed ring with its bounding box, the boxes of runs of 32 edges (edge `i` runs from
- * vertex `i - 1` to `i`), and a point-in-ring test, for `ringsOverlap`. */
+/** A closed ring with its bounding box and the boxes of runs of 32 edges (edge `i` runs from
+ * vertex `i - 1` to `i`), for `ringsOverlap`. */
 export function prepareRing(ring: Vec2[]) {
   const runs: { from: number; to: number; box: Box }[] = [];
   for (let from = 1; from < ring.length; from += 32) {
     const to = Math.min(ring.length, from + 32);
     runs.push({ from, to, box: boxOf(ring, from - 1, to) });
   }
-  return { ring, box: boxOf(ring), runs, inside: preparePolygon(ring, 1e-9) };
+  return { ring, box: boxOf(ring), runs };
 }
 export type PreparedRing = ReturnType<typeof prepareRing>;
+
+/** Even-odd test along a ray toward +x, over the runs the ray can cross. */
+function insideRing({ ring, runs }: PreparedRing, p: Vec2): boolean {
+  let inside = false;
+  for (const run of runs) {
+    if (run.box.maxX < p.x || run.box.minY > p.y || run.box.maxY < p.y) continue;
+    for (let i = run.from; i < run.to; i++) {
+      const a = ring[i - 1]!,
+        b = ring[i]!;
+      if (a.y > p.y !== b.y > p.y && p.x < a.x + ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y))
+        inside = !inside;
+    }
+  }
+  return inside;
+}
 
 /** Whether two closed rings overlap: part of either boundary lies inside the other ring and
  * farther than `margin` from its boundary. Rings that touch or share an edge do not. */
@@ -468,8 +483,8 @@ function edgesNear({ ring, runs }: PreparedRing, box: Box): number[] {
 
 function deepBoundary(of: PreparedRing, within: PreparedRing, margin: number): boolean {
   const line = of.ring,
-    ring = within.ring,
-    inside = within.inside;
+    ring = within.ring;
+  const inside = (p: Vec2) => insideRing(within, p);
   const grown = (b: Box) => ({
     minX: b.minX - margin,
     minY: b.minY - margin,

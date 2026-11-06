@@ -1465,12 +1465,17 @@ export function junctionCurbs(nodes: CNode[], roads: CRoad[]): CurbApron[] {
         // An edge curving more tightly than the arc runs inside it before the tangent point.
         if (selfCrossings(ring)) return 'large';
         const apron = prepareRing(ring);
-        for (let k = 0; k < roads.length; k++)
+        // The two roads' own edges bound the apron, so they can reach into it only across the
+        // arc: for them, the segment between the arc and its chord stands for the apron.
+        const segment = prepareRing(closeOutline([ta.point, ...arc, tb.point]));
+        for (let k = 0; k < roads.length; k++) {
+          const own = k === ra.idx || k === rb.idx;
           if (
             boxesMeet(apron.box, surfaceBoxes[k]!) &&
-            ringsOverlap(apron, surface(k), APRON_MARGIN_M)
+            ringsOverlap(own ? segment : apron, surface(k), APRON_MARGIN_M)
           )
             return 'large';
+        }
         for (const other of prepared)
           if (boxesMeet(apron.box, other.box) && ringsOverlap(apron, other, APRON_MARGIN_M))
             return 'large';
