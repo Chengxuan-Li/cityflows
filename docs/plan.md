@@ -334,7 +334,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B36 | Owner, round 3 (4, 5): carriageway splits and merges that TASK-071 does not cover draw as two overlapping surfaces without lane markings (4), or with a jagged edge where a ramp joins (5). | Network and renderer: lanes continue side by side with dividers through such splits and merges, and an absorbing merge draws as a smooth taper. |
 | B38 | TASK-079 review: some lane polylines step backwards by 4 to 26 m (Munich `r:1025`/`r:1026`, `r:839`/`r:840`, `r:866`/`r:867`; Sindelfingen `r:1053`/`r:1054`, `r:1116`/`r:1117`), so the markings drawn from them are off there. | Geometry (`lanes.ts`) or the importer's smoothing: find where the offset lane polyline folds back and remove the fold. |
 | B39 | TASK-080 review: at multi-lane splits and merges that stay ordinary junctions (Munich n:312, n:305, n:201, n:194) the stretch between the road ends is a junction surface with no lane markings, and some lanes there have no movement into the lane beside them (`r:313` has none into `r:692`). | Network movements and guide markings: generate the missing through movements at such splits, then let TASK-075's guide lines (or continuation) draw dividers across them. |
-| B40 | TASK-084 review: the engine computes a conflict zone's entry position as `(lane.lengthM + zoneStart) - lane.lengthM`, which can round past `zoneStart`; T21 failed once by 2e-15 m on an intermediate tree. | Simulation: clamp the entry position to `zoneStart` (a rounding fix, no rule change); confirm the benchmark hashes. |
+| B40 (done, lead fix 44d871c) | TASK-084 review: the engine computes a conflict zone's entry position as `(lane.lengthM + zoneStart) - lane.lengthM`, which can round past `zoneStart`; T21 failed once by 2e-15 m on an intermediate tree. | Simulation: clamp the entry position to `zoneStart` (a rounding fix, no rule change); confirm the benchmark hashes. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
@@ -1488,6 +1488,16 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   same-direction coincident Landsberger `r:729`/`r:984`. New: B40, a rounding slip in the
   engine's conflict-zone entry position (the agent saw T21 fail once by 2e-15 m on an
   intermediate tree: `(lane.lengthM + zoneStart) - lane.lengthM` can round past `zoneStart`).
+- 2026-11-06, lead fix for B40 (`task/086-zone-entry`, merged). TASK-082 round 2 made T21's
+  Munich run fail at `n:721`: the u-turn `r:1334#0>r:1280#0` entered its zone while
+  `r:1279#0>r:1280#0` occupied its own. Two layers: the grant forecast (TASK-065, expected
+  arrival from the current IDM acceleration) treated the through car, already on its movement
+  and braking at 4.45 m/s2 for its leader, as stopping short of the zone; the backstop then
+  clamped the u-turn car at the zone start, but the entry offset, re-derived as
+  `(lane.lengthM + zoneStart) - lane.lengthM`, rounded past `zoneStart`, so the next step's
+  zone stop no longer held it. The commit now computes the offset once. No rule change: the
+  backstop works as architecture section 8 states. Benchmark hashes unchanged, vitest green on
+  main, T21 green on TASK-082's tree.
 
 ## Owner decisions log
 
