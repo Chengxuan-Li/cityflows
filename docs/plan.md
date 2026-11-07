@@ -121,7 +121,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-099](tasks/TASK-099.md) | 5 | One lateral shift profile per corridor stretch (B54, B55 redesign; replaces TASK-089's split arrays and TASK-095's pull) | `src/network/continuity.ts`, `corridor.ts`, `lanes.ts`, `compile.ts`, `types.ts`, `junctions.ts`, `roads.ts`/`nodes.ts` (markings), audit | 089, 092, 093, 094, 095 salvage | T39/T45, traffic gate | todo |
 | [TASK-096](tasks/TASK-096.md) | 6 | OSM surroundings (buildings, land use, water, parks, railways) drawn under the roads | `src/importers/osm/context.ts`, `overpass.ts`, `City.context` (schema), `src/render/layers/context.ts`, `scene.ts`, Layers, import wizard | 090 | T44, project round trip, e2e smoke | done |
 | [TASK-097](tasks/TASK-097.md) | 6 | Shadows, deck edges, tunnel style and see-through under decks for grade separation | `src/render/layers/shadows.ts`, `scene.ts`, `style.ts`, Layers, shot cameras | 090 | unit, e2e smoke | done |
-| [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | todo |
+| [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1747,6 +1747,22 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   dimming applies to the tunnel grade's road layers only, so TASK-096's surroundings in the
   bottom grade are not faded (Sindelfingen `r:252`/`r:253`). Lead verification on main: check
   519, city 59.
+
+- 2026-11-07, TASK-098 merged (3D viewer, phases A and B; agent run by the owner). three
+  0.187.0 in a lazy chunk (615 kB); the eager bundle grew 4.8 kB (index split into index and a
+  shared preload chunk, 931.1 kB against 926.3 kB). A 2D/3D toggle (`V`) shows the same compiled
+  city and running simulation: grade `g` at 5·g m with Hermite ramps (one `heightAt` for
+  surfaces, paint, signals and vehicles), 0.8 m deck slabs, piers every 30 m, shadow-mapped
+  sun, "See below ground", and buildings extruded from `City.context` (heightM, else 3 m per
+  level, else 10 m) with a Buildings toggle. Editing, undo and redo are disabled in 3D; vehicle
+  picking works. `cityGrades` and `VehiclePoses` are factored out of the 2D scene, not copied.
+  Munich at 1x with about 1 300 vehicles: 59.9 FPS in both 3D and 2D. Lead review: shots read
+  (Donnersberger, `n:967`, Sindelfingen, ramp profile); in the app, Munich imported, played,
+  3D flown over the bridge, a car selected in 3D, back to 2D on the same centre with the toolbox
+  enabled, no console errors. Lead verification on main: check, city 61, bench end state
+  unchanged, full e2e 69/70. The one failure is T44's local frame gate (+12%). It fails the
+  same way on the pre-merge main (2 of 3 runs, +10 to +14% against 10%), so TASK-096's
+  frame margin is within run-to-run noise on this machine.
 
 ## Owner decisions log
 
