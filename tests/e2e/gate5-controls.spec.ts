@@ -43,6 +43,9 @@ async function openTraffic(page: Page, mode: 'stop' | 'red' | 'roundabout') {
   const scenario = project.scenarios[0]!;
   scenario.startS = 0;
   scenario.demand.workStart = { meanS: 0, sdS: 0 };
+  // Hold the original car fleet fixed when comparing junction controls; V100 covers mixed fleets.
+  const cars = { car: 1, van: 0, truck: 0, bus: 0 };
+  scenario.demand.classShares = { local: cars, through: cars };
   for (const [name, data] of [
     ['city.json', source],
     ['scenarios.json', project.scenarios],

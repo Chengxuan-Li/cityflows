@@ -91,7 +91,7 @@ type MovementId = string;  // derived: `${LaneId}>${LaneId}`
 
 type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary'
   | 'residential' | 'service' | 'ramp';
-type VehicleClass = 'car' | 'truck' | 'bus';
+type VehicleClass = 'car' | 'van' | 'truck' | 'bus';
 type Control = 'uncontrolled' | 'yield' | 'stop' | 'signal';
 type DrivingSide = 'right' | 'left';
 
@@ -207,7 +207,7 @@ interface GeoSource {
 }
 
 interface City {
-  schemaVersion: 1;
+  schemaVersion: 3;
   version: number;         // bumps on every committed edit; caches key on it
   name: string;
   drivingSide: DrivingSide;
@@ -220,7 +220,9 @@ interface City {
 }
 ```
 
-TASK-096 adds optional display-only surroundings without a schema-version change. Old
+TASK-100 advances the city schema to 3. Version 2 lanes gain `van` immediately after `car`
+where cars were allowed; version 1 first restores its node defaults, then follows the same
+migration. Current cities retain explicit class restrictions. TASK-096 adds optional display-only surroundings without a schema-version change. Old
 projects omit the field; current and TASK-042 baseline cities retain it through ZIP/JSON save
 and open. Context is never edited, never increments city.version, and is ignored by compile,
 routing, demand and simulation.
@@ -818,7 +820,9 @@ sim, demand and routing); all iteration in index order.
 ```ts
 interface SimParams {
   dtS: 0.1;
-  vehicleLengthM: 4.5;
+  vehicleClasses: Record<VehicleClass, {
+    lengthM: number; widthM: number; maxSpeedMps: number; accelFactor: number; decelFactor: number
+  }>;
   idm: { aMps2: 1.5; bMps2: 2.0; headwayS: 1.2; minGapM: 2.0; desiredSpeedSd: 0.08 };
   mobil: { politeness: 0.3; thresholdMps2: 0.2; safeDecelMps2: 3.0 };
   laneChangeDistanceM: 30;
@@ -860,6 +864,7 @@ interface VehicleSnapshot {
   speed: Float32Array; lateralM: Float32Array;       // lateral offset while changing lanes
   lane: Int32Array;                                   // lane idx, or -(movement idx + 1) on a movement
   state: Uint8Array;                                  // 1 driving, 2 queued_destination
+  vclass: Uint8Array;                                 // car 0, van 1, truck 2, bus 3
   fade: Float32Array;                                 // TASK-077: 1, or falling to 0 before a respawn
 }
 
@@ -875,6 +880,7 @@ interface Metrics {
   trips: { pending: number; queuedOrigin: number; driving: number; queuedDestination: number;
            completed: number; failed: number };       // sum equals trips loaded (T01)
   failedByReason: Record<FailReason, number>;
+  completedByClass: Record<VehicleClass, number>;
   meanTravelTimeS: number; meanDelayS: number;        // delay = travel - free-flow estimate
   roadSpeedRatio: Float32Array;                       // mean speed / limit per compiled road, for heat
   stepsPerSecond: number;                             // measured by the host, 0 headless
@@ -883,6 +889,7 @@ interface Metrics {
 
 interface VehicleDetail {
   id: number; tripId: string; personId: string | null;
+  vehicleClass: VehicleClass; purpose: VehiclePurpose;
   originPlace: PlaceId; destinationPlace: PlaceId; state: VehicleState;
   lane: number; positionM: number; speedMps: number;
   route: Route | null;
@@ -892,6 +899,25 @@ interface VehicleDetail {
   respawns: number;                                   // TASK-077
 }
 ```
+
+TASK-100 stores class and purpose as dense `Uint8Array` indices. Class profiles default to:
+
+| Class | Length m | Width m | Maximum km/h | Acceleration factor | Deceleration factor |
+| --- | --- | --- | --- | --- | --- |
+| car | 4.5 | 1.8 | unlimited | 1 | 1 |
+| van | 5.5 | 2 | 120 | 0.85 | 0.95 |
+| truck | 12 | 2.5 | 80 | 0.5 | 0.8 |
+| bus | 12 | 2.55 | 80 | 0.6 | 0.8 |
+
+Factors multiply IDM acceleration and comfortable deceleration. Desired speed is the road
+limit times the trip's existing speed factor, capped by its class maximum. Following gaps
+subtract the leader's length; rear clearance and follower space use the occupying vehicle's
+own length. Spawn, MOBIL, merges, junction boxes, zone forecasts and committed exit clamps
+use these same profiles. Lane permissions and patch projection use the trip's class;
+rerouting also carries its purpose for TASK-101. Respawn preserves both indices. Old saved
+`vehicleLengthM` is ignored. An unlimited maximum is `Infinity` internally and `null` in JSON;
+the boundary schema restores it. T46 fixes the pre-change grid/town cars-only outcomes,
+travel times and state hashes exactly.
 
 Step sequence, in this order every step:
 
@@ -924,9 +950,9 @@ Step sequence, in this order every step:
      no vehicle holds a grant on or drives on a conflicting movement (TASK-064: no vehicle
      holds a grant on a conflicting movement while still on its approach lane, or drives on
      it with its rear not yet past the end of that movement's conflict zone with the
-     candidate's movement, `position < endM + vehicleLengthM`; a vehicle that has cleared the
+     candidate's movement, `position < endM + occupant.lengthM`; a vehicle that has cleared the
      zone no longer blocks), the last vehicle on the
-     exit lane is at least `vehicleLengthM + minGapM` along it (downstream blocking), and for
+     exit lane is at least `candidate.lengthM + minGapM` along it (downstream blocking), and for
      yield and stop nodes every vehicle approaching on a conflicting higher-priority movement
      is at least `gapS` away (TASK-064: measured to the start of its conflict zone with the
      candidate, the rest of its lane plus `startM`, not to its stop line). Stop nodes require a minor-approach vehicle to stand at the
@@ -952,9 +978,9 @@ Step sequence, in this order every step:
    - TASK-065, keep the box clear (B28). A candidate whose exit lane does not have room for
      its whole length past the movement (the rear of the exit lane's last vehicle, projected
      forward by that vehicle's speed over the candidate's time to cross, at least
-     `vehicleLengthM + minGapM` along the lane) is not granted, so it waits at the stop line
+     `candidate.lengthM + minGapM` along the lane) is not granted, so it waits at the stop line
      rather than in the junction. After `boxWaitS` of waiting at the line it falls back to
-     the older rule (the last vehicle's front at least `vehicleLengthM + minGapM` along), so a
+     the older rule (the last vehicle's front at least `candidate.lengthM + minGapM` along), so a
      jammed junction still drains.
 5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
    its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
@@ -1150,7 +1176,9 @@ interface Person { id: string; homePlaceId: PlaceId; workPlaceId: PlaceId | null
 type TripMode = 'car' | 'walk' | 'bus' | 'rail';
 interface Leg { mode: TripMode; fromPlaceId: PlaceId; toPlaceId: PlaceId }
 interface TripRequest { id: string; personId: string | null; originPlaceId: PlaceId;
-  destinationPlaceId: PlaceId; departS: number; mode: TripMode; legs: Leg[] }
+  destinationPlaceId: PlaceId; departS: number; mode: TripMode; legs: Leg[];
+  vehicleClass: VehicleClass; purpose: VehiclePurpose }
+type VehiclePurpose = 'private' | 'delivery' | 'service' | 'taxi' | 'through';
 
 interface DemandConfig {
   seed: number;
@@ -1160,6 +1188,7 @@ interface DemandConfig {
   workDuration: { meanS: number; sdS: number };    // default 9 h, 1 h
   gravityScaleM: number;          // home-work distance decay, default 5000
   throughTripsPerHour: number[];  // 24 values, gateway to gateway (Gate 3)
+  classShares?: { local: Record<VehicleClass, number>; through: Record<VehicleClass, number> };
   chains?: { schoolShare?: number; shopShare?: number; leisureShare?: number }; // 0..1, omitted = 0
 }
 
@@ -1169,6 +1198,15 @@ interface Scenario { id: string; name: string; seed: number; startS: number; end
 function generatePopulation(city: City, config: DemandConfig): Person[];
 function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[];  // sorted by departS
 ```
+
+TASK-100 assigns class after mode choice, using a separate demand-seeded stream keyed by
+trip id, leaving every existing agenda, mode and timing draw unchanged. Omitted shares resolve
+to local car 0.92 / van 0.08 and through car 0.80 / van 0.08 / truck 0.12; buses default to
+zero. Local vans split delivery/service equally by a seeded draw; other local trips are
+private and through trips retain purpose through. Unsupported modes keep car/private metadata
+and still fail as unsupported. Saved trips missing labels parse as car/private, or through
+for established `through:` trip IDs. Summary counts include each class; the demand panel also
+shows completed trips per class. Buses have no stops, routes or transit operations.
 
 TASK-042 comparison saves a baseline `{ city, scenario, population? }`. The variant references
 the current editor `cityVersion`. Both runs use the baseline scenario, seed and the same trip
@@ -1208,7 +1246,8 @@ variant. Saving a baseline captures current editor state, including unapplied li
   excess visitors travel one way. Endpoints are other gateways weighted by population plus
   jobs, or residential places by population when there are no other gateways. An event with
   visitors but no positive-weight endpoint fails clearly. Counts are absolute, independent of
-  resident sampling and car share; visitors and through trips use cars. No transit is simulated.
+  resident sampling and car share; visitors and through trips use road vehicles drawn from their
+  respective class shares. No transit is simulated.
 - Restart keeps the saved population unless a place was added or removed or a place's kind,
   population or jobs changed since it was generated; then the population is regenerated from
   the scenario demand so new places attract trips. TASK-034 adds explicit regeneration with a
@@ -1260,6 +1299,9 @@ type HostEvent =
   UI shows the achieved speed, so throttling is visible rather than silent.
 - Snapshots are pulled: the main thread requests one per animation frame with at most one in
   flight; the worker replies with transferable buffers. `tick` events are pushed at 10 Hz.
+- TASK-100: the class-index `vclass` buffer transfers with every vehicle snapshot. Inspector
+  replies carry class and purpose, headless metrics preserve `completedByClass`, and trip CSV
+  records include `class` and `purpose` columns after destination.
 - TASK-041: snapshot replies additionally include optional `roadSpeedRatio`, transferred with
   the matching vehicle arrays at most once per 500 ms of wall time. The renderer updates heat
   and lane-end queues only with these replies. Load/restart resets the throttle.
@@ -1317,6 +1359,14 @@ type HostEvent =
 ## 11. Rendering and UI
 
 `src/render` draws a `CompiledCity` and the latest `VehicleSnapshot` with PixiJS 8:
+
+- TASK-100: one generated texture atlas contains class shapes: rounded car, short-bonnet van,
+  cab-and-box truck and long rounded bus. Street zoom uses each class's length and width;
+  overview uses compact dots. Optional Layers setting "Colour vehicles by class" defaults
+  off; it uses a muted four-colour palette in both views and leaves destination colouring
+  as the default. 3D instances use class footprints and heights 1.5/2.2/3.5/3.2 m in class
+  index order. Class-sized selection and existing picking work for all four. The inspector
+  shows class and purpose under the vehicle heading. Presentation changes never alter physics.
 
 - TASK-096: optional Surroundings draws above tiles and below every grade group. Muted
   land use, water, green, parking and building fills (courtyard holes, hairline building edges)

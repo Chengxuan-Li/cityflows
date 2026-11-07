@@ -18,10 +18,10 @@ test('T21: an opposing queue is released as the left-turn rear clears its zone',
   request(1);
   expect(intersections.grants[1]).toBe(-1); // approach reservation
   vehicles.remove(0);
-  vehicles.insert(0, -left.idx - 1, end + DEFAULT_SIM_PARAMS.vehicleLengthM - 0.001);
+  vehicles.insert(0, -left.idx - 1, end + DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM - 0.001);
   request(1);
   expect(intersections.grants[1]).toBe(-1); // rear still in contact
-  vehicles.position[0] = end + DEFAULT_SIM_PARAMS.vehicleLengthM;
+  vehicles.position[0] = end + DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM;
   expect(vehicles.position[0]).toBeLessThan(left.lengthM);
   request(1);
   expect(intersections.grants[1]).toBe(through.idx);
@@ -34,7 +34,7 @@ test('T21: a cleared leader cannot hide a following approach grant or movement o
   request(0);
   request(2);
   vehicles.remove(0);
-  vehicles.insert(0, -left.idx - 1, end + DEFAULT_SIM_PARAMS.vehicleLengthM);
+  vehicles.insert(0, -left.idx - 1, end + DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM);
   request(1);
   expect(intersections.grants[1]).toBe(-1);
   vehicles.remove(2);

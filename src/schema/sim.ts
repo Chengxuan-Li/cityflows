@@ -1,7 +1,18 @@
+import type { VehicleClass } from './city';
+
 /** Simulation parameters (architecture section 8). Defaults live in src/sim/params.ts. */
 export interface SimParams {
   dtS: number;
-  vehicleLengthM: number;
+  vehicleClasses: Record<
+    VehicleClass,
+    {
+      lengthM: number;
+      widthM: number;
+      maxSpeedMps: number;
+      accelFactor: number;
+      decelFactor: number;
+    }
+  >;
   idm: { aMps2: number; bMps2: number; headwayS: number; minGapM: number; desiredSpeedSd: number };
   mobil: { politeness: number; thresholdMps2: number; safeDecelMps2: number };
   laneChangeDistanceM: number;

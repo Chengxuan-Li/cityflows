@@ -1,6 +1,7 @@
 import { createRandom } from '../geo/random';
 import type { City, Scenario, TripRequest } from '../schema';
 import { weightedChoice } from './selection';
+import { tripVehicle } from './vehicle';
 
 export function throughTrips(city: City, scenario: Scenario): TripRequest[] {
   const gateways = Object.values(city.places)
@@ -32,6 +33,7 @@ export function throughTrips(city: City, scenario: Scenario): TripRequest[] {
         departS: hour * 3600 + random.uniform(0, 3600),
         mode: 'car',
         legs: [{ mode: 'car', fromPlaceId: origin.id, toPlaceId: destination.id }],
+        ...tripVehicle(id, scenario.demand, 'through'),
       });
     }
   }

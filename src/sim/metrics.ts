@@ -1,4 +1,5 @@
 import type { CompiledCity } from '../network';
+import { vehicleClasses, type VehicleClass } from '../schema';
 import type { FailReason, Metrics } from './types';
 import {
   COMPLETED,
@@ -31,6 +32,7 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
   let respawns = 0;
   let totalTravel = 0;
   let totalDelay = 0;
+  const completedByClass: Record<VehicleClass, number> = { car: 0, van: 0, truck: 0, bus: 0 };
 
   function transition(id: number, state: TripState) {
     trips[tripStates[vehicles.state[id] as TripState]]--;
@@ -54,6 +56,7 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
     }
     return {
       timeS,
+      completedByClass: { ...completedByClass },
       trips: { ...trips },
       failedByReason: { ...failedByReason },
       meanTravelTimeS: trips.completed ? totalTravel / trips.completed : 0,
@@ -97,6 +100,7 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
     },
     complete(id: number, timeS: number) {
       transition(id, COMPLETED);
+      completedByClass[vehicleClasses[vehicles.vclass[id]!]!]++;
       vehicles.arrived[id] = timeS;
       const travel = timeS - vehicles.departed[id]!;
       totalTravel += travel;

@@ -6,10 +6,11 @@ import { saveBaseline, restoreBaseline } from '../../src/project/scenarios';
 import { saveProject, saveProjectJson } from '../../src/project/save';
 import { openProject } from '../../src/project/open';
 import { sha256 } from '../../src/project/hash';
+import { scenarioSchema } from '../../src/schema';
 
 test('baseline round-trips with its scenario in ZIP and JSON; restore is undoable', async () => {
   const city = grid5x5();
-  const project = { city, scenarios: [defaultScenario('grid5x5')] };
+  const project = { city, scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))] };
   const baseline = saveBaseline(city, project.scenarios[0]!);
   const editor = createEditor({ ...city, name: 'Variant grid' });
   const road = Object.values(city.roads)[0]!;

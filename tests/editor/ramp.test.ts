@@ -30,6 +30,12 @@ test.each(['right', 'left'] as const)(
     expect(result.ok).toBe(true);
     const ramp = Object.values(editor.city.roads).find((r) => r.roadClass === 'ramp')!;
     expect(ramp.lanes).toHaveLength(1);
+    expect(ramp.lanes[0]!.allowed).toContain('van');
+    expect(
+      Object.values(editor.city.roads).every((r) =>
+        r.lanes.every((lane) => lane.allowed.includes('van')),
+      ),
+    ).toBe(true);
     expect(ramp.speedLimitMps).toBe(to.speedLimitMps);
     expect(ramp.centerline.length).toBeGreaterThan(2);
     const lane = editor.compiled.index.lane.get(`${ramp.id}#0`)!;

@@ -353,7 +353,7 @@ export function editRoundabout(
           to: b.id,
           centerline,
           lateralOffsetM: 0,
-          lanes: [{ widthM: 3.5, allowed: ['car', 'truck', 'bus'] }],
+          lanes: [{ widthM: 3.5, allowed: ['car', 'van', 'truck', 'bus'] }],
           roadClass: busiest.roadClass,
           speedLimitMps: 30 / 3.6,
           name: 'Roundabout',

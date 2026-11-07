@@ -1,26 +1,56 @@
-import { Particle, ParticleContainer, Texture } from 'pixi.js';
+import { Particle, ParticleContainer, Rectangle, Texture } from 'pixi.js';
+import type { Vec2 } from '../../geo/vec2';
 import type { CompiledCity } from '../../network';
+import { vehicleClasses, type VehicleClass } from '../../schema/city';
 import { style } from '../style';
 import { VehiclePoses, type PresentationSnapshot } from '../vehicle-pose';
 export { advanceAlong, distanceAlong, laneChangePose } from '../vehicle-pose';
 
-function vehicleTexture(dot: boolean): Texture {
+function vehicleTextures() {
   const canvas = document.createElement('canvas');
-  canvas.width = dot ? 32 : 72;
-  canvas.height = dot ? 32 : 32;
+  canvas.width = 256;
+  canvas.height = 5 * 64;
   const context = canvas.getContext('2d')!;
-  context.fillStyle = '#ffffff';
-  context.beginPath();
-  if (dot) context.arc(16, 16, 16, 0, Math.PI * 2);
-  else context.roundRect(0, 0, 72, 32, 16);
-  context.fill();
-  if (!dot) {
+  const frames: Record<string, Rectangle> = {};
+  for (const [index, vehicleClass] of vehicleClasses.entries()) {
+    const { lengthM, widthM } = style.vehicleClasses[vehicleClass];
+    const width = Math.round((lengthM / widthM) * 48);
+    const y = index * 64 + 8;
+    frames[vehicleClass] = new Rectangle(8, y, width, 48);
+    context.fillStyle = '#ffffff';
+    context.beginPath();
+    if (vehicleClass === 'truck') {
+      context.roundRect(8, y + 1, width * 0.73, 46, 3);
+      context.roundRect(8 + width * 0.76, y + 3, width * 0.24, 42, 7);
+    } else if (vehicleClass === 'van') {
+      context.roundRect(8, y, width * 0.79, 48, 5);
+      context.roundRect(8 + width * 0.74, y + 5, width * 0.26, 38, 8);
+    } else context.roundRect(8, y, width, 48, vehicleClass === 'car' ? 24 : 9);
+    context.fill();
     context.fillStyle = '#c1c9c8';
     context.beginPath();
-    context.roundRect(47, 6, 10, 20, 4);
+    context.roundRect(8 + width * 0.79, y + 9, width * 0.08, 30, 3);
+    if (vehicleClass === 'bus') {
+      for (let window = 0; window < 6; window++) {
+        context.roundRect(22 + window * 29, y + 4, 17, 5, 2);
+        context.roundRect(22 + window * 29, y + 39, 17, 5, 2);
+      }
+    }
     context.fill();
   }
-  return Texture.from(canvas);
+  context.fillStyle = '#ffffff';
+  context.beginPath();
+  context.arc(24, 288, 16, 0, Math.PI * 2);
+  context.fill();
+  frames.dot = new Rectangle(8, 272, 32, 32);
+  const atlas = Texture.from(canvas);
+  const textures = Object.fromEntries(
+    Object.entries(frames).map(([key, frame]) => [
+      key,
+      new Texture({ source: atlas.source, frame }),
+    ]),
+  ) as Record<VehicleClass | 'dot', Texture>;
+  return { atlas, textures };
 }
 
 export function createVehicleLayer() {
@@ -36,7 +66,10 @@ export function createVehicleLayer() {
 type VehicleLayer = ReturnType<typeof createVehicleLayer>;
 
 export class Vehicles {
-  private readonly textures = { car: vehicleTexture(false), dot: vehicleTexture(true) };
+  private readonly atlas = vehicleTextures();
+  private readonly textures = this.atlas.textures;
+  private readonly classes = new WeakMap<Particle, VehicleClass>();
+  private colourByClass = false;
   private layers: VehicleLayer[] = [];
   private laneLayers: VehicleLayer[] = [];
   private movementLayers: VehicleLayer[] = [];
@@ -78,9 +111,15 @@ export class Vehicles {
     }
   }
 
+  setColourByClass(enabled: boolean): void {
+    if (this.colourByClass === enabled) return;
+    this.colourByClass = enabled;
+    if (this.snapshot) this.update(this.snapshot);
+  }
+
   update(snapshot: PresentationSnapshot): void {
     this.poses.update(snapshot);
-    const { count, id, lane, fade, vehicleHues } = snapshot;
+    const { count, id, lane, fade, vehicleHues, vclass } = snapshot;
     if (this.x.length < count) {
       this.x = new Float32Array(count);
       this.y = new Float32Array(count);
@@ -96,12 +135,19 @@ export class Vehicles {
       let particle = layer.pool[index];
       if (!particle) {
         particle = new Particle({ texture: this.textures.car, anchorX: 0.5, anchorY: 0.5 });
-        this.size(particle);
         layer.pool.push(particle);
+      }
+      const vehicleClass = vehicleClasses[vclass[i]!]!;
+      if (this.classes.get(particle) !== vehicleClass) {
+        this.classes.set(particle, vehicleClass);
+        this.size(particle);
+        layer.container.update();
       }
       this.particles[i] = particle;
 
-      const tint = vehicleHues?.[id[i]! - 1] ?? style.driving;
+      const tint = this.colourByClass
+        ? style.vehicleClasses[vehicleClass].color
+        : (vehicleHues?.[id[i]! - 1] ?? style.driving);
       if (particle.tint !== tint) particle.tint = tint;
       if (particle.alpha !== fade[i]) particle.alpha = fade[i]!;
     }
@@ -128,16 +174,38 @@ export class Vehicles {
     }
   }
 
+  pickBody(point: Vec2): number | null {
+    const snapshot = this.snapshot;
+    if (this.dot || !snapshot) return null;
+    for (let i = snapshot.count - 1; i >= 0; i--) {
+      const particle = this.particles[i]!;
+      const dx = point.x - particle.x;
+      const dy = point.y - particle.y;
+      const cos = Math.cos(particle.rotation);
+      const sin = Math.sin(particle.rotation);
+      const longitudinal = dx * cos + dy * sin;
+      const lateral = -dx * sin + dy * cos;
+      const length = particle.texture.width * particle.scaleX;
+      const width = particle.texture.height * particle.scaleY;
+      if (longitudinal >= -length && longitudinal <= 0 && Math.abs(lateral) <= width / 2)
+        return snapshot.id[i]!;
+    }
+    return null;
+  }
+
   private size(particle: Particle): void {
-    const texture = this.dot ? this.textures.dot : this.textures.car;
+    const vehicleClass = this.classes.get(particle)!;
+    const texture = this.dot ? this.textures.dot : this.textures[vehicleClass];
+    const dimensions = style.vehicleClasses[vehicleClass];
     const diameter = (2 * style.vehicleDotRadiusPx) / this.zoom;
     particle.texture = texture;
-    particle.scaleX = (this.dot ? diameter : style.vehicleLengthM) / texture.width;
-    particle.scaleY = (this.dot ? diameter : style.vehicleWidthM) / texture.height;
+    particle.anchorX = this.dot ? 0.5 : 1;
+    particle.scaleX = (this.dot ? diameter : dimensions.lengthM) / texture.width;
+    particle.scaleY = (this.dot ? diameter : dimensions.widthM) / texture.height;
   }
 
   destroy(): void {
-    this.textures.car.destroy(true);
-    this.textures.dot.destroy(true);
+    for (const texture of Object.values(this.textures)) texture.destroy();
+    this.atlas.atlas.destroy(true);
   }
 }

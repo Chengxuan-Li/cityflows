@@ -21,6 +21,7 @@ test.each(['right', 'left'] as const)(
     for (const id of record.ringRoads) {
       const road = editor.city.roads[id]!;
       expect(road.lanes).toHaveLength(1);
+      expect(road.lanes[0]!.allowed).toContain('van');
       expect(road.speedLimitMps).toBeCloseTo(30 / 3.6);
     }
     const entries = Object.values(editor.city.nodes).filter((n) => n.control === 'yield');
@@ -148,7 +149,7 @@ test('T12 opens and removes a v1 roundabout saved by main, including baseline an
   expect(opened).toMatchObject({ ok: true });
   if (!opened.ok) throw new Error(opened.error);
   const { city, baseline, history } = opened.project;
-  expect(city.schemaVersion).toBe(2);
+  expect(city.schemaVersion).toBe(3);
   const record = city.nodes[nodeId]!.roundabout!;
   expect(Object.keys(record).sort()).toEqual(['radiusM', 'restore', 'ringRoads']);
   expect(baseline?.city).toEqual(city);

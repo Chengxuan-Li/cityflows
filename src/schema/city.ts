@@ -10,7 +10,8 @@ export type MovementId = string; // derived: `${LaneId}>${LaneId}`
 
 export type RoadClass =
   'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'ramp';
-export type VehicleClass = 'car' | 'truck' | 'bus';
+export const vehicleClasses = ['car', 'van', 'truck', 'bus'] as const;
+export type VehicleClass = (typeof vehicleClasses)[number];
 export type Control = 'uncontrolled' | 'yield' | 'stop' | 'signal';
 export type DrivingSide = 'right' | 'left';
 
@@ -141,7 +142,7 @@ export type ContextFeature =
   | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number };
 
 export interface City {
-  schemaVersion: 2;
+  schemaVersion: 3;
   version: number; // bumps on every committed edit; caches key on it
   name: string;
   drivingSide: DrivingSide;

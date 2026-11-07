@@ -1,7 +1,7 @@
 import type { CompiledCity } from '../network';
 import type { LinkCosts, RouteProvider, RouteRequest } from '../routing';
 import { remainingRouteCost } from '../routing/costs';
-import type { SimParams } from '../schema';
+import { vehicleClasses, vehiclePurposes, type SimParams } from '../schema';
 import { COMPLETED, DRIVING, FAILED, type Vehicles } from './vehicle';
 
 export function vehicleRouteRequest(
@@ -15,7 +15,8 @@ export function vehicleRouteRequest(
     fromLane: lane,
     fromPosM: positionM,
     toConnector: vehicles.destination[id]!,
-    vehicleClass: 'car',
+    vehicleClass: vehicleClasses[vehicles.vclass[id]!]!,
+    purpose: vehiclePurposes[vehicles.purpose[id]!]!,
     desiredSpeedFactor: vehicles.speedFactor[id]!,
     noise: params.routeNoise,
     seed: vehicles.routeSeed[id]!,

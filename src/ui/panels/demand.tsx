@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
+import { vehicleClasses } from '../../schema/city';
 import type { FailReason, Metrics } from '../../sim/types';
 import { useAppStore } from '../store';
 
@@ -28,6 +29,7 @@ export function DemandPanel() {
     engine: typeof engine;
     at: number;
     failedByReason: Metrics['failedByReason'];
+    completedByClass: Metrics['completedByClass'];
     respawns: number;
   } | null>(null);
   const pausedTime = run.status === 'playing' ? null : run.timeS;
@@ -38,8 +40,8 @@ export function DemandPanel() {
     const read = () =>
       void engine
         .metrics()
-        .then(({ timeS, failedByReason, respawns }) => {
-          if (active) setFailed({ engine, at: timeS, failedByReason, respawns });
+        .then(({ timeS, failedByReason, completedByClass, respawns }) => {
+          if (active) setFailed({ engine, at: timeS, failedByReason, completedByClass, respawns });
         })
         .catch((error: unknown) => {
           if (active) reportError(error);
@@ -108,6 +110,28 @@ export function DemandPanel() {
               </text>
             ))}
           </svg>
+          <table aria-label="Trips by class">
+            <thead>
+              <tr>
+                <th scope="col">Class</th>
+                <th scope="col">Trips</th>
+                <th scope="col">Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicleClasses.map((vehicleClass) => (
+                <tr key={vehicleClass}>
+                  <th scope="row">{vehicleClass[0]!.toUpperCase() + vehicleClass.slice(1)}</th>
+                  <td>{summary.byClass[vehicleClass].toLocaleString()}</td>
+                  <td>
+                    {failed?.engine === engine
+                      ? failed.completedByClass[vehicleClass].toLocaleString()
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           <dl className="details" aria-label="Last run">
             <dt>Last run</dt>
             <dd>

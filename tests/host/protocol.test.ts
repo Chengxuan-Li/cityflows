@@ -53,7 +53,11 @@ test('round-trips every request through the worker and matches replies by ID', a
   const city = grid5x5();
   const input = {
     compiled: setup(city),
-    trips: trips(city, 1),
+    trips: trips(city, 1).map((trip) => ({
+      ...trip,
+      vehicleClass: 'truck' as const,
+      purpose: 'through' as const,
+    })),
     scenario: { ...scenario(), endS: 101 },
   };
   const events: HostEvent[] = [];
@@ -80,7 +84,9 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect(requests.filter((request) => request.type === 'snapshot')).toHaveLength(1);
   expect(snapshot).toMatchObject({ timeS: 101, count: 1 });
   expect(snapshot.id.byteLength).toBe(4);
-  expect(transferred).toEqual(Array(10).fill(0));
+  expect(snapshot.vclass).toBeInstanceOf(Uint8Array);
+  expect([...snapshot.vclass]).toEqual([2]);
+  expect(transferred).toEqual(Array(11).fill(0));
   expect(snapshot.roadSpeedRatio).toHaveLength(input.compiled.roads.length);
   now = 499;
   expect((await client.snapshot()).roadSpeedRatio).toBeUndefined();
@@ -93,8 +99,17 @@ test('round-trips every request through the worker and matches replies by ID', a
   const inspect = client.inspect(1);
   await Promise.resolve();
   for (const reply of deferred.reverse()) deliver(main, reply);
-  expect(await metrics).toMatchObject({ timeS: 101, trips: { driving: 1 } });
-  expect(await inspect).toMatchObject({ id: 1, state: 'driving' });
+  expect(await metrics).toMatchObject({
+    timeS: 101,
+    trips: { driving: 1 },
+    completedByClass: { car: 0, van: 0, truck: 0, bus: 0 },
+  });
+  expect(await inspect).toMatchObject({
+    id: 1,
+    state: 'driving',
+    vehicleClass: 'truck',
+    purpose: 'through',
+  });
   deferReplies = false;
 
   expect(events).toEqual([{ type: 'finished', timeS: 101 }]);
@@ -125,6 +140,7 @@ test('round-trips every request through the worker and matches replies by ID', a
     'hash',
     'step',
   ]);
+  expect(await client.tripRecords()).toMatchObject([{ vehicleClass: 'truck', purpose: 'through' }]);
   const beforeComparison = await client.metrics();
   const comparisonHash = await client.hash();
   const historyBefore = await client.metricsSeries();

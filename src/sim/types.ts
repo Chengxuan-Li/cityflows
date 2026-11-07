@@ -1,6 +1,13 @@
 import type { CompiledCity } from '../network';
 import type { Route } from '../routing';
-import type { PlaceId, Scenario, SimParams, TripRequest } from '../schema';
+import type {
+  PlaceId,
+  Scenario,
+  SimParams,
+  TripRequest,
+  VehicleClass,
+  VehiclePurpose,
+} from '../schema';
 
 export type VehicleState =
   'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed';
@@ -47,11 +54,13 @@ export interface VehicleSnapshot {
   lateralM: Float32Array;
   lane: Int32Array;
   state: Uint8Array;
+  vclass: Uint8Array;
   /** TASK-077: 1, or falling to 0 over the last `gridlock.fadeS` before a respawn. */
   fade: Float32Array;
 }
 
 export interface Metrics {
+  completedByClass: Record<VehicleClass, number>;
   timeS: number;
   trips: {
     pending: number;
@@ -83,6 +92,8 @@ export interface TripOutcome {
 }
 
 export interface VehicleDetail {
+  vehicleClass: VehicleClass;
+  purpose: VehiclePurpose;
   id: number;
   tripId: string;
   personId: string | null;

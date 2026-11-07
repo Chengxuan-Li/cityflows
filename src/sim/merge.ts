@@ -1,10 +1,12 @@
 import type { CMovement, CompiledCity } from '../network';
 import type { SimParams } from '../schema';
 import { idmAcceleration } from './idm';
-import { DRIVING, type Vehicles } from './vehicle';
+import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
 
 export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params: SimParams) {
-  const { idm, mobil, vehicleLengthM, dtS } = params;
+  const { idm, mobil, dtS } = params;
+  const profiles = createVehicleProfiles(params);
+  const profile = (id: number) => profiles[vehicles.vclass[id]!]!;
   const isRamp = (movement: CMovement) =>
     compiled.roads[compiled.lanes[movement.fromLane]!.road]!.roadClass === 'ramp';
   const remaining = (id: number, movement: CMovement) =>
@@ -28,7 +30,7 @@ export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params:
         remaining(id, other) <=
         Math.max(
           params.intersection.decisionDistanceM,
-          (speed * speed) / (2 * idm.bMps2) + idm.minGapM,
+          (speed * speed) / (2 * profile(id).idm.bMps2) + idm.minGapM,
         )
       )
         return true;
@@ -40,13 +42,13 @@ export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params:
     const target = compiled.lanes[movement.toLane]!;
     const leader = vehicles.last(target.idx);
     if (leader !== -1) {
-      const gap = vehicles.position[leader]! - vehicleLengthM;
+      const gap = vehicles.position[leader]! - profile(leader).lengthM;
       if (
         gap < idm.minGapM ||
         idmAcceleration(
-          idm,
+          profile(id).idm,
           vehicles.speed[id]!,
-          target.speedLimitMps * vehicles.speedFactor[id]!,
+          Math.min(target.speedLimitMps * vehicles.speedFactor[id]!, profile(id).maxSpeedMps),
           vehicles.speed[leader]!,
           gap,
         ) < -mobil.safeDecelMps2
@@ -73,9 +75,9 @@ export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params:
     return Math.max(
       -mobil.safeDecelMps2,
       idmAcceleration(
-        idm,
+        profile(id).idm,
         vehicles.speed[id]!,
-        lane.speedLimitMps * vehicles.speedFactor[id]!,
+        Math.min(lane.speedLimitMps * vehicles.speedFactor[id]!, profile(id).maxSpeedMps),
         0,
         remaining(id, movement),
       ),

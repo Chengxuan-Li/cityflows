@@ -92,7 +92,7 @@ export function createConnectors(
 
   function spawn(
     timeS: number,
-    hasGap: (connector: CConnector) => boolean,
+    hasGap: (connector: CConnector, id: number) => boolean,
     release: (id: number, connector: CConnector, timeS: number) => boolean,
   ) {
     disconnected = disconnected.filter((id) => {
@@ -133,7 +133,7 @@ export function createConnectors(
         // A parked car must leave beyond its own arrival queue. Otherwise spawning at an
         // upstream "both" portal fills the only lane needed to free the next parking slot.
         const usable = (exit: CConnector) => {
-          if (!canUse(exit, timeS) || !hasGap(exit)) return false;
+          if (!canUse(exit, timeS) || !hasGap(exit, candidateId)) return false;
           if (place.capacity === null) return true;
           for (let car = vehicles.first(exit.lane); car !== -1; car = vehicles.next[car]!) {
             if (vehicles.position[car]! < exit.positionM) break;

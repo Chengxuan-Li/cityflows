@@ -40,7 +40,7 @@ test('T03 both approach lanes queue on red and drain safely on green', () => {
       lane.sort((a, b) => b - a);
       for (let j = 1; j < lane.length; j++) {
         expect(lane[j - 1]! - lane[j]!).toBeGreaterThanOrEqual(
-          DEFAULT_SIM_PARAMS.vehicleLengthM + DEFAULT_SIM_PARAMS.idm.minGapM - 1e-8,
+          DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM - 1e-8,
         );
       }
     }

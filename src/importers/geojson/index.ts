@@ -214,7 +214,7 @@ export function importGeoJson(
           centerline,
           lanes: Array.from({ length: count }, () => ({
             widthM,
-            allowed: ['car', 'truck', 'bus'],
+            allowed: ['car', 'van', 'truck', 'bus'],
           })),
           lateralOffsetM: oneway ? 0 : (side * count * widthM) / 2,
           streetGroupId,

@@ -17,6 +17,8 @@ export function tripRecords(engine: TrafficEngine, trips: readonly TripRequest[]
       person: trip.personId,
       origin: trip.originPlaceId,
       destination: trip.destinationPlaceId,
+      vehicleClass: trip.vehicleClass,
+      purpose: trip.purpose,
       departure: outcome.departedS,
       arrival: outcome.arrivedS,
       travelTime,

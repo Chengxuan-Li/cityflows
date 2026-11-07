@@ -13,7 +13,8 @@ import type { VehicleDetail } from '../../src/sim/types';
 import { routingFixture } from '../routing/fixtures';
 import { scenario, setup } from './fixtures';
 
-const { dtS, idm, mobil, vehicleLengthM, cooperativeYieldS, missedTurnAfterS } = DEFAULT_SIM_PARAMS;
+const { dtS, idm, mobil, cooperativeYieldS, missedTurnAfterS } = DEFAULT_SIM_PARAMS;
+const vehicleLengthM = DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM;
 const { creepSpeedMps } = DEFAULT_SIM_PARAMS.intersection;
 
 /** Only the given lane pairs from `from` into `to` (lane ordinals, 0 = leftmost). */
@@ -114,6 +115,8 @@ function departures(
       originPlaceId: places.at(-1)!.id,
       destinationPlaceId: places[0]!.id,
       departS,
+      vehicleClass: 'car',
+      purpose: 'private',
       mode: 'car',
       legs: [],
     });

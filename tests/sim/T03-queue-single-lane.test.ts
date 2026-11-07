@@ -43,7 +43,8 @@ test('T03 a single-lane queue grows on red and drains on green with safe gaps', 
       }
     }
     positions.sort((a, b) => b - a);
-    const { vehicleLengthM, idm } = DEFAULT_SIM_PARAMS;
+    const { idm } = DEFAULT_SIM_PARAMS;
+    const vehicleLengthM = DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM;
     for (let j = 1; j < positions.length; j++) {
       expect(positions[j - 1]! - positions[j]! - vehicleLengthM).toBeGreaterThanOrEqual(
         idm.minGapM - 1e-8,

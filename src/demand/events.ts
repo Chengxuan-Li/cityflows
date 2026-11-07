@@ -1,6 +1,7 @@
 import { createRandom } from '../geo/random';
 import type { City, Scenario, TripRequest } from '../schema';
 import { weightedChoice } from './selection';
+import { tripVehicle } from './vehicle';
 
 export function eventTrips(city: City, scenario: Scenario): TripRequest[] {
   const places = Object.values(city.places).sort((a, b) =>
@@ -37,6 +38,7 @@ export function eventTrips(city: City, scenario: Scenario): TripRequest[] {
             departS,
             mode: 'car',
             legs: [{ mode: 'car', fromPlaceId: from, toPlaceId: to }],
+            ...tripVehicle(`${personId}:${direction}`, scenario.demand, 'local'),
           });
         }
         if (i < event.arrivals) emit('in', arrival);

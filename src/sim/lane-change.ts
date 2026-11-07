@@ -1,8 +1,8 @@
 import type { CLane, CompiledCity } from '../network';
-import type { SimParams } from '../schema';
+import { vehicleClasses, type SimParams } from '../schema';
 import { idmAcceleration } from './idm';
 import { isDroppedLane } from '../network/lane-drop';
-import { DRIVING, type Vehicles } from './vehicle';
+import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
 
 interface Proposal {
   id: number;
@@ -16,7 +16,7 @@ export function createLaneChanges(
   params: SimParams,
   hasGrant: (id: number) => boolean = () => false,
 ) {
-  const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM, vehicleLengthM } = params;
+  const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM } = params;
   const proposals: Proposal[] = [];
   const creeping = new Uint8Array(vehicles.count);
   const holding = new Uint8Array(vehicles.count);
@@ -29,8 +29,11 @@ export function createLaneChanges(
   const yielders: number[] = [];
   const offsetM = new Float64Array(vehicles.count);
   const startTick = new Float64Array(vehicles.count);
-  const clearance = vehicleLengthM + idm.minGapM;
-  const carLane = compiled.lanes.map((lane) => lane.allowed.includes('car'));
+  const profiles = createVehicleProfiles(params);
+  const profile = (id: number) => profiles[vehicles.vclass[id]!]!;
+  const allowedLanes = vehicleClasses.map((name) =>
+    compiled.lanes.map((lane) => lane.allowed.includes(name)),
+  );
   // Next roads before which each lane is dropped; survival is static per compiled city.
   const dropsBefore = compiled.lanes.map((lane) => {
     const dropped: number[] = [];
@@ -78,7 +81,7 @@ export function createLaneChanges(
     // lane-level fallback route can name only dropped lanes. Leave by the nearest surviving
     // lane that still enters the next road; planLane then takes its movement and reroutes.
     for (const idx of compiled.roads[route.roads[step]!]!.lanes) {
-      if (!carLane[idx] || !survives(idx, nextRoad)) continue;
+      if (!allowedLanes[vehicles.vclass[id]!]![idx] || !survives(idx, nextRoad)) continue;
       const lane = compiled.lanes[idx]!;
       const enters = lane.out.some((movement) => {
         const { toLane, neverGreen } = compiled.movements[movement]!;
@@ -91,18 +94,23 @@ export function createLaneChanges(
 
   function acceleration(id: number, lane: CLane, leader: number) {
     return idmAcceleration(
-      idm,
+      profile(id).idm,
       vehicles.speed[id]!,
-      lane.speedLimitMps * vehicles.speedFactor[id]!,
+      Math.min(lane.speedLimitMps * vehicles.speedFactor[id]!, profile(id).maxSpeedMps),
       leader === -1 ? 0 : vehicles.speed[leader]!,
       leader === -1
         ? Infinity
-        : vehicles.position[leader]! - vehicles.position[id]! - vehicleLengthM,
+        : vehicles.position[leader]! - vehicles.position[id]! - profile(leader).lengthM,
     );
   }
 
   function safeGap(id: number, lane: CLane, positionM: number, leader: number, follower: number) {
-    if (leader !== -1 && vehicles.position[leader]! - positionM < clearance) return false;
+    const clearance = profile(id).lengthM + idm.minGapM;
+    if (
+      leader !== -1 &&
+      vehicles.position[leader]! - positionM < profile(leader).lengthM + idm.minGapM
+    )
+      return false;
     if (follower !== -1) {
       const spareGap = positionM - vehicles.position[follower]! - clearance;
       if (spareGap < 0) return false;
@@ -125,10 +133,14 @@ export function createLaneChanges(
           return false;
       }
     }
-    if (lane.lengthM - positionM < clearance && leader === -1) {
+    if (leader === -1) {
       for (const idx of lane.out) {
         const leaving = vehicles.last(-idx - 1);
-        if (leaving !== -1 && lane.lengthM - positionM + vehicles.position[leaving]! < clearance)
+        if (
+          leaving !== -1 &&
+          lane.lengthM - positionM + vehicles.position[leaving]! <
+            profile(leaving).lengthM + idm.minGapM
+        )
           return false;
       }
     }
@@ -137,7 +149,7 @@ export function createLaneChanges(
 
   /** The nearest vehicle behind on the target lane that can stop behind the requester's rear. */
   function pickYielder(id: number, positionM: number) {
-    const stopM = positionM - clearance;
+    const stopM = positionM - profile(id).lengthM - idm.minGapM;
     for (
       let candidate = nearFollower;
       candidate !== -1 && vehicles.position[candidate]! >= positionM - laneChangeDistanceM;
@@ -151,7 +163,7 @@ export function createLaneChanges(
         heldS[candidate]! >= params.cooperativeYieldS ||
         yieldingTo[candidate] !== -1 ||
         distance < 0 ||
-        speed * speed > 2 * idm.bMps2 * distance
+        speed * speed > 2 * profile(candidate).idm.bMps2 * distance
       )
         continue;
       yieldingTo[candidate] = id;
@@ -196,7 +208,7 @@ export function createLaneChanges(
       heldS[id] = 0;
       return true;
     }
-    if (positionM < vehicleLengthM || remaining < 0) return false;
+    if (positionM < profile(id).lengthM || remaining < 0) return false;
     if (mandatory && compiled.movements[route.movements[step] ?? -1]?.turn === 'diverge')
       holding[id] = 1;
     const animating = lateralM(id, tick) !== 0;
@@ -220,7 +232,7 @@ export function createLaneChanges(
       const standing = mandatory && vehicles.speed[id]! < 0.1;
       if (
         !lane ||
-        !carLane[target] ||
+        !allowedLanes[vehicles.vclass[id]!]![target] ||
         (standing ? positionM > lane.stopM + 1e-8 : lane.lengthM - positionM < idm.minGapM - 1e-8)
       )
         continue;
@@ -241,7 +253,8 @@ export function createLaneChanges(
         // pull ahead keeps moving, so both do not settle at creep speed.
         if (
           mandatory &&
-          ((leader !== -1 && vehicles.position[leader]! - positionM < clearance) ||
+          ((leader !== -1 &&
+            vehicles.position[leader]! - positionM < profile(leader).lengthM + idm.minGapM) ||
             (follower !== -1 && vehicles.speed[follower]! > vehicles.speed[id]!))
         ) {
           creeping[id] = 1;

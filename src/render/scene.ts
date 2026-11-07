@@ -529,6 +529,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       const recolor = layers.roadClasses !== layerVisibility.roadClasses;
       const reshade = layers.shadows !== layerVisibility.shadows;
       layerVisibility = layers;
+      vehicles.setColourByClass(layers.vehicleClasses);
       if (recolor) redrawTerrain();
       if (reshade) rebuildShadows();
       applyVisibility();
@@ -549,9 +550,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     pick(screenX, screenY) {
       const point = camera.screenToWorld({ x: screenX, y: screenY });
       const snapshot = vehicles.snapshot;
+      const body = vehicles.pickBody(point);
       const vehicle =
-        snapshot &&
-        pickVehicle(point, camera.zoom, snapshot.id, vehicles.x, vehicles.y, snapshot.count);
+        body !== null
+          ? { kind: 'vehicle' as const, id: body }
+          : snapshot &&
+            pickVehicle(point, camera.zoom, snapshot.id, vehicles.x, vehicles.y, snapshot.count);
       return vehicle ?? staticPick?.(point, camera.zoom) ?? null;
     },
     destroy() {

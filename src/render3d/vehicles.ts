@@ -8,6 +8,7 @@ import {
 } from 'three';
 import type { CompiledCity } from '../network';
 import { style } from '../render/style';
+import { vehicleClasses } from '../schema/city';
 import { VehiclePoses, type PresentationSnapshot } from '../render/vehicle-pose';
 import { heightAt, heightSlopeAt, roadStation, type cityHeights } from './heights';
 
@@ -16,9 +17,10 @@ export class Vehicles3D {
   mesh = this.createMesh(1024);
   private readonly transform = new Object3D();
   private readonly color = new Color();
+  private colourByClass = false;
 
   private createMesh(capacity: number) {
-    const geometry = new BoxGeometry(4.5, 1.5, 1.8).translate(0, 0.75, 0);
+    const geometry = new BoxGeometry(1, 1, 1).translate(-0.5, 0.5, 0);
     const mesh = new InstancedMesh(geometry, new MeshLambertMaterial(), capacity);
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     mesh.castShadow = true;
@@ -43,8 +45,24 @@ export class Vehicles3D {
       previous.dispose();
     }
     this.mesh.count = snapshot.count;
+    this.recolour();
+  }
+
+  setColourByClass(enabled: boolean) {
+    if (this.colourByClass === enabled) return;
+    this.colourByClass = enabled;
+    this.recolour();
+  }
+
+  private recolour() {
+    const snapshot = this.poses.snapshot;
+    if (!snapshot) return;
     for (let i = 0; i < snapshot.count; i++) {
-      this.color.setHex(snapshot.vehicleHues?.[snapshot.id[i]! - 1] ?? style.driving);
+      this.color.setHex(
+        this.colourByClass
+          ? style.vehicleClasses[vehicleClasses[snapshot.vclass[i]!]!].color
+          : (snapshot.vehicleHues?.[snapshot.id[i]! - 1] ?? style.driving),
+      );
       this.mesh.setColorAt(i, this.color);
     }
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
@@ -73,7 +91,13 @@ export class Vehicles3D {
       }
       this.transform.position.set(pose.x, z, pose.y);
       this.transform.rotation.set(0, -pose.heading, Math.atan(slope), 'YXZ');
-      this.transform.scale.setScalar(snapshot.fade[i]!);
+      const dimensions = style.vehicleClasses[vehicleClasses[snapshot.vclass[i]!]!];
+      const fade = snapshot.fade[i]!;
+      this.transform.scale.set(
+        dimensions.lengthM * fade,
+        dimensions.heightM * fade,
+        dimensions.widthM * fade,
+      );
       this.transform.updateMatrix();
       this.mesh.setMatrixAt(i, this.transform.matrix);
     }

@@ -92,7 +92,7 @@ export function editRamp(
     const right = city.drivingSide === 'right';
     const extra = {
       widthM: 3.5,
-      allowed: ['car', 'truck', 'bus'] as Road['lanes'][number]['allowed'],
+      allowed: ['car', 'van', 'truck', 'bus'] as Road['lanes'][number]['allowed'],
     };
     const lanes = right ? [...taper.lanes, extra] : [extra, ...taper.lanes];
     const rules = taperRules(draft.roads[command.to.roadId]!, { ...taper, lanes }, rampId, right);
@@ -108,7 +108,7 @@ export function editRamp(
           receiving.lateralOffsetM +
           (right ? 1 : -1) *
             (receiving.lanes.reduce((sum, lane) => sum + lane.widthM, 0) / 2 + extra.widthM / 2),
-        lanes: [{ widthM: 3.5, allowed: ['car', 'truck', 'bus'] }],
+        lanes: [{ widthM: 3.5, allowed: ['car', 'van', 'truck', 'bus'] }],
         roadClass: 'ramp',
         speedLimitMps: city.roads[command.to.roadId]!.speedLimitMps,
         name: null,

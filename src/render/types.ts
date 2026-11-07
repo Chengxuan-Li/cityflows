@@ -21,6 +21,7 @@ export interface VehicleSnapshot {
   lateralM: Float32Array;
   lane: Int32Array; // lane index, or -(movement index + 1)
   state: Uint8Array; // 1 driving, 2 queued_destination
+  vclass: Uint8Array; // schema vehicleClasses index: car, van, truck, bus
   fade: Float32Array; // sprite alpha: 1, falling to 0 before a gridlock respawn (TASK-077)
 }
 
@@ -39,6 +40,7 @@ export interface RouteOverlay {
 export interface LayerVisibility {
   shadows: boolean;
   roadClasses: boolean;
+  vehicleClasses: boolean;
   basemap: boolean;
   context: boolean;
   difference: boolean;
@@ -54,6 +56,7 @@ export interface LayerVisibility {
 export const defaultLayers: LayerVisibility = {
   shadows: true,
   roadClasses: false,
+  vehicleClasses: false,
   basemap: true,
   context: true,
   difference: false,

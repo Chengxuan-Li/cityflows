@@ -39,7 +39,7 @@ export class Scene3D {
   private readonly sun = new DirectionalLight(0xfff8ec, 1.4);
   private readonly vehicles = new Vehicles3D();
   private readonly selection = new Mesh(
-    new BoxGeometry(5.3, 1.9, 2.6).translate(0, 0.8, 0),
+    new BoxGeometry(1.18, 1.27, 1.44).translate(-0.5, 0.53, 0),
     new MeshBasicMaterial({ color: style.selection, wireframe: true }),
   );
   private content = new Group();
@@ -235,6 +235,9 @@ export class Scene3D {
   }
   setSnapshot(snapshot: PresentationSnapshot) {
     this.vehicles.setSnapshot(snapshot);
+  }
+  setColourVehiclesByClass(enabled: boolean) {
+    this.vehicles.setColourByClass(enabled);
   }
   setSelection(pick: Pick | null) {
     this.selectedId = pick?.kind === 'vehicle' ? pick.id : null;

@@ -3,6 +3,7 @@ import type { City, Person, Scenario, TripRequest } from '../schema';
 import { buildAgenda } from './agenda';
 import { eventTrips } from './events';
 import { throughTrips } from './through';
+import { tripVehicle } from './vehicle';
 
 /** Rebuild each person's daily agenda from their persistent assignments. */
 export function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[] {
@@ -25,6 +26,7 @@ export function scheduleTrips(city: City, persons: Person[], scenario: Scenario)
         departS: to.startS,
         mode,
         legs: [{ mode, fromPlaceId: from.placeId, toPlaceId: to.placeId }],
+        ...tripVehicle(`${id}:trip:${i}`, scenario.demand, 'local', mode),
       });
     }
   }

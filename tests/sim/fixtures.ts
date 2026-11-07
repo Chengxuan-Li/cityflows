@@ -23,6 +23,8 @@ export function trips(city: City, count: number, spacingS = 0): TripRequest[] {
     destinationPlaceId: destination!.id,
     departS: 100 + i * spacingS,
     mode: 'car',
+    vehicleClass: 'car',
+    purpose: 'private',
     legs: [],
   }));
 }

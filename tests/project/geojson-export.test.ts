@@ -98,7 +98,7 @@ describe('exportGeoJson', () => {
     expect(result.city.roads[inbound.id]!.to).toBe(result.city.roads[outbound.id]!.from);
     expect(result.city.roads[inbound.id]!.lanes[0]).toEqual({
       widthM: 3.5,
-      allowed: ['car', 'truck', 'bus'],
+      allowed: ['car', 'van', 'truck', 'bus'],
     });
     const junction = result.city.nodes[result.city.roads[inbound.id]!.to]!;
     expect(junction).toMatchObject({ control: 'uncontrolled', signal: null, turnRules: [] });

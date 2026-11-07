@@ -57,6 +57,8 @@ test('QA every export downloads parseable data with columns, feature counts and 
         'person',
         'origin',
         'destination',
+        'class',
+        'purpose',
         'departure',
         'arrival',
         'travel time',
@@ -78,7 +80,7 @@ test('QA every export downloads parseable data with columns, feature counts and 
     expect(downloaded.name).toMatch(/\.csv$/);
     const [provenance, ...lines] = downloaded.text.split('\r\n');
     expect(provenance).toMatch(
-      /^# synthetic traffic, not observed traffic; seed=\d+; engine version=.+; schema version=2; time step=0\.1s$/,
+      /^# synthetic traffic, not observed traffic; seed=\d+; engine version=.+; schema version=3; time step=0\.1s$/,
     );
     const [header, ...rows] = parseCsv(lines.join('\r\n'));
     expect(header).toEqual(columns);
@@ -110,7 +112,7 @@ test('QA every export downloads parseable data with columns, feature counts and 
   const geo = JSON.parse(downloaded.text);
   expect(geo.type).toBe('FeatureCollection');
   expect(geo['cityflows:notice']).toBe('Synthetic traffic, not observed traffic');
-  expect(geo['cityflows:provenance']).toMatchObject({ schemaVersion: 2, dtS: 0.1 });
+  expect(geo['cityflows:provenance']).toMatchObject({ schemaVersion: 3, dtS: 0.1 });
   expect(geo['cityflows:provenance'].engineVersion).toEqual(expect.any(String));
   expect(geo['cityflows:provenance'].seed).toEqual(expect.any(Number));
   expect(geo['cityflows:coordinates']).toBe('local');
