@@ -309,6 +309,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             road,
             layerVisibility.roadClasses,
             grade.crossings,
+            sourceGeometry,
           );
           drawTransitions(
             grade.surfaces,
@@ -318,7 +319,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             layerVisibility.roadClasses,
           );
           drawRoadJoins(grade.surfaces, compiled, road, layerVisibility.roadClasses);
-          drawCrossings(grade.crossings, compiled, road);
+          drawCrossings(grade.crossings, compiled, road, sourceGeometry);
         }
         for (const node of compiled.nodes) {
           drawNode(

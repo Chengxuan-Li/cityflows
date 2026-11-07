@@ -69,6 +69,9 @@ export interface Road {
   /** The carriageways of one street, side by side: the two directions of a two-way street,
    * a divided pair, a dual carriageway (geometry rework). Absent means `streetGroupId`. */
   corridorId?: string | null;
+  /** Pedestrian crossing overrides at the road's start and end node (TASK-091): only explicit
+   * edits; an absent entry takes the default rule (architecture section 11). Decorative. */
+  crossings?: { start?: boolean; end?: boolean };
   provenance: Provenance;
 }
 

@@ -13,7 +13,6 @@ it('derives signal, priority and turn markings only from usable compiled movemen
   expect(approachMarkings(city, lane)).toMatchObject({
     stop: true,
     yield: false,
-    crossingEnd: true,
   });
   for (const turn of approachMarkings(city, lane).turns) {
     expect(lane.out.some((index) => city.movements[index]!.turn === turn)).toBe(true);
@@ -24,7 +23,6 @@ it('derives signal, priority and turn markings only from usable compiled movemen
   expect(approachMarkings(city, lane)).toMatchObject({
     stop: false,
     yield: true,
-    crossingEnd: false,
   });
   node.control = 'stop';
   expect(approachMarkings(city, lane).stop).toBe(true);
@@ -35,7 +33,6 @@ it('derives signal, priority and turn markings only from usable compiled movemen
   expect(approachMarkings(city, lane)).toMatchObject({
     stop: false,
     yield: false,
-    crossingEnd: false,
     turns: [],
   });
 });

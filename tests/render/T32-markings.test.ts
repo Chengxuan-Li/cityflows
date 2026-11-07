@@ -8,6 +8,7 @@ import {
 } from '../../bench/junction-audit';
 import { hairpin } from '../../src/fixtures/hairpin';
 import {
+  headingAtDistance,
   offsetPolyline,
   parallelOffset,
   pointAtDistance,
@@ -16,7 +17,12 @@ import {
 } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { compile, type CLane, type CompiledCity, type CRoad } from '../../src/network';
-import { approachMarkings, drawRoad } from '../../src/render/layers/roads';
+import {
+  approachMarkings,
+  crossingPlacement,
+  crossingStripes,
+  drawRoad,
+} from '../../src/render/layers/roads';
 import { style } from '../../src/render/style';
 import { cityTest, tierCities, unitTest } from '../tier';
 
@@ -92,7 +98,7 @@ const laneLines = (road: CRoad, lane: CLane) => [
 ];
 
 test.each(tierCities(['grid', 'munich'] as const))(
-  'T32.1: on %s every approach’s dividers and centre line reach its stop position',
+  'T32.1: on %s every approach’s dividers and centre line reach its stop position or crossing',
   (name) => {
     const city = net(name);
     const short: string[] = [];
@@ -104,6 +110,16 @@ test.each(tierCities(['grid', 'munich'] as const))(
       const others = city.roads
         .filter((o) => o !== road && (o.from === road.to || o.to === road.to))
         .map((o) => [...o.surface, o.surface[0]!]);
+      // TASK-091 (B46): a centre line ends where its node's outline reaches back over the lane.
+      const outline = city.nodes[road.to]!.outline;
+      const crossingEnd = crossingStripes(city, road, true).length
+        ? crossingPlacement(city, road, true).farM
+        : 0;
+      const startTrim = crossingStripes(city, road, false).length
+        ? crossingPlacement(city, road, false).farM + 0.5
+        : 0;
+      const headingOf = (lane: CLane) => (s: number) =>
+        headingAtDistance(lane.polyline, lane.cumulative, s);
       for (const index of road.lanes) {
         const lane = city.lanes[index]!;
         for (const offset of laneLines(road, lane)) {
@@ -114,12 +130,31 @@ test.each(tierCities(['grid', 'munich'] as const))(
               const { s, lateral } = project(lane, p);
               if (Math.abs(lateral - offset) < 0.1) reach = Math.max(reach, s);
             }
-          if (reach >= lane.stopM - 0.5) continue;
-          // Allowed only where the missing stretch lies on another road's surface.
+          // TASK-091: lines end 0.5 m before a crossing set back from the junction.
+          const stop = Math.min(lane.stopM, lane.lengthM - crossingEnd - 0.5);
+          if (reach >= stop - 0.5) continue;
+          // Allowed only where the missing stretch lies on another road's surface (or, for the
+          // centre line, under the junction outline).
+          // A centre line with less than two dashes of road between its crossings and outlines
+          // is not drawn at all (TASK-091: no stub inside a junction, Munich r:1172 at n:182).
+          if (offset < 0 && reach === 0 && stop - startTrim < 2 * 2.7) continue;
+          const heading = headingOf(lane);
           const covered = Array.from({ length: 9 }, (_, k) => {
-            const s = reach + ((lane.stopM - reach) * (k + 0.5)) / 9;
+            const s = reach + ((stop - reach) * (k + 0.5)) / 9;
             const point = pointAtDistance(lane.polyline, lane.cumulative, s);
-            return others.some((ring) => pointInPolygon(point, ring, 0));
+            return (
+              others.some((ring) => pointInPolygon(point, ring, 0)) ||
+              (offset < 0 &&
+                outline.length > 0 &&
+                pointInPolygon(
+                  {
+                    x: point.x - Math.sin(heading(s)) * offset,
+                    y: point.y + Math.cos(heading(s)) * offset,
+                  },
+                  outline,
+                  0.1,
+                ))
+            );
           }).every(Boolean);
           if (!covered) short.push(`${lane.id} ${offset > 0 ? 'divider' : 'centre'} ${reach}`);
         }
@@ -145,7 +180,7 @@ function turnsOf(city: CompiledCity, lane: CLane): string {
 }
 
 test.each(tierCities(['grid', 'munich'] as const))(
-  'T32.2: on %s arrows are drawn once per lane, 6 to 9 m before the stop position, where lanes differ',
+  'T32.2: on %s arrows are drawn once per lane, 6 to 9 m before the stop position or behind the crossing, where lanes differ',
   (name) => {
     const city = net(name);
     const wrong: string[] = [];
@@ -166,7 +201,11 @@ test.each(tierCities(['grid', 'munich'] as const))(
         if (lane.lengthM < 12) wrong.push(`${lane.id}: lane under 12 m`);
         if (alike) wrong.push(`${lane.id}: all lanes of ${road.id} allow the same turns`);
         if (Math.max(...along) - Math.min(...along) > 4.5) wrong.push(`${lane.id}: more than once`);
-        if (lane.stopM - centre < 6 || lane.stopM - centre > 9)
+        // TASK-091: behind a crossing set back from the junction an arrow's front stays 0.5 m
+        // from it (within the 2.5 m an arrow shape varies by).
+        const gap = lane.lengthM - crossingPlacement(city, road, true).farM - Math.max(...along);
+        const behind = crossingStripes(city, road, true).length > 0 && gap > 0.45 && gap < 3;
+        if ((lane.stopM - centre < 6 || lane.stopM - centre > 9) && !behind)
           wrong.push(`${lane.id}: centred ${(lane.stopM - centre).toFixed(2)} m before stop`);
       }
     }
@@ -275,12 +314,15 @@ cityTest(
 );
 
 // 5024a83 measured with bench/junction-audit.ts: dividers and centre lines drawRoad strokes
-// outside its nodes' outlines, and all its strokes (with arrow shafts and stop lines).
+// outside its nodes' outlines, and all its strokes (with arrow shafts and stop lines). TASK-091
+// re-measured: lines now end 0.5 m before every crossing, which moved out from the junction to
+// the curb returns and onto every junction of three or more arms (5024a83's line lengths:
+// grid 9880, town 101643, sindelfingen 46174, munich 38684 m).
 const main = {
-  grid: { lineOutsideM: 9880, markingOutsideM: 10555 },
-  town: { lineOutsideM: 101643, markingOutsideM: 108343 },
-  sindelfingen: { lineOutsideM: 46174, markingOutsideM: 48923 },
-  munich: { lineOutsideM: 38684, markingOutsideM: 41611 },
+  grid: { lineOutsideM: 8453, markingOutsideM: 8886 },
+  town: { lineOutsideM: 83776, markingOutsideM: 87772 },
+  sindelfingen: { lineOutsideM: 41613, markingOutsideM: 41920 },
+  munich: { lineOutsideM: 35400, markingOutsideM: 36231 },
 };
 
 test.each(tierCities(auditCities))(

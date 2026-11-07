@@ -23,6 +23,7 @@ export function dispatch(city: City, command: Command): CommandPatch {
     case 'setRoadAttributes':
     case 'reverseRoad':
     case 'setStreetDirection':
+    case 'setCrossing':
       return editRoad(city, command);
     case 'setTurnRule':
     case 'clearTurnRule':

@@ -4,15 +4,30 @@ import { requireEntity, type CommandPatch } from './types';
 
 type RoadCommand = Extract<
   Command,
-  { kind: 'setRoadLanes' | 'setRoadAttributes' | 'reverseRoad' | 'setStreetDirection' }
+  {
+    kind:
+      'setRoadLanes' | 'setRoadAttributes' | 'reverseRoad' | 'setStreetDirection' | 'setCrossing';
+  }
 >;
 
 function defaultOffset(city: City, road: Road): number {
   return ((city.drivingSide === 'right' ? 1 : -1) * roadWidth(road)) / 2;
 }
 
+/** `road` with these crossing overrides (TASK-091); the field is dropped when both are default. */
+export function withCrossings(road: Road, start?: boolean, end?: boolean): Road {
+  const next = { ...road };
+  delete next.crossings;
+  const crossings = { ...(start !== undefined && { start }), ...(end !== undefined && { end }) };
+  return Object.keys(crossings).length ? { ...next, crossings } : next;
+}
+
 function oppositeGeometry(road: Road): Road {
-  return { ...road, from: road.to, to: road.from, centerline: [...road.centerline].reverse() };
+  return withCrossings(
+    { ...road, from: road.to, to: road.from, centerline: [...road.centerline].reverse() },
+    road.crossings?.end,
+    road.crossings?.start,
+  );
 }
 
 function removeJunctionReferences(city: City, road: Road, patch: CommandPatch): void {
@@ -159,6 +174,11 @@ export function editRoad(city: City, command: RoadCommand): CommandPatch {
         set: { roads: { [road.id]: { ...road, name, roadClass, speedLimitMps } } },
         remove: {},
       };
+    }
+    case 'setCrossing': {
+      const crossings = { ...road.crossings, [command.end]: command.crossing ?? undefined };
+      const next = withCrossings(road, crossings.start, crossings.end);
+      return { set: { roads: { [road.id]: next } }, remove: {} };
     }
     case 'reverseRoad': {
       const next = { ...oppositeGeometry(road), lateralOffsetM: -road.lateralOffsetM || 0 };

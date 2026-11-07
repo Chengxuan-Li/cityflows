@@ -4,6 +4,7 @@ import { compile } from '../../network';
 import { allocateId, type City, type Command, type Node, type Road } from '../../schema';
 import { applyPatch } from '../patch';
 import { requireEntity, type CommandPatch } from './types';
+import { withCrossings } from './road';
 
 type TopologyCommand = Extract<
   Command,
@@ -239,19 +240,26 @@ function splitRoad(city: City, road: Road, atM: number): CommandPatch {
   ) {
     const lengths = cumulativeLengths(direction.centerline);
     const id = allocateId(counter, 'r');
-    patch.set.roads![direction.id] = {
-      ...direction,
-      to: nodeId,
-      centerline: [...direction.centerline.filter((_, i) => lengths[i]! < position), pos],
-      streetGroupId: firstGroup,
-    };
-    patch.set.roads![id] = {
-      ...direction,
-      id,
-      from: nodeId,
-      centerline: [pos, ...direction.centerline.filter((_, i) => lengths[i]! > position)],
-      streetGroupId: secondGroup,
-    };
+    patch.set.roads![direction.id] = withCrossings(
+      {
+        ...direction,
+        to: nodeId,
+        centerline: [...direction.centerline.filter((_, i) => lengths[i]! < position), pos],
+        streetGroupId: firstGroup,
+      },
+      direction.crossings?.start,
+    );
+    patch.set.roads![id] = withCrossings(
+      {
+        ...direction,
+        id,
+        from: nodeId,
+        centerline: [pos, ...direction.centerline.filter((_, i) => lengths[i]! > position)],
+        streetGroupId: secondGroup,
+      },
+      undefined,
+      direction.crossings?.end,
+    );
     const end = patch.set.nodes![direction.to] ?? city.nodes[direction.to]!;
     patch.set.nodes![end.id] = replaceReferences(end, direction.id, id);
     replacements[direction.id] = [direction.id, id];
@@ -305,7 +313,11 @@ function mergeRoads(city: City, a: Road, b: Road): CommandPatch {
     const seam = start.centerline.length - 1;
     if (nearestPointOnLine(line[seam]!, [line[seam - 1]!, line[seam + 1]!]).distance < 1e-8)
       line.splice(seam, 1);
-    patch.set.roads![start.id] = { ...start, to: end.to, centerline: line, streetGroupId: group };
+    patch.set.roads![start.id] = withCrossings(
+      { ...start, to: end.to, centerline: line, streetGroupId: group },
+      start.crossings?.start,
+      end.crossings?.end,
+    );
     patch.remove.roads!.push(end.id);
     const far = patch.set.nodes![end.to] ?? city.nodes[end.to]!;
     patch.set.nodes![far.id] = replaceReferences(far, end.id, start.id);

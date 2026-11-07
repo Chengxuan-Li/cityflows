@@ -1,6 +1,20 @@
 import { generateSignalProgram } from '../../importers/signal-program';
 import type { CNode, CompiledCity, Turn } from '../../network';
-import { movementId, nodeSchema, type Control, type Node, type SignalProgram } from '../../schema';
+import {
+  crossingArms,
+  crossingDefault,
+  crossingEnabled,
+  crossingPlacement,
+} from '../../render/layers/roads';
+import {
+  movementId,
+  nodeSchema,
+  type City,
+  type Command,
+  type Control,
+  type Node,
+  type SignalProgram,
+} from '../../schema';
 import { useAppStore } from '../store';
 import { SignalInspector } from './signal';
 
@@ -18,6 +32,61 @@ function samePair(a: RoadPair, b: RoadPair) {
   return a.from === b.from && a.to === b.to;
 }
 
+/** The node's arms with their crossing state (TASK-091): checked where a road end of the arm
+ * has a crossing, disabled where none fits. Decorative: no simulation effect. */
+function Crossings({ node, compiled, city }: { node: CNode; compiled: CompiledCity; city: City }) {
+  const { commit } = useAppStore.getState();
+  const arms = crossingArms(compiled, node).map((ends) => {
+    const roads = ends.map(({ road }) => road);
+    const names = [...new Set(roads.map((road) => city.roads[road.id]?.name ?? null))];
+    const placements = ends.map(({ road, atEnd }) => crossingPlacement(compiled, road, atEnd));
+    const short = ends.every(({ road }, k) =>
+      road.lanes.every((i) => compiled.lanes[i]!.lengthM < placements[k]!.nearM + 9.75),
+    );
+    return {
+      ends,
+      label: `${names.filter((name) => name !== null).join(' / ') || 'Road'} (${roads.map((road) => road.id).join(', ')})`,
+      checked: ends.some(({ road, atEnd }) => crossingEnabled(compiled, road, atEnd, city)),
+      reason: placements.some((p) => p.stripes.length)
+        ? null
+        : short
+          ? 'Road too short'
+          : 'No room outside the junction',
+    };
+  });
+  return (
+    <details className="disclosure">
+      <summary>Crossings</summary>
+      <ul className="item-list">
+        {arms.map(({ ends, label, checked, reason }) => (
+          <li key={label}>
+            <label className="phase-pair" title={reason ?? undefined}>
+              <input
+                type="checkbox"
+                aria-label={`Crossing on ${label}`}
+                checked={checked && !reason}
+                disabled={reason !== null}
+                onChange={(event) => {
+                  const crossing = event.currentTarget.checked;
+                  const commands: Command[] = ends.map(({ road, atEnd }) => ({
+                    kind: 'setCrossing',
+                    roadId: road.id,
+                    end: atEnd ? 'end' : 'start',
+                    crossing: crossing === crossingDefault(compiled, road, atEnd) ? null : crossing,
+                  }));
+                  void commit({ kind: 'batch', label: 'Crossing', commands });
+                }}
+              />
+              {label}
+            </label>
+            {reason && <span className="muted">{reason}</span>}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 export function NodeInspector({
   node,
   source,
@@ -28,6 +97,7 @@ export function NodeInspector({
   compiled: CompiledCity;
 }) {
   const { commit } = useAppStore.getState();
+  const city = useAppStore((state) => state.session!.project.city);
   const nodeId = node.id;
   const incoming = compiled.roads.filter(({ to }) => to === node.idx);
   const outgoing = compiled.roads.filter(({ from }) => from === node.idx);
@@ -86,6 +156,7 @@ export function NodeInspector({
         </label>
       </div>
       {signal && <SignalInspector node={node} source={source} compiled={compiled} />}
+      {node.outline.length > 0 && <Crossings node={node} compiled={compiled} city={city} />}
       <details className="disclosure">
         <summary>Turns</summary>
         <p className="muted">Incoming → outgoing · lane 1 is leftmost</p>

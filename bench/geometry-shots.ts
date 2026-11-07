@@ -50,6 +50,9 @@ export const shots: { id: string; cases: string[]; centre: [number, number]; zoo
   { id: 'B41-n328', cases: [], centre: [502, 213.5], zoom: 8 },
   { id: 'X-n79', cases: [], centre: [405, 534], zoom: 12 },
   { id: 'X-n189', cases: [], centre: [200.5, 373], zoom: 12 },
+  // TASK-091 (B46, B50, B52): crossings set back from the curb, centre lines ending at the mouth.
+  { id: 'B52-n291', cases: [], centre: [-524.5, 466.5], zoom: 14 },
+  { id: 'B46-n182', cases: [], centre: [424.5, 371], zoom: 12 },
 ];
 
 export const VIEWPORT = { width: 1280, height: 800 };
@@ -68,6 +71,8 @@ const anchors: Record<string, [number, number]> = {
   'n:324': [610.01, 223.17],
   'n:721': [305.64, 194.23],
   'n:446': [-462.12, -643.47],
+  'n:291': [-524.33, 466.57],
+  'n:182': [424.39, 370.93],
 };
 
 async function freePort(): Promise<number> {

@@ -125,8 +125,11 @@ test.each(tierCities(auditCities))(
 
 // 5024a83 measured with bench/junction-audit.ts: metres of dividers and centre lines drawRoad
 // strokes outside its nodes' outlines. TASK-079 draws turn arrows only where a road's lanes
-// differ (B34), so all strokes together fall by design; the clip never acted on arrows.
-const mainLineOutsideM = { grid: 9880, town: 101643, sindelfingen: 46174, munich: 38684 };
+// differ (B34), so all strokes together fall by design; the clip never acted on arrows. TASK-091
+// re-measured: lines end 0.5 m before every crossing, which moved out to the curb returns and
+// onto every junction of three or more arms (5024a83: grid 9880, town 101643, sindelfingen
+// 46174, munich 38684 m).
+const mainLineOutsideM = { grid: 8453, town: 83776, sindelfingen: 41613, munich: 35400 };
 
 test.each(tierCities(auditCities))(
   'T27: %s keeps at least 98 % of main’s lane lines outside outlines',
