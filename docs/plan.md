@@ -126,6 +126,11 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-096](tasks/TASK-096.md) | 6 | OSM surroundings (buildings, land use, water, parks, railways) drawn under the roads | `src/importers/osm/context.ts`, `overpass.ts`, `City.context` (schema), `src/render/layers/context.ts`, `scene.ts`, Layers, import wizard | 090 | T44, project round trip, e2e smoke | done |
 | [TASK-097](tasks/TASK-097.md) | 6 | Shadows, deck edges, tunnel style and see-through under decks for grade separation | `src/render/layers/shadows.ts`, `scene.ts`, `style.ts`, Layers, shot cameras | 090 | unit, e2e smoke | done |
 | [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | done |
+| [TASK-100](tasks/TASK-100.md) | 7 | Vehicle classes: car, van, truck and bus, each with its own size and driving | `src/schema` (class, version 3), `src/sim/**`, `src/demand/**`, `src/host/**`, vehicle layers 2D and 3D, vehicle inspector | 090 | T46, traffic quick | todo |
+| [TASK-101](tasks/TASK-101.md) | 7 | Restricted road access: closed roads, local-traffic zones, delivery and bus lanes | `Road.access` (schema), `compile.ts`, `src/routing/**`, access tags in `roads.ts`, `src/editor`, street inspector | 090 | T47, traffic quick | todo |
+| [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | todo |
+| [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | todo |
+| [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -268,6 +273,12 @@ dependency of its tasks is merged to `main`.
   `transitions.ts` and `drawRoadJoins`. Shared: `src/geo/polyline.ts` (078 and 079 add
   exports), `nodes.ts` (078 `drawNode`, 080 `drawRoadJoins`); the lead reconciles. Merge
   order: 079, 078, 080.
+
+- Phase 1 of Gates 7 to 9 (lead, 2026-11-07): TASK-100, TASK-101, TASK-105, TASK-106 and
+  TASK-108 in parallel on `task/100-vehicle-classes`, `task/101-road-access`,
+  `task/105-terrain`, `task/106-vegetation` and `task/108-lane-markings`, cut from `main` at
+  the commit that carries their contracts. The owner runs the agents; each creates its own
+  worktree. Surfaces and merge order: "Phases" under "Roadmap: Gates 7 to 9".
 
 Rule from the brief: no broad parallel coding before the schema exists. Two tasks that must
 both change `src/sim` (for example 004 and 031) are sequenced, never parallel.
@@ -706,14 +717,13 @@ Proposed tasks, with surfaces kept disjoint:
 | Task | Feature | Surfaces | After |
 | --- | --- | --- | --- |
 | TASK-100 | Vehicle categories (7.2) | `src/schema` (class), `src/sim/vehicle.ts`, `params.ts`, `idm.ts`, `src/demand`, snapshot, `layers/vehicles.ts`, `render3d/vehicles.ts`, inspector, metrics | - |
-| TASK-101 | Restricted access (7.3) | `src/schema` (road access), `src/importers/osm` (tags), `src/routing`, road inspector, sign markings | - |
+| TASK-101 | Restricted access (7.3) | `src/schema` (road access), `src/importers/osm` (tags), `src/routing`, road inspector; no drawing (signs are TASK-107's) | - |
 | TASK-102 | Parking model and garages (7.1) | `src/schema` (`ParkingFacility`), new `src/importers/osm/parking.ts`, `src/sim/connectors.ts`, new `src/sim/parking.ts`, host snapshot, inspector, metrics | 100 |
-| TASK-103 | Roadside parking (7.1) | road strips in schema and network, manoeuvre in `engine.ts`, parked-car layers 2D and 3D, road inspector | 102 |
-| TASK-104 | Surface lots with aisles (7.1) | `filter.ts` and `parking.ts` in the importer, stall generation in `src/network`, lot routing | 103 |
+| TASK-103 | Visible parking in the simulation, roadside and lot stalls (7.1) | road strips in schema and network, park and leave manoeuvre in `src/sim`, parked-car layers 2D and 3D, road inspector | 102, 104 |
+| TASK-104 | Surface lot import: aisles and stall geometry, no simulation (7.1) | `filter.ts` and a new `lots.ts` in the importer, stall generation in `src/network` | the lead's parking schema |
 
 TASK-100 and TASK-101 run in parallel (simulation and demand against routing and the
-importer; the lead reconciles the two schema additions). TASK-102 to TASK-104 each change
-`src/sim` and run in sequence.
+importer; the lead reconciles the two schema additions). The phases below give the order.
 
 ### Gate 8: more realistic visuals
 
@@ -757,12 +767,12 @@ Proposed tasks:
 | --- | --- | --- | --- |
 | TASK-105 | Topography (8.2) | DEM fetch and cache in `src/importers`, `City.terrain` (schema), `render3d/heights.ts`, ground mesh, 2D hillshade | - |
 | TASK-106 | Vegetation and surfaces (8.3) | `src/importers/osm/context.ts` (trees), new `render/layers/vegetation.ts`, `render3d/vegetation.ts`, textures | - |
-| TASK-107 | Lamps, sidewalks, curbs (8.4) | new `render/layers/street.ts`, `render3d/street.ts`, context import of lamps and sidewalk tags | 106 (shared placement rules) |
+| TASK-107 | Street furniture: lamps, curbs, sidewalks, access signs, `BUS` lane text (8.4) | new `render/layers/street.ts`, `render3d/street.ts`, context import of lamps | 101, 106, 110 (sidewalk geometry) |
 | TASK-108 | Lane marking realism (8.5) | `render/layers/roads.ts`, `junction-markings.ts`, `render3d/markings.ts`, `style.ts` themes | - |
 | TASK-109 | Building details (8.1) | `render3d/context.ts`, building tags in `context.ts` | 105 |
 
-TASK-105, TASK-106 and TASK-108 run in parallel. TASK-108 and Gate 7's TASK-101 both touch
-road markings (the `BUS` lane text and zone signs): the lead merges TASK-101 first.
+TASK-105, TASK-106 and TASK-108 run in parallel. Access signs and `BUS` lane text moved to
+TASK-107, so TASK-101 and TASK-108 share no files.
 
 ### Gate 9: occupancy-driven trips
 
@@ -799,15 +809,57 @@ Proposed tasks:
 
 | Task | Feature | Surfaces | After |
 | --- | --- | --- | --- |
-| TASK-110 | Pedestrian network (9.1) | new `src/importers/osm/walk.ts`, new `src/network/walk.ts`, walk routing, walk layer 2D and 3D | 107 (sidewalk geometry) |
-| TASK-111 | Pedestrians and crossings in the simulation (9.2) | `src/sim` (walkers, crossing yield), `SignalProgram` pedestrian phases, signal editor, renderers | 110 |
+| TASK-110 | Pedestrian network, including sidewalk geometry (9.1) | new `src/importers/osm/walk.ts`, new `src/network/walk.ts`, walk routing, walk layer 2D and 3D | the lead's walk schema |
+| TASK-111 | Pedestrian rules in the simulation: zebra yield, pedestrian signal phases, tested with a test pedestrian source (9.2) | `src/sim/intersection.ts`, `signals.ts`, new `walkers.ts`, `SignalProgram` pedestrian phases, signal editor, renderers | 110 |
 | TASK-112 | Person-driven trips (9.3) | `src/demand`, persons and cars in `src/sim`, trip legs, inspector (person view) | 104, 111 |
 | TASK-113 | Mode choice (9.4) | `src/demand` (choice model), demand sheet, metrics | 112 |
+| TASK-114 | US and UK marking themes (8.5, low priority) | `style.ts` themes, a project theme setting | 108 |
 
-Gate 9 changes `src/sim` in every task and runs in sequence. It lifts "walking legs" from
+TASK-111 to TASK-113 change `src/sim` and run in sequence. It lifts "walking legs" from
 architecture section 16; transit vehicles, bicycles and parking fees stay deferred.
 
-### Questions for the owner, with the lead's defaults
+### Phases (owner-approved, 2026-11-07)
+
+The gates name features; the phases below order the work by file surface and dependency so
+that tasks run in parallel. The simulation chain (TASK-100, 102, 103, 112, 113) is the critical
+path; the visual tasks never block it. The owner starts and orchestrates every agent, in Codex
+or Claude Code, and sends each finished branch to the lead for review; the lead never starts
+agents. For each task the lead writes the contract, creates the branch from `main` (no
+worktree; the agent creates its own) and writes a handover message naming the harness, the
+model and the reasoning effort.
+
+| Phase | Tasks in parallel | Depends on | Estimate |
+| --- | --- | --- | --- |
+| 0 | Lead: Phase 1 contracts and branches; during Phase 1, the shared formats for Phase 2 on `main` (`ParkingFacility`, the walk network types) | - | half a day |
+| 1 | TASK-100, TASK-101, TASK-105, TASK-106, TASK-108 | - | 1 to 1.5 days |
+| 2 | TASK-102, TASK-104, TASK-110, TASK-109 | 100 (102), 105 (109), the Phase 0 formats | 1 to 1.5 days |
+| 3 | TASK-103, TASK-111, TASK-107 | 102 and 104 (103), 110 (111, 107), 101 (107) | 1.5 to 2 days |
+| 4 | TASK-112, TASK-114 | 103, 110, 111 (112); 108 (114) | 2 to 3 days |
+| 5 | TASK-113 | 112 | half to 1 day |
+
+Phase 3 runs two simulation tasks at once, on disjoint files: TASK-103 owns `parking.ts`,
+`connectors.ts` and the manoeuvre, TASK-111 owns `intersection.ts`, `signals.ts` and
+`walkers.ts`; the lead reconciles their hooks in `engine.ts`. TASK-111 has no real walkers
+until TASK-112, so it does not move traffic.
+
+Agents and ports for Phase 1 (the lead's suggestion; the owner decides):
+
+| Task | Harness | Model | Effort | e2e port |
+| --- | --- | --- | --- | --- |
+| TASK-100 | Claude Code | Opus 5.5 | high | 5301 |
+| TASK-101 | Claude Code | Opus 5.5 | high | 5302 |
+| TASK-105 | Codex | GPT-6.1-Sol | high | 5305 |
+| TASK-106 | Codex | GPT-6.1 Terra | high | 5306 |
+| TASK-108 | Codex | GPT-6.1-Sol | high | 5308 |
+
+Phase 1 shared files, reconciled by the lead at merge: `src/schema/city.ts` and
+`city.schema.ts` (100 the class and version 3, 101 `Road.access`, 105 `City.terrain`, 106
+context points), `src/routing/index.ts` (100 and 101 both add `RouteRequest.purpose`),
+`src/importers/osm/roads.ts` (100 the default `allowed` list, 101 the access tags),
+`src/render/scene.ts`, `src/render3d/scene.ts`, `src/render/style.ts`, `src/render/types.ts`,
+`src/ui/layers.tsx` and `docs/architecture.md`. Merge order: 108, 106, 105, 101, 100.
+
+### Questions for the owner, with the lead's defaults (accepted by the owner, 2026-11-07)
 
 1. Vehicle classes: `car`, `van`, `truck`, `bus`; motorcycles and bicycles left out.
 2. Where OSM has no parking data (most residential buildings): a building with residents
@@ -1995,6 +2047,16 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   `n:638`, `n:104`, `n:967`). Lead verification on main: check 540, city 61.
 
 ## Owner decisions log
+
+- 2026-11-07, Gates 7 to 9: the lead's defaults are accepted (vehicle classes car, van, truck,
+  bus; inferred garages and roadside strips where OSM has no parking; AWS Terrain Tiles;
+  slope ignored by the simulation; generated street trees and lamps on by default; walkers
+  without collisions; a baseline reset at each merge of a task that changes demand or
+  parking; night lighting low priority). The work runs in the lead's phases, not gate by
+  gate. The owner starts and orchestrates every agent (Codex or Claude Code) and sends each
+  finished task to the lead for review; the lead writes contracts, creates branches without
+  worktrees, writes a handover message per agent with a harness, model and effort, and
+  reviews, corrects and merges.
 
 - 2026-11-07, next stages: B54 east, B55 and B56 stay outstanding and are deferred. The
   work advances to three stages: Gate 7, road betterment (car parking in buildings, at the
