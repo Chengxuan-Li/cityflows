@@ -7,7 +7,17 @@ import { button, importOsm, metrics } from '../tests/e2e/helpers';
 
 // node --experimental-strip-types --import ./bench/register.ts bench/geometry-shots3d.ts <out-dir> [--performance]
 // Fixed V98 cameras and two genuinely consecutive render frames. Port 5295 only.
-const shots = [
+type Shot = {
+  id: string;
+  centre: { x: number; y: number };
+  zoom: number;
+  pitch: number;
+  bearing: number;
+  osm?: string;
+  buildings?: boolean;
+  belowGround?: boolean;
+};
+const shots: Shot[] = [
   { id: 'V98-donnersberger', centre: { x: -20, y: -170 }, zoom: 1.7, pitch: 45, bearing: 45 },
   { id: 'V98-n967', centre: { x: -19.5, y: 172 }, zoom: 6, pitch: 55, bearing: 45 },
   { id: 'V98-munich-overview', centre: { x: 0, y: -60 }, zoom: 0.4, pitch: 55, bearing: 0 },
@@ -28,7 +38,35 @@ shots.push({
   bearing: 45,
   osm: 'fixtures/osm/sindelfingen-a81.osm',
 });
-shots.push({ id: 'V98-ramp-profile', centre: { x: -40, y: 210 }, zoom: 5, pitch: 15, bearing: 90 });
+shots.push({
+  id: 'V98-ramp-profile',
+  centre: { x: -40, y: 210 },
+  zoom: 5,
+  pitch: 15,
+  bearing: 90,
+  buildings: false,
+});
+shots.push(
+  { id: 'V98-buildings', centre: { x: -150, y: 90 }, zoom: 3, pitch: 55, bearing: 45 },
+  {
+    id: 'V98-buildings-off',
+    centre: { x: -150, y: 90 },
+    zoom: 3,
+    pitch: 55,
+    bearing: 45,
+    buildings: false,
+  },
+  { id: 'V98-courtyard', centre: { x: -151, y: -339 }, zoom: 4, pitch: 65, bearing: 45 },
+  {
+    id: 'V98-sindelfingen-below',
+    centre: { x: 310, y: 340 },
+    zoom: 1.5,
+    pitch: 45,
+    bearing: 45,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+    belowGround: true,
+  },
+);
 const munich = 'fixtures/osm/munich-donnersberger.osm';
 
 async function frames(page: Page, n = 3) {
@@ -134,6 +172,10 @@ async function main() {
       const canvas = page.getByLabel('3D city view', { exact: true });
       await expect.poll(() => canvas.getAttribute('data-meshes').then(Number)).toBeGreaterThan(0);
       for (const shot of shots.filter((shot) => (shot.osm ?? munich) === osm)) {
+        await page.getByLabel('Buildings', { exact: true }).setChecked(shot.buildings ?? true);
+        await page
+          .getByLabel('See below ground', { exact: true })
+          .setChecked(shot.belowGround ?? false);
         const profileView = shot.id === 'V98-ramp-profile';
         if (profileView) {
           await button(page, 'Layers').click();
@@ -166,6 +208,8 @@ async function main() {
           buildMs: await canvas.getAttribute('data-build-ms'),
           meshes: await canvas.getAttribute('data-meshes'),
           tiles: await canvas.getAttribute('data-tiles'),
+          buildings: await canvas.getAttribute('data-buildings'),
+          contextFeatures: await canvas.getAttribute('data-context-features'),
         };
         records.push(record);
         console.info(JSON.stringify(record));
@@ -206,6 +250,10 @@ async function main() {
         const two = await performanceSample(page, '2d');
         await button(page, '3D').click();
         await expect(canvas).toHaveAttribute('data-view', '3d');
+        await page.getByLabel('Buildings', { exact: true }).check();
+        await expect
+          .poll(() => canvas.getAttribute('data-buildings').then(Number))
+          .toBeGreaterThan(1000);
         await frames(page, 60);
         const three = await performanceSample(page, '3d');
         await button(page, 'Pause').click();
@@ -219,6 +267,8 @@ async function main() {
           gpu,
           buildMs: await canvas.getAttribute('data-build-ms'),
           tiles: await canvas.getAttribute('data-tiles'),
+          buildings: await canvas.getAttribute('data-buildings'),
+          contextFeatures: await canvas.getAttribute('data-context-features'),
         };
         records.push(record);
         console.info(JSON.stringify(record));

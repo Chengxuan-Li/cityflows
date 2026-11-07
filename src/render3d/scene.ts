@@ -47,6 +47,10 @@ export class Scene3D {
   private source: CityGeometry | undefined;
   private geometry: ReturnType<typeof buildGeometry> | undefined;
   private ground: Mesh<PlaneGeometry, MeshLambertMaterial> | undefined;
+  private buildings: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
+  private surroundings: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
+  private surroundingsVisible = true;
+  private buildingsVisible = true;
   private lamps: InstancedMesh | undefined;
   private selectedId: number | null = null;
   private signalCity: CompiledCity | null = null;
@@ -131,6 +135,17 @@ export class Scene3D {
     places.material.vertexColors = true;
     places.name = 'places';
     places.visible = this.placesVisible;
+    this.buildings = add(geometry.context.buildings, 0xffffff);
+    this.buildings.material.vertexColors = true;
+    this.surroundings = add(geometry.context.ground, 0xffffff, false);
+    this.surroundings.material.vertexColors = true;
+    // Broad terrain first, then water/green and lines, in one ordered mesh.
+    // It cannot write depth against itself where context areas overlap.
+    this.surroundings.material.depthWrite = false;
+    // Tiles are transparent too: keep terrain after them even at full opacity.
+    this.surroundings.material.transparent = true;
+    this.surroundings.renderOrder = 3;
+    this.setSurroundings(this.surroundingsVisible, this.buildingsVisible);
     const transform = new Object3D();
     const piers = new InstancedMesh(
       new BoxGeometry(1.2, 1, 1.2),
@@ -263,6 +278,7 @@ export class Scene3D {
 
   setBelowGround(enabled: boolean) {
     this.belowGround = enabled;
+    if (this.surroundings) this.surroundings.material.opacity = enabled ? 0.4 : 1;
     if (!this.ground || this.ground.material.transparent === enabled) return;
     this.ground.material.transparent = enabled;
     this.ground.material.opacity = enabled ? 0.4 : 1;
@@ -277,6 +293,19 @@ export class Scene3D {
     this.placesVisible = visible;
     const places = this.content.getObjectByName('places');
     if (places) places.visible = visible;
+  }
+
+  setSurroundings(visible: boolean, buildings: boolean) {
+    this.surroundingsVisible = visible;
+    this.buildingsVisible = buildings;
+    if (this.surroundings) this.surroundings.visible = visible;
+    if (this.buildings) this.buildings.visible = visible && buildings;
+    const count = this.geometry?.context;
+    const buildingCount = visible && buildings ? (count?.buildingCount ?? 0) : 0;
+    this.canvas.dataset.buildings = String(buildingCount);
+    this.canvas.dataset.contextFeatures = String(
+      buildingCount + (visible ? (count?.groundCount ?? 0) : 0),
+    );
   }
 
   setView(centre: Vec2, zoom: number, pitch = 55, bearing = 0) {
@@ -383,6 +412,8 @@ export class Scene3D {
     );
     // Fit the 2048 shadow map to the camera's ground target, rather than the whole city.
     const extent = Math.max(40, this.camera.position.distanceTo(this.controls.target) * 0.9);
+    // A world-space texel offset keeps broad roofs free of self-shadow stripes.
+    this.sun.shadow.normalBias = Math.max(0.05, (2 * extent) / this.sun.shadow.mapSize.x);
     const target = this.controls.target;
     this.sun.target.position.copy(target);
     this.sun.position.set(target.x - extent, extent * 1.5, target.z - extent);

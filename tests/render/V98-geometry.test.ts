@@ -17,6 +17,8 @@ test.each(tierCities(auditCities))(
       geometry.markings,
       geometry.crossings,
       geometry.places,
+      geometry.context.buildings,
+      geometry.context.ground,
     ]) {
       for (const attribute of Object.values(buffer.attributes))
         expect(Array.from(attribute.array).every(Number.isFinite)).toBe(true);
@@ -27,5 +29,9 @@ test.each(tierCities(auditCities))(
     expect(geometry.piers.every((pier) => Number.isFinite(pier.height) && pier.height > 0)).toBe(
       true,
     );
+    if (name === 'munich' || name === 'sindelfingen') {
+      expect(geometry.context.buildingCount).toBeGreaterThan(0);
+      expect(geometry.context.groundCount).toBeGreaterThan(0);
+    }
   },
 );

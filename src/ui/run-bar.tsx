@@ -17,6 +17,11 @@ function clock(timeS: number) {
 export function RunBar() {
   const mode = useAppStore((state) => state.viewMode);
   const belowGround = useAppStore((state) => state.belowGround);
+  const buildings = useAppStore((state) => state.buildings);
+  const surroundings = useAppStore((state) => state.layers.context);
+  const hasBuildings = useAppStore((state) =>
+    state.session?.project.city.context?.features.some((f) => f.class === 'building'),
+  );
   const run = useAppStore((state) => state.run);
   const busy = useAppStore((state) => state.busy);
   const diagnostics = useAppStore((state) =>
@@ -139,6 +144,17 @@ export function RunBar() {
               onChange={() => useAppStore.getState().toggleBelowGround()}
             />{' '}
             See below ground
+          </label>
+        )}
+        {mode === '3d' && hasBuildings && (
+          <label>
+            <input
+              type="checkbox"
+              checked={buildings}
+              disabled={!surroundings}
+              onChange={() => useAppStore.getState().toggleBuildings()}
+            />{' '}
+            Buildings
           </label>
         )}
         <button

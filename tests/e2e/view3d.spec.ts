@@ -1,7 +1,22 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { button, importOsm, metrics, pageErrors } from './helpers';
 
 test.use({ reducedMotion: 'no-preference' });
+
+async function centrePixel(page: Page) {
+  return page.evaluate(async () => {
+    const image = (await window.cityflows!.capture3D!())[0]!;
+    const bitmap = await createImageBitmap(await (await fetch(image)).blob());
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d')!;
+    context.drawImage(bitmap, 0, 0);
+    const pixel = [...context.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data];
+    bitmap.close();
+    return pixel.slice(0, 3);
+  });
+}
 
 test('@smoke V98 Munich switches views, keeps playback and camera centre, and selects a 3D vehicle', async ({
   page,
@@ -45,12 +60,31 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   await expect(map).toHaveAttribute('data-ticker', 'stopped');
   await expect.poll(() => map3D.getAttribute('data-tiles').then(Number)).toBeGreaterThan(0);
   await expect.poll(() => map3D.getAttribute('data-crossings').then(Number)).toBeGreaterThan(0);
+  const buildings = page.getByLabel('Buildings', { exact: true });
+  await expect(buildings).toBeChecked();
+  const buildingCount = Number(await map3D.getAttribute('data-buildings'));
+  expect(buildingCount).toBeGreaterThan(1000);
+  const buildMs = await map3D.getAttribute('data-build-ms');
+  await buildings.uncheck();
+  await expect(map3D).toHaveAttribute('data-buildings', '0');
+  await expect
+    .poll(() => map3D.getAttribute('data-context-features').then(Number))
+    .toBeGreaterThan(0);
+  await buildings.check();
+  await expect(map3D).toHaveAttribute('data-buildings', String(buildingCount));
+  await expect(map3D).toHaveAttribute('data-build-ms', buildMs!);
   await button(page, 'Layers').click();
   const layers = page.getByRole('region', { name: 'Map layers' });
   await layers.getByLabel('Basemap', { exact: true }).uncheck();
   await expect(map3D).toHaveAttribute('data-tiles', '0');
   await layers.getByLabel('Basemap', { exact: true }).check();
   await expect.poll(() => map3D.getAttribute('data-tiles').then(Number)).toBeGreaterThan(0);
+  await layers.getByLabel('Surroundings', { exact: true }).uncheck();
+  await expect(map3D).toHaveAttribute('data-context-features', '0');
+  await expect(map3D).toHaveAttribute('data-buildings', '0');
+  await expect(buildings).toBeDisabled();
+  await layers.getByLabel('Surroundings', { exact: true }).check();
+  await expect(map3D).toHaveAttribute('data-buildings', String(buildingCount));
   await button(page, 'Layers').click();
   for (const name of ['Select', 'Road', 'Place', 'Ramp', 'Roundabout']) {
     await expect(button(page, name)).toBeDisabled();
@@ -58,6 +92,25 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   }
   const entered = await page.evaluate(() => window.cityflows!.view3D!()!.centre);
   expect(Math.hypot(entered.x - centre.x, entered.y - centre.y)).toBeLessThan(0.01);
+  const beforePixel = await page.evaluate(() => window.cityflows!.view3D!()!);
+  await buildings.uncheck();
+  await button(page, 'Layers').click();
+  await layers.getByLabel('Places', { exact: true }).uncheck();
+  // A grass patch clear of roads/buildings must cover the solid blue tile stub.
+  await page.evaluate(() => window.cityflows!.setView3D!({ x: 595.8, y: -277.3 }, 8, 85));
+  await page.waitForTimeout(1500);
+  const grass = await centrePixel(page);
+  await layers.getByLabel('Surroundings', { exact: true }).uncheck();
+  await expect(map3D).toHaveAttribute('data-context-features', '0');
+  const tilePixel = await centrePixel(page);
+  expect(
+    grass.reduce((difference, value, i) => difference + Math.abs(value - tilePixel[i]!), 0),
+  ).toBeGreaterThan(20);
+  await layers.getByLabel('Surroundings', { exact: true }).check();
+  await layers.getByLabel('Places', { exact: true }).check();
+  await button(page, 'Layers').click();
+  await buildings.check();
+  await page.evaluate((view) => window.cityflows!.setView3D!(view.centre, view.zoom), beforePixel);
   await page.getByLabel('See below ground').check();
   const start = (await metrics(page)).timeS;
   await button(page, 'Play').click();
@@ -84,6 +137,7 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
     page.getByRole('heading', { name: `Vehicle ${target.id}`, exact: true }),
   ).toBeVisible();
   // Pan through MapControls and hand the resulting ground target back to 2D.
+  await buildings.uncheck();
   const box = (await map3D.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
@@ -107,6 +161,9 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   // Returning to 3D must not carry the previous pan's damping into the new target.
   await page.keyboard.press('v');
   await expect(map3D).toBeVisible();
+  await expect(buildings).not.toBeChecked();
+  await expect(map3D).toHaveAttribute('data-buildings', '0');
+  await buildings.check();
   await page.waitForTimeout(500);
   const restored = await page.evaluate(() => window.cityflows!.view3D!()!.centre);
   expect(Math.hypot(restored.x - leaving.centre.x, restored.y - leaving.centre.y)).toBeLessThan(
@@ -123,5 +180,6 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
       }),
     )
     .toBeLessThan(1000);
+  await expect.poll(() => map3D.getAttribute('data-buildings').then(Number)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });

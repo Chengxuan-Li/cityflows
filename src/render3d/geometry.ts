@@ -10,6 +10,7 @@ import { placeHue, style } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
 import { roadMarkings } from './markings';
+import { buildContext } from './context';
 
 type Vertex = [number, number, number];
 const vertex = (p: Vec2, z: number): Vertex => [p.x, z, p.y];
@@ -180,6 +181,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
   placeGeometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   const { heads, supports } = signalLayout(city, heights);
   return {
+    context: buildContext(source.context?.features ?? []),
     surfaces: buffer(surfaces, true),
     slabs: buffer(slabs),
     markings: buffer(markings),

@@ -79,8 +79,10 @@ export type ExportFormat = 'geojson' | 'trips' | 'road-metrics' | 'trajectories'
 interface AppState {
   viewMode: '2d' | '3d';
   belowGround: boolean;
+  buildings: boolean;
   toggleView: () => void;
   toggleBelowGround: () => void;
+  toggleBuildings: () => void;
   compareOpen: boolean;
   comparison: Comparison | null;
   comparisonProgress: { run: 'Baseline' | 'Variant'; fraction: number } | null;
@@ -291,6 +293,7 @@ export const useAppStore = create<AppState>((set, get) => {
   return {
     viewMode: '2d',
     belowGround: false,
+    buildings: true,
     toggleView: () => {
       const { viewMode, selection, session, busy } = get();
       if (!session || busy) return;
@@ -304,6 +307,7 @@ export const useAppStore = create<AppState>((set, get) => {
       });
     },
     toggleBelowGround: () => set(({ belowGround }) => ({ belowGround: !belowGround })),
+    toggleBuildings: () => set(({ buildings }) => ({ buildings: !buildings })),
     compareOpen: false,
     comparison: null,
     comparisonProgress: null,
