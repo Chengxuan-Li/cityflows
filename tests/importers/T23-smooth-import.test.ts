@@ -4,6 +4,7 @@ import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { parseOsm } from '../../src/importers/osm/parse';
 import type { City } from '../../src/schema';
+import { tierCities, unitTest } from '../tier';
 import { fixture } from './fixtures';
 
 const observed = vi.hoisted(() => ({
@@ -91,11 +92,13 @@ const classByRadius = {
   12: 'service',
 };
 
-test.each([
-  ['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]],
-  ['sindelfingen-a81', [8.98, 48.69, 9.0, 48.702]],
-  ['downtown', undefined],
-] as const)(
+test.each(
+  tierCities([
+    ['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]],
+    ['sindelfingen-a81', [8.98, 48.69, 9.0, 48.702]],
+    ['downtown', undefined],
+  ] as const),
+)(
   'T23: %s preserves junctions and fits deterministic tangent fillets',
   (name, bbox) => {
     const { xml, options } = fixture(name);
@@ -258,7 +261,7 @@ test.each([
   },
   60_000,
 );
-test('T23: a two-way OSM bend has mirrored fillets and smoothing provenance', () => {
+unitTest('T23: a two-way OSM bend has mirrored fillets and smoothing provenance', () => {
   const xml = `<osm>
     <node id="1" lat="48" lon="11"/>
     <node id="2" lat="48" lon="11.001"/>
@@ -276,7 +279,7 @@ test('T23: a two-way OSM bend has mirrored fillets and smoothing provenance', ()
     expect(road.provenance.inferred).toContain('smoothed:1');
 });
 
-test.each([false, true])(
+unitTest.each([false, true])(
   'T23: smooths a class transition unless it carried a stop (%s)',
   (stop) => {
     const xml = `<osm>

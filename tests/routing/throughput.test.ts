@@ -1,39 +1,52 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
-import { createRouteProvider, freeFlowLinkCosts, type RouteResult } from '../../src/routing';
+import { auditRoute } from '../../bench/route-audit';
+import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
+import { tierCities } from '../tier';
 import { throughputCities, throughputFixture, throughputRequests } from './throughput-fixtures';
 
-// Captured before TASK-062 from main at 1a14d7a, and again for TASK-074, whose setbacks move lane
-// lengths: the same roads everywhere, one Sindelfingen route on other lanes, 7 Sindelfingen and
-// 12 Munich costs moved. Captured again for TASK-084 (separated coincident pairs, relaxed
-// roads): the same roads everywhere, one Munich route through other movements, 30 Sindelfingen
-// and 14 Munich costs moved. Again for TASK-082 (lanes offset from corridor reference lines):
-// the same roads, movements and lanes everywhere, 8 Sindelfingen and 6 Munich costs moved by
-// at most 0.01 percent. Again for TASK-087 (dual carriageways pushed apart, r:729/r:984 side by
-// side): Munich has 259 connectors (260 before), so its fixed sample of connector pairs shifts
-// and 90 of its 96 requests are others; Sindelfingen's requests are the same and route on the
-// same roads, 87 through renumbered movements (n:580 loses one). Again for TASK-089 (converging
-// carriageways set side by side): Munich keeps its 259 connectors and movements, but lanes at
-// the split junctions are cut farther out, so some connectors sit a few metres along and 12 of
-// its 96 routes take other roads (9 costs on the same roads moved, by at most 3.5 percent);
-// Sindelfingen keeps its requests, roads and movements, 2 costs moved by at most 0.23 percent.
-// Includes the complete result, not just road IDs: equal-cost ties, movements, target lanes and
-// exact costs matter.
-const expected = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<
+// The roads each request of the fixed sample takes on main 5568eed (a failure reason where it has
+// no route), keyed by its connectors and variant. TASK-090: compared within a budget instead of
+// exactly. The exact results (movements, target lanes, costs) were captured again for TASK-062,
+// TASK-074, TASK-084, TASK-082, TASK-087 and TASK-089, each time because lane lengths, cuts or
+// connector positions moved; what matters is that routing is deterministic, every route is
+// drivable and the routes mostly stay on their roads.
+const recorded = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<
   string,
-  RouteResult[]
+  Record<string, string[] | string>
 >;
 
-test.each(throughputCities)('%s preserves the baseline routes exactly', (name) => {
-  const net = throughputFixture(name);
-  const provider = createRouteProvider();
-  const costs = freeFlowLinkCosts(net);
-  const requests = throughputRequests(net);
-  const actual = requests.map((request) => provider.route(net, costs, request));
-  expect(actual).toEqual(expected[name]);
-  // Reuse the provider after other requests and a cost-version change.
-  costs.version++;
-  expect(requests.toReversed().map((request) => provider.route(net, costs, request))).toEqual(
-    expected[name]!.toReversed(),
-  );
-});
+test.each(tierCities(throughputCities))(
+  '%s routes its sample deterministically, drivably and at most 10 percent on other roads',
+  (name) => {
+    const { city, net } = throughputFixture(name);
+    const provider = createRouteProvider();
+    const costs = freeFlowLinkCosts(net);
+    const requests = throughputRequests(net);
+    const actual = requests.map(({ request }) => provider.route(net, costs, request));
+    // Routed again by a fresh provider, and by this one after a cost-version change, reversed.
+    const fresh = createRouteProvider();
+    expect(requests.map(({ request }) => fresh.route(net, costs, request))).toEqual(actual);
+    costs.version++;
+    expect(requests.toReversed().map(({ request }) => provider.route(net, costs, request))).toEqual(
+      actual.toReversed(),
+    );
+    const undrivable = actual.flatMap((result, i) =>
+      result.ok
+        ? auditRoute(city, net, requests[i]!.request, result.route).map(
+            (issue) => `${requests[i]!.key}: ${JSON.stringify(issue)}`,
+          )
+        : [],
+    );
+    expect(undrivable).toEqual([]);
+    const changed = requests
+      .filter(({ key }, i) => {
+        const result = actual[i]!;
+        const now = result.ok ? result.route.roads.map((r) => net.roads[r]!.id) : result.reason;
+        return JSON.stringify(now) !== JSON.stringify(recorded[name]![key]);
+      })
+      .map(({ key }) => key);
+    console.info(name, `${changed.length} of ${requests.length} routes on other roads`, changed);
+    expect(changed.length).toBeLessThanOrEqual(Math.floor(0.1 * requests.length));
+  },
+);

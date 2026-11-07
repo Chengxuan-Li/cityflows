@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { importOsmCached } from '../../bench/city-cache';
 import { expect, test } from 'vitest';
 import { Graphics } from 'pixi.js';
 import { buildCity } from '../../src/fixtures/build-city';
@@ -6,7 +7,6 @@ import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { signalApproach } from '../../src/fixtures/signal-approach';
 import { distance, segmentsIntersect } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
-import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity, type CNode } from '../../src/network';
 import {
   drawJunctionMarkings,
@@ -15,6 +15,7 @@ import {
 } from '../../src/render/layers/junction-markings';
 import type { City, Node } from '../../src/schema';
 import { insideOutline } from '../network/junction-audit';
+import { tierCities, unitTest } from '../tier';
 
 function compiled(city: City) {
   const result = compile(city);
@@ -98,55 +99,60 @@ function crossings(guides: ReturnType<typeof junctionGuides>) {
   return count;
 }
 
-test('T28.1: a priority road keeps its centre, dividers and mouth edge through a yield T', () => {
-  const { city, centre } = tJunction();
-  const net = compiled(city);
-  const node = at(net, centre);
-  const guides = junctionGuides(net, node);
-  const kinds = (kind: string) => guides.filter((g) => g.kind === kind);
-  expect(kinds('centre')).toHaveLength(1);
-  expect(kinds('divider')).toHaveLength(2);
-  expect(kinds('edge')).toHaveLength(1);
-  // Centre on y = 0, dividers one lane either side, the edge on the side street's (south) side.
-  expect(kinds('centre')[0]!.line.every((p) => Math.abs(p.y) < 0.01)).toBe(true);
-  expect(
-    kinds('divider')
-      .map((g) => Math.round(g.line[0]!.y * 100) / 100)
-      .sort(),
-  ).toEqual([-3.5, 3.5]);
-  expect(kinds('edge')[0]!.line.every((p) => Math.abs(p.y - 7) < 0.01)).toBe(true);
-  // They span the junction from road end to road end.
-  const span = majorThroughs(net, node)
-    .flat()
-    .flatMap((m) => [m.polyline[0]!.x, m.polyline.at(-1)!.x]);
-  for (const guide of guides) {
-    const xs = guide.line.map((p) => p.x);
-    expect(Math.min(...xs)).toBeCloseTo(Math.min(...span), 1);
-    expect(Math.max(...xs)).toBeCloseTo(Math.max(...span), 1);
-  }
-  // Short dashes and gaps of 1.5 m; nothing enters the side street's mouth past the edge line.
-  for (const guide of guides) {
-    expect(guide.dashes.length).toBeGreaterThan(2);
-    for (const [i, dash] of guide.dashes.entries()) {
-      expect(distance(dash[0]!, dash.at(-1)!)).toBeCloseTo(1.5, 3);
-      if (i) expect(distance(guide.dashes[i - 1]!.at(-1)!, dash[0]!)).toBeCloseTo(1.5, 3);
-      expect(dash.every((p) => Math.abs(p.y) <= 7.01)).toBe(true);
+unitTest(
+  'T28.1: a priority road keeps its centre, dividers and mouth edge through a yield T',
+  () => {
+    const { city, centre } = tJunction();
+    const net = compiled(city);
+    const node = at(net, centre);
+    const guides = junctionGuides(net, node);
+    const kinds = (kind: string) => guides.filter((g) => g.kind === kind);
+    expect(kinds('centre')).toHaveLength(1);
+    expect(kinds('divider')).toHaveLength(2);
+    expect(kinds('edge')).toHaveLength(1);
+    // Centre on y = 0, dividers one lane either side, the edge on the side street's (south) side.
+    expect(kinds('centre')[0]!.line.every((p) => Math.abs(p.y) < 0.01)).toBe(true);
+    expect(
+      kinds('divider')
+        .map((g) => Math.round(g.line[0]!.y * 100) / 100)
+        .sort(),
+    ).toEqual([-3.5, 3.5]);
+    expect(kinds('edge')[0]!.line.every((p) => Math.abs(p.y - 7) < 0.01)).toBe(true);
+    // They span the junction from road end to road end.
+    const span = majorThroughs(net, node)
+      .flat()
+      .flatMap((m) => [m.polyline[0]!.x, m.polyline.at(-1)!.x]);
+    for (const guide of guides) {
+      const xs = guide.line.map((p) => p.x);
+      expect(Math.min(...xs)).toBeCloseTo(Math.min(...span), 1);
+      expect(Math.max(...xs)).toBeCloseTo(Math.max(...span), 1);
     }
-  }
-  // The side street's movements have no guide: the major through groups are the east and
-  // westbound approaches only.
-  const groups = majorThroughs(net, node);
-  expect(groups.map((g) => net.roads[net.lanes[g[0]!.fromLane]!.road]!.classRank)).toEqual([5, 5]);
-  expect(groups.flat().every((m) => m.turn === 'through')).toBe(true);
-  // Drawn into the layer as one stroke per node.
-  const graphics = new Graphics();
-  expect(drawJunctionMarkings(graphics, net, node)).toBe(
-    guides.reduce((sum, g) => sum + g.dashes.length, 0),
-  );
-  graphics.destroy();
-});
+    // Short dashes and gaps of 1.5 m; nothing enters the side street's mouth past the edge line.
+    for (const guide of guides) {
+      expect(guide.dashes.length).toBeGreaterThan(2);
+      for (const [i, dash] of guide.dashes.entries()) {
+        expect(distance(dash[0]!, dash.at(-1)!)).toBeCloseTo(1.5, 3);
+        if (i) expect(distance(guide.dashes[i - 1]!.at(-1)!, dash[0]!)).toBeCloseTo(1.5, 3);
+        expect(dash.every((p) => Math.abs(p.y) <= 7.01)).toBe(true);
+      }
+    }
+    // The side street's movements have no guide: the major through groups are the east and
+    // westbound approaches only.
+    const groups = majorThroughs(net, node);
+    expect(groups.map((g) => net.roads[net.lanes[g[0]!.fromLane]!.road]!.classRank)).toEqual([
+      5, 5,
+    ]);
+    expect(groups.flat().every((m) => m.turn === 'through')).toBe(true);
+    // Drawn into the layer as one stroke per node.
+    const graphics = new Graphics();
+    expect(drawJunctionMarkings(graphics, net, node)).toBe(
+      guides.reduce((sum, g) => sum + g.dashes.length, 0),
+    );
+    graphics.destroy();
+  },
+);
 
-test('T28.2: no guides without a major road or at a signal', () => {
+unitTest('T28.2: no guides without a major road or at a signal', () => {
   for (const control of ['stop', 'uncontrolled'] as const) {
     const { city, centre } = fourWay(control);
     const net = compiled(city);
@@ -170,37 +176,42 @@ test('T28.2: no guides without a major road or at a signal', () => {
 });
 
 test('T28.3: dashes stay on the junction and its roads and guides never cross', () => {
-  const munich = importOsm(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
-    importerVersion: 'test',
-    bbox: [11.525, 48.135, 11.545, 48.148],
-  });
-  if (!munich.ok) throw new Error(JSON.stringify(munich.diagnostics));
-  const cities = [tJunction().city, oneWayBend().city, grid5x5(), munich.city];
-  const counts = cities.map((city) => {
-    const net = compiled(city);
+  // TASK-090: the fixtures and the grid in `npm test`, Munich in the city tier.
+  const cities = {
+    tJunction: () => tJunction().city,
+    oneWayBend: () => oneWayBend().city,
+    grid: grid5x5,
+    munich: () => {
+      const munich = importOsmCached(
+        readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'),
+        {
+          importerVersion: 'test',
+          bbox: [11.525, 48.135, 11.545, 48.148],
+        },
+      );
+      if (!munich.ok) throw new Error(JSON.stringify(munich.diagnostics));
+      return munich.city;
+    },
+  };
+  for (const name of tierCities(Object.keys(cities) as (keyof typeof cities)[])) {
+    const net = compiled(cities[name]());
     let nodes = 0;
-    let dashes = 0;
     for (const node of net.nodes) {
       const guides = junctionGuides(net, node);
       if (!guides.length) continue;
       nodes++;
       expect(crossings(guides), node.id).toBe(0);
       for (const guide of guides)
-        for (const dash of guide.dashes) {
-          dashes++;
+        for (const dash of guide.dashes)
           for (const point of dash) expect(contained(net, node, point), node.id).toBe(true);
-        }
     }
-    return { nodes, dashes };
-  });
-  expect(counts[0]!.nodes).toBe(1);
-  expect(counts[1]!.nodes).toBe(1);
-  // Every grid junction is an equal-priority residential crossing or the signal.
-  expect(counts[2]!.nodes).toBe(0);
-  expect(counts[3]!.nodes).toBeGreaterThanOrEqual(15);
+    // Every grid junction is an equal-priority residential crossing or the signal.
+    if (name === 'munich') expect(nodes).toBeGreaterThanOrEqual(15);
+    else expect(nodes, name).toBe(name === 'grid' ? 0 : 1);
+  }
 }, 60_000);
 
-test('T28.4: a two-lane one-way priority road gets one divider following its curve', () => {
+unitTest('T28.4: a two-lane one-way priority road gets one divider following its curve', () => {
   const { city, centre } = oneWayBend();
   const net = compiled(city);
   const node = at(net, centre);

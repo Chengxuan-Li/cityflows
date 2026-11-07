@@ -4,6 +4,7 @@ import { cumulativeLengths, distance, pointAtDistance } from '../../src/geo/poly
 import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
 import type { City } from '../../src/schema';
+import { tierCities, unitTest } from '../tier';
 
 const observed = vi.hoisted(() => ({ before: undefined as City | undefined, skip: false }));
 // Step 12 alone: the separations and the relaxation that follow it have their own contracts
@@ -28,7 +29,7 @@ vi.mock(import('../../src/importers/osm/realign'), async (load) => {
   };
 });
 
-test('T24: acute-Y minor arm meets the fixed major at sixty degrees', () => {
+unitTest('T24: acute-Y minor arm meets the fixed major at sixty degrees', () => {
   const xml = readFileSync('fixtures/osm/acute-y.osm', 'utf8');
   const result = importOsm(xml, { importerVersion: 'test' });
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
@@ -71,7 +72,7 @@ test('T24: acute-Y minor arm meets the fixed major at sixty degrees', () => {
   expect(importOsm(xml, { importerVersion: 'test' })).toEqual(result);
 });
 
-test('T24: a same-direction diverge stays exactly as imported', () => {
+unitTest('T24: a same-direction diverge stays exactly as imported', () => {
   const xml = readFileSync('fixtures/osm/acute-y.osm', 'utf8').replaceAll(
     '<tag k="highway"',
     '<tag k="oneway" v="yes"/><tag k="highway"',
@@ -82,7 +83,7 @@ test('T24: a same-direction diverge stays exactly as imported', () => {
     expect(road.centerline).toEqual(observed.before!.roads[road.id]!.centerline);
 });
 
-test('T24: short roads may bend within their original half-length', async () => {
+unitTest('T24: short roads may bend within their original half-length', async () => {
   const result = importOsm(readFileSync('fixtures/osm/acute-y.osm', 'utf8'), {
     importerVersion: 'test',
   });
@@ -123,7 +124,7 @@ test('T24: short roads may bend within their original half-length', async () => 
   expect(diagnostics.some((d) => d.code === 'realign_limited')).toBe(true);
 });
 
-test('T24: a curvature-limited candidate does not hide a later feasible bend', () => {
+unitTest('T24: a curvature-limited candidate does not hide a later feasible bend', () => {
   const xml = `<osm><node id="1" lat="0" lon="0"/>
     <node id="2" lat="0" lon="0.0009"/>
     <node id="3" lat="-0.000007854" lon="0.00045"/>
@@ -136,7 +137,7 @@ test('T24: a curvature-limited candidate does not hide a later feasible bend', (
   expect((Math.atan2(b!.y - a!.y, b!.x - a!.x) * 180) / Math.PI).toBeGreaterThan(40);
 });
 
-test('T24: a class tie prefers a feasible full bend over a blocked partial bend', () => {
+unitTest('T24: a class tie prefers a feasible full bend over a blocked partial bend', () => {
   const angles = [-61, 0, 30];
   const xml = `<osm><node id="1" lat="0" lon="0"/>
     ${angles.map((deg, i) => `<node id="${i + 2}" lat="${-Math.sin((deg * Math.PI) / 180) * 0.001}" lon="${Math.cos((deg * Math.PI) / 180) * 0.001}"/>`).join('')}
@@ -152,10 +153,12 @@ test('T24: a class tie prefers a feasible full bend over a blocked partial bend'
     expect(road.centerline).toEqual(observed.before!.roads[road.id]!.centerline);
 });
 
-test.each([
-  ['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]],
-  ['sindelfingen-a81', [8.98, 48.69, 9.0, 48.702]],
-] as const)(
+test.each(
+  tierCities([
+    ['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]],
+    ['sindelfingen-a81', [8.98, 48.69, 9.0, 48.702]],
+  ] as const),
+)(
   'T24: %s preserves motorway merges and diverges, nodes and determinism',
   (name, bbox) => {
     const xml = readFileSync(`fixtures/osm/${name}.osm`, 'utf8');

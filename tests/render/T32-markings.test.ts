@@ -18,6 +18,7 @@ import type { Vec2 } from '../../src/geo/vec2';
 import { compile, type CLane, type CompiledCity, type CRoad } from '../../src/network';
 import { approachMarkings, drawRoad } from '../../src/render/layers/roads';
 import { style } from '../../src/render/style';
+import { cityTest, tierCities, unitTest } from '../tier';
 
 const nets = new Map<string, CompiledCity>();
 const net = (name: AuditCity) => {
@@ -90,7 +91,7 @@ const laneLines = (road: CRoad, lane: CLane) => [
   ...(road.streetGroupId !== null && lane.left < 0 ? [-lane.widthM / 2] : []),
 ];
 
-test.each(['grid', 'munich'] as const)(
+test.each(tierCities(['grid', 'munich'] as const))(
   'T32.1: on %s every approach’s dividers and centre line reach its stop position',
   (name) => {
     const city = net(name);
@@ -143,7 +144,7 @@ function turnsOf(city: CompiledCity, lane: CLane): string {
   return [...turns].sort().join();
 }
 
-test.each(['grid', 'munich'] as const)(
+test.each(tierCities(['grid', 'munich'] as const))(
   'T32.2: on %s arrows are drawn once per lane, 6 to 9 m before the stop position, where lanes differ',
   (name) => {
     const city = net(name);
@@ -176,7 +177,7 @@ test.each(['grid', 'munich'] as const)(
   120_000,
 );
 
-test('T32.2: the owner’s X-marked arrows on Munich’s Marsstraße below n:823 are gone', () => {
+cityTest('T32.2: the owner’s X-marked arrows on Munich’s Marsstraße below n:823 are gone', () => {
   // On 5024a83 the two one-way carriageways r:368 (n:949 to n:823) and r:480 (n:823 to n:949),
   // which the importer realigned onto one centreline, carried arrows of both directions on the
   // same two lanes: r:368#0 u-turn and left, r:368#1 right (at the Y-junction n:823); r:480#0
@@ -229,7 +230,7 @@ function offsetError(lane: CLane, line: Vec2[], offset: number) {
   return error;
 }
 
-test('T32.3: on the hairpin fixture every lane line and edge keeps its offset', () => {
+unitTest('T32.3: on the hairpin fixture every lane line and edge keeps its offset', () => {
   const result = compile(hairpin());
   if (!result.ok) throw new Error('hairpin fixture');
   const city = result.compiled;
@@ -250,24 +251,28 @@ test('T32.3: on the hairpin fixture every lane line and edge keeps its offset', 
   }
 });
 
-test('T32.3: every Munich divider and centre line keeps its offset outside tapers', () => {
-  const city = net('munich');
-  const off: string[] = [];
-  for (const road of city.roads) {
-    if (hasTaper(city, road)) continue;
-    const lanes = road.lanes.map((i) => city.lanes[i]!);
-    for (const line of record(city, road).lines) {
-      // The lane the line belongs to: the one it lies half a lane width from.
-      const lane = lanes.reduce((best, l) => {
-        const gap = (x: CLane) => Math.abs(Math.abs(project(x, line[0]!).lateral) - x.widthM / 2);
-        return gap(l) < gap(best) ? l : best;
-      });
-      const error = offsetError(lane, line, lane.widthM / 2);
-      if (error >= 0.05) off.push(`${lane.id} ${error.toFixed(3)}`);
+cityTest(
+  'T32.3: every Munich divider and centre line keeps its offset outside tapers',
+  () => {
+    const city = net('munich');
+    const off: string[] = [];
+    for (const road of city.roads) {
+      if (hasTaper(city, road)) continue;
+      const lanes = road.lanes.map((i) => city.lanes[i]!);
+      for (const line of record(city, road).lines) {
+        // The lane the line belongs to: the one it lies half a lane width from.
+        const lane = lanes.reduce((best, l) => {
+          const gap = (x: CLane) => Math.abs(Math.abs(project(x, line[0]!).lateral) - x.widthM / 2);
+          return gap(l) < gap(best) ? l : best;
+        });
+        const error = offsetError(lane, line, lane.widthM / 2);
+        if (error >= 0.05) off.push(`${lane.id} ${error.toFixed(3)}`);
+      }
     }
-  }
-  expect(off).toEqual([]);
-}, 120_000);
+    expect(off).toEqual([]);
+  },
+  120_000,
+);
 
 // 5024a83 measured with bench/junction-audit.ts: dividers and centre lines drawRoad strokes
 // outside its nodes' outlines, and all its strokes (with arrow shafts and stop lines).
@@ -278,7 +283,7 @@ const main = {
   munich: { lineOutsideM: 38684, markingOutsideM: 41611 },
 };
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T32.4: %s keeps at least 98 % of main’s lane lines outside outlines',
   (name) => {
     const lengths = markingLengths(net(name));

@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
-import { generatePopulation, scheduleTrips } from '../../src/demand';
 import { buildCity } from '../../src/fixtures/build-city';
 import { bypass } from '../../src/fixtures/bypass';
 import { shortTurnLane } from '../../src/fixtures/short-turn-lane';
-import { defaultScenario } from '../../src/fixtures/scenarios';
-import { importOsm } from '../../src/importers/osm';
 import type { CompiledCity } from '../../src/network';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import { createGraphCache } from '../../src/routing/graph';
@@ -335,60 +331,4 @@ test('T29 a held car whose target lane is blocked for good gives the exit up and
   expect(detail.state).toBe('completed');
 });
 
-// Known to fail (TASK-076 report): Munich still gridlocks from about 08:00, and from then cars
-// off their target lanes stand in the jammed queues for hours (TASK-077's respawn is the
-// escape). Before the lock the longest off-target hold at the end of a lane is on r:639, about
-// 70 s. Turn this into `test` once the city no longer locks.
-test.fails(
-  'T29 Munich at 0.15: no car off its target lanes stands still for long',
-  () => {
-    const imported = importOsm(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
-      importerVersion: '1',
-      drivingSide: 'right',
-      bbox: [11.525, 48.135, 11.545, 48.148],
-    });
-    if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
-    const { city } = imported;
-    const compiled = setup(city);
-    const morning = defaultScenario('grid5x5');
-    morning.startS = 7 * 3600;
-    morning.endS = 10 * 3600;
-    morning.demand.personsPerResident = 0.15;
-    const engine = createEngine();
-    engine.load({
-      compiled,
-      trips: scheduleTrips(city, generatePopulation(city, morning.demand), morning),
-      scenario: morning,
-    });
-    const watched = new Set(['r:639', 'r:1299', 'r:968', 'r:884']);
-    const since = new Map<number, number>();
-    let longest = 0;
-    let longestWatched = 0;
-    while (engine.timeS < morning.endS) {
-      engine.step(10);
-      const snapshot = engine.snapshot();
-      for (const [index, id] of snapshot.id.entries()) {
-        const lane = compiled.lanes[snapshot.lane[index]!];
-        const detail = lane && snapshot.speed[index]! < 0.1 ? engine.inspect(id)! : null;
-        const step = detail?.route?.roads.indexOf(lane!.road) ?? -1;
-        const offTarget =
-          detail !== null &&
-          step >= 0 &&
-          step < detail.route!.roads.length - 1 &&
-          !detail.route!.targetLanes[step]!.includes(lane!.idx);
-        if (!offTarget) {
-          since.delete(id);
-          continue;
-        }
-        const start = since.get(id) ?? engine.timeS;
-        since.set(id, start);
-        longest = Math.max(longest, engine.timeS - start);
-        if (watched.has(compiled.roads[lane!.road]!.id))
-          longestWatched = Math.max(longestWatched, engine.timeS - start);
-      }
-    }
-    expect(longest).toBeLessThanOrEqual(missedTurnAfterS + 10);
-    expect(longestWatched).toBeLessThanOrEqual(missedTurnAfterS + 10);
-  },
-  600000,
-);
+// T29's Munich morning runs in the traffic tier (tests/traffic/munich-morning.test.ts).

@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect, test, vi } from 'vitest';
-import { probeMorning } from '../../bench/import-probe';
+import { expect, vi } from 'vitest';
 import { directionPairs, pairGapAudit, unrelatedOverlaps } from '../../bench/geometry-audit';
 import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
@@ -8,6 +7,7 @@ import { importOsm } from '../../src/importers/osm';
 import { DEFAULT_RELAX_MAX_M } from '../../src/importers/osm/relax';
 import { compile } from '../../src/network';
 import type { City, Road } from '../../src/schema';
+import { cityTest, unitTest } from '../tier';
 import { fixture } from './fixtures';
 
 const observed = vi.hoisted(() => ({ beforeSeparation: undefined as City | undefined }));
@@ -71,144 +71,155 @@ function minimumRadius(line: Vec2[]) {
   return radius;
 }
 
-test('T36.1: corridors of two-way ways, coincident pairs and dual carriageways, stable ids', () => {
-  const { xml, options } = fixture('downtown');
-  const downtown = importOsm(xml, options);
-  if (!downtown.ok) throw new Error(JSON.stringify(downtown.diagnostics));
-  const twoWay = Object.values(downtown.city.roads).filter((r) => r.streetGroupId !== null);
-  expect(twoWay.length).toBeGreaterThan(0);
-  for (const road of twoWay) expect(road.corridorId).toBe(road.streetGroupId);
+cityTest(
+  'T36.1: corridors of two-way ways, coincident pairs and dual carriageways, stable ids',
+  () => {
+    const { xml, options } = fixture('downtown');
+    const downtown = importOsm(xml, options);
+    if (!downtown.ok) throw new Error(JSON.stringify(downtown.diagnostics));
+    const twoWay = Object.values(downtown.city.roads).filter((r) => r.streetGroupId !== null);
+    expect(twoWay.length).toBeGreaterThan(0);
+    for (const road of twoWay) expect(road.corridorId).toBe(road.streetGroupId);
 
-  const city = munich();
-  const roads = city.roads;
-  // Marsstraße: opposite one-way ways 51775137 and 69811613 drawn on one centerline.
-  expect(roads['r:368']!.corridorId).toBe('corridor:51775137+69811613');
-  expect(roads['r:480']!.corridorId).toBe('corridor:51775137+69811613');
-  // Arnulfstraße west of n:138: one-way carriageways about 15 m apart.
-  expect(roads['r:715']!.corridorId).toBe('corridor:151784477+316052825');
-  expect(roads['r:958']!.corridorId).toBe('corridor:151784477+316052825');
-  expect(roads['r:715']!.provenance.inferred).not.toContain('separated');
-  // Arnulfstraße's way 54200280 pairs with 57832630 on two sections: numbered like street groups.
-  expect(roads['r:395']!.corridorId).toBe('corridor:54200280+57832630');
-  expect(roads['r:451']!.corridorId).toBe('corridor:54200280+57832630/1');
+    const city = munich();
+    const roads = city.roads;
+    // Marsstraße: opposite one-way ways 51775137 and 69811613 drawn on one centerline.
+    expect(roads['r:368']!.corridorId).toBe('corridor:51775137+69811613');
+    expect(roads['r:480']!.corridorId).toBe('corridor:51775137+69811613');
+    // Arnulfstraße west of n:138: one-way carriageways about 15 m apart.
+    expect(roads['r:715']!.corridorId).toBe('corridor:151784477+316052825');
+    expect(roads['r:958']!.corridorId).toBe('corridor:151784477+316052825');
+    expect(roads['r:715']!.provenance.inferred).not.toContain('separated');
+    // Arnulfstraße's way 54200280 pairs with 57832630 on two sections: numbered like street groups.
+    expect(roads['r:395']!.corridorId).toBe('corridor:54200280+57832630');
+    expect(roads['r:451']!.corridorId).toBe('corridor:54200280+57832630/1');
 
-  const ids = (c: City) => Object.values(c.roads).map((r) => [r.id, r.corridorId]);
-  expect(ids(munich())).toEqual(ids(city));
-  const kinds = { twoWay: 0, coincident: 0, dual: 0, pushed: 0, sameDirection: 0, none: 0 };
-  const members = new Map<string, Road[]>();
-  for (const road of Object.values(roads)) {
-    if (road.corridorId === null) kinds.none++;
-    else members.set(road.corridorId!, [...(members.get(road.corridorId!) ?? []), road]);
-  }
-  for (const [id, list] of members) {
-    expect(list).toHaveLength(2);
-    const [x, y] = list as [Road, Road];
-    if (!id.startsWith('corridor:')) kinds.twoWay++;
-    else if (x.from === y.from) kinds.sameDirection++;
-    else if (!x.provenance.inferred!.includes('separated')) kinds.dual++;
-    else if (JSON.stringify(x.centerline) === JSON.stringify([...y.centerline].reverse()))
-      kinds.coincident++;
-    else kinds.pushed++;
-  }
-  console.info('T36.1 Munich corridors', kinds);
-  expect(kinds.coincident).toBe(7);
-  expect(kinds.dual).toBeGreaterThan(0);
-  // TASK-087 (T39): three dual carriageways pushed apart (Landsberger r:325/r:941, r:327/r:1330,
-  // r:724/r:1279) and the same-direction Landsberger pair r:729/r:984. TASK-089: two more whose
-  // continuation across a node the network now sets side by side (Landsberger r:1277/r:1362 at
-  // n:774, Arnulfstraße r:1354/r:447 at n:382).
-  expect(kinds.pushed).toBe(5);
-  expect(kinds.sameDirection).toBe(1);
-}, 120_000);
+    const ids = (c: City) => Object.values(c.roads).map((r) => [r.id, r.corridorId]);
+    expect(ids(munich())).toEqual(ids(city));
+    const kinds = { twoWay: 0, coincident: 0, dual: 0, pushed: 0, sameDirection: 0, none: 0 };
+    const members = new Map<string, Road[]>();
+    for (const road of Object.values(roads)) {
+      if (road.corridorId === null) kinds.none++;
+      else members.set(road.corridorId!, [...(members.get(road.corridorId!) ?? []), road]);
+    }
+    for (const [id, list] of members) {
+      expect(list).toHaveLength(2);
+      const [x, y] = list as [Road, Road];
+      if (!id.startsWith('corridor:')) kinds.twoWay++;
+      else if (x.from === y.from) kinds.sameDirection++;
+      else if (!x.provenance.inferred!.includes('separated')) kinds.dual++;
+      else if (JSON.stringify(x.centerline) === JSON.stringify([...y.centerline].reverse()))
+        kinds.coincident++;
+      else kinds.pushed++;
+    }
+    console.info('T36.1 Munich corridors', kinds);
+    expect(kinds.coincident).toBe(7);
+    expect(kinds.dual).toBeGreaterThan(0);
+    // TASK-087 (T39): three dual carriageways pushed apart (Landsberger r:325/r:941, r:327/r:1330,
+    // r:724/r:1279) and the same-direction Landsberger pair r:729/r:984. TASK-089: two more whose
+    // continuation across a node the network now sets side by side (Landsberger r:1277/r:1362 at
+    // n:774, Arnulfstraße r:1354/r:447 at n:382).
+    expect(kinds.pushed).toBe(5);
+    expect(kinds.sameDirection).toBe(1);
+  },
+  120_000,
+);
 
-test('T36.2: Marsstraße becomes a divided pair with a 0.5 m median, topology unchanged', () => {
-  const city = munich();
-  const before = observed.beforeSeparation!;
-  const [a, b] = [city.roads['r:368']!, city.roads['r:480']!];
-  for (const road of [a, b]) {
-    const original = before.roads[road.id]!;
-    expect([road.from, road.to, road.provenance.osmIds]).toEqual([
-      original.from,
-      original.to,
-      original.provenance.osmIds,
+cityTest(
+  'T36.2: Marsstraße becomes a divided pair with a 0.5 m median, topology unchanged',
+  () => {
+    const city = munich();
+    const before = observed.beforeSeparation!;
+    const [a, b] = [city.roads['r:368']!, city.roads['r:480']!];
+    for (const road of [a, b]) {
+      const original = before.roads[road.id]!;
+      expect([road.from, road.to, road.provenance.osmIds]).toEqual([
+        original.from,
+        original.to,
+        original.provenance.osmIds,
+      ]);
+      expect(original.lateralOffsetM).toBe(0);
+      // Half its two 3.5 m lanes plus half the median, to the right of travel.
+      expect(road.lateralOffsetM).toBe(3.75);
+      expect(road.provenance.inferred).toContain('separated');
+    }
+    expect(a.centerline).toEqual(before.roads['r:368']!.centerline);
+    expect(b.centerline).toEqual([...a.centerline].reverse());
+    expect(Object.keys(city.roads)).toEqual(Object.keys(before.roads));
+    for (const node of Object.values(city.nodes))
+      expect(node.pos).toEqual(before.nodes[node.id]!.pos);
+
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const net = result.compiled;
+    const pair = directionPairs(city, net).find(({ a: x, b: y }) =>
+      [x.id, y.id].every((id) => id === 'r:368' || id === 'r:480'),
+    )!;
+    // Measure 2: the median edges run 0.5 m apart (7 m overlapping before).
+    const gap = pairGapAudit(net, pair.a, pair.b, pair.kind, [0, 0]);
+    expect(gap.signedM).toBeCloseTo(0.5, 2);
+    expect(gap.maxM).toBeCloseTo(0.5, 2);
+    expect(unrelatedOverlaps(city, net).filter((o) => /r:(368|480)\b/.test(o.roads))).toEqual([]);
+  },
+  120_000,
+);
+
+unitTest(
+  'T36.2: a coincident pair on separate nodes parts in its middle, eased at the ends',
+  () => {
+    // Westbound B lies 0.4 m south of eastbound A over A's length, then leaves at 45 degrees.
+    const xml = osm([
+      {
+        id: 1,
+        tags: { highway: 'residential', oneway: 'yes' },
+        points: [
+          [0, 0],
+          [200, 0],
+        ],
+      },
+      {
+        id: 2,
+        tags: { highway: 'residential', oneway: 'yes' },
+        points: [
+          [240, 40.4],
+          [200, 0.4],
+          [0, 0.4],
+          [-40, 40.4],
+        ],
+      },
     ]);
-    expect(original.lateralOffsetM).toBe(0);
-    // Half its two 3.5 m lanes plus half the median, to the right of travel.
-    expect(road.lateralOffsetM).toBe(3.75);
-    expect(road.provenance.inferred).toContain('separated');
-  }
-  expect(a.centerline).toEqual(before.roads['r:368']!.centerline);
-  expect(b.centerline).toEqual([...a.centerline].reverse());
-  expect(Object.keys(city.roads)).toEqual(Object.keys(before.roads));
-  for (const node of Object.values(city.nodes))
-    expect(node.pos).toEqual(before.nodes[node.id]!.pos);
-
-  const result = compile(city);
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const net = result.compiled;
-  const pair = directionPairs(city, net).find(({ a: x, b: y }) =>
-    [x.id, y.id].every((id) => id === 'r:368' || id === 'r:480'),
-  )!;
-  // Measure 2: the median edges run 0.5 m apart (7 m overlapping before).
-  const gap = pairGapAudit(net, pair.a, pair.b, pair.kind, [0, 0]);
-  expect(gap.signedM).toBeCloseTo(0.5, 2);
-  expect(gap.maxM).toBeCloseTo(0.5, 2);
-  expect(unrelatedOverlaps(city, net).filter((o) => /r:(368|480)\b/.test(o.roads))).toEqual([]);
-}, 120_000);
-
-test('T36.2: a coincident pair on separate nodes parts in its middle, eased at the ends', () => {
-  // Westbound B lies 0.4 m south of eastbound A over A's length, then leaves at 45 degrees.
-  const xml = osm([
-    {
-      id: 1,
-      tags: { highway: 'residential', oneway: 'yes' },
-      points: [
-        [0, 0],
-        [200, 0],
-      ],
-    },
-    {
-      id: 2,
-      tags: { highway: 'residential', oneway: 'yes' },
-      points: [
-        [240, 40.4],
-        [200, 0.4],
-        [0, 0.4],
-        [-40, 40.4],
-      ],
-    },
-  ]);
-  const result = importOsm(xml, { importerVersion: 'test', relaxMaxM: 0 });
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const [a, b] = Object.values(result.city.roads) as [Road, Road];
-  const before = observed.beforeSeparation!;
-  expect(a.corridorId).toBe('corridor:1+2');
-  expect(b.corridorId).toBe('corridor:1+2');
-  for (const road of [a, b]) {
-    expect(road.provenance.inferred).toContain('separated');
-    expect(road.centerline[0]).toEqual(before.roads[road.id]!.centerline[0]);
-    expect(road.centerline.at(-1)).toEqual(before.roads[road.id]!.centerline.at(-1));
-    // B's 45 degree bends are smoothing fillets (about 25 m) that the easing shifts inward.
-    expect(minimumRadius(road.centerline)).toBeGreaterThan(10);
-  }
-  const yAt = (road: Road, x: number) =>
-    nearestOnPolyline(road.centerline, { x: x + a.centerline[0]!.x, y: a.centerline[0]!.y }).point
-      .y - a.centerline[0]!.y;
-  // Middle line y = 0.2 (the mean over the coincident run, within 5 cm); each centerline half
-  // its 3 m lane plus 0.25 m to its right.
-  for (const x of [50, 100, 150]) {
-    expect(yAt(a, x)).toBeCloseTo(0.2 + 1.75, 1);
-    expect(yAt(b, x)).toBeCloseTo(0.2 - 1.75, 1);
-  }
-  // Eased over A's junction zones and back onto B's own line beyond the taper.
-  expect(Math.abs(yAt(a, 1))).toBeLessThan(0.05);
-  const lengths = cumulativeLengths(b.centerline);
-  const original = before.roads[b.id]!.centerline;
-  for (const s of [5, lengths.at(-1)! - 5])
-    expect(
-      nearestOnPolyline(original, pointAtDistance(b.centerline, lengths, s)).away,
-    ).toBeLessThan(1e-6);
-});
+    const result = importOsm(xml, { importerVersion: 'test', relaxMaxM: 0 });
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const [a, b] = Object.values(result.city.roads) as [Road, Road];
+    const before = observed.beforeSeparation!;
+    expect(a.corridorId).toBe('corridor:1+2');
+    expect(b.corridorId).toBe('corridor:1+2');
+    for (const road of [a, b]) {
+      expect(road.provenance.inferred).toContain('separated');
+      expect(road.centerline[0]).toEqual(before.roads[road.id]!.centerline[0]);
+      expect(road.centerline.at(-1)).toEqual(before.roads[road.id]!.centerline.at(-1));
+      // B's 45 degree bends are smoothing fillets (about 25 m) that the easing shifts inward.
+      expect(minimumRadius(road.centerline)).toBeGreaterThan(10);
+    }
+    const yAt = (road: Road, x: number) =>
+      nearestOnPolyline(road.centerline, { x: x + a.centerline[0]!.x, y: a.centerline[0]!.y }).point
+        .y - a.centerline[0]!.y;
+    // Middle line y = 0.2 (the mean over the coincident run, within 5 cm); each centerline half
+    // its 3 m lane plus 0.25 m to its right.
+    for (const x of [50, 100, 150]) {
+      expect(yAt(a, x)).toBeCloseTo(0.2 + 1.75, 1);
+      expect(yAt(b, x)).toBeCloseTo(0.2 - 1.75, 1);
+    }
+    // Eased over A's junction zones and back onto B's own line beyond the taper.
+    expect(Math.abs(yAt(a, 1))).toBeLessThan(0.05);
+    const lengths = cumulativeLengths(b.centerline);
+    const original = before.roads[b.id]!.centerline;
+    for (const s of [5, lengths.at(-1)! - 5])
+      expect(
+        nearestOnPolyline(original, pointAtDistance(b.centerline, lengths, s)).away,
+      ).toBeLessThan(1e-6);
+  },
+);
 
 const parallel = (minor: Record<string, string>) =>
   osm([
@@ -231,74 +242,61 @@ const parallel = (minor: Record<string, string>) =>
     },
   ]);
 
-test('T36.3: relaxation clears unrelated parallel roads, smoothly and deterministically', () => {
-  const xml = parallel({});
-  const run = (relaxMaxM: number) => {
-    const result = importOsm(xml, { importerVersion: 'test', relaxMaxM });
-    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    return result.city;
-  };
-  const off = run(0);
-  const city = run(DEFAULT_RELAX_MAX_M);
-  const [major, minor] = [city.roads['r:3']!, city.roads['r:6']!];
-  expect([major.name, minor.name]).toEqual(['Major', 'Minor']);
-  for (const road of Object.values(off.roads)) {
-    expect(road.centerline).toHaveLength(2);
-    expect(relaxed(road)).toBe(0);
-  }
-  expect(city.nodes).toEqual(off.nodes);
-  for (const road of [major, minor]) {
-    expect(road.centerline[0]).toEqual(off.roads[road.id]!.centerline[0]);
-    expect(road.centerline.at(-1)).toEqual(off.roads[road.id]!.centerline.at(-1));
-    expect(minimumRadius(road.centerline)).toBeGreaterThan(30);
-  }
-  // The residential road takes the larger share.
-  expect(relaxed(minor)).toBeGreaterThan(2 * relaxed(major));
-  expect(relaxed(minor) + relaxed(major)).toBeLessThan(3);
-  // Clear of each other (blocks 0.5 m apart, the capsules' 0.6 m less a few centimetres) from
-  // 45 m past the junction zones' 15 m ramp to the same distance before the far end.
-  const origin = major.centerline[0]!;
-  for (let x = 45; x <= 155; x += 5) {
-    const p = nearestOnPolyline(major.centerline, { x: origin.x + x, y: origin.y }).point;
-    expect(nearestOnPolyline(minor.centerline, p).away).toBeGreaterThan(1.75 + 1.5 + 0.5);
-  }
-  const compiled = (c: City) => {
-    const result = compile(c);
-    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    return unrelatedOverlaps(c, result.compiled).reduce((sum, o) => sum + o.areaM2, 0);
-  };
-  const [overlapOff, overlapOn] = [compiled(off), compiled(city)];
-  console.info(
-    'T36.3 overlap m2',
-    { off: overlapOff, relaxed: overlapOn },
-    {
-      major: relaxed(major),
-      minor: relaxed(minor),
-      radius: [minimumRadius(major.centerline), minimumRadius(minor.centerline)],
-    },
-  );
-  expect(overlapOn).toBeLessThan(overlapOff / 4);
-  expect(JSON.stringify(run(DEFAULT_RELAX_MAX_M))).toBe(JSON.stringify(city));
-  // A bridge does not interact with the road under it.
-  const bridge = importOsm(parallel({ bridge: 'yes', layer: '1' }), { importerVersion: 'test' });
-  if (!bridge.ok) throw new Error(JSON.stringify(bridge.diagnostics));
-  for (const road of Object.values(bridge.city.roads)) expect(relaxed(road)).toBe(0);
-});
+unitTest(
+  'T36.3: relaxation clears unrelated parallel roads, smoothly and deterministically',
+  () => {
+    const xml = parallel({});
+    const run = (relaxMaxM: number) => {
+      const result = importOsm(xml, { importerVersion: 'test', relaxMaxM });
+      if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+      return result.city;
+    };
+    const off = run(0);
+    const city = run(DEFAULT_RELAX_MAX_M);
+    const [major, minor] = [city.roads['r:3']!, city.roads['r:6']!];
+    expect([major.name, minor.name]).toEqual(['Major', 'Minor']);
+    for (const road of Object.values(off.roads)) {
+      expect(road.centerline).toHaveLength(2);
+      expect(relaxed(road)).toBe(0);
+    }
+    expect(city.nodes).toEqual(off.nodes);
+    for (const road of [major, minor]) {
+      expect(road.centerline[0]).toEqual(off.roads[road.id]!.centerline[0]);
+      expect(road.centerline.at(-1)).toEqual(off.roads[road.id]!.centerline.at(-1));
+      expect(minimumRadius(road.centerline)).toBeGreaterThan(30);
+    }
+    // The residential road takes the larger share.
+    expect(relaxed(minor)).toBeGreaterThan(2 * relaxed(major));
+    expect(relaxed(minor) + relaxed(major)).toBeLessThan(3);
+    // Clear of each other (blocks 0.5 m apart, the capsules' 0.6 m less a few centimetres) from
+    // 45 m past the junction zones' 15 m ramp to the same distance before the far end.
+    const origin = major.centerline[0]!;
+    for (let x = 45; x <= 155; x += 5) {
+      const p = nearestOnPolyline(major.centerline, { x: origin.x + x, y: origin.y }).point;
+      expect(nearestOnPolyline(minor.centerline, p).away).toBeGreaterThan(1.75 + 1.5 + 0.5);
+    }
+    const compiled = (c: City) => {
+      const result = compile(c);
+      if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+      return unrelatedOverlaps(c, result.compiled).reduce((sum, o) => sum + o.areaM2, 0);
+    };
+    const [overlapOff, overlapOn] = [compiled(off), compiled(city)];
+    console.info(
+      'T36.3 overlap m2',
+      { off: overlapOff, relaxed: overlapOn },
+      {
+        major: relaxed(major),
+        minor: relaxed(minor),
+        radius: [minimumRadius(major.centerline), minimumRadius(minor.centerline)],
+      },
+    );
+    expect(overlapOn).toBeLessThan(overlapOff / 4);
+    expect(JSON.stringify(run(DEFAULT_RELAX_MAX_M))).toBe(JSON.stringify(city));
+    // A bridge does not interact with the road under it.
+    const bridge = importOsm(parallel({ bridge: 'yes', layer: '1' }), { importerVersion: 'test' });
+    if (!bridge.ok) throw new Error(JSON.stringify(bridge.diagnostics));
+    for (const road of Object.values(bridge.city.roads)) expect(relaxed(road)).toBe(0);
+  },
+);
 
-test('T36.4: Munich at 0.15 meets the traffic gate at the default relaxation', () => {
-  const city = munich();
-  const result = compile(city);
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const morning = probeMorning(city, result.compiled, 0.15);
-  console.info('T36.4 Munich morning at 0.15', {
-    completed: morning.completed,
-    failed: morning.failed,
-    gridlocked: morning.failedByReason.gridlocked,
-    stalledHeads: morning.stalledHeads,
-  });
-  // Main after TASK-085: 3 886 completed, 56 failed, all gridlocked (docs/plan.md, the gates).
-  expect(morning.stalledHeads).toBe(0);
-  expect(morning.failed).toBe(morning.failedByReason.gridlocked);
-  expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(Math.floor(56 * 1.5));
-  expect(morning.completed).toBeGreaterThanOrEqual(Math.ceil(3886 * 0.9));
-}, 600_000);
+// T36.4, Munich's morning, runs in the traffic tier (tests/traffic/munich-morning.test.ts).

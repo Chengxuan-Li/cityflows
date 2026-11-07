@@ -16,15 +16,19 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
+    "test:city": "vitest run --project city",
+    "test:traffic": "vitest run --project traffic",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
     "bench": "node --experimental-strip-types --expose-gc --import ./bench/register.ts ./bench/sim.ts",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build",
     "import-probe": "node --experimental-strip-types --import ./bench/register.ts ./bench/import-probe.ts",
     "route-audit": "node --experimental-strip-types --import ./bench/register.ts ./bench/route-audit.ts",
     "geometry-audit": "node --experimental-strip-types --import ./bench/register.ts ./bench/geometry-audit.ts",
-    "geometry-shots": "node --experimental-strip-types --import ./bench/register.ts ./bench/geometry-shots.ts"
+    "geometry-shots": "node --experimental-strip-types --import ./bench/register.ts ./bench/geometry-shots.ts",
+    "traffic:quick": "node --experimental-strip-types --import ./bench/register.ts ./bench/traffic-quick.ts"
   },
   "dependencies": {
     "clipper2-ts": "2.0.1-18",

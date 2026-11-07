@@ -11,12 +11,12 @@ import {
   preparePolygon,
 } from '../src/geo/polyline';
 import type { Vec2 } from '../src/geo/vec2';
-import { importOsm } from '../src/importers/osm';
 import { compile, type CMovement, type CompiledCity, type CNode, type CRoad } from '../src/network';
 import { SETBACK_CAP_M } from '../src/network/junctions';
 import { drawRoad } from '../src/render/layers/roads';
 import { style } from '../src/render/style';
 import type { City } from '../src/schema';
+import { importOsmCached } from './city-cache';
 
 // Junction shape audit (TASK-074, architecture 5.1): per node, how far the drawn junction is
 // from one clean surface. Usage: node --experimental-strip-types --import ./bench/register.ts
@@ -33,7 +33,7 @@ export function loadAuditCity(name: AuditCity, relaxMaxM?: number): City {
     name === 'munich'
       ? (['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]] as const)
       : (['sindelfingen-a81', [8.98, 48.69, 9.0, 48.702]] as const);
-  const result = importOsm(readFileSync(`fixtures/osm/${file}.osm`, 'utf8'), {
+  const result = importOsmCached(readFileSync(`fixtures/osm/${file}.osm`, 'utf8'), {
     importerVersion: '1',
     drivingSide: 'right',
     bbox: [...bbox],
