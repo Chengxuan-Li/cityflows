@@ -1,7 +1,11 @@
 {
-  "tree": "TASK-094 merge",
+  "tree": "main 430b9d8 (TASK-095 salvage), fresh import",
   "scale": 0.15,
-  "completed": 4017,
-  "gridlocked": 41,
-  "quick": { "until": "09:30", "completed": 3701, "gridlocked": 22 }
+  "completed": 3715,
+  "gridlocked": 57,
+  "quick": {
+    "until": "09:30",
+    "completed": 3448,
+    "gridlocked": 23
+  }
 }
