@@ -13,7 +13,11 @@ chat history.
 | 2 | Real-city import and a genuine network editor | An imported neighborhood is editable; changing a one-way or adding a road changes legal routes, not only the picture; project round-trips |
 | 3 | Places, daily life, ramps, congestion-aware routing | A morning rush has home-to-work directionality; a longer but faster expressway wins; a station pulse causes measurable spillback |
 | 4 | Compelling sandbox and comparisons | A new user imports a neighborhood, adds a station, builds a bypass, edits signals, and compares before and after without developer tools |
-| 5 | Future: transit, walking legs, bulk import, desktop | Not planned here; the contracts keep it possible (R7) |
+| 5 | Future: transit, bulk import, desktop (walking legs move to Gate 9) | Not planned here; the contracts keep it possible (R7) |
+| 6 | OSM surroundings, grade shadows and a 3D viewer (TASK-096 to TASK-098) | Done 2026-11-07; the planar geometry built from OSM is unchanged |
+| 7 | Road betterment: parking, vehicle categories, restricted access | Roadmap: Gates 7 to 9 |
+| 8 | More realistic visuals: terrain, vegetation, street furniture, markings | Roadmap: Gates 7 to 9 |
+| 9 | Occupancy-driven trips: pedestrians, person trips, mode choice | Roadmap: Gates 7 to 9 |
 
 ### Gate 1 checklist (owner, 2026-11-03)
 
@@ -303,6 +307,9 @@ exists.
   edits); edits that change demand still need a restart.
 - `npm audit` reports moderate advisories in dev tooling only (minimatch under
   typescript-eslint); nothing ships to the browser. Revisit when upgrading tooling.
+- B54 east (`n:138`), B55 and B56 (owner, 2026-11-07): outstanding, deferred while Gates 7
+  to 9 proceed. The traffic gate keeps allowing B56's one stalled head, and TASK-099's
+  attachment stays limited to its two named Munich corridors.
 
 ## Owner findings from real OSM testing (2026-11-04)
 
@@ -361,9 +368,9 @@ triage by the lead; the agents' investigation may move items between groups.
 | B51 (done, TASK-092) | Owner, round 5 (6): `n:104` node shape, smaller problems: the median nose between the west carriageways is square, not rounded; sharp corners at the south road (B48); the south road's centre line enters the junction (B46). | Network and renderer: round median noses at split ends (TASK-089); B46, B48. |
 | B52 (curb done, TASK-092; stripes TASK-091/094) | Owner, round 5 (7): `n:291`, the curb from the north road into the south-west road kinks, and the south-west arm's crossing stripes run into the curb corner. | Network: B48; renderer: B50's set-back. |
 | B53 (done, TASK-094) | TASK-091: at signalised approaches the crossing stays where TASK-072 put it (0.25 to 2.75 m from the cut, between the stop line and the junction); setting it back as the owner asked (B50) moves it 5 to 12 m out, behind the stop line, so cars at red would stand on it (T26). 34 Munich ends (incl. `n:291`) and 4 at Sindelfingen `n:110`. | Simulation rule change, owner to decide: move `stopM` to the crossing's far edge plus 0.5 m (`src/network/stops.ts`), new benchmark hashes. |
-| B54 (Landsberger done, TASK-095 salvage; `n:138` west and `n:638` done, TASK-099; `n:138` east open) | Owner, 2026-11-07 (round 6; screenshots in `docs/findings/2026-11-07-round6/`, 1, 2): one street's carriageways still run apart with irregular voids wider than TASK-093's 3 m: Arnulfstraße at `n:138` west (`r:386`/`r:716`) and east (`r:715`/`r:958`), and east of the Donnersberger bridge at `n:638` (`r:654`/`r:680`; the owner's n:168). "Merge both segments into paired road with center divider marker lines." | TASK-095: attach one corridor's carriageways wherever they run within 20 degrees, with a divider; ease apart only where they part. |
-| B55 (open; TASK-099 did not reach it) | Owner, round 6: "we still need to make the '2 roads approach an intersection at small angle diff or parallel' handling": different streets approaching a node nearly parallel overlap near it (Sindelfingen `n:841`, `n:68`). | TASK-095: hold such pairs side by side up to the node (TASK-089 split ends for any pair), rounded gore, edge line between them. |
-| B56 | TASK-099 round 3: Munich at 0.15 holds a deadlock loop (Arnulfstraße eastbound, `n:138`, the Landsberger ramps, `n:967`'s ramp `r:703`, the Donnersberger ramps through `n:638`, back to `r:884`) that locks at `n:263`, where the head of `r:703#1` waits for good to enter a standing queue in lane 0 instead of re-routing. Main had it before TASK-099 (`r:406#1`'s head waited 6 084 s) without a head standing still long enough to count as stalled; TASK-099 shows it as one stalled head on `r:753#0`. A 1 cm shift of an unrelated road moves completed trips by up to +211 and can stall a head on this corridor. | Simulation rule (owner): let a vehicle stuck at a queue head re-route or give way; then tighten the gate back to 0 stalled heads. |
+| B54 (Landsberger done, TASK-095 salvage; `n:138` west and `n:638` done, TASK-099; `n:138` east deferred, owner 2026-11-07) | Owner, 2026-11-07 (round 6; screenshots in `docs/findings/2026-11-07-round6/`, 1, 2): one street's carriageways still run apart with irregular voids wider than TASK-093's 3 m: Arnulfstraße at `n:138` west (`r:386`/`r:716`) and east (`r:715`/`r:958`), and east of the Donnersberger bridge at `n:638` (`r:654`/`r:680`; the owner's n:168). "Merge both segments into paired road with center divider marker lines." | TASK-095: attach one corridor's carriageways wherever they run within 20 degrees, with a divider; ease apart only where they part. |
+| B55 (deferred, owner 2026-11-07; TASK-099 did not reach it) | Owner, round 6: "we still need to make the '2 roads approach an intersection at small angle diff or parallel' handling": different streets approaching a node nearly parallel overlap near it (Sindelfingen `n:841`, `n:68`). | TASK-095: hold such pairs side by side up to the node (TASK-089 split ends for any pair), rounded gore, edge line between them. |
+| B56 (deferred, owner 2026-11-07) | TASK-099 round 3: Munich at 0.15 holds a deadlock loop (Arnulfstraße eastbound, `n:138`, the Landsberger ramps, `n:967`'s ramp `r:703`, the Donnersberger ramps through `n:638`, back to `r:884`) that locks at `n:263`, where the head of `r:703#1` waits for good to enter a standing queue in lane 0 instead of re-routing. Main had it before TASK-099 (`r:406#1`'s head waited 6 084 s) without a head standing still long enough to count as stalled; TASK-099 shows it as one stalled head on `r:753#0`. A 1 cm shift of an unrelated road moves completed trips by up to +211 and can stall a head on this corridor. | Simulation rule (owner): let a vehicle stuck at a queue head re-route or give way; then tighten the gate back to 0 stalled heads. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
@@ -613,6 +620,210 @@ The lead stops and asks the owner when: a stage needs a change to simulation rul
 fails after two rounds; a target turns out to be wrong for the owner's cases; or the work
 would change something outside this repository. Otherwise it merges, pushes `main` (Pages
 redeploys) and reports after each merge.
+
+## Roadmap: Gates 7 to 9 (owner, 2026-11-07)
+
+The owner's next stages, after deferring B54 east, B55 and B56 (owner decisions log,
+2026-11-07). Gate 6 was the visual surroundings and the 3D viewer (TASK-096 to TASK-098).
+Each gate below is a set of features with a first design, the tasks the lead proposes, and
+the questions the lead will settle with defaults unless the owner answers differently. The
+task contracts (`docs/tasks/TASK-1xx.md`) and the architecture amendments are written when a
+wave starts, not now.
+
+What already exists and is built on, not rebuilt:
+
+- `VehicleClass` (`car`, `truck`, `bus`) on `Lane.allowed`, and routing graphs per class
+  (`src/routing/graph.ts`). The simulation's vehicles carry no class yet.
+- `Place.kind: 'parking'`, `Place.capacity` and connectors with `in`, `out` or `both`
+  directions and a throughput (`src/sim/connectors.ts`). A car appears at a connector and
+  vanishes at its destination's connector, so every place already behaves like an invisible
+  garage.
+- `TripMode` (`car`, `walk`, `bus`, `rail`), `TripRequest.legs` and `Person.hasCar`.
+  Non-car trips are generated and then dropped by the simulation.
+- OSM surroundings (`City.context`, TASK-096) with buildings, `amenity=parking` areas and
+  green areas including `wood`, `forest`, `grass` and `grassland`.
+- Pedestrian crossings as markings (TASK-091, TASK-094). They are decorative; no simulated
+  pedestrian uses them.
+- The importer drops `highway=service` with `service=parking_aisle` or `driveway`
+  (`src/importers/osm/filter.ts`) and every footway.
+
+### Gate 7: road betterment
+
+Exit criterion: on the Munich extract, a morning run shows cars leaving building garages,
+street parking and a surface lot; parked cars are visible at the curb and in the lot; a full
+facility sends arriving cars on to the next one; cars, vans, trucks and buses are told apart
+in the inspector, the map and the metrics; a destination-only street carries only traffic
+that starts or ends on it, and a bus lane carries only buses.
+
+1. Parking, three kinds, one model. A new `ParkingFacility` entity in `City` (schema and
+   project migration) with a kind, a capacity, its slots, an access rule (public, private to
+   a place, customers) and its connectors to the road network.
+   - Garage (in a building, invisible): entry and exit connectors on a road; a car that
+     enters disappears and is counted; no interior network. From OSM: `amenity=parking` with
+     `parking=underground` or `multi-storey`, `building=parking`, `building=garage(s)`,
+     `entrance=garage`. Each existing place's connectors become its garage, so today's
+     behaviour is the first case of the new model.
+   - Roadside: a parking strip along one side of a road, outside the travel lanes, with
+     slots by length (about 6 m parallel, 2.5 m angled or perpendicular). The lane array
+     does not change. From OSM: `parking:left`, `parking:right`, `parking:both` (and the
+     older `parking:lane:*`); the road inspector toggles a strip per side. A parking car
+     stops in the curb lane, holds it for a manoeuvre time, then leaves the lane and stays
+     visible in its slot; a leaving car waits for a gap and merges in.
+   - Surface lot: an `amenity=parking` area with `parking=surface`. Its `parking_aisle` ways
+     are imported as low-speed service roads tagged with the lot, stalls are generated along
+     both sides of each aisle inside the lot polygon, and the lot's entries are where aisles
+     meet public roads. A car drives through the aisles to a free stall and stays visible.
+   - In the simulation: on arrival a car takes its destination's own facility first, then
+     the nearest public facility with a free slot within a search radius, and drives on
+     (cruising) when the chosen one fills before it arrives. Departures start from where
+     the car is parked. Facilities start the day with an occupancy from residents' cars.
+     The walk between facility and destination is counted as distance only until Gate 9.
+   - Parked cars travel in the snapshot as a separate, rarely changing set; the 2D and 3D
+     renderers draw them as one instanced layer rebuilt on change.
+   - Metrics: occupancy per facility, search time, cars parked. A Layers entry colours
+     facilities by occupancy.
+   - This lifts "parking circulation" from architecture section 16.
+2. Vehicle categories. Extend `VehicleClass` to `car`, `van`, `truck`, `bus` (the migration
+   keeps the old three) and add a free label for the purpose (`private`, `delivery`,
+   `service`, `taxi`, `through`). Each class gets a length, a width and its own driver
+   parameters (desired speed cap, acceleration, comfortable deceleration), which change queue
+   storage and capacity. Demand gets a share per class and purpose (trucks mostly on
+   through trips, vans to work and retail places). Vehicles carry their class into the
+   snapshot; the renderers draw a shape per class and can colour by class; the inspector,
+   the export and the metrics report per class.
+3. Restricted access. A road-level access rule per class: `yes`, `no`, `destination` (local
+   traffic only), `delivery`, `private`, with lanes reserved by class through
+   `Lane.allowed` as today. From OSM: `access`, `motor_vehicle`, `motorcar`, `hgv`, `bus`,
+   `psv`, `goods`, `lanes:psv`, `busway`, `maxweight` and `maxheight` mapped to classes.
+   Routing: `no` leaves the class's graph; `destination` and `private` roads form zones
+   (connected sets of such roads), and a route may enter a zone only when its origin or
+   destination lies in it; `delivery` admits vans and trucks with a delivery purpose. The
+   road inspector edits the rule, and the map shows a sign at each zone entry and `BUS` on
+   reserved lanes. Time-conditional access (`:conditional`) stays out.
+
+Proposed tasks, with surfaces kept disjoint:
+
+| Task | Feature | Surfaces | After |
+| --- | --- | --- | --- |
+| TASK-100 | Vehicle categories (7.2) | `src/schema` (class), `src/sim/vehicle.ts`, `params.ts`, `idm.ts`, `src/demand`, snapshot, `layers/vehicles.ts`, `render3d/vehicles.ts`, inspector, metrics | - |
+| TASK-101 | Restricted access (7.3) | `src/schema` (road access), `src/importers/osm` (tags), `src/routing`, road inspector, sign markings | - |
+| TASK-102 | Parking model and garages (7.1) | `src/schema` (`ParkingFacility`), new `src/importers/osm/parking.ts`, `src/sim/connectors.ts`, new `src/sim/parking.ts`, host snapshot, inspector, metrics | 100 |
+| TASK-103 | Roadside parking (7.1) | road strips in schema and network, manoeuvre in `engine.ts`, parked-car layers 2D and 3D, road inspector | 102 |
+| TASK-104 | Surface lots with aisles (7.1) | `filter.ts` and `parking.ts` in the importer, stall generation in `src/network`, lot routing | 103 |
+
+TASK-100 and TASK-101 run in parallel (simulation and demand against routing and the
+importer; the lead reconciles the two schema additions). TASK-102 to TASK-104 each change
+`src/sim` and run in sequence.
+
+### Gate 8: more realistic visuals
+
+Same rule as Gate 6: the planar geometry built from OSM does not change, every feature has
+a Layers toggle, and the frame time stays within the owner's 20 percent allowance (owner
+decisions log, TASK-097) at both Munich zooms. Gate 8 touches only `src/render`,
+`src/render3d`, `City.context` and the importer's context part, so it runs alongside Gate 7.
+
+Exit criterion: Sindelfingen in 3D shows its relief with roads following the ground, trees
+along streets and filling woods, lamps and curbs along streets, hatched gores with chevrons
+at motorway exits and realistic arrows; Munich's network hashes are unchanged.
+
+1. Building details (low priority, last). OSM `roof:shape` (flat, gabled, hipped,
+   pyramidal), `roof:colour`, `building:colour`, `building:material`, `roof:levels`; window
+   bands generated per level in the facade shader.
+2. Topography. An elevation grid for the import area, fetched at import from open DEM tiles
+   (AWS Terrain Tiles, Terrarium encoding, no key) and saved in the project as an optional
+   `City.terrain` (origin, cell size, quantized heights). 3D: the ground mesh follows it,
+   and roads drape onto it with bridges and tunnels keeping their grade offsets. 2D: an
+   optional hillshade. The simulation ignores slope.
+3. Vegetation and surfaces. Trees from `natural=tree` and `natural=tree_row`; street trees
+   generated along streets where OSM has none (seeded, spaced by class, clear of junctions,
+   crossings and driveways, marked generated, own toggle); woods and forests filled by
+   seeded sampling at a capped density with distance-based detail; procedural textures for
+   grass, meadow, forest floor, pavement and asphalt. 2D draws canopies from above.
+4. Street lights and curbs. Lamps from `highway=street_lamp`, generated along streets where
+   OSM has none (spacing by class, sidewalk side, own toggle); sidewalks from `sidewalk=*`
+   drawn outside the carriageway and clipped by buildings; a raised curb along the road
+   edge in 3D, broken at crossings and driveways. Optionally lamps light up at night by the
+   simulation clock.
+5. Lane markings. Hatched gore areas with chevrons where lanes diverge or merge at ramps,
+   solid white channelizing lines around them; marking colour by theme (yellow centre lines
+   between opposing traffic in the US, white in Germany and the UK, UK yellow edge lines);
+   arrow shapes drawn to a national standard instead of today's simple arrows. A marking
+   theme per project, defaulting from the import area's country; Germany first, the US and
+   UK themes later (low priority). 2D and 3D read the same marking geometry.
+
+Proposed tasks:
+
+| Task | Feature | Surfaces | After |
+| --- | --- | --- | --- |
+| TASK-105 | Topography (8.2) | DEM fetch and cache in `src/importers`, `City.terrain` (schema), `render3d/heights.ts`, ground mesh, 2D hillshade | - |
+| TASK-106 | Vegetation and surfaces (8.3) | `src/importers/osm/context.ts` (trees), new `render/layers/vegetation.ts`, `render3d/vegetation.ts`, textures | - |
+| TASK-107 | Lamps, sidewalks, curbs (8.4) | new `render/layers/street.ts`, `render3d/street.ts`, context import of lamps and sidewalk tags | 106 (shared placement rules) |
+| TASK-108 | Lane marking realism (8.5) | `render/layers/roads.ts`, `junction-markings.ts`, `render3d/markings.ts`, `style.ts` themes | - |
+| TASK-109 | Building details (8.1) | `render3d/context.ts`, building tags in `context.ts` | 105 |
+
+TASK-105, TASK-106 and TASK-108 run in parallel. TASK-108 and Gate 7's TASK-101 both touch
+road markings (the `BUS` lane text and zone signs): the lead merges TASK-101 first.
+
+### Gate 9: occupancy-driven trips
+
+Exit criterion: a person leaves a building, walks to their car parked on the street,
+drives, parks in a lot near the destination and walks into the building; pedestrians cross
+at zebras with cars yielding and at signals during their own phase; short trips walk, long
+ones drive, and congestion moves some trips to park-and-walk; through traffic is unchanged.
+
+1. A pedestrian network. Import `highway=footway`, `pedestrian`, `path`, `steps`,
+   `living_street` and `footway=crossing`, and generate sidewalks along streets from
+   `sidewalk=*` (or by road class where untagged). A walk graph separate from the vehicle
+   network, joined to it at crossings (the crossings of TASK-091 become walk links) and to
+   buildings at entrances (`entrance=*`, else the nearest walk link). Walk routing on it.
+2. Pedestrians in the simulation. Walkers move along walk links at their own speed (no crowd
+   collisions). At a zebra, cars yield to a walker on or about to step onto the crossing; at
+   a signal, crossings get pedestrian phases in `SignalProgram`, and turning movements
+   yield to walkers in them through the existing conflict zones. This is the simulation
+   rule change the owner asked for ("controlled properly by traffic"); its details come to
+   the owner with the task contract.
+3. Person-driven trips. Every local trip starts and ends at a building or facility. A
+   person (or a household group sharing one car) owns a car with a parking location: the
+   building's garage (the car leaves from the invisible garage), a street slot or a lot
+   stall. A trip's legs are walk to the car, drive, park (by walking distance, availability
+   and access), walk to the destination; cars stay where they were parked, so occupancy
+   evolves through the day. Vehicles carry their occupants. Gateway-to-gateway through
+   traffic stays vehicles without persons.
+4. Mode choice. Walk, drive, or drive part and walk part, chosen per trip at departure by a
+   logit model over walk time, drive time from current link costs, parking search and walk
+   egress time, distance, car availability and location, and per-person preferences sampled
+   from the demand seed (a walk preference, a value of time). The demand sheet gets sliders
+   for these; the metrics show mode shares.
+
+Proposed tasks:
+
+| Task | Feature | Surfaces | After |
+| --- | --- | --- | --- |
+| TASK-110 | Pedestrian network (9.1) | new `src/importers/osm/walk.ts`, new `src/network/walk.ts`, walk routing, walk layer 2D and 3D | 107 (sidewalk geometry) |
+| TASK-111 | Pedestrians and crossings in the simulation (9.2) | `src/sim` (walkers, crossing yield), `SignalProgram` pedestrian phases, signal editor, renderers | 110 |
+| TASK-112 | Person-driven trips (9.3) | `src/demand`, persons and cars in `src/sim`, trip legs, inspector (person view) | 104, 111 |
+| TASK-113 | Mode choice (9.4) | `src/demand` (choice model), demand sheet, metrics | 112 |
+
+Gate 9 changes `src/sim` in every task and runs in sequence. It lifts "walking legs" from
+architecture section 16; transit vehicles, bicycles and parking fees stay deferred.
+
+### Questions for the owner, with the lead's defaults
+
+1. Vehicle classes: `car`, `van`, `truck`, `bus`; motorcycles and bicycles left out.
+2. Where OSM has no parking data (most residential buildings): a building with residents
+   gets an implicit garage sized from its residents and the car share, and residential
+   streets get roadside strips where they are wide enough; both marked inferred.
+3. Elevation data from AWS Terrain Tiles, a second external host next to Overpass and the
+   tile server.
+4. Slope does not affect driving.
+5. Generated street trees and lamps are on by default, marked generated, with their own
+   toggles.
+6. Pedestrians walk along links without collisions between them.
+7. Tasks that change demand or parking (TASK-100, TASK-102 to TASK-104, TASK-111 to
+   TASK-113) change completed-trip counts by design: the lead resets the traffic baseline at
+   each such merge and records the before and after figures in its review entry; the gate's
+   90 percent rule still protects every other task.
+8. Night lighting by the simulation clock is part of TASK-107, low priority.
 
 ## Lead handover
 
@@ -1784,6 +1995,17 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   `n:638`, `n:104`, `n:967`). Lead verification on main: check 540, city 61.
 
 ## Owner decisions log
+
+- 2026-11-07, next stages: B54 east, B55 and B56 stay outstanding and are deferred. The
+  work advances to three stages: Gate 7, road betterment (car parking in buildings, at the
+  roadside and in surface lots; vehicle categories as labels or metadata; restricted road
+  access by vehicle type or for local destinations); Gate 8, more realistic visuals (terrain;
+  trees, forests, grass and surface textures; street lights and curbs; chevrons,
+  channelizing lines, yellow and white markings by region, realistic arrows; building
+  details, low priority); Gate 9, occupancy-driven trips (a pedestrian network with
+  walkable, traffic-controlled crossings; local trips from and to buildings by persons who
+  walk to and from their cars; a choice between walking, driving and part of each). The
+  lead's design and task split are in "Roadmap: Gates 7 to 9".
 
 - 2026-11-07, TASK-099: merge with the traffic baseline reset rather than fix B56 first.
   `bench/traffic-baseline.json` holds TASK-099's figures (3 390 completed, 81 gridlocked, 1

@@ -1775,7 +1775,8 @@ Benchmark the sim step, worker transfer, and render time separately (TASK-044).
 
 ## 16. Deferred, explicitly
 
-Transit vehicles and GTFS, walking legs, PBF import and bulk extracts,
-permissive and actuated signals, adaptive routing beyond EWMA, editing in 3D, desktop packaging,
-parking circulation. R7's multimodal readiness is covered by `TripRequest.legs` and
+Transit vehicles and GTFS, PBF import and bulk extracts, permissive and actuated signals,
+adaptive routing beyond EWMA, editing in 3D, desktop packaging, bicycles. Parking circulation
+and walking legs are planned for Gates 7 and 9 (plan, "Roadmap: Gates 7 to 9"); their
+contracts are added here when those tasks start. R7's multimodal readiness is covered by `TripRequest.legs` and
 `TripMode` in section 9; nothing in the sim assumes a person equals a car.
