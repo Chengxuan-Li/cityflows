@@ -69,6 +69,8 @@ const named: Record<AuditCity, Record<string, string>> = {
     'n:138 r:958>r:156':
       'a right turn into r:155 reaches past r:156’s cut: a curb from r:156 to r:29 would cut into it',
     'n:138 r:156>r:155': 'as n:138 r:958>r:156: the same turn covers r:156’s corner',
+    'n:138 r:958>r:155':
+      'TASK-099: as n:138 r:958>r:156, with r:716 attached the right turn into r:155 covers r:156’s corners too (115 degrees)',
     'n:182 r:221>r:1172': shortRoad('r:1172', 5),
     'n:212 r:1172>r:213':
       'B47 (TASK-093): the one-way r:213 continues as the two-way r:1172/r:1173, aligned by the centre lines',

@@ -132,6 +132,8 @@ test.each(
       const isRing = road.provenance.osmIds!.some((id) => ringIds.has(id));
       expect(road.centerline[0]).toEqual(from);
       expect(road.centerline.at(-1)).toEqual(to);
+      // TASK-099: carriageways attached at the median (Arnulfstraße at n:138 and n:638) move by design.
+      if (road.provenance.inferred!.includes('attached')) continue;
       if (
         isRing ||
         (original.length === 2 &&

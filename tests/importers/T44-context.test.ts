@@ -26,10 +26,10 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     expect(off.city).not.toHaveProperty('context');
     const baseline =
       name === 'munich-donnersberger'
-        ? // Main after the TASK-095 salvage (Landsberger attached under the 15 m gap limit).
+        ? // TASK-099: Arnulfstraße attached at n:138 west and n:638 (after the TASK-095 salvage).
           [
-            '234fbaa2a7c3463696ebe0e349d01905b9ed6f11531918368a244342e084eae2',
-            'e72a7c954868979f3abd782a6e740f68e44fdd431db33b9cbd638131798d06dd',
+            '88e9ab49d760df6fa7f8c8438b988c56808c576614513811839423f30600dc5a',
+            '0ebe95babcf343a68590519e96ccddb1411e8ccf94f729c17fc37e424d9cbd2a',
           ]
         : [
             '81c3d192984cfbf6adb251ff89241d83cc294fcbfbde22bdb0bd39d66134197f',

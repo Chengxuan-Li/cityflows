@@ -1,5 +1,6 @@
 import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
+import { ALIGNMENT_M } from '../../network/junctions';
 import { ATTACH_GAP_M, CONVERGING, sameStreet, smoothstep, taperLength } from '../../network/lanes';
 import type { City, Road } from '../../schema';
 import { JUNCTION_ZONE_M, resample, vertexNormals } from './relax';
@@ -554,28 +555,41 @@ function sampleChain(roads: Road[], side: number): Chain {
   }
   const lengths = cumulativeLengths(points);
   const halves = roads.map(halfBlock);
-  // TASK-071: at a joint the network lines up the narrower road's lanes with the wider one's on
-  // the median side, laying them along the wider road's line through the node and easing onto
-  // their own line over the taper. Their median edge runs on with the wider road's where the
-  // narrower road's line lies the difference of the half blocks toward the median, which it
-  // reaches over the first five sixths of the taper from the joint (where its lanes still mostly
-  // follow the wider road's line; matched to the network's ease within 0.1 m at n:652).
-  const median = points.map((_, i) => {
-    const k = owner[i]!;
-    let half = halves[k]!;
-    for (const j of [k - 1, k + 1]) {
-      if (j < 0 || j >= roads.length || halves[j]! <= halves[k]!) continue;
-      const joint = lengths[j < k ? ends[j]! : ends[k]!]!;
-      const away = Math.abs(lengths[i]! - joint);
-      half += (halves[j]! - halves[k]!) * (1 - smoothstep((1.2 * away) / taperLength(roads[k]!)));
-    }
-    return half;
-  });
   const normals = vertexNormals(points);
-  const edge = points.map((p, i) => ({
-    x: p.x - side * normals[i]!.x * median[i]!,
-    y: p.y - side * normals[i]!.y * median[i]!,
-  }));
+  const edge = points.map((p, i) => {
+    const half = halves[owner[i]!]!;
+    return { x: p.x - side * normals[i]!.x * half, y: p.y - side * normals[i]!.y * half };
+  });
+  // TASK-071, TASK-080: at a joint of two lane counts the network lines both roads' lanes up on
+  // the median side along the wider road's heading through the node (a ray), each easing onto
+  // its own line over its taper (a smoothstep). The median edge drawn there is that blend.
+  for (const [k, end] of ends.slice(0, -1).entries()) {
+    if (halves[k] === halves[k + 1]) continue;
+    const wide = halves[k]! > halves[k + 1]! ? k : k + 1;
+    const node = points[end]!;
+    const next = points[wide === k ? end - 1 : end + 1]!;
+    const sign = wide === k ? -1 : 1;
+    const length = Math.hypot(next.x - node.x, next.y - node.y) || 1;
+    const t = { x: (sign * (next.x - node.x)) / length, y: (sign * (next.y - node.y)) / length };
+    const n = { x: -t.y, y: t.x };
+    for (const r of [k, k + 1]) {
+      const taper = taperLength(roads[r]!);
+      for (let i = 0; i < points.length; i++) {
+        if (owner[i] !== r && !(i === end && r === k)) continue;
+        const away = lengths[i]! - lengths[end]!;
+        const f = smoothstep(Math.abs(away) / taper);
+        if (f >= 1) continue;
+        const ray = {
+          x: node.x + t.x * away - side * n.x * halves[wide]!,
+          y: node.y + t.y * away - side * n.y * halves[wide]!,
+        };
+        edge[i] = { x: ray.x * (1 - f) + edge[i]!.x * f, y: ray.y * (1 - f) + edge[i]!.y * f };
+      }
+    }
+  }
+  const median = points.map((p, i) =>
+    Math.abs((p.x - edge[i]!.x) * normals[i]!.x + (p.y - edge[i]!.y) * normals[i]!.y),
+  );
   return {
     roads,
     points,
@@ -794,6 +808,22 @@ export function attachCarriageways(city: City, roads: OsmRoad[]): void {
     });
     const shares = centredMean(parts, Math.round(span / 4));
     const total = smoothAbove(raw, Math.round(span / 8)).map((v, i) => v * ease(a.lengths[i]!));
+    // TASK-083: at a node both chains reach, where the node's through alignment continues them,
+    // one carriageway keeps its line up to `ALIGNMENT_M` from the node (easing in over half the
+    // taper beyond) and the other takes the whole pull there: the wider block keeps its line (it
+    // would bend more lanes), of equal blocks the one that pulls less (the other one flares).
+    for (const [k, node] of nodesA.entries()) {
+      if (!nodesB.includes(node)) continue;
+      const near = (i: number) => (k === 0 ? a.lengths[i]! : totalA - a.lengths[i]!);
+      const zone = shares.map((_, i) => i).filter((i) => near(i) <= ALIGNMENT_M + taper / 2);
+      const wider = zone.reduce((sum, i) => sum + (2 * fraction[i]! - 1), 0) / (zone.length || 1);
+      const own = zone.reduce((sum, i) => sum + total[i]! * (2 * shares[i]! - 1), 0);
+      const holdA = Math.abs(wider) > 0.05 ? wider > 0 : own <= 0;
+      for (const i of zone) {
+        const h = smoothstep((near(i) - ALIGNMENT_M) / (taper / 2));
+        shares[i] = holdA ? shares[i]! * h : 1 - (1 - shares[i]!) * h;
+      }
+    }
     // A's median edge moves along its normals, B's along A's where it lies beside A, so the gap
     // measured along them closes by the whole pull. The lines move as translations of their edges,
     // so where they turn the drawn edges miss by a few centimetres: twice more, what is left of the
@@ -841,7 +871,7 @@ export function attachCarriageways(city: City, roads: OsmRoad[]): void {
       return [v * f, v * (1 - f)];
     });
     const intended = edges.map((edge, i) => (Number.isFinite(edge) ? edge - total[i]! : MEDIAN_M));
-    for (let pass = 0; pass < 2; pass++) {
+    for (let pass = 0; pass < 3; pass++) {
       const [x, y] = [sampleChain(a.roads, side), sampleChain(b.roads, side)];
       const stations = x.edge.map((p) => nearestOnPolyline(a.edge, p).along);
       const residual = x.edge.map((p, i) => {
@@ -849,9 +879,9 @@ export function attachCarriageways(city: City, roads: OsmRoad[]): void {
         const n = x.normals[i]!;
         const hit = rayHit(p, { x: -side * n.x, y: -side * n.y }, y.edge, y.lengths);
         const miss = hit && hit.t - valueAt(intended, a.lengths, stations[i]!);
-        return miss !== undefined && weight > 0 ? weight * Math.max(-1, Math.min(1, miss)) : 0;
+        return miss !== undefined && weight > 0 ? weight * Math.max(-3, Math.min(3, miss)) : 0;
       });
-      const left = centredMean(residual, Math.round(span / 4));
+      const left = centredMean(residual, Math.round(span / 8));
       apply(x, y, (s) => {
         const v = valueAt(left, x.lengths, s);
         const f = valueAt(shares, a.lengths, s);
@@ -879,9 +909,9 @@ function move(city: City, chain: Chain, edge: Vec2[]): void {
       y: (edge[i]!.y - chain.edge[i]!.y) * keep,
     };
   });
-  // As `separateDual`: three passes of a [1, 2, 1] filter over the move take out the centimetre
+  // As `separateDual` (twice over): six passes of a [1, 2, 1] filter over the move take out the centimetre
   // zigzag the samples' rays leave.
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 6; pass++) {
     const before = shift.map((v) => ({ ...v }));
     for (let i = 1; i < shift.length - 1; i++)
       shift[i] = {

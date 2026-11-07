@@ -57,7 +57,7 @@ const REACH_M = 50;
 /** How far out a road end's direction is taken for its angular place. */
 const FACING_M = 5;
 /** How far out a through road's alignment is taken on each side (the audit's `APPROACH_M`). */
-const ALIGNMENT_M = 20;
+export const ALIGNMENT_M = 20;
 /** A through road keeps its alignment where it passes the node within this distance: moving it
  * moves the side roads' cuts as much, and T38.4 allows no lane to lose more than 2 m. Farther
  * off (a Y, a node between two carriageways) it keeps it only where the side roads' cuts move
@@ -900,7 +900,7 @@ function nose(a: PolygonEnd, b: PolygonEnd, surface: Vec2[]): JunctionCorner | u
 function attachedNose(
   a: PolygonEnd,
   b: PolygonEnd,
-  crossing: number,
+  hit: { point: Vec2; alongA: number; alongB: number },
   roads: [number, number],
 ): JunctionCorner | undefined {
   if (
@@ -913,10 +913,10 @@ function attachedNose(
   const la = cumulativeLengths(a.right),
     lb = cumulativeLengths(b.left);
   const apart = (s: number) => nearestOnPolyline(b.left, pointAtDistance(a.right, la, s));
-  let s = crossing;
-  while (s < crossing + 3 * NOSE_REACH_M && apart(s).away < 0.8 * ATTACHED_M) s += 0.25;
+  let s = hit.alongA;
+  while (s < hit.alongA + 3 * NOSE_REACH_M && apart(s).away < 0.95 * ATTACHED_M) s += 0.25;
   const at = apart(s);
-  if (at.away < 0.8 * ATTACHED_M || s + NOSE_REACH_M > la.at(-1)!) return undefined;
+  if (at.away < 0.95 * ATTACHED_M || s + NOSE_REACH_M > la.at(-1)!) return undefined;
   for (let d = 0; d <= NOSE_REACH_M; d += 0.5)
     if (apart(s + d).away > 2 * ATTACHED_M) return undefined;
   const pa = pointAtDistance(a.right, la, s);
@@ -924,23 +924,32 @@ function attachedNose(
     outB = edgeDirection(b.left, lb, at.along);
   const curve = edgeCurve(pa, neg(outA), at.point, outB);
   const far = 2 * at.away + 1;
+  // The gore over the overlap, and the notch from the crossing to the nose as its fillet.
   return {
-    kind: 'nose',
+    kind: 'gore',
     roads,
     ring: [
       a.right[0]!,
-      ...edgeUpTo(a.right, s),
-      ...curve,
-      ...edgeUpTo(b.left, at.along).reverse(),
+      ...edgeUpTo(a.right, hit.alongA),
+      hit.point,
+      ...edgeUpTo(b.left, hit.alongB).reverse(),
       b.left[0]!,
     ],
-    curve,
+    fillet: [
+      // From a metre back inside the gore, so the two pieces join over an area, not at a point.
+      pointAtDistance(b.left, lb, Math.max(0, hit.alongB - 1)),
+      pointAtDistance(a.right, la, Math.max(0, hit.alongA - 1)),
+      ...edgeUpTo(a.right, s).filter((_, i) => la[i + 1]! > hit.alongA),
+      ...curve,
+      ...edgeUpTo(b.left, at.along)
+        .filter((_, i) => lb[i + 1]! > hit.alongB)
+        .reverse(),
+    ],
     cut: [
       ...curve,
       { x: at.point.x + outB.x * far, y: at.point.y + outB.y * far },
       { x: pa.x + outA.x * far, y: pa.y + outA.y * far },
     ],
-    radius: at.away / 2,
   };
 }
 
@@ -1049,7 +1058,7 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
           )
       : undefined;
   if (hit) {
-    const attached = attachedNose(a, b, hit.alongA, roads);
+    const attached = attachedNose(a, b, hit, roads);
     if (attached) return attached;
     // TASK-092: the gore's tip, where the edges cross, is rounded by a fillet of `GORE_RADIUS_M`
     // in the notch beyond it, tangent to both edges, its tangent points within the first half of
