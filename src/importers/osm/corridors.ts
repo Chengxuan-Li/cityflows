@@ -1,12 +1,6 @@
 import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import {
-  CONVERGING,
-  MEDIAN_VOID_M,
-  sameStreet,
-  smoothstep,
-  taperLength,
-} from '../../network/lanes';
+import { ATTACH_GAP_M, CONVERGING, sameStreet, smoothstep, taperLength } from '../../network/lanes';
 import type { City, Road } from '../../schema';
 import { JUNCTION_ZONE_M, resample, vertexNormals } from './relax';
 import type { OsmRoad } from './roads';
@@ -15,6 +9,8 @@ import type { OsmRoad } from './roads';
 export const MEDIAN_M = 0.5;
 const cosine30 = Math.cos(Math.PI / 6);
 const SAMPLE_M = 1;
+/** TASK-095: carriageways opening at more than 20 degrees part. */
+const PART_SLOPE = Math.tan(Math.PI / 9);
 const halfBlock = (road: Road) => road.lanes.reduce((w, lane) => w + lane.widthM, 0) / 2;
 
 type Box = { minX: number; minY: number; maxX: number; maxY: number };
@@ -372,8 +368,8 @@ function pushable(
  * the full share. The road gets that share as `lateralOffsetM` and the centerline that carries
  * its pushed block, so at the nodes both centerlines meet the node and the blocks lie side by
  * side, as a separated coincident pair does; where they are farther apart the lanes stay on the
- * source line, unless their median is narrower than `MEDIAN_VOID_M` (TASK-093, B45: pulled
- * together to the median, eased over the taper where it widens past that). Pairs meeting at one
+ * source line, unless their median is narrower than `ATTACH_GAP_M` (TASK-093, B45, TASK-095,
+ * B54: pulled together to the median, eased over the taper where it widens past that). Pairs meeting at one
  * node only are left alone: one lateral offset per road cannot put them side by side at that node
  * without moving their lanes at the other, and so are pairs whose through lanes would jog at a
  * node (`pushable`). Topology, ids and node positions are unchanged; provenance records
@@ -405,11 +401,26 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
         -side *
         ((nearest[i]!.point.x - p.x) * normals[i]!.x + (nearest[i]!.point.y - p.y) * normals[i]!.y),
     );
-    // TASK-093 (B45): a median void narrower than `MEDIAN_VOID_M` (the gap between the two blocks
-    // beyond the median) closes too, each road pulled toward the pair's middle line by its share;
-    // so does a wider stretch shorter than twice the taper between two such, which easing out and
-    // back in would leave as a dent.
-    const closing = gaps.map((gap) => gap - clearance + MEDIAN_M < MEDIAN_VOID_M);
+    // TASK-093 (B45), TASK-095 (B54): a median void narrower than `ATTACH_GAP_M` (the gap between
+    // the two blocks beyond the median) closes too, each road pulled toward the pair's middle line
+    // by its share; so does a wider stretch shorter than twice the taper between two such, which
+    // easing out and back in would leave as a dent. Where the pair opens from together (within
+    // half a metre of the median) past the limit at more than 20 degrees, it parts where it was
+    // last together.
+    const edges = gaps.map((gap) => gap - clearance + MEDIAN_M);
+    const closing = edges.map((edge) => edge < ATTACH_GAP_M);
+    for (const order of [1, -1]) {
+      const at = (k: number) => (order > 0 ? k : edges.length - 1 - k);
+      for (let k = 0; k < edges.length; k++) {
+        if (closing[at(k)]) continue;
+        let together = k;
+        while (together > 0 && edges[at(together)]! > MEDIAN_M + 0.5) together--;
+        const run = Math.abs(lengths[at(k)]! - lengths[at(together)]!);
+        if ((edges[at(k)]! - edges[at(together)]!) / Math.max(SAMPLE_M, run) > PART_SLOPE)
+          for (let m = together + 1; m < k; m++) closing[at(m)] = false;
+        while (k < edges.length && !closing[at(k)]) k++;
+      }
+    }
     const reach = 2 * Math.min(taperLength(a.road), taperLength(b.road));
     for (let i = 0; i < closing.length; i++) {
       if (closing[i] || !closing[i - 1]) continue;

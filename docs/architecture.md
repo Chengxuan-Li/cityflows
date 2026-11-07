@@ -445,8 +445,11 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   importer pairs one partner per road) joins its pair's corridor after realignment, so
   realignment and relaxation are unchanged; TASK-089's jog rule measures the lanes that
   actually join; shallowly converging pairs stay attached to the node instead of opening a
-  lens. Median voids narrower than `MEDIAN_VOID_M` = 3 m between one corridor's carriageways
-  close to the 0.5 m median, eased where the source median widens past it. Where a road's lane
+  lens. Median voids between one corridor's carriageways running between the same two nodes
+  close to the 0.5 m median where they are narrower than `ATTACH_GAP_M` = 15 m (TASK-095
+  salvage, B54; 3 m before), eased where the source median widens past it; a pair opening at
+  more than 20 degrees from where it ran together parts there. `MEDIAN_VOID_M` = 3 m remains
+  only for the junction-mouth hold of shallowly converging pairs (`continuity.ts`). Where a road's lane
   count or directions change across a two-arm or through node (a one-way continuing as a
   two-way street), the road with fewer lanes shifts so its lanes continue the matching travel
   direction's lanes (within 0.1 m at the node), eased over the TASK-080 taper; a direction of a

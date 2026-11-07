@@ -87,9 +87,15 @@ export function shiftAt(
 export const shiftLength = (profile: ArrayLike<number>) =>
   profile.length ? (profile.length - 1) * SHIFT_STEP_M : 0;
 
-/** TASK-093 (B45, owner to confirm): a median between one street's carriageways narrower than
- * this is closed to the 0.5 m median; a wider one stays as drawn. */
+/** TASK-093 (B45): at a junction mouth (`continuity.ts`), a median between one street's
+ * carriageways narrower than this that closes again farther out follows its shortfall. The
+ * importer's attach rule uses `ATTACH_GAP_M` (TASK-095). */
 export const MEDIAN_VOID_M = 3;
+
+/** TASK-095 (B54; replaces `MEDIAN_VOID_M` in the importer): one street's carriageways running
+ * between the same two nodes are attached at the 0.5 m median wherever the gap between them is
+ * narrower than this, and part where it is wider or opens at more than 20 degrees. */
+export const ATTACH_GAP_M = 15;
 
 /** Carriageways converging at more than this angle are not set side by side. */
 export const CONVERGING = Math.cos(Math.PI / 4);
