@@ -83,8 +83,6 @@ const named: Record<AuditCity, Record<string, string>> = {
     'n:823 r:368>r:480': 'Marsstraße’s coincident carriageways (case Mars)',
     'n:894 r:900>r:1025':
       'the service way r:1025 lies on r:899/r:900 (T38.4’s r:1024): a curb would cut a movement surface',
-    'n:967 r:1276>r:961':
-      'B49 (TASK-093): the east carriageways overlap into the junction; their gore goes with the split',
     'n:975 r:1081>r:976': 'r:976 is 0 m long (source)',
   },
 };
@@ -104,14 +102,14 @@ test.each(tierCities(auditCities))(
 );
 
 cityTest(
-  'T42.2: the owner’s corners at n:262, n:291 and n:104 have curbs; n:967 only B49’s gore',
+  'T42.2: the owner’s corners at n:262, n:291, n:104 and n:967 have curbs (n:967’s gore since TASK-093)',
   () => {
     const { city, net } = load('munich');
     for (const id of ['n:262', 'n:291', 'n:104', 'n:967']) {
       const corners = cornerAudit(city, net, node(net, id));
       expect(corners.length, id).toBeGreaterThan(2);
       const sharp = corners.filter((c) => c.sharp).map((c) => `${c.node} ${c.roads}`);
-      expect(sharp, id).toEqual(id === 'n:967' ? ['n:967 r:1276>r:961'] : []);
+      expect(sharp, id).toEqual([]);
     }
     // n:262's marked corner (Trappentreustraße r:252 into Landsberger r:922) and n:291's (the
     // north road into the south-west road) were missing; n:967's north-west corner had none.
