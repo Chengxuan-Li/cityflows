@@ -23,6 +23,32 @@ export const shots: {
   osm?: string;
 }[] = [
   { id: 'overview', cases: [], centre: [0, 0], zoom: 0.5 },
+  // TASK-097: grade separation, including both abutments of the A81 crossing.
+  { id: 'V97-n967', cases: [], centre: [-28, 172], zoom: 10 },
+  { id: 'V97-donnersberger', cases: [], centre: [5, -285], zoom: 1 },
+  { id: 'V97-deck-south-end', cases: [], centre: [-43, 280], zoom: 10 },
+  { id: 'V97-deck-north-end', cases: [], centre: [105, -608], zoom: 10 },
+  {
+    id: 'V97-sindelfingen-a81',
+    cases: [],
+    centre: [66, 203],
+    zoom: 4.5,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
+  {
+    id: 'V97-sindelfingen-north-end',
+    cases: [],
+    centre: [26, 142],
+    zoom: 14,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
+  {
+    id: 'V97-sindelfingen-south-end',
+    cases: [],
+    centre: [107, 264],
+    zoom: 14,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
   { id: 'G1', cases: ['G1'], centre: [-613, 18], zoom: 5 },
   { id: 'G1-n919', cases: ['G1'], centre: [-520, 28.5], zoom: 14 },
   { id: 'G2', cases: ['G2'], centre: [173, 182], zoom: 6 },
@@ -156,7 +182,7 @@ async function waitForServer(url: string, timeoutMs: number) {
  * centre sets the zoom; f = 1/2 with q - p the needed shift rounded to whole pixels moves the
  * centre to within a pixel; then for each axis q - p = 100 px along it and f = 1/(1 - r/100)
  * removes the remainder r. Returns the remaining error of the centre, px. */
-async function placeCamera(page: Page, centre: [number, number], zoom: number) {
+export async function placeCamera(page: Page, centre: [number, number], zoom: number) {
   return page.evaluate(
     ({ centre, zoom }) => {
       const canvas = document.querySelector<HTMLCanvasElement>('canvas[aria-label="City map"]')!;
@@ -266,6 +292,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       const layers = page.getByRole('region', { name: 'Map layers' });
       for (const label of ['Basemap', 'Places', 'Entrances and exits'])
         await layers.getByLabel(label, { exact: true }).uncheck();
+      if (process.env.CITYFLOWS_SHADOWS === '0')
+        await layers.getByLabel('Shadows', { exact: true }).uncheck();
       await button('Layers').click();
       // Only the map: every panel and control is hidden, the canvas keeps its place.
       await page.addStyleTag({

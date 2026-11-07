@@ -42,6 +42,11 @@ export function placeHue(id: string): number {
 export const style = {
   background: 0xf4f1e7,
   asphalt: 0xaebdb8,
+  shadow: 0x303d3a,
+  deckEdge: 0x6e817b,
+  deckEdgeWidthM: 0.35,
+  tunnelAlpha: 0.55,
+  deckGhostAlpha: 0.35,
   marking: 0xfffcf3,
   connector: 0x6f827a,
   selection: 0x4d8e94,

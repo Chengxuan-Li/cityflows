@@ -1709,6 +1709,12 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 
 ## Owner decisions log
 
+- 2026-11-07, TASK-097: shadows apply only to non-ground streets. Raised streets cast onto
+  surrounding objects; lower streets shade themselves. The owner raises the frame-time
+  allowance from 10% to 20% at both Munich zooms; the rebuild allowance stays at 20%.
+  Accepted measurements (Shadows off → on): overview 16.6655 → 16.6659 ms, street
+  91.8017 → 101.9403 ms (+11.04%), rebuild 284.7 → 327.3 ms (+14.96%). This supersedes
+  TASK-097's original 10% frame limit; no simulation, network or schema change is authorized.
 - 2026-11-07, visual features: the owner asked for OSM surroundings (non-road geometry), shadows
   that tell road levels apart, and possibly a 3D scene, none changing the planar geometry built
   from OSM. Planned as TASK-096, TASK-097 and TASK-098. The 3D view leaves the deferred list

@@ -14,6 +14,7 @@ import { drawMovementArrow, drawRoad, drawCrossings } from './layers/roads';
 import { drawTransitions } from './layers/transitions';
 import { drawSignal } from './layers/signals';
 import { drawSigns } from './layers/signs';
+import { DeckCoverage, DeckGhosts, drawGradeShadows } from './layers/shadows';
 import { Tiles } from './layers/tiles';
 import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { createPicker, pickVehicle } from './picking';
@@ -121,6 +122,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let updatePlaces: ((zoom: number) => void) | undefined;
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
+  let gradeShadows: ReturnType<typeof drawGradeShadows>[] = [];
+  let ghosts: DeckGhosts[] = [];
+  let rebuildShadows = () => {};
 
   let redrawTerrain = () => {};
 
@@ -156,6 +160,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       grade.connectors.visible = layerVisibility.connectors;
       grade.signals.visible = layerVisibility.signals;
     }
+    for (const ghost of ghosts) ghost.signals.visible = layerVisibility.signals;
+    if (import.meta.env.MODE === 'test')
+      canvas.dataset.gradeEffects = JSON.stringify({
+        graphics: gradeShadows.length * 2,
+        ghosts: ghosts.length,
+        tunnels: visibleGrades.filter((grade) => grade.terrain.alpha !== 1).length,
+      });
   }
   let selection: Pick | null = null;
   let selectedVehicle = -1;
@@ -225,6 +236,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     setCity(compiled, source) {
       // Versions identify edits within a city. Different source cities can share a version.
       if (city?.version === compiled.version && sourceGeometry === source) return;
+      const rebuildStart = import.meta.env.MODE === 'test' ? performance.now() : 0;
       city = compiled;
       vehicles.setGeometry(compiled);
       if (sourceGeometry?.geo !== source?.geo) {
@@ -248,6 +260,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       difference.removeFromParent();
       difference.clear();
       differenceCount = 0;
+      for (const ghost of ghosts) ghost.destroy();
+      ghosts = [];
+      gradeShadows = [];
       for (const child of map.removeChildren()) child.destroy({ children: true, context: true });
       updateSignals = [];
 
@@ -356,6 +371,60 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         city.lanes.map(({ road }) => grades.get(roadGrades[road]!)!.vehicles),
         city.movements.map(({ node }) => grades.get(nodeGrades[node]!)!.vehicles),
       );
+      rebuildShadows = () => {
+        for (const effect of gradeShadows) {
+          effect.shadow.removeFromParent();
+          effect.edges.removeFromParent();
+          effect.shadow.destroy({ context: true });
+          effect.edges.destroy({ context: true });
+        }
+        gradeShadows = [];
+        for (const ghost of ghosts) ghost.destroy();
+        ghosts = [];
+        for (const grade of visibleGrades) {
+          grade.terrain.cacheAsTexture(false);
+          grade.cacheResolution = 0;
+          grade.terrain.alpha = layerVisibility.shadows && grade.layer < 0 ? style.tunnelAlpha : 1;
+        }
+        if (layerVisibility.shadows) {
+          const coverage = new DeckCoverage(compiled, roadGrades, nodeGrades);
+          for (const [i, grade] of visibleGrades.entries()) {
+            if (grade.layer !== 0) {
+              const effect = drawGradeShadows(
+                compiled,
+                grade.layer,
+                visibleGrades[i - 1]?.layer,
+                roadGrades,
+                nodeGrades,
+              );
+              if (grade.layer > 0) grade.terrain.addChildAt(effect.shadow, 0);
+              else grade.terrain.addChild(effect.shadow);
+              grade.terrain.addChild(effect.edges);
+              gradeShadows.push(effect);
+            }
+            if (i === visibleGrades.length - 1) continue;
+            const ghost = new DeckGhosts(
+              grade.layer,
+              coverage,
+              grade.signals,
+              grade.vehicles.container,
+            );
+            map.addChild(ghost.container);
+            ghosts.push(ghost);
+          }
+        }
+        for (const grade of visibleGrades) {
+          const bounds = grade.terrain.getLocalBounds();
+          grade.terrainSize = Math.max(bounds.width, bounds.height);
+        }
+        updateTerrainCache();
+        applyVisibility();
+      };
+      rebuildShadows();
+      if (import.meta.env.MODE === 'test') {
+        performance.measure('cityflows:rebuild', { start: rebuildStart, end: performance.now() });
+        performance.clearMeasures('cityflows:rebuild');
+      }
     },
     setTiles(enabled) {
       tilesEnabled = enabled;
@@ -365,6 +434,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (!city) return;
       vehicles.update(snapshot);
       for (const update of updateSignals) update(snapshot.timeS);
+      for (const ghost of ghosts) ghost.sync();
       if (selection?.kind === 'vehicle') {
         selectedVehicle = snapshot.id.subarray(0, snapshot.count).indexOf(selection.id);
         updateVehicleRing();
@@ -375,6 +445,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     },
     animateVehicles(elapsedS) {
       vehicles.animate(elapsedS);
+      for (const ghost of ghosts) ghost.sync();
       updateVehicleRing();
     },
     setSelection(next) {
@@ -428,8 +499,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     },
     setLayerVisibility(layers) {
       const recolor = layers.roadClasses !== layerVisibility.roadClasses;
+      const reshade = layers.shadows !== layerVisibility.shadows;
       layerVisibility = layers;
       if (recolor) redrawTerrain();
+      if (reshade) rebuildShadows();
       applyVisibility();
     },
     setDisconnected(lanes) {
@@ -456,6 +529,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      for (const ghost of ghosts) ghost.destroy();
       vehicles.destroy();
       tiles?.destroy();
       if (resizeObserver) {

@@ -25,7 +25,8 @@ for what a deck covers. Presentation only: no geometry, network or simulation ch
    grades `scene.ts` already computes (`nodeGrades`, `roadGrades`); do not compute grades a
    second way.
 2. **Cast shadow.**
-   - For every grade above the lowest visible one, draw a shadow of that grade's road surfaces
+   - Owner revision (2026-11-07): ground streets cast nothing. For every grade above 0,
+     draw a shadow of that grade's road surfaces
      and node areas (`CRoad.surface`, `CNode.outline`) onto what lies below: a dark fill at
      about 25% opacity, offset by `Δh × k` in one fixed light direction (light from the
      north-west, so shadows fall to the south-east; start with `k = 0.6`, name the value you
@@ -42,6 +43,9 @@ for what a deck covers. Presentation only: no geometry, network or simulation ch
    not at its junction mouths or where it touches another surface of the same grade.
 4. **Tunnels.** Road surfaces of grade below 0, where they are not covered, draw at about 55%
    opacity with dashed edges, the usual map convention.
+   Owner revision (2026-11-07): lower streets receive an inset shadow on themselves, clipped
+   inside their road and node surfaces. Use 5 m depth per negative grade, the same light
+   direction and penumbra, and fade the inset to zero at ground-level portals over 20 m.
 5. **See-through under decks.** Signal heads and vehicles of a lower grade that a higher deck
    covers stay visible as a ghost: a copy of the lower grade's `signals` and vehicle containers
    drawn above the higher grades at about 35% opacity. Mask or limit it to where it is covered
@@ -81,7 +85,9 @@ style from `shadows.ts` using the compiled surfaces), `src/network`, `src/import
 3. **No change with Shadows off.** A test (unit or e2e) that with `shadows: false` the scene
    adds no shadow, edge, tunnel or ghost objects.
 4. **Cost.** Frame time at the Munich overview and at a street zoom with Shadows on is within
-   10% of off, and static rebuild time within 20%. Report the four numbers.
+   20% of off, and static rebuild time within 20%. Report the four numbers. Owner decision
+   (2026-11-07): raise the frame-time allowance from 10% to 20%; retain the 20% rebuild
+   allowance. The measured 11.04% street-frame and 14.96% rebuild increases are accepted.
 5. `npm run check`, `npm run test:city` and `npm run test:e2e:smoke` green. Run e2e with
    `CITYFLOWS_TEST_PORT=5293`; never use port 4173.
 

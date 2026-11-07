@@ -1374,6 +1374,23 @@ type HostEvent =
 - `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes and
   road and node layers are not in the compiled model. Grade groups draw from lowest to
   highest, with roads in compiled index order inside each grade.
+  TASK-097 (owner revision): the default-on "Shadows" layer affects non-ground streets only.
+  Raised grades use 5 m per grade and cast a south-east shadow at 0.6 m per metre above the
+  next lower grade. Three unioned fills (16%, 7%, 4%, the latter two offset another 0.75 m
+  and 1.5 m) soften the edge without a blur filter or dark seams between surfaces. At a
+  ground endpoint the whole offset, including the penumbra, tapers to zero over the
+  final 20 m from the road's surface cut. Raised shadow graphics sit first in their terrain;
+  0.35 m parapets sit above it, clipped away from junction mouths and same-grade surfaces.
+  Negative-grade terrain uses 55% opacity and 3 m dashed edges with 3 m gaps. Static effects
+  share the terrain's overview cache. Lower streets receive an inset shadow on their own
+  north-west edge: their surface minus its south-east-shifted copy, using 5 m depth per
+  negative grade and the same penumbra and portal taper. These shadows draw above the
+  lower surfaces, clipped inside them. Ground streets cast no shadows. A spatial index
+  limits 35% signal ghosts to covered heads above all decks. Heads share original graphics
+  contexts and live tints; vehicle ghosts share
+  whole animated particle arrays unmasked to avoid per-car coverage work. The Signals toggle
+  also hides signal ghosts. Disabling Shadows removes the added graphics and ghosts and
+  restores tunnel opacity, preserving the original rendering and picking.
   `Scene.setRouteOverlay({ lanes, movements } | null)` takes compiled indices; the UI maps a
   `Route` to it (the lanes of `targetLanes` and the route's movements).
 - The renderer owns a structural copy of the `VehicleSnapshot` layout in `src/render/types.ts`
