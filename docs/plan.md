@@ -119,8 +119,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-094](tasks/TASK-094.md) | 5 | Stop lines behind set-back crossings at signals (B53) | `src/network/stops.ts`, crossing span, `src/render/layers/roads.ts` (placement), T26, T41, `bench/latest.log` | 072, 091, 090 | T26 extended, T41.5 | done |
 | [TASK-095](tasks/TASK-095.md) | 5 | Roads that approach a node side by side are drawn attached, with a divider line (B54, B55) | `src/importers/osm/corridors.ts`, `src/network/continuity.ts`, `corridor.ts`, `lanes.ts`, `junctions.ts`, `nodes.ts`, `roads.ts` (divider), audit measures | 089, 092, 093, 090 | T39/T43 | failed; importer part salvaged |
 | [TASK-099](tasks/TASK-099.md) | 5 | One lateral shift profile per corridor stretch (B54, B55 redesign; replaces TASK-089's split arrays and TASK-095's pull) | `src/network/continuity.ts`, `corridor.ts`, `lanes.ts`, `compile.ts`, `types.ts`, `junctions.ts`, `roads.ts`/`nodes.ts` (markings), audit | 089, 092, 093, 094, 095 salvage | T39/T45, traffic gate | todo |
-| [TASK-096](tasks/TASK-096.md) | 6 | OSM surroundings (buildings, land use, water, parks, railways) drawn under the roads | `src/importers/osm/context.ts`, `overpass.ts`, `City.context` (schema), `src/render/layers/context.ts`, `scene.ts`, Layers, import wizard | 090 | T44, project round trip, e2e smoke | todo |
-| [TASK-097](tasks/TASK-097.md) | 6 | Shadows, deck edges, tunnel style and see-through under decks for grade separation | `src/render/layers/shadows.ts`, `scene.ts`, `style.ts`, Layers, shot cameras | 090 | unit, e2e smoke | todo |
+| [TASK-096](tasks/TASK-096.md) | 6 | OSM surroundings (buildings, land use, water, parks, railways) drawn under the roads | `src/importers/osm/context.ts`, `overpass.ts`, `City.context` (schema), `src/render/layers/context.ts`, `scene.ts`, Layers, import wizard | 090 | T44, project round trip, e2e smoke | done |
+| [TASK-097](tasks/TASK-097.md) | 6 | Shadows, deck edges, tunnel style and see-through under decks for grade separation | `src/render/layers/shadows.ts`, `scene.ts`, `style.ts`, Layers, shot cameras | 090 | unit, e2e smoke | done |
 | [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -1727,6 +1727,26 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   reproduce; the code is unchanged since (docs and cameras only), the runs are deterministic
   and `node_modules` is unchanged. `bench/traffic-baseline.json` now holds the reproducible
   figures.
+
+- 2026-11-07, TASK-096 merged (OSM surroundings; agent run by the owner). Optional
+  `City.context` (no schema bump) with buildings, water, green, land use, parking, rail, tram
+  and waterways, clipped and simplified at 0.3 m; Overpass fetches them when "Include
+  surroundings" is on; a muted Surroundings layer under every road, sharing the bottom grade's
+  terrain cache. Munich 1 662 features (1 406 buildings; the extract has no track lines),
+  context 26% of the city JSON; Sindelfingen 252. T44 pins that `context: false` reproduces the
+  canonical city and that context leaves `compile()` unchanged on all four cities; the lead
+  moved its Munich hashes to main after the TASK-095 salvage. Frame cost at the Munich
+  overview +9.8% (software GPU). Lead review: shots read (overview, `n:138`, Sindelfingen);
+  roads stay dominant.
+- 2026-11-07, TASK-097 merged (grade shadows; agent run by the owner, owner revised the design
+  and the frame gate, see the decisions log). Raised grades cast a soft three-fill shadow
+  south-east (0.6 m per metre of height, 5 m per grade), fading to zero over 20 m at
+  abutments; lower grades shade themselves; 0.35 m parapets; tunnels at 55% with dashed
+  edges; signal heads and vehicles under decks show as 35% ghosts (TASK-094's hidden `n:967`
+  heads now visible). Street-zoom frame +11.0%, rebuild +15.0%. Lead fix at merge: tunnel
+  dimming applies to the tunnel grade's road layers only, so TASK-096's surroundings in the
+  bottom grade are not faded (Sindelfingen `r:252`/`r:253`). Lead verification on main: check
+  519, city 59.
 
 ## Owner decisions log
 
