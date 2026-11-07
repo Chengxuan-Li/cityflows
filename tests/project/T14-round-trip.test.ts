@@ -40,3 +40,52 @@ it.each([
   expect(compiled.ok).toBe(true);
   expect(compile(opened.project.city)).toEqual(compiled);
 });
+
+it.each([
+  ['ZIP', saveProject],
+  ['JSON', saveProjectJson],
+])('T44 preserves surroundings and the TASK-042 baseline in %s', async (_format, save) => {
+  const city = grid5x5();
+  city.context = {
+    features: [
+      {
+        kind: 'area',
+        class: 'building',
+        sub: 'apartments',
+        heightM: 12,
+        levels: 4,
+        rings: [
+          [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 10 },
+            { x: 0, y: 0 },
+          ],
+        ],
+      },
+      {
+        kind: 'line',
+        class: 'rail',
+        line: [
+          { x: 0, y: 0 },
+          { x: 10, y: 20 },
+        ],
+        layer: 1,
+        widthM: 2,
+      },
+    ],
+  };
+  const project: Project = {
+    city,
+    scenarios: [defaultScenario('grid5x5')],
+    baseline: { city, scenario: defaultScenario('grid5x5') },
+  };
+  expect(await openProject(await save(project))).toEqual({ ok: true, project });
+});
+
+it('T44 opens an older project without surroundings', async () => {
+  const project: Project = { city: grid5x5(), scenarios: [defaultScenario('grid5x5')] };
+  const result = await openProject(await saveProject(project));
+  expect(result).toEqual({ ok: true, project });
+  if (result.ok) expect(result.project.city).not.toHaveProperty('context');
+});

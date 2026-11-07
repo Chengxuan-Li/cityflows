@@ -127,6 +127,19 @@ export interface GeoSource {
   inferredCount: number;
 }
 
+export type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
+export type ContextLine = 'rail' | 'tram' | 'waterway';
+export type ContextFeature =
+  | {
+      kind: 'area';
+      class: ContextArea;
+      rings: Vec2[][];
+      sub?: string;
+      heightM?: number;
+      levels?: number;
+    }
+  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number };
+
 export interface City {
   schemaVersion: 2;
   version: number; // bumps on every committed edit; caches key on it
@@ -136,6 +149,7 @@ export interface City {
   nodes: Record<NodeId, Node>;
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
+  context?: { features: ContextFeature[] };
   nextId: number; // single counter for all id kinds
 }
 

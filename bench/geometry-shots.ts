@@ -22,6 +22,15 @@ export const shots: {
   zoom: number;
   osm?: string;
 }[] = [
+  { id: 'V96-munich-overview', cases: [], centre: [0, 0], zoom: 0.43 },
+  { id: 'V96-hbf-tracks', cases: [], centre: [250, -140], zoom: 1.8 },
+  {
+    id: 'V96-sindelfingen',
+    cases: [],
+    centre: [0, 0],
+    zoom: 0.27,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
   { id: 'overview', cases: [], centre: [0, 0], zoom: 0.5 },
   { id: 'G1', cases: ['G1'], centre: [-613, 18], zoom: 5 },
   { id: 'G1-n919', cases: ['G1'], centre: [-520, 28.5], zoom: 14 },
@@ -126,6 +135,7 @@ const anchors: Record<string, Record<string, [number, number]>> = {
 };
 
 async function freePort(): Promise<number> {
+  if (process.env.CITYFLOWS_TEST_PORT) return Number(process.env.CITYFLOWS_TEST_PORT);
   return new Promise((done, fail) => {
     const server = createServer();
     server.once('error', fail);

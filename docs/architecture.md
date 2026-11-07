@@ -215,9 +215,26 @@ interface City {
   nodes: Record<NodeId, Node>;
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
+  context?: { features: ContextFeature[] }; // display-only OSM surroundings, see below
   nextId: number;          // single counter for all id kinds
 }
 ```
+
+TASK-096 adds optional display-only surroundings without a schema-version change. Old
+projects omit the field; current and TASK-042 baseline cities retain it through ZIP/JSON save
+and open. Context is never edited, never increments city.version, and is ignored by compile,
+routing, demand and simulation.
+
+~~~ts
+type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
+type ContextLine = 'rail' | 'tram' | 'waterway';
+type ContextFeature =
+  | { kind: 'area'; class: ContextArea; rings: Vec2[][]; sub?: string; heightM?: number; levels?: number }
+  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number };
+~~~
+
+Rings are closed, outer first then holes, in local metres rounded to 0.1 m. Optional sub is the
+source tag value; tagged building height/levels and line width/layer are retained.
 
 Invariants (checked by compile, section 5):
 
@@ -1289,7 +1306,16 @@ type HostEvent =
 
 `src/render` draws a `CompiledCity` and the latest `VehicleSnapshot` with PixiJS 8:
 
-- Layers, bottom to top: tile backdrop (Gate 2, optional), road surfaces, lane markings and
+- TASK-096: optional Surroundings draws above tiles and below every grade group. Muted
+  land use, water, green, parking and building fills (courtyard holes, hairline building edges)
+  and rail/tram/waterway lines are static and never pickable. Rail cross ties appear at detail
+  zoom. Surroundings sits first in the lowest grade's terrain, under every road surface.
+  Overview shares that terrain's power-of-two texture cache and 2048 px cap, avoiding an
+  extra map-sized textured quad. Geometry builds once per setCity; visibility toggles refresh
+  the shared texture without rebuilding geometry. LayerVisibility.context
+  defaults true; the Layers control appears only for cities with context. Tiles and context
+  can both be visible. The canvas contextFeatures dataset reports the visible feature count.
+- Layers, bottom to top: tile backdrop (Gate 2, optional), surroundings, road surfaces, lane markings and
   movement arrows (legal movements only), node areas, places and connectors, signal heads
   colored by current state, vehicles (ParticleContainer, rounded rectangles colored by state,
   dots below a zoom threshold), selection and route overlays, road heat coloring.
@@ -1538,6 +1564,18 @@ Lives in `src/importers/osm`, runs inside an import worker.
    movement-connected component, inset at most 10 m from lane ends; this avoids snapping
    to isolated accesses or relying on an immediate lane change after spawning. Inferences,
    source ids and block aggregation are recorded in provenance.
+   TASK-096 separately imports display-only context after place generation (default on;
+   ImportOptions.context=false omits it). Areas: building=* except no; natural=water,
+   waterway=riverbank and landuse=reservoir|basin as water; leisure=park|garden|pitch|playground,
+   landuse=grass|meadow|forest|recreation_ground|village_green|allotments|cemetery and
+   natural=wood|scrub|grassland as green; landuse=residential|commercial|retail|industrial|
+   railway|construction as landuse; amenity=parking as parking. Lines: railway=rail|light_rail|
+   subway|narrow_gauge as rail, railway=tram as tram, waterway=river|stream|canal as waterway.
+   Abandoned/disused rail and tunnel=yes lines at negative layer are omitted. Multipolygons
+   share the building ring assembler and bbox clipper. Geometry is clipped, simplified at
+   0.3 m, rounded to 0.1 m inside the bbox; areas below 4 m² and lines below 2 m are dropped.
+   Building height (metres or feet) and building:levels, line width and integer layer are
+   retained when valid. Place generation and every network byte stay unchanged.
 10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
     counts of inferred lanes and speeds. The wizard shows them before the city is accepted.
     `osm_incomplete_way` (TASK-070): a drivable way that references nodes missing from the
@@ -1573,7 +1611,10 @@ Lives in `src/importers/osm`, runs inside an import worker.
 
 Overpass provider: query drivable highways and restriction relations in a bbox capped at
 50 km squared, one request at a time, results cached in IndexedDB by bbox and query version,
-endpoint configurable, OSM attribution recorded. Nominatim, when used, is limited to one
+endpoint configurable, OSM attribution recorded. TASK-096 adds the context tag selectors
+(ways and multipolygon relations) inside the same bbox while retaining the road selector.
+Query version 2 invalidates older road-only cached extracts. Imports with surroundings disabled
+fetch the road-only query and bypass the full-context cache, so they cannot poison it. Nominatim, when used, is limited to one
 request per second and triggered only by an explicit search action.
 
 ## 14. Testing

@@ -198,6 +198,31 @@ const geo = z.object({
   }),
 });
 
+const contextRing = z
+  .array(vec2)
+  .min(4)
+  .refine(
+    (ring) => ring[0]!.x === ring.at(-1)!.x && ring[0]!.y === ring.at(-1)!.y,
+    'Context rings must be closed',
+  );
+const contextFeature = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('area'),
+    class: z.enum(['building', 'water', 'green', 'landuse', 'parking']),
+    rings: z.array(contextRing).min(1),
+    sub: z.string().optional(),
+    heightM: z.number().positive().optional(),
+    levels: z.number().positive().optional(),
+  }),
+  z.object({
+    kind: z.literal('line'),
+    class: z.enum(['rail', 'tram', 'waterway']),
+    line: z.array(vec2).min(2),
+    widthM: z.number().positive().optional(),
+    layer: z.int().optional(),
+  }),
+]);
+
 const cityFields = {
   version: count,
   name: z.string(),
@@ -206,6 +231,7 @@ const cityFields = {
   nodes: z.record(nodeId, nodeSchema),
   roads: z.record(roadId, roadSchema),
   places: z.record(placeId, placeSchema),
+  context: z.object({ features: z.array(contextFeature) }).optional(),
   nextId: count,
 };
 

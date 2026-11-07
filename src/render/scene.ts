@@ -3,6 +3,7 @@ import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { Camera } from './camera';
+import { drawContext } from './layers/context';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
 import { drawNode, drawRoadJoins, nodeColor } from './layers/nodes';
@@ -111,6 +112,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   app.stage.addChild(world);
 
   const vehicles = new Vehicles();
+  let surroundings: ReturnType<typeof drawContext> | undefined;
+  let contextCount = 0;
   let city: CompiledCity | undefined;
   let tiles: Tiles | undefined;
   let tilesEnabled = true;
@@ -130,6 +133,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     // A 2048 px edge cap bounds texture storage; detailed views use vector geometry.
     const overview = camera.zoom < 0.7;
     const resolution = 2 ** Math.ceil(Math.log2(camera.zoom * window.devicePixelRatio));
+    if (surroundings) surroundings.ties.visible = !overview;
     for (const grade of visibleGrades) {
       grade.markings.visible = !overview;
       grade.guides.visible = !overview;
@@ -144,6 +148,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
 
   function applyVisibility() {
+    if (surroundings && surroundings.container.visible !== layerVisibility.context) {
+      surroundings.container.visible = layerVisibility.context;
+      const grade = visibleGrades[0]!;
+      const bounds = grade.terrain.getLocalBounds();
+      grade.terrainSize = Math.max(bounds.width, bounds.height);
+      updateTerrainCache();
+      grade.terrain.updateCacheTexture();
+    }
+    canvas.dataset.contextFeatures = String(layerVisibility.context ? contextCount : 0);
     difference.visible = layerVisibility.difference;
     if (import.meta.env.MODE === 'test')
       canvas.dataset.differenceRoads = String(layerVisibility.difference ? differenceCount : 0);
@@ -252,6 +265,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateSignals = [];
 
       if (tiles) map.addChild(tiles.container);
+      const started = performance.now();
+      const features = source?.context?.features ?? [];
+      surroundings = drawContext(features);
+      contextCount = features.length;
+      map.addChild(surroundings.container);
+      if (import.meta.env.MODE === 'test')
+        canvas.dataset.contextRebuildMs = String(performance.now() - started);
       const nodeGrades = city.nodes.map(({ id }) => source?.nodes[id]?.layer ?? 0);
       const roadGrades = city.roads.map(
         ({ id, from, to }) =>
@@ -260,6 +280,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       visibleGrades = orderedLayers([...nodeGrades, ...roadGrades]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
       for (const { group } of visibleGrades) map.addChild(group);
+      // The bottom grade shares its overview texture with surroundings: same draw order,
+      // without another map-sized textured quad on software GPUs.
+      visibleGrades[0]!.terrain.addChildAt(surroundings.container, 0);
       const base = grades.get(0)!;
       base.group.addChildAt(heat.roads, base.group.getChildIndex(base.connectors));
       base.group.addChildAt(difference, base.group.getChildIndex(base.connectors));

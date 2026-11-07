@@ -1,0 +1,192 @@
+import { pointInPolygon, polylineLength } from '../../geo/polyline';
+import type { Vec2 } from '../../geo/vec2';
+import type { ContextArea, ContextFeature, ContextLine } from '../../schema';
+import { clip, polygonSources } from './buildings';
+import { clipPart, type Bounds } from './clip';
+import type { OsmData, OsmTags } from './parse';
+
+function areaClass(tag: OsmTags): ContextArea | undefined {
+  if (tag.building && tag.building !== 'no') return 'building';
+  if (
+    tag.natural === 'water' ||
+    tag.waterway === 'riverbank' ||
+    ['reservoir', 'basin'].includes(tag.landuse ?? '')
+  )
+    return 'water';
+  if (
+    ['park', 'garden', 'pitch', 'playground'].includes(tag.leisure ?? '') ||
+    [
+      'grass',
+      'meadow',
+      'forest',
+      'recreation_ground',
+      'village_green',
+      'allotments',
+      'cemetery',
+    ].includes(tag.landuse ?? '') ||
+    ['wood', 'scrub', 'grassland'].includes(tag.natural ?? '')
+  )
+    return 'green';
+  if (
+    ['residential', 'commercial', 'retail', 'industrial', 'railway', 'construction'].includes(
+      tag.landuse ?? '',
+    )
+  )
+    return 'landuse';
+  if (tag.amenity === 'parking') return 'parking';
+}
+
+function lineClass(tag: OsmTags): ContextLine | undefined {
+  if (tag.tunnel === 'yes' && Number(tag.layer) < 0) return;
+  if (['rail', 'light_rail', 'subway', 'narrow_gauge'].includes(tag.railway ?? '')) return 'rail';
+  if (tag.railway === 'tram') return 'tram';
+  if (['river', 'stream', 'canal'].includes(tag.waterway ?? '')) return 'waterway';
+}
+
+// Douglas-Peucker, including closed rings (whose first split is the farthest vertex).
+function simplify(points: Vec2[]): Vec2[] {
+  if (points.length < 3) return points;
+  const keep = new Set([0, points.length - 1]);
+  const stack = [[0, points.length - 1]];
+  while (stack.length) {
+    const [first, last] = stack.pop()!;
+    const a = points[first!]!,
+      b = points[last!]!;
+    const dx = b.x - a.x,
+      dy = b.y - a.y,
+      length2 = dx * dx + dy * dy;
+    let maximum = 0.3 ** 2,
+      split = -1;
+    for (let i = first! + 1; i < last!; i++) {
+      const p = points[i]!;
+      const t = length2
+        ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2))
+        : 0;
+      const distance2 = (p.x - a.x - t * dx) ** 2 + (p.y - a.y - t * dy) ** 2;
+      if (distance2 > maximum) {
+        maximum = distance2;
+        split = i;
+      }
+    }
+    if (split >= 0) {
+      keep.add(split);
+      stack.push([first!, split], [split, last!]);
+    }
+  }
+  return points.filter((_, i) => keep.has(i));
+}
+
+const area = (ring: Vec2[]) =>
+  Math.abs(
+    ring.reduce((sum, a, i) => {
+      const b = ring[(i + 1) % ring.length]!;
+      return sum + a.x * b.y - b.x * a.y;
+    }, 0) / 2,
+  );
+
+function measurement(value: string | undefined): number | undefined {
+  if (!value) return;
+  const match = /^\s*(\d+(?:\.\d+)?)\s*(m|ft|')?\s*$/.exec(value);
+  if (!match) return;
+  const n = Number(match[1]) * (match[2] === 'ft' || match[2] === "'" ? 0.3048 : 1);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+export function importContext(
+  data: OsmData,
+  positions: Map<number, Vec2>,
+  bounds: Bounds,
+): ContextFeature[] {
+  // Snap inward at the boundary: every serialized tenth of a metre remains in the bbox.
+  const snapped: Bounds = {
+    min: { x: Math.ceil(bounds.min.x * 10) / 10, y: Math.ceil(bounds.min.y * 10) / 10 },
+    max: { x: Math.floor(bounds.max.x * 10) / 10, y: Math.floor(bounds.max.y * 10) / 10 },
+  };
+  const round = (line: Vec2[]) =>
+    simplify(line)
+      .map((p) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 }))
+      .filter((p, i, a) => !i || p.x !== a[i - 1]!.x || p.y !== a[i - 1]!.y);
+  const features: ContextFeature[] = [];
+  for (const source of polygonSources(data, (tag) => areaClass(tag) !== undefined)) {
+    const projected = source.rings.flatMap(({ role, ids }) => {
+      const ring = ids.slice(0, -1).map((id) => positions.get(id));
+      return ring.every((p): p is Vec2 => p !== undefined) ? [{ role, ring }] : [];
+    });
+    const outers = projected.filter((r) => r.role === 'outer');
+    const innerOwners = projected
+      .filter((r) => r.role === 'inner')
+      .map(({ ring }) => ({
+        ring,
+        owner: outers
+          .filter((outer) => pointInPolygon(ring[0]!, [...outer.ring, outer.ring[0]!]))
+          .sort((a, b) => area(a.ring) - area(b.ring))[0],
+      }));
+    const close = (ring: Vec2[]) => {
+      const clipped = clip(ring, snapped);
+      if (clipped.length < 3) return;
+      const points = round([...clipped, clipped[0]!]);
+      return points.length >= 4 && area(points) >= 4 ? points : undefined;
+    };
+    for (const shape of outers) {
+      const outer = close(shape.ring);
+      if (!outer) continue;
+      const holes = innerOwners
+        .filter((inner) => inner.owner === shape)
+        .map((inner) => close(inner.ring))
+        .filter((ring): ring is Vec2[] => !!ring);
+      if (area(outer) - holes.reduce((sum, hole) => sum + area(hole), 0) < 4) continue;
+      const tag = source.tag;
+      const kind = areaClass(tag)!;
+      const sub =
+        kind === 'building'
+          ? tag.building
+          : kind === 'parking'
+            ? tag.parking
+            : (tag.landuse ?? tag.natural ?? tag.leisure ?? tag.waterway);
+      const heightM = kind === 'building' ? measurement(tag.height) : undefined;
+      const levels = kind === 'building' ? measurement(tag['building:levels']) : undefined;
+      features.push({
+        kind: 'area',
+        class: kind,
+        rings: [outer, ...holes],
+        ...(sub && { sub }),
+        ...(heightM !== undefined && { heightM }),
+        ...(levels !== undefined && { levels }),
+      });
+    }
+  }
+  for (const way of data.way) {
+    const kind = lineClass(way.tag);
+    if (!kind) continue;
+    // Missing nodes break a line rather than drawing a fabricated bridge across the gap.
+    let run: Vec2[] = [];
+    const flush = () => {
+      for (const part of clipPart(
+        run.map((pos, i) => ({ key: String(i), pos })),
+        snapped,
+        'context',
+        new Set(),
+      )) {
+        const line = round(part.points.map((point) => point.pos));
+        if (line.length < 2 || polylineLength(line) < 2) continue;
+        const widthM = measurement(way.tag.width);
+        const layer = way.tag.layer === undefined ? undefined : Number(way.tag.layer);
+        features.push({
+          kind: 'line',
+          class: kind,
+          line,
+          ...(widthM !== undefined && { widthM }),
+          ...(Number.isInteger(layer) && { layer }),
+        });
+      }
+      run = [];
+    };
+    for (const id of way.nd) {
+      const p = positions.get(id);
+      if (p) run.push(p);
+      else flush();
+    }
+    flush();
+  }
+  return features;
+}

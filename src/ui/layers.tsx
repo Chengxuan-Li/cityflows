@@ -4,6 +4,7 @@ import { useAppStore } from './store';
 
 const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
+  ['context', 'Surroundings'],
   ['roadClasses', 'Road classes'],
   ['difference', 'Comparison road usage'],
   ['heat', 'Road speeds'],
@@ -18,6 +19,7 @@ const labels: [keyof LayerVisibility, string][] = [
 export function Layers() {
   const layers = useAppStore((state) => state.layers);
   const hasGeo = useAppStore((state) => Boolean(state.session?.project.city.geo));
+  const hasContext = useAppStore((state) => Boolean(state.session?.project.city.context));
   const { toggleLayer, toggleLayers } = useAppStore.getState();
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -29,7 +31,7 @@ export function Layers() {
   return (
     <section id="layers" className="layers-sheet" aria-label="Map layers">
       {labels
-        .filter(([key]) => key !== 'basemap' || hasGeo)
+        .filter(([key]) => (key !== 'basemap' || hasGeo) && (key !== 'context' || hasContext))
         .map(([key, label]) => (
           <label key={key}>
             <input type="checkbox" checked={layers[key]} onChange={() => toggleLayer(key)} />

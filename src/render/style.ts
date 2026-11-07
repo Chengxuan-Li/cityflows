@@ -41,6 +41,24 @@ export function placeHue(id: string): number {
 
 export const style = {
   background: 0xf4f1e7,
+  context: {
+    building: 0xe5e1d7,
+    buildingEdge: 0xd5d0c5,
+    water: 0xd0e2e6,
+    green: 0xe0e8d5,
+    parking: 0xe5e4de,
+    landuse: 0xece9df,
+    landuseSub: {
+      residential: 0xeee7de,
+      commercial: 0xe9e6e1,
+      retail: 0xeee5df,
+      industrial: 0xe6e4df,
+      railway: 0xe8e6df,
+      construction: 0xede7d9,
+    } as Record<string, number>,
+    rail: 0xa7aaa5,
+    tram: 0xb2b5af,
+  },
   asphalt: 0xaebdb8,
   marking: 0xfffcf3,
   connector: 0x6f827a,

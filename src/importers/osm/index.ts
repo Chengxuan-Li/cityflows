@@ -4,6 +4,7 @@ import { compile, type Diagnostic } from '../../network';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
+import { importContext } from './context';
 import { addBuildings } from './buildings';
 import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
 import { drivableClass } from './filter';
@@ -318,6 +319,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addGateways(city, roads, base.compiled);
   addOsmPlaces(city, data, positions, bounds, base.compiled);
   addBuildings(city, data, positions, bounds, base.compiled);
+  if (options.context !== false)
+    city.context = { features: importContext(data, positions, bounds) };
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)
