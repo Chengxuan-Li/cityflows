@@ -79,6 +79,16 @@ road inspector edit it. Drawing signs and `BUS` lane text is TASK-107's job, not
 
 ## In scope
 
+The list below is this task's main surface, not a fence. You may also change any other file
+the feature needs in order to be wired in, type-check or be tested (callers, constructors,
+view wiring, dev pages, fixture builders, shared types), as long as it is not named under
+"Out of scope"; list each such file and why in your report. Stop and ask the lead only for
+a file named under "Out of scope", a contract change this task does not describe, or a
+behaviour change to another feature.
+
+Also named after the agent asked: `src/schema/history.ts` and `history.schema.ts` (the
+access edit's `Command` variant).
+
 `src/schema/city.ts`, `city.schema.ts`; `src/network/compile.ts`, `src/network/types.ts`
 (additive: `CRoad.access`, zones); `src/routing/**` (except the `purpose` line TASK-100 also
 adds, which the lead reconciles); `src/importers/osm/roads.ts` (access and bus-lane tags; the

@@ -180,7 +180,10 @@ the importer's sources); `CITYFLOWS_NO_CACHE=1` imports fresh.
 1. Read your task file, `docs/architecture.md`, and the code you will touch. Do not restart
    the architectural investigation.
 2. Branch `task/<id>-<short-name>` from `main` (or a worktree). Touch only the files listed
-   under "In scope"; if you must touch another module, stop and ask the lead.
+   under "In scope" plus whatever else the feature needs to be wired in, type-check or be
+   tested, and list those extra files in your report. Stop and ask the lead only for a file
+   under "Out of scope", a contract change the task does not describe, or a behaviour
+   change to another feature.
 3. Build the feature end to end, including the test IDs listed in the task. Tests named by a
    handoff T-ID live in `tests/<module>/<Txx>-<name>.test.ts`.
 4. `npm run check` must pass, plus the tiers that match the task: `npm run test:city` for

@@ -80,6 +80,17 @@ never reads the terrain; slope does not affect driving (owner decision, 2026-11-
 
 ## In scope
 
+The list below is this task's main surface, not a fence. You may also change any other file
+the feature needs in order to be wired in, type-check or be tested (callers, constructors,
+view wiring, dev pages, fixture builders, shared types), as long as it is not named under
+"Out of scope"; list each such file and why in your report. Stop and ask the lead only for
+a file named under "Out of scope", a contract change this task does not describe, or a
+behaviour change to another feature.
+
+Also named after the agent asked: `src/ui/map-view.tsx` (the Terrain toggle into the 3D
+scene) and `src/render3d/geometry.ts` (terrain in surfaces, junctions, places, piers and
+context construction).
+
 `src/importers/terrain.ts` (new), the call where the import runs (`src/importers/worker.ts`
 and the Node entry the city tier uses),
 `src/importers/types.ts` (`ImportOptions`), `src/importers/cache.ts`, `src/importers/worker.ts`;
