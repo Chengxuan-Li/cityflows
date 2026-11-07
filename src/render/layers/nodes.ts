@@ -1,5 +1,10 @@
 import type { Graphics } from 'pixi.js';
-import { distance as distanceOf, headingAtDistance, nearestOnPolyline } from '../../geo/polyline';
+import {
+  distance as distanceOf,
+  headingAtDistance,
+  nearestOnPolyline,
+  pointInPolygon,
+} from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CMovement, CNode, CompiledCity, CRoad } from '../../network';
 import { roadStyle, style } from '../style';
@@ -147,11 +152,14 @@ export function curbBands(
     }
     if (!end) return [];
     // A curb runs out along each road edge to its tangent point and turns back there along the
-    // arc: the band covers the arc only, the roads' own verges drawing their edges.
+    // arc: the band covers the arc only, the roads' own verges drawing their edges. TASK-092: the
+    // outline also dips under the road where a movement surface's end pokes past the cut.
     const alongEdge = (r: CRoad, p: Vec2) => {
       const h = r.surface.length / 2;
-      return [r.surface.slice(0, h), r.surface.slice(h)].some(
-        (edge) => nearestOnPolyline(edge, p).away < 0.05,
+      return (
+        [r.surface.slice(0, h), r.surface.slice(h)].some(
+          (edge) => nearestOnPolyline(edge, p).away < 0.05,
+        ) || pointInPolygon(p, [...r.surface, r.surface[0]!])
       );
     };
     const trim = (path: Vec2[], r: CRoad) => {
