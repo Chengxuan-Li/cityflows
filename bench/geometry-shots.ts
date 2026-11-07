@@ -82,6 +82,23 @@ export const shots: {
     zoom: 16,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
+  // Owner round 6: carriageways and roads approaching a node at a small angle or parallel.
+  { id: 'R6-n138', cases: [], centre: [-16.5, -535.5], zoom: 6 },
+  { id: 'R6-n638', cases: [], centre: [90.5, -526], zoom: 6 },
+  {
+    id: 'R6-sindelfingen-n841',
+    cases: [],
+    centre: [310.5, -584.5],
+    zoom: 10,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
+  {
+    id: 'R6-sindelfingen-n68',
+    cases: [],
+    centre: [350, -488],
+    zoom: 10,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
 ];
 
 export const VIEWPORT = { width: 1280, height: 800 };
