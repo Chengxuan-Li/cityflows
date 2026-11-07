@@ -118,6 +118,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-093](tasks/TASK-093.md) | 5 | One street's carriageways: overlap at n:967, median voids, lane-to-lane continuation (B49, B45, B47) | `src/importers/osm/corridors.ts`, `realign.ts`, `src/network/continuity.ts`, `corridor.ts`, `lanes.ts`, T39 | 084, 087, 089, 071, 090 | T39 extended | done |
 | [TASK-094](tasks/TASK-094.md) | 5 | Stop lines behind set-back crossings at signals (B53) | `src/network/stops.ts`, crossing span, `src/render/layers/roads.ts` (placement), T26, T41, `bench/latest.log` | 072, 091, 090 | T26 extended, T41.5 | done |
 | [TASK-095](tasks/TASK-095.md) | 5 | Roads that approach a node side by side are drawn attached, with a divider line (B54, B55) | `src/importers/osm/corridors.ts`, `src/network/continuity.ts`, `corridor.ts`, `lanes.ts`, `junctions.ts`, `nodes.ts`, `roads.ts` (divider), audit measures | 089, 092, 093, 090 | T39/T43 | todo |
+| [TASK-096](tasks/TASK-096.md) | 6 | OSM surroundings (buildings, land use, water, parks, railways) drawn under the roads | `src/importers/osm/context.ts`, `overpass.ts`, `City.context` (schema), `src/render/layers/context.ts`, `scene.ts`, Layers, import wizard | 090 | T44, project round trip, e2e smoke | todo |
+| [TASK-097](tasks/TASK-097.md) | 6 | Shadows, deck edges, tunnel style and see-through under decks for grade separation | `src/render/layers/shadows.ts`, `scene.ts`, `style.ts`, Layers, shot cameras | 090 | unit, e2e smoke | todo |
+| [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1706,6 +1709,12 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 
 ## Owner decisions log
 
+- 2026-11-07, visual features: the owner asked for OSM surroundings (non-road geometry), shadows
+  that tell road levels apart, and possibly a 3D scene, none changing the planar geometry built
+  from OSM. Planned as TASK-096, TASK-097 and TASK-098. The 3D view leaves the deferred list
+  (decision 15) as a viewer; editing stays 2D. three.js is approved as a dependency and
+  `City.context` as an optional schema field. The owner orchestrates these agents; the lead
+  writes the contracts, creates the branches and reviews the commits.
 - 2026-11-07, B53: at signalised approaches the crossing sets back like everywhere else and
   the stop line moves behind it (`stopM` at the crossing's far edge minus 0.5 m); new
   benchmark hashes accepted (TASK-094).
