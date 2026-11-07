@@ -6,6 +6,8 @@ const productionPort = port + 1;
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
+  // CI's runner imports a real extract and redraws its junction polygons past the 5 s default.
+  expect: { timeout: 20_000 },
   // Scenarios that step whole mornings starve parallel pages of the shared GPU process.
   workers: 1,
   retries: process.env.CI ? 1 : 0,
