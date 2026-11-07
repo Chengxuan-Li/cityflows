@@ -6,14 +6,22 @@ import process from 'node:process';
 import { chromium, type Page } from '@playwright/test';
 
 // Fixed-camera images of the geometry rework's cases (TASK-081, docs/plan.md "Geometry rework"):
-// starts the dev server on a free port, imports the Munich extract through the app's import
-// dialog, hides the basemap, places and entrances, and captures each shot at the camera below,
-// so images of two trees line up pixel for pixel. Usage: npm run geometry-shots -- <out-dir>
-// [--only <id,id>] (TASK-090: only the named shots).
+// starts the dev server on a free port, imports the Munich extract (or a shot's own, TASK-094)
+// through the app's import dialog, hides the basemap, places and entrances, and captures each
+// shot at the camera below, so images of two trees line up pixel for pixel. Usage:
+// npm run geometry-shots -- <out-dir> [--only <id,id>] (TASK-090: only the named shots).
+
+const MUNICH = 'fixtures/osm/munich-donnersberger.osm';
 
 /** World centre (m, the city's frame) and zoom (screen px per m) of each image; the case ids are
  * bench/geometry-audit.ts's. The map canvas is 1280 x 800 px. */
-export const shots: { id: string; cases: string[]; centre: [number, number]; zoom: number }[] = [
+export const shots: {
+  id: string;
+  cases: string[];
+  centre: [number, number];
+  zoom: number;
+  osm?: string;
+}[] = [
   { id: 'overview', cases: [], centre: [0, 0], zoom: 0.5 },
   { id: 'G1', cases: ['G1'], centre: [-613, 18], zoom: 5 },
   { id: 'G1-n919', cases: ['G1'], centre: [-520, 28.5], zoom: 14 },
@@ -66,26 +74,38 @@ export const shots: { id: string; cases: string[]; centre: [number, number]; zoo
   { id: 'B48-n967', cases: [], centre: [-19.5, 172], zoom: 14 },
   { id: 'B48-n291', cases: [], centre: [-524.5, 466.5], zoom: 18 },
   { id: 'B51-n104', cases: [], centre: [-283, 141], zoom: 18 },
+  // TASK-094 (B53): a signalized node's crossings set back, its stop lines behind them.
+  {
+    id: 'B53-sindelfingen-n110',
+    cases: [],
+    centre: [310, 604.5],
+    zoom: 16,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
 ];
 
 export const VIEWPORT = { width: 1280, height: 800 };
 
-/** Node positions the cameras were placed by; a run on a tree that moves them says so. */
-const anchors: Record<string, [number, number]> = {
-  'n:919': [-519.99, 28.53],
-  'n:774': [112.06, 176.53],
-  'n:719': [233.66, 187.16],
-  'n:312': [-42.26, -62.35],
-  'n:949': [477.79, -405.43],
-  'n:823': [497.5, -448.85],
-  'n:1181': [-509.67, 128.4],
-  'n:138': [-16.37, -535.48],
-  'n:104': [-278.45, 141.89],
-  'n:324': [610.01, 223.17],
-  'n:721': [305.64, 194.23],
-  'n:446': [-462.12, -643.47],
-  'n:291': [-524.33, 466.57],
-  'n:182': [424.39, 370.93],
+/** Node positions the cameras were placed by, per extract; a run on a tree that moves them says
+ * so. */
+const anchors: Record<string, Record<string, [number, number]>> = {
+  'fixtures/osm/sindelfingen-a81.osm': { 'n:110': [309.96, 604.74] },
+  [MUNICH]: {
+    'n:919': [-519.99, 28.53],
+    'n:774': [112.06, 176.53],
+    'n:719': [233.66, 187.16],
+    'n:312': [-42.26, -62.35],
+    'n:949': [477.79, -405.43],
+    'n:823': [497.5, -448.85],
+    'n:1181': [-509.67, 128.4],
+    'n:138': [-16.37, -535.48],
+    'n:104': [-278.45, 141.89],
+    'n:324': [610.01, 223.17],
+    'n:721': [305.64, 194.23],
+    'n:446': [-462.12, -643.47],
+    'n:291': [-524.33, 466.57],
+    'n:182': [424.39, 370.93],
+  },
 };
 
 async function freePort(): Promise<number> {
@@ -207,59 +227,64 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       deviceScaleFactor: 1,
       reducedMotion: 'reduce',
     });
-    const page = await context.newPage();
-    await page.route(/^https:\/\//, (route) => route.abort());
-    await page.goto(url);
-    const button = (name: string) => page.getByRole('button', { name, exact: true });
-    await button('Play').waitFor();
-    await button('Import').click();
-    const dialog = page.getByRole('dialog', { name: 'Import city' });
-    await dialog.getByLabel('OSM file').setInputFiles('fixtures/osm/munich-donnersberger.osm');
-    await button('Import roads').click();
-    await dialog
-      .getByRole('region', { name: 'Import diagnostics' })
-      .getByText('0 errors')
-      .waitFor({ timeout: 60_000 });
-    await button('Continue').click();
-    await button('Accept city').click();
-    await dialog.waitFor({ state: 'hidden', timeout: 60_000 });
-    await page.waitForFunction(() => !!window.cityflows?.city?.());
-    await button('Layers').click();
-    const layers = page.getByRole('region', { name: 'Map layers' });
-    for (const label of ['Basemap', 'Places', 'Entrances and exits'])
-      await layers.getByLabel(label, { exact: true }).uncheck();
-    await button('Layers').click();
-    // Only the map: every panel and control is hidden, the canvas keeps its place.
-    await page.addStyleTag({
-      content:
-        'body * { visibility: hidden !important; } canvas.map { visibility: visible !important; }',
-    });
-    const positions = await page.evaluate((ids) => {
-      const city = window.cityflows!.city!();
-      return Object.fromEntries(ids.map((id) => [id, city.nodes[id as never]?.pos ?? null]));
-    }, Object.keys(anchors));
-    const moved = Object.entries(anchors).filter(([id, [x, y]]) => {
-      const p = positions[id];
-      return !p || Math.hypot(p.x - x, p.y - y) > 0.05;
-    });
-    if (moved.length)
-      console.warn('camera anchors moved on this tree:', moved.map(([id]) => id).join(', '));
-    const canvas = page.locator('canvas[aria-label="City map"]');
-    for (const shot of selected) {
-      const placed = await placeCamera(page, shot.centre, shot.zoom);
-      await frames(page, 3);
-      const path = join(out, `${shot.id}.png`);
-      await canvas.screenshot({ path, animations: 'disabled' });
-      records.push({
-        ...shot,
-        file: `${shot.id}.png`,
-        centreErrorPx: placed.error,
-        zoom: placed.zoom,
-        canvas: placed.size,
+    for (const osm of new Set(selected.map((shot) => shot.osm ?? MUNICH))) {
+      const page = await context.newPage();
+      await page.route(/^https:\/\//, (route) => route.abort());
+      await page.goto(url);
+      const button = (name: string) => page.getByRole('button', { name, exact: true });
+      await button('Play').waitFor();
+      await button('Import').click();
+      const dialog = page.getByRole('dialog', { name: 'Import city' });
+      await dialog.getByLabel('OSM file').setInputFiles(osm);
+      await button('Import roads').click();
+      await dialog
+        .getByRole('region', { name: 'Import diagnostics' })
+        .getByText('0 errors')
+        .waitFor({ timeout: 60_000 });
+      await button('Continue').click();
+      await button('Accept city').click();
+      await dialog.waitFor({ state: 'hidden', timeout: 60_000 });
+      await page.waitForFunction(() => !!window.cityflows?.city?.());
+      await button('Layers').click();
+      const layers = page.getByRole('region', { name: 'Map layers' });
+      for (const label of ['Basemap', 'Places', 'Entrances and exits'])
+        await layers.getByLabel(label, { exact: true }).uncheck();
+      await button('Layers').click();
+      // Only the map: every panel and control is hidden, the canvas keeps its place.
+      await page.addStyleTag({
+        content:
+          'body * { visibility: hidden !important; } canvas.map { visibility: visible !important; }',
       });
-      console.info(
-        `${shot.id}: centre ${shot.centre.join(', ')} zoom ${shot.zoom} px/m (error ${placed.error.toExponential(1)} px) -> ${path}`,
-      );
+      const anchored = anchors[osm] ?? {};
+      const positions = await page.evaluate((ids) => {
+        const city = window.cityflows!.city!();
+        return Object.fromEntries(ids.map((id) => [id, city.nodes[id as never]?.pos ?? null]));
+      }, Object.keys(anchored));
+      const moved = Object.entries(anchored).filter(([id, [x, y]]) => {
+        const p = positions[id];
+        return !p || Math.hypot(p.x - x, p.y - y) > 0.05;
+      });
+      if (moved.length)
+        console.warn('camera anchors moved on this tree:', moved.map(([id]) => id).join(', '));
+      const canvas = page.locator('canvas[aria-label="City map"]');
+      for (const shot of selected) {
+        if ((shot.osm ?? MUNICH) !== osm) continue;
+        const placed = await placeCamera(page, shot.centre, shot.zoom);
+        await frames(page, 3);
+        const path = join(out, `${shot.id}.png`);
+        await canvas.screenshot({ path, animations: 'disabled' });
+        records.push({
+          ...shot,
+          file: `${shot.id}.png`,
+          centreErrorPx: placed.error,
+          zoom: placed.zoom,
+          canvas: placed.size,
+        });
+        console.info(
+          `${shot.id}: centre ${shot.centre.join(', ')} zoom ${shot.zoom} px/m (error ${placed.error.toExponential(1)} px) -> ${path}`,
+        );
+      }
+      await page.close();
     }
     writeFileSync(join(out, 'shots.json'), JSON.stringify(records, null, 1));
     await context.close();

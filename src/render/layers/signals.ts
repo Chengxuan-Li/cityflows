@@ -1,7 +1,35 @@
 import { Container, Graphics } from 'pixi.js';
-import { headingAtDistance } from '../../geo/polyline';
+import { headingAtDistance, pointAtDistance } from '../../geo/polyline';
 import { signalStateAt, type CNode, type CompiledCity } from '../../network';
 import { style } from '../style';
+
+/** One light per movement of each approach lane, across the lane just before its stop line
+ * (TASK-094: with the stop line and the crossing, not at the lane end in the junction). */
+export function signalHeads(city: CompiledCity, node: CNode) {
+  const heads: { x: number; y: number; radius: number; lane: number; movement: number }[] = [];
+  const lanes = new Set(node.movements.map((movement) => city.movements[movement]!.fromLane));
+  for (const index of lanes) {
+    const lane = city.lanes[index]!;
+    const point = pointAtDistance(lane.polyline, lane.cumulative, lane.stopM);
+    const heading = headingAtDistance(lane.polyline, lane.cumulative, lane.stopM);
+    const alongX = Math.cos(heading);
+    const alongY = Math.sin(heading);
+    const halfWidth = lane.widthM * 0.46;
+    const movements = lane.out;
+    const spacing = Math.min(0.92, (2 * halfWidth) / movements.length);
+    for (let i = 0; i < movements.length; i++) {
+      const offset = (i - (movements.length - 1) / 2) * spacing;
+      heads.push({
+        x: point.x - alongX * 0.93 - alongY * offset,
+        y: point.y - alongY * 0.93 + alongX * offset,
+        radius: spacing * 0.36,
+        lane: index,
+        movement: movements[i]!,
+      });
+    }
+  }
+  return heads;
+}
 
 export function drawSignal(
   city: CompiledCity,
@@ -10,36 +38,18 @@ export function drawSignal(
 ): (timeS: number) => void {
   const signal = node.signal!;
   const phases = signal.phases.map(({ movements }) => new Set(movements));
-  const heads: { graphic: Graphics; movement: number }[] = [];
-  const lanes = new Set(node.movements.map((movement) => city.movements[movement]!.fromLane));
-  for (const index of lanes) {
-    const lane = city.lanes[index]!;
-    const point = lane.polyline.at(-1)!;
-    const heading = headingAtDistance(lane.polyline, lane.cumulative, lane.lengthM);
-    const alongX = Math.cos(heading);
-    const alongY = Math.sin(heading);
-    const x = point.x - alongX * 0.18;
-    const y = point.y - alongY * 0.18;
-    const halfWidth = lane.widthM * 0.46;
-    const movements = lane.out;
-    const spacing = Math.min(0.92, (2 * halfWidth) / movements.length);
-    const radius = spacing * 0.36;
-    for (let i = 0; i < movements.length; i++) {
-      const offset = (i - (movements.length - 1) / 2) * spacing;
-      const headX = x - alongX * 0.75 - alongY * offset;
-      const headY = y - alongY * 0.75 + alongX * offset;
-      const graphic = container.addChild(
-        new Graphics()
-          .circle(headX, headY, radius * 3.1)
-          .fill({ color: 0xffffff, alpha: 0.16 })
-          .circle(headX, headY, radius * 1.9)
-          .fill({ color: 0xffffff, alpha: 0.33 })
-          .circle(headX, headY, radius * 1.25)
-          .fill(0xffffff),
-      );
-      heads.push({ graphic, movement: movements[i]! });
-    }
-  }
+  const heads = signalHeads(city, node).map(({ x, y, radius, movement }) => ({
+    graphic: container.addChild(
+      new Graphics()
+        .circle(x, y, radius * 3.1)
+        .fill({ color: 0xffffff, alpha: 0.16 })
+        .circle(x, y, radius * 1.9)
+        .fill({ color: 0xffffff, alpha: 0.33 })
+        .circle(x, y, radius * 1.25)
+        .fill(0xffffff),
+    ),
+    movement,
+  }));
 
   let previousPhase = -1;
   let previousState: string | undefined;

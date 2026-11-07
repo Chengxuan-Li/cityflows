@@ -5,7 +5,7 @@ import { signalApproach } from '../../src/fixtures/signal-approach';
 import { buildCity } from '../../src/fixtures/build-city';
 import { compile } from '../../src/network';
 import { drawNode, nodeColor } from '../../src/render/layers/nodes';
-import { drawRoad, crossingStripes } from '../../src/render/layers/roads';
+import { drawRoad, crossingPlacement, crossingStripes } from '../../src/render/layers/roads';
 import { createGrade, pickThroughNode } from '../../src/render/scene';
 import { createPicker } from '../../src/render/picking';
 import { roadStyle, style } from '../../src/render/style';
@@ -127,6 +127,8 @@ test.each(['signal', 'yield'] as const)('T20: %s marking meets the stop position
   }
 });
 
+// TASK-094: the crossing sets back from the curb return like any other; the stop line lies 0.5 m
+// before its far edge.
 test('T20: signal crossings lie on the road between stop position and junction', () => {
   const result = compile(signalApproach());
   if (!result.ok) throw new Error('fixture');
@@ -144,8 +146,9 @@ test('T20: signal crossings lie on the road between stop position and junction',
       );
       expect(stripe.some((p) => pointInPolygon(p, node.outline))).toBe(false);
       const along = stripe.map((p) => (p.x - end.x) * Math.cos(h) + (p.y - end.y) * Math.sin(h));
-      expect(Math.min(...along)).toBeCloseTo(-2.75);
-      expect(Math.max(...along)).toBeCloseTo(-0.25);
+      expect(Math.min(...along)).toBeCloseTo(lane.stopM + 0.5 - lane.lengthM);
+      expect(Math.max(...along)).toBeCloseTo(lane.stopM + 3 - lane.lengthM);
+      expect(Math.max(...along)).toBeLessThan(-0.25);
     }
   }
 });
@@ -245,7 +248,9 @@ test('T20: a served outer lane keeps the full-width crossing when lane zero is u
   }
 });
 
-test('T26: exit crossings occupy the first 0.25 to 2.75 m of the exit road', () => {
+// TASK-094: exit crossings at a signal set back from the curb return too (TASK-072: the first 0.25
+// to 2.75 m of the exit road).
+test('T26: exit crossings set back on the exit road', () => {
   const result = compile(signalApproach());
   if (!result.ok) throw new Error('fixture');
   const net = result.compiled;
@@ -264,8 +269,10 @@ test('T26: exit crossings occupy the first 0.25 to 2.75 m of the exit road', () 
       const along = stripe.map(
         (p) => (p.x - start.x) * Math.cos(h) + (p.y - start.y) * Math.sin(h),
       );
-      expect(Math.min(...along)).toBeCloseTo(0.25);
-      expect(Math.max(...along)).toBeCloseTo(2.75);
+      const { nearM } = crossingPlacement(net, road, false);
+      expect(nearM).toBeGreaterThan(0.25);
+      expect(Math.min(...along)).toBeCloseTo(nearM);
+      expect(Math.max(...along)).toBeCloseTo(nearM + 2.5);
     }
   }
 });

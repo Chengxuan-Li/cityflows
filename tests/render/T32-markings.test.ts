@@ -138,6 +138,9 @@ test.each(tierCities(['grid', 'munich'] as const))(
           // A centre line with less than two dashes of road between its crossings and outlines
           // is not drawn at all (TASK-091: no stub inside a junction, Munich r:1172 at n:182).
           if (offset < 0 && reach === 0 && stop - startTrim < 2 * 2.7) continue;
+          // TASK-094: on a short road the stop line behind a signal's crossing may lie at or before
+          // the far edge of the crossing at its start (Munich r:651): no room for a divider.
+          if (reach === 0 && stop <= startTrim) continue;
           const heading = headingOf(lane);
           const covered = Array.from({ length: 9 }, (_, k) => {
             const s = reach + ((stop - reach) * (k + 0.5)) / 9;
@@ -317,12 +320,15 @@ cityTest(
 // outside its nodes' outlines, and all its strokes (with arrow shafts and stop lines). TASK-091
 // re-measured: lines now end 0.5 m before every crossing, which moved out from the junction to
 // the curb returns and onto every junction of three or more arms (5024a83's line lengths:
-// grid 9880, town 101643, sindelfingen 46174, munich 38684 m).
+// grid 9880, town 101643, sindelfingen 46174, munich 38684 m). TASK-094 re-measured: at signals
+// lines end at the stop line behind the set-back crossing (TASK-091: grid 8453/8886, town
+// 83776/87772, sindelfingen 41613/41920, munich 35400/36231 m); measured on main after TASK-092
+// and TASK-093.
 const main = {
-  grid: { lineOutsideM: 8453, markingOutsideM: 8886 },
-  town: { lineOutsideM: 83776, markingOutsideM: 87772 },
-  sindelfingen: { lineOutsideM: 41613, markingOutsideM: 41920 },
-  munich: { lineOutsideM: 35400, markingOutsideM: 36231 },
+  grid: { lineOutsideM: 8386, markingOutsideM: 8819 },
+  town: { lineOutsideM: 81564, markingOutsideM: 85560 },
+  sindelfingen: { lineOutsideM: 41664, markingOutsideM: 41971 },
+  munich: { lineOutsideM: 35698, markingOutsideM: 36545 },
 };
 
 test.each(tierCities(auditCities))(

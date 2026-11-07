@@ -200,13 +200,15 @@ cityTest('T40.3: n:1181 draws the crossings of TASK-072’s rule, off the juncti
   const node = nodeOf(city, 'n:1181');
   // Every served approach and exit of the signal: Landsberger Straße west (r:981 in, r:1358 out),
   // east (r:984 in, r:476 out) and Barthstraße (r:1182 in, r:1183 out). Before TASK-083 the old
-  // outline reached over the ends of r:981, r:1358 and r:476 and hid their stripes; r:729, laid
-  // beside r:984, ends inside the junction and has none.
+  // outline reached over the ends of r:981, r:1358 and r:476 and hid their stripes. r:729, laid
+  // beside r:984, ends inside the junction; since TASK-094 its signal-arm crossing moves out
+  // along the road like any other, clear of the junction.
   expect(crossingRoads(city, node)).toEqual([
     'r:1182',
     'r:1183',
     'r:1358',
     'r:476',
+    'r:729',
     'r:981',
     'r:984',
   ]);
