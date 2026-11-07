@@ -9,7 +9,7 @@ import {
 import type { CompiledCity } from '../network';
 import { style } from '../render/style';
 import { VehiclePoses, type PresentationSnapshot } from '../render/vehicle-pose';
-import { heightAt, roadStation, type cityHeights } from './heights';
+import { heightAt, heightSlopeAt, roadStation, type cityHeights } from './heights';
 
 export class Vehicles3D {
   readonly poses = new VehiclePoses();
@@ -58,13 +58,18 @@ export class Vehicles3D {
       const lane = snapshot.lane[i]!;
       let z: number,
         slope = 0;
-      if (lane < 0) z = heights.nodes[city.movements[-lane - 1]!.node]!;
-      else {
+      if (lane < 0) {
+        const movement = city.movements[-lane - 1]!;
+        z = heights.nodes[movement.node]!;
+        const before = heights.roads[city.lanes[movement.fromLane]!.road]!;
+        if (!city.nodes[movement.node]!.outline.length)
+          slope = heightSlopeAt(before, before.lengthM);
+      } else {
         const road = city.roads[city.lanes[lane]!.road]!;
         const height = heights.roads[road.idx]!;
         const s = roadStation(road, pose);
         z = heightAt(height, s);
-        slope = (heightAt(height, s + 0.1) - heightAt(height, s - 0.1)) / 0.2;
+        slope = heightSlopeAt(height, s);
       }
       this.transform.position.set(pose.x, z, pose.y);
       this.transform.rotation.set(0, -pose.heading, Math.atan(slope), 'YXZ');

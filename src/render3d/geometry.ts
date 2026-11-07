@@ -69,7 +69,7 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
         [d, z0],
       ]);
       polygon(surfaces, [a, b, c, d], (p) => zs.get(p)!);
-      if (height.deckM > 0) {
+      if (z0 > 0 || z1 > 0) {
         quad(slabs, vertex(a, z0), vertex(b, z1), vertex(b, z1 - 0.8), vertex(a, z0 - 0.8));
         quad(slabs, vertex(c, z1), vertex(d, z0), vertex(d, z0 - 0.8), vertex(c, z1 - 0.8));
         quad(
@@ -82,9 +82,10 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
       }
     }
   }
-  if (height.deckM > 0)
+  if (Math.max(height.fromM, height.toM, height.deckM) > 0)
     for (const end of [0, count - 1]) {
       const z = heightAt(height, end === 0 ? 0 : height.lengthM);
+      if (z <= 0) continue;
       const a = road.surface[end]!,
         b = road.surface[road.surface.length - end - 1]!;
       quad(slabs, vertex(a, z), vertex(b, z), vertex(b, z - 0.8), vertex(a, z - 0.8));
@@ -129,7 +130,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
     for (const atEnd of [false, true])
       for (const stripe of crossingStripes(city, road, atEnd, source))
         polygon(crossings, stripe, z);
-    if (height.deckM > 0) {
+    if (Math.max(height.fromM, height.toM, height.deckM) > 0) {
       for (let s = 15; s < height.lengthM; s += 30) {
         const top = heightAt(height, s) - 0.8;
         if (top <= 0) continue;

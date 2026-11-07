@@ -68,3 +68,39 @@ it('places instances at the shared 2D poses, with ramp height, pitch, hue and mo
   );
   vehicles.destroy();
 });
+
+it('keeps vehicle pitch through an inclined, outline-free road join', () => {
+  const b = buildCity('Inclined through join', 98);
+  const a = b.node(-120, 0, -1),
+    middle = b.node(0, 0, 0),
+    deck = b.node(140, 0, 2);
+  b.road(a, middle).layer = -1;
+  b.road(middle, deck).layer = 2;
+  const result = compile(b.city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const city = result.compiled,
+    heights = cityHeights(city, b.city);
+  const movement = city.movements.find((m) => city.nodes[m.node]!.id === middle.id)!;
+  expect(city.nodes[movement.node]!.outline).toHaveLength(0);
+  const vehicles = new Vehicles3D();
+  vehicles.setGeometry(city, 2);
+  vehicles.setSnapshot({
+    timeS: 0,
+    count: 1,
+    id: new Uint32Array([1]),
+    x: new Float32Array([0]),
+    y: new Float32Array([0]),
+    heading: new Float32Array([0]),
+    speed: new Float32Array([0]),
+    lateralM: new Float32Array([0]),
+    lane: new Int32Array([-movement.idx - 1]),
+    state: new Uint8Array([1]),
+    fade: new Float32Array([1]),
+  });
+  vehicles.animate(0, city, heights);
+  const matrix = new Matrix4();
+  vehicles.mesh.getMatrixAt(0, matrix);
+  expect(matrix.elements[1]).toBeGreaterThan(0.01);
+  expect(new Vector3().setFromMatrixPosition(matrix).y).toBe(0);
+  vehicles.destroy();
+});

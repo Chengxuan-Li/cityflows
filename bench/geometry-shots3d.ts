@@ -28,6 +28,7 @@ shots.push({
   bearing: 45,
   osm: 'fixtures/osm/sindelfingen-a81.osm',
 });
+shots.push({ id: 'V98-ramp-profile', centre: { x: -40, y: 210 }, zoom: 5, pitch: 15, bearing: 90 });
 const munich = 'fixtures/osm/munich-donnersberger.osm';
 
 async function frames(page: Page, n = 3) {
@@ -133,12 +134,21 @@ async function main() {
       const canvas = page.getByLabel('3D city view', { exact: true });
       await expect.poll(() => canvas.getAttribute('data-meshes').then(Number)).toBeGreaterThan(0);
       for (const shot of shots.filter((shot) => (shot.osm ?? munich) === osm)) {
+        const profileView = shot.id === 'V98-ramp-profile';
+        if (profileView) {
+          await button(page, 'Layers').click();
+          await page
+            .getByRole('region', { name: 'Map layers' })
+            .getByLabel('Basemap', { exact: true })
+            .uncheck();
+          await button(page, 'Layers').click();
+        }
         await page.evaluate(
           (shot) => window.cityflows!.setView3D!(shot.centre, shot.zoom, shot.pitch, shot.bearing),
           shot,
         );
         await frames(page);
-        if (process.argv.includes('--basemap')) {
+        if (process.argv.includes('--basemap') && !profileView) {
           await expect
             .poll(() => canvas.getAttribute('data-tiles').then(Number), { timeout: 30000 })
             .toBeGreaterThan(0);
@@ -159,6 +169,14 @@ async function main() {
         };
         records.push(record);
         console.info(JSON.stringify(record));
+        if (profileView && process.argv.includes('--basemap')) {
+          await button(page, 'Layers').click();
+          await page
+            .getByRole('region', { name: 'Map layers' })
+            .getByLabel('Basemap', { exact: true })
+            .check();
+          await button(page, 'Layers').click();
+        }
       }
       if (osm === munich && process.argv.includes('--performance')) {
         await button(page, '3D').click();
