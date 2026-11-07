@@ -20,6 +20,14 @@ const shots = [
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
 ];
+shots.push({
+  id: 'V98-signals-crossings',
+  centre: { x: 310, y: 604.5 },
+  zoom: 10,
+  pitch: 55,
+  bearing: 45,
+  osm: 'fixtures/osm/sindelfingen-a81.osm',
+});
 const munich = 'fixtures/osm/munich-donnersberger.osm';
 
 async function frames(page: Page, n = 3) {
@@ -116,7 +124,8 @@ async function main() {
       });
       const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(e.message));
-      await page.route('https://**/*', (route) => route.abort());
+      if (!process.argv.includes('--basemap'))
+        await page.route('https://**/*', (route) => route.abort());
       await page.goto('http://localhost:5295');
       await expect(button(page, 'Play')).toBeEnabled();
       await importOsm(page, osm);
@@ -129,6 +138,12 @@ async function main() {
           shot,
         );
         await frames(page);
+        if (process.argv.includes('--basemap')) {
+          await expect
+            .poll(() => canvas.getAttribute('data-tiles').then(Number), { timeout: 30000 })
+            .toBeGreaterThan(0);
+          await page.waitForTimeout(1500);
+        }
         const images = await page.evaluate(() => window.cityflows!.capture3D!());
         images.forEach((data, i) =>
           writeFileSync(
@@ -140,6 +155,7 @@ async function main() {
           ...shot,
           buildMs: await canvas.getAttribute('data-build-ms'),
           meshes: await canvas.getAttribute('data-meshes'),
+          tiles: await canvas.getAttribute('data-tiles'),
         };
         records.push(record);
         console.info(JSON.stringify(record));
@@ -172,7 +188,7 @@ async function main() {
         const two = await performanceSample(page, '2d');
         await button(page, '3D').click();
         await expect(canvas).toHaveAttribute('data-view', '3d');
-        await frames(page, 10);
+        await frames(page, 60);
         const three = await performanceSample(page, '3d');
         await button(page, 'Pause').click();
         const gpu = await canvas.evaluate((canvas) => {
@@ -184,6 +200,7 @@ async function main() {
           performance: [two, three],
           gpu,
           buildMs: await canvas.getAttribute('data-build-ms'),
+          tiles: await canvas.getAttribute('data-tiles'),
         };
         records.push(record);
         console.info(JSON.stringify(record));

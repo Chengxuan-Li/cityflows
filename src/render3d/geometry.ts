@@ -1,9 +1,11 @@
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { parallelOffset } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
 import { junctionGuides } from '../render/layers/junction-markings';
-import { signalHeads } from '../render/layers/signals';
+import { crossingStripes } from '../render/layers/roads';
+import { signalLayout } from './signals';
 import { placeHue, style } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
@@ -29,9 +31,10 @@ function quad(target: number[], a: Vertex, b: Vertex, c: Vertex, d: Vertex) {
   target.push(...a, ...b, ...c, ...a, ...c, ...d);
 }
 
-export function buffer(positions: number[]) {
-  const geometry = new BufferGeometry();
+export function buffer(positions: number[], smooth = false) {
+  let geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  if (smooth) geometry = mergeVertices(geometry);
   geometry.computeVertexNormals();
   return geometry;
 }
@@ -115,13 +118,17 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
   const heights = cityHeights(city, source);
   const surfaces: number[] = [],
     slabs: number[] = [],
-    markings: number[] = [];
+    markings: number[] = [],
+    crossings: number[] = [];
   const piers: { x: number; y: number; height: number }[] = [];
   for (const road of city.roads) {
     const height = heights.roads[road.idx]!;
     roadSurface(surfaces, slabs, road, height);
     const z = (p: Vec2) => heightAt(height, roadStation(road, p)) + 0.02;
     for (const line of roadMarkings(city, road, source)) markingStrip(markings, line, z);
+    for (const atEnd of [false, true])
+      for (const stripe of crossingStripes(city, road, atEnd, source))
+        polygon(crossings, stripe, z);
     if (height.deckM > 0) {
       for (let s = 15; s < height.lengthM; s += 30) {
         const top = heightAt(height, s) - 0.8;
@@ -170,25 +177,16 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
   }
   const placeGeometry = buffer(places);
   placeGeometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  const heads = city.nodes.flatMap((node) =>
-    node.signal
-      ? signalHeads(city, node).map((head) => ({
-          ...head,
-          node: node.idx,
-          height: heightAt(
-            heights.roads[city.lanes[head.lane]!.road]!,
-            roadStation(city.roads[city.lanes[head.lane]!.road]!, head),
-          ),
-        }))
-      : [],
-  );
+  const { heads, supports } = signalLayout(city, heights);
   return {
-    surfaces: buffer(surfaces),
+    surfaces: buffer(surfaces, true),
     slabs: buffer(slabs),
     markings: buffer(markings),
+    crossings: buffer(crossings),
     places: placeGeometry,
     piers,
     heads,
+    supports,
     heights,
   };
 }

@@ -1441,7 +1441,12 @@ height step. Surfaces, marking strips, signal poles and pitched vehicle instance
 height rule; movements use their node's height. Raised decks have 0.8 m slabs and piers every
 30 m. The 3D camera starts at the 2D centre and hands its ground target and scale back on
 return; the hidden Pixi ticker stops while 3D is active. Vehicle raycasting opens the existing
-inspector, playback stays live, and a ground-opacity toggle reveals tunnels. Phase B's
+inspector, with the same eight-pixel picking tolerance as 2D; playback stays live and a
+ground-opacity toggle reveals tunnels. Pedestrian stripes reuse the 2D crossing polygons.
+Signal heads face the approaching lane and hang at 5.5 m from 6 m curbside cantilevers.
+A ground-mesh adapter reuses the 2D tile loader, projection, cache, retry and URL settings;
+the Basemap layer also works in 3D and follows the ground-opacity toggle. Surface normals
+are shared across ramp triangles for smooth lighting; inferred heights are unchanged. Phase B's
 surroundings await TASK-096; phase A has no buildings, terrain elevation or 3D editing.
 
 `src/ui` is the React app with one Zustand store. Layout follows the brief:

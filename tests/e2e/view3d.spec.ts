@@ -11,6 +11,21 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   await page.route('https://**/*', (route) => route.abort());
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
+  const tile = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 32;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = '#a4b7be';
+    context.fillRect(0, 0, 32, 32);
+    return canvas.toDataURL('image/png').split(',')[1]!;
+  });
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from(tile, 'base64'),
+      headers: { 'access-control-allow-origin': '*' },
+    }),
+  );
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm');
   const map = page.getByLabel('City map', { exact: true });
   const map3D = page.getByLabel('3D city view', { exact: true });
@@ -28,6 +43,15 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   await expect(map3D).toHaveAttribute('data-view', '3d');
   await expect.poll(() => map3D.getAttribute('data-meshes').then(Number)).toBeGreaterThan(0);
   await expect(map).toHaveAttribute('data-ticker', 'stopped');
+  await expect.poll(() => map3D.getAttribute('data-tiles').then(Number)).toBeGreaterThan(0);
+  await expect.poll(() => map3D.getAttribute('data-crossings').then(Number)).toBeGreaterThan(0);
+  await button(page, 'Layers').click();
+  const layers = page.getByRole('region', { name: 'Map layers' });
+  await layers.getByLabel('Basemap', { exact: true }).uncheck();
+  await expect(map3D).toHaveAttribute('data-tiles', '0');
+  await layers.getByLabel('Basemap', { exact: true }).check();
+  await expect.poll(() => map3D.getAttribute('data-tiles').then(Number)).toBeGreaterThan(0);
+  await button(page, 'Layers').click();
   for (const name of ['Select', 'Road', 'Place', 'Ramp', 'Roundabout']) {
     await expect(button(page, name)).toBeDisabled();
     await expect(button(page, name)).toHaveAttribute('title', 'Editing is available in 2D');
@@ -47,12 +71,15 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
     return { id: snapshot.id[0]!, x: snapshot.x[0]!, y: snapshot.y[0]! };
   });
   await page.evaluate(
-    (target) => window.cityflows!.setView3D!({ x: target.x, y: target.y }, 12, 55),
+    (target) => window.cityflows!.setView3D!({ x: target.x, y: target.y }, 3, 55),
     target,
   );
   await page.waitForTimeout(250);
-  const point = await page.evaluate((target) => window.cityflows!.worldToScreen!(target), target);
-  await map3D.click({ position: point });
+  const point = await page.evaluate(
+    (target) => window.cityflows!.vehicleToScreen!(target.id)!,
+    target,
+  );
+  await map3D.click({ position: { x: point.x + 4, y: point.y } });
   await expect(
     page.getByRole('heading', { name: `Vehicle ${target.id}`, exact: true }),
   ).toBeVisible();

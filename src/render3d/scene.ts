@@ -11,12 +11,10 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   Object3D,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
-  Raycaster,
   Scene,
-  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three';
@@ -26,7 +24,10 @@ import { signalStateAt, type CompiledCity } from '../network';
 import { style } from '../render/style';
 import type { CityGeometry, Pick } from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
+import { Basemap3D } from './basemap';
 import { buildGeometry } from './geometry';
+import { pickVehicle3D, vehicleScreenPoint } from './picking';
+import { signalMountM, signalRotationY } from './signals';
 import { Vehicles3D } from './vehicles';
 
 export class Scene3D {
@@ -37,7 +38,6 @@ export class Scene3D {
   private readonly observer: ResizeObserver;
   private readonly sun = new DirectionalLight(0xfff8ec, 1.4);
   private readonly vehicles = new Vehicles3D();
-  private readonly raycaster = new Raycaster();
   private readonly selection = new Mesh(
     new BoxGeometry(5.3, 1.9, 2.6).translate(0, 0.8, 0),
     new MeshBasicMaterial({ color: style.selection, wireframe: true }),
@@ -54,13 +54,16 @@ export class Scene3D {
   private capture: { images: string[]; resolve: (images: string[]) => void } | null = null;
   private belowGround = false;
   private placesVisible = true;
+  private basemap: Basemap3D | undefined;
+  private tilesEnabled = true;
+  private lastRenderMs = performance.now();
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const renderer = (this.renderer = new WebGLRenderer({ canvas, antialias: true }));
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
     renderer.setClearColor(style.background);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.shadowMap.type = PCFShadowMap;
     this.scene.add(
       new HemisphereLight(0xffffff, 0x9eaa99, 1.4),
       this.sun,
@@ -101,6 +104,14 @@ export class Scene3D {
     const start = performance.now();
     this.disposeContent();
     this.city = city;
+    if (this.source?.geo !== source.geo) {
+      this.basemap?.destroy();
+      this.basemap = source.geo ? new Basemap3D(source.geo) : undefined;
+      if (this.basemap) {
+        this.basemap.group.visible = this.tilesEnabled;
+        this.scene.add(this.basemap.group);
+      }
+    }
     this.source = source;
     this.vehicles.poses.snapshot = null;
     this.vehicles.mesh.count = 0;
@@ -115,6 +126,7 @@ export class Scene3D {
     add(geometry.surfaces, style.asphalt);
     add(geometry.slabs, 0x899b99);
     add(geometry.markings, style.marking, false);
+    add(geometry.crossings, style.marking, false);
     const places = add(geometry.places, 0xffffff, false);
     places.material.vertexColors = true;
     places.name = 'places';
@@ -134,9 +146,14 @@ export class Scene3D {
     piers.castShadow = piers.receiveShadow = true;
     this.content.add(piers);
     const poles = new InstancedMesh(
-      new BoxGeometry(0.12, 3, 0.12),
+      new BoxGeometry(0.15, 6, 0.15),
       new MeshLambertMaterial({ color: 0x637773 }),
-      geometry.heads.length,
+      geometry.supports.length,
+    );
+    const arms = new InstancedMesh(
+      new BoxGeometry(1, 1, 1),
+      new MeshLambertMaterial({ color: 0x637773 }),
+      geometry.supports.length,
     );
     const boxes = new InstancedMesh(
       new BoxGeometry(0.55, 0.95, 0.4),
@@ -144,22 +161,35 @@ export class Scene3D {
       geometry.heads.length,
     );
     this.lamps = new InstancedMesh(
-      new BoxGeometry(0.32, 0.32, 0.43),
+      new PlaneGeometry(0.32, 0.32).translate(0, 0, 0.205),
       new MeshBasicMaterial(),
       geometry.heads.length,
     );
     transform.scale.setScalar(1);
-    geometry.heads.forEach((head, i) => {
-      transform.position.set(head.x, head.height + 1.5, head.y);
+    geometry.supports.forEach((support, i) => {
+      transform.position.set(support.x, support.height + support.clearanceM / 2, support.y);
       transform.updateMatrix();
       poles.setMatrixAt(i, transform.matrix);
-      transform.position.y = head.height + 3;
+      const from = new Vector3(support.x, support.height + support.clearanceM, support.y);
+      const to = new Vector3(support.end.x, support.end.height + support.clearanceM, support.end.y);
+      const direction = to.clone().sub(from);
+      transform.position.copy(from).add(to).multiplyScalar(0.5);
+      transform.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), direction.clone().normalize());
+      transform.scale.set(0.12, direction.length(), 0.12);
+      transform.updateMatrix();
+      arms.setMatrixAt(i, transform.matrix);
+      transform.rotation.set(0, 0, 0);
+      transform.scale.setScalar(1);
+    });
+    geometry.heads.forEach((head, i) => {
+      transform.position.set(head.x, head.height + signalMountM, head.y);
+      transform.rotation.set(0, signalRotationY(head.heading), 0);
       transform.updateMatrix();
       boxes.setMatrixAt(i, transform.matrix);
       this.lamps!.setMatrixAt(i, transform.matrix);
     });
-    poles.castShadow = boxes.castShadow = true;
-    this.content.add(poles, boxes, this.lamps);
+    poles.castShadow = arms.castShadow = boxes.castShadow = true;
+    this.content.add(poles, arms, boxes, this.lamps);
     geometry.surfaces.computeBoundingBox();
     const box = geometry.surfaces.boundingBox!;
     if (box.isEmpty()) {
@@ -172,6 +202,7 @@ export class Scene3D {
       new PlaneGeometry(width, depth),
       new MeshLambertMaterial({ color: style.background }),
     );
+    this.ground.renderOrder = 2;
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.position.set((box.min.x + box.max.x) / 2, -0.04, (box.min.z + box.max.z) / 2);
     this.ground.receiveShadow = true;
@@ -238,6 +269,10 @@ export class Scene3D {
     this.ground.material.depthWrite = !enabled;
     this.ground.material.needsUpdate = true;
   }
+  setTiles(enabled: boolean) {
+    this.tilesEnabled = enabled;
+    if (this.basemap) this.basemap.group.visible = enabled;
+  }
   setPlaces(visible: boolean) {
     this.placesVisible = visible;
     const places = this.content.getObjectByName('places');
@@ -284,15 +319,29 @@ export class Scene3D {
       y: ((1 - p.y) * this.canvas.clientHeight) / 2,
     };
   }
+  vehicleToScreen(id: number) {
+    const index =
+      this.vehicles.poses.snapshot?.id.subarray(0, this.vehicles.mesh.count).indexOf(id) ?? -1;
+    return index < 0
+      ? null
+      : vehicleScreenPoint(
+          this.vehicles.mesh,
+          index,
+          this.camera,
+          this.canvas.clientWidth,
+          this.canvas.clientHeight,
+        );
+  }
   pick(x: number, y: number): Pick | null {
-    this.vehicles.mesh.computeBoundingSphere();
-    this.raycaster.setFromCamera(
-      new Vector2((2 * x) / this.canvas.clientWidth - 1, 1 - (2 * y) / this.canvas.clientHeight),
+    const index = pickVehicle3D(
+      this.vehicles.mesh,
       this.camera,
+      x,
+      y,
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
     );
-    const hit = this.raycaster.intersectObject(this.vehicles.mesh)[0];
-    const index = hit?.instanceId;
-    return index === undefined
+    return index === null
       ? null
       : { kind: 'vehicle', id: this.vehicles.poses.snapshot!.id[index]! };
   }
@@ -315,9 +364,23 @@ export class Scene3D {
     }
     // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
     const distance = this.camera.position.distanceTo(this.controls.target);
-    this.camera.near = Math.max(0.2, distance / 50);
+    this.camera.near = Math.max(0.2, distance / 10);
     this.camera.far = Math.max(5000, distance * 10);
     this.camera.updateProjectionMatrix();
+    this.camera.updateMatrixWorld();
+    const now = performance.now();
+    this.basemap?.update(
+      this.camera,
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
+      now - this.lastRenderMs,
+      this.belowGround,
+    );
+    this.lastRenderMs = now;
+    this.canvas.dataset.tiles = String(this.tilesEnabled ? (this.basemap?.visibleCount ?? 0) : 0);
+    this.canvas.dataset.crossings = String(
+      this.geometry?.crossings.getAttribute('position').count ?? 0,
+    );
     // Fit the 2048 shadow map to the camera's ground target, rather than the whole city.
     const extent = Math.max(40, this.camera.position.distanceTo(this.controls.target) * 0.9);
     const target = this.controls.target;
@@ -353,6 +416,7 @@ export class Scene3D {
   destroy() {
     this.observer.disconnect();
     this.controls.dispose();
+    this.basemap?.destroy();
     this.disposeContent();
     this.vehicles.destroy();
     this.selection.geometry.dispose();

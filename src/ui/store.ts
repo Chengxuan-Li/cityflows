@@ -663,6 +663,7 @@ declare global {
     cityflows?: Pick<EngineClient, 'metrics' | 'hash' | 'inspect' | 'step'> & {
       snapshot?: EngineClient['snapshot'];
       drawnSnapshot?: () => VehicleSnapshot | null;
+      vehicleToScreen?: (id: number) => Vec2 | null;
       capture3D?: () => Promise<string[]>;
       view3D?: () => { centre: Vec2; zoom: number } | null;
       setView3D?: (centre: Vec2, zoom: number, pitch?: number, bearing?: number) => void;

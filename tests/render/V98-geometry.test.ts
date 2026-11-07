@@ -11,7 +11,13 @@ test.each(tierCities(auditCities))(
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
     const geometry = buildGeometry(result.compiled, city);
-    for (const buffer of [geometry.surfaces, geometry.slabs, geometry.markings, geometry.places]) {
+    for (const buffer of [
+      geometry.surfaces,
+      geometry.slabs,
+      geometry.markings,
+      geometry.crossings,
+      geometry.places,
+    ]) {
       for (const attribute of Object.values(buffer.attributes))
         expect(Array.from(attribute.array).every(Number.isFinite)).toBe(true);
       buffer.dispose();

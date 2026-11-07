@@ -335,6 +335,7 @@ export function MapView() {
         window.cityflows.drawnSnapshot = () => drawnSnapshot;
         window.cityflows.worldToScreen = (point) =>
           active3D ? three!.worldToScreen(point) : view.camera.worldToScreen(point);
+        window.cityflows.vehicleToScreen = (id) => three?.vehicleToScreen(id) ?? null;
         window.cityflows.capture3D = () => three!.captureFrames();
         window.cityflows.view3D = () => three?.getView() ?? null;
         window.cityflows.setView3D = (centre, zoom, pitch, bearing) =>
@@ -487,6 +488,7 @@ export function MapView() {
           three!.setSelection(selection);
           three!.setBelowGround(getState().belowGround);
           three!.setPlaces(layers.places);
+          three!.setTiles(layers.basemap);
           three!.setSignals(
             getState().run?.timeS ?? 0,
             getState().run?.stale ? null : session.loadedCompiled,
