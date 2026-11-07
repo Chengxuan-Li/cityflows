@@ -21,7 +21,9 @@ async function centrePixel(page: Page) {
 test('@smoke V98 Munich switches views, keeps playback and camera centre, and selects a 3D vehicle', async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  // CI's runner renders three.js on a software GPU; 120 s timed out there (d3502d8)
+  // and the local run takes 84 s.
+  test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.route('https://**/*', (route) => route.abort());
   await page.goto('/');
