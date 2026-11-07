@@ -424,6 +424,33 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   each other, a cap at a dead end, and every movement surface; curb circles are cut out so
   the boundary follows the arc. `CNode.curbs` is removed. The importer's realignment (13 step
   12) groups road ends by `corridorId`, so a street's carriageways are one arm there too.
+- TASK-089 (split converging carriageways; owner decision: split the node geometrically,
+  not the network). Where an incoming and an outgoing carriageway of one street meet a node
+  within 45 degrees (60 for a crossing's arms), each gets its own end beside the node: its
+  median-side edge a quarter metre off the node point, held over the junction mouth and eased
+  away from the node (monotone, over the TASK-080 taper), and pushed apart no more than the pair
+  actually overlaps. Lanes are laid out from the reference line plus the per-road shift profile
+  `CRoad.startShift`/`endShift` (sampled every 0.5 m); cuts, curbs and the polygon follow the
+  split ends; each direction's carriageways cross the node as a forced through pair; the median
+  reaches the junction edge, and opposite carriageways side by side draw their touching edges as
+  a solid double line. Movements, ids and routing are as imported. Divided pairs keep their
+  median across a node (B43).
+- TASK-092 (corners, B48, B51). Every corner between neighbouring arms gets a curb of at least
+  its class radius (TASK-083's table), shrunk only where the arms leave less room and not below
+  2 m without a named reason (T42.1); curbs are edge-following cubics that leave and meet the
+  road edges along them (TASK-089), reaching at most half of each arm. A split pair's median
+  ends in a half-circle nose at the junction edge. The audit's measure 10 (corner sharpness:
+  a missing or degenerate curb, or a turn over 30 degrees between 0.5 m samples) checks it.
+- TASK-093 (one street's carriageways, B49, B45, B47). A second OSM way of a carriageway (the
+  importer pairs one partner per road) joins its pair's corridor after realignment, so
+  realignment and relaxation are unchanged; TASK-089's jog rule measures the lanes that
+  actually join; shallowly converging pairs stay attached to the node instead of opening a
+  lens. Median voids narrower than `MEDIAN_VOID_M` = 3 m between one corridor's carriageways
+  close to the 0.5 m median, eased where the source median widens past it. Where a road's lane
+  count or directions change across a two-arm or through node (a one-way continuing as a
+  two-way street), the road with fewer lanes shifts so its lanes continue the matching travel
+  direction's lanes (within 0.1 m at the node), eased over the TASK-080 taper; a direction of a
+  two-way street is never shifted, and a shift steeper than 1 in 4 is not applied.
 - TASK-080 (short transitions, B37). Every taper of TASK-071 (a branch easing to its own
   offset, a dropped lane narrowing, an added lane growing) takes
   `taperM = min(half the road, clamp(0.4 * speed limit in km/h, 15 m, 40 m))`: 20 m at
@@ -934,11 +961,15 @@ noise, by `rerouteHysteresis`; at most `maxReplans` congestion switches occur pe
 Switches release approach grants, reset the route cursor and lane plan, and set
 `routeReason: 'congestion'`.
 
-Stop positions (TASK-072). `CLane.stopM` is where an ungranted vehicle stops: `lengthM`
-minus `crossingM = 3.0` (a 2.5 m crossing and 0.5 m clearance) when the lane's approach has a
-pedestrian crossing (TASK-072's rule: a signalized approach with a served movement), else
+Stop positions (TASK-072, TASK-094). `CLane.stopM` is where an ungranted vehicle stops. On a
+signalized approach with a served movement and a crossing, `stopM` is the crossing's far edge
+minus 0.5 m (`crossingSpan` in `src/network/crossings.ts`, shared with the renderer), so a
+waiting car's front stays 0.5 m short of the stripes; where that would fall in the lane's
+first half, or the crossing is turned off, the end draws no crossing and `stopM` is
+`lengthM - 3.0` (TASK-072's 2.5 m crossing and 0.5 m clearance). Elsewhere `stopM` is
 `lengthM`; a lane shorter than 10 m gets no crossing. TASK-091's decorative crossings at other
-junctions and its overrides do not change `stopM`. Every rule that treats the lane end as the stop line for an ungranted vehicle uses
+junctions do not change `stopM`. A car that passed the stop line on a grant and loses it at
+red stands where it is (the grant-release rule is unchanged). Every rule that treats the lane end as the stop line for an ungranted vehicle uses
 `stopM` instead: the standing obstacle, the commit clamp, the stop sign's one second at the
 line, the entry request distance, junction waiting time, and the distance a yield or stop
 gap is measured over. A granted vehicle drives on to `lengthM` and onto its movement as
@@ -1288,11 +1319,11 @@ type HostEvent =
   diverge), or the road belongs to a roundabout ring (a closed chain of one-way roads, each
   continuing into the next within 30 degrees). `Road.crossings` overrides the default per road
   end; only explicit edits are stored, a value equal to the default clears the entry, and old
-  files load unchanged. Place: on an arm with a signalized approach (a lane whose `stopM` is
-  before its end) TASK-072's place holds, 0.25 to 2.75 m from the cut, because the stop line
-  must stay before the crossing and `stopM` cannot move. Elsewhere the near edge lies 1 m beyond
+  files load unchanged. Place (TASK-094 for signalized approaches): the near edge lies 1 m beyond
   the farthest point where a curb return of the node meets a road edge of the arm, measured
-  along each road, and no stripe comes within 1 m of a curb return. TASK-089's move-out (up to
+  along each road, and no stripe comes within 1 m of a curb return. At a signalized approach
+  that can get green the crossing stays there (no move-out), keeping the stop line close to the
+  junction; signal heads are drawn just behind the stop line. Elsewhere TASK-089's move-out (up to
   6 m, all stripes together) clears the node's and the road's far node's outline; lanes shorter
   than the near edge plus 9.75 m carry no stripes. Dividers and centre lines end, and turn
   arrows stay, 0.5 m behind a crossing (on a signalized approach the stop position, before the
