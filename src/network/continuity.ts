@@ -606,6 +606,8 @@ const OVERLAP_PROBE_M = 1;
 const CROSSING_M = 3;
 /** Farther from the node than this the blocks are not compared. */
 const CONVERGE_REACH_M = 200;
+/** Blocks whose gap falls short of the median by no more than this have parted (TASK-099). */
+const TOUCH_M = 0.05;
 const ALONG = Math.cos(Math.PI / 6);
 /** Another road end within this angle on the side a block would move to is in its way. */
 const NEIGHBOUR = Math.cos(Math.PI / 3);
@@ -1053,7 +1055,9 @@ export function convergingShifts(
       ins.some((a) => outs.some((b) => measure(a, b, i * SHIFT_STEP_M).centres < -1)),
     );
     if (crossed > 0) needed.fill(0, crossed);
-    const parted = needed.findIndex((v) => v <= 0);
+    // TASK-099: blocks within `TOUCH_M` of the median have parted (the importer's pull leaves
+    // attached carriageways at the median to a few centimetres either way).
+    const parted = needed.findIndex((v) => v <= TOUCH_M);
     if (parted > 0) needed.fill(0, parted);
     const taper = Math.min(...all.map(({ road }) => taperLength(sources[road.idx]!)));
     // Owner (TASK-089, the n:104 sketch): each side's lane block gets its own end at the node, its
@@ -1102,11 +1106,28 @@ export function convergingShifts(
     // farther out than at the node.
     const atMouth = envelope[Math.round(hold / SHIFT_STEP_M)] ?? 0;
     const overlapM = (parted < 0 ? needed.length : parted) * SHIFT_STEP_M;
+    // TASK-099 (B54): a pair whose source lines run attached, within half the median of it, for a
+    // taper beyond where its blocks part (the importer's `attachCarriageways` closed the median
+    // there) follows its shortfall exactly, without a hold, an envelope or a mean: the split and
+    // the importer's pull then meet where both are zero and the facing edges run on at the median
+    // as one line. What the node needs beyond the shortfall there (nothing where both lines end at
+    // the node point) eases out over the taper.
+    const runsAttached =
+      parted > 0 &&
+      Array.from(
+        { length: Math.round(taper / SHIFT_STEP_M) },
+        (_, k) => (parted + k) * SHIFT_STEP_M,
+      ).every(
+        (d) =>
+          d <= limit &&
+          ins.every((a) => outs.every((b) => Math.abs(measure(a, b, d).shortfall) <= MEDIAN_M / 2)),
+      );
     const attached =
-      overlapM > hold + taper &&
-      envelope.at(-1)! <= 1 &&
-      total - atMouth < MEDIAN_VOID_M &&
-      envelope[0]! - needed[0]! <= MEDIAN_M / 2;
+      runsAttached ||
+      (overlapM > hold + taper &&
+        envelope.at(-1)! <= 1 &&
+        total - atMouth < MEDIAN_VOID_M &&
+        envelope[0]! - needed[0]! <= MEDIAN_M / 2);
     const held = holdRamp(1, attached ? 0 : hold, taper);
     const size = Math.max(held.length, envelope.length) + Math.ceil(taper / SHIFT_STEP_M) + 2;
     const tail = (i: number) =>
@@ -1114,11 +1135,15 @@ export function convergingShifts(
         ? envelope.at(-1)! * Math.max(0, 1 - ((i - envelope.length + 1) * SHIFT_STEP_M) / taper)
         : 0;
     const raw = Array.from({ length: size }, (_, i) =>
-      Math.max(envelope[i] ?? tail(i), Math.max(0, total) * (held[i] ?? 0)),
+      runsAttached
+        ? (needed[i] ?? 0) + Math.max(0, total - needed[0]!) * (held[i] ?? 0)
+        : Math.max(envelope[i] ?? tail(i), Math.max(0, total) * (held[i] ?? 0)),
     );
-    const split = attached
-      ? centredMean(raw, taper / 2).map((v, i) => Math.max(v, raw[i]!))
-      : trailingMean(trailingMean(raw, taper / 2), taper / 2);
+    const split = runsAttached
+      ? centredMean(raw, 4)
+      : attached
+        ? centredMean(raw, taper / 2).map((v, i) => Math.max(v, raw[i]!))
+        : trailingMean(trailingMean(raw, taper / 2), taper / 2);
     // Each side's shift never turns back. A side whose end moves toward the other at the node
     // (its line ends beyond its place) eases that move out over the hold; the other takes the
     // rest of the split. Where both move apart, each takes its end's share of the split all
