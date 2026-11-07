@@ -51,11 +51,11 @@ function ends(city: CompiledCity) {
 const expressway = (road: CRoad) => road.roadClass === 'motorway' || road.roadClass === 'ramp';
 
 /** The junction outline still covers the middle of the road where the crossing would lie at its
- * farthest (moved out 6 m): the end lies under the outline of an irregular node (TASK-089's
- * limit). */
+ * farthest (moved out 6 m; a served signal's approach does not move, TASK-094): the end lies
+ * under the outline of an irregular node (TASK-089's limit). */
 function underOutline(city: CompiledCity, node: CNode, road: CRoad, atEnd: boolean, nearM: number) {
   const lane = city.lanes[road.lanes[Math.floor(road.lanes.length / 2)]!]!;
-  const d = nearM + 6;
+  const d = nearM + (atEnd && servedSignal(city, road) ? 0 : 6);
   return [d, d + 2.5].some((x) =>
     pointInPolygon(
       pointAtDistance(lane.polyline, lane.cumulative, atEnd ? lane.lengthM - x : x),

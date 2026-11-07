@@ -129,8 +129,9 @@ test.each(tierCities(auditCities))(
 // re-measured: lines end 0.5 m before every crossing, which moved out to the curb returns and
 // onto every junction of three or more arms (5024a83: grid 9880, town 101643, sindelfingen
 // 46174, munich 38684 m). TASK-094 re-measured: at signals lines end at the stop line behind the
-// set-back crossing (TASK-091: grid 8453, town 83776, sindelfingen 41613, munich 35400 m).
-const mainLineOutsideM = { grid: 8386, town: 81564, sindelfingen: 41558, munich: 35038 };
+// set-back crossing (TASK-091: grid 8453, town 83776, sindelfingen 41613, munich 35400 m),
+// measured on main after TASK-092 and TASK-093.
+const mainLineOutsideM = { grid: 8386, town: 81564, sindelfingen: 41664, munich: 35698 };
 
 test.each(tierCities(auditCities))(
   'T27: %s keeps at least 98 % of main’s lane lines outside outlines',

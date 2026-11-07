@@ -163,9 +163,11 @@ const MOVE_OUT_M = 6;
  * measured along each road, and no stripe comes within 1 m of a curb return; TASK-089: where the
  * outline reaches over the road the crossing moves out, all stripes together, to the first place
  * that keeps the most stripes clear (up to 6 m); lanes shorter than the near edge plus 9.75 m
- * carry no stripes. TASK-094 (B53): signalized approaches follow the same rule, and their stop
- * line moves behind the crossing (`populateStops`); where it would fall in a lane's first half
- * the end has no stripes and keeps TASK-072's stop.
+ * carry no stripes. TASK-094 (B53): signalized approaches set back from the curb return too, but
+ * do not move out (their stop line follows the crossing, and each metre out is a metre less
+ * storage and a longer start at green: Munich at 0.15 gridlocked 75 times with the move-out, 41
+ * without); their stop line lies behind the crossing (`populateStops`), and where it would fall
+ * in a lane's first half the end has no stripes and keeps TASK-072's stop.
  */
 export function crossingPlacement(city: CompiledCity, road: CRoad, atEnd: boolean): Placement {
   let cached = placements.get(road);
@@ -255,9 +257,11 @@ function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placeme
   };
   const full = Math.floor((width - 0.225) / STRIPE_PITCH_M + 0.5);
   let best = { stripes: at(near), nearM: near, farM: near + CROSSING_M };
+  // A served signal's approach stays where the curb return puts it (TASK-094).
+  const fixed = atEnd && servedSignal(city, road);
   for (
     let offset = 0.25;
-    offset <= MOVE_OUT_M + 1e-9 && best.stripes.length < full;
+    !fixed && offset <= MOVE_OUT_M + 1e-9 && best.stripes.length < full;
     offset += 0.25
   ) {
     const stripes = at(near + offset);

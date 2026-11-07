@@ -322,12 +322,13 @@ cityTest(
 // the curb returns and onto every junction of three or more arms (5024a83's line lengths:
 // grid 9880, town 101643, sindelfingen 46174, munich 38684 m). TASK-094 re-measured: at signals
 // lines end at the stop line behind the set-back crossing (TASK-091: grid 8453/8886, town
-// 83776/87772, sindelfingen 41613/41920, munich 35400/36231 m).
+// 83776/87772, sindelfingen 41613/41920, munich 35400/36231 m); measured on main after TASK-092
+// and TASK-093.
 const main = {
   grid: { lineOutsideM: 8386, markingOutsideM: 8819 },
   town: { lineOutsideM: 81564, markingOutsideM: 85560 },
-  sindelfingen: { lineOutsideM: 41558, markingOutsideM: 41866 },
-  munich: { lineOutsideM: 35038, markingOutsideM: 35887 },
+  sindelfingen: { lineOutsideM: 41664, markingOutsideM: 41971 },
+  munich: { lineOutsideM: 35698, markingOutsideM: 36545 },
 };
 
 test.each(tierCities(auditCities))(
