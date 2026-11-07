@@ -96,15 +96,32 @@ cityTest(
 
     const ids = (c: City) => Object.values(c.roads).map((r) => [r.id, r.corridorId]);
     expect(ids(munich())).toEqual(ids(city));
-    const kinds = { twoWay: 0, coincident: 0, dual: 0, pushed: 0, sameDirection: 0, none: 0 };
+    const kinds = {
+      twoWay: 0,
+      coincident: 0,
+      dual: 0,
+      pushed: 0,
+      sameDirection: 0,
+      thirdWay: 0,
+      none: 0,
+    };
     const members = new Map<string, Road[]>();
     for (const road of Object.values(roads)) {
       if (road.corridorId === null) kinds.none++;
       else members.set(road.corridorId!, [...(members.get(road.corridorId!) ?? []), road]);
     }
     for (const [id, list] of members) {
-      expect(list).toHaveLength(2);
-      const [x, y] = list as [Road, Road];
+      let pair = list;
+      if (list.length === 3) {
+        // TASK-093 (B49): a carriageway drawn as two ways that meet at a node joins its pair's
+        // corridor as a third way.
+        const joint = list.find((y) => list.some((x) => x.to === y.from));
+        expect(joint, id).toBeDefined();
+        kinds.thirdWay++;
+        pair = list.filter((r) => r !== joint);
+      }
+      expect(pair).toHaveLength(2);
+      const [x, y] = pair as [Road, Road];
       if (!id.startsWith('corridor:')) kinds.twoWay++;
       else if (x.from === y.from) kinds.sameDirection++;
       else if (!x.provenance.inferred!.includes('separated')) kinds.dual++;
@@ -121,6 +138,9 @@ cityTest(
     // n:774, Arnulfstraße r:1354/r:447 at n:382).
     expect(kinds.pushed).toBe(5);
     expect(kinds.sameDirection).toBe(1);
+    // TASK-093: Landsberger r:961 (beside r:1276 into n:967), r:1044 and r:1308, Marsstraße r:944
+    // and r:698 continue their pair's carriageway.
+    expect(kinds.thirdWay).toBe(5);
   },
   120_000,
 );

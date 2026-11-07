@@ -87,6 +87,10 @@ export function shiftAt(
 export const shiftLength = (profile: ArrayLike<number>) =>
   profile.length ? (profile.length - 1) * SHIFT_STEP_M : 0;
 
+/** TASK-093 (B45, owner to confirm): a median between one street's carriageways narrower than
+ * this is closed to the 0.5 m median; a wider one stays as drawn. */
+export const MEDIAN_VOID_M = 3;
+
 /** Carriageways converging at more than this angle are not set side by side. */
 export const CONVERGING = Math.cos(Math.PI / 4);
 
