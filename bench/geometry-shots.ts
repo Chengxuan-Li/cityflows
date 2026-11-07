@@ -9,6 +9,7 @@ import { chromium, type Page } from '@playwright/test';
 // starts the dev server on a free port, imports the Munich extract through the app's import
 // dialog, hides the basemap, places and entrances, and captures each shot at the camera below,
 // so images of two trees line up pixel for pixel. Usage: npm run geometry-shots -- <out-dir>
+// [--only <id,id>] (TASK-090: only the named shots).
 
 /** World centre (m, the city's frame) and zoom (screen px per m) of each image; the case ids are
  * bench/geometry-audit.ts's. The map canvas is 1280 x 800 px. */
@@ -152,8 +153,13 @@ const frames = (page: Page, count: number) =>
   }, count);
 
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
-  const out = process.argv[2];
-  if (!out) throw new Error('Usage: npm run geometry-shots -- <out-dir>');
+  const [out, flag, list, ...rest] = process.argv.slice(2);
+  if (!out || (flag !== undefined && (flag !== '--only' || !list)) || rest.length)
+    throw new Error('Usage: npm run geometry-shots -- <out-dir> [--only <id,id>]');
+  const only = list?.split(',');
+  const unknown = only?.filter((id) => !shots.some((shot) => shot.id === id)) ?? [];
+  if (unknown.length) throw new Error(`Unknown shots: ${unknown.join(', ')}`);
+  const selected = only ? shots.filter((shot) => only.includes(shot.id)) : shots;
   mkdirSync(out, { recursive: true });
   const port = await freePort();
   const url = `http://127.0.0.1:${port}/`;
@@ -221,7 +227,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
     if (moved.length)
       console.warn('camera anchors moved on this tree:', moved.map(([id]) => id).join(', '));
     const canvas = page.locator('canvas[aria-label="City map"]');
-    for (const shot of shots) {
+    for (const shot of selected) {
       const placed = await placeCamera(page, shot.centre, shot.zoom);
       await frames(page, 3);
       const path = join(out, `${shot.id}.png`);
