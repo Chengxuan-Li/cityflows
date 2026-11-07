@@ -108,9 +108,7 @@ editing it), shadows (TASK-097), the 3D view (TASK-098).
 1. **Network untouched.**
    - For Munich, Sindelfingen, grid and town, the compiled city with context equals the one
      without (compare a stable hash of `compile(city)` output; add it to T44).
-   - Benchmark hashes unchanged (`npm run bench`, the four hashes in `bench/latest.log`).
-   - `npm run test:traffic` passes with the same figures as main (4 017 / 41 at the time of
-     writing; read `bench/traffic-baseline.json`).
+   - Benchmark hashes and the traffic gate are checked by the lead at merge; do not run them.
 2. **Import.**
    - Munich and Sindelfingen import with context; counts per class reported and asserted in
      T44 within ±10%.
@@ -130,6 +128,16 @@ editing it), shadows (TASK-097), the 3D view (TASK-098).
      both.
 5. `npm run check`, `npm run test:city` and `npm run test:e2e:smoke` green. Run e2e with
    `CITYFLOWS_TEST_PORT=5291`; never use port 4173.
+
+## Checks to run
+
+Use the fast tiers (TASK-090, `AGENTS.md` "Delivering a task"):
+
+- While iterating: `npm test` (unit tier, about 15 s) and `npm run geometry-shots -- <dir> --only <ids>`.
+- Before committing: `npm run check`, `npm run test:city` and `npm run test:e2e:smoke`.
+- Do not run `npm run test:traffic`, `npm run traffic:quick`, `npm run bench` or the full
+  `npm run test:e2e`: this task does not touch `src/sim` or `src/network`, and the lead runs
+  the traffic gate, the benchmark hashes and the full e2e suite at merge.
 
 ## Acceptance
 
