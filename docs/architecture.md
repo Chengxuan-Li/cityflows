@@ -1431,6 +1431,19 @@ type HostEvent =
   variant-minus-baseline unique vehicle counts in warm brown (up) and teal (down), below
   vehicles. It includes baseline geometry for removed roads; unchanged roads have no tint.
 
+The optional viewer-only **3D view** (`src/render3d`, TASK-098 phase A) dynamically loads
+three.js and MapControls into a separate chunk. It reads the same compiled city and running
+snapshot as 2D; editing remains in 2D. Shared grade resolution and vehicle poses live in
+`src/render/grades.ts` and `vehicle-pose.ts`. Grade g is 5g metres above the flat ground;
+`heightAt` eases from each end node to the deck with smoothstep over min(60 m, half the
+compiled surface's station span), starting at the junction cut so surfaces meet without a
+height step. Surfaces, marking strips, signal poles and pitched vehicle instances use this
+height rule; movements use their node's height. Raised decks have 0.8 m slabs and piers every
+30 m. The 3D camera starts at the 2D centre and hands its ground target and scale back on
+return; the hidden Pixi ticker stops while 3D is active. Vehicle raycasting opens the existing
+inspector, playback stays live, and a ground-opacity toggle reveals tunnels. Phase B's
+surroundings await TASK-096; phase A has no buildings, terrain elevation or 3D editing.
+
 `src/ui` is the React app with one Zustand store. Layout follows the brief:
 
 ```

@@ -11,6 +11,7 @@ export function TopBar() {
   const input = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLDialogElement>(null);
   const session = useAppStore((state) => state.session);
+  const in3D = useAppStore((state) => state.viewMode === '3d');
   const busy = useAppStore((state) => state.busy);
   const { open, save, undo, redo } = useAppStore.getState();
   const city = session?.project.city;
@@ -56,10 +57,10 @@ export function TopBar() {
         </div>
       </div>
       <div className="controls" role="group" aria-label="Edit history">
-        <button onClick={() => void undo()} disabled={busy || !session?.editor.canUndo}>
+        <button onClick={() => void undo()} disabled={in3D || busy || !session?.editor.canUndo}>
           Undo
         </button>
-        <button onClick={() => void redo()} disabled={busy || !session?.editor.canRedo}>
+        <button onClick={() => void redo()} disabled={in3D || busy || !session?.editor.canRedo}>
           Redo
         </button>
       </div>

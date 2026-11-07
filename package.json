@@ -31,6 +31,7 @@
     "traffic:quick": "node --experimental-strip-types --import ./bench/register.ts ./bench/traffic-quick.ts"
   },
   "dependencies": {
+    "@types/three": "0.187.0",
     "clipper2-ts": "2.0.1-18",
     "fast-xml-parser": "5.11.2",
     "fflate": "^0.8.3",
@@ -39,6 +40,7 @@
     "pixi.js": "^8.22.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "three": "0.187.0",
     "zod": "^4.6.7",
     "zustand": "^5.0.16"
   },
