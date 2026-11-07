@@ -2,13 +2,13 @@ import { readFileSync } from 'node:fs';
 import { generatePopulation, scheduleTrips } from '../src/demand';
 import { defaultScenario } from '../src/fixtures/scenarios';
 import { town } from '../src/fixtures/town';
-import { importOsm } from '../src/importers/osm';
+import { importOsmCached } from './city-cache';
 import { compile } from '../src/network';
 import { createEngine } from '../src/sim/engine';
 
 // node --experimental-strip-types --import ./bench/register.ts bench/passthrough-probe.ts
 console.info('Measuring town day and Munich morning (step-only timers, seed 1)');
-const imported = importOsm(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
+const imported = importOsmCached(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
   importerVersion: '1',
   drivingSide: 'right',
   bbox: [11.525, 48.135, 11.545, 48.148],

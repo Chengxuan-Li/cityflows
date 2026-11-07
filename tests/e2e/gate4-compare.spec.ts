@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { City, Scenario } from '../../src/schema';
 
-test('baseline comparison detects a banned center turn and paints road usage differences', async ({
+test('baseline comparison detects a banned center turn and paints road usage differences @smoke', async ({
   page,
 }, testInfo) => {
   test.setTimeout(180_000);

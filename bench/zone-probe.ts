@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation, scheduleTrips } from '../src/demand';
 import { defaultScenario } from '../src/fixtures/scenarios';
-import { importOsm } from '../src/importers/osm';
+import { importOsmCached } from './city-cache';
 import { compile } from '../src/network';
 import { createEngine } from '../src/sim/engine';
 import { DEFAULT_SIM_PARAMS } from '../src/sim/params';
@@ -10,7 +10,7 @@ import { SETBACK_CAP_M } from '../src/network/junctions';
 
 // Diagnose the remaining Munich queues without changing routing, geometry, or simulation rules.
 // node --experimental-strip-types --import ./bench/register.ts ./bench/zone-probe.ts
-const imported = importOsm(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
+const imported = importOsmCached(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
   importerVersion: '1',
   drivingSide: 'right',
   bbox: [11.525, 48.135, 11.545, 48.148],

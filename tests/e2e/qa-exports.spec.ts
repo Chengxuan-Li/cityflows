@@ -136,7 +136,9 @@ test('QA every export downloads parseable data with columns, feature counts and 
   await writeMetrics(info, { csvRows: counts, geojsonFeatures: features.length, timeS: run.timeS });
 });
 
-test('QA GeoJSON export is clickable without the toolbox intercepting it', async ({ page }) => {
+test('QA GeoJSON export is clickable without the toolbox intercepting it @smoke', async ({
+  page,
+}) => {
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
   await button(page, 'Export').click();

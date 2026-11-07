@@ -36,7 +36,7 @@ test.beforeEach(async ({ page }) => {
   await expect(button(page, 'Play')).toBeEnabled();
 });
 
-test('T17 applies an edit while playing and keeps its vehicles inspectable', async ({
+test('T17 applies an edit while playing and keeps its vehicles inspectable @smoke', async ({
   page,
 }, testInfo) => {
   await pick(page, 60, 2);

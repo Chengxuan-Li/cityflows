@@ -2,12 +2,13 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { auditRoute } from '../../bench/route-audit';
 import { cumulativeLengths, headingAtDistance, segmentsIntersect } from '../../src/geo/polyline';
-import { importOsm } from '../../src/importers/osm';
+import { importOsmCached } from '../../bench/city-cache';
 import { compile, type CompiledCity } from '../../src/network';
 import { defaultSlice, orderBranches } from '../../src/network/continuity';
 import type { CMovement, CRoad } from '../../src/network/types';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import type { City, TurnRule } from '../../src/schema';
+import { cityTest, tierCities } from '../tier';
 
 const extracts = {
   Munich: ['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]],
@@ -18,7 +19,7 @@ function load(name: keyof typeof extracts) {
   let entry = loaded.get(name);
   if (!entry) {
     const [file, bbox] = extracts[name];
-    const imported = importOsm(readFileSync(`fixtures/osm/${file}.osm`, 'utf8'), {
+    const imported = importOsmCached(readFileSync(`fixtures/osm/${file}.osm`, 'utf8'), {
       importerVersion: 'test',
       bbox: [...bbox],
     });
@@ -135,51 +136,55 @@ function linedUp(city: City, net: CompiledCity) {
   return { nodes, pairs };
 }
 
-test('T37: the lanes that line up at Munich n:312, n:305, n:201 and n:194 continue', () => {
-  const { city, net } = load('Munich');
-  const { pairs } = linedUp(city, net);
-  const at = (node: string) =>
-    pairs.filter((p) => p.node === node).map((p) => [p.id, p.movement?.turn ?? 'banned']);
-  // r:313's lanes 0 and 1 line up with r:692 (lanes 2 and 3 are banned there by turn:lanes).
-  expect(at('n:312')).toEqual([
-    ['r:313#0>r:692#0', 'diverge'],
-    ['r:313#1>r:692#1', 'diverge'],
-    ['r:313#2>r:706#0', 'diverge'],
-    ['r:313#3>r:706#1', 'diverge'],
-  ]);
-  const node = net.nodes[net.index.node.get('n:312')!]!;
-  // Nothing removed: the fallback movements of r:313#0 and #1 into r:706 stay.
-  expect(node.movements.map((i) => net.movements[i]!.id).sort()).toEqual([
-    'r:313#0>r:692#0',
-    'r:313#0>r:706#0',
-    'r:313#1>r:692#1',
-    'r:313#1>r:706#0',
-    'r:313#2>r:706#0',
-    'r:313#3>r:706#1',
-  ]);
-  // r:307#0 had no movement at all; r:1188 keeps its curb-side pairs (#0>#1, #1>#2, #2>#3).
-  expect(at('n:305')).toEqual([
-    ['r:1188#0>r:307#0', 'merge'],
-    ['r:1188#1>r:307#1', 'merge'],
-    ['r:1188#2>r:307#2', 'merge'],
-    ['r:676#0>r:307#2', 'merge'],
-    ['r:676#1>r:307#3', 'merge'],
-  ]);
-  // Already complete before TASK-085: r:730's single lane feeds every lane of r:968, and under
-  // the unequal-count slice r:1275 lines up with r:968's right lanes; r:968#1 lines up with none.
-  expect(at('n:201')).toEqual([
-    ['r:730#0>r:968#0', 'merge'],
-    ['r:1275#0>r:968#2', 'merge'],
-    ['r:1275#1>r:968#3', 'merge'],
-  ]);
-  // r:687#2 lines up with r:416#2, but OSM turn:lanes sends it only to r:196.
-  expect(at('n:194')).toEqual([
-    ['r:687#0>r:416#0', 'diverge'],
-    ['r:687#1>r:416#1', 'diverge'],
-    ['r:687#2>r:416#2', 'banned'],
-    ['r:687#2>r:196#0', 'diverge'],
-  ]);
-}, 60_000);
+cityTest(
+  'T37: the lanes that line up at Munich n:312, n:305, n:201 and n:194 continue',
+  () => {
+    const { city, net } = load('Munich');
+    const { pairs } = linedUp(city, net);
+    const at = (node: string) =>
+      pairs.filter((p) => p.node === node).map((p) => [p.id, p.movement?.turn ?? 'banned']);
+    // r:313's lanes 0 and 1 line up with r:692 (lanes 2 and 3 are banned there by turn:lanes).
+    expect(at('n:312')).toEqual([
+      ['r:313#0>r:692#0', 'diverge'],
+      ['r:313#1>r:692#1', 'diverge'],
+      ['r:313#2>r:706#0', 'diverge'],
+      ['r:313#3>r:706#1', 'diverge'],
+    ]);
+    const node = net.nodes[net.index.node.get('n:312')!]!;
+    // Nothing removed: the fallback movements of r:313#0 and #1 into r:706 stay.
+    expect(node.movements.map((i) => net.movements[i]!.id).sort()).toEqual([
+      'r:313#0>r:692#0',
+      'r:313#0>r:706#0',
+      'r:313#1>r:692#1',
+      'r:313#1>r:706#0',
+      'r:313#2>r:706#0',
+      'r:313#3>r:706#1',
+    ]);
+    // r:307#0 had no movement at all; r:1188 keeps its curb-side pairs (#0>#1, #1>#2, #2>#3).
+    expect(at('n:305')).toEqual([
+      ['r:1188#0>r:307#0', 'merge'],
+      ['r:1188#1>r:307#1', 'merge'],
+      ['r:1188#2>r:307#2', 'merge'],
+      ['r:676#0>r:307#2', 'merge'],
+      ['r:676#1>r:307#3', 'merge'],
+    ]);
+    // Already complete before TASK-085: r:730's single lane feeds every lane of r:968, and under
+    // the unequal-count slice r:1275 lines up with r:968's right lanes; r:968#1 lines up with none.
+    expect(at('n:201')).toEqual([
+      ['r:730#0>r:968#0', 'merge'],
+      ['r:1275#0>r:968#2', 'merge'],
+      ['r:1275#1>r:968#3', 'merge'],
+    ]);
+    // r:687#2 lines up with r:416#2, but OSM turn:lanes sends it only to r:196.
+    expect(at('n:194')).toEqual([
+      ['r:687#0>r:416#0', 'diverge'],
+      ['r:687#1>r:416#1', 'diverge'],
+      ['r:687#2>r:416#2', 'banned'],
+      ['r:687#2>r:196#0', 'diverge'],
+    ]);
+  },
+  60_000,
+);
 
 // Before TASK-085 (571cce5): Munich 152 of the 161 lined-up pairs had a movement, 1 banned, 8
 // missing (n:253 r:482#0>r:321#0; n:305 r:1188#0-2>r:307#0-2; n:308 r:1259#1>r:310#1,
@@ -189,14 +194,16 @@ test('T37: the lanes that line up at Munich n:312, n:305, n:201 and n:194 contin
 // away from the other, so at n:104, n:324, n:446, n:721, n:774 and n:823 the through road is
 // classified through again (its curb lanes gain the through pairing; e.g. r:1276#0>r:1277#0)
 // and turns between a corridor's two carriageways are u-turns, not lefts.
-test.each([
-  ['Munich', 70, 161, 1, 1340],
-  // TASK-087: Sindelfingen's n:580 becomes a continuation node (r:585/r:586 runs on into the
-  // unnamed pair r:582/r:583, now side by side): its two lined-up pairs are added, r:586>r:582
-  // is classified through, and the turn r:583#0>r:582#0 between the pair's carriageways goes.
-  // TASK-089: unchanged (the network keeps every movement where it splits converging nodes).
-  ['Sindelfingen', 49, 96, 0, 1123],
-] as const)(
+test.each(
+  tierCities([
+    ['Munich', 70, 161, 1, 1340],
+    // TASK-087: Sindelfingen's n:580 becomes a continuation node (r:585/r:586 runs on into the
+    // unnamed pair r:582/r:583, now side by side): its two lined-up pairs are added, r:586>r:582
+    // is classified through, and the turn r:583#0>r:582#0 between the pair's carriageways goes.
+    // TASK-089: unchanged (the network keeps every movement where it splits converging nodes).
+    ['Sindelfingen', 49, 96, 0, 1123],
+  ] as const),
+)(
   'T37: %s gives every lined-up trunk and branch lane a movement unless banned',
   (name, nodeCount, pairCount, bannedCount, movementCount) => {
     const { city, net } = load(name);
@@ -211,7 +218,7 @@ test.each([
   60_000,
 );
 
-test.each(['Munich', 'Sindelfingen'] as const)(
+test.each(tierCities(['Munich', 'Sindelfingen'] as const))(
   'T37: %s lined-up movements do not cross each other at a node',
   (name) => {
     const { city, net } = load(name);
@@ -237,26 +244,30 @@ test.each(['Munich', 'Sindelfingen'] as const)(
   60_000,
 );
 
-test('T37: lane-level routing uses r:313 into r:692 and the route is drivable', () => {
-  const { city, net } = load('Munich');
-  const start = net.lanes[net.index.lane.get('r:313#0')!]!;
-  // r:1030 is reached through r:692, r:996, r:928 and r:694; before TASK-085 the routes there
-  // from r:313 took the r:706 branch and a longer way round (throughput routes, Munich 9-11).
-  const road = net.index.road.get('r:1030')!;
-  const destination = net.connectors.find(
-    (c) => c.direction !== 'out' && net.lanes[c.lane]!.road === road,
-  )!;
-  const request = {
-    fromLane: start.idx,
-    fromPosM: 0,
-    toConnector: destination.idx,
-    vehicleClass: 'car' as const,
-    desiredSpeedFactor: 1,
-    noise: 0,
-    seed: 1,
-  };
-  const result = createRouteProvider().route(net, freeFlowLinkCosts(net), request);
-  if (!result.ok) throw new Error(result.reason);
-  expect(result.route.roads.slice(0, 2).map((i) => net.roads[i]!.id)).toEqual(['r:313', 'r:692']);
-  expect(auditRoute(city, net, request, result.route)).toEqual([]);
-}, 60_000);
+cityTest(
+  'T37: lane-level routing uses r:313 into r:692 and the route is drivable',
+  () => {
+    const { city, net } = load('Munich');
+    const start = net.lanes[net.index.lane.get('r:313#0')!]!;
+    // r:1030 is reached through r:692, r:996, r:928 and r:694; before TASK-085 the routes there
+    // from r:313 took the r:706 branch and a longer way round (throughput routes, Munich 9-11).
+    const road = net.index.road.get('r:1030')!;
+    const destination = net.connectors.find(
+      (c) => c.direction !== 'out' && net.lanes[c.lane]!.road === road,
+    )!;
+    const request = {
+      fromLane: start.idx,
+      fromPosM: 0,
+      toConnector: destination.idx,
+      vehicleClass: 'car' as const,
+      desiredSpeedFactor: 1,
+      noise: 0,
+      seed: 1,
+    };
+    const result = createRouteProvider().route(net, freeFlowLinkCosts(net), request);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.route.roads.slice(0, 2).map((i) => net.roads[i]!.id)).toEqual(['r:313', 'r:692']);
+    expect(auditRoute(city, net, request, result.route)).toEqual([]);
+  },
+  60_000,
+);

@@ -12,6 +12,7 @@ import type { Vec2 } from '../../src/geo/vec2';
 import type { CMovement, CNode, CompiledCity, CRoad } from '../../src/network';
 import { junctionGuides, splitLinedUp } from '../../src/render/layers/junction-markings';
 import { crossingStripes, markingClips } from '../../src/render/layers/roads';
+import { cityTest, tierCities } from '../tier';
 
 const nets = new Map<string, CompiledCity>();
 const net = (name: AuditCity) => {
@@ -82,57 +83,64 @@ const expected: Record<string, [string, string][]> = {
   ],
 };
 
-test('T40.1: every neighbouring through pair at n:201, n:312, n:305 has a divider from cut to cut', () => {
-  const city = net('munich');
-  for (const [id, pairs] of Object.entries(expected)) {
-    const node = nodeOf(city, id);
-    const guides = junctionGuides(city, node);
-    const dividers = guides.filter((g) => g.between);
-    expect(
-      dividers.map((g) => g.between!.map((m) => m.id)),
-      id,
-    ).toEqual(pairs);
-    const ring = [...node.outline, node.outline[0]!];
-    for (const guide of dividers) {
-      const [a, b] = guide.between!;
-      // Continuous with the lanes' own dividers (or the meeting of two roads' edges) at both cuts.
-      const start = cutGap(city, node, [a.fromLane, b.fromLane], guide.line[0]!);
-      const end = cutGap(city, node, [a.toLane, b.toLane], guide.line.at(-1)!);
-      expect(start, `${id} ${a.id} start`).toBeLessThan(0.5);
-      expect(end, `${id} ${a.id} end`).toBeLessThan(0.5);
-      // Inside the junction polygon (0.1 m), dashed along the whole line.
-      expect(guide.line.every((p) => pointInPolygon(p, ring, 0.1))).toBe(true);
-      expect(guide.dashes.flat().every((p) => pointInPolygon(p, ring, 0.1))).toBe(true);
-      expect(guide.dashes.length).toBeGreaterThanOrEqual(5);
+cityTest(
+  'T40.1: every neighbouring through pair at n:201, n:312, n:305 has a divider from cut to cut',
+  () => {
+    const city = net('munich');
+    for (const [id, pairs] of Object.entries(expected)) {
+      const node = nodeOf(city, id);
+      const guides = junctionGuides(city, node);
+      const dividers = guides.filter((g) => g.between);
+      expect(
+        dividers.map((g) => g.between!.map((m) => m.id)),
+        id,
+      ).toEqual(pairs);
+      const ring = [...node.outline, node.outline[0]!];
+      for (const guide of dividers) {
+        const [a, b] = guide.between!;
+        // Continuous with the lanes' own dividers (or the meeting of two roads' edges) at both cuts.
+        const start = cutGap(city, node, [a.fromLane, b.fromLane], guide.line[0]!);
+        const end = cutGap(city, node, [a.toLane, b.toLane], guide.line.at(-1)!);
+        expect(start, `${id} ${a.id} start`).toBeLessThan(0.5);
+        expect(end, `${id} ${a.id} end`).toBeLessThan(0.5);
+        // Inside the junction polygon (0.1 m), dashed along the whole line.
+        expect(guide.line.every((p) => pointInPolygon(p, ring, 0.1))).toBe(true);
+        expect(guide.dashes.flat().every((p) => pointInPolygon(p, ring, 0.1))).toBe(true);
+        expect(guide.dashes.length).toBeGreaterThanOrEqual(5);
+      }
     }
-  }
-}, 60_000);
+  },
+  60_000,
+);
 
-test('T40.1: at n:194 (a continuation node, no junction surface) the roads’ dividers meet', () => {
-  const city = net('munich');
-  const node = nodeOf(city, 'n:194');
-  expect(node.outline).toEqual([]);
-  expect(junctionGuides(city, node)).toEqual([]);
-  const movement = (id: string) => city.movements[city.index.movement.get(id as never)!]!;
-  const pairs: [CMovement, CMovement][] = [
-    [movement('r:687#0>r:416#0'), movement('r:687#1>r:416#1')],
-    [movement('r:687#1>r:416#1'), movement('r:687#2>r:196#0')],
-  ];
-  // r:196#0 starts where r:416#2 does (r:687#2>r:416#2 is banned by turn:lanes), so the boundary
-  // between r:416#1 and r:196#0 is r:416's divider #1|#2.
-  const branchEnds = ['r:416', 'r:196']
-    .flatMap((id) => roadOf(city, id).lanes.map((lane) => dividerEnd(city, lane, node)))
-    .filter((p): p is Vec2 => p !== undefined);
-  for (const [a, b] of pairs) {
-    const [p, q] = [a.fromLane, b.fromLane].map((i) => laneEnd(city, i, node));
-    const boundary = { x: (p!.x + q!.x) / 2, y: (p!.y + q!.y) / 2 };
-    // r:687's divider ends at the boundary and a branch's divider starts there.
-    expect(distance(dividerEnd(city, a.fromLane, node)!, boundary), a.id).toBeLessThan(0.5);
-    expect(Math.min(...branchEnds.map((e) => distance(e, boundary))), a.id).toBeLessThan(0.5);
-  }
-});
+cityTest(
+  'T40.1: at n:194 (a continuation node, no junction surface) the roads’ dividers meet',
+  () => {
+    const city = net('munich');
+    const node = nodeOf(city, 'n:194');
+    expect(node.outline).toEqual([]);
+    expect(junctionGuides(city, node)).toEqual([]);
+    const movement = (id: string) => city.movements[city.index.movement.get(id as never)!]!;
+    const pairs: [CMovement, CMovement][] = [
+      [movement('r:687#0>r:416#0'), movement('r:687#1>r:416#1')],
+      [movement('r:687#1>r:416#1'), movement('r:687#2>r:196#0')],
+    ];
+    // r:196#0 starts where r:416#2 does (r:687#2>r:416#2 is banned by turn:lanes), so the boundary
+    // between r:416#1 and r:196#0 is r:416's divider #1|#2.
+    const branchEnds = ['r:416', 'r:196']
+      .flatMap((id) => roadOf(city, id).lanes.map((lane) => dividerEnd(city, lane, node)))
+      .filter((p): p is Vec2 => p !== undefined);
+    for (const [a, b] of pairs) {
+      const [p, q] = [a.fromLane, b.fromLane].map((i) => laneEnd(city, i, node));
+      const boundary = { x: (p!.x + q!.x) / 2, y: (p!.y + q!.y) / 2 };
+      // r:687's divider ends at the boundary and a branch's divider starts there.
+      expect(distance(dividerEnd(city, a.fromLane, node)!, boundary), a.id).toBeLessThan(0.5);
+      expect(Math.min(...branchEnds.map((e) => distance(e, boundary))), a.id).toBeLessThan(0.5);
+    }
+  },
+);
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T40.2: %s split dividers cross no movement of another lane pair; none at signals',
   (name) => {
     const city = net(name);
@@ -187,7 +195,7 @@ function crossingRoads(city: CompiledCity, node: CNode) {
     .sort();
 }
 
-test('T40.3: n:1181 draws the crossings of TASK-072’s rule, off the junction polygon', () => {
+cityTest('T40.3: n:1181 draws the crossings of TASK-072’s rule, off the junction polygon', () => {
   const city = net('munich');
   const node = nodeOf(city, 'n:1181');
   // Every served approach and exit of the signal: Landsberger Straße west (r:981 in, r:1358 out),

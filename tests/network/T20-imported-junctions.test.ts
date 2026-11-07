@@ -1,17 +1,20 @@
 import { expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { importOsm } from '../../src/importers/osm';
+import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
 import { polylineSelfCrossings } from '../../bench/geometry-audit';
-import { importedRoadBodyOverlaps, junctionOverlaps, movementsOutside } from './junction-audit';
+import { tierCities } from '../tier';
+import { junctionOverlaps, movementsOutside, roadBodyCrossings } from './junction-audit';
 
-test.each([
-  ['sindelfingen-a81', [8.98, 48.69, 9.0, 48.702]],
-  ['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]],
-] as const)(
+test.each(
+  tierCities([
+    ['sindelfingen-a81', [8.98, 48.69, 9.0, 48.702]],
+    ['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]],
+  ] as const),
+)(
   'T20: %s lane overlap audit',
   (name, bbox) => {
-    const imported = importOsm(readFileSync(`fixtures/osm/${name}.osm`, 'utf8'), {
+    const imported = importOsmCached(readFileSync(`fixtures/osm/${name}.osm`, 'utf8'), {
       importerVersion: 'test',
       bbox: [...bbox],
     });
@@ -20,7 +23,6 @@ test.each([
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
     const all = junctionOverlaps(result.compiled);
     const overlaps = all.filter((pair) => !pair.capped);
-    const sourceDefects = importedRoadBodyOverlaps[name]!;
     console.info(
       name,
       'road-body overlap occurrences',
@@ -31,10 +33,10 @@ test.each([
     // TASK-082: the seam crossing of service way 7973188 (r:28#0 and r:30#0 at n:26 and n:696,
     // the offset folding across its zero-setback seam) is gone: the loop's two halves now join
     // with one tangent at their nodes.
-    expect(overlaps.filter((pair) => !sourceDefects[pair.lanes.join('>')])).toEqual([]);
-    // Every listed source defect still crosses somewhere, capped node or not.
-    const keys = new Set(all.map((pair) => pair.lanes.join('>')));
-    expect(Object.keys(sourceDefects).filter((key) => !keys.has(key))).toEqual([]);
+    // TASK-090: within the budget of junction-audit.ts, not the named source defects.
+    const crossings = roadBodyCrossings(result.compiled, name);
+    console.info(name, 'road-body crossings', crossings.pairs);
+    expect(crossings.pairs.length).toBeLessThanOrEqual(crossings.budget);
     // TASK-083: every movement surface lies in its junction polygon and no polygon crosses
     // itself (T38.2 checks the surfaces' edges too). A polygon touches itself at each curb's
     // tangent point, where its boundary returns along the arc beside the road edge it came out

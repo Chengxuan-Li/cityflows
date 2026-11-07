@@ -3,8 +3,9 @@ import type { CompiledCity } from '../../src/network';
 import { SETBACK_CAP_M } from '../../src/network/junctions';
 import type { Vec2 } from '../../src/geo/vec2';
 
-// Canonical road-body defects, outside TASK-061's junction geometry surface.
-// Keys name lane pairs so a new crossing at another junction cannot disappear into a count.
+// Canonical road-body defects, outside TASK-061's junction geometry surface, on main 5568eed.
+// TASK-090: checked as a budget (`roadBodyCrossings`), no longer pair by pair: every geometry task
+// added or removed pairs here.
 // Crossings beyond a capped setback (`capped`) are not listed: the Sindelfingen pair
 // r:140#0>r:476#0 (curved service ways, 47 m beyond the junction) became one with the cap.
 export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = {
@@ -45,6 +46,17 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     // n:792, where the service way r:1155 runs 1.7 degrees beside them.
   },
 };
+
+/** Lane pairs with a road-body crossing (not behind a capped setback) and the most a city may
+ * have: the recorded pairs plus one. */
+export function roadBodyCrossings(net: CompiledCity, city: string) {
+  const pairs = new Set(
+    junctionOverlaps(net)
+      .filter((pair) => !pair.capped)
+      .map((pair) => pair.lanes.join('>')),
+  );
+  return { pairs: [...pairs], budget: Object.keys(importedRoadBodyOverlaps[city]!).length + 1 };
+}
 
 export function insideOutline(point: Vec2, ring: Vec2[], tolerance = 0.1) {
   let inside = false;

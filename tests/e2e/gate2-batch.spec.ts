@@ -9,7 +9,9 @@ async function point(page: Page, x: number, y: number) {
   };
 }
 
-test('box selection edits street speeds in one undoable batch', async ({ page }, testInfo) => {
+test('box selection edits street speeds in one undoable batch @smoke', async ({
+  page,
+}, testInfo) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
   const start = await point(page, 30, -15);

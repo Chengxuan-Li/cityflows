@@ -3,7 +3,7 @@ import process from 'node:process';
 import { grid5x5 } from '../src/fixtures/grid5x5';
 import { town } from '../src/fixtures/town';
 import { lonLatToLocal } from '../src/geo/projection';
-import { importOsm } from '../src/importers/osm';
+import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
 import { isLaneDrop } from '../src/network/lane-drop';
 import { readZip } from '../src/project/zip';
@@ -206,7 +206,7 @@ async function loadCity(file: string, bounds: string[]): Promise<City> {
     const bbox = bounds.length
       ? (bounds.map(Number) as [number, number, number, number])
       : undefined;
-    const result = importOsm(readFileSync(file, 'utf8'), {
+    const result = importOsmCached(readFileSync(file, 'utf8'), {
       importerVersion: '1',
       drivingSide: 'right',
       bbox,
