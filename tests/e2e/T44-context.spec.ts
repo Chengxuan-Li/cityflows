@@ -45,7 +45,8 @@ async function timing(page: Page) {
 test('@smoke T44 imports, toggles and measures surroundings without changing the network', async ({
   page,
 }, info) => {
-  test.setTimeout(180_000);
+  // CI's runner imports three extracts and renders on a software GPU; 180 s timed out there.
+  test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.route('https://**/*', (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 960 });
