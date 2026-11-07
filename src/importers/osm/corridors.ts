@@ -512,3 +512,153 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
     }
   }
 }
+
+/**
+ * TASK-099 (B54): one corridor's carriageways running side by side, in opposite directions and
+ * within 20 degrees, are pulled toward each other wherever the gap between their blocks is wider
+ * than the 0.5 m median and narrower than `ATTACH_GAP_M`, each by its share, so they run attached
+ * at the median. Unlike `separateDual` this only pulls: the centerlines are untouched where the
+ * blocks are already closer than the median (near a node both reach, where the network's
+ * TASK-089 split sets them side by side), and no road gets a lateral offset, so a continuation
+ * across a node keeps its lanes. A carriageway is pulled as a chain: roads of one corridor joined
+ * at nodes with nothing else (a lane-count change, say) move together, the node with them. At a
+ * chain end its partner does not reach, the pull eases out over the taper. Topology and ids are
+ * unchanged.
+ */
+export function attachCarriageways(city: City, roads: OsmRoad[]): void {
+  const side = city.drivingSide === 'right' ? 1 : -1;
+  const at = new Map<string, Road[]>();
+  for (const { road } of roads)
+    for (const node of [road.from, road.to]) at.set(node, [...(at.get(node) ?? []), road]);
+  // The road continuing `road` through a node joining just the two, one in and one out.
+  const next = (road: Road, forward: boolean) => {
+    const node = forward ? road.to : road.from;
+    const others = (at.get(node) ?? []).filter((r) => r !== road);
+    if ((at.get(node) ?? []).length !== 2 || others.length !== 1) return undefined;
+    const other = others[0]!;
+    if (other.corridorId !== road.corridorId || other.lateralOffsetM !== 0) return undefined;
+    return (forward ? other.from === node : other.to === node) ? other : undefined;
+  };
+  const groups = new Map<string, Road[][]>();
+  const seen = new Set<Road>();
+  for (const { road } of roads) {
+    const id = road.corridorId;
+    if (!id?.startsWith('corridor:') || road.lateralOffsetM !== 0 || seen.has(road)) continue;
+    let first = road;
+    for (let back = next(first, false); back && back !== road; back = next(first, false))
+      first = back;
+    const chain = [first];
+    for (let on = next(first, true); on && on !== first; on = next(on, true)) chain.push(on);
+    for (const r of chain) seen.add(r);
+    groups.set(id, [...(groups.get(id) ?? []), chain]);
+  }
+  const cosine20 = Math.cos(Math.PI / 9);
+  for (const chains of groups.values()) {
+    if (chains.length < 2) continue;
+    const lines = chains.map((chain) =>
+      chain.flatMap((road, k) => (k ? road.centerline.slice(1) : road.centerline)),
+    );
+    const results = chains.map((chain, c) => {
+      const points: Vec2[] = [];
+      const ends: number[] = [];
+      for (const [k, road] of chain.entries()) {
+        const sampled = resample(road.centerline, SAMPLE_M);
+        points.push(...(k ? sampled.slice(1) : sampled));
+        ends.push(points.length - 1);
+      }
+      const normals = vertexNormals(points);
+      const lengths = cumulativeLengths(points);
+      const total = lengths.at(-1)!;
+      const halfAt = (i: number) => halfBlock(chain[ends.findIndex((e) => e >= i)]!);
+      const raw = points.map(() => 0);
+      const reached = [false, false];
+      for (const [d, other] of chains.entries()) {
+        if (d === c) continue;
+        const otherChain = chains[d]!;
+        const line = lines[d]!;
+        const lengthB = cumulativeLengths(line).at(-1)!;
+        const nodesB = new Set([otherChain[0]!.from, otherChain.at(-1)!.to]);
+        if (nodesB.has(chain[0]!.from)) reached[0] = true;
+        if (nodesB.has(chain.at(-1)!.to)) reached[1] = true;
+        const edges = points.map((p, i) => {
+          const q = nearestOnPolyline(line, p);
+          const gap =
+            -side * ((q.point.x - p.x) * normals[i]!.x + (q.point.y - p.y) * normals[i]!.y);
+          const t = { x: normals[i]!.y, y: -normals[i]!.x };
+          const opposite = t.x * q.direction.x + t.y * q.direction.y < -cosine20;
+          const inside = q.along > 1e-6 && q.along < lengthB - 1e-6;
+          const roadB = otherChain[0]!;
+          const clearance = halfAt(i) + halfBlock(roadB) + MEDIAN_M;
+          return gap > 0 && opposite && inside ? gap - clearance + MEDIAN_M : Infinity;
+        });
+        const closing = edges.map((edge) => edge > MEDIAN_M && edge < ATTACH_GAP_M);
+        // As `separateDual`: where the pair opens from together past the limit at more than 20
+        // degrees, it parts where it was last together.
+        for (const order of [1, -1]) {
+          const idx = (k: number) => (order > 0 ? k : edges.length - 1 - k);
+          for (let k = 0; k < edges.length; k++) {
+            if (closing[idx(k)] || edges[idx(k)] === Infinity) continue;
+            let together = k;
+            while (together > 0 && edges[idx(together)]! > MEDIAN_M + 0.5) together--;
+            const run = Math.abs(lengths[idx(k)]! - lengths[idx(together)]!);
+            if ((edges[idx(k)]! - edges[idx(together)]!) / Math.max(SAMPLE_M, run) > PART_SLOPE)
+              for (let m = together + 1; m < k; m++) closing[idx(m)] = false;
+            while (k < edges.length && !closing[idx(k)] && edges[idx(k)] !== Infinity) k++;
+          }
+        }
+        const shareB = halfBlock(otherChain[0]!) + MEDIAN_M / 2;
+        for (let i = 0; i < raw.length; i++) {
+          const share = halfAt(i) + MEDIAN_M / 2;
+          if (closing[i])
+            raw[i] = Math.max(raw[i]!, ((edges[i]! - MEDIAN_M) * share) / (share + shareB));
+        }
+        void other;
+      }
+      if (!raw.some((v) => v > 0)) return undefined;
+      const taper = Math.min(...chain.map(taperLength));
+      const mean = (values: number[], window: number) =>
+        values.map((_, i) => {
+          let sum = 0,
+            weight = 0;
+          for (let j = 0; j < values.length; j++)
+            if (Math.abs(lengths[j]! - lengths[i]!) <= window / 2) {
+              sum += values[j]!;
+              weight++;
+            }
+          return weight ? sum / weight : values[i]!;
+        });
+      const pull = mean(mean(raw, taper / 2), taper / 2).map((v, i) => {
+        const s = lengths[i]!;
+        const fromStart = reached[0] ? 1 : smoothstep(Math.min(1, s / taper));
+        const fromEnd = reached[1] ? 1 : smoothstep(Math.min(1, (total - s) / taper));
+        return v * fromStart * fromEnd;
+      });
+      pull[0] = 0;
+      pull[pull.length - 1] = 0;
+      const moved = points.map((p, i) => ({
+        x: p.x - side * normals[i]!.x * pull[i]!,
+        y: p.y - side * normals[i]!.y * pull[i]!,
+      }));
+      return { moved, ends };
+    });
+    for (const [c, result] of results.entries()) {
+      if (!result) continue;
+      const chain = chains[c]!;
+      let start = 0;
+      for (const [k, road] of chain.entries()) {
+        const line = result.moved.slice(start, result.ends[k]! + 1);
+        if (k > 0) city.nodes[road.from]!.pos = line[0]!;
+        road.centerline = line;
+        road.provenance = {
+          ...road.provenance,
+          inferred: [...road.provenance.inferred!, 'attached'],
+        };
+        start = result.ends[k]!;
+      }
+    }
+  }
+  for (const { road } of roads) {
+    road.centerline[0] = city.nodes[road.from]!.pos;
+    road.centerline[road.centerline.length - 1] = city.nodes[road.to]!.pos;
+  }
+}
