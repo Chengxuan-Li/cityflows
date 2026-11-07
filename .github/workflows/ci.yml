@@ -9,6 +9,7 @@ permissions:
   contents: read
 
 jobs:
+  # TASK-090: check, city and the three e2e shards run side by side; deploy waits for check.
   check:
     runs-on: ubuntu-latest
     steps:
@@ -18,14 +19,18 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Real-city imports (bench/city-cache.ts), reused while sources and extracts are unchanged.
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/cityflows
+          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
       - run: npm run build
 
-  e2e:
-    needs: check
+  city:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -34,12 +39,32 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/cityflows
+          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
+      - run: npm run test:city
+      - run: npm run test:traffic
+
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --pass-with-no-tests
+      - run: npx playwright test --shard=${{ matrix.shard }}/3 --pass-with-no-tests
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.shard }}
           path: test-results
           retention-days: 7
 

@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
   await expect(button(page, 'Play')).toBeEnabled();
 });
 
-test('demo A: 2 000 residents set in the inspector give a morning peak in the demand panel and on the road', async ({
+test('demo A: 2 000 residents set in the inspector give a morning peak in the demand panel and on the road @smoke', async ({
   page,
 }, info) => {
   test.setTimeout(180_000);

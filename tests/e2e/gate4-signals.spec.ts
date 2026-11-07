@@ -46,7 +46,7 @@ test.beforeEach(async ({ page }) => {
   await expect(button(page, 'Play')).toBeEnabled();
 });
 
-test('T13 drafts conflict-free programs with timeline, schematic and shared defaults', async ({
+test('T13 drafts conflict-free programs with timeline, schematic and shared defaults @smoke', async ({
   page,
 }, info) => {
   await selectSignal(page);
