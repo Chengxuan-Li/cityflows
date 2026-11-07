@@ -44,7 +44,7 @@ function inside(point: Vec2, ring: Vec2[]): boolean {
   return result;
 }
 
-function clip(ring: Vec2[], bounds: Bounds): Vec2[] {
+export function clip(ring: Vec2[], bounds: Bounds): Vec2[] {
   for (const [axis, edge, greater] of [
     ['x', bounds.min.x, true],
     ['x', bounds.max.x, false],
@@ -116,15 +116,18 @@ function streetBlocks(city: City): Vec2[][] {
   return result.sort((a, b) => signedArea(a) - signedArea(b));
 }
 
-function polygons(data: OsmData, positions: Map<number, Vec2>, bounds: Bounds) {
+export function polygonSources(data: OsmData, accepts: (tags: OsmTags) => boolean) {
   const ways = new Map(data.way.map((way) => [way.id, way]));
   const used = new Set<number>();
-  const shapes: { id: number; tag: OsmTags; rings: number[][] }[] = [];
+  const shapes: {
+    id: number;
+    tag: OsmTags;
+    rings: { role: 'outer' | 'inner'; ids: number[] }[];
+  }[] = [];
   for (const relation of data.relation) {
-    if (relation.tag.type !== 'multipolygon' || (!relation.tag.building && !relation.tag.landuse))
-      continue;
-    const rings: number[][] = [];
-    for (const role of ['outer', 'inner']) {
+    if (relation.tag.type !== 'multipolygon' || !accepts(relation.tag)) continue;
+    const rings: { role: 'outer' | 'inner'; ids: number[] }[] = [];
+    for (const role of ['outer', 'inner'] as const) {
       const parts = relation.member
         .filter((m) => m.type === 'way' && (m.role || 'outer') === role)
         .map((m) => ways.get(m.ref))
@@ -139,24 +142,24 @@ function polygons(data: OsmData, positions: Map<number, Vec2>, bounds: Bounds) {
           if (next[0] !== chain.at(-1)) next.reverse();
           chain.push(...next.slice(1));
         }
-        if (chain.length >= 4 && chain[0] === chain.at(-1)) rings.push(chain);
+        if (chain.length >= 4 && chain[0] === chain.at(-1)) rings.push({ role, ids: chain });
       }
       parts.forEach((w) => used.add(w.id));
     }
     shapes.push({ id: relation.id, tag: relation.tag, rings });
   }
   for (const way of data.way) {
-    if (
-      !used.has(way.id) &&
-      (way.tag.building || way.tag.landuse) &&
-      way.nd.length >= 4 &&
-      way.nd[0] === way.nd.at(-1)
-    )
-      shapes.push({ id: way.id, tag: way.tag, rings: [way.nd] });
+    if (!used.has(way.id) && accepts(way.tag) && way.nd.length >= 4 && way.nd[0] === way.nd.at(-1))
+      shapes.push({ id: way.id, tag: way.tag, rings: [{ role: 'outer', ids: way.nd }] });
   }
+  return shapes;
+}
+
+function polygons(data: OsmData, positions: Map<number, Vec2>, bounds: Bounds) {
+  const shapes = polygonSources(data, (tag) => Boolean(tag.building || tag.landuse));
   return shapes.flatMap(({ id, tag, rings }) => {
     const projected = rings
-      .map((ids) => ids.slice(0, -1).map((ref) => positions.get(ref)))
+      .map(({ ids }) => ids.slice(0, -1).map((ref) => positions.get(ref)))
       .filter((ring): ring is Vec2[] => ring.every((p) => p !== undefined))
       .map((ring) => clip(ring, bounds))
       .filter((ring) => ring.length >= 3 && Math.abs(signedArea(ring)) > 1);

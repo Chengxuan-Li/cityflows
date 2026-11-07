@@ -39,6 +39,7 @@ export interface RouteOverlay {
 export interface LayerVisibility {
   roadClasses: boolean;
   basemap: boolean;
+  context: boolean;
   difference: boolean;
   heat: boolean;
   queues: boolean;
@@ -52,6 +53,7 @@ export interface LayerVisibility {
 export const defaultLayers: LayerVisibility = {
   roadClasses: false,
   basemap: true,
+  context: true,
   difference: false,
   heat: false,
   queues: false,
@@ -90,4 +92,5 @@ export type CityGeometry = {
   roads?: City['roads'];
   places: City['places'];
   geo?: City['geo'];
+  context?: City['context'];
 };

@@ -35,3 +35,13 @@ test('allows one abortable request and releases the slot on cancellation or fail
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<osm/>')));
   await expect(fetchOverpass(bbox, new AbortController().signal)).resolves.toBe('<osm/>');
 });
+
+test('T44 includes surroundings in the same bbox while preserving the road query', () => {
+  const bbox: [number, number, number, number] = [-74.008, 40.711, -74.004, 40.715];
+  const roads = buildQuery(bbox, false);
+  const full = buildQuery(bbox);
+  expect(full.split('->.roads;')[0]).toBe(roads.split('->.roads;')[0]);
+  for (const tag of ['building', 'natural', 'landuse', 'leisure', 'amenity', 'railway', 'waterway'])
+    expect(full).toContain('[' + tag);
+  expect(roads).not.toContain('[building');
+});

@@ -21,6 +21,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
     () => localStorage.getItem('cityflows-overpass-endpoint') ?? defaultEndpoint,
   );
   const [side, setSide] = useState<'left' | 'right'>('right');
+  const [surroundings, setSurroundings] = useState(true);
   const [name, setName] = useState('OpenStreetMap import');
   // The largest 0.05 step at which the Munich reference extract does not gridlock (plan,
   // "Reference extract and import baseline", wave 10 table).
@@ -60,14 +61,14 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
         const invalid = areaError(bbox);
         if (invalid) throw new Error(invalid);
         localStorage.setItem('cityflows-overpass-endpoint', endpoint);
-        const cached = await cachedExtract(bbox);
+        const cached = surroundings ? await cachedExtract(bbox) : undefined;
         controller.signal.throwIfAborted();
         if (cached !== undefined) {
           xml = cached;
           setSourceNote('Loaded from cache');
         } else {
           setProgress('Downloading roads…');
-          xml = await fetchOverpass(bbox, controller.signal, endpoint);
+          xml = await fetchOverpass(bbox, controller.signal, endpoint, surroundings);
           setSourceNote('Downloaded from Overpass');
         }
       }
@@ -90,7 +91,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
         parser.terminate();
         worker.current = null;
         const imported = event.data.result;
-        if (imported.ok && !file) {
+        if (imported.ok && !file && surroundings) {
           try {
             await cachedExtract(bbox, xml);
           } catch {
@@ -103,7 +104,12 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
       };
       parser.postMessage({
         xml,
-        options: { importerVersion: '1', drivingSide: side, ...(!file && { bbox }) },
+        options: {
+          importerVersion: '1',
+          drivingSide: side,
+          context: surroundings,
+          ...(!file && { bbox }),
+        },
       });
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -200,6 +206,14 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
                 <option value="right">Right</option>
                 <option value="left">Left</option>
               </select>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={surroundings}
+                onChange={(event) => setSurroundings(event.target.checked)}
+              />
+              Include surroundings
             </label>
             {!file && (
               <label className="edit-field">
