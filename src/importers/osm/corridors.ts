@@ -1,6 +1,12 @@
 import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import { CONVERGING, sameStreet, smoothstep, taperLength } from '../../network/lanes';
+import {
+  CONVERGING,
+  MEDIAN_VOID_M,
+  sameStreet,
+  smoothstep,
+  taperLength,
+} from '../../network/lanes';
 import type { City, Road } from '../../schema';
 import { JUNCTION_ZONE_M, resample, vertexNormals } from './relax';
 import type { OsmRoad } from './roads';
@@ -108,6 +114,29 @@ export function assignCorridors(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
       });
   const pairs = match(coincident);
   const duals = match(dual);
+  // TASK-093 (B49): a carriageway drawn as two ways meeting at a node of two road ends pairs one
+  // of them with the opposite carriageway; the other (n:967's r:961, which continues r:1368 beside
+  // r:1276) joins that corridor after the realignment, which keeps treating it as an arm of its
+  // own, as before.
+  for (const { pair } of dual) {
+    const [loose, held] = paired.has(pair[0]) ? [pair[1], pair[0]] : pair;
+    if (paired.has(loose) || !paired.has(held) || loose.road.name === null) continue;
+    const id = held.road.corridorId;
+    const partner = roads.find((o) => o !== held && o.road.corridorId === id);
+    const node =
+      partner?.road.to === loose.road.from
+        ? loose.road.from
+        : partner?.road.from === loose.road.to
+          ? loose.road.to
+          : null;
+    if (
+      node === null ||
+      roads.filter(({ road }) => road.from === node || road.to === node).length !== 2
+    )
+      continue;
+    paired.add(loose);
+    thirdWay.set(loose.road, id!);
+  }
   const unnamed = duals.filter(([a]) => a.road.name === null);
   // TASK-089: a pair pushable only because its continuation converges with its own other
   // carriageway joins its corridor after the realignment (`separateDual`), which bends a
@@ -260,6 +289,8 @@ function closePairs(roads: OsmRoad[]): [OsmRoad, OsmRoad][] {
  */
 /** Corridor ids of unnamed pairs that may join their corridor after the realignment. */
 const deferredCorridor = new WeakMap<Road, string>();
+/** Corridor ids of the second ways of carriageways drawn as two (`assignCorridors`). */
+const thirdWay = new WeakMap<Road, string>();
 
 function pushable(
   city: City,
@@ -341,13 +372,16 @@ function pushable(
  * the full share. The road gets that share as `lateralOffsetM` and the centerline that carries
  * its pushed block, so at the nodes both centerlines meet the node and the blocks lie side by
  * side, as a separated coincident pair does; where they are farther apart the lanes stay on the
- * source line. Pairs meeting at one node only are left alone: one lateral offset per road cannot
- * put them side by side at that node without moving their lanes at the other, and so are pairs
- * whose through lanes would jog at a node (`pushable`). Topology, ids and
- * node positions are unchanged; provenance records `separated`.
+ * source line, unless their median is narrower than `MEDIAN_VOID_M` (TASK-093, B45: pulled
+ * together to the median, eased over the taper where it widens past that). Pairs meeting at one
+ * node only are left alone: one lateral offset per road cannot put them side by side at that node
+ * without moving their lanes at the other, and so are pairs whose through lanes would jog at a
+ * node (`pushable`). Topology, ids and node positions are unchanged; provenance records
+ * `separated`. Third ways (`assignCorridors`) join their corridors here, after the realignment.
  */
 export function separateDual(city: City, roads: OsmRoad[]): void {
   const side = city.drivingSide === 'right' ? 1 : -1;
+  for (const { road } of roads) road.corridorId = thirdWay.get(road) ?? road.corridorId;
   const pairs = closePairs(roads);
   const pushed = pushable(city, roads, pairs);
   for (const pair of pairs) {
@@ -371,32 +405,62 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
         -side *
         ((nearest[i]!.point.x - p.x) * normals[i]!.x + (nearest[i]!.point.y - p.y) * normals[i]!.y),
     );
+    // TASK-093 (B45): a median void narrower than `MEDIAN_VOID_M` (the gap between the two blocks
+    // beyond the median) closes too, each road pulled toward the pair's middle line by its share;
+    // so does a wider stretch shorter than twice the taper between two such, which easing out and
+    // back in would leave as a dent.
+    const closing = gaps.map((gap) => gap - clearance + MEDIAN_M < MEDIAN_VOID_M);
+    const reach = 2 * Math.min(taperLength(a.road), taperLength(b.road));
+    for (let i = 0; i < closing.length; i++) {
+      if (closing[i] || !closing[i - 1]) continue;
+      let j = i;
+      while (j < closing.length && !closing[j]) j++;
+      if (j < closing.length && lengths[j]! - lengths[i - 1]! < reach) closing.fill(true, i, j);
+      i = j;
+    }
     const centerlines = [a, b].map(({ road }, k) => {
       // The push this road needs (its share of the shortfall), unclamped and clamped at zero.
       const shortfall = gaps.map((gap) => ((clearance - gap) * shares[k]!) / clearance);
       const needed = shortfall.map((value) => Math.max(0, value));
-      const prefix = [0];
-      for (let i = 1; i <= points.length; i++)
-        prefix.push(
-          prefix[i - 1]! +
-            (i < points.length
-              ? ((needed[i - 1]! + needed[i]!) / 2) * (lengths[i]! - lengths[i - 1]!)
-              : 0),
-        );
-      // The trapezoid integral of `needed` from station 0 to `s`.
-      const integral = (s: number) => {
-        let i = 1;
-        while (i < points.length - 1 && lengths[i]! < s) i++;
-        const t = (s - lengths[i - 1]!) / (lengths[i]! - lengths[i - 1]! || 1);
-        const value = needed[i - 1]! + (needed[i]! - needed[i - 1]!) * t;
-        return prefix[i - 1]! + ((needed[i - 1]! + value) / 2) * (s - lengths[i - 1]!);
+      const pull = shortfall.map((value, i) => (closing[i] ? Math.min(0, value) : 0));
+      // The mean of `values` over `window` about each point (a window shrinking to nothing at the
+      // nodes), by the trapezoid integral from station 0.
+      const mean = (values: number[], window: number) => {
+        const prefix = [0];
+        for (let i = 1; i <= points.length; i++)
+          prefix.push(
+            prefix[i - 1]! +
+              (i < points.length
+                ? ((values[i - 1]! + values[i]!) / 2) * (lengths[i]! - lengths[i - 1]!)
+                : 0),
+          );
+        const integral = (s: number) => {
+          let i = 1;
+          while (i < points.length - 1 && lengths[i]! < s) i++;
+          const t = (s - lengths[i - 1]!) / (lengths[i]! - lengths[i - 1]! || 1);
+          const value = values[i - 1]! + (values[i]! - values[i - 1]!) * t;
+          return prefix[i - 1]! + ((values[i - 1]! + value) / 2) * (s - lengths[i - 1]!);
+        };
+        return values.map((v, i) => {
+          const s = lengths[i]!;
+          const half = Math.min(window / 2, s, total - s);
+          return half > 1e-9 ? (integral(s + half) - integral(s - half)) / (2 * half) : v;
+        });
       };
       const taper = taperLength(road);
+      // With a pull, push and pull ease together by two means over half the taper each, so the
+      // lanes keep a continuous curvature where one gives way to the other.
+      const pushes = pull.some((v) => v < 0)
+        ? mean(
+            mean(
+              needed.map((v, i) => v + pull[i]!),
+              taper / 2,
+            ),
+            taper / 2,
+          )
+        : mean(needed, taper);
       return points.map((p, i) => {
-        const s = lengths[i]!;
-        const half = Math.min(taper / 2, s, total - s);
-        const push =
-          half > 1e-9 ? (integral(s + half) - integral(s - half)) / (2 * half) : needed[i]!;
+        const push = pushes[i]!;
         // The point dividing p to q by the shares lies half a block plus half the median from
         // where each block goes when fully pushed; the centerline is that point moved by the
         // push beyond full closure, along the road's own normal.
@@ -409,6 +473,20 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
         return { x: middle.x + n.x * shift, y: middle.y + n.y * shift };
       });
     });
+    // A closed median follows the line midway between the two source lines, whose points step
+    // unevenly where the nearest points cross the other line's vertices (a zigzag of a few
+    // centimetres): three passes of a [1, 2, 1] filter remove it, moving a 100 m curve by
+    // millimetres.
+    if (closing.some((c, i) => c && gaps[i]! > clearance))
+      for (const line of centerlines)
+        for (let pass = 0; pass < 3; pass++) {
+          const before = line.map((q) => ({ ...q }));
+          for (let i = 1; i < line.length - 1; i++)
+            line[i] = {
+              x: (before[i - 1]!.x + 2 * before[i]!.x + before[i + 1]!.x) / 4,
+              y: (before[i - 1]!.y + 2 * before[i]!.y + before[i + 1]!.y) / 4,
+            };
+        }
     centerlines[1]!.reverse();
     for (const [k, { road }] of [a, b].entries()) {
       const line = centerlines[k]!;
