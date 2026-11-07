@@ -166,8 +166,15 @@ cityTest(
     expect(a.centerline).toEqual(before.roads['r:368']!.centerline);
     expect(b.centerline).toEqual([...a.centerline].reverse());
     expect(Object.keys(city.roads)).toEqual(Object.keys(before.roads));
+    // TASK-099: a joint of an attached carriageway moves with it (n:652, 2.24 m).
+    const joint = (id: string) => {
+      const incident = Object.values(city.roads).filter((r) => r.from === id || r.to === id);
+      return (
+        incident.length === 2 && incident.every((r) => r.provenance.inferred!.includes('attached'))
+      );
+    };
     for (const node of Object.values(city.nodes))
-      expect(node.pos).toEqual(before.nodes[node.id]!.pos);
+      if (!joint(node.id)) expect(node.pos).toEqual(before.nodes[node.id]!.pos);
 
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
@@ -319,4 +326,4 @@ unitTest(
   },
 );
 
-// T36.4, Munich's morning, runs in the traffic tier (tests/traffic/munich-morning.test.ts).
+// T36.4, Munich's morning, became the traffic gate in tests/traffic/munich-morning.test.ts.

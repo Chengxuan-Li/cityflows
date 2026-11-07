@@ -20,6 +20,7 @@ import {
   sampleSameDirection,
   separateCoincident,
   separateDual,
+  attachCarriageways,
 } from './corridors';
 import { DEFAULT_RELAX_MAX_M, relaxRoads } from './relax';
 import {
@@ -290,6 +291,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   );
   separateCoincident(city, coincident);
   separateDual(city, roads);
+  attachCarriageways(city, roads);
   relaxRoads(city, roads, options.relaxMaxM ?? DEFAULT_RELAX_MAX_M);
   sampleSameDirection(sameDirection);
   incidents.clear();
