@@ -301,8 +301,11 @@ test.each(tierCities(auditCities))(
     // Main before TASK-089: Munich n:104, n:407, n:719, n:721, n:774 and Sindelfingen n:156. The
     // one left: n:156's r:157/r:510 meet the node 10 degrees apart and their median is set at one
     // station just past the cuts, 0.43 m at r:510's cut against 0.67 m 40 m out (1.43 m on main).
-    // TASK-090: counted, not named.
-    expect(medianChanges(net).length).toBeLessThanOrEqual(name === 'sindelfingen' ? 1 : 0);
+    // TASK-090: counted, not named. TASK-093: two Munich pairs now run within 1 m 40 m out:
+    // n:382's r:1354/r:447, whose median closes (B45; 0.77 against 0.72 m, 3.37 m out on main),
+    // and n:967's r:961/r:1276, attached at the node and parting 40 m out (B49; 0.53 against
+    // 0.88 m).
+    expect(medianChanges(net).length).toBeLessThanOrEqual(name === 'sindelfingen' ? 1 : 2);
   },
   120_000,
 );
@@ -354,7 +357,14 @@ function wobbles(net: CompiledCity): Record<string, number> {
 const wobbling: Record<AuditCity, Record<string, string>> = {
   grid: {},
   town: {},
-  sindelfingen: {},
+  sindelfingen: {
+    'n:156 r:510#0L':
+      'TASK-093 (B45): the median of r:157/r:510 (at most 3.2 m) closes, and the pair follows the line midway between its source lines, which bends both ways within 60 m of n:156 (main kept the void and a B43 S-bend).',
+    'n:156 r:510#0R': 'As r:510#0L.',
+    'n:899 r:1232#0L':
+      'TASK-093 (B47): the one-way r:1232 eases onto the lane of its direction on r:900 over its 17 m taper, against the source bend of the 35 m road.',
+    'n:899 r:1232#0R': 'As r:1232#0L.',
+  },
   munich: {
     'n:104 r:1308#1R': 'The source line bends twice within 60 m of n:104 (2 on main too).',
     'n:328 r:1330#1R': 'The source line bends three times within 60 m of n:328 (3 on main too).',
@@ -370,6 +380,20 @@ const wobbling: Record<AuditCity, Record<string, string>> = {
     'n:33 r:948#0R': 'As r:845#1L (1 on main).',
     'n:33 r:948#1L': 'As r:845#1L (1 on main).',
     'n:33 r:948#1R': 'As r:845#1L (1 on main).',
+    // TASK-093 (B47): a one-way road easing onto the lane of its direction of the street it
+    // continues, against bends of its source line.
+    'n:55 r:57#0L': 'r:57 eases 1.5 m onto the lane of r:192 over 15 m on a bending source line.',
+    'n:55 r:57#0R': 'As r:57#0L.',
+    'n:108 r:119#0L': 'r:119 eases 1.5 m onto the lane of r:8 over 15 m on a bending source line.',
+    'n:108 r:119#0R': 'As r:119#0L.',
+    'n:347 r:1082#0L':
+      'r:1082 eases 1.5 m onto the lane of r:349 over 15 m on a bending source line.',
+    'n:347 r:1082#0R': 'As r:1082#0L.',
+    'n:661 r:662#0L':
+      'The two lanes of r:662 ease 1.75 m onto the left two of r:666 (three lanes) over 15 m, on a bending source line.',
+    'n:661 r:662#0R': 'As r:662#0L.',
+    'n:661 r:662#1L': 'As r:662#0L.',
+    'n:661 r:662#1R': 'As r:662#0L.',
   },
 };
 
@@ -449,6 +473,98 @@ cityTest(
       expect(city.roads[id as `r:${number}`]!.provenance.inferred!.join(',')).not.toContain(
         'realigned',
       );
+  },
+  120_000,
+);
+
+/** The median-side edge of a road's surface (its left edge under right-hand traffic), from the
+ * node outward. */
+function medianEdge(net: CompiledCity, id: string, node: number) {
+  const road = net.roads[net.index.road.get(id as `r:${number}`)!]!;
+  const side = road.surface.slice(0, road.surface.length / 2);
+  return road.to === node ? [...side].reverse() : side;
+}
+
+cityTest(
+  'T39.6: n:967, Landsberger r:961 and r:1276 meet the junction side by side with the median (B49)',
+  () => {
+    const { city, net } = load('munich');
+    // r:961 continues r:1368, r:1276's pair, across n:936: a third way of their corridor.
+    expect(city.roads['r:961']!.corridorId).toBe(city.roads['r:1276']!.corridorId);
+    expect(
+      laneOverlaps(city, net).filter(
+        (o) => /\br:961\b/.test(o.roads) && /\br:1276\b/.test(o.roads),
+      ),
+    ).toEqual([]);
+    // No lane of the two crosses another within 40 m (main: r:1276#0 over r:961#0). The west
+    // arm's r:248 and r:364, which a ramp beside them keeps as drawn, cross as on main.
+    expect(crossingsNear(net, 'n:967').filter((c) => /r:(961|1276)#/.test(c))).toEqual([]);
+    // The facing edges just past the later cut and 20 m out: the 0.5 m median.
+    const node = net.index.node.get('n:967')!;
+    const [a, b] = [medianEdge(net, 'r:961', node), medianEdge(net, 'r:1276', node)];
+    const lengths = cumulativeLengths(a);
+    const start = nearestOnPolyline(a, b[0]!).along + 0.5;
+    for (const d of [0, 10, 20])
+      expect(nearestOnPolyline(b, pointAtDistance(a, lengths, start + d)).away).toBeCloseTo(0.5, 0);
+  },
+  120_000,
+);
+
+cityTest(
+  'T39.7: Landsberger between n:721 and n:328 keeps no median void narrower than 3 m (B45)',
+  () => {
+    const { net } = load('munich');
+    // Facing edges of r:724 and r:1279 every metre: attached (the 0.5 m median), wider than 3 m
+    // (the median as drawn), or easing between the two over at most a taper (20 m at 50 km/h).
+    const node = net.index.node.get('n:721')!;
+    const [a, b] = [medianEdge(net, 'r:724', node), medianEdge(net, 'r:1279', node)];
+    const lengths = cumulativeLengths(a);
+    const narrow: number[] = [];
+    for (let s = 0; s <= lengths.at(-1)!; s += 1) {
+      const gap = nearestOnPolyline(b, pointAtDistance(a, lengths, s)).away;
+      if (gap > 0.6 && gap < 3) narrow.push(s);
+    }
+    const runs: number[][] = [];
+    for (const s of narrow)
+      if (runs.at(-1) && s - runs.at(-1)!.at(-1)! <= 1) runs.at(-1)!.push(s);
+      else runs.push([s]);
+    expect(runs.length).toBe(2);
+    for (const run of runs) expect(run.at(-1)! - run[0]!).toBeLessThanOrEqual(20);
+  },
+  120_000,
+);
+
+cityTest(
+  'T39.8: a one-way lane continuing a two-way street lines up with its direction’s lane (B47)',
+  () => {
+    const { net } = load('munich');
+    // n:212: the one-way r:213 into r:1172; n:55: r:192 into the one-way r:57. Each lane line,
+    // extended to the node, passes it at the same offset within 0.1 m; the shifted road is held
+    // to its cut, so its lane leaves the cut along its own reference line.
+    for (const [id, from, to, shifted] of [
+      ['n:212', 'r:213', 'r:1172', 'r:213'],
+      ['n:55', 'r:192', 'r:57', 'r:57'],
+    ] as const) {
+      const node = net.nodes[net.index.node.get(id)!]!;
+      const lane = (road: string) => net.lanes[net.roads[net.index.road.get(road)!]!.lanes[0]!]!;
+      const [la, lb] = [lane(from), lane(to)];
+      const heading = (p: Vec2, q: Vec2) => Math.atan2(q.y - p.y, q.x - p.x);
+      const ha = heading(la.polyline.at(-2)!, la.polyline.at(-1)!),
+        hb = heading(lb.polyline[0]!, lb.polyline[1]!);
+      const offset = (p: Vec2, h: number) =>
+        -(p.x - node.pos.x) * Math.sin(h) + (p.y - node.pos.y) * Math.cos(h);
+      expect(
+        Math.abs(offset(la.polyline.at(-1)!, ha) - offset(lb.polyline[0]!, hb)),
+        id,
+      ).toBeLessThan(0.1);
+      const road = net.roads[net.index.road.get(shifted)!]!;
+      const atEnd = road.to === node.idx;
+      const profile = atEnd ? road.endShift : road.startShift;
+      // Held: the shift at the node and one step beyond it are equal.
+      expect(profile.length, id).toBeGreaterThan(2);
+      expect(Math.abs(profile[1]! - profile[0]!), id).toBeLessThan(1e-9);
+      expect(Math.abs(profile[0]!), id).toBeCloseTo(1.5, 1);
+    }
   },
   120_000,
 );

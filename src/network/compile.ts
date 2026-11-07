@@ -161,6 +161,7 @@ export function compile(city: City): CompileResult {
     nodes.map(() => []),
     unshifted,
     city.drivingSide,
+    sourceNodes,
   ).groups;
   const flows = convergingFlows(converging, sourceRoads);
   // B43: a through road may keep its line farther from the node where the side roads' cuts move
@@ -183,6 +184,7 @@ export function compile(city: City): CompileResult {
     through,
     unshifted,
     city.drivingSide,
+    sourceNodes,
     converging,
   ).shifts.forEach(({ start, end }, idx) => {
     roads[idx]!.startShift = start;

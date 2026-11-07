@@ -56,11 +56,24 @@ export const shots: {
   { id: 'B41-n1375', cases: [], centre: [-706.5, 97.5], zoom: 8 },
   { id: 'B41-n1303', cases: [], centre: [266, -486.5], zoom: 8 },
   { id: 'B41-n328', cases: [], centre: [502, 213.5], zoom: 8 },
+  // TASK-093: n:967's east carriageways (B49), Landsberger's median n:721 to n:328 (B45),
+  // Westendstraße's one-way lane continuing into a two-way street at n:212 and n:55 (B47).
+  { id: 'T93-n967', cases: [], centre: [10, 170], zoom: 12 },
+  { id: 'T93-n721-n328', cases: [], centre: [404, 204], zoom: 5.5 },
+  { id: 'T93-n721', cases: [], centre: [340, 198], zoom: 12 },
+  { id: 'T93-n328', cases: [], centre: [470, 210], zoom: 12 },
+  { id: 'T93-n212', cases: [], centre: [415, 370], zoom: 16 },
+  { id: 'T93-n55', cases: [], centre: [285, 378], zoom: 16 },
   { id: 'X-n79', cases: [], centre: [405, 534], zoom: 12 },
   { id: 'X-n189', cases: [], centre: [200.5, 373], zoom: 12 },
   // TASK-091 (B46, B50, B52): crossings set back from the curb, centre lines ending at the mouth.
   { id: 'B52-n291', cases: [], centre: [-524.5, 466.5], zoom: 14 },
   { id: 'B46-n182', cases: [], centre: [424.5, 371], zoom: 12 },
+  // TASK-092 (B48, B51, B52): the owner's sharp corners and the n:104 median nose, close up.
+  { id: 'B48-n262', cases: [], centre: [-68.5, 137.5], zoom: 14 },
+  { id: 'B48-n967', cases: [], centre: [-19.5, 172], zoom: 14 },
+  { id: 'B48-n291', cases: [], centre: [-524.5, 466.5], zoom: 18 },
+  { id: 'B51-n104', cases: [], centre: [-283, 141], zoom: 18 },
   // TASK-094 (B53): a signalized node's crossings set back, its stop lines behind them.
   {
     id: 'B53-sindelfingen-n110',

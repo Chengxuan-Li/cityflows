@@ -15,6 +15,7 @@ import {
   nearestOnPolyline,
   pointAtDistance,
   polylineCrossings,
+  preparePolygon,
   vertexNormals,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
@@ -77,8 +78,14 @@ const ALONG = Math.cos(Math.PI / 6);
  * points lie within `FIT_M` of the road edges. */
 const FIT_M = 0.25;
 const MIN_CURB_M = 0.5;
-/** A curb's tangent point lies within this share of its road, counted from the node. */
-const CURB_REACH = 0.4;
+/** A curb's tangent point lies within this share of its road, counted from the node: half, the
+ * other end's curb taking the other half (TASK-092; 40 percent left short roads' corners sharp). */
+const CURB_REACH = 0.5;
+/** The radius rounding a gore's tip (TASK-092): a nose between two roads overlapping at an acute
+ * angle, not a corner block, so it fills the notch no farther than this needs. */
+const GORE_RADIUS_M = 2;
+/** How far beyond the cut a median's nose may move to keep the movement surfaces off the median. */
+const NOSE_REACH_M = 3;
 /** Spacing of the samples of a through road's alignment and of curb arcs. */
 const SAMPLE_M = 0.5;
 const ARC_STEP = (3 * Math.PI) / 180;
@@ -196,9 +203,9 @@ function splitNearest(cubic: Vec2[], pos: Vec2) {
   return { before, after, at, tangent: unit(sub(after[1]!, at)) };
 }
 
-function sampleHalf(c: Vec2[]): Vec2[] {
+function sampleHalf(c: Vec2[], minSteps = 2): Vec2[] {
   const length = distance(c[0]!, c[1]!) + distance(c[1]!, c[2]!) + distance(c[2]!, c[3]!);
-  const steps = Math.max(2, Math.ceil(length / SAMPLE_M));
+  const steps = Math.max(minSteps, Math.ceil(length / SAMPLE_M));
   return Array.from({ length: steps + 1 }, (_, i) => cubicPoint(c, i / steps));
 }
 
@@ -785,26 +792,127 @@ function arcBetween(o: Vec2, radius: number, a: Vec2, b: Vec2): Vec2[] {
   });
 }
 
+/** A cubic from `a` to `b` leaving `a` along `leave` and arriving at `b` along `arrive`, its
+ * handles a circular arc's for that turn and chord, sampled; past a quarter turn, two such cubics
+ * meeting at the arc's middle (one cubic's curvature strays by a fifth there). */
+function edgeCurve(a: Vec2, leave: Vec2, b: Vec2, arrive: Vec2): Vec2[] {
+  const turn = Math.acos(Math.max(-1, Math.min(1, dot(leave, arrive))));
+  const chordLength = distance(a, b);
+  const across = cross(sub(b, a), leave);
+  if (turn > Math.PI / 2 && chordLength > 1e-6 && Math.abs(across) > 1e-9) {
+    // The arc bulges to the side `leave` points to off the chord; at its middle it runs along the
+    // chord.
+    const c = unit(sub(b, a));
+    const n = unit({ x: leave.x - dot(leave, c) * c.x, y: leave.y - dot(leave, c) * c.y });
+    const sagitta = (chordLength / 2) * Math.tan(turn / 4);
+    const mid = { x: (a.x + b.x) / 2 + n.x * sagitta, y: (a.y + b.y) / 2 + n.y * sagitta };
+    return [...edgeCurve(a, leave, mid, c).slice(0, -1), ...edgeCurve(mid, c, b, arrive)];
+  }
+  const handle =
+    turn > 1e-6 ? (4 / 3) * Math.tan(turn / 4) * (chordLength / (2 * Math.sin(turn / 2))) : 0;
+  // At most `ARC_STEP` of turn between samples, so a small nose is round too.
+  return sampleHalf(
+    [
+      a,
+      { x: a.x + leave.x * handle, y: a.y + leave.y * handle },
+      { x: b.x - arrive.x * handle, y: b.y - arrive.y * handle },
+      b,
+    ],
+    Math.ceil(turn / ARC_STEP),
+  );
+}
+
+/** An outward edge's unit direction at station `s`, over the metre beyond it. */
+function edgeDirection(edge: Vec2[], lengths: Float64Array, s: number): Vec2 {
+  const total = lengths.at(-1)!;
+  return unit(
+    sub(pointAtDistance(edge, lengths, Math.min(total, s + 1)), pointAtDistance(edge, lengths, s)),
+  );
+}
+
+/** The station of an outward edge where its points' projection on `u` reaches `target`. */
+function stationAlong(edge: Vec2[], lengths: Float64Array, u: Vec2, target: number) {
+  for (let i = 1; i < edge.length; i++) {
+    const p = dot(edge[i - 1]!, u),
+      q = dot(edge[i]!, u);
+    if ((p - target) * (q - target) <= 0 && p !== q)
+      return lengths[i - 1]! + ((target - p) / (q - p)) * (lengths[i]! - lengths[i - 1]!);
+  }
+  return undefined;
+}
+
+/** TASK-092 (B51): the median between two carriageways running side by side out of the junction
+ * ends in a rounded nose, a half circle across the median tangent to both inner edges (`a`'s right,
+ * `b`'s left), its tip at the cut line, where TASK-089 placed the median's end (at the farther cut
+ * where the two are cut unequally), or as far beyond it as keeps every movement surface (a U-turn
+ * folding into the median) on the junction's side of the nose. */
+function nose(a: PolygonEnd, b: PolygonEnd, surface: Vec2[]): JunctionCorner | undefined {
+  const ka = a.right[0]!,
+    kb = b.left[0]!;
+  const da = leaving(a.right),
+    db = leaving(b.left);
+  if (dot(da, db) <= Math.SQRT1_2) return undefined;
+  const u = unit({ x: da.x + db.x, y: da.y + db.y });
+  // Half the median's width across the edges (two directions of a street cut unequally have none).
+  const radius = Math.abs(cross(u, sub(kb, ka))) / 2;
+  if (radius < 0.05) return undefined;
+  const la = cumulativeLengths(a.right),
+    lb = cumulativeLengths(b.left);
+  const base = Math.max(dot(ka, u), dot(kb, u)) + radius;
+  for (let beyond = 0; beyond <= NOSE_REACH_M; beyond += 0.25) {
+    const sa = stationAlong(a.right, la, u, base + beyond),
+      sb = stationAlong(b.left, lb, u, base + beyond);
+    if (sa === undefined || sb === undefined) return undefined;
+    const pa = pointAtDistance(a.right, la, sa),
+      pb = pointAtDistance(b.left, lb, sb);
+    const outA = edgeDirection(a.right, la, sa),
+      outB = edgeDirection(b.left, lb, sb);
+    const curve = edgeCurve(pa, neg(outA), pb, outB);
+    // The median beyond the nose is taken out of the polygon.
+    const far = 4 * radius + 1;
+    const cut = [
+      ...curve,
+      { x: pb.x + outB.x * far, y: pb.y + outB.y * far },
+      { x: pa.x + outA.x * far, y: pa.y + outA.y * far },
+    ];
+    const inCut = preparePolygon([...cut, cut[0]!], 0);
+    if (surface.some((p) => inCut(p))) continue;
+    return {
+      kind: 'nose',
+      roads: [a.road.idx, b.road.idx],
+      ring: [ka, ...edgeUpTo(a.right, sa), ...curve, ...edgeUpTo(b.left, sb).reverse(), kb],
+      curve,
+      cut,
+      radius,
+    };
+  }
+  return undefined;
+}
+
 /** The corner between two neighbouring approaches (T38.3 reads the curbs). */
 export interface JunctionCorner {
-  kind: 'curb' | 'gore' | 'outer' | 'step';
+  kind: 'curb' | 'gore' | 'outer' | 'step' | 'nose';
   /** Compiled road indices: the road whose right edge (outward) and the road whose left edge
    * the corner joins. */
   roads: [number, number];
   ring: Vec2[];
   /** Curbs: what set the tangent length (the class radius; a cut farther from the corner than
    * the class tangent, the arc then meeting that cut's corner; the class radius beyond the
-   * nearer cut, which keeps the curb from bulging past its road ends; the first 40 percent of a
-   * road; a movement surface it would cut into), the class radius, the radius used, the arc's centre and its tangent points. */
-  limit?: 'class' | 'cut' | 'lobe' | 'road' | 'turn';
-  /** Curbs: the curb's boundary, from the first road's edge to the second's, leaving and meeting
-   * each along it; and the region beyond it, between the road edges, taken out of the polygon. */
+   * nearer cut, which keeps the curb from bulging past its road ends; the first half of a road; a
+   * movement surface it would cut into; a road edge bending away from the arc), the class radius,
+   * the radius used, the arc's centre and its tangent points. Noses: the half circle's radius. */
+  limit?: 'class' | 'cut' | 'lobe' | 'road' | 'turn' | 'edge';
+  /** Curbs and noses: the boundary, from the first road's edge to the second's, leaving and
+   * meeting each along it; and the region beyond it, between the road edges, taken out of the
+   * polygon. */
   curve?: Vec2[];
   cut?: Vec2[];
   classRadius?: number;
   radius?: number;
   centre?: Vec2;
   tangents?: [Vec2, Vec2];
+  /** Gores: the fillet rounding the tip, in the notch beyond it (TASK-092). */
+  fillet?: Vec2[];
 }
 
 /** The corner between one approach's right edge `a` and the next approach's left edge `b`: a
@@ -820,9 +928,10 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     db = leaving(b.left);
   const roads: [number, number] = [a.road.idx, b.road.idx];
   // TASK-089 (owner's sketch): the median between a street's two carriageways split at the node
-  // ends at the junction edge, the cut line between their cut corners; no curb runs it out.
+  // ends at the junction edge, the cut line between their cut corners; no curb runs it out. Its
+  // nose is rounded (TASK-092, B51).
   if (a.split && b.split && a.incoming !== b.incoming && dot(da, db) > Math.SQRT1_2)
-    return undefined;
+    return nose(a, b, surface);
   // Edges within 30 degrees of running on into each other (a road continuing into a narrower or
   // wider one, two ends side by side across the node): an S-curve tangent to both, which
   // replaces the chord between the cuts (`cutRegion`).
@@ -862,15 +971,66 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     };
     return { kind: 'outer', roads, ring: [ka, ta, ...arcBetween(o, radius, ta, tb), tb, kb] };
   }
-  if (sa > 0.01 || sb > 0.01) {
-    const hit = polylineCrossings(a.right, b.left)
-      .filter((h) => distance(h.point, ka) <= REACH_M)
-      .reduce<{ point: Vec2; alongA: number; alongB: number } | undefined>(
-        (best, h) =>
-          !best || Math.max(h.alongA, h.alongB) < Math.max(best.alongA, best.alongB) ? h : best,
-        undefined,
-      );
-    if (!hit) return undefined;
+  const lower =
+    a.road.classRank < b.road.classRank
+      ? [a.road]
+      : b.road.classRank < a.road.classRank
+        ? [b.road]
+        : [a.road, b.road];
+  const classRadius = Math.min(...lower.map((r) => CURB_RADIUS_M[r.roadClass]));
+  const room = (edge: Vec2[], end: PolygonEnd, s: number) =>
+    Math.min(CURB_REACH * end.road.lengthM - end.setback, cumulativeLengths(edge).at(-1)!) - s;
+  // The edges' lines meeting beyond a cut: a gore where the edges cross there (a capped acute
+  // pair's overlap); else the meeting point lies behind the other cut and a curb fits as below
+  // (TASK-092: these were left without a corner, the sharp corners at n:262, n:291 and n:967).
+  const hit =
+    sa > 0.01 || sb > 0.01
+      ? polylineCrossings(a.right, b.left)
+          .filter((h) => distance(h.point, ka) <= REACH_M)
+          .reduce<{ point: Vec2; alongA: number; alongB: number } | undefined>(
+            (best, h) =>
+              !best || Math.max(h.alongA, h.alongB) < Math.max(best.alongA, best.alongB) ? h : best,
+            undefined,
+          )
+      : undefined;
+  if (hit) {
+    // TASK-092: the gore's tip, where the edges cross, is rounded by a fillet of `GORE_RADIUS_M`
+    // in the notch beyond it, tangent to both edges, its tangent points within the first half of
+    // either road (the radius shrinks to fit).
+    const la = cumulativeLengths(a.right),
+      lb = cumulativeLengths(b.left);
+    const theta = Math.acos(
+      Math.max(
+        -1,
+        Math.min(
+          1,
+          dot(edgeDirection(a.right, la, hit.alongA), edgeDirection(b.left, lb, hit.alongB)),
+        ),
+      ),
+    );
+    const t = Math.min(
+      Math.min(GORE_RADIUS_M, classRadius) / Math.tan(theta / 2),
+      room(a.right, a, hit.alongA),
+      room(b.left, b, hit.alongB),
+    );
+    const pa = pointAtDistance(a.right, la, hit.alongA + t),
+      pb = pointAtDistance(b.left, lb, hit.alongB + t);
+    const fillet =
+      t * Math.tan(theta / 2) >= MIN_CURB_M
+        ? [
+            hit.point,
+            ...edgeUpTo(a.right, hit.alongA + t).filter((_, i) => la[i + 1]! > hit.alongA),
+            ...edgeCurve(
+              pa,
+              neg(edgeDirection(a.right, la, hit.alongA + t)),
+              pb,
+              edgeDirection(b.left, lb, hit.alongB + t),
+            ),
+            ...edgeUpTo(b.left, hit.alongB + t)
+              .filter((_, i) => lb[i + 1]! > hit.alongB)
+              .reverse(),
+          ]
+        : undefined;
     return {
       kind: 'gore',
       roads,
@@ -881,22 +1041,16 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
         ...edgeUpTo(b.left, hit.alongB).reverse(),
         kb,
       ],
+      ...(fillet ? { fillet } : {}),
     };
   }
+  // Meeting beyond both cuts with no crossing near: no corner.
+  if (sa > 0.01 && sb > 0.01) return undefined;
   // A curb arc of the class radius of the lower-ranked road, its tangent points on both road
   // edges at or beyond their cuts, at most the class radius beyond the nearer cut (no lobe) and
-  // within the first 40 percent of either road; the radius follows. The edges' directions are
+  // within the first half of either road; the radius follows. The edges' directions are
   // then taken as the chords from the cut corners to those tangent points and the arc is fitted
   // again, so on a curving road it still meets the edges.
-  const lower =
-    a.road.classRank < b.road.classRank
-      ? [a.road]
-      : b.road.classRank < a.road.classRank
-        ? [b.road]
-        : [a.road, b.road];
-  const classRadius = Math.min(...lower.map((r) => CURB_RADIUS_M[r.roadClass]));
-  const room = (edge: Vec2[], end: PolygonEnd, s: number) =>
-    Math.min(CURB_REACH * end.road.lengthM - end.setback, cumulativeLengths(edge).at(-1)!) - s;
   const fit = (da: Vec2, db: Vec2) => {
     const c = cross(da, db);
     const sa = cross(w, db) / c,
@@ -933,7 +1087,7 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
       chord(b.left, best.sb + best.tangent),
     ];
     const next = fit(ra, rb);
-    if (next.c <= 0.02 || next.sa > 0.01 || next.sb > 0.01) break;
+    if (next.c <= 0.02 || (next.sa > 0.01 && next.sb > 0.01)) break;
     [best, da, db] = [next, ra, rb];
   }
   const { p, theta, perRadius } = best;
@@ -961,15 +1115,28 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     [tangent, limit] = [low, 'turn'];
     if (tangent < Math.max(0, -best.sa, -best.sb) - 0.5) return undefined;
   }
-  const radius = tangent / perRadius;
-  if (radius < MIN_CURB_M) return undefined;
-  const ta = { x: p.x + da.x * tangent, y: p.y + da.y * tangent },
-    tb = { x: p.x + db.x * tangent, y: p.y + db.y * tangent };
   // An edge bending away within the curb's reach (a road turning right after the junction) takes
-  // no arc: none fits tangent to it.
+  // no arc there: the arc shrinks (bisection) until its tangent points lie on both edges, and none
+  // fits where they would then lie behind a cut (TASK-092: it was dropped at the first misfit).
   const onEdge = (edge: Vec2[], t: Vec2, d: Vec2) =>
     nearestOnPolyline([{ x: edge[0]!.x - d.x, y: edge[0]!.y - d.y }, ...edge], t).away <= FIT_M;
-  if (!onEdge(a.right, ta, da) || !onEdge(b.left, tb, db)) return undefined;
+  const at = (d: Vec2, t: number) => ({ x: p.x + d.x * t, y: p.y + d.y * t });
+  const fits = (t: number) => onEdge(a.right, at(da, t), da) && onEdge(b.left, at(db, t), db);
+  if (!fits(tangent)) {
+    let low = Math.max(0, -best.sa, -best.sb),
+      high = tangent;
+    if (!fits(low)) return undefined;
+    for (let k = 0; k < 10; k++) {
+      const mid = (low + high) / 2;
+      if (fits(mid)) low = mid;
+      else high = mid;
+    }
+    [tangent, limit] = [low, 'edge'];
+  }
+  const radius = tangent / perRadius;
+  if (radius < MIN_CURB_M) return undefined;
+  const ta = at(da, tangent),
+    tb = at(db, tangent);
   const o = centre(tangent);
   // The corner block (TASK-089, B42): from the cut corners along the road edges to the points
   // nearest the tangent points, joined by a cubic that leaves and meets each edge along the edge
@@ -983,16 +1150,8 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     nb = nearestOnPolyline(b.left, tb);
   const leave = neg(na.direction),
     arrive = nb.direction;
-  const turn = Math.acos(Math.max(-1, Math.min(1, dot(leave, arrive))));
   const chordLength = distance(na.point, nb.point);
-  const handle =
-    turn > 1e-6 ? (4 / 3) * Math.tan(turn / 4) * (chordLength / (2 * Math.sin(turn / 2))) : 0;
-  const curve = sampleHalf([
-    na.point,
-    { x: na.point.x + leave.x * handle, y: na.point.y + leave.y * handle },
-    { x: nb.point.x - arrive.x * handle, y: nb.point.y - arrive.y * handle },
-    nb.point,
-  ]);
+  const curve = edgeCurve(na.point, leave, nb.point, arrive);
   const block = [
     ka,
     ...edgeUpTo(a.right, na.along),
@@ -1093,12 +1252,13 @@ function cutRegion(
     if (distance(a, b) > 1e-6) fan.push(cap(a, b, leaving(group[0]!.left)));
     return { fan, corners };
   }
-  const far = (x: PolygonEnd[], y: PolygonEnd[]) =>
-    through.some(
-      (p) =>
-        (x.some((e) => e.road.idx === p.from) && y.some((e) => e.road.idx === p.to)) ||
-        (y.some((e) => e.road.idx === p.from) && x.some((e) => e.road.idx === p.to)),
-    );
+  // The far side of a through road: the two approaches' facing ends are a through pair, whose strip
+  // runs along it (TASK-092: not where another end lies outside the pair, as a street's other
+  // direction beside a through road continuing into a one-way, which needs its own corner).
+  const far = (x: PolygonEnd[], y: PolygonEnd[]) => {
+    const [a, b] = [x.at(-1)!.road.idx, y[0]!.road.idx];
+    return through.some((p) => (p.from === a && p.to === b) || (p.from === b && p.to === a));
+  };
   groups.forEach((group, i) => {
     const next = groups[(i + 1) % groups.length]!;
     group.forEach((end, k) => {
@@ -1114,6 +1274,11 @@ function cutRegion(
         piece.ring.every((p) => distance(p, node.pos) <= 2.5 * SETBACK_CAP_M)
       )
         corners.push(piece);
+      // A median between them ends in a rounded nose (TASK-092).
+      else if (piece?.kind !== 'gore') {
+        const median = nose(end, group[k + 1]!, surface);
+        if (median) corners.push(median);
+      }
     });
     if (far(group, next)) return;
     const step = corner(group.at(-1)!, next[0]!);
@@ -1239,20 +1404,27 @@ export function junctionPolygon(
   );
   const { fan, corners } = cutRegion(node, roads, approaches, hidden, through, samples);
   cornersByNode.set(node, corners);
-  // A curb never covers its two roads (TASK-089: where a converging shift curves an edge, the curb
-  // curve can run on its road side near its ends).
+  // A curb or nose block is closed through the node's centre, as the fan is (TASK-092): closed by
+  // the chord between its cut corners, an arc whose tangent points lie beyond the cuts crosses the
+  // chord, and the ends cut off beyond it were dropped with the union's small rings (a kink where
+  // the curb left the road edge). A curb never covers its two roads (TASK-089: where a converging
+  // shift curves an edge, the curb curve can run on its road side near its ends).
+  const centre = nodeCentre(node, through);
+  const block = (c: JunctionCorner) =>
+    c.kind === 'curb' || c.kind === 'nose' ? [...c.ring, centre] : c.ring;
   const curbs = corners.flatMap((c) =>
     c.kind === 'curb' && c.roads.some((r) => shifted(roads.find((road) => road.idx === r)!))
       ? booleanOpD(
           ClipType.Difference,
-          [c.ring],
+          [block(c)],
           c.roads.map((r) => roads.find((road) => road.idx === r)!.surface),
           FillRule.NonZero,
           PRECISION,
         )
-      : [c.ring],
+      : [block(c)],
   );
-  const pieces: PathD[] = [...fan, ...curbs, ...surfaces];
+  const fillets = corners.flatMap((c) => (c.fillet ? [c.fillet] : []));
+  const pieces: PathD[] = [...fan, ...curbs, ...fillets, ...surfaces];
   for (const pair of through) {
     const from = roads.find((r) => r.idx === pair.from)!,
       to = roads.find((r) => r.idx === pair.to)!;
@@ -1278,7 +1450,9 @@ export function junctionPolygon(
   const grow = (paths: PathD[], by: number) =>
     inflatePathsD(paths, by, JoinType.Round, EndType.Polygon, 2, PRECISION, 0.002);
   const closing = (paths: PathD[]) => grow(grow(paths, 0.01), -0.01);
-  if (union.some(crossesItself)) union = closing(union);
+  // A gore's fillet touches the gore only at its tip (the roads' surfaces lie between): the closing
+  // joins them there.
+  if (union.some(crossesItself) || (fillets.length && union.length > 1)) union = closing(union);
   // The outer ring, its vertices within 2 mm merged, so a curb's cusp at its tangent point (the
   // boundary returns along the arc beside the road edge it came out on) touches itself instead of
   // crossing at rounding; a cusp still crossing gets the closing too, where that clears it.

@@ -12,6 +12,7 @@ import { SETBACK_CAP_M, type ThroughPair } from './junctions';
 import type { CLane, CMovement, CNode, CRoad } from './types';
 import {
   CONVERGING,
+  MEDIAN_VOID_M,
   roadWidth,
   sameStreet,
   SHIFT_STEP_M,
@@ -637,6 +638,19 @@ function trailingMean(values: number[], window: number): number[] {
   });
 }
 
+/** Mean over a window centred on each sample, `half` either side and shrinking to nothing at
+ * either end: exact on a linear stretch, at or above a convex corner, and never increasing where
+ * the values never increase. */
+function centredMean(values: number[], half: number): number[] {
+  const n = Math.max(1, Math.round(half / SHIFT_STEP_M));
+  const prefix = [0];
+  for (const v of values) prefix.push(prefix.at(-1)! + v);
+  return values.map((_, i) => {
+    const h = Math.min(n, i, values.length - 1 - i);
+    return (prefix[i + h + 1]! - prefix[i - h]!) / (2 * h + 1);
+  });
+}
+
 /** `value` held to `hold` from the node, then eased to zero over `taper` by two trailing means
  * (zero slope at both ends of the ease). */
 function holdRamp(value: number, hold: number, taper: number): number[] {
@@ -699,6 +713,7 @@ export function convergingShifts(
   through: ThroughPair[][],
   setbacks: number[][],
   side: 'left' | 'right',
+  sourceNodes: Node[],
   found?: ConvergingGroup[],
 ): { shifts: { start: Float64Array; end: Float64Array }[]; groups: ConvergingGroup[] } {
   const sigma = side === 'right' ? 1 : -1;
@@ -878,12 +893,35 @@ export function convergingShifts(
   }
   // A member running straight on (on 20 m chords, as TASK-083 pairs through roads) into a road
   // that is not split, whose lanes would jog by more than 5 m across the node, keeps its pair as
-  // drawn (Sindelfingen n:78: the 4-lane r:1061 into r:80).
+  // drawn (Sindelfingen n:78: the 4-lane r:1061 into r:80), the jog measured between the lanes
+  // that join (`laneStep`).
   const chord = (road: CRoad, incoming: boolean) => {
     const near = outwardFrame(references[road.idx]!, incoming, 0).p;
     const far = outwardFrame(references[road.idx]!, incoming, Math.min(20, length(road.idx) / 2)).p;
     const l = Math.hypot(far.x - near.x, far.y - near.y) || 1;
     return { x: (far.x - near.x) / l, y: (far.y - near.y) / l };
+  };
+  // The lateral step, to the right of travel, from the lanes of `from` that continue into `to`
+  // across `node` to the lanes they enter, as their lines are drawn: the lanes the node's lane
+  // turn rules name (TASK-093, n:967: the 4-lane r:248's two right lanes into r:1276, beside its two
+  // left-turn lanes), else the median-side edges (through movements pair lanes from the median,
+  // architecture 5.2).
+  const laneStep = (node: CNode, from: number, to: number) => {
+    const [a, b] = [sources[from]!, sources[to]!];
+    const rules = sourceNodes[node.idx]!.turnRules.filter(
+      (r) =>
+        r.allowed &&
+        r.from === a.id &&
+        r.to === b.id &&
+        r.fromLane !== undefined &&
+        r.toLane !== undefined,
+    );
+    if (rules.length)
+      return (
+        rules.reduce((sum, r) => sum + laneOffset(b, r.toLane!) - laneOffset(a, r.fromLane!), 0) /
+        rules.length
+      );
+    return b.lateralOffsetM - a.lateralOffsetM - (sigma * (roadWidth(b) - roadWidth(a))) / 2;
   };
   const blockEdge = (set: ConvergingEnd[]) =>
     sigma > 0
@@ -903,8 +941,6 @@ export function convergingShifts(
       const n = m.incoming ? { x: -f.n.x, y: -f.n.y } : f.n;
       const off = (f.p.x - node.pos.x) * n.x + (f.p.y - node.pos.y) * n.y;
       const shift = (sigma * MEDIAN_M) / 2 - blockEdge(m.incoming ? ins : outs) - off;
-      const median =
-        sources[m.road.idx]!.lateralOffsetM + shift - (sigma * roadWidth(sources[m.road.idx]!)) / 2;
       const t = chord(m.road, m.incoming);
       return incident[node.idx]!.some((e) => {
         const incoming = e.to === node.idx;
@@ -912,8 +948,10 @@ export function convergingShifts(
           return false;
         const d = chord(e, incoming);
         if (d.x * t.x + d.y * t.y > -ALONG) return false;
-        const other = sources[e.idx]!.lateralOffsetM - (sigma * roadWidth(sources[e.idx]!)) / 2;
-        return Math.abs(median - other) > 5;
+        const jog = m.incoming
+          ? laneStep(node, m.road.idx, e.idx) - shift
+          : laneStep(node, e.idx, m.road.idx) + shift;
+        return Math.abs(jog) > 5;
       });
     }),
   );
@@ -1048,23 +1086,39 @@ export function convergingShifts(
     };
     const hold = Math.max(0, Math.min(MOUTH_M, limit - taper));
     const total = sigma * (atTheNode(ins[0]!) + atTheNode(outs[0]!));
-    const held = holdRamp(1, hold, taper);
     // The split the pair needs from the node out: its full split held over the mouth and eased
     // over the taper, and no less than the shortfall anywhere farther out (its non-increasing
     // envelope), eased by two trailing means: never increasing, so no lane edge turns back.
     const envelope = needed.map((v) => Math.max(0, v));
     for (let i = envelope.length - 2; i >= 0; i--)
       envelope[i] = Math.max(envelope[i]!, envelope[i + 1]!);
+    // TASK-093 (B49, n:967): a pair converging onto the node at so shallow an angle that it still
+    // overlaps a taper beyond the mouth, where holding the full split would open a median void
+    // narrower than `MEDIAN_VOID_M` that closes again farther out, follows its shortfall from the
+    // node instead (a centred mean, exact where the shortfall changes linearly, as two
+    // carriageways meeting at an angle do, and never below it), so the carriageways run attached
+    // at the median up to the junction; a shortfall left where the shift must have eased out
+    // (`limit`, at most 1 m) eases out linearly over the taper beyond. Not a pair that needs more
+    // farther out than at the node.
+    const atMouth = envelope[Math.round(hold / SHIFT_STEP_M)] ?? 0;
+    const overlapM = (parted < 0 ? needed.length : parted) * SHIFT_STEP_M;
+    const attached =
+      overlapM > hold + taper &&
+      envelope.at(-1)! <= 1 &&
+      total - atMouth < MEDIAN_VOID_M &&
+      envelope[0]! - needed[0]! <= MEDIAN_M / 2;
+    const held = holdRamp(1, attached ? 0 : hold, taper);
     const size = Math.max(held.length, envelope.length) + Math.ceil(taper / SHIFT_STEP_M) + 2;
-    const split = trailingMean(
-      trailingMean(
-        Array.from({ length: size }, (_, i) =>
-          Math.max(envelope[i] ?? 0, Math.max(0, total) * (held[i] ?? 0)),
-        ),
-        taper / 2,
-      ),
-      taper / 2,
+    const tail = (i: number) =>
+      attached
+        ? envelope.at(-1)! * Math.max(0, 1 - ((i - envelope.length + 1) * SHIFT_STEP_M) / taper)
+        : 0;
+    const raw = Array.from({ length: size }, (_, i) =>
+      Math.max(envelope[i] ?? tail(i), Math.max(0, total) * (held[i] ?? 0)),
     );
+    const split = attached
+      ? centredMean(raw, taper / 2).map((v, i) => Math.max(v, raw[i]!))
+      : trailingMean(trailingMean(raw, taper / 2), taper / 2);
     // Each side's shift never turns back. A side whose end moves toward the other at the node
     // (its line ends beyond its place) eases that move out over the hold; the other takes the
     // rest of the split. Where both move apart, each takes its end's share of the split all
@@ -1108,9 +1162,10 @@ export function convergingShifts(
         if (Math.abs(shift) < 1e-6 || Math.abs(atNode(other, otherIncoming)) > 1e-6) continue;
         const jog = medianEdge(member, shift) - medianEdge(other, 0);
         if (Math.abs(jog) <= MEDIAN_M / 2 + 0.01) continue;
-        // A direction of a two-way street never moves onto its other direction, nor a carriageway
-        // whose street's other carriageway meets the node beside it (within 45 degrees).
-        if (sources[other]!.streetGroupId !== null && sigma * jog < 0) continue;
+        // A direction of a two-way street never moves, onto its other direction or (TASK-093) away
+        // from it, opening their centre line; nor a carriageway whose street's other carriageway
+        // meets the node beside it (within 45 degrees).
+        if (sources[other]!.streetGroupId !== null) continue;
         const d = outwardFrame(references[other]!, otherIncoming, 0).t;
         if (
           incident[node.idx]!.some((e) => {
@@ -1128,6 +1183,87 @@ export function convergingShifts(
           trimmed(holdRamp(jog, 0, taperLength(sources[other]!))),
         );
       }
+  // TASK-093 (B47, n:212, n:55): a street continuing straight across a node (each end the other's
+  // most nearly opposite, within 30 degrees) with another lane count or other directions on the
+  // far side (a one-way lane into a two-way street) lines up the lanes that join (`laneStep`)
+  // instead of the centre lines. The road with fewer lanes on its arm (its own and its street's
+  // other direction there; then fewer of its own) takes the step, held to its cut and eased over
+  // its TASK-080 taper. Not where either end is shifted already, nor between two one-way roads at
+  // a node of two road ends (a TASK-071 continuation), nor beside a split's or merge's branch or
+  // the road's own other carriageway, nor a direction of a two-way street (it would part from
+  // its other direction), nor a step steeper than 1 in 4 over the taper.
+  const sameName = (x: Road, y: Road) =>
+    x.name !== null ? x.name === y.name : y.name === null && x.roadClass === y.roadClass;
+  const nodeOffset = (node: CNode, road: CRoad, incoming: boolean) => {
+    const f = outwardFrame(references[road.idx]!, incoming, 0);
+    const n = incoming ? { x: -f.n.x, y: -f.n.y } : f.n;
+    return (f.p.x - node.pos.x) * n.x + (f.p.y - node.pos.y) * n.y;
+  };
+  for (const node of nodes) {
+    const ends = incident[node.idx]!.filter((r) => r.from !== r.to);
+    const facing = (a: CRoad, b: CRoad) => {
+      const [ta, tb] = [chord(a, true), chord(b, false)];
+      return ta.x * tb.x + ta.y * tb.y;
+    };
+    const reverse = (x: CRoad, y: CRoad) =>
+      sources[x.idx]!.streetGroupId !== null &&
+      sources[x.idx]!.streetGroupId === sources[y.idx]!.streetGroupId;
+    const best = (candidates: CRoad[], score: (r: CRoad) => number) =>
+      candidates.reduce<CRoad | undefined>(
+        (top, r) => (top === undefined || score(r) < score(top) ? r : top),
+        undefined,
+      );
+    for (const a of ends) {
+      if (a.to !== node.idx) continue;
+      const b = best(
+        ends.filter((r) => r.from === node.idx && !reverse(a, r)),
+        (r) => facing(a, r),
+      );
+      if (!b || facing(a, b) > -ALONG) continue;
+      if (
+        best(
+          ends.filter((r) => r.to === node.idx && !reverse(r, b)),
+          (r) => facing(r, b),
+        ) !== a
+      )
+        continue;
+      const [sa, sb] = [sources[a.idx]!, sources[b.idx]!];
+      if (!sameName(sa, sb)) continue;
+      const oneWay = [sa, sb].map((r) => r.streetGroupId === null);
+      if (oneWay[0] === oneWay[1] && sa.lanes.length === sb.lanes.length) continue;
+      if (oneWay[0] && oneWay[1] && ends.length === 2) continue;
+      // Branches of a split or merge beside either road (another end the same way within 60
+      // degrees: TASK-071 and TASK-080 set those side by side), or the shifted road's own other
+      // carriageway beside it (within 45 degrees), keep the layout as it is.
+      const beside = (road: CRoad, incoming: boolean) => {
+        const d = chord(road, incoming);
+        return ends.some((r) => {
+          if (r === road || reverse(r, road)) return false;
+          const t = chord(r, r.to === node.idx);
+          const cos = t.x * d.x + t.y * d.y;
+          return cos >= CONVERGING || ((r.to === node.idx) === incoming && cos >= NEIGHBOUR);
+        });
+      };
+      if (beside(a, true) || beside(b, false)) continue;
+      if (Math.abs(atNode(a.idx, true)) > 1e-6 || Math.abs(atNode(b.idx, false)) > 1e-6) continue;
+      const step =
+        laneStep(node, a.idx, b.idx) + nodeOffset(node, b, false) - nodeOffset(node, a, true);
+      if (Math.abs(step) <= 0.1) continue;
+      const arm = (road: CRoad) =>
+        sources[road.idx]!.lanes.length +
+        ends
+          .filter((r) => r !== road && reverse(r, road))
+          .reduce((sum, r) => sum + sources[r.idx]!.lanes.length, 0);
+      const order = arm(a) - arm(b) || sa.lanes.length - sb.lanes.length;
+      if (order === 0) continue;
+      const [road, incoming, value] = order < 0 ? [a, true, step] : [b, false, -step];
+      if (sources[road.idx]!.streetGroupId !== null) continue;
+      const taper = taperLength(sources[road.idx]!);
+      if (Math.abs(value) > taper / 4) continue;
+      const cut = setbacks[node.idx]![incident[node.idx]!.indexOf(road)]!;
+      shifts.set(key(road.idx, incoming), trimmed(holdRamp(value, cut, taper)));
+    }
+  }
   return {
     groups: result,
     shifts: sources.map((_, idx) => ({

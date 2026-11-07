@@ -6,6 +6,7 @@ import {
   nearestOnPolyline,
   parallelOffset,
   pointAtDistance,
+  polylineCrossings,
   preparePolygon,
   prepareRing,
   ringsOverlap,
@@ -21,9 +22,10 @@ import { style } from '../src/render/style';
 import type { City, Road, RoadClass } from '../src/schema';
 import { auditCities, loadAuditCity, markingLengths, type AuditCity } from './junction-audit';
 
-// Geometry audit (TASK-081, docs/plan.md "Geometry rework"): nine measures of how far the drawn
+// Geometry audit (TASK-081, docs/plan.md "Geometry rework"): ten measures of how far the drawn
 // roads, lanes and junctions are from the corridors their canonical centerlines describe, per
-// city and per named case (the ninth, lane overlap, from TASK-087). Usage: npm run geometry-audit -- [out.json] [--relax-max-m <m>]
+// city and per named case (the ninth, lane overlap, from TASK-087; the tenth, corner sharpness,
+// from TASK-092). Usage: npm run geometry-audit -- [out.json] [--relax-max-m <m>]
 //
 // Conventions: stations are arc lengths along a polyline; the right-hand normal of heading
 // (dx, dy) is (-dy, dx) (y-south, architecture 5.1); a lateral offset is signed, positive to the
@@ -1358,6 +1360,208 @@ export function laneOverlaps(city: City, net: CompiledCity, outsideOutlines = tr
 }
 
 // ---------------------------------------------------------------------------------------------
+// 10. Corner sharpness (TASK-092)
+
+export interface CornerSharpness {
+  node: string;
+  /** The road ends whose corners the curb joins, in outline order. */
+  roads: string;
+  /** A corner between two arms, a median nose between two ends running the same way, or the
+   * edge joining two ends running into each other (a through road's far side, a step). */
+  kind: 'corner' | 'nose' | 'through';
+  /** Length of the outline between where it leaves the first road's edge and meets the second's. */
+  curbM: number;
+  /** Largest turn between consecutive samples of the drawn boundary (the first road's edge, the
+   * curb, the second road's edge), degrees; 0.5 m samples, a sixth of the median at a nose. */
+  turnDeg: number;
+  /** Smallest radius through three samples two apart (1 m at 0.5 m samples), m. */
+  radiusM: number;
+  /** Corner and through: turns more than 30 degrees between samples, or a curb under 0.5 m where
+   * the edges meet at more than 30 degrees. Nose: not rounded (the same turn rule). */
+  sharp: boolean;
+}
+
+const CORNER_STEP_M = 0.5;
+const CORNER_EDGE_M = 2;
+const SHARP_DEG = 30;
+
+function resample(line: readonly Vec2[], step: number): Vec2[] {
+  const lengths = cumulativeLengths(line);
+  const total = lengths.at(-1)!;
+  const count = Math.max(1, Math.round(total / step));
+  return Array.from({ length: count + 1 }, (_, i) =>
+    pointAtDistance(line, lengths, (total * i) / count),
+  );
+}
+
+function bends(points: readonly Vec2[]) {
+  let turn = 0,
+    radius = Infinity;
+  for (let i = 1; i + 1 < points.length; i++) {
+    const a = points[i - 1]!,
+      p = points[i]!,
+      b = points[i + 1]!;
+    const h1 = Math.atan2(p.y - a.y, p.x - a.x),
+      h2 = Math.atan2(b.y - p.y, b.x - p.x);
+    turn = Math.max(turn, Math.abs(Math.atan2(Math.sin(h2 - h1), Math.cos(h2 - h1))));
+  }
+  // The radius through samples two apart: the polyline's chords put single samples millimetres
+  // inside an arc, which at 0.5 m spacing reads a 6 m arc as 4.6 m.
+  for (let i = 2; i + 2 < points.length; i++) {
+    const a = points[i - 2]!,
+      p = points[i]!,
+      b = points[i + 2]!;
+    const area2 = Math.abs((p.x - a.x) * (b.y - a.y) - (p.y - a.y) * (b.x - a.x));
+    const sides =
+      Math.hypot(p.x - a.x, p.y - a.y) *
+      Math.hypot(b.x - p.x, b.y - p.y) *
+      Math.hypot(b.x - a.x, b.y - a.y);
+    if (area2 > 1e-9) radius = Math.min(radius, sides / (2 * area2));
+  }
+  return { turnDeg: (turn * 180) / Math.PI, radiusM: radius };
+}
+
+/** Measure 10 at a node with an outline. Walking the outline, every stretch between corners of two
+ * different road ends is a curb: from where it leaves the first end's edge to where it meets the
+ * second's (the outline runs out along a road edge to a curb's tangent point and back), with
+ * `CORNER_EDGE_M` of each road edge beyond, as drawn. */
+export function cornerAudit(city: City, net: CompiledCity, node: CNode): CornerSharpness[] {
+  if (!node.outline.length) return [];
+  // A dead end (every road end within 30 degrees of one direction, as measure 6) has a cap.
+  const outwards = roadEnds(net, node).map((end) => outward(city, end.road, end.atEnd));
+  if (outwards.every((d) => d.x * outwards[0]!.x + d.y * outwards[0]!.y > ALONG)) return [];
+  const ring = closed(node.outline).slice(0, -1);
+  const n = ring.length;
+  const corners = roadEnds(net, node).flatMap((end) => {
+    const [l, r] = surfaceEdges(end.road);
+    const edges = end.atEnd ? [[...l].reverse(), [...r].reverse()] : [l, r];
+    // Each corner's place on the outline: the corner, or where its edge comes out from under the
+    // outline (a movement surface's end beyond the cut covering it).
+    return edges.map((edge, side) => {
+      const near = trimPolyline(edge, 0, Math.max(0, cumulativeLengths(edge).at(-1)! - 5));
+      let k = -1,
+        best = Infinity;
+      ring.forEach((p, i) => {
+        const hit = nearestOnPolyline(near, p);
+        if (hit.away < 0.05 && hit.along < best) [k, best] = [i, hit.along];
+      });
+      return { end, side, edge, k };
+    });
+  });
+  // Corners on the outline, grouped where they share a vertex (two ends side by side).
+  const groups = new Map<number, typeof corners>();
+  for (const c of corners) if (c.k >= 0) groups.set(c.k, [...(groups.get(c.k) ?? []), c]);
+  const order = [...groups.keys()].sort((a, b) => a - b).map((k) => groups.get(k)!);
+  const surfaces = roadEnds(net, node).map((end) => preparePolygon(closed(end.road.surface), 0.01));
+  const inOutline = preparePolygon(closed(node.outline), 0);
+  const out: CornerSharpness[] = [];
+  const direction = (edge: Vec2[], s: number) => {
+    const lengths = cumulativeLengths(edge);
+    const total = lengths.at(-1)!;
+    const a = pointAtDistance(edge, lengths, Math.min(s, total)),
+      b = pointAtDistance(edge, lengths, Math.min(s + 5, total));
+    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
+  };
+  const m = order.length;
+  order.forEach((g1, h) => {
+    const g2 = order[(h + 1) % m]!;
+    if (m < 2 || g1.some((a) => g2.some((b) => a.end === b.end))) return;
+    // Of coincident corners, the one whose road end's cut closes in the neighbouring group.
+    const pick = (group: typeof corners, other: typeof corners) =>
+      group.find((c) => other.some((o) => o.end === c.end)) ?? group[0]!;
+    const first = pick(g1, order[(h + m - 1) % m]!),
+      second = pick(g2, order[(h + 2) % m]!);
+    const path: Vec2[] = [];
+    for (let i = first.k; ; i = (i + 1) % n) {
+      path.push(ring[i]!);
+      if (i === second.k) break;
+    }
+    const covered = (p: Vec2) => surfaces.some((inside) => inside(p));
+    let e1: Vec2[], e2: Vec2[], s1: number, s2: number, curb: Vec2[];
+    if (resample(path, 0.25).every(covered)) {
+      // Along road surfaces only: the step between a street's two directions cut unequally (not
+      // drawn), or a gore, whose tip is where the two edges cross beyond the cuts and drawn where
+      // the notch beyond it is open (no road, this node's or another's, covers it).
+      const hit = polylineCrossings(first.edge, second.edge)
+        .filter((h) => h.alongA > 0.05 && h.alongB > 0.05)
+        .sort((a, b) => Math.max(a.alongA, a.alongB) - Math.max(b.alongA, b.alongB))[0];
+      if (!hit) return;
+      const da = direction(first.edge, hit.alongA),
+        db = direction(second.edge, hit.alongB);
+      const bisector = { x: da.x + db.x, y: da.y + db.y };
+      const l = Math.hypot(bisector.x, bisector.y) || 1;
+      const beyond = {
+        x: hit.point.x + (0.3 * bisector.x) / l,
+        y: hit.point.y + (0.3 * bisector.y) / l,
+      };
+      if (
+        inOutline(beyond) ||
+        net.roads.some(
+          (road) =>
+            road.surface.some((p) => Math.hypot(p.x - beyond.x, p.y - beyond.y) < 200) &&
+            preparePolygon(closed(road.surface), 0.01)(beyond),
+        )
+      )
+        return;
+      [e1, e2, s1, s2, curb] = [first.edge, second.edge, hit.alongA, hit.alongB, [hit.point]];
+    } else {
+      // The outline under a road surface (out along a road edge to a curb's tangent point, a
+      // movement surface's end beyond a cut) is not drawn: the curb starts where it leaves them.
+      let i = 0,
+        j = path.length - 1;
+      while (i + 1 < j && covered(path[i + 1]!)) i++;
+      while (j - 1 > i && covered(path[j - 1]!)) j--;
+      // The drawn boundary runs on along the road edge where the curb leaves the roads (usually
+      // its corners' own, but a corner under another road is not on the outline).
+      const edgeAt = (p: Vec2) =>
+        corners.reduce((best, c) =>
+          nearestOnPolyline(c.edge, p).away < nearestOnPolyline(best.edge, p).away ? c : best,
+        ).edge;
+      [e1, e2] = [edgeAt(path[i]!), edgeAt(path[j]!)];
+      s1 = nearestOnPolyline(e1, path[i]!).along;
+      s2 = nearestOnPolyline(e2, path[j]!).along;
+      curb = path.slice(i, j + 1);
+    }
+    const along = (edge: Vec2[], s: number) => {
+      const lengths = cumulativeLengths(edge);
+      const to = Math.min(lengths.at(-1)!, s + CORNER_EDGE_M);
+      return [
+        pointAtDistance(edge, lengths, s),
+        ...edge.filter((_, k) => lengths[k]! > s + 1e-6 && lengths[k]! < to - 1e-6),
+        pointAtDistance(edge, lengths, to),
+      ];
+    };
+    const drawn = [...along(e1, s1).reverse(), ...curb.slice(1, -1), ...along(e2, s2)];
+    const d1 = direction(e1, s1),
+      d2 = direction(e2, s2);
+    const cos = d1.x * d2.x + d1.y * d2.y;
+    const kind = cos > ALONG ? 'nose' : cos < -ALONG ? 'through' : 'corner';
+    // Two ends side by side with no median between them (a street's two directions cut unequally,
+    // the step under a movement surface's end): no nose.
+    const across = (p: Vec2, q: Vec2, d = d1) => Math.abs(d.x * (q.y - p.y) - d.y * (q.x - p.x));
+    if (kind === 'nose' && across(path[0]!, path.at(-1)!, direction(first.edge, 0)) < 0.1) return;
+    const curbM = cumulativeLengths(curb).at(-1)!;
+    // A nose's width: across the edges between where its curve leaves and meets them.
+    const gap = across(curb[0]!, curb.at(-1)!);
+    const step = kind === 'nose' ? Math.min(CORNER_STEP_M, Math.max(0.02, gap / 6)) : CORNER_STEP_M;
+    const { turnDeg, radiusM } = bends(resample(drawn, step));
+    // Deflection from the first edge, inward, to the second, outward.
+    const deflection = (Math.acos(Math.max(-1, Math.min(1, -cos))) * 180) / Math.PI;
+    out.push({
+      node: node.id,
+      roads: `${first.end.road.id}>${second.end.road.id}`,
+      kind,
+      curbM: round(curbM, 2),
+      turnDeg: round(turnDeg, 1),
+      radiusM: round(Math.min(radiusM, 999), 2),
+      sharp: turnDeg > SHARP_DEG || (kind === 'corner' && curbM < 0.5 && deflection > SHARP_DEG),
+    });
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
 // The audit
 
 export interface GeometryAudit {
@@ -1370,6 +1574,7 @@ export interface GeometryAudit {
   joins: JoinGap[];
   markings: MarkingOffset[];
   laneOverlaps: LaneOverlap[];
+  corners: CornerSharpness[];
   /** Marking lengths (TASK-074/079's measure) of the whole city; null for a case. */
   lengths: ReturnType<typeof markingLengths> | null;
   /** Every width sample's error, for percentiles over a set of roads (not written to JSON). */
@@ -1398,6 +1603,7 @@ export function auditGeometry(city: City, net: CompiledCity): GeometryAudit {
     joins: net.nodes.flatMap((node) => joinAudit(net, node) ?? []),
     markings: net.roads.flatMap((road) => markingAudit(net, road) ?? []),
     laneOverlaps: laneOverlaps(city, net),
+    corners: net.nodes.flatMap((node) => cornerAudit(city, net, node)),
     lengths: markingLengths(net),
     widthErrors,
   };
@@ -1413,6 +1619,8 @@ export function totals(audit: GeometryAudit, roads?: Set<string>) {
     .flatMap(([, e]) => e);
   const { widths, gaps, folds, through, overlaps, junctions, joins, markings, laneOverlaps } =
     audit;
+  const curbs = audit.corners.filter((c) => c.kind !== 'nose');
+  const noses = audit.corners.filter((c) => c.kind === 'nose');
   const corridorLanes = laneOverlaps.filter((o) => o.corridor);
   return {
     widthMaxM: round(max(widths, (w) => w.maxM)),
@@ -1466,6 +1674,11 @@ export function totals(audit: GeometryAudit, roads?: Set<string>) {
       2,
     ),
     laneOverlapCorridorPairs: corridorLanes.length,
+    cornersSharp: curbs.filter((c) => c.sharp).length,
+    // 0.5 m samples read a 2 m arc as 1.97 m.
+    cornersUnder2m: curbs.filter((c) => c.kind === 'corner' && c.radiusM < 1.9).length,
+    nosesSquare: noses.filter((c) => c.sharp).length,
+    noses: noses.length,
     lineOutsideM: audit.lengths?.lineOutsideM ?? null,
     markingOutsideM: audit.lengths?.markingOutsideM ?? null,
   };
@@ -1526,6 +1739,11 @@ export function worst(audit: GeometryAudit, count = 20) {
       audit.laneOverlaps,
       (o) => o.areaM2,
       (o) => o.roads,
+    ),
+    corners: top(
+      audit.corners.filter((c) => c.sharp),
+      (c) => c.turnDeg,
+      (c) => `${c.node} ${c.roads}`,
     ),
   };
 }
@@ -1666,6 +1884,7 @@ export function caseAudit(net: CompiledCity, audit: GeometryAudit, c: GeometryCa
     joins: audit.joins.filter((j) => nodes.has(j.node)),
     markings: audit.markings.filter((m) => roads.has(m.road)),
     laneOverlaps: audit.laneOverlaps.filter((o) => pair(o.roads)),
+    corners: audit.corners.filter((c) => nodes.has(c.node)),
     lengths: null,
     widthErrors: new Map([...audit.widthErrors].filter(([id]) => roads.has(id))),
   };
@@ -1682,7 +1901,19 @@ export function compileCity(name: AuditCity, relaxMaxM?: number) {
 function entities(audit: GeometryAudit) {
   const { widths, gaps, folds, through, overlaps, junctions, joins, markings, laneOverlaps } =
     audit;
-  return { widths, gaps, folds, through, overlaps, junctions, joins, markings, laneOverlaps };
+  const corners = audit.corners.filter((c) => c.sharp || c.radiusM < 1.9);
+  return {
+    widths,
+    gaps,
+    folds,
+    through,
+    overlaps,
+    junctions,
+    joins,
+    markings,
+    laneOverlaps,
+    corners,
+  };
 }
 
 function compact(list: object[], key: string, value: string): string {
@@ -1734,6 +1965,9 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
     lines.push(`  markings maxM: ${compact(top.markings, 'road', 'maxM')}`);
     lines.push(
       `  lane overlap m2 (corridor *, nearest node m): ${top.laneOverlap.map((o) => `${o.roads}${o.corridor ? '*' : ''} ${o.areaM2} (${o.node} ${o.nodeM})`).join(', ')}`,
+    );
+    lines.push(
+      `  sharp corners turn deg/radius m: ${top.corners.map((c) => `${c.node} ${c.kind} ${c.roads} ${c.turnDeg}/${c.radiusM}`).join(', ')}`,
     );
     for (const c of geometryCases.filter((c) => c.city === name)) {
       const restricted = caseAudit(net, audit, c);
