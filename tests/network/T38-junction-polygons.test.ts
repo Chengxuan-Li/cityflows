@@ -505,7 +505,7 @@ test.each(tierCities(auditCities))(
   120_000,
 );
 
-// T38.5, Munich's morning, runs in the traffic tier (tests/traffic/munich-morning.test.ts).
+// T38.5, Munich's morning, became the traffic gate in tests/traffic/munich-morning.test.ts.
 
 // TASK-090: the fingerprint test (a hash of everything compiled, moved from T31) is gone: it moved
 // with every geometry change and reimport determinism (tests/importers/determinism.test.ts, T23,

@@ -1,11 +1,12 @@
 {
-  "tree": "main 430b9d8 (TASK-095 salvage), fresh import",
+  "tree": "task/099b-pull 279b110 (TASK-099), fresh import; reset by the owner 2026-11-07",
   "scale": 0.15,
-  "completed": 3715,
-  "gridlocked": 57,
+  "completed": 3390,
+  "gridlocked": 81,
+  "stalledHeads": 1,
   "quick": {
     "until": "09:30",
-    "completed": 3448,
-    "gridlocked": 23
+    "completed": 3067,
+    "gridlocked": 42
   }
 }

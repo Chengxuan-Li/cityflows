@@ -326,4 +326,4 @@ unitTest(
   },
 );
 
-// T36.4, Munich's morning, runs in the traffic tier (tests/traffic/munich-morning.test.ts).
+// T36.4, Munich's morning, became the traffic gate in tests/traffic/munich-morning.test.ts.
