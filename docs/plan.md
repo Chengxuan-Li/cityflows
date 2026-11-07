@@ -113,7 +113,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-088](tasks/TASK-088.md) | 5 | Lane dividers across multi-lane splits; markings at n:1181 (B44) | `src/render/layers/roads.ts`, `junction-markings.ts`, `tests/render/T40*` | 075, 083, 085 | T40 | done |
 | [TASK-089](tasks/TASK-089.md) | 5 | Converging carriageways side by side, through alignments that reach, a constant median, clean curb ends (B41, B43, B42) | `src/network/junctions.ts`, `movements.ts`, `nodes.ts`, `tests/network/T38*` | 083, 087 | T38 extended, T39.4, T39.5 | done |
 | [TASK-090](tasks/TASK-090.md) | process | Fast checks: test tiers, a city import cache, one shared Munich morning | `package.json` scripts, `vite.config.ts`, `playwright.config.ts`, CI, `bench` loaders, `tests/**`, `AGENTS.md` | none | tiers, cache, shared morning | done |
-| [TASK-091](tasks/TASK-091.md) | 5 | Pedestrian crossings everywhere and editable; centre lines end at the junction (B50, B46, B52) | `src/schema`, `src/render/layers/roads.ts`, `junction-markings.ts`, `src/ui/inspector/node.tsx`, `tests/render` T41 | 072, 074, 089 | T41 | todo |
+| [TASK-091](tasks/TASK-091.md) | 5 | Pedestrian crossings everywhere and editable; centre lines end at the junction (B50, B46, B52) | `src/schema`, `src/render/layers/roads.ts`, `junction-markings.ts`, `src/ui/inspector/node.tsx`, `tests/render` T41 | 072, 074, 089 | T41 | done (signal-arm set-back open, B53) |
 | [TASK-092](tasks/TASK-092.md) | 5 | Every junction corner sweeps with a radius; rounded median noses (B48, B51, B52) | `src/network/junctions.ts`, `src/render/layers/nodes.ts`, audit corner measure, `tests/network` | 083, 089, 090 | corner audit zero | todo |
 | [TASK-093](tasks/TASK-093.md) | 5 | One street's carriageways: overlap at n:967, median voids, lane-to-lane continuation (B49, B45, B47) | `src/importers/osm/corridors.ts`, `realign.ts`, `src/network/continuity.ts`, `corridor.ts`, `lanes.ts`, T39 | 084, 087, 089, 071, 090 | T39 extended | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -354,6 +354,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B50 | Owner, round 5: pedestrian crossings. Make them editable (decorative only for now); every node gets crossings by default except expressway ramps; crossings start farther from the junction (owner 7: the `n:291` west-arm stripes run into the corner). | Schema and editor: a per-approach crossing flag (default on, off for motorway links), an inspector toggle, and a set-back of the stripes behind the curb return. No simulation effect. |
 | B51 | Owner, round 5 (6): `n:104` node shape, smaller problems: the median nose between the west carriageways is square, not rounded; sharp corners at the south road (B48); the south road's centre line enters the junction (B46). | Network and renderer: round median noses at split ends (TASK-089); B46, B48. |
 | B52 | Owner, round 5 (7): `n:291`, the curb from the north road into the south-west road kinks, and the south-west arm's crossing stripes run into the curb corner. | Network: B48; renderer: B50's set-back. |
+| B53 | TASK-091: at signalised approaches the crossing stays where TASK-072 put it (0.25 to 2.75 m from the cut, between the stop line and the junction); setting it back as the owner asked (B50) moves it 5 to 12 m out, behind the stop line, so cars at red would stand on it (T26). 34 Munich ends (incl. `n:291`) and 4 at Sindelfingen `n:110`. | Simulation rule change, owner to decide: move `stopM` to the crossing's far edge plus 0.5 m (`src/network/stops.ts`), new benchmark hashes. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
@@ -1642,6 +1643,20 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   shards in parallel; `geometry-shots --only`. Lead verification on main: check 33 s green
   (473 tests), city 47 passed, traffic 5 passed plus T29's expected fail (3 762 completed, 49
   gridlocked).
+
+- 2026-11-07, TASK-091 merged (B46, B50, B52). Crossings by default at every road end of a
+  node with three or more arms or a signal, except motorways, motorway/trunk links, motorway
+  merges and roundabout rings (detected by geometry); per-end overrides
+  (`Road.crossings`) stored only when edited, toggled in the node inspector with undo, saved
+  and reopened; old files load with defaults. Ends with a crossing: Munich 75 to 659,
+  Sindelfingen 10 to 677, town 128 to 2 266, grid 8 to 140. Stripes start 1 m beyond the curb
+  return except at signal arms (B53, a simulation decision for the owner). Centre lines end at
+  the junction mouth (no segment inside its node polygons on four cities); dividers, centre
+  lines and arrows stop 0.5 m before a crossing; centre-line pieces shorter than a dash are
+  dropped (the `n:182` stub). T27, T32.1, T32.2, T32.4 line lengths updated (Munich lane lines
+  38 684 to 35 400 m). Full Munich redraw 185 to 305 ms (node script). Benchmark hashes
+  unchanged. Lead verification: check green (482), city 50 passed. CI on the TASK-090 layout
+  green in 10 minutes wall (before about 40).
 
 ## Owner decisions log
 
