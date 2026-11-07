@@ -82,9 +82,18 @@ style from `shadows.ts` using the compiled surfaces), `src/network`, `src/import
    adds no shadow, edge, tunnel or ghost objects.
 4. **Cost.** Frame time at the Munich overview and at a street zoom with Shadows on is within
    10% of off, and static rebuild time within 20%. Report the four numbers.
-5. Benchmark hashes unchanged; `npm run check`, `npm run test:city` and
-   `npm run test:e2e:smoke` green. Run e2e with `CITYFLOWS_TEST_PORT=5293`; never use port
-   4173. `src/sim` is out of scope, so `test:traffic` need not run.
+5. `npm run check`, `npm run test:city` and `npm run test:e2e:smoke` green. Run e2e with
+   `CITYFLOWS_TEST_PORT=5293`; never use port 4173.
+
+## Checks to run
+
+Use the fast tiers (TASK-090, `AGENTS.md` "Delivering a task"):
+
+- While iterating: `npm test` (unit tier, about 15 s) and `npm run geometry-shots -- <dir> --only <ids>`.
+- Before committing: `npm run check`, `npm run test:city` and `npm run test:e2e:smoke`.
+- Do not run `npm run test:traffic`, `npm run traffic:quick`, `npm run bench` or the full
+  `npm run test:e2e`: this task does not touch `src/sim` or `src/network`, and the lead runs
+  the traffic gate, the benchmark hashes and the full e2e suite at merge.
 
 ## Acceptance
 

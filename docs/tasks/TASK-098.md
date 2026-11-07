@@ -111,8 +111,17 @@ Editing in 3D, `src/importers`, `src/network`, `src/sim`, the schema,
 5. **Switching.** e2e (`@smoke`): load Munich, toggle 3D, `dataset.view` is `3d` and meshes
    are drawn, playback continues, toggle back, the 2D map shows the same centre and the
    toolbox is enabled again. Run with `CITYFLOWS_TEST_PORT=5295`; never use port 4173.
-6. Benchmark hashes unchanged; `npm run check`, `npm run test:city` and
-   `npm run test:e2e:smoke` green.
+6. `npm run check`, `npm run test:city` and `npm run test:e2e:smoke` green.
+
+## Checks to run
+
+Use the fast tiers (TASK-090, `AGENTS.md` "Delivering a task"):
+
+- While iterating: `npm test` (unit tier, about 15 s) and `npm run geometry-shots -- <dir> --only <ids>`.
+- Before committing: `npm run check`, `npm run test:city` and `npm run test:e2e:smoke`.
+- Do not run `npm run test:traffic`, `npm run traffic:quick`, `npm run bench` or the full
+  `npm run test:e2e`: this task does not touch `src/sim` or `src/network`, and the lead runs
+  the traffic gate, the benchmark hashes and the full e2e suite at merge.
 
 ## Acceptance
 
