@@ -112,7 +112,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-087](tasks/TASK-087.md) | 5 | Importer: no overlapping carriageways near junctions (B41, B42) | `src/importers/osm/**`, audit measure 9 in `bench/geometry-audit.ts`, `tests/importers/T39*`, `tests/network/junction-audit.ts` lists | 083, 084; plan "Geometry rework" | T39; no corridor lane overlap outside outlines | done (partial, rest in TASK-089) |
 | [TASK-088](tasks/TASK-088.md) | 5 | Lane dividers across multi-lane splits; markings at n:1181 (B44) | `src/render/layers/roads.ts`, `junction-markings.ts`, `tests/render/T40*` | 075, 083, 085 | T40 | done |
 | [TASK-089](tasks/TASK-089.md) | 5 | Converging carriageways side by side, through alignments that reach, a constant median, clean curb ends (B41, B43, B42) | `src/network/junctions.ts`, `movements.ts`, `nodes.ts`, `tests/network/T38*` | 083, 087 | T38 extended, T39.4, T39.5 | done |
-| [TASK-090](tasks/TASK-090.md) | process | Fast checks: test tiers, a city import cache, one shared Munich morning | `package.json` scripts, `vite.config.ts`, `playwright.config.ts`, CI, `bench` loaders, `tests/**`, `AGENTS.md` | none | tiers, cache, shared morning | todo |
+| [TASK-090](tasks/TASK-090.md) | process | Fast checks: test tiers, a city import cache, one shared Munich morning | `package.json` scripts, `vite.config.ts`, `playwright.config.ts`, CI, `bench` loaders, `tests/**`, `AGENTS.md` | none | tiers, cache, shared morning | done |
 | [TASK-091](tasks/TASK-091.md) | 5 | Pedestrian crossings everywhere and editable; centre lines end at the junction (B50, B46, B52) | `src/schema`, `src/render/layers/roads.ts`, `junction-markings.ts`, `src/ui/inspector/node.tsx`, `tests/render` T41 | 072, 074, 089 | T41 | todo |
 | [TASK-092](tasks/TASK-092.md) | 5 | Every junction corner sweeps with a radius; rounded median noses (B48, B51, B52) | `src/network/junctions.ts`, `src/render/layers/nodes.ts`, audit corner measure, `tests/network` | 083, 089, 090 | corner audit zero | todo |
 | [TASK-093](tasks/TASK-093.md) | 5 | One street's carriageways: overlap at n:967, median voids, lane-to-lane continuation (B49, B45, B47) | `src/importers/osm/corridors.ts`, `realign.ts`, `src/network/continuity.ts`, `corridor.ts`, `lanes.ts`, T39 | 084, 087, 089, 071, 090 | T39 extended | todo |
@@ -1624,6 +1624,24 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   3 762 completed, 49 failed, all gridlocked, stalledHeads 0 (gate 3 497 and 90 percent of
   main, gridlocked at most 63); route audit zero in all four cities; benchmark hashes unchanged
   (agent); e2e 63 (agent, port 5289).
+
+- 2026-11-06, TASK-090 merged (fast checks, owner-approved plan). Tiers as vitest projects:
+  `npm test` (unit, synthetic cities, Sindelfingen; `npm run check` runs it) 140 s to 15-17 s;
+  `npm run test:city` (Munich geometry and import, 47 tests) about 15-20 s; `npm run
+  test:traffic` (one shared Munich morning at 0.15 for the five former mornings, plus
+  `munich.test.ts`'s full-demand morning kept apart because its thresholds assume scale 1)
+  about 2-3 min. Real-city imports are cached in `node_modules/.cache/cityflows`, keyed by the
+  extract, the options and the importer's static import graph; `CITYFLOWS_NO_CACHE=1`
+  bypasses it. `npm run traffic:quick` (the gate's morning stopped at 09:30, about 25 s,
+  advisory) ranks `a18cce0` and `81dfcd0` as the 0.15 run does, gridlock by a margin of one.
+  Exact baselines became budgets: route samples (at most 10 percent change roads), T25
+  setbacks (at most 12 Munich nodes move over 0.5 m), T38.4 storage (Munich at most 30 lanes
+  over 2 m, none over 10 m), road-body crossings, T39.2/T39.4/T39.5, T35.2; T38 fingerprints
+  removed. Kept exact: simulation determinism, benchmark hashes, ids, project round trips,
+  `r:259`/`r:694`, G2. `@smoke` e2e set (12 tests, 93 s); CI runs check, city and three e2e
+  shards in parallel; `geometry-shots --only`. Lead verification on main: check 33 s green
+  (473 tests), city 47 passed, traffic 5 passed plus T29's expected fail (3 762 completed, 49
+  gridlocked).
 
 ## Owner decisions log
 
