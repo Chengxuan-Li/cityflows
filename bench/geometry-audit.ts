@@ -16,16 +16,20 @@ import {
 } from '../src/geo/polyline';
 import type { Vec2 } from '../src/geo/vec2';
 import { compile, type CLane, type CompiledCity, type CNode, type CRoad } from '../src/network';
-import { laneEdges, roadWidth, shiftAt } from '../src/network/lanes';
+import { MEDIAN_M } from '../src/importers/osm/corridors';
+import { ATTACH_GAP_M, laneEdges, roadWidth, shiftAt } from '../src/network/lanes';
+
+const hasShift = (road: CRoad) => road.startShift.length > 0 || road.endShift.length > 0;
 import { drawRoad } from '../src/render/layers/roads';
 import { style } from '../src/render/style';
 import type { City, Road, RoadClass } from '../src/schema';
 import { auditCities, loadAuditCity, markingLengths, type AuditCity } from './junction-audit';
 
-// Geometry audit (TASK-081, docs/plan.md "Geometry rework"): ten measures of how far the drawn
+// Geometry audit (TASK-081, docs/plan.md "Geometry rework"): eleven measures of how far the drawn
 // roads, lanes and junctions are from the corridors their canonical centerlines describe, per
-// city and per named case (the ninth, lane overlap, from TASK-087; the tenth, corner sharpness,
-// from TASK-092). Usage: npm run geometry-audit -- [out.json] [--relax-max-m <m>]
+// city and per named case (the ninth, lane overlap, from TASK-087, by road end from TASK-095; the
+// tenth, corner sharpness, from TASK-092; the eleventh, corridor voids, from TASK-095). Usage:
+// npm run geometry-audit -- [out.json] [--relax-max-m <m>]
 //
 // Conventions: stations are arc lengths along a polyline; the right-hand normal of heading
 // (dx, dy) is (-dy, dx) (y-south, architecture 5.1); a lateral offset is signed, positive to the
@@ -167,9 +171,7 @@ export function roadWidthAudit(city: City, net: CompiledCity, road: CRoad) {
   // the road's reference line.
   const referenceLength = cumulativeLengths(road.reference).at(-1)!;
   const shifts = frames.map(({ p }) =>
-    road.startShift.length || road.endShift.length
-      ? shiftAt(road, nearestOnPolyline(road.reference, p).along, referenceLength)
-      : 0,
+    hasShift(road) ? shiftAt(road, nearestOnPolyline(road.reference, p).along, referenceLength) : 0,
   );
   const deviates = (k: number) =>
     lanes.some((lane, i) => {
@@ -654,7 +656,7 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
     // TASK-089: each road's converging shift, at the station's projection on its reference
     // line, up to its cut.
     const shiftOf = (road: CRoad, s: number) => {
-      if (!road.startShift.length && !road.endShift.length) return 0;
+      if (!hasShift(road)) return 0;
       const p = frame(c.line, c.lengths, s).p;
       const length = cumulativeLengths(road.reference).at(-1)!;
       return shiftAt(road, nearestOnPolyline(road.reference, p).along, length);
@@ -715,14 +717,13 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
         if (hit.along >= o.total - 1e-9 && overshoot > STEP_M) return false;
         const lateral =
           (q.x - hit.point.x) * -hit.direction.y + (q.y - hit.point.y) * hit.direction.x;
-        const shift =
-          o.road.startShift.length || o.road.endShift.length
-            ? shiftAt(
-                o.road,
-                nearestOnPolyline(o.road.reference, hit.point).along,
-                cumulativeLengths(o.road.reference).at(-1)!,
-              )
-            : 0;
+        const shift = hasShift(o.road)
+          ? shiftAt(
+              o.road,
+              nearestOnPolyline(o.road.reference, hit.point).along,
+              cumulativeLengths(o.road.reference).at(-1)!,
+            )
+          : 0;
         return (
           lateral >= o.lo + shift - BAND_TOLERANCE_M && lateral <= o.hi + shift + BAND_TOLERANCE_M
         );
@@ -1248,26 +1249,19 @@ function union(intervals: number[][]): number[][] {
   return out;
 }
 
-/** Length of [x0, x1] outside the sorted, merged `holes`, and a point of it (NaN when none). */
-function outside(x0: number, x1: number, holes: number[][]): { length: number; x: number } {
-  let length = 0,
-    x = NaN,
-    from = x0;
+/** The pieces of [x0, x1] outside the sorted, merged `holes`. */
+function outside(x0: number, x1: number, holes: number[][]): number[][] {
+  const pieces: number[][] = [];
+  let from = x0;
   for (const [h0, h1] of holes) {
     if (h1! <= from) continue;
     if (h0! >= x1) break;
-    if (h0! > from) {
-      length += h0! - from;
-      x = (from + h0!) / 2;
-    }
+    if (h0! > from) pieces.push([from, h0!]);
     from = Math.max(from, h1!);
     if (from >= x1) break;
   }
-  if (from < x1) {
-    length += x1 - from;
-    x = (from + x1) / 2;
-  }
-  return { length, x };
+  if (from < x1) pieces.push([from, x1]);
+  return pieces;
 }
 
 /** Measure 9. The area where the drawn lane surfaces (`laneEdges`, tapers included, each shrunk
@@ -1278,6 +1272,36 @@ function outside(x0: number, x1: number, holes: number[][]): { length: number; x
  * lane lying on another under a junction polygon, as zebra stripes there show). Integrated along the 0.25 m cell rows; the nearest
  * node is taken over the midpoints of the overlapping row pieces. */
 export function laneOverlaps(city: City, net: CompiledCity, outsideOutlines = true): LaneOverlap[] {
+  return [...overlapPieces(city, net, outsideOutlines).values()]
+    .map(({ a, b, pieces }) => {
+      const [ra, rb] = [net.roads[a]!, net.roads[b]!];
+      let node = net.nodes[0]!,
+        nodeM = Infinity;
+      for (const [x0, x1, y] of pieces)
+        for (const n of net.nodes) {
+          const d = Math.hypot((x0! + x1!) / 2 - n.pos.x, y! - n.pos.y);
+          if (d < nodeM) [node, nodeM] = [n, d];
+        }
+      return {
+        roads: `${ra.id}/${rb.id}`,
+        areaM2: round(pieceArea(pieces), 2),
+        corridor: sameCorridor(net, a, b),
+        node: node.id,
+        nodeM: round(nodeM, 1),
+      };
+    })
+    .filter((o) => o.areaM2 > 0)
+    .sort((a, b) => (a.roads < b.roads ? -1 : 1));
+}
+
+const sameCorridor = (net: CompiledCity, a: number, b: number) =>
+  net.roads[a]!.corridorId !== null && net.roads[a]!.corridorId === net.roads[b]!.corridorId;
+const pieceArea = (pieces: number[][]) =>
+  pieces.reduce((sum, [x0, x1]) => sum + (x1! - x0!) * CELL_M, 0);
+
+/** Measure 9's overlapping row pieces [x0, x1, y] by road pair (compiled indices, a < b); with
+ * `anyGrade`, of roads of any grade too. */
+function overlapPieces(city: City, net: CompiledCity, outsideOutlines: boolean, anyGrade = false) {
   const lanes = new Map<number, number[][]>(); // row -> [x0, x1, road]
   for (const road of net.roads) {
     const roadLanes = road.lanes.map((i) => net.lanes[i]!);
@@ -1304,9 +1328,7 @@ export function laneOverlaps(city: City, net: CompiledCity, outsideOutlines = tr
     }),
   );
   const grades = net.roads.map((road) => grade(city, city.roads[road.id]!));
-  const sameCorridor = (a: number, b: number) =>
-    net.roads[a]!.corridorId !== null && net.roads[a]!.corridorId === net.roads[b]!.corridorId;
-  const pairs = new Map<string, { a: number; b: number; area: number; points: Vec2[] }>();
+  const pairs = new Map<string, { a: number; b: number; pieces: number[][] }>();
   for (const [k, list] of lanes) {
     const y = OFFSET_Y + k * CELL_M;
     const holes = union(outlines.get(k) ?? []);
@@ -1324,39 +1346,154 @@ export function laneOverlaps(city: City, net: CompiledCity, outsideOutlines = tr
       const p = merged[i]!;
       for (let j = i + 1; j < merged.length && merged[j]!.x0 < p.x1; j++) {
         const q = merged[j]!;
-        if (q.road === p.road || grades[p.road] !== grades[q.road]) continue;
-        if (joined.has(`${p.road}|${q.road}`) && !sameCorridor(p.road, q.road)) continue;
-        const piece = outside(q.x0, Math.min(p.x1, q.x1), holes);
-        if (piece.length <= 0) continue;
+        if (q.road === p.road || (!anyGrade && grades[p.road] !== grades[q.road])) continue;
+        if (joined.has(`${p.road}|${q.road}`) && !sameCorridor(net, p.road, q.road)) continue;
+        const pieces = outside(q.x0, Math.min(p.x1, q.x1), holes);
+        if (!pieces.length) continue;
         const [a, b] = p.road < q.road ? [p.road, q.road] : [q.road, p.road];
         const key = `${a}|${b}`;
-        const entry = pairs.get(key) ?? { a, b, area: 0, points: [] };
-        entry.area += piece.length * CELL_M;
-        entry.points.push({ x: piece.x, y });
+        const entry = pairs.get(key) ?? { a, b, pieces: [] };
+        for (const [x0, x1] of pieces) entry.pieces.push([x0!, x1!, y]);
         pairs.set(key, entry);
       }
     }
   }
-  return [...pairs.values()]
-    .map(({ a, b, area, points }) => {
-      const [ra, rb] = [net.roads[a]!, net.roads[b]!];
-      let node = net.nodes[0]!,
-        nodeM = Infinity;
-      for (const p of points)
-        for (const n of net.nodes) {
-          const d = Math.hypot(p.x - n.pos.x, p.y - n.pos.y);
-          if (d < nodeM) [node, nodeM] = [n, d];
+  return pairs;
+}
+
+export interface EndOverlap {
+  node: string;
+  roads: string;
+  angleDeg: number;
+  /** Measure 9's overlap of the two roads within `END_REACH_M` of the node, outlines included,
+   * m2. */
+  areaM2: number;
+  corridor: boolean;
+}
+
+/** TASK-095: road ends compared within this distance of their node and this angle. */
+const END_REACH_M = 40;
+const END_ANGLE = Math.cos((20 * Math.PI) / 180);
+
+/** Measure 9, by road end (TASK-095, B55): for every two road ends at a node whose outward
+ * directions (`outward`) lie within 20 degrees, not the two directions of one street, the area of
+ * measure 9's overlap of the two roads within 40 m of the node (0 included), under the node
+ * outlines too (a gore drawn over two overlapping lane blocks is the overlap B55 removes), of any
+ * grade (the two meet at the node). */
+export function endOverlaps(city: City, net: CompiledCity): EndOverlap[] {
+  const pieces = overlapPieces(city, net, false, true);
+  const out: EndOverlap[] = [];
+  for (const node of net.nodes) {
+    const ends = net.roads
+      .filter((r) => (r.from === node.idx || r.to === node.idx) && r.from !== r.to)
+      .map((road) => ({ road, d: outward(city, road, road.to === node.idx) }));
+    for (const [i, a] of ends.entries())
+      for (const b of ends.slice(i + 1)) {
+        const cos = a.d.x * b.d.x + a.d.y * b.d.y;
+        if (cos < END_ANGLE) continue;
+        if (a.road.streetGroupId !== null && a.road.streetGroupId === b.road.streetGroupId)
+          continue;
+        const [lo, hi] = a.road.idx < b.road.idx ? [a.road, b.road] : [b.road, a.road];
+        let area = 0;
+        for (const [x0, x1, y] of pieces.get(`${lo.idx}|${hi.idx}`)?.pieces ?? []) {
+          const dy = y! - node.pos.y;
+          if (Math.abs(dy) >= END_REACH_M) continue;
+          const half = Math.sqrt(END_REACH_M ** 2 - dy * dy);
+          area += Math.max(0, Math.min(x1!, node.pos.x + half) - Math.max(x0!, node.pos.x - half));
         }
-      return {
-        roads: `${ra.id}/${rb.id}`,
-        areaM2: round(area, 2),
-        corridor: sameCorridor(a, b),
-        node: node.id,
-        nodeM: round(nodeM, 1),
-      };
-    })
-    .filter((o) => o.areaM2 > 0)
-    .sort((a, b) => (a.roads < b.roads ? -1 : 1));
+        out.push({
+          node: node.id,
+          roads: `${lo.id}/${hi.id}`,
+          angleDeg: round((Math.acos(Math.min(1, cos)) * 180) / Math.PI, 1),
+          areaM2: round(area * CELL_M, 2),
+          corridor: sameCorridor(net, lo.idx, hi.idx),
+        });
+      }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// 11. Corridor voids (TASK-095, B54)
+
+export interface CorridorVoid {
+  roads: string;
+  /** Void beyond the median between the two carriageways where it is narrower than the gap
+   * limit, m2; the widest such gap and the length it spans. */
+  areaM2: number;
+  maxM: number;
+  lengthM: number;
+}
+
+/** Measure 11. For two opposite one-way carriageways of one corridor, stations every 0.5 m along
+ * A's median-side lane edge (measure 2's `medianEdge`); the gap is the ray crossing of B's median
+ * edge nearest A's, toward the median. A station counts where that gap is wider than the median
+ * (by more than 0.1 m) and narrower than `ATTACH_GAP_M`, B's edge there runs within 20 degrees
+ * of opposite, neither end of the ray lies under a node outline and no other road of the grade
+ * crosses the ray (a road between them); its void is the gap less the median. */
+export function corridorVoids(city: City, net: CompiledCity): CorridorVoid[] {
+  const toward = net.drivingSide === 'left' ? 1 : -1;
+  const outlines = net.nodes
+    .filter((n) => n.outline.length > 2)
+    .map((n) => preparePolygon(closed(n.outline), 0));
+  const rings = net.roads.map((road) => {
+    const ring = closed(road.surface);
+    const xs = ring.map((p) => p.x),
+      ys = ring.map((p) => p.y);
+    return {
+      road,
+      ring,
+      grade: grade(city, city.roads[road.id]!),
+      box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] as const,
+    };
+  });
+  const out: CorridorVoid[] = [];
+  for (const a of net.roads)
+    for (const b of net.roads) {
+      if (b.idx <= a.idx || a.streetGroupId !== null || b.streetGroupId !== null) continue;
+      if (a.corridorId === null || a.corridorId !== b.corridorId) continue;
+      const lineA = medianEdge(net, a),
+        lineB = medianEdge(net, b);
+      const lengths = cumulativeLengths(lineA);
+      const g = rings[a.idx]!.grade;
+      let area = 0,
+        widest = 0,
+        length = 0;
+      for (let s = STEP_M / 2; s < lengths.at(-1)!; s += STEP_M) {
+        const { p, t, n } = frame(lineA, lengths, s);
+        const hit = nearestTo(rayCrossings(p, n, lineB, ATTACH_GAP_M + 1), 0);
+        if (hit === null) continue;
+        const gap = hit * toward;
+        if (gap <= MEDIAN_M + 0.1 || gap >= ATTACH_GAP_M) continue;
+        const q = { x: p.x + n.x * hit, y: p.y + n.y * hit };
+        const tb = nearestOnPolyline(lineB, q).direction;
+        if (t.x * tb.x + t.y * tb.y > -END_ANGLE) continue;
+        if (outlines.some((inside) => inside(p) || inside(q))) continue;
+        const between = rings.some(
+          ({ road, ring, grade: other, box }) =>
+            road !== a &&
+            road !== b &&
+            other === g &&
+            Math.max(p.x, q.x) >= box[0] &&
+            Math.min(p.x, q.x) <= box[2] &&
+            Math.max(p.y, q.y) >= box[1] &&
+            Math.min(p.y, q.y) <= box[3] &&
+            ring.some((c, i) => i > 0 && properCrossing(p, q, ring[i - 1]!, c)),
+        );
+        if (between) continue;
+        area += (gap - MEDIAN_M) * STEP_M;
+        widest = Math.max(widest, gap);
+        length += STEP_M;
+      }
+      if (area > 0)
+        out.push({
+          roads: `${a.id}/${b.id}`,
+          areaM2: round(area, 2),
+          maxM: round(widest, 2),
+          lengthM: round(length, 1),
+        });
+    }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1574,7 +1711,9 @@ export interface GeometryAudit {
   joins: JoinGap[];
   markings: MarkingOffset[];
   laneOverlaps: LaneOverlap[];
+  endOverlaps: EndOverlap[];
   corners: CornerSharpness[];
+  voids: CorridorVoid[];
   /** Marking lengths (TASK-074/079's measure) of the whole city; null for a case. */
   lengths: ReturnType<typeof markingLengths> | null;
   /** Every width sample's error, for percentiles over a set of roads (not written to JSON). */
@@ -1603,7 +1742,9 @@ export function auditGeometry(city: City, net: CompiledCity): GeometryAudit {
     joins: net.nodes.flatMap((node) => joinAudit(net, node) ?? []),
     markings: net.roads.flatMap((road) => markingAudit(net, road) ?? []),
     laneOverlaps: laneOverlaps(city, net),
+    endOverlaps: endOverlaps(city, net),
     corners: net.nodes.flatMap((node) => cornerAudit(city, net, node)),
+    voids: corridorVoids(city, net),
     lengths: markingLengths(net),
     widthErrors,
   };
@@ -1674,6 +1815,16 @@ export function totals(audit: GeometryAudit, roads?: Set<string>) {
       2,
     ),
     laneOverlapCorridorPairs: corridorLanes.length,
+    endOverlapM2: round(
+      sum(audit.endOverlaps, (o) => o.areaM2),
+      2,
+    ),
+    endOverlapPairs: audit.endOverlaps.filter((o) => o.areaM2 > 0).length,
+    voidM2: round(
+      sum(audit.voids, (v) => v.areaM2),
+      2,
+    ),
+    voidPairs: audit.voids.length,
     cornersSharp: curbs.filter((c) => c.sharp).length,
     // 0.5 m samples read a 2 m arc as 1.97 m.
     cornersUnder2m: curbs.filter((c) => c.kind === 'corner' && c.radiusM < 1.9).length,
@@ -1884,7 +2035,9 @@ export function caseAudit(net: CompiledCity, audit: GeometryAudit, c: GeometryCa
     joins: audit.joins.filter((j) => nodes.has(j.node)),
     markings: audit.markings.filter((m) => roads.has(m.road)),
     laneOverlaps: audit.laneOverlaps.filter((o) => pair(o.roads)),
+    endOverlaps: audit.endOverlaps.filter((o) => nodes.has(o.node)),
     corners: audit.corners.filter((c) => nodes.has(c.node)),
+    voids: audit.voids.filter((v) => pair(v.roads)),
     lengths: null,
     widthErrors: new Map([...audit.widthErrors].filter(([id]) => roads.has(id))),
   };
@@ -1902,6 +2055,8 @@ function entities(audit: GeometryAudit) {
   const { widths, gaps, folds, through, overlaps, junctions, joins, markings, laneOverlaps } =
     audit;
   const corners = audit.corners.filter((c) => c.sharp || c.radiusM < 1.9);
+  const endOverlaps = audit.endOverlaps.filter((o) => o.areaM2 > 0);
+  const voids = audit.voids;
   return {
     widths,
     gaps,
@@ -1912,7 +2067,9 @@ function entities(audit: GeometryAudit) {
     joins,
     markings,
     laneOverlaps,
+    endOverlaps,
     corners,
+    voids,
   };
 }
 
@@ -1965,6 +2122,16 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
     lines.push(`  markings maxM: ${compact(top.markings, 'road', 'maxM')}`);
     lines.push(
       `  lane overlap m2 (corridor *, nearest node m): ${top.laneOverlap.map((o) => `${o.roads}${o.corridor ? '*' : ''} ${o.areaM2} (${o.node} ${o.nodeM})`).join(', ')}`,
+    );
+    lines.push(
+      `  end overlap m2 within 40 m (node, angle): ${audit.endOverlaps
+        .filter((o) => o.areaM2 > 0)
+        .sort((x, y) => y.areaM2 - x.areaM2)
+        .map((o) => `${o.node} ${o.roads}${o.corridor ? '*' : ''} ${o.areaM2} (${o.angleDeg})`)
+        .join(', ')}`,
+    );
+    lines.push(
+      `  corridor voids m2 (max m, length m): ${audit.voids.map((v) => `${v.roads} ${v.areaM2} (${v.maxM}, ${v.lengthM})`).join(', ')}`,
     );
     lines.push(
       `  sharp corners turn deg/radius m: ${top.corners.map((c) => `${c.node} ${c.kind} ${c.roads} ${c.turnDeg}/${c.radiusM}`).join(', ')}`,

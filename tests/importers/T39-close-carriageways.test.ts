@@ -10,6 +10,7 @@ import {
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity } from '../../src/network';
+import { ATTACH_GAP_M } from '../../src/network/lanes';
 import { crossingStripes } from '../../src/render/layers/roads';
 import type { City, Road } from '../../src/schema';
 import { junctionOverlaps } from '../network/junction-audit';
@@ -147,14 +148,15 @@ unitTest(
       expect(road.centerline[0]).toEqual(city.nodes[road.from]!.pos);
       expect(road.centerline.at(-1)).toEqual(city.nodes[road.to]!.pos);
     }
-    // Near the nodes the centerlines are one middle line, the blocks 7.5 m apart; in the middle,
-    // where the source draws them 12 m apart, the lanes stay on their own lines.
+    // Near the nodes the centerlines are one middle line, the blocks 7.5 m apart. TASK-095 (B54):
+    // in the middle, where the source draws them 12 m apart (a 4.5 m void, under the 15 m gap
+    // limit; 3 m before), the blocks close to the median too, each 2.25 m toward the other.
     const length = cumulativeLengths(a.centerline).at(-1)!;
     for (const s of [0, 2, 5, 10, length - 5, length]) {
       const p = pointAtDistance(a.centerline, cumulativeLengths(a.centerline), s);
       expect(nearestOnPolyline(b.centerline, p).away).toBeLessThan(1e-6);
     }
-    expect(Math.abs(blockAt(a, 100).y - a.centerline[0]!.y)).toBeLessThan(0.02);
+    expect(Math.abs(blockAt(a, 100).y - a.centerline[0]!.y + 2.25)).toBeLessThan(0.1);
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
     expect(laneOverlaps(city, result.compiled).filter((o) => o.corridor)).toEqual([]);
@@ -511,25 +513,20 @@ cityTest(
 );
 
 cityTest(
-  'T39.7: Landsberger between n:721 and n:328 keeps no median void narrower than 3 m (B45)',
+  'T39.7: Landsberger between n:721 and n:328 keeps no median void under the gap limit (B45, B54)',
   () => {
     const { net } = load('munich');
-    // Facing edges of r:724 and r:1279 every metre: attached (the 0.5 m median), wider than 3 m
-    // (the median as drawn), or easing between the two over at most a taper (20 m at 50 km/h).
+    // Facing edges of r:724 and r:1279 every metre: attached at the 0.5 m median all the way
+    // (TASK-095: closed under the 15 m gap limit; TASK-093's 3 m left a lens of up to 8.2 m).
     const node = net.index.node.get('n:721')!;
     const [a, b] = [medianEdge(net, 'r:724', node), medianEdge(net, 'r:1279', node)];
     const lengths = cumulativeLengths(a);
-    const narrow: number[] = [];
+    const open: number[] = [];
     for (let s = 0; s <= lengths.at(-1)!; s += 1) {
       const gap = nearestOnPolyline(b, pointAtDistance(a, lengths, s)).away;
-      if (gap > 0.6 && gap < 3) narrow.push(s);
+      if (gap > 0.75 && gap < ATTACH_GAP_M) open.push(s);
     }
-    const runs: number[][] = [];
-    for (const s of narrow)
-      if (runs.at(-1) && s - runs.at(-1)!.at(-1)! <= 1) runs.at(-1)!.push(s);
-      else runs.push([s]);
-    expect(runs.length).toBe(2);
-    for (const run of runs) expect(run.at(-1)! - run[0]!).toBeLessThanOrEqual(20);
+    expect(open).toEqual([]);
   },
   120_000,
 );
