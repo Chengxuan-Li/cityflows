@@ -163,10 +163,17 @@ Rules, enforced by `eslint.config.js`:
 ```
 npm run dev            # Vite dev server
 npm run check          # typecheck + lint + format:check + unit tests + build (run before a PR)
-npm test               # Vitest, headless
+npm test               # Vitest unit tier: no Munich import or simulation (about 20 s)
+npm run test:city      # Munich's import and geometry tests
+npm run test:traffic   # the Munich mornings: the traffic gate at 0.15 and full demand (2 min)
+npm run traffic:quick  # advisory: Munich at 0.15 to 09:30 against main (under 30 s)
 npm run test:e2e       # Playwright (first run: npx playwright install chromium)
+npm run test:e2e:smoke # the @smoke Playwright tests (under 3 min)
 npm run format         # Prettier
 ```
+
+Real-city imports are cached in `node_modules/.cache/cityflows` (`bench/city-cache.ts`, keyed by
+the importer's sources); `CITYFLOWS_NO_CACHE=1` imports fresh.
 
 ## Delivering a task
 
@@ -176,7 +183,10 @@ npm run format         # Prettier
    under "In scope"; if you must touch another module, stop and ask the lead.
 3. Build the feature end to end, including the test IDs listed in the task. Tests named by a
    handoff T-ID live in `tests/<module>/<Txx>-<name>.test.ts`.
-4. `npm run check` must pass. Playwright tasks also run `npm run test:e2e`.
+4. `npm run check` must pass, plus the tiers that match the task: `npm run test:city` for
+   network, importer and render geometry; `npm run traffic:quick` while iterating on anything
+   that moves traffic; `npm run test:e2e:smoke` for UI. The lead runs `test:city`,
+   `test:traffic` and the full `test:e2e` at merge.
 5. Open a PR with: what works, what is explicitly unsupported, how it was verified, any
    contract change (requires lead approval), any new dependency (with justification), any
    copied code (with a `NOTICE` entry). Commit messages use Conventional Commits

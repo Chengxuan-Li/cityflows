@@ -1,11 +1,7 @@
 import { expect, test } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { generatePopulation, scheduleTrips } from '../../src/demand';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { junctions } from '../../src/fixtures/junctions';
-import { defaultScenario } from '../../src/fixtures/scenarios';
 import { signalApproach } from '../../src/fixtures/signal-approach';
-import { importOsm } from '../../src/importers/osm';
 import { createEngine } from '../../src/sim/engine';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { patchChanges } from '../../src/sim/patch';
@@ -206,30 +202,4 @@ test('T21: grid has no contacting-zone overlap at any step of two hours', () => 
   expect(engine.metrics().trips.failed).toBe(0);
 });
 
-test('T21: Munich at scale 0.15 has no contacting-zone overlap at any morning step', () => {
-  const imported = importOsm(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
-    importerVersion: '1',
-    drivingSide: 'right',
-    bbox: [11.525, 48.135, 11.545, 48.148],
-  });
-  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
-  const { city } = imported;
-  const compiled = setup(city);
-  const morning = defaultScenario('grid5x5');
-  morning.startS = 7 * 3600;
-  morning.endS = 10 * 3600;
-  morning.demand.personsPerResident = 0.15;
-  const requests = scheduleTrips(city, generatePopulation(city, morning.demand), morning);
-  const engine = createEngine();
-  engine.load({ compiled, trips: requests, scenario: morning });
-  let contacts = 0;
-  for (let step = 0; step < 108000; step++) {
-    engine.step();
-    contacts += sampleConflictZones(engine, compiled);
-  }
-  expect(contacts).toBeGreaterThan(0);
-  expect(engine.timeS).toBe(10 * 3600);
-  // The only failures are trips stuck at a jam head again after their last respawn (TASK-077).
-  const { trips, failedByReason } = engine.metrics();
-  expect(trips.failed).toBe(failedByReason.gridlocked);
-}, 600000);
+// T21's Munich morning runs in the traffic tier (tests/traffic/munich-morning.test.ts).

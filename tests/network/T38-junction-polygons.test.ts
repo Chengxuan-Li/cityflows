@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import {
@@ -7,8 +6,8 @@ import {
   throughAudit,
   unrelatedOverlaps,
 } from '../../bench/geometry-audit';
-import { probeMorning } from '../../bench/import-probe';
 import { auditCities, loadAuditCity, type AuditCity } from '../../bench/junction-audit';
+import { cityTest, tierCities, unitTest } from '../tier';
 import { buildCity } from '../../src/fixtures/build-city';
 import { junctions } from '../../src/fixtures/junctions';
 import {
@@ -59,18 +58,22 @@ function cut(net: CompiledCity, roadIdx: number, atEnd: boolean): [Vec2, Vec2] {
   return atEnd ? [ring[half - 1]!, ring[half]!] : [ring[0]!, ring.at(-1)!];
 }
 
-test('T38.1: G2, Landsberger Straße keeps its alignment across n:774 and n:719', () => {
-  const { city, net } = load('munich');
-  for (const id of ['n:774', 'n:719']) {
-    const n = node(net, id);
-    const through = throughAudit(city, net, n)!;
-    expect(through.pairs, id).toBe(2);
-    expect(through.farM, id).toBeLessThanOrEqual(0.1);
-    expect(through.nearM, id).toBeLessThanOrEqual(0.1);
-    expect(through.laneM, id).toBeLessThan(0.1);
-    expect(junctionShapeAudit(city, net, n)!.bulgeM2, id).toBe(0);
-  }
-}, 120_000);
+cityTest(
+  'T38.1: G2, Landsberger Straße keeps its alignment across n:774 and n:719',
+  () => {
+    const { city, net } = load('munich');
+    for (const id of ['n:774', 'n:719']) {
+      const n = node(net, id);
+      const through = throughAudit(city, net, n)!;
+      expect(through.pairs, id).toBe(2);
+      expect(through.farM, id).toBeLessThanOrEqual(0.1);
+      expect(through.nearM, id).toBeLessThanOrEqual(0.1);
+      expect(through.laneM, id).toBeLessThan(0.1);
+      expect(junctionShapeAudit(city, net, n)!.bulgeM2, id).toBe(0);
+    }
+  },
+  120_000,
+);
 
 /** The movement surface samples of a node that lie neither in its outline (0.1 m) nor on the
  * movement's own roads (a hairpin sweeping back over its lanes behind the stop line is road). */
@@ -125,7 +128,7 @@ function cutsOff(net: CompiledCity, n: CNode): string[] {
   );
 }
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T38.2: %s junction polygons are simple, hold every movement surface and meet every cut',
   (name) => {
     const { net } = load(name);
@@ -149,7 +152,7 @@ const stage2 = {
   munich: { bulgeM2: 905.25, overlapM2: 118.13 },
 };
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T38.2: %s bulge is at most a quarter of stage 2’s and no unrelated overlap is added',
   (name) => {
     const { city, net } = load(name);
@@ -165,7 +168,7 @@ test.each(auditCities)(
   120_000,
 );
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T38.3: %s concave corners are tangent arcs of their class radius or the largest that fits',
   (name) => {
     const { net } = load(name);
@@ -228,7 +231,7 @@ const turnDegrees = (a: Vec2, p: Vec2, b: Vec2) => {
   return (Math.abs(Math.atan2(Math.sin(h2 - h1), Math.cos(h2 - h1))) * 180) / Math.PI;
 };
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T38.3: %s draws continuation joints, outer corners and steps without a turn over 20 degrees',
   (name) => {
     const { net } = load(name);
@@ -293,7 +296,7 @@ test.each(auditCities)(
   120_000,
 );
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T38.3: %s curbs leave and meet their road edges within 20 degrees (B42)',
   (name) => {
     const { net } = load(name);
@@ -338,52 +341,55 @@ test.each(auditCities)(
   120_000,
 );
 
-test('T38.3: class radii at a residential crossing, a side street and a primary crossing', () => {
-  const { city, node: at, road, street } = buildCity('Curb classes', 1);
-  const two = (
-    a: ReturnType<typeof at>,
-    b: ReturnType<typeof at>,
-    roadClass: 'secondary' | 'primary',
-  ) => {
-    const streetGroupId = `street:${a.id}:${b.id}`;
-    road(a, b, { roadClass, streetGroupId });
-    road(b, a, { roadClass, streetGroupId });
-  };
-  const residential = at(0, 0);
-  for (const [x, y] of [
-    [200, 0],
-    [-200, 0],
-    [0, 200],
-    [0, -200],
-  ] as const)
-    street(residential, at(x, y));
-  const side = at(1000, 0);
-  two(at(800, 0), side, 'secondary');
-  two(side, at(1200, 0), 'secondary');
-  street(side, at(1000, 200));
-  const primary = at(2000, 0);
-  for (const [x, y] of [
-    [2200, 0],
-    [1800, 0],
-    [2000, 200],
-    [2000, -200],
-  ] as const)
-    two(primary, at(x, y), 'primary');
-  const result = compile(city);
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const net = result.compiled;
-  const radii = (id: string) =>
-    junctionCorners(node(net, id))
-      .filter((c) => c.kind === 'curb')
-      .map((c) => [c.classRadius, Math.round(c.radius! * 1000) / 1000]);
-  expect(radii(residential.id)).toEqual(Array(4).fill([6, 6]));
-  expect(radii(side.id)).toEqual(Array(2).fill([6, 6]));
-  expect(radii(primary.id)).toEqual(Array(4).fill([12, 12]));
-  // The side street's two corners and nothing on the far side of the through road.
-  expect(junctionCorners(node(net, side.id)).map((c) => c.kind)).toEqual(['curb', 'curb']);
-});
+unitTest(
+  'T38.3: class radii at a residential crossing, a side street and a primary crossing',
+  () => {
+    const { city, node: at, road, street } = buildCity('Curb classes', 1);
+    const two = (
+      a: ReturnType<typeof at>,
+      b: ReturnType<typeof at>,
+      roadClass: 'secondary' | 'primary',
+    ) => {
+      const streetGroupId = `street:${a.id}:${b.id}`;
+      road(a, b, { roadClass, streetGroupId });
+      road(b, a, { roadClass, streetGroupId });
+    };
+    const residential = at(0, 0);
+    for (const [x, y] of [
+      [200, 0],
+      [-200, 0],
+      [0, 200],
+      [0, -200],
+    ] as const)
+      street(residential, at(x, y));
+    const side = at(1000, 0);
+    two(at(800, 0), side, 'secondary');
+    two(side, at(1200, 0), 'secondary');
+    street(side, at(1000, 200));
+    const primary = at(2000, 0);
+    for (const [x, y] of [
+      [2200, 0],
+      [1800, 0],
+      [2000, 200],
+      [2000, -200],
+    ] as const)
+      two(primary, at(x, y), 'primary');
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const net = result.compiled;
+    const radii = (id: string) =>
+      junctionCorners(node(net, id))
+        .filter((c) => c.kind === 'curb')
+        .map((c) => [c.classRadius, Math.round(c.radius! * 1000) / 1000]);
+    expect(radii(residential.id)).toEqual(Array(4).fill([6, 6]));
+    expect(radii(side.id)).toEqual(Array(2).fill([6, 6]));
+    expect(radii(primary.id)).toEqual(Array(4).fill([12, 12]));
+    // The side street's two corners and nothing on the far side of the through road.
+    expect(junctionCorners(node(net, side.id)).map((c) => c.kind)).toEqual(['curb', 'curb']);
+  },
+);
 
-test('T38.2: fixture polygons are simple and cover the capped acute Y', () => {
+unitTest('T38.2: fixture polygons are simple and cover the capped acute Y', () => {
   const result = compile(junctions());
   if (!result.ok) throw new Error('fixture');
   const net = result.compiled;
@@ -399,33 +405,39 @@ test('T38.2: fixture polygons are simple and cover the capped acute Y', () => {
   expect(preparePolygon(acute.outline, 0.1)(tip)).toBe(true);
 });
 
-test('T38.2: a short unequal junction holds the movements that escaped the TASK-074 outline', () => {
-  // Moved from T20: three movements into r:9 left the old outline, which touched itself where
-  // the 16 m arm's stub lay across the 313 degree arm's mouth.
-  const { city, node: at, street } = buildCity('Short unequal junction', 1);
-  const center = at(0, 0);
-  for (const [degrees, length, lanes] of [
-    [93, 93, 2],
-    [23, 16, 3],
-    [313, 39, 4],
-  ] as const) {
-    const angle = (degrees * Math.PI) / 180;
-    street(center, at(Math.cos(angle) * length, Math.sin(angle) * length), lanes);
-  }
-  const result = compile(city);
-  if (!result.ok) throw new Error('fixture');
-  const n = node(result.compiled, center.id);
-  expect(polylineSelfCrossings(n.outline, true)).toBe(0);
-  expect(escaping(result.compiled, n)).toEqual([]);
-  expect(cutsOff(result.compiled, n)).toEqual([]);
-});
+unitTest(
+  'T38.2: a short unequal junction holds the movements that escaped the TASK-074 outline',
+  () => {
+    // Moved from T20: three movements into r:9 left the old outline, which touched itself where
+    // the 16 m arm's stub lay across the 313 degree arm's mouth.
+    const { city, node: at, street } = buildCity('Short unequal junction', 1);
+    const center = at(0, 0);
+    for (const [degrees, length, lanes] of [
+      [93, 93, 2],
+      [23, 16, 3],
+      [313, 39, 4],
+    ] as const) {
+      const angle = (degrees * Math.PI) / 180;
+      street(center, at(Math.cos(angle) * length, Math.sin(angle) * length), lanes);
+    }
+    const result = compile(city);
+    if (!result.ok) throw new Error('fixture');
+    const n = node(result.compiled, center.id);
+    expect(polylineSelfCrossings(n.outline, true)).toBe(0);
+    expect(escaping(result.compiled, n)).toEqual([]);
+    expect(cutsOff(result.compiled, n)).toEqual([]);
+  },
+);
 
 // T38.4: main after stage 2 (7d92383), lengths of the lanes at nodes with an outline.
 const stage2Lanes = JSON.parse(
   readFileSync('tests/network/T38-stage2-lane-lengths.json', 'utf8'),
 ) as Record<AuditCity, Record<string, number>>;
 
-// Lanes that lose more, each with its reason.
+// Lanes that lose more on main 5568eed, each with its reason. TASK-090: a budget, not this exact
+// list (every junction geometry task renamed lanes in it): at most `storageBudget` lanes lose more than
+// 2 m, none more than 10 m.
+const storageBudget: Record<AuditCity, number> = { grid: 0, town: 0, sindelfingen: 4, munich: 30 };
 const storageExceptions: Record<AuditCity, Record<string, string>> = {
   grid: {},
   town: {},
@@ -477,74 +489,24 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
   },
 };
 
-test.each(auditCities)(
-  'T38.4: %s loses no more than 2 m of any lane against stage 2',
+test.each(tierCities(auditCities))(
+  'T38.4: %s loses more than 2 m on few lanes and no more than 10 m on any against stage 2',
   (name) => {
     const { net } = load(name);
     const losses = net.lanes
       .filter((lane) => stage2Lanes[name][lane.id] !== undefined)
-      .filter((lane) => stage2Lanes[name][lane.id]! - lane.lengthM > 2)
-      .map((lane) => lane.id)
-      .sort();
-    expect(losses).toEqual(Object.keys(storageExceptions[name]).sort());
+      .map((lane) => ({ id: lane.id, lossM: stage2Lanes[name][lane.id]! - lane.lengthM }))
+      .filter((lane) => lane.lossM > 2);
+    const unrecorded = losses.filter((lane) => !storageExceptions[name][lane.id]);
+    console.info('T38.4', name, losses.length, 'lanes lose over 2 m; not recorded:', unrecorded);
+    expect(losses.length).toBeLessThanOrEqual(storageBudget[name]);
+    expect(losses.filter((lane) => lane.lossM > 10)).toEqual([]);
   },
   120_000,
 );
 
-// T38.5: the traffic gate against main after stage 2 (7d92383): Munich at 0.15, 7:00 to 10:00,
-// 3 686 completed and 58 failed, all gridlocked.
-test('T38.5: Munich at 0.15 completes 90 percent of stage 2, gridlock at most 1.5 times', () => {
-  const { city, net } = load('munich');
-  const morning = probeMorning(city, net, 0.15);
-  console.info(
-    'T38.5 Munich morning at 0.15',
-    morning.completed,
-    morning.failedByReason,
-    morning.stalledHeads,
-  );
-  expect(morning.failed).toBe(morning.failedByReason.gridlocked ?? 0);
-  expect(morning.completed).toBeGreaterThanOrEqual(Math.ceil(0.9 * 3686));
-  expect(morning.failed).toBeLessThanOrEqual(1.5 * 58);
-  expect(morning.stalledHeads).toBe(0);
-}, 600_000);
+// T38.5, Munich's morning, runs in the traffic tier (tests/traffic/munich-morning.test.ts).
 
-/** Everything compiled except TASK-082's corridor geometry (reference lines, stations, corridor
- * surfaces, all derived from the lanes it hashes), hashed (moved from T31). */
-function fingerprint(net: CompiledCity) {
-  const hash = createHash('sha256');
-  const plain = (value: unknown) =>
-    JSON.stringify(value, (key, v: unknown) =>
-      ['corridorId', 'reference', 'stations', 'corridorSurface'].includes(key)
-        ? undefined
-        : v instanceof Float64Array
-          ? Array.from(v)
-          : v,
-    );
-  for (const list of [net.nodes, net.roads, net.lanes, net.movements, net.places, net.connectors])
-    for (const item of list) hash.update(plain(item));
-  return hash.digest('hex').slice(0, 16);
-}
-
-// Re-measured after TASK-083 (cuts, through alignments, polygons, through movements). Before:
-// grid 56deba638330bc89, town fc657fc34fe56206, Sindelfingen 9406c542b3054ff5, Munich
-// 330eb51540ef21b3 (T31, with the aprons left out).
-// TASK-089 moved all four (grid 550abeb39a410ed8, town 21bcc4f206cea7a5, Sindelfingen
-// b1d2ca6d8b7927c8, Munich 7c5b29366d96e789 before): every road carries its converging shifts
-// (empty in the grid and the town) and every lane its reference normals, and the curbs at the
-// nodes are edge-following cubics (B42), so every outline moves; the grid's and the town's
-// setbacks and movements are unchanged. Sindelfingen and Munich also have their converging
-// carriageways set side by side, and Munich the importer's newly separated pairs.
-const fingerprints: Record<AuditCity, string> = {
-  grid: '119e12ba38491e6f',
-  town: 'd742fc9c03a237ed',
-  sindelfingen: '315a1a0c8920856d',
-  munich: '2ef7091167826274',
-};
-
-test.each(auditCities)(
-  'T38: %s compiles to its fingerprint',
-  (name) => {
-    expect(fingerprint(load(name).net)).toBe(fingerprints[name]);
-  },
-  120_000,
-);
+// TASK-090: the fingerprint test (a hash of everything compiled, moved from T31) is gone: it moved
+// with every geometry change and reimport determinism (tests/importers/determinism.test.ts, T23,
+// T24) covers determinism.

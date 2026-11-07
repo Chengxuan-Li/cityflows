@@ -93,7 +93,7 @@ test('a new player following only the hints completes the loop once', async ({ p
   expect(errors).toEqual([]);
 });
 
-test('hints can be skipped, reopened, and resume after a reload', async ({ page }) => {
+test('hints can be skipped, reopened, and resume after a reload @smoke', async ({ page }) => {
   const errors = pageErrors(page);
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();

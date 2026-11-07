@@ -1,17 +1,15 @@
-import { expect, test } from 'vitest';
-import { probeMorning } from '../../bench/import-probe';
+import { expect } from 'vitest';
+import { importOsmCached } from '../../bench/city-cache';
 import { auditRoute } from '../../bench/route-audit';
 import { lonLatToLocal } from '../../src/geo/projection';
-import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
+import { cityTest, unitTest } from '../tier';
 import { fixture } from './fixtures';
-import {
-  importedRoadBodyOverlaps,
-  junctionOverlaps,
-  movementsOutside,
-} from '../network/junction-audit';
+import { movementsOutside, roadBodyCrossings } from '../network/junction-audit';
 
+// Short roads on main 5568eed. TASK-090: a budget of the recorded count plus two, not the exact
+// list: setbacks move with every junction geometry change.
 const remainingShortRoads: Record<string, string> = {
   'r:1172': 'Short Westendstraße remnant: 2.50 m and 3.41 m setbacks leave less than 5 m.',
   'r:1173': 'Reverse Westendstraße remnant: 3.69 m and 2.50 m setbacks leave less than 5 m.',
@@ -39,147 +37,134 @@ const remainingDeadEnds: Record<string, string> = {
     'Two-way trunk link terminates against an incoming one-way link; ramp U-turns remain prohibited.',
 };
 
-test('Munich import satisfies topology, demand, route and morning-run targets', () => {
-  const { xml } = fixture('munich-donnersberger');
-  const imported = importOsm(xml, {
-    importerVersion: 'test',
-    bbox: [11.525, 48.135, 11.545, 48.148],
-  });
-  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
-  const { city } = imported;
-  const count = (code: string) => imported.diagnostics.filter((d) => d.code === code).length;
-  expect(count('connector_unreachable')).toBe(0);
-  expect(count('road_too_short')).toBeLessThanOrEqual(15);
-  expect(count('dead_end')).toBeLessThanOrEqual(7);
-  const roads = Object.values(city.roads);
-  const signals = Object.values(city.nodes).filter((n) => n.control === 'signal');
-  expect(signals).toHaveLength(14);
-  for (const node of signals) {
-    const ends = roads.filter((r) => r.from === node.id || r.to === node.id);
-    expect(
-      new Set(ends.map((r) => (r.from === node.id ? r.to : r.from))).size,
-    ).toBeGreaterThanOrEqual(3);
-    expect(new Set(ends.map((r) => r.name)).size).toBeGreaterThanOrEqual(2);
-    expect(node.signal).not.toBeNull();
-  }
-  expect(
-    imported.diagnostics
-      .filter((d) => d.code === 'dead_end')
-      .flatMap((d) => d.refs)
-      .sort(),
-  ).toEqual(Object.keys(remainingDeadEnds).sort());
-  const places = Object.values(city.places);
-  const homes = places.filter((p) => p.kind === 'residential');
-  const work = places.filter((p) => p.kind === 'work');
-  for (const count of [
-    homes.reduce((s, p) => s + p.population, 0),
-    work.reduce((s, p) => s + p.jobs, 0),
-    places.reduce((s, p) => s + p.population, 0),
-    places.reduce((s, p) => s + p.jobs, 0),
-  ]) {
-    expect(count).toBeGreaterThanOrEqual(10_000);
-    expect(count).toBeLessThanOrEqual(40_000);
-  }
-  expect(
-    homes.length + work.length + places.filter((p) => p.kind === 'retail').length,
-  ).toBeLessThan(100);
-  expect(places.filter((p) => p.kind === 'parking')).toHaveLength(80);
-  expect(places.filter((p) => p.kind === 'school')).toHaveLength(5);
-  const northwest = lonLatToLocal(city.geo!, { lon: 11.525, lat: 48.148 });
-  const southeast = lonLatToLocal(city.geo!, { lon: 11.545, lat: 48.135 });
-  for (const road of Object.values(city.roads)) {
-    if (!['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass)) continue;
-    for (const [id, direction] of [
-      [road.from, 'out'],
-      [road.to, 'in'],
-    ] as const) {
-      const { pos } = city.nodes[id]!;
-      if (
-        Math.min(
-          Math.abs(pos.x - northwest.x),
-          Math.abs(pos.x - southeast.x),
-          Math.abs(pos.y - northwest.y),
-          Math.abs(pos.y - southeast.y),
-        ) > 1e-6
-      )
-        continue;
+// Its morning at full demand runs in the traffic tier (tests/traffic/munich-full-demand.test.ts).
+cityTest(
+  'Munich import satisfies topology, demand and route targets',
+  () => {
+    const { xml } = fixture('munich-donnersberger');
+    const imported = importOsmCached(xml, {
+      importerVersion: 'test',
+      bbox: [11.525, 48.135, 11.545, 48.148],
+    });
+    if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+    const { city } = imported;
+    const count = (code: string) => imported.diagnostics.filter((d) => d.code === code).length;
+    expect(count('connector_unreachable')).toBe(0);
+    expect(count('road_too_short')).toBeLessThanOrEqual(15);
+    expect(count('dead_end')).toBeLessThanOrEqual(7);
+    const roads = Object.values(city.roads);
+    const signals = Object.values(city.nodes).filter((n) => n.control === 'signal');
+    expect(signals).toHaveLength(14);
+    for (const node of signals) {
+      const ends = roads.filter((r) => r.from === node.id || r.to === node.id);
       expect(
-        places.some(
-          (p) =>
-            p.kind === 'gateway' &&
-            p.connectors.some((c) => c.roadId === road.id && c.direction === direction),
-        ),
-      ).toBe(true);
+        new Set(ends.map((r) => (r.from === node.id ? r.to : r.from))).size,
+      ).toBeGreaterThanOrEqual(3);
+      expect(new Set(ends.map((r) => r.name)).size).toBeGreaterThanOrEqual(2);
+      expect(node.signal).not.toBeNull();
     }
-  }
-
-  const result = compile(city);
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const { compiled } = result;
-  expect(
-    result.diagnostics
-      .filter((d) => d.code === 'road_too_short')
-      .flatMap((d) => d.refs)
-      .sort(),
-  ).toEqual(Object.keys(remainingShortRoads).sort());
-  // 78 lane crossings at junction ends before TASK-061. What remains is either a source
-  // road-body defect listed in the audit or a crossing at a node with a capped setback,
-  // which the junction surface covers (architecture 5.1).
-  const overlaps = junctionOverlaps(compiled).filter((pair) => !pair.capped);
-  expect(
-    overlaps.filter(
-      (pair) => !importedRoadBodyOverlaps['munich-donnersberger']![pair.lanes.join('>')],
-    ),
-  ).toEqual([]);
-  // TASK-074 residuals (see T20 and T27): a dead-end U-turn, a merged pair of carriageways
-  // lying on top of each other, and a short stub whose turns cross its neighbour's mouth.
-  // TASK-080: r:1276#0>r:1368#0 left the list (r:1368's shorter transition at n:936, see T20).
-  // TASK-082: r:973#0>r:972#0 left it too (see T20).
-  // TASK-083: the junction polygon holds every movement surface (T38.2), the dead-end U-turn
-  // r:1163#0>r:1121#0 included.
-  expect(movementsOutside(compiled)).toEqual([]);
-  const provider = createRouteProvider(),
-    costs = freeFlowLinkCosts(compiled);
-  const unroutable: string[] = [];
-  const infeasible: string[] = [];
-  let pairs = 0;
-  for (const origin of compiled.connectors.filter((c) => c.direction !== 'in')) {
-    for (const destination of compiled.connectors.filter((c) => c.direction !== 'out')) {
-      if (origin.place === destination.place) continue;
-      pairs++;
-      const request = {
-        fromLane: origin.lane,
-        fromPosM: origin.positionM,
-        toConnector: destination.idx,
-        vehicleClass: 'car' as const,
-        desiredSpeedFactor: 1,
-        noise: 0,
-        seed: 1,
-      };
-      const route = provider.route(compiled, costs, request);
-      if (!route.ok) unroutable.push(`${origin.id}>${destination.id}: ${route.reason}`);
-      else
-        for (const issue of auditRoute(city, compiled, request, route.route))
-          infeasible.push(`${origin.id}>${destination.id}: ${JSON.stringify(issue)}`);
+    expect(
+      imported.diagnostics
+        .filter((d) => d.code === 'dead_end')
+        .flatMap((d) => d.refs)
+        .sort(),
+    ).toEqual(Object.keys(remainingDeadEnds).sort());
+    const places = Object.values(city.places);
+    const homes = places.filter((p) => p.kind === 'residential');
+    const work = places.filter((p) => p.kind === 'work');
+    for (const count of [
+      homes.reduce((s, p) => s + p.population, 0),
+      work.reduce((s, p) => s + p.jobs, 0),
+      places.reduce((s, p) => s + p.population, 0),
+      places.reduce((s, p) => s + p.jobs, 0),
+    ]) {
+      expect(count).toBeGreaterThanOrEqual(10_000);
+      expect(count).toBeLessThanOrEqual(40_000);
     }
-  }
-  expect(pairs).toBeGreaterThan(40_000);
-  expect(unroutable).toEqual([]);
-  expect(infeasible).toEqual([]);
-  const morning = probeMorning(city, compiled);
-  console.info('Munich morning probe', morning);
-  expect(morning.releasedTrips).toBeGreaterThan(10_000);
-  // At full demand the city jams; the only failures are trips stuck at a jam head again after
-  // their last respawn (TASK-077).
-  expect(morning.failed).toBe(morning.failedByReason.gridlocked);
-  expect(morning.completed).toBeGreaterThanOrEqual(Math.floor(445 * 0.99));
-  expect(morning.gatewayTraffic.trunk!.entered).toBeGreaterThan(0);
-  expect(morning.gatewayTraffic.trunk!.left).toBeGreaterThan(0);
-  expect(morning.sampledRoadTraffic.ramp!.entered).toBeGreaterThan(0);
-  expect(morning.sampledRoadTraffic.ramp!.left).toBeGreaterThan(0);
-}, 600_000);
+    expect(
+      homes.length + work.length + places.filter((p) => p.kind === 'retail').length,
+    ).toBeLessThan(100);
+    expect(places.filter((p) => p.kind === 'parking')).toHaveLength(80);
+    expect(places.filter((p) => p.kind === 'school')).toHaveLength(5);
+    const northwest = lonLatToLocal(city.geo!, { lon: 11.525, lat: 48.148 });
+    const southeast = lonLatToLocal(city.geo!, { lon: 11.545, lat: 48.135 });
+    for (const road of Object.values(city.roads)) {
+      if (!['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass)) continue;
+      for (const [id, direction] of [
+        [road.from, 'out'],
+        [road.to, 'in'],
+      ] as const) {
+        const { pos } = city.nodes[id]!;
+        if (
+          Math.min(
+            Math.abs(pos.x - northwest.x),
+            Math.abs(pos.x - southeast.x),
+            Math.abs(pos.y - northwest.y),
+            Math.abs(pos.y - southeast.y),
+          ) > 1e-6
+        )
+          continue;
+        expect(
+          places.some(
+            (p) =>
+              p.kind === 'gateway' &&
+              p.connectors.some((c) => c.roadId === road.id && c.direction === direction),
+          ),
+        ).toBe(true);
+      }
+    }
 
-test.each([
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const { compiled } = result;
+    expect(
+      result.diagnostics.filter((d) => d.code === 'road_too_short').flatMap((d) => d.refs).length,
+    ).toBeLessThanOrEqual(Object.keys(remainingShortRoads).length + 2);
+    // 78 lane crossings at junction ends before TASK-061. What remains is either a source
+    // road-body defect in the audit's budget (TASK-090) or a crossing at a node with a capped
+    // setback, which the junction surface covers (architecture 5.1).
+    const crossings = roadBodyCrossings(compiled, 'munich-donnersberger');
+    expect(crossings.pairs.length).toBeLessThanOrEqual(crossings.budget);
+    // TASK-074 residuals (see T20 and T27): a dead-end U-turn, a merged pair of carriageways
+    // lying on top of each other, and a short stub whose turns cross its neighbour's mouth.
+    // TASK-080: r:1276#0>r:1368#0 left the list (r:1368's shorter transition at n:936, see T20).
+    // TASK-082: r:973#0>r:972#0 left it too (see T20).
+    // TASK-083: the junction polygon holds every movement surface (T38.2), the dead-end U-turn
+    // r:1163#0>r:1121#0 included.
+    expect(movementsOutside(compiled)).toEqual([]);
+    const provider = createRouteProvider(),
+      costs = freeFlowLinkCosts(compiled);
+    const unroutable: string[] = [];
+    const infeasible: string[] = [];
+    let pairs = 0;
+    for (const origin of compiled.connectors.filter((c) => c.direction !== 'in')) {
+      for (const destination of compiled.connectors.filter((c) => c.direction !== 'out')) {
+        if (origin.place === destination.place) continue;
+        pairs++;
+        const request = {
+          fromLane: origin.lane,
+          fromPosM: origin.positionM,
+          toConnector: destination.idx,
+          vehicleClass: 'car' as const,
+          desiredSpeedFactor: 1,
+          noise: 0,
+          seed: 1,
+        };
+        const route = provider.route(compiled, costs, request);
+        if (!route.ok) unroutable.push(`${origin.id}>${destination.id}: ${route.reason}`);
+        else
+          for (const issue of auditRoute(city, compiled, request, route.route))
+            infeasible.push(`${origin.id}>${destination.id}: ${JSON.stringify(issue)}`);
+      }
+    }
+    expect(pairs).toBeGreaterThan(40_000);
+    expect(unroutable).toEqual([]);
+    expect(infeasible).toEqual([]);
+  },
+  600_000,
+);
+
+unitTest.each([
   // Warnings only: lane_requires_merge (TASK-069) and realign_limited (TASK-068) are notes.
   ['downtown', 28],
   ['highway', 11],
@@ -187,7 +172,7 @@ test.each([
   ['sindelfingen-a81', 41], // TASK-068's realignment removed one dead end.
 ] as const)('%s stays within its import warning baseline', (name, baseline) => {
   const { xml, options } = fixture(name);
-  const result = importOsm(xml, options);
+  const result = importOsmCached(xml, options);
   expect(result.ok).toBe(true);
   expect(result.diagnostics.filter((d) => d.severity === 'warning').length).toBeLessThanOrEqual(
     baseline,

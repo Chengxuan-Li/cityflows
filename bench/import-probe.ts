@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation, scheduleTrips } from '../src/demand';
 import { defaultScenario } from '../src/fixtures/scenarios';
-import { importOsm } from '../src/importers/osm';
+import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
 import type { City } from '../src/schema';
 import { createRouteProvider, freeFlowLinkCosts } from '../src/routing';
 import { createEngine } from '../src/sim/engine';
+import type { TrafficEngine } from '../src/sim/types';
 
 // Import an OSM fixture, compile it, and run its morning headless: the baseline the import
 // wave measures against. Usage: npm run import-probe -- fixtures/osm/<name>.osm w s e n [--scale n]
@@ -20,7 +21,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
     throw new Error('--scale must be a finite, nonnegative number');
   const bbox = args.slice(0, 4).map(Number) as [number, number, number, number];
   const xml = readFileSync(file, 'utf8');
-  const imported = importOsm(xml, { importerVersion: '1', drivingSide: 'right', bbox });
+  const imported = importOsmCached(xml, { importerVersion: '1', drivingSide: 'right', bbox });
   const byCode = new Map<string, number>();
   for (const { code } of imported.diagnostics) byCode.set(code, (byCode.get(code) ?? 0) + 1);
   console.table([...byCode].map(([code, count]) => ({ code, count })));
@@ -77,7 +78,17 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   console.info(probeMorning(city, compiled, scale));
 }
 
-export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
+/** `untilS` stops the run early (the same demand, a prefix of the morning: `traffic:quick`);
+ * `observe` sees the engine after every step (the traffic tier's observers, TASK-090). */
+export function probeMorning(
+  city: City,
+  compiled: CompiledCity,
+  scale = 1,
+  {
+    untilS = 10 * 3600,
+    observe,
+  }: { untilS?: number; observe?: (engine: TrafficEngine) => void } = {},
+) {
   const scenario = defaultScenario('grid5x5');
   scenario.demand.personsPerResident = scale;
   scenario.startS = 7 * 3600;
@@ -98,8 +109,11 @@ export function probeMorning(city: City, compiled: CompiledCity, scale = 1) {
     const cls = compiled.roads[road]!.roadClass;
     (sampledRoadTraffic[cls] ??= { entered: 0, left: 0 })[direction]++;
   };
-  for (let step = 0; step < 3 * 36000; step += 600) {
-    engine.step(600);
+  for (let step = 0; step < (untilS - scenario.startS) * 10; step += 600) {
+    for (let i = 0; i < 600; i++) {
+      engine.step();
+      observe?.(engine);
+    }
     const { trips: counts } = engine.metrics();
     peak = Math.max(peak, counts.driving);
     if ((step + 600) % 18000 === 0) {

@@ -28,7 +28,7 @@ async function markingPixels(page: Page, centre: { x: number; y: number }, radiu
   }, png.toString('base64'));
 }
 
-test('TASK-091: a crossing toggled in the node inspector is redrawn, and undo restores it', async ({
+test('TASK-091: a crossing toggled in the node inspector is redrawn, and undo restores it @smoke', async ({
   page,
 }) => {
   const errors = pageErrors(page);

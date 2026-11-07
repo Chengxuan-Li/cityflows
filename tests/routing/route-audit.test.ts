@@ -1,9 +1,9 @@
 import { expect, test } from 'vitest';
+import { importOsmCached } from '../../bench/city-cache';
 import { auditCity, auditRoute } from '../../bench/route-audit';
 import { readFileSync } from 'node:fs';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { town } from '../../src/fixtures/town';
-import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
 import { buildCity } from '../../src/fixtures/build-city';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
@@ -15,7 +15,7 @@ test.each(['grid', 'town', 'Sindelfingen'])(
   (name) => {
     const imported =
       name === 'Sindelfingen'
-        ? importOsm(readFileSync('fixtures/osm/sindelfingen-a81.osm', 'utf8'), {
+        ? importOsmCached(readFileSync('fixtures/osm/sindelfingen-a81.osm', 'utf8'), {
             importerVersion: 'test',
             bbox: [8.98, 48.69, 9, 48.702],
           })

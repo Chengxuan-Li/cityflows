@@ -82,7 +82,7 @@ for (const scale of [0.15, 0.5]) {
   });
 }
 
-test('imports the downtown fixture and generates traffic from added places', async ({
+test('imports the downtown fixture and generates traffic from added places @smoke', async ({
   page,
 }, info) => {
   test.setTimeout(120_000);

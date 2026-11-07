@@ -81,7 +81,7 @@ test.beforeEach(async ({ page }) => {
   await expect(button(page, 'Play')).toBeEnabled();
 });
 
-test('stop control and restart grow the side-street queue', async ({ page }, info) => {
+test('stop control and restart grow the side-street queue @smoke', async ({ page }, info) => {
   const errors = pageErrors(page);
   const source = await openTraffic(page, 'stop');
   await step(page, 1000);

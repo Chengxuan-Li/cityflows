@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { importOsmCached } from '../../bench/city-cache';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { town } from '../../src/fixtures/town';
-import { importOsm } from '../../src/importers/osm';
-import { compile, type CompiledCity } from '../../src/network';
+import { compile } from '../../src/network';
+import type { CompiledCity } from '../../src/network';
 import type { RouteRequest } from '../../src/routing';
 
 export const throughputCities = ['grid', 'town', 'Sindelfingen', 'Munich'] as const;
@@ -11,7 +12,7 @@ export type ThroughputCity = (typeof throughputCities)[number];
 export function throughputFixture(name: ThroughputCity) {
   const imported =
     name === 'Sindelfingen' || name === 'Munich'
-      ? importOsm(
+      ? importOsmCached(
           readFileSync(
             `fixtures/osm/${name === 'Munich' ? 'munich-donnersberger' : 'sindelfingen-a81'}.osm`,
             'utf8',
@@ -27,10 +28,11 @@ export function throughputFixture(name: ThroughputCity) {
   const city = imported?.ok ? imported.city : name === 'grid' ? grid5x5() : town();
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  return result.compiled;
+  return { city, net: result.compiled };
 }
 
-export function throughputRequests(net: CompiledCity): RouteRequest[] {
+/** The fixed sample, each request keyed by its connectors and its variant (0 to 2). */
+export function throughputRequests(net: CompiledCity): { key: string; request: RouteRequest }[] {
   // Same ordered connector pairs and exclusions as bench/route-audit.ts; spread
   // the fixed sample across the entire city rather than only its first origins.
   const pairs = net.connectors
@@ -56,6 +58,6 @@ export function throughputRequests(net: CompiledCity): RouteRequest[] {
       request,
       { ...request, noise: 0.1, seed: i + 1 },
       { ...request, fromPosM: net.lanes[origin.lane]!.lengthM - 5, noise: 0.3, seed: i + 17 },
-    ];
+    ].map((request, variant) => ({ key: `${origin.id}>${destination.id}#${variant}`, request }));
   }).flat();
 }

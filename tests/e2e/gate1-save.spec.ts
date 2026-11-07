@@ -10,7 +10,7 @@ async function pickCenterNode(page: Page) {
   await expect(page.getByLabel('Phase 1 green (s)')).toBeVisible();
 }
 
-test('an edited network survives save and reopen (Gate 1 item 7)', async ({ page }) => {
+test('an edited network survives save and reopen (Gate 1 item 7) @smoke', async ({ page }) => {
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
   await pickCenterNode(page);

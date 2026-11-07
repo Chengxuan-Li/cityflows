@@ -27,6 +27,7 @@ import {
   drawRoad,
 } from '../../src/render/layers/roads';
 import { style } from '../../src/render/style';
+import { tierCities, unitTest } from '../tier';
 import type { City } from '../../src/schema';
 
 const nets = new Map<AuditCity, CompiledCity>();
@@ -72,7 +73,7 @@ function underOutline(city: CompiledCity, node: CNode, road: CRoad, atEnd: boole
   );
 }
 
-test.each(['town', 'sindelfingen', 'munich'] as const)(
+test.each(tierCities(['town', 'sindelfingen', 'munich'] as const))(
   'T41.1: on %s every road end at a junction of three or more arms has a crossing unless excluded',
   (name) => {
     const city = net(name);
@@ -119,7 +120,7 @@ test.each(['town', 'sindelfingen', 'munich'] as const)(
   120_000,
 );
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T41.2: on %s no stripe lies in a junction polygon, a curb, or within 1 m of a curb return',
   (name) => {
     const city = net(name);
@@ -191,7 +192,7 @@ function centreLines(city: CompiledCity, road: CRoad): Vec2[][] {
   return lines;
 }
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T41.4: on %s no centre-line segment lies inside its junction polygons (0.1 m)',
   (name) => {
     const city = net(name);
@@ -245,41 +246,50 @@ test.each(auditCities)(
   120_000,
 );
 
-test('T41.3: a crossing override redraws, undoes, redoes and survives save and open', async () => {
-  const source = loadAuditCity('grid');
-  const editor = createEditor(source);
-  const compiled = editor.compiled;
-  const node = compiled.nodes.find((n) => !n.signal && crossingArms(compiled, n).length === 4)!;
-  const road = compiled.roads.find((r) => r.to === node.idx)!;
-  const at = (result: { compiled: CompiledCity }) =>
-    result.compiled.roads[result.compiled.index.road.get(road.id)!]!;
-  expect(crossingStripes(compiled, road, true, editor.city).length).toBeGreaterThan(0);
-  const off = editor.apply({ kind: 'setCrossing', roadId: road.id, end: 'end', crossing: false });
-  if (!off.ok) throw new Error('edit');
-  expect(off.city.roads[road.id]!.crossings).toEqual({ end: false });
-  expect(crossingStripes(off.compiled, at(off), true, off.city)).toEqual([]);
-  // The default needs no entry: clearing the override removes the field.
-  const undone = editor.undo()!;
-  if (!undone.ok) throw new Error('undo');
-  expect(undone.city.roads[road.id]!.crossings).toBeUndefined();
-  expect(crossingStripes(undone.compiled, at(undone), true, undone.city).length).toBeGreaterThan(0);
-  const redone = editor.redo()!;
-  if (!redone.ok) throw new Error('redo');
-  expect(redone.city.roads[road.id]!.crossings).toEqual({ end: false });
-  expect(crossingStripes(redone.compiled, at(redone), true, redone.city)).toEqual([]);
+unitTest(
+  'T41.3: a crossing override redraws, undoes, redoes and survives save and open',
+  async () => {
+    const source = loadAuditCity('grid');
+    const editor = createEditor(source);
+    const compiled = editor.compiled;
+    const node = compiled.nodes.find((n) => !n.signal && crossingArms(compiled, n).length === 4)!;
+    const road = compiled.roads.find((r) => r.to === node.idx)!;
+    const at = (result: { compiled: CompiledCity }) =>
+      result.compiled.roads[result.compiled.index.road.get(road.id)!]!;
+    expect(crossingStripes(compiled, road, true, editor.city).length).toBeGreaterThan(0);
+    const off = editor.apply({ kind: 'setCrossing', roadId: road.id, end: 'end', crossing: false });
+    if (!off.ok) throw new Error('edit');
+    expect(off.city.roads[road.id]!.crossings).toEqual({ end: false });
+    expect(crossingStripes(off.compiled, at(off), true, off.city)).toEqual([]);
+    // The default needs no entry: clearing the override removes the field.
+    const undone = editor.undo()!;
+    if (!undone.ok) throw new Error('undo');
+    expect(undone.city.roads[road.id]!.crossings).toBeUndefined();
+    expect(crossingStripes(undone.compiled, at(undone), true, undone.city).length).toBeGreaterThan(
+      0,
+    );
+    const redone = editor.redo()!;
+    if (!redone.ok) throw new Error('redo');
+    expect(redone.city.roads[road.id]!.crossings).toEqual({ end: false });
+    expect(crossingStripes(redone.compiled, at(redone), true, redone.city)).toEqual([]);
 
-  const scenario = JSON.parse(readFileSync('fixtures/projects/grid5x5.cityflows.json', 'utf8')) as {
-    scenarios: unknown[];
-    city: City;
-  };
-  const project = { city: redone.city, scenarios: scenario.scenarios } as never;
-  const opened = await openProject(await saveProject(project));
-  if (!opened.ok) throw new Error(opened.error);
-  expect(opened.project.city.roads[road.id]!.crossings).toEqual({ end: false });
-  expect(opened.project.city).toEqual(redone.city);
+    const scenario = JSON.parse(
+      readFileSync('fixtures/projects/grid5x5.cityflows.json', 'utf8'),
+    ) as {
+      scenarios: unknown[];
+      city: City;
+    };
+    const project = { city: redone.city, scenarios: scenario.scenarios } as never;
+    const opened = await openProject(await saveProject(project));
+    if (!opened.ok) throw new Error(opened.error);
+    expect(opened.project.city.roads[road.id]!.crossings).toEqual({ end: false });
+    expect(opened.project.city).toEqual(redone.city);
 
-  // A file saved on main (no `crossings` anywhere) opens with the defaults.
-  const main = await openProject(readFileSync('fixtures/projects/grid5x5.cityflows.json', 'utf8'));
-  if (!main.ok) throw new Error(main.error);
-  expect(Object.values(main.project.city.roads).some((r) => 'crossings' in r)).toBe(false);
-});
+    // A file saved on main (no `crossings` anywhere) opens with the defaults.
+    const main = await openProject(
+      readFileSync('fixtures/projects/grid5x5.cityflows.json', 'utf8'),
+    );
+    if (!main.ok) throw new Error(main.error);
+    expect(Object.values(main.project.city.roads).some((r) => 'crossings' in r)).toBe(false);
+  },
+);

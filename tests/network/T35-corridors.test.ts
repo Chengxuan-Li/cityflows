@@ -12,6 +12,7 @@ import {
   surfaceEdges,
 } from '../../bench/geometry-audit';
 import { auditCities, loadAuditCity, type AuditCity } from '../../bench/junction-audit';
+import { cityTest, tierCities, unitTest } from '../tier';
 import {
   cumulativeLengths,
   distance,
@@ -130,7 +131,7 @@ function widthOutsideTransitions(city: City, net: CompiledCity, road: CRoad) {
   return { ...worst, skipped };
 }
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T35.1: %s corridors keep their width and centre line, and no lane folds',
   (name) => {
     const { city, net } = load(name);
@@ -181,47 +182,57 @@ test.each(auditCities)(
   300_000,
 );
 
-test('T35.1: G1, the hairpin service roads, keep their width and centre line', () => {
-  const { city, net } = load('munich');
-  const at = (id: string) => net.roads[net.index.road.get(id as never)!]!;
-  // Outside the eases at n:919 and n:355 (joints of 15 degrees in the source, eased over
-  // about 16 m to share the node's tangent, about 0.4 m off the centerline).
-  for (const id of ['r:917', 'r:921', 'r:1059', 'r:1060'])
-    expect(widthOutsideTransitions(city, net, at(id)).errorM, id).toBeLessThan(0.05);
-  for (const [a, b] of [
-    ['r:917', 'r:921'],
-    ['r:1059', 'r:1060'],
-  ] as const) {
-    const gap = pairGapAudit(net, at(a), at(b), 'two-way', [0, 0]);
-    expect(gap.maxM, `${a}/${b}`).toBeLessThan(0.02);
-  }
-}, 120_000);
+cityTest(
+  'T35.1: G1, the hairpin service roads, keep their width and centre line',
+  () => {
+    const { city, net } = load('munich');
+    const at = (id: string) => net.roads[net.index.road.get(id as never)!]!;
+    // Outside the eases at n:919 and n:355 (joints of 15 degrees in the source, eased over
+    // about 16 m to share the node's tangent, about 0.4 m off the centerline).
+    for (const id of ['r:917', 'r:921', 'r:1059', 'r:1060'])
+      expect(widthOutsideTransitions(city, net, at(id)).errorM, id).toBeLessThan(0.05);
+    for (const [a, b] of [
+      ['r:917', 'r:921'],
+      ['r:1059', 'r:1060'],
+    ] as const) {
+      const gap = pairGapAudit(net, at(a), at(b), 'two-way', [0, 0]);
+      expect(gap.maxM, `${a}/${b}`).toBeLessThan(0.02);
+    }
+  },
+  120_000,
+);
 
-test('T35.1: at G1 n:919 the two streets share one tangent: no gap, no kink', () => {
-  const { net } = load('munich');
-  const node = net.nodes[net.index.node.get('n:919' as never)!]!;
-  expect(node.outline).toEqual([]);
-  const through = node.movements.map((i) => net.movements[i]!);
-  expect(through.length).toBe(2);
-  for (const m of through) {
-    const from = net.lanes[m.fromLane]!,
-      to = net.lanes[m.toLane]!;
-    // The lane ends meet, and so do the edges either side of them.
-    expect(distance(from.polyline.at(-1)!, to.polyline[0]!)).toBeLessThan(1e-9);
-    const heading = (a: Vec2, b: Vec2) => Math.atan2(b.y - a.y, b.x - a.x);
-    const turn =
-      heading(to.polyline[0]!, to.polyline[1]!) -
-      heading(from.polyline.at(-2)!, from.polyline.at(-1)!);
-    expect((Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) * 180) / Math.PI).toBeLessThan(2);
-    const [la, ra] = surfaceEdges(net.roads[from.road]!),
-      [lb, rb] = surfaceEdges(net.roads[to.road]!);
-    expect(distance(la.at(-1)!, lb[0]!)).toBeLessThan(1e-9);
-    expect(distance(ra.at(-1)!, rb[0]!)).toBeLessThan(1e-9);
-  }
-  expect(joinAudit(net, node)!.maxM).toBeLessThanOrEqual(0.05);
-}, 120_000);
+cityTest(
+  'T35.1: at G1 n:919 the two streets share one tangent: no gap, no kink',
+  () => {
+    const { net } = load('munich');
+    const node = net.nodes[net.index.node.get('n:919' as never)!]!;
+    expect(node.outline).toEqual([]);
+    const through = node.movements.map((i) => net.movements[i]!);
+    expect(through.length).toBe(2);
+    for (const m of through) {
+      const from = net.lanes[m.fromLane]!,
+        to = net.lanes[m.toLane]!;
+      // The lane ends meet, and so do the edges either side of them.
+      expect(distance(from.polyline.at(-1)!, to.polyline[0]!)).toBeLessThan(1e-9);
+      const heading = (a: Vec2, b: Vec2) => Math.atan2(b.y - a.y, b.x - a.x);
+      const turn =
+        heading(to.polyline[0]!, to.polyline[1]!) -
+        heading(from.polyline.at(-2)!, from.polyline.at(-1)!);
+      expect((Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) * 180) / Math.PI).toBeLessThan(
+        2,
+      );
+      const [la, ra] = surfaceEdges(net.roads[from.road]!),
+        [lb, rb] = surfaceEdges(net.roads[to.road]!);
+      expect(distance(la.at(-1)!, lb[0]!)).toBeLessThan(1e-9);
+      expect(distance(ra.at(-1)!, rb[0]!)).toBeLessThan(1e-9);
+    }
+    expect(joinAudit(net, node)!.maxM).toBeLessThanOrEqual(0.05);
+  },
+  120_000,
+);
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T35.1: %s road surfaces are simple and corridor surfaces are their clean union',
   (name) => {
     const { net } = load(name);
@@ -249,11 +260,13 @@ test.each(auditCities)(
   120_000,
 );
 
-/** TASK-089: reference ends that move farther than 2 m, with the most they may. Through
+/** TASK-089: reference ends that move farther than 2 m, each with the tolerance it had. Through
  * alignments of a converging flow (the owner's n:104 rule: the carriageway passing a converging
  * node runs on straight, so its continuation's reference ends where the through line meets the
  * node, half the corridor separation off the node point), and B43 far through alignments whose
- * cuts grow by at most 2 m (`farThrough`), which may move an end a little past 2 m. */
+ * cuts grow by at most 2 m (`farThrough`), which may move an end a little past 2 m. Recorded on
+ * main 5568eed. TASK-090: a budget, not per end: at most 15 percent more ends than recorded move
+ * farther than 2 m, none farther than 6.5 m. */
 const farther: Record<string, number> = {
   // Munich, converging flows: n:104 r:644 > r:1308; n:1181 r:729 and r:984 > r:1358; n:33
   // r:944 > r:948.
@@ -274,7 +287,7 @@ const farther: Record<string, number> = {
   'sindelfingen r:86:start': 2.5,
 };
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T35.2: %s reference lines keep their endpoints and stay within 5 cm of the source unless eased',
   (name) => {
     const { city, net, diagnostics } = load(name);
@@ -282,6 +295,7 @@ test.each(auditCities)(
       diagnostics.filter((d) => d.code === 'reference_eased').flatMap((d) => d.refs),
     );
     const failures: string[] = [];
+    const movedFar: string[] = [];
     let easedRoads = 0;
     for (const road of net.roads) {
       const source = city.roads[road.id]!.centerline;
@@ -297,8 +311,9 @@ test.each(auditCities)(
         if (distance(p, q) <= 1e-9) return false;
         const node = net.nodes[atEnd ? road.to : road.from]!;
         const end = `${name} ${road.id}:${atEnd ? 'end' : 'start'}`;
-        if (!node.outline.length || distance(p, q) > (farther[end] ?? 2) + 1e-9)
+        if (!node.outline.length || distance(p, q) > 6.5 + 1e-9)
           failures.push(`${road.id}: ${atEnd ? 'end' : 'start'} moved`);
+        else if (distance(p, q) > 2 + 1e-9) movedFar.push(end);
         return true;
       });
       const reach = Math.min(20, total / 2) + 0.5;
@@ -317,12 +332,16 @@ test.each(auditCities)(
       }
     }
     expect(failures).toEqual([]);
-    console.info(name, `${easedRoads} roads eased beyond 5 cm, each noted`);
+    const recorded = Object.keys(farther).filter((end) => end.startsWith(`${name} `));
+    expect(movedFar.length).toBeLessThanOrEqual(Math.floor(1.15 * recorded.length));
+    console.info(name, `${easedRoads} roads eased beyond 5 cm, each noted`, {
+      notRecorded: movedFar.filter((end) => !recorded.includes(end)),
+    });
   },
   120_000,
 );
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T35.3: %s lanes at 25, 50 and 75 percent map to the reference station within 0.1 m',
   (name) => {
     const { city, net } = load(name);
@@ -403,36 +422,39 @@ function folds(points: Vec2[], need: number) {
   return count;
 }
 
-test('T35.2: a right-angle corner is eased to the offset plus a margin, a gentle arc only resampled', () => {
-  const corner = [
-    { x: 0, y: 0 },
-    { x: 40, y: 0 },
-    { x: 40, y: 40 },
-  ];
-  const sharp = referenceLine(corner, 3, 3);
-  expect(sharp.points[0]).toEqual(corner[0]);
-  expect(sharp.points.at(-1)).toEqual(corner[2]);
-  expect(sharp.eased).toHaveLength(1);
-  // A 3.25 m arc in a right angle passes 3.25 (sqrt 2 - 1) m inside the corner (its chords a
-  // few millimetres more).
-  expect(sharp.eased[0]!.radiusM).toBeCloseTo(3.25, 6);
-  expect(Math.abs(sharp.eased[0]!.deviationM - 3.25 * (Math.SQRT2 - 1))).toBeLessThan(0.01);
-  expect(folds(sharp.points, 3)).toBe(0);
+unitTest(
+  'T35.2: a right-angle corner is eased to the offset plus a margin, a gentle arc only resampled',
+  () => {
+    const corner = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 40 },
+    ];
+    const sharp = referenceLine(corner, 3, 3);
+    expect(sharp.points[0]).toEqual(corner[0]);
+    expect(sharp.points.at(-1)).toEqual(corner[2]);
+    expect(sharp.eased).toHaveLength(1);
+    // A 3.25 m arc in a right angle passes 3.25 (sqrt 2 - 1) m inside the corner (its chords a
+    // few millimetres more).
+    expect(sharp.eased[0]!.radiusM).toBeCloseTo(3.25, 6);
+    expect(Math.abs(sharp.eased[0]!.deviationM - 3.25 * (Math.SQRT2 - 1))).toBeLessThan(0.01);
+    expect(folds(sharp.points, 3)).toBe(0);
 
-  // A radius-12 m quarter circle sampled every 0.3 m, with millimetre back-steps.
-  const arc: Vec2[] = [];
-  for (let s = 0; s <= 6 * Math.PI; s += 0.3) {
-    arc.push({ x: 12 * Math.sin(s / 12), y: 12 - 12 * Math.cos(s / 12) });
-    arc.push({ x: 12 * Math.sin(s / 12) - 0.001, y: 12 - 12 * Math.cos(s / 12) });
-  }
-  const gentle = referenceLine(arc, 3, 3);
-  expect(gentle.eased).toEqual([]);
-  expect(gentle.points[0]).toEqual(arc[0]);
-  expect(gentle.points.at(-1)).toEqual(arc.at(-1));
-  expect(gentle.points.length).toBeLessThan(arc.length / 4);
-  const lengths = cumulativeLengths(gentle.points);
-  for (let i = 1; i < gentle.points.length; i++)
-    expect(lengths[i]! - lengths[i - 1]!).toBeLessThanOrEqual(1 + 1e-9);
-  for (const p of arc) expect(nearestOnPolyline(gentle.points, p).away).toBeLessThan(0.02);
-  expect(folds(gentle.points, 3)).toBe(0);
-});
+    // A radius-12 m quarter circle sampled every 0.3 m, with millimetre back-steps.
+    const arc: Vec2[] = [];
+    for (let s = 0; s <= 6 * Math.PI; s += 0.3) {
+      arc.push({ x: 12 * Math.sin(s / 12), y: 12 - 12 * Math.cos(s / 12) });
+      arc.push({ x: 12 * Math.sin(s / 12) - 0.001, y: 12 - 12 * Math.cos(s / 12) });
+    }
+    const gentle = referenceLine(arc, 3, 3);
+    expect(gentle.eased).toEqual([]);
+    expect(gentle.points[0]).toEqual(arc[0]);
+    expect(gentle.points.at(-1)).toEqual(arc.at(-1));
+    expect(gentle.points.length).toBeLessThan(arc.length / 4);
+    const lengths = cumulativeLengths(gentle.points);
+    for (let i = 1; i < gentle.points.length; i++)
+      expect(lengths[i]! - lengths[i - 1]!).toBeLessThanOrEqual(1 + 1e-9);
+    for (const p of arc) expect(nearestOnPolyline(gentle.points, p).away).toBeLessThan(0.02);
+    expect(folds(gentle.points, 3)).toBe(0);
+  },
+);

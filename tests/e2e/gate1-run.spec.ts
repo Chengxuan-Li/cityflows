@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(() => expect(errors).toEqual([]));
 
-test('the grid has no validation issues and lists its 15 lane drops under Notes', async ({
+test('the grid has no validation issues and lists its 15 lane drops under Notes @smoke', async ({
   page,
 }) => {
   await page.getByRole('button', { name: 'Validation (0)', exact: true }).click();
@@ -34,7 +34,9 @@ test('the grid has no validation issues and lists its 15 lane drops under Notes'
   await expect(notes.getByRole('listitem').first()).toContainText('must merge upstream');
 });
 
-test('runs, pauses, replays the same steps, and inspects the map', async ({ page }, testInfo) => {
+test('runs, pauses, replays the same steps, and inspects the map @smoke', async ({
+  page,
+}, testInfo) => {
   const start = await metrics(page);
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect

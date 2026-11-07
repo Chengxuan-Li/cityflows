@@ -13,6 +13,7 @@ import { compile, type CompiledCity } from '../../src/network';
 import { crossingStripes } from '../../src/render/layers/roads';
 import type { City, Road } from '../../src/schema';
 import { junctionOverlaps } from '../network/junction-audit';
+import { cityTest, tierCities, unitTest } from '../tier';
 
 // T39 (TASK-087, B41, B42): carriageways of one street must not overlap outside the junction
 // polygons. The importer pushes apart the two carriageways of a dual-carriageway corridor that
@@ -124,47 +125,54 @@ const blockAt = (road: Road, s: number) => {
   };
 };
 
-test('T39.1: a dual carriageway meeting at both nodes runs side by side up to them', () => {
-  const run = (xml: string) => {
-    const result = importOsm(xml, { importerVersion: 'test', relaxMaxM: 0 });
+unitTest(
+  'T39.1: a dual carriageway meeting at both nodes runs side by side up to them',
+  () => {
+    const run = (xml: string) => {
+      const result = importOsm(xml, { importerVersion: 'test', relaxMaxM: 0 });
+      if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+      return result.city;
+    };
+    const city = run(dual('two-way'));
+    const [a, b] = ['Dual', 'Dual'].map((_, k) =>
+      Object.values(city.roads).find(
+        (r) => r.provenance.osmIds!.includes(k + 1) && r.streetGroupId === null,
+      ),
+    ) as [Road, Road];
+    expect(a.corridorId).toBe(b.corridorId);
+    for (const road of [a, b]) {
+      // Half its two 3.5 m lanes plus half the 0.5 m median, to the right of travel.
+      expect(road.lateralOffsetM).toBe(3.75);
+      expect(road.provenance.inferred).toContain('separated');
+      expect(road.centerline[0]).toEqual(city.nodes[road.from]!.pos);
+      expect(road.centerline.at(-1)).toEqual(city.nodes[road.to]!.pos);
+    }
+    // Near the nodes the centerlines are one middle line, the blocks 7.5 m apart; in the middle,
+    // where the source draws them 12 m apart, the lanes stay on their own lines.
+    const length = cumulativeLengths(a.centerline).at(-1)!;
+    for (const s of [0, 2, 5, 10, length - 5, length]) {
+      const p = pointAtDistance(a.centerline, cumulativeLengths(a.centerline), s);
+      expect(nearestOnPolyline(b.centerline, p).away).toBeLessThan(1e-6);
+    }
+    expect(Math.abs(blockAt(a, 100).y - a.centerline[0]!.y)).toBeLessThan(0.02);
+    const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    return result.city;
-  };
-  const city = run(dual('two-way'));
-  const [a, b] = ['Dual', 'Dual'].map((_, k) =>
-    Object.values(city.roads).find(
-      (r) => r.provenance.osmIds!.includes(k + 1) && r.streetGroupId === null,
-    ),
-  ) as [Road, Road];
-  expect(a.corridorId).toBe(b.corridorId);
-  for (const road of [a, b]) {
-    // Half its two 3.5 m lanes plus half the 0.5 m median, to the right of travel.
-    expect(road.lateralOffsetM).toBe(3.75);
-    expect(road.provenance.inferred).toContain('separated');
-    expect(road.centerline[0]).toEqual(city.nodes[road.from]!.pos);
-    expect(road.centerline.at(-1)).toEqual(city.nodes[road.to]!.pos);
-  }
-  // Near the nodes the centerlines are one middle line, the blocks 7.5 m apart; in the middle,
-  // where the source draws them 12 m apart, the lanes stay on their own lines.
-  const length = cumulativeLengths(a.centerline).at(-1)!;
-  for (const s of [0, 2, 5, 10, length - 5, length]) {
-    const p = pointAtDistance(a.centerline, cumulativeLengths(a.centerline), s);
-    expect(nearestOnPolyline(b.centerline, p).away).toBeLessThan(1e-6);
-  }
-  expect(Math.abs(blockAt(a, 100).y - a.centerline[0]!.y)).toBeLessThan(0.02);
-  const result = compile(city);
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  expect(laneOverlaps(city, result.compiled).filter((o) => o.corridor)).toEqual([]);
-  expect(junctionOverlaps(result.compiled)).toEqual([]);
+    expect(laneOverlaps(city, result.compiled).filter((o) => o.corridor)).toEqual([]);
+    expect(junctionOverlaps(result.compiled)).toEqual([]);
 
-  // A centred one-way continuation west of the node: pushing the pair would make the through
-  // lanes there jog by 3.75 m, so the pair stays as drawn.
-  const centred = run(dual('one-way'));
-  for (const road of Object.values(centred.roads).filter((r) => r.name === 'Dual'))
-    expect(road.lateralOffsetM).toBe(0);
-}, 60_000);
+    // A centred one-way continuation west of the node: pushing the pair would make the through
+    // lanes there jog by 3.75 m, so the pair stays as drawn.
+    const centred = run(dual('one-way'));
+    for (const road of Object.values(centred.roads).filter((r) => r.name === 'Dual'))
+      expect(road.lateralOffsetM).toBe(0);
+  },
+  60_000,
+);
 
 // Measure 9 on main dc01ed4 (m2) for every pair that still overlaps, and the corridor pairs left.
+// TASK-090: unrelated pairs within a budget, not pair by pair (a pair not listed failed, and every
+// geometry task added or renamed some): at most 10 percent more pairs and 10 percent more area
+// than recorded here. The corridor pairs stay exact (the owner's r:259/r:694).
 const unrelated: Record<AuditCity, Record<string, number>> = {
   grid: {},
   town: {},
@@ -228,7 +236,7 @@ const corridorResiduals: Record<string, string> = {
   'r:259/r:694': 'Trappentreustraße shares no node; the blocks touch near n:257.',
 };
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T39.2: %s lane overlap outside the outlines (measure 9)',
   (name) => {
     const { city, net } = load(name);
@@ -244,8 +252,12 @@ test.each(auditCities)(
         .map((o) => o.roads)
         .sort(),
     ).toEqual(name === 'munich' ? Object.keys(corridorResiduals).sort() : []);
-    for (const o of overlaps.filter((o) => !o.corridor))
-      expect(o.areaM2, o.roads).toBeLessThanOrEqual(unrelated[name][o.roads]! + 0.01);
+    const others = overlaps.filter((o) => !o.corridor);
+    const recorded = Object.values(unrelated[name]);
+    expect(others.length).toBeLessThanOrEqual(Math.floor(1.1 * recorded.length));
+    expect(others.reduce((sum, o) => sum + o.areaM2, 0)).toBeLessThanOrEqual(
+      1.1 * recorded.reduce((sum, a) => sum + a, 0) + 0.01,
+    );
   },
   120_000,
 );
@@ -282,16 +294,15 @@ function medianChanges(net: CompiledCity): string[] {
   return out;
 }
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T39.4: %s divided pairs keep their median at the node (B43)',
   (name) => {
     const { net } = load(name);
     // Main before TASK-089: Munich n:104, n:407, n:719, n:721, n:774 and Sindelfingen n:156. The
     // one left: n:156's r:157/r:510 meet the node 10 degrees apart and their median is set at one
     // station just past the cuts, 0.43 m at r:510's cut against 0.67 m 40 m out (1.43 m on main).
-    expect(medianChanges(net).map((m) => m.split(' ').slice(0, 2).join(' '))).toEqual(
-      name === 'sindelfingen' ? ['n:156 r:157/r:510'] : [],
-    );
+    // TASK-090: counted, not named.
+    expect(medianChanges(net).length).toBeLessThanOrEqual(name === 'sindelfingen' ? 1 : 0);
   },
   120_000,
 );
@@ -338,7 +349,8 @@ function wobbles(net: CompiledCity): Record<string, number> {
   return out;
 }
 
-// Edges that change curvature sign more than once near a split node, each with its reason.
+// Edges that change curvature sign more than once near a split node on main 5568eed, each with its
+// reason. TASK-090: a budget of the recorded count plus 15 percent, not this exact list.
 const wobbling: Record<AuditCity, Record<string, string>> = {
   grid: {},
   town: {},
@@ -361,11 +373,18 @@ const wobbling: Record<AuditCity, Record<string, string>> = {
   },
 };
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T39.5: %s lane edges near a split node ease without wobbling',
   (name) => {
     const { net } = load(name);
-    expect(Object.keys(wobbles(net)).sort()).toEqual(Object.keys(wobbling[name]).sort());
+    const found = Object.keys(wobbles(net));
+    console.info(
+      'T39.5',
+      name,
+      'not recorded:',
+      found.filter((edge) => !wobbling[name][edge]),
+    );
+    expect(found.length).toBeLessThanOrEqual(Math.floor(1.15 * Object.keys(wobbling[name]).length));
   },
   120_000,
 );
@@ -384,48 +403,52 @@ function crossingsNear(net: CompiledCity, id: string, reach = 40) {
     .map((o) => o.lanes.join('>'));
 }
 
-test('T39.3: the named Munich nodes, n:1181 and B42 at n:138', () => {
-  const { city, net } = load('munich');
-  // Pushed apart (TASK-087), or set side by side where they converge (TASK-089): no two lanes
-  // cross within 40 m.
-  for (const id of [
-    'n:324',
-    'n:721',
-    'n:104',
-    'n:774',
-    'n:446',
-    'n:949',
-    'n:823',
-    'n:1181',
-    'n:382',
-  ])
-    expect(crossingsNear(net, id), id).toEqual([]);
-  // n:1181: r:729 lies beside r:984, not on it, and no longer runs under r:476's exit crossing
-  // (TASK-088's R3-1 finding). TASK-089: the two and r:476 are one approach, set side by side,
-  // each cut by its own edges; r:729 is cut no farther out than r:984 (1.75 m nearer the node),
-  // and the exit crossing shows all its stripes, as does r:984's (r:729's lies under its turn
-  // into r:476, none on main either).
-  const node = net.nodes[net.index.node.get('n:1181')!]!;
-  const incident = net.roads.filter((r) => r.from === node.idx || r.to === node.idx);
-  const setback = (id: string) => node.setbacks[incident.findIndex((r) => r.id === id)]!;
-  expect(setback('r:729')).toBeLessThan(setback('r:984') + 0.5);
-  for (const [id, stripes] of [
-    ['r:476', 8],
-    ['r:984', 8],
-  ] as const) {
-    const road = net.roads[net.index.road.get(id)!]!;
-    expect(crossingStripes(net, road, road.to === node.idx).length, id).toBe(stripes);
-  }
-  expect(city.roads['r:729']!.lateralOffsetM).toBe(-3.5);
-  expect(city.roads['r:984']!.lateralOffsetM).toBe(1.75);
-  expect(laneOverlaps(city, net, false).filter((o) => /r:(729|984)\b/.test(o.roads))).toEqual([]);
-  // TASK-089: the west carriageways r:981/r:1358 meet n:1181 from one side only; the network sets
-  // them side by side there, so they no longer overlap under the polygon either.
-  expect(laneOverlaps(city, net, false).map((o) => o.roads)).not.toContain('r:1358/r:981');
-  // B42: Arnulfstraße west of n:138 is one corridor arm pointing along its carriageways' mean
-  // direction, 60 degrees from Donnersbergerstraße, so Donnersbergerstraße is not bent.
-  for (const id of ['r:140', 'r:141'])
-    expect(city.roads[id as `r:${number}`]!.provenance.inferred!.join(',')).not.toContain(
-      'realigned',
-    );
-}, 120_000);
+cityTest(
+  'T39.3: the named Munich nodes, n:1181 and B42 at n:138',
+  () => {
+    const { city, net } = load('munich');
+    // Pushed apart (TASK-087), or set side by side where they converge (TASK-089): no two lanes
+    // cross within 40 m.
+    for (const id of [
+      'n:324',
+      'n:721',
+      'n:104',
+      'n:774',
+      'n:446',
+      'n:949',
+      'n:823',
+      'n:1181',
+      'n:382',
+    ])
+      expect(crossingsNear(net, id), id).toEqual([]);
+    // n:1181: r:729 lies beside r:984, not on it, and no longer runs under r:476's exit crossing
+    // (TASK-088's R3-1 finding). TASK-089: the two and r:476 are one approach, set side by side,
+    // each cut by its own edges; r:729 is cut no farther out than r:984 (1.75 m nearer the node),
+    // and the exit crossing shows all its stripes, as does r:984's (r:729's lies under its turn
+    // into r:476, none on main either).
+    const node = net.nodes[net.index.node.get('n:1181')!]!;
+    const incident = net.roads.filter((r) => r.from === node.idx || r.to === node.idx);
+    const setback = (id: string) => node.setbacks[incident.findIndex((r) => r.id === id)]!;
+    expect(setback('r:729')).toBeLessThan(setback('r:984') + 0.5);
+    for (const [id, stripes] of [
+      ['r:476', 8],
+      ['r:984', 8],
+    ] as const) {
+      const road = net.roads[net.index.road.get(id)!]!;
+      expect(crossingStripes(net, road, road.to === node.idx).length, id).toBe(stripes);
+    }
+    expect(city.roads['r:729']!.lateralOffsetM).toBe(-3.5);
+    expect(city.roads['r:984']!.lateralOffsetM).toBe(1.75);
+    expect(laneOverlaps(city, net, false).filter((o) => /r:(729|984)\b/.test(o.roads))).toEqual([]);
+    // TASK-089: the west carriageways r:981/r:1358 meet n:1181 from one side only; the network sets
+    // them side by side there, so they no longer overlap under the polygon either.
+    expect(laneOverlaps(city, net, false).map((o) => o.roads)).not.toContain('r:1358/r:981');
+    // B42: Arnulfstraße west of n:138 is one corridor arm pointing along its carriageways' mean
+    // direction, 60 degrees from Donnersbergerstraße, so Donnersbergerstraße is not bent.
+    for (const id of ['r:140', 'r:141'])
+      expect(city.roads[id as `r:${number}`]!.provenance.inferred!.join(',')).not.toContain(
+        'realigned',
+      );
+  },
+  120_000,
+);

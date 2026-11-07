@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
-import { importOsm } from '../../src/importers/osm';
+import { importOsmCached } from '../../bench/city-cache';
 import { parseOsm } from '../../src/importers/osm/parse';
 
 test('Sindelfingen keeps circulating ways and gives them priority over entries', () => {
@@ -9,7 +9,7 @@ test('Sindelfingen keeps circulating ways and gives them priority over entries',
   if (typeof data === 'string') throw new Error(data);
   const ways = new Set(data.way.filter((w) => w.tag.junction === 'roundabout').map((w) => w.id));
   expect(ways.size).toBeGreaterThan(0);
-  const result = importOsm(xml, { importerVersion: 'test' });
+  const result = importOsmCached(xml, { importerVersion: 'test' });
   expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
   if (!result.ok) return;
   const roads = Object.values(result.city.roads);

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { importOsmCached } from '../../bench/city-cache';
 import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
 import { continuity } from '../../src/fixtures/continuity';
@@ -11,11 +12,11 @@ import {
   segmentsIntersect,
 } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
-import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity, type CRoad } from '../../src/network';
 import { separation } from '../../src/network/continuity';
 import { seams } from '../../src/render/layers/transitions';
 import type { City } from '../../src/schema';
+import { cityTest, tierCities, unitTest } from '../tier';
 
 function compiled(city: City): CompiledCity {
   const result = compile(city);
@@ -52,7 +53,7 @@ function settled(net: CompiledCity, road: CRoad, own: Vec2[], atEnd = false): nu
   return last;
 }
 
-test('T33.1: tapers are short and scaled by speed, at most half the road', () => {
+unitTest('T33.1: tapers are short and scaled by speed, at most half the road', () => {
   // Widenings (an added lane) and narrowings (a dropped lane) at 50 and 100 km/h, and on a road
   // shorter than twice the 50 km/h taper.
   const { city, node, road } = buildCity('Taper lengths', 1);
@@ -151,7 +152,7 @@ function selfIntersections(net: CompiledCity, roads: CRoad[]) {
 }
 
 const munich = () => {
-  const imported = importOsm(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
+  const imported = importOsmCached(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {
     importerVersion: 'test',
     bbox: [11.525, 48.135, 11.545, 48.148],
   });
@@ -160,7 +161,9 @@ const munich = () => {
 };
 
 test('T33.2: transition lanes never cross themselves and keep a continuous heading', () => {
-  for (const city of [continuity(), munich()]) {
+  for (const city of tierCities(['continuity', 'munich']).map((name) =>
+    name === 'munich' ? munich() : continuity(),
+  )) {
     const net = compiled(city);
     const transitions = net.roads.filter(
       (r) =>
@@ -219,51 +222,55 @@ const munichCases: [string, string, string, number, number][] = [
   ['n:734', 'r:1189', 'r:735', 31.5, 7.5],
 ];
 
-test('T33.3: Munich splits and merges run side by side with dividers to where they part', () => {
-  const net = compiled(munich());
-  const report: Record<string, { before: number; after: number; dividerM: number }> = {};
-  for (const [node, leftId, rightId, before, limit] of munichCases) {
-    const left = roadOf(net, leftId),
-      right = roadOf(net, rightId);
-    const n = net.index.node.get(node as never)!;
-    expect([left.from, left.to]).toContain(n);
-    expect([right.from, right.to]).toContain(n);
-    const after = overlapM2(left.surface, right.surface);
-    const seam = seams(net, left).filter((s) =>
-      right.lanes.some((i) => {
-        const lane = net.lanes[i]!;
-        const edge = offsetPolyline(lane.polyline, -lane.widthM / 2);
-        return (
-          edge.some((q) => distance(q, s[0]!) < 1) || edge.some((q) => distance(q, s.at(-1)!) < 1)
-        );
-      }),
-    );
-    const dividerM = seam.reduce((sum, s) => sum + cumulativeLengths(s).at(-1)!, 0);
-    report[node] = { before, after: Math.round(after * 10) / 10, dividerM: Math.round(dividerM) };
-    expect(after, node).toBeLessThanOrEqual(limit);
-    if (node === 'n:194') continue;
-    // A divider runs between the two blocks from the junction (or the node) to where they part
-    // (at n:201 within 2 m of the junction, see above).
-    expect(dividerM, node).toBeGreaterThan(node === 'n:201' ? 1 : 5);
-    const leftLanes = left.lanes.map((i) => net.lanes[i]!);
-    const atNode = left.to === n;
-    for (const s of seam) {
-      // Past the divider's far end the two edges are apart.
-      const last = leftLanes.at(-1)!;
-      const edge = offsetPolyline(last.polyline, last.widthM / 2);
-      const lengths = cumulativeLengths(edge);
-      const end = atNode ? s[0]! : s.at(-1)!;
-      const index = edge.findIndex((q) => distance(q, end) < 1e-9);
-      const beyond = pointAtDistance(
-        edge,
-        lengths,
-        Math.max(0, Math.min(lengths.at(-1)!, lengths[index]! + (atNode ? -3 : 3))),
+cityTest(
+  'T33.3: Munich splits and merges run side by side with dividers to where they part',
+  () => {
+    const net = compiled(munich());
+    const report: Record<string, { before: number; after: number; dividerM: number }> = {};
+    for (const [node, leftId, rightId, before, limit] of munichCases) {
+      const left = roadOf(net, leftId),
+        right = roadOf(net, rightId);
+      const n = net.index.node.get(node as never)!;
+      expect([left.from, left.to]).toContain(n);
+      expect([right.from, right.to]).toContain(n);
+      const after = overlapM2(left.surface, right.surface);
+      const seam = seams(net, left).filter((s) =>
+        right.lanes.some((i) => {
+          const lane = net.lanes[i]!;
+          const edge = offsetPolyline(lane.polyline, -lane.widthM / 2);
+          return (
+            edge.some((q) => distance(q, s[0]!) < 1) || edge.some((q) => distance(q, s.at(-1)!) < 1)
+          );
+        }),
       );
-      const rightLane = net.lanes[right.lanes[0]!]!;
-      const rightEdge = offsetPolyline(rightLane.polyline, -rightLane.widthM / 2);
-      const gap = Math.min(...rightEdge.map((q) => distance(q, beyond)));
-      if (index > 0 && index < edge.length - 1) expect(gap, node).toBeGreaterThan(0.1);
+      const dividerM = seam.reduce((sum, s) => sum + cumulativeLengths(s).at(-1)!, 0);
+      report[node] = { before, after: Math.round(after * 10) / 10, dividerM: Math.round(dividerM) };
+      expect(after, node).toBeLessThanOrEqual(limit);
+      if (node === 'n:194') continue;
+      // A divider runs between the two blocks from the junction (or the node) to where they part
+      // (at n:201 within 2 m of the junction, see above).
+      expect(dividerM, node).toBeGreaterThan(node === 'n:201' ? 1 : 5);
+      const leftLanes = left.lanes.map((i) => net.lanes[i]!);
+      const atNode = left.to === n;
+      for (const s of seam) {
+        // Past the divider's far end the two edges are apart.
+        const last = leftLanes.at(-1)!;
+        const edge = offsetPolyline(last.polyline, last.widthM / 2);
+        const lengths = cumulativeLengths(edge);
+        const end = atNode ? s[0]! : s.at(-1)!;
+        const index = edge.findIndex((q) => distance(q, end) < 1e-9);
+        const beyond = pointAtDistance(
+          edge,
+          lengths,
+          Math.max(0, Math.min(lengths.at(-1)!, lengths[index]! + (atNode ? -3 : 3))),
+        );
+        const rightLane = net.lanes[right.lanes[0]!]!;
+        const rightEdge = offsetPolyline(rightLane.polyline, -rightLane.widthM / 2);
+        const gap = Math.min(...rightEdge.map((q) => distance(q, beyond)));
+        if (index > 0 && index < edge.length - 1) expect(gap, node).toBeGreaterThan(0.1);
+      }
     }
-  }
-  console.info('T33.3 overlap m2 before/after and divider m', report);
-}, 60_000);
+    console.info('T33.3 overlap m2 before/after and divider m', report);
+  },
+  60_000,
+);

@@ -14,6 +14,7 @@ import type { Vec2 } from '../../src/geo/vec2';
 import type { CompiledCity } from '../../src/network';
 import { drawRoad, markingClips } from '../../src/render/layers/roads';
 import { style } from '../../src/render/style';
+import { tierCities } from '../tier';
 
 // T27 (TASK-074): what stays of it after TASK-083. Its outline measures (simple, movements held,
 // road ends met, curbs tangent), its storage test and its Munich morning moved to T38.
@@ -30,7 +31,7 @@ function audit(name: AuditCity) {
   return entry;
 }
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T27: %s road-end overlap outside outlines is gone or at least halved',
   (name) => {
     const summary = summarize(audit(name).audits);
@@ -88,7 +89,7 @@ function recorder() {
   return { graphics: graphics as unknown as Graphics, lines };
 }
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T27: %s draws no lane marking in another road’s junction mouth or under an outline',
   (name) => {
     const { net } = audit(name);
@@ -130,7 +131,7 @@ test.each(auditCities)(
 // 46174, munich 38684 m).
 const mainLineOutsideM = { grid: 8453, town: 83776, sindelfingen: 41613, munich: 35400 };
 
-test.each(auditCities)(
+test.each(tierCities(auditCities))(
   'T27: %s keeps at least 98 % of main’s lane lines outside outlines',
   (name) => {
     const lengths = markingLengths(audit(name).net);
