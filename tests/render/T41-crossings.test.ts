@@ -16,6 +16,7 @@ import {
 } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { type CNode, type CompiledCity, type CRoad } from '../../src/network';
+import { servedSignal } from '../../src/network/crossings';
 import { junctionCorners } from '../../src/network/junctions';
 import { openProject } from '../../src/project/open';
 import { saveProject } from '../../src/project/save';
@@ -49,22 +50,12 @@ function ends(city: CompiledCity) {
 
 const expressway = (road: CRoad) => road.roadClass === 'motorway' || road.roadClass === 'ramp';
 
-/** The arm of a road end has a signalized approach: the crossing keeps TASK-072's place. */
-function signalArm(city: CompiledCity, node: CNode, road: CRoad, atEnd: boolean) {
-  const arm = crossingArms(city, node).find((a) =>
-    a.some((e) => e.road === road && e.atEnd === atEnd),
-  )!;
-  return arm.some(
-    (e) => e.atEnd && e.road.lanes.some((i) => city.lanes[i]!.stopM < city.lanes[i]!.lengthM),
-  );
-}
-
 /** The junction outline still covers the middle of the road where the crossing would lie at its
- * farthest (moved out 6 m; a signalized approach does not move): the end lies under the outline
- * of an irregular node (TASK-089's limit). */
+ * farthest (moved out 6 m): the end lies under the outline of an irregular node (TASK-089's
+ * limit). */
 function underOutline(city: CompiledCity, node: CNode, road: CRoad, atEnd: boolean, nearM: number) {
   const lane = city.lanes[road.lanes[Math.floor(road.lanes.length / 2)]!]!;
-  const d = nearM + (signalArm(city, node, road, atEnd) && atEnd ? 0 : 6);
+  const d = nearM + 6;
   return [d, d + 2.5].some((x) =>
     pointInPolygon(
       pointAtDistance(lane.polyline, lane.cumulative, atEnd ? lane.lengthM - x : x),
@@ -85,6 +76,7 @@ test.each(tierCities(['town', 'sindelfingen', 'munich'] as const))(
       noOutline: 0,
       short: 0,
       underOutline: 0,
+      stopInFirstHalf: 0,
     };
     const missing: string[] = [];
     const wrong: string[] = [];
@@ -110,6 +102,16 @@ test.each(tierCities(['town', 'sindelfingen', 'munich'] as const))(
       if (!node.outline.length) counts.noOutline++;
       else if (road.lanes.every((i) => city.lanes[i]!.lengthM < placement.nearM + 9.75))
         counts.short++;
+      // TASK-094: at a served signal the stop line would fall in a lane's first half.
+      else if (
+        atEnd &&
+        servedSignal(city, road) &&
+        road.lanes.some((i) => {
+          const lane = city.lanes[i]!;
+          return lane.lengthM - placement.farM - 0.5 < lane.lengthM / 2;
+        })
+      )
+        counts.stopInFirstHalf++;
       else if (underOutline(city, node, road, atEnd, placement.nearM)) counts.underOutline++;
       else missing.push(`${road.id} at ${node.id}`);
     }
@@ -125,12 +127,13 @@ test.each(tierCities(auditCities))(
   (name) => {
     const city = net(name);
     const bad: string[] = [];
-    const signal: string[] = [];
     let stripes = 0;
+    let signalStripes = 0;
     for (const { road, atEnd, node } of ends(city)) {
       const curbs = junctionCorners(node).filter((c) => c.kind === 'curb' && c.curve);
       for (const stripe of crossingStripes(city, road, atEnd)) {
         stripes++;
+        if (node.signal) signalStripes++;
         // Inside a curb arc: between the arc and its chord. The junction polygons of the road's two
         // nodes; another node's polygon over the road
         // (a junction on another grade, an unconnected road through it) is not this crossing's.
@@ -148,12 +151,11 @@ test.each(tierCities(auditCities))(
                 : null;
         const reason = stripe.map(why).find((r) => r !== null);
         if (!reason) continue;
-        (signalArm(city, node, road, atEnd) ? signal : bad).push(
-          `${road.id} at ${node.id}: ${reason}`,
-        );
+        bad.push(`${road.id} at ${node.id}: ${reason}`);
       }
     }
-    console.info('T41.2', name, { stripes, bad: bad.length, signalArm: signal.length });
+    // TASK-094: signal arms set back too.
+    console.info('T41.2', name, { stripes, signalStripes, bad: bad.length });
     expect(bad).toEqual([]);
   },
   120_000,

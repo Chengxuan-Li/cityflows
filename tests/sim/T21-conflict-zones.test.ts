@@ -59,7 +59,8 @@ test.each(['yield', 'stop'] as const)(
     vehicles.speed[1] = 2;
     vehicles.stopped[0] = 1;
     const distance = 2 * DEFAULT_SIM_PARAMS.intersection.gapS - start / 2;
-    vehicles.position[1] = compiled.lanes[through.fromLane]!.lengthM - distance;
+    // From the stop line (TASK-094 moved the fixture's behind its crossing).
+    vehicles.position[1] = compiled.lanes[through.fromLane]!.stopM - distance;
     expect(distance / vehicles.speed[1]!).toBeLessThan(DEFAULT_SIM_PARAMS.intersection.gapS);
     request(0);
     expect(intersections.grants[0]).toBe(left.idx);

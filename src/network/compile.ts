@@ -493,7 +493,7 @@ export function compile(city: City): CompileResult {
     });
   }
   warnAboutProvenance([...sourceNodes, ...sourceRoads, ...sourcePlaces], diagnostics);
-  populateStops(compiled);
+  populateStops(compiled, city);
   warnAboutConnectivity(compiled, diagnostics);
   return { ok: true, compiled, diagnostics };
 }
