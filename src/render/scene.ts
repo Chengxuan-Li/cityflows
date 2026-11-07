@@ -2,6 +2,7 @@ import { Application, Container, Graphics, Polygon } from 'pixi.js';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
+import { cityGrades } from './grades';
 import { Camera } from './camera';
 import { drawContext } from './layers/context';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
@@ -246,6 +247,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   return {
     ready,
     camera,
+    setActive(active) {
+      if (active) app.start();
+      else app.stop();
+    },
     setCity(compiled, source) {
       // Versions identify edits within a city. Different source cities can share a version.
       if (city?.version === compiled.version && sourceGeometry === source) return;
@@ -287,11 +292,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       map.addChild(surroundings.container);
       if (import.meta.env.MODE === 'test')
         canvas.dataset.contextRebuildMs = String(performance.now() - started);
-      const nodeGrades = city.nodes.map(({ id }) => source?.nodes[id]?.layer ?? 0);
-      const roadGrades = city.roads.map(
-        ({ id, from, to }) =>
-          source?.roads?.[id]?.layer ?? Math.min(nodeGrades[from]!, nodeGrades[to]!),
-      );
+      const { nodeGrades, roadGrades } = cityGrades(city, source);
       visibleGrades = orderedLayers([...nodeGrades, ...roadGrades]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
       for (const { group } of visibleGrades) map.addChild(group);

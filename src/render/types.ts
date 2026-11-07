@@ -69,6 +69,7 @@ export const defaultLayers: LayerVisibility = {
 export interface Scene {
   readonly ready: Promise<void>;
   readonly camera: Camera;
+  setActive(active: boolean): void;
   /** Supply source geometry to draw place rings and stack grade-separated roads. */
   setCity(compiled: CompiledCity, source?: CityGeometry): void;
   setTiles(enabled: boolean): void;

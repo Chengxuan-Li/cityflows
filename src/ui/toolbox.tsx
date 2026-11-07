@@ -2,12 +2,14 @@ import { useAppStore } from './store';
 
 export function Toolbox() {
   const tool = useAppStore((state) => state.tool);
-  const disabled = useAppStore((state) => state.busy || !state.session);
+  const in3D = useAppStore((state) => state.viewMode === '3d');
+  const disabled = useAppStore((state) => state.busy || !state.session || state.viewMode === '3d');
   return (
     <nav className="toolbox" aria-label="Toolbox">
       <button
+        disabled={disabled}
         aria-pressed={tool === 'select'}
-        title="Select map items · Escape clears selection"
+        title={in3D ? 'Editing is available in 2D' : 'Select map items · Escape clears selection'}
         onClick={() => useAppStore.getState().setTool('select')}
       >
         Select
@@ -15,7 +17,9 @@ export function Toolbox() {
       <button
         aria-pressed={tool === 'road'}
         disabled={disabled}
-        title="Draw a street · Enter finishes · Escape cancels"
+        title={
+          in3D ? 'Editing is available in 2D' : 'Draw a street · Enter finishes · Escape cancels'
+        }
         onClick={() => useAppStore.getState().setTool('road')}
       >
         Road
@@ -23,7 +27,7 @@ export function Toolbox() {
       <button
         aria-pressed={tool === 'place'}
         disabled={disabled}
-        title="Paint a place · Escape cancels"
+        title={in3D ? 'Editing is available in 2D' : 'Paint a place · Escape cancels'}
         onClick={() => useAppStore.getState().setTool('place')}
       >
         Place
@@ -31,7 +35,11 @@ export function Toolbox() {
       <button
         aria-pressed={tool === 'ramp'}
         disabled={disabled}
-        title="Connect roads with a ramp · Enter or second click builds · Escape cancels"
+        title={
+          in3D
+            ? 'Editing is available in 2D'
+            : 'Connect roads with a ramp · Enter or second click builds · Escape cancels'
+        }
         onClick={() => useAppStore.getState().setTool('ramp')}
       >
         Ramp
@@ -39,7 +47,11 @@ export function Toolbox() {
       <button
         aria-pressed={tool === 'roundabout'}
         disabled={disabled}
-        title="Drag from a junction to size a roundabout / Click its center to remove / Escape cancels"
+        title={
+          in3D
+            ? 'Editing is available in 2D'
+            : 'Drag from a junction to size a roundabout / Click its center to remove / Escape cancels'
+        }
         onClick={() => useAppStore.getState().setTool('roundabout')}
       >
         Roundabout

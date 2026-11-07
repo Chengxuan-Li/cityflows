@@ -1431,6 +1431,41 @@ type HostEvent =
   variant-minus-baseline unique vehicle counts in warm brown (up) and teal (down), below
   vehicles. It includes baseline geometry for removed roads; unchanged roads have no tint.
 
+The optional viewer-only **3D view** (`src/render3d`, TASK-098) dynamically loads
+three.js and MapControls into a separate chunk. It reads the same compiled city and running
+snapshot as 2D; editing remains in 2D. Shared grade resolution and vehicle poses live in
+`src/render/grades.ts` and `vehicle-pose.ts`. Grade g is 5g metres above the flat ground;
+`heightAt` interpolates the full compiled surface's station span with a monotone cubic
+Hermite profile, retaining smoothstep easing where the endpoint slopes are zero.
+Node heights remain fixed; at a simple, uncontrolled one-to-one road
+continuation, a PCHIP weighted harmonic tangent matches the adjoining slopes. Junctions,
+branches, flats and reversals retain level endpoints. A road grade above or below both end
+heights retains its level bridge/tunnel core and end transitions capped at 60 m. For
+approaches, this inferred geometry replaces the original 60 m/half-road easing and its
+premature flat plateaus; no surveyed elevations are claimed.
+Surfaces, marking strips, signal poles and pitched instances share this
+height rule; movements use their node's height and retain the through slope where applicable.
+Raised decks have 0.8 m slabs and piers every 30 m. The 3D camera starts at the 2D centre and
+hands its ground target and scale back on
+return; the hidden Pixi ticker stops while 3D is active. Vehicle raycasting opens the existing
+inspector, with the same eight-pixel picking tolerance as 2D; playback stays live and a
+ground-opacity toggle reveals tunnels. Pedestrian stripes reuse the 2D crossing polygons.
+Signal heads face the approaching lane and hang at 5.5 m from 6 m curbside cantilevers.
+A ground-mesh adapter reuses the 2D tile loader, projection, cache, retry and URL settings;
+the Basemap layer also works in 3D and follows the ground-opacity toggle. Surface normals
+are shared across ramp triangles for smooth lighting. Phase B reads `City.context`:
+flat-roof buildings use `heightM`, else `levels * 3 m`, else 10 m, with courtyard holes
+and inner walls. Extrusions share one coloured mesh; ground areas and rail/tram/waterway
+strips share another, using the 2D palette and line widths. Ground context sits at -0.025 m,
+above tiles and below places/roads; overlapping areas draw in the 2D category order without
+writing depth against one another. Flat context stays in the transparent render queue even at
+full opacity so it draws after basemap tiles. The existing Surroundings layer controls both meshes;
+Buildings (default on, in 3D) independently hides extrusions. Toggles do not rebuild geometry.
+Flat context follows the below-ground opacity, while buildings retain their shadows.
+The shadow normal offset scales with one world-space shadow texel (minimum 0.05 m) to keep
+broad roofs free of self-shadow stripes.
+Terrain elevation and 3D editing remain out of scope.
+
 `src/ui` is the React app with one Zustand store. Layout follows the brief:
 
 ```

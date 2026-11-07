@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { Scene3D } from '../render3d/scene';
 import type { Vec2 } from '../geo/vec2';
 import type { Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
@@ -272,6 +273,8 @@ function bindPointer(
 
 export function MapView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvas3DRef = useRef<HTMLCanvasElement>(null);
+  const mode = useAppStore((state) => state.viewMode);
   const tool = useAppStore((state) => state.tool);
   const [options, setOptions] = useState(initialRoadOptions);
   const [placeKind, setPlaceKind] = useState<PaintKind>('residential');
@@ -291,6 +294,7 @@ export function MapView() {
     const controller = new AbortController();
     const { signal } = controller;
     let scene: Scene | undefined;
+    let three: Scene3D | undefined;
     let animation = 0;
 
     async function mount() {
@@ -303,6 +307,24 @@ export function MapView() {
       if (signal.aborted) return;
 
       let drawn: Session | null = null;
+      let drawn3D: Session | null = null;
+      let active3D = false;
+      let loading3D = false;
+      const canvas3D = canvas3DRef.current!;
+      async function load3D() {
+        loading3D = true;
+        try {
+          const { Scene3D } = await import('../render3d/scene');
+          if (!signal.aborted) three = new Scene3D(canvas3D);
+        } catch (error) {
+          if (!signal.aborted) {
+            setState({ viewMode: '2d' });
+            getState().reportError(error);
+          }
+        } finally {
+          loading3D = false;
+        }
+      }
       let motionGeometry: Session['loadedCompiled'] | null = null;
       let drawnSelection: Pick | null = null;
       let drawnRoads: readonly string[] | null = null;
@@ -311,7 +333,13 @@ export function MapView() {
       let drawnSnapshot: VehicleSnapshot | null = null;
       if (window.cityflows) {
         window.cityflows.drawnSnapshot = () => drawnSnapshot;
-        window.cityflows.worldToScreen = (point) => view.camera.worldToScreen(point);
+        window.cityflows.worldToScreen = (point) =>
+          active3D ? three!.worldToScreen(point) : view.camera.worldToScreen(point);
+        window.cityflows.vehicleToScreen = (id) => three?.vehicleToScreen(id) ?? null;
+        window.cityflows.capture3D = () => three!.captureFrames();
+        window.cityflows.view3D = () => three?.getView() ?? null;
+        window.cityflows.setView3D = (centre, zoom, pitch, bearing) =>
+          three?.setView(centre, zoom, pitch, bearing);
       }
       let snapshotAgeS = 0;
       let lastFrame = performance.now();
@@ -342,7 +370,9 @@ export function MapView() {
         }
         view.setSignalPreview(current.run?.stale ? null : session.loadedCompiled, snapshot.timeS);
         if (snapshot.timeS !== snapshotTime) {
-          view.setSnapshot(snapshotForMap(snapshot, session));
+          const presentation = snapshotForMap(snapshot, session);
+          if (active3D) three!.setSnapshot(presentation);
+          else view.setSnapshot(presentation);
           if (window.cityflows) {
             drawnSnapshot = pausedSnapshot(
               snapshot,
@@ -372,7 +402,7 @@ export function MapView() {
 
       function frame(now: number) {
         animation = requestAnimationFrame(frame);
-        pointer.advance(now);
+        if (!active3D) pointer.advance(now);
         const { session, selection, vehicle, busy } = getState();
         const elapsedS = Math.max(0, now - lastFrame) / 1000;
         lastFrame = now;
@@ -395,6 +425,14 @@ export function MapView() {
           if (drawn?.editor !== session.editor) {
             pointer.reset();
             fitCity(view, canvas, session);
+            if (active3D)
+              three!.setView(
+                view.camera.screenToWorld({
+                  x: canvas.clientWidth / 2,
+                  y: canvas.clientHeight / 2,
+                }),
+                view.camera.zoom,
+              );
           }
           drawn = session;
           drawnSelection = drawnRoute = null;
@@ -410,12 +448,53 @@ export function MapView() {
           drawnSnapshot = null;
           snapshotAgeS = 0;
         }
+        const want3D = getState().viewMode === '3d';
+        if (want3D && !three && !loading3D) void load3D();
+        if (want3D !== active3D && (!want3D || three)) {
+          pointer.reset();
+          const middle = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
+          if (want3D) three!.setView(view.camera.screenToWorld(middle), view.camera.zoom);
+          else {
+            const { centre, zoom } = three!.getView();
+            view.camera.zoomAt(middle, zoom / view.camera.zoom);
+            const current = view.camera.screenToWorld(middle);
+            view.camera.pan(
+              (current.x - centre.x) * view.camera.zoom,
+              (current.y - centre.y) * view.camera.zoom,
+            );
+          }
+          active3D = want3D;
+          view.setActive(!active3D);
+          canvas.dataset.ticker = active3D ? 'stopped' : 'running';
+          snapshotTime = NaN;
+        }
+        if (active3D && drawn3D?.compiled !== session.compiled) {
+          three!.setCity(session.compiled, session.project.city);
+          drawn3D = session;
+          snapshotTime = NaN;
+        }
         // Edits change the displayed city; paths stay with the loaded run until restart.
         view.setVehicleGeometry(
           session.loadedCompiled,
           session.project.scenarios[0]!.simParams.laneChangeDurationS ??
             DEFAULT_SIM_PARAMS.laneChangeDurationS,
         );
+        if (active3D) {
+          three!.setVehicleGeometry(
+            session.loadedCompiled,
+            session.project.scenarios[0]!.simParams.laneChangeDurationS ??
+              DEFAULT_SIM_PARAMS.laneChangeDurationS,
+          );
+          three!.setSelection(selection);
+          three!.setBelowGround(getState().belowGround);
+          three!.setPlaces(layers.places);
+          three!.setSurroundings(layers.context, getState().buildings);
+          three!.setTiles(layers.basemap);
+          three!.setSignals(
+            getState().run?.timeS ?? 0,
+            getState().run?.stale ? null : session.loadedCompiled,
+          );
+        }
         if (selection !== drawnSelection) {
           view.setSelection(selection);
           drawnSelection = selection;
@@ -440,7 +519,8 @@ export function MapView() {
         }
         const run = getState().run;
         snapshotAgeS = run?.status === 'playing' ? snapshotAgeS + elapsedS * run.speed : 0;
-        view.animateVehicles(snapshotAgeS);
+        if (active3D) three!.render(snapshotAgeS, run?.timeS ?? 0);
+        else view.animateVehicles(snapshotAgeS);
         if (pulling || failed === session) return;
         pulling = true;
         void pull(session)
@@ -468,6 +548,7 @@ export function MapView() {
         () => {
           const { session, busy } = getState();
           return (
+            getState().viewMode === '2d' &&
             !busy &&
             session !== null &&
             session.compiled === drawn?.compiled &&
@@ -477,7 +558,11 @@ export function MapView() {
         () => tools[getState().tool],
       );
       const unsubscribe = useAppStore.subscribe((state, previous) => {
-        if (state.tool !== previous.tool || state.session?.editor !== previous.session?.editor) {
+        if (
+          state.viewMode !== previous.viewMode ||
+          state.tool !== previous.tool ||
+          state.session?.editor !== previous.session?.editor
+        ) {
           pointer.reset();
           tools[previous.tool].cancel();
           view.setEditOverlay(null);
@@ -490,6 +575,51 @@ export function MapView() {
           tools[state.tool].refresh();
       });
       signal.addEventListener('abort', unsubscribe, { once: true });
+      window.addEventListener(
+        'keydown',
+        (event) => {
+          if (
+            event.repeat ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.altKey ||
+            document.querySelector('dialog[open]') ||
+            (event.target instanceof HTMLElement &&
+              event.target.closest('input, textarea, select, [contenteditable="true"]'))
+          )
+            return;
+          if (event.key.toLowerCase() === 'v') {
+            event.preventDefault();
+            getState().toggleView();
+          }
+        },
+        { signal },
+      );
+      let down: Vec2 | null = null;
+      canvas3D.addEventListener(
+        'pointerdown',
+        (event) => {
+          if (event.button === 0) down = { x: event.clientX, y: event.clientY };
+        },
+        { signal },
+      );
+      canvas3D.addEventListener(
+        'pointerup',
+        (event) => {
+          if (
+            !down ||
+            !active3D ||
+            Math.hypot(event.clientX - down.x, event.clientY - down.y) > 3
+          ) {
+            down = null;
+            return;
+          }
+          down = null;
+          const rect = canvas3D.getBoundingClientRect();
+          getState().select(three!.pick(event.clientX - rect.left, event.clientY - rect.top));
+        },
+        { signal },
+      );
       animation = requestAnimationFrame(frame);
     }
 
@@ -500,6 +630,7 @@ export function MapView() {
       controller.abort();
       cancelAnimationFrame(animation);
       scene?.destroy();
+      three?.destroy();
     };
   }, []);
 
@@ -507,9 +638,20 @@ export function MapView() {
     <>
       <canvas
         ref={canvasRef}
-        tabIndex={0}
+        style={{ visibility: mode === '3d' ? 'hidden' : 'visible' }}
+        aria-hidden={mode === '3d'}
+        data-view="2d"
+        tabIndex={mode === '2d' ? 0 : -1}
         className={`map${tool !== 'select' ? ' drawing' : ''}`}
         aria-label="City map"
+      />
+      <canvas
+        ref={canvas3DRef}
+        className="map"
+        aria-label="3D city view"
+        aria-hidden={mode !== '3d'}
+        tabIndex={mode === '3d' ? 0 : -1}
+        style={{ position: 'absolute', inset: 0, visibility: mode === '3d' ? 'visible' : 'hidden' }}
       />
       {tool === 'road' && <RoadOptions value={options} onChange={setOptions} />}
       {tool === 'place' && (

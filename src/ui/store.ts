@@ -77,6 +77,12 @@ type RunCommand = 'play' | 'pause' | 'step' | 'restart';
 export type ExportFormat = 'geojson' | 'trips' | 'road-metrics' | 'trajectories';
 
 interface AppState {
+  viewMode: '2d' | '3d';
+  belowGround: boolean;
+  buildings: boolean;
+  toggleView: () => void;
+  toggleBelowGround: () => void;
+  toggleBuildings: () => void;
   compareOpen: boolean;
   comparison: Comparison | null;
   comparisonProgress: { run: 'Baseline' | 'Variant'; fraction: number } | null;
@@ -158,7 +164,7 @@ export const useAppStore = create<AppState>((set, get) => {
   function edit(apply: (editor: Editor) => CommitResult | null) {
     return perform(async () => {
       const { session, run, selection } = get();
-      if (!session || !run) return;
+      if (!session || !run || get().viewMode === '3d') return;
       const { editor, engine, project } = session;
       const result = apply(editor);
       if (!result) return;
@@ -285,6 +291,23 @@ export const useAppStore = create<AppState>((set, get) => {
   }
 
   return {
+    viewMode: '2d',
+    belowGround: false,
+    buildings: true,
+    toggleView: () => {
+      const { viewMode, selection, session, busy } = get();
+      if (!session || busy) return;
+      set({
+        viewMode: viewMode === '2d' ? '3d' : '2d',
+        tool: 'select',
+        selectedRoads: [],
+        selection: selection?.kind === 'vehicle' ? selection : null,
+        selectionPoint: null,
+        vehicle: selection?.kind === 'vehicle' ? get().vehicle : null,
+      });
+    },
+    toggleBelowGround: () => set(({ belowGround }) => ({ belowGround: !belowGround })),
+    toggleBuildings: () => set(({ buildings }) => ({ buildings: !buildings })),
     compareOpen: false,
     comparison: null,
     comparisonProgress: null,
@@ -412,8 +435,10 @@ export const useAppStore = create<AppState>((set, get) => {
     toggleDemand: () =>
       set(({ demandOpen }) => ({ demandOpen: !demandOpen, layersOpen: false, metricsOpen: false })),
     tool: 'select',
-    setTool: (tool) =>
-      set({ tool, selection: null, selectedRoads: [], vehicle: null, selectionPoint: null }),
+    setTool: (tool) => {
+      if (get().viewMode === '3d') return;
+      set({ tool, selection: null, selectedRoads: [], vehicle: null, selectionPoint: null });
+    },
     selectionPoint: null,
     session: null,
     run: null,
@@ -642,6 +667,10 @@ declare global {
     cityflows?: Pick<EngineClient, 'metrics' | 'hash' | 'inspect' | 'step'> & {
       snapshot?: EngineClient['snapshot'];
       drawnSnapshot?: () => VehicleSnapshot | null;
+      vehicleToScreen?: (id: number) => Vec2 | null;
+      capture3D?: () => Promise<string[]>;
+      view3D?: () => { centre: Vec2; zoom: number } | null;
+      setView3D?: (centre: Vec2, zoom: number, pitch?: number, bearing?: number) => void;
       worldToScreen?: (point: Vec2) => Vec2;
       city?: () => Project['city'];
       commit?: (command: Command) => Promise<void>;
