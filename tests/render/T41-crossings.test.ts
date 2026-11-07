@@ -27,6 +27,7 @@ import {
   crossingStripes,
   drawRoad,
 } from '../../src/render/layers/roads';
+import { signalHeads } from '../../src/render/layers/signals';
 import { style } from '../../src/render/style';
 import { tierCities, unitTest } from '../tier';
 import type { City } from '../../src/schema';
@@ -244,6 +245,31 @@ test.each(tierCities(auditCities))(
     }
     console.info('T41.4', name, { segments, inside: inside.length, under: [...under] });
     expect([...new Set(inside)]).toEqual([]);
+  },
+  120_000,
+);
+
+// TASK-094: a signal's lights stand with their lane's stop line (behind the set-back crossing, or
+// TASK-072's 3 m where there is none), not at the lane end inside the junction.
+test.each(tierCities(auditCities))(
+  'T41.5: on %s every signal head lies within 2 m of its lane’s stop position',
+  (name) => {
+    const city = net(name);
+    const far: string[] = [];
+    let heads = 0;
+    for (const node of city.nodes) {
+      if (!node.signal) continue;
+      for (const head of signalHeads(city, node)) {
+        heads++;
+        const lane = city.lanes[head.lane]!;
+        const stop = pointAtDistance(lane.polyline, lane.cumulative, lane.stopM);
+        const d = Math.hypot(head.x - stop.x, head.y - stop.y);
+        if (d > 2) far.push(`${lane.id} at ${node.id}: ${d.toFixed(2)} m`);
+      }
+    }
+    console.info('T41.5', name, { heads, far: far.length });
+    expect(heads).toBeGreaterThan(0);
+    expect(far).toEqual([]);
   },
   120_000,
 );
