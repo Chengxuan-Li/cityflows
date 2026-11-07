@@ -89,6 +89,7 @@ export const roadSchema = z.object({
   name: z.string().nullable(),
   streetGroupId: z.string().nullable(),
   corridorId: z.string().nullable().optional(),
+  crossings: z.object({ start: z.boolean().optional(), end: z.boolean().optional() }).optional(),
   provenance,
 });
 

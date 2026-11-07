@@ -158,6 +158,7 @@ interface Road {
   name: string | null;
   streetGroupId: string | null;  // groups the two directions of a simple two-way street
   corridorId?: string | null;    // carriageways of one street side by side; absent = streetGroupId
+  crossings?: { start?: boolean; end?: boolean }; // TASK-091: crossing overrides; absent = default
   provenance: Provenance;
 }
 
@@ -566,6 +567,7 @@ type Command =
   | { kind: 'setRoadAttributes'; roadId: RoadId; speedLimitMps?: number; roadClass?: RoadClass; name?: string | null }
   | { kind: 'setStreetDirection'; streetGroupId: string; direction: 'both' | RoadId }  // RoadId = keep only this direction
   | { kind: 'reverseRoad'; roadId: RoadId }
+  | { kind: 'setCrossing'; roadId: RoadId; end: 'start' | 'end'; crossing: boolean | null } // TASK-091; null = default
   | { kind: 'setTurnRule'; nodeId: NodeId; rule: TurnRule }        // replaces an equal-key rule
   | { kind: 'clearTurnRule'; nodeId: NodeId; rule: Omit<TurnRule, 'allowed' | 'provenance'> }
   | { kind: 'setControl'; nodeId: NodeId; control: Control; signal?: SignalProgram; minorRoads?: RoadId[] }
@@ -934,8 +936,9 @@ Switches release approach grants, reset the route cursor and lane plan, and set
 
 Stop positions (TASK-072). `CLane.stopM` is where an ungranted vehicle stops: `lengthM`
 minus `crossingM = 3.0` (a 2.5 m crossing and 0.5 m clearance) when the lane's approach has a
-pedestrian crossing (the section 11 rule), else `lengthM`; a lane shorter than 10 m gets no
-crossing. Every rule that treats the lane end as the stop line for an ungranted vehicle uses
+pedestrian crossing (TASK-072's rule: a signalized approach with a served movement), else
+`lengthM`; a lane shorter than 10 m gets no crossing. TASK-091's decorative crossings at other
+junctions and its overrides do not change `stopM`. Every rule that treats the lane end as the stop line for an ungranted vehicle uses
 `stopM` instead: the standing obstacle, the commit clamp, the stop sign's one second at the
 line, the entry request distance, junction waiting time, and the distance a yield or stop
 gap is measured over. A granted vehicle drives on to `lengthM` and onto its movement as
@@ -1277,6 +1280,29 @@ type HostEvent =
   across the road's full width; the junction surface begins at the lane end. The crossing on
   the exit side of a signalized junction lies on the exit road's first 0.25 to 2.75 m. Same
   serving rule as before (a signalized approach with a served movement).
+- TASK-091 (B50, B52; replaces the serving rule above). Crossings are decorative: no simulation
+  effect, `stopM` keeps TASK-072's rule. Arms: a node's road ends, where ends within 20 degrees of
+  each other that share a corridor or run in opposite directions form one arm. Default: a road end at a node of three or more arms, or at a
+  signalized node, has a crossing unless the road is a motorway or a ramp (the importer's
+  `_link` class, which also covers slip lanes), every arm of the node is one (a motorway merge or
+  diverge), or the road belongs to a roundabout ring (a closed chain of one-way roads, each
+  continuing into the next within 30 degrees). `Road.crossings` overrides the default per road
+  end; only explicit edits are stored, a value equal to the default clears the entry, and old
+  files load unchanged. Place: on an arm with a signalized approach (a lane whose `stopM` is
+  before its end) TASK-072's place holds, 0.25 to 2.75 m from the cut, because the stop line
+  must stay before the crossing and `stopM` cannot move. Elsewhere the near edge lies 1 m beyond
+  the farthest point where a curb return of the node meets a road edge of the arm, measured
+  along each road, and no stripe comes within 1 m of a curb return. TASK-089's move-out (up to
+  6 m, all stripes together) clears the node's and the road's far node's outline; lanes shorter
+  than the near edge plus 9.75 m carry no stripes. Dividers and centre lines end, and turn
+  arrows stay, 0.5 m behind a crossing (on a signalized approach the stop position, before the
+  crossing, still ends them).
+  The node inspector lists the arms with a "Crossing" checkbox each (disabled, with the reason,
+  where no stripe fits).
+- TASK-091 (B46): a centre line (a two-way street's, or the solid median edge of TASK-089) ends
+  at the junction mouth: it is clipped out of both its nodes' outlines, also where an outline
+  reaches back over the approach (TASK-079's stretch drawn above the junction now applies to
+  dividers only); a piece shorter than a dash (2.7 m) is not drawn.
 - TASK-071: at a continuation node no stop line, crossing or junction surface is drawn; lane
   dividers continue through it, the dividers beside a tapering lane converge or diverge with
   it, and a dropped lane carries two merge chevrons inside its taper.

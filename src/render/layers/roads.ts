@@ -7,17 +7,24 @@ import {
   parallelOffset,
   pointAtDistance,
   pointInPolygon,
+  preparePolygon,
   segmentDistance,
   segmentIntersection,
   trimPolyline,
   nearestOnPolyline,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import type { CLane, CMovement, CompiledCity, CRoad, Turn } from '../../network';
-import { SETBACK_CAP_M } from '../../network/junctions';
+import type { CLane, CMovement, CNode, CompiledCity, CRoad, Turn } from '../../network';
+import { junctionCorners, SETBACK_CAP_M } from '../../network/junctions';
+import type { City } from '../../schema';
 import { roadStyle, style } from '../style';
 
+/** The canonical roads, which carry the crossing overrides (TASK-091). */
+type CrossingSource = { roads?: City['roads'] };
+
 const DASH_M = 2.7;
+/** Gap between a crossing and the lane lines that end at it (TASK-091). */
+const LINE_CLEAR_M = 0.5;
 const GAP_M = 3.1;
 
 function fadeAtZoom(graphics: Graphics, from: number, to: number) {
@@ -34,6 +41,7 @@ export function drawRoad(
   road: CRoad,
   roadClasses = false,
   controls: Graphics = markings,
+  source?: CrossingSource,
 ): void {
   const { color, vergeM } = roadStyle(road, roadClasses);
   surface
@@ -63,6 +71,24 @@ export function drawRoad(
     strokeLines(markings, below, alpha);
     strokeLines(controls, above, alpha);
   };
+  // B46 (TASK-091): a centre line ends at the junction mouth, also where the outline reaches back
+  // over the end of the approach: no centre line inside a junction polygon, and no piece shorter
+  // than a dash left between two (a stub road inside a junction, Munich r:1172 at n:182).
+  const centreClips = junction.length ? [...clips, junction] : clips;
+  const drawCentre = (lines: Vec2[][]) =>
+    strokeLines(
+      markings,
+      lines
+        .flatMap((line) => clipOutside(line, centreClips, 0))
+        .filter((piece) => cumulativeLengths(piece).at(-1)! >= DASH_M),
+      0.85,
+    );
+  // TASK-091: lines and arrows keep behind a crossing (the far edge from the cut, 0 for none).
+  const [startFarM, endFarM] = [false, true].map((atEnd) => {
+    if (!crossingEnabled(city, road, atEnd, source)) return 0;
+    const placement = crossingPlacement(city, road, atEnd);
+    return placement.stripes.length ? placement.farM : 0;
+  }) as [number, number];
   const partners =
     road.streetGroupId === null && road.corridorId !== null
       ? city.roads
@@ -71,13 +97,17 @@ export function drawRoad(
       : [];
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
-    const along = trimPolyline(lane.polyline, 0, lane.lengthM - lane.stopM);
+    const along = trimPolyline(
+      lane.polyline,
+      startFarM && startFarM + LINE_CLEAR_M,
+      Math.max(lane.lengthM - lane.stopM, endFarM && endFarM + LINE_CLEAR_M),
+    );
     // On a road with a tapering lane `drawTransitions` draws the dividers, dashed from the road's
     // start and below the junction surface; here only their stretch under it, in their phase.
     if (lane.right >= 0)
       draw(dashes(parallelOffset(along, lane.widthM / 2), !tapered), 0.78, !tapered);
     if (road.streetGroupId !== null && (medianOnRight ? lane.right : lane.left) < 0)
-      draw([parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2)], 0.85);
+      drawCentre([parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2)]);
     // TASK-089: a carriageway beside another of its corridor (a separated or side-by-side pair)
     // draws its median edge solid where that one runs within 1.5 m: two lines, a double line;
     // the strip between them is paved (no hairline of verge-less median between the lines).
@@ -95,9 +125,9 @@ export function drawRoad(
         );
         surface.poly([...run, ...facing.reverse()]).fill(color);
       }
-      draw(runs, 0.85);
+      drawCentre(runs);
     }
-    drawApproachMarkings(controls, city, lane);
+    drawApproachMarkings(controls, city, lane, endFarM);
   }
 }
 
@@ -260,7 +290,9 @@ function arrowTurns(city: CompiledCity, lane: CLane): Turn[] {
   return [...turns];
 }
 
-export function approachMarkings(city: CompiledCity, lane: CLane) {
+/** `crossingFarM`: the far edge of the crossing at the lane's end, from the cut (0 for none);
+ * TASK-091: an arrow stays behind it. */
+export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM = 0) {
   const road = city.roads[lane.road]!;
   const node = city.nodes[road.to]!;
   const legal = lane.out.map((index) => city.movements[index]!).filter((m) => !m.neverGreen);
@@ -273,27 +305,37 @@ export function approachMarkings(city: CompiledCity, lane: CLane) {
   const differ = road.lanes.some(
     (index) => key(arrowTurns(city, city.lanes[index]!)) !== key(turns),
   );
+  const scale = Math.min(1, lane.lengthM / 18);
+  const arrowAt = Math.min(
+    lane.stopM - ARROW_BEFORE_STOP_M,
+    lane.lengthM - crossingFarM - ARROW_CLEAR_M - ARROW_HALF_M * scale,
+  );
   return {
     stop: controlled && (node.signal !== null || (node.control === 'stop' && minor)),
     yield: controlled && node.control === 'yield' && minor,
-    crossingEnd: controlled && node.signal !== null,
-    crossingStart:
-      city.nodes[road.from]!.signal !== null &&
-      lane.in.some((index) => !city.movements[index]!.neverGreen),
-    turns: differ && lane.lengthM >= ARROW_MIN_LANE_M && !onOtherRoad(city, lane) ? turns : [],
+    arrowAt,
+    turns:
+      differ &&
+      lane.lengthM >= ARROW_MIN_LANE_M &&
+      arrowAt >= ARROW_HALF_M * scale &&
+      !onOtherRoad(city, lane, arrowAt)
+        ? turns
+        : [],
   };
 }
 
 /** Arrows are centred this far before the stop position, and need a lane this long. */
 const ARROW_BEFORE_STOP_M = 7.5;
 const ARROW_MIN_LANE_M = 12;
+/** An arrow's half length, and the gap it keeps to a crossing in front of it (TASK-091). */
+const ARROW_HALF_M = 2;
+const ARROW_CLEAR_M = 0.5;
 
 /** The arrow position lies on the surface of a road running the other way at one of this
  * road's nodes: two carriageways drawn on top of each other (B34, Munich r:368 and r:480),
  * where the arrows of both directions would share one pair of lanes. */
-function onOtherRoad(city: CompiledCity, lane: CLane): boolean {
+function onOtherRoad(city: CompiledCity, lane: CLane, at: number): boolean {
   const road = city.roads[lane.road]!;
-  const at = lane.stopM - ARROW_BEFORE_STOP_M;
   const point = pointAtDistance(lane.polyline, lane.cumulative, at);
   const heading = headingAtDistance(lane.polyline, lane.cumulative, at);
   const nodes = [road.from, road.to];
@@ -316,8 +358,13 @@ function onOtherRoad(city: CompiledCity, lane: CLane): boolean {
 
 /** Stop and give-way lines and arrows, drawn above the node area: where the junction surface
  * covers the end of an approach they stay visible. */
-function drawApproachMarkings(controls: Graphics, city: CompiledCity, lane: CLane): void {
-  const marks = approachMarkings(city, lane);
+function drawApproachMarkings(
+  controls: Graphics,
+  city: CompiledCity,
+  lane: CLane,
+  crossingFarM: number,
+): void {
+  const marks = approachMarkings(city, lane, crossingFarM);
   const local = (distance: number, forward: number, side: number) => {
     const point = pointAtDistance(lane.polyline, lane.cumulative, distance);
     const heading = headingAtDistance(lane.polyline, lane.cumulative, distance);
@@ -345,7 +392,7 @@ function drawApproachMarkings(controls: Graphics, city: CompiledCity, lane: CLan
   }
   const scale = Math.min(1, lane.lengthM / 18);
   const arrowPoint = (forward: number, side: number) =>
-    local(lane.stopM - ARROW_BEFORE_STOP_M, forward * scale, side * scale);
+    local(marks.arrowAt, forward * scale, side * scale);
   for (const turn of marks.turns) {
     const side = turn === 'left' ? -1 : 1;
     const points: [number, number][] =
@@ -411,75 +458,257 @@ export function drawMovementArrow(graphics: Graphics, movement: CMovement): void
     .fill({ color: style.marking, alpha: 0.9 });
 }
 
-/** Zebra stripes follow the road surface between the stop line and junction. */
-export function crossingStripes(city: CompiledCity, road: CRoad, atEnd: boolean): Vec2[][] {
+/** A road end at a node, with its outward direction (away from the node). */
+interface RoadEnd {
+  road: CRoad;
+  atEnd: boolean;
+  direction: Vec2;
+}
+
+const topology = new WeakMap<CompiledCity, { incident: CRoad[][]; ring: Set<number> }>();
+
+/** Incident roads by node and the roads of roundabout rings, per compiled city. A ring is a
+ * closed chain of one-way roads (no opposite road in their street group) in which every road
+ * continues into the next within 30 degrees, so the ring turns inside its roads, not at nodes:
+ * an imported `junction=roundabout` way or an authored roundabout, never a block of one-way
+ * streets. */
+function cityTopology(city: CompiledCity) {
+  let cached = topology.get(city);
+  if (cached) return cached;
+  const incident = city.nodes.map((): CRoad[] => []);
+  for (const road of city.roads) {
+    incident[road.from]!.push(road);
+    if (road.to !== road.from) incident[road.to]!.push(road);
+  }
+  const groups = new Map<string, number>();
+  for (const road of city.roads)
+    if (road.streetGroupId !== null)
+      groups.set(road.streetGroupId, (groups.get(road.streetGroupId) ?? 0) + 1);
+  const oneWay = (road: CRoad) =>
+    road.streetGroupId === null || groups.get(road.streetGroupId) === 1;
+  const ring = new Set<number>();
+  const along = Math.cos(Math.PI / 6);
+  for (const road of city.roads) {
+    if (ring.has(road.idx) || !oneWay(road)) continue;
+    const chain = [road];
+    for (let step = 0; step < 24; step++) {
+      const last = chain.at(-1)!;
+      const heading = endDirection(last, true);
+      const next = incident[last.to]!.filter((r) => {
+        if (r.from !== last.to || r === last || !oneWay(r)) return false;
+        const d = endDirection(r, false);
+        return -(d.x * heading.x + d.y * heading.y) > along;
+      });
+      if (next.length !== 1 || chain.includes(next[0]!)) {
+        if (next[0] === road) for (const r of chain) ring.add(r.idx);
+        break;
+      }
+      chain.push(next[0]!);
+    }
+  }
+  cached = { incident, ring };
+  topology.set(city, cached);
+  return cached;
+}
+
+/** A node's arms (TASK-091): its road ends, where ends within 20 degrees of each other form one
+ * arm if they are of one corridor or run in opposite directions (the two directions of a street,
+ * a divided pair, carriageways the importer did not pair, as Munich r:476 and r:984 at n:1181). */
+export function crossingArms(city: CompiledCity, node: CNode): RoadEnd[][] {
+  const arms: RoadEnd[][] = [];
+  const close = Math.cos(Math.PI / 9);
+  for (const road of cityTopology(city).incident[node.idx]!)
+    for (const atEnd of [false, true]) {
+      if ((atEnd ? road.to : road.from) !== node.idx) continue;
+      const end = { road, atEnd, direction: endDirection(road, atEnd) };
+      const arm = arms.find(
+        (ends) =>
+          ends.some(
+            (e) =>
+              e.atEnd !== atEnd ||
+              (road.corridorId !== null && e.road.corridorId === road.corridorId),
+          ) &&
+          ends.every(
+            (e) => e.direction.x * end.direction.x + e.direction.y * end.direction.y > close,
+          ),
+      );
+      if (arm) arm.push(end);
+      else arms.push([end]);
+    }
+  return arms;
+}
+
+const expressway = (road: CRoad) => road.roadClass === 'motorway' || road.roadClass === 'ramp';
+
+/** The default (architecture section 11, TASK-091): a road end at a node of three or more arms,
+ * or at a signalized node, has a crossing, unless the road is a motorway or a ramp (`_link`
+ * roads and slip lanes), every arm of the node is (a motorway merge or diverge), or the road is
+ * part of a roundabout ring. */
+export function crossingDefault(city: CompiledCity, road: CRoad, atEnd: boolean): boolean {
   const node = city.nodes[atEnd ? road.to : road.from]!;
-  if (!node.signal || !node.outline.length) return [];
+  if (expressway(road) || cityTopology(city).ring.has(road.idx)) return false;
+  const arms = crossingArms(city, node);
+  return (
+    (arms.length >= 3 || node.signal !== null) &&
+    !arms.every((arm) => arm.every((e) => expressway(e.road)))
+  );
+}
+
+/** Whether a road end has a crossing: its override in the canonical road, else the default. */
+export function crossingEnabled(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): boolean {
+  return (
+    source?.roads?.[road.id]?.crossings?.[atEnd ? 'end' : 'start'] ??
+    crossingDefault(city, road, atEnd)
+  );
+}
+
+const STRIPE_M = 0.45;
+const STRIPE_PITCH_M = 0.9;
+const CROSSING_M = 2.5;
+/** TASK-091: the near edge lies this far beyond the point where the curb return meets the road
+ * edge, and no stripe comes closer to a curb return. */
+const CURB_CLEAR_M = 1;
+/** A crossing needs this much of its lanes beyond its near edge (TASK-072's 10 m lane, whose
+ * crossing started 0.25 m from the cut). */
+const CROSSING_ROAD_M = 9.75;
+/** TASK-089: how far a crossing may move out along the road to clear the junction outline. */
+const MOVE_OUT_M = 6;
+
+/**
+ * Where a road end's crossing lies: its stripes and the distances from the cut to its edges,
+ * whether or not the end has one (`crossingStripes` asks). On an arm with a signalized approach
+ * the crossing keeps TASK-072's place between the stop position and the junction (0.25 to
+ * 2.75 m from the cut; the simulation stops cars at `stopM` before it). Elsewhere (TASK-091) its
+ * near edge lies 1 m beyond the farthest point where a curb return of the node meets a road
+ * edge of the arm, measured along each road, and no stripe comes within 1 m of a curb return.
+ * Either way, TASK-089: where the outline reaches over the road the crossing moves out, all
+ * stripes together, to the first place that keeps the most stripes clear (up to 6 m), except a
+ * signalized approach's, which stays before the junction; and lanes shorter than the near edge
+ * plus 9.75 m carry no stripes.
+ */
+export function crossingPlacement(city: CompiledCity, road: CRoad, atEnd: boolean): Placement {
+  let cached = placements.get(road);
+  if (!cached) placements.set(road, (cached = []));
+  return (cached[+atEnd] ??= placeCrossing(city, road, atEnd));
+}
+
+interface Placement {
+  stripes: Vec2[][];
+  nearM: number;
+  farM: number;
+}
+
+/** Placements by compiled road (static geometry: the default and overrides do not move them). */
+const placements = new WeakMap<CRoad, Placement[]>();
+
+function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placement {
+  const node = city.nodes[atEnd ? road.to : road.from]!;
+  if (!node.outline.length) return { stripes: [], nearM: 0, farM: 0 };
+  const arm = crossingArms(city, node).find((a) =>
+    a.some((e) => e.road.idx === road.idx && e.atEnd === atEnd),
+  )!;
   const lanes = road.lanes.map((index) => city.lanes[index]!);
-  const served = lanes.some((lane) => {
-    const marks = approachMarkings(city, lane);
-    return atEnd ? marks.crossingEnd : marks.crossingStart;
-  });
-  if (!served) return [];
+  const signalArm = arm.some(
+    (e) => e.atEnd && e.road.lanes.some((i) => city.lanes[i]!.stopM < city.lanes[i]!.lengthM),
+  );
+  const curbs = junctionCorners(node).filter((c) => c.kind === 'curb' && c.curve);
+  let near = 0.25;
+  if (!signalArm)
+    for (const corner of curbs)
+      corner.roads.forEach((index, k) => {
+        if (!arm.some((e) => e.road.idx === index)) return;
+        const tangent = corner.tangents![k]!;
+        const nearest = lanes
+          .map((lane) => ({ lane, on: nearestOnPolyline(lane.polyline, tangent) }))
+          .reduce((a, b) => (b.on.away < a.on.away ? b : a));
+        const fromCut = atEnd ? nearest.lane.lengthM - nearest.on.along : nearest.on.along;
+        near = Math.max(near, fromCut + CURB_CLEAR_M);
+      });
   const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
-  const local = (along: number, side: number): Vec2 => {
+  const local = (d: number, side: number): Vec2 => {
     let edge = 0;
     const lane = lanes.find((lane) => {
       if (side <= edge + lane.widthM) return true;
       edge += lane.widthM;
       return false;
     })!;
-    const distance = atEnd ? lane.stopM + along : along;
+    const distance = atEnd ? lane.lengthM - d : d;
     const point = pointAtDistance(lane.polyline, lane.cumulative, distance);
     const heading = headingAtDistance(lane.polyline, lane.cumulative, distance);
     const offset = side - edge - lane.widthM / 2;
     return { x: point.x - Math.sin(heading) * offset, y: point.y + Math.cos(heading) * offset };
   };
-  // TASK-089: where the junction outline reaches over the road beyond its cut (a split
-  // carriageway's turn surfaces, a curb), the crossing moves out along the road, all its stripes
-  // together, to the first place that clears the outline as far as any place does (up to 6 m).
-  const at = (offset: number) => {
+  const onSurface = preparePolygon([...road.surface, road.surface[0]!]);
+  // A set-back crossing on a short road must not reach under the far node's junction either.
+  const far = city.nodes[atEnd ? road.from : road.to]!.outline;
+  const inOwn = preparePolygon(node.outline);
+  const inFar = far.length ? preparePolygon(far) : () => false;
+  const outside = (p: Vec2) => !inOwn(p) && !inFar(p);
+  const clearOfCurbs = (p: Vec2) =>
+    signalArm ||
+    curbs.every((c) =>
+      c.curve!.every((q, i) => i === 0 || segmentDistance(p, c.curve![i - 1]!, q) >= CURB_CLEAR_M),
+    );
+  const at = (from: number) => {
     const stripes: Vec2[][] = [];
-    for (let side = 0.225; side + 0.45 <= width; side += 0.9) {
+    for (let side = 0.225; side + STRIPE_M <= width; side += STRIPE_PITCH_M) {
       let edge = 0;
       const short = lanes.some((lane) => {
-        const overlaps = side < edge + lane.widthM && side + 0.45 > edge;
+        const overlaps = side < edge + lane.widthM && side + STRIPE_M > edge;
         edge += lane.widthM;
-        return overlaps && lane.lengthM < 10 + offset;
+        return overlaps && lane.lengthM < from + CROSSING_ROAD_M;
       });
       if (short) continue;
       const stripe = [
-        local(0.25 + offset, side),
-        local(2.75 + offset, side),
-        local(2.75 + offset, side + 0.45),
-        local(0.25 + offset, side + 0.45),
+        local(from, side),
+        local(from + CROSSING_M, side),
+        local(from + CROSSING_M, side + STRIPE_M),
+        local(from, side + STRIPE_M),
       ];
-      if (
-        stripe.every(
-          (p) =>
-            pointInPolygon(p, [...road.surface, road.surface[0]!]) &&
-            !pointInPolygon(p, node.outline),
-        )
-      )
-        stripes.push(stripe);
+      if (stripe.every((p) => onSurface(p) && outside(p) && clearOfCurbs(p))) stripes.push(stripe);
     }
     return stripes;
   };
-  let best = at(0);
+  const full = Math.floor((width - 0.225) / STRIPE_PITCH_M + 0.5);
+  const fixed = signalArm && atEnd;
+  let best = { stripes: at(near), nearM: near, farM: near + CROSSING_M };
   for (
     let offset = 0.25;
-    offset <= 6 + 1e-9 && best.length < Math.floor((width - 0.225) / 0.9 + 0.5);
+    !fixed && offset <= MOVE_OUT_M + 1e-9 && best.stripes.length < full;
     offset += 0.25
   ) {
-    const stripes = at(offset);
-    if (stripes.length > best.length) best = stripes;
+    const stripes = at(near + offset);
+    if (stripes.length > best.stripes.length)
+      best = { stripes, nearM: near + offset, farM: near + offset + CROSSING_M };
   }
   return best;
 }
 
-export function drawCrossings(graphics: Graphics, city: CompiledCity, road: CRoad): void {
+/** Zebra stripes of a road end's crossing, empty where it has none (`crossingEnabled`). */
+export function crossingStripes(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): Vec2[][] {
+  return crossingEnabled(city, road, atEnd, source)
+    ? crossingPlacement(city, road, atEnd).stripes
+    : [];
+}
+
+export function drawCrossings(
+  graphics: Graphics,
+  city: CompiledCity,
+  road: CRoad,
+  source?: CrossingSource,
+): void {
   fadeAtZoom(graphics, 0.7, 2.2);
   for (const atEnd of [false, true])
-    for (const stripe of crossingStripes(city, road, atEnd))
+    for (const stripe of crossingStripes(city, road, atEnd, source))
       graphics.poly(stripe).fill(style.marking);
 }

@@ -27,6 +27,7 @@ export type Command =
     }
   | { kind: 'setStreetDirection'; streetGroupId: string; direction: 'both' | RoadId } // RoadId = keep only this direction
   | { kind: 'reverseRoad'; roadId: RoadId }
+  | { kind: 'setCrossing'; roadId: RoadId; end: 'start' | 'end'; crossing: boolean | null } // null = default
   | { kind: 'setTurnRule'; nodeId: NodeId; rule: TurnRule } // replaces an equal-key rule
   | { kind: 'clearTurnRule'; nodeId: NodeId; rule: Omit<TurnRule, 'allowed' | 'provenance'> }
   | {
