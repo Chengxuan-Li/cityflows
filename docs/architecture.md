@@ -471,6 +471,15 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   two-way street), the road with fewer lanes shifts so its lanes continue the matching travel
   direction's lanes (within 0.1 m at the node), eased over the TASK-080 taper; a direction of a
   two-way street is never shifted, and a shift steeper than 1 in 4 is not applied.
+- TASK-099 (attached carriageways, B54). After `separateDual`, `attachCarriageways` pulls one
+  corridor's two carriageways together until their lane blocks meet at the 0.5 m median: the
+  gap is measured between the blocks' median edges along rays, the pull is smoothed so it never
+  undershoots and fades over 15 m from every chain end, and at a lane-count joint it follows
+  the network's lane blend. Where a TASK-083 through alignment continues one carriageway, that
+  one keeps its imported line for 20 m from the node and the other takes the whole pull. It
+  applies only to the corridors named in `ATTACHED` (two in Munich). `convergingShifts`
+  follows the actual shortfall where source lines already run attached, and an attached pair
+  whose edges cross past the cuts ends its gore in a rounded nose (`junctions.ts`).
 - TASK-080 (short transitions, B37). Every taper of TASK-071 (a branch easing to its own
   offset, a dropped lane narrowing, an added lane growing) takes
   `taperM = min(half the road, clamp(0.4 * speed limit in km/h, 15 m, 40 m))`: 20 m at
@@ -1628,7 +1637,7 @@ Lives in `src/importers/osm`, runs inside an import worker.
    subway|narrow_gauge as rail, railway=tram as tram, waterway=river|stream|canal as waterway.
    Abandoned/disused rail and tunnel=yes lines at negative layer are omitted. Multipolygons
    share the building ring assembler and bbox clipper. Geometry is clipped, simplified at
-   0.3 m, rounded to 0.1 m inside the bbox; areas below 4 m² and lines below 2 m are dropped.
+   0.3 m, rounded to 0.1 m inside the bbox; areas below 4 mÂ² and lines below 2 m are dropped.
    Building height (metres or feet) and building:levels, line width and integer layer are
    retained when valid. Place generation and every network byte stay unchanged.
 10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
