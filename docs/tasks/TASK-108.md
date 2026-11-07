@@ -66,6 +66,16 @@ from the compiled city; they never change it.
 
 ## In scope
 
+The list below is this task's main surface, not a fence. You may also change any other file
+the feature needs in order to be wired in, type-check or be tested (callers, constructors,
+view wiring, dev pages, fixture builders, shared types), as long as it is not named under
+"Out of scope"; list each such file and why in your report. Stop and ask the lead only for
+a file named under "Out of scope", a contract change this task does not describe, or a
+behaviour change to another feature.
+
+Also named after the agent asked: `src/render3d/geometry.ts` (its marking strips and
+junction guides move to the shared marking geometry).
+
 `src/render/marking-geometry.ts` (new), `src/render/layers/roads.ts`,
 `src/render/layers/junction-markings.ts`, `src/render/layers/transitions.ts`,
 `src/render/style.ts` (theme), `src/render3d/markings.ts`, `src/render3d/scene.ts` (wiring

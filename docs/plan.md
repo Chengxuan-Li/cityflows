@@ -856,8 +856,16 @@ Phase 1 shared files, reconciled by the lead at merge: `src/schema/city.ts` and
 `city.schema.ts` (100 the class and version 3, 101 `Road.access`, 105 `City.terrain`, 106
 context points), `src/routing/index.ts` (100 and 101 both add `RouteRequest.purpose`),
 `src/importers/osm/roads.ts` (100 the default `allowed` list, 101 the access tags),
-`src/render/scene.ts`, `src/render3d/scene.ts`, `src/render/style.ts`, `src/render/types.ts`,
-`src/ui/layers.tsx` and `docs/architecture.md`. Merge order: 108, 106, 105, 101, 100.
+`src/render/scene.ts`, `src/render3d/scene.ts`, `src/render3d/geometry.ts` (105 terrain, 108
+markings), `src/ui/map-view.tsx` (100, 105, 106 wiring), `src/render/style.ts`,
+`src/render/types.ts`, `src/ui/layers.tsx` and `docs/architecture.md`. Merge order: 108, 106,
+105, 101, 100.
+
+Scope rule (owner, 2026-11-07, after every Phase 1 agent stopped on a missing file): a
+contract's "In scope" list is the main surface, not a fence. Agents may change whatever else
+the feature needs to be wired in, type-check or be tested, and list it in their report; they
+stop only for a file under "Out of scope", an undescribed contract change or a behaviour
+change to another feature (`AGENTS.md` "Delivering a task").
 
 ### Questions for the owner, with the lead's defaults (accepted by the owner, 2026-11-07)
 

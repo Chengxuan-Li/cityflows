@@ -83,6 +83,19 @@ TASK-104 park by class, TASK-112 gives persons cars.
 
 ## In scope
 
+The list below is this task's main surface, not a fence. You may also change any other file
+the feature needs in order to be wired in, type-check or be tested (callers, constructors,
+view wiring, dev pages, fixture builders, shared types), as long as it is not named under
+"Out of scope"; list each such file and why in your report. Stop and ask the lead only for
+a file named under "Out of scope", a contract change this task does not describe, or a
+behaviour change to another feature.
+
+Also named after the agent asked: `src/fixtures/build-city.ts` and
+`src/importers/osm/index.ts` (the `schemaVersion` the City constructors write),
+`src/project/export-csv.ts` (trip export columns), `src/render/scene.ts`,
+`src/render3d/scene.ts` and `src/ui/map-view.tsx` (class colouring wiring), `dev/render.ts`
+(the snapshot's class array).
+
 `src/schema/city.ts`, `city.schema.ts`, `demand.ts`, `demand.schema.ts`, `sim.ts`, `migrate.ts`;
 `src/sim/**`; `src/demand/**`; `src/routing/index.ts` (only the `purpose` field on
 `RouteRequest`); `src/host/**`; `src/importers/osm/roads.ts` and `src/importers/geojson/index.ts`
@@ -95,8 +108,8 @@ each named.
 
 ## Out of scope
 
-Access rules on roads and the routing graph (TASK-101), parking (TASK-102), the importer beyond
-the default `allowed` list, network geometry, road markings (TASK-108), terrain (TASK-105),
+Access rules on roads and the routing graph (TASK-101), parking (TASK-102), importer behaviour
+beyond the default `allowed` list and the schema version, network geometry, road markings (TASK-108), terrain (TASK-105),
 vegetation (TASK-106). Buses get no routes or stops; they exist as a class only.
 
 ## Gates

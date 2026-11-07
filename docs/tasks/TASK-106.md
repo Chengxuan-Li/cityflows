@@ -70,6 +70,16 @@ never reads the new data.
 
 ## In scope
 
+The list below is this task's main surface, not a fence. You may also change any other file
+the feature needs in order to be wired in, type-check or be tested (callers, constructors,
+view wiring, dev pages, fixture builders, shared types), as long as it is not named under
+"Out of scope"; list each such file and why in your report. Stop and ask the lead only for
+a file named under "Out of scope", a contract change this task does not describe, or a
+behaviour change to another feature.
+
+Also named after the agent asked: `src/ui/map-view.tsx` (the tree layers into the 3D
+scene).
+
 `src/schema/city.ts`, `city.schema.ts` (context points and `tree_row`);
 `src/importers/osm/context.ts`, `src/importers/overpass.ts` (surroundings part only);
 `src/render/vegetation.ts` (new), `src/render/layers/vegetation.ts` (new),
