@@ -934,8 +934,13 @@ until after Phase 3.
 | Task | Harness | Model | Effort | e2e port |
 | --- | --- | --- | --- | --- |
 | TASK-103 | Codex | GPT-6.1-Sol | xhigh | 5303 |
-| TASK-111 | Claude Code | Opus 5.5 | high | 5311 |
+| TASK-111 | Claude Code, the lead's subagent | Opus 5.5 | high | 5311 |
 | TASK-117 | Codex | GPT-6.1 Terra | high | 5317 |
+
+The owner sends TASK-103 and TASK-117 to Codex and lets the lead drive TASK-111 through a
+subagent from the lead's session (2026-11-08), an exception to "the lead never starts agents".
+The subagent works in `D:\cityflows-wtI` on `task/111-pedestrian-rules` under the same
+contract, checks and report; the lead reviews its commits like any other delivery.
 
 Phase 1 shared files, reconciled by the lead at merge: `src/schema/city.ts` and
 `city.schema.ts` (100 the class and version 3, 101 `Road.access`, 105 `City.terrain`, 106
