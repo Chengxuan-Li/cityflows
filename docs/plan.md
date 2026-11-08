@@ -939,7 +939,7 @@ until after Phase 3.
 
 The owner sends TASK-103 and TASK-117 to Codex and lets the lead drive TASK-111 through a
 subagent from the lead's session (2026-11-08), an exception to "the lead never starts agents".
-The subagent works in `D:\cityflows-wtI` on `task/111-pedestrian-rules` under the same
+The subagent works in `D:\cityflows-wt\111` on `task/111-pedestrian-rules` under the same
 contract, checks and report; the lead reviews its commits like any other delivery.
 
 Phase 1 shared files, reconciled by the lead at merge: `src/schema/city.ts` and
