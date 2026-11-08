@@ -139,9 +139,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | done |
 | [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | done |
 | [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | done |
-| [TASK-103](tasks/TASK-103.md) | 7 | Visible parking: roadside strips and lot stalls in the simulation, park and leave manoeuvres, parked cars drawn | `strip` facilities (import, inference, compile), inferred lot driveways, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, parked-car layers 2D and 3D, road inspector | 102, 104 | T52, traffic quick, shots | todo |
-| [TASK-111](tasks/TASK-111.md) | 9 | Pedestrian rules: walkers, zebra priority, pedestrian signal phases, a test pedestrian source | new `src/sim/walkers.ts`, crossing spans, `SignalProgram` walk groups, `intersection.ts`, `signals.ts`, walker layers 2D and 3D, signal editor | 110 | T53, traffic quick unchanged, shots | todo |
-| [TASK-117](tasks/TASK-117.md) | 8 | Visual fixes after Phase 2: sign collisions, UK kerb lines only on urban kerbs, access signs by marking theme | `src/render/street.ts` (sign placement), `layers/street.ts`, `render3d/street.ts`, `marking-geometry.ts`, `style.ts` | 107, 114 | V117, shots | todo |
+| [TASK-103](tasks/TASK-103.md) | 7 | Visible parking: roadside strips and lot stalls in the simulation, park and leave manoeuvres, parked cars drawn | `strip` facilities (import, inference, compile), inferred lot driveways, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, parked-car layers 2D and 3D, road inspector | 102, 104 | T52, traffic quick, shots | done (see review) |
+| [TASK-111](tasks/TASK-111.md) | 9 | Pedestrian rules: walkers, zebra priority, pedestrian signal phases, a test pedestrian source | new `src/sim/walkers.ts`, crossing spans, `SignalProgram` walk groups, `intersection.ts`, `signals.ts`, walker layers 2D and 3D, signal editor | 110 | T53, traffic quick unchanged, shots | done (see review) |
+| [TASK-117](tasks/TASK-117.md) | 8 | Visual fixes after Phase 2: sign collisions, UK kerb lines only on urban kerbs, access signs by marking theme | `src/render/street.ts` (sign placement), `layers/street.ts`, `render3d/street.ts`, `marking-geometry.ts`, `style.ts` | 107, 114 | V117, shots | done (see review) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -2355,6 +2355,50 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   the display-only `markingTheme` aside, as T44 does. Shots read: US yellow centre lines, UK
   yellow kerb edges, `BUS` and signs unchanged across themes. US/UK marking builds cost about
   2.5 times German (1.9 s against 0.74 s on Munich, per the agent); German is unchanged.
+- TASK-111 review (lead, 2026-11-08): delivered by the lead's subagent (owner exception) as one
+  commit; merged first. Walkers live in `src/sim/walkers.ts`, created only when the scenario has
+  test pedestrians, so with none the engine does nothing new: `traffic:quick` equals main
+  (3356 / 20, `against main { completed: 0, gridlocked: 0 }`) and the full traffic tier is the
+  baseline exactly (3493 / 51). A held crossing's near edge is a standing obstacle clamped like a
+  stop line; derived walk groups give an arm walk green where no movement from it is green;
+  walk lists compile into `CSignal.phases[].walk` and patch by link id. With the test source at
+  2 000 walkers per hour Munich's step time rose 5.5% (gate 25%), zero hard stops, zone stops
+  34 to 39. V107's compile pins moved by the new crossing and walk data only (stripped, they
+  hash to the old pins). Shots read: walkers on sidewalks and crossings, cars before the
+  stripes, walk lights readable; walkers are small at street zoom. The subagent appended two
+  lines to the shared `.git/info/exclude` by mistake and removed them; the checkout stayed
+  clean.
+- TASK-117 review (lead, 2026-11-08): merged with TASK-111 (one e2e run, 85 passed). Lead fix:
+  same-rule entries of one street group merged across the whole group, so the far end of a long
+  restricted street lost its sign (Munich 3 merges, Sindelfingen 6); merging now needs the kept
+  sign within 15 m (Munich 1, Sindelfingen 4), with a V117 case. V117's compile pins follow V107
+  after TASK-111. Lamps, curbs and German/US paint equal main's; Sindelfingen's one footprint
+  overlap is resolved, Munich had none under the agent's estimator. Shots read: no sign overlaps
+  another, UK motorway and ramp edges white, yellow only on urban nearside kerbs; a footbridge
+  over one Munich plate is the existing deck occlusion.
+- TASK-103 review (lead, 2026-11-08): merged last in Phase 3, on top of TASK-111 and TASK-117.
+  Conflicts with TASK-111 (snapshot walkers and parked cars, pick order vehicle, walker, parked;
+  layers, shots, section 11) kept both. Munich 257 strips (33 mapped, 224 inferred, 2 149
+  slots), lots reachable 4 to 22 of 22; Sindelfingen 71 strips, 1 111 slots, lots 1 to 31 of 31.
+  Performance: each parked car queues on its own slot connector (2 601 connectors in Munich
+  against 311), and connector spawn walked every queue every step; the lead made spawn visit
+  only queues due that step (a heap of wake times, compiled order kept), memoized the parking
+  near each home at load, and sampled band edges densely only along strip runs. Totals are
+  unchanged by these (quick 3314 / 33 / 5, mean delay 589.2769366877969 s). Idle against main:
+  step 39.4 s against 30.8 s (+28%; the branch was +47%), load 36 ms against 18 ms (was 133 ms),
+  street placement 422 against 347 ms, compile +4%. Route requests rose 25% (100 704 against
+  80 851), almost all fast failed searches: choice tests each slot connector of a strip in turn
+  and an unreachable strip fails on every slot (0.2 s in all); routing time rose about 1 s.
+  Internalizing strip choice (one entry per strip, a slot picked on arrival, as lots already do)
+  would remove those and most connectors; not needed for performance, left as is (owner).
+  At merge: UK kerb lines leave out strip runs (TASK-117's hook); T52's vehicle hashes leave
+  out signal walk lists, which index walk links that strips move; V107 and V117 pins for Munich
+  and Sindelfingen hash to TASK-103's own pins with TASK-111's fields stripped, and V117's lamps
+  and curbs move with the bands (lamps equal within 0.1 mm of the branch). Traffic: full 3462 /
+  72 / 5 parking failures against 3493 / 51 (gate 3144 and 76), quick 3314 / 33 / 5 against 3356
+  / 20; baseline reset to these. The gate tests now allow counted parking failures under 2% of
+  local arrivals (5 of 1 369); T53's Munich walker floor is 0.94 of the no-walker hour (walkers
+  now cost 4.5% of completions, 1.4% before parking).
 
 ## Owner decisions log
 
