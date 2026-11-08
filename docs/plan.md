@@ -131,6 +131,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | done |
 | [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | done |
 | [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
+| [TASK-109](tasks/TASK-109.md) | 8 | Building details: terrain footprints closed, roof shapes, colours, window bands | building fields of `ContextFeature` (schema), building tags in `context.ts`, `render3d/context.ts`, `terrain.ts` (footprint closure), new `render3d/roofs.ts`, Building details layer | 096, 098, 105 | V109, 3D shots | todo |
+| [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -832,7 +834,7 @@ model and the reasoning effort.
 | --- | --- | --- | --- |
 | 0 | Lead: Phase 1 contracts and branches; during Phase 1, the shared formats for Phase 2 on `main` (`ParkingFacility`, the walk network types) | - | half a day |
 | 1 | TASK-100, TASK-101, TASK-105, TASK-106, TASK-108 | - | 1 to 1.5 days |
-| 2 | TASK-102, TASK-104, TASK-110, TASK-109 | 100 (102), 105 (109), the Phase 0 formats | 1 to 1.5 days |
+| 2 | TASK-102, TASK-104, TASK-110, TASK-109, TASK-115 | 100 (102), 105 (109), the Phase 0 formats; 102, 104 and 110 start after 101 is on `main` | 1 to 1.5 days |
 | 3 | TASK-103, TASK-111, TASK-107 | 102 and 104 (103), 110 (111, 107), 101 (107) | 1.5 to 2 days |
 | 4 | TASK-112, TASK-114 | 103, 110, 111 (112); 108 (114) | 2 to 3 days |
 | 5 | TASK-113 | 112 | half to 1 day |
@@ -851,6 +853,20 @@ Agents and ports for Phase 1 (the lead's suggestion; the owner decides):
 | TASK-105 | Codex | GPT-6.1-Sol | high | 5305 |
 | TASK-106 | Codex | GPT-6.1 Terra | high | 5306 |
 | TASK-108 | Codex | GPT-6.1-Sol | high | 5308 |
+
+Phase 2 (lead, 2026-11-08). TASK-109 and TASK-115 share no files with TASK-101 and start
+first, on `task/109-building-details` and `task/115-render-on-demand`. TASK-109 opens with
+TASK-105's open footprint pits (Buildings off on a slope shows the background). TASK-115 is
+the owner's fix for the idle redraw that slows CI (review log, 2026-11-07). TASK-102, TASK-104
+and TASK-110 share the schema, importer and routing with TASK-101, so their contracts and
+branches follow 101's merge and the lead's parking and walk formats. Shared between 109 and
+115: `src/render3d/scene.ts` and `src/ui/map-view.tsx` (109 adds a toggle and setter, 115 adds
+invalidation calls); the lead reconciles. Merge order: 115, then 109.
+
+| Task | Harness | Model | Effort | e2e port |
+| --- | --- | --- | --- | --- |
+| TASK-109 | Codex | GPT-6.1-Sol | high | 5309 |
+| TASK-115 | Codex | GPT-6.1 Terra | high | 5315 |
 
 Phase 1 shared files, reconciled by the lead at merge: `src/schema/city.ts` and
 `city.schema.ts` (100 the class and version 3, 101 `Road.access`, 105 `City.terrain`, 106
