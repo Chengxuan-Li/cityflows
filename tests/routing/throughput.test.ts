@@ -11,6 +11,9 @@ import { throughputCities, throughputFixture, throughputRequests } from './throu
 // TASK-074, TASK-084, TASK-082, TASK-087 and TASK-089, each time because lane lengths, cuts or
 // connector positions moved; what matters is that routing is deterministic, every route is
 // drivable and the routes mostly stay on their roads.
+// TASK-101: real-city samples recaptured after retained access boundaries changed connector
+// keys and access rules changed paths. T47 separately compares unrestricted routes exactly
+// against 56ffccd's router on the same canonical networks.
 const recorded = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<
   string,
   Record<string, string[] | string>

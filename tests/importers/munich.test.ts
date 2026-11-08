@@ -11,6 +11,16 @@ import { movementsOutside, roadBodyCrossings } from '../network/junction-audit';
 // Short roads on main 5568eed. TASK-090: a budget of the recorded count plus two, not the exact
 // list: setbacks move with every junction geometry change.
 const remainingShortRoads: Record<string, string> = {
+  'r:1032': 'TASK-101 retains the 7.40 m private link; its floor setbacks and 5 m lane cannot fit.',
+  'r:1033': 'The reverse of the retained 7.40 m private link.',
+  'r:1072':
+    'TASK-101 retains the 17.57 m private approach; 5.90 m and 7.38 m setbacks leave under 5 m.',
+  'r:1073': 'The reverse private approach; 5.18 m and 10 m setbacks leave under 5 m.',
+  'r:1316':
+    'TASK-101 retains the 9.87 m truck-delivery segment; its two junction cuts leave under 5 m.',
+  'r:1319':
+    'The inferred median crossing beside the retained segment is 9.87 m, under two floor setbacks plus 5 m.',
+  'r:1320': 'The reverse of the same 9.87 m median crossing.',
   'r:1172': 'Short Westendstraße remnant: 2.50 m and 3.41 m setbacks leave less than 5 m.',
   'r:1173': 'Reverse Westendstraße remnant: 3.69 m and 2.50 m setbacks leave less than 5 m.',
   'r:345': 'Philipp-Loewenfeld-Straße link: 4.09 m and 3.94 m setbacks exceed available length.',
@@ -33,6 +43,8 @@ const remainingDeadEnds: Record<string, string> = {
     'Westendstraße faces a one-way approach; the only outgoing road reverses its own street group.',
   'r:350#0':
     'Friedrich-von-Pauli-Straße faces a one-way approach; only its reverse carriageway leaves.',
+  'r:490#0':
+    'TASK-101 retains the height-restricted 13.16 m link: its only outgoing direction is a same-street U-turn.',
   'r:672#0':
     'Two-way trunk link terminates against an incoming one-way link; ramp U-turns remain prohibited.',
 };
@@ -136,6 +148,10 @@ cityTest(
       costs = freeFlowLinkCosts(compiled);
     const unroutable: string[] = [];
     const infeasible: string[] = [];
+    // TASK-101: these open connector roads require entering a different restricted road.
+    // r:379 exits through the bus-only Trappentreustraße links r:373/r:374; r:1059/r:1060
+    // are reached/left through private r:917/r:921. Their open endpoints confer no zone permit.
+    const forbidden = { from379: 0, from1060: 0, to1059: 0 };
     let pairs = 0;
     for (const origin of compiled.connectors.filter((c) => c.direction !== 'in')) {
       for (const destination of compiled.connectors.filter((c) => c.direction !== 'out')) {
@@ -151,14 +167,27 @@ cityTest(
           seed: 1,
         };
         const route = provider.route(compiled, costs, request);
-        if (!route.ok) unroutable.push(`${origin.id}>${destination.id}: ${route.reason}`);
-        else
+        if (!route.ok) {
+          const from = compiled.roads[compiled.lanes[origin.lane]!.road]!.id;
+          const to = compiled.roads[compiled.lanes[destination.lane]!.road]!.id;
+          const expected =
+            from === 'r:379'
+              ? 'from379'
+              : from === 'r:1060'
+                ? 'from1060'
+                : to === 'r:1059'
+                  ? 'to1059'
+                  : null;
+          if (route.reason === 'class_forbidden' && expected) forbidden[expected]++;
+          else unroutable.push(`${origin.id}>${destination.id}: ${route.reason}`);
+        } else
           for (const issue of auditRoute(city, compiled, request, route.route))
             infeasible.push(`${origin.id}>${destination.id}: ${JSON.stringify(issue)}`);
       }
     }
     expect(pairs).toBeGreaterThan(40_000);
     expect(unroutable).toEqual([]);
+    expect(forbidden).toEqual({ from379: 427, from1060: 210, to1059: 1233 });
     expect(infeasible).toEqual([]);
   },
   600_000,
@@ -167,9 +196,9 @@ cityTest(
 unitTest.each([
   // Warnings only: lane_requires_merge (TASK-069) and realign_limited (TASK-068) are notes.
   ['downtown', 28],
-  ['highway', 11],
+  ['highway', 15], // TASK-101 retains short access boundaries and their lane-length warnings.
   ['suburb', 7],
-  ['sindelfingen-a81', 41], // TASK-068's realignment removed one dead end.
+  ['sindelfingen-a81', 58], // TASK-101: retained restricted segments and final signal geometry.
 ] as const)('%s stays within its import warning baseline', (name, baseline) => {
   const { xml, options } = fixture(name);
   const result = importOsmCached(xml, options);

@@ -210,6 +210,8 @@ unitTest('T25: lane edges retain shared miter corners away from a taper', () => 
 // junction geometry task moved the hash and had to recapture it. Nodes whose setbacks moved by more than 0.5 m in the last three tasks:
 // TASK-088 none, TASK-087 Munich 5, TASK-089 Munich 10 (the grid none; TASK-083's rework Munich
 // 32 and the grid 2), so Munich may move 12 and the grid none. Outlines are T38's.
+// TASK-101: Munich's reference is main 56ffccd compiled on the same retained-access City;
+// comparing with the old collapsed topology would count removed and re-rooted junctions.
 const recordedSetbacks = JSON.parse(
   readFileSync('tests/network/T25-setbacks.json', 'utf8'),
 ) as Record<string, Record<string, number[]>>;
@@ -218,7 +220,7 @@ test.each(
   tierCities([
     ['grid', 0, 0],
     // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
-    ['Munich', 63, 12],
+    ['Munich', 65, 12], // TASK-101 retains two additional continuation nodes; budget unchanged.
   ] as const),
 )(
   'T25: %s keeps the baseline setbacks of ordinary junctions within 0.5 m',

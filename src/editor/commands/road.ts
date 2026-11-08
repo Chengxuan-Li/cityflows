@@ -6,7 +6,12 @@ type RoadCommand = Extract<
   Command,
   {
     kind:
-      'setRoadLanes' | 'setRoadAttributes' | 'reverseRoad' | 'setStreetDirection' | 'setCrossing';
+      | 'setRoadLanes'
+      | 'setRoadAttributes'
+      | 'setRoadAccess'
+      | 'reverseRoad'
+      | 'setStreetDirection'
+      | 'setCrossing';
   }
 >;
 
@@ -162,6 +167,12 @@ export function editRoad(city: City, command: RoadCommand): CommandPatch {
 
   const road = requireEntity(city.roads, command.roadId);
   switch (command.kind) {
+    case 'setRoadAccess': {
+      const next = { ...road };
+      if (command.access && Object.keys(command.access).length) next.access = { ...command.access };
+      else delete next.access;
+      return { set: { roads: { [road.id]: next } }, remove: {} };
+    }
     case 'setRoadLanes':
       return setRoadLanes(city, road, command.lanes);
     case 'setRoadAttributes': {

@@ -130,7 +130,9 @@ cityTest(
       else kinds.pushed++;
     }
     console.info('T36.1 Munich corridors', kinds);
-    expect(kinds.coincident).toBe(7);
+    // TASK-101: retained truck-delivery boundaries make r:392/r:402, r:406/r:1346 and
+    // r:451/r:1342 pushed rather than coincident; retained r:1322/r:1350 adds one pair (7-3+1).
+    expect(kinds.coincident).toBe(5);
     expect(kinds.dual).toBeGreaterThan(0);
     // TASK-087 (T39): three dual carriageways pushed apart (Landsberger r:325/r:941, r:327/r:1330,
     // r:724/r:1279) and the same-direction Landsberger pair r:729/r:984. TASK-089: two more whose
