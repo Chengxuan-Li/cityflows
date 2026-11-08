@@ -11,7 +11,8 @@ import {
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
 import { crossingEnabled, crossingPlacement } from '../network/crossings';
-import type { AccessValue } from '../schema';
+import type { AccessValue, MarkingThemeId } from '../schema';
+import { cityMarkingTheme } from '../schema/marking-theme';
 import { cityGrades } from './grades';
 import { busLabels } from './marking-geometry';
 import type { CityGeometry } from './types';
@@ -42,6 +43,120 @@ export const signLabels: Record<SignRule, string> = {
   delivery: 'Lieferverkehr frei',
   private: 'Privatweg',
 };
+
+export const themedSignLabels: Record<MarkingThemeId, Record<SignRule, string>> = {
+  de: signLabels,
+  us: {
+    no: 'DO NOT ENTER',
+    destination: 'LOCAL TRAFFIC ONLY',
+    delivery: 'DELIVERIES ONLY',
+    private: 'PRIVATE ROAD',
+  },
+  uk: {
+    no: 'No entry',
+    destination: 'Except for access',
+    delivery: 'Except for loading',
+    private: 'Private road',
+  },
+};
+
+/** Conservative Arial plate bounds, shared across themes so switching style never moves posts.
+ * Two rectangles retain the empty space alongside the disc instead of reserving one big box. */
+export function signFootprint(sign: AccessSign) {
+  const labels = sign.rules.filter((r) => r !== 'no');
+  const width = Math.max(
+    2.5,
+    ...Object.values(themedSignLabels).flatMap((table) =>
+      labels.map((r) => table[r].length * 0.85 * 0.65 + 0.6),
+    ),
+  );
+  const { x, y } = sign.pos;
+  return [
+    { left: x - 1.25, right: x + 1.25, top: y - 1.25, bottom: y + 1.25 },
+    ...(labels.length
+      ? [
+          {
+            left: x - width / 2,
+            right: x + width / 2,
+            top: y + 1.45,
+            bottom: y + 1.9 + labels.length * 1.1,
+          },
+        ]
+      : []),
+  ];
+}
+
+function footprintsOverlap(
+  a: ReturnType<typeof signFootprint>,
+  b: ReturnType<typeof signFootprint>,
+) {
+  return a.some((a) =>
+    b.some((b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top),
+  );
+}
+
+export function signCollisions(signs: readonly AccessSign[]) {
+  const footprints = signs.map(signFootprint);
+  const pairs: { roads: [number, number]; footprint: boolean; post: boolean }[] = [];
+  for (let i = 0; i < signs.length; i++)
+    for (let j = i + 1; j < signs.length; j++) {
+      const footprint = footprintsOverlap(footprints[i]!, footprints[j]!);
+      const post = distance(signs[i]!.pos, signs[j]!.pos) < 1.5;
+      if (footprint || post)
+        pairs.push({ roads: [signs[i]!.road, signs[j]!.road], footprint, post });
+    }
+  return {
+    footprints: pairs.filter((p) => p.footprint).length,
+    posts: pairs.filter((p) => p.post).length,
+    pairs,
+  };
+}
+
+function resolveSigns(city: CompiledCity, entries: AccessSign[]) {
+  const before = signCollisions(entries);
+  const signs: AccessSign[] = [],
+    footprints: ReturnType<typeof signFootprint>[] = [],
+    groups = new Set<string>();
+  let moved = 0,
+    merged = 0;
+  for (const sign of entries) {
+    const road = city.roads[sign.road]!;
+    const key =
+      road.streetGroupId === null
+        ? null
+        : JSON.stringify([road.streetGroupId, road.access, [...sign.rules].sort()]);
+    if (key !== null && groups.has(key)) {
+      merged++;
+      continue;
+    }
+    if (key !== null) groups.add(key);
+    const half = road.surface.length / 2;
+    const side = city.drivingSide === 'right' ? 1 : -1;
+    const edge = side === 1 ? road.surface.slice(half).reverse() : road.surface.slice(0, half);
+    const lengths = cumulativeLengths(edge),
+      end = Math.min(12, lengths.at(-1)!);
+    let station = Math.min(4, lengths.at(-1)! / 2);
+    const original = sign.pos;
+    while (
+      signs.some(
+        (other, i) =>
+          distance(other.pos, sign.pos) < 1.5 ||
+          footprintsOverlap(footprints[i]!, signFootprint(sign)),
+      ) &&
+      station < end
+    ) {
+      station = Math.min(end, station + 0.5);
+      const h = headingAtDistance(edge, lengths, station),
+        p = pointAtDistance(edge, lengths, station);
+      sign.heading = h;
+      sign.pos = { x: p.x - Math.sin(h) * side * 0.9, y: p.y + Math.cos(h) * side * 0.9 };
+    }
+    if (sign.pos !== original) moved++;
+    signs.push(sign);
+    footprints.push(signFootprint(sign));
+  }
+  return { signs, placement: { before, after: signCollisions(signs), moved, merged } };
+}
 
 /** TASK-106 predates lamp points; keep its input restricted to the features it owns. */
 export function treeContext(source: CityGeometry): CityGeometry {
@@ -199,7 +314,6 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
         heading: h,
         pos: { x: p.x - Math.sin(h) * side * 0.9, y: p.y + Math.cos(h) * side * 0.9 },
       });
-      for (const rule of rules) signCounts[rule]++;
     }
     const ground = !roadGrades[road.idx] && !nodeGrades[road.from] && !nodeGrades[road.to];
     const crossings = [false, true].flatMap((end) =>
@@ -331,15 +445,19 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
       }
     }
   }
+  const resolved = resolveSigns(city, signs);
+  for (const sign of resolved.signs) for (const rule of sign.rules) signCounts[rule]++;
   return {
+    theme: cityMarkingTheme(source),
     lamps,
-    signs,
+    signs: resolved.signs,
     curbs,
     counts: {
       lamps: { osm: osmLamps.length, generated: lamps.length - osmLamps.length },
       signs: signCounts,
       busLabels: labels,
-      signEntries: signs.length,
+      signEntries: resolved.signs.length,
+      signPlacement: resolved.placement,
       curbs: curbs.length,
     },
   };
