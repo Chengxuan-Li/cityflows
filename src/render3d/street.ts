@@ -16,7 +16,13 @@ import {
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { parallelOffset } from '../geo/polyline';
 import type { CompiledCity } from '../network';
-import { signLabels, type AccessSign, type Curb, type placeStreet } from '../render/street';
+import {
+  themedSignLabels,
+  type SignRule,
+  type AccessSign,
+  type Curb,
+  type placeStreet,
+} from '../render/street';
 import { heightAt, roadStation, type cityHeights } from './heights';
 
 // Bound both final 3D edges against each replacement chord; keep every gap run separate.
@@ -118,24 +124,55 @@ export function signHeight(
   return heightAt(profile, station) + (profile.crossfall?.(station, sign.pos) ?? 0);
 }
 
-function signTexture(rules: readonly (keyof typeof signLabels)[]) {
+function signTexture(rules: readonly SignRule[], theme: ReturnType<typeof placeStreet>['theme']) {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 384;
   const ctx = canvas.getContext('2d')!;
   const no = rules.includes('no');
+  const plateOnly = theme === 'us' && !no;
+  if (theme === 'us' && no) {
+    ctx.fillStyle = '#fffcf3';
+    ctx.fillRect(30, 5, 196, 196);
+  }
   ctx.fillStyle = '#c64e45';
-  ctx.beginPath();
-  ctx.arc(128, 103, 98, 0, Math.PI * 2);
-  ctx.fill();
+  if (!plateOnly) {
+    ctx.beginPath();
+    ctx.arc(128, 103, 98, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.fillStyle = '#fffcf3';
   if (no) ctx.fillRect(60, 84, 136, 38);
-  else {
+  else if (!plateOnly) {
     ctx.beginPath();
     ctx.arc(128, 103, 75, 0, Math.PI * 2);
     ctx.fill();
   }
-  const labels = rules.filter((r) => r !== 'no').map((r) => signLabels[r]);
+  if (theme === 'us' && no) {
+    ctx.font = 'bold 30px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('DO NOT', 128, 66);
+    ctx.fillText('ENTER', 128, 154);
+  }
+  if (theme === 'uk' && !no) {
+    ctx.fillStyle = '#344843';
+    ctx.strokeStyle = '#344843';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.arc(91, 88, 12, 0, Math.PI * 2);
+    ctx.arc(163, 88, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(91, 88);
+    ctx.lineTo(121, 60);
+    ctx.lineTo(163, 88);
+    ctx.moveTo(115, 60);
+    ctx.lineTo(140, 60);
+    ctx.stroke();
+    ctx.fillRect(86, 121, 84, 29);
+    ctx.fillRect(101, 105, 54, 21);
+  }
+  const labels = rules.filter((r) => r !== 'no').map((r) => themedSignLabels[theme][r]);
   if (labels.length) {
     ctx.fillStyle = '#fffcf3';
     ctx.fillRect(3, 220, 250, 154);
@@ -214,7 +251,7 @@ export function buildStreet(
     const faces = new InstancedMesh(
       new PlaneGeometry(1.25, 1.875).translate(0, 0, 0.06),
       new MeshBasicMaterial({
-        map: signTexture(entries[0]!.rules),
+        map: signTexture(entries[0]!.rules, street.theme),
         transparent: true,
         alphaTest: 0.1,
         side: DoubleSide,

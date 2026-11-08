@@ -65,6 +65,17 @@ export const shots: {
       ...(three ? { view: '3d' as const, pitch: 50, bearing: 30 } : {}),
     })),
   ),
+  ...(['de', 'us', 'uk'] as const).flatMap((theme) =>
+    [false, true].map((three) => ({
+      id: `V117-munich-signs${theme === 'de' ? '' : `-${theme}`}${three ? '-3d' : ''}`,
+      cases: [],
+      centre: (three ? [-20, -222] : [-35, -222]) as [number, number],
+      zoom: 24,
+      theme,
+      ...(three ? { view: '3d' as const, pitch: 20, bearing: 270 } : {}),
+    })),
+  ),
+  { id: 'V117-munich-motorway-uk', cases: [], centre: [0, -256], zoom: 4, theme: 'uk' },
   ...[true, false].flatMap((details) => [
     {
       id: `V109-munich-roofs${details ? '' : '-off'}`,

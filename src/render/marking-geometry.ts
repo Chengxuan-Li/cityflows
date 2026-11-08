@@ -129,6 +129,19 @@ export function busLabels(city: CompiledCity, road: CRoad, source?: CrossingSour
   }
   return labels;
 }
+/** Side is relative to travel (-1 left, +1 right). TASK-103 can omit parking-strip runs here. */
+export function edgeLineColor(city: CompiledCity, road: CRoad, side: number, theme: MarkingTheme) {
+  if (theme.id === 'uk') {
+    const nearside = side === (city.drivingSide === 'right' ? 1 : -1);
+    return nearside && ['residential', 'tertiary', 'secondary', 'primary'].includes(road.roadClass)
+      ? theme.colors.edge
+      : theme.colors.lane;
+  }
+  return theme.id === 'us' && side < 0 && (road.corridorId !== null || road.roadClass === 'ramp')
+    ? theme.colors.centre
+    : theme.colors.edge;
+}
+
 export function roadMarkingGeometry(
   city: CompiledCity,
   road: CRoad,
@@ -274,10 +287,11 @@ export function roadMarkingGeometry(
           for (const points of clipOutside(section, centreClips, 0))
             belowShapes.push({
               ...lineShape(road, 'edge', points, 0.85, markingTheme),
-              ...(markingTheme.id === 'us' &&
-              side < 0 &&
-              (road.corridorId !== null || road.roadClass === 'ramp')
-                ? { color: markingTheme.colors.centre }
+              ...(markingTheme.id === 'uk' ||
+              (markingTheme.id === 'us' &&
+                side < 0 &&
+                (road.corridorId !== null || road.roadClass === 'ramp'))
+                ? { color: edgeLineColor(city, road, side, markingTheme) }
                 : {}),
             });
       }

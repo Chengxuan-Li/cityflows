@@ -1702,7 +1702,7 @@ the city, and roads retain the strongest tone.
   offset even on paired directed roads. No generation on motorway,
   trunk, ramp or negative-grade roads; none within 25 m of an imported lamp, 8 m of a placed tree,
   near junctions/crossings/connectors, or inside road surfaces, buildings or water. Tree input
-  excludes lamp points without changing TASK-106's placement. One curb-side German sign marks
+  excludes lamp points without changing TASK-106's placement. One curb-side access sign marks
   each entering road with changed class access/zone, deduplicated across lanes/classes;
   internal zone roads and open exits have none. Shapes and label textures are drawn in code.
   2D furniture appears above its road grade at street zoom (1.5 px/m), hidden at overview.
@@ -1746,13 +1746,28 @@ the city, and roads retain the strongest tone.
   has double solid yellow opposing centre lines (passing permission is not inferred), 3/9 m
   white lane dashes, white outer edges and yellow left edges on divided roads and ramps.
   UK paint has white centre lines (6/3 m warning lines on primary/secondary/trunk, 3/6 m
-  otherwise), 2/4 m white lane dashes, yellow edges and double dashed give-way bars.
+  otherwise), 2/4 m white lane dashes and double dashed give-way bars.
   Each theme supplies arrow polygons, guide widths/dashes and gore stripe dimensions;
   UK approach arrows are elongated to 6 m (9 m on fast roads). Edge strokes follow compiled
   tapered lane boundaries; close opposing carriageways share centre paint rather than kerb
   lines. Crossings retain their layout.
   Style switches redraw both views even when compiled identity/version stays unchanged;
   the animation loop and simulation remain unchanged.
+- TASK-117: access signs resolve in compiled road order, merging entries with the same street
+  group, effective class access and entry rules when they stand within 15 m of each other (the
+  far end of a long restricted street keeps its own sign). A later sign advances in 0.5 m steps along its
+  own kerb, from the existing 4 m station to at most 12 m (or the edge end). Conservative
+  world-metre disc and label rectangles cover all three themes, keeping posts fixed on theme
+  switches; posts also keep 1.5 m separation. Unresolved pairs stay at the limit and are counted
+  with road indices alongside before/after overlaps, moved and merged counts. Lamps and curbs
+  retain their placement. German signs retain their drawing; US uses R5-1 DO NOT ENTER or white
+  LOCAL TRAFFIC ONLY / DELIVERIES ONLY / PRIVATE ROAD plates. UK uses diagram 616 or diagram
+  619 with Except for access / Except for loading / Private road plates. Both views redraw
+  signs through the existing marking-style invalidation path. UK edge colour is chosen by
+  road and side: yellow only on the nearside of urban residential/tertiary/secondary/primary
+  streets (imported unclassified/living streets use residential); offside/median edges and
+  motorway/trunk/ramp edges are white. `edgeLineColor` is the shared TASK-103 merge hook for
+  omitting no-waiting paint beside parking strips. German and US paint retain their bytes.
 - TASK-100: one generated texture atlas contains class shapes: rounded car, short-bonnet van,
   cab-and-box truck and long rounded bus. Street zoom uses each class's length and width;
   overview uses compact dots. Optional Layers setting "Colour vehicles by class" defaults
