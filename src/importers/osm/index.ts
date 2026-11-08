@@ -308,6 +308,14 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
   if (assignSignalLanes(city, signalIds, base.compiled)) base = compile(city);
   if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
+  // Signal control changes junction geometry. Fix it before choosing compatible greens.
+  for (const id of signalIds) {
+    const node = city.nodes[id]!;
+    node.control = 'signal';
+    node.signal = { offsetS: 0, amberS: 3, allRedS: 1, phases: [{ durationS: 30, groups: [] }] };
+  }
+  base = compile(city);
+  if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
   for (const id of signalIds) {
     addSignal(
       city,
@@ -318,6 +326,9 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
       data,
     );
   }
+  // Connector access must use the real programs, never the geometry-only signal pass.
+  base = compile(city);
+  if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
   addGateways(city, roads, base.compiled);
   addOsmPlaces(city, data, positions, bounds, base.compiled);
   addBuildings(city, data, positions, bounds, base.compiled);

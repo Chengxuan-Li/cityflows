@@ -18,6 +18,7 @@ import type {
 export type Command =
   | { kind: 'restoreCity'; city: City }
   | { kind: 'setRoadLanes'; roadId: RoadId; lanes: Lane[] }
+  | { kind: 'setRoadAccess'; roadId: RoadId; access: Road['access'] | null }
   | {
       kind: 'setRoadAttributes';
       roadId: RoadId;

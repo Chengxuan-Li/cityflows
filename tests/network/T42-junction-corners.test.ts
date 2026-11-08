@@ -38,6 +38,15 @@ const named: Record<AuditCity, Record<string, string>> = {
   grid: {},
   town: {},
   sindelfingen: {
+    // TASK-101: short private/bus-exempt segments that consolidation must now retain.
+    'n:1069 r:878>r:1070':
+      'the retained 9.52 m private bus-exempt approach has a 1.54 m curb turning 31.1 degrees between samples',
+    'n:1102 r:1113>r:1110':
+      'the retained 4.13 m bus-exempt segment has a 1.46 m curb turning 30.3 degrees between samples',
+    'n:167 r:169>r:1111':
+      'the other end of the retained 4.13 m segment: a 1.42 m curb turning 30.3 degrees between samples',
+    'n:365 r:968>r:367':
+      'the retained 5.85 m bus-exempt link meets a 7.09 m private road; no curb fits between their cuts',
     'n:1028 r:1178>r:1029': edgeBends,
     'n:1157 r:1159>r:1170': edgeBends,
     'n:1237 r:1249>r:1247': shortRoad('r:1249', 11),
@@ -61,6 +70,26 @@ const named: Record<AuditCity, Record<string, string>> = {
     'n:924 r:925>r:1020': shortRoad('r:1020', 17),
   },
   munich: {
+    // TASK-101: retaining access boundaries keeps these short approaches explicit. Main's
+    // compiler on this same canonical City produces these exact corner measurements too.
+    'n:1037 r:1109>r:1043':
+      'the curved 21.04 m private approach r:1109 leaves a 1.08 m minimum radius on the drawn curb',
+    'n:138 r:715>r:1316':
+      'the retained 9.87 m truck-delivery segment leaves a 1.39 m curb turning 32.7 degrees between samples',
+    'n:138 r:1316>r:716':
+      'the other side of the retained 9.87 m segment meets the attached carriageway: minimum radius 0.86 m',
+    'n:138 r:386>r:716':
+      'the attached 0.5 m median has a 0.22 m nose radius, below the 0.5 m sampling interval',
+    'n:153 r:717>r:156':
+      'the retained 5.95 m truck-delivery segment leaves a 1.33 m curb turning 32.5 degrees between samples',
+    'n:284 r:285>r:490':
+      'the retained height-restricted approaches are 13.20 and 13.16 m long; their curb has a 0.74 m radius',
+    'n:324 r:325>r:1073':
+      'the retained 17.57 m private approach leaves a 1 m curb with a 0.49 m radius',
+    'n:384 r:399>r:1263':
+      'the retained 14.08 m approach beside the truck-delivery boundary leaves a 1.63 m curb turning 33.2 degrees',
+    'n:384 r:1260>r:383':
+      'the retained 15.70 m approach beside the truck-delivery boundary leaves a 0.84 m curb with a 0.68 m radius',
     'n:1091 r:1092>r:1095':
       'r:1093 lies on the service pair r:1094/r:1095 (coincident ways, measure 9 43 m2): the edge from r:1092 crosses its end',
     'n:440 r:444>r:1093': 'as at n:1091: r:1093 lies on r:1094/r:1095 and its corner pokes out',
@@ -104,17 +133,17 @@ test.each(tierCities(auditCities))(
 );
 
 cityTest(
-  'T42.2: the owner’s corners at n:262, n:291, n:104 and n:967 have curbs (n:967’s gore since TASK-093)',
+  'T42.2: the owner’s corners at n:262, n:291, n:104 and n:247 have curbs (B49)',
   () => {
     const { city, net } = load('munich');
-    for (const id of ['n:262', 'n:291', 'n:104', 'n:967']) {
+    for (const id of ['n:262', 'n:291', 'n:104', 'n:247']) {
       const corners = cornerAudit(city, net, node(net, id));
       expect(corners.length, id).toBeGreaterThan(2);
       const sharp = corners.filter((c) => c.sharp).map((c) => `${c.node} ${c.roads}`);
       expect(sharp, id).toEqual([]);
     }
     // n:262's marked corner (Trappentreustraße r:252 into Landsberger r:922) and n:291's (the
-    // north road into the south-west road) were missing; n:967's north-west corner had none.
+    // north road into the south-west road) were missing; n:247's north-west corner had none.
     const curb = (id: string, a: string, b: string) =>
       junctionCorners(node(net, id)).find(
         (c) => c.kind === 'curb' && c.roads.map((r) => net.roads[r]!.id).join('>') === `${a}>${b}`,
@@ -122,7 +151,7 @@ cityTest(
     for (const [id, a, b] of [
       ['n:262', 'r:252', 'r:922'],
       ['n:291', 'r:293', 'r:301'],
-      ['n:967', 'r:364', 'r:703'],
+      ['n:247', 'r:364', 'r:703'],
       ['n:104', 'r:964', 'r:107'],
     ] as const)
       expect(curb(id, a, b)?.radius, `${id} ${a}>${b}`).toBeGreaterThan(2);

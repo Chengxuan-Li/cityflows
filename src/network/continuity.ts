@@ -17,6 +17,7 @@ import {
   sameStreet,
   SHIFT_STEP_M,
   shiftAt,
+  smoothstep,
   taperLength,
   type ContinuationEnd,
   type RoadContinuity,
@@ -755,25 +756,52 @@ export function convergingShifts(
     const chain = chainOf(road, incoming);
     let k = chain.offsets.length - 1;
     while (k > 0 && chain.offsets[k]! > d) k--;
-    return outwardFrame(references[chain.roads[k]!]!, incoming, d - chain.offsets[k]!);
+    const idx = chain.roads[k]!;
+    const source = sources[idx]!;
+    const ownHalf = roadWidth(source) / 2;
+    let halfWidth = ownHalf;
+    // The narrow side of a lane-count joint follows the wider median edge, then eases
+    // onto its own block over the same taper used by the continuation layout.
+    for (const next of [k - 1, k + 1]) {
+      if (next < 0 || next >= chain.roads.length) continue;
+      const half = roadWidth(sources[chain.roads[next]!]!) / 2;
+      const joint = chain.offsets[Math.max(k, next)]!;
+      halfWidth = Math.max(
+        halfWidth,
+        ownHalf + (half - ownHalf) * (1 - smoothstep(Math.abs(d - joint) / taperLength(source))),
+      );
+    }
+    return {
+      ...outwardFrame(references[idx]!, incoming, d - chain.offsets[k]!),
+      source,
+      halfWidth,
+    };
   };
   // The shortfall of the gap between an incoming end's block and an outgoing end's `d` from the
   // node (along their chains once groups are known), and the distance between their centres,
   // both across the incoming end toward the side the outgoing one belongs on.
   let chained = false;
   const measure = (a: ConvergingEnd, b: ConvergingEnd, d: number) => {
-    const sa = sources[a.road.idx]!,
-      sb = sources[b.road.idx]!;
     const fa = chained
       ? chainFrame(a.road.idx, true, d)
-      : outwardFrame(references[a.road.idx]!, true, d);
+      : {
+          ...outwardFrame(references[a.road.idx]!, true, d),
+          source: sources[a.road.idx]!,
+          halfWidth: roadWidth(sources[a.road.idx]!) / 2,
+        };
     const fb = chained
       ? chainFrame(b.road.idx, false, d)
-      : outwardFrame(references[b.road.idx]!, false, d);
+      : {
+          ...outwardFrame(references[b.road.idx]!, false, d),
+          source: sources[b.road.idx]!,
+          halfWidth: roadWidth(sources[b.road.idx]!) / 2,
+        };
+    const sa = fa.source,
+      sb = fb.source;
     const centres =
       sigma * ((fb.p.x - fa.p.x) * fa.n.x + (fb.p.y - fa.p.y) * fa.n.y) +
       sigma * (sa.lateralOffsetM + sb.lateralOffsetM);
-    return { shortfall: MEDIAN_M - centres + (roadWidth(sa) + roadWidth(sb)) / 2, centres };
+    return { shortfall: MEDIAN_M - centres + fa.halfWidth + fb.halfWidth, centres };
   };
   const groups: { node: CNode; ins: ConvergingEnd[]; outs: ConvergingEnd[] }[] = [];
   const grouped = new Set<string>();
@@ -1055,6 +1083,22 @@ export function convergingShifts(
       ins.some((a) => outs.some((b) => measure(a, b, i * SHIFT_STEP_M).centres < -1)),
     );
     if (crossed > 0) needed.fill(0, crossed);
+    // Two converging junctions can still overlap between them. Each end owns its side of
+    // the narrowest gap; the far junction's rising demand must not hold this end open.
+    let sharedValley = false;
+    if (
+      !needed.some((v) => v <= TOUCH_M) &&
+      all.every(({ road, incoming }) => {
+        const last = chainOf(road.idx, incoming).roads.at(-1)!;
+        return grouped.has(key(last, !incoming));
+      })
+    ) {
+      const valley = needed.reduce((best, value, i) => (value < needed[best]! ? i : best), 0);
+      if (valley > 0 && needed.at(-1)! > needed[valley]! + TOUCH_M) {
+        needed.fill(needed[valley]!, valley + 1);
+        sharedValley = true;
+      }
+    }
     // TASK-099: blocks within `TOUCH_M` of the median have parted (the importer's pull leaves
     // attached carriageways at the median to a few centimetres either way).
     const parted = needed.findIndex((v) => v <= TOUCH_M);
@@ -1125,7 +1169,7 @@ export function convergingShifts(
     const attached =
       runsAttached ||
       (overlapM > hold + taper &&
-        envelope.at(-1)! <= 1 &&
+        (envelope.at(-1)! <= 1 || sharedValley) &&
         total - atMouth < MEDIAN_VOID_M &&
         envelope[0]! - needed[0]! <= MEDIAN_M / 2);
     const held = holdRamp(1, attached ? 0 : hold, taper);

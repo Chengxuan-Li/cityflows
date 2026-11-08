@@ -86,6 +86,12 @@ export const roadSchema = z.object({
     'ramp',
   ]),
   speedLimitMps: z.number().positive(),
+  access: z
+    .partialRecord(
+      z.enum(['all', ...vehicleClasses]),
+      z.enum(['yes', 'no', 'destination', 'delivery', 'private']),
+    )
+    .optional(),
   name: z.string().nullable(),
   streetGroupId: z.string().nullable(),
   corridorId: z.string().nullable().optional(),

@@ -26,14 +26,15 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     expect(off.city).not.toHaveProperty('context');
     const baseline =
       name === 'munich-donnersberger'
-        ? // TASK-099: Arnulfstraße attached at n:138 west and n:638 (after the TASK-095 salvage).
+        ? // TASK-101: imported road access/bus reservations and compiled access/zone arrays;
+          // merged with TASK-100's `van`.
           [
-            'ef0ffa86243dd37218c7cda891fe1a7e21f7728a650ab11040187f41c76c7cfc',
-            'd87aa7b1ca6d437deb1b23800bfdb6ef442d13dff53a71cbf2615addeff5e66a',
+            '5214f5f79a95e4fa038e01fa58ec6aaf65fe74b09cfc495d83dca579ae279b3b',
+            '114894aea61446a784fca6707c1ef6601080ac8e03d374f0e66586be8b2f36fe',
           ]
         : [
-            '486f9776102eb7e2cf898c4d723b84f281a0c9b5de2e208eb6af6bd7e19cd3be',
-            'c92abc21df8856e3550bbf553dd520833c3d62913262479ed30a701f8f25378a',
+            '440715f6bc83776119a532b4d27dff374f7d03dc4cceae1d24cbfcddd282ecd8',
+            '6796e26d82f456a43fd826489ab54f9285f4148ca82c0f3be1ed1a15d8027478',
           ];
     expect(hash(off.city)).toBe(baseline[0]);
     expect(hash(compile(off.city))).toBe(baseline[1]);

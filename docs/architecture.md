@@ -92,6 +92,7 @@ type MovementId = string;  // derived: `${LaneId}>${LaneId}`
 type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary'
   | 'residential' | 'service' | 'ramp';
 type VehicleClass = 'car' | 'van' | 'truck' | 'bus';
+type AccessValue = 'yes' | 'no' | 'destination' | 'delivery' | 'private';
 type Control = 'uncontrolled' | 'yield' | 'stop' | 'signal';
 type DrivingSide = 'right' | 'left';
 
@@ -155,6 +156,7 @@ interface Road {
   lanes: Lane[];           // index 0 = leftmost in travel direction
   roadClass: RoadClass;
   speedLimitMps: number;
+  access?: { all?: AccessValue } & Partial<Record<VehicleClass, AccessValue>>;
   name: string | null;
   streetGroupId: string | null;  // groups the two directions of a simple two-way street
   corridorId?: string | null;    // carriageways of one street side by side; absent = streetGroupId
@@ -227,6 +229,13 @@ projects omit the field; current and TASK-042 baseline cities retain it through 
 and open. Context is never edited, never increments city.version, and is ignored by compile,
 routing, demand and simulation.
 
+TASK-101 adds optional road access without a schema-version change. The effective rule is
+the class entry, then `all`, then `yes`. `vehicleClasses` in `city.ts` is the single ordered
+class constant used by access validation, compilation, import and the inspector. Lane
+reservations remain `Lane.allowed`. `setRoadAccess` replaces or clears the road's access
+object in one undo entry, using the normal version bump and live-edit path; project and
+history validation preserve it.
+
 ~~~ts
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
 type ContextPoint = 'tree';
@@ -292,6 +301,7 @@ interface CompiledCity {
 interface CNode { idx: number; id: NodeId; pos: Vec2; radiusM: number; control: Control;
   movements: number[]; signal: CSignal | null; }
 interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[];
+  access: AccessValue[]; zone: Int32Array; // indexed by vehicleClasses
   roadClass: RoadClass; classRank: number; speedLimitMps: number; lengthM: number;
   streetGroupId: string | null; corridorId: string | null;   // corridorId ?? streetGroupId
   surface: Vec2[]; /* polygon for rendering */ }
@@ -311,6 +321,11 @@ interface CConnector { idx: number; id: ConnectorId; place: number; lane: number
 interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   connectorsIn: number[]; connectorsOut: number[]; capacity: number | null; events: PlaceEvent[]; }
 ```
+
+TASK-101 resolves `CRoad.access` for every class. `zone[classIndex]` is `-1` outside local
+access zones. For each class, destination/private roads connected through either shared
+endpoint form one zone, independent of travel direction; mixed destination/private rules
+join the same zone. Zones are assigned deterministically in compiled road order.
 
 ### 5.1 Lane layout
 
@@ -488,6 +503,12 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   applies only to the corridors named in `ATTACHED` (two in Munich). `convergingShifts`
   follows the actual shortfall where source lines already run attached, and an attached pair
   whose edges cross past the cuts ends its gore in a rounded nose (`junctions.ts`).
+- TASK-101 retains access boundaries during import, which can split these chains differently.
+  The two named attached corridors keep that treatment before dual separation is considered.
+  Dual separation tests crowding against the shared arm axis. Converging shifts measure the
+  width and offset of the chain segment reached, blending the narrow side of a lane-count
+  joint over its existing taper. When both ends converge, each junction caps its demand at
+  the gap minimum and retains that residual; the far junction supplies the remaining shift.
 - TASK-080 (short transitions, B37). Every taper of TASK-071 (a branch easing to its own
   offset, a dropped lane narrowing, an added lane growing) takes
   `taperM = min(half the road, clamp(0.4 * speed limit in km/h, 15 m, 40 m))`: 20 m at
@@ -749,6 +770,7 @@ interface RouteRequest {
   fromLane: number; fromPosM: number;       // compiled lane idx and position
   toConnector: number;                      // compiled connector idx, direction 'in' or 'both'
   vehicleClass: VehicleClass;
+  purpose?: 'private' | 'delivery' | 'service' | 'taxi' | 'through';
   desiredSpeedFactor: number;               // per-driver, from the sim RNG
   noise: number;                            // 0..1, per-vehicle cost perturbation amplitude
   seed: number;                             // for the perturbation
@@ -816,6 +838,25 @@ Algorithm:
 `laneChangeDistanceM` is a simulation parameter (default 30 m) shared with the sim through
 `SimParams`. Congestion-aware costs (Gate 3) replace `roadTravelTimeS` with EWMA observed
 travel times and add bounded, hysteretic rerouting; the provider contract does not change.
+
+TASK-101 removes `no` roads from the class graph, including its origin and destination
+checks. Each request filters road-search and lane-search edges: destination/private roads
+are allowed only in the origin road's or destination connector road's zone; delivery roads
+require `purpose: 'delivery'`. The same checks apply to endpoints. A topologically possible
+route that requires violating access returns `class_forbidden`, including when lane
+feasibility forces a restricted detour. No successful fallback relaxes access. A vehicle
+already in a local zone can route out of it through that origin zone.
+Live patches compare effective access and zone arrays. A remaining route crossing an
+access-changed road is checked immediately as invalid, bypassing congestion hysteresis;
+otherwise an edit could retain a faster but forbidden route.
+Missed-turn fallback candidates use that same access filter with the vehicle's actual
+current lane and destination before entry; testing recovery from the candidate road alone
+would incorrectly grant origin-zone permission before the car entered it.
+
+There is no route-result cache. Graphs are cached by compiled identity/version and class;
+lane edges by graph identity and the provider's lane-change distance. Those caches contain
+only request-independent edges. Origin/destination zones and purpose are evaluated on each
+request after cache lookup, so local and delivery permissions cannot leak between requests.
 
 ## 8. Simulation
 
@@ -1558,16 +1599,16 @@ broad roofs free of self-shadow stripes.
 TASK-106: `src/render/vegetation.ts` is the shared pure placement module. Seeded per-source
 streams produce OSM node/row trees, street trees and Poisson-disc woodland/scrub/park fills.
 Tree rows use 8 m or tagged spacing. Eligible residential/tertiary/secondary/primary road
-edges get trees 2.5 m outside the compiled surface, every 12 m with ±2 m station jitter;
+edges get trees 2.5 m outside the compiled surface, every 12 m with Â±2 m station jitter;
 inward sides of a corridor pair are omitted. Full canopy circles exclude road surfaces,
 junction outlines and 15 m node buffers, crossing stripes, connector buffers (carriageway
 width + 4 m), buildings, water areas/lines, rail/tram strips, parking, pitches and playgrounds.
 Street trees additionally keep 8 m from imported node/row trees. Forest/wood, scrub and park
-sampling targets one tree per 40, 60 and 300 m², respectively, with minimum separation
+sampling targets one tree per 40, 60 and 300 mÂ², respectively, with minimum separation
 0.7 times the square root of that area per tree. Holes and canopy margins are preserved;
 obstacles can reduce achieved density in small/narrow polygons. Grass/meadow/grassland
-remain open. OSM dimensions win; defaults are 8–14 m tall, 3–4.5 m street crowns or 4–6 m
-woodland crowns; scrub is 3–6 m tall with 3–4 m crowns. Explicit OSM nodes are uncapped;
+remain open. OSM dimensions win; defaults are 8â€“14 m tall, 3â€“4.5 m street crowns or 4â€“6 m
+woodland crowns; scrub is 3â€“6 m tall with 3â€“4 m crowns. Explicit OSM nodes are uncapped;
 all derived row, street and area trees share a 60,000 limit, with counts/cap status exposed.
 
 2D draws three soft green canopy tones above surroundings and below roads, in the same
@@ -1577,7 +1618,7 @@ Every instance reads its base through the `groundAt` callback in `render3d/veget
 (default `groundHeight`, 0 m); TASK-105's terrain ground sampler is wired here at merge.
 Trees and Street trees are independent default-on Layers switches, shown only when placement
 produces their content. Neither changes saved data or rebuilds geometry when toggled.
-Procedural 64×64 repeatable, faint grain textures tint grass, meadow, forest floor, pavement
+Procedural 64Ã—64 repeatable, faint grain textures tint grass, meadow, forest floor, pavement
 and asphalt with the existing palette. 2D context uses repeating world-space fills; 3D ground
 uses one five-slot grain atlas in one ordered mesh, and roads receive world-space asphalt UVs.
 Test-mode scene attributes expose counts, cap, placement and 2D rebuild milliseconds;
@@ -1643,6 +1684,31 @@ baseline.json     { city: City, scenario: Scenario, population?: Person[] } opti
   the existing GeoJSON output and names files with the project name and scenario ID.
 
 ## 13. OSM import
+
+TASK-101 reads access tags per directed road. Precedence for `all` is `access`, `vehicle`,
+`motor_vehicle`, `motorcar`; per-class tags override that (`goods` for van when present in
+`vehicleClasses`, `hgv` for truck, `psv` then `bus` for bus). A tag's direction suffix
+overrides its unsuffixed value. `yes`, `permissive`, `designated` map to `yes`; `no`,
+`destination`, `delivery`, `private` retain their meaning; `customers` maps to `private`.
+Unknown values map to `yes` and their tag names enter `provenance.inferred`. Private
+service roads stay imported. Numeric `maxweight` below 3.5 t closes truck/bus; `maxheight`
+below 3 m also closes van when that class is available. Tonnes/metres are default; kg/lbs
+and ft are converted. Unparsed limits are inferred, with no fabricated size restriction.
+
+Bus reservations use `bus:lanes` then `psv:lanes` exact directional patterns (`designated`
+and `exclusive` reserve a lane, `yes` keeps mixed traffic, `no` excludes buses); unsuffixed
+patterns apply only to one-way ways. Unrecognized per-lane values are inferred.
+Otherwise `lanes:bus`/`lanes:psv` counts and `busway=lane` reserve curb lanes. Directional
+counts win; a total on a two-way way splits ceil/floor forward/backward unless a busway
+side locates it. `busway:forward`/`:backward` and physical `:left`/`:right` locate lanes;
+unsuffixed `busway=lane` applies in both directions. Counts respect driving side; exact
+patterns remain left-to-right in travel direction. Invalid patterns/counts are inferred.
+Junction consolidation preserves a short restricted segment whenever its effective access
+or lane reservations differ from the roads outside the proposed cluster. A closure or bus
+lane between open roads cannot disappear; uniform access zones still simplify normally.
+Signal controls are enabled before compiling the geometry used to generate their phases;
+after phase generation, a fresh compile supplies the usable graph for connector placement.
+Time-conditional rules, signs and lane text are outside TASK-101.
 
 Lives in `src/importers/osm`, runs inside an import worker.
 
