@@ -11,6 +11,7 @@ import { town } from '../../src/fixtures/town';
 import { compile, type CompiledCity } from '../../src/network';
 import { pointInPolygon, nearestOnPolyline, distance } from '../../src/geo/polyline';
 import { placeTrees } from '../../src/render/vegetation';
+import { treeContext } from '../../src/render/street';
 import type { City, ContextFeature } from '../../src/schema';
 import { tierCities, unitTest } from '../tier';
 
@@ -168,12 +169,12 @@ test.each(tierCities(['grid', 'town', 'munich-donnersberger', 'sindelfingen-a81'
             ? { street: 1463, wood: 50 }
             : { street: 1844, wood: 32 };
     const start = performance.now();
-    const result = placeTrees(compiled(city), city);
+    const result = placeTrees(compiled(city), treeContext(city));
     console.info('V106', name, {
       counts: result.counts,
       capped: result.capped,
       placementMs: performance.now() - start,
-      importedTrees: city.context?.features.filter((f) => f.kind === 'point').length ?? 0,
+      importedTrees: city.context?.features.filter((f) => f.class === 'tree').length ?? 0,
       importedRows: city.context?.features.filter((f) => f.class === 'tree_row').length ?? 0,
     });
     for (const [key, count] of Object.entries(expected)) {
@@ -182,7 +183,7 @@ test.each(tierCities(['grid', 'town', 'munich-donnersberger', 'sindelfingen-a81'
       expect(actual).toBeLessThanOrEqual(count * 1.1);
     }
     expect(
-      city.context?.features.filter((f) => f.kind === 'point' || f.class === 'tree_row') ?? [],
+      city.context?.features.filter((f) => f.class === 'tree' || f.class === 'tree_row') ?? [],
     ).toHaveLength(0);
     expect(hash(compile(city))).toBe(baselines[name]);
   },

@@ -114,7 +114,8 @@ export function importContext(
       .filter((p, i, a) => !i || p.x !== a[i - 1]!.x || p.y !== a[i - 1]!.y);
   const features: ContextFeature[] = [];
   for (const node of data.node) {
-    if (node.tag.natural !== 'tree') continue;
+    const lamp = node.tag.highway === 'street_lamp';
+    if (!lamp && node.tag.natural !== 'tree') continue;
     const p = positions.get(node.id);
     if (
       !p ||
@@ -126,14 +127,15 @@ export function importContext(
       continue;
     const pos = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
     const heightM = measurement(node.tag.height),
-      crownM = measurement(node.tag.diameter_crown);
+      crownM = lamp ? undefined : measurement(node.tag.diameter_crown);
+    const sub = lamp ? (node.tag.lamp_mount ?? node.tag.support) : node.tag.leaf_type;
     features.push({
       kind: 'point',
-      class: 'tree',
+      class: lamp ? 'street_lamp' : 'tree',
       pos,
       ...(heightM !== undefined && { heightM }),
       ...(crownM !== undefined && { crownM }),
-      ...(node.tag.leaf_type && { sub: node.tag.leaf_type }),
+      ...(sub && { sub }),
     });
   }
   for (const source of polygonSources(data, (tag) => areaClass(tag) !== undefined)) {

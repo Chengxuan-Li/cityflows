@@ -52,14 +52,14 @@ export default defineConfig({
       command: `npm run build -- --mode test && npm run preview -- --port ${port} --strictPort`,
       url: `http://localhost:${port}`,
       reuseExistingServer: false,
-      timeout: 120_000,
+      timeout: 420_000,
     },
     {
       command: `npm run build -- --mode production --outDir node_modules/.cache/qa-production && npm run preview -- --outDir node_modules/.cache/qa-production --port ${productionPort} --strictPort`,
       env: { CITYFLOWS_BASE_PATH: '/cityflows/' },
       url: `http://localhost:${productionPort}/cityflows/`,
       reuseExistingServer: false,
-      timeout: 120_000,
+      timeout: 420_000,
     },
   ],
   projects: [

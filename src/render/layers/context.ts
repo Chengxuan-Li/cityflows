@@ -32,6 +32,7 @@ export function drawContext(features: readonly ContextFeature[]) {
   // Broad terrain first, then water/green, then footprints and lines.
   const order = {
     tree: -1,
+    street_lamp: -1,
     tree_row: -1,
     landuse: 0,
     green: 1,

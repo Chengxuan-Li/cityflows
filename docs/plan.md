@@ -135,7 +135,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | todo |
 | [TASK-102](tasks/TASK-102.md) | 7 | Parking model and garages: facilities, choice on arrival, cruising, departures from where parked | `City.parking` refinements, new `importers/osm/parking.ts`, facility compile, new `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, demand, snapshot, facility inspector and occupancy layer | 100, 101, Phase 2 formats | T48, traffic quick | todo |
 | [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | todo |
-| [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | todo |
+| [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | done |
 | [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | todo |
 | [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | todo |
 | [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | todo |
@@ -775,7 +775,7 @@ Proposed tasks:
 | --- | --- | --- | --- |
 | TASK-105 | Topography (8.2) | DEM fetch and cache in `src/importers`, `City.terrain` (schema), `render3d/heights.ts`, ground mesh, 2D hillshade | - |
 | TASK-106 | Vegetation and surfaces (8.3) | `src/importers/osm/context.ts` (trees), new `render/layers/vegetation.ts`, `render3d/vegetation.ts`, textures | - |
-| TASK-107 | Street furniture: lamps, curbs, sidewalks, access signs, `BUS` lane text (8.4) | new `render/layers/street.ts`, `render3d/street.ts`, context import of lamps | 101, 106, 110 (sidewalk geometry) |
+| TASK-107 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (8.4); sidewalks are TASK-110 | new `render/layers/street.ts`, `render3d/street.ts`, context import of lamps | 101, 106, 108 |
 | TASK-108 | Lane marking realism (8.5) | `render/layers/roads.ts`, `junction-markings.ts`, `render3d/markings.ts`, `style.ts` themes | - |
 | TASK-109 | Building details (8.1) | `render3d/context.ts`, building tags in `context.ts` | 105 |
 
@@ -927,7 +927,7 @@ change to another feature (`AGENTS.md` "Delivering a task").
    TASK-113) change completed-trip counts by design: the lead resets the traffic baseline at
    each such merge and records the before and after figures in its review entry; the gate's
    90 percent rule still protects every other task.
-8. Night lighting by the simulation clock is part of TASK-107, low priority.
+8. Night lighting by the simulation clock is optional in TASK-107 and deferred.
 
 ## Lead handover
 

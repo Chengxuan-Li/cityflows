@@ -1,7 +1,8 @@
 import type { Vec2 } from '../geo/vec2';
 import type { RoadClass, VehicleClass } from '../schema';
 
-export type MarkingRole = 'edge' | 'lane' | 'centre' | 'channel' | 'hatch' | 'arrow' | 'stop';
+export type MarkingRole =
+  'edge' | 'lane' | 'centre' | 'channel' | 'hatch' | 'arrow' | 'stop' | 'bus';
 export interface MarkingLineStyle {
   widthM: number;
   dash?: readonly [number, number];
@@ -69,6 +70,7 @@ function germanLines(highway: boolean): Record<MarkingRole, MarkingLineStyle> {
     channel: { widthM: 0.3 },
     hatch: { widthM: 0.5 },
     arrow: { widthM },
+    bus: { widthM },
     stop: { widthM: 0.28 },
   };
 }
@@ -83,6 +85,7 @@ export const markingTheme: MarkingTheme = {
     channel: 0xfffcf3,
     hatch: 0xfffcf3,
     arrow: 0xfffcf3,
+    bus: 0xfffcf3,
     stop: 0xfffcf3,
   },
   classes: {

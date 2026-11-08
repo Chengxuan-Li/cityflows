@@ -191,7 +191,7 @@ export interface GeoSource {
 }
 
 export type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-export type ContextPoint = 'tree';
+export type ContextPoint = 'tree' | 'street_lamp';
 export type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
 export type ContextFeature =
   | {

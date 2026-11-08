@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { placeTrees } from '../render/vegetation';
+import { treeContext } from '../render/street';
 import type { LayerVisibility } from '../render/types';
 import { useAppStore } from './store';
 
@@ -9,6 +10,10 @@ const labels: [keyof LayerVisibility, string][] = [
   ['context', 'Surroundings'],
   ['trees', 'Trees'],
   ['streetTrees', 'Street trees'],
+  ['streetLights', 'Street lights'],
+  ['signs', 'Signs'],
+  ['curbs', 'Curbs'],
+  ['markings', 'Lane markings'],
   ['roadClasses', 'Road classes'],
   ['vehicleClasses', 'Colour vehicles by class'],
   ['shadows', 'Shadows'],
@@ -24,11 +29,13 @@ const labels: [keyof LayerVisibility, string][] = [
 
 export function Layers() {
   const layers = useAppStore((state) => state.layers);
+  const view3d = useAppStore((state) => state.viewMode === '3d');
   const hasGeo = useAppStore((state) => Boolean(state.session?.project.city.geo));
   const hasContext = useAppStore((state) => Boolean(state.session?.project.city.context));
   const session = useAppStore((state) => state.session);
   const treeCounts = useMemo(
-    () => (session ? placeTrees(session.compiled, session.project.city).counts : undefined),
+    () =>
+      session ? placeTrees(session.compiled, treeContext(session.project.city)).counts : undefined,
     [session],
   );
   const hasTrees =
@@ -53,7 +60,8 @@ export function Layers() {
             (key !== 'context' || hasContext) &&
             (key !== 'trees' || hasTrees) &&
             (key !== 'streetTrees' || hasStreetTrees) &&
-            (key !== 'terrain' || hasTerrain),
+            (key !== 'terrain' || hasTerrain) &&
+            (key !== 'curbs' || view3d),
         )
         .map(([key, label]) => (
           <label key={key}>
