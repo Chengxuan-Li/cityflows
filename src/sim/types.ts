@@ -49,7 +49,16 @@ export interface PatchResult {
   rerouted: number;
 }
 
+export interface ParkedCarsSnapshot {
+  revision?: number;
+  occupied: Uint8Array;
+  vclass: Uint8Array;
+  id: Uint32Array;
+  hues: Uint32Array;
+}
+
 export interface VehicleSnapshot {
+  parkedCars?: ParkedCarsSnapshot;
   parkingOccupancy?: Uint32Array;
   timeS: number;
   count: number;

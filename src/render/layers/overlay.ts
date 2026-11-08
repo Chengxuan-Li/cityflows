@@ -34,6 +34,14 @@ export function drawSelection(
   if (!selection) return;
   const stroke = { color: style.selection, width: 1.4, alpha: 0.55 };
   switch (selection.kind) {
+    case 'parked': {
+      const space = city.parkingSpaces?.[selection.space];
+      if (space)
+        graphics
+          .circle(space.position.x, space.position.y, Math.max(space.lengthM / 2, 5 / zoom))
+          .stroke({ ...stroke, width: 1.4 / zoom });
+      break;
+    }
     case 'parking': {
       const { centroid } = city.parking[selection.parking]!;
       graphics

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Diagnostics } from './inspector/diagnostics';
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
-import { ParkingInspector } from './inspector/parking';
+import { ParkingInspector, ParkedSpaceInspector } from './inspector/parking';
 import { StreetInspector } from './inspector/street';
 import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
@@ -44,6 +44,8 @@ function Inspector() {
     );
   if (!selection) return null;
   switch (selection.kind) {
+    case 'parked':
+      return <ParkedSpaceInspector space={selection.space} />;
     case 'parking':
       return <ParkingInspector facility={compiled.parking[selection.parking]!} />;
     case 'vehicle':

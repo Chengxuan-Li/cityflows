@@ -211,7 +211,27 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         side,
         layer: layerOf(r),
         widthM: 2,
-        line: offsetPolyline(edge, sign),
+        line: (() => {
+          const bands = city.strips?.filter((s) => s.road === r.idx && s.side === side) ?? [];
+          if (!bands.length) return offsetPolyline(edge, sign);
+          const edgeLengths = cumulativeLengths(edge),
+            length = edgeLengths.at(-1)!;
+          const points = Array.from({ length: Math.ceil(length / 2) + 1 }, (_, i) =>
+            pointAtDistance(edge, edgeLengths, Math.min(length, i * 2)),
+          );
+          return points.map((p) => {
+            const station = nearestOnPolyline(r.reference, p).along;
+            const width = Math.max(
+              0,
+              ...bands.filter((s) => station >= s.fromM && station <= s.toM).map((s) => s.widthM),
+            );
+            const hit = nearestOnPolyline(edge, p);
+            return {
+              x: p.x - hit.direction.y * sign * (1 + width),
+              y: p.y + hit.direction.x * sign * (1 + width),
+            };
+          });
+        })(),
       });
       if (s) sidewalks.set(`${r.idx}:${side}`, s);
     }
@@ -625,6 +645,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     }
   }
   for (const c of city.connectors) {
+    if (c.parking !== undefined && city.parking[c.parking]!.kind !== 'garage') continue;
     const l = city.lanes[c.lane]!,
       r = city.roads[l.road]!;
     attach(

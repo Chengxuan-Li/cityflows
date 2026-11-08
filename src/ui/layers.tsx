@@ -12,6 +12,7 @@ const labels: [keyof LayerVisibility, string][] = [
   ['context', 'Surroundings'],
   ['buildingDetails', 'Building details'],
   ['parkingStalls', 'Parking stalls'],
+  ['parkedCars', 'Parked cars'],
   ['sidewalks', 'Sidewalks'],
   ['footways', 'Footways'],
   ['pedestrians', 'Pedestrians'],

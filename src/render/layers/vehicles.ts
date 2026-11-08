@@ -6,7 +6,7 @@ import { style } from '../style';
 import { VehiclePoses, type PresentationSnapshot } from '../vehicle-pose';
 export { advanceAlong, distanceAlong, laneChangePose } from '../vehicle-pose';
 
-function vehicleTextures() {
+export function vehicleTextures() {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 5 * 64;

@@ -23,7 +23,7 @@ test('T49 imports surface facilities and only their aisles, retaining capacity, 
   const result = importOsm(lotXml, { importerVersion: 'test', terrain: false });
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const lots = Object.values(result.city.parking ?? {});
+  const lots = Object.values(result.city.parking ?? {}).filter((p) => p.kind === 'lot');
   expect(lots).toHaveLength(1);
   const lot = lots[0]!;
   expect(lot).toMatchObject({ kind: 'lot', capacity: 99, access: 'customers', connectors: [] });
@@ -43,7 +43,7 @@ test('T49 imports surface facilities and only their aisles, retaining capacity, 
 });
 
 test.each(['<tag k="oneway" v="-1"/>', '<tag k="access" v="no"/>'])(
-  'T49 reports an outbound-only or closed lot as unreachable: %s',
+  'T52 gives an outbound-only or closed aisle a nearby inferred driveway: %s',
   (tag) => {
     const xml = lotXml.replace(
       '<tag k="service" v="parking_aisle"/><tag k="access" v="customers"/>',
@@ -51,6 +51,9 @@ test.each(['<tag k="oneway" v="-1"/>', '<tag k="access" v="no"/>'])(
     );
     const result = importOsm(xml, { importerVersion: 'test', terrain: false });
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    expect(result.diagnostics.filter((d) => d.code === 'parking_unreachable')).toHaveLength(1);
+    expect(result.diagnostics.filter((d) => d.code === 'parking_unreachable')).toHaveLength(0);
+    const lot = Object.values(result.city.parking ?? {}).find((p) => p.kind === 'lot')!;
+    expect(lot.provenance.inferred).toContain('driveway');
+    expect(lot.connectors).toHaveLength(1);
   },
 );

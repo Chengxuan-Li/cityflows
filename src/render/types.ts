@@ -36,9 +36,17 @@ export interface WalkerSnapshot {
   layer: Int8Array;
 }
 
+export interface ParkedCarsSnapshot {
+  occupied: Uint8Array;
+  vclass: Uint8Array;
+  id: Uint32Array;
+  hues: Uint32Array;
+}
+
 export type Pick =
   | { kind: 'vehicle'; id: number }
   | { kind: 'walker'; id: number }
+  | { kind: 'parked'; space: number }
   | { kind: 'lane'; lane: number; road: number }
   | { kind: 'node'; node: number }
   | { kind: 'place'; place: number }
@@ -53,6 +61,7 @@ export interface RouteOverlay {
 export interface LayerVisibility {
   buildingDetails: boolean;
   parkingStalls: boolean;
+  parkedCars: boolean;
   sidewalks: boolean;
   footways: boolean;
   pedestrians: boolean;
@@ -82,6 +91,7 @@ export interface LayerVisibility {
 export const defaultLayers: LayerVisibility = {
   buildingDetails: true,
   parkingStalls: true,
+  parkedCars: true,
   sidewalks: true,
   footways: true,
   pedestrians: true,
@@ -116,6 +126,7 @@ export interface Scene {
   setCity(compiled: CompiledCity, source?: CityGeometry): void;
   setTiles(enabled: boolean): void;
   setSnapshot(snapshot: VehicleSnapshot): void;
+  setParkedCars(snapshot: ParkedCarsSnapshot | null): void;
   setSignalPreview(loaded: CompiledCity | null, timeS: number): void;
   setSelection(selection: Pick | null): void;
   setMultiSelection(roads: readonly number[]): void;

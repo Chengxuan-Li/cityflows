@@ -24,7 +24,9 @@ export interface Tree {
 }
 type Area = Extract<ContextFeature, { kind: 'area' }>;
 type Obstacle =
-  { rings: Vec2[][] } | { pos: Vec2; radius: number } | { line: Vec2[]; width: number };
+  | { rings: Vec2[][]; parkingBand?: boolean }
+  | { pos: Vec2; radius: number }
+  | { line: Vec2[]; width: number };
 const inside = (p: Vec2, rings: Vec2[][]) =>
   pointInPolygon(p, rings[0]!) && !rings.slice(1).some((r) => pointInPolygon(p, r));
 const closed = (ring: Vec2[]) => [...ring, ring[0]!];
@@ -45,6 +47,8 @@ export function placeTrees(city: CompiledCity, source: CityGeometry) {
   const root = createRandom(106);
   const features = source.context?.features ?? [];
   const obstacles: Obstacle[] = [];
+  for (const strip of city.strips ?? [])
+    obstacles.push({ rings: [closed(strip.polygon)], parkingBand: true });
   for (const lot of Object.values(source.parking ?? {}))
     if (lot.kind === 'lot' && lot.shape?.kind === 'polygon')
       obstacles.push({ rings: [closed(lot.shape.ring)] });
@@ -61,6 +65,8 @@ export function placeTrees(city: CompiledCity, source: CityGeometry) {
           obstacles.push({ rings: [closed(stripe)] });
     }
   for (const connector of city.connectors) {
+    if (connector.parking !== undefined && city.parking[connector.parking]!.kind === 'roadside')
+      continue;
     const lane = city.lanes[connector.lane]!;
     const road = city.roads[lane.road]!;
     const width = road.lanes.reduce((sum, i) => sum + city.lanes[i]!.widthM, 0);
@@ -108,10 +114,14 @@ export function placeTrees(city: CompiledCity, source: CityGeometry) {
   }
   if (!obstacles.length) index.add(0, 0, 0, 0);
   index.finish();
-  const clear = (p: Vec2, radius: number) => {
+  const clear = (p: Vec2, radius: number, mapped: boolean) => {
     for (const i of index.search(p.x - radius, p.y - radius, p.x + radius, p.y + radius)) {
       const obstacle = obstacles[i];
       if (!obstacle) continue;
+      if ('rings' in obstacle && obstacle.parkingBand) {
+        if (!mapped && inside(p, obstacle.rings)) return false;
+        continue;
+      }
       if ('pos' in obstacle) {
         if (distance(p, obstacle.pos) < obstacle.radius + radius) return false;
       } else if ('line' in obstacle) {
@@ -133,7 +143,8 @@ export function placeTrees(city: CompiledCity, source: CityGeometry) {
     return false;
   };
   const add = (tree: Tree, spacing = 0) => {
-    if (!clear(tree.pos, tree.crownM / 2)) return false;
+    if (!clear(tree.pos, tree.crownM / 2, tree.source === 'osm' || tree.source === 'row'))
+      return false;
     if (
       neighbours(
         tree.pos,

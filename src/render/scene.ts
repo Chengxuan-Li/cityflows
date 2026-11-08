@@ -32,6 +32,8 @@ import { drawSigns } from './layers/signs';
 import { DeckCoverage, DeckGhosts, drawGradeShadows } from './layers/shadows';
 import { Tiles } from './layers/tiles';
 import { createVehicleLayer, Vehicles } from './layers/vehicles';
+import { ParkedCars } from './layers/parked-cars';
+import { stripTicks } from './strip-geometry';
 import { createPicker, pickParking, pickVehicle } from './picking';
 import { style } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
@@ -78,8 +80,30 @@ export function createGrade(layer: number) {
   const signals = new Container();
   const vehicles = createVehicleLayer();
   const walkers = new Graphics();
-  terrain.addChild(footways, sidewalks, surfaces, markings, arrows, nodes, guides, crossings);
-  group.addChild(terrain, connectors, places, signals, vehicles.container, walkers);
+  const parkedCars = createVehicleLayer();
+  const bands = new Graphics();
+  const slotTicks = new Graphics();
+  terrain.addChild(
+    footways,
+    sidewalks,
+    bands,
+    surfaces,
+    slotTicks,
+    markings,
+    arrows,
+    nodes,
+    guides,
+    crossings,
+  );
+  group.addChild(
+    terrain,
+    connectors,
+    places,
+    signals,
+    parkedCars.container,
+    vehicles.container,
+    walkers,
+  );
   return {
     layer,
     group,
@@ -97,6 +121,9 @@ export function createGrade(layer: number) {
     signals,
     vehicles,
     walkers,
+    parkedCars,
+    bands,
+    slotTicks,
     terrainSize: 0,
     cacheResolution: 0,
   };
@@ -144,6 +171,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   app.stage.addChild(world);
 
   const vehicles = new Vehicles();
+  const parkedCars = new ParkedCars();
   let surroundings: ReturnType<typeof drawContext> | undefined;
   let lots: ReturnType<typeof drawLots> | undefined;
   let hillshade: ReturnType<typeof drawHillshade> | undefined;
@@ -180,6 +208,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let redrawTerrain = () => {};
 
   function updateTerrainCache() {
+    for (const grade of visibleGrades) grade.slotTicks.alpha = Math.min(1, camera.zoom / 1.5);
     if (lots) lots.stalls.alpha = Math.min(1, camera.zoom / 1.5);
     // At overview zoom both markings and arrows are invisible. Rasterize the static
     // terrain once at a power-of-two screen resolution, leaving cars/signals live.
@@ -206,6 +235,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
 
   function applyVisibility() {
+    for (const grade of visibleGrades)
+      grade.parkedCars.container.visible = layerVisibility.parkedCars;
+    canvas.dataset.parkedCars = String(layerVisibility.parkedCars ? parkedCars.count : 0);
+    canvas.dataset.parkingSpaces = String(city?.parkingSpaces?.length ?? 0);
+    canvas.dataset.parkingStrips = String(city?.strips?.length ?? 0);
     if (lots && lots.stalls.visible !== layerVisibility.parkingStalls) {
       lots.stalls.visible = layerVisibility.parkingStalls;
       visibleGrades[0]!.terrain.updateCacheTexture();
@@ -376,6 +410,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     world.scale.set(camera.zoom);
     vehicleRing.scale.set(1 / camera.zoom);
     vehicles.setZoom(camera.zoom);
+    parkedCars.setStyle(camera.zoom, layerVisibility.vehicleClasses);
     updateTerrainCache();
     for (const layer of furniture) layer.container.visible = camera.zoom >= 1.5;
     drawEditOverlay(editOverlay, editPreview, camera.zoom);
@@ -474,6 +509,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         drawWalk(shape.sidewalk ? grade.sidewalks : grade.footways, shape);
       }
       for (const { group } of visibleGrades) map.addChild(group);
+      for (const strip of compiled.strips ?? [])
+        grades.get(roadGrades[strip.road]!)!.bands.poly(strip.polygon).fill(style.context.parking);
+      for (const tick of stripTicks(compiled, source))
+        grades
+          .get(roadGrades[tick.road]!)!
+          .slotTicks.poly(tick.points, false)
+          .stroke({ color: style.stall, width: 0.12, alpha: 0.8 });
       // The bottom grade shares its overview texture with surroundings: same draw order,
       // without another map-sized textured quad on software GPUs.
       visibleGrades[0]!.terrain.addChildAt(surroundings.container, 0);
@@ -593,6 +635,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         city.lanes.map(({ road }) => grades.get(roadGrades[road]!)!.vehicles),
         city.movements.map(({ node }) => grades.get(nodeGrades[node]!)!.vehicles),
       );
+      parkedCars.setGeometry(
+        compiled,
+        visibleGrades.map((grade) => grade.parkedCars),
+        city.lanes.map(({ road }) => grades.get(roadGrades[road]!)!.parkedCars),
+      );
       rebuildShadows = () => {
         for (const effect of gradeShadows) {
           effect.shadow.removeFromParent();
@@ -657,6 +704,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       invalidate();
       tilesEnabled = enabled;
       if (!enabled) tiles?.clearView();
+    },
+    setParkedCars(snapshot) {
+      parkedCars.setSnapshot(snapshot);
+      canvas.dataset.parkedCars = String(layerVisibility.parkedCars ? parkedCars.count : 0);
+      invalidate();
     },
     setSnapshot(snapshot) {
       invalidate();
@@ -772,6 +824,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       const reshade = layers.shadows !== layerVisibility.shadows;
       layerVisibility = layers;
       vehicles.setColourByClass(layers.vehicleClasses);
+      parkedCars.setStyle(camera.zoom, layers.vehicleClasses);
       if (recolor) redrawTerrain();
       if (reshade) rebuildShadows();
       applyVisibility();
@@ -810,9 +863,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
               walkerSnapshot.count,
             )
           : null;
+      const parked = layerVisibility.parkedCars ? parkedCars.pick(point) : null;
       return (
         vehicle ??
         (walker?.kind === 'vehicle' ? { kind: 'walker' as const, id: walker.id } : null) ??
+        (parked === null ? null : { kind: 'parked' as const, space: parked }) ??
         (city && layerVisibility.parkingOccupancy ? pickParking(city, point, camera.zoom) : null) ??
         staticPick?.(point, camera.zoom) ??
         null
@@ -824,6 +879,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       cancelAnimationFrame(animation);
       for (const ghost of ghosts) ghost.destroy();
       vehicles.destroy();
+      parkedCars.destroy();
       hillshade?.destroy({ texture: true, textureSource: true });
       tiles?.destroy();
       if (resizeObserver) {
