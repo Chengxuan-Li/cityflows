@@ -473,6 +473,7 @@ export class Scene3D {
   setBuildingDetails(enabled: boolean) {
     if (this.buildingDetails === enabled) return;
     this.buildingDetails = enabled;
+    this.invalidate();
     if (this.buildings && this.geometry)
       this.buildings.geometry = enabled
         ? this.geometry.context.detailedBuildings
