@@ -271,13 +271,13 @@ type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 
 interface WalkNode { id: WalkNodeId; pos: Vec2; layer: number;
   entrance?: { placeId: PlaceId | null }; provenance: Provenance }
 interface WalkLink { id: WalkLinkId; from: WalkNodeId; to: WalkNodeId; line: Vec2[];
-  kind: WalkKind; widthM: number | null; provenance: Provenance }
+  kind: WalkKind; widthM: number | null; layer?: number; provenance: Provenance }
 ~~~
 
 Stall geometry, sidewalks along streets and walk links over TASK-091 crossings are derived at
 compile and never saved. `sidewalk` sides are relative to the road's travel direction; absent
-means the default by road class. TASK-102 compiles and simulates garages; roadside strips,
-lots and the walk network wait for their owning tasks.
+means the default by road class. TASK-102 compiles and simulates garages, TASK-104 surface lots; roadside strips wait for
+their owning task.
 
 TASK-102 persists OSM garages and inferred private garages on the same `City.parking` format.
 An implicit garage reuses its place's connectors and is marked `implicitGarage` in provenance;
@@ -288,6 +288,14 @@ with several source buildings, mapped slots describe only part of the block: an 
 garage supplies the positive remainder, without changing mapped capacities or demand.
 Editor entry and place creation materialize these facilities for stable saved IDs; compile
 derives them on a copy for legacy files and headless callers. Gateways have no garage.
+
+TASK-110 gives a mapped link its way's `layer` (old links use
+their from-node's layer). Shared OSM walk endpoints retain explicit connectivity across grades;
+an untagged bridge endpoint without a continuing deck meets ground. Interior bridge nodes stay
+on the deck. Project boundaries validate walk-link references and line endpoints. An entrance's
+place association may be dormant after place deletion; undo restores it, and an absent place
+is treated as unmatched without changing the editor's patch/history contract. Vehicle routing,
+demand and simulation ignore walk data.
 
 TASK-105 adds optional display-only terrain without a schema-version bump. The boundary
 validates positive spacing, at least two rows and columns, base64 and exactly two bytes per
@@ -734,6 +742,34 @@ following movements and lane changes),
 fallback movement; the router does not use it, so a car there must merge upstream),
 `inferred_attributes` (count of imported defaults, from provenance).
 
+### 5.6 Pedestrian graph (TASK-110)
+
+`CompiledCity.walk: WalkGraph` is derived after the unchanged vehicle compile. Dense nodes
+carry position, layer, incident link indices and mapped source IDs. Dense bidirectional links
+carry a polyline, cumulative metres, length, width, grade, kind and `generated`. Sidewalk links
+name their compiled road and travel-relative side; corners name their node. Crossings name
+their road, `start`/`end` (or `midblock` for mapped crossings) and `zebra`/`signal` control.
+`places`, `parking`, `connectors` and `sourceNodes` maps expose walk-node access indices.
+
+Default 2 m sidewalks follow the compiled outer curb, their centre 1 m beyond it, on
+residential, tertiary, secondary and primary streets. Motorways, trunks, ramps and service
+roads get none by default. Explicit `no` and `separate` suppress generation; `yes` enables it.
+An inward side of paired carriageways is always suppressed, including divided corridors.
+Corners follow the existing curb returns on the outside; through seams join the same curb.
+TASK-091/094 crossing placement and road-end overrides supply cross-street walk links.
+
+Same-grade mapped intersections split links. Mapped endpoints snap within 4 m (curb width
+and imported alignment), with no inferred shortcut across an ordinary street; explicit OSM
+shared endpoints can join grades at abutments. Entrances attach their places; otherwise
+access uses the nearest part of the place shape. Short access links prefer the main walk
+component within 150 m, retaining local paths when no main-component access fits. Access
+links may cross service driveways,
+but never an ordinary road centreline. A door with no viable attachment falls back to the
+place shape. Parking shapes, roadside strips and car connectors use the same access rule.
+No access is invented beyond the distance limit or across an incompatible grade. Access is a
+straight connection, not obstacle-avoiding navigation through a block. Building clipping is
+presentation-only; display context still cannot change compiled connectivity.
+
 ## 6. Editing
 
 TASK-102 adds `setParkingAttributes` (capacity and access) and parking collections to patches
@@ -964,6 +1000,14 @@ There is no route-result cache. Graphs are cached by compiled identity/version a
 lane edges by graph identity and the provider's lane-change distance. Those caches contain
 only request-independent edges. Origin/destination zones and purpose are evaluated on each
 request after cache lookup, so local and delivery permissions cannot leak between requests.
+
+TASK-110 adds `createWalkRouter(graph: WalkGraph)` independently of `RouteProvider`. Its
+`route({ from, to, speedMps?, stepsFactor? })` accepts a place ID, dense walk-node index, or
+`{ link, positionM }`. A deterministic heap Dijkstra minimizes walking time, default speed
+1.4 m/s and steps factor 0.6. Partial first/last links and same-link shortcuts are included.
+The result contains directed legs `{ link, fromM, toM }`, link indices, metres and seconds;
+failures are `position_unreachable` or `no_path`. Scratch arrays are reused per router; no
+request-dependent route is cached. No walkers are simulated yet (TASK-111/112).
 
 ## 8. Simulation
 
@@ -1543,6 +1587,15 @@ type HostEvent =
 
 ## 11. Rendering and UI
 
+TASK-110 adds independent default-on Sidewalks and Footways layers. Both renderers consume
+`render/walk-geometry.ts`: pale paving outside the curb, thinner mapped paths, clipped against
+same-grade asphalt and building footprints, with steps hatched. Boolean fragments below
+0.005 m² are discarded before triangulation. Existing crossing markings remain unchanged.
+Access links and shared living-street links are graph-only. The 2D geometry shares each grade's
+static texture cache. In 3D paving follows terrain folds at 0.14 m curb height; steps and bridge
+paths interpolate their endpoint grades. Visibility toggles do not rebuild geometry or alter
+the city, and roads retain the strongest tone.
+
 `src/render` draws a `CompiledCity` and the latest `VehicleSnapshot` with PixiJS 8:
 
 - TASK-108: `render/marking-geometry.ts` owns world-metre paint shapes (role-coloured
@@ -1921,6 +1974,19 @@ building footprint serves that place. Garage entrance nodes supply entries; othe
 nearest car-permitted lane is snapped with the shared connector logic. Disconnected garages
 remain mapped and route feasibility excludes them from a particular trip's choices. Implicit
 garages are added after building-demand aggregation. Surface lot and aisle import is deferred.
+
+TASK-110 imports footway, pedestrian, path, steps and living_street ways into `City.walk`,
+using `footway=crossing` for the crossing kind, positive metre widths, and the existing OSM
+bridge/tunnel/layer rules. Present consecutive vertices become links; missing references break
+a run, and geometry clips to the bbox. `foot=no` and `access=no` are omitted. Closed pedestrian
+ways retain their boundary links; the graph does not add plaza-interior navigation. A
+`footway=crossing` way is kept even when its highway tag describes a shared cycleway.
+Entrance nodes are retained, matched first by building provenance, then by touching place
+footprint; unmatched doors retain `placeId: null`. Walk IDs are allocated after all vehicle
+entities, preserving their IDs. Sidewalk tags (`sidewalk`, `sidewalk:both`, per-side overrides)
+are reversed for backward directed roads. The Overpass query (version 6 with
+TASK-102's garages and TASK-104's lots) adds a separate pedestrian
+ways/entrance clause even with surroundings disabled; its drivable selector is unchanged.
 
 TASK-101 reads access tags per directed road. Precedence for `all` is `access`, `vehicle`,
 `motor_vehicle`, `motorcar`; per-class tags override that (`goods` for van when present in

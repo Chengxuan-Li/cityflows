@@ -1,4 +1,5 @@
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
+import { vehicleJson } from '../vehicle-json';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
@@ -27,10 +28,7 @@ function compiled(city: City): CompiledCity {
   if (!result.ok) throw new Error('Invalid test city');
   return result.compiled;
 }
-const hash = (value: unknown) =>
-  createHash('sha256')
-    .update(JSON.stringify(value, (_, v: unknown) => (v instanceof Map ? [...v] : v)))
-    .digest('hex');
+const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value)).digest('hex');
 // Compiled hashes from 56ffccd, updated at the TASK-100 merge: lanes also allow `van`; with
 // `van` removed they hash as at 56ffccd. Updated again at the TASK-101 merge (access, zones and
 // retained access-boundary junctions), TASK-104 (lots) and TASK-102 (garages in every city).

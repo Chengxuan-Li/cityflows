@@ -103,6 +103,35 @@ export const shots: {
     terrain: true,
     pitch: 45,
   },
+  { id: 'V110-munich-sidewalks', cases: [], centre: [-300, 290], zoom: 4 },
+  { id: 'V110-munich-crossings', cases: [], centre: [-19, 167], zoom: 6 },
+  {
+    id: 'V110-sindelfingen-paths',
+    cases: [],
+    centre: [470, 590],
+    zoom: 4,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
+  {
+    id: 'V110-munich-sidewalks-3d',
+    cases: [],
+    centre: [-300, 290],
+    zoom: 4,
+    view: '3d',
+    terrain: true,
+    pitch: 55,
+    bearing: 30,
+  },
+  {
+    id: 'V110-munich-crossings-3d',
+    cases: [],
+    centre: [-19, 167],
+    zoom: 6,
+    view: '3d',
+    terrain: true,
+    pitch: 55,
+    bearing: 30,
+  },
   { id: 'V108-munich-exit', cases: [], centre: [0, -256], zoom: 10 },
   { id: 'V108-munich-arrows', cases: [], centre: [10, 170], zoom: 12 },
   {
@@ -516,10 +545,10 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       await dialog
         .getByRole('region', { name: 'Import diagnostics' })
         .getByText('0 errors')
-        .waitFor({ timeout: 60_000 });
+        .waitFor({ timeout: 420_000 });
       await button('Continue').click();
       await button('Accept city').click();
-      await dialog.waitFor({ state: 'hidden', timeout: 60_000 });
+      await dialog.waitFor({ state: 'hidden', timeout: 420_000 });
       await page.waitForFunction(() => !!window.cityflows?.city?.());
       await button('Layers').click();
       const layers = page.getByRole('region', { name: 'Map layers' });

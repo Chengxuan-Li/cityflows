@@ -175,6 +175,7 @@ export interface WalkNode {
 }
 
 export interface WalkLink {
+  layer?: number; // way grade; endpoints may meet a different grade at an abutment
   id: WalkLinkId;
   from: WalkNodeId;
   to: WalkNodeId;

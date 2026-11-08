@@ -9,6 +9,8 @@ import { drawVegetation } from './layers/vegetation';
 import { placeTrees } from './vegetation';
 import { drawContext } from './layers/context';
 import { drawLots } from './layers/stalls';
+import { walkGeometry } from './walk-geometry';
+import { drawWalk } from './layers/walk';
 import { drawHillshade } from './layers/hillshade';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
@@ -59,6 +61,8 @@ export function createGrade(layer: number) {
   const group = new Container();
   const terrain = new Container();
   const surfaces = new Graphics();
+  const sidewalks = new Graphics();
+  const footways = new Graphics();
   const markings = new Graphics();
   const nodes = new Graphics();
   const guides = new Graphics();
@@ -68,13 +72,15 @@ export function createGrade(layer: number) {
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
-  terrain.addChild(surfaces, markings, arrows, nodes, guides, crossings);
+  terrain.addChild(footways, sidewalks, surfaces, markings, arrows, nodes, guides, crossings);
   group.addChild(terrain, connectors, places, signals, vehicles.container);
   return {
     layer,
     group,
     terrain,
     surfaces,
+    sidewalks,
+    footways,
     markings,
     nodes,
     guides,
@@ -188,6 +194,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ? (city?.lots?.reduce((s, lot) => s + lot.stallCount, 0) ?? 0)
         : 0,
     );
+    for (const grade of visibleGrades) {
+      if (
+        grade.sidewalks.visible !== layerVisibility.sidewalks ||
+        grade.footways.visible !== layerVisibility.footways
+      ) {
+        grade.sidewalks.visible = layerVisibility.sidewalks;
+        grade.footways.visible = layerVisibility.footways;
+        grade.terrain.updateCacheTexture();
+      }
+    }
+    canvas.dataset.sidewalks = String(layerVisibility.sidewalks);
+    canvas.dataset.footways = String(layerVisibility.footways);
     if (hillshade && hillshade.visible !== layerVisibility.terrain) {
       hillshade.visible = layerVisibility.terrain;
       const grade = visibleGrades[0]!;
@@ -392,8 +410,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (import.meta.env.MODE === 'test')
         canvas.dataset.contextRebuildMs = String(performance.now() - started);
       const { nodeGrades, roadGrades } = cityGrades(city, source);
-      visibleGrades = orderedLayers([...nodeGrades, ...roadGrades]).map(createGrade);
+      visibleGrades = orderedLayers([
+        ...nodeGrades,
+        ...roadGrades,
+        ...compiled.walk.links.map((l) => l.layer),
+      ]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
+      for (const shape of walkGeometry(compiled, source)) {
+        const grade = grades.get(shape.layer)!;
+        drawWalk(shape.sidewalk ? grade.sidewalks : grade.footways, shape);
+      }
       for (const { group } of visibleGrades) map.addChild(group);
       // The bottom grade shares its overview texture with surroundings: same draw order,
       // without another map-sized textured quad on software GPUs.

@@ -4,12 +4,11 @@ import { expect, test } from 'vitest';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
 import { tierCities } from '../tier';
+import { vehicleJson } from '../vehicle-json';
 import { withoutLotAisles } from '../without-lot-aisles';
 
-const hash = (value: unknown) =>
-  createHash('sha256')
-    .update(JSON.stringify(value, (_, v: unknown) => (v instanceof Map ? [...v] : v)))
-    .digest('hex');
+// TASK-110's walk data is excluded, as in T44.
+const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value)).digest('hex');
 // TASK-102's import without lots (its T44 pins; main 806263a before TASK-102). No original
 // entity is reconstructed by the stripping oracle.
 const main = {

@@ -13,6 +13,8 @@ export function withoutLotAisles(source: City): City {
   // TASK-102's garages are allocated before the lots and stay.
   for (const lot of lots) delete city.parking![lot.id];
   if (!Object.keys(city.parking!).length) delete city.parking;
+  // TASK-110's walk network is allocated after the lots.
+  delete city.walk;
   city.nextId = firstId;
   if (city.geo)
     city.geo.source.inferredCount = [

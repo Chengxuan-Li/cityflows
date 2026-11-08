@@ -136,7 +136,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-102](tasks/TASK-102.md) | 7 | Parking model and garages: facilities, choice on arrival, cruising, departures from where parked | `City.parking` refinements, new `importers/osm/parking.ts`, facility compile, new `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, demand, snapshot, facility inspector and occupancy layer | 100, 101, Phase 2 formats | T48, traffic quick | done (see review) |
 | [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | done (mapped entries only; unreachable lots diagnosed; see review) |
 | [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | todo |
-| [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | todo |
+| [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | review |
 | [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | todo |
 | [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -2284,6 +2284,19 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   / 0 against 3378 / 62 / 0; baseline reset to these (stalled heads stays 1). The agent
   relaxed two Munich e2e allowances (T47 180 s, V106 local frame overhead 25%) citing the
   owner; kept.
+- TASK-110 review (lead, 2026-11-08): merged after TASK-116. Conflicts with TASK-102/104/109
+  kept both sides (layers, styles, imports); the Overpass query is version 6 with the garage,
+  lot and walk clauses; walk IDs still come last, after the lots. T49 now hashes through
+  `vehicleJson`, and its stripping oracle drops the walk network (allocated after the lots),
+  so the stripped cities still equal TASK-102's pins; T44, V106 and V108 hold. The 3D walk
+  toggle now requests a frame (the branch predates TASK-115). Compile time: the branch made a
+  warm Sindelfingen compile 3.0 s against main's 0.36 s (Munich 1.0 s against 0.36 s), almost
+  all in attaching places, garages and lots to the walk graph. The lead replaced the exact
+  nearest-point radius search with a best-first search, skipped candidate paths whose box
+  cannot beat the current attachment, and dropped the per-probe cumulative lengths in the
+  road-crossing test; the compiled walk graph hashes identically on grid, town, Munich and
+  Sindelfingen. Warm compile now 0.81 s Munich and 0.77 s Sindelfingen (walk about 0.45 s
+  of that). Shots read on the merged tree: sidewalks outside the curb, lots unchanged.
 
 ## Owner decisions log
 

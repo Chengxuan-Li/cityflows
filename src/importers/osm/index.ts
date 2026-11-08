@@ -7,6 +7,7 @@ import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
 import { importContext } from './context';
 import { addLots } from './lots';
+import { importWalk } from './walk';
 import { addBuildings } from './buildings';
 import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
 import { drivableClass } from './filter';
@@ -338,6 +339,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addOsmGarages(city, data, positions, bounds, base.compiled);
   addImplicitGarages(city);
   addLots(city, data, positions, bounds, diagnostics);
+  importWalk(city, data, positions, bounds);
   if (options.context !== false)
     city.context = { features: importContext(data, positions, bounds, diagnostics, true) };
 

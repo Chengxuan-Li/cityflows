@@ -1,4 +1,5 @@
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
+import { vehicleJson } from '../vehicle-json';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
@@ -11,10 +12,7 @@ import { compile } from '../../src/network';
 import { lonLatToLocal } from '../../src/geo/projection';
 import { tierCities, unitTest } from '../tier';
 
-const hash = (value: unknown) =>
-  createHash('sha256')
-    .update(JSON.stringify(value, (_, v: unknown) => (v instanceof Map ? [...v] : v)))
-    .digest('hex');
+const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value)).digest('hex');
 
 test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
   'T44 %s: context leaves the canonical network and compilation unchanged',

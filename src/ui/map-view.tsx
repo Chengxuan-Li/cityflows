@@ -522,6 +522,7 @@ export function MapView() {
           three!.setSurroundings(layers.context, getState().buildings);
           three!.setBuildingDetails(layers.buildingDetails);
           three!.setTrees(layers.trees, layers.streetTrees);
+          three!.setWalkLayers(layers.sidewalks, layers.footways);
           three!.setTiles(layers.basemap);
           three!.setSignals(
             getState().run?.timeS ?? 0,

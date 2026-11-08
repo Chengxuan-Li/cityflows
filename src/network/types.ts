@@ -1,4 +1,5 @@
 import type Flatbush from 'flatbush';
+import type { WalkGraph } from './walk';
 import type { Vec2 } from '../geo/vec2';
 import type {
   Control,
@@ -29,6 +30,7 @@ export interface Diagnostic {
 }
 
 export interface CompiledCity {
+  walk: WalkGraph;
   version: number;
   drivingSide: DrivingSide;
   nodes: CNode[];
