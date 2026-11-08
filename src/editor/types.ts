@@ -13,6 +13,8 @@ export interface Editor {
   apply(command: Command): CommitResult;
   undo(): CommitResult | null;
   redo(): CommitResult | null;
+  readonly canUndoDisplayOnly: boolean;
+  readonly canRedoDisplayOnly: boolean;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly history: readonly HistoryEntry[];

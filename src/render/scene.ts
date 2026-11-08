@@ -1,3 +1,5 @@
+import { cityMarkingTheme } from '../schema/marking-theme';
+import { markingThemes } from './style';
 import { Application, Container, Graphics, Polygon } from 'pixi.js';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
@@ -284,6 +286,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       else app.stop();
     },
     setCity(compiled, source) {
+      const markingTheme = markingThemes[cityMarkingTheme(source)];
       // Versions identify edits within a city. Different source cities can share a version.
       if (city?.version === compiled.version && sourceGeometry === source) return;
       const rebuildStart = import.meta.env.MODE === 'test' ? performance.now() : 0;
@@ -398,6 +401,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             layerVisibility.roadClasses,
             grade.crossings,
             sourceGeometry,
+            markingTheme,
           );
           drawTransitions(
             grade.surfaces,
@@ -405,9 +409,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             compiled,
             road,
             layerVisibility.roadClasses,
+            markingTheme,
           );
           drawRoadJoins(grade.surfaces, compiled, road, layerVisibility.roadClasses);
-          drawCrossings(grade.crossings, compiled, road, sourceGeometry);
+          drawCrossings(grade.crossings, compiled, road, sourceGeometry, markingTheme);
         }
         for (const node of compiled.nodes) {
           drawNode(
@@ -418,14 +423,19 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         }
         for (const movement of compiled.movements) {
           if (!movement.neverGreen && compiled.nodes[movement.node]!.outline.length)
-            drawMovementArrow(grades.get(nodeGrades[movement.node]!)!.arrows, movement);
+            drawMovementArrow(
+              grades.get(nodeGrades[movement.node]!)!.arrows,
+              movement,
+              markingTheme,
+            );
         }
         updateTerrainCache();
       };
-      // Guide lines do not depend on road-class tones, so they are drawn once per version.
+      // Guide lines do not depend on road-class tones.
       for (const node of city.nodes)
-        drawJunctionMarkings(grades.get(nodeGrades[node.idx]!)!.guides, city, node);
+        drawJunctionMarkings(grades.get(nodeGrades[node.idx]!)!.guides, city, node, markingTheme);
       redrawTerrain();
+      canvas.dataset.markingTheme = markingTheme.id;
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
         drawSigns(city, node, grade.signals, () => camera.zoom);

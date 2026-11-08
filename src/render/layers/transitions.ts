@@ -1,3 +1,4 @@
+import { markingTheme as defaultTheme, type MarkingTheme } from '../style';
 import type { Graphics } from 'pixi.js';
 import type { CompiledCity, CRoad } from '../../network';
 import { roadStyle } from '../style';
@@ -10,11 +11,12 @@ export function drawTransitions(
   city: CompiledCity,
   road: CRoad,
   roadClasses = false,
+  markingTheme: MarkingTheme = defaultTheme,
 ): void {
   if (road.lanes.some((i) => city.lanes[i]!.taperStartM || city.lanes[i]!.taperEndM)) {
     const { color } = roadStyle(road, roadClasses);
     for (const lane of transitionGeometry(city, road).lanes)
       surface.poly([...lane.left, ...[...lane.right].reverse()]).fill(color);
   }
-  drawMarkings(markings, transitionMarkings(city, road));
+  drawMarkings(markings, transitionMarkings(city, road, markingTheme), markingTheme);
 }

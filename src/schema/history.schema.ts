@@ -7,6 +7,7 @@ const roadId = z.string().regex(/^r:\d+$/);
 const placeId = z.string().regex(/^p:\d+$/);
 
 export const patchSchema = z.object({
+  markingTheme: citySchema.shape.markingTheme.nullable(),
   metadata: z
     .object({
       name: citySchema.shape.name,

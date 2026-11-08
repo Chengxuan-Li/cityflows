@@ -23,10 +23,40 @@ export const shots: {
   zoom: number;
   osm?: string;
   view?: '3d';
+  theme?: 'de' | 'us' | 'uk';
   terrain?: boolean;
   pitch?: number;
   bearing?: number;
 }[] = [
+  ...(['de', 'us', 'uk'] as const).flatMap((theme) =>
+    [false, true].flatMap((three) => [
+      {
+        id: `V114-munich-${theme}${three ? '-3d' : ''}`,
+        cases: [],
+        centre: [0, -256] as [number, number],
+        zoom: 10,
+        theme,
+        ...(three ? { view: '3d' as const, pitch: 60, bearing: 0 } : {}),
+      },
+      {
+        id: `V114-downtown-${theme}${three ? '-3d' : ''}`,
+        cases: [],
+        centre: [0, 0] as [number, number],
+        zoom: 4,
+        osm: 'fixtures/osm/downtown.osm',
+        theme,
+        ...(three ? { view: '3d' as const, pitch: 60, bearing: 0 } : {}),
+      },
+      {
+        id: `V114-munich-arrows-${theme}${three ? '-3d' : ''}`,
+        cases: [],
+        centre: [10, 170] as [number, number],
+        zoom: 12,
+        theme,
+        ...(three ? { view: '3d' as const, pitch: 60, bearing: 0 } : {}),
+      },
+    ]),
+  ),
   { id: 'V108-munich-exit', cases: [], centre: [0, -256], zoom: 10 },
   { id: 'V108-munich-arrows', cases: [], centre: [10, 170], zoom: 12 },
   {
@@ -387,7 +417,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       a.id.replace(/-(on|off)$/, '').localeCompare(b.id.replace(/-(on|off)$/, '')),
     );
   mkdirSync(out, { recursive: true });
-  const port = await freePort();
+  const port = Number(process.env.CITYFLOWS_TEST_PORT) || (await freePort());
   const url = process.env.CITYFLOWS_SHOTS_URL ?? `http://127.0.0.1:${port}/`;
   const server = process.env.CITYFLOWS_SHOTS_URL
     ? undefined
@@ -447,6 +477,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       await page.waitForFunction(() => !!window.cityflows?.city?.());
       await button('Layers').click();
       const layers = page.getByRole('region', { name: 'Map layers' });
+      const importedTheme = await layers.getByLabel('Marking style').inputValue();
+      console.info(`${osm}: imported marking style ${importedTheme}`);
       for (const label of ['Basemap', 'Places', 'Entrances and exits'])
         await layers.getByLabel(label, { exact: true }).uncheck();
       if (process.env.CITYFLOWS_TREES === '0')
@@ -500,6 +532,9 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
             { timeout: 60_000 },
           );
         await button('Layers').click();
+        await layers
+          .getByLabel('Marking style')
+          .selectOption(shot.theme ?? ((shot.osm ?? MUNICH).includes('downtown') ? 'us' : 'de'));
         const terrainToggle = layers.getByLabel('Terrain', { exact: true });
         if (await terrainToggle.count()) await terrainToggle.setChecked(shot.terrain ?? false);
         await button('Layers').click();
@@ -547,6 +582,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         await target.screenshot({ path, animations: 'disabled' });
         records.push({
           ...shot,
+          importedTheme,
           file: `${shot.id}.png`,
           view: in3d ? '3d' : '2d',
           timing,

@@ -1,3 +1,4 @@
+import { cityMarkingTheme } from '../schema/marking-theme';
 import {
   BoxGeometry,
   BufferGeometry,
@@ -23,7 +24,7 @@ import {
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
-import { markingTheme, style } from '../render/style';
+import { markingThemes, style } from '../render/style';
 import type { CityGeometry, Pick } from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
 import { Basemap3D } from './basemap';
@@ -195,7 +196,7 @@ export class Scene3D {
     this.content.add(this.vegetation.group);
     add(geometry.slabs, 0x899b99);
     add(geometry.markings, 0xffffff, false).material.vertexColors = true;
-    add(geometry.crossings, markingTheme.colors.stop, false);
+    add(geometry.crossings, markingThemes[cityMarkingTheme(source)].colors.stop, false);
     const places = add(geometry.places, 0xffffff, false);
     places.material.vertexColors = true;
     places.name = 'places';
@@ -316,6 +317,7 @@ export class Scene3D {
     this.signalCity = city;
     this.lastSignalKey = '';
     this.setSignals(0);
+    this.canvas.dataset.markingTheme = cityMarkingTheme(source);
     this.canvas.dataset.buildMs = (performance.now() - start).toFixed(1);
     this.canvas.dataset.terrain = String(Boolean(renderedSource.terrain));
     const groundHeight = terrain.groundAt(this.controls.target.x, this.controls.target.z);

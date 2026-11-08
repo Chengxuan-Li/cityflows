@@ -219,6 +219,8 @@ export type ContextFeature =
       sub?: string;
     };
 
+export type MarkingThemeId = 'de' | 'us' | 'uk';
+
 export interface City {
   schemaVersion: 3;
   version: number; // bumps on every committed edit; caches key on it
@@ -228,6 +230,7 @@ export interface City {
   nodes: Record<NodeId, Node>;
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
+  markingTheme?: MarkingThemeId; // display only; absent = geography default
   context?: { features: ContextFeature[] };
   parking?: Record<ParkingId, ParkingFacility>; // Phase 2; absent = none
   walk?: { nodes: Record<WalkNodeId, WalkNode>; links: Record<WalkLinkId, WalkLink> };

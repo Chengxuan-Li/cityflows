@@ -11,6 +11,8 @@ import { diffCity } from '../patch';
 
 export function dispatch(city: City, command: Command): CommandPatch {
   switch (command.kind) {
+    case 'setMarkingTheme':
+      return { set: {}, remove: {}, markingTheme: command.theme };
     case 'restoreCity':
       return diffCity(city, command.city);
     case 'addRoundabout':

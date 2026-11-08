@@ -57,10 +57,20 @@ export function TopBar() {
         </div>
       </div>
       <div className="controls" role="group" aria-label="Edit history">
-        <button onClick={() => void undo()} disabled={in3D || busy || !session?.editor.canUndo}>
+        <button
+          onClick={() => void undo()}
+          disabled={
+            (in3D && !session?.editor.canUndoDisplayOnly) || busy || !session?.editor.canUndo
+          }
+        >
           Undo
         </button>
-        <button onClick={() => void redo()} disabled={in3D || busy || !session?.editor.canRedo}>
+        <button
+          onClick={() => void redo()}
+          disabled={
+            (in3D && !session?.editor.canRedoDisplayOnly) || busy || !session?.editor.canRedo
+          }
+        >
           Redo
         </button>
       </div>

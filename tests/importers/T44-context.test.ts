@@ -36,7 +36,10 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             '440715f6bc83776119a532b4d27dff374f7d03dc4cceae1d24cbfcddd282ecd8',
             '6796e26d82f456a43fd826489ab54f9285f4148ca82c0f3be1ed1a15d8027478',
           ];
-    expect(hash(off.city)).toBe(baseline[0]);
+    // V114 adds a display-only setting; retain the original network hash.
+    const { markingTheme, ...originalCity } = off.city;
+    expect(markingTheme).toBe('de');
+    expect(hash(originalCity)).toBe(baseline[0]);
     expect(hash(compile(off.city))).toBe(baseline[1]);
     expect(on.city.context?.features.length).toBeGreaterThan(0);
     const { context, ...network } = on.city;

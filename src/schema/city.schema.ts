@@ -302,6 +302,7 @@ const walkNetwork = z.object({
 });
 
 const cityFields = {
+  markingTheme: z.enum(['de', 'us', 'uk']).optional(),
   version: count,
   name: z.string(),
   drivingSide: z.enum(['right', 'left']),

@@ -100,6 +100,7 @@ export interface Scene {
 }
 
 export type CityGeometry = {
+  markingTheme?: City['markingTheme'];
   nodes: City['nodes'];
   roads?: City['roads'];
   places: City['places'];

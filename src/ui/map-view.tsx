@@ -416,7 +416,10 @@ export function MapView() {
           view.setTiles(layers.basemap);
           drawnLayers = layers;
         }
-        if (drawn?.compiled !== session.compiled) {
+        if (
+          drawn?.compiled !== session.compiled ||
+          drawn?.project.city.markingTheme !== session.project.city.markingTheme
+        ) {
           view.setCity(session.compiled, session.project.city);
           view.setDisconnected(
             session.diagnostics
@@ -471,7 +474,11 @@ export function MapView() {
           canvas.dataset.ticker = active3D ? 'stopped' : 'running';
           snapshotTime = NaN;
         }
-        if (active3D && drawn3D?.compiled !== session.compiled) {
+        if (
+          active3D &&
+          (drawn3D?.compiled !== session.compiled ||
+            drawn3D?.project.city.markingTheme !== session.project.city.markingTheme)
+        ) {
           three!.setCity(session.compiled, session.project.city);
           drawn3D = session;
           snapshotTime = NaN;
