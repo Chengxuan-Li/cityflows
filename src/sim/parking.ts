@@ -12,9 +12,10 @@ export function createParking(
   params: SimParams,
   vehicles: Vehicles,
 ) {
-  /** An inferred garage with an inferred capacity stands in for parking OSM does not map: its
-   * capacity is an estimate, so it never turns its own place's cars away and holds every
-   * resident's car at the start. Mapped and user-set capacities are hard limits. */
+  /** An inferred garage with an inferred capacity stands in for parking OSM does not map. Its
+   * nameplate covers its place's residents and jobs (compile), and it never turns a car away:
+   * not every owner parks there, and mode choice will thin car demand later (owner, 2026-11-08).
+   * Mapped and user-set capacities are hard limits. */
   const soft = (f: CompiledCity['parking'][number]) =>
     (f.source.provenance.inferred?.includes('implicitGarage') &&
       f.source.provenance.inferred.includes('capacity')) ??
@@ -34,15 +35,12 @@ export function createParking(
           : hour >= 9 && hour < 20 && kind === 'retail'
             ? 0.35
             : 0);
-      const count =
-        f.occupancyAtStart === null && f.residents && soft(f)
+      const count = Math.min(
+        f.capacity,
+        f.occupancyAtStart === null && f.residents
           ? remaining.get(f.place)!
-          : Math.min(
-              f.capacity,
-              f.occupancyAtStart === null && f.residents
-                ? remaining.get(f.place)!
-                : Math.round(f.capacity * fraction),
-            );
+          : Math.round(f.capacity * fraction),
+      );
       remaining.set(f.place, Math.max(0, remaining.get(f.place)! - count));
       return count;
     });
