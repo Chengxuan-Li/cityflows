@@ -131,7 +131,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | done |
 | [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | done |
 | [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
-| [TASK-109](tasks/TASK-109.md) | 8 | Building details: terrain footprints closed, roof shapes, colours, window bands | building fields of `ContextFeature` (schema), building tags in `context.ts`, `render3d/context.ts`, `terrain.ts` (footprint closure), new `render3d/roofs.ts`, Building details layer | 096, 098, 105 | V109, 3D shots | todo |
+| [TASK-109](tasks/TASK-109.md) | 8 | Building details: terrain footprints closed, roof shapes, colours, window bands | building fields of `ContextFeature` (schema), building tags in `context.ts`, `render3d/context.ts`, `terrain.ts` (footprint closure), new `render3d/roofs.ts`, Building details layer | 096, 098, 105 | V109, 3D shots | done |
 | [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | done |
 | [TASK-102](tasks/TASK-102.md) | 7 | Parking model and garages: facilities, choice on arrival, cruising, departures from where parked | `City.parking` refinements, new `importers/osm/parking.ts`, facility compile, new `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, demand, snapshot, facility inspector and occupancy layer | 100, 101, Phase 2 formats | T48, traffic quick | todo |
 | [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | todo |
@@ -2202,6 +2202,22 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   until then; faster clicks exposed it), now waits for the edit and two frames. Lead
   verification: check 671, city 69, full e2e 76 of 77 then the fixed spec 3 of 3; in the app the
   idle 2D map made 0 WebGL draw calls in 2 s, a zoom drew, then 0 again.
+
+- 2026-11-08, TASK-109 merged after lead fixes (Codex, GPT-6.1-Sol). Footprint closure first:
+  the ground mesh keeps each excavated floor and adds banks along every outer and inner ring,
+  cut at the terrain grid lines, so pits stay closed with Buildings, Building details or
+  Surroundings off (main showed bright see-through slivers on Sindelfingen's slopes). Then OSM
+  roof and building tags (`roof`, `colour`, `material`, `minHeightM` on context areas), new
+  `render3d/roofs.ts` (gabled, hipped, half-hipped, pyramidal, skillion, mansard and gambrel on
+  near-rectangular footprints; 71 irregular Munich footprints and 3 round roofs fall back to
+  flat), muted tagged colours, window bands in the building shader fading by distance, and a
+  "Building details" toggle. Agent figures: Munich 3D frame +10.1% (street) and +8.5%
+  (overview) against main; context build 45 to 104 ms. Lead: shots read (Munich roofs and
+  overview, Sindelfingen terrain with Buildings off against main, canopies); merged main with
+  TASK-115 and added the frame request to `setBuildingDetails`; V115 gets the heavy-case budget
+  (its 3D case took 58 s of 60 on CI). The machine was saturated by six Phase 2 agents, so the
+  lead ran type-check, lint, format, the V109, V105, T44, T14 and V115 unit tests (82 pass) and
+  the V105, V109, V115 and view3d e2e cases (pass), and left the full suite to CI at merge.
 
 ## Owner decisions log
 
