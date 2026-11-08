@@ -1,6 +1,9 @@
 import type { SimParams } from '../schema';
 
 export const DEFAULT_SIM_PARAMS: SimParams = {
+  streetParkingShare: 0.3,
+  parkManoeuvreS: { parallel: 8, angled: 4, perpendicular: 4 },
+  leaveManoeuvreS: 4,
   parkingSearchRadiusM: 400,
   dtS: 0.1,
   vehicleClasses: {

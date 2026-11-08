@@ -77,6 +77,13 @@ export const demandConfigSchema = z.object({
 
 export const simParamsSchema = z
   .object({
+    streetParkingShare: z.number().min(0).max(1),
+    parkManoeuvreS: z.object({
+      parallel: z.number().nonnegative(),
+      angled: z.number().nonnegative(),
+      perpendicular: z.number().nonnegative(),
+    }),
+    leaveManoeuvreS: z.number().nonnegative(),
     parkingSearchRadiusM: z.number().nonnegative(),
     dtS: z.number(),
     vehicleClasses: z.record(

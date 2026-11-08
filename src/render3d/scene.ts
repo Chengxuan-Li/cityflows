@@ -26,7 +26,7 @@ import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
 import { markingThemes, style } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
-import type { CityGeometry, Pick } from '../render/types';
+import type { CityGeometry, Pick, ParkedCarsSnapshot } from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
 import { Basemap3D } from './basemap';
 import { buildGeometry } from './geometry';
@@ -41,9 +41,11 @@ import { Vehicles3D } from './vehicles';
 import { buildWalkSignals, Walkers3D } from './walkers';
 import { groundMesh } from './terrain';
 import { lotGeometry } from './stalls';
+import { stripGeometry } from './strips';
 import { terrainVehicleOffset } from './heights';
 import { buildTerrainGround } from './context';
 import { Parking3D } from './parking';
+import { ParkedCars3D } from './parked-cars';
 import { buildWalk } from './walk';
 
 export class Scene3D {
@@ -89,6 +91,10 @@ export class Scene3D {
   private selectedId: number | null = null;
   private selectedParking: number | null = null;
   private parking: Parking3D | undefined;
+  private parkedCars: ParkedCars3D | undefined;
+  private parkedSnapshot: ParkedCarsSnapshot | null = null;
+  private parkedVisible = true;
+  private selectedSpace: number | null = null;
   private parkingVisible = false;
   private parkingCounts: ArrayLike<number> | null = null;
   private signalCity: CompiledCity | null = null;
@@ -165,6 +171,7 @@ export class Scene3D {
       this.vehicles.poses.snapshot = null;
       this.vehicles.mesh.count = 0;
       this.walkers.mesh.count = 0;
+      this.parkedSnapshot = null;
     }
     this.city = city;
     const renderedSource = this.terrainEnabled ? source : { ...source, terrain: undefined };
@@ -178,6 +185,12 @@ export class Scene3D {
     this.parking.group.visible = this.parkingVisible;
     this.parking.setCounts(this.parkingCounts);
     this.content.add(this.parking.group);
+    this.parkedCars = new ParkedCars3D(city, geometry.heights);
+    this.parkedCars.mesh.visible = this.parkedVisible;
+    this.parkedCars.setStyle(this.getView().zoom, this.colourByClass);
+    this.parkedCars.setSnapshot(this.parkedSnapshot);
+    this.content.add(this.parkedCars.mesh);
+    this.updateParkedDataset();
     if (this.source?.geo !== source.geo || this.renderedTerrain !== this.terrainEnabled) {
       this.basemap?.destroy();
       this.basemap = source.geo ? new Basemap3D(source.geo, terrain) : undefined;
@@ -254,6 +267,9 @@ export class Scene3D {
     ];
     const lots = lotGeometry(city, renderedSource, terrain);
     add(lots.surface, style.context.parking, false);
+    const strips = stripGeometry(city, renderedSource, geometry.heights);
+    add(strips.surface, style.context.parking, false);
+    add(strips.paint, style.stall, false);
     this.parkingStalls = add(lots.paint, style.stall, false);
     this.parkingStalls.visible = this.parkingStallsVisible;
     this.canvas.dataset.parkingStalls = String(
@@ -404,6 +420,25 @@ export class Scene3D {
   setVehicleGeometry(city: CompiledCity, durationS: number) {
     this.vehicles.setGeometry(city, durationS);
   }
+  private updateParkedDataset() {
+    this.canvas.dataset.parkedCars = String(this.parkedVisible ? (this.parkedCars?.count ?? 0) : 0);
+    this.canvas.dataset.parkingSpaces = String(this.city?.parkingSpaces?.length ?? 0);
+    this.canvas.dataset.parkingStrips = String(this.city?.strips?.length ?? 0);
+  }
+  setParkedCars(snapshot: ParkedCarsSnapshot | null) {
+    if (snapshot === this.parkedSnapshot) return;
+    this.parkedSnapshot = snapshot;
+    this.parkedCars?.setSnapshot(snapshot);
+    this.updateParkedDataset();
+    this.invalidate();
+  }
+  setParkedCarsVisible(visible: boolean) {
+    if (visible === this.parkedVisible) return;
+    this.parkedVisible = visible;
+    if (this.parkedCars) this.parkedCars.mesh.visible = visible;
+    this.updateParkedDataset();
+    this.invalidate();
+  }
   setSnapshot(snapshot: PresentationSnapshot) {
     this.vehicles.setSnapshot(snapshot);
     if (this.geometry) this.walkers.setSnapshot(snapshot.walkers, this.geometry.heights);
@@ -420,11 +455,15 @@ export class Scene3D {
     if (enabled === this.colourByClass) return;
     this.colourByClass = enabled;
     this.vehicles.setColourByClass(enabled);
+    this.parkedCars?.setStyle(this.getView().zoom, enabled);
     this.invalidate();
   }
   setSelection(pick: Pick | null) {
     const id = pick?.kind === 'vehicle' ? pick.id : null;
     const parking = pick?.kind === 'parking' ? pick.parking : null;
+    const space = pick?.kind === 'parked' ? pick.space : null;
+    if (space !== this.selectedSpace) this.invalidate();
+    this.selectedSpace = space;
     if (id !== this.selectedId || parking !== this.selectedParking) this.invalidate();
     this.selectedId = id;
     this.selectedParking = parking;
@@ -670,6 +709,17 @@ export class Scene3D {
           )
         : null;
     if (walker !== null) return { kind: 'walker', id: this.walkers.snapshot!.id[walker]! };
+    if (this.parkedVisible && this.parkedCars) {
+      const parked = pickVehicle3D(
+        this.parkedCars.mesh,
+        this.camera,
+        x,
+        y,
+        this.canvas.clientWidth,
+        this.canvas.clientHeight,
+      );
+      if (parked !== null) return { kind: 'parked', space: this.parkedCars.spaceAt(parked) };
+    }
     if (this.parkingVisible && this.city) {
       const tolerance = Math.max(7, 5 * this.getView().zoom);
       for (let i = this.city.parking.length - 1; i >= 0; i--) {
@@ -714,6 +764,7 @@ export class Scene3D {
     );
     if (!this.demand.consume(renderContinuously())) return;
     this.parking?.update(this.getView().zoom, this.selectedParking);
+    this.parkedCars?.setStyle(this.getView().zoom, this.colourByClass);
     if (this.city && this.geometry)
       this.vehicles.animate(elapsedS, this.city, this.geometry.heights);
     if (this.city && this.geometry?.heights.terrain.grid && this.vehicles.poses.snapshot) {
@@ -738,6 +789,16 @@ export class Scene3D {
     if (index >= 0) {
       this.vehicles.mesh.getMatrixAt(index, this.selection.matrix);
       this.selection.matrixAutoUpdate = false;
+    }
+    if (this.selectedSpace !== null && this.parkedCars && this.parkedVisible) {
+      const parkedIndex = this.parkedCars.instanceOf(this.selectedSpace);
+      this.selection.visible = parkedIndex >= 0;
+      if (parkedIndex >= 0) {
+        this.parkedCars.mesh.getMatrixAt(parkedIndex, this.selection.matrix);
+        this.selection.matrix.elements[12]! += 0.5 * this.selection.matrix.elements[0]!;
+        this.selection.matrix.elements[14]! += 0.5 * this.selection.matrix.elements[2]!;
+        this.selection.matrixAutoUpdate = false;
+      }
     }
     // Fit the 2048 shadow map to the camera's ground target, rather than the whole city.
     const extent = Math.max(40, this.camera.position.distanceTo(this.controls.target) * 0.9);

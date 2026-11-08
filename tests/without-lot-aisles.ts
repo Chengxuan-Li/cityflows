@@ -11,7 +11,8 @@ export function withoutLotAisles(source: City): City {
   for (const id of Object.keys(city.nodes))
     if (Number(id.slice(2)) >= firstId) delete city.nodes[id];
   // TASK-102's garages are allocated before the lots and stay.
-  for (const lot of lots) delete city.parking![lot.id];
+  for (const lot of Object.values(city.parking ?? {}))
+    if (lot.kind !== 'garage') delete city.parking![lot.id];
   if (!Object.keys(city.parking!).length) delete city.parking;
   // TASK-110's walk network is allocated after the lots.
   delete city.walk;

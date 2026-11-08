@@ -197,6 +197,47 @@ function nearRing(ring: readonly Vec2[], p: Vec2, margin: number) {
   return false;
 }
 
+/** The vehicle edge remains fixed; furniture follows the outside of a parking band. */
+export function parkingBandEdge(
+  city: CompiledCity,
+  road: CRoad,
+  side: 'left' | 'right',
+  edge: Vec2[],
+) {
+  const strips = (city.strips ?? []).filter(
+    (strip) => strip.road === road.idx && strip.side === side,
+  );
+  if (!strips.length) return edge;
+  const lengths = cumulativeLengths(edge),
+    referenceLengths = cumulativeLengths(road.reference);
+  const end = lengths.at(-1)!;
+  const stations = new Set<number>(lengths);
+  // Lead (TASK-103 merge): sample every metre only along the runs (plus 1 m); elsewhere the
+  // offset is zero and the edge's own vertices give the same line.
+  const runs: [number, number][] = [];
+  for (const strip of strips) {
+    const [a, b] = [strip.fromM, strip.toM].map(
+      (s) => nearestOnPolyline(edge, pointAtDistance(road.reference, referenceLengths, s)).along,
+    ) as [number, number];
+    for (const at of [a, b])
+      for (const delta of [-0.001, 0.001]) stations.add(Math.max(0, Math.min(end, at + delta)));
+    runs.push([Math.min(a, b) - 1, Math.max(a, b) + 1]);
+  }
+  for (const [from, to] of runs)
+    for (let s = Math.max(0, Math.ceil(from)); s < Math.min(end, to); s += 1) stations.add(s);
+  const sign = side === 'left' ? -1 : 1;
+  return [...stations]
+    .sort((a, b) => a - b)
+    .map((s) => {
+      const p = pointAtDistance(edge, lengths, s),
+        h = headingAtDistance(edge, lengths, s);
+      const station = nearestOnPolyline(road.reference, p).along;
+      const width =
+        strips.find((strip) => station >= strip.fromM && station <= strip.toM)?.widthM ?? 0;
+      return { x: p.x - Math.sin(h) * sign * width, y: p.y + Math.cos(h) * sign * width };
+    });
+}
+
 /** Immutable render data only: neither canonical entities nor compiled arrays are written. */
 export function placeStreet(city: CompiledCity, source: CityGeometry, trees: readonly Tree[]) {
   const features = source.context?.features ?? [];
@@ -326,6 +367,7 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
     );
     const connectors = city.connectors
       .filter((c) => {
+        if (c.parking !== undefined && city.parking[c.parking]!.kind === 'roadside') return false;
         const other = city.roads[city.lanes[c.lane]!.road]!;
         return (
           other.idx === road.idx ||
@@ -337,8 +379,9 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
         return pointAtDistance(lane.polyline, lane.cumulative, c.positionM);
       });
     const width = road.lanes.reduce((n, i) => n + city.lanes[i]!.widthM, 0);
-    for (const [side, original] of edges.entries()) {
-      if (original.length < 2 || (road.streetGroupId && side !== curbSide)) continue;
+    for (const [side, baseEdge] of edges.entries()) {
+      if (baseEdge.length < 2 || (road.streetGroupId && side !== curbSide)) continue;
+      const original = parkingBandEdge(city, road, side === 0 ? 'left' : 'right', baseEdge);
       const sign = side === 0 ? -1 : 1;
       // On divided roads the inward edge belongs to a median, not a verge.
       const centre = city.lanes[road.lanes[0]!]!.polyline;

@@ -49,6 +49,8 @@ export const shots: {
    * walker shots of an extract share one run: the union of their sources, the largest `steps`. */
   walkers?: { fromPlaceId: string; toPlaceId: string; perHour: number }[];
   steps?: number;
+  timeS?: number;
+  parkingTarget?: 'street' | 'inferred-lot';
 }[] = [
   // TASK-111: walkers on sidewalks and crossings, cars held before zebra stripes at n:180 and the
   // walk lights at Landsberger Straße by the Donnersbergerbrücke (n:963, n:262), at 07:30.
@@ -76,6 +78,35 @@ export const shots: {
     })),
   ),
   { id: 'V117-munich-motorway-uk', cases: [], centre: [0, -256], zoom: 4, theme: 'uk' },
+  ...(['2d', '3d'] as const).flatMap((view) => [
+    {
+      id: `V103-munich-street${view === '3d' ? '-3d' : ''}`,
+      cases: [],
+      centre: [-300, 290] as [number, number],
+      zoom: 8,
+      ...(view === '3d' && { view, terrain: true, pitch: 60, bearing: 30 }),
+      timeS: 8 * 3600,
+      parkingTarget: 'street' as const,
+    },
+    {
+      id: `V103-munich-lot${view === '3d' ? '-3d' : ''}`,
+      cases: [],
+      centre: [135.7, 305.3] as [number, number],
+      zoom: 7,
+      ...(view === '3d' && { view, terrain: true, pitch: 55 }),
+      timeS: 8 * 3600,
+    },
+    {
+      id: `V103-sindelfingen-lot${view === '3d' ? '-3d' : ''}`,
+      cases: [],
+      centre: [-379, -498.4] as [number, number],
+      zoom: 5,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      ...(view === '3d' && { view, terrain: true, pitch: 55 }),
+      timeS: 8 * 3600,
+      parkingTarget: 'inferred-lot' as const,
+    },
+  ]),
   ...[true, false].flatMap((details) => [
     {
       id: `V109-munich-roofs${details ? '' : '-off'}`,
@@ -701,6 +732,50 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         // `view: '3d'` render in 3D at their own pitch and bearing.
         const in3d = three || shot.view === '3d';
         const mode = button('3D');
+        if (shot.timeS !== undefined) {
+          const time = await page.evaluate(() => window.cityflows!.metrics().then((m) => m.timeS));
+          if (time > shot.timeS) await button('Restart').click();
+          const current = await page.evaluate(() =>
+            window.cityflows!.metrics().then((m) => m.timeS),
+          );
+          const steps = Math.round((shot.timeS - current) / 0.1);
+          if (steps > 0) await page.evaluate((steps) => window.cityflows!.step(steps), steps);
+          await page.waitForFunction(
+            (time) => (window.cityflows?.drawnSnapshot?.()?.timeS ?? -1) >= time,
+            shot.timeS,
+            { timeout: 420_000 },
+          );
+        }
+        let centre = shot.centre;
+        if (shot.parkingTarget) {
+          const source = await page.evaluate(() => window.cityflows!.city!());
+          const result = compile(source);
+          if (!result.ok) throw new Error('Parking camera city must compile');
+          const net = result.compiled;
+          const candidates =
+            shot.parkingTarget === 'street'
+              ? (net.strips ?? [])
+                  .filter((strip) =>
+                    source.parking?.[strip.id]?.provenance.inferred?.includes('strip'),
+                  )
+                  .map(
+                    (strip) =>
+                      net.parkingSpaces![strip.slots[Math.floor(strip.slots.length / 2)]!]!
+                        .position,
+                  )
+              : net.parking
+                  .filter(
+                    (p) => p.kind === 'lot' && p.source.provenance.inferred?.includes('driveway'),
+                  )
+                  .map((p) => p.centroid);
+          candidates.sort(
+            (a, b) =>
+              Math.hypot(a.x - centre[0], a.y - centre[1]) -
+              Math.hypot(b.x - centre[0], b.y - centre[1]),
+          );
+          if (!candidates.length) throw new Error(`No ${shot.parkingTarget} camera target`);
+          centre = [candidates[0]!.x, candidates[0]!.y];
+        }
         if (shot.id.startsWith('V107-munich-zone') && !localTraffic) {
           if ((await mode.getAttribute('aria-pressed')) === 'true') await mode.click();
           const source = await page.evaluate(() => window.cityflows!.city!());
@@ -777,13 +852,13 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
                 return { error: 0, zoom, size: [1280, 800] };
               },
               {
-                centre: shot.centre,
+                centre,
                 zoom: shot.zoom,
                 pitch: shot.pitch ?? (shot.view ? undefined : 60),
                 bearing: shot.bearing ?? (shot.view ? undefined : 0),
               },
             )
-          : await placeCamera(page, shot.centre, shot.zoom);
+          : await placeCamera(page, centre, shot.zoom);
         await page.addStyleTag({
           content:
             'body * { visibility: hidden !important; } canvas.map[aria-hidden="false"] { visibility: visible !important; }',
@@ -791,28 +866,47 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         await frames(page, 30);
         if (errors.length) throw new Error(errors.join('\n'));
         const target = in3d ? page.getByLabel('3D city view', { exact: true }) : canvas;
-        const timing = await page.evaluate(async () => {
-          window.cityflowsRenderContinuously = true;
-          const renders: number[] = [],
-            times: number[] = [];
-          const observer = new PerformanceObserver((list) => {
-            for (const entry of list.getEntries())
-              if (entry.name === 'cityflows:render' || entry.name === 'cityflows:render3d')
-                renders.push(entry.duration);
+        const sampleTiming = () =>
+          page.evaluate(async () => {
+            window.cityflowsRenderContinuously = true;
+            const renders: number[] = [],
+              times: number[] = [];
+            const observer = new PerformanceObserver((list) => {
+              for (const entry of list.getEntries())
+                if (entry.name === 'cityflows:render' || entry.name === 'cityflows:render3d')
+                  renders.push(entry.duration);
+            });
+            observer.observe({ entryTypes: ['measure'] });
+            let last = performance.now();
+            for (let i = 0; i < 90; i++) {
+              const now = await new Promise<number>((r) => requestAnimationFrame(r));
+              times.push(now - last);
+              last = now;
+            }
+            observer.disconnect();
+            window.cityflowsRenderContinuously = false;
+            if (!renders.length) throw new Error('No drawn frames in timing sample');
+            const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
+            return { frameMs: mean(times), renderMs: mean(renders) };
           });
-          observer.observe({ entryTypes: ['measure'] });
-          let last = performance.now();
-          for (let i = 0; i < 90; i++) {
-            const now = await new Promise<number>((r) => requestAnimationFrame(r));
-            times.push(now - last);
-            last = now;
-          }
-          observer.disconnect();
-          window.cityflowsRenderContinuously = false;
-          if (!renders.length) throw new Error('No drawn frames in timing sample');
-          const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
-          return { frameMs: mean(times), renderMs: mean(renders) };
-        });
+        const timing = await sampleTiming();
+        let parkedOffTiming: typeof timing | undefined;
+        if (shot.id.startsWith('V103-')) {
+          const setParked = async (checked: boolean) => {
+            await page.addStyleTag({ content: 'body * { visibility: visible !important; }' });
+            await button('Layers').click();
+            await layers.getByLabel('Parked cars', { exact: true }).setChecked(checked);
+            await button('Layers').click();
+            await page.addStyleTag({
+              content:
+                'body * { visibility: hidden !important; } canvas.map[aria-hidden="false"], canvas.map3d { visibility: visible !important; }',
+            });
+            await frames(page, 30);
+          };
+          await setParked(false);
+          parkedOffTiming = await sampleTiming();
+          await setParked(true);
+        }
         const path = join(out, `${shot.id}.png`);
         await target.screenshot({ path, animations: 'disabled' });
         const walkerCount = shot.walkers
@@ -826,6 +920,9 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
           file: `${shot.id}.png`,
           view: in3d ? '3d' : '2d',
           timing,
+          parkedOffTiming,
+          parkedCars: await target.getAttribute('data-parked-cars'),
+          actualCentre: centre,
           centreErrorPx: placed.error,
           zoom: placed.zoom,
           canvas: placed.size,

@@ -20,7 +20,7 @@ import { compileSignal, compileSignalWalk } from './signals';
 import { buildLaneSpatial } from './spatial';
 import { compileWalk, emptyWalkGraph } from './walk';
 import { populateStops } from './stops';
-import { compileParking } from './parking';
+import { compileParking, compileVisibleParking } from './parking';
 import { generateStalls } from './stalls';
 import type {
   CConnector,
@@ -537,6 +537,9 @@ export function compile(city: City): CompileResult {
   if (Object.values(city.parking ?? {}).some((lot) => lot.kind === 'lot'))
     compiled.lots = generateStalls(city, compiled);
   populateStops(compiled, city);
+  compileVisibleParking(city, compiled, centroid);
+  for (const lane of lanes)
+    lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   warnAboutConnectivity(compiled, diagnostics);
   compiled.walk = compileWalk(city, compiled);
   compileSignalWalk(compiled, city);

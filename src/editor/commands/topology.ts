@@ -5,6 +5,7 @@ import { allocateId, type City, type Command, type Node, type Road } from '../..
 import { applyPatch } from '../patch';
 import { mapConnectors, requireEntity, type CommandPatch } from './types';
 import { withCrossings } from './road';
+import { mapStrips, resizeStrips } from './parking';
 
 type TopologyCommand = Extract<
   Command,
@@ -187,10 +188,10 @@ export function relocateConnectors(
       Object.entries(draft.places).map(([id, place]) => [id, { ...place, connectors: [] }]),
     ),
     parking: Object.fromEntries(
-      Object.entries(draft.parking ?? {}).map(([id, facility]) => [
-        id,
-        { ...facility, connectors: [] },
-      ]),
+      // Strip stations are resized after connector relocation, so omit affected old runs here.
+      Object.entries(draft.parking ?? {})
+        .filter(([, facility]) => !facility.strip || !patch.set.roads?.[facility.strip.roadId])
+        .map(([id, facility]) => [id, { ...facility, connectors: [] }]),
     ),
   });
   if (!before.ok || !after.ok) return patch; // The editor reports structural errors at commit.
@@ -265,6 +266,17 @@ function splitRoad(city: City, road: Road, atM: number): CommandPatch {
     const end = patch.set.nodes![direction.to] ?? city.nodes[direction.to]!;
     patch.set.nodes![end.id] = replaceReferences(end, direction.id, id);
     replacements[direction.id] = [direction.id, id];
+    patch.nextId = counter.nextId;
+    mapStrips(city, patch, direction.id, (strip) => [
+      { ...strip, toM: Math.min(strip.toM, position - 5) },
+      {
+        ...strip,
+        roadId: id,
+        fromM: Math.max(strip.fromM, position + 5) - position,
+        toM: strip.toM - position,
+      },
+    ]);
+    counter.nextId = patch.nextId;
   }
   split(road, atM, road.streetGroupId, group);
   const reverse = opposite(city, road);
@@ -325,6 +337,10 @@ function mergeRoads(city: City, a: Road, b: Road): CommandPatch {
     const far = patch.set.nodes![end.to] ?? city.nodes[end.to]!;
     patch.set.nodes![far.id] = replaceReferences(far, end.id, start.id);
     replacements[start.id] = replacements[end.id] = [start.id];
+    const offset = polylineLength(start.centerline);
+    mapStrips(city, patch, end.id, (strip) => [
+      { ...strip, roadId: start.id, fromM: strip.fromM + offset, toM: strip.toM + offset },
+    ]);
   }
   merge(first, second, first.streetGroupId);
   if (reverseFirst && reverseSecond) merge(reverseSecond, reverseFirst, first.streetGroupId);
@@ -364,16 +380,19 @@ export function editTopology(city: City, command: TopologyCommand): CommandPatch
           },
         ]),
     );
-    return relocateConnectors(city, {
+    const patch = relocateConnectors(city, {
       set: { nodes: { [node.id]: { ...node, pos: command.pos } }, roads },
       remove: {},
     });
+    resizeStrips(city, patch);
+    return patch;
   }
   const road = requireEntity(city.roads, command.roadId);
   if (command.kind === 'splitRoad') return splitRoad(city, road, command.atM);
   if (command.kind === 'mergeRoads')
     return mergeRoads(city, road, requireEntity(city.roads, command.otherRoadId));
   const patch: CommandPatch = { set: {}, remove: { roads: [road.id], nodes: [] }, warnings: [] };
+  mapStrips(city, patch, road.id, () => []);
   const uses = ({ from, to }: { from: string; to: string }) => from === road.id || to === road.id;
   for (const node of Object.values(city.nodes)) {
     const turnRules = node.turnRules.filter((rule) => !uses(rule));

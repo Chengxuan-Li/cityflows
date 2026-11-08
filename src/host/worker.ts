@@ -11,6 +11,7 @@ let inputs: Parameters<typeof engine.load>[0] | undefined;
 let loop: ReturnType<typeof createPlayLoop> | undefined;
 let multiplier = 1;
 let lastOverlayMs = -Infinity;
+let lastParkedRevision: number | undefined;
 let recorder: ReturnType<typeof createExportRecorder> | undefined;
 
 function loadedRecorder() {
@@ -31,6 +32,7 @@ function load(input: Parameters<typeof engine.load>[0]) {
   loop?.pause();
   inputs = input;
   lastOverlayMs = -Infinity;
+  lastParkedRevision = undefined;
   recorder = createExportRecorder(engine, input.compiled);
   loop = createPlayLoop(engine, {
     dtS,
@@ -117,7 +119,14 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
   const { id } = request;
   try {
     if (request.type === 'snapshot') {
-      const { timeS, count, parkingOccupancy: occupancy, walkers, ...arrays } = engine.snapshot();
+      const {
+        timeS,
+        count,
+        parkingOccupancy: occupancy,
+        parkedCars: stock,
+        walkers,
+        ...arrays
+      } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
       if (walkers)
         for (const array of Object.values(walkers))
@@ -126,6 +135,17 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
       const updateOverlays = now - lastOverlayMs >= 500;
       const roadSpeedRatio = updateOverlays ? engine.metrics().roadSpeedRatio : undefined;
       const parkingOccupancy = updateOverlays ? occupancy : undefined;
+      const parkedCars = stock && stock.revision !== lastParkedRevision ? stock : undefined;
+      if (parkedCars) {
+        lastParkedRevision = parkedCars.revision;
+        for (const array of [
+          parkedCars.occupied,
+          parkedCars.vclass,
+          parkedCars.id,
+          parkedCars.hues,
+        ])
+          transfer.push(array.buffer);
+      }
       if (roadSpeedRatio) {
         lastOverlayMs = now;
         transfer.push(roadSpeedRatio.buffer);
@@ -134,7 +154,15 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
       const reply: HostReply = {
         id,
         ok: true,
-        result: { timeS, count, ...arrays, roadSpeedRatio, parkingOccupancy, walkers },
+        result: {
+          timeS,
+          count,
+          ...arrays,
+          roadSpeedRatio,
+          parkingOccupancy,
+          parkedCars,
+          walkers,
+        },
       };
       self.postMessage(reply, { transfer });
     } else {

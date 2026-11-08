@@ -17,7 +17,7 @@ test.each(tierCities(['Munich', 'Sindelfingen'] as const))(
     const { city } = throughputFixture(name);
     const counts = { osm: 0, implicit: 0 };
     // TASK-104's surface lots are counted by T49.
-    for (const facility of Object.values(city.parking ?? {}).filter((f) => f.kind !== 'lot')) {
+    for (const facility of Object.values(city.parking ?? {}).filter((f) => f.kind === 'garage')) {
       expect(facility.kind).toBe('garage');
       expect(facility.connectors.length).toBeGreaterThan(0);
       const implicit = facility.provenance.inferred?.includes('implicitGarage') ?? false;
@@ -45,7 +45,9 @@ test.each(tierCities(['Munich', 'Sindelfingen'] as const))(
     const provider = createRouteProvider();
     const costs = freeFlowLinkCosts(net);
     const rejected: number[] = [];
-    for (const facility of net.parking.filter((p) => p.source.provenance.source === 'osm')) {
+    for (const facility of net.parking.filter(
+      (p) => p.kind === 'garage' && p.source.provenance.source === 'osm',
+    )) {
       for (const toConnector of facility.connectorsIn) {
         const request = {
           fromLane: origin.lane,

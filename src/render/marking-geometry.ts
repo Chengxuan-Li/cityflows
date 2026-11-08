@@ -129,7 +129,7 @@ export function busLabels(city: CompiledCity, road: CRoad, source?: CrossingSour
   }
   return labels;
 }
-/** Side is relative to travel (-1 left, +1 right). TASK-103 can omit parking-strip runs here. */
+/** Side is relative to travel (-1 left, +1 right). Strip runs are cut by `besideNoStrip`. */
 export function edgeLineColor(city: CompiledCity, road: CRoad, side: number, theme: MarkingTheme) {
   if (theme.id === 'uk') {
     const nearside = side === (city.drivingSide === 'right' ? 1 : -1);
@@ -140,6 +140,33 @@ export function edgeLineColor(city: CompiledCity, road: CRoad, side: number, the
   return theme.id === 'us' && side < 0 && (road.corridorId !== null || road.roadClass === 'ramp')
     ? theme.colors.centre
     : theme.colors.edge;
+}
+
+/** Lead (TASK-103 merge): the pieces of a kerb line beside no parking strip on that side; a
+ * kerb with parking carries no UK no-waiting line. */
+export function besideNoStrip(city: CompiledCity, road: CRoad, side: number, points: Vec2[]) {
+  const name = side < 0 ? 'left' : 'right';
+  const strips = (city.strips ?? []).filter((s) => s.road === road.idx && s.side === name);
+  if (!strips.length || points.length < 2) return [points];
+  const lengths = cumulativeLengths(points),
+    total = lengths.at(-1)!,
+    reference = cumulativeLengths(road.reference);
+  const runs = strips
+    .map((s) => {
+      const [a, b] = [s.fromM, s.toM].map(
+        (m) => nearestOnPolyline(points, pointAtDistance(road.reference, reference, m)).along,
+      ) as [number, number];
+      return [Math.min(a, b), Math.max(a, b)] as const;
+    })
+    .sort((a, b) => a[0] - b[0]);
+  const pieces: Vec2[][] = [];
+  let cursor = 0;
+  for (const [from, to] of runs) {
+    if (from > cursor + 0.05) pieces.push(trimPolyline(points, cursor, total - from));
+    cursor = Math.max(cursor, to);
+  }
+  if (total > cursor + 0.05) pieces.push(trimPolyline(points, cursor, 0));
+  return pieces;
 }
 
 export function roadMarkingGeometry(
@@ -283,17 +310,21 @@ export function roadMarkingGeometry(
           // Separation can change between the vertices of a straight boundary.
           sections = keepInside(edge, kerb, true);
         }
+        const kerbLine =
+          markingTheme.id === 'uk' &&
+          edgeLineColor(city, road, side, markingTheme) === markingTheme.colors.edge;
         for (const section of sections)
-          for (const points of clipOutside(section, centreClips, 0))
-            belowShapes.push({
-              ...lineShape(road, 'edge', points, 0.85, markingTheme),
-              ...(markingTheme.id === 'uk' ||
-              (markingTheme.id === 'us' &&
-                side < 0 &&
-                (road.corridorId !== null || road.roadClass === 'ramp'))
-                ? { color: edgeLineColor(city, road, side, markingTheme) }
-                : {}),
-            });
+          for (const clipped of clipOutside(section, centreClips, 0))
+            for (const points of kerbLine ? besideNoStrip(city, road, side, clipped) : [clipped])
+              belowShapes.push({
+                ...lineShape(road, 'edge', points, 0.85, markingTheme),
+                ...(markingTheme.id === 'uk' ||
+                (markingTheme.id === 'us' &&
+                  side < 0 &&
+                  (road.corridorId !== null || road.roadClass === 'ramp'))
+                  ? { color: edgeLineColor(city, road, side, markingTheme) }
+                  : {}),
+              });
       }
     }
     aboveShapes.push(...approachShapes(city, lane, endFarM, markingTheme));

@@ -85,14 +85,18 @@ beforeAll(() => {
 
 test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")', () => {
   // 90 percent of main's completed trips, gridlock at most 1.5 times main's, every failure a
-  // gridlock, and no more stalled jam heads than main. The owner reset the baseline at TASK-099
+  // gridlock or a counted parking failure, and no more stalled jam heads than main. The owner reset the baseline at TASK-099
   // (2026-11-07), which replaced the fixed 3 497 floor and T36.4/T38.5's stage figures; the lead
-  // reset it again at TASK-100 (mixed fleet), TASK-104 (surface lots) and TASK-102 (garages). The one allowed stalled head is the deadlock loop
+  // reset it again at TASK-100 (mixed fleet), TASK-104 (surface lots), TASK-102 (garages), TASK-116 and TASK-103 (visible parking). The one allowed stalled head is the deadlock loop
   // through Arnulfstraße and the Donnersberger ramps that locks at n:263 (B56); the mixed fleet
   // happens to avoid it, a cars-only run does not.
   expect(morning.completed).toBeGreaterThanOrEqual(Math.ceil(0.9 * baseline.completed));
   expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(1.5 * baseline.gridlocked);
-  expect(morning.failed).toBe(morning.failedByReason.gridlocked);
+  // TASK-103: a counted parking failure is the other allowed failure, under 2% of local arrivals.
+  expect(morning.failed).toBe(
+    morning.failedByReason.gridlocked + morning.failedByReason.no_parking,
+  );
+  expect(morning.failedByReason.no_parking).toBeLessThan(0.02 * morning.localArrivals);
   expect(morning.stalledHeads).toBeLessThanOrEqual(baseline.stalledHeads);
 });
 
@@ -101,7 +105,11 @@ test('T21: Munich at scale 0.15 has no contacting-zone overlap at any morning st
   expect(zones.contacts).toBeGreaterThan(0);
   expect(endS).toBe(10 * 3600);
   // The only failures are trips stuck at a jam head again after their last respawn (TASK-077).
-  expect(morning.failed).toBe(morning.failedByReason.gridlocked);
+  // TASK-103: a counted parking failure is the other allowed failure, under 2% of local arrivals.
+  expect(morning.failed).toBe(
+    morning.failedByReason.gridlocked + morning.failedByReason.no_parking,
+  );
+  expect(morning.failedByReason.no_parking).toBeLessThan(0.02 * morning.localArrivals);
 });
 
 // Known to fail (TASK-076 report): Munich still gridlocks from about 08:00, and from then cars

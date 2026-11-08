@@ -1,7 +1,8 @@
 import { pointAtDistance } from '../geo/polyline';
+import { createRandom } from '../geo/random';
 import type { CompiledCity } from '../network';
 import type { Scenario, SimParams, TripRequest } from '../schema';
-import type { Metrics } from './types';
+import type { Metrics, ParkedCarsSnapshot } from './types';
 import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import { parkingHash } from './hash';
 
@@ -46,11 +47,71 @@ export function createParking(
     });
   }
   let occupied = initialOccupancy(compiled);
+  let spaces = compiled.parkingSpaces ?? [];
+  let stock = new Int32Array(spaces.length).fill(-1); // -2 is an initially parked car
+  let classes = new Uint8Array(spaces.length);
+  let reserved = new Int32Array(spaces.length).fill(-1);
+  let revision = 0;
+  const rng = createRandom(scenario.seed).derive('street-parking');
+  const prefersStreet = (id: number) =>
+    rng.derive(trips[id]!.personId ?? trips[id]!.id).next() < params.streetParkingShare;
+  const small = (id: number) => vehicles.vclass[id]! < 2;
+  // Lead (TASK-103 merge): memoized per place; load asked it twice per trip.
+  const nearHomeCache = new Map<number, CompiledCity['parking']>();
+  const nearHome = (place: number) => {
+    let cached = nearHomeCache.get(place);
+    if (!cached) nearHomeCache.set(place, (cached = nearHomeOf(place)));
+    return cached;
+  };
+  const nearHomeOf = (place: number) => {
+    const p = compiled.places[place]!.centroid;
+    return compiled.parking
+      .filter(
+        (f) =>
+          f.kind !== 'garage' &&
+          (f.access === 'public' || f.place === place) &&
+          f.connectorsOut.length,
+      )
+      .map((f) => ({ f, d: Math.hypot(f.centroid.x - p.x, f.centroid.y - p.y) }))
+      .filter(({ d }) => d <= params.parkingSearchRadiusM)
+      .sort((a, b) => a.d - b.d || a.f.idx - b.f.idx)
+      .map(({ f }) => f);
+  };
+  for (const f of compiled.parking) {
+    for (const slot of (f.spaces ?? []).slice(0, occupied[f.idx])) stock[slot] = -2;
+  }
+  // Move the residential share out of garages once, in compiled place/facility/slot order.
+  for (const p of compiled.places) {
+    if (p.kind !== 'residential') continue;
+    const garages = compiled.parking.filter(
+      (f) => f.place === p.idx && f.kind === 'garage' && f.occupancyAtStart === null,
+    );
+    let count = Math.round(
+      garages.reduce((n, f) => n + occupied[f.idx]!, 0) * params.streetParkingShare,
+    );
+    for (const f of nearHome(p.idx)) {
+      if (f.occupancyAtStart !== null) continue;
+      for (const slot of f.spaces ?? []) {
+        if (!count || stock[slot] !== -1) continue;
+        const garage = garages.find((g) => occupied[g.idx]! > 0);
+        if (!garage) break;
+        stock[slot] = -2;
+        occupied[f.idx]!++;
+        occupied[garage.idx]!--;
+        count--;
+      }
+    }
+  }
   let cachedHash: number | undefined;
   const previous = new Int32Array(trips.length).fill(-1);
   let origins = new Int32Array(trips.length).fill(-1);
   let chosen = new Int32Array(trips.length).fill(-1);
   let parked = new Int32Array(trips.length).fill(-1);
+  let originSpaces = new Int32Array(trips.length).fill(-1);
+  let parkedSpaces = new Int32Array(trips.length).fill(-1);
+  const manoeuvreSpaces = new Int32Array(trips.length).fill(-1);
+  const parkUntil = new Float64Array(trips.length).fill(NaN);
+  const leaveUntil = new Float64Array(trips.length).fill(-Infinity);
   const left = new Uint8Array(trips.length);
   const noOriginCar = new Uint8Array(trips.length);
   const searching = new Uint8Array(trips.length);
@@ -65,6 +126,7 @@ export function createParking(
     .map((_, id) => id)
     .sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
   const available = occupied.slice();
+  const availableSpaces = stock.slice();
   for (const id of chronology) {
     const trip = trips[id]!;
     if (trip.mode !== 'car') continue;
@@ -78,10 +140,22 @@ export function createParking(
       const place = compiled.index.place.get(trip.originPlaceId);
       if (place !== undefined && compiled.places[place]!.kind === 'gateway') continue;
       const own = compiled.parking.filter((f) => f.place === place);
-      const facility = own.find((f) => f.connectorsOut.length && available[f.idx]! > 0);
+      const street =
+        small(id) && prefersStreet(id) ? nearHome(place!).filter((f) => f.kind !== 'garage') : [];
+      const facility = [...street, ...own, ...(small(id) ? nearHome(place!) : [])].find(
+        (f) =>
+          f.connectorsOut.length && available[f.idx]! > 0 && (small(id) || f.kind === 'garage'),
+      );
       origins[id] = facility?.idx ?? -1;
-      if (facility) available[facility.idx]!--;
-      else if (own.length) noOriginCar[id] = 1;
+      if (facility) {
+        available[facility.idx]!--;
+        const slot = facility.spaces?.find((s) => availableSpaces[s] !== -1);
+        if (slot !== undefined) {
+          originSpaces[id] = slot;
+          availableSpaces[slot] = -1;
+          classes[slot] = vehicles.vclass[id]!;
+        }
+      } else if (own.length) noOriginCar[id] = 1;
     }
   }
   const destinationPlace = (id: number) =>
@@ -91,21 +165,36 @@ export function createParking(
       b = compiled.parking[facility]!.centroid;
     return Math.hypot(a.x - b.x, a.y - b.y);
   };
+  const candidates = new Map<string, CompiledCity['parking']>();
   const facilitiesFor = (id: number) => {
     const destination = destinationPlace(id);
     if (destination.kind === 'gateway') return [];
-    return compiled.parking
+    const streetFirst = destination.kind === 'residential' && small(id) && prefersStreet(id);
+    const key = `${destination.idx}:${small(id)}:${streetFirst}`;
+    const cached = candidates.get(key);
+    if (cached) return cached;
+    const visit = !['residential', 'work', 'school'].includes(destination.kind);
+    const rank = (f: CompiledCity['parking'][number]) => {
+      const beyond = distance(id, f.idx) > params.parkingSearchRadiusM;
+      const visible = f.kind !== 'garage';
+      const ownGarage = f.kind === 'garage' && f.place === destination.idx;
+      if ((visit || streetFirst) && visible && !beyond) return 0;
+      if (ownGarage) return visit || streetFirst ? 1 : 0;
+      if (visible && !beyond) return 1;
+      return beyond ? 3 : 2;
+    };
+    const result = compiled.parking
       .filter(
-        (f) => f.connectorsIn.length && (f.place === destination.idx || f.access === 'public'),
+        (f) =>
+          f.connectorsIn.length &&
+          (small(id) || f.kind === 'garage') &&
+          (f.place === destination.idx || f.access === 'public'),
       )
       .sort(
-        (a, b) =>
-          Number(b.place === destination.idx) - Number(a.place === destination.idx) ||
-          Number(distance(id, a.idx) > params.parkingSearchRadiusM) -
-            Number(distance(id, b.idx) > params.parkingSearchRadiusM) ||
-          distance(id, a.idx) - distance(id, b.idx) ||
-          a.idx - b.idx,
+        (a, b) => rank(a) - rank(b) || distance(id, a.idx) - distance(id, b.idx) || a.idx - b.idx,
       );
+    candidates.set(key, result);
+    return result;
   };
   function required(id: number) {
     const destination = destinationPlace(id);
@@ -129,6 +218,7 @@ export function createParking(
       for (const f of facilitiesFor(id)) {
         if ((needRoom ? !hasRoom(f) : f.capacity === 0) || rejected.get(id)?.has(f.idx)) continue;
         for (const connector of f.connectorsIn) {
+          if (f.kind !== 'garage' && needRoom && !freeSpace(connector, id)) continue;
           if (!accept(connector)) continue;
           chosen[id] = f.idx;
           cachedHash = undefined;
@@ -143,6 +233,33 @@ export function createParking(
   function originFacility(id: number) {
     const before = previous[id]!;
     return before === -1 ? origins[id]! : parked[before]!;
+  }
+  function originSpace(id: number) {
+    return previous[id] === -1 ? originSpaces[id]! : parkedSpaces[previous[id]!]!;
+  }
+  function freeSpace(connector: number, id: number) {
+    const c = compiled.connectors[connector]!,
+      f = compiled.parking[c.parking ?? -1];
+    if (!f || f.kind === 'garage') return undefined;
+    const point = pointAtDistance(
+      compiled.lanes[c.lane]!.polyline,
+      compiled.lanes[c.lane]!.cumulative,
+      c.positionM,
+    );
+    let best: (typeof spaces)[number] | undefined,
+      distance = Infinity;
+    for (const i of f.spaces ?? []) {
+      const s = spaces[i]!;
+      if (stock[i] !== -1 || (reserved[i] !== -1 && reserved[i] !== id)) continue;
+      // A roadside driver must stop at the target slot, not another car's slot farther along.
+      if (f.kind === 'roadside' && s.connector !== connector) continue;
+      const d = Math.hypot(s.position.x - point.x, s.position.y - point.y);
+      if (d < distance) {
+        best = s;
+        distance = d;
+      }
+    }
+    return best;
   }
   function beginSearch(id: number, timeS: number) {
     searching[id] = 1;
@@ -163,6 +280,8 @@ export function createParking(
     },
     hasOriginFacility: (id: number) => originFacility(id) !== -1,
     exits(id: number, fallback: number[]) {
+      const slot = spaces[originSpace(id)];
+      if (slot && !left[id]) return [slot.connector];
       const f = compiled.parking[originFacility(id)];
       if (!f && previous[id] !== -1 && vehicles.state[previous[id]!] !== COMPLETED) {
         const place = compiled.index.place.get(trips[id]!.originPlaceId);
@@ -177,20 +296,50 @@ export function createParking(
       }
       return f ? f.connectorsOut : fallback;
     },
-    depart(id: number) {
+    depart(id: number, timeS = scenario.startS) {
       if (left[id]) return;
       cachedHash = undefined;
       const facility = originFacility(id);
       if (facility !== -1 && occupied[facility]) occupied[facility]!--;
+      const slot = originSpace(id);
+      if (slot !== -1) {
+        stock[slot] = -1;
+        if (spaces[slot]?.manoeuvre) leaveUntil[id] = timeS + params.leaveManoeuvreS;
+        revision++;
+      }
       left[id] = 1;
     },
-    full(connector: number) {
+    departing: (id: number, timeS: number) => timeS < leaveUntil[id]! - 1e-9,
+    leavingSpace: (id: number) => !left[id] && originSpace(id) !== -1,
+    needsManoeuvre(connector: number) {
+      const c = compiled.connectors[connector]!,
+        f = compiled.parking[c.parking ?? -1];
+      return f?.kind !== 'garage' && (f?.spaces ?? []).some((i) => spaces[i]!.manoeuvre);
+    },
+    holdArrival(id: number, connector: number, timeS: number) {
+      if (Number.isNaN(parkUntil[id])) {
+        const slot = freeSpace(connector, id);
+        if (!slot) return false;
+        manoeuvreSpaces[id] = slot.idx;
+        reserved[slot.idx] = id;
+        parkUntil[id] = timeS + params.parkManoeuvreS[slot.layout];
+        cachedHash = undefined;
+      }
+      return timeS >= parkUntil[id]! - 1e-9;
+    },
+    full(connector: number, id = -1) {
       const facility = compiled.connectors[connector]!.parking;
-      return facility !== undefined && !hasRoom(compiled.parking[facility]!);
+      if (facility === undefined) return false;
+      const f = compiled.parking[facility]!;
+      return f.kind === 'garage' ? !hasRoom(f) : !freeSpace(connector, id);
     },
     admits(id: number, connector: number) {
       const f = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
-      return !f || f.access === 'public' || f.place === destinationPlace(id).idx;
+      return (
+        !f ||
+        ((small(id) || f.kind === 'garage') &&
+          (f.access === 'public' || f.place === destinationPlace(id).idx))
+      );
     },
     beginSearch,
     approach(id: number, lane: number, positionM: number, timeS: number) {
@@ -202,7 +351,9 @@ export function createParking(
     },
     reject(id: number, timeS: number) {
       const f = chosen[id]!;
-      if (f !== -1) {
+      const facility = compiled.parking[f];
+      // A rejected slot does not exhaust the other slots along the same strip/aisle.
+      if (f !== -1 && !facility!.connectorsIn.some((c) => freeSpace(c, id))) {
         if (!rejected.has(id)) rejected.set(id, new Set());
         rejected.get(id)!.add(f);
       }
@@ -213,6 +364,15 @@ export function createParking(
       if (f === undefined) return;
       cachedHash = undefined;
       if (!hasRoom(compiled.parking[f]!)) throw new Error('Parking admission exceeded capacity');
+      if (compiled.parking[f]!.kind !== 'garage') {
+        const slot = spaces[manoeuvreSpaces[id]!] ?? freeSpace(connector, id);
+        if (!slot || stock[slot.idx] !== -1) throw new Error('Parking slot is occupied');
+        stock[slot.idx] = id;
+        classes[slot.idx] = vehicles.vclass[id]!;
+        reserved[slot.idx] = -1;
+        parkedSpaces[id] = slot.idx;
+        revision++;
+      }
       occupied[f]!++;
       parked[id] = f;
       chosen[id] = f;
@@ -232,7 +392,33 @@ export function createParking(
       };
     },
     snapshot: () => occupied.slice(),
-    stateHash: () => (cachedHash ??= parkingHash([occupied, origins, chosen, parked])),
+    stockSnapshot(): ParkedCarsSnapshot {
+      const occupiedBits = new Uint8Array(Math.ceil(spaces.length / 8));
+      const ids = new Uint32Array(spaces.length);
+      for (let i = 0; i < stock.length; i++)
+        if (stock[i] !== -1) {
+          occupiedBits[i >> 3]! |= 1 << (i & 7);
+          ids[i] = stock[i]! >= 0 ? stock[i]! + 1 : 0;
+        }
+      return {
+        revision,
+        occupied: occupiedBits,
+        id: ids,
+        vclass: classes.slice(),
+        hues: new Uint32Array(spaces.length),
+      };
+    },
+    get revision() {
+      return revision;
+    },
+    stateHash: () =>
+      (cachedHash ??= parkingHash([
+        occupied,
+        origins,
+        chosen,
+        parked,
+        ...(spaces.length ? [stock, originSpaces, parkedSpaces, reserved] : []),
+      ])),
     metrics(failed: number): Metrics['parking'] {
       return {
         facilities: compiled.parking.map((f) => ({
@@ -247,6 +433,15 @@ export function createParking(
       };
     },
     patch(next: CompiledCity) {
+      for (const f of compiled.parking) {
+        if (f.kind === 'garage') continue;
+        const mapped = next.index.parking.get(f.id);
+        const count = mapped === undefined ? 0 : (next.parking[mapped]!.spaces?.length ?? 0);
+        if (f.spaces?.some((i, ordinal) => stock[i] !== -1 && ordinal >= count))
+          throw new Error(
+            `Parking ${f.id} has occupied spaces affected by this edit; restart the run`,
+          );
+      }
       for (const facility of next.parking) {
         const old = compiled.index.parking.get(facility.id);
         if (old !== undefined && !soft(facility) && occupied[old]! > facility.capacity)
@@ -268,6 +463,39 @@ export function createParking(
         (f) => occupied[compiled.index.parking.get(f.id)!] ?? initial[f.idx]!,
       );
       rejected.clear();
+      candidates.clear();
+      const oldSpaces = spaces,
+        oldStock = stock,
+        oldClasses = classes;
+      spaces = next.parkingSpaces ?? [];
+      const ordinal = new Int32Array(oldSpaces.length);
+      for (const f of compiled.parking)
+        f.spaces?.forEach((i, n) => {
+          ordinal[i] = n;
+        });
+      const remapSpace = (old: number) => {
+        if (old === -1) return -1;
+        const s = oldSpaces[old]!;
+        const facility = next.index.parking.get(compiled.parking[s.parking]!.id);
+        return facility === undefined
+          ? -1
+          : (next.parking[facility]!.spaces?.[ordinal[old]!] ?? -1);
+      };
+      originSpaces = originSpaces.map(remapSpace);
+      parkedSpaces = parkedSpaces.map(remapSpace);
+      stock = new Int32Array(spaces.length).fill(-1);
+      classes = new Uint8Array(spaces.length);
+      reserved = new Int32Array(spaces.length).fill(-1);
+      for (const s of oldSpaces) {
+        const mapped = remapSpace(s.idx);
+        if (mapped !== -1) {
+          stock[mapped] = oldStock[s.idx]!;
+          classes[mapped] = oldClasses[s.idx]!;
+        }
+      }
+      manoeuvreSpaces.fill(-1);
+      parkUntil.fill(NaN);
+      revision++;
       compiled = next;
     },
   };

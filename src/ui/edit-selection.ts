@@ -7,6 +7,15 @@ export function selectionAfterEdit(
   after: CompiledCity,
 ): Pick | null {
   switch (selection?.kind) {
+    case 'parked': {
+      const old = before.parkingSpaces?.[selection.space];
+      if (!old) return null;
+      const facility = before.parking[old.parking]!;
+      const ordinal = facility.spaces!.indexOf(old.idx);
+      const mapped = after.index.parking.get(facility.id);
+      const space = mapped === undefined ? undefined : after.parking[mapped]!.spaces?.[ordinal];
+      return space === undefined ? null : { kind: 'parked', space };
+    }
     case 'parking': {
       const parking = after.index.parking.get(before.parking[selection.parking]!.id);
       return parking === undefined ? null : { kind: 'parking', parking };

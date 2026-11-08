@@ -86,7 +86,7 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
     context,
     browser,
   }, info) => {
-    test.setTimeout(600_000);
+    test.setTimeout(420_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     const cdp = await context.newCDPSession(page);

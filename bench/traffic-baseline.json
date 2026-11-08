@@ -1,12 +1,12 @@
 {
-  "tree": "main at the TASK-116 merge (feasible lane target sets on every route, on top of TASK-102's garages and TASK-104's lots); reset per the owner's rule for TASK-116, 2026-11-08. stalledHeads stays 1: this tree measured 0, but the B56 loop at n:263 still locks with cars only",
+  "tree": "main at the TASK-103 merge (roadside strips and lot stalls in the simulation, on top of TASK-111's pedestrian rules and TASK-117); reset per the owner's rule 7, 2026-11-08. 5 counted parking failures besides the gridlock; stalledHeads stays 1 (the B56 loop at n:263)",
   "scale": 0.15,
-  "completed": 3493,
-  "gridlocked": 51,
+  "completed": 3462,
+  "gridlocked": 72,
   "stalledHeads": 1,
   "quick": {
     "until": "09:30",
-    "completed": 3356,
-    "gridlocked": 20
+    "completed": 3314,
+    "gridlocked": 33
   }
 }

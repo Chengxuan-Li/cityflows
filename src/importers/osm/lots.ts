@@ -1,5 +1,11 @@
 import { areaD } from 'clipper2-ts';
-import { pointInPolygon, polylineCrossings, prepareRing, ringsOverlap } from '../../geo/polyline';
+import {
+  nearestOnPolyline,
+  pointInPolygon,
+  polylineCrossings,
+  prepareRing,
+  ringsOverlap,
+} from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import { compile, type Diagnostic } from '../../network';
 import {
@@ -72,7 +78,11 @@ export function addLots(
       name: tag.name ?? null,
       capacity: capacity ?? 0,
       access:
-        tag.access === 'private' ? 'private' : tag.access === 'customers' ? 'customers' : 'public',
+        tag.access === 'customers'
+          ? 'customers'
+          : tag.access === undefined || ['yes', 'permissive', 'designated'].includes(tag.access)
+            ? 'public'
+            : 'private',
       placeId: matches.length === 1 ? matches[0]!.id : null,
       shape: { kind: 'polygon', ring },
       connectors: [],
@@ -226,6 +236,8 @@ export function addLots(
     }
   }
   // Entry reachability propagates through the mapped aisle network, including one-way direction.
+  const withAisles = compile(city);
+  if (!withAisles.ok) return;
   for (const lot of lots) {
     const aisleNodes = new Set(
       lot.aisles!.flatMap((id) => [city.roads[id]!.from, city.roads[id]!.to]),
@@ -257,12 +269,50 @@ export function addLots(
         }
       }
     }
-    if (!lot.aisles!.some((id) => traversed.has(id)))
-      diagnostics.push({
-        severity: 'warning',
-        code: 'parking_unreachable',
-        refs: [lot.id],
-        message: `Lot ${lot.name ?? lot.id} has no mapped aisle reaching a permitted public road; no entry inferred`,
-      });
+    if (!lot.aisles!.some((id) => traversed.has(id))) {
+      const ring = lot.shape!.kind === 'polygon' ? close(lot.shape!.ring) : [];
+      const candidates = withAisles.compiled.lanes
+        .flatMap((lane) => {
+          const road = city.roads[withAisles.compiled.roads[lane.road]!.id]!;
+          if (
+            aisleIds.has(road.id) ||
+            !lane.allowed.includes('car') ||
+            ['no', 'delivery'].includes(road.access?.car ?? road.access?.all ?? 'yes')
+          )
+            return [];
+          let best = ring
+            .map((p) => nearestOnPolyline(lane.polyline, p))
+            .sort((a, b) => a.away - b.away)[0];
+          for (const p of lane.polyline) {
+            const hit = nearestOnPolyline(ring, p);
+            if (best && hit.away < best.away)
+              best = { ...nearestOnPolyline(lane.polyline, p), away: hit.away };
+            if (pointInPolygon(p, ring)) best = { ...nearestOnPolyline(lane.polyline, p), away: 0 };
+          }
+          const crossing = polylineCrossings(lane.polyline, ring)[0];
+          if (crossing) best = { ...nearestOnPolyline(lane.polyline, crossing.point), away: 0 };
+          if (!best || best.away > 30) return [];
+          return [{ lane, road, hit: best }];
+        })
+        .sort((a, b) => a.hit.away - b.hit.away || a.lane.idx - b.lane.idx);
+      const nearest = candidates[0];
+      if (nearest) {
+        lot.connectors.push({
+          id: allocateId(city, 'c'),
+          roadId: nearest.road.id,
+          lane: nearest.lane.lane,
+          positionM: Math.max(0, Math.min(nearest.lane.lengthM, nearest.hit.along)),
+          direction: 'both',
+          throughputPerMin: 30,
+        });
+        lot.provenance.inferred!.push('driveway');
+      } else
+        diagnostics.push({
+          severity: 'warning',
+          code: 'parking_unreachable',
+          refs: [lot.id],
+          message: `Lot ${lot.name ?? lot.id} has no reachable aisle or permitted road within 30 m`,
+        });
+    }
   }
 }
