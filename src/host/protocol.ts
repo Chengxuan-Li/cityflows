@@ -58,6 +58,7 @@ export type HostRequest =
   | { id: number; type: 'trajectories'; enabled?: boolean }
   | { id: number; type: 'trajectoryStatus' }
   | { id: number; type: 'inspect'; vehicleId: number }
+  | { id: number; type: 'inspectWalker'; walkerId: number }
   | { id: number; type: 'hash' };
 
 export type HostReply =

@@ -58,4 +58,6 @@ export interface Scenario {
   endS: number;
   demand: DemandConfig;
   simParams: Partial<SimParams>;
+  /** TASK-111: test pedestrian sources, walkers spawned at seeded times; absent = none. */
+  walkers?: { fromPlaceId: PlaceId; toPlaceId: PlaceId; perHour: number }[];
 }

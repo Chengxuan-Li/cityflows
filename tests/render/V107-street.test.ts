@@ -144,12 +144,14 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 });
 
 // Main 378a1f1's compile output (TASK-102/104/110 moved TASK-107's 806263a pins); TASK-107
-// changes no network code.
+// changes no network code. TASK-111 re-pinned: its crossing node, arm and spans and the signal
+// phases' walk lists are new compiled data; with them stripped every city hashes to the previous
+// pin (grid 645ce5cf…, town 4b08bdfa…, Munich db7eea6e…, Sindelfingen ad1ccb01…).
 const baselines = {
-  grid: '645ce5cff150638b1f8fa258034082926637860e468f9bf18ccaaad33ddb6f09',
-  town: '4b08bdfab45da81ff2e259d6eed45f7fcbca0c101d6368031a087f70a57ab785',
-  'munich-donnersberger': 'db7eea6e2bbcbdaba551b2894e3fb216d10ac707b6b6f91278c578ec81a0cc8a',
-  'sindelfingen-a81': 'ad1ccb01b65d2b31fda1653326c7f7dfa225f513a1edbd722747cd630adf1766',
+  grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
+  town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
+  'munich-donnersberger': 'f656b98c6ea1808836fc7e2d7a6cc4bd756bd1ba648a8d2269057f74ef5ffe54',
+  'sindelfingen-a81': '502cb24fe67410a87243344c871417f8c622abc2526ece9ee4a6c1d70fac8ebe',
 };
 const lampCounts = {
   grid: [0, 0],

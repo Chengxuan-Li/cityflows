@@ -25,4 +25,8 @@ export const DEFAULT_SIM_PARAMS: SimParams = {
   rerouteHysteresis: 0.15,
   maxReplans: 3,
   routeNoise: 0.1,
+  walkSpeedMps: 1.4,
+  walkStepsFactor: 0.6,
+  walkClearanceS: 2,
+  crossingClearM: 1,
 };

@@ -60,7 +60,11 @@ export function TopBar() {
         <button
           onClick={() => void undo()}
           disabled={
-            (in3D && !session?.editor.canUndoDisplayOnly) || busy || !session?.editor.canUndo
+            busy ||
+            !session?.undoStack.length ||
+            (in3D &&
+              session.undoStack.at(-1)!.kind === 'city' &&
+              !session.editor.canUndoDisplayOnly)
           }
         >
           Undo
@@ -68,7 +72,11 @@ export function TopBar() {
         <button
           onClick={() => void redo()}
           disabled={
-            (in3D && !session?.editor.canRedoDisplayOnly) || busy || !session?.editor.canRedo
+            busy ||
+            !session?.redoStack.length ||
+            (in3D &&
+              session.redoStack.at(-1)!.kind === 'city' &&
+              !session.editor.canRedoDisplayOnly)
           }
         >
           Redo

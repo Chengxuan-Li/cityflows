@@ -27,6 +27,7 @@ import { drawParking } from './layers/parking';
 import { drawMovementArrow, drawRoad, drawCrossings, updateZoomFade } from './layers/roads';
 import { drawTransitions } from './layers/transitions';
 import { drawSignal } from './layers/signals';
+import { drawWalkerRoute, drawWalkers, drawWalkSignals } from './layers/walkers';
 import { drawSigns } from './layers/signs';
 import { DeckCoverage, DeckGhosts, drawGradeShadows } from './layers/shadows';
 import { Tiles } from './layers/tiles';
@@ -34,7 +35,7 @@ import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { createPicker, pickParking, pickVehicle } from './picking';
 import { style } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
-import type { Pick, CityGeometry, Scene } from './types';
+import type { Pick, CityGeometry, Scene, WalkerSnapshot } from './types';
 import { defaultLayers, type LayerVisibility } from './types';
 
 export function orderedLayers(layers: readonly number[]): number[] {
@@ -76,8 +77,9 @@ export function createGrade(layer: number) {
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
+  const walkers = new Graphics();
   terrain.addChild(footways, sidewalks, surfaces, markings, arrows, nodes, guides, crossings);
-  group.addChild(terrain, connectors, places, signals, vehicles.container);
+  group.addChild(terrain, connectors, places, signals, vehicles.container, walkers);
   return {
     layer,
     group,
@@ -94,6 +96,7 @@ export function createGrade(layer: number) {
     connectors,
     signals,
     vehicles,
+    walkers,
     terrainSize: 0,
     cacheResolution: 0,
   };
@@ -102,6 +105,7 @@ export function createGrade(layer: number) {
 export function createScene(canvas: HTMLCanvasElement): Scene & {
   setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
   animateVehicles(elapsedS: number, playing?: boolean): void;
+  setWalkerRoute(links: readonly number[] | null): void;
 } {
   const app = new Application();
   const demand = new FrameDemand();
@@ -116,6 +120,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   world.eventMode = 'none';
   const map = new Container();
   const routeOverlay = new Graphics();
+  const walkerRoute = new Graphics();
   const selectionOverlay = new Graphics();
   const multiSelectionOverlay = new Graphics();
   const vehicleRing = new Graphics()
@@ -130,7 +135,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   const disconnectedOverlay = new Graphics();
   const signalPreview = new Graphics();
   const parking = new Graphics();
-  world.addChild(map, routeOverlay, selectionOverlay, vehicleRing, heatOverlay);
+  world.addChild(map, routeOverlay, walkerRoute, selectionOverlay, vehicleRing, heatOverlay);
   world.addChild(multiSelectionOverlay);
   world.addChild(disconnectedOverlay, signalPreview, parking);
   const editOverlay = new Graphics();
@@ -158,6 +163,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let updatePlaces: ((zoom: number) => void) | undefined;
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
+  let walkerLayers = new Map<number, Graphics>();
+  let walkerSnapshot: WalkerSnapshot | undefined;
+  let selectedWalker = -1;
+  let drawnWalkers = false;
+  const redrawWalkers = () => {
+    // Without test pedestrians the layers stay empty: nothing to clear or draw.
+    if (!walkerSnapshot && !drawnWalkers) return;
+    drawWalkers(walkerLayers, walkerSnapshot, camera.zoom, selectedWalker);
+    drawnWalkers = !!walkerSnapshot;
+  };
   let gradeShadows: ReturnType<typeof drawGradeShadows>[] = [];
   let ghosts: DeckGhosts[] = [];
   let rebuildShadows = () => {};
@@ -273,6 +288,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       layerVisibility.parkingOccupancy ? (city?.parking.length ?? 0) : 0,
     );
     routeOverlay.visible = layerVisibility.routes;
+    walkerRoute.visible = layerVisibility.routes && layerVisibility.pedestrians;
+    for (const graphics of walkerLayers.values()) graphics.visible = layerVisibility.pedestrians;
     disconnectedOverlay.visible = layerVisibility.disconnected;
     for (const grade of visibleGrades) {
       grade.places.visible = layerVisibility.places;
@@ -365,6 +382,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     updatePlaces?.(camera.zoom);
     if (city) drawParking(parking, city, parkingCounts, camera.zoom);
     if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
+    redrawWalkers();
   });
   vehicles.setZoom(camera.zoom);
 
@@ -398,6 +416,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       selectionOverlay.clear();
       multiSelectionOverlay.clear();
       routeOverlay.clear();
+      walkerRoute.clear();
+      walkerSnapshot = undefined;
+      selectedWalker = -1;
       heatOverlay.clear();
       heat.setCity(compiled);
       disconnectedOverlay.clear();
@@ -446,6 +467,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ...compiled.walk.links.map((l) => l.layer),
       ]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
+      walkerLayers = new Map(visibleGrades.map((grade) => [grade.layer, grade.walkers]));
+      drawnWalkers = false;
       for (const shape of walkGeometry(compiled, source)) {
         const grade = grades.get(shape.layer)!;
         drawWalk(shape.sidewalk ? grade.sidewalks : grade.footways, shape);
@@ -552,7 +575,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
         drawSigns(city, node, grade.signals);
-        if (node.signal) updateSignals.push(drawSignal(city, node, grade.signals));
+        if (node.signal) {
+          updateSignals.push(drawSignal(city, node, grade.signals));
+          updateSignals.push(drawWalkSignals(city, node, grade.signals));
+        }
       }
       updatePlaces = drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
       updatePlaces(camera.zoom);
@@ -637,12 +663,21 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (!city) return;
       vehicles.update(snapshot);
       vehicleAgeS = 0;
+      walkerSnapshot = snapshot.walkers;
+      redrawWalkers();
+      if (import.meta.env.MODE === 'test')
+        canvas.dataset.walkers = String(walkerSnapshot?.count ?? 0);
       for (const update of updateSignals) update(snapshot.timeS);
       for (const ghost of ghosts) ghost.sync();
       if (selection?.kind === 'vehicle') {
         selectedVehicle = snapshot.id.subarray(0, snapshot.count).indexOf(selection.id);
         updateVehicleRing();
       }
+    },
+    setWalkerRoute(links) {
+      invalidate();
+      if (city && links) drawWalkerRoute(walkerRoute, city, links);
+      else walkerRoute.clear();
     },
     setVehicleGeometry(compiled, laneChangeDurationS) {
       vehicles.setGeometry(compiled, laneChangeDurationS);
@@ -665,6 +700,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           ? snapshot.id.subarray(0, snapshot.count).indexOf(selection.id)
           : -1;
       updateVehicleRing();
+      selectedWalker = selection?.kind === 'walker' ? selection.id : -1;
+      redrawWalkers();
     },
     setMultiSelection(roads) {
       invalidate();
@@ -762,8 +799,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           ? { kind: 'vehicle' as const, id: body }
           : snapshot &&
             pickVehicle(point, camera.zoom, snapshot.id, vehicles.x, vehicles.y, snapshot.count);
+      const walker =
+        layerVisibility.pedestrians && walkerSnapshot
+          ? pickVehicle(
+              point,
+              camera.zoom,
+              walkerSnapshot.id,
+              walkerSnapshot.x,
+              walkerSnapshot.y,
+              walkerSnapshot.count,
+            )
+          : null;
       return (
         vehicle ??
+        (walker?.kind === 'vehicle' ? { kind: 'walker' as const, id: walker.id } : null) ??
         (city && layerVisibility.parkingOccupancy ? pickParking(city, point, camera.zoom) : null) ??
         staticPick?.(point, camera.zoom) ??
         null

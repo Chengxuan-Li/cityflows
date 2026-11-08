@@ -23,10 +23,22 @@ export interface VehicleSnapshot {
   state: Uint8Array; // 1 driving, 2 queued_destination
   vclass: Uint8Array; // schema vehicleClasses index: car, van, truck, bus
   fade: Float32Array; // sprite alpha: 1, falling to 0 before a gridlock respawn (TASK-077)
+  walkers?: WalkerSnapshot; // TASK-111: test pedestrians, when the scenario has them
+}
+
+export interface WalkerSnapshot {
+  count: number;
+  id: Uint32Array;
+  x: Float32Array;
+  y: Float32Array;
+  heading: Float32Array;
+  state: Uint8Array; // 1 walking, 2 waiting at a kerb, 3 crossing
+  layer: Int8Array;
 }
 
 export type Pick =
   | { kind: 'vehicle'; id: number }
+  | { kind: 'walker'; id: number }
   | { kind: 'lane'; lane: number; road: number }
   | { kind: 'node'; node: number }
   | { kind: 'place'; place: number }
@@ -43,6 +55,7 @@ export interface LayerVisibility {
   parkingStalls: boolean;
   sidewalks: boolean;
   footways: boolean;
+  pedestrians: boolean;
   terrain: boolean;
   shadows: boolean;
   roadClasses: boolean;
@@ -71,6 +84,7 @@ export const defaultLayers: LayerVisibility = {
   parkingStalls: true,
   sidewalks: true,
   footways: true,
+  pedestrians: true,
   terrain: true,
   shadows: true,
   roadClasses: false,

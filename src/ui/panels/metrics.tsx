@@ -22,6 +22,7 @@ export function MetricsPanel() {
     engine: NonNullable<typeof session>['engine'];
     samples: MetricsSample[];
     parking: Metrics['parking'];
+    walkers: Metrics['walkers'];
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -33,7 +34,12 @@ export function MetricsPanel() {
     void Promise.all([session.engine.metricsSeries(), session.engine.metrics()])
       .then(([samples, metrics]) => {
         if (active) {
-          setResult({ engine: session.engine, samples, parking: metrics.parking });
+          setResult({
+            engine: session.engine,
+            samples,
+            parking: metrics.parking,
+            walkers: metrics.walkers,
+          });
           setLoading(false);
         }
       })
@@ -65,6 +71,7 @@ export function MetricsPanel() {
     facilities.find(({ id }) => id === selectedId) ??
     facilities[0];
   const parking = result?.engine === session?.engine ? result?.parking : undefined;
+  const walkers = result?.engine === session?.engine ? result?.walkers : undefined;
   const charts: { key: string; label: string; color: string; values: number[]; maximum: number }[] =
     plots.map(([key, label, color]) => ({
       key,
@@ -110,6 +117,33 @@ export function MetricsPanel() {
           <dd>{parking.meanSearchTimeS.toFixed(1)} s</dd>
           <dt>Trips failed for lack of parking</dt>
           <dd>{parking.failed.toLocaleString()}</dd>
+        </dl>
+      )}
+      {walkers && (
+        <dl className="details" aria-label="Pedestrian metrics">
+          <dt>Test pedestrians out, arrived, without a route</dt>
+          <dd>
+            {walkers.spawned.toLocaleString()}, {walkers.completed.toLocaleString()},{' '}
+            {walkers.dropped.toLocaleString()}
+          </dd>
+          <dt>Mean walk</dt>
+          <dd>{Math.round(walkers.meanWalkTimeS)} s</dd>
+          <dt>Mean wait at a zebra, at a signal</dt>
+          <dd>
+            {walkers.meanWaitS.zebra.toFixed(1)} s, {walkers.meanWaitS.signal.toFixed(1)} s
+          </dd>
+          <dt>Vehicles stopped for pedestrians at zebras, at signals</dt>
+          <dd>
+            {walkers.vehicleStops.zebra.toLocaleString()},{' '}
+            {walkers.vehicleStops.signal.toLocaleString()}
+          </dd>
+          <dt>Vehicle delay they cost</dt>
+          <dd>
+            {Math.round(
+              walkers.vehicleDelayS.zebra + walkers.vehicleDelayS.signal,
+            ).toLocaleString()}{' '}
+            s
+          </dd>
         </dl>
       )}
       {chosen && (

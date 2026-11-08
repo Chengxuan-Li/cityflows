@@ -338,6 +338,8 @@ export const style = {
   selection: 0x4d8e94,
   route: 0x588eac,
   driving: 0x667c81,
+  // TASK-111: pedestrians, darker than the paving; a warmer tone while waiting at a kerb.
+  walker: { walking: 0x3d4a52, waiting: 0xb4683f },
   signalRed: 0xc95656,
   signalAmber: 0xe7a637,
   signalGreen: 0x30926c,

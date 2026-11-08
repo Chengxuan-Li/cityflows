@@ -239,7 +239,7 @@ test('T07 merge rejects unsafe target gaps and cooperates only within the brakin
     amberS: 3,
     allRedS: 1,
     cycleS: 24,
-    phases: [{ durationS: 20, movements: [main.idx] }],
+    phases: [{ durationS: 20, movements: [main.idx], walk: [] }],
   };
   expect(merges.canEnter(1, main)).toBe(true);
   vehicles.insert(2, merge.toLane, 8);

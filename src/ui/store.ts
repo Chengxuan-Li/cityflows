@@ -16,9 +16,9 @@ import type { Project } from '../project/types';
 import type { Pick as MapPick, VehicleSnapshot } from '../render/types';
 import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
-import type { Command, Person } from '../schema';
+import type { Command, Person, Scenario } from '../schema';
 import type { RoadId } from '../schema';
-import type { Metrics, PatchResult, VehicleDetail } from '../sim/types';
+import type { Metrics, PatchResult, VehicleDetail, WalkerDetail } from '../sim/types';
 import { bundledProject } from './bundled-projects';
 import { selectionAfterEdit } from './edit-selection';
 import { comparisonTrips, restoreBaseline, saveBaseline, type Variant } from '../project/scenarios';
@@ -49,8 +49,15 @@ function scheduleKey(city: Project['city']) {
   );
 }
 
+export type TestWalkers = NonNullable<Scenario['walkers']>;
+/** One undoable edit: a city command (the editor's history) or a change of the test pedestrians. */
+type EditEntry = { kind: 'city' } | { kind: 'walkers'; before: TestWalkers; after: TestWalkers };
+
 export interface Session {
   project: Project & { population: Person[] };
+  /** The order of undoable edits across the editor's history and the scenario's test pedestrians. */
+  undoStack: EditEntry[];
+  redoStack: EditEntry[];
   editor: Editor;
   compiled: CompiledCity;
   loadedCompiled: CompiledCity;
@@ -108,6 +115,7 @@ interface AppState {
   selectedRoads: RoadId[];
   selectRoads: (roads: RoadId[]) => void;
   vehicle: VehicleDetail | null;
+  walker: WalkerDetail | null;
   parkingOccupancy: Record<string, number>;
   diagnosticsOpen: boolean;
   rejectedEdit: Diagnostic[];
@@ -126,6 +134,8 @@ interface AppState {
   redo: () => Promise<void>;
   setSpeed: (speed: number) => Promise<void>;
   regenerateDemand: (seed: number) => Promise<void>;
+  /** TASK-111: replace the scenario's test pedestrians (undoable; restart to apply). */
+  setTestWalkers: (walkers: TestWalkers) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -162,7 +172,21 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
-  function edit(apply: (editor: Editor) => CommitResult | null, displayOnly = false) {
+  /** The edit stacks after a commit, undo or redo succeeded. */
+  function stacks(session: Session, mode: 'commit' | 'undo' | 'redo', entry: EditEntry) {
+    const { undoStack, redoStack } = session;
+    if (mode === 'commit') return { undoStack: [...undoStack, entry], redoStack: [] };
+    if (mode === 'undo')
+      return { undoStack: undoStack.slice(0, -1), redoStack: [...redoStack, entry] };
+    return { undoStack: [...undoStack, entry], redoStack: redoStack.slice(0, -1) };
+  }
+  const cityEdit: EditEntry = { kind: 'city' };
+
+  function edit(
+    apply: (editor: Editor) => CommitResult | null,
+    displayOnly = false,
+    mode: 'commit' | 'undo' | 'redo' = 'commit',
+  ) {
     return perform(async () => {
       const { session, run, selection } = get();
       if (!session || !run || (get().viewMode === '3d' && !displayOnly)) return;
@@ -175,7 +199,13 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       const { city, compiled, diagnostics } = result;
       if (compiled === session.compiled) {
-        set({ session: { ...session, project: { ...project, city, history: editor.history } } });
+        set({
+          session: {
+            ...session,
+            ...stacks(session, mode, cityEdit),
+            project: { ...project, city, history: editor.history },
+          },
+        });
         return;
       }
       cancelComparison();
@@ -187,6 +217,7 @@ export const useAppStore = create<AppState>((set, get) => {
       set({
         session: {
           ...session,
+          ...stacks(session, mode, cityEdit),
           project: { ...project, city, history: editor.history },
           compiled,
           diagnostics,
@@ -238,6 +269,32 @@ export const useAppStore = create<AppState>((set, get) => {
     });
   }
 
+  /** TASK-111: test pedestrians are a scenario input like the demand seed: the run waits for a
+   * restart. Undo restores `before`; commit and redo apply `after`. */
+  function changeWalkers(
+    entry: Extract<EditEntry, { kind: 'walkers' }>,
+    mode: 'commit' | 'undo' | 'redo',
+  ) {
+    return perform(async () => {
+      const { session, run } = get();
+      if (!session || !run) return;
+      const { project, engine } = session;
+      const walkers = mode === 'undo' ? entry.before : entry.after;
+      const scenario: Scenario = { ...project.scenarios[0]!, walkers };
+      if (!walkers.length) delete scenario.walkers;
+      await engine.pause();
+      const { timeS, trips: counts } = await engine.metrics();
+      set({
+        session: {
+          ...session,
+          ...stacks(session, mode, entry),
+          project: { ...project, scenarios: [scenario, ...project.scenarios.slice(1)] },
+        },
+        run: { ...run, status: 'paused', stale: true, achieved: 0, timeS, counts },
+      });
+    });
+  }
+
   async function loadSession(project: Project) {
     // The editor exposes the compiled city but does not retain the initial diagnostics.
     const validation = compile(project.city);
@@ -262,6 +319,8 @@ export const useAppStore = create<AppState>((set, get) => {
       set({
         session: {
           project: { ...project, city: editor.city, population },
+          undoStack: [],
+          redoStack: [],
           populationKey: demandKey(project.city),
           demandSummary: demandSummary(trips, project.city),
           editor,
@@ -287,6 +346,7 @@ export const useAppStore = create<AppState>((set, get) => {
         parkingOccupancy: {},
         selectedRoads: [],
         vehicle: null,
+        walker: null,
         diagnosticsOpen: false,
         rejectedEdit: [],
       });
@@ -308,9 +368,14 @@ export const useAppStore = create<AppState>((set, get) => {
         tool: 'select',
         selectedRoads: [],
         selection:
-          selection?.kind === 'vehicle' || selection?.kind === 'parking' ? selection : null,
+          selection?.kind === 'vehicle' ||
+          selection?.kind === 'walker' ||
+          selection?.kind === 'parking'
+            ? selection
+            : null,
         selectionPoint: null,
         vehicle: selection?.kind === 'vehicle' ? get().vehicle : null,
+        walker: selection?.kind === 'walker' ? get().walker : null,
       });
     },
     toggleBelowGround: () => set(({ belowGround }) => ({ belowGround: !belowGround })),
@@ -471,6 +536,7 @@ export const useAppStore = create<AppState>((set, get) => {
       });
     },
     vehicle: null,
+    walker: null,
     parkingOccupancy: {},
     diagnosticsOpen: false,
     rejectedEdit: [],
@@ -481,14 +547,27 @@ export const useAppStore = create<AppState>((set, get) => {
         selection,
         selectedRoads: [],
         vehicle: null,
+        walker: null,
         diagnosticsOpen: false,
         rejectedEdit: [],
       }),
     toggleDiagnostics: () => set(({ diagnosticsOpen }) => ({ diagnosticsOpen: !diagnosticsOpen })),
     commit: (command) =>
       edit((editor) => editor.apply(command), command.kind === 'setMarkingTheme'),
-    undo: () => edit((editor) => editor.undo(), get().session?.editor.canUndoDisplayOnly),
-    redo: () => edit((editor) => editor.redo(), get().session?.editor.canRedoDisplayOnly),
+    undo: () => {
+      const last = get().session?.undoStack.at(-1);
+      if (last?.kind === 'walkers') return changeWalkers(last, 'undo');
+      return edit((editor) => editor.undo(), get().session?.editor.canUndoDisplayOnly, 'undo');
+    },
+    redo: () => {
+      const next = get().session?.redoStack.at(-1);
+      if (next?.kind === 'walkers') return changeWalkers(next, 'redo');
+      return edit((editor) => editor.redo(), get().session?.editor.canRedoDisplayOnly, 'redo');
+    },
+    setTestWalkers: (walkers) => {
+      const before = get().session?.project.scenarios[0]!.walkers ?? [];
+      return changeWalkers({ kind: 'walkers', before, after: walkers }, 'commit');
+    },
     reportError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
     open: (source = 'grid5x5') =>
       perform(async () => {
@@ -683,6 +762,9 @@ declare global {
       worldToScreen?: (point: Vec2) => Vec2;
       city?: () => Project['city'];
       commit?: (command: Command) => Promise<void>;
+      /** TASK-111: set the test pedestrians and restart the run with them. */
+      setWalkers?: (walkers: TestWalkers) => Promise<void>;
+      inspectWalker?: EngineClient['inspectWalker'];
       movementId(index: number): string;
       resetHints?: () => void;
     };

@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useState } from 'react';
+import type { Place } from '../../schema';
 import { vehicleClasses } from '../../schema/city';
 import type { FailReason, Metrics } from '../../sim/types';
-import { useAppStore } from '../store';
+import { useAppStore, type TestWalkers } from '../store';
 
 const failReasons: Record<FailReason, string> = {
   no_parking: 'No parking available',
@@ -13,6 +14,109 @@ const failReasons: Record<FailReason, string> = {
   no_destination_connector: 'Destination has no entrance',
   gridlocked: 'Stuck in gridlock too often',
 };
+
+/** TASK-111: walkers between two places at a seeded rate, to try the pedestrian rules. */
+function TestPedestrians({
+  places,
+  walkers,
+  busy,
+}: {
+  places: Place[];
+  walkers: TestWalkers;
+  busy: boolean;
+}) {
+  const { setTestWalkers } = useAppStore.getState();
+  const [from, setFrom] = useState(places[0]?.id ?? '');
+  const [to, setTo] = useState(places[1]?.id ?? places[0]?.id ?? '');
+  const name = (id: string) => places.find((place) => place.id === id)?.name ?? id;
+  return (
+    <div className="test-pedestrians">
+      <table aria-label="Test pedestrians">
+        <thead>
+          <tr>
+            <th scope="col">Test pedestrians from</th>
+            <th scope="col">To</th>
+            <th scope="col">Per hour</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {walkers.map((walker, index) => (
+            <tr key={index}>
+              <td>{name(walker.fromPlaceId)}</td>
+              <td>{name(walker.toPlaceId)}</td>
+              <td>
+                <input
+                  key={walker.perHour}
+                  type="number"
+                  min={0}
+                  step={1}
+                  aria-label={`Pedestrians per hour from ${name(walker.fromPlaceId)} to ${name(walker.toPlaceId)}`}
+                  defaultValue={walker.perHour}
+                  disabled={busy}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur();
+                  }}
+                  onBlur={(event) => {
+                    const perHour = Number(event.currentTarget.value);
+                    if (!(perHour >= 0) || perHour === walker.perHour) return;
+                    void setTestWalkers(
+                      walkers.map((w, i) => (i === index ? { ...w, perHour } : w)),
+                    );
+                  }}
+                />
+              </td>
+              <td>
+                <button
+                  aria-label={`Remove pedestrians from ${name(walker.fromPlaceId)} to ${name(walker.toPlaceId)}`}
+                  disabled={busy}
+                  onClick={() => void setTestWalkers(walkers.filter((_, i) => i !== index))}
+                >
+                  ×
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <form
+        className="edit-fields"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const perHour = Number(new FormData(event.currentTarget).get('perHour'));
+          if (!from || !to || from === to || !(perHour > 0)) return;
+          void setTestWalkers([...walkers, { fromPlaceId: from, toPlaceId: to, perHour }]);
+        }}
+      >
+        <label className="edit-field">
+          From
+          <select value={from} onChange={(event) => setFrom(event.currentTarget.value)}>
+            {places.map((place) => (
+              <option key={place.id} value={place.id}>
+                {place.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="edit-field">
+          To
+          <select value={to} onChange={(event) => setTo(event.currentTarget.value)}>
+            {places.map((place) => (
+              <option key={place.id} value={place.id}>
+                {place.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="edit-field">
+          Per hour
+          <input name="perHour" type="number" min={1} step={1} defaultValue={100} required />
+        </label>
+        <button disabled={busy || from === to}>Add pedestrians</button>
+      </form>
+    </div>
+  );
+}
 
 function clock(timeS: number) {
   return `${String(Math.floor(timeS / 3600)).padStart(2, '0')}:${String(Math.floor(timeS / 60) % 60).padStart(2, '0')}`;
@@ -207,6 +311,11 @@ export function DemandPanel() {
             Regenerating draws new homes, workplaces and departure times from the seed; restart to
             run them.
           </p>
+          <TestPedestrians
+            places={places}
+            walkers={project.scenarios[0]!.walkers ?? []}
+            busy={busy}
+          />
         </div>
       </div>
       <p className="muted">Synthetic traffic, not observed traffic.</p>
