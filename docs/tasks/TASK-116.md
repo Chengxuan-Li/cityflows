@@ -87,6 +87,14 @@ baseline, simulation parameters or shares to make the numbers look better.
 5. `npm run check`, `npm run test:city`, `npm run traffic:quick` and `npm run test:e2e:smoke`
    green. Run e2e with `CITYFLOWS_TEST_PORT=5316`; never use port 4173.
 
+Owner clarification (2026-11-08): Munich-specific execution-time and local frame
+overhead allowances may be relaxed. T47 uses 180 s for import, live edit,
+assertions and screenshot capture together. The local Munich vegetation check
+allows 25% frame overhead instead of 20% to absorb timing noise; its placement,
+layer independence, rebuild and city-integrity assertions remain unchanged.
+Traffic and routing-speed gates, simulation parameters, shares and baseline stay
+unchanged.
+
 ## Checks to run
 
 - While iterating: `npm test` (unit tier) and `npm run traffic:quick`.

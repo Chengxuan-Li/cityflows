@@ -72,7 +72,7 @@ test('@smoke V106 tree layers share placement in both views and stay within the 
     );
     const samples: Awaited<ReturnType<typeof timing>>[] = [];
     // CI's software GPU makes frame ratios noise and the four samples cost minutes per view
-    // (as T44): there it takes one sample per state and skips the 1.2 allowance.
+    // (as T44): there it takes one sample per state and skips the local frame allowance.
     const states = process.env.CI ? [true, false] : [true, false, true, false];
     for (const on of states) {
       await trees.setChecked(on);
@@ -106,7 +106,8 @@ test('@smoke V106 tree layers share placement in both views and stay within the 
       is3d ? 'data-build-ms' : 'data-vegetation-rebuild-ms',
       buildMs!,
     );
-    if (!process.env.CI) expect(onMs).toBeLessThanOrEqual(offMs * 1.2);
+    // Owner-approved Munich allowance for local frame-timing noise; CI records timings only.
+    if (!process.env.CI) expect(onMs).toBeLessThanOrEqual(offMs * 1.25);
     await trees.check();
     await street.check();
     // Each layer works independently, without hiding or rebuilding surroundings.

@@ -138,7 +138,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | todo |
 | [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | todo |
 | [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | todo |
-| [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | implemented; smoke pending |
+| [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -870,10 +870,10 @@ and 108. TASK-116 generalises TASK-101's lane-option fix to every route (review 
 TASK-116 now returns feasible target sets for every route, preserving the selected plan and
 TASK-076's lane preference. The quick morning improves from 3,012 completed / 38 gridlocked /
 0 stalled heads on main to 3,214 / 29 / 2; persistent heads remain on `r:248` and `r:961`.
-`npm run check` and `test:city` pass. One smoke case remains red: T47's Munich
-local-access workflow exceeds its unchanged 60 s deadline across import/setup,
-Play and capture phases on this host; the other 20 smoke cases passed across the
-full run and focused rerun. The lead must clear this remaining verification gate.
+`npm run check` and `test:city` pass. All 21 smoke cases are validated across a
+20-pass full run and the remaining vegetation case's focused rerun. The owner
+approved a 180 s total budget for T47 Munich and a 25% local vegetation frame
+allowance; functional assertions and traffic/routing-speed gates are unchanged.
 The lead retains the full traffic gate and baseline reset at merge.
 
 Checks for Phase 2 agents (owner, 2026-11-08): `npm run check`, `npm run test:city` and

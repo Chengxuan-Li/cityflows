@@ -60,6 +60,8 @@ test('T47 local traffic only reroutes a live through trip and undo restores acce
 test('T47 Munich local access diverts through traffic and permits a local departure @smoke', async ({
   page,
 }, info) => {
+  // The owner allows Munich's import, live edit and evidence capture a larger wall-time budget.
+  test.setTimeout(180_000);
   const errors = pageErrors(page);
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
@@ -184,11 +186,6 @@ test('T47 Munich local access diverts through traffic and permits a local depart
     body: JSON.stringify(chosen),
     contentType: 'application/json',
   });
+  await page.screenshot({ path: info.outputPath('munich-local-access.png') });
   expect(errors).toEqual([]);
-});
-
-// Evidence capture has its own teardown budget; the live-edit assertions keep their 60 s limit.
-test.afterEach(async ({ page }, info) => {
-  if (info.title.startsWith('T47 Munich'))
-    await page.screenshot({ path: info.outputPath('munich-local-access.png') });
 });
