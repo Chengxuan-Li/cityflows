@@ -13,11 +13,13 @@ import { test } from 'vitest';
 
 // Exact full results from 56ffccd's unmodified router on these same unrestricted networks.
 // Imported networks retain access boundaries before their rules are cleared for this check.
+// Sindelfingen and Munich moved at the TASK-104 merge (the aisle graph, unrestricted here, and
+// shifted dense indices) and at TASK-102 (garages renumber the aisles).
 const hashes = {
   grid: 'f54053d207e6c0d1da2ad1748d84de10b7c6d961fbddde66e183c0b0066bb031',
   town: '3014271261a29ab0fdd413ecf0af3063f569f9420cb028b05a1fbd827973be57',
-  Sindelfingen: 'edfee22305eddb2436d68f82ed0ebb88ab120980bd9a8818b90f0bf11d38cd9a',
-  Munich: 'bc6db3c17ec82aac370bbdd77c0e3e19880c48d3485e7f06757a44fac6fc29d0',
+  Sindelfingen: 'ba1eb109924f8802a81e03daa0605a60462366a05344808583ad4709a90d3161',
+  Munich: '64dd76ad60806f4dca405dbc82eaa92da88a723bd558be4efc3c748efe5ee2e0',
 };
 
 test.each(tierCities(throughputCities))('T47 unrestricted %s routes equal main', (name) => {

@@ -4,7 +4,7 @@ import { compile } from '../../network';
 import { allocateId, type City, type Command, type Node, type Road } from '../../schema';
 import { applyPatch, diffCity } from '../patch';
 import { editTopology, nearestPointOnLine, newRoadNode, relocateConnectors } from './topology';
-import { requireEntity, type CommandPatch } from './types';
+import { mapConnectors, requireEntity, type CommandPatch } from './types';
 
 function ringCentroid(ring: Road[], origin: Vec2): Vec2 {
   let area = 0;
@@ -204,37 +204,28 @@ function removeRoundabout(city: City, center: Node): CommandPatch {
     if (JSON.stringify(updated) !== JSON.stringify(node)) nodes[node.id] = updated;
   }
 
-  const draft = { ...city, nodes, roads, places: { ...city.places } };
-  const warnings: NonNullable<CommandPatch['warnings']> = [];
-  for (const place of Object.values(city.places)) {
-    const connectors = place.connectors.flatMap((connector) => {
-      const road = roads[resolve(connector.roadId)];
-      if (!road) {
-        warnings.push({
-          severity: 'warning',
-          code: 'connector_removed',
-          refs: [place.id, connector.id, connector.roadId],
-          message: `Removed connector ${connector.id} with road ${connector.roadId}`,
-        });
-        return [];
-      }
-      if (connector.lane < road.lanes.length) return [connector];
-      warnings.push({
+  const draft = { ...city, nodes, roads };
+  const patch: CommandPatch = { ...diffCity(city, draft), warnings: [] };
+  mapConnectors(city, patch, (connector, ownerId) => {
+    const road = roads[resolve(connector.roadId)];
+    if (!road) {
+      patch.warnings!.push({
         severity: 'warning',
-        code: 'connector_lane_clamped',
-        refs: [place.id, connector.id, road.id],
-        message: `Moved connector ${connector.id} to the outermost lane on ${road.id}`,
+        code: 'connector_removed',
+        refs: [ownerId, connector.id, connector.roadId],
+        message: `Removed connector ${connector.id} with road ${connector.roadId}`,
       });
-      return [{ ...connector, lane: city.drivingSide === 'right' ? road.lanes.length - 1 : 0 }];
-    });
-    if (
-      connectors.length !== place.connectors.length ||
-      connectors.some((connector, i) => connector !== place.connectors[i])
-    ) {
-      draft.places[place.id] = { ...place, connectors };
+      return null;
     }
-  }
-  const patch = { ...diffCity(city, draft), warnings };
+    if (connector.lane < road.lanes.length) return connector;
+    patch.warnings!.push({
+      severity: 'warning',
+      code: 'connector_lane_clamped',
+      refs: [ownerId, connector.id, road.id],
+      message: `Moved connector ${connector.id} to the outermost lane on ${road.id}`,
+    });
+    return { ...connector, lane: city.drivingSide === 'right' ? road.lanes.length - 1 : 0 };
+  });
   return relocateConnectors(
     city,
     patch,

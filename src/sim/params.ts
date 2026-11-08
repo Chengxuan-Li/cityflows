@@ -1,6 +1,7 @@
 import type { SimParams } from '../schema';
 
 export const DEFAULT_SIM_PARAMS: SimParams = {
+  parkingSearchRadiusM: 400,
   dtS: 0.1,
   vehicleClasses: {
     car: { lengthM: 4.5, widthM: 1.8, maxSpeedMps: Infinity, accelFactor: 1, decelFactor: 1 },

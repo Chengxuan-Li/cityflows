@@ -377,6 +377,18 @@ export function PlaceInspector({ place, connectorId }: { place: Place; connector
         {summary?.departures ?? 0} trips produced · {summary?.arrivals ?? 0} attracted
       </p>
       {!summary && <p className="muted">Regenerate demand to schedule this place.</p>}
+      {session.compiled.parking
+        .filter((facility) => facility.source.placeId === place.id)
+        .map((facility) => (
+          <button
+            key={facility.id}
+            onClick={() =>
+              useAppStore.getState().select({ kind: 'parking', parking: facility.idx })
+            }
+          >
+            {facility.name ?? 'Garage'} · {facility.capacity} spaces
+          </button>
+        ))}
       <div className="edit-fields">
         {(place.kind === 'residential'
           ? (['population'] as const)

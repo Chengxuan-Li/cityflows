@@ -388,6 +388,12 @@ dd {
   margin-top: 6px;
 }
 
+.parking-fields {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
 .edit-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

@@ -61,6 +61,9 @@ test('trip export retains every loaded trip and engine outcomes, with nonnegativ
     expect(record.arrival).toBe(detail.arrivedS);
     expect(record.travelTime).toBe(record.arrival! - record.departure!);
     expect(record.delay).toBeGreaterThanOrEqual(0);
+    expect(record.parkingFacility).toBe(detail.parkingFacility);
+    expect(record.walkingDistanceM).toBe(detail.walkingDistanceM);
+    expect(record.parkingSearchTimeS).toBe(detail.parkingSearchTimeS);
   }
   expect(records.find((r) => r.id === 'unsupported')).toMatchObject({
     departure: null,
@@ -77,11 +80,39 @@ test('trip export retains every loaded trip and engine outcomes, with nonnegativ
   });
   const rows = lines(exportTripsCsv(records, provenance));
   expect(rows[0]).toBe(
-    'id,person,origin,destination,class,purpose,departure,arrival,travel time,delay,fail reason,respawns',
+    'id,person,origin,destination,class,purpose,departure,arrival,travel time,delay,fail reason,respawns,parking facility,walking distance,parking search time',
   );
   expect(rows).toHaveLength(requests.length + 1);
   expect(rows[1]!.split(',').slice(4, 6)).toEqual(['truck', 'through']);
   expect(rows[2]!.split(',').slice(4, 6)).toEqual(['bus', 'service']);
+});
+
+test('trip CSV preserves parking facility, walking distance and search time', () => {
+  const rows = lines(
+    exportTripsCsv(
+      [
+        {
+          id: 'trip:parking',
+          person: null,
+          origin: 'p:1',
+          destination: 'p:2',
+          vehicleClass: 'car',
+          purpose: 'private',
+          departure: 100,
+          arrival: 160,
+          travelTime: 60,
+          delay: 5,
+          failReason: null,
+          respawns: 0,
+          parkingFacility: 'pk:7',
+          walkingDistanceM: 125.5,
+          parkingSearchTimeS: 14,
+        },
+      ],
+      provenance,
+    ),
+  );
+  expect(rows[1]!.split(',').slice(-3)).toEqual(['pk:7', '125.5', '14']);
 });
 
 test('road metrics record throughput and queue maxima and escape imported names', () => {

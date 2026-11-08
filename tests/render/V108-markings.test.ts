@@ -30,23 +30,25 @@ import { tierCities, unitTest } from '../tier';
 // TASK-101 merge: compiled roads carry access and zones (all four), and access boundaries keep
 // junctions in Munich and Sindelfingen, which moves their arrows; grid and town arrows are equal.
 // TASK-104 merge: compiled `lots` (stalls, aisle ids) and the appended aisle graph move the
-// Munich and Sindelfingen compile hashes; arrows are unchanged (T49 strips the aisles).
+// Munich and Sindelfingen compile hashes, and the new aisle lanes join the arrow hash.
+// TASK-102 merge: garages compile into every city; they take ids before the lots, so the
+// aisle lanes are renumbered. Arrows on the other 664 Sindelfingen lanes equal main's.
 const baseline = {
   grid: {
-    compile: 'fcf4d931bbc66167737ec54391d801caf214ade75bb9b20f557d53aebc6745dc',
+    compile: '41664cabf1ab1d44115242181e2d531294b4cd516eb00209669329ad514b53f3',
     arrows: '46a5ce9adeddd011af72c58a0c8ef9e9b315ad7f732ebfa71b2cff6c2d531748',
   },
   town: {
-    compile: '80464e2043f772549c4cd990c689d3aa9884c905316334a946205deb7190a5f5',
+    compile: '3c319559549227be144c8ccb3fa783d7d9ca9bd46c66ecb715cabf26a709fa0d',
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: '475329711ca65dcf10635478ebc75fdd81a68b54bad7a67d4519b823b4808ee0',
-    arrows: 'b937d115697af6dfe6a9bbb0c453fac41b6f04092761a7ea52b9bd93d89a5cfa',
+    compile: 'ed5aaca59bdd8352f870debc144cb0ae86f9fb48c37f391d2474bbfc537edeb5',
+    arrows: '4a050bf9444cf93e96db85004e8d3ea62dca54dcc33d6a794f12c603be8234d3',
   },
   munich: {
-    compile: '067ad454012badd68fe6cba95dc4ded056f51b539521190274c12969b8c3cf6a',
-    arrows: 'ce8a7e9688027561538d0b4bdbd8a32b0498221b2a460597a99685e97a4adcc7',
+    compile: '2e140aa992c4bc2c233497ca6d3a0d25574f8db0f8c236153703c4b049301e19',
+    arrows: '58f23f654d47b6df163f7625fc68815d5e2dc06b00437fc2918e30a09dd7abb1',
   },
 } as const;
 const hash = (value: unknown) =>

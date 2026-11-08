@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Diagnostics } from './inspector/diagnostics';
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
+import { ParkingInspector } from './inspector/parking';
 import { StreetInspector } from './inspector/street';
 import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
@@ -41,6 +42,8 @@ function Inspector() {
     );
   if (!selection) return null;
   switch (selection.kind) {
+    case 'parking':
+      return <ParkingInspector facility={compiled.parking[selection.parking]!} />;
     case 'vehicle':
       return <VehicleInspector id={selection.id} detail={vehicle} city={city} />;
     case 'lane':
@@ -72,6 +75,11 @@ function Inspector() {
       );
     case 'connector': {
       const connector = compiled.connectors[selection.connector]!;
+      if (
+        connector.parking !== undefined &&
+        !compiled.parking[connector.parking]!.source.provenance.inferred?.includes('implicitGarage')
+      )
+        return <ParkingInspector facility={compiled.parking[connector.parking]!} />;
       return (
         <PlaceInspector
           key={compiled.places[connector.place]!.id}

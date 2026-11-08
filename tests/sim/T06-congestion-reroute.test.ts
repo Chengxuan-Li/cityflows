@@ -274,4 +274,4 @@ test('T06 bypass blockage, recovery and rerouting are deterministic and bounded'
   expect(Math.max(...switches.values())).toBe(1);
   expect(first.metrics().trips.completed).toBe(requests.length);
   expect(first.metrics().trips.failed).toBe(0);
-}, 30000);
+});

@@ -33,12 +33,13 @@ export function throughputFixture(name: ThroughputCity) {
 
 /** The fixed sample, each request keyed by its connectors and its variant (0 to 2). */
 export function throughputRequests(net: CompiledCity): { key: string; request: RouteRequest }[] {
-  // Same ordered connector pairs and exclusions as bench/route-audit.ts; spread
-  // the fixed sample across the entire city rather than only its first origins.
-  const pairs = net.connectors
+  // Keep the original place-connector sample when TASK-102 appends garage entries.
+  const placeEntries = new Set(net.places.flatMap((p) => [...p.connectorsIn, ...p.connectorsOut]));
+  const connectors = net.connectors.filter((c) => placeEntries.has(c.idx));
+  const pairs = connectors
     .filter((c) => c.direction !== 'in')
     .flatMap((origin) =>
-      net.connectors
+      connectors
         .filter((c) => c.direction !== 'out' && c.place !== origin.place)
         .map((destination) => ({ origin, destination })),
     );

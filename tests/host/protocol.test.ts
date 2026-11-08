@@ -86,12 +86,19 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect(snapshot.id.byteLength).toBe(4);
   expect(snapshot.vclass).toBeInstanceOf(Uint8Array);
   expect([...snapshot.vclass]).toEqual([2]);
-  expect(transferred).toEqual(Array(11).fill(0));
+  expect(transferred).toEqual(Array(12).fill(0));
   expect(snapshot.roadSpeedRatio).toHaveLength(input.compiled.roads.length);
+  expect(snapshot.parkingOccupancy).toBeInstanceOf(Uint32Array);
+  expect(snapshot.parkingOccupancy).toHaveLength(input.compiled.parking.length);
   now = 499;
-  expect((await client.snapshot()).roadSpeedRatio).toBeUndefined();
+  const throttled = await client.snapshot();
+  expect(throttled.roadSpeedRatio).toBeUndefined();
+  expect(throttled.parkingOccupancy).toBeUndefined();
+  expect(transferred).toEqual(Array(10).fill(0));
   now = 500;
-  expect((await client.snapshot()).roadSpeedRatio).toHaveLength(input.compiled.roads.length);
+  const updated = await client.snapshot();
+  expect(updated.roadSpeedRatio).toHaveLength(input.compiled.roads.length);
+  expect(updated.parkingOccupancy).toHaveLength(input.compiled.parking.length);
   expect(await client.metricsSeries()).toMatchObject([{ timeS: 100, driving: 0 }]);
 
   deferReplies = true;
@@ -116,7 +123,9 @@ test('round-trips every request through the worker and matches replies by ID', a
   unsubscribe();
   await client.restart();
   expect(await client.metricsSeries()).toHaveLength(1);
-  expect((await client.snapshot()).roadSpeedRatio).toBeDefined();
+  const restarted = await client.snapshot();
+  expect(restarted.roadSpeedRatio).toBeDefined();
+  expect(restarted.parkingOccupancy).toHaveLength(input.compiled.parking.length);
   expect(await client.hash()).toBe(initialHash);
   await client.step(10);
   expect(events).toHaveLength(1);
@@ -164,7 +173,9 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect(patch.timeS).toBe(beforeComparison.timeS);
   expect((await client.metrics()).timeS).toBe(beforeComparison.timeS);
   expect(await client.metricsSeries()).toEqual(historyBefore);
-  expect((await client.snapshot()).roadSpeedRatio).toBeDefined();
+  const patched = await client.snapshot();
+  expect(patched.roadSpeedRatio).toBeDefined();
+  expect(patched.parkingOccupancy).toHaveLength(editor.compiled.parking.length);
   const wire = requests.find((request) => request.type === 'patch')!;
   expect(wire.type === 'patch' && wire.compiled.laneSpatial.data).toBeInstanceOf(ArrayBuffer);
   await client.restart();

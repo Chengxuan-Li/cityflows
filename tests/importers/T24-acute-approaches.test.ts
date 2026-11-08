@@ -228,5 +228,5 @@ test.each(
     // Owner-approved exception: these remaining lanes have no eligible acute pair.
     expect(next.short).toBeLessThanOrEqual(old.short);
   },
-  60_000,
+  Number(process.env.CITYFLOWS_TEST_TIMEOUT_MS ?? 60_000),
 );

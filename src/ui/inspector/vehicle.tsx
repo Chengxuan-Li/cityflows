@@ -45,6 +45,19 @@ export function VehicleInspector({
           <dd>{(detail.speedMps * 3.6).toFixed(1)} km/h</dd>
           <dt>Waiting time</dt>
           <dd>{detail.waitingS.toFixed(1)} s</dd>
+          {detail.parkingFacility && (
+            <>
+              <dt>Parking</dt>
+              <dd>
+                {compiled.parking[compiled.index.parking.get(detail.parkingFacility)!]?.name ??
+                  'Garage'}
+              </dd>
+              <dt>Walk to destination</dt>
+              <dd>{Math.round(detail.walkingDistanceM)} m</dd>
+              <dt>Parking search</dt>
+              <dd>{detail.parkingSearchTimeS.toFixed(1)} s</dd>
+            </>
+          )}
           {reason && (
             <>
               <dt>Waiting because</dt>

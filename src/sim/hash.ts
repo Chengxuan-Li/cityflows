@@ -10,7 +10,12 @@ function word(hash: number, value: number): number {
   return hash;
 }
 
-export function stateHash(timeS: number, vehicles: Vehicles, trips: Metrics['trips']): number {
+export function stateHash(
+  timeS: number,
+  vehicles: Vehicles,
+  trips: Metrics['trips'],
+  parking?: number,
+): number {
   let hash = word(0x811c9dc5, Math.round(timeS * 10));
   for (let id = 0; id < vehicles.count; id++) {
     if (Number.isNaN(vehicles.departed[id])) continue;
@@ -29,5 +34,12 @@ export function stateHash(timeS: number, vehicles: Vehicles, trips: Metrics['tri
   ]) {
     hash = word(hash, count);
   }
+  if (parking !== undefined) hash = word(hash, parking);
+  return hash >>> 0;
+}
+
+export function parkingHash(fields: readonly (Uint32Array | Int32Array)[]): number {
+  let hash = 0x811c9dc5;
+  for (const values of fields) for (const value of values) hash = word(hash, value);
   return hash >>> 0;
 }

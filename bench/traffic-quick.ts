@@ -52,6 +52,13 @@ const totals = {
   failed: morning.failed,
   gridlocked: morning.failedByReason.gridlocked,
   stalledHeads: morning.stalledHeads,
+  failedByReason: morning.failedByReason,
+  parking: {
+    arrivals: morning.parking.arrivals,
+    meanSearchTimeS: morning.parking.meanSearchTimeS,
+    failed: morning.parking.failed,
+    localArrivals: morning.localArrivals,
+  },
 };
 console.info(
   `Munich at 0.15, 07:00 to 09:30, ${((performance.now() - start) / 1000).toFixed(1)} s:`,

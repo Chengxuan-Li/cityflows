@@ -21,6 +21,15 @@ test('same city, demand and seed produce identical comparison numbers', () => {
   expect(baseline.travelTime.p90DelayS).toBeGreaterThan(0);
   expect(Object.values(baseline.roadVehicleCounts).some((count) => count > 0)).toBe(true);
   expect(baseline.series).toHaveLength(11);
+  expect(baseline.metrics.parking.facilities).toHaveLength(2);
+  expect(baseline.series.every(({ parkingOccupancy }) => parkingOccupancy !== undefined)).toBe(
+    true,
+  );
+  expect(baseline.series.at(-1)!.parkingOccupancy).toEqual(
+    Object.fromEntries(
+      baseline.metrics.parking.facilities.map(({ id, occupied }) => [id, occupied]),
+    ),
+  );
   const interactive = createEngine();
   interactive.load(input);
   interactive.step(6000);

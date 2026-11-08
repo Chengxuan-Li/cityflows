@@ -1,12 +1,12 @@
 {
-  "tree": "main at the TASK-104 merge (surface lots: appended aisles, lot entry junctions); reset per the owner's rule for parking-changing tasks, 2026-11-08. stalledHeads stays 1: this tree measured 0, but the B56 loop at n:263 still locks with cars only",
+  "tree": "main at the TASK-102 merge (garages, parking choice and parked departures, on top of TASK-104's lots); reset per the owner's rule for parking-changing tasks, 2026-11-08. stalledHeads stays 1: this tree measured 0, but the B56 loop at n:263 still locks with cars only",
   "scale": 0.15,
-  "completed": 3472,
-  "gridlocked": 70,
+  "completed": 3378,
+  "gridlocked": 62,
   "stalledHeads": 1,
   "quick": {
     "until": "09:30",
-    "completed": 3233,
-    "gridlocked": 35
+    "completed": 3209,
+    "gridlocked": 28
   }
 }

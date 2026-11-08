@@ -155,9 +155,14 @@ cityTest(
     // r:379 exits through the bus-only Trappentreustraße links r:373/r:374; r:1059/r:1060
     // are reached/left through private r:917/r:921. Their open endpoints confer no zone permit.
     const forbidden = { from379: 0, from1060: 0, to1059: 0 };
+    // TASK-102 garage entries have separate reachability checks; preserve this place audit.
+    const placeEntries = new Set(
+      compiled.places.flatMap((p) => [...p.connectorsIn, ...p.connectorsOut]),
+    );
+    const connectors = compiled.connectors.filter((c) => placeEntries.has(c.idx));
     let pairs = 0;
-    for (const origin of compiled.connectors.filter((c) => c.direction !== 'in')) {
-      for (const destination of compiled.connectors.filter((c) => c.direction !== 'out')) {
+    for (const origin of connectors.filter((c) => c.direction !== 'in')) {
+      for (const destination of connectors.filter((c) => c.direction !== 'out')) {
         if (origin.place === destination.place) continue;
         pairs++;
         const request = {

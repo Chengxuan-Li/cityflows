@@ -14,7 +14,7 @@ interface LoopOptions {
 }
 
 type LoopEngine = Pick<TrafficEngine, 'timeS' | 'step'> & {
-  metrics(): Pick<Metrics, 'trips' | 'meanDelayS'>;
+  metrics(): Pick<Metrics, 'trips' | 'meanDelayS' | 'parking'>;
 };
 
 export function createPlayLoop(
@@ -32,13 +32,20 @@ export function createPlayLoop(
   let nextSampleS = engine.timeS + 60;
 
   function sample() {
-    const { trips, meanDelayS } = engine.metrics();
+    const { trips, meanDelayS, parking } = engine.metrics();
     series.push({
       timeS: engine.timeS,
       driving: trips.driving,
       queued: trips.queuedOrigin + trips.queuedDestination,
       completed: trips.completed,
       meanDelayS,
+      ...(parking.facilities.length
+        ? {
+            parkingOccupancy: Object.fromEntries(
+              parking.facilities.map(({ id, occupied }) => [id, occupied]),
+            ),
+          }
+        : {}),
     });
   }
   sample();

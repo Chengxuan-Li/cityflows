@@ -39,6 +39,7 @@ import { groundMesh } from './terrain';
 import { lotGeometry } from './stalls';
 import { terrainVehicleOffset } from './heights';
 import { buildTerrainGround } from './context';
+import { Parking3D } from './parking';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -75,6 +76,10 @@ export class Scene3D {
   private buildingDetails = true;
   private lamps: InstancedMesh | undefined;
   private selectedId: number | null = null;
+  private selectedParking: number | null = null;
+  private parking: Parking3D | undefined;
+  private parkingVisible = false;
+  private parkingCounts: ArrayLike<number> | null = null;
   private signalCity: CompiledCity | null = null;
   private lastSignalKey = '';
   private capture: { images: string[]; resolve: (images: string[]) => void } | null = null;
@@ -154,6 +159,10 @@ export class Scene3D {
       Boolean(renderedSource.terrain),
     ));
     const terrain = geometry.heights.terrain;
+    this.parking = new Parking3D(city, (p) => terrain.groundAt(p.x, p.y));
+    this.parking.group.visible = this.parkingVisible;
+    this.parking.setCounts(this.parkingCounts);
+    this.content.add(this.parking.group);
     if (this.source?.geo !== source.geo || this.renderedTerrain !== this.terrainEnabled) {
       this.basemap?.destroy();
       this.basemap = source.geo ? new Basemap3D(source.geo, terrain) : undefined;
@@ -371,8 +380,28 @@ export class Scene3D {
   }
   setSelection(pick: Pick | null) {
     const id = pick?.kind === 'vehicle' ? pick.id : null;
-    if (id !== this.selectedId) this.invalidate();
+    const parking = pick?.kind === 'parking' ? pick.parking : null;
+    if (id !== this.selectedId || parking !== this.selectedParking) this.invalidate();
     this.selectedId = id;
+    this.selectedParking = parking;
+  }
+  setParkingOccupancy(counts: ArrayLike<number> | null) {
+    const same =
+      counts === this.parkingCounts ||
+      (counts !== null &&
+        this.parkingCounts !== null &&
+        counts.length === this.parkingCounts.length &&
+        Array.prototype.every.call(counts, (n: number, i: number) => n === this.parkingCounts![i]));
+    this.parkingCounts = counts;
+    if (same) return;
+    this.parking?.setCounts(counts);
+    this.invalidate();
+  }
+  setParkingVisible(visible: boolean) {
+    if (visible !== this.parkingVisible) this.invalidate();
+    this.parkingVisible = visible;
+    if (this.parking) this.parking.group.visible = visible;
+    this.canvas.dataset.parkingFacilities = String(visible ? (this.city?.parking.length ?? 0) : 0);
   }
 
   setSignals(timeS: number, loaded: CompiledCity | null = this.signalCity) {
@@ -570,9 +599,17 @@ export class Scene3D {
       this.canvas.clientWidth,
       this.canvas.clientHeight,
     );
-    return index === null
-      ? null
-      : { kind: 'vehicle', id: this.vehicles.poses.snapshot!.id[index]! };
+    if (index !== null) return { kind: 'vehicle', id: this.vehicles.poses.snapshot!.id[index]! };
+    if (this.parkingVisible && this.city) {
+      const tolerance = Math.max(7, 5 * this.getView().zoom);
+      for (let i = this.city.parking.length - 1; i >= 0; i--) {
+        const facility = this.city.parking[i]!,
+          p = this.worldToScreen(facility.centroid);
+        if (Math.abs(p.x - x) <= tolerance && Math.abs(p.y - y) <= tolerance)
+          return { kind: 'parking', parking: facility.idx };
+      }
+    }
+    return null;
   }
 
   render(elapsedS: number, timeS: number) {
@@ -606,6 +643,7 @@ export class Scene3D {
       this.geometry?.crossings.getAttribute('position').count ?? 0,
     );
     if (!this.demand.consume(renderContinuously())) return;
+    this.parking?.update(this.getView().zoom, this.selectedParking);
     if (this.city && this.geometry)
       this.vehicles.animate(elapsedS, this.city, this.geometry.heights);
     if (this.city && this.geometry?.heights.terrain.grid && this.vehicles.poses.snapshot) {

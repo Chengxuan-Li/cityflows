@@ -1,6 +1,7 @@
 import { polylineLength } from '../../geo/polyline';
 import { lonLatToLocal } from '../../geo/projection';
 import { compile, type Diagnostic } from '../../network';
+import { addImplicitGarages } from '../../network/parking';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
@@ -10,6 +11,7 @@ import { addBuildings } from './buildings';
 import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
+import { addOsmGarages } from './parking';
 import { addGateways, addOsmPlaces } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
@@ -333,6 +335,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addGateways(city, roads, base.compiled);
   addOsmPlaces(city, data, positions, bounds, base.compiled);
   addBuildings(city, data, positions, bounds, base.compiled);
+  addOsmGarages(city, data, positions, bounds, base.compiled);
+  addImplicitGarages(city);
   addLots(city, data, positions, bounds, diagnostics);
   if (options.context !== false)
     city.context = { features: importContext(data, positions, bounds, diagnostics, true) };
@@ -363,6 +367,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     ...Object.values(city.nodes).flatMap((node) => node.turnRules),
     ...Object.values(city.roads),
     ...Object.values(city.places),
+    ...Object.values(city.parking ?? {}),
   ].reduce((sum, entity) => sum + (entity.provenance.inferred?.length ?? 0), 0);
   const validation = citySchema.safeParse(city);
   if (!validation.success) {

@@ -10,15 +10,16 @@ const hash = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value, (_, v: unknown) => (v instanceof Map ? [...v] : v)))
     .digest('hex');
-// Main 806263a, before TASK-104. No original entity is reconstructed by the stripping oracle.
+// TASK-102's import without lots (its T44 pins; main 806263a before TASK-102). No original
+// entity is reconstructed by the stripping oracle.
 const main = {
   'munich-donnersberger': [
-    '5214f5f79a95e4fa038e01fa58ec6aaf65fe74b09cfc495d83dca579ae279b3b',
-    '114894aea61446a784fca6707c1ef6601080ac8e03d374f0e66586be8b2f36fe',
+    '11a7022ffb599e262038854f342a987a0c1fb2ae76d1790623d8ba9be51e9b0e',
+    '13adf10aeb155f927cdeab07ffdfd655a80da85ca764462cc87848c93a38e931',
   ],
   'sindelfingen-a81': [
-    '440715f6bc83776119a532b4d27dff374f7d03dc4cceae1d24cbfcddd282ecd8',
-    '6796e26d82f456a43fd826489ab54f9285f4148ca82c0f3be1ed1a15d8027478',
+    '23d8ccc808153bc15f0be4298e07f0c7b56ee4babd4ed57be0d148f7e9e2e5cc',
+    'bcd1a39665fe5c3ce4f342544916dd5a95cedd2fb6331035eeeb5f6d82cf024f',
   ],
 };
 
@@ -42,7 +43,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
     compile(stripped);
     const mainCompileMs = performance.now() - baselineStart;
     if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
-    const lots = Object.values(city.parking!);
+    // TASK-102's garages share `City.parking`.
+    const lots = Object.values(city.parking!).filter((f) => f.kind === 'lot');
     const aisles = new Set(lots.flatMap((lot) => lot.aisles!));
     const stalls = compiled.compiled.lots!.reduce((s, lot) => s + lot.stallCount, 0);
     const counts = [lots.length, aisles.size, stalls];

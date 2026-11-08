@@ -5,6 +5,7 @@ import { connectorPosition } from '../picking';
 import { style } from '../style';
 import type { Pick, RouteOverlay } from '../types';
 import { placePath } from './places';
+import { parkingRadiusM } from '../parking';
 
 export function drawMultiSelection(
   graphics: Graphics,
@@ -33,6 +34,13 @@ export function drawSelection(
   if (!selection) return;
   const stroke = { color: style.selection, width: 1.4, alpha: 0.55 };
   switch (selection.kind) {
+    case 'parking': {
+      const { centroid } = city.parking[selection.parking]!;
+      graphics
+        .circle(centroid.x, centroid.y, Math.max(parkingRadiusM, 7 / zoom) + 2 / zoom)
+        .stroke({ ...stroke, width: 1.4 / zoom });
+      break;
+    }
     case 'lane': {
       const lane = city.lanes[selection.lane]!;
       graphics

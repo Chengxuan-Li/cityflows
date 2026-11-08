@@ -18,7 +18,8 @@ export type FailReason =
   | 'stranded'
   | 'no_origin_connector'
   | 'no_destination_connector'
-  | 'gridlocked';
+  | 'gridlocked'
+  | 'no_parking';
 
 export interface TrafficEngine {
   load(input: {
@@ -44,6 +45,7 @@ export interface PatchResult {
 }
 
 export interface VehicleSnapshot {
+  parkingOccupancy?: Uint32Array;
   timeS: number;
   count: number;
   id: Uint32Array;
@@ -60,6 +62,13 @@ export interface VehicleSnapshot {
 }
 
 export interface Metrics {
+  parking: {
+    facilities: { id: string; occupied: number; capacity: number }[];
+    parked: number;
+    arrivals: number;
+    meanSearchTimeS: number;
+    failed: number;
+  };
   completedByClass: Record<VehicleClass, number>;
   timeS: number;
   trips: {
@@ -84,6 +93,9 @@ export interface Metrics {
 }
 
 export interface TripOutcome {
+  parkingFacility: string | null;
+  walkingDistanceM: number;
+  parkingSearchTimeS: number;
   departedS: number | null;
   arrivedS: number | null;
   freeFlowS: number | null;
@@ -92,6 +104,9 @@ export interface TripOutcome {
 }
 
 export interface VehicleDetail {
+  parkingFacility: string | null;
+  walkingDistanceM: number;
+  parkingSearchTimeS: number;
   vehicleClass: VehicleClass;
   purpose: VehiclePurpose;
   id: number;
@@ -104,7 +119,7 @@ export interface VehicleDetail {
   positionM: number;
   speedMps: number;
   route: Route | null;
-  routeReason: 'initial' | 'missed_turn' | 'congestion' | 'edit' | 'respawn';
+  routeReason: 'initial' | 'missed_turn' | 'congestion' | 'edit' | 'respawn' | 'parking';
   waitingS: number;
   departedS: number | null;
   arrivedS: number | null;

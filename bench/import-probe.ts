@@ -204,6 +204,13 @@ export function probeMorning(
     respawns: metrics.respawns,
     ...metrics.trips,
     failedByReason: metrics.failedByReason,
+    parking: metrics.parking,
+    localArrivals: trips.filter(
+      (trip, id) =>
+        city.places[trip.destinationPlaceId]!.kind !== 'gateway' &&
+        (engine.inspect(id + 1)?.state === 'completed' ||
+          engine.inspect(id + 1)?.failReason === 'no_parking'),
+    ).length,
     gatewayTraffic,
     sampledRoadTraffic,
     failures: Object.fromEntries(failures),

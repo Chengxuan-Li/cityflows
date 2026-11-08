@@ -30,13 +30,14 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
         ? // TASK-101: imported road access/bus reservations and compiled access/zone arrays;
           // merged with TASK-100's `van`.
           // TASK-104: lot facilities, appended aisles and compiled `lots` (T49 strips them).
+          // TASK-102: garage facilities, inferred garages and their compiled entries.
           [
-            'bc20fb6fdedbc6648393b63bc6ceed3c1212ad8711c59912393e34d5c7b7452e',
-            '2b926f716ed9de61e8538f82d6adae6ca2b2c4668fe3c5af9378cee8b99f7433',
+            'f1d2cbb961cbbef23ec53efb2ede11f585bc786b92b59906266a3788f35284fb',
+            '35d33148525b79c4b22126d79c0ed22c7c0139d0255923d06f4b85168e3c81fc',
           ]
         : [
-            '517440c07e61532e35658b73c704a625f8c34d9d1da145863ae4998062fc921b',
-            '4f2d84a8141019fc1ed65102dd2abf511e1c6a4ae8da46b279b827e565a98a0d',
+            '17e968e53875ab61d15cc4762f80d4505534818419e6738117fb3b0d64587ab5',
+            '76bba2d00f5809192b54018febce65755973427427ef384540b58ec4bbc2800b',
           ];
     expect(hash(off.city)).toBe(baseline[0]);
     expect(hash(compile(off.city))).toBe(baseline[1]);

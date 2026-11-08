@@ -72,6 +72,7 @@ test.each(['right', 'left'] as const)(
     const motorway = roads.find((r) => r.centerline[0]!.x === 0)!;
     const source = roads.find((r) => r.roadClass === 'ramp' && r.centerline[0]!.x < 0)!;
     const editor = createEditor(city);
+    const initial = editor.city;
     const result = editor.apply({
       kind: 'addRamp',
       from: { roadId: source.id, atM: 30 },
@@ -108,7 +109,7 @@ test.each(['right', 'left'] as const)(
     expect(editor.undo()!.ok).toBe(true);
     expect(editor.city).toEqual({ ...built, version: editor.city.version });
     expect(editor.undo()!.ok).toBe(true);
-    expect(editor.city).toEqual({ ...city, version: editor.city.version });
+    expect(editor.city).toEqual({ ...initial, version: editor.city.version });
   },
 );
 

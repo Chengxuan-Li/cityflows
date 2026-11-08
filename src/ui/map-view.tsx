@@ -332,6 +332,7 @@ export function MapView() {
       let drawnRoute: Route | null = null;
       let snapshotTime = NaN;
       let drawnSnapshot: VehicleSnapshot | null = null;
+      let parkingCounts: number[] | null = null;
       if (window.cityflows) {
         window.cityflows.drawnSnapshot = () => drawnSnapshot;
         window.cityflows.worldToScreen = (point) =>
@@ -357,6 +358,27 @@ export function MapView() {
         const snapshot = await session.engine.snapshot();
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
+        if (snapshot.parkingOccupancy) {
+          const counts = snapshot.parkingOccupancy;
+          parkingCounts = session.compiled.parking.map(({ id }) => {
+            const index = session.loadedCompiled.index.parking.get(id);
+            return index === undefined ? 0 : counts[index]!;
+          });
+          view.setParkingOccupancy(parkingCounts);
+          three?.setParkingOccupancy(parkingCounts);
+          const occupancy = Object.fromEntries(
+            session.compiled.parking.map((facility) => [
+              facility.id,
+              parkingCounts![facility.idx]!,
+            ]),
+          );
+          const previous = getState().parkingOccupancy;
+          if (
+            Object.keys(previous).length !== Object.keys(occupancy).length ||
+            Object.entries(occupancy).some(([id, count]) => previous[id] !== count)
+          )
+            setState({ parkingOccupancy: occupancy });
+        }
         if (snapshot.timeS !== snapshotTime && snapshot.roadSpeedRatio) {
           const ratios = snapshot.roadSpeedRatio;
           view.setHeat(
@@ -440,6 +462,10 @@ export function MapView() {
           drawnRoads = null;
           snapshotTime = NaN;
           drawnSnapshot = null;
+          parkingCounts = session.compiled.parking.map(
+            ({ id }) => getState().parkingOccupancy[id] ?? 0,
+          );
+          view.setParkingOccupancy(parkingCounts);
           snapshotAgeS = 0;
           drawnComparison = null;
         }
@@ -470,6 +496,7 @@ export function MapView() {
         }
         if (active3D && drawn3D?.compiled !== session.compiled) {
           three!.setCity(session.compiled, session.project.city, layers.terrain);
+          three!.setParkingOccupancy(parkingCounts);
           drawn3D = session;
           snapshotTime = NaN;
         }
@@ -490,6 +517,7 @@ export function MapView() {
           three!.setSelection(selection);
           three!.setBelowGround(getState().belowGround);
           three!.setPlaces(layers.places);
+          three!.setParkingVisible(layers.parkingOccupancy);
           three!.setColourVehiclesByClass(layers.vehicleClasses);
           three!.setSurroundings(layers.context, getState().buildings);
           three!.setBuildingDetails(layers.buildingDetails);

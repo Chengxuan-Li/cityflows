@@ -33,12 +33,12 @@ const hash = (value: unknown) =>
     .digest('hex');
 // Compiled hashes from 56ffccd, updated at the TASK-100 merge: lanes also allow `van`; with
 // `van` removed they hash as at 56ffccd. Updated again at the TASK-101 merge (access, zones and
-// retained access-boundary junctions).
+// retained access-boundary junctions), TASK-104 (lots) and TASK-102 (garages in every city).
 const baselines = {
-  grid: 'a3f4b1fd03c65d0e380c56473b082f0d7dd67565fed7003c7239b8fe0f31bbb3',
-  town: '7f5407b1088b1d219baedc5442270c618ff896125e57d615b67867b4318c15ec',
-  'munich-donnersberger': '2b926f716ed9de61e8538f82d6adae6ca2b2c4668fe3c5af9378cee8b99f7433',
-  'sindelfingen-a81': '4f2d84a8141019fc1ed65102dd2abf511e1c6a4ae8da46b279b827e565a98a0d',
+  grid: '296948629376e758231293088f0cdb136d7554c269b0d0880a92577177e913a6',
+  town: '96bd0dd88f049e1589aac69b800a1fe25dfb976687b5b55c9874998b7c51b2a6',
+  'munich-donnersberger': '35d33148525b79c4b22126d79c0ed22c7c0139d0255923d06f4b85168e3c81fc',
+  'sindelfingen-a81': '76bba2d00f5809192b54018febce65755973427427ef384540b58ec4bbc2800b',
 };
 
 unitTest(

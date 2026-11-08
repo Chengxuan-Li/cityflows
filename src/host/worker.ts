@@ -10,7 +10,7 @@ const engine = createEngine();
 let inputs: Parameters<typeof engine.load>[0] | undefined;
 let loop: ReturnType<typeof createPlayLoop> | undefined;
 let multiplier = 1;
-let lastHeatMs = -Infinity;
+let lastOverlayMs = -Infinity;
 let recorder: ReturnType<typeof createExportRecorder> | undefined;
 
 function loadedRecorder() {
@@ -30,7 +30,7 @@ function load(input: Parameters<typeof engine.load>[0]) {
   engine.load(input);
   loop?.pause();
   inputs = input;
-  lastHeatMs = -Infinity;
+  lastOverlayMs = -Infinity;
   recorder = createExportRecorder(engine, input.compiled);
   loop = createPlayLoop(engine, {
     dtS,
@@ -52,7 +52,7 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       const result = engine.patch(compiled);
       inputs = { ...inputs, compiled };
       loadedRecorder().patch(compiled);
-      lastHeatMs = -Infinity;
+      lastOverlayMs = -Infinity;
       performance.clearMeasures('cityflows.patch');
       performance.measure('cityflows.patch', { start: started, end: performance.now() });
       return { ...result, timeS: engine.timeS };
@@ -115,18 +115,21 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
   const { id } = request;
   try {
     if (request.type === 'snapshot') {
-      const { timeS, count, ...arrays } = engine.snapshot();
+      const { timeS, count, parkingOccupancy: occupancy, ...arrays } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
       const now = performance.now();
-      const roadSpeedRatio = now - lastHeatMs >= 500 ? engine.metrics().roadSpeedRatio : undefined;
+      const updateOverlays = now - lastOverlayMs >= 500;
+      const roadSpeedRatio = updateOverlays ? engine.metrics().roadSpeedRatio : undefined;
+      const parkingOccupancy = updateOverlays ? occupancy : undefined;
       if (roadSpeedRatio) {
-        lastHeatMs = now;
+        lastOverlayMs = now;
         transfer.push(roadSpeedRatio.buffer);
       }
+      if (parkingOccupancy) transfer.push(parkingOccupancy.buffer);
       const reply: HostReply = {
         id,
         ok: true,
-        result: { timeS, count, ...arrays, roadSpeedRatio },
+        result: { timeS, count, ...arrays, roadSpeedRatio, parkingOccupancy },
       };
       self.postMessage(reply, { transfer });
     } else {

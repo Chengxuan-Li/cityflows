@@ -10,7 +10,7 @@ import { scenario, trips } from '../sim/fixtures';
 test.each(['right', 'left'] as const)(
   'T12 roundabout circulates under %s-hand driving, persists and restores',
   (side) => {
-    const city = grid5x5();
+    const city = createEditor(grid5x5()).city;
     city.drivingSide = side;
     Object.assign(Object.values(city.places)[0]!.connectors[0]!, { roadId: 'r:64', positionM: 10 });
     const editor = createEditor(city);
@@ -87,7 +87,7 @@ const add = { kind: 'addRoundabout', nodeId, radiusM: 25 } as const;
 const remove = { kind: 'removeRoundabout', nodeId } as const;
 
 test('T12 removes the current approaches and undoes and redoes the removal exactly', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const editor = createEditor(city);
   expect(editor.apply(add).ok).toBe(true);
   expect(editor.apply({ kind: 'setRoadAttributes', roadId: 'r:64', speedLimitMps: 5 }).ok).toBe(
@@ -109,7 +109,7 @@ test('T12 removes the current approaches and undoes and redoes the removal exact
 });
 
 test('T12 rebuilds at the ring centroid after the center marker moves', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const editor = createEditor(city);
   expect(editor.apply(add).ok).toBe(true);
   expect(editor.apply({ kind: 'moveNode', nodeId, pos: { x: 245, y: 250 } }).ok).toBe(true);
@@ -135,7 +135,7 @@ test('T12 keeps a split inbound approach in the restored signal program', () => 
 });
 
 test('T12 restores the original signal program after building a roundabout', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const editor = createEditor(city);
   expect(editor.apply(add).ok).toBe(true);
   expect(editor.city.nodes[nodeId]!.control).toBe('uncontrolled');

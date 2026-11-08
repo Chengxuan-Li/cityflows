@@ -17,6 +17,7 @@ import { drawRoute, drawSelection } from './layers/overlay';
 import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
 import { drawPlaces } from './layers/places';
+import { drawParking } from './layers/parking';
 import { drawMovementArrow, drawRoad, drawCrossings, updateZoomFade } from './layers/roads';
 import { drawTransitions } from './layers/transitions';
 import { drawSignal } from './layers/signals';
@@ -24,7 +25,7 @@ import { drawSigns } from './layers/signs';
 import { DeckCoverage, DeckGhosts, drawGradeShadows } from './layers/shadows';
 import { Tiles } from './layers/tiles';
 import { createVehicleLayer, Vehicles } from './layers/vehicles';
-import { createPicker, pickVehicle } from './picking';
+import { createPicker, pickParking, pickVehicle } from './picking';
 import { style } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
 import type { Pick, CityGeometry, Scene } from './types';
@@ -118,9 +119,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   heatOverlay.addChild(heat.roads, heat.queues);
   const disconnectedOverlay = new Graphics();
   const signalPreview = new Graphics();
+  const parking = new Graphics();
   world.addChild(map, routeOverlay, selectionOverlay, vehicleRing, heatOverlay);
   world.addChild(multiSelectionOverlay);
-  world.addChild(disconnectedOverlay, signalPreview);
+  world.addChild(disconnectedOverlay, signalPreview, parking);
   const editOverlay = new Graphics();
   let editPreview: EditOverlay | null = null;
   world.addChild(editOverlay);
@@ -134,6 +136,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let vegetation: ReturnType<typeof drawVegetation> | undefined;
   let treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   let city: CompiledCity | undefined;
+  let parkingCounts: ArrayLike<number> | null = null;
   let tiles: Tiles | undefined;
   let tilesEnabled = true;
   let sourceGeometry: CityGeometry | undefined;
@@ -225,6 +228,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       canvas.dataset.differenceRoads = String(layerVisibility.difference ? differenceCount : 0);
     heat.roads.visible = layerVisibility.heat;
     heat.queues.visible = layerVisibility.queues;
+    parking.visible = layerVisibility.parkingOccupancy;
+    canvas.dataset.parkingFacilities = String(
+      layerVisibility.parkingOccupancy ? (city?.parking.length ?? 0) : 0,
+    );
     routeOverlay.visible = layerVisibility.routes;
     disconnectedOverlay.visible = layerVisibility.disconnected;
     for (const grade of visibleGrades) {
@@ -315,6 +322,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     updateTerrainCache();
     drawEditOverlay(editOverlay, editPreview, camera.zoom);
     updatePlaces?.(camera.zoom);
+    if (city) drawParking(parking, city, parkingCounts, camera.zoom);
     if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
   });
   vehicles.setZoom(camera.zoom);
@@ -334,6 +342,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       previewLoaded = undefined;
       const rebuildStart = import.meta.env.MODE === 'test' ? performance.now() : 0;
       city = compiled;
+      parkingCounts = null;
+      drawParking(parking, city, parkingCounts, camera.zoom);
       vehicles.setGeometry(compiled);
       if (sourceGeometry?.geo !== source?.geo) {
         tiles?.destroy();
@@ -622,6 +632,19 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       invalidate();
       if (city) heat.setHeat(ratios);
     },
+    setParkingOccupancy(counts) {
+      // Snapshots arrive while paused too; redraw only for a changed count (TASK-115).
+      const same =
+        counts === parkingCounts ||
+        (counts !== null &&
+          parkingCounts !== null &&
+          counts.length === parkingCounts.length &&
+          Array.prototype.every.call(counts, (n: number, i: number) => n === parkingCounts![i]));
+      parkingCounts = counts;
+      if (same) return;
+      invalidate();
+      if (city) drawParking(parking, city, counts, camera.zoom);
+    },
     setDifference(roads) {
       invalidate();
       difference.clear();
@@ -674,7 +697,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           ? { kind: 'vehicle' as const, id: body }
           : snapshot &&
             pickVehicle(point, camera.zoom, snapshot.id, vehicles.x, vehicles.y, snapshot.count);
-      return vehicle ?? staticPick?.(point, camera.zoom) ?? null;
+      return (
+        vehicle ??
+        (city && layerVisibility.parkingOccupancy ? pickParking(city, point, camera.zoom) : null) ??
+        staticPick?.(point, camera.zoom) ??
+        null
+      );
     },
     destroy() {
       if (destroyed) return;

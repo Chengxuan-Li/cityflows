@@ -3,6 +3,7 @@ import type { Vec2 } from '../geo/vec2';
 import type { CConnector, CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { style } from './style';
+import { parkingRadiusM } from './parking';
 import type { Pick } from './types';
 
 function segmentDistanceSquared(p: Vec2, a: Vec2, b: Vec2): number {
@@ -111,4 +112,17 @@ export function pickVehicle(
     }
   }
   return nearest < 0 ? null : { kind: 'vehicle', id: ids[nearest]! };
+}
+
+export function pickParking(city: CompiledCity, point: Vec2, zoom: number): Pick | null {
+  const radius = Math.max(parkingRadiusM, 7 / zoom);
+  for (let i = city.parking.length - 1; i >= 0; i--) {
+    const facility = city.parking[i]!;
+    if (
+      Math.abs(point.x - facility.centroid.x) <= radius &&
+      Math.abs(point.y - facility.centroid.y) <= radius
+    )
+      return { kind: 'parking', parking: facility.idx };
+  }
+  return null;
 }

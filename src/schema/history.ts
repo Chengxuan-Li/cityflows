@@ -13,10 +13,20 @@ import type {
   Control,
   SignalProgram,
   City,
+  ParkingFacility,
+  ParkingId,
+  ParkingAccess,
 } from './city';
 
 export type Command =
   | { kind: 'restoreCity'; city: City }
+  | {
+      kind: 'setParkingAttributes';
+      parkingId: ParkingId;
+      capacity?: number;
+      access?: ParkingAccess;
+      source?: ParkingFacility;
+    }
   | { kind: 'setRoadLanes'; roadId: RoadId; lanes: Lane[] }
   | { kind: 'setRoadAccess'; roadId: RoadId; access: Road['access'] | null }
   | {
@@ -60,8 +70,9 @@ export interface Patch {
     nodes?: Record<NodeId, Node>;
     roads?: Record<RoadId, Road>;
     places?: Record<PlaceId, Place>;
+    parking?: Record<ParkingId, ParkingFacility>;
   };
-  remove: { nodes?: NodeId[]; roads?: RoadId[]; places?: PlaceId[] };
+  remove: { nodes?: NodeId[]; roads?: RoadId[]; places?: PlaceId[]; parking?: ParkingId[] };
   nextId?: number;
 }
 

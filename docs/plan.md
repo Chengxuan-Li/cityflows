@@ -133,7 +133,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
 | [TASK-109](tasks/TASK-109.md) | 8 | Building details: terrain footprints closed, roof shapes, colours, window bands | building fields of `ContextFeature` (schema), building tags in `context.ts`, `render3d/context.ts`, `terrain.ts` (footprint closure), new `render3d/roofs.ts`, Building details layer | 096, 098, 105 | V109, 3D shots | done |
 | [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | done |
-| [TASK-102](tasks/TASK-102.md) | 7 | Parking model and garages: facilities, choice on arrival, cruising, departures from where parked | `City.parking` refinements, new `importers/osm/parking.ts`, facility compile, new `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, demand, snapshot, facility inspector and occupancy layer | 100, 101, Phase 2 formats | T48, traffic quick | todo |
+| [TASK-102](tasks/TASK-102.md) | 7 | Parking model and garages: facilities, choice on arrival, cruising, departures from where parked | `City.parking` refinements, new `importers/osm/parking.ts`, facility compile, new `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, demand, snapshot, facility inspector and occupancy layer | 100, 101, Phase 2 formats | T48, traffic quick | done (see review) |
 | [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | done (mapped entries only; unreachable lots diagnosed; see review) |
 | [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | todo |
 | [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | todo |
@@ -2231,10 +2231,28 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   adds zebras to its street and aisle junctions carry none (Sindelfingen's big lot had one at
   every aisle); stalls are generated before the stops so a stop sees the same crossings;
   `parking`-kind places draw as an outline (their fill hid every aisle and stall with Places on,
-  which the shots hide); the 3D stall toggle requests a frame. T44, V106 and V108 compile pins
-  move for the lots (arrows unchanged). Traffic: quick 3233 / 35 / 1 against 3012 / 38 / 0 on
-  main, no route uses an aisle; full 3472 / 70 / 0 against 3342 / 75 / 1. Baseline reset to
-  these (stalled heads stays 1 for B56).
+  which the shots hide); the 3D stall toggle requests a frame. T44, V106 and V108 pins move for
+  the lots (V108's arrow hash gains the aisle lanes). Traffic: quick 3233 / 35 / 1 against
+  3012 / 38 / 0 on main, no route uses an aisle; full 3472 / 70 / 0 against 3342 / 75 / 1.
+  Baseline reset to these (stalled heads stays 1 for B56).
+
+- 2026-11-08, TASK-102 merged after lead fixes (Codex, GPT-6.1-Sol). Garages from OSM (Munich 53,
+  Sindelfingen 4) plus an inferred private garage for every place with demand and no mapped
+  facility (87 and 20), compiled into `CompiledCity.parking`; cars choose the destination's own
+  garage first, then the nearest public one within 400 m, recheck on entry and cruise to the
+  next when it is full; a person's next trip leaves from where the car parked; occupancy
+  snapshots, a minute history, an editable facility inspector with undo, occupancy markers in
+  2D and 3D, and trip CSV columns. 116 was not ready, so 102 merged after 104 instead of after
+  116. Lead: conflicts with TASK-104 and TASK-115 (overpass query version 5 with both clauses;
+  garages are allocated before the lots; T49's oracle strips only the lots, and the stripped
+  cities now hash to TASK-102's own T44 pins, so lots still change nothing else); the
+  occupancy setters request a frame only when a count changes, and 3D selection of a garage
+  requests one; the garage tests skip lot facilities. Pins: T44, V106, V108 and T47 move for
+  the garages; V108's arrow hash moves because garages take ids before the lots and renumber
+  the aisle lanes (arrows on Sindelfingen's other 664 lanes equal main's). Traffic: quick
+  3209 / 28 / 0 against 3233 / 35 / 1 at the TASK-104 merge, 0 parking failures in 2725 local
+  arrivals, mean search 0 s; full 3378 / 62 / 0 against 3472 / 70 / 0, no parking failures.
+  Baseline reset to these (stalled heads stays 1).
 
 ## Owner decisions log
 

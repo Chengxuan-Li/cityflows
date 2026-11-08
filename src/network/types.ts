@@ -14,6 +14,7 @@ import type {
   AccessValue,
   PlaceKind,
   PlaceEvent,
+  ParkingFacility,
 } from '../schema';
 
 export type CompileResult =
@@ -36,6 +37,7 @@ export interface CompiledCity {
   movements: CMovement[];
   places: CPlace[];
   connectors: CConnector[];
+  parking: CParking[];
   lots?: CLot[]; // TASK-104: surface lots and their generated stalls, when any
   index: {
     node: Map<NodeId, number>;
@@ -44,6 +46,7 @@ export interface CompiledCity {
     movement: Map<MovementId, number>;
     place: Map<PlaceId, number>;
     connector: Map<ConnectorId, number>;
+    parking: Map<string, number>;
   };
   laneSpatial: Flatbush; // lane segments, for picking and snapping
 }
@@ -159,6 +162,7 @@ export interface CSignal {
   phases: { durationS: number; movements: number[] }[];
 }
 export interface CConnector {
+  parking?: number;
   idx: number;
   id: ConnectorId;
   place: number;
@@ -166,6 +170,21 @@ export interface CConnector {
   positionM: number;
   direction: 'in' | 'out' | 'both';
   throughputPerMin: number;
+}
+export interface CParking {
+  idx: number;
+  id: string;
+  kind: ParkingFacility['kind'];
+  name: string | null;
+  capacity: number;
+  access: ParkingFacility['access'];
+  place: number;
+  centroid: Vec2;
+  connectorsIn: number[];
+  connectorsOut: number[];
+  occupancyAtStart: number | null;
+  residents: number;
+  source: ParkingFacility;
 }
 export interface CPlace {
   idx: number;

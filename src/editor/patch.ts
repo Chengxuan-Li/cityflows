@@ -1,6 +1,6 @@
 import type { City, Patch } from '../schema';
 
-const collections = ['nodes', 'roads', 'places'] as const;
+const collections = ['nodes', 'roads', 'places', 'parking'] as const;
 
 function applyRecords<T>(
   records: Record<string, T>,
@@ -20,6 +20,9 @@ export function applyPatch(city: City, patch: Patch): City {
     nodes: applyRecords(city.nodes, patch.set.nodes, patch.remove.nodes),
     roads: applyRecords(city.roads, patch.set.roads, patch.remove.roads),
     places: applyRecords(city.places, patch.set.places, patch.remove.places),
+    ...(city.parking || patch.set.parking || patch.remove.parking
+      ? { parking: applyRecords(city.parking ?? {}, patch.set.parking, patch.remove.parking) }
+      : {}),
     nextId: patch.nextId ?? city.nextId,
   };
 }
@@ -31,7 +34,7 @@ export function invertPatch(city: City, patch: Patch): Patch {
   for (const key of collections) {
     const ids = new Set([...Object.keys(patch.set[key] ?? {}), ...(patch.remove[key] ?? [])]);
     for (const id of ids) {
-      const original = city[key][id];
+      const original = city[key]?.[id];
       if (original) Object.assign((inverse.set[key] ??= {}), { [id]: original });
       else (inverse.remove[key] ??= []).push(id);
     }
@@ -51,11 +54,11 @@ export function diffCity(before: City, after: City): Patch {
   }
   for (const key of collections) {
     if (before[key] === after[key]) continue;
-    for (const id of Object.keys(before[key])) {
-      if (!after[key][id]) (patch.remove[key] ??= []).push(id);
+    for (const id of Object.keys(before[key] ?? {})) {
+      if (!after[key]?.[id]) (patch.remove[key] ??= []).push(id);
     }
-    for (const [id, entity] of Object.entries(after[key])) {
-      if (entity !== before[key][id]) Object.assign((patch.set[key] ??= {}), { [id]: entity });
+    for (const [id, entity] of Object.entries(after[key] ?? {})) {
+      if (entity !== before[key]?.[id]) Object.assign((patch.set[key] ??= {}), { [id]: entity });
     }
   }
   if (after.nextId !== before.nextId) patch.nextId = after.nextId;

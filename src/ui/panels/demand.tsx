@@ -4,6 +4,7 @@ import type { FailReason, Metrics } from '../../sim/types';
 import { useAppStore } from '../store';
 
 const failReasons: Record<FailReason, string> = {
+  no_parking: 'No parking available',
   no_route: 'No route between the places',
   unsupported_mode: 'Not travelling by car',
   destination_unreachable: 'Destination unreachable from the road',
