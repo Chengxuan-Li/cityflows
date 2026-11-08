@@ -22,6 +22,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
   );
   const [side, setSide] = useState<'left' | 'right'>('right');
   const [surroundings, setSurroundings] = useState(true);
+  const [terrain, setTerrain] = useState(true);
   const [name, setName] = useState('OpenStreetMap import');
   // The largest 0.05 step at which the Munich reference extract does not gridlock (plan,
   // "Reference extract and import baseline", wave 10 table).
@@ -108,6 +109,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
           importerVersion: '1',
           drivingSide: side,
           context: surroundings,
+          terrain,
           ...(!file && { bbox }),
         },
       });
@@ -214,6 +216,14 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
                 onChange={(event) => setSurroundings(event.target.checked)}
               />
               Include surroundings
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={terrain}
+                onChange={(event) => setTerrain(event.target.checked)}
+              />
+              Include terrain
             </label>
             {!file && (
               <label className="edit-field">

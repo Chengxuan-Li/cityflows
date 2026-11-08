@@ -75,6 +75,9 @@ clockwise turn as seen on screen, which is a right turn for the driver.
   under 1.4 percent). The browser importer caps a bounding box at 25 km by 25 km and 50 km
   squared of area; larger areas need the bulk path, which is not in release 1.
 - Raster tiles (Gate 2) are placed with the affine `local = (merc - merc0) * scale`.
+- TASK-105 terrain uses the same local frame: `originM` is the north-west cell centre,
+  rows grow south and columns east. Elevations are metres above the source datum, stored
+  as little-endian Int16 decimetres relative to `baseM`; they never modify planar coordinates.
 
 ## 4. Canonical model: `City`
 
@@ -216,6 +219,8 @@ interface City {
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
   context?: { features: ContextFeature[] }; // display-only OSM surroundings, see below
+  terrain?: { source: string; originM: Vec2; cellM: number; cols: number; rows: number;
+              baseM: number; heights: string }; // base64 Int16 LE decimetres above baseM
   nextId: number;          // single counter for all id kinds
 }
 ```
@@ -224,6 +229,12 @@ TASK-096 adds optional display-only surroundings without a schema-version change
 projects omit the field; current and TASK-042 baseline cities retain it through ZIP/JSON save
 and open. Context is never edited, never increments city.version, and is ignored by compile,
 routing, demand and simulation.
+
+TASK-105 adds optional display-only terrain without a schema-version bump. The boundary
+validates positive spacing, at least two rows and columns, base64 and exactly two bytes per
+sample. Old files omit terrain. Edits retain it without incrementing `city.version`, and
+`compile(city)` ignores it. Geography, entity geometry, IDs and the compiled network are
+identical with terrain present or absent.
 
 ~~~ts
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
@@ -1473,7 +1484,40 @@ Buildings (default on, in 3D) independently hides extrusions. Toggles do not reb
 Flat context follows the below-ground opacity, while buildings retain their shadows.
 The shadow normal offset scales with one world-space shadow texel (minimum 0.05 m) to keep
 broad roofs free of self-shadow stripes.
-Terrain elevation and 3D editing remain out of scope.
+TASK-105 terrain is presentation-only. `createTerrain` decodes once and exposes edge-clamped
+bilinear `groundAt(x, y)`. Ground roads add sampled terrain to the existing grade profile;
+decks and tunnels add the linear baseline between their surface ends, with ramps blending
+from sampled ground as the existing grade profile reaches the deck. Ground-road surfaces,
+crossings, markings, signals and vehicle positions share the elevation/crossfall rule.
+The mesh starts with one fixed diagonal per 10 m grid cell. Coplanar ground cells merge after
+checking every corner against the grid's exact quantized plane. Folds and shared edge vertices
+remain split to avoid cracks. Flat asphalt is unioned inside each triangle, avoiding redundant
+strip seams. Ground surroundings split this same mesh at class
+boundaries, with vertex colours, courtyard holes and line widths; buildings remain geometry.
+Ground-level paint is split at grid triangles rather than at redundant half-metre stations;
+straight level decks and level junctions retain only segment endpoints. Ramps retain their
+finer grade-profile sampling.
+The opaque backdrop replaces the fallback ground when basemap is off, and a second mesh
+omits background regions to reveal tiles when basemap is on. Both meshes are disposed with the city. Basemap
+tiles drape with matching UVs. Buildings retain their original extrusion height and stand
+at the lowest sampled ground under
+their footprint. Displayed ground is cut to that foundation inside the footprint, preserving
+courtyards, so elevation samples affected by roofs cannot protrude through the extrusion.
+Water stays level at its outline's lowest elevation, with the ground and
+overlapping ground fills cut away beneath it, preserving islands. Raised/tunnel junctions
+retain level deck heights; ground junctions follow the terrain. Basemap meshes collapse
+the edge-clamped exterior into broad strips rather than tessellating outside the grid.
+Only asphalt above ground enters the terrain view's shadow pass. The draped backdrop uses
+one opaque pass, or one transparent pass with basemap/below-ground visibility. With no
+vehicles, an unchanged camera and layer visibility reuse the
+static shadow map; camera changes, layer changes and vehicles refresh it. The visible scene
+still renders every frame.
+Camera targets follow
+the ground. Terrain off rebuilds the original flat geometry and removes the 2D hillshade;
+cities without terrain follow the same path as before. `LayerVisibility.terrain` defaults
+on and its control appears only when the city has terrain. The 2D hillshade uses north-west
+light at 45 degrees, low opacity, below surroundings in the shared overview texture cache.
+3D editing remains out of scope.
 
 `src/ui` is the React app with one Zustand store. Layout follows the brief:
 
@@ -1513,6 +1557,9 @@ baseline.json     { city: City, scenario: Scenario, population?: Person[] } opti
   same manifest verifies both forms. `manifest.schemaVersion` is the city's schema version at
   save time; `openProject` passes `city.json` to `migrateCity` and ignores archive members
   outside the layout.
+- TASK-105 terrain is embedded in `city.json`, including baseline cities, and shares its
+  integrity hash. The manifest attribution combines the map and terrain sources. ZIP and
+  JSON preserve the grid verbatim; no terrain file or migration is required.
 - TASK-042 adds optional `baseline` to single JSON and optional `baseline.json` to the ZIP
   manifest's hashed members. Both validate the saved city, scenario and optional population;
   omitting them preserves existing project behavior. Schema version remains 1. Baseline is
@@ -1535,6 +1582,18 @@ baseline.json     { city: City, scenario: Scenario, population?: Person[] } opti
 ## 13. OSM import
 
 Lives in `src/importers/osm`, runs inside an import worker.
+
+TASK-105: after the unchanged road import, the worker fetches terrain unless
+`ImportOptions.terrain` is false (the wizard's "Include terrain", default on).
+AWS Terrain Tiles Terrarium PNGs at zoom 15 decode with `fast-png` in workers and Node,
+without canvas: `R * 256 + G + B / 256 - 32768` metres. Up to six requests run at once,
+with a 20-second timeout per tile. Tiles are cached by z/x/y in the import IndexedDB store.
+The bbox plus 100 m is sampled bilinearly to a 10 m local grid, including across tile seams;
+stored elevations round to decimetres. Any fetch/decode/cache failure retains the road city
+and adds one `terrain_unavailable` warning to the diagnostics step. The Node city-tier entry
+attaches committed grids for the two reference extracts without network requests.
+`bench/terrain-fetch.ts` produces those grids in `fixtures/terrain/` and prints sizes,
+height ranges and fetch times; its tile cache lives in this worktree's `node_modules/.cache`.
 
 1. Parse `.osm` XML with `fast-xml-parser` into nodes, ways, relations.
 2. Keep drivable highways: motorway, trunk, primary, secondary, tertiary, unclassified,

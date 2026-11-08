@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { chromium, type Page } from '@playwright/test';
+import { fixtureTerrain } from '../tests/e2e/terrain-fixture';
 
 // Fixed-camera images of the geometry rework's cases (TASK-081, docs/plan.md "Geometry rework"):
 // starts the dev server on a free port, imports the Munich extract (or a shot's own, TASK-094)
@@ -21,7 +22,78 @@ export const shots: {
   centre: [number, number];
   zoom: number;
   osm?: string;
+  view?: '3d';
+  terrain?: boolean;
+  pitch?: number;
+  bearing?: number;
 }[] = [
+  ...['on', 'off'].flatMap((state) => [
+    {
+      id: `V105-sindelfingen-overview-${state}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.27,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 40,
+    },
+    {
+      id: `V105-sindelfingen-a81-${state}`,
+      cases: [],
+      centre: [66, 203] as [number, number],
+      zoom: 2.5,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 35,
+      bearing: 55,
+    },
+    {
+      id: `V105-sindelfingen-bridge-${state}`,
+      cases: [],
+      centre: [66, 203] as [number, number],
+      zoom: 6,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 30,
+      bearing: -65,
+    },
+    {
+      id: `V105-munich-overview-${state}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.43,
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 40,
+    },
+    {
+      id: `V105-munich-detail-${state}`,
+      cases: [],
+      centre: [5, -285] as [number, number],
+      zoom: 1.5,
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 40,
+    },
+    {
+      id: `V105-sindelfingen-hillshade-${state}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.27,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      terrain: state === 'on',
+    },
+    {
+      id: `V105-munich-hillshade-${state}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.43,
+      terrain: state === 'on',
+    },
+  ]),
   { id: 'V96-munich-overview', cases: [], centre: [0, 0], zoom: 0.43 },
   { id: 'V96-hbf-tracks', cases: [], centre: [250, -140], zoom: 1.8 },
   {
@@ -247,30 +319,40 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
   const [out, flag, list, ...rest] = process.argv.slice(2);
   if (!out || (flag !== undefined && (flag !== '--only' || !list)) || rest.length)
     throw new Error('Usage: npm run geometry-shots -- <out-dir> [--only <id,id>]');
-  const only = list?.split(',');
+  const only = list?.split(',').flatMap((id) => {
+    if (shots.some((shot) => shot.id === id)) return [id];
+    const pair = shots.filter((shot) => shot.id === `${id}-on` || shot.id === `${id}-off`);
+    return pair.length ? pair.map((shot) => shot.id) : [id];
+  });
   const unknown = only?.filter((id) => !shots.some((shot) => shot.id === id)) ?? [];
   if (unknown.length) throw new Error(`Unknown shots: ${unknown.join(', ')}`);
   const selected = only ? shots.filter((shot) => only.includes(shot.id)) : shots;
+  if (only?.some((id) => id.startsWith('V105-')))
+    selected.sort((a, b) =>
+      a.id.replace(/-(on|off)$/, '').localeCompare(b.id.replace(/-(on|off)$/, '')),
+    );
   mkdirSync(out, { recursive: true });
   const port = await freePort();
-  const url = `http://127.0.0.1:${port}/`;
-  const server = spawn(
-    process.execPath,
-    [
-      resolve('node_modules/vite/bin/vite.js'),
-      '--mode',
-      'test',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(port),
-      '--strictPort',
-    ],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
-  );
+  const url = process.env.CITYFLOWS_SHOTS_URL ?? `http://127.0.0.1:${port}/`;
+  const server = process.env.CITYFLOWS_SHOTS_URL
+    ? undefined
+    : spawn(
+        process.execPath,
+        [
+          resolve('node_modules/vite/bin/vite.js'),
+          '--mode',
+          'test',
+          '--host',
+          '127.0.0.1',
+          '--port',
+          String(port),
+          '--strictPort',
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      );
   let log = '';
-  server.stdout.on('data', (d) => (log += String(d)));
-  server.stderr.on('data', (d) => (log += String(d)));
+  server?.stdout?.on('data', (d) => (log += String(d)));
+  server?.stderr?.on('data', (d) => (log += String(d)));
   const browser = await chromium.launch();
   const records: unknown[] = [];
   try {
@@ -282,13 +364,22 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
     });
     for (const osm of new Set(selected.map((shot) => shot.osm ?? MUNICH))) {
       const page = await context.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', (error) => {
+        errors.push(error.message);
+        console.error(error.message);
+      });
       await page.route(/^https:\/\//, (route) => route.abort());
+      const wantsTerrain = selected.some((shot) => (shot.osm ?? MUNICH) === osm && shot.terrain);
+      if (wantsTerrain) await fixtureTerrain(page, osm);
       await page.goto(url);
       const button = (name: string) => page.getByRole('button', { name, exact: true });
       await button('Play').waitFor();
       await button('Import').click();
       const dialog = page.getByRole('dialog', { name: 'Import city' });
       await dialog.getByLabel('OSM file').setInputFiles(osm);
+      const includeTerrain = dialog.getByLabel('Include terrain', { exact: true });
+      if (await includeTerrain.count()) await includeTerrain.setChecked(wantsTerrain);
       await button('Import roads').click();
       await dialog
         .getByRole('region', { name: 'Import diagnostics' })
@@ -308,7 +399,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       // Only the map: every panel and control is hidden, the canvas keeps its place.
       await page.addStyleTag({
         content:
-          'body * { visibility: hidden !important; } canvas.map { visibility: visible !important; }',
+          'body * { visibility: hidden !important; } canvas.map[aria-hidden="false"] { visibility: visible !important; }',
       });
       const anchored = anchors[osm] ?? {};
       const positions = await page.evaluate((ids) => {
@@ -324,19 +415,86 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       const canvas = page.locator('canvas[aria-label="City map"]');
       for (const shot of selected) {
         if ((shot.osm ?? MUNICH) !== osm) continue;
-        const placed = await placeCamera(page, shot.centre, shot.zoom);
-        await frames(page, 3);
+        // Hidden controls remain operable for the fixed-camera harness.
+        await page.addStyleTag({ content: 'body * { visibility: visible !important; }' });
+        const mode = button('3D');
+        if (((await mode.getAttribute('aria-pressed')) === 'true') !== (shot.view === '3d'))
+          await mode.click();
+        if (shot.view === '3d')
+          await page.waitForFunction(
+            () =>
+              document.querySelector('canvas[data-view="3d"]')?.getAttribute('data-build-ms') &&
+              window.cityflows?.view3D?.(),
+            undefined,
+            { timeout: 60_000 },
+          );
+        await button('Layers').click();
+        const terrainToggle = layers.getByLabel('Terrain', { exact: true });
+        if (await terrainToggle.count()) await terrainToggle.setChecked(shot.terrain ?? false);
+        await button('Layers').click();
+        const placed =
+          shot.view === '3d'
+            ? await page.evaluate((shot) => {
+                window.cityflows!.setView3D!(
+                  { x: shot.centre[0], y: shot.centre[1] },
+                  shot.zoom,
+                  shot.pitch,
+                  shot.bearing,
+                );
+                return { error: 0, zoom: shot.zoom, size: [1280, 800] };
+              }, shot)
+            : await placeCamera(page, shot.centre, shot.zoom);
+        await page.addStyleTag({
+          content:
+            'body * { visibility: hidden !important; } canvas.map[aria-hidden="false"] { visibility: visible !important; }',
+        });
+        await frames(page, 30);
+        if (errors.length) throw new Error(errors.join('\n'));
+        const target =
+          shot.view === '3d' ? page.getByLabel('3D city view', { exact: true }) : canvas;
+        const timing = await page.evaluate(async () => {
+          const renders: number[] = [],
+            times: number[] = [];
+          const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries())
+              if (entry.name === 'cityflows:render' || entry.name === 'cityflows:render3d')
+                renders.push(entry.duration);
+          });
+          observer.observe({ entryTypes: ['measure'] });
+          let last = performance.now();
+          for (let i = 0; i < 90; i++) {
+            const now = await new Promise<number>((r) => requestAnimationFrame(r));
+            times.push(now - last);
+            last = now;
+          }
+          observer.disconnect();
+          const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
+          return { frameMs: mean(times), renderMs: mean(renders) };
+        });
         const path = join(out, `${shot.id}.png`);
-        await canvas.screenshot({ path, animations: 'disabled' });
+        await target.screenshot({ path, animations: 'disabled' });
         records.push({
           ...shot,
           file: `${shot.id}.png`,
           centreErrorPx: placed.error,
           zoom: placed.zoom,
           canvas: placed.size,
+          ...timing,
+          buildMs: await target.getAttribute('data-build-ms'),
+          triangles: await target.getAttribute('data-triangles'),
+          gpu:
+            shot.view === '3d'
+              ? await target.evaluate((canvas: HTMLCanvasElement) => {
+                  const gl = canvas.getContext('webgl2')!;
+                  const debug = gl.getExtension('WEBGL_debug_renderer_info');
+                  return gl.getParameter(
+                    debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER,
+                  ) as string;
+                })
+              : null,
         });
         console.info(
-          `${shot.id}: centre ${shot.centre.join(', ')} zoom ${shot.zoom} px/m (error ${placed.error.toExponential(1)} px) -> ${path}`,
+          `${shot.id}: ${timing.frameMs.toFixed(2)} ms/frame, ${timing.renderMs.toFixed(2)} ms/render -> ${path}`,
         );
       }
       await page.close();
@@ -348,6 +506,6 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
     throw error;
   } finally {
     await browser.close();
-    server.kill();
+    server?.kill();
   }
 }

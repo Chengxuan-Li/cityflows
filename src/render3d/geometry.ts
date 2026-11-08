@@ -1,5 +1,5 @@
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { parallelOffset } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
@@ -11,6 +11,7 @@ import type { CityGeometry } from '../render/types';
 import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
 import { roadMarkings } from './markings';
 import { buildContext } from './context';
+import { drape, indexTerrain, terrainAreas } from './terrain';
 
 type Vertex = [number, number, number];
 const vertex = (p: Vec2, z: number): Vertex => [p.x, z, p.y];
@@ -64,13 +65,16 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
         d = mix(right0, right1, t0);
       // Earcut triangulates the actual compiled surface, with known station heights.
       const zs = new Map([
-        [a, z0],
-        [b, z1],
-        [c, z1],
-        [d, z0],
+        [a, z0 + (height.crossfall?.(s0 + (s1 - s0) * t0, a) ?? 0)],
+        [b, z1 + (height.crossfall?.(s0 + (s1 - s0) * t1, b) ?? 0)],
+        [c, z1 + (height.crossfall?.(s0 + (s1 - s0) * t1, c) ?? 0)],
+        [d, z0 + (height.crossfall?.(s0 + (s1 - s0) * t0, d) ?? 0)],
       ]);
       polygon(surfaces, [a, b, c, d], (p) => zs.get(p)!);
-      if (z0 > 0 || z1 > 0) {
+      if (
+        z0 - (height.ground?.(s0 + (s1 - s0) * t0) ?? 0) > 0 ||
+        z1 - (height.ground?.(s0 + (s1 - s0) * t1) ?? 0) > 0
+      ) {
         quad(slabs, vertex(a, z0), vertex(b, z1), vertex(b, z1 - 0.8), vertex(a, z0 - 0.8));
         quad(slabs, vertex(c, z1), vertex(d, z0), vertex(d, z0 - 0.8), vertex(c, z1 - 0.8));
         quad(
@@ -86,22 +90,32 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
   if (Math.max(height.fromM, height.toM, height.deckM) > 0)
     for (const end of [0, count - 1]) {
       const z = heightAt(height, end === 0 ? 0 : height.lengthM);
-      if (z <= 0) continue;
+      if (z - (height.ground?.(end === 0 ? 0 : height.lengthM) ?? 0) <= 0) continue;
       const a = road.surface[end]!,
         b = road.surface[road.surface.length - end - 1]!;
       quad(slabs, vertex(a, z), vertex(b, z), vertex(b, z - 0.8), vertex(a, z - 0.8));
     }
 }
 
-function markingStrip(target: number[], line: Vec2[], z: (p: Vec2) => number) {
+function markingStrip(
+  target: number[],
+  line: Vec2[],
+  z: (p: Vec2) => number,
+  areas?: Vec2[][],
+  planar = false,
+) {
   const left = parallelOffset(line, -style.dividerWidthM / 2);
   const right = parallelOffset(line, style.dividerWidthM / 2);
+  if (areas) {
+    areas.push([...left, ...right.reverse()]);
+    return;
+  }
   for (let i = 1; i < left.length; i++) {
     const a = left[i - 1]!,
       b = left[i]!,
       c = right[i]!,
       d = right[i - 1]!;
-    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5));
+    const steps = planar ? 1 : Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5));
     for (let j = 0; j < steps; j++)
       polygon(
         target,
@@ -116,21 +130,47 @@ function markingStrip(target: number[], line: Vec2[], z: (p: Vec2) => number) {
   }
 }
 
-export function buildGeometry(city: CompiledCity, source: CityGeometry) {
+export function buildGeometry(city: CompiledCity, source: CityGeometry, omitContextGround = false) {
   const heights = cityHeights(city, source);
   const surfaces: number[] = [],
     slabs: number[] = [],
     markings: number[] = [],
     crossings: number[] = [];
-  const piers: { x: number; y: number; height: number }[] = [];
+  const landSurfaces: number[] = [],
+    landMarkings: number[] = [],
+    landCrossings: number[] = [];
+  const flatAreas: Vec2[][] = [];
+  const flatMarkings: Vec2[][] = [];
+  const piers: { x: number; y: number; height: number; base: number }[] = [];
   for (const road of city.roads) {
     const height = heights.roads[road.idx]!;
-    roadSurface(surfaces, slabs, road, height);
-    const z = (p: Vec2) => heightAt(height, roadStation(road, p)) + 0.02;
-    for (const line of roadMarkings(city, road, source)) markingStrip(markings, line, z);
+    const surfaceTarget = height.crossfall ? landSurfaces : surfaces;
+    const markingTarget = height.crossfall ? landMarkings : markings;
+    const crossingTarget = height.crossfall ? landCrossings : crossings;
+    if (height.crossfall && height.fromM === 0 && height.toM === 0 && height.deckM === 0)
+      flatAreas.push(road.surface);
+    else roadSurface(surfaceTarget, slabs, road, height);
+    const z = (p: Vec2) => {
+      const s = roadStation(road, p);
+      return heightAt(height, s) + (height.crossfall?.(s, p) ?? 0) + 0.02;
+    };
+    const flat = source.terrain && height.fromM === 0 && height.toM === 0 && height.deckM === 0;
+    const start = road.reference[0]!,
+      end = road.reference.at(-1)!;
+    const dx = end.x - start.x,
+      dy = end.y - start.y;
+    const planar =
+      Boolean(source.terrain) &&
+      height.fromM === height.deckM &&
+      height.toM === height.deckM &&
+      road.reference.every(
+        (p) => Math.abs((p.x - start.x) * dy - (p.y - start.y) * dx) < Math.hypot(dx, dy) * 1e-6,
+      );
+    for (const line of roadMarkings(city, road, source))
+      markingStrip(markingTarget, line, z, flat ? flatMarkings : undefined, planar);
     for (const atEnd of [false, true])
       for (const stripe of crossingStripes(city, road, atEnd, source))
-        polygon(crossings, stripe, z);
+        polygon(crossingTarget, stripe, z);
     if (Math.max(height.fromM, height.toM, height.deckM) > 0) {
       for (let s = 15; s < height.lengthM; s += 30) {
         const top = heightAt(height, s) - 0.8;
@@ -144,16 +184,32 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
         const t = (station - road.stations[i - 1]!) / (road.stations[i]! - road.stations[i - 1]!);
         const a = mix(left[i - 1]!, left[i]!, t),
           b = mix(right[i - 1]!, right[i]!, t);
-        piers.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, height: top });
+        const x = (a.x + b.x) / 2,
+          y = (a.y + b.y) / 2;
+        const base = heights.terrain.groundAt(x, y);
+        if (top > base) piers.push({ x, y, height: top - base, base });
       }
     }
   }
   for (const node of city.nodes) {
     const z = heights.nodes[node.idx]!;
-    polygon(surfaces, node.outline, () => z);
+    const ground = heights.terrain.groundAt(node.pos.x, node.pos.y);
+    const followsGround = source.terrain && source.nodes[node.id]!.layer === 0;
+    const nodeZ = (p: Vec2) =>
+      followsGround ? z + heights.terrain.surfaceAt(p.x, p.y) - ground : z;
+    if (followsGround) {
+      if (node.outline.length >= 3) flatAreas.push(node.outline);
+    } else polygon(surfaces, node.outline, () => z);
     for (const guide of junctionGuides(city, node))
-      for (const dash of guide.dashes) markingStrip(markings, dash, () => z + 0.02);
-    if (z > 0)
+      for (const dash of guide.dashes)
+        markingStrip(
+          followsGround ? landMarkings : markings,
+          dash,
+          (p) => nodeZ(p) + 0.02,
+          followsGround ? flatMarkings : undefined,
+          Boolean(source.terrain),
+        );
+    if (z - heights.terrain.groundAt(node.pos.x, node.pos.y) > 0)
       for (let i = 0; i < node.outline.length; i++) {
         const a = node.outline[i]!,
           b = node.outline[(i + 1) % node.outline.length]!;
@@ -177,15 +233,42 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
     for (let i = start; i < places.length; i += 3)
       colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
   }
-  const placeGeometry = buffer(places);
+  let placeGeometry = buffer(places);
   placeGeometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  if (source.terrain)
+    placeGeometry = indexTerrain(drape(placeGeometry, heights.terrain, -0.02, false, true));
   const { heads, supports } = signalLayout(city, heights);
+  if (source.terrain)
+    for (const part of [...heads, ...supports]) {
+      const road = city.roads['road' in part ? part.road : city.lanes[part.lane]!.road]!;
+      part.height += heights.roads[road.idx]!.crossfall?.(roadStation(road, part), part) ?? 0;
+    }
+  const terrainBuffer = (
+    flat: number[],
+    land: number[],
+    smooth = false,
+    areas?: Vec2[][],
+    areaOffset = 0,
+  ) => {
+    if (!source.terrain) return buffer(flat, smooth);
+    const a = buffer(flat),
+      b = drape(buffer(land), heights.terrain, 0, true);
+    const parts = [a, b];
+    if (areas) parts.push(terrainAreas(areas, heights.terrain).translate(0, areaOffset, 0));
+    const result = mergeGeometries(parts)!;
+    a.dispose();
+    b.dispose();
+    parts[2]?.dispose();
+    return indexTerrain(result);
+  };
+  const context = buildContext(source.context?.features ?? [], heights.terrain, !omitContextGround);
+  if (source.terrain) context.ground = indexTerrain(context.ground);
   return {
-    context: buildContext(source.context?.features ?? []),
-    surfaces: buffer(surfaces, true),
+    context,
+    surfaces: terrainBuffer(surfaces, landSurfaces, true, flatAreas),
     slabs: buffer(slabs),
-    markings: buffer(markings),
-    crossings: buffer(crossings),
+    markings: terrainBuffer(markings, landMarkings, false, flatMarkings, 0.02),
+    crossings: terrainBuffer(crossings, landCrossings),
     places: placeGeometry,
     piers,
     heads,

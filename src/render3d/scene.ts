@@ -1,15 +1,17 @@
 import {
   BoxGeometry,
-  type BufferGeometry,
+  BufferGeometry,
   Color,
   DirectionalLight,
   DoubleSide,
+  Float32BufferAttribute,
   Group,
   HemisphereLight,
   InstancedMesh,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  Matrix4,
   Object3D,
   PCFShadowMap,
   PerspectiveCamera,
@@ -29,6 +31,9 @@ import { buildGeometry } from './geometry';
 import { pickVehicle3D, vehicleScreenPoint } from './picking';
 import { signalMountM, signalRotationY } from './signals';
 import { Vehicles3D } from './vehicles';
+import { groundMesh } from './terrain';
+import { terrainVehicleOffset } from './heights';
+import { buildTerrainGround } from './context';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -46,7 +51,10 @@ export class Scene3D {
   private city: CompiledCity | undefined;
   private source: CityGeometry | undefined;
   private geometry: ReturnType<typeof buildGeometry> | undefined;
-  private ground: Mesh<PlaneGeometry, MeshLambertMaterial> | undefined;
+  private ground: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
+  private terrainEnabled = true;
+  private renderedTerrain = true;
+  private terrainGround: ReturnType<typeof buildTerrainGround> | undefined;
   private buildings: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private surroundings: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private surroundingsVisible = true;
@@ -61,6 +69,8 @@ export class Scene3D {
   private basemap: Basemap3D | undefined;
   private tilesEnabled = true;
   private lastRenderMs = performance.now();
+  private readonly vehicleMatrix = new Matrix4();
+  private shadowView = '';
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const renderer = (this.renderer = new WebGLRenderer({ canvas, antialias: true }));
@@ -104,22 +114,37 @@ export class Scene3D {
   }
 
   setCity(city: CompiledCity, source: CityGeometry) {
-    if (this.city === city && this.source === source) return;
+    if (
+      this.city === city &&
+      this.source === source &&
+      this.renderedTerrain === this.terrainEnabled
+    )
+      return;
     const start = performance.now();
+    this.shadowView = '';
     this.disposeContent();
+    if (this.city !== city) {
+      this.vehicles.poses.snapshot = null;
+      this.vehicles.mesh.count = 0;
+    }
     this.city = city;
-    if (this.source?.geo !== source.geo) {
+    const renderedSource = this.terrainEnabled ? source : { ...source, terrain: undefined };
+    const geometry = (this.geometry = buildGeometry(
+      city,
+      renderedSource,
+      Boolean(renderedSource.terrain),
+    ));
+    const terrain = geometry.heights.terrain;
+    if (this.source?.geo !== source.geo || this.renderedTerrain !== this.terrainEnabled) {
       this.basemap?.destroy();
-      this.basemap = source.geo ? new Basemap3D(source.geo) : undefined;
+      this.basemap = source.geo ? new Basemap3D(source.geo, terrain) : undefined;
       if (this.basemap) {
         this.basemap.group.visible = this.tilesEnabled;
         this.scene.add(this.basemap.group);
       }
     }
     this.source = source;
-    this.vehicles.poses.snapshot = null;
-    this.vehicles.mesh.count = 0;
-    const geometry = (this.geometry = buildGeometry(city, source));
+    this.renderedTerrain = this.terrainEnabled;
     const add = (shape: BufferGeometry, color: number, shadow = true) => {
       const mesh = new Mesh(shape, new MeshLambertMaterial({ color, side: DoubleSide }));
       mesh.receiveShadow = true;
@@ -127,7 +152,32 @@ export class Scene3D {
       this.content.add(mesh);
       return mesh;
     };
-    add(geometry.surfaces, style.asphalt);
+    add(geometry.surfaces, style.asphalt, !terrain.grid);
+    if (terrain.grid) {
+      // Ground asphalt cannot cast a useful shadow onto itself. Only decks and
+      // raised approaches enter the shadow pass; their visible mesh is unchanged.
+      const positions: number[] = [],
+        p = geometry.surfaces.getAttribute('position');
+      const count = geometry.surfaces.index?.count ?? p.count;
+      for (let i = 0; i < count; i += 3) {
+        const indices = [0, 1, 2].map((j) => geometry.surfaces.index?.getX(i + j) ?? i + j);
+        if (!indices.some((j) => p.getY(j) - terrain.groundAt(p.getX(j), p.getZ(j)) > 0.3))
+          continue;
+        for (const j of indices) positions.push(p.getX(j), p.getY(j), p.getZ(j));
+      }
+      const caster = new Mesh(
+        new BufferGeometry().setAttribute('position', new Float32BufferAttribute(positions, 3)),
+        new MeshBasicMaterial({
+          side: DoubleSide,
+          colorWrite: false,
+          depthWrite: false,
+        }),
+      );
+      caster.castShadow = true;
+      caster.layers.set(1);
+      this.sun.shadow.camera.layers.enable(1);
+      this.content.add(caster);
+    }
     add(geometry.slabs, 0x899b99);
     add(geometry.markings, style.marking, false);
     add(geometry.crossings, style.marking, false);
@@ -153,7 +203,7 @@ export class Scene3D {
       geometry.piers.length,
     );
     geometry.piers.forEach((pier, i) => {
-      transform.position.set(pier.x, pier.height / 2, pier.y);
+      transform.position.set(pier.x, pier.base + pier.height / 2, pier.y);
       transform.scale.set(1, pier.height, 1);
       transform.updateMatrix();
       piers.setMatrixAt(i, transform.matrix);
@@ -213,20 +263,47 @@ export class Scene3D {
     }
     const width = Math.max(100, box.max.x - box.min.x + 500),
       depth = Math.max(100, box.max.z - box.min.z + 500);
+    const grid = renderedSource.terrain;
+    const bounds = {
+      minX: Math.min(box.min.x - 250, grid?.originM.x ?? Infinity),
+      minY: Math.min(box.min.z - 250, grid?.originM.y ?? Infinity),
+      maxX: Math.max(
+        box.max.x + 250,
+        grid ? grid.originM.x + (grid.cols - 1) * grid.cellM : -Infinity,
+      ),
+      maxY: Math.max(
+        box.max.z + 250,
+        grid ? grid.originM.y + (grid.rows - 1) * grid.cellM : -Infinity,
+      ),
+    };
     this.ground = new Mesh(
-      new PlaneGeometry(width, depth),
+      renderedSource.terrain ? groundMesh(terrain, bounds, -0.04) : new PlaneGeometry(width, depth),
       new MeshLambertMaterial({ color: style.background }),
     );
     this.ground.renderOrder = 2;
-    this.ground.rotation.x = -Math.PI / 2;
-    this.ground.position.set((box.min.x + box.max.x) / 2, -0.04, (box.min.z + box.max.z) / 2);
+    if (!renderedSource.terrain) {
+      this.ground.rotation.x = -Math.PI / 2;
+      this.ground.position.set((box.min.x + box.max.x) / 2, -0.04, (box.min.z + box.max.z) / 2);
+    }
     this.ground.receiveShadow = true;
     this.content.add(this.ground);
+    if (grid) {
+      const surface = this.ground.geometry.clone().translate(0, 0.015, 0);
+      this.terrainGround = buildTerrainGround(surface, source.context?.features ?? []);
+      surface.dispose();
+      this.surroundings.geometry.dispose();
+      this.surroundings.material.forceSinglePass = true;
+      this.updateTerrainBackdrop();
+    }
     this.setBelowGround(this.belowGround);
     this.signalCity = city;
     this.lastSignalKey = '';
     this.setSignals(0);
     this.canvas.dataset.buildMs = (performance.now() - start).toFixed(1);
+    this.canvas.dataset.terrain = String(Boolean(renderedSource.terrain));
+    const groundHeight = terrain.groundAt(this.controls.target.x, this.controls.target.z);
+    this.camera.position.y += groundHeight - this.controls.target.y;
+    this.controls.target.y = groundHeight;
     this.canvas.dataset.meshes = String(this.content.children.length + 1);
   }
 
@@ -279,6 +356,7 @@ export class Scene3D {
   setBelowGround(enabled: boolean) {
     this.belowGround = enabled;
     if (this.surroundings) this.surroundings.material.opacity = enabled ? 0.4 : 1;
+    this.updateTerrainBackdrop();
     if (!this.ground || this.ground.material.transparent === enabled) return;
     this.ground.material.transparent = enabled;
     this.ground.material.opacity = enabled ? 0.4 : 1;
@@ -288,6 +366,25 @@ export class Scene3D {
   setTiles(enabled: boolean) {
     this.tilesEnabled = enabled;
     if (this.basemap) this.basemap.group.visible = enabled;
+    this.updateTerrainBackdrop();
+  }
+  private updateTerrainBackdrop() {
+    if (!this.terrainGround || !this.ground || !this.surroundings) return;
+    const surface = this.tilesEnabled ? this.terrainGround.transparent : this.terrainGround.opaque;
+    this.surroundings.geometry = surface;
+    if (this.geometry) this.geometry.context.ground = surface;
+    const transparent = this.tilesEnabled || this.belowGround;
+    if (this.surroundings.material.transparent !== transparent) {
+      this.surroundings.material.transparent = transparent;
+      this.surroundings.material.needsUpdate = true;
+    }
+    this.surroundings.material.depthWrite = !transparent;
+    this.ground.visible = this.tilesEnabled || !this.surroundingsVisible;
+  }
+  setTerrain(enabled: boolean) {
+    if (enabled === this.terrainEnabled) return;
+    this.terrainEnabled = enabled;
+    if (this.city && this.source) this.setCity(this.city, this.source);
   }
   setPlaces(visible: boolean) {
     this.placesVisible = visible;
@@ -300,6 +397,7 @@ export class Scene3D {
     this.buildingsVisible = buildings;
     if (this.surroundings) this.surroundings.visible = visible;
     if (this.buildings) this.buildings.visible = visible && buildings;
+    this.updateTerrainBackdrop();
     const count = this.geometry?.context;
     const buildingCount = visible && buildings ? (count?.buildingCount ?? 0) : 0;
     this.canvas.dataset.buildings = String(buildingCount);
@@ -314,14 +412,15 @@ export class Scene3D {
     this.controls.enableDamping = false;
     this.controls.update();
     this.controls.enableDamping = damping;
-    this.controls.target.set(centre.x, 0, centre.y);
+    const ground = this.geometry?.heights.terrain.groundAt(centre.x, centre.y) ?? 0;
+    this.controls.target.set(centre.x, ground, centre.y);
     const distance =
       this.canvas.clientHeight / (2 * Math.tan((this.camera.fov * Math.PI) / 360) * zoom);
     const angle = (pitch * Math.PI) / 180,
       azimuth = (bearing * Math.PI) / 180;
     this.camera.position.set(
       centre.x + distance * Math.cos(angle) * Math.sin(azimuth),
-      distance * Math.sin(angle),
+      ground + distance * Math.sin(angle),
       centre.y + distance * Math.cos(angle) * Math.cos(azimuth),
     );
     this.controls.update();
@@ -342,7 +441,11 @@ export class Scene3D {
     };
   }
   worldToScreen(point: Vec2) {
-    const p = new Vector3(point.x, 1, point.y).project(this.camera);
+    const p = new Vector3(
+      point.x,
+      (this.geometry?.heights.terrain.groundAt(point.x, point.y) ?? 0) + 1,
+      point.y,
+    ).project(this.camera);
     return {
       x: ((p.x + 1) * this.canvas.clientWidth) / 2,
       y: ((1 - p.y) * this.canvas.clientHeight) / 2,
@@ -376,9 +479,22 @@ export class Scene3D {
   }
 
   render(elapsedS: number, timeS: number) {
+    const renderStart = performance.now();
     this.controls.update();
     if (this.city && this.geometry)
       this.vehicles.animate(elapsedS, this.city, this.geometry.heights);
+    if (this.city && this.geometry?.heights.terrain.grid && this.vehicles.poses.snapshot) {
+      const heights = this.geometry.heights,
+        snapshot = this.vehicles.poses.snapshot;
+      for (let i = 0; i < snapshot.count; i++) {
+        this.vehicles.mesh.getMatrixAt(i, this.vehicleMatrix);
+        const e = this.vehicleMatrix.elements,
+          p = { x: e[12]!, y: e[14]! },
+          lane = snapshot.lane[i]!;
+        e[13]! += terrainVehicleOffset(this.city, heights, lane, p);
+        this.vehicles.mesh.setMatrixAt(i, this.vehicleMatrix);
+      }
+    }
     this.setSignals(timeS);
     const index =
       this.selectedId === null
@@ -416,13 +532,40 @@ export class Scene3D {
     this.sun.shadow.normalBias = Math.max(0.05, (2 * extent) / this.sun.shadow.mapSize.x);
     const target = this.controls.target;
     this.sun.target.position.copy(target);
-    this.sun.position.set(target.x - extent, extent * 1.5, target.z - extent);
+    this.sun.position.set(target.x - extent, target.y + extent * 1.5, target.z - extent);
     const shadow = this.sun.shadow.camera;
     shadow.left = shadow.bottom = -extent;
     shadow.right = shadow.top = extent;
     shadow.far = extent * 5;
     shadow.updateProjectionMatrix();
+    // Reuse an unchanged light map. Moving vehicles always refresh their shadows.
+    const cacheShadows =
+      Boolean(this.geometry?.heights.terrain.grid) && this.vehicles.mesh.count === 0;
+    const shadowView = [
+      this.camera.position.x,
+      this.camera.position.y,
+      this.camera.position.z,
+      target.x,
+      target.y,
+      target.z,
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
+      this.surroundingsVisible ? 1 : 0,
+      this.buildingsVisible ? 1 : 0,
+      this.vehicles.mesh.count,
+    ]
+      .map((n) => n.toFixed(4))
+      .join(',');
+    this.renderer.shadowMap.autoUpdate = !cacheShadows;
+    if (shadowView !== this.shadowView) this.renderer.shadowMap.needsUpdate = true;
+    this.shadowView = shadowView;
     this.renderer.render(this.scene, this.camera);
+    if (import.meta.env.MODE === 'test')
+      this.canvas.dataset.triangles = String(this.renderer.info.render.triangles);
+    if (import.meta.env.MODE === 'test') {
+      performance.measure('cityflows:render3d', { start: renderStart, end: performance.now() });
+      performance.clearMeasures('cityflows:render3d');
+    }
     if (import.meta.env.MODE === 'test' && this.capture) {
       this.capture.images.push(this.canvas.toDataURL('image/png'));
       if (this.capture.images.length === 2) {
@@ -434,6 +577,11 @@ export class Scene3D {
   }
 
   private disposeContent() {
+    if (this.terrainGround) {
+      const { opaque, transparent } = this.terrainGround;
+      (this.surroundings?.geometry === opaque ? transparent : opaque).dispose();
+    }
+    this.terrainGround = undefined;
     this.content.traverse((object) => {
       if (object instanceof Mesh) {
         object.geometry.dispose();

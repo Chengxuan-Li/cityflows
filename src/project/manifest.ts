@@ -41,6 +41,7 @@ export function createManifest(city: City, metadata: SaveMetadata): Manifest {
     savedAt: metadata.savedAt ?? new Date().toISOString(),
     files: {},
     licenses: metadata.licenses ?? (city.geo?.source.kind === 'osm' ? ['ODbL-1.0'] : []),
-    attribution: city.geo?.source.attribution ?? null,
+    attribution:
+      [city.geo?.source.attribution, city.terrain?.source].filter(Boolean).join('; ') || null,
   };
 }

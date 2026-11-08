@@ -9,11 +9,14 @@ import {
   ShapeUtils,
   Vector2,
 } from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
+import Flatbush from 'flatbush';
 import { parallelOffset } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { ContextFeature } from '../schema';
 import { style } from '../render/style';
+import { drape, lowestGround, triangulate, type Terrain } from './terrain';
 
 function shape(rings: Vec2[][]) {
   const points = (ring: Vec2[], clockwise: boolean) => {
@@ -51,9 +54,14 @@ function merged(geometries: BufferGeometry[]) {
 }
 
 /** Display-only surroundings. Metric x/east, z/south, y/up; roofs retain courtyard holes. */
-export function buildContext(features: readonly ContextFeature[]) {
+export function buildContext(
+  features: readonly ContextFeature[],
+  terrain?: Terrain,
+  groundMeshes = true,
+) {
   const buildings: BufferGeometry[] = [],
     ground: BufferGeometry[] = [];
+  let groundCount = 0;
   const order = {
     landuse: 0,
     green: 1,
@@ -72,9 +80,12 @@ export function buildContext(features: readonly ContextFeature[]) {
         steps: 1,
         curveSegments: 1,
       }).rotateX(-Math.PI / 2);
+      if (terrain?.grid) geometry.translate(0, lowestGround(feature.rings, terrain, true), 0);
       buildings.push(paint(geometry, style.context.building, style.context.buildingEdge));
       continue;
     }
+    groundCount++;
+    if (!groundMeshes) continue;
     let rings: Vec2[][], color: number;
     if (feature.kind === 'area') {
       rings = feature.rings;
@@ -97,16 +108,148 @@ export function buildContext(features: readonly ContextFeature[]) {
       ];
       color = feature.class === 'waterway' ? style.context.water : style.context[feature.class];
     }
-    const geometry = new ShapeGeometry(shape(rings), 1)
+    let geometry: BufferGeometry = new ShapeGeometry(shape(rings), 1)
       .toNonIndexed()
       .rotateX(-Math.PI / 2)
       .translate(0, -0.025, 0);
+    if (terrain?.grid) {
+      if (feature.class === 'water') {
+        geometry.translate(0, lowestGround(rings, terrain), 0);
+        geometry.deleteAttribute('uv');
+      } else geometry = drape(geometry, terrain);
+    }
     ground.push(paint(geometry, color));
   }
   return {
     buildings: merged(buildings),
     ground: merged(ground),
     buildingCount: buildings.length,
-    groundCount: ground.length,
+    groundCount,
   };
+}
+
+/** Split the shared terrain by context boundaries, keeping one colour pass and exact heights. */
+export function buildTerrainGround(ground: BufferGeometry, features: readonly ContextFeature[]) {
+  const order = {
+    landuse: 0,
+    green: 1,
+    water: 2,
+    parking: 3,
+    building: 4,
+    waterway: 5,
+    rail: 6,
+    tram: 7,
+  };
+  const areas = [...features]
+    .sort((a, b) => order[a.class] - order[b.class])
+    .flatMap((feature) => {
+      if (feature.class === 'building') return [];
+      let rings: Vec2[][];
+      if (feature.kind === 'area') rings = feature.rings;
+      else {
+        const width =
+          feature.class === 'waterway'
+            ? (feature.widthM ?? 2)
+            : feature.class === 'tram'
+              ? 0.45
+              : 0.7;
+        rings = [
+          [
+            ...parallelOffset(feature.line, -width / 2),
+            ...parallelOffset(feature.line, width / 2).reverse(),
+          ],
+        ];
+      }
+      rings = rings.map((ring, i) => (areaD(ring) > 0 === (i === 0) ? ring : [...ring].reverse()));
+      const colour =
+        feature.class === 'landuse'
+          ? (style.context.landuseSub[feature.sub ?? ''] ?? style.context.landuse)
+          : feature.class === 'waterway'
+            ? style.context.water
+            : style.context[feature.class];
+      return [{ rings, color: new Color(colour) }];
+    });
+  const index = areas.length ? new Flatbush(areas.length) : undefined;
+  for (const { rings } of areas) {
+    const points = rings[0]!;
+    index!.add(
+      Math.min(...points.map((p) => p.x)),
+      Math.min(...points.map((p) => p.y)),
+      Math.max(...points.map((p) => p.x)),
+      Math.max(...points.map((p) => p.y)),
+    );
+  }
+  index?.finish();
+  const opaque = { positions: [] as number[], colors: [] as number[], normals: [] as number[] };
+  const transparent = {
+    positions: [] as number[],
+    colors: [] as number[],
+    normals: [] as number[],
+  };
+  const p = ground.getAttribute('position'),
+    n = ground.getAttribute('normal');
+  const count = ground.index?.count ?? p.count;
+  const background = new Color(style.background);
+  for (let i = 0; i < count; i += 3) {
+    const ids = [0, 1, 2].map((j) => ground.index?.getX(i + j) ?? i + j);
+    const vertices = ids.map((j) => ({ x: p.getX(j), y: p.getZ(j), h: p.getY(j) }));
+    const [a, b, c] = vertices as [
+      (typeof vertices)[number],
+      (typeof vertices)[number],
+      (typeof vertices)[number],
+    ];
+    const det = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+    if (Math.abs(det) < 1e-8) continue;
+    const triangle = vertices.map(({ x, y }) => ({ x, y }));
+    if (areaD(triangle) < 0) triangle.reverse();
+    let pieces = [triangle];
+    const emit = (paths: Vec2[][], color: Color, covered: boolean) => {
+      for (const triangle of triangulate(paths))
+        for (const v of triangle.reverse()) {
+          const u = ((v.x - a.x) * (c.y - a.y) - (v.y - a.y) * (c.x - a.x)) / det;
+          const w = ((b.x - a.x) * (v.y - a.y) - (b.y - a.y) * (v.x - a.x)) / det;
+          const h = a.h + u * (b.h - a.h) + w * (c.h - a.h);
+          for (const target of covered ? [opaque, transparent] : [opaque]) {
+            target.positions.push(v.x, h, v.y);
+            target.colors.push(color.r, color.g, color.b);
+            for (let axis = 0; axis < 3; axis++)
+              target.normals.push(
+                n.getComponent(ids[0]!, axis) * (1 - u - w) +
+                  n.getComponent(ids[1]!, axis) * u +
+                  n.getComponent(ids[2]!, axis) * w,
+              );
+          }
+        }
+    };
+    const nearby =
+      index
+        ?.search(
+          Math.min(a.x, b.x, c.x),
+          Math.min(a.y, b.y, c.y),
+          Math.max(a.x, b.x, c.x),
+          Math.max(a.y, b.y, c.y),
+        )
+        .sort((a, b) => b - a) ?? [];
+    for (const j of nearby) {
+      const area = areas[j]!;
+      emit(
+        booleanOpD(ClipType.Intersection, pieces, area.rings, FillRule.NonZero, 5),
+        area.color,
+        true,
+      );
+      pieces = booleanOpD(ClipType.Difference, pieces, area.rings, FillRule.NonZero, 5);
+      if (!pieces.length) break;
+    }
+    emit(pieces, background, false);
+  }
+  const buffer = (data: typeof opaque) => {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new Float32BufferAttribute(data.positions, 3));
+    geometry.setAttribute('color', new Float32BufferAttribute(data.colors, 3));
+    geometry.setAttribute('normal', new Float32BufferAttribute(data.normals, 3));
+    const result = mergeVertices(geometry);
+    geometry.dispose();
+    return result;
+  };
+  return { opaque: buffer(opaque), transparent: buffer(transparent) };
 }
