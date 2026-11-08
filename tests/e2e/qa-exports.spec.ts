@@ -65,6 +65,10 @@ test('QA every export downloads parseable data with columns, feature counts and 
         'delay',
         'fail reason',
         'respawns',
+        // TASK-102: where the car parked, the walk from there and the search time.
+        'parking facility',
+        'walking distance',
+        'parking search time',
       ],
     ],
     [

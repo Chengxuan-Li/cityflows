@@ -2252,7 +2252,16 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   the aisle lanes (arrows on Sindelfingen's other 664 lanes equal main's). Traffic: quick
   3209 / 28 / 0 against 3233 / 35 / 1 at the TASK-104 merge, 0 parking failures in 2725 local
   arrivals, mean search 0 s; full 3378 / 62 / 0 against 3472 / 70 / 0, no parking failures.
-  Baseline reset to these (stalled heads stays 1).
+  Baseline reset to these (stalled heads stays 1). CI after the merge failed three e2e cases
+  the agents do not run: T16's stress grid released no car (every home garage was full at
+  departure until its residents left, so every choice failed), demo A failed 1 382 trips (a
+  1 200-slot inferred office garage for 2 000 commuters, and a Homes garage saved at 1 088
+  before the population edit), and the trips CSV gained three columns. Lead fix: room at
+  departure is a forecast (head for the first candidate with any slots; the entry decides),
+  and an inferred garage with an inferred capacity never turns its own place's cars away;
+  mapped and inspector-set capacities stay hard (the edit clears `capacity` from
+  `inferred`). Owner may prefer hard inferred capacities with demand that respects them.
+  Munich quick is unchanged (3209 / 28 / 0).
 
 ## Owner decisions log
 

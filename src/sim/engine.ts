@@ -331,10 +331,15 @@ function createRun({
     const { lane, positionM } = connector;
     if (
       parking.required(id) &&
-      !parking.choose(id, timeS, (into) => {
-        vehicles.destination[id] = into;
-        return routeFrom(id, lane, positionM).ok;
-      })
+      !parking.choose(
+        id,
+        timeS,
+        (into) => {
+          vehicles.destination[id] = into;
+          return routeFrom(id, lane, positionM).ok;
+        },
+        true,
+      )
     ) {
       return false;
     }

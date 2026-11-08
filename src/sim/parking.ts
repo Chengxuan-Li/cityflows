@@ -12,6 +12,14 @@ export function createParking(
   params: SimParams,
   vehicles: Vehicles,
 ) {
+  /** An inferred garage with an inferred capacity stands in for parking OSM does not map: its
+   * capacity is an estimate, so it never turns its own place's cars away and holds every
+   * resident's car at the start. Mapped and user-set capacities are hard limits. */
+  const soft = (f: CompiledCity['parking'][number]) =>
+    (f.source.provenance.inferred?.includes('implicitGarage') &&
+      f.source.provenance.inferred.includes('capacity')) ??
+    false;
+  const hasRoom = (f: CompiledCity['parking'][number]) => soft(f) || occupied[f.idx]! < f.capacity;
   function initialOccupancy(city: CompiledCity) {
     const remaining = new Map<number, number>();
     const hour = (scenario.startS / 3600) % 24;
@@ -26,12 +34,15 @@ export function createParking(
           : hour >= 9 && hour < 20 && kind === 'retail'
             ? 0.35
             : 0);
-      const count = Math.min(
-        f.capacity,
-        f.occupancyAtStart === null && f.residents
+      const count =
+        f.occupancyAtStart === null && f.residents && soft(f)
           ? remaining.get(f.place)!
-          : Math.round(f.capacity * fraction),
-      );
+          : Math.min(
+              f.capacity,
+              f.occupancyAtStart === null && f.residents
+                ? remaining.get(f.place)!
+                : Math.round(f.capacity * fraction),
+            );
       remaining.set(f.place, Math.max(0, remaining.get(f.place)! - count));
       return count;
     });
@@ -106,18 +117,28 @@ export function createParking(
       compiled.parking.some((f) => f.place === destination.idx || f.access === 'public')
     );
   }
-  function choose(id: number, timeS: number, accept: (connector: number) => boolean) {
-    for (const f of facilitiesFor(id)) {
-      if (occupied[f.idx]! >= f.capacity || rejected.get(id)?.has(f.idx)) continue;
-      for (const connector of f.connectorsIn) {
-        if (!accept(connector)) continue;
-        chosen[id] = f.idx;
-        cachedHash = undefined;
-        walking[id] = distance(id, f.idx);
-        if (f.place !== destinationPlace(id).idx) searching[id] = 1;
-        return true;
+  /** `atDeparture`: room now is only a forecast. When every admissible facility is full, the car
+   * still heads for the first one in choice order that has slots at all; the entry check
+   * rejects it if that one is still full on arrival (a home garage empties as its residents
+   * leave). */
+  function choose(
+    id: number,
+    timeS: number,
+    accept: (connector: number) => boolean,
+    atDeparture = false,
+  ) {
+    for (const needRoom of atDeparture ? [true, false] : [true])
+      for (const f of facilitiesFor(id)) {
+        if ((needRoom ? !hasRoom(f) : f.capacity === 0) || rejected.get(id)?.has(f.idx)) continue;
+        for (const connector of f.connectorsIn) {
+          if (!accept(connector)) continue;
+          chosen[id] = f.idx;
+          cachedHash = undefined;
+          walking[id] = distance(id, f.idx);
+          if (f.place !== destinationPlace(id).idx) searching[id] = 1;
+          return true;
+        }
       }
-    }
     if (searching[id] && !Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
     return false;
   }
@@ -167,7 +188,7 @@ export function createParking(
     },
     full(connector: number) {
       const facility = compiled.connectors[connector]!.parking;
-      return facility !== undefined && occupied[facility]! >= compiled.parking[facility]!.capacity;
+      return facility !== undefined && !hasRoom(compiled.parking[facility]!);
     },
     admits(id: number, connector: number) {
       const f = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
@@ -193,8 +214,7 @@ export function createParking(
       const f = compiled.connectors[connector]!.parking;
       if (f === undefined) return;
       cachedHash = undefined;
-      if (occupied[f]! >= compiled.parking[f]!.capacity)
-        throw new Error('Parking admission exceeded capacity');
+      if (!hasRoom(compiled.parking[f]!)) throw new Error('Parking admission exceeded capacity');
       occupied[f]!++;
       parked[id] = f;
       chosen[id] = f;
@@ -231,7 +251,7 @@ export function createParking(
     patch(next: CompiledCity) {
       for (const facility of next.parking) {
         const old = compiled.index.parking.get(facility.id);
-        if (old !== undefined && occupied[old]! > facility.capacity)
+        if (old !== undefined && !soft(facility) && occupied[old]! > facility.capacity)
           throw new Error(
             `Parking ${facility.id} has ${occupied[old]} occupied slots; capacity cannot be reduced below occupancy during a run`,
           );

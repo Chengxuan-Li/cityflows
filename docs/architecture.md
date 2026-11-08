@@ -1426,7 +1426,14 @@ variant. Saving a baseline captures current editor state, including unapplied li
   garages by straight-line walking distance, within `parkingSearchRadiusM` (default 400 m)
   before those beyond it. Each candidate must have room and a class/purpose-feasible route.
   Choice happens at departure and capacity is checked again at the entry; a full entry sends
-  the car cruising to the next reachable candidate. Exhaustion fails as `no_parking`.
+  the car cruising to the next reachable candidate. Exhaustion fails as `no_parking`. Room at
+  departure is a forecast: when every admissible candidate is full, the car heads for the
+  first one with any slots, and the entry check decides (lead, TASK-102 merge: a morning
+  where every home garage is full until its residents leave failed every trip). An inferred
+  garage whose capacity is still inferred never turns its own place's cars away and holds
+  every resident's car at the start; mapped capacities and capacities set in the inspector
+  are hard limits (lead: a 1 200-slot inferred office garage failed 800 of demo A's 2 000
+  commuters).
   Search time starts on entering the search radius for a fallback, or when an entry is
   rejected, and ends on parking; walking distance is recorded separately, with no walkers.
   A person's next car trip waits for the previous trip and leaves from the parked facility,
