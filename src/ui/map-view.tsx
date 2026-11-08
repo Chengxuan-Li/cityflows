@@ -3,7 +3,7 @@ import type { Scene3D } from '../render3d/scene';
 import type { Vec2 } from '../geo/vec2';
 import type { Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
-import { style } from '../render/style';
+import { style, placeHue } from '../render/style';
 import type { Pick, Scene, VehicleSnapshot } from '../render/types';
 import type { Route } from '../routing';
 import type { LaneId } from '../schema';
@@ -17,7 +17,7 @@ import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
 import { createPlacePaintTool, type PaintKind } from './tools/place-paint';
 import { PlaceOptions } from './tools/place-options';
-import { pausedSnapshot } from './drawn-snapshot';
+import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
 
 function snapshotForMap(
   snapshot: VehicleSnapshot,
@@ -335,6 +335,7 @@ export function MapView() {
       let parkingCounts: number[] | null = null;
       if (window.cityflows) {
         window.cityflows.drawnSnapshot = () => drawnSnapshot;
+        window.cityflows.parkedCars = () => getState().parkedCars;
         window.cityflows.worldToScreen = (point) =>
           active3D ? three!.worldToScreen(point) : view.camera.worldToScreen(point);
         window.cityflows.vehicleToScreen = (id) => three?.vehicleToScreen(id) ?? null;
@@ -358,6 +359,22 @@ export function MapView() {
         const snapshot = await session.engine.snapshot();
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
+        if (snapshot.parkedCars) {
+          const stock = snapshot.parkedCars;
+          for (const space of session.loadedCompiled.parkingSpaces ?? []) {
+            const id = stock.id[space.idx]!;
+            const owner = session.loadedCompiled.parking[space.parking]!.place;
+            stock.hues[space.idx] = id
+              ? (session.vehicleHues[id - 1] ?? style.driving)
+              : owner >= 0
+                ? placeHue(session.loadedCompiled.places[owner]!.id)
+                : style.driving;
+          }
+          setState({ parkedCars: stock });
+          const displayed = remapParkedCars(stock, session.loadedCompiled, session.compiled);
+          view.setParkedCars(displayed);
+          three?.setParkedCars(displayed);
+        }
         if (snapshot.parkingOccupancy) {
           const counts = snapshot.parkingOccupancy;
           parkingCounts = session.compiled.parking.map(({ id }) => {
@@ -470,6 +487,9 @@ export function MapView() {
           );
           view.setParkingOccupancy(parkingCounts);
           snapshotAgeS = 0;
+          view.setParkedCars(
+            remapParkedCars(getState().parkedCars, session.loadedCompiled, session.compiled),
+          );
           drawnComparison = null;
         }
         if (motionGeometry !== session.loadedCompiled) {
@@ -504,6 +524,9 @@ export function MapView() {
         ) {
           three!.setCity(session.compiled, session.project.city, layers.terrain);
           three!.setParkingOccupancy(parkingCounts);
+          three!.setParkedCars(
+            remapParkedCars(getState().parkedCars, session.loadedCompiled, session.compiled),
+          );
           drawn3D = session;
           snapshotTime = NaN;
         }
@@ -516,6 +539,7 @@ export function MapView() {
         if (active3D) {
           three!.setTerrain(layers.terrain);
           three!.setParkingStalls(layers.parkingStalls);
+          three!.setParkedCarsVisible(layers.parkedCars);
           three!.setVehicleGeometry(
             session.loadedCompiled,
             session.project.scenarios[0]!.simParams.laneChangeDurationS ??

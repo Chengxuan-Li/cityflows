@@ -148,8 +148,9 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 const baselines = {
   grid: '645ce5cff150638b1f8fa258034082926637860e468f9bf18ccaaad33ddb6f09',
   town: '4b08bdfab45da81ff2e259d6eed45f7fcbca0c101d6368031a087f70a57ab785',
-  'munich-donnersberger': 'db7eea6e2bbcbdaba551b2894e3fb216d10ac707b6b6f91278c578ec81a0cc8a',
-  'sindelfingen-a81': 'ad1ccb01b65d2b31fda1653326c7f7dfa225f513a1edbd722747cd630adf1766',
+  // TASK-103 parking bands move the derived walk layer and append parking entries/spaces.
+  'munich-donnersberger': '35122d76da4a85b2e1a62f567fb816b745d9f8beb21a2601728f4db5b59c46f9',
+  'sindelfingen-a81': '1b4fdcc4ebc43b94af37c74265b8f44a5b823464d733d4680c19d4eb2b50f6b4',
 };
 const lampCounts = {
   grid: [0, 0],

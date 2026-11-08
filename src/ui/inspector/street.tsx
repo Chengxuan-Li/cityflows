@@ -1,4 +1,11 @@
-import { roadSchema, type City, type Road, type RoadClass } from '../../schema';
+import {
+  roadSchema,
+  type City,
+  type Road,
+  type RoadClass,
+  type ParkingAccess,
+  type ParkingLayout,
+} from '../../schema';
 import { vehicleClasses, type AccessValue } from '../../schema';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
@@ -85,6 +92,24 @@ export function StreetInspector({ road, city, lane }: { road: Road; city: City; 
       </p>
       <StreetTopologyActions road={road} />
       <details className="disclosure">
+        <summary>Roadside parking</summary>
+        <div className="edit-fields">
+          {(['left', 'right'] as const).map((side) => {
+            const curb = city.drivingSide;
+            const direction = reverse && side !== curb ? reverse : road;
+            return (
+              <StripFields
+                key={side}
+                city={city}
+                road={direction}
+                side={reverse ? curb : side}
+                label={side}
+              />
+            );
+          })}
+        </div>
+      </details>
+      <details className="disclosure">
         <summary>Lanes and street settings</summary>
         <div className="edit-fields">
           {accessControl('all')}
@@ -147,5 +172,106 @@ export function StreetInspector({ road, city, lane }: { road: Road; city: City; 
         </div>
       </details>
     </>
+  );
+}
+
+function StripFields({
+  city,
+  road,
+  side,
+  label,
+}: {
+  city: City;
+  road: Road;
+  side: 'left' | 'right';
+  label: 'left' | 'right';
+}) {
+  const disabled = useAppStore((state) => state.busy || state.viewMode === '3d');
+  const facilities = Object.values(city.parking ?? {}).filter(
+    ({ strip }) => strip?.roadId === road.id && strip.side === side,
+  );
+  const capacity = facilities.reduce((sum, facility) => sum + facility.capacity, 0);
+  const layouts = new Set(facilities.map((facility) => facility.strip!.layout));
+  const accesses = new Set(facilities.map((facility) => facility.access));
+  const layout = facilities[0]?.strip!.layout ?? null;
+  const access = facilities[0]?.access ?? 'public';
+  const sources = new Set(
+    facilities.map((facility) =>
+      facility.provenance.source === 'authored'
+        ? 'Edited'
+        : facility.provenance.inferred?.length
+          ? 'Inferred'
+          : 'Mapped',
+    ),
+  );
+  const prefix = label === 'left' ? 'Left' : 'Right';
+  const { commit } = useAppStore.getState();
+  return (
+    <fieldset
+      className="parking-fields edit-fields"
+      aria-label={`${prefix} roadside parking`}
+      disabled={disabled}
+    >
+      <label className="edit-field">
+        {prefix} parking
+        <select
+          aria-label={`${prefix} parking layout`}
+          value={layouts.size > 1 ? 'mixed' : (layout ?? 'none')}
+          onChange={(event) =>
+            void commit({
+              kind: 'setRoadParking',
+              roadId: road.id,
+              side,
+              layout:
+                event.currentTarget.value === 'none'
+                  ? null
+                  : (event.currentTarget.value as ParkingLayout),
+              access,
+            })
+          }
+        >
+          <option value="none">None</option>
+          {layouts.size > 1 && (
+            <option value="mixed" disabled>
+              Mixed
+            </option>
+          )}
+          <option value="parallel">Parallel</option>
+          <option value="angled">Diagonal</option>
+          <option value="perpendicular">Perpendicular</option>
+        </select>
+      </label>
+      {facilities.length > 0 && (
+        <>
+          <p className="muted">
+            {capacity} spaces · {[...sources].join(', ')}
+          </p>
+          <label className="edit-field">
+            {prefix} parking access
+            <select
+              value={accesses.size > 1 ? 'mixed' : access}
+              onChange={(event) =>
+                void commit({
+                  kind: 'setRoadParking',
+                  roadId: road.id,
+                  side,
+                  layout,
+                  access: event.currentTarget.value as ParkingAccess,
+                })
+              }
+            >
+              {accesses.size > 1 && (
+                <option value="mixed" disabled>
+                  Mixed
+                </option>
+              )}
+              <option value="public">Public</option>
+              <option value="customers">Customers</option>
+              <option value="private">Private</option>
+            </select>
+          </label>
+        </>
+      )}
+    </fieldset>
   );
 }

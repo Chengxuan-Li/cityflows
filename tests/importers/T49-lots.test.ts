@@ -50,7 +50,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
     const aisles = new Set(lots.flatMap((lot) => lot.aisles!));
     const stalls = compiled.compiled.lots!.reduce((s, lot) => s + lot.stallCount, 0);
     const counts = [lots.length, aisles.size, stalls];
-    const expected = name === 'munich-donnersberger' ? [22, 51, 268] : [31, 147, 364];
+    // TASK-103 also fills lots without mapped aisles, without adding a vehicle road.
+    const expected = name === 'munich-donnersberger' ? [22, 51, 367] : [31, 147, 505];
     counts.forEach((value, i) =>
       expect(Math.abs(value - expected[i]!)).toBeLessThanOrEqual(expected[i]! * 0.1),
     );
@@ -84,7 +85,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
       compileMs,
       mainCompileMs,
       unreachable: imported.diagnostics.filter((d) => d.code === 'parking_unreachable').length,
-      inferredEntries: 0,
+      inferredEntries: lots.filter((l) => l.provenance.inferred?.includes('driveway')).length,
       mismatches,
     });
   },

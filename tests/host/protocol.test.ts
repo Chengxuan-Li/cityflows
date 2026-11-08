@@ -86,7 +86,10 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect(snapshot.id.byteLength).toBe(4);
   expect(snapshot.vclass).toBeInstanceOf(Uint8Array);
   expect([...snapshot.vclass]).toEqual([2]);
-  expect(transferred).toEqual(Array(12).fill(0));
+  // TASK-103: four separate stock buffers accompany the first snapshot, even in a city
+  // with no visible spaces, so replacing a previous city's stock also clears the layer.
+  expect(transferred).toEqual(Array(16).fill(0));
+  expect(snapshot.parkedCars?.occupied).toBeInstanceOf(Uint8Array);
   expect(snapshot.roadSpeedRatio).toHaveLength(input.compiled.roads.length);
   expect(snapshot.parkingOccupancy).toBeInstanceOf(Uint32Array);
   expect(snapshot.parkingOccupancy).toHaveLength(input.compiled.parking.length);
@@ -94,11 +97,13 @@ test('round-trips every request through the worker and matches replies by ID', a
   const throttled = await client.snapshot();
   expect(throttled.roadSpeedRatio).toBeUndefined();
   expect(throttled.parkingOccupancy).toBeUndefined();
+  expect(throttled.parkedCars).toBeUndefined();
   expect(transferred).toEqual(Array(10).fill(0));
   now = 500;
   const updated = await client.snapshot();
   expect(updated.roadSpeedRatio).toHaveLength(input.compiled.roads.length);
   expect(updated.parkingOccupancy).toHaveLength(input.compiled.parking.length);
+  expect(updated.parkedCars).toBeUndefined();
   expect(await client.metricsSeries()).toMatchObject([{ timeS: 100, driving: 0 }]);
 
   deferReplies = true;
@@ -126,6 +131,7 @@ test('round-trips every request through the worker and matches replies by ID', a
   const restarted = await client.snapshot();
   expect(restarted.roadSpeedRatio).toBeDefined();
   expect(restarted.parkingOccupancy).toHaveLength(input.compiled.parking.length);
+  expect(restarted.parkedCars).toBeDefined();
   expect(await client.hash()).toBe(initialHash);
   await client.step(10);
   expect(events).toHaveLength(1);

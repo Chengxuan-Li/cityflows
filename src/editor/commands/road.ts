@@ -1,5 +1,7 @@
 import { roadWidth } from '../../network/lanes';
 import { allocateId, type City, type Command, type Road, type RoadId } from '../../schema';
+import { polylineLength } from '../../geo/polyline';
+import { mapStrips } from './parking';
 import { mapConnectors, requireEntity, type CommandPatch } from './types';
 
 type RoadCommand = Extract<
@@ -138,6 +140,7 @@ function setStreetDirection(
   if (!removed) return patch;
 
   patch.remove.roads = [removed.id];
+  mapStrips(city, patch, removed.id, () => []);
   removeJunctionReferences(city, removed, patch);
   mapConnectors(city, patch, (connector, ownerId) => {
     if (connector.roadId !== removed.id) return connector;
@@ -184,6 +187,15 @@ export function editRoad(city: City, command: RoadCommand): CommandPatch {
     case 'reverseRoad': {
       const next = { ...oppositeGeometry(road), lateralOffsetM: -road.lateralOffsetM || 0 };
       const patch: CommandPatch = { set: { roads: { [road.id]: next } }, remove: {} };
+      const length = polylineLength(road.centerline);
+      mapStrips(city, patch, road.id, (strip) => [
+        {
+          ...strip,
+          side: strip.side === 'right' ? 'left' : 'right',
+          fromM: length - strip.toM,
+          toM: length - strip.fromM,
+        },
+      ]);
       const paired =
         road.streetGroupId === null
           ? undefined

@@ -3,7 +3,8 @@ import { buildCity } from '../fixtures/build-city';
 import { compile } from '../network';
 import type { VehicleSnapshot } from '../render/types';
 import { pickVehicle } from '../render/picking';
-import { pausedSnapshot } from './drawn-snapshot';
+import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
+import { allocateId } from '../schema';
 
 it('exposes the paused rendered position during lane changes in both directions', () => {
   const { city, node, road } = buildCity('Lane change pick', 1);
@@ -38,4 +39,43 @@ it('exposes the paused rendered position during lane changes in both directions'
   expect(
     pickVehicle({ x: drawn.x[0]!, y: drawn.y[0]! }, 32, snapshot.id, snapshot.x, renderedY, 2),
   ).toEqual({ kind: 'vehicle', id: 1 });
+});
+
+it('remaps parked stock by facility and local slot after an earlier facility is removed', () => {
+  const { city, node, road } = buildCity('Parking edit presentation', 103);
+  const street = road(node(0, 0), node(120, 0));
+  city.parking = {};
+  for (const side of ['left', 'right'] as const) {
+    const id = allocateId(city, 'pk');
+    city.parking[id] = {
+      id,
+      name: null,
+      kind: 'roadside',
+      capacity: 2,
+      access: 'public',
+      placeId: null,
+      shape: null,
+      connectors: [],
+      provenance: { source: 'authored' },
+      strip: { roadId: street.id, side, fromM: 20, toM: 31, layout: 'parallel' },
+    };
+  }
+  const before = compile(city);
+  if (!before.ok) throw new Error('before');
+  const stock = {
+    occupied: new Uint8Array([0b1101]),
+    id: new Uint32Array([10, 0, 20, 21]),
+    vclass: new Uint8Array([1, 0, 0, 1]),
+    hues: new Uint32Array([1, 0, 2, 3]),
+  };
+  delete city.parking[Object.keys(city.parking)[0]!];
+  const after = compile(city);
+  if (!after.ok) throw new Error('after');
+  const mapped = remapParkedCars(stock, before.compiled, after.compiled)!;
+  expect([...mapped.occupied]).toEqual([3]);
+  expect([...mapped.id]).toEqual([20, 21]);
+  expect([...mapped.vclass]).toEqual([0, 1]);
+  expect([...mapped.hues]).toEqual([2, 3]);
+  expect(remapParkedCars(stock, before.compiled, before.compiled)).toBe(stock);
+  expect(remapParkedCars(null, before.compiled, after.compiled)).toBeNull();
 });

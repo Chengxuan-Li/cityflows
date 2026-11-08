@@ -16,6 +16,7 @@ import type {
   ParkingFacility,
   ParkingId,
   ParkingAccess,
+  ParkingLayout,
 } from './city';
 
 export type Command =
@@ -29,6 +30,13 @@ export type Command =
       source?: ParkingFacility;
     }
   | { kind: 'setRoadLanes'; roadId: RoadId; lanes: Lane[] }
+  | {
+      kind: 'setRoadParking';
+      roadId: RoadId;
+      side: 'left' | 'right';
+      layout: ParkingLayout | null;
+      access?: ParkingAccess;
+    }
   | { kind: 'setRoadAccess'; roadId: RoadId; access: Road['access'] | null }
   | {
       kind: 'setRoadAttributes';

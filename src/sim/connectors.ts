@@ -192,12 +192,15 @@ export function createConnectors(
         if (!exit) {
           if (candidates.length !== exits.length) break;
           i++;
-          accounting.fail(id, parking.required(id) ? 'no_parking' : 'no_route');
+          accounting.fail(
+            id,
+            parking.required(id) || parking.leavingSpace(id) ? 'no_parking' : 'no_route',
+          );
           continue;
         }
         i++;
         vehicles.waiting[id] = vehicles.waiting[id]! + Math.max(0, timeS - queuedSince(id));
-        parking.depart(id);
+        parking.depart(id, timeS);
         recordAdmission(exit, timeS);
         releasedFrom[id] = idx;
         freedSlot[id] = 0;
@@ -211,7 +214,7 @@ export function createConnectors(
   }
 
   function canArrive(connector: CConnector, timeS: number, id?: number) {
-    if (parking.full(connector.idx) || (id !== undefined && !parking.admits(id, connector.idx)))
+    if (parking.full(connector.idx, id) || (id !== undefined && !parking.admits(id, connector.idx)))
       return false;
     const place =
       id === undefined ? connector.place : compiled.index.place.get(trips[id]!.destinationPlaceId)!;

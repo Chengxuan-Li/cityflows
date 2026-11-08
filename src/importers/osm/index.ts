@@ -10,6 +10,7 @@ import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
 import { importContext } from './context';
 import { addLots } from './lots';
 import { importWalk } from './walk';
+import { addStrips } from './strips';
 import { addBuildings } from './buildings';
 import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
 import { drivableClass } from './filter';
@@ -343,6 +344,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addImplicitGarages(city);
   addLots(city, data, positions, bounds, diagnostics);
   importWalk(city, data, positions, bounds);
+  addStrips(city, data, positions);
   if (options.context !== false)
     city.context = { features: importContext(data, positions, bounds, diagnostics, true) };
 
@@ -385,6 +387,15 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
       const facility = city.parking![lot.id]!;
       if (facility.provenance.inferred?.includes('capacity')) facility.capacity = lot.stallCount;
     }
+  const inferredDiagnostic = final.diagnostics.find((d) => d.code === 'inferred_attributes');
+  if (inferredDiagnostic) {
+    inferredDiagnostic.message = `Inferred ${geo.source.inferredCount} attributes on imported entities`;
+    inferredDiagnostic.refs.push(
+      ...Object.values(city.parking ?? {})
+        .filter((p) => p.provenance.inferred?.length)
+        .map((p) => p.id),
+    );
+  }
   diagnostics.push(...final.diagnostics);
   return final.ok ? { ok: true, city, diagnostics } : { ok: false, diagnostics };
 }

@@ -31,7 +31,7 @@ function overlaps(a: PreparedRing, b: PreparedRing): boolean {
   );
 }
 
-/** Derived paint and future parking targets; canonical capacity remains authoritative. */
+/** Derived bays; lots without mapped aisles use a regular layout without inventing roads. */
 export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
   const occupied: PreparedRing[] = [];
   const obstacles = [
@@ -156,6 +156,73 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
               corners,
             });
           }
+        }
+      }
+      if (!lot.aisles?.length) {
+        const edges = shape.map((a, i) => ({ a, b: shape[(i + 1) % shape.length]! }));
+        edges.sort(
+          (a, b) =>
+            Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y) - Math.hypot(a.b.x - a.a.x, a.b.y - a.a.y),
+        );
+        const edge = edges[0]!;
+        const axis = Math.atan2(edge.b.y - edge.a.y, edge.b.x - edge.a.x);
+        let best: CStall[] = [];
+        // Try both bay orientations: a shallow lot may only fit longitudinal parking.
+        for (const heading of [axis, axis + Math.PI / 2]) {
+          const attempt: CStall[] = [];
+          const u = { x: Math.cos(heading), y: Math.sin(heading) },
+            v = { x: -u.y, y: u.x };
+          const us = shape.map((p) => p.x * u.x + p.y * u.y),
+            vs = shape.map((p) => p.x * v.x + p.y * v.y);
+          const minU = Math.min(...us),
+            maxU = Math.max(...us),
+            minV = Math.min(...vs),
+            maxV = Math.max(...vs);
+          for (
+            let row = 0, y = minV + 2.5;
+            y + 2.5 <= maxV + 1e-8;
+            row++, y += row % 2 === 1 ? 5 : 11
+          ) {
+            for (let x = minU + 1.25; x + 1.25 <= maxU + 1e-8; x += 2.5) {
+              const position = { x: x * u.x + y * v.x, y: x * u.y + y * v.y };
+              const corners = [
+                [-1, -1],
+                [1, -1],
+                [1, 1],
+                [-1, 1],
+              ].map(([w, l]) => ({
+                x: position.x + w! * 1.25 * u.x + l! * 2.5 * v.x,
+                y: position.y + w! * 1.25 * u.y + l! * 2.5 * v.y,
+              }));
+              if (
+                booleanOpD(ClipType.Difference, [corners], [shape], FillRule.EvenOdd, 4).reduce(
+                  (sum, ring) => sum + Math.abs(areaD(ring)),
+                  0,
+                ) > 0.001
+              )
+                continue;
+              const candidate = prepareRing(closed(corners));
+              if (
+                local.some((o) => overlaps(candidate, o)) ||
+                occupied.some((o) => overlaps(candidate, o))
+              )
+                continue;
+              attempt.push({
+                position,
+                heading: heading + Math.PI / 2,
+                widthM: 2.5,
+                lengthM: 5,
+                aisleRoad: lot.connectors[0]?.roadId ?? '',
+                positionM: lot.connectors[0]?.positionM ?? 0,
+                corners,
+              });
+            }
+          }
+          if (attempt.length > best.length) best = attempt;
+        }
+        for (const stall of best) {
+          stalls.push(stall);
+          occupied.push(prepareRing(closed(stall.corners)));
         }
       }
       result.stallCount = stalls.length;

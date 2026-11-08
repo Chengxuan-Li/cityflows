@@ -18,7 +18,7 @@ import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
 import type { Command, Person } from '../schema';
 import type { RoadId } from '../schema';
-import type { Metrics, PatchResult, VehicleDetail } from '../sim/types';
+import type { Metrics, PatchResult, VehicleDetail, ParkedCarsSnapshot } from '../sim/types';
 import { bundledProject } from './bundled-projects';
 import { selectionAfterEdit } from './edit-selection';
 import { comparisonTrips, restoreBaseline, saveBaseline, type Variant } from '../project/scenarios';
@@ -109,6 +109,7 @@ interface AppState {
   selectRoads: (roads: RoadId[]) => void;
   vehicle: VehicleDetail | null;
   parkingOccupancy: Record<string, number>;
+  parkedCars: ParkedCarsSnapshot | null;
   diagnosticsOpen: boolean;
   rejectedEdit: Diagnostic[];
   busy: boolean;
@@ -285,6 +286,7 @@ export const useAppStore = create<AppState>((set, get) => {
         },
         selection: null,
         parkingOccupancy: {},
+        parkedCars: null,
         selectedRoads: [],
         vehicle: null,
         diagnosticsOpen: false,
@@ -472,6 +474,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
     vehicle: null,
     parkingOccupancy: {},
+    parkedCars: null,
     diagnosticsOpen: false,
     rejectedEdit: [],
     busy: false,
@@ -676,6 +679,7 @@ declare global {
     cityflows?: Pick<EngineClient, 'metrics' | 'hash' | 'inspect' | 'step'> & {
       snapshot?: EngineClient['snapshot'];
       drawnSnapshot?: () => VehicleSnapshot | null;
+      parkedCars?: () => ParkedCarsSnapshot | null;
       vehicleToScreen?: (id: number) => Vec2 | null;
       capture3D?: () => Promise<string[]>;
       view3D?: () => { centre: Vec2; zoom: number } | null;

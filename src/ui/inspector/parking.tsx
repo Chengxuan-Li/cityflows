@@ -1,7 +1,8 @@
 import type { CParking } from '../../network';
-import type { ParkingAccess } from '../../schema';
+import { vehicleClasses, type ParkingAccess } from '../../schema';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
+import { remapParkedCars } from '../drawn-snapshot';
 
 export function ParkingInspector({ facility }: { facility: CParking }) {
   const occupied = useAppStore((state) => state.parkingOccupancy[facility.id]);
@@ -25,6 +26,12 @@ export function ParkingInspector({ facility }: { facility: CParking }) {
         )}
         <dt>Occupancy now</dt>
         <dd>{occupied === undefined ? '—' : `${occupied} / ${facility.capacity}`}</dd>
+        {facility.kind === 'lot' && (
+          <>
+            <dt>Generated spaces</dt>
+            <dd>{facility.capacity}</dd>
+          </>
+        )}
         {Boolean(facility.source.provenance.inferred?.length) && (
           <>
             <dt>Source</dt>
@@ -33,20 +40,22 @@ export function ParkingInspector({ facility }: { facility: CParking }) {
         )}
       </dl>
       <fieldset className="parking-fields edit-fields" disabled={viewMode === '3d' || busy}>
-        <NumberField
-          label="Parking capacity"
-          value={facility.capacity}
-          min={occupied ?? 0}
-          step={1}
-          onCommit={(capacity) =>
-            void commit({
-              kind: 'setParkingAttributes',
-              parkingId: facility.id,
-              capacity: capacity!,
-              source: facility.source,
-            })
-          }
-        />
+        {facility.kind !== 'lot' && (
+          <NumberField
+            label="Parking capacity"
+            value={facility.capacity}
+            min={occupied ?? 0}
+            step={1}
+            onCommit={(capacity) =>
+              void commit({
+                kind: 'setParkingAttributes',
+                parkingId: facility.id,
+                capacity: capacity!,
+                source: facility.source,
+              })
+            }
+          />
+        )}
         <label className="edit-field">
           Parking access
           <select
@@ -67,6 +76,41 @@ export function ParkingInspector({ facility }: { facility: CParking }) {
         </label>
       </fieldset>
       {viewMode === '3d' && <p className="muted">Edit parking in 2D.</p>}
+    </>
+  );
+}
+
+export function ParkedSpaceInspector({ space }: { space: number }) {
+  const session = useAppStore((state) => state.session!);
+  const compiled = session.compiled;
+  const stock = useAppStore((state) => state.parkedCars);
+  const parkedCars = remapParkedCars(stock, session.loadedCompiled, compiled);
+  const slot = compiled.parkingSpaces?.[space];
+  const facility = slot && compiled.parking[slot.parking];
+  const occupied = parkedCars && Boolean(parkedCars.occupied[space >> 3]! & (1 << (space & 7)));
+  return (
+    <>
+      <h2>{occupied ? `Parked vehicle ${parkedCars!.id[space]}` : 'Parking space'}</h2>
+      {facility && (
+        <dl className="details">
+          {occupied && (
+            <>
+              <dt>Class</dt>
+              <dd className="capitalize">{vehicleClasses[parkedCars!.vclass[space]!]}</dd>
+            </>
+          )}
+          <dt>Parking</dt>
+          <dd>
+            {facility.name ?? (facility.kind === 'roadside' ? 'Roadside parking' : 'Parking lot')}
+          </dd>
+          <dt>Kind</dt>
+          <dd className="capitalize">{facility.kind}</dd>
+          <dt>Access</dt>
+          <dd className="capitalize">{facility.access}</dd>
+          <dt>State</dt>
+          <dd>{occupied ? 'Parked' : 'Empty'}</dd>
+        </dl>
+      )}
     </>
   );
 }

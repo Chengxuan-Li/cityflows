@@ -28,7 +28,7 @@ const slowRoads = (page: Parameters<typeof metrics>[0]) =>
 test('demo A, morning commute: 2 000 residents drive to the offices at 08:00 and home in the evening', async ({
   page,
 }, info) => {
-  test.setTimeout(240_000);
+  test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();

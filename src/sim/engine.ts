@@ -282,6 +282,21 @@ function createRun({
       if (Math.abs(vehicles.position[id]! - positionM) < required) return false;
     }
     const source = compiled.lanes[lane]!;
+    if (parking.leavingSpace(vehicle)) {
+      for (let id = vehicles.last(lane); id !== -1; id = vehicles.previous[id]!) {
+        if (vehicles.position[id]! >= positionM) break;
+        const gapM = positionM - profile(vehicle).lengthM - vehicles.position[id]!;
+        const follower = profile(id);
+        const insertion = idmAcceleration(
+          follower.idm,
+          vehicles.speed[id]!,
+          Math.min(source.speedLimitMps * vehicles.speedFactor[id]!, follower.maxSpeedMps),
+          0,
+          gapM - vehicles.speed[id]! * dtS,
+        );
+        if (insertion < -params.mobil.safeDecelMps2) return false;
+      }
+    }
     if (source.lengthM - positionM < maxSpacing) {
       for (const idx of source.out) {
         const id = vehicles.last(-idx - 1);
@@ -340,7 +355,7 @@ function createRun({
       const lane = compiled.lanes[occupied[i]!]!;
       if (lane.left === -1 && lane.right === -1) continue;
       for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
-        if (vehicles.state[id] !== DRIVING) continue;
+        if (vehicles.state[id] !== DRIVING || parking.departing(id, time())) continue;
         const discretionary =
           intersections.grants[id] === -1 &&
           lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM;
@@ -375,6 +390,12 @@ function createRun({
           continue;
         }
         const position = vehicles.position[id]!;
+        if (parking.departing(id, timeS)) {
+          acceleration[id] = 0;
+          limit[id] = position;
+          ahead = id;
+          continue;
+        }
         if (lane) parking.approach(id, lane.idx, position, timeS);
         const destination = compiled.connectors[arrival[id]!];
         const movement = compiled.movements[vehicles.movement[id]!];
@@ -412,7 +433,11 @@ function createRun({
         let obstacle = rear;
         let leaderSpeed = leader === -1 ? 0 : vehicles.speed[leader]!;
         let stopAt = Infinity;
-        if (lane && destination && !connectors.canArrive(destination, timeS, id)) {
+        if (
+          lane &&
+          destination &&
+          (parking.needsManoeuvre(destination.idx) || !connectors.canArrive(destination, timeS, id))
+        ) {
           // Put the virtual bumper beyond the portal so standstill occurs at the portal.
           stopAt = destination.positionM + idm.minGapM;
         } else if (
@@ -524,7 +549,7 @@ function createRun({
     vehicles.speed[id] = 0;
     if (
       connector.parking !== undefined &&
-      (parking.full(connector.idx) || !parking.admits(id, connector.idx))
+      (parking.full(connector.idx, id) || !parking.admits(id, connector.idx))
     ) {
       parking.reject(id, timeS);
       const lane = vehicles.lane[id]!;
@@ -546,6 +571,11 @@ function createRun({
       routeReasons[id] = 'parking';
       if (vehicles.state[id] === QUEUED_DESTINATION) accounting.transition(id, DRIVING);
       planLane(id, lane, connector.positionM);
+      return;
+    }
+    if (parking.needsManoeuvre(connector.idx) && !parking.holdArrival(id, connector.idx, timeS)) {
+      if (vehicles.state[id] !== QUEUED_DESTINATION) accounting.transition(id, QUEUED_DESTINATION);
+      vehicles.waiting[id] = vehicles.waiting[id]! + dtS;
       return;
     }
     if (connectors.arrive(connector, timeS, id)) {
@@ -781,6 +811,7 @@ function createRun({
       state: new Uint8Array(count),
       vclass: new Uint8Array(count),
       parkingOccupancy: parking.snapshot(),
+      parkedCars: parking.stockSnapshot(),
       fade: new Float32Array(count),
     };
     let i = 0;

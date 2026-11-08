@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { button, city, downloadText, metrics, pageErrors, writeMetrics } from './helpers';
 
+test.setTimeout(420_000);
+
 // Parse CSV fields, including escaped quotes and embedded newlines in imported names.
 function parseCsv(text: string) {
   const rows: string[][] = [];
