@@ -876,14 +876,16 @@ Algorithm:
 4. Fallback when 2 or 3 fail: Dijkstra over lanes, edges = movements (same costs) plus lane
    changes to adjacent lanes costing 3 s each; `k` successive changes on one lane need
    `k * laneChangeDistanceM` of that lane (from the current position on the origin lane). The
-   result is converted to a `Route` with singleton target lanes. If that fails too:
+   result keeps its selected roads, movements and cost, then resolves feasible target sets
+   on that road chain. If that fails too:
    `lane_infeasible`.
-5. `targetLanes[i]` is `feasible[i]`. The sim uses it for mandatory lane changes.
-   TASK-101: the lane search (`lane-search.ts`) returns one target lane per road, which the
-   sim treats as compulsory. For a route that crosses a lane its class may not use, the
-   engine (`createRun` in `src/sim/engine.ts`) replaces those targets with `resolveLanes`'
-   feasible sets on the same roads and movements, so a driver may change lanes earlier to
-   pass a queue; other routes keep the singleton targets (T46's pinned behaviour).
+5. `targetLanes[i]` is `feasible[i]`, with the selected movement's departure lane first;
+   the destination road always targets only the connector lane. Mandatory changes are needed
+   only outside the set; MOBIL may use any feasible lane without adding a required change.
+   TASK-116 generalises TASK-101's restricted-route fix: both routing searches return the
+   sets directly, preserving the chosen roads, movements, cost and failures. The engine no
+   longer widens targets in a class-dependent wrapper. Reroutes and live patches carry the
+   ordered sets, including through lane-index remapping; dropped-lane recovery stays exact.
    `desiredSpeedFactor` is carried in the request for congestion-aware costs (Gate 3) and
    unused in Gate 1. A `toConnector` with direction `out` yields `destination_unreachable`.
 
@@ -1015,8 +1017,9 @@ own length. Spawn, MOBIL, merges, junction boxes, zone forecasts and committed e
 use these same profiles. Lane permissions and patch projection use the trip's class;
 rerouting also carries its purpose for TASK-101. Respawn preserves both indices. Old saved
 `vehicleLengthM` is ignored. An unlimited maximum is `Infinity` internally and `null` in JSON;
-the boundary schema restores it. T46 fixes the pre-change grid/town cars-only outcomes,
-travel times and state hashes exactly.
+the boundary schema restores it. T46 pins grid/town cars-only outcomes, travel times and
+state hashes, and compares explicit all-car trips with legacy trips on the same tree.
+TASK-116 re-pins these outcomes because feasible target sets let cars pass queues.
 
 Step sequence, in this order every step:
 

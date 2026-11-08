@@ -23,6 +23,9 @@ const totals = {
   failed: morning.failed,
   gridlocked: morning.failedByReason.gridlocked,
   stalledHeads: morning.stalledHeads,
+  meanDelayS: morning.meanDelayS,
+  routeRequests: morning.routeRequests,
+  meanRouteMs: morning.meanRouteMs,
 };
 console.info(
   `Munich at 0.15, 07:00 to 09:30, ${((performance.now() - start) / 1000).toFixed(1)} s:`,
@@ -32,3 +35,6 @@ console.info('against main', {
   completed: totals.completed - quick.completed,
   gridlocked: totals.gridlocked - quick.gridlocked,
 });
+
+console.info('gridlocked by road', morning.gridlockedRoads);
+console.info('stalled heads', morning.stalledHeadDetails);

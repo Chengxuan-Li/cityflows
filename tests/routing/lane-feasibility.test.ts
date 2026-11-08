@@ -76,7 +76,10 @@ test('the lane fallback detours when the shortest turn is out of reach from the 
   const ids = result.route.roads.map((idx) => compiled.roads[idx]!.id);
   expect(ids).toContain(detour.id);
   expect(ids).not.toContain(direct.id);
-  expect(result.route.targetLanes[0]).toEqual([request.fromLane]);
+  // The late origin still stays in its lane; the other lane is also a legal exit on this
+  // chosen detour, not a compulsory change back toward the unreachable direct turn.
+  expect(result.route.targetLanes[0]![0]).toBe(request.fromLane);
+  expect(result.route.targetLanes[0]).toHaveLength(2);
 });
 
 test('trimmed lanes cannot use the extra centerline length for a lane change', () => {

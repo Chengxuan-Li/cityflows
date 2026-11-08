@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { button, importOsm, metrics, pageErrors } from './helpers';
+import { button, clockTimeS, importOsm, metrics, pageErrors } from './helpers';
 
 test.use({ reducedMotion: 'no-preference' });
 
@@ -116,8 +116,10 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   await page.getByLabel('See below ground').check();
   const start = (await metrics(page)).timeS;
   await button(page, 'Play').click();
-  await expect.poll(async () => (await metrics(page)).timeS).toBeGreaterThan(start);
+  await expect.poll(() => clockTimeS(page)).toBeGreaterThan(start);
   await button(page, 'Pause').click();
+  await expect(button(page, 'Play')).toBeEnabled();
+  expect((await metrics(page)).timeS).toBeGreaterThan(start);
   // Reach the morning through the same worker used by both renderers.
   await page.evaluate(() => window.cityflows!.step(6000));
   await expect.poll(() => map3D.getAttribute('data-vehicles').then(Number)).toBeGreaterThan(0);
