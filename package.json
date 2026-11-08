@@ -33,6 +33,7 @@
   "dependencies": {
     "@types/three": "0.187.0",
     "clipper2-ts": "2.0.1-18",
+    "fast-png": "8.0.0",
     "fast-xml-parser": "5.11.2",
     "fflate": "^0.8.3",
     "flatbush": "4.7.0",

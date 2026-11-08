@@ -169,6 +169,15 @@ export interface City {
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
   context?: { features: ContextFeature[] };
+  terrain?: {
+    source: string;
+    originM: Vec2;
+    cellM: number;
+    cols: number;
+    rows: number;
+    baseM: number;
+    heights: string;
+  };
   nextId: number; // single counter for all id kinds
 }
 

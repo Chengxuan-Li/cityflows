@@ -19,8 +19,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
   'T44 %s: context leaves the canonical network and compilation unchanged',
   (name) => {
     const xml = readFileSync('fixtures/osm/' + name + '.osm', 'utf8');
-    const off = importOsmCached(xml, { importerVersion: '1', context: false });
-    const on = importOsmCached(xml, { importerVersion: '1' });
+    const off = importOsmCached(xml, { importerVersion: '1', context: false, terrain: false });
+    const on = importOsmCached(xml, { importerVersion: '1', terrain: false });
     expect(off.ok && on.ok).toBe(true);
     if (!off.ok || !on.ok) throw new Error('Import failed');
     expect(off.city).not.toHaveProperty('context');

@@ -161,6 +161,7 @@ export function placeHue(id: string): number {
 }
 
 export const style = {
+  hillshadeAlpha: 0.3,
   background: 0xf4f1e7,
   context: {
     building: 0xe5e1d7,

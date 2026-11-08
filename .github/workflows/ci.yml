@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  # TASK-090: check, city and the three e2e shards run side by side; deploy waits for check.
+  # TASK-090: check, city and the e2e groups run side by side; deploy waits for check.
+  # The e2e groups are balanced by duration in playwright.config.ts.
   check:
     runs-on: ubuntu-latest
     steps:
@@ -51,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        group: [a, b, c, rest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -60,11 +61,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --shard=${{ matrix.shard }}/3 --pass-with-no-tests
+      - run: npx playwright test
+        env:
+          CITYFLOWS_E2E_GROUP: ${{ matrix.group }}
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: playwright-results-${{ matrix.shard }}
+          name: playwright-results-${{ matrix.group }}
           path: test-results
           retention-days: 7
 

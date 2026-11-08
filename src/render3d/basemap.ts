@@ -1,6 +1,7 @@
 import type { Sprite } from 'pixi.js';
 import {
   Group,
+  type BufferGeometry,
   Line3,
   Mesh,
   MeshLambertMaterial,
@@ -14,14 +15,15 @@ import {
 import type { GeoReference } from '../geo/projection';
 import { Camera, type Bounds } from '../render/camera';
 import { Tiles } from '../render/layers/tiles';
+import { groundMesh, type Terrain } from './terrain';
 
 /** Intersect the finite camera frustum with the ground, including its far plane
  * where low-pitch views cross the horizon. MapControls always looks at the ground. */
-export function groundBounds(camera: PerspectiveCamera): Bounds {
+export function groundBounds(camera: PerspectiveCamera, groundY = 0): Bounds {
   const corners = Array.from({ length: 8 }, (_, i) =>
     new Vector3(i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1).unproject(camera),
   );
-  const plane = new Plane(new Vector3(0, 1, 0), 0);
+  const plane = new Plane(new Vector3(0, 1, 0), -groundY);
   const points: Vector3[] = [];
   for (let i = 0; i < 8; i++)
     for (const bit of [1, 2, 4]) {
@@ -43,9 +45,12 @@ export class Basemap3D {
   readonly group = new Group();
   private readonly tiles: Tiles;
   private readonly proxy = new Camera();
-  private readonly meshes = new Map<Sprite, Mesh<PlaneGeometry, MeshLambertMaterial>>();
+  private readonly meshes = new Map<Sprite, Mesh<BufferGeometry, MeshLambertMaterial>>();
 
-  constructor(geo: GeoReference) {
+  constructor(
+    geo: GeoReference,
+    private readonly terrain?: Terrain,
+  ) {
     this.tiles = new Tiles(geo);
   }
 
@@ -57,7 +62,12 @@ export class Basemap3D {
     belowGround: boolean,
   ) {
     if (!this.group.visible) return;
-    this.proxy.fitToBounds(groundBounds(camera), width, height, 0);
+    this.proxy.fitToBounds(
+      groundBounds(camera, this.terrain?.groundAt(camera.position.x, camera.position.z) ?? 0),
+      width,
+      height,
+      0,
+    );
     this.tiles.update(this.proxy, width, height, deltaMs);
     for (const [sprite, mesh] of this.meshes) {
       mesh.visible = false;
@@ -74,14 +84,27 @@ export class Basemap3D {
         texture.colorSpace = SRGBColorSpace;
         texture.needsUpdate = true;
         mesh = new Mesh(
-          new PlaneGeometry(sprite.width, sprite.height),
+          this.terrain?.grid
+            ? groundMesh(
+                this.terrain,
+                {
+                  minX: sprite.x,
+                  minY: sprite.y,
+                  maxX: sprite.x + sprite.width,
+                  maxY: sprite.y + sprite.height,
+                },
+                -0.03,
+              )
+            : new PlaneGeometry(sprite.width, sprite.height),
           new MeshLambertMaterial({ map: texture, transparent: true, depthWrite: true }),
         );
         // Tiles precede the translucent fallback ground and write depth, so each
         // ground pixel blends once at 40% rather than two layers accumulating 64%.
         mesh.renderOrder = 1;
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(sprite.x + sprite.width / 2, -0.03, sprite.y + sprite.height / 2);
+        if (!this.terrain?.grid) {
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.position.set(sprite.x + sprite.width / 2, -0.03, sprite.y + sprite.height / 2);
+        }
         mesh.receiveShadow = true;
         this.group.add(mesh);
         this.meshes.set(sprite, mesh);
@@ -95,7 +118,7 @@ export class Basemap3D {
     return [...this.meshes.values()].filter((mesh) => mesh.visible).length;
   }
 
-  private disposeMesh(mesh: Mesh<PlaneGeometry, MeshLambertMaterial>) {
+  private disposeMesh(mesh: Mesh<BufferGeometry, MeshLambertMaterial>) {
     mesh.removeFromParent();
     mesh.geometry.dispose();
     mesh.material.map!.dispose();

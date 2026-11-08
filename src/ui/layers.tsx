@@ -5,6 +5,7 @@ import { useAppStore } from './store';
 
 const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
+  ['terrain', 'Terrain'],
   ['context', 'Surroundings'],
   ['trees', 'Trees'],
   ['streetTrees', 'Street trees'],
@@ -34,6 +35,7 @@ export function Layers() {
     treeCounts &&
     treeCounts.osm + treeCounts.row + treeCounts.wood + treeCounts.scrub + treeCounts.park > 0;
   const hasStreetTrees = Boolean(treeCounts?.street);
+  const hasTerrain = useAppStore((state) => Boolean(state.session?.project.city.terrain));
   const { toggleLayer, toggleLayers } = useAppStore.getState();
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -50,7 +52,8 @@ export function Layers() {
             (key !== 'basemap' || hasGeo) &&
             (key !== 'context' || hasContext) &&
             (key !== 'trees' || hasTrees) &&
-            (key !== 'streetTrees' || hasStreetTrees),
+            (key !== 'streetTrees' || hasStreetTrees) &&
+            (key !== 'terrain' || hasTerrain),
         )
         .map(([key, label]) => (
           <label key={key}>

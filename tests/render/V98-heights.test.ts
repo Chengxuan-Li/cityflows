@@ -10,7 +10,8 @@ test.each(tierCities(auditCities))(
     const city = loadAuditCity(name);
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    const heights = cityHeights(result.compiled, city);
+    // This gate pins the original grade-only profile. V105 exercises terrain separately.
+    const heights = cityHeights(result.compiled, { ...city, terrain: undefined });
     let worst = { road: '', deltaM: 0, atM: 0, lengthM: 0, deckM: 0, fromM: 0, toM: 0 };
     let ramps = 0;
     let gradeZeroRamps = 0;

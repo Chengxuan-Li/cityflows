@@ -247,6 +247,23 @@ const cityFields = {
   roads: z.record(roadId, roadSchema),
   places: z.record(placeId, placeSchema),
   context: z.object({ features: z.array(contextFeature) }).optional(),
+  terrain: z
+    .object({
+      source: z.string().min(1),
+      originM: vec2,
+      cellM: z.number().positive(),
+      cols: z.int().min(2),
+      rows: z.int().min(2),
+      baseM: z.number(),
+      heights: z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+    })
+    .refine((grid) => {
+      const bytes =
+        (grid.heights.length * 3) / 4 -
+        (grid.heights.endsWith('==') ? 2 : grid.heights.endsWith('=') ? 1 : 0);
+      return bytes === grid.cols * grid.rows * 2;
+    }, 'Terrain byte length must match its dimensions')
+    .optional(),
   nextId: count,
 };
 
