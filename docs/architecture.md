@@ -843,6 +843,11 @@ Algorithm:
    result is converted to a `Route` with singleton target lanes. If that fails too:
    `lane_infeasible`.
 5. `targetLanes[i]` is `feasible[i]`. The sim uses it for mandatory lane changes.
+   TASK-101: the lane search (`lane-search.ts`) returns one target lane per road, which the
+   sim treats as compulsory. For a route that crosses a lane its class may not use, the
+   engine (`createRun` in `src/sim/engine.ts`) replaces those targets with `resolveLanes`'
+   feasible sets on the same roads and movements, so a driver may change lanes earlier to
+   pass a queue; other routes keep the singleton targets (T46's pinned behaviour).
    `desiredSpeedFactor` is carried in the request for congestion-aware costs (Gate 3) and
    unused in Gate 1. A `toConnector` with direction `out` yields `destination_unreachable`.
 
