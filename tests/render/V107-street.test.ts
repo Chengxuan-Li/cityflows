@@ -147,11 +147,13 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 // changes no network code. TASK-111 re-pinned: its crossing node, arm and spans and the signal
 // phases' walk lists are new compiled data; with them stripped every city hashes to the previous
 // pin (grid 645ce5cf…, town 4b08bdfa…, Munich db7eea6e…, Sindelfingen ad1ccb01…).
+// Lead, TASK-103 merge: Munich and Sindelfingen add parking bands, entries and spaces; with
+// TASK-111's fields stripped they hash to TASK-103's own pins (35122d76…, 1b4fdcc4…).
 const baselines = {
   grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
   town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
-  'munich-donnersberger': 'f656b98c6ea1808836fc7e2d7a6cc4bd756bd1ba648a8d2269057f74ef5ffe54',
-  'sindelfingen-a81': '502cb24fe67410a87243344c871417f8c622abc2526ece9ee4a6c1d70fac8ebe',
+  'munich-donnersberger': '332a2e3726e8ec9a4a8ba38aafee3a2cd4a1c8dddb527dbe6d3a81f43c712c23',
+  'sindelfingen-a81': '5e7ffd6378f144941c8e4bb48e074000fb966bf22b3af331bec19b8d8360340a',
 };
 const lampCounts = {
   grid: [0, 0],

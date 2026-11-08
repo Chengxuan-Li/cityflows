@@ -29,6 +29,10 @@ export function createConnectors(
   let queues = compiled.connectors.map((): number[] => []);
   let head = new Uint32Array(queues.length);
   let ready = new Uint32Array(queues.length);
+  // Lead (TASK-103 merge): when a connector's queue next needs a look, 0 while cars are ready
+  // to leave. Parked stock queues one car per slot connector, so skipping idle queues keeps the
+  // step from walking thousands of them; a skipped queue would have done nothing that step.
+  let wake = new Float64Array(queues.length);
   let nextAdmission = new Float64Array(queues.length).fill(-Infinity);
   let inside = new Uint32Array(compiled.places.length);
   let admitted = new Uint32Array(compiled.places.length);
@@ -116,6 +120,7 @@ export function createConnectors(
     });
     for (const connector of origins) {
       const idx = connector.idx;
+      if (wake[idx]! > timeS + 1e-9) continue;
       const queue = queues[idx]!;
       let available = ready[idx]!;
       while (available < queue.length && queuedSince(queue[available]!) <= timeS + 1e-9) {
@@ -210,6 +215,8 @@ export function createConnectors(
         }
       }
       head[idx] = i;
+      wake[idx] =
+        i < available ? 0 : available < queue.length ? queuedSince(queue[available]!) : Infinity;
     }
   }
 
@@ -273,6 +280,7 @@ export function createConnectors(
       i++;
     queue.splice(i, 0, id);
     ready[out]!++;
+    wake[out] = 0;
     if (queue.length === 1) origins = compiled.connectors.filter((c) => queues[c.idx]!.length);
   }
 
@@ -310,6 +318,7 @@ export function createConnectors(
     );
     head = new Uint32Array(queues.length);
     ready = new Uint32Array(queues.length);
+    wake = new Float64Array(queues.length);
     nextAdmission = budgets;
     origins = next.connectors.filter((c) => queues[c.idx]!.length);
     compiled = next;

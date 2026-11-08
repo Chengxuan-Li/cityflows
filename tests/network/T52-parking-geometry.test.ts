@@ -9,6 +9,23 @@ import { safeStripRuns } from '../../src/network/strips';
 import { createHash } from 'node:crypto';
 import type { CompiledCity } from '../../src/network';
 
+/** Lead (TASK-111 merge): a signal phase's walk list indexes walk links, which strips move. */
+const vehicleNodes = (net: CompiledCity) =>
+  net.nodes.map((n) =>
+    n.signal
+      ? {
+          ...n,
+          signal: {
+            ...n.signal,
+            phases: n.signal.phases.map((p) => ({
+              durationS: p.durationS,
+              movements: p.movements,
+            })),
+          },
+        }
+      : n,
+  );
+
 test.each([
   ['grid', grid5x5],
   ['town', town],
@@ -24,7 +41,7 @@ test.each([
       createHash('sha256')
         .update(
           JSON.stringify({
-            nodes: net.nodes,
+            nodes: vehicleNodes(net),
             roads: net.roads,
             movements: net.movements,
             places: net.places,

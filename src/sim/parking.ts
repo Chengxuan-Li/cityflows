@@ -56,7 +56,14 @@ export function createParking(
   const prefersStreet = (id: number) =>
     rng.derive(trips[id]!.personId ?? trips[id]!.id).next() < params.streetParkingShare;
   const small = (id: number) => vehicles.vclass[id]! < 2;
+  // Lead (TASK-103 merge): memoized per place; load asked it twice per trip.
+  const nearHomeCache = new Map<number, CompiledCity['parking']>();
   const nearHome = (place: number) => {
+    let cached = nearHomeCache.get(place);
+    if (!cached) nearHomeCache.set(place, (cached = nearHomeOf(place)));
+    return cached;
+  };
+  const nearHomeOf = (place: number) => {
     const p = compiled.places[place]!.centroid;
     return compiled.parking
       .filter(

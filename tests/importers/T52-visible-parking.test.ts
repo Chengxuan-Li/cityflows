@@ -10,6 +10,23 @@ import { buildCity } from '../../src/fixtures/build-city';
 import { allocateId } from '../../src/schema';
 import { importOsm } from '../../src/importers/osm';
 
+/** Lead (TASK-111 merge): a signal phase's walk list indexes walk links, which strips move. */
+const vehicleNodes = (net: CompiledCity) =>
+  net.nodes.map((n) =>
+    n.signal
+      ? {
+          ...n,
+          signal: {
+            ...n.signal,
+            phases: n.signal.phases.map((p) => ({
+              durationS: p.durationS,
+              movements: p.movements,
+            })),
+          },
+        }
+      : n,
+  );
+
 test.each(['no', 'delivery'])('T52 closed lot access stays private: %s', (access) => {
   const result = importOsm(
     `<osm><node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0.001"/><node id="3" lat="0.0001" lon="0.0001"/><node id="4" lat="0.0001" lon="0.0005"/><node id="5" lat="0.0003" lon="0.0005"/><node id="6" lat="0.0003" lon="0.0001"/><way id="10"><nd ref="1"/><nd ref="2"/><tag k="highway" v="residential"/></way><way id="20"><nd ref="3"/><nd ref="4"/><nd ref="5"/><nd ref="6"/><nd ref="3"/><tag k="amenity" v="parking"/><tag k="access" v="${access}"/></way></osm>`,
@@ -119,7 +136,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
       createHash('sha256')
         .update(
           JSON.stringify({
-            nodes: net.nodes,
+            nodes: vehicleNodes(net),
             roads: net.roads,
             movements: net.movements,
             places: net.places,

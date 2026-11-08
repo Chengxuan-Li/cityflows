@@ -9,6 +9,8 @@ import { compile } from '../../src/network';
 import { placeStreet } from '../../src/render/street';
 import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { markingThemes } from '../../src/render/style';
+import { cumulativeLengths } from '../../src/geo/polyline';
+import { allocateId } from '../../src/schema';
 import { unitTest, tierCities } from '../tier';
 
 unitTest('V117 neighbouring entries move along their kerbs until faces and posts are clear', () => {
@@ -104,9 +106,42 @@ unitTest.each(['right', 'left'] as const)(
   },
 );
 
+unitTest('V117 UK kerb lines leave out parking strip runs (lead, TASK-103 merge)', () => {
+  const b = buildCity('UK strip', 1);
+  b.city.drivingSide = 'left';
+  const [road] = b.street(b.node(0, 0), b.node(120, 0));
+  for (const r of Object.values(b.city.roads)) r.lateralOffsetM *= -1;
+  const yellow = (city: typeof b.city) => {
+    const result = compile(city);
+    if (!result.ok) throw Error('compile');
+    const r = result.compiled.roads[result.compiled.index.road.get(road!.id)!]!;
+    return roadMarkingGeometry(result.compiled, r, city, markingThemes.uk)
+      .below.filter((s) => s.role === 'edge' && (s.color ?? 0xf2ca4b) === 0xf2ca4b)
+      .reduce((sum, s) => sum + cumulativeLengths(s.points).at(-1)!, 0);
+  };
+  const before = yellow(b.city);
+  const id = allocateId(b.city, 'pk');
+  (b.city.parking ??= {})[id] = {
+    id,
+    kind: 'roadside',
+    name: null,
+    access: 'public',
+    placeId: null,
+    capacity: 10,
+    connectors: [],
+    shape: null,
+    strip: { roadId: road!.id, side: 'left', fromM: 30, toM: 85, layout: 'parallel' },
+    provenance: { source: 'authored' },
+  };
+  // The 55 m run leaves the yellow line; the rest of the kerb keeps it.
+  expect(before - yellow(b.city)).toBeGreaterThan(50);
+  expect(yellow(b.city)).toBeGreaterThan(20);
+});
+
 // Main 606ee51: display-only fixes must retain all network, lamp, curb and DE/US paint bytes.
 // Lead, TASK-111 merge: compile pins follow V107 (crossing spans and walk phases added; the
-// previous pins return with them stripped).
+// previous pins return with them stripped); TASK-103 moves Munich and Sindelfingen as in V107,
+// and its parking bands move their lamps and curbs outward (V103 covers them).
 const pins = {
   grid: {
     compile: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
@@ -123,16 +158,16 @@ const pins = {
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
   munich: {
-    compile: 'f656b98c6ea1808836fc7e2d7a6cc4bd756bd1ba648a8d2269057f74ef5ffe54',
-    lamps: '022a566b4569796eb73231e6f4bcf97a61c55385229c916f1d887f35168fca07',
-    curbs: 'a4842cbb009483c5c1981799f3c5cc49fc3fa4cd6e348989423d32bff65d5b82',
+    compile: '332a2e3726e8ec9a4a8ba38aafee3a2cd4a1c8dddb527dbe6d3a81f43c712c23',
+    lamps: 'bc94740d4de607448564eccefc039d3f5e628993d32e633dfdaa99d62d6d1e71',
+    curbs: '87bf5ac1b6f01bb6ba7d9e001433c346d60e8b39ea2fbe12e26bbc85e39da18b',
     de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
     us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
   },
   sindelfingen: {
-    compile: '502cb24fe67410a87243344c871417f8c622abc2526ece9ee4a6c1d70fac8ebe',
-    lamps: 'caade54d58325c0f4585fec2054ce64a174dc9ea8852e4fcb3ddb77889f7ac9c',
-    curbs: '7578c2635adc30096fb3577bd74a8e9c42aae198e47645bb29617c71f5b53427',
+    compile: '5e7ffd6378f144941c8e4bb48e074000fb966bf22b3af331bec19b8d8360340a',
+    lamps: 'acd3b097695fe649986e9236ccf382fa154c19d9487087c2fc6b63395cffbeba',
+    curbs: '401236de151028fe921ef2ca483c99218fa4fa8daf258fa45a50da58f3229255',
     de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',
     us: 'c323dc2ff69850bb63f12141e3b2b00e81520238f7411e8e11ecf0c082b2d3d4',
   },

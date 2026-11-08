@@ -212,15 +212,19 @@ export function parkingBandEdge(
     referenceLengths = cumulativeLengths(road.reference);
   const end = lengths.at(-1)!;
   const stations = new Set<number>(lengths);
-  for (let s = 0; s < end; s += 1) stations.add(s);
-  for (const strip of strips)
-    for (const s of [strip.fromM, strip.toM]) {
-      const at = nearestOnPolyline(
-        edge,
-        pointAtDistance(road.reference, referenceLengths, s),
-      ).along;
+  // Lead (TASK-103 merge): sample every metre only along the runs (plus 1 m); elsewhere the
+  // offset is zero and the edge's own vertices give the same line.
+  const runs: [number, number][] = [];
+  for (const strip of strips) {
+    const [a, b] = [strip.fromM, strip.toM].map(
+      (s) => nearestOnPolyline(edge, pointAtDistance(road.reference, referenceLengths, s)).along,
+    ) as [number, number];
+    for (const at of [a, b])
       for (const delta of [-0.001, 0.001]) stations.add(Math.max(0, Math.min(end, at + delta)));
-    }
+    runs.push([Math.min(a, b) - 1, Math.max(a, b) + 1]);
+  }
+  for (const [from, to] of runs)
+    for (let s = Math.max(0, Math.ceil(from)); s < Math.min(end, to); s += 1) stations.add(s);
   const sign = side === 'left' ? -1 : 1;
   return [...stations]
     .sort((a, b) => a - b)
