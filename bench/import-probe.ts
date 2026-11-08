@@ -101,7 +101,23 @@ export function probeMorning(
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, population, scenario);
   const engine = createEngine();
-  engine.load({ compiled, trips, scenario, ...(routeProvider && { routeProvider }) });
+  const provider = routeProvider ?? createRouteProvider();
+  let routeRequests = 0;
+  let routeTimeMs = 0;
+  engine.load({
+    compiled,
+    trips,
+    scenario,
+    routeProvider: {
+      route(network, costs, request) {
+        const start = performance.now();
+        const result = provider.route(network, costs, request);
+        routeTimeMs += performance.now() - start;
+        routeRequests++;
+        return result;
+      },
+    },
+  });
   let peak = 0;
   const completedByHalfHour: number[] = [];
   let completedBefore = 0;
@@ -160,13 +176,23 @@ export function probeMorning(
       front.set(lane, id);
   }
   let stalledHeads = 0;
+  const stalledHeadDetails: { tripId: string; road: string; lane: number }[] = [];
   for (const [index, id] of end.id.entries()) {
     const lane = end.lane[index]!;
     if (end.state[index] !== 1 || (lane >= 0 && front.get(lane) !== id)) continue;
-    if (end.timeS - still.get(id)!.sinceS >= 300) stalledHeads++;
+    if (end.timeS - still.get(id)!.sinceS >= 300) {
+      stalledHeads++;
+      const from = lane >= 0 ? lane : compiled.movements[-lane - 1]!.fromLane;
+      stalledHeadDetails.push({
+        tripId: engine.inspect(id)!.tripId,
+        road: compiled.roads[compiled.lanes[from]!.road]!.id,
+        lane,
+      });
+    }
   }
   const gatewayTraffic: Record<string, { entered: number; left: number }> = {};
   const failures = new Map<string, number>();
+  const gridlockedRoads: Record<string, number> = {};
   for (const [i, trip] of trips.entries()) {
     const detail = engine.inspect(i + 1);
     if (!detail) continue;
@@ -174,6 +200,11 @@ export function probeMorning(
       const lane = compiled.lanes[detail.lane];
       const key = `${detail.failReason}:${lane?.id ?? 'unspawned'}`;
       failures.set(key, (failures.get(key) ?? 0) + 1);
+      if (detail.failReason === 'gridlocked') {
+        const from = lane ?? compiled.lanes[compiled.movements[-detail.lane - 1]!.fromLane]!;
+        const road = compiled.roads[from.road]!.id;
+        gridlockedRoads[road] = (gridlockedRoads[road] ?? 0) + 1;
+      }
     }
     const first = initialRoad.get(i + 1) ?? detail.route?.roads[0];
     if (
@@ -200,6 +231,11 @@ export function probeMorning(
     peakDriving: peak,
     completedByHalfHour,
     stalledHeads,
+    stalledHeadDetails,
+    gridlockedRoads,
+    meanDelayS: metrics.meanDelayS,
+    routeRequests,
+    meanRouteMs: routeRequests ? routeTimeMs / routeRequests : 0,
     zoneStops: metrics.zoneStops,
     respawns: metrics.respawns,
     ...metrics.trips,

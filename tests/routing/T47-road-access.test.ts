@@ -11,31 +11,39 @@ import { routingFixture } from './fixtures';
 import { throughputCities, throughputFixture, throughputRequests } from './throughput-fixtures';
 import { test } from 'vitest';
 
-// Exact full results from 56ffccd's unmodified router on these same unrestricted networks.
-// Imported networks retain access boundaries before their rules are cleared for this check.
-// Sindelfingen and Munich moved at the TASK-104 merge (the aisle graph, unrestricted here, and
-// shifted dense indices) and at TASK-102 (garages renumber the aisles).
+// TASK-116: main 806263a's roads, movements, cost and failures, captured before widening
+// targets. Access rules still change none of these on an unrestricted network; target sets
+// now expose alternatives, with the chosen movement's lane first (T51). Sindelfingen and Munich
+// re-pinned at the merge after TASK-102/104 (lot aisles); equal to main fc5bf2f's routes.
 const hashes = {
-  grid: 'f54053d207e6c0d1da2ad1748d84de10b7c6d961fbddde66e183c0b0066bb031',
-  town: '3014271261a29ab0fdd413ecf0af3063f569f9420cb028b05a1fbd827973be57',
-  Sindelfingen: 'ba1eb109924f8802a81e03daa0605a60462366a05344808583ad4709a90d3161',
-  Munich: '64dd76ad60806f4dca405dbc82eaa92da88a723bd558be4efc3c748efe5ee2e0',
+  grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
+  town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
+  Sindelfingen: 'a46d1f5718d0f7706a60b3c5659d2ad435feb10e755a9e4bf6f430d77b3fade1',
+  Munich: '58909a710bc0ed2f0cbaecd380cfa6c3bfb0b0ae6abb18b9f7f04af5d0c870e0',
 };
 
-test.each(tierCities(throughputCities))('T47 unrestricted %s routes equal main', (name) => {
-  const { city } = throughputFixture(name);
-  for (const road of Object.values(city.roads)) {
-    delete road.access;
-    for (const lane of road.lanes) lane.allowed = [...vehicleClasses];
-  }
-  const result = compile(city);
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const net = result.compiled;
-  const provider = createRouteProvider();
-  const costs = freeFlowLinkCosts(net);
-  const routes = throughputRequests(net).map(({ request }) => provider.route(net, costs, request));
-  expect(createHash('sha256').update(JSON.stringify(routes)).digest('hex')).toBe(hashes[name]);
-});
+test.each(tierCities(throughputCities))(
+  'T47 unrestricted %s routes keep main roads, movements and cost',
+  (name) => {
+    const { city } = throughputFixture(name);
+    for (const road of Object.values(city.roads)) {
+      delete road.access;
+      for (const lane of road.lanes) lane.allowed = [...vehicleClasses];
+    }
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const net = result.compiled;
+    const provider = createRouteProvider();
+    const costs = freeFlowLinkCosts(net);
+    const routes = throughputRequests(net).map(({ request }) => {
+      const result = provider.route(net, costs, request);
+      if (!result.ok) return result;
+      const { roads, movements, costS } = result.route;
+      return { ok: true, route: { roads, movements, costS } };
+    });
+    expect(createHash('sha256').update(JSON.stringify(routes)).digest('hex')).toBe(hashes[name]);
+  },
+);
 
 function route(city: City) {
   const { compiled, request } = routingFixture(city);

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { placeCamera } from '../../bench/geometry-shots';
-import { button, importOsm, metrics, pageErrors, stateHash } from './helpers';
+import { button, clockTimeS, importOsm, metrics, pageErrors, stateHash } from './helpers';
 
 test('V97 shadows expose changing under-deck signals and remove all effects when off @smoke', async ({
   page,
@@ -87,9 +87,11 @@ test('V97 shadows expose changing under-deck signals and remove all effects when
   const start = (await metrics(page)).timeS;
   await button(page, 'Play').click();
   await placeCamera(page, [5, -285], 1);
-  await expect.poll(async () => (await metrics(page)).timeS).toBeGreaterThan(start + 1);
+  await expect.poll(() => clockTimeS(page)).toBeGreaterThan(start + 1);
   await placeCamera(page, [-28, 172], 10);
   await canvas.screenshot({ path: info.outputPath('n967-playing.png') });
   await button(page, 'Pause').click();
+  await expect(button(page, 'Play')).toBeEnabled();
+  expect((await metrics(page)).timeS).toBeGreaterThan(start + 1);
   expect(errors).toEqual([]);
 });

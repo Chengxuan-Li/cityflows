@@ -138,7 +138,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | todo |
 | [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | todo |
 | [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | todo |
-| [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | todo |
+| [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -867,6 +867,14 @@ The owner added TASK-114 (low priority) to this batch. TASK-107 no longer waits 
 its sidewalks moved to TASK-110, and lamps, curbs, signs and `BUS` text depend only on 101, 106
 and 108. TASK-116 generalises TASK-101's lane-option fix to every route (review log,
 2026-11-08).
+TASK-116 now returns feasible target sets for every route, preserving the selected plan and
+TASK-076's lane preference. The quick morning improves from 3,012 completed / 38 gridlocked /
+0 stalled heads on main to 3,214 / 29 / 2; persistent heads remain on `r:248` and `r:961`.
+`npm run check` and `test:city` pass. All 21 smoke cases are validated across a
+20-pass full run and the remaining vegetation case's focused rerun. The owner
+approved a 180 s total budget for T47 Munich and a 25% local vegetation frame
+allowance; functional assertions and traffic/routing-speed gates are unchanged.
+The lead retains the full traffic gate and baseline reset at merge.
 
 Checks for Phase 2 agents (owner, 2026-11-08): `npm run check`, `npm run test:city` and
 `npm run test:e2e:smoke`, plus `npm run traffic:quick` for tasks that move traffic (102, 104,
@@ -2260,8 +2268,22 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   departure is a forecast (head for the first candidate with any slots; the entry decides),
   and an inferred garage with an inferred capacity never turns its own place's cars away;
   mapped and inspector-set capacities stay hard (the edit clears `capacity` from
-  `inferred`). Owner may prefer hard inferred capacities with demand that respects them.
-  Munich quick is unchanged (3209 / 28 / 0).
+  `inferred`). Munich quick is unchanged (3209 / 28 / 0).
+- Owner, 2026-11-08, on the inferred garages: keep them admitting every car for the demo
+  (not every owner parks in their garage, and mode choice will thin car demand), but the
+  nameplate must hold the initial stock. Lead: compile sizes an inferred garage to at least
+  its place's current population and jobs, less the place's other garages, so a place edit
+  (demo A's Homes at 2 000 over a 1 088-slot garage) raises the nameplate; pins unchanged.
+- TASK-116 review (lead, 2026-11-08): merged after TASK-102 and TASK-104. Routing keeps the
+  lane search's movements and returns `resolveLanes`' sets with the chosen lane first; the
+  engine wrapper is gone. Conflicts: the import probe keeps TASK-102's optional provider and
+  wraps it for TASK-116's timing; traffic-quick prints both reports. T47's projection pins
+  (roads, movements, cost) for Sindelfingen and Munich re-pinned to main fc5bf2f's own
+  routes, so TASK-116 moves no route after the lots; T46 town keeps TASK-102's state hash
+  with TASK-116's times. Traffic: quick 3356 / 20 / 0 against 3209 / 28 / 0, full 3493 / 51
+  / 0 against 3378 / 62 / 0; baseline reset to these (stalled heads stays 1). The agent
+  relaxed two Munich e2e allowances (T47 180 s, V106 local frame overhead 25%) citing the
+  owner; kept.
 
 ## Owner decisions log
 

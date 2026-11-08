@@ -66,6 +66,8 @@ test('T29 a lane feeding two lanes of a short ramp lands in the one that serves 
   const lane = (id: string) => compiled.index.lane.get(id)!;
   expect(roads.map((idx) => compiled.roads[idx]!.id)).toEqual([approach.id, ramp.id, right.id]);
   expect(compiled.movements[movements[0]!]!.toLane).toBe(lane(`${ramp.id}#2`));
+  expect(targetLanes[0]![0]).toBe(origin.lane);
+  expect(targetLanes[0]).toHaveLength(2);
   expect(targetLanes[1]).toEqual([lane(`${ramp.id}#2`)]);
   // No lane change anywhere: every movement leaves from the lane the previous one entered.
   let entry = origin.lane;
@@ -73,6 +75,35 @@ test('T29 a lane feeding two lanes of a short ramp lands in the one that serves 
     expect(compiled.movements[idx]!.fromLane).toBe(entry);
     entry = compiled.movements[idx]!.toLane;
   }
+  const engine = createEngine();
+  const [home, work] = Object.values(city.places);
+  engine.load({
+    compiled,
+    scenario: scenario(),
+    trips: [
+      {
+        id: 'ramp',
+        personId: null,
+        originPlaceId: home!.id,
+        destinationPlaceId: work!.id,
+        departS: 100,
+        vehicleClass: 'car',
+        purpose: 'private',
+        mode: 'car',
+        legs: [],
+      },
+    ],
+  });
+  for (let step = 0; step < 1200; step++) {
+    engine.step();
+    const detail = engine.inspect(1)!;
+    if (detail.lane >= 0) {
+      const current = compiled.lanes[detail.lane]!;
+      if (current.road === roads[0]) expect(detail.lane).toBe(origin.lane);
+      if (current.road === roads[1]) expect(detail.lane).toBe(lane(`${ramp.id}#2`));
+    }
+  }
+  expect(engine.inspect(1)!.state).toBe('completed');
   // Lane resolution itself picks that landing lane (before TASK-076 it kept the first of the
   // two equal-penalty movements and left the change to the lane-level search).
   const lanes = resolveLanes(

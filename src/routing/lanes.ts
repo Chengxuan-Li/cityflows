@@ -39,6 +39,7 @@ export function resolveLanes(
   request: RouteRequest,
   destination: CConnector,
   changeDistanceM: number,
+  preferredMovements?: number[],
 ) {
   const last = roads.length - 1;
   const targetLanes: number[][] = new Array(roads.length);
@@ -60,7 +61,7 @@ export function resolveLanes(
     const changes = arrivalChanges(lane);
     if (changes !== undefined) enterable.set(lane, changes);
   }
-  targetLanes[last] = [...enterable.keys()];
+  targetLanes[last] = [destination.lane];
 
   const choices: Map<number, number>[] = new Array(last);
   for (let i = last - 1; i >= 0; i--) {
@@ -103,12 +104,17 @@ export function resolveLanes(
         ? compiled.lanes[entryLane]!.lengthM
         : Math.max(0, compiled.roads[roads[i]!]!.lengthM - 10);
     const startM = i === 0 ? request.fromPosM : 0;
-    let movement: number | undefined;
-    for (const { lane } of reachable(entryLane, endM, startM)) {
-      movement = choices[i]!.get(lane);
-      if (movement !== undefined) break;
+    let movement = preferredMovements?.[i];
+    if (movement === undefined) {
+      for (const { lane } of reachable(entryLane, endM, startM)) {
+        movement = choices[i]!.get(lane);
+        if (movement !== undefined) break;
+      }
     }
     if (movement === undefined) return null;
+    // Keep the chosen plan first without making its lane compulsory.
+    const preferred = compiled.movements[movement]!.fromLane;
+    targetLanes[i] = [preferred, ...targetLanes[i]!.filter((lane) => lane !== preferred)];
     movements.push(movement);
     entryLane = compiled.movements[movement]!.toLane;
   }

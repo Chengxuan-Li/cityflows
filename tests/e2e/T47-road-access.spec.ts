@@ -3,7 +3,7 @@ import { pointAtDistance } from '../../src/geo/polyline';
 import { compile } from '../../src/network';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import type { City } from '../../src/schema';
-import { button, city, clickWorld, importOsm, metrics, pageErrors } from './helpers';
+import { button, city, clickWorld, clockTimeS, importOsm, metrics, pageErrors } from './helpers';
 
 test('T47 local traffic only reroutes a live through trip and undo restores access @smoke', async ({
   page,
@@ -60,6 +60,8 @@ test('T47 local traffic only reroutes a live through trip and undo restores acce
 test('T47 Munich local access diverts through traffic and permits a local departure @smoke', async ({
   page,
 }, info) => {
+  // The owner allows Munich's import, live edit and evidence capture a larger wall-time budget.
+  test.setTimeout(180_000);
   const errors = pageErrors(page);
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
@@ -161,7 +163,7 @@ test('T47 Munich local access diverts through traffic and permits a local depart
   await expect(page.getByText(/^Edit applied/)).toBeVisible();
   await button(page, 'Play').click();
   await expect(button(page, 'Pause')).toBeEnabled();
-  await expect.poll(async () => (await metrics(page)).timeS).toBeGreaterThan(start);
+  await expect.poll(() => clockTimeS(page)).toBeGreaterThan(start);
   await expect
     .poll(async () =>
       page.evaluate(
@@ -177,6 +179,8 @@ test('T47 Munich local access diverts through traffic and permits a local depart
     )
     .toBe(false);
   await button(page, 'Pause').click();
+  await expect(button(page, 'Play')).toBeEnabled();
+  expect((await metrics(page)).timeS).toBeGreaterThan(start);
   expect((await city(page)).roads[chosen!.roadId]!.access).toEqual({ all: 'destination' });
   await info.attach('Munich access example', {
     body: JSON.stringify(chosen),

@@ -2,7 +2,7 @@ import type { CConnector, CompiledCity } from '../network';
 import { laneChangePenaltyS, type routeCosts } from './costs';
 import type { RoadGraph } from './graph';
 import type { Route, RouteRequest } from './index';
-import { reachableLanes } from './lanes';
+import { reachableLanes, resolveLanes } from './lanes';
 import { createPathSearch } from './search';
 
 interface LaneEdge {
@@ -115,6 +115,16 @@ export function createLaneSearch(changeDistanceM: number) {
     const targetLanes = movements.map((idx) => [compiled.movements[idx]!.fromLane]);
     targetLanes.push([destination.lane]);
     const roads = targetLanes.map(([lane]) => compiled.lanes[lane!]!.road);
-    return { roads, movements, targetLanes, costS: path.costS };
+    const lanes = resolveLanes(
+      compiled,
+      graph,
+      roads,
+      request,
+      destination,
+      changeDistanceM,
+      movements,
+    );
+    if (!lanes) throw new Error('Lane search returned an infeasible road chain');
+    return { roads, movements, targetLanes: lanes.targetLanes, costS: path.costS };
   };
 }

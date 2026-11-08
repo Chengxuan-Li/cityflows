@@ -6,6 +6,17 @@ import type { City } from '../../src/schema';
 
 export const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 export const metrics = (page: Page) => page.evaluate(() => window.cityflows!.metrics());
+
+// Read playback progress without cloning every trip's metrics through the busy worker.
+export async function clockTimeS(page: Page) {
+  const [hours, minutes, seconds] = (
+    await page.getByLabel('Simulation clock', { exact: true }).innerText()
+  )
+    .split(':')
+    .map(Number);
+  return hours! * 3600 + minutes! * 60 + seconds!;
+}
+
 export const city = (page: Page) => page.evaluate(() => window.cityflows!.city!());
 export const stateHash = (page: Page) => page.evaluate(() => window.cityflows!.hash());
 

@@ -17,6 +17,7 @@ import { signalApproach } from '../../src/fixtures/signal-approach';
 import { vehicleClasses } from '../../src/schema';
 
 const allCars = { car: 1, van: 0, truck: 0, bus: 0 };
+// TASK-116: re-pinned after feasible lane targets enabled queue passing for every car.
 const before = {
   grid5x5: {
     completed: 28,
@@ -27,8 +28,8 @@ const before = {
   },
   town: {
     completed: 207,
-    meanTravelTimeS: 138.45265700483094,
-    meanDelayS: 45.9328750119628,
+    meanTravelTimeS: 138.4507246376812,
+    meanDelayS: 45.93094264481305,
     hash: 1188370961,
     trips: 414,
   },
@@ -38,7 +39,7 @@ test.each([
   ['grid5x5', grid5x5],
   ['town', town],
 ] as const)(
-  'T46 cars-only %s preserves pre-class completion and times with deterministic parking state',
+  'T46 cars-only %s matches legacy trips on this tree and pins completion, times and state',
   (name, fixture) => {
     const city = fixture(19);
     const scenario = defaultScenario(name, 19);
@@ -57,6 +58,18 @@ test.each([
       hash: engine.stateHash(),
       trips: requests.length,
     };
+    const legacy = createEngine();
+    legacy.load({
+      compiled: setup(city),
+      scenario,
+      trips: requests.map((trip) => {
+        // Exercise runtime defaults for legacy trips that predate the required class fields.
+        return { ...trip, vehicleClass: undefined, purpose: undefined } as unknown as typeof trip;
+      }),
+    });
+    legacy.step(Math.round((scenario.endS - scenario.startS) / 0.1));
+    expect(legacy.metrics()).toEqual(metrics);
+    expect(legacy.stateHash()).toBe(observed.hash);
     expect(observed).toEqual(before[name]);
   },
   30000,
