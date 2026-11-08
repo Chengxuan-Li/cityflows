@@ -15,7 +15,9 @@ import {
 } from '../render/marking-geometry';
 import { markingTheme } from '../render/style';
 import type { CityGeometry } from '../render/types';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { heightAt, roadStation, type cityHeights } from './heights';
+import { drape } from './terrain';
 
 export function goreHeight(
   city: CompiledCity,
@@ -98,9 +100,14 @@ export function buildMarkings(
   source: CityGeometry,
   heights: ReturnType<typeof cityHeights>,
 ): BufferGeometry {
-  const positions: number[] = [],
-    colors: number[] = [];
+  // TASK-105: paint on roads and junctions that follow the terrain is draped over the ground
+  // grid (relative heights kept), as their surfaces are; decks, tunnels and gores stay absolute.
+  const terrain = heights.terrain.grid ? heights.terrain : undefined;
+  const raised = { positions: [] as number[], colors: [] as number[] };
+  const land = { positions: [] as number[], colors: [] as number[] };
+  let target = raised;
   const emit = (polygon: Vec2[], color: number, height: (p: Vec2) => number) => {
+    const { positions, colors } = target;
     for (const triangle of ShapeUtils.triangulateShape(
       polygon.map((p) => new Vector2(p.x, p.y)),
       [],
@@ -118,6 +125,9 @@ export function buildMarkings(
       for (const ring of markingPolygons(shape)) {
         const color = markingTheme.colors[shape.role];
         if (shape.gore) {
+          // Gore paint follows its own pavement triangles, never the draped ground.
+          const saved = target;
+          target = raised;
           const xs = ring.map((p) => p.x),
             ys = ring.map((p) => p.y);
           const minX = Math.min(...xs),
@@ -141,6 +151,7 @@ export function buildMarkings(
             ))
               emit(part, color, (p) => triangleHeight(triangle, p));
           }
+          target = saved;
         } else if (shape.kind === 'line' && !flat) {
           const [a, b, c, d] = ring as [Vec2, Vec2, Vec2, Vec2];
           const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5));
@@ -166,25 +177,45 @@ export function buildMarkings(
   for (const road of city.roads) {
     const geometry = roadMarkingGeometry(city, road, source);
     const profile = heights.roads[road.idx]!;
+    target = terrain && profile.crossfall ? land : raised;
     add(
       [...geometry.below, ...geometry.above, ...transitionMarkings(city, road)],
-      (p) => heightAt(profile, roadStation(road, p)),
-      profile.fromM === profile.toM && profile.fromM === profile.deckM,
+      (p) => {
+        const s = roadStation(road, p);
+        return heightAt(profile, s) + (profile.crossfall?.(s, p) ?? 0);
+      },
+      !terrain && profile.fromM === profile.toM && profile.fromM === profile.deckM,
     );
   }
   for (const node of city.nodes) {
-    add(nodeMarkingGeometry(city, node), () => heights.nodes[node.idx]!, true);
+    const z = heights.nodes[node.idx]!;
+    const followsGround = terrain && source.nodes[node.id]?.layer === 0;
+    const ground = followsGround ? terrain.groundAt(node.pos.x, node.pos.y) : 0;
+    const nodeZ = (p: Vec2) => (followsGround ? z + terrain.surfaceAt(p.x, p.y) - ground : z);
+    target = followsGround ? land : raised;
+    add(nodeMarkingGeometry(city, node), nodeZ, true);
     if (node.outline.length)
       for (const index of node.movements) {
         const movement = city.movements[index]!;
         // Pixi draws movement paths before the junction fill; retain that occlusion in 3D.
-        if (!movement.neverGreen)
-          add(movementMarkings(movement), () => heights.nodes[node.idx]! - 0.05, true);
+        if (!movement.neverGreen) add(movementMarkings(movement), (p) => nodeZ(p) - 0.05, true);
       }
   }
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  const buffer = ({ positions, colors }: typeof raised) => {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+    return geometry;
+  };
+  let geometry = buffer(raised);
+  if (terrain && land.positions.length) {
+    const flat = geometry,
+      draped = drape(buffer(land), terrain, 0, true);
+    draped.deleteAttribute('normal');
+    geometry = mergeGeometries([flat, draped.index ? draped.toNonIndexed() : draped])!;
+    flat.dispose();
+    draped.dispose();
+  }
   geometry.userData.markingCounts = counts;
   geometry.computeVertexNormals();
   return geometry;

@@ -4,6 +4,7 @@ import { posix } from 'node:path';
 import process from 'node:process';
 import { deserialize, serialize } from 'node:v8';
 import { importOsm } from '../src/importers/osm';
+import { parseOsm } from '../src/importers/osm/parse';
 import type { ImportOptions, ImportResult } from '../src/importers/types';
 
 // Imports of OSM extracts cached on disk (TASK-090): a real city takes 2 s to import idle and 5
@@ -81,9 +82,11 @@ export function cachePath(xml: string, options: ImportOptions): string {
 /** `importOsm`, served from the disk cache when the same import ran before. Each call returns
  * its own copy. */
 export function importOsmCached(xml: string, options: ImportOptions): ImportResult {
-  if (process.env.CITYFLOWS_NO_CACHE === '1') return importOsm(xml, options);
+  if (process.env.CITYFLOWS_NO_CACHE === '1')
+    return withTerrain(importOsm(xml, options), xml, options);
   const file = cachePath(xml, options);
-  if (existsSync(file)) return deserialize(readFileSync(file)) as ImportResult;
+  if (existsSync(file))
+    return withTerrain(deserialize(readFileSync(file)) as ImportResult, xml, options);
   const result = importOsm(xml, options);
   // Parallel test workers may race: write a file of our own, then rename it into place. On
   // Windows the rename fails while another worker holds the target open; its copy is the same.
@@ -96,5 +99,47 @@ export function importOsmCached(xml: string, options: ImportOptions): ImportResu
     rmSync(temp, { force: true });
     if (!existsSync(file)) throw error;
   }
-  return result;
+  return withTerrain(result, xml, options);
+}
+
+let terrainFixtures:
+  | {
+      xml: string;
+      origin: { lon: number; lat: number };
+      terrain: NonNullable<Extract<ImportResult, { ok: true }>['city']['terrain']>;
+    }[]
+  | undefined;
+function withTerrain(result: ImportResult, xml: string, options: ImportOptions): ImportResult {
+  if (!result.ok || options.terrain === false) return result;
+  terrainFixtures ??= ['munich-donnersberger', 'sindelfingen-a81'].flatMap((name) => {
+    const file = `fixtures/terrain/${name}.json`;
+    if (!existsSync(file)) return [];
+    const xml = readFileSync(`fixtures/osm/${name}.osm`, 'utf8');
+    const data = parseOsm(xml);
+    if (typeof data === 'string' || !data.bounds)
+      throw new Error(`Missing terrain fixture bounds: ${name}`);
+    const [west, south, east, north] = data.bounds;
+    return [
+      {
+        xml,
+        origin: { lon: (west + east) / 2, lat: (south + north) / 2 },
+        terrain: JSON.parse(readFileSync(file, 'utf8')),
+      },
+    ];
+  });
+  const fixture = terrainFixtures.find((fixture) => fixture.xml === xml);
+  if (!fixture) return result;
+  // A custom bbox uses a different local frame; fixture grids belong to their original one.
+  if (
+    result.city.geo?.origin.lon !== fixture.origin.lon ||
+    result.city.geo.origin.lat !== fixture.origin.lat
+  )
+    return result;
+  return {
+    ...result,
+    city: {
+      ...result.city,
+      terrain: { ...fixture.terrain, originM: { ...fixture.terrain.originM } },
+    },
+  };
 }

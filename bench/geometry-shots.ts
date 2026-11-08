@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { chromium, type Page } from '@playwright/test';
+import { fixtureTerrain } from '../tests/e2e/terrain-fixture';
 
 // Fixed-camera images of the geometry rework's cases (TASK-081, docs/plan.md "Geometry rework"):
 // starts the dev server on a free port, imports the Munich extract (or a shot's own, TASK-094)
@@ -21,7 +22,10 @@ export const shots: {
   centre: [number, number];
   zoom: number;
   osm?: string;
-  view3d?: boolean;
+  view?: '3d';
+  terrain?: boolean;
+  pitch?: number;
+  bearing?: number;
 }[] = [
   { id: 'V108-munich-exit', cases: [], centre: [0, -256], zoom: 10 },
   { id: 'V108-munich-arrows', cases: [], centre: [10, 170], zoom: 12 },
@@ -41,17 +45,110 @@ export const shots: {
     zoom: 6,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
-  { id: 'V106-munich-streets-3d', cases: [], centre: [-300, 290], zoom: 3, view3d: true },
-  { id: 'V106-munich-park-3d', cases: [], centre: [-430, 390], zoom: 4, view3d: true },
+  {
+    id: 'V106-munich-streets-3d',
+    cases: [],
+    centre: [-300, 290],
+    zoom: 3,
+    view: '3d' as const,
+    pitch: 55,
+    bearing: 30,
+  },
+  {
+    id: 'V106-munich-park-3d',
+    cases: [],
+    centre: [-430, 390],
+    zoom: 4,
+    view: '3d' as const,
+    pitch: 55,
+    bearing: 30,
+  },
   {
     id: 'V106-sindelfingen-wood-3d',
     cases: [],
     centre: [-721, 491],
     zoom: 6,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
-    view3d: true,
+    view: '3d' as const,
+    pitch: 55,
+    bearing: 30,
   },
-  { id: 'R6-n138-3d', cases: [], centre: [-16.5, -535.5], zoom: 6, view3d: true },
+  {
+    id: 'R6-n138-3d',
+    cases: [],
+    centre: [-16.5, -535.5],
+    zoom: 6,
+    view: '3d' as const,
+    pitch: 55,
+    bearing: 30,
+  },
+  ...['on', 'off'].flatMap((state) => [
+    {
+      id: `V105-sindelfingen-overview-${state}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.27,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 40,
+    },
+    {
+      id: `V105-sindelfingen-a81-${state}`,
+      cases: [],
+      centre: [66, 203] as [number, number],
+      zoom: 2.5,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 35,
+      bearing: 55,
+    },
+    {
+      id: `V105-sindelfingen-bridge-${state}`,
+      cases: [],
+      centre: [66, 203] as [number, number],
+      zoom: 6,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 30,
+      bearing: -65,
+    },
+    {
+      id: `V105-munich-overview-${state}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.43,
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 40,
+    },
+    {
+      id: `V105-munich-detail-${state}`,
+      cases: [],
+      centre: [5, -285] as [number, number],
+      zoom: 1.5,
+      view: '3d' as const,
+      terrain: state === 'on',
+      pitch: 40,
+    },
+    {
+      id: `V105-sindelfingen-hillshade-${state}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.27,
+      osm: 'fixtures/osm/sindelfingen-a81.osm',
+      terrain: state === 'on',
+    },
+    {
+      id: `V105-munich-hillshade-${state}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.43,
+      terrain: state === 'on',
+    },
+  ]),
   { id: 'V96-munich-overview', cases: [], centre: [0, 0], zoom: 0.43 },
   { id: 'V96-hbf-tracks', cases: [], centre: [250, -140], zoom: 1.8 },
   {
@@ -277,30 +374,40 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
   const [out, flag, list, ...rest] = process.argv.slice(2);
   if (!out || (flag !== undefined && (flag !== '--only' || !list)) || rest.length)
     throw new Error('Usage: npm run geometry-shots -- <out-dir> [--only <id,id>]');
-  const only = list?.split(',');
+  const only = list?.split(',').flatMap((id) => {
+    if (shots.some((shot) => shot.id === id)) return [id];
+    const pair = shots.filter((shot) => shot.id === `${id}-on` || shot.id === `${id}-off`);
+    return pair.length ? pair.map((shot) => shot.id) : [id];
+  });
   const unknown = only?.filter((id) => !shots.some((shot) => shot.id === id)) ?? [];
   if (unknown.length) throw new Error(`Unknown shots: ${unknown.join(', ')}`);
   const selected = only ? shots.filter((shot) => only.includes(shot.id)) : shots;
+  if (only?.some((id) => id.startsWith('V105-')))
+    selected.sort((a, b) =>
+      a.id.replace(/-(on|off)$/, '').localeCompare(b.id.replace(/-(on|off)$/, '')),
+    );
   mkdirSync(out, { recursive: true });
   const port = await freePort();
-  const url = `http://127.0.0.1:${port}/`;
-  const server = spawn(
-    process.execPath,
-    [
-      resolve('node_modules/vite/bin/vite.js'),
-      '--mode',
-      'test',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(port),
-      '--strictPort',
-    ],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
-  );
+  const url = process.env.CITYFLOWS_SHOTS_URL ?? `http://127.0.0.1:${port}/`;
+  const server = process.env.CITYFLOWS_SHOTS_URL
+    ? undefined
+    : spawn(
+        process.execPath,
+        [
+          resolve('node_modules/vite/bin/vite.js'),
+          '--mode',
+          'test',
+          '--host',
+          '127.0.0.1',
+          '--port',
+          String(port),
+          '--strictPort',
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      );
   let log = '';
-  server.stdout.on('data', (d) => (log += String(d)));
-  server.stderr.on('data', (d) => (log += String(d)));
+  server?.stdout?.on('data', (d) => (log += String(d)));
+  server?.stderr?.on('data', (d) => (log += String(d)));
   const browser = await chromium.launch();
   const records: unknown[] = [];
   try {
@@ -312,14 +419,23 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
     });
     for (const osm of new Set(selected.map((shot) => shot.osm ?? MUNICH))) {
       const page = await context.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', (error) => {
+        errors.push(error.message);
+        console.error(error.message);
+      });
       await page.route(/^https:\/\//, (route) => route.abort());
       page.setDefaultTimeout(420_000);
+      const wantsTerrain = selected.some((shot) => (shot.osm ?? MUNICH) === osm && shot.terrain);
+      if (wantsTerrain) await fixtureTerrain(page, osm);
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 420_000 });
       const button = (name: string) => page.getByRole('button', { name, exact: true });
       await button('Play').waitFor();
       await button('Import').click();
       const dialog = page.getByRole('dialog', { name: 'Import city' });
       await dialog.getByLabel('OSM file').setInputFiles(osm);
+      const includeTerrain = dialog.getByLabel('Include terrain', { exact: true });
+      if (await includeTerrain.count()) await includeTerrain.setChecked(wantsTerrain);
       await button('Import roads').click();
       await dialog
         .getByRole('region', { name: 'Import diagnostics' })
@@ -368,51 +484,67 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       const canvas = page.getByLabel(three ? '3D city view' : 'City map', { exact: true });
       for (const shot of selected) {
         if ((shot.osm ?? MUNICH) !== osm) continue;
-        // V108's CITYFLOWS_SHOTS_3D renders every shot in 3D at pitch 60; V106's `view3d` shots
-        // render in 3D at pitch 55, bearing 30.
-        const in3d = three || Boolean(shot.view3d);
-        const toggle = page.getByRole('button', { name: '3D', exact: true, includeHidden: true });
-        if (((await toggle.getAttribute('aria-pressed')) === 'true') !== in3d)
-          await toggle.evaluate((button: HTMLButtonElement) => button.click());
-        await page
-          .locator(in3d ? 'canvas[aria-label="3D city view"]' : 'canvas[aria-label="City map"]')
-          .waitFor({ state: 'visible' });
-        let placed;
-        if (in3d) {
-          await page.waitForFunction(() => !!window.cityflows?.view3D?.());
-          const [pitch, bearing] = shot.view3d ? [55, 30] : [60, 0];
-          await page.evaluate(
-            ({ centre, zoom, pitch, bearing }) =>
-              window.cityflows!.setView3D!({ x: centre[0]!, y: centre[1]! }, zoom, pitch, bearing),
-            { centre: shot.centre, zoom: shot.zoom, pitch, bearing },
+        // Hidden controls remain operable for the fixed-camera harness.
+        await page.addStyleTag({ content: 'body * { visibility: visible !important; }' });
+        // V108's CITYFLOWS_SHOTS_3D renders every shot in 3D (pitch 60, bearing 0); cameras with
+        // `view: '3d'` render in 3D at their own pitch and bearing.
+        const in3d = three || shot.view === '3d';
+        const mode = button('3D');
+        if (((await mode.getAttribute('aria-pressed')) === 'true') !== in3d) await mode.click();
+        if (in3d)
+          await page.waitForFunction(
+            () =>
+              document.querySelector('canvas[data-view="3d"]')?.getAttribute('data-build-ms') &&
+              window.cityflows?.view3D?.(),
+            undefined,
+            { timeout: 60_000 },
           );
-          placed = { error: 0, zoom: shot.zoom, size: [VIEWPORT.width, VIEWPORT.height] };
-        } else placed = await placeCamera(page, shot.centre, shot.zoom);
-        await frames(page, 3);
-        const timing =
-          process.env.CITYFLOWS_SHOTS_TIMING === '1' &&
-          ['overview', 'V96-hbf-tracks'].includes(shot.id)
-            ? await page.evaluate(async () => {
-                const samples: number[] = [];
-                let previous = 0;
-                for (let i = 0; i < 150; i++) {
-                  const now = await new Promise<number>((r) => requestAnimationFrame(r));
-                  if (i >= 30) samples.push(now - previous);
-                  previous = now;
-                }
-                const sorted = samples.toSorted((a, b) => a - b);
-                return {
-                  meanMs: samples.reduce((a, b) => a + b, 0) / samples.length,
-                  p95Ms: sorted[Math.floor(sorted.length * 0.95)],
-                  samples: samples.length,
-                };
-              })
-            : undefined;
-        const path = join(out, `${shot.id}.png`);
-        await (in3d ? page.getByLabel('3D city view', { exact: true }) : canvas).screenshot({
-          path,
-          animations: 'disabled',
+        await button('Layers').click();
+        const terrainToggle = layers.getByLabel('Terrain', { exact: true });
+        if (await terrainToggle.count()) await terrainToggle.setChecked(shot.terrain ?? false);
+        await button('Layers').click();
+        const placed = in3d
+          ? await page.evaluate(
+              ({ centre, zoom, pitch, bearing }) => {
+                window.cityflows!.setView3D!({ x: centre[0], y: centre[1] }, zoom, pitch, bearing);
+                return { error: 0, zoom, size: [1280, 800] };
+              },
+              {
+                centre: shot.centre,
+                zoom: shot.zoom,
+                pitch: shot.pitch ?? (shot.view ? undefined : 60),
+                bearing: shot.bearing ?? (shot.view ? undefined : 0),
+              },
+            )
+          : await placeCamera(page, shot.centre, shot.zoom);
+        await page.addStyleTag({
+          content:
+            'body * { visibility: hidden !important; } canvas.map[aria-hidden="false"] { visibility: visible !important; }',
         });
+        await frames(page, 30);
+        if (errors.length) throw new Error(errors.join('\n'));
+        const target = in3d ? page.getByLabel('3D city view', { exact: true }) : canvas;
+        const timing = await page.evaluate(async () => {
+          const renders: number[] = [],
+            times: number[] = [];
+          const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries())
+              if (entry.name === 'cityflows:render' || entry.name === 'cityflows:render3d')
+                renders.push(entry.duration);
+          });
+          observer.observe({ entryTypes: ['measure'] });
+          let last = performance.now();
+          for (let i = 0; i < 90; i++) {
+            const now = await new Promise<number>((r) => requestAnimationFrame(r));
+            times.push(now - last);
+            last = now;
+          }
+          observer.disconnect();
+          const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
+          return { frameMs: mean(times), renderMs: mean(renders) };
+        });
+        const path = join(out, `${shot.id}.png`);
+        await target.screenshot({ path, animations: 'disabled' });
         records.push({
           ...shot,
           file: `${shot.id}.png`,
@@ -421,9 +553,21 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
           centreErrorPx: placed.error,
           zoom: placed.zoom,
           canvas: placed.size,
+          ...timing,
+          buildMs: await target.getAttribute('data-build-ms'),
+          triangles: await target.getAttribute('data-triangles'),
+          gpu: in3d
+            ? await target.evaluate((canvas: HTMLCanvasElement) => {
+                const gl = canvas.getContext('webgl2')!;
+                const debug = gl.getExtension('WEBGL_debug_renderer_info');
+                return gl.getParameter(
+                  debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER,
+                ) as string;
+              })
+            : null,
         });
         console.info(
-          `${shot.id}: centre ${shot.centre.join(', ')} zoom ${shot.zoom} px/m (error ${placed.error.toExponential(1)} px) -> ${path}`,
+          `${shot.id}: ${timing.frameMs.toFixed(2)} ms/frame, ${timing.renderMs.toFixed(2)} ms/render -> ${path}`,
         );
       }
       await page.close();
@@ -435,6 +579,6 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
     throw error;
   } finally {
     await browser.close();
-    server.kill();
+    server?.kill();
   }
 }

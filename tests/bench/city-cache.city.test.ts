@@ -14,10 +14,21 @@ test.each([
   (name, bbox) => {
     vi.stubEnv('CITYFLOWS_NO_CACHE', '');
     const xml = readFileSync(`fixtures/osm/${name}.osm`, 'utf8');
-    const options: ImportOptions = { importerVersion: '1', drivingSide: 'right', bbox: [...bbox] };
+    const options: ImportOptions = {
+      importerVersion: '1',
+      drivingSide: 'right',
+      bbox: [...bbox],
+      terrain: false,
+    };
     importOsmCached(xml, options);
     expect(existsSync(cachePath(xml, options))).toBe(true);
     expect(importOsmCached(xml, options)).toStrictEqual(importOsm(xml, options));
+    const withTerrain = importOsmCached(xml, { ...options, terrain: undefined });
+    if (!withTerrain.ok) throw new Error('Import failed');
+    const { terrain, ...planar } = withTerrain.city;
+    expect(terrain).toEqual(JSON.parse(readFileSync(`fixtures/terrain/${name}.json`, 'utf8')));
+    const plain = importOsmCached(xml, options);
+    expect(plain.ok && plain.city).toStrictEqual(planar);
     expect(cachePath(xml, { ...options, relaxMaxM: 0 })).not.toBe(cachePath(xml, options));
   },
   60_000,

@@ -38,6 +38,7 @@ export interface RouteOverlay {
 }
 
 export interface LayerVisibility {
+  terrain: boolean;
   shadows: boolean;
   roadClasses: boolean;
   vehicleClasses: boolean;
@@ -56,6 +57,7 @@ export interface LayerVisibility {
 }
 
 export const defaultLayers: LayerVisibility = {
+  terrain: true,
   shadows: true,
   roadClasses: false,
   vehicleClasses: false,
@@ -103,4 +105,5 @@ export type CityGeometry = {
   places: City['places'];
   geo?: City['geo'];
   context?: City['context'];
+  terrain?: City['terrain'];
 };

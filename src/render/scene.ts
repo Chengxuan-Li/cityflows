@@ -7,6 +7,7 @@ import { Camera } from './camera';
 import { drawVegetation } from './layers/vegetation';
 import { placeTrees } from './vegetation';
 import { drawContext } from './layers/context';
+import { drawHillshade } from './layers/hillshade';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
 import { drawNode, drawRoadJoins, nodeColor } from './layers/nodes';
@@ -117,6 +118,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
 
   const vehicles = new Vehicles();
   let surroundings: ReturnType<typeof drawContext> | undefined;
+  let hillshade: ReturnType<typeof drawHillshade> | undefined;
   let contextCount = 0;
   let vegetation: ReturnType<typeof drawVegetation> | undefined;
   let treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
@@ -157,6 +159,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
 
   function applyVisibility() {
+    if (hillshade && hillshade.visible !== layerVisibility.terrain) {
+      hillshade.visible = layerVisibility.terrain;
+      const grade = visibleGrades[0]!;
+      const bounds = grade.terrain.getLocalBounds();
+      grade.terrainSize = Math.max(bounds.width, bounds.height);
+      updateTerrainCache();
+      grade.terrain.updateCacheTexture();
+    }
+    canvas.dataset.terrain = String(Boolean(hillshade && layerVisibility.terrain));
     if (surroundings && surroundings.container.visible !== layerVisibility.context) {
       surroundings.container.visible = layerVisibility.context;
       const grade = visibleGrades[0]!;
@@ -302,6 +313,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       for (const ghost of ghosts) ghost.destroy();
       ghosts = [];
       gradeShadows = [];
+      hillshade?.destroy({ texture: true, textureSource: true });
+      hillshade = undefined;
       for (const child of map.removeChildren()) child.destroy({ children: true, context: true });
       updateSignals = [];
 
@@ -330,6 +343,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       // without another map-sized textured quad on software GPUs.
       visibleGrades[0]!.terrain.addChildAt(surroundings.container, 0);
       visibleGrades[0]!.terrain.addChildAt(vegetation.container, 1);
+      if (source?.terrain) {
+        hillshade = drawHillshade(source.terrain);
+        hillshade.visible = layerVisibility.terrain;
+        visibleGrades[0]!.terrain.addChildAt(hillshade, 0);
+      }
       const base = grades.get(0)!;
       base.group.addChildAt(heat.roads, base.group.getChildIndex(base.connectors));
       base.group.addChildAt(difference, base.group.getChildIndex(base.connectors));
@@ -595,6 +613,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       destroyed = true;
       for (const ghost of ghosts) ghost.destroy();
       vehicles.destroy();
+      hillshade?.destroy({ texture: true, textureSource: true });
       tiles?.destroy();
       if (resizeObserver) {
         resizeObserver.disconnect();

@@ -480,6 +480,7 @@ export function MapView() {
             DEFAULT_SIM_PARAMS.laneChangeDurationS,
         );
         if (active3D) {
+          three!.setTerrain(layers.terrain);
           three!.setVehicleGeometry(
             session.loadedCompiled,
             session.project.scenarios[0]!.simParams.laneChangeDurationS ??

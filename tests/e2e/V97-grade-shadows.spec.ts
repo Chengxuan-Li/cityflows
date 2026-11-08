@@ -6,7 +6,7 @@ test('V97 shadows expose changing under-deck signals and remove all effects when
   page,
 }, info) => {
   // CI's runner imports Munich and steps two signal phases on a software GPU; 120 s timed out there.
-  test.setTimeout(300_000);
+  test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });

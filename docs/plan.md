@@ -128,7 +128,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | done |
 | [TASK-100](tasks/TASK-100.md) | 7 | Vehicle classes: car, van, truck and bus, each with its own size and driving | `src/schema` (class, version 3), `src/sim/**`, `src/demand/**`, `src/host/**`, vehicle layers 2D and 3D, vehicle inspector | 090 | T46, traffic quick | done |
 | [TASK-101](tasks/TASK-101.md) | 7 | Restricted road access: closed roads, local-traffic zones, delivery and bus lanes | `Road.access` (schema), `compile.ts`, `src/routing/**`, access tags in `roads.ts`, `src/editor`, street inspector | 090 | T47, traffic quick | todo |
-| [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | todo |
+| [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | done |
 | [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | done |
 | [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -2097,6 +2097,23 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   2 804 / 38. All-car and van-free runs give 3 111; with vans the network locks from about
   07:50 (`r:761`, `r:844`, `r:1368`, `r:83`, `r:1279`, `r:222`, `r:89`), vans no more stuck
   than cars. The agent continues from `task/101-merge-main`.
+
+- 2026-11-07, TASK-105 merged after lead integration (Codex, GPT-6.1-Sol). AWS Terrarium grids
+  at 10 m in `City.terrain` (Munich 3.9 %, Sindelfingen 3.4 % of `city.json`), `fast-png`;
+  3D ground, basemap, surroundings, roads (decks and tunnels on an end-to-end baseline),
+  signals and vehicles follow it; buildings stand on their lowest ground; 2D hillshade;
+  "Terrain" layer, off renders as main. The agent worked from 56ffccd without the merged
+  phases; the lead merged main into it: TASK-108's `buildMarkings` now adds the ground roads'
+  crossfall and the ground junctions' local surface, and drapes that paint over the grid
+  (gore paint keeps its pavement heights); TASK-106's trees take `groundAt`, and street trees
+  skip graded roads (they grew through decks); the shot harness keeps one 3D mode. Stress
+  site: the agent also tried San Francisco (Russian Hill, 105 m relief, cache only). On the
+  merged code its paint sits on the road surface except 4 of 49 506 samples, two spots that are
+  buried on flat ground too (a ramp near the tunnel portal); 3D build takes 10.7 s in the
+  browser (Sindelfingen 11.7 s against 2.0 s flat). Known issue, follow-up: building
+  footprints are excavated, so with Buildings off (and where a footprint has no building)
+  hillsides show open pits. Lead verification on main: check, city, traffic quick 3 233 / 32,
+  full e2e, shots read (Sindelfingen A81 and bridge, Munich, hillshade, SF in the app).
 
 ## Owner decisions log
 

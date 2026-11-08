@@ -12,6 +12,7 @@ import type { ContextFeature } from '../schema';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import type { CityGeometry } from './types';
+import { cityGrades } from './grades';
 
 export type TreeSource = 'osm' | 'row' | 'wood' | 'scrub' | 'park' | 'street';
 export interface Tree {
@@ -197,8 +198,12 @@ export function placeTrees(city: CompiledCity, source: CityGeometry) {
       if (!corridors.has(road.corridorId)) corridors.set(road.corridorId, []);
       corridors.get(road.corridorId)!.push(road);
     }
+  // Street trees stand on the ground: none along bridges, tunnels or the ramps onto them, where
+  // a ground-level tree would grow through a deck (seen in 3D at the TASK-105 merge).
+  const { nodeGrades, roadGrades } = cityGrades(city, source);
   for (const road of [...city.roads].sort((a, b) => a.id.localeCompare(b.id))) {
     if (!['residential', 'tertiary', 'secondary', 'primary'].includes(road.roadClass)) continue;
+    if (roadGrades[road.idx] || nodeGrades[road.from] || nodeGrades[road.to]) continue;
     const half = road.surface.length / 2;
     const edges = [road.surface.slice(0, half), road.surface.slice(half).reverse()];
     for (const [side, edge] of edges.entries()) {

@@ -12,6 +12,7 @@ export function DiagnosticsStep({ result }: { result: ImportResult }) {
         {errors.length} errors · {warnings.length} warnings
       </p>
       {result.ok && <p>{result.city.geo?.source.attribution}</p>}
+      {result.ok && result.city.terrain && <p>{result.city.terrain.source}</p>}
       <ul className="import-diagnostics">
         {issues.map((d, i) => (
           <li key={i}>

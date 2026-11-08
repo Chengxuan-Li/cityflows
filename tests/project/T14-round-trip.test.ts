@@ -7,6 +7,29 @@ import { saveProject, saveProjectJson } from '../../src/project/save';
 import type { Project } from '../../src/project/types';
 import { scenarioSchema } from '../../src/schema';
 
+it.each([saveProject, saveProjectJson])(
+  'V105 terrain survives save/open with source attribution',
+  async (save) => {
+    const city = grid5x5();
+    city.terrain = {
+      source: 'AWS Terrain Tiles',
+      originM: { x: 0, y: 0 },
+      cellM: 10,
+      cols: 2,
+      rows: 2,
+      baseM: 500,
+      heights: 'AAAAAAAAAAA=',
+    };
+    const project = { city, scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))] };
+    const opened = await openProject(await save(project));
+    expect(opened).toEqual({ ok: true, project });
+    const json = JSON.parse(await saveProjectJson(project));
+    expect(json.manifest.attribution).toContain('AWS Terrain Tiles');
+    delete city.terrain;
+    expect(await openProject(await save(project))).toEqual({ ok: true, project });
+  },
+);
+
 it.each([
   ['ZIP', saveProject],
   ['JSON', saveProjectJson],
