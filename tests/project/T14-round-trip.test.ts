@@ -30,6 +30,76 @@ it.each([saveProject, saveProjectJson])(
   },
 );
 
+it.each([saveProject, saveProjectJson])(
+  'Phase 2 parking facilities, walk network and sidewalk tags survive save/open',
+  async (save) => {
+    const city = grid5x5();
+    const road = Object.values(city.roads)[0]!;
+    const place = Object.values(city.places)[0]!;
+    const provenance = { source: 'osm' as const, osmIds: [1] };
+    road.sidewalk = { right: 'yes', left: 'separate' };
+    city.parking = {
+      'pk:900': {
+        id: 'pk:900',
+        kind: 'garage',
+        name: null,
+        capacity: 40,
+        access: 'private',
+        placeId: place.id,
+        connectors: [{ ...place.connectors[0]!, id: 'c:901' }],
+        shape: { kind: 'point', pos: { x: 0, y: 0 } },
+        provenance: { ...provenance, inferred: ['capacity'] },
+      },
+      'pk:902': {
+        id: 'pk:902',
+        kind: 'roadside',
+        name: 'Kerb',
+        capacity: 8,
+        access: 'public',
+        placeId: null,
+        connectors: [],
+        shape: null,
+        strip: { roadId: road.id, side: 'right', fromM: 10, toM: 58, layout: 'parallel' },
+        occupancyAtStart: 0.6,
+        provenance,
+      },
+    };
+    city.walk = {
+      nodes: {
+        'wn:903': { id: 'wn:903', pos: { x: 0, y: 0 }, layer: 0, provenance },
+        'wn:904': {
+          id: 'wn:904',
+          pos: { x: 20, y: 0 },
+          layer: 0,
+          entrance: { placeId: place.id },
+          provenance,
+        },
+      },
+      links: {
+        'wl:905': {
+          id: 'wl:905',
+          from: 'wn:903',
+          to: 'wn:904',
+          line: [
+            { x: 0, y: 0 },
+            { x: 20, y: 0 },
+          ],
+          kind: 'footway',
+          widthM: null,
+          provenance,
+        },
+      },
+    };
+    city.nextId = 906;
+    const project = { city, scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))] };
+    expect(await openProject(await save(project))).toEqual({ ok: true, project });
+    delete city.parking;
+    delete city.walk;
+    delete road.sidewalk;
+    expect(await openProject(await save(project))).toEqual({ ok: true, project });
+  },
+);
+
 it.each([
   ['ZIP', saveProject],
   ['JSON', saveProjectJson],
