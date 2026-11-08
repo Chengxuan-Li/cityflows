@@ -7,6 +7,9 @@ export type PlaceId = string; // "p:12"
 export type ConnectorId = string; // "c:12"
 export type LaneId = string; // derived: `${RoadId}#${laneIndex}`
 export type MovementId = string; // derived: `${LaneId}>${LaneId}`
+export type ParkingId = string; // "pk:12"
+export type WalkNodeId = string; // "wn:12"
+export type WalkLinkId = string; // "wl:12"
 
 export type RoadClass =
   'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'ramp';
@@ -75,8 +78,13 @@ export interface Road {
   /** Pedestrian crossing overrides at the road's start and end node (TASK-091): only explicit
    * edits; an absent entry takes the default rule (architecture section 11). Decorative. */
   crossings?: { start?: boolean; end?: boolean };
+  /** Sidewalks on each side of the travel direction, from OSM `sidewalk=*` (Phase 2 format,
+   * TASK-110): `separate` means a mapped footway runs alongside. Absent = by road class. */
+  sidewalk?: { left?: SidewalkValue; right?: SidewalkValue };
   provenance: Provenance;
 }
+
+export type SidewalkValue = 'yes' | 'no' | 'separate';
 
 export type PlaceKind =
   | 'residential'
@@ -119,6 +127,58 @@ export interface Place {
   connectors: Connector[];
   profile: { arrivals: number[]; departures: number[] } | null; // 24 relative hourly weights
   events: PlaceEvent[];
+  provenance: Provenance;
+}
+
+/** Phase 2 format (lead, 2026-11-08), used by TASK-102 to TASK-104 and TASK-112. A facility
+ * where cars park: a garage in a building (cars vanish inside), a strip along one side of a
+ * road, or a surface lot with aisles. Stall geometry is derived at compile, never saved. */
+export type ParkingKind = 'garage' | 'roadside' | 'lot';
+export type ParkingAccess = 'public' | 'private' | 'customers';
+export type ParkingLayout = 'parallel' | 'angled' | 'perpendicular';
+
+export interface ParkingFacility {
+  id: ParkingId;
+  kind: ParkingKind;
+  name: string | null;
+  capacity: number; // slots
+  access: ParkingAccess; // private and customers belong to `placeId`
+  placeId: PlaceId | null; // the place it serves (a building's garage, a shop's lot)
+  /** Entries and exits on the road network (garage, lot). A roadside strip has none: cars
+   * park from the curb lane of `strip.roadId`. */
+  connectors: Connector[];
+  shape: { kind: 'point'; pos: Vec2 } | { kind: 'polygon'; ring: Vec2[] } | null;
+  strip?: {
+    roadId: RoadId;
+    side: 'left' | 'right'; // relative to the road's travel direction
+    fromM: number; // along the road's centreline
+    toM: number;
+    layout: ParkingLayout;
+  };
+  aisles?: RoadId[]; // a lot's `parking_aisle` service roads
+  occupancyAtStart?: number; // share 0..1 of slots taken at the start of the day; absent = derived
+  provenance: Provenance; // `inferred` marks facilities generated where OSM has none
+}
+
+/** Phase 2 format (lead, 2026-11-08), used by TASK-110 to TASK-112. Mapped pedestrian ways
+ * only; sidewalks along streets and walk links over crossings are derived at compile. */
+export type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 'crossing';
+
+export interface WalkNode {
+  id: WalkNodeId;
+  pos: Vec2;
+  layer: number;
+  entrance?: { placeId: PlaceId | null }; // OSM `entrance=*`; null = not yet matched to a place
+  provenance: Provenance;
+}
+
+export interface WalkLink {
+  id: WalkLinkId;
+  from: WalkNodeId;
+  to: WalkNodeId;
+  line: Vec2[]; // >= 2 points; first and last equal the nodes' positions
+  kind: WalkKind;
+  widthM: number | null;
   provenance: Provenance;
 }
 
@@ -169,6 +229,8 @@ export interface City {
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
   context?: { features: ContextFeature[] };
+  parking?: Record<ParkingId, ParkingFacility>; // Phase 2; absent = none
+  walk?: { nodes: Record<WalkNodeId, WalkNode>; links: Record<WalkLinkId, WalkLink> };
   terrain?: {
     source: string;
     originM: Vec2;

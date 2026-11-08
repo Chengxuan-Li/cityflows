@@ -164,6 +164,7 @@ interface Road {
   streetGroupId: string | null;  // groups the two directions of a simple two-way street
   corridorId?: string | null;    // carriageways of one street side by side; absent = streetGroupId
   crossings?: { start?: boolean; end?: boolean }; // TASK-091: crossing overrides; absent = default
+  sidewalk?: { left?: 'yes' | 'no' | 'separate'; right?: 'yes' | 'no' | 'separate' }; // Phase 2
   provenance: Provenance;
 }
 
@@ -221,6 +222,8 @@ interface City {
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
   context?: { features: ContextFeature[] }; // display-only OSM surroundings, see below
+  parking?: Record<ParkingId, ParkingFacility>; // Phase 2 format, see below
+  walk?: { nodes: Record<WalkNodeId, WalkNode>; links: Record<WalkLinkId, WalkLink> };
   terrain?: { source: string; originM: Vec2; cellM: number; cols: number; rows: number;
               baseM: number; heights: string }; // base64 Int16 LE decimetres above baseM
   nextId: number;          // single counter for all id kinds
@@ -240,6 +243,39 @@ class constant used by access validation, compilation, import and the inspector.
 reservations remain `Lane.allowed`. `setRoadAccess` replaces or clears the road's access
 object in one undo entry, using the normal version bump and live-edit path; project and
 history validation preserve it.
+
+Phase 2 formats (lead, 2026-11-08) add optional parking facilities, a mapped walk network and
+road sidewalk tags without a schema-version change; old files omit them and open unchanged.
+IDs use the shared counter with prefixes `pk:`, `wn:` and `wl:`. TASK-102 to TASK-104 and
+TASK-110 own their meaning and may refine these shapes in their contracts.
+
+~~~ts
+type ParkingKind = 'garage' | 'roadside' | 'lot';
+type ParkingAccess = 'public' | 'private' | 'customers';
+interface ParkingFacility {
+  id: ParkingId; kind: ParkingKind; name: string | null;
+  capacity: number;               // slots
+  access: ParkingAccess;          // private and customers belong to placeId
+  placeId: PlaceId | null;        // the place it serves
+  connectors: Connector[];        // garage and lot entries/exits; a roadside strip has none
+  shape: { kind: 'point'; pos: Vec2 } | { kind: 'polygon'; ring: Vec2[] } | null;
+  strip?: { roadId: RoadId; side: 'left' | 'right'; fromM: number; toM: number;
+            layout: 'parallel' | 'angled' | 'perpendicular' };   // roadside only
+  aisles?: RoadId[];              // a lot's parking_aisle service roads
+  occupancyAtStart?: number;      // 0..1; absent = derived from residents
+  provenance: Provenance;         // inferred marks facilities generated where OSM has none
+}
+type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 'crossing';
+interface WalkNode { id: WalkNodeId; pos: Vec2; layer: number;
+  entrance?: { placeId: PlaceId | null }; provenance: Provenance }
+interface WalkLink { id: WalkLinkId; from: WalkNodeId; to: WalkNodeId; line: Vec2[];
+  kind: WalkKind; widthM: number | null; provenance: Provenance }
+~~~
+
+Stall geometry, sidewalks along streets and walk links over TASK-091 crossings are derived at
+compile and never saved. `sidewalk` sides are relative to the road's travel direction; absent
+means the default by road class. Compile, routing and the simulation ignore these fields until
+the tasks that own them wire them in.
 
 TASK-105 adds optional display-only terrain without a schema-version bump. The boundary
 validates positive spacing, at least two rows and columns, base64 and exactly two bytes per
