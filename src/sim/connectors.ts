@@ -102,6 +102,39 @@ export function createConnectors(
   }
   for (const queue of queues) queue.sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
   let origins = compiled.connectors.filter((c) => queues[c.idx]!.length);
+  // Queues to look at in the next step (`wake` 0), and a min-heap of later wake times; entries
+  // whose time no longer matches `wake` are stale.
+  let awake = origins.map((c) => c.idx);
+  let heap: { t: number; idx: number }[] = [];
+  const before = (a: { t: number; idx: number }, b: { t: number; idx: number }) =>
+    a.t < b.t || (a.t === b.t && a.idx < b.idx);
+  function pushWake(entry: { t: number; idx: number }) {
+    let i = heap.push(entry) - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!before(heap[i]!, heap[parent]!)) break;
+      [heap[i], heap[parent]] = [heap[parent]!, heap[i]!];
+      i = parent;
+    }
+  }
+  function popWake() {
+    const top = heap[0]!,
+      last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last;
+      for (let i = 0; ;) {
+        const l = 2 * i + 1,
+          r = l + 1;
+        let m = i;
+        if (l < heap.length && before(heap[l]!, heap[m]!)) m = l;
+        if (r < heap.length && before(heap[r]!, heap[m]!)) m = r;
+        if (m === i) break;
+        [heap[i], heap[m]] = [heap[m]!, heap[i]!];
+        i = m;
+      }
+    }
+    return top;
+  }
   const canUse = (connector: CConnector, timeS: number) =>
     timeS + 1e-9 >= nextAdmission[connector.idx]!;
   const recordAdmission = (connector: CConnector, timeS: number) => {
@@ -118,10 +151,19 @@ export function createConnectors(
       accounting.fail(id, 'no_origin_connector');
       return false;
     });
-    for (const connector of origins) {
-      const idx = connector.idx;
-      if (wake[idx]! > timeS + 1e-9) continue;
+    const due = awake;
+    awake = [];
+    while (heap.length && heap[0]!.t <= timeS + 1e-9) {
+      const { t, idx } = popWake();
+      if (wake[idx] === t) due.push(idx);
+    }
+    // Compiled order, as when every queue was visited; a queue left out would do nothing.
+    due.sort((a, b) => a - b);
+    for (let d = 0; d < due.length; d++) {
+      const idx = due[d]!;
+      if (d && due[d - 1] === idx) continue;
       const queue = queues[idx]!;
+      if (!queue.length) continue;
       let available = ready[idx]!;
       while (available < queue.length && queuedSince(queue[available]!) <= timeS + 1e-9) {
         accounting.transition(queue[available++]!, QUEUED_ORIGIN);
@@ -178,11 +220,11 @@ export function createConnectors(
           return true;
         };
         let exits = parking.exits(candidateId, place.connectorsOut);
-        if (exits.includes(connector.idx)) {
+        if (exits.includes(idx)) {
           exits =
             !parking.hasOriginFacility(candidateId) && place.capacity === null
-              ? [connector.idx]
-              : [connector.idx, ...exits.filter((idx) => idx !== connector.idx)];
+              ? [idx]
+              : [idx, ...exits.filter((other) => other !== idx)];
         }
         if (!exits.length) {
           [queue[i], queue[candidate]] = [queue[candidate]!, queue[i]!];
@@ -217,6 +259,8 @@ export function createConnectors(
       head[idx] = i;
       wake[idx] =
         i < available ? 0 : available < queue.length ? queuedSince(queue[available]!) : Infinity;
+      if (wake[idx] === 0) awake.push(idx);
+      else if (wake[idx]! < Infinity) pushWake({ t: wake[idx]!, idx });
     }
   }
 
@@ -281,6 +325,7 @@ export function createConnectors(
     queue.splice(i, 0, id);
     ready[out]!++;
     wake[out] = 0;
+    awake.push(out);
     if (queue.length === 1) origins = compiled.connectors.filter((c) => queues[c.idx]!.length);
   }
 
@@ -321,6 +366,8 @@ export function createConnectors(
     wake = new Float64Array(queues.length);
     nextAdmission = budgets;
     origins = next.connectors.filter((c) => queues[c.idx]!.length);
+    awake = origins.map((c) => c.idx);
+    heap = [];
     compiled = next;
   }
 
