@@ -2120,9 +2120,11 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   10). Four groups balanced by measured duration now (`CITYFLOWS_E2E_GROUP` in
   `playwright.config.ts`, about 250 to 300 s each locally; `rest` takes any file not named, so
   new specs are never skipped). V106's frame comparison takes one sample per state on CI and
-  skips its ratio there, as T44 does. CI prints per-test durations (list reporter). Open:
-  `gate1-run` timed out on CI twice since TASK-106 (Pause click during ×20 playback), which
-  tree layers do not explain locally, even at 4× CPU throttling.
+  skips its ratio there, as T44 does. CI prints per-test durations (list reporter). The
+  `gate1-run` and `qa-overpass` timeouts were not hangs: the trace shows every click taking
+  about 1.25 s, because the 2D scene redraws every frame even when idle and CI's software GPU
+  needs about 0.4 s a frame on a slow runner; the test ran out of its 60 s. CI cases now get
+  120 s; rendering the 2D scene only on change is the real fix (follow-up).
 
 ## Owner decisions log
 
