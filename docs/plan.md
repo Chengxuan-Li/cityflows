@@ -139,6 +139,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | done |
 | [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | done |
 | [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | done |
+| [TASK-103](tasks/TASK-103.md) | 7 | Visible parking: roadside strips and lot stalls in the simulation, park and leave manoeuvres, parked cars drawn | `strip` facilities (import, inference, compile), inferred lot driveways, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, parked-car layers 2D and 3D, road inspector | 102, 104 | T52, traffic quick, shots | todo |
+| [TASK-111](tasks/TASK-111.md) | 9 | Pedestrian rules: walkers, zebra priority, pedestrian signal phases, a test pedestrian source | new `src/sim/walkers.ts`, crossing spans, `SignalProgram` walk groups, `intersection.ts`, `signals.ts`, walker layers 2D and 3D, signal editor | 110 | T53, traffic quick unchanged, shots | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -903,6 +905,29 @@ the traffic baseline at their merge (owner rule 7).
 | TASK-114 | Codex | GPT-6-Luna | high | 5314 |
 | TASK-115 | Codex | GPT-6.1 Terra | high | 5315 |
 | TASK-116 | Codex | GPT-6.1-Sol | high | 5316 |
+
+Phase 3 (lead, 2026-11-08). TASK-103 and TASK-111 start together on branches cut from `main`
+at the end of Phase 2 (CI green at 885c17e). Lead defaults written into the contracts, from
+the discussion with the owner: a lot with no reachable aisle gets one inferred driveway within
+30 m; residential trips take the own garage first except a seeded 30% who look for a street
+slot first, work and school trips the own garage first, visits strips and lots first; inferred
+garages keep admitting every car; pedestrian signals run concurrently with the parallel
+vehicle green, turning drivers yielding, with an exclusive pedestrian phase as an editor
+option. Both contracts ask for every timing that grew against main, after TASK-107 and TASK-110
+reported large slowdowns as limitations.
+
+Shared files, reconciled by the lead at merge: `src/sim/engine.ts`, `types.ts`, `metrics.ts`,
+`hash.ts` and `params.ts`, `src/schema/sim.ts`, `src/network/compile.ts`, `types.ts` and
+`walk.ts` (103 the sidewalk offset beside a band, 111 crossing spans), the host and snapshot,
+the scenes, `src/ui/layers.tsx`, `store.ts`, `map-view.tsx`, the metrics panels,
+`bench/geometry-shots.ts` and `docs/architecture.md`. Merge order: as delivered. TASK-103 moves
+trip counts and resets the traffic baseline at its merge (owner rule 7); TASK-111 must leave
+traffic unchanged without walkers.
+
+| Task | Harness | Model | Effort | e2e port |
+| --- | --- | --- | --- | --- |
+| TASK-103 | Codex | GPT-6.1-Sol | xhigh | 5303 |
+| TASK-111 | Claude Code | Opus 5.5 | high | 5311 |
 
 Phase 1 shared files, reconciled by the lead at merge: `src/schema/city.ts` and
 `city.schema.ts` (100 the class and version 3, 101 `Road.access`, 105 `City.terrain`, 106
