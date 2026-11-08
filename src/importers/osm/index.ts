@@ -2,6 +2,8 @@ import { polylineLength } from '../../geo/polyline';
 import { lonLatToLocal } from '../../geo/projection';
 import { compile, type Diagnostic } from '../../network';
 import { addImplicitGarages } from '../../network/parking';
+import { geographicMarkingTheme } from '../../schema/marking-theme';
+import { osmMarkingTheme } from './controls';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
@@ -125,6 +127,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     name: 'OpenStreetMap import',
     drivingSide: options.drivingSide ?? 'right',
     geo,
+    markingTheme: osmMarkingTheme(data) ?? geographicMarkingTheme(geo),
     nodes: {},
     roads: {},
     places: {},

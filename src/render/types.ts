@@ -121,6 +121,7 @@ export interface Scene {
 
 export type CityGeometry = {
   parking?: City['parking'];
+  markingTheme?: City['markingTheme'];
   nodes: City['nodes'];
   roads?: City['roads'];
   places: City['places'];

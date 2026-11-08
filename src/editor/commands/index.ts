@@ -14,6 +14,8 @@ export function dispatch(city: City, command: Command): CommandPatch {
   switch (command.kind) {
     case 'setParkingAttributes':
       return editParking(city, command);
+    case 'setMarkingTheme':
+      return { set: {}, remove: {}, markingTheme: command.theme };
     case 'restoreCity':
       return diffCity(city, command.city);
     case 'addRoundabout':

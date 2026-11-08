@@ -137,7 +137,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | done (mapped entries only; unreachable lots diagnosed; see review) |
 | [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | done |
 | [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | done |
-| [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | todo |
+| [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | done |
 | [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -2308,6 +2308,15 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   `preparePolygon` per ring; output hashes identical on town, Munich and Sindelfingen; 0.58 s
   Sindelfingen, 0.39 s Munich. Shots read: lamps on the verge, `BUS` upright in the lane, the
   Anlieger frei sign readable in 3D, curbs open at crossings. Night lighting stays deferred.
+- TASK-114 review (lead, 2026-11-08): merged last. Conflicts: TASK-107's `busLabels` sits
+  before the themed `roadMarkingGeometry` (every theme inherits the `bus` colour); 3D paint
+  handles and lots kept with the themed stop colour; the map view rebuilds 3D on a theme change
+  with terrain and parking occupancy. V114's German paint pins re-pinned to main 62ca1c3's paint,
+  computed with main's own modules (TASK-104 aisles and TASK-107 `BUS` text moved the 806263a
+  values); the merged tree's German paint equals main's on Munich and Sindelfingen. T49 sets
+  the display-only `markingTheme` aside, as T44 does. Shots read: US yellow centre lines, UK
+  yellow kerb edges, `BUS` and signs unchanged across themes. US/UK marking builds cost about
+  2.5 times German (1.9 s against 0.74 s on Munich, per the agent); German is unchanged.
 
 ## Owner decisions log
 

@@ -1,3 +1,5 @@
+import { cityMarkingTheme } from '../schema/marking-theme';
+import type { MarkingThemeId } from '../schema/city';
 import { useEffect, useMemo } from 'react';
 import { placeTrees } from '../render/vegetation';
 import { treeContext } from '../render/street';
@@ -65,6 +67,24 @@ export function Layers() {
   }, [toggleLayers]);
   return (
     <section id="layers" className="layers-sheet" aria-label="Map layers">
+      {session && (
+        <label>
+          Marking style
+          <select
+            aria-label="Marking style"
+            value={cityMarkingTheme(session.project.city)}
+            onChange={(event) =>
+              void useAppStore
+                .getState()
+                .commit({ kind: 'setMarkingTheme', theme: event.target.value as MarkingThemeId })
+            }
+          >
+            <option value="de">Germany</option>
+            <option value="us">United States</option>
+            <option value="uk">United Kingdom</option>
+          </select>
+        </label>
+      )}
       {labels
         .filter(
           ([key]) =>

@@ -32,7 +32,12 @@ import {
   type CrossingSource,
 } from '../network/crossings';
 import { SETBACK_CAP_M, junctionCorners } from '../network/junctions';
-import { markingTheme, type MarkingRole, type ArrowKind } from './style';
+import {
+  markingTheme as defaultTheme,
+  type MarkingRole,
+  type ArrowKind,
+  type MarkingTheme,
+} from './style';
 
 import { defaultSlice, orderBranches } from '../network/continuity';
 import { laneEdges } from '../network/lanes';
@@ -40,12 +45,19 @@ import { laneEdges } from '../network/lanes';
 const LINE_CLEAR_M = 0.5;
 
 export type MarkingShape = {
+  color?: number;
   gore?: PaintedGore;
   role: MarkingRole;
   points: Vec2[];
   alpha: number;
 } & ({ kind: 'line'; widthM: number; dash?: readonly [number, number] } | { kind: 'polygon' });
-function lineShape(road: CRoad, role: MarkingRole, points: Vec2[], alpha = 1): MarkingShape {
+function lineShape(
+  road: CRoad,
+  role: MarkingRole,
+  points: Vec2[],
+  alpha = 1,
+  markingTheme: MarkingTheme = defaultTheme,
+): MarkingShape {
   return {
     kind: 'line',
     role,
@@ -117,7 +129,12 @@ export function busLabels(city: CompiledCity, road: CRoad, source?: CrossingSour
   }
   return labels;
 }
-export function roadMarkingGeometry(city: CompiledCity, road: CRoad, source?: CrossingSource) {
+export function roadMarkingGeometry(
+  city: CompiledCity,
+  road: CRoad,
+  source?: CrossingSource,
+  markingTheme: MarkingTheme = defaultTheme,
+) {
   const belowShapes: MarkingShape[] = [],
     aboveShapes: MarkingShape[] = [],
     pavement: Vec2[][] = [];
@@ -140,8 +157,12 @@ export function roadMarkingGeometry(city: CompiledCity, road: CRoad, source?: Cr
         if (belowJunction) below.push(...parts.outside);
         above.push(...parts.inside);
       }
-    belowShapes.push(...below.map((points) => lineShape(road, 'lane', points, alpha)));
-    aboveShapes.push(...above.map((points) => lineShape(road, 'lane', points, alpha)));
+    belowShapes.push(
+      ...below.map((points) => lineShape(road, 'lane', points, alpha, markingTheme)),
+    );
+    aboveShapes.push(
+      ...above.map((points) => lineShape(road, 'lane', points, alpha, markingTheme)),
+    );
   };
   // B46 (TASK-091): a centre line ends at the junction mouth, also where the outline reaches back
   // over the end of the approach: no centre line inside a junction polygon, and no piece shorter
@@ -152,7 +173,7 @@ export function roadMarkingGeometry(city: CompiledCity, road: CRoad, source?: Cr
       ...lines
         .flatMap((line) => clipOutside(line, centreClips, 0))
         .filter((piece) => cumulativeLengths(piece).at(-1)! >= 2.7)
-        .map((points) => lineShape(road, 'centre', points, 0.85)),
+        .map((points) => lineShape(road, 'centre', points, 0.85, markingTheme)),
     );
   const partners =
     road.streetGroupId === null && road.corridorId !== null
@@ -183,8 +204,25 @@ export function roadMarkingGeometry(city: CompiledCity, road: CRoad, source?: Cr
         0.78,
         !tapered,
       );
-    if (road.streetGroupId !== null && (medianOnRight ? lane.right : lane.left) < 0)
-      drawCentre([parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2)]);
+    // A dashed centre is shared by both directions; painting it twice can fill its gaps.
+    if (
+      road.streetGroupId !== null &&
+      (medianOnRight ? lane.right : lane.left) < 0 &&
+      (markingTheme.id !== 'uk' ||
+        !city.roads.some(
+          (other) => other.streetGroupId === road.streetGroupId && other.idx < road.idx,
+        ))
+    ) {
+      const edge = parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2);
+      const pattern = markingTheme.classes[road.roadClass].centre.dash;
+      drawCentre(
+        markingTheme.id === 'us'
+          ? [parallelOffset(edge, medianOnRight ? -0.15 : 0.15)]
+          : pattern
+            ? roadDashes(edge, true, pattern)
+            : [edge],
+      );
+    }
     // TASK-089: a carriageway beside another of its corridor (a separated or side-by-side pair)
     // draws its median edge solid where that one runs within 1.5 m: two lines, a double line;
     // the strip between them is paved (no hairline of verge-less median between the lines).
@@ -204,13 +242,58 @@ export function roadMarkingGeometry(city: CompiledCity, road: CRoad, source?: Cr
       }
       drawCentre(runs);
     }
-    aboveShapes.push(...approachShapes(city, lane, endFarM));
+    if (markingTheme.id !== 'de' && (lane.left < 0 || lane.right < 0)) {
+      const edges = laneEdges(
+        lane,
+        road.lanes.map((i) => city.lanes[i]!),
+      );
+      for (const side of [-1, 1]) {
+        if ((side < 0 ? lane.left : lane.right) >= 0) continue;
+        const median = medianOnRight ? side > 0 : side < 0;
+        if (median && road.streetGroupId !== null) continue;
+        // Compiled edges follow tapers and the road's lane-block normals.
+        const boundary = side < 0 ? edges.left : edges.right;
+        const inset = parallelOffset(boundary, -side * 0.15);
+        const ratio = cumulativeLengths(inset).at(-1)! / lane.lengthM;
+        const edge = trimPolyline(
+          inset,
+          (startSpan ? startSpan.farM + LINE_CLEAR_M : 0) * ratio,
+          Math.max(lane.lengthM - lane.stopM, endSpan ? endFarM + LINE_CLEAR_M : 0) * ratio,
+        );
+        let sections = [edge];
+        if (median && partners.length) {
+          // Nearby opposing carriageways already carry the shared centre paint.
+          const kerb = (p: Vec2) => {
+            const boundaryPoint = nearestOnPolyline(boundary, p).point;
+            return partners.every((ring) => nearestOnPolyline(ring, boundaryPoint).away > 1.5);
+          };
+          // Separation can change between the vertices of a straight boundary.
+          sections = keepInside(edge, kerb, true);
+        }
+        for (const section of sections)
+          for (const points of clipOutside(section, centreClips, 0))
+            belowShapes.push({
+              ...lineShape(road, 'edge', points, 0.85, markingTheme),
+              ...(markingTheme.id === 'us' &&
+              side < 0 &&
+              (road.corridorId !== null || road.roadClass === 'ramp')
+                ? { color: markingTheme.colors.centre }
+                : {}),
+            });
+      }
+    }
+    aboveShapes.push(...approachShapes(city, lane, endFarM, markingTheme));
   }
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
   return { below: belowShapes, above: aboveShapes, pavement };
 }
 
-function approachShapes(city: CompiledCity, lane: CLane, crossingFarM: number): MarkingShape[] {
+function approachShapes(
+  city: CompiledCity,
+  lane: CLane,
+  crossingFarM: number,
+  markingTheme: MarkingTheme = defaultTheme,
+): MarkingShape[] {
   const marks = approachMarkings(city, lane, crossingFarM);
   const road = city.roads[lane.road]!;
   const shapes: MarkingShape[] = [];
@@ -224,8 +307,32 @@ function approachShapes(city: CompiledCity, lane: CLane, crossingFarM: number): 
   };
   const half = lane.widthM * 0.44;
   if (marks.stop)
-    shapes.push(lineShape(road, 'stop', [local(lane.stopM, 0, -half), local(lane.stopM, 0, half)]));
-  if (marks.yield)
+    shapes.push(
+      lineShape(
+        road,
+        'stop',
+        [local(lane.stopM, 0, -half), local(lane.stopM, 0, half)],
+        1,
+        markingTheme,
+      ),
+    );
+  if (marks.yield && markingTheme.id === 'uk') {
+    for (const forward of [0, -0.6])
+      for (let side = -half; side < half; side += 0.9)
+        shapes.push(
+          lineShape(
+            road,
+            'stop',
+            [
+              local(lane.stopM, forward, side),
+              local(lane.stopM, forward, Math.min(half, side + 0.6)),
+            ],
+            1,
+            markingTheme,
+          ),
+        );
+  }
+  if (marks.yield && markingTheme.id !== 'uk')
     for (let side = -half + 0.4; side <= half - 0.2; side += 0.85)
       shapes.push(
         fillShape('stop', [
@@ -265,7 +372,10 @@ function approachShapes(city: CompiledCity, lane: CLane, crossingFarM: number): 
   return shapes;
 }
 
-export function movementMarkings(movement: CMovement): MarkingShape[] {
+export function movementMarkings(
+  movement: CMovement,
+  markingTheme: MarkingTheme = defaultTheme,
+): MarkingShape[] {
   const { polyline, cumulative, lengthM } = movement;
   const start = lengthM * 0.13,
     end = lengthM * 0.84;
@@ -649,7 +759,7 @@ function mouth(city: CompiledCity, node: CNode, m: CMovement, major: Set<number>
   });
 }
 
-function guideDashes(line: Vec2[]): Vec2[][] {
+function guideDashes(line: Vec2[], markingTheme: MarkingTheme): Vec2[][] {
   const total = cumulativeLengths(line).at(-1)!;
   const period = markingTheme.guide.dash![0] + markingTheme.guide.dash![1];
   const count = Math.floor((total + markingTheme.guide.dash![1]) / period);
@@ -762,7 +872,11 @@ function splitDividers(city: CompiledCity, lined: CMovement[]): Omit<Guide, 'das
   return lines;
 }
 
-export function junctionGuides(city: CompiledCity, node: CNode): Guide[] {
+export function junctionGuides(
+  city: CompiledCity,
+  node: CNode,
+  markingTheme: MarkingTheme = defaultTheme,
+): Guide[] {
   const lined = splitLinedUp(city, node);
   const groups = majorThroughs(city, node);
   if (!groups.length && !lined) return [];
@@ -802,28 +916,43 @@ export function junctionGuides(city: CompiledCity, node: CNode): Guide[] {
   const inside = (p: Vec2) => rings.some((ring) => pointInPolygon(p, ring, 0.05));
   return lines.map((guide) => ({
     ...guide,
-    dashes: guideDashes(guide.line).flatMap((dash) => keepInside(dash, inside)),
+    dashes: guideDashes(guide.line, markingTheme).flatMap((dash) => keepInside(dash, inside)),
   }));
 }
 
 /** The runs of a dash whose sampled points all lie inside; runs under 0.5 m are dropped. */
-function keepInside(dash: Vec2[], inside: (p: Vec2) => boolean): Vec2[][] {
-  if (dash.every(inside)) return [dash];
+function keepInside(dash: Vec2[], inside: (p: Vec2) => boolean, sampleSegments = false): Vec2[][] {
+  if (!sampleSegments && dash.every(inside)) return [dash];
   const cumulative = cumulativeLengths(dash);
   const total = cumulative.at(-1)!;
   const step = 0.1;
   const runs: Vec2[][] = [];
   let run: Vec2[] = [];
+  let allInside = true;
+  let startM = 0,
+    endM = 0;
   for (let s = 0; s <= total + 1e-9; s += step) {
-    const p = pointAtDistance(dash, cumulative, Math.min(s, total));
-    if (inside(p)) run.push(p);
-    else if (run.length) {
-      runs.push(run);
-      run = [];
+    const at = Math.min(s, total);
+    const p = pointAtDistance(dash, cumulative, at);
+    if (inside(p)) {
+      if (!run.length) startM = at;
+      endM = at;
+      run.push(p);
+    } else {
+      allInside = false;
+      if (run.length) {
+        runs.push(sampleSegments ? trimPolyline(dash, startM, total - endM) : run);
+        run = [];
+      }
     }
   }
-  if (run.length) runs.push(run);
-  return runs.filter((r) => r.length > 1 && (r.length - 1) * step >= 0.5);
+  if (sampleSegments && allInside && dash.every(inside)) return [dash];
+  if (run.length) runs.push(sampleSegments ? trimPolyline(dash, startM, total - endM) : run);
+  return runs.filter(
+    (r) =>
+      r.length > 1 &&
+      (sampleSegments ? cumulativeLengths(r).at(-1)! >= 0.5 - 1e-9 : (r.length - 1) * step >= 0.5),
+  );
 }
 
 export function transitionGeometry(city: CompiledCity, road: CRoad) {
@@ -1039,6 +1168,7 @@ export function hatchGeometry(
   heading: number,
   road: CRoad,
   holes: Vec2[][] = [],
+  markingTheme: MarkingTheme = defaultTheme,
 ): MarkingShape[] {
   const region = [ring, ...holes];
   const width = markingTheme.classes[road.roadClass].channel.widthM;
@@ -1227,7 +1357,7 @@ export function paintedGores(city: CompiledCity, node: CNode): PaintedGore[] {
       );
       let rings = clearCentrelines(city, subtract(unionRings([candidate.ring]), exclusions), true);
       if (used.length) rings = subtract(rings, used);
-      const lineWidth = markingTheme.classes[candidate.road.roadClass].channel.widthM;
+      const lineWidth = defaultTheme.classes[candidate.road.roadClass].channel.widthM;
       rings = intersect(offsetRings(offsetRings(rings, -lineWidth / 2), lineWidth / 2), rings);
       for (const ring of rings.filter((r) => areaD(r) > 0.15)) {
         const holes = rings.filter(
@@ -1250,8 +1380,12 @@ export function gorePavement(city: CompiledCity, road: CRoad): Vec2[][] {
   );
 }
 
-export function nodeMarkingGeometry(city: CompiledCity, node: CNode): MarkingShape[] {
-  const guides = junctionGuides(city, node).flatMap((g) =>
+export function nodeMarkingGeometry(
+  city: CompiledCity,
+  node: CNode,
+  markingTheme: MarkingTheme = defaultTheme,
+): MarkingShape[] {
+  const guides = junctionGuides(city, node, markingTheme).flatMap((g) =>
     g.dashes.map((points) => ({
       kind: 'line' as const,
       role: g.kind === 'divider' ? ('lane' as const) : g.kind,
@@ -1264,7 +1398,7 @@ export function nodeMarkingGeometry(city: CompiledCity, node: CNode): MarkingSha
   return [
     ...guides,
     ...paintedGores(city, node).flatMap((g) =>
-      hatchGeometry(g.ring, g.heading, g.road, g.holes).map((shape) => ({
+      hatchGeometry(g.ring, g.heading, g.road, g.holes, markingTheme).map((shape) => ({
         ...shape,
         gore: g,
       })),
@@ -1272,16 +1406,24 @@ export function nodeMarkingGeometry(city: CompiledCity, node: CNode): MarkingSha
   ];
 }
 
-export function transitionMarkings(city: CompiledCity, road: CRoad): MarkingShape[] {
+export function transitionMarkings(
+  city: CompiledCity,
+  road: CRoad,
+  markingTheme: MarkingTheme = defaultTheme,
+): MarkingShape[] {
   const pattern = markingTheme.classes[road.roadClass].lane.dash!;
   const shapes = seams(city, road).flatMap((line) =>
-    roadDashes(line, true, pattern).map((p) => lineShape(road, 'lane', p, 0.78)),
+    roadDashes(line, true, pattern).map((p) => lineShape(road, 'lane', p, 0.78, markingTheme)),
   );
   if (!road.lanes.some((i) => city.lanes[i]!.taperStartM || city.lanes[i]!.taperEndM))
     return shapes;
   const geometry = transitionGeometry(city, road);
   for (const divider of geometry.dividers)
-    shapes.push(...roadDashes(divider, true, pattern).map((p) => lineShape(road, 'lane', p, 0.78)));
+    shapes.push(
+      ...roadDashes(divider, true, pattern).map((p) =>
+        lineShape(road, 'lane', p, 0.78, markingTheme),
+      ),
+    );
   for (const item of geometry.lanes) {
     const lane = city.lanes[item.lane]!;
     for (const start of [true, false]) {
@@ -1311,7 +1453,7 @@ export function transitionMarkings(city: CompiledCity, road: CRoad): MarkingShap
         const holes = rings.filter(
           (r) => areaD(r) < 0 && pointInPolygon(r[0]!, [...ring, ring[0]!], 0),
         );
-        shapes.push(...hatchGeometry(ring, h, road, holes));
+        shapes.push(...hatchGeometry(ring, h, road, holes, markingTheme));
       }
       if (!start) {
         const centre = Math.max(3.75, lane.taperStartM, at - 7.5);

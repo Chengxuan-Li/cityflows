@@ -204,3 +204,22 @@ export function markRoundaboutEntries(city: City, data: OsmData): void {
     node.minorRoads = minor;
   }
 }
+
+/** Explicit area country tags take precedence over the coarse geographic default. */
+export function osmMarkingTheme(data: OsmData): City['markingTheme'] {
+  const countries = [...data.relation, ...data.way, ...data.node].flatMap(({ tag }) => {
+    const value =
+      tag['addr:country'] ??
+      tag['is_in:country_code'] ??
+      tag['ISO3166-1:alpha2'] ??
+      tag['ISO3166-1'] ??
+      tag['is_in:country'];
+    return value ? [value.trim().toUpperCase()] : [];
+  });
+  if (!countries.length) return undefined;
+  const country = countries[0]!;
+  if (['US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA', 'CA', 'CANADA'].includes(country))
+    return 'us';
+  if (['GB', 'UK', 'UNITED KINGDOM', 'IE', 'IRELAND'].includes(country)) return 'uk';
+  return 'de';
+}

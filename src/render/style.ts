@@ -1,5 +1,5 @@
 import type { Vec2 } from '../geo/vec2';
-import type { RoadClass, VehicleClass } from '../schema';
+import type { MarkingThemeId, RoadClass, VehicleClass } from '../schema';
 
 export type MarkingRole =
   'edge' | 'lane' | 'centre' | 'channel' | 'hatch' | 'arrow' | 'stop' | 'bus';
@@ -76,7 +76,7 @@ function germanLines(highway: boolean): Record<MarkingRole, MarkingLineStyle> {
 }
 const townLines = germanLines(false),
   highwayLines = germanLines(true);
-export const markingTheme: MarkingTheme = {
+const germanTheme: MarkingTheme = {
   id: 'de',
   colors: {
     edge: 0xfffcf3,
@@ -123,6 +123,119 @@ export const markingTheme: MarkingTheme = {
     widthM: 0.12,
   },
 };
+
+const white = 0xfffcf3,
+  yellow = 0xf2ca4b;
+function arrowSet(straight: Vec2[], left: Vec2[], merge: Vec2[]): Record<ArrowKind, Vec2[][]> {
+  const right = left.map(({ x, y }) => ({ x, y: -y }));
+  return {
+    through: [straight],
+    left: [left],
+    right: [right],
+    'through-left': [straight, left],
+    'through-right': [straight, right],
+    'left-right': [left, right],
+    'merge-left': [merge],
+    'merge-right': [merge.map(({ x, y }) => ({ x, y: -y }))],
+  };
+}
+const usStraight = polygon([
+  [-2.5, -0.15],
+  [0.7, -0.15],
+  [0.7, -0.65],
+  [2.5, 0],
+  [0.7, 0.65],
+  [0.7, 0.15],
+  [-2.5, 0.15],
+]);
+const usLeft = polygon([
+  [-2.5, -0.15],
+  [0.8, -0.15],
+  [0.8, -0.55],
+  [0.15, -0.55],
+  [1.1, -1.4],
+  [2.05, -0.55],
+  [1.3, -0.55],
+  [1.3, 0.15],
+  [-2.5, 0.15],
+]);
+const ukStraight = polygon([
+  [-2.5, -0.12],
+  [1.05, -0.12],
+  [0.65, -0.52],
+  [0.95, -0.52],
+  [2.5, 0],
+  [0.95, 0.52],
+  [0.65, 0.52],
+  [1.05, 0.12],
+  [-2.5, 0.12],
+]);
+const ukLeft = polygon([
+  [-2.5, -0.12],
+  [0.9, -0.12],
+  [0.9, -0.8],
+  [0.35, -0.55],
+  [0.35, -0.8],
+  [1.1, -1.55],
+  [1.85, -0.8],
+  [1.85, -0.55],
+  [1.3, -0.8],
+  [1.3, 0.12],
+  [-2.5, 0.12],
+]);
+function themedLines(id: 'us' | 'uk'): MarkingTheme['classes'] {
+  const result = { ...germanTheme.classes };
+  for (const key of Object.keys(result) as RoadClass[]) {
+    const lines = result[key];
+    result[key] = {
+      ...lines,
+      edge: { widthM: 0.15 },
+      lane: { widthM: 0.15, dash: id === 'us' ? [3, 9] : [2, 4] },
+      centre: {
+        widthM: 0.15,
+        ...(id === 'uk'
+          ? { dash: ['primary', 'secondary', 'trunk'].includes(key) ? [6, 3] : [3, 6] }
+          : {}),
+      },
+      stop: { widthM: id === 'us' ? 0.3 : 0.2 },
+    };
+  }
+  return result;
+}
+export const markingThemes: Record<MarkingThemeId, MarkingTheme> = {
+  de: germanTheme,
+  us: {
+    ...germanTheme,
+    id: 'us',
+    colors: { ...germanTheme.colors, centre: yellow },
+    classes: themedLines('us'),
+    guide: { widthM: 0.15, dash: [0.6, 1.8] },
+    hatch: { widthM: 0.5, townSpacingM: 3, highwaySpacingM: 6 },
+    arrows: arrowSet(
+      usStraight,
+      usLeft,
+      mergeLeft.map(({ x, y }) => ({ x, y: y * 1.15 })),
+    ),
+    arrowLengthM: 5,
+    fastArrowLengthM: 7.5,
+  },
+  uk: {
+    ...germanTheme,
+    id: 'uk',
+    colors: { ...germanTheme.colors, edge: yellow, centre: white },
+    classes: themedLines('uk'),
+    guide: { widthM: 0.1, dash: [1, 1] },
+    hatch: { widthM: 0.5, townSpacingM: 2, highwaySpacingM: 4 },
+    arrows: arrowSet(
+      ukStraight,
+      ukLeft,
+      mergeLeft.map(({ x, y }) => ({ x, y: y * 0.85 })),
+    ),
+    arrowLengthM: 6,
+    fastArrowLengthM: 9,
+  },
+};
+export const markingTheme = markingThemes.de;
 
 const local = { color: 0xbcc8c4, vergeM: 0.25 };
 const avenue = { color: 0xa6b7b4, vergeM: 0.55 };

@@ -1,3 +1,4 @@
+import { cityMarkingTheme } from '../schema/marking-theme';
 import {
   BoxGeometry,
   BufferGeometry,
@@ -23,7 +24,7 @@ import {
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
-import { markingTheme, style } from '../render/style';
+import { markingThemes, style } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
 import type { CityGeometry, Pick } from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
@@ -241,7 +242,10 @@ export class Scene3D {
     add(geometry.slabs, 0x899b99);
     const paint = add(geometry.markings, 0xffffff, false);
     paint.material.vertexColors = true;
-    this.paint = [paint, add(geometry.crossings, markingTheme.colors.stop, false)];
+    this.paint = [
+      paint,
+      add(geometry.crossings, markingThemes[cityMarkingTheme(source)].colors.stop, false),
+    ];
     const lots = lotGeometry(city, renderedSource, terrain);
     add(lots.surface, style.context.parking, false);
     this.parkingStalls = add(lots.paint, style.stall, false);
@@ -380,6 +384,7 @@ export class Scene3D {
     this.signalCity = city;
     this.lastSignalKey = '';
     this.setSignals(0);
+    this.canvas.dataset.markingTheme = cityMarkingTheme(source);
     this.canvas.dataset.buildMs = (performance.now() - start).toFixed(1);
     this.canvas.dataset.terrain = String(Boolean(renderedSource.terrain));
     const groundHeight = terrain.groundAt(this.controls.target.x, this.controls.target.z);

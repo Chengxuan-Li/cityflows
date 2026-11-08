@@ -19,6 +19,7 @@ import type {
 } from './city';
 
 export type Command =
+  | { kind: 'setMarkingTheme'; theme: NonNullable<City['markingTheme']> }
   | { kind: 'restoreCity'; city: City }
   | {
       kind: 'setParkingAttributes';
@@ -65,6 +66,7 @@ export type Command =
   | { kind: 'batch'; label: string; commands: Command[] }; // Gate 2
 
 export interface Patch {
+  markingTheme?: City['markingTheme'] | null;
   metadata?: Pick<City, 'name' | 'drivingSide' | 'geo'>;
   set: {
     nodes?: Record<NodeId, Node>;

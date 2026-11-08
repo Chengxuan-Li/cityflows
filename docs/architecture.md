@@ -221,6 +221,7 @@ interface City {
   nodes: Record<NodeId, Node>;
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
+  markingTheme?: 'de' | 'us' | 'uk'; // display only; absent = geography default
   context?: { features: ContextFeature[] }; // display-only OSM surroundings, see below
   parking?: Record<ParkingId, ParkingFacility>; // Phase 2 format, see below
   walk?: { nodes: Record<WalkNodeId, WalkNode>; links: Record<WalkLinkId, WalkLink> };
@@ -346,6 +347,13 @@ Invariants (checked by compile, section 5):
   connector to the outermost remaining lane and reports a warning.
 - A node with `control: 'signal'` has a `signal`.
 - `turnRules` reference roads incident to that node.
+
+TASK-114 adds optional display-only `City.markingTheme` without a schema-version bump.
+Compile, routing and simulation ignore it. Import uses explicit OSM country tags first,
+then coarse offline bounds: US/Canada → `us`, UK/Ireland → `uk`, elsewhere → `de`.
+Files without the field resolve from their geographic bounding box, else `de`.
+The Layers “Marking style” choice is undoable; its history patch uses `null` to restore an
+absent override. A pure marking-style edit retains the city version and compiled object.
 
 ## 5. Compiled model: `CompiledCity`
 
@@ -1627,8 +1635,8 @@ the city, and roads retain the strongest tone.
   polylines with widths and dash metadata, and filled polygons). Road clipping, dash phase,
   approach controls and arrows, continuation seams/tapers, junction guides and crossing
   polygons moved out of the 2D layers; 2D and 3D consume the same shapes. Dash footprints
-  are expanded before either renderer draws them. `render/style.ts` selects the `de`
-  marking theme: warm white in every role, 0.12 m urban and 0.15 m motorway/trunk lane
+  are expanded before either renderer draws them. `render/style.ts` holds a `de`/`us`/`uk` theme table, selected per project through
+  `City.markingTheme` (or its geography default). The `de` theme remains unchanged: warm white in every role, 0.12 m urban and 0.15 m motorway/trunk lane
   lines, 0.30 m broad edge/channel lines, 3/6 m and 6/12 m lane dash/gap patterns, and
   1.5/1.5 m junction guides. Theme polygons supply straight, left, right, combined and
   diagonal lane-ending arrows; approach glyphs are 5 m long, 7.5 m at 70 km/h and above.
@@ -1649,6 +1657,17 @@ the city, and roads retain the strongest tone.
   fills in both views; approach arrows remain above.
   The adapter samples road/node elevations only through
   `render3d/heights.ts`; no compiled geometry or network behaviour changes.
+- TASK-114: both views receive the selected theme through shared paint geometry. US paint
+  has double solid yellow opposing centre lines (passing permission is not inferred), 3/9 m
+  white lane dashes, white outer edges and yellow left edges on divided roads and ramps.
+  UK paint has white centre lines (6/3 m warning lines on primary/secondary/trunk, 3/6 m
+  otherwise), 2/4 m white lane dashes, yellow edges and double dashed give-way bars.
+  Each theme supplies arrow polygons, guide widths/dashes and gore stripe dimensions;
+  UK approach arrows are elongated to 6 m (9 m on fast roads). Edge strokes follow compiled
+  tapered lane boundaries; close opposing carriageways share centre paint rather than kerb
+  lines. Crossings retain their layout.
+  Style switches redraw both views even when compiled identity/version stays unchanged;
+  the animation loop and simulation remain unchanged.
 - TASK-100: one generated texture atlas contains class shapes: rounded car, short-bonnet van,
   cab-and-box truck and long rounded bus. Street zoom uses each class's length and width;
   overview uses compact dots. Optional Layers setting "Colour vehicles by class" defaults
@@ -1673,7 +1692,7 @@ the city, and roads retain the strongest tone.
 - Camera: pan and zoom at the pointer, world units meters, y-south so no flip is needed.
 - Picking: `laneSpatial` for roads and lanes, nearest snapshot vehicle within a pixel radius,
   place polygons by point-in-polygon.
-- Static geometry is rebuilt only when `compiled.version` changes.
+- Static geometry is rebuilt when `compiled.version` or the selected marking style changes.
 - TASK-061: node areas draw `CNode.outline` (road-end edges and curb arcs) instead of the
   polygon through the lane-edge corners plus a disc; through nodes (setback 0) draw nothing,
   the road runs through. Movement surfaces, stop lines, give-way triangles, arrows and

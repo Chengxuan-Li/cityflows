@@ -14,8 +14,11 @@ function applyRecords<T>(
 }
 
 export function applyPatch(city: City, patch: Patch): City {
-  return {
+  const theme =
+    patch.markingTheme === undefined ? city.markingTheme : (patch.markingTheme ?? undefined);
+  const next = {
     ...city,
+    markingTheme: theme,
     ...patch.metadata,
     nodes: applyRecords(city.nodes, patch.set.nodes, patch.remove.nodes),
     roads: applyRecords(city.roads, patch.set.roads, patch.remove.roads),
@@ -25,10 +28,13 @@ export function applyPatch(city: City, patch: Patch): City {
       : {}),
     nextId: patch.nextId ?? city.nextId,
   };
+  if (theme === undefined) delete next.markingTheme;
+  return next;
 }
 
 export function invertPatch(city: City, patch: Patch): Patch {
   const inverse: Patch = { set: {}, remove: {} };
+  if (patch.markingTheme !== undefined) inverse.markingTheme = city.markingTheme ?? null;
   if (patch.metadata)
     inverse.metadata = { name: city.name, drivingSide: city.drivingSide, geo: city.geo };
   for (const key of collections) {
@@ -61,6 +67,7 @@ export function diffCity(before: City, after: City): Patch {
       if (entity !== before[key]?.[id]) Object.assign((patch.set[key] ??= {}), { [id]: entity });
     }
   }
+  if (after.markingTheme !== before.markingTheme) patch.markingTheme = after.markingTheme ?? null;
   if (after.nextId !== before.nextId) patch.nextId = after.nextId;
   return patch;
 }

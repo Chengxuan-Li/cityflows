@@ -162,10 +162,10 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
-  function edit(apply: (editor: Editor) => CommitResult | null) {
+  function edit(apply: (editor: Editor) => CommitResult | null, displayOnly = false) {
     return perform(async () => {
       const { session, run, selection } = get();
-      if (!session || !run || get().viewMode === '3d') return;
+      if (!session || !run || (get().viewMode === '3d' && !displayOnly)) return;
       const { editor, engine, project } = session;
       const result = apply(editor);
       if (!result) return;
@@ -174,6 +174,10 @@ export const useAppStore = create<AppState>((set, get) => {
         return;
       }
       const { city, compiled, diagnostics } = result;
+      if (compiled === session.compiled) {
+        set({ session: { ...session, project: { ...project, city, history: editor.history } } });
+        return;
+      }
       cancelComparison();
       set({ comparison: null });
       const stale =
@@ -481,9 +485,10 @@ export const useAppStore = create<AppState>((set, get) => {
         rejectedEdit: [],
       }),
     toggleDiagnostics: () => set(({ diagnosticsOpen }) => ({ diagnosticsOpen: !diagnosticsOpen })),
-    commit: (command) => edit((editor) => editor.apply(command)),
-    undo: () => edit((editor) => editor.undo()),
-    redo: () => edit((editor) => editor.redo()),
+    commit: (command) =>
+      edit((editor) => editor.apply(command), command.kind === 'setMarkingTheme'),
+    undo: () => edit((editor) => editor.undo(), get().session?.editor.canUndoDisplayOnly),
+    redo: () => edit((editor) => editor.redo(), get().session?.editor.canRedoDisplayOnly),
     reportError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
     open: (source = 'grid5x5') =>
       perform(async () => {

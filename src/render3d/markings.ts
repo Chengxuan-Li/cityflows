@@ -1,3 +1,4 @@
+import { cityMarkingTheme } from '../schema/marking-theme';
 import { booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import { nearestOnPolyline } from '../geo/polyline';
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
@@ -13,7 +14,7 @@ import {
   type GoreSurface,
   type PaintedGore,
 } from '../render/marking-geometry';
-import { markingTheme } from '../render/style';
+import { markingThemes } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { heightAt, roadStation, type cityHeights } from './heights';
@@ -100,6 +101,7 @@ export function buildMarkings(
   source: CityGeometry,
   heights: ReturnType<typeof cityHeights>,
 ): BufferGeometry {
+  const markingTheme = markingThemes[cityMarkingTheme(source)];
   // TASK-105: paint on roads and junctions that follow the terrain is draped over the ground
   // grid (relative heights kept), as their surfaces are; decks, tunnels and gores stay absolute.
   const terrain = heights.terrain.grid ? heights.terrain : undefined;
@@ -123,7 +125,7 @@ export function buildMarkings(
     for (const shape of shapes) {
       counts[shape.kind]++;
       for (const ring of markingPolygons(shape)) {
-        const color = markingTheme.colors[shape.role];
+        const color = shape.color ?? markingTheme.colors[shape.role];
         if (shape.gore) {
           // Gore paint follows its own pavement triangles, never the draped ground.
           const saved = target;
@@ -175,11 +177,11 @@ export function buildMarkings(
     }
   };
   for (const road of city.roads) {
-    const geometry = roadMarkingGeometry(city, road, source);
+    const geometry = roadMarkingGeometry(city, road, source, markingTheme);
     const profile = heights.roads[road.idx]!;
     target = terrain && profile.crossfall ? land : raised;
     add(
-      [...geometry.below, ...geometry.above, ...transitionMarkings(city, road)],
+      [...geometry.below, ...geometry.above, ...transitionMarkings(city, road, markingTheme)],
       (p) => {
         const s = roadStation(road, p);
         return heightAt(profile, s) + (profile.crossfall?.(s, p) ?? 0);
@@ -193,12 +195,13 @@ export function buildMarkings(
     const ground = followsGround ? terrain.groundAt(node.pos.x, node.pos.y) : 0;
     const nodeZ = (p: Vec2) => (followsGround ? z + terrain.surfaceAt(p.x, p.y) - ground : z);
     target = followsGround ? land : raised;
-    add(nodeMarkingGeometry(city, node), nodeZ, true);
+    add(nodeMarkingGeometry(city, node, markingTheme), nodeZ, true);
     if (node.outline.length)
       for (const index of node.movements) {
         const movement = city.movements[index]!;
         // Pixi draws movement paths before the junction fill; retain that occlusion in 3D.
-        if (!movement.neverGreen) add(movementMarkings(movement), (p) => nodeZ(p) - 0.05, true);
+        if (!movement.neverGreen)
+          add(movementMarkings(movement, markingTheme), (p) => nodeZ(p) - 0.05, true);
       }
   }
   const buffer = ({ positions, colors }: typeof raised) => {

@@ -5,6 +5,16 @@ import { dispatch } from './commands';
 import { applyPatch, diffCity, invertPatch } from './patch';
 import type { CommitResult, Editor } from './types';
 
+function displayOnly(patch: Patch): boolean {
+  return (
+    patch.markingTheme !== undefined &&
+    !patch.metadata &&
+    patch.nextId === undefined &&
+    !Object.keys(patch.set).length &&
+    !Object.keys(patch.remove).length
+  );
+}
+
 export function createEditor(initialCity: City): Editor {
   const materialized = { ...initialCity, parking: { ...initialCity.parking } };
   addImplicitGarages(materialized);
@@ -18,16 +28,22 @@ export function createEditor(initialCity: City): Editor {
 
   let city = initialCity;
   let compiled = initial.compiled;
+  let diagnostics = initial.diagnostics;
   let history: readonly HistoryEntry[] = [];
   const redoStack: HistoryEntry[] = [];
 
   function commit(patch: Patch, warnings: Diagnostic[] = []): CommitResult {
     const candidate = applyPatch(city, patch);
+    if (displayOnly(patch)) {
+      city = candidate;
+      return { ok: true, city, compiled, diagnostics };
+    }
     candidate.version = city.version + 1;
     const result = compile(candidate);
     if (!result.ok) return result;
     city = candidate;
     compiled = result.compiled;
+    diagnostics = result.diagnostics;
     return { ok: true, city, compiled, diagnostics: [...result.diagnostics, ...warnings] };
   }
 
@@ -37,6 +53,12 @@ export function createEditor(initialCity: City): Editor {
     },
     get compiled() {
       return compiled;
+    },
+    get canUndoDisplayOnly() {
+      return Boolean(history.at(-1) && displayOnly(history.at(-1)!.inverse));
+    },
+    get canRedoDisplayOnly() {
+      return Boolean(redoStack.at(-1) && displayOnly(redoStack.at(-1)!.patch));
     },
     get history() {
       return history;
