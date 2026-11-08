@@ -48,9 +48,16 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const max = lonLatToLocal(geo, { lon: e, lat: s });
     for (const feature of context!.features) {
       counts[feature.class] = (counts[feature.class] ?? 0) + 1;
-      const lines = feature.kind === 'area' ? feature.rings : [feature.line];
+      const lines =
+        feature.kind === 'area'
+          ? feature.rings
+          : feature.kind === 'line'
+            ? [feature.line]
+            : [[feature.pos]];
       for (const line of lines) {
-        expect(line.length).toBeGreaterThanOrEqual(feature.kind === 'area' ? 4 : 2);
+        expect(line.length).toBeGreaterThanOrEqual(
+          feature.kind === 'area' ? 4 : feature.kind === 'line' ? 2 : 1,
+        );
         if (feature.kind === 'area') expect(line[0]).toEqual(line.at(-1));
         for (const p of line) {
           expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);

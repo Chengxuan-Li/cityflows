@@ -1,4 +1,9 @@
-import { pointInPolygon, polylineLength } from '../../geo/polyline';
+import {
+  parallelOffset,
+  pointInPolygon,
+  polylineCrossings,
+  polylineLength,
+} from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { ContextArea, ContextFeature, ContextLine } from '../../schema';
 import { clip, polygonSources } from './buildings';
@@ -37,6 +42,7 @@ function areaClass(tag: OsmTags): ContextArea | undefined {
 }
 
 function lineClass(tag: OsmTags): ContextLine | undefined {
+  if (tag.natural === 'tree_row') return 'tree_row';
   if (tag.tunnel === 'yes' && Number(tag.layer) < 0) return;
   if (['rail', 'light_rail', 'subway', 'narrow_gauge'].includes(tag.railway ?? '')) return 'rail';
   if (tag.railway === 'tram') return 'tram';
@@ -107,6 +113,29 @@ export function importContext(
       .map((p) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 }))
       .filter((p, i, a) => !i || p.x !== a[i - 1]!.x || p.y !== a[i - 1]!.y);
   const features: ContextFeature[] = [];
+  for (const node of data.node) {
+    if (node.tag.natural !== 'tree') continue;
+    const p = positions.get(node.id);
+    if (
+      !p ||
+      p.x < snapped.min.x ||
+      p.y < snapped.min.y ||
+      p.x > snapped.max.x ||
+      p.y > snapped.max.y
+    )
+      continue;
+    const pos = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+    const heightM = measurement(node.tag.height),
+      crownM = measurement(node.tag.diameter_crown);
+    features.push({
+      kind: 'point',
+      class: 'tree',
+      pos,
+      ...(heightM !== undefined && { heightM }),
+      ...(crownM !== undefined && { crownM }),
+      ...(node.tag.leaf_type && { sub: node.tag.leaf_type }),
+    });
+  }
   for (const source of polygonSources(data, (tag) => areaClass(tag) !== undefined)) {
     const projected = source.rings.flatMap(({ role, ids }) => {
       const ring = ids.slice(0, -1).map((id) => positions.get(id));
@@ -155,9 +184,18 @@ export function importContext(
       });
     }
   }
+  const wooded = features.filter(
+    (f): f is Extract<ContextFeature, { kind: 'area' }> =>
+      f.kind === 'area' &&
+      f.class === 'green' &&
+      ['wood', 'forest', 'scrub', 'park'].includes(f.sub ?? ''),
+  );
   for (const way of data.way) {
     const kind = lineClass(way.tag);
-    if (!kind) continue;
+    const path = ['footway', 'path', 'cycleway', 'pedestrian', 'steps', 'track'].includes(
+      way.tag.highway ?? '',
+    );
+    if (!kind && !path) continue;
     // Missing nodes break a line rather than drawing a fabricated bridge across the gap.
     let run: Vec2[] = [];
     const flush = () => {
@@ -170,12 +208,40 @@ export function importContext(
         const line = round(part.points.map((point) => point.pos));
         if (line.length < 2 || polylineLength(line) < 2) continue;
         const widthM = measurement(way.tag.width);
+        if (path) {
+          if (
+            !wooded.some(
+              (area) =>
+                line.some((p) => pointInPolygon(p, area.rings[0]!)) ||
+                polylineCrossings(line, area.rings[0]!).length > 0,
+            )
+          )
+            continue;
+          const width = widthM ?? (way.tag.highway === 'pedestrian' ? 3 : 2);
+          const ring = round(
+            clip(
+              [...parallelOffset(line, -width / 2), ...parallelOffset(line, width / 2).reverse()],
+              snapped,
+            ),
+          );
+          if (ring.length >= 3)
+            features.push({
+              kind: 'area',
+              class: 'landuse',
+              sub: 'path',
+              rings: [[...ring, ring[0]!]],
+            });
+          continue;
+        }
+        const spacing = kind === 'tree_row' ? measurement(way.tag.spacing) : undefined;
+        const spacingM = spacing !== undefined && spacing >= 2 ? spacing : undefined;
         const layer = way.tag.layer === undefined ? undefined : Number(way.tag.layer);
         features.push({
           kind: 'line',
-          class: kind,
+          class: kind!,
           line,
           ...(widthM !== undefined && { widthM }),
+          ...(spacingM !== undefined && { spacingM }),
           ...(Number.isInteger(layer) && { layer }),
         });
       }

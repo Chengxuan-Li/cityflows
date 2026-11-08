@@ -129,7 +129,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-100](tasks/TASK-100.md) | 7 | Vehicle classes: car, van, truck and bus, each with its own size and driving | `src/schema` (class, version 3), `src/sim/**`, `src/demand/**`, `src/host/**`, vehicle layers 2D and 3D, vehicle inspector | 090 | T46, traffic quick | done |
 | [TASK-101](tasks/TASK-101.md) | 7 | Restricted road access: closed roads, local-traffic zones, delivery and bus lanes | `Road.access` (schema), `compile.ts`, `src/routing/**`, access tags in `roads.ts`, `src/editor`, street inspector | 090 | T47, traffic quick | todo |
 | [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | todo |
-| [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | todo |
+| [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | done |
 | [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -2075,6 +2075,17 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   Lead fixes at merge: `bench/zone-probe.ts` read the deleted `vehicleLengthM`; V108's compile
   hashes now include `van` (proved equal to 56ffccd's with `van` removed). Conflicts in
   `style.ts` and architecture section 11 kept both sides.
+
+- 2026-11-07, TASK-106 merged after lead fixes (Codex, GPT-6.1 Terra). OSM tree points and
+  tree rows; one seeded placement module (`render/vegetation.ts`) for street trees (2.5 m off
+  the road, 12 m ±2), woods, scrub and parks, cap 60 000, never saved in the city; 2D canopy
+  discs, 3D instanced trees with a far LOD, procedural ground grain; "Trees" and "Street
+  trees" layers. 3D frame time +15 % (allowance 20 %), 2D +1 %. Every 3D base takes a
+  `groundAt` callback, flat until TASK-105's sampler is wired at its merge. Lead review: shots
+  read (streets, park, wood, 2D and 3D). Lead fixes at merge: `bench/geometry-shots.ts`
+  combines V108's all-3D mode with V106's per-shot `view3d`; V106 hashes include `van` (equal
+  to 56ffccd's with `van` removed) and its save/open case parses the scenario as T14 does.
+  Lead verification on main: check 594, city 66, traffic quick 3 233 / 32 (unchanged).
 
 ## Owner decisions log
 

@@ -1,10 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
+import { placeTrees } from '../render/vegetation';
 import type { LayerVisibility } from '../render/types';
 import { useAppStore } from './store';
 
 const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
   ['context', 'Surroundings'],
+  ['trees', 'Trees'],
+  ['streetTrees', 'Street trees'],
   ['roadClasses', 'Road classes'],
   ['vehicleClasses', 'Colour vehicles by class'],
   ['shadows', 'Shadows'],
@@ -22,6 +25,15 @@ export function Layers() {
   const layers = useAppStore((state) => state.layers);
   const hasGeo = useAppStore((state) => Boolean(state.session?.project.city.geo));
   const hasContext = useAppStore((state) => Boolean(state.session?.project.city.context));
+  const session = useAppStore((state) => state.session);
+  const treeCounts = useMemo(
+    () => (session ? placeTrees(session.compiled, session.project.city).counts : undefined),
+    [session],
+  );
+  const hasTrees =
+    treeCounts &&
+    treeCounts.osm + treeCounts.row + treeCounts.wood + treeCounts.scrub + treeCounts.park > 0;
+  const hasStreetTrees = Boolean(treeCounts?.street);
   const { toggleLayer, toggleLayers } = useAppStore.getState();
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -33,7 +45,13 @@ export function Layers() {
   return (
     <section id="layers" className="layers-sheet" aria-label="Map layers">
       {labels
-        .filter(([key]) => (key !== 'basemap' || hasGeo) && (key !== 'context' || hasContext))
+        .filter(
+          ([key]) =>
+            (key !== 'basemap' || hasGeo) &&
+            (key !== 'context' || hasContext) &&
+            (key !== 'trees' || hasTrees) &&
+            (key !== 'streetTrees' || hasStreetTrees),
+        )
         .map(([key, label]) => (
           <label key={key}>
             <input type="checkbox" checked={layers[key]} onChange={() => toggleLayer(key)} />

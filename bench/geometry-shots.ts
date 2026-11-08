@@ -21,6 +21,7 @@ export const shots: {
   centre: [number, number];
   zoom: number;
   osm?: string;
+  view3d?: boolean;
 }[] = [
   { id: 'V108-munich-exit', cases: [], centre: [0, -256], zoom: 10 },
   { id: 'V108-munich-arrows', cases: [], centre: [10, 170], zoom: 12 },
@@ -31,6 +32,26 @@ export const shots: {
     zoom: 14,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
+  { id: 'V106-munich-streets', cases: [], centre: [-300, 290], zoom: 3 },
+  { id: 'V106-munich-park', cases: [], centre: [-430, 390], zoom: 4 },
+  {
+    id: 'V106-sindelfingen-wood',
+    cases: [],
+    centre: [-721, 491],
+    zoom: 6,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
+  { id: 'V106-munich-streets-3d', cases: [], centre: [-300, 290], zoom: 3, view3d: true },
+  { id: 'V106-munich-park-3d', cases: [], centre: [-430, 390], zoom: 4, view3d: true },
+  {
+    id: 'V106-sindelfingen-wood-3d',
+    cases: [],
+    centre: [-721, 491],
+    zoom: 6,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+    view3d: true,
+  },
+  { id: 'R6-n138-3d', cases: [], centre: [-16.5, -535.5], zoom: 6, view3d: true },
   { id: 'V96-munich-overview', cases: [], centre: [0, 0], zoom: 0.43 },
   { id: 'V96-hbf-tracks', cases: [], centre: [250, -140], zoom: 1.8 },
   {
@@ -292,7 +313,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
     for (const osm of new Set(selected.map((shot) => shot.osm ?? MUNICH))) {
       const page = await context.newPage();
       await page.route(/^https:\/\//, (route) => route.abort());
-      await page.goto(url);
+      page.setDefaultTimeout(420_000);
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 420_000 });
       const button = (name: string) => page.getByRole('button', { name, exact: true });
       await button('Play').waitFor();
       await button('Import').click();
@@ -311,13 +333,18 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       const layers = page.getByRole('region', { name: 'Map layers' });
       for (const label of ['Basemap', 'Places', 'Entrances and exits'])
         await layers.getByLabel(label, { exact: true }).uncheck();
+      if (process.env.CITYFLOWS_TREES === '0')
+        for (const label of ['Trees', 'Street trees']) {
+          const toggle = layers.getByLabel(label, { exact: true });
+          if (await toggle.count()) await toggle.uncheck();
+        }
       if (process.env.CITYFLOWS_SHADOWS === '0')
         await layers.getByLabel('Shadows', { exact: true }).uncheck();
       await button('Layers').click();
       // Only the map: every panel and control is hidden, the canvas keeps its place.
       await page.addStyleTag({
         content:
-          'body * { visibility: hidden !important; } canvas.map { visibility: visible !important; }',
+          'body * { visibility: hidden !important; } canvas.map[aria-hidden="false"] { visibility: visible !important; }',
       });
       const anchored = anchors[osm] ?? {};
       const positions = await page.evaluate((ids) => {
@@ -341,17 +368,26 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       const canvas = page.getByLabel(three ? '3D city view' : 'City map', { exact: true });
       for (const shot of selected) {
         if ((shot.osm ?? MUNICH) !== osm) continue;
-        const placed = three
-          ? await page.evaluate((shot) => {
-              window.cityflows!.setView3D!(
-                { x: shot.centre[0], y: shot.centre[1] },
-                shot.zoom,
-                60,
-                0,
-              );
-              return { error: 0, zoom: shot.zoom, size: [1280, 800] };
-            }, shot)
-          : await placeCamera(page, shot.centre, shot.zoom);
+        // V108's CITYFLOWS_SHOTS_3D renders every shot in 3D at pitch 60; V106's `view3d` shots
+        // render in 3D at pitch 55, bearing 30.
+        const in3d = three || Boolean(shot.view3d);
+        const toggle = page.getByRole('button', { name: '3D', exact: true, includeHidden: true });
+        if (((await toggle.getAttribute('aria-pressed')) === 'true') !== in3d)
+          await toggle.evaluate((button: HTMLButtonElement) => button.click());
+        await page
+          .locator(in3d ? 'canvas[aria-label="3D city view"]' : 'canvas[aria-label="City map"]')
+          .waitFor({ state: 'visible' });
+        let placed;
+        if (in3d) {
+          await page.waitForFunction(() => !!window.cityflows?.view3D?.());
+          const [pitch, bearing] = shot.view3d ? [55, 30] : [60, 0];
+          await page.evaluate(
+            ({ centre, zoom, pitch, bearing }) =>
+              window.cityflows!.setView3D!({ x: centre[0]!, y: centre[1]! }, zoom, pitch, bearing),
+            { centre: shot.centre, zoom: shot.zoom, pitch, bearing },
+          );
+          placed = { error: 0, zoom: shot.zoom, size: [VIEWPORT.width, VIEWPORT.height] };
+        } else placed = await placeCamera(page, shot.centre, shot.zoom);
         await frames(page, 3);
         const timing =
           process.env.CITYFLOWS_SHOTS_TIMING === '1' &&
@@ -373,11 +409,14 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
               })
             : undefined;
         const path = join(out, `${shot.id}.png`);
-        await canvas.screenshot({ path, animations: 'disabled' });
+        await (in3d ? page.getByLabel('3D city view', { exact: true }) : canvas).screenshot({
+          path,
+          animations: 'disabled',
+        });
         records.push({
           ...shot,
           file: `${shot.id}.png`,
-          view: three ? '3d' : '2d',
+          view: in3d ? '3d' : '2d',
           timing,
           centreErrorPx: placed.error,
           zoom: placed.zoom,

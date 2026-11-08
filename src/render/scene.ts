@@ -4,6 +4,8 @@ import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { cityGrades } from './grades';
 import { Camera } from './camera';
+import { drawVegetation } from './layers/vegetation';
+import { placeTrees } from './vegetation';
 import { drawContext } from './layers/context';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
@@ -116,6 +118,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   const vehicles = new Vehicles();
   let surroundings: ReturnType<typeof drawContext> | undefined;
   let contextCount = 0;
+  let vegetation: ReturnType<typeof drawVegetation> | undefined;
+  let treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   let city: CompiledCity | undefined;
   let tiles: Tiles | undefined;
   let tilesEnabled = true;
@@ -161,6 +165,23 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateTerrainCache();
       grade.terrain.updateCacheTexture();
     }
+    if (
+      vegetation &&
+      (vegetation.natural.visible !== layerVisibility.trees ||
+        vegetation.street.visible !== layerVisibility.streetTrees)
+    ) {
+      vegetation.natural.visible = layerVisibility.trees;
+      vegetation.street.visible = layerVisibility.streetTrees;
+      visibleGrades[0]!.terrain.updateCacheTexture();
+    }
+    canvas.dataset.trees = String(
+      layerVisibility.trees && treeCounts
+        ? Object.entries(treeCounts).reduce((sum, [key, n]) => sum + (key === 'street' ? 0 : n), 0)
+        : 0,
+    );
+    canvas.dataset.streetTrees = String(
+      layerVisibility.streetTrees ? (treeCounts?.street ?? 0) : 0,
+    );
     canvas.dataset.contextFeatures = String(layerVisibility.context ? contextCount : 0);
     difference.visible = layerVisibility.difference;
     if (import.meta.env.MODE === 'test')
@@ -287,6 +308,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (tiles) map.addChild(tiles.container);
       const started = performance.now();
       const features = source?.context?.features ?? [];
+      const placementStart = performance.now();
+      const placed = placeTrees(compiled, source ?? { nodes: {}, places: {} });
+      treeCounts = placed.counts;
+      canvas.dataset.treePlacementMs = String(performance.now() - placementStart);
+      canvas.dataset.treeCounts = JSON.stringify(placed.counts);
+      canvas.dataset.treeCap = String(placed.capped);
+      const vegetationStart = performance.now();
+      vegetation = drawVegetation(placed.trees);
+      canvas.dataset.vegetationRebuildMs = String(performance.now() - vegetationStart);
       surroundings = drawContext(features);
       contextCount = features.length;
       map.addChild(surroundings.container);
@@ -299,6 +329,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       // The bottom grade shares its overview texture with surroundings: same draw order,
       // without another map-sized textured quad on software GPUs.
       visibleGrades[0]!.terrain.addChildAt(surroundings.container, 0);
+      visibleGrades[0]!.terrain.addChildAt(vegetation.container, 1);
       const base = grades.get(0)!;
       base.group.addChildAt(heat.roads, base.group.getChildIndex(base.connectors));
       base.group.addChildAt(difference, base.group.getChildIndex(base.connectors));
@@ -412,7 +443,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           // bottom grade's terrain cache.
           const alpha = layerVisibility.shadows && grade.layer < 0 ? style.tunnelAlpha : 1;
           for (const child of grade.terrain.children)
-            if (child !== surroundings?.container) child.alpha = alpha;
+            if (child !== surroundings?.container && child !== vegetation?.container)
+              child.alpha = alpha;
         }
         if (layerVisibility.shadows) {
           const coverage = new DeckCoverage(compiled, roadGrades, nodeGrades);

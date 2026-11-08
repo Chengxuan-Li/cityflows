@@ -155,9 +155,15 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
   const placeGeometry = buffer(places);
   placeGeometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   const { heads, supports } = signalLayout(city, heights);
+  const surfaceGeometry = buffer(surfaces, true);
+  const positions = surfaceGeometry.getAttribute('position');
+  const uv = new Float32BufferAttribute(new Float32Array(positions.count * 2), 2);
+  for (let i = 0; i < positions.count; i++)
+    uv.setXY(i, positions.getX(i) / 2.56, positions.getZ(i) / 2.56);
+  surfaceGeometry.setAttribute('uv', uv);
   return {
     context: buildContext(source.context?.features ?? []),
-    surfaces: buffer(surfaces, true),
+    surfaces: surfaceGeometry,
     slabs: buffer(slabs),
     markings: buildMarkings(city, source, heights),
     crossings: buffer(crossings),
