@@ -23,9 +23,11 @@ async function idle(page: Page, canvas: Locator) {
 
 for (const mode of ['2d', '3d'])
   test(`@smoke V115 Munich draws only visible changes in ${mode}`, async ({ page }, info) => {
+    // A Munich import and 3D build on CI's software GPU: the 3D case took 58 s of 60 there.
+    test.setTimeout(420_000);
     const errors = pageErrors(page);
     await page.setViewportSize({ width: 1280, height: 800 });
-    // V98 covers normal camera damping; fixed settling keeps this smoke case under 60 s.
+    // V98 covers normal camera damping; fixed settling keeps this smoke case short.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.route('https://**/*', (route) => route.abort());
     await page.goto('/');
