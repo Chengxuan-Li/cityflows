@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import { expect, test } from 'vitest';
 import {
@@ -33,7 +34,7 @@ const compiled = new Map<AuditCity, { city: City; net: CompiledCity; diagnostics
 function load(name: AuditCity) {
   let entry = compiled.get(name);
   if (!entry) {
-    const city = loadAuditCity(name);
+    const city = withoutLotAisles(loadAuditCity(name));
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
     compiled.set(name, (entry = { city, net: result.compiled, diagnostics: result.diagnostics }));

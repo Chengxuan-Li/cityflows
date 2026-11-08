@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { expect } from 'vitest';
 import { importOsmCached } from '../../bench/city-cache';
 import { auditRoute } from '../../bench/route-audit';
@@ -59,8 +60,10 @@ cityTest(
       bbox: [11.525, 48.135, 11.545, 48.148],
     });
     if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
-    const { city } = imported;
-    const count = (code: string) => imported.diagnostics.filter((d) => d.code === code).length;
+    // TASK-104: retain the historical public-road oracle; lots and full traffic are T49/traffic:quick.
+    const city = withoutLotAisles(imported.city);
+    const diagnostics = compile(city).diagnostics;
+    const count = (code: string) => diagnostics.filter((d) => d.code === code).length;
     expect(count('connector_unreachable')).toBe(0);
     expect(count('road_too_short')).toBeLessThanOrEqual(15);
     expect(count('dead_end')).toBeLessThanOrEqual(7);
@@ -76,7 +79,7 @@ cityTest(
       expect(node.signal).not.toBeNull();
     }
     expect(
-      imported.diagnostics
+      diagnostics
         .filter((d) => d.code === 'dead_end')
         .flatMap((d) => d.refs)
         .sort(),
@@ -203,7 +206,10 @@ unitTest.each([
   const { xml, options } = fixture(name);
   const result = importOsmCached(xml, options);
   expect(result.ok).toBe(true);
-  expect(result.diagnostics.filter((d) => d.severity === 'warning').length).toBeLessThanOrEqual(
+  if (!result.ok) throw new Error('Import failed');
+  // TASK-104 diagnoses new lots and aisle mouths separately from the public-network budget.
+  const original = compile(withoutLotAisles(result.city));
+  expect(original.diagnostics.filter((d) => d.severity === 'warning').length).toBeLessThanOrEqual(
     baseline,
   );
 });

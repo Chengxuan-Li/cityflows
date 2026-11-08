@@ -1,3 +1,4 @@
+// TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { cityHeights } from '../../src/render3d/heights';
 import { goreTriangles, triangleHeight, buildMarkings } from '../../src/render3d/markings';
 import { laneEdges } from '../../src/network/lanes';
@@ -28,6 +29,8 @@ import { tierCities, unitTest } from '../tier';
 // TASK-100 merge: its lanes also allow `van`; with `van` removed they hash as at 56ffccd.
 // TASK-101 merge: compiled roads carry access and zones (all four), and access boundaries keep
 // junctions in Munich and Sindelfingen, which moves their arrows; grid and town arrows are equal.
+// TASK-104 merge: compiled `lots` (stalls, aisle ids) and the appended aisle graph move the
+// Munich and Sindelfingen compile hashes; arrows are unchanged (T49 strips the aisles).
 const baseline = {
   grid: {
     compile: 'fcf4d931bbc66167737ec54391d801caf214ade75bb9b20f557d53aebc6745dc',
@@ -38,12 +41,12 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: 'c7efb7a2063a40577c197b7cdeaf12b26d1316c4e960a63e59b25ba643b054e9',
-    arrows: '01dc4f7e491f7a406b9d1830d493b82d6f92a5d18831ea143789d7d9d1e747d5',
+    compile: '475329711ca65dcf10635478ebc75fdd81a68b54bad7a67d4519b823b4808ee0',
+    arrows: 'b937d115697af6dfe6a9bbb0c453fac41b6f04092761a7ea52b9bd93d89a5cfa',
   },
   munich: {
-    compile: '7f698e83dc854b18fa99c5c21a9758cf490207a964c92b94590f3ced7ad45da3',
-    arrows: 'e701bfb8559e34f7f97e3a001dc3ad4e9d93e8f6ea6cf24af2e2e8ce46c17af1',
+    compile: '067ad454012badd68fe6cba95dc4ded056f51b539521190274c12969b8c3cf6a',
+    arrows: 'ce8a7e9688027561538d0b4bdbd8a32b0498221b2a460597a99685e97a4adcc7',
   },
 } as const;
 const hash = (value: unknown) =>

@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { auditRoute } from '../../bench/route-audit';
@@ -24,9 +25,10 @@ function load(name: keyof typeof extracts) {
       bbox: [...bbox],
     });
     if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
-    const result = compile(imported.city);
+    const city = withoutLotAisles(imported.city);
+    const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    loaded.set(name, (entry = { city: imported.city, net: result.compiled }));
+    loaded.set(name, (entry = { city, net: result.compiled }));
   }
   return entry;
 }

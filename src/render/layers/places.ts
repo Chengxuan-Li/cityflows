@@ -45,9 +45,13 @@ export function drawPlaces(
       points.push(target);
       local = { kind: 'point', pos: { x: 0, y: 0 } };
     }
-    placePath(target, local, kind, Infinity)
-      .fill(placeHue(id))
-      .stroke({ color: style.marking, width: 0.6 });
+    // A parking area's place is its outline: the lot's aisles and stalls (TASK-104) lie inside.
+    if (kind === 'parking' && local.kind === 'polygon')
+      placePath(target, local, kind, Infinity).stroke({ color: placeHue(id), width: 1.2 });
+    else
+      placePath(target, local, kind, Infinity)
+        .fill(placeHue(id))
+        .stroke({ color: style.marking, width: 0.6 });
   }
   return (zoom) => {
     for (const point of points) point.scale.set(Math.max(1, 8 / (zoom * style.pointRadiusM)));

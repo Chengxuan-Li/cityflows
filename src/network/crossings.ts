@@ -115,16 +115,37 @@ export function crossingArms(city: CompiledCity, node: CNode): RoadEnd[][] {
   return arms;
 }
 
+const noAisles = new Set<number>();
+const aisleSets = new WeakMap<object, Set<number>>();
+/** Compiled indices of lot aisle roads, cached by the compiled lot list. */
+function aisleRoads(city: CompiledCity): Set<number> {
+  if (!city.lots) return noAisles;
+  let set = aisleSets.get(city.lots);
+  if (!set) {
+    set = new Set<number>();
+    for (const lot of city.lots)
+      for (const id of lot.aisles) {
+        const idx = city.index.road.get(id);
+        if (idx !== undefined) set.add(idx);
+      }
+    aisleSets.set(city.lots, set);
+  }
+  return set;
+}
+
 const expressway = (road: CRoad) => road.roadClass === 'motorway' || road.roadClass === 'ramp';
 
 /** The default (architecture section 11, TASK-091): a road end at a node of three or more arms,
  * or at a signalized node, has a crossing, unless the road is a motorway or a ramp (`_link`
  * roads and slip lanes), every arm of the node is (a motorway merge or diverge), or the road is
- * part of a roundabout ring. */
+ * part of a roundabout ring. TASK-104: lot aisles get none and are not arms. */
 export function crossingDefault(city: CompiledCity, road: CRoad, atEnd: boolean): boolean {
   const node = city.nodes[atEnd ? road.to : road.from]!;
-  if (expressway(road) || cityTopology(city).ring.has(road.idx)) return false;
-  const arms = crossingArms(city, node);
+  const aisles = aisleRoads(city);
+  if (expressway(road) || aisles.has(road.idx) || cityTopology(city).ring.has(road.idx))
+    return false;
+  // TASK-104: lot aisles are driveways, not arms; a lot entry adds no crossing to its street.
+  const arms = crossingArms(city, node).filter((arm) => !arm.every((e) => aisles.has(e.road.idx)));
   return (
     (arms.length >= 3 || node.signal !== null) &&
     !arms.every((arm) => arm.every((e) => expressway(e.road)))

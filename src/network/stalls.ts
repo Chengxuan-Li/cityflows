@@ -1,0 +1,164 @@
+import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
+import {
+  cumulativeLengths,
+  headingAtDistance,
+  pointAtDistance,
+  prepareRing,
+  nearestOnPolyline,
+  pointInPolygon,
+  type PreparedRing,
+} from '../geo/polyline';
+import type { Vec2 } from '../geo/vec2';
+import type { City } from '../schema';
+import type { CLot, CStall, CompiledCity } from './types';
+
+const closed = (ring: Vec2[]) => [...ring, ring[0]!];
+
+function overlaps(a: PreparedRing, b: PreparedRing): boolean {
+  if (
+    a.box.maxX <= b.box.minX ||
+    b.box.maxX <= a.box.minX ||
+    a.box.maxY <= b.box.minY ||
+    b.box.maxY <= a.box.minY
+  )
+    return false;
+  // Coincident footprints have no boundary strictly inside the other polygon.
+  return (
+    booleanOpD(ClipType.Intersection, [a.ring], [b.ring], FillRule.EvenOdd, 4).reduce(
+      (sum, ring) => sum + Math.abs(areaD(ring)),
+      0,
+    ) > 0.001
+  );
+}
+
+/** Derived paint and future parking targets; canonical capacity remains authoritative. */
+export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
+  const occupied: PreparedRing[] = [];
+  const obstacles = [
+    ...compiled.roads.map((road) => road.surface),
+    ...compiled.nodes.map((node) => node.outline),
+  ]
+    .filter((ring) => ring.length >= 3)
+    .map((ring) => prepareRing(closed(ring)));
+  return Object.values(city.parking ?? {})
+    .filter((lot) => lot.kind === 'lot')
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((lot) => {
+      const stalls: CStall[] = [];
+      const result: CLot = {
+        id: lot.id,
+        entries: lot.entries ?? [],
+        aisles: lot.aisles ?? [],
+        stalls,
+        stallCount: 0,
+      };
+      if (lot.shape?.kind !== 'polygon') return result;
+      const shape = lot.shape.ring;
+      const boundary = prepareRing(closed(shape));
+      const local = [
+        ...obstacles,
+        ...(lot.exclusions ?? []).map((ring) => prepareRing(closed(ring))),
+      ].filter(
+        ({ box }) =>
+          box.minX <= boundary.box.maxX &&
+          box.maxX >= boundary.box.minX &&
+          box.minY <= boundary.box.maxY &&
+          box.maxY >= boundary.box.minY,
+      );
+      const junctions = compiled.nodes.filter(
+        (node) =>
+          (lot.entries ?? []).includes(node.id) ||
+          new Set(
+            (lot.aisles ?? [])
+              .filter((r) => city.roads[r]?.from === node.id || city.roads[r]?.to === node.id)
+              .map((r) => city.roads[r]!.streetGroupId ?? r),
+          ).size > 1,
+      );
+      const seen = new Set<string>();
+      for (const id of [...(lot.aisles ?? [])].sort()) {
+        const road = city.roads[id];
+        if (!road) continue;
+        const key = road.streetGroupId ?? id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const paired = (lot.aisles ?? [])
+          .map((r) => city.roads[r]!)
+          .filter(
+            (r) => r && r.id !== id && road.streetGroupId && r.streetGroupId === road.streetGroupId,
+          );
+        const width = road.lanes.reduce((sum, lane) => sum + lane.widthM, 0);
+        const reverse = paired[0];
+        const reverseWidth = reverse?.lanes.reduce((sum, lane) => sum + lane.widthM, 0) ?? 0;
+        const left = Math.min(
+          road.lateralOffsetM - width / 2,
+          reverse ? -reverse.lateralOffsetM - reverseWidth / 2 : Infinity,
+        );
+        const right = Math.max(
+          road.lateralOffsetM + width / 2,
+          reverse ? -reverse.lateralOffsetM + reverseWidth / 2 : -Infinity,
+        );
+        const angle = !paired.length && width <= 4 ? Math.PI / 3 : Math.PI / 2;
+        const pitch = 2.5 / Math.sin(angle);
+        const cumulative = cumulativeLengths(road.centerline);
+        const length = cumulative.at(-1)!;
+        for (const side of [-1, 1]) {
+          for (let s = 6 + pitch / 2; s <= length - 6 - pitch / 2; s += pitch) {
+            const p = pointAtDistance(road.centerline, cumulative, s);
+            const tangent = headingAtDistance(road.centerline, cumulative, s);
+            const heading = tangent + side * angle;
+            const along = { x: Math.cos(heading), y: Math.sin(heading) };
+            const across = { x: -along.y, y: along.x };
+            const normal = { x: -Math.sin(tangent), y: Math.cos(tangent) };
+            const offset =
+              (side < 0 ? left : right) +
+              side * (2.5 * Math.sin(angle) + 1.25 * Math.abs(Math.cos(angle)) + 0.2);
+            const position = { x: p.x + normal.x * offset, y: p.y + normal.y * offset };
+            const corners = [
+              [-1, -1],
+              [1, -1],
+              [1, 1],
+              [-1, 1],
+            ].map(([l, w]) => ({
+              x: position.x + l! * 2.5 * along.x + w! * 1.25 * across.x,
+              y: position.y + l! * 2.5 * along.y + w! * 1.25 * across.y,
+            }));
+            const outside = booleanOpD(
+              ClipType.Difference,
+              [corners],
+              [shape],
+              FillRule.EvenOdd,
+              4,
+            );
+            if (outside.reduce((sum, ring) => sum + Math.abs(areaD(ring)), 0) > 0.001) continue;
+            const candidate = prepareRing(closed(corners));
+            if (
+              local.some((obstacle) => overlaps(candidate, obstacle)) ||
+              occupied.some((other) => overlaps(candidate, other))
+            )
+              continue;
+            // Keep the entire bay, rather than just its centre, six metres from junctions.
+            if (
+              junctions.some(
+                (node) =>
+                  pointInPolygon(node.pos, closed(corners)) ||
+                  nearestOnPolyline(closed(corners), node.pos).away < 6,
+              )
+            )
+              continue;
+            occupied.push(candidate);
+            stalls.push({
+              position,
+              heading,
+              widthM: 2.5,
+              lengthM: 5,
+              aisleRoad: id,
+              positionM: s,
+              corners,
+            });
+          }
+        }
+      }
+      result.stallCount = stalls.length;
+      return result;
+    });
+}

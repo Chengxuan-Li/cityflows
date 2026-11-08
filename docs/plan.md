@@ -134,7 +134,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-109](tasks/TASK-109.md) | 8 | Building details: terrain footprints closed, roof shapes, colours, window bands | building fields of `ContextFeature` (schema), building tags in `context.ts`, `render3d/context.ts`, `terrain.ts` (footprint closure), new `render3d/roofs.ts`, Building details layer | 096, 098, 105 | V109, 3D shots | done |
 | [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | done |
 | [TASK-102](tasks/TASK-102.md) | 7 | Parking model and garages: facilities, choice on arrival, cruising, departures from where parked | `City.parking` refinements, new `importers/osm/parking.ts`, facility compile, new `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, demand, snapshot, facility inspector and occupancy layer | 100, 101, Phase 2 formats | T48, traffic quick | todo |
-| [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | todo |
+| [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | done (mapped entries only; unreachable lots diagnosed; see review) |
 | [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | todo |
 | [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | todo |
 | [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | todo |
@@ -2218,6 +2218,23 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   (its 3D case took 58 s of 60 on CI). The machine was saturated by six Phase 2 agents, so the
   lead ran type-check, lint, format, the V109, V105, T44, T14 and V115 unit tests (82 pass) and
   the V105, V109, V115 and view3d e2e cases (pass), and left the full suite to CI at merge.
+
+- 2026-11-08, TASK-104 merged after lead fixes (Codex, GPT-6.1 Terra). Surface lots become
+  `lot` facilities with their courtyards and overlapping buildings as exclusions; mapped
+  `parking_aisle` ways inside or touching a lot are appended as 10 km/h service roads with
+  destination access, joined only at mapped public nodes (no inferred entries: Munich 18 of 22
+  lots and Sindelfingen 30 of 31 are reported unreachable, mostly lots without mapped aisles);
+  compile derives 2.5 x 5 m stalls (Munich 268, Sindelfingen 364) drawn as a default-on
+  "Parking stalls" layer in both views. T49 strips the aisles and gets main's City and compile
+  hashes back for both cities. Lead: `CompiledCity.parking` renamed `lots` (TASK-102's garages
+  use `parking`); lot aisles get no default crossing and are not arms, so a lot entry no longer
+  adds zebras to its street and aisle junctions carry none (Sindelfingen's big lot had one at
+  every aisle); stalls are generated before the stops so a stop sees the same crossings;
+  `parking`-kind places draw as an outline (their fill hid every aisle and stall with Places on,
+  which the shots hide); the 3D stall toggle requests a frame. T44, V106 and V108 compile pins
+  move for the lots (arrows unchanged). Traffic: quick 3233 / 35 / 1 against 3012 / 38 / 0 on
+  main, no route uses an aisle; full 3472 / 70 / 0 against 3342 / 75 / 1. Baseline reset to
+  these (stalled heads stays 1 for B56).
 
 ## Owner decisions log
 

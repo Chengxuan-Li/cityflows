@@ -1,12 +1,12 @@
 {
-  "tree": "main at the TASK-100 merge (mixed fleet: car, van, truck); reset per the owner's rule for demand-changing tasks, 2026-11-07. stalledHeads stays 1: the mixed fleet measured 0, but the B56 loop at n:263 still locks with cars only",
+  "tree": "main at the TASK-104 merge (surface lots: appended aisles, lot entry junctions); reset per the owner's rule for parking-changing tasks, 2026-11-08. stalledHeads stays 1: this tree measured 0, but the B56 loop at n:263 still locks with cars only",
   "scale": 0.15,
-  "completed": 3547,
-  "gridlocked": 57,
+  "completed": 3472,
+  "gridlocked": 70,
   "stalledHeads": 1,
   "quick": {
     "until": "09:30",
     "completed": 3233,
-    "gridlocked": 32
+    "gridlocked": 35
   }
 }

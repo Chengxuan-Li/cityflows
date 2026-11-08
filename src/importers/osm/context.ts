@@ -10,6 +10,7 @@ import type { ContextArea, ContextFeature, ContextLine, RoofShape } from '../../
 import { clip, polygonSources } from './buildings';
 import { clipPart, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
+import { surfaceLot } from './lots';
 
 function areaClass(tag: OsmTags): ContextArea | undefined {
   if (tag.building && tag.building !== 'no') return 'building';
@@ -249,6 +250,7 @@ export function importContext(
   positions: Map<number, Vec2>,
   bounds: Bounds,
   diagnostics: Diagnostic[] = [],
+  omitLots = false,
 ): ContextFeature[] {
   // Snap inward at the boundary: every serialized tenth of a metre remains in the bbox.
   const snapped: Bounds = {
@@ -285,6 +287,7 @@ export function importContext(
     });
   }
   for (const source of polygonSources(data, (tag) => areaClass(tag) !== undefined)) {
+    if (omitLots && surfaceLot(source.tag)) continue;
     const projected = source.rings.flatMap(({ role, ids }) => {
       const ring = ids.slice(0, -1).map((id) => positions.get(id));
       return ring.every((p): p is Vec2 => p !== undefined) ? [{ role, ring }] : [];

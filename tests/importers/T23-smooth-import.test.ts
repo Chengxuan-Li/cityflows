@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { expect, test, vi } from 'vitest';
 import { distance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
@@ -104,7 +105,7 @@ test.each(
     const { xml, options } = fixture(name);
     const imported = importOsm(xml, { ...options, bbox: bbox && [...bbox] });
     if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
-    const { city } = imported;
+    const city = withoutLotAisles(imported.city);
     const before = observed.before!;
     const source = parseOsm(xml);
     if (typeof source === 'string') throw new Error(source);

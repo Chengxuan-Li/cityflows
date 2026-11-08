@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { expect, test } from 'vitest';
 import { continuity } from '../../src/fixtures/continuity';
 import {
@@ -233,7 +234,7 @@ test.each(
           })
         : null;
     if (imported && !imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
-    const result = compile(imported?.ok ? imported.city : grid5x5());
+    const result = compile(imported?.ok ? withoutLotAisles(imported.city) : grid5x5());
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
     const net = result.compiled;
     const ordinary = new Map<string, number[]>(

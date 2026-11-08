@@ -36,6 +36,7 @@ import { buildVegetation, surfaceTexture } from './vegetation';
 import { placeTrees } from '../render/vegetation';
 import { Vehicles3D } from './vehicles';
 import { groundMesh } from './terrain';
+import { lotGeometry } from './stalls';
 import { terrainVehicleOffset } from './heights';
 import { buildTerrainGround } from './context';
 
@@ -63,6 +64,8 @@ export class Scene3D {
   private treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   private ground: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private terrainEnabled = true;
+  private parkingStallsVisible = true;
+  private parkingStalls?: Mesh;
   private renderedTerrain = true;
   private terrainGround: ReturnType<typeof buildTerrainGround> | undefined;
   private buildings: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
@@ -207,6 +210,15 @@ export class Scene3D {
     add(geometry.slabs, 0x899b99);
     add(geometry.markings, 0xffffff, false).material.vertexColors = true;
     add(geometry.crossings, markingTheme.colors.stop, false);
+    const lots = lotGeometry(city, renderedSource, terrain);
+    add(lots.surface, style.context.parking, false);
+    this.parkingStalls = add(lots.paint, style.stall, false);
+    this.parkingStalls.visible = this.parkingStallsVisible;
+    this.canvas.dataset.parkingStalls = String(
+      this.parkingStallsVisible
+        ? (city.lots?.reduce((sum, lot) => sum + lot.stallCount, 0) ?? 0)
+        : 0,
+    );
     const places = add(geometry.places, 0xffffff, false);
     places.material.vertexColors = true;
     places.name = 'places';
@@ -434,6 +446,15 @@ export class Scene3D {
     if (enabled === this.terrainEnabled) return;
     this.terrainEnabled = enabled;
     if (this.city && this.source) this.setCity(this.city, this.source);
+  }
+
+  setParkingStalls(enabled: boolean) {
+    if (this.parkingStallsVisible !== enabled) this.invalidate();
+    this.parkingStallsVisible = enabled;
+    if (this.parkingStalls) this.parkingStalls.visible = enabled;
+    this.canvas.dataset.parkingStalls = String(
+      enabled ? (this.city?.lots?.reduce((sum, lot) => sum + lot.stallCount, 0) ?? 0) : 0,
+    );
   }
   setPlaces(visible: boolean) {
     if (this.placesVisible !== visible) this.invalidate();

@@ -8,6 +8,7 @@ import { FrameDemand, renderContinuously } from './frame-demand';
 import { drawVegetation } from './layers/vegetation';
 import { placeTrees } from './vegetation';
 import { drawContext } from './layers/context';
+import { drawLots } from './layers/stalls';
 import { drawHillshade } from './layers/hillshade';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
@@ -127,6 +128,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
 
   const vehicles = new Vehicles();
   let surroundings: ReturnType<typeof drawContext> | undefined;
+  let lots: ReturnType<typeof drawLots> | undefined;
   let hillshade: ReturnType<typeof drawHillshade> | undefined;
   let contextCount = 0;
   let vegetation: ReturnType<typeof drawVegetation> | undefined;
@@ -148,6 +150,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let redrawTerrain = () => {};
 
   function updateTerrainCache() {
+    if (lots) lots.stalls.alpha = Math.min(1, camera.zoom / 1.5);
     // At overview zoom both markings and arrows are invisible. Rasterize the static
     // terrain once at a power-of-two screen resolution, leaving cars/signals live.
     // A 2048 px edge cap bounds texture storage; detailed views use vector geometry.
@@ -173,6 +176,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
 
   function applyVisibility() {
+    if (lots && lots.stalls.visible !== layerVisibility.parkingStalls) {
+      lots.stalls.visible = layerVisibility.parkingStalls;
+      visibleGrades[0]!.terrain.updateCacheTexture();
+    }
+    canvas.dataset.parkingStalls = String(
+      layerVisibility.parkingStalls
+        ? (city?.lots?.reduce((s, lot) => s + lot.stallCount, 0) ?? 0)
+        : 0,
+    );
     if (hillshade && hillshade.visible !== layerVisibility.terrain) {
       hillshade.visible = layerVisibility.terrain;
       const grade = visibleGrades[0]!;
@@ -377,6 +389,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       // without another map-sized textured quad on software GPUs.
       visibleGrades[0]!.terrain.addChildAt(surroundings.container, 0);
       visibleGrades[0]!.terrain.addChildAt(vegetation.container, 1);
+      lots = drawLots(compiled, source);
+      visibleGrades[0]!.terrain.addChildAt(lots.container, 1);
       if (source?.terrain) {
         hillshade = drawHillshade(source.terrain);
         hillshade.visible = layerVisibility.terrain;

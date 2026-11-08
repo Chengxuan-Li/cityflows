@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { readFileSync } from 'node:fs';
 import { expect, test, vi } from 'vitest';
 import { cumulativeLengths, distance, pointAtDistance } from '../../src/geo/polyline';
@@ -34,6 +35,7 @@ unitTest('T24: acute-Y minor arm meets the fixed major at sixty degrees', () => 
   const result = importOsm(xml, { importerVersion: 'test' });
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   const roads = Object.values(result.city.roads);
+  result.city = withoutLotAisles(result.city);
   const before = observed.before!;
   const minor = roads.find((r) => r.name === 'Minor')!;
   const a = minor.centerline[0]!,
@@ -168,6 +170,7 @@ test.each(
     };
     const result = importOsm(xml, options);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    result.city = withoutLotAisles(result.city);
     const before = observed.before!;
     for (const node of Object.values(result.city.nodes))
       expect(node.pos).toEqual(before.nodes[node.id]!.pos);
@@ -192,7 +195,9 @@ test.each(
       )!;
       expect(road.centerline).toEqual([...reverse.centerline].reverse());
     }
-    expect(importOsm(xml, options)).toEqual(result);
+    const repeated = importOsm(xml, options);
+    if (!repeated.ok) throw new Error('Import failed');
+    expect(withoutLotAisles(repeated.city)).toEqual(result.city);
     expect(
       result.diagnostics
         .filter((d) => d.code === 'realign_limited')

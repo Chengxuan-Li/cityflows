@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { readFileSync } from 'node:fs';
 import { expect, vi } from 'vitest';
 import { directionPairs, pairGapAudit, unrelatedOverlaps } from '../../bench/geometry-audit';
@@ -29,7 +30,7 @@ const munich = () => {
     bbox: [11.525, 48.135, 11.545, 48.148],
   });
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  return result.city;
+  return withoutLotAisles(result.city);
 };
 
 /** An OSM document of straight ways given in metres (x east, y south) around 48 N, 11 E. */
@@ -278,7 +279,7 @@ unitTest(
     const run = (relaxMaxM: number) => {
       const result = importOsm(xml, { importerVersion: 'test', relaxMaxM });
       if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-      return result.city;
+      return withoutLotAisles(result.city);
     };
     const off = run(0);
     const city = run(DEFAULT_RELAX_MAX_M);

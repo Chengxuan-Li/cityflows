@@ -1,3 +1,4 @@
+// TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { createHash } from 'node:crypto';
 import { expect } from 'vitest';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
@@ -15,8 +16,8 @@ import { test } from 'vitest';
 const hashes = {
   grid: 'f54053d207e6c0d1da2ad1748d84de10b7c6d961fbddde66e183c0b0066bb031',
   town: '3014271261a29ab0fdd413ecf0af3063f569f9420cb028b05a1fbd827973be57',
-  Sindelfingen: 'dbbd4a4c93b101a2cbc895b5c9636e093d8bc7c4314c05733d9b1f417a38aada',
-  Munich: '519d75af1b60789b55ddea51e917abe6ab32f0639ab061914f6040022da84356',
+  Sindelfingen: 'edfee22305eddb2436d68f82ed0ebb88ab120980bd9a8818b90f0bf11d38cd9a',
+  Munich: 'bc6db3c17ec82aac370bbdd77c0e3e19880c48d3485e7f06757a44fac6fc29d0',
 };
 
 test.each(tierCities(throughputCities))('T47 unrestricted %s routes equal main', (name) => {

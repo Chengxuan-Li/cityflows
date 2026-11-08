@@ -36,6 +36,7 @@ export interface CompiledCity {
   movements: CMovement[];
   places: CPlace[];
   connectors: CConnector[];
+  lots?: CLot[]; // TASK-104: surface lots and their generated stalls, when any
   index: {
     node: Map<NodeId, number>;
     road: Map<RoadId, number>;
@@ -45,6 +46,24 @@ export interface CompiledCity {
     connector: Map<ConnectorId, number>;
   };
   laneSpatial: Flatbush; // lane segments, for picking and snapping
+}
+
+export interface CStall {
+  position: Vec2;
+  heading: number;
+  widthM: number;
+  lengthM: number;
+  aisleRoad: RoadId;
+  positionM: number;
+  corners: Vec2[];
+}
+
+export interface CLot {
+  id: string;
+  entries: NodeId[];
+  aisles: RoadId[]; // the lot's `parking_aisle` roads (no default crossings)
+  stalls: CStall[];
+  stallCount: number;
 }
 
 export interface CNode {
