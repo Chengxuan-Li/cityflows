@@ -287,14 +287,25 @@ identical with terrain present or absent.
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
 type ContextPoint = 'tree';
 type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
+
+type RoofShape = 'flat' | 'gabled' | 'hipped' | 'pyramidal' | 'skillion' | 'mansard'
+  | 'gambrel' | 'half-hipped' | 'round' | 'dome' | 'onion';
 type ContextFeature =
-  | { kind: 'area'; class: ContextArea; rings: Vec2[][]; sub?: string; heightM?: number; levels?: number }
+  | { kind: 'area'; class: ContextArea; rings: Vec2[][]; sub?: string; heightM?: number; levels?: number;
+      roof?: { shape: RoofShape; heightM?: number; levels?: number; colour?: string;
+               material?: string; orientation?: 'along' | 'across'; directionDeg?: number };
+      colour?: string; material?: string; minHeightM?: number }
   | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number }
   | { kind: 'point'; class: ContextPoint; pos: Vec2; heightM?: number; crownM?: number; sub?: string };
 ~~~
 
 Rings are closed, outer first then holes, in local metres rounded to 0.1 m. Optional sub is the
 source tag value; tagged building height/levels and line width/layer are retained.
+TASK-109 adds the optional building roof, facade colour/material and clearance fields above,
+without a schema-version bump. Colours are lowercase `#rrggbb`; roof dimensions and clearance
+are nonnegative metres/levels; `directionDeg` is a downhill compass bearing in [0, 360).
+Old files omit these fields. They remain display-only and survive project save/open; no
+network, demand or simulation module reads them.
 TASK-106 adds tree points (`sub` is `leaf_type`, dimensions are metres) and tree-row lines
 with optional `spacingM` (minimum 2 m) from OSM `spacing` (default 8 m). This is an optional context
 extension without a schema-version bump. Only imported context is saved; generated trees
@@ -1646,6 +1657,26 @@ writing depth against one another. Flat context stays in the transparent render 
 full opacity so it draws after basemap tiles. The existing Surroundings layer controls both meshes;
 Buildings (default on, in 3D) independently hides extrusions. Toggles do not rebuild geometry.
 Flat context follows the below-ground opacity, while buildings retain their shadows.
+TASK-109: Building details defaults on, appears in Layers while Buildings is shown in 3D,
+and switches between two prebuilt batches. Off uses the original boxes and colours. Detailed
+walls use tagged colour, then a material palette, then the existing tone varied by a stable
+footprint hash. Tagged colours mix 28% into the neutral palette so roads stay prominent.
+Roofs use tagged colour/material, then muted tile or flat grey. Facade window
+bands use wall-distance and height attributes in the shared Lambert shader: one band per
+tagged level, otherwise approximately 3 m levels. They fade between 150 and 600 m from the
+camera and do not appear on roofs, canopies, garages, sheds, or tall unlevelled industrial walls.
+`render3d/roofs.ts` clips planar roof patches to the exact footprint. Gabled, hipped,
+half-hipped, pyramidal, skillion, mansard and gambrel roofs require a footprint/minimum
+oriented rectangle area ratio of at least 0.85. The ridge follows its long side unless
+orientation is across or a downhill direction is supplied. Roof height uses tagged metres,
+then roof levels times 3 m, otherwise 35-degree pitch capped at 8 m and half the total height;
+explicit values cap at total height minus minimum clearance. Walls end at total height minus roof height, with
+boundary infill up to the roof. Untagged roofs stay flat; courtyard, irregular and curved
+roof fallbacks stay flat and report their reasons. Courtyard holes remain open. Canopies
+have a 0.2 m roof slab above their tagged clearance (3 m default), reserving its thickness
+below the eaves, with no facade or gable-end infill.
+The scene exposes context build time, plain/detailed building triangles and roof/fallback
+counts alongside the existing frame measures for the geometry-shot harness.
 The shadow normal offset scales with one world-space shadow texel (minimum 0.05 m) to keep
 broad roofs free of self-shadow stripes.
 TASK-106: `src/render/vegetation.ts` is the shared pure placement module. Seeded per-source
@@ -1698,7 +1729,11 @@ at the lowest sampled ground under
 their footprint. Displayed ground is cut to that foundation inside the footprint, preserving
 courtyards, so elevation samples affected by roofs cannot protrude through the extrusion.
 Water stays level at its outline's lowest elevation, with the ground and
-overlapping ground fills cut away beneath it, preserving islands. Raised/tunnel junctions
+overlapping ground fills cut away beneath it, preserving islands. TASK-109 closes each
+excavated footprint in the ground itself: its floor plus vertical banks along every outer
+and inner ring. Bank tops split at terrain cell boundaries and fixed diagonals to meet the
+exact rendered surface. Banks survive the coloured-ground overlay, basemap and
+Buildings/Building details/Surroundings visibility switches. Raised/tunnel junctions
 retain level deck heights; ground junctions follow the terrain. Basemap meshes collapse
 the edge-clamped exterior into broad strips rather than tessellating outside the grid.
 Only asphalt above ground enters the terrain view's shadow pass. The draped backdrop uses
@@ -1945,6 +1980,16 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    nodes nor rows. The dedicated importer case exercises these tags and ZIP/JSON persistence.
    Building height (metres or feet) and building:levels, line width and integer layer are
    retained when valid. Place generation and every network byte stay unchanged.
+   TASK-109 also reads `roof:shape`, `roof:height`, `roof:levels`, `roof:colour`,
+   `roof:material`, `roof:orientation`, `roof:direction`, `building:colour`,
+   `building:material`, `min_height` and `building:min_level` on building ways and
+   multipolygons. Metres/feet use the existing dimension parser; clearance prefers
+   `min_height`, then minimum levels times 3 m, then 3 m for `building=roof`. Materials
+   trim and lowercase. Common colour names and three/six-digit hex normalize; unknown
+   colours drop. `quadruple_saltbox` maps to hipped, `saltbox` to gabled, other unknown
+   shapes to flat, with grouped mapping counts in `osm_unsupported_tag` diagnostics.
+   Roof metadata without a shape retains flat. Direction accepts degrees or compass
+   points and normalizes to [0, 360). Building parts remain excluded.
 10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
     counts of inferred lanes and speeds. The wizard shows them before the city is accepted.
     `osm_incomplete_way` (TASK-070): a drivable way that references nodes missing from the

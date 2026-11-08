@@ -26,7 +26,56 @@ export const shots: {
   terrain?: boolean;
   pitch?: number;
   bearing?: number;
+  buildings?: boolean;
+  details?: boolean;
 }[] = [
+  ...[true, false].flatMap((details) => [
+    {
+      id: `V109-munich-roofs${details ? '' : '-off'}`,
+      cases: [],
+      centre: [610, 425] as [number, number],
+      zoom: 4,
+      view: '3d' as const,
+      terrain: true,
+      pitch: 62,
+      bearing: 30,
+      details,
+    },
+    {
+      id: `V109-munich-overview${details ? '' : '-off'}`,
+      cases: [],
+      centre: [0, 0] as [number, number],
+      zoom: 0.55,
+      view: '3d' as const,
+      terrain: true,
+      pitch: 40,
+      bearing: 15,
+      details,
+    },
+  ]),
+  {
+    id: 'V109-sindelfingen-terrain',
+    cases: [],
+    centre: [515, 520],
+    zoom: 3,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+    view: '3d',
+    terrain: true,
+    pitch: 65,
+    bearing: 30,
+    buildings: false,
+  },
+  {
+    id: 'V109-sindelfingen-canopies',
+    cases: [],
+    centre: [615, 65],
+    zoom: 7,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+    view: '3d',
+    terrain: true,
+    pitch: 62,
+    bearing: 30,
+  },
   { id: 'V108-munich-exit', cases: [], centre: [0, -256], zoom: 10 },
   { id: 'V108-munich-arrows', cases: [], centre: [10, 170], zoom: 12 },
   {
@@ -502,6 +551,11 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         await button('Layers').click();
         const terrainToggle = layers.getByLabel('Terrain', { exact: true });
         if (await terrainToggle.count()) await terrainToggle.setChecked(shot.terrain ?? false);
+        if (in3d) {
+          await page.getByLabel('Buildings', { exact: true }).setChecked(shot.buildings ?? true);
+          const detailsToggle = layers.getByLabel('Building details', { exact: true });
+          if (await detailsToggle.count()) await detailsToggle.setChecked(shot.details ?? true);
+        }
         await button('Layers').click();
         const placed = in3d
           ? await page.evaluate(
@@ -559,6 +613,9 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
           ...timing,
           buildMs: await target.getAttribute('data-build-ms'),
           triangles: await target.getAttribute('data-triangles'),
+          contextBuildMs: await target.getAttribute('data-context-build-ms'),
+          buildingTriangles: await target.getAttribute('data-building-triangles'),
+          roofStats: await target.getAttribute('data-roof-stats'),
           gpu: in3d
             ? await target.evaluate((canvas: HTMLCanvasElement) => {
                 const gl = canvas.getContext('webgl2')!;

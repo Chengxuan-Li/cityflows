@@ -228,6 +228,38 @@ const contextFeature = z.discriminatedUnion('kind', [
     sub: z.string().optional(),
     heightM: z.number().positive().optional(),
     levels: z.number().positive().optional(),
+    roof: z
+      .object({
+        shape: z.enum([
+          'flat',
+          'gabled',
+          'hipped',
+          'pyramidal',
+          'skillion',
+          'mansard',
+          'gambrel',
+          'half-hipped',
+          'round',
+          'dome',
+          'onion',
+        ]),
+        heightM: nonnegative.optional(),
+        levels: nonnegative.optional(),
+        colour: z
+          .string()
+          .regex(/^#[0-9a-f]{6}$/)
+          .optional(),
+        material: z.string().optional(),
+        orientation: z.enum(['along', 'across']).optional(),
+        directionDeg: z.number().min(0).lt(360).optional(),
+      })
+      .optional(),
+    colour: z
+      .string()
+      .regex(/^#[0-9a-f]{6}$/)
+      .optional(),
+    material: z.string().optional(),
+    minHeightM: nonnegative.optional(),
   }),
   z.object({
     kind: z.literal('line'),

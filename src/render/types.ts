@@ -38,6 +38,7 @@ export interface RouteOverlay {
 }
 
 export interface LayerVisibility {
+  buildingDetails: boolean;
   terrain: boolean;
   shadows: boolean;
   roadClasses: boolean;
@@ -57,6 +58,7 @@ export interface LayerVisibility {
 }
 
 export const defaultLayers: LayerVisibility = {
+  buildingDetails: true,
   terrain: true,
   shadows: true,
   roadClasses: false,

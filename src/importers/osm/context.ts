@@ -5,7 +5,8 @@ import {
   polylineLength,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import type { ContextArea, ContextFeature, ContextLine } from '../../schema';
+import type { Diagnostic } from '../../network';
+import type { ContextArea, ContextFeature, ContextLine, RoofShape } from '../../schema';
 import { clip, polygonSources } from './buildings';
 import { clipPart, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
@@ -90,18 +91,164 @@ const area = (ring: Vec2[]) =>
     }, 0) / 2,
   );
 
-function measurement(value: string | undefined): number | undefined {
+function measurement(value: string | undefined, allowZero = false): number | undefined {
   if (!value) return;
   const match = /^\s*(\d+(?:\.\d+)?)\s*(m|ft|')?\s*$/.exec(value);
   if (!match) return;
   const n = Number(match[1]) * (match[2] === 'ft' || match[2] === "'" ? 0.3048 : 1);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
+  return Number.isFinite(n) && (n > 0 || (allowZero && n === 0)) ? n : undefined;
+}
+
+const roofShapes = new Set<RoofShape>([
+  'flat',
+  'gabled',
+  'hipped',
+  'pyramidal',
+  'skillion',
+  'mansard',
+  'gambrel',
+  'half-hipped',
+  'round',
+  'dome',
+  'onion',
+]);
+const namedColours: Record<string, string> = {
+  black: '#000000',
+  silver: '#c0c0c0',
+  gray: '#808080',
+  grey: '#808080',
+  white: '#ffffff',
+  maroon: '#800000',
+  red: '#ff0000',
+  purple: '#800080',
+  fuchsia: '#ff00ff',
+  green: '#008000',
+  lime: '#00ff00',
+  olive: '#808000',
+  yellow: '#ffff00',
+  navy: '#000080',
+  blue: '#0000ff',
+  teal: '#008080',
+  aqua: '#00ffff',
+  orange: '#ffa500',
+  brown: '#a52a2a',
+  beige: '#f5f5dc',
+  tan: '#d2b48c',
+  pink: '#ffc0cb',
+  gold: '#ffd700',
+  darkred: '#8b0000',
+  darkgreen: '#006400',
+  darkblue: '#00008b',
+  darkgray: '#a9a9a9',
+  darkgrey: '#a9a9a9',
+  lightgray: '#d3d3d3',
+  lightgrey: '#d3d3d3',
+  lightblue: '#add8e6',
+  lightgreen: '#90ee90',
+  lightyellow: '#ffffe0',
+  salmon: '#fa8072',
+  darksalmon: '#e9967a',
+  coral: '#ff7f50',
+  bisque: '#ffe4c4',
+  ivory: '#fffff0',
+  whitesmoke: '#f5f5f5',
+  gainsboro: '#dcdcdc',
+  chocolate: '#d2691e',
+  sienna: '#a0522d',
+  saddlebrown: '#8b4513',
+  firebrick: '#b22222',
+  rosybrown: '#bc8f8f',
+  slategray: '#708090',
+  slategrey: '#708090',
+};
+
+function colour(value: string | undefined): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return;
+  if (/^#[0-9a-f]{6}$/.test(normalized)) return normalized;
+  if (/^#[0-9a-f]{3}$/.test(normalized))
+    return '#' + [...normalized.slice(1)].map((c) => c + c).join('');
+  return Object.hasOwn(namedColours, normalized) ? namedColours[normalized] : undefined;
+}
+
+function nonnegativeMeasurement(value: string | undefined): number | undefined {
+  return measurement(value, true);
+}
+
+function direction(value: string | undefined): number | undefined {
+  if (!value?.trim()) return;
+  const compass = [
+    'N',
+    'NNE',
+    'NE',
+    'ENE',
+    'E',
+    'ESE',
+    'SE',
+    'SSE',
+    'S',
+    'SSW',
+    'SW',
+    'WSW',
+    'W',
+    'WNW',
+    'NW',
+    'NNW',
+  ];
+  const index = compass.indexOf(value.trim().toUpperCase());
+  if (index >= 0) return index * 22.5;
+  const degrees = Number(value);
+  return Number.isFinite(degrees) ? ((degrees % 360) + 360) % 360 : undefined;
+}
+
+function buildingDetails(
+  tag: OsmTags,
+  mappedShapes: Map<string, { shape: RoofShape; count: number }>,
+) {
+  const colourValue = colour(tag['building:colour']);
+  const material = tag['building:material']?.trim().toLowerCase();
+  const minLevel = nonnegativeMeasurement(tag['building:min_level']);
+  const minHeightM =
+    nonnegativeMeasurement(tag.min_height) ??
+    (minLevel !== undefined ? minLevel * 3 : tag.building === 'roof' ? 3 : undefined);
+  const rawShape = tag['roof:shape']?.trim().toLowerCase();
+  let shape: RoofShape = 'flat';
+  if (rawShape) {
+    if (roofShapes.has(rawShape as RoofShape)) shape = rawShape as RoofShape;
+    else {
+      shape =
+        rawShape === 'quadruple_saltbox' ? 'hipped' : rawShape === 'saltbox' ? 'gabled' : 'flat';
+      const previous = mappedShapes.get(rawShape);
+      mappedShapes.set(rawShape, { shape, count: (previous?.count ?? 0) + 1 });
+    }
+  }
+  const heightM = nonnegativeMeasurement(tag['roof:height']);
+  const levels = nonnegativeMeasurement(tag['roof:levels']);
+  const roofColour = colour(tag['roof:colour']);
+  const roofMaterial = tag['roof:material']?.trim().toLowerCase();
+  const orientation = tag['roof:orientation'];
+  const directionDeg = direction(tag['roof:direction']);
+  const details: Omit<NonNullable<Extract<ContextFeature, { kind: 'area' }>['roof']>, 'shape'> = {
+    ...(heightM !== undefined && { heightM }),
+    ...(levels !== undefined && { levels }),
+    ...(roofColour && { colour: roofColour }),
+    ...(roofMaterial && { material: roofMaterial }),
+    ...((orientation === 'along' || orientation === 'across') && { orientation }),
+    ...(directionDeg !== undefined && { directionDeg }),
+  };
+  return {
+    ...(rawShape || Object.keys(details).length ? { roof: { shape, ...details } } : {}),
+    ...(colourValue && { colour: colourValue }),
+    ...(material && { material }),
+    ...(minHeightM !== undefined && { minHeightM }),
+  };
 }
 
 export function importContext(
   data: OsmData,
   positions: Map<number, Vec2>,
   bounds: Bounds,
+  diagnostics: Diagnostic[] = [],
 ): ContextFeature[] {
   // Snap inward at the boundary: every serialized tenth of a metre remains in the bbox.
   const snapped: Bounds = {
@@ -113,6 +260,7 @@ export function importContext(
       .map((p) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 }))
       .filter((p, i, a) => !i || p.x !== a[i - 1]!.x || p.y !== a[i - 1]!.y);
   const features: ContextFeature[] = [];
+  const mappedShapes = new Map<string, { shape: RoofShape; count: number }>();
   for (const node of data.node) {
     if (node.tag.natural !== 'tree') continue;
     const p = positions.get(node.id);
@@ -181,6 +329,7 @@ export function importContext(
         ...(sub && { sub }),
         ...(heightM !== undefined && { heightM }),
         ...(levels !== undefined && { levels }),
+        ...(kind === 'building' && buildingDetails(tag, mappedShapes)),
       });
     }
   }
@@ -254,5 +403,12 @@ export function importContext(
     }
     flush();
   }
+  for (const [shape, mapped] of mappedShapes)
+    diagnostics.push({
+      severity: 'warning',
+      code: 'osm_unsupported_tag',
+      refs: [],
+      message: `Mapped ${mapped.count} building roofs from ${shape} to ${mapped.shape}`,
+    });
   return features;
 }
