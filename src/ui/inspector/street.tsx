@@ -1,7 +1,16 @@
 import { roadSchema, type City, type Road, type RoadClass } from '../../schema';
+import { vehicleClasses, type AccessValue } from '../../schema';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
 import { StreetTopologyActions } from '../tools/topology-actions';
+
+const accessLabels: Record<AccessValue, string> = {
+  yes: 'Open',
+  no: 'Closed',
+  destination: 'Local traffic only',
+  delivery: 'Deliveries only',
+  private: 'Private',
+};
 
 export function StreetInspector({ road, city, lane }: { road: Road; city: City; lane: number }) {
   const { commit } = useAppStore.getState();
@@ -39,6 +48,35 @@ export function StreetInspector({ road, city, lane }: { road: Road; city: City; 
     );
   }
 
+  function accessControl(key: 'all' | (typeof vehicleClasses)[number]) {
+    return (
+      <label className="edit-field" key={key}>
+        {key === 'all' ? 'Access' : `${key} access`}
+        <select
+          value={road.access?.[key] ?? ''}
+          onChange={(event) => {
+            const access = { ...road.access };
+            const value = event.currentTarget.value as AccessValue | '';
+            if (value) access[key] = value;
+            else delete access[key];
+            void commit({
+              kind: 'setRoadAccess',
+              roadId: road.id,
+              access: Object.keys(access).length ? access : null,
+            });
+          }}
+        >
+          <option value="">{key === 'all' ? 'Open (default)' : 'Use all vehicles rule'}</option>
+          {Object.entries(accessLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
   return (
     <>
       <h2>{road.name || `Street ${road.id}`}</h2>
@@ -49,6 +87,11 @@ export function StreetInspector({ road, city, lane }: { road: Road; city: City; 
       <details className="disclosure">
         <summary>Lanes and street settings</summary>
         <div className="edit-fields">
+          {accessControl('all')}
+          <details className="disclosure">
+            <summary>Vehicle classes</summary>
+            <div className="edit-fields">{vehicleClasses.map(accessControl)}</div>
+          </details>
           <label className="edit-field">
             Road class
             <select

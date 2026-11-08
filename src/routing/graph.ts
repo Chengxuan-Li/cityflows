@@ -1,6 +1,7 @@
 import type { CompiledCity } from '../network';
 import { isLaneDrop } from '../network/lane-drop';
 import type { VehicleClass } from '../schema';
+import { vehicleClasses } from '../schema';
 import { movementPenaltyS } from './costs';
 
 interface RoadEdge {
@@ -16,8 +17,12 @@ export interface RoadGraph {
 }
 
 function buildGraph(compiled: CompiledCity, vehicleClass: VehicleClass | null): RoadGraph {
+  const classIndex = vehicleClass === null ? -1 : vehicleClasses.indexOf(vehicleClass);
   const allowed = compiled.lanes.map(
-    (lane) => vehicleClass === null || lane.allowed.includes(vehicleClass),
+    (lane) =>
+      vehicleClass === null ||
+      (lane.allowed.includes(vehicleClass) &&
+        compiled.roads[lane.road]!.access[classIndex] !== 'no'),
   );
   const outgoing = compiled.lanes.map((): number[] => []);
   const penalties = new Float64Array(compiled.movements.length);

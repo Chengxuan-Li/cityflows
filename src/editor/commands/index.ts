@@ -21,6 +21,7 @@ export function dispatch(city: City, command: Command): CommandPatch {
       return editRamp(city, command);
     case 'setRoadLanes':
     case 'setRoadAttributes':
+    case 'setRoadAccess':
     case 'reverseRoad':
     case 'setStreetDirection':
     case 'setCrossing':

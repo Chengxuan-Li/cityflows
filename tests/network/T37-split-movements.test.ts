@@ -196,24 +196,27 @@ cityTest(
 // and turns between a corridor's two carriageways are u-turns, not lefts.
 test.each(
   tierCities([
-    ['Munich', 70, 161, 1, 1340],
+    ['Munich', 72, 166, 1, 1356], // TASK-101: retained access boundaries and final signal geometry.
     // TASK-087: Sindelfingen's n:580 becomes a continuation node (r:585/r:586 runs on into the
     // unnamed pair r:582/r:583, now side by side): its two lined-up pairs are added, r:586>r:582
     // is classified through, and the turn r:583#0>r:582#0 between the pair's carriageways goes.
     // TASK-089: unchanged (the network keeps every movement where it splits converging nodes).
-    ['Sindelfingen', 49, 96, 0, 1123],
+    // TASK-101 retains the junctions beside short access boundaries.
+    ['Sindelfingen', 59, 116, 0, 1174],
   ] as const),
 )(
   'T37: %s gives every lined-up trunk and branch lane a movement unless banned',
   (name, nodeCount, pairCount, bannedCount, movementCount) => {
     const { city, net } = load(name);
     const { nodes, pairs } = linedUp(city, net);
-    expect(nodes).toHaveLength(nodeCount);
-    expect(pairs).toHaveLength(pairCount);
+    expect([
+      nodes.length,
+      pairs.length,
+      pairs.filter((p) => p.banned).length,
+      net.movements.length,
+    ]).toEqual([nodeCount, pairCount, bannedCount, movementCount]);
     expect(pairs.filter((p) => !p.movement && !p.banned).map((p) => p.id)).toEqual([]);
-    expect(pairs.filter((p) => p.banned)).toHaveLength(bannedCount);
     expect(pairs.filter((p) => p.movement && !continuing(p.movement))).toEqual([]);
-    expect(net.movements).toHaveLength(movementCount);
   },
   60_000,
 );

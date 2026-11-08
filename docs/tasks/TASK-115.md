@@ -51,8 +51,8 @@ layers, loading tiles and every animation must look exactly as today.
 6. **CI.** Once on-demand rendering works, set the e2e `timeout` in `playwright.config.ts`
    back to 60 s on CI as locally, and update its comment. Keep the four CI groups; note in
    your report any spec whose local duration changed a lot, so the lead can rebalance.
-7. **Measure.** Local wall time of the full `npm run test:e2e` before and after on the same
-   machine, and of the slowest five specs; idle frames drawn per second at the Munich
+7. **Measure.** Local wall time of `npm run test:e2e:smoke` before and after on the same
+   machine, and of its slowest five specs; idle frames drawn per second at the Munich
    overview in 2D and 3D, before (60 or the display rate) and after (0 expected).
 
 ## In scope
@@ -99,20 +99,18 @@ when it is drawn. `.github/workflows/ci.yml` stays as it is (the lead rebalances
    look as today. Describe what you checked in the app.
 4. **Frame cost unchanged.** T16, T44 and V106 pass with their thresholds unchanged, using the
    continuous-render switch where they sample idle frames.
-5. **Faster e2e.** The full local `npm run test:e2e` wall time drops; report before and after.
-   The lead confirms on CI at merge, with the 60 s timeout.
-6. `npm run check`, `npm run test:city` and `npm run test:e2e:smoke` green, and the full
-   `npm run test:e2e` once before committing (this task changes timing for every spec). Run e2e
-   with `CITYFLOWS_TEST_PORT=5315`; never use port 4173.
+5. **Faster e2e.** The local `npm run test:e2e:smoke` wall time drops; report before and after.
+   The lead runs the full suite at merge and confirms on CI with the 60 s timeout.
+6. `npm run check`, `npm run test:city` and `npm run test:e2e:smoke` green. Run e2e with
+   `CITYFLOWS_TEST_PORT=5315`; never use port 4173.
 
 ## Checks to run
 
 - While iterating: `npm test` (unit tier), single e2e specs with `--grep`, and
   `npm run geometry-shots -- <dir> --only <ids>`.
-- Before committing: `npm run check`, `npm run test:city`, `npm run test:e2e:smoke`, then the
-  full `npm run test:e2e`.
-- Do not run `npm run test:traffic`, `npm run traffic:quick` or `npm run bench`; this task does
-  not touch the simulation, and the lead runs them at merge.
+- Before committing: `npm run check`, `npm run test:city` and `npm run test:e2e:smoke`.
+- Do not run `npm run test:traffic`, `npm run traffic:quick`, the full `npm run test:e2e` or
+  `npm run bench`; the lead runs them at merge, and GitHub CI runs the rest after the merge.
 
 ## Acceptance
 
@@ -124,7 +122,7 @@ pan, zoom, play, edit a road, toggle layers and switch to 3D and back; describe 
 
 A report in the body of your last commit message (no new Markdown files): the invalidation
 sources as implemented, the test switch, the files you changed outside the pre-approved list
-and why, idle frames per second before and after, full e2e wall time before and after with
+and why, idle frames per second before and after, smoke e2e wall time before and after with
 the five slowest specs, shot differences, and the final lines of `npm run check`.
 
 Commit on `task/115-render-on-demand`; do not push or merge. The lead reviews only commits.

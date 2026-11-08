@@ -315,6 +315,7 @@ export function MapView() {
         loading3D = true;
         try {
           const { Scene3D } = await import('../render3d/scene');
+          // The frame loop passes the terrain layer with the first setCity (TASK-115).
           if (!signal.aborted) three = new Scene3D(canvas3D);
         } catch (error) {
           if (!signal.aborted) {
@@ -356,7 +357,7 @@ export function MapView() {
         const snapshot = await session.engine.snapshot();
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
-        if (snapshot.roadSpeedRatio) {
+        if (snapshot.timeS !== snapshotTime && snapshot.roadSpeedRatio) {
           const ratios = snapshot.roadSpeedRatio;
           view.setHeat(
             session.compiled === session.loadedCompiled
@@ -465,11 +466,10 @@ export function MapView() {
           }
           active3D = want3D;
           view.setActive(!active3D);
-          canvas.dataset.ticker = active3D ? 'stopped' : 'running';
           snapshotTime = NaN;
         }
         if (active3D && drawn3D?.compiled !== session.compiled) {
-          three!.setCity(session.compiled, session.project.city);
+          three!.setCity(session.compiled, session.project.city, layers.terrain);
           drawn3D = session;
           snapshotTime = NaN;
         }
@@ -524,7 +524,7 @@ export function MapView() {
         const run = getState().run;
         snapshotAgeS = run?.status === 'playing' ? snapshotAgeS + elapsedS * run.speed : 0;
         if (active3D) three!.render(snapshotAgeS, run?.timeS ?? 0);
-        else view.animateVehicles(snapshotAgeS);
+        else view.animateVehicles(snapshotAgeS, run?.status === 'playing');
         if (pulling || failed === session) return;
         pulling = true;
         void pull(session)

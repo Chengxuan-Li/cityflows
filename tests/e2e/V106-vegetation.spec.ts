@@ -4,7 +4,8 @@ import { button, city, importOsm, pageErrors } from './helpers';
 import { placeCamera } from '../../bench/geometry-shots';
 
 async function timing(page: Page) {
-  return page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
+    window.cityflowsRenderContinuously = true;
     const frames: number[] = [],
       renders: number[] = [];
     let capture = false;
@@ -23,9 +24,17 @@ async function timing(page: Page) {
       last = now;
     }
     observer.disconnect();
+    window.cityflowsRenderContinuously = false;
     const mean = (samples: number[]) => samples.reduce((sum, n) => sum + n, 0) / samples.length;
-    return { frameMs: mean(frames), renderMs: mean(renders), samples: frames.length };
+    return {
+      frameMs: mean(frames),
+      renderMs: mean(renders),
+      samples: frames.length,
+      drawn: renders.length,
+    };
   });
+  expect(result.drawn).toBeGreaterThan(0);
+  return result;
 }
 
 test('@smoke V106 tree layers share placement in both views and stay within the frame allowance', async ({

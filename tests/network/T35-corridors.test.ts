@@ -168,7 +168,15 @@ test.each(tierCities(auditCities))(
     // now pushed apart side by side with a 0.5 m median; the median eases in over r:585's taper,
     // parting its two directions by 4 cm 11 m from the node.
     const parting = gaps
-      .filter((g) => g.maxM >= 0.02 && g.roads !== 'r:585/r:586')
+      .filter((g) => {
+        // TASK-101 keeps way 332200797 (14.59 m) before the private divided pair at n:581.
+        // Its two-way link parts by 0.245 m while approaching the pair's 0.5 m median.
+        if (name === 'sindelfingen' && g.roads === 'r:592/r:593') {
+          expect(g.maxM).toBeLessThanOrEqual(0.246);
+          return false;
+        }
+        return g.maxM >= 0.02 && g.roads !== 'r:585/r:586';
+      })
       .map((g) => `${g.roads} ${g.maxM}`);
     expect(parting).toEqual([]);
     console.info(

@@ -59,7 +59,7 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   await button(page, '3D').click();
   await expect(map3D).toHaveAttribute('data-view', '3d');
   await expect.poll(() => map3D.getAttribute('data-meshes').then(Number)).toBeGreaterThan(0);
-  await expect(map).toHaveAttribute('data-ticker', 'stopped');
+  await expect(map).toHaveAttribute('data-active', 'false');
   await expect.poll(() => map3D.getAttribute('data-tiles').then(Number)).toBeGreaterThan(0);
   await expect.poll(() => map3D.getAttribute('data-crossings').then(Number)).toBeGreaterThan(0);
   const buildings = page.getByLabel('Buildings', { exact: true });
@@ -152,7 +152,7 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
     return view;
   });
   await expect(map).toBeVisible();
-  await expect(map).toHaveAttribute('data-ticker', 'running');
+  await expect(map).toHaveAttribute('data-active', 'true');
   await expect(button(page, 'Road')).toBeEnabled();
   const screen = await page.evaluate(
     (point) => window.cityflows!.worldToScreen!(point),

@@ -38,14 +38,21 @@ export function patchChanges(before: CompiledCity, after: CompiledCity) {
       changedNodes.add(node.idx);
   }
   const changedRoads = new Set<number>();
+  const accessChangedRoads = new Set<number>();
   for (const road of before.roads) {
     const next = roads[road.idx]!;
     const replacement = after.roads[next];
+    const accessChanged =
+      replacement &&
+      (road.access.some((rule, kind) => rule !== replacement.access[kind]) ||
+        road.zone.some((zone, kind) => zone !== replacement.zone[kind]));
+    if (accessChanged) accessChangedRoads.add(road.idx);
     if (
       !replacement ||
       changedNodes.has(replacement.from) ||
       changedNodes.has(replacement.to) ||
       road.speedLimitMps !== replacement.speedLimitMps ||
+      accessChanged ||
       road.lanes.length !== replacement.lanes.length ||
       road.lanes.some((idx, i) => {
         const a = before.lanes[idx]!;
@@ -63,7 +70,7 @@ export function patchChanges(before: CompiledCity, after: CompiledCity) {
     )
       changedRoads.add(road.idx);
   }
-  return { lanes, movements, roads, connectors, changedNodes, changedRoads };
+  return { lanes, movements, roads, connectors, changedNodes, changedRoads, accessChangedRoads };
 }
 
 export type PatchChanges = ReturnType<typeof patchChanges>;

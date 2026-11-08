@@ -127,6 +127,17 @@ export async function runMorning(page: Page) {
 
 /** Draws the one-way two-lane expressway across the grid and its two ramps (demo C). */
 export async function buildBypass(page: Page) {
+  const ramps = () =>
+    city(page).then(
+      (source) => Object.values(source.roads).filter((r) => r.roadClass === 'ramp').length,
+    );
+  const drawn = () =>
+    page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
   await button(page, 'Road').click();
   await page.getByLabel('Two-way').uncheck();
   await page.getByRole('combobox', { name: 'Class', exact: true }).selectOption('motorway');
@@ -135,14 +146,19 @@ export async function buildBypass(page: Page) {
   await clickGrid(page, 450, 330);
   await page.keyboard.press('Enter');
   await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
+  await drawn();
   await button(page, 'Ramp').click();
   await clickGrid(page, 60, 1.5);
   const hover = await gridPoint(page, 180, 60);
   await page.mouse.move(hover.x, hover.y);
   await page.keyboard.press('Enter');
+  await expect.poll(ramps).toBe(1);
+  await expect(button(page, 'Ramp')).toBeEnabled();
+  await drawn();
   await clickGrid(page, 360, 240);
   // Leave 60 m for the taper and 50 m to change lanes before the grid's next lane drop.
   await clickGrid(page, 478.5, 250);
+  await expect.poll(ramps).toBe(2);
   await button(page, 'Select').click();
 }
 
@@ -153,10 +169,18 @@ export async function writeMetrics(info: TestInfo, data: unknown) {
   await info.attach('metrics', { body, contentType: 'application/json' });
 }
 
-export async function importOsm(page: Page, path: string) {
+export async function importOsm(
+  page: Page,
+  path: string,
+  options: { surroundings?: boolean; terrain?: boolean } = {},
+) {
   await button(page, 'Import').click();
   const dialog = page.getByRole('dialog', { name: 'Import city' });
   await dialog.getByLabel('OSM file').setInputFiles(path);
+  if (options.surroundings !== undefined)
+    await dialog.getByLabel('Include surroundings').setChecked(options.surroundings);
+  if (options.terrain !== undefined)
+    await dialog.getByLabel('Include terrain').setChecked(options.terrain);
   await button(page, 'Import roads').click();
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     '0 errors',

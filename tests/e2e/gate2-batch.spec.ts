@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { city } from './helpers';
 
 async function point(page: Page, x: number, y: number) {
   const bounds = (await page.getByLabel('City map').boundingBox())!;
@@ -123,6 +124,14 @@ test('mixed fields preserve untouched values, and lanes, class and direction com
   await page.getByLabel('Road class').selectOption('primary');
   await page.getByLabel('Lanes in this direction').fill('3');
   await page.getByLabel('Lanes in this direction').press('Enter');
+  // The map takes clicks once its frame loop has drawn the recompiled city (TASK-115 made
+  // clicks fast enough to land before that frame).
+  await expect
+    .poll(async () => Object.values((await city(page)).roads).some((r) => r.lanes.length === 3))
+    .toBe(true);
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
   const second = await point(page, 180, 0);
   await page.keyboard.down('Shift');
   await page.mouse.click(second.x, second.y);

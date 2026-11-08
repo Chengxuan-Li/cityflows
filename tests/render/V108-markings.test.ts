@@ -26,22 +26,24 @@ import { tierCities, unitTest } from '../tier';
 
 // Compile hashes captured at 56ffccd (main) before the renderer changes, then updated at the
 // TASK-100 merge: its lanes also allow `van`; with `van` removed they hash as at 56ffccd.
+// TASK-101 merge: compiled roads carry access and zones (all four), and access boundaries keep
+// junctions in Munich and Sindelfingen, which moves their arrows; grid and town arrows are equal.
 const baseline = {
   grid: {
-    compile: '395992b0260d4620048866aae894f860231137f54668fe47e04aa5eefc647342',
+    compile: 'fcf4d931bbc66167737ec54391d801caf214ade75bb9b20f557d53aebc6745dc',
     arrows: '46a5ce9adeddd011af72c58a0c8ef9e9b315ad7f732ebfa71b2cff6c2d531748',
   },
   town: {
-    compile: '2381f5c2443cba6def37b680b1c8be6b2d7a250eca332706d91c7fafecab24c0',
+    compile: '80464e2043f772549c4cd990c689d3aa9884c905316334a946205deb7190a5f5',
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: 'b8f36d61b223798eee37a146acf0d7734d6817cc0097b44cc4b5be994f6b0fcc',
-    arrows: '3ed3ead902ca594a2396c539f951d21f416a98011b29e79448932f020300a519',
+    compile: 'c7efb7a2063a40577c197b7cdeaf12b26d1316c4e960a63e59b25ba643b054e9',
+    arrows: '01dc4f7e491f7a406b9d1830d493b82d6f92a5d18831ea143789d7d9d1e747d5',
   },
   munich: {
-    compile: '45d1ca0b196c8f13cab99a99e4a7bda495f72b3477dab4ab6b2f8cc61a8df3cc',
-    arrows: 'e5c698a8c5686411555e695c390f8500d57191a06df3ebe59393df980d02a7f7',
+    compile: '7f698e83dc854b18fa99c5c21a9758cf490207a964c92b94590f3ced7ad45da3',
+    arrows: 'e701bfb8559e34f7f97e3a001dc3ad4e9d93e8f6ea6cf24af2e2e8ce46c17af1',
   },
 } as const;
 const hash = (value: unknown) =>

@@ -5,6 +5,9 @@ const nodeId = z.string().regex(/^n:\d+$/);
 const roadId = z.string().regex(/^r:\d+$/);
 const placeId = z.string().regex(/^p:\d+$/);
 const connectorId = z.string().regex(/^c:\d+$/);
+const parkingId = z.string().regex(/^pk:\d+$/);
+const walkNodeId = z.string().regex(/^wn:\d+$/);
+const walkLinkId = z.string().regex(/^wl:\d+$/);
 const count = z.int().nonnegative();
 const nonnegative = z.number().nonnegative();
 const vec2 = z.object({ x: z.number(), y: z.number() });
@@ -86,10 +89,22 @@ export const roadSchema = z.object({
     'ramp',
   ]),
   speedLimitMps: z.number().positive(),
+  access: z
+    .partialRecord(
+      z.enum(['all', ...vehicleClasses]),
+      z.enum(['yes', 'no', 'destination', 'delivery', 'private']),
+    )
+    .optional(),
   name: z.string().nullable(),
   streetGroupId: z.string().nullable(),
   corridorId: z.string().nullable().optional(),
   crossings: z.object({ start: z.boolean().optional(), end: z.boolean().optional() }).optional(),
+  sidewalk: z
+    .object({
+      left: z.enum(['yes', 'no', 'separate']).optional(),
+      right: z.enum(['yes', 'no', 'separate']).optional(),
+    })
+    .optional(),
   provenance,
 });
 
@@ -264,6 +279,60 @@ const contextFeature = z.discriminatedUnion('kind', [
   }),
 ]);
 
+const parkingFacility = z.object({
+  id: parkingId,
+  kind: z.enum(['garage', 'roadside', 'lot']),
+  name: z.string().nullable(),
+  capacity: count,
+  access: z.enum(['public', 'private', 'customers']),
+  placeId: placeId.nullable(),
+  connectors: z.array(connectorSchema),
+  shape: z
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('point'), pos: vec2 }),
+      z.object({ kind: z.literal('polygon'), ring: z.array(vec2).min(3) }),
+    ])
+    .nullable(),
+  strip: z
+    .object({
+      roadId,
+      side: z.enum(['left', 'right']),
+      fromM: nonnegative,
+      toM: nonnegative,
+      layout: z.enum(['parallel', 'angled', 'perpendicular']),
+    })
+    .refine((strip) => strip.toM > strip.fromM, 'A parking strip must have positive length')
+    .optional(),
+  aisles: z.array(roadId).optional(),
+  occupancyAtStart: z.number().min(0).max(1).optional(),
+  provenance,
+});
+
+const walkNetwork = z.object({
+  nodes: z.record(
+    walkNodeId,
+    z.object({
+      id: walkNodeId,
+      pos: vec2,
+      layer: z.int(),
+      entrance: z.object({ placeId: placeId.nullable() }).optional(),
+      provenance,
+    }),
+  ),
+  links: z.record(
+    walkLinkId,
+    z.object({
+      id: walkLinkId,
+      from: walkNodeId,
+      to: walkNodeId,
+      line: z.array(vec2).min(2),
+      kind: z.enum(['footway', 'pedestrian', 'path', 'steps', 'living_street', 'crossing']),
+      widthM: z.number().positive().nullable(),
+      provenance,
+    }),
+  ),
+});
+
 const cityFields = {
   version: count,
   name: z.string(),
@@ -273,6 +342,8 @@ const cityFields = {
   roads: z.record(roadId, roadSchema),
   places: z.record(placeId, placeSchema),
   context: z.object({ features: z.array(contextFeature) }).optional(),
+  parking: z.record(parkingId, parkingFacility).optional(),
+  walk: walkNetwork.optional(),
   terrain: z
     .object({
       source: z.string().min(1),
@@ -293,13 +364,24 @@ const cityFields = {
   nextId: count,
 };
 
-function matchEntityIds(city: Pick<City, 'nodes' | 'roads' | 'places'>, context: z.RefinementCtx) {
-  for (const key of ['nodes', 'roads', 'places'] as const) {
-    for (const [id, entity] of Object.entries(city[key])) {
+function matchEntityIds(
+  city: Pick<City, 'nodes' | 'roads' | 'places' | 'parking' | 'walk'>,
+  context: z.RefinementCtx,
+) {
+  const records: [string[], Record<string, { id: string }>][] = [
+    [['nodes'], city.nodes],
+    [['roads'], city.roads],
+    [['places'], city.places],
+    [['parking'], city.parking ?? {}],
+    [['walk', 'nodes'], city.walk?.nodes ?? {}],
+    [['walk', 'links'], city.walk?.links ?? {}],
+  ];
+  for (const [path, record] of records) {
+    for (const [id, entity] of Object.entries(record)) {
       if (id !== entity.id)
         context.addIssue({
           code: 'custom',
-          path: [key, id, 'id'],
+          path: [...path, id, 'id'],
           message: 'Record key must match entity id',
         });
     }

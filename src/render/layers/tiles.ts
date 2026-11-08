@@ -51,7 +51,16 @@ export class Tiles {
     this.container.destroy();
   }
 
-  update(camera: Camera, width: number, height: number, deltaMs: number): void {
+  get needsUpdate(): boolean {
+    return (
+      this.dirty ||
+      this.container.children.some((sprite) => sprite.alpha < 1) ||
+      (this.retryAt > 0 && performance.now() >= this.retryAt)
+    );
+  }
+
+  update(camera: Camera, width: number, height: number, deltaMs: number): boolean {
+    let changed = false;
     const z = Math.min(
       maxZoom,
       Math.max(0, Math.round(Math.log2((this.worldSize * camera.zoom) / tilePixels))),
@@ -71,13 +80,21 @@ export class Tiles {
     }
 
     if (this.dirty || view !== this.view) {
+      const previous = this.container.children.slice();
       this.view = view;
       this.dirty = false;
       this.reconcile(z, size, left, top, right, bottom);
+      changed =
+        previous.length !== this.container.children.length ||
+        previous.some((sprite, i) => sprite !== this.container.children[i]);
     }
     for (const sprite of this.container.children) {
-      if (sprite.alpha < 1) sprite.alpha = Math.min(1, sprite.alpha + deltaMs / fadeMs);
+      if (sprite.alpha < 1) {
+        changed = true;
+        sprite.alpha = Math.min(1, sprite.alpha + deltaMs / fadeMs);
+      }
     }
+    return changed;
   }
 
   private reconcile(

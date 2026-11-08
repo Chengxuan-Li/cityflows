@@ -314,8 +314,13 @@ function pushable(
   // by the network, lined up with the pushed pair (TASK-089 `convergingShifts`).
   // As the network decides (`convergingShifts`): not where a block would move toward another road
   // end within 60 degrees beside it.
-  const crowded = (members: Road[], node: string) =>
-    members.some((m) => {
+  const crowded = (members: Road[], node: string) => {
+    const headings = members.map((road) => outward(road, node));
+    const axis = Math.atan2(
+      headings.reduce((sum, h) => sum + Math.sin(h), 0),
+      headings.reduce((sum, h) => sum + Math.cos(h), 0),
+    );
+    return members.some((m) => {
       const heading = outward(m, node);
       // The side the block moves to: its travel right.
       const toward = heading + (side * (m.to === node ? -1 : 1) * Math.PI) / 2;
@@ -323,10 +328,11 @@ function pushable(
         ({ road: e }) =>
           !members.includes(e) &&
           (e.from === node || e.to === node) &&
-          Math.cos(outward(e, node) - heading) > Math.cos(Math.PI / 3) &&
+          Math.cos(outward(e, node) - axis) > Math.cos(Math.PI / 3) &&
           Math.cos(outward(e, node) - toward) > 0,
       );
     });
+  };
   const converging = (other: Road, node: string, pair: [OsmRoad, OsmRoad]) =>
     roads.some(
       ({ road: partner }) =>
@@ -390,6 +396,7 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
   const pushed = pushable(city, roads, pairs);
   for (const pair of pairs) {
     const [a, b] = pair;
+    if (ATTACHED[a.road.corridorId!]) continue;
     if (!pushed.has(a.road)) continue;
     for (const { road } of pair) road.corridorId ??= deferredCorridor.get(road) ?? null;
     const shares = [a, b].map(({ road }) => halfBlock(road) + MEDIAN_M / 2);

@@ -127,12 +127,18 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-097](tasks/TASK-097.md) | 6 | Shadows, deck edges, tunnel style and see-through under decks for grade separation | `src/render/layers/shadows.ts`, `scene.ts`, `style.ts`, Layers, shot cameras | 090 | unit, e2e smoke | done |
 | [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | done |
 | [TASK-100](tasks/TASK-100.md) | 7 | Vehicle classes: car, van, truck and bus, each with its own size and driving | `src/schema` (class, version 3), `src/sim/**`, `src/demand/**`, `src/host/**`, vehicle layers 2D and 3D, vehicle inspector | 090 | T46, traffic quick | done |
-| [TASK-101](tasks/TASK-101.md) | 7 | Restricted road access: closed roads, local-traffic zones, delivery and bus lanes | `Road.access` (schema), `compile.ts`, `src/routing/**`, access tags in `roads.ts`, `src/editor`, street inspector | 090 | T47, traffic quick | todo |
+| [TASK-101](tasks/TASK-101.md) | 7 | Restricted road access: closed roads, local-traffic zones, delivery and bus lanes | `Road.access` (schema), `compile.ts`, `src/routing/**`, access tags in `roads.ts`, `src/editor`, street inspector | 090 | T47, traffic quick | done |
 | [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | done |
 | [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | done |
 | [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
 | [TASK-109](tasks/TASK-109.md) | 8 | Building details: terrain footprints closed, roof shapes, colours, window bands | building fields of `ContextFeature` (schema), building tags in `context.ts`, `render3d/context.ts`, `terrain.ts` (footprint closure), new `render3d/roofs.ts`, Building details layer | 096, 098, 105 | V109, 3D shots | todo |
-| [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | todo |
+| [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | done |
+| [TASK-102](tasks/TASK-102.md) | 7 | Parking model and garages: facilities, choice on arrival, cruising, departures from where parked | `City.parking` refinements, new `importers/osm/parking.ts`, facility compile, new `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, demand, snapshot, facility inspector and occupancy layer | 100, 101, Phase 2 formats | T48, traffic quick | todo |
+| [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | todo |
+| [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | todo |
+| [TASK-110](tasks/TASK-110.md) | 9 | Pedestrian network: footways, sidewalks, crossings, entrances, walk routing, walk layers | `City.walk` and `Road.sidewalk` refinements, new `importers/osm/walk.ts`, new `src/network/walk.ts`, new `src/routing/walk.ts`, walk layers 2D and 3D | 091, 094, 096, Phase 2 formats | T50, shots | todo |
+| [TASK-114](tasks/TASK-114.md) | 8 | US and UK marking themes, chosen per project, default by country | `City.markingTheme` (schema), theme table in `style.ts`, `marking-geometry.ts`, country detection, marking style setting | 108 | V114, shots | todo |
+| [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -832,11 +838,11 @@ model and the reasoning effort.
 
 | Phase | Tasks in parallel | Depends on | Estimate |
 | --- | --- | --- | --- |
-| 0 | Lead: Phase 1 contracts and branches; during Phase 1, the shared formats for Phase 2 on `main` (`ParkingFacility`, the walk network types) | - | half a day |
+| 0 | Lead: Phase 1 contracts and branches; the shared formats for Phase 2 on `main` (`ParkingFacility`, the walk network types; done 2026-11-08) | - | half a day |
 | 1 | TASK-100, TASK-101, TASK-105, TASK-106, TASK-108 | - | 1 to 1.5 days |
-| 2 | TASK-102, TASK-104, TASK-110, TASK-109, TASK-115 | 100 (102), 105 (109), the Phase 0 formats; 102, 104 and 110 start after 101 is on `main` | 1 to 1.5 days |
-| 3 | TASK-103, TASK-111, TASK-107 | 102 and 104 (103), 110 (111, 107), 101 (107) | 1.5 to 2 days |
-| 4 | TASK-112, TASK-114 | 103, 110, 111 (112); 108 (114) | 2 to 3 days |
+| 2 | TASK-102, TASK-104, TASK-107, TASK-109, TASK-110, TASK-114, TASK-115, TASK-116 | 100 and 101 (102, 104, 107), 105 (109), 106 and 108 (107, 114), the Phase 0 formats | 1.5 to 2 days |
+| 3 | TASK-103, TASK-111 | 102 and 104 (103), 110 (111) | 1.5 to 2 days |
+| 4 | TASK-112 | 103, 110, 111 | 2 to 3 days |
 | 5 | TASK-113 | 112 | half to 1 day |
 
 Phase 3 runs two simulation tasks at once, on disjoint files: TASK-103 owns `parking.ts`,
@@ -854,19 +860,41 @@ Agents and ports for Phase 1 (the lead's suggestion; the owner decides):
 | TASK-106 | Codex | GPT-6.1 Terra | high | 5306 |
 | TASK-108 | Codex | GPT-6.1-Sol | high | 5308 |
 
-Phase 2 (lead, 2026-11-08). TASK-109 and TASK-115 share no files with TASK-101 and start
-first, on `task/109-building-details` and `task/115-render-on-demand`. TASK-109 opens with
-TASK-105's open footprint pits (Buildings off on a slope shows the background). TASK-115 is
-the owner's fix for the idle redraw that slows CI (review log, 2026-11-07). TASK-102, TASK-104
-and TASK-110 share the schema, importer and routing with TASK-101, so their contracts and
-branches follow 101's merge and the lead's parking and walk formats. Shared between 109 and
-115: `src/render3d/scene.ts` and `src/ui/map-view.tsx` (109 adds a toggle and setter, 115 adds
-invalidation calls); the lead reconciles. Merge order: 115, then 109.
+Phase 2 (lead, 2026-11-08). TASK-109 and TASK-115 started first, before TASK-101 merged;
+TASK-102, TASK-104, TASK-107, TASK-110, TASK-114 and TASK-116 follow on branches cut from `main`
+after TASK-101 and the lead's Phase 2 formats (`City.parking`, `City.walk`, `Road.sidewalk`).
+The owner added TASK-114 (low priority) to this batch. TASK-107 no longer waits for TASK-110:
+its sidewalks moved to TASK-110, and lamps, curbs, signs and `BUS` text depend only on 101, 106
+and 108. TASK-116 generalises TASK-101's lane-option fix to every route (review log,
+2026-11-08).
+
+Checks for Phase 2 agents (owner, 2026-11-08): `npm run check`, `npm run test:city` and
+`npm run test:e2e:smoke`, plus `npm run traffic:quick` for tasks that move traffic (102, 104,
+116). Agents do not run the full e2e suite, `npm run test:traffic` or the benchmarks; the lead
+runs them at merge and GitHub CI runs the rest after it.
+
+Shared files, reconciled by the lead at merge: `src/schema/city.ts` and `city.schema.ts` (102
+and 104 parking, 110 walk, 107 `street_lamp`, 109 roof fields, 114 `markingTheme`),
+`src/importers/overpass.ts` (102, 104, 107, 110), `src/importers/osm/index.ts` (102, 104, 110,
+114), `src/importers/osm/context.ts` (104, 107, 109), `src/network/compile.ts` and `types.ts`
+(102, 104, 110), `src/sim/engine.ts` (102, 116), `src/render/marking-geometry.ts` and
+`style.ts` (104, 107, 109, 114), the scenes, `src/ui/map-view.tsx`, `layers.tsx`, `store.ts` and
+`docs/architecture.md` (most tasks). Once TASK-115 is on `main`, every new layer or setter must
+request a frame through its invalidation rule; the lead adds the calls when merging a task
+written before it. Merge order: as tasks are delivered, with 115 before the other renderer
+tasks and 116 before 102 when both are ready. Tasks that move trip counts (102, 104, 116) reset
+the traffic baseline at their merge (owner rule 7).
 
 | Task | Harness | Model | Effort | e2e port |
 | --- | --- | --- | --- | --- |
+| TASK-102 | Codex | GPT-6.1-Sol | xhigh | 5302 |
+| TASK-104 | Codex | GPT-6.1 Terra | high | 5304 |
+| TASK-107 | Codex | GPT-6.1 Terra | high | 5307 |
 | TASK-109 | Codex | GPT-6.1-Sol | high | 5309 |
+| TASK-110 | Codex | GPT-6.1-Sol | high | 5310 |
+| TASK-114 | Codex | GPT-6-Luna | high | 5314 |
 | TASK-115 | Codex | GPT-6.1 Terra | high | 5315 |
+| TASK-116 | Codex | GPT-6.1-Sol | high | 5316 |
 
 Phase 1 shared files, reconciled by the lead at merge: `src/schema/city.ts` and
 `city.schema.ts` (100 the class and version 3, 101 `Road.access`, 105 `City.terrain`, 106
@@ -2141,6 +2169,39 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   about 1.25 s, because the 2D scene redraws every frame even when idle and CI's software GPU
   needs about 0.4 s a frame on a slow runner; the test ran out of its 60 s. CI cases now get
   120 s; rendering the 2D scene only on change is the real fix (follow-up).
+
+- 2026-11-08, TASK-101 merged after the agent's second round (Codex, from
+  `task/101-merge-main`). Cause of the mixed-fleet jam: the lane search records one target lane
+  per road with an arbitrary timing for equal-cost changes, and the simulation treats it as
+  compulsory, so a driver could not pass a queue in another legal lane; queues at the reserved
+  Trappentreustrasse approaches (`r:674`, `r:737`, `r:1299`) and Landsberger Strasse (`r:968`)
+  spilled back through Donnersberger. Fix in `src/sim/engine.ts`: a route that crosses a lane
+  its class may not use takes `resolveLanes`' feasible sets on the same roads and movements;
+  other routes keep singleton targets (T46 unchanged); regression
+  `tests/sim/route-lane-options.test.ts`. Also: `map-view.tsx` sets the 3D scene's terrain flag
+  before its first city (V105's first-3D readiness), and T47 imports without surroundings and
+  terrain. Access rules, shares and gates unchanged. Lead verification on main plus 101: check
+  664, city 69, full traffic 3 342 / 75 / 1 (floor 3 193, gridlock cap 85), quick 3 012 / 38 / 0,
+  full e2e 75 passed (24 min local, V106's local ratio included), street inspector checked in
+  the app (Closed with a bus exception, then undo). The baseline stays 3 547 / 57 (101 is not
+  a demand task), so the full run's margin to the floor is 149 trips until TASK-102 resets it.
+  The lead added the lane-option rule to the routing section of `docs/architecture.md`.
+  Follow-up worth weighing: the singleton-target rule may cause the same queue blocking on
+  unrestricted routes; widening the fix changes T46's pinned behaviour, so it needs its own task.
+
+- 2026-11-08, TASK-115 merged after lead fixes (Codex, GPT-6.1 Terra). One coalescing
+  `FrameDemand` per view (`src/render/frame-demand.ts`): Pixi starts with `autoStart: false`,
+  setters and the camera invalidate, the 3D scene invalidates on control changes, vehicles only
+  while playing or interpolating, tiles only while loading or fading. Test mode exposes
+  `data-frames` and `window.cityflowsRenderContinuously`, which T16, T44, V106 and the shots
+  use while measuring; thresholds unchanged. CI's e2e timeout is 60 s again. Agent figures:
+  idle Munich draws 67 frames in 2 s before and 0 after (2D), 16 and 0 (3D); six shots
+  pixel-identical; full local e2e 38 min to 16 min. Lead: merged main (TASK-101's first-3D
+  terrain line removed, 115's `setCity` terrain argument kept); `gate2-batch`'s mixed-fields
+  case Shift-clicked before the map had drawn the recompiled city (the pointer ignores clicks
+  until then; faster clicks exposed it), now waits for the edit and two frames. Lead
+  verification: check 671, city 69, full e2e 76 of 77 then the fixed spec 3 of 3; in the app the
+  idle 2D map made 0 WebGL draw calls in 2 s, a zoom drew, then 0 again.
 
 ## Owner decisions log
 
