@@ -10,6 +10,11 @@ import type { Vec2 } from '../../src/geo/vec2';
 // r:140#0>r:476#0 (curved service ways, 47 m beyond the junction) became one with the cap.
 export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = {
   'munich-donnersberger': {
+    // TASK-101 retains the access boundary at n:27. These same source crossings occur
+    // with main's compiler on this canonical topology (T39's r:29/r:958 overlap).
+    'r:29#0>r:958#2':
+      'The source slip road crosses Arnulfstraße beside the retained truck-delivery boundary.',
+    'r:29#0>r:958#3': 'The same source slip road crosses the adjacent Arnulfstraße lane.',
     'r:196#0>r:416#2':
       'The source ramp crosses the trunk lane body at n:194; TASK-071 removes the capped-setback classification at this continuation.',
     // TASK-083: r:565#0>r:589#0 and r:325#0>r:941#0 no longer cross (r:565/r:589 lie on each

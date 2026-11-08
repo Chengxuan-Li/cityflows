@@ -4,6 +4,7 @@ import {
   createRouteProvider,
   movementPenaltyS,
   reachableLanes,
+  roadAccessFilter,
   type LinkCosts,
   type RouteProvider,
 } from '../routing';
@@ -125,12 +126,21 @@ function createRun({
     } else if (planned?.fromLane === lane) {
       vehicles.movement[id] = planned.idx;
     } else {
+      const permits = roadAccessFilter(
+        compiled,
+        vehicleRouteRequest(vehicles, params, id, lane, positionM),
+      );
       let penalty = Infinity;
       let routePenalty = Infinity;
       let alternate = -1;
       for (const idx of compiled.lanes[lane]!.out) {
         const movement = compiled.movements[idx]!;
-        if (movement.neverGreen || !carLanes[movement.toLane]) continue;
+        if (
+          movement.neverGreen ||
+          !carLanes[movement.toLane] ||
+          !permits(compiled.lanes[movement.toLane]!.road)
+        )
+          continue;
         const cost = movementPenaltyS(compiled, movement);
         if (
           !vehicles.attemptedFallbacks[id]?.has(idx) &&
@@ -849,8 +859,10 @@ function createRun({
         if (vehicles.state[id] === QUEUED_DESTINATION) accounting.transition(id, DRIVING);
       }
       const mappedRoute = vehicles.route[id]!;
+      const accessChanged = route!.roads.slice(step).some((i) => changes.accessChangedRoads.has(i));
       const invalid =
         relocated ||
+        accessChanged ||
         mappedRoute.roads.slice(step).includes(-1) ||
         mappedRoute.movements.slice(step).some((i) => i === -1 || next.movements[i]!.neverGreen) ||
         route!.targetLanes.slice(step).some((lanes) => lanes.some((i) => changes.lanes[i] === -1));
@@ -868,6 +880,7 @@ function createRun({
         accounting.transition(id, DRIVING);
       if (affected) {
         const immediate =
+          accessChanged ||
           relocated ||
           mappedRoute.roads[step] === -1 ||
           mappedRoute.movements[step] === -1 ||

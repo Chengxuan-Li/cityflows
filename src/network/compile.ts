@@ -1,6 +1,7 @@
 import { cumulativeLengths, headingAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, Place, RoadClass } from '../schema';
+import { VEHICLE_CLASSES } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
 import { continuationLayout, convergingFlows, convergingShifts } from './continuity';
@@ -107,6 +108,8 @@ export function compile(city: City): CompileResult {
       end: headingAtDistance(road.centerline, cumulative, lengthM),
     });
     const compiled: CRoad = {
+      access: VEHICLE_CLASSES.map((kind) => road.access?.[kind] ?? road.access?.all ?? 'yes'),
+      zone: new Int32Array(VEHICLE_CLASSES.length).fill(-1),
       idx,
       id: road.id,
       from,
@@ -135,6 +138,26 @@ export function compile(city: City): CompileResult {
   const incident = nodes.map((node) =>
     [...incoming[node.idx]!, ...outgoing[node.idx]!].sort((a, b) => a.idx - b.idx),
   );
+  for (let kind = 0; kind < VEHICLE_CLASSES.length; kind++) {
+    let zone = 0;
+    const restricted = (road: CRoad) =>
+      road.access[kind] === 'destination' || road.access[kind] === 'private';
+    for (const road of roads) {
+      if (!restricted(road) || road.zone[kind] !== -1) continue;
+      const pending = [road];
+      road.zone[kind] = zone;
+      for (let i = 0; i < pending.length; i++) {
+        const current = pending[i]!;
+        for (const node of [current.from, current.to])
+          for (const next of incident[node]!) {
+            if (!restricted(next) || next.zone[kind] !== -1) continue;
+            next.zone[kind] = zone;
+            pending.push(next);
+          }
+      }
+      zone++;
+    }
+  }
   // A ramp ranks one below the road it joins: the roads leaving its end node, or, when it only
   // leads into another ramp, the roads entering its start node. Other ramps do not count.
   const joinedRank = (neighbors: CRoad[]) =>

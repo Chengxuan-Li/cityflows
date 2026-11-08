@@ -301,6 +301,7 @@ function mergeRoads(city: City, a: Road, b: Road): CommandPatch {
   function merge(start: Road, end: Road, group: string | null) {
     const attributes = (r: Road) => [
       r.lanes,
+      r.access,
       r.lateralOffsetM,
       r.roadClass,
       r.speedLimitMps,

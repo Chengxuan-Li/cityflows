@@ -10,7 +10,9 @@ export type MovementId = string; // derived: `${LaneId}>${LaneId}`
 
 export type RoadClass =
   'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'ramp';
-export type VehicleClass = 'car' | 'truck' | 'bus';
+export const VEHICLE_CLASSES = ['car', 'truck', 'bus'] as const;
+export type VehicleClass = (typeof VEHICLE_CLASSES)[number];
+export type AccessValue = 'yes' | 'no' | 'destination' | 'delivery' | 'private';
 export type Control = 'uncontrolled' | 'yield' | 'stop' | 'signal';
 export type DrivingSide = 'right' | 'left';
 
@@ -64,6 +66,7 @@ export interface Road {
   lanes: Lane[]; // index 0 = leftmost in travel direction
   roadClass: RoadClass;
   speedLimitMps: number;
+  access?: { all?: AccessValue } & Partial<Record<VehicleClass, AccessValue>>;
   name: string | null;
   streetGroupId: string | null; // groups the two directions of a simple two-way street
   /** The carriageways of one street, side by side: the two directions of a two-way street,

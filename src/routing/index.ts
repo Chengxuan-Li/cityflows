@@ -1,5 +1,6 @@
 import type { CompiledCity } from '../network';
 import type { VehicleClass } from '../schema';
+import { VEHICLE_CLASSES } from '../schema';
 import { createCostCache, routeCosts } from './costs';
 import { createGraphCache } from './graph';
 import { createLaneSearch } from './lane-search';
@@ -14,6 +15,7 @@ export interface RouteRequest {
   fromPosM: number;
   toConnector: number;
   vehicleClass: VehicleClass;
+  purpose?: 'private' | 'delivery' | 'service' | 'taxi' | 'through';
   desiredSpeedFactor: number;
   noise: number;
   seed: number;
@@ -43,6 +45,22 @@ export interface RoutingParams {
   laneChangeDistanceM?: number;
 }
 
+export function roadAccessFilter(compiled: CompiledCity, request: RouteRequest) {
+  const kind = VEHICLE_CLASSES.indexOf(request.vehicleClass);
+  const from = compiled.lanes[request.fromLane]!.road;
+  const to = compiled.lanes[compiled.connectors[request.toConnector]!.lane]!.road;
+  const originZone = compiled.roads[from]!.zone[kind]!;
+  const destinationZone = compiled.roads[to]!.zone[kind]!;
+  return (idx: number) => {
+    const road = compiled.roads[idx]!;
+    const rule = road.access[kind]!;
+    if (rule === 'delivery') return request.purpose === 'delivery';
+    if (rule === 'destination' || rule === 'private')
+      return road.zone[kind] === originZone || road.zone[kind] === destinationZone;
+    return rule === 'yes';
+  };
+}
+
 export function createRouteProvider({
   laneChangeDistanceM = 30,
 }: RoutingParams = {}): RouteProvider {
@@ -62,6 +80,8 @@ export function createRouteProvider({
       }
       const from = compiled.lanes[request.fromLane]!.road;
       const to = compiled.lanes[destination.lane]!.road;
+      const permits = roadAccessFilter(compiled, request);
+      if (!permits(from) || !permits(to)) return { ok: false, reason: 'class_forbidden' };
       const weights = routeCosts(compiled, costsFor(costs), request);
       const path = shortestPath(
         compiled.roads.length,
@@ -70,7 +90,7 @@ export function createRouteProvider({
         weights.originCost,
         (road, relax) => {
           for (const edge of graph.roads[road]!)
-            relax(edge.to, weights.transition(edge.to, edge.penaltyS));
+            if (permits(edge.to)) relax(edge.to, weights.transition(edge.to, edge.penaltyS));
         },
       );
       if (!path) {
@@ -100,8 +120,17 @@ export function createRouteProvider({
           return { ok: true, route: { roads, ...lanes, costS: path.costS } };
       }
 
-      const route = searchLanes(compiled, graph, weights, request, destination);
-      return route ? { ok: true, route } : { ok: false, reason: 'lane_infeasible' };
+      const route = searchLanes(compiled, graph, weights, request, destination, permits);
+      if (route) return { ok: true, route };
+      const withoutAccess = searchLanes(
+        compiled,
+        graphFor(compiled, null),
+        weights,
+        request,
+        destination,
+        () => true,
+      );
+      return { ok: false, reason: withoutAccess ? 'class_forbidden' : 'lane_infeasible' };
     },
   };
 }

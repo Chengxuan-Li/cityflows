@@ -11,6 +11,7 @@ import type {
   ConnectorId,
   RoadClass,
   VehicleClass,
+  AccessValue,
   PlaceKind,
   PlaceEvent,
 } from '../schema';
@@ -60,6 +61,8 @@ export interface CNode {
   signal: CSignal | null;
 }
 export interface CRoad {
+  access: AccessValue[]; // indexed by VEHICLE_CLASSES
+  zone: Int32Array; // per class; -1 outside destination/private zones
   idx: number;
   id: RoadId;
   from: number;

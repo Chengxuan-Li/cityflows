@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { City, Node } from './city';
+import { VEHICLE_CLASSES } from './city';
 
 const nodeId = z.string().regex(/^n:\d+$/);
 const roadId = z.string().regex(/^r:\d+$/);
@@ -64,7 +65,7 @@ const junctionSchema = z
 
 export const laneSchema = z.object({
   widthM: z.number().positive(),
-  allowed: z.array(z.enum(['car', 'truck', 'bus'])),
+  allowed: z.array(z.enum(VEHICLE_CLASSES)),
 });
 
 export const roadSchema = z.object({
@@ -86,6 +87,12 @@ export const roadSchema = z.object({
     'ramp',
   ]),
   speedLimitMps: z.number().positive(),
+  access: z
+    .partialRecord(
+      z.enum(['all', ...VEHICLE_CLASSES]),
+      z.enum(['yes', 'no', 'destination', 'delivery', 'private']),
+    )
+    .optional(),
   name: z.string().nullable(),
   streetGroupId: z.string().nullable(),
   corridorId: z.string().nullable().optional(),
