@@ -2,13 +2,45 @@ import { useMemo, useRef, useState } from 'react';
 import { pointAtDistance } from '../../geo/polyline';
 import { generateSignalProgram } from '../../importers/signal-program';
 import { compile, type CNode, type CompiledCity } from '../../network';
+import { crossingArms } from '../../network/crossings';
 import type { City, Node, SignalProgram } from '../../schema';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
 
 type Props = { node: CNode; source: Node; compiled: CompiledCity };
 type Group = SignalProgram['phases'][number]['groups'][number];
+type Walk = NonNullable<SignalProgram['phases'][number]['walk']>[number];
 const sameGroup = (a: Group, b: Group) => a.from === b.from && a.to === b.to;
+const compass = [
+  'east',
+  'south-east',
+  'south',
+  'south-west',
+  'west',
+  'north-west',
+  'north',
+  'north-east',
+];
+
+/** TASK-111: the node's signal crossings, one per arm, named by a road end of the arm. */
+function signalCrossings(compiled: CompiledCity, node: CNode, city: City) {
+  const arms = crossingArms(compiled, node);
+  const byArm = new Map<number, number[]>();
+  for (const link of compiled.walk.links)
+    if (link.crossing?.control === 'signal' && link.crossing.node === node.idx)
+      byArm.set(link.crossing.arm, [...(byArm.get(link.crossing.arm) ?? []), link.idx]);
+  return [...byArm].map(([arm, links]) => {
+    const end = arms[arm]![0]!;
+    const angle = Math.atan2(end.direction.y, end.direction.x);
+    const name = city.roads[end.road.id]?.name ?? end.road.id;
+    return {
+      arm,
+      links,
+      walk: { roadId: end.road.id, end: end.atEnd ? 'end' : 'start' } as Walk,
+      label: `${name} (${compass[(Math.round(angle / (Math.PI / 4)) + 8) % 8]})`,
+    };
+  });
+}
 
 export function SignalInspector(props: Props) {
   const city = useAppStore((state) => state.session!.project.city);
@@ -36,6 +68,21 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
   const conflicts = new Set(
     diagnostics.filter((d) => d.code === 'signal_conflict').flatMap((d) => d.refs),
   );
+  const crossings = signalCrossings(compiled, node, city);
+  const trialSignal = trial.ok ? trial.compiled.nodes[node.idx]?.signal : undefined;
+  /** Walk green per phase and crossing in the draft, derived or explicit (from the trial compile). */
+  const walkGreen = (phase: number, crossing: (typeof crossings)[number]) => {
+    const links = trialSignal?.phases[phase]?.walk;
+    if (!links || !trial.ok) return false;
+    const ids = new Set(links.map((i) => trial.compiled.walk.links[i]!.id));
+    return crossing.links.some((i) => ids.has(compiled.walk.links[i]!.id));
+  };
+  function toggleWalk(index: number, crossing: (typeof crossings)[number]) {
+    const walk = crossings
+      .filter((c) => (c === crossing ? !walkGreen(index, c) : walkGreen(index, c)))
+      .map((c) => c.walk);
+    changePhase(index, { walk });
+  }
   const groups = new Map<string, { roads: Group; movements: number[] }>();
   for (const index of node.movements) {
     const movement = compiled.movements[index]!;
@@ -158,6 +205,23 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
         >
           Add phase
         </button>
+        {crossings.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setDraft({
+                ...draft,
+                phases: [
+                  ...draft.phases,
+                  { durationS: 10, groups: [], walk: crossings.map((c) => c.walk) },
+                ],
+              });
+              setActive(draft.phases.length);
+            }}
+          >
+            Add pedestrian phase
+          </button>
+        )}
         <button
           type="button"
           disabled={draft.phases.length === 1}
@@ -210,6 +274,36 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
             );
           })}
         <circle r={node.radiusM} fill="#e8e8dc" />
+        {crossings.map((crossing) => {
+          const checked = walkGreen(active, crossing);
+          return (
+            <g
+              key={crossing.arm}
+              role="checkbox"
+              tabIndex={0}
+              aria-label={`${phaseName} crossing ${crossing.label}`}
+              aria-checked={checked}
+              className={`signal-crossing ${checked ? 'served' : ''}`}
+              onClick={() => toggleWalk(active, crossing)}
+              onKeyDown={(event) => {
+                if (event.key === ' ' || event.key === 'Enter') {
+                  event.preventDefault();
+                  toggleWalk(active, crossing);
+                }
+              }}
+            >
+              <title>Crossing {crossing.label}</title>
+              {crossing.links.map((i) => (
+                <path
+                  key={i}
+                  d={path(compiled.walk.links[i]!.line)}
+                  fill="none"
+                  strokeWidth={1.2}
+                />
+              ))}
+            </g>
+          );
+        })}
         {[...groups.values()].map(({ roads, movements }) => {
           const checked = draft.phases[active]!.groups.some((g) => sameGroup(g, roads));
           const conflict = movements.some((i) => conflicts.has(compiled.movements[i]!.id));
@@ -245,7 +339,10 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
           );
         })}
       </svg>
-      <p className="muted">{phaseName} · select arrows to switch road pairs</p>
+      <p className="muted">
+        {phaseName} · select arrows to switch road pairs
+        {crossings.length > 0 ? ' and crossings to switch walk green' : ''}
+      </p>
       <div className="signal-validation" aria-live="polite">
         {!trial.ok && (
           <div role="alert">
@@ -307,6 +404,43 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
               }}
             >
               <summary>Phase {index + 1} road pairs</summary>
+              {crossings.length > 0 && (
+                <p className="muted">
+                  Walk green {phase.walk ? 'set by hand' : 'where no traffic leaves the arm'}
+                  {phase.walk && (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraft((current) => ({
+                            ...current,
+                            phases: current.phases.map((p, i) =>
+                              i === index ? { durationS: p.durationS, groups: p.groups } : p,
+                            ),
+                          }));
+                        }}
+                      >
+                        Derive
+                      </button>
+                    </>
+                  )}
+                </p>
+              )}
+              {crossings.map((crossing) => (
+                <label className="phase-pair" key={crossing.arm}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Phase ${index + 1} crossing ${crossing.label}`}
+                    checked={walkGreen(index, crossing)}
+                    onChange={() => {
+                      setActive(index);
+                      toggleWalk(index, crossing);
+                    }}
+                  />
+                  Walk: {crossing.label}
+                </label>
+              ))}
               {[...groups.values()].map(({ roads }) => (
                 <label className="phase-pair" key={`${roads.from}>${roads.to}`}>
                   <input

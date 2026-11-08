@@ -40,7 +40,27 @@ export interface CWalkLink {
   road?: number;
   side?: 'left' | 'right';
   node?: number;
-  crossing?: { road: number; end: 'start' | 'end' | 'midblock'; control: 'zebra' | 'signal' };
+  crossing?: {
+    road: number;
+    end: 'start' | 'end' | 'midblock';
+    control: 'zebra' | 'signal';
+    /** TASK-111: the node and its arm (`crossingArms` index) the crossing serves; -1 for a
+     * midblock zebra. */
+    node: number;
+    arm: number;
+    /** TASK-111: where this link crosses each lane it crosses, in compiled lane order. */
+    spans: CrossingSpan[];
+  };
+}
+/** TASK-111: a crossing link over one lane. `atM` is along the lane where the link meets its
+ * centreline, `halfM` half the stripes' extent along the lane; `linkM` and `linkHalfM` the same
+ * along the link for the lane's width. */
+export interface CrossingSpan {
+  lane: number;
+  atM: number;
+  halfM: number;
+  linkM: number;
+  linkHalfM: number;
 }
 export interface WalkGraph {
   nodes: CWalkNode[];
@@ -285,6 +305,9 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
           road: road.idx,
           end: atEnd ? 'end' : 'start',
           control: node.signal ? 'signal' : 'zebra',
+          node: node.idx,
+          arm: i,
+          spans: [],
         },
       });
     }
@@ -319,11 +342,21 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
           length = polylineLength(road.reference),
           atEnd = near.along > length / 2;
         const node = city.nodes[atEnd ? road.to : road.from]!;
+        const end =
+          Math.min(near.along, length - near.along) > 30 ? 'midblock' : atEnd ? 'end' : 'start';
+        const control = node.signal && distance(node.pos, p) < 40 ? 'signal' : 'zebra';
+        const junction = end !== 'midblock' || control === 'signal';
         crossing = {
           road: road.idx,
-          end:
-            Math.min(near.along, length - near.along) > 30 ? 'midblock' : atEnd ? 'end' : 'start',
-          control: node.signal && distance(node.pos, p) < 40 ? 'signal' : 'zebra',
+          end,
+          control,
+          node: junction ? node.idx : -1,
+          arm: junction
+            ? crossingArms(city, node).findIndex((arm) =>
+                arm.some((e) => e.road.idx === road.idx && e.atEnd === atEnd),
+              )
+            : -1,
+          spans: [],
         };
       }
     }
@@ -602,6 +635,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     );
   }
   const { graph, nodeAt } = materializeWalk(source, raw);
+  addCrossingSpans(city, graph, layerOf);
   for (const a of anchors) {
     const idx = nodeAt(a.pos, a.layer);
     if (a.type === 'connectors') graph.connectors.set(a.id, idx);
@@ -612,6 +646,98 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     }
   }
   return graph;
+}
+
+const STRIPES_HALF_M = 1.25;
+const EXTEND_M = 12;
+
+/** TASK-111: the lanes each crossing link crosses, at its grade. A generated crossing crosses the
+ * lanes of its arm's roads (both directions of a street, any carriageways of the arm); a mapped
+ * one the lanes its line meets. A mapped crossing in a junction mouth can lie beyond a trimmed
+ * lane end of its arm: the lane's straight extension (up to 12 m) then meets it, and the span sits
+ * at that lane end. The vehicle network is not touched. */
+function addCrossingSpans(city: CompiledCity, graph: WalkGraph, layerOf: (r: CRoad) => number) {
+  const arms = new Map<number, ReturnType<typeof crossingArms>>();
+  const segmentLanes = city.lanes.flatMap((lane) => lane.polyline.slice(1).map(() => lane.idx));
+  const meet = (
+    link: CWalkLink,
+    line: Vec2[],
+    index: number,
+    clamp: (along: number) => number,
+  ): CrossingSpan | undefined => {
+    const lane = city.lanes[index]!;
+    const lengths = cumulativeLengths(line);
+    for (let i = 1; i < link.line.length; i++) {
+      const a = link.line[i - 1]!,
+        b = link.line[i]!;
+      for (let j = 1; j < line.length; j++) {
+        const p = line[j - 1]!,
+          q = line[j]!;
+        const point = segmentIntersection(a, b, p, q);
+        if (!point) continue;
+        const sin = Math.max(
+          0.3,
+          Math.abs((b.x - a.x) * (q.y - p.y) - (b.y - a.y) * (q.x - p.x)) /
+            (distance(a, b) * distance(p, q)),
+        );
+        return {
+          lane: index,
+          atM: clamp(lengths[j - 1]! + distance(p, point)),
+          halfM: STRIPES_HALF_M / sin,
+          linkM: link.cumulative[i - 1]! + distance(a, point),
+          linkHalfM: lane.widthM / 2 / sin,
+        };
+      }
+    }
+  };
+  for (const link of graph.links) {
+    if (!link.crossing) continue;
+    const { road, node, arm } = link.crossing;
+    let ends = node >= 0 ? arms.get(node) : undefined;
+    if (node >= 0 && !ends) arms.set(node, (ends = crossingArms(city, city.nodes[node]!)));
+    const armRoads = ends ? ends[arm]!.map((e) => e.road) : [city.roads[road]!];
+    const sameGrade = (lane: number) => layerOf(city.roads[city.lanes[lane]!.road]!) === link.layer;
+    let direct: number[];
+    if (link.generated) direct = armRoads.flatMap((r) => r.lanes);
+    else {
+      let x0 = Infinity,
+        y0 = Infinity,
+        x1 = -Infinity,
+        y1 = -Infinity;
+      for (const p of link.line) {
+        x0 = Math.min(x0, p.x);
+        y0 = Math.min(y0, p.y);
+        x1 = Math.max(x1, p.x);
+        y1 = Math.max(y1, p.y);
+      }
+      direct = [
+        ...new Set(city.laneSpatial.search(x0, y0, x1, y1).map((i) => segmentLanes[i]!)),
+      ].sort((a, b) => a - b);
+    }
+    const spans = new Map<number, CrossingSpan>();
+    for (const index of direct.filter(sameGrade)) {
+      const hit = meet(link, city.lanes[index]!.polyline, index, (along) => along);
+      if (hit) spans.set(index, hit);
+    }
+    if (ends && !link.generated)
+      for (const r of armRoads)
+        for (const index of r.lanes) {
+          if (spans.has(index) || !sameGrade(index)) continue;
+          const lane = city.lanes[index]!;
+          const atEnd = r.to === node;
+          const s = atEnd ? lane.lengthM : 0,
+            p = pointAtDistance(lane.polyline, lane.cumulative, s),
+            h = headingAtDistance(lane.polyline, lane.cumulative, s),
+            sign = atEnd ? EXTEND_M : -EXTEND_M;
+          const ray = [p, { x: p.x + sign * Math.cos(h), y: p.y + sign * Math.sin(h) }];
+          const hit = meet(link, ray, index, () => s);
+          if (hit) spans.set(index, hit);
+        }
+    link.crossing = {
+      ...link.crossing,
+      spans: [...spans.values()].sort((a, b) => a.lane - b.lane),
+    };
+  }
 }
 
 function materializeWalk(source: City, raw: Raw[]) {

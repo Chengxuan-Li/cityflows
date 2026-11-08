@@ -80,3 +80,57 @@ it('looks up phase and color including clearance times and marks unserved turns'
     }),
   );
 });
+
+it('T53 walk groups: derived where no movement leaves the arm, explicit by road end, none without vehicle groups', () => {
+  const { city, node } = signalFixture();
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const { compiled } = result;
+  const compiledNode = compiled.nodes[compiled.index.node.get(node.id)!]!;
+  const signal = compiledNode.signal!;
+  const crossings = compiled.walk.links.filter((l) => l.crossing?.node === compiledNode.idx);
+  expect(crossings).toHaveLength(4);
+  const armRoads = (link: (typeof crossings)[number]) =>
+    new Set(link.crossing!.spans.map((s) => compiled.lanes[s.lane]!.road));
+  for (const [p, phase] of signal.phases.entries())
+    for (const link of crossings) {
+      const leaves = phase.movements.some((m) =>
+        armRoads(link).has(compiled.lanes[compiled.movements[m]!.fromLane]!.road),
+      );
+      expect(phase.walk.includes(link.idx), `phase ${p} ${link.id}`).toBe(!leaves);
+    }
+
+  // Explicit groups name a road end of the arm; a stale entry is ignored; a phase with walk
+  // groups and no vehicle groups is an exclusive pedestrian phase; none is derived without.
+  const program = city.nodes[node.id]!.signal!;
+  const [first] = Object.values(city.roads).filter((r) => r.to === node.id);
+  const outgoing = Object.values(city.roads).find(
+    (r) => r.from === node.id && r.streetGroupId === first!.streetGroupId,
+  )!;
+  program.phases[0]!.walk = [
+    { roadId: outgoing.id, end: 'start' },
+    { roadId: 'r:999', end: 'end' },
+  ];
+  program.phases.push({ durationS: 8, groups: [] });
+  program.phases.push({
+    durationS: 8,
+    groups: [],
+    walk: Object.values(city.roads)
+      .filter((r) => r.to === node.id)
+      .map((r) => ({ roadId: r.id, end: 'end' as const })),
+  });
+  const edited = compile(city);
+  if (!edited.ok) throw new Error(JSON.stringify(edited.diagnostics));
+  const phases = edited.compiled.nodes[compiledNode.idx]!.signal!.phases;
+  const arm = edited.compiled.walk.links.find(
+    (l) =>
+      l.crossing?.node === compiledNode.idx &&
+      l.crossing.spans.some(
+        (s) => edited.compiled.lanes[s.lane]!.road === edited.compiled.index.road.get(first!.id),
+      ),
+  )!;
+  expect(phases[0]!.walk).toEqual([arm.idx]);
+  expect(phases.at(-2)!.walk).toEqual([]);
+  expect(phases.at(-1)!.walk).toHaveLength(4);
+  expect(phases.at(-1)!.movements).toHaveLength(0);
+});

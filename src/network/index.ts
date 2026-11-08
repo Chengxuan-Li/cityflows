@@ -1,4 +1,4 @@
 export * from './types';
-export type { WalkGraph, CWalkNode, CWalkLink } from './walk';
+export type { WalkGraph, CWalkNode, CWalkLink, CrossingSpan } from './walk';
 export { compile } from './compile';
-export { signalStateAt } from './signals';
+export { signalStateAt, walkGreenS, walkWindows } from './signals';

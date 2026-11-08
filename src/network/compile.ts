@@ -16,7 +16,7 @@ import {
   throughPath,
 } from './junctions';
 import { generateMovements } from './movements';
-import { compileSignal } from './signals';
+import { compileSignal, compileSignalWalk } from './signals';
 import { buildLaneSpatial } from './spatial';
 import { compileWalk, emptyWalkGraph } from './walk';
 import { populateStops } from './stops';
@@ -539,5 +539,6 @@ export function compile(city: City): CompileResult {
   populateStops(compiled, city);
   warnAboutConnectivity(compiled, diagnostics);
   compiled.walk = compileWalk(city, compiled);
+  compileSignalWalk(compiled, city);
   return { ok: true, compiled, diagnostics };
 }

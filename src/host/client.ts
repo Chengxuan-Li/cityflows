@@ -1,4 +1,4 @@
-import type { Metrics, VehicleDetail } from '../sim/types';
+import type { Metrics, VehicleDetail, WalkerDetail } from '../sim/types';
 import type { CompiledCity } from '../network';
 import type { RoadStats, TrajectoryRecord, TripRecord } from '../project/export-csv';
 import type {
@@ -34,6 +34,7 @@ export interface EngineClient {
   setTrajectories(enabled: boolean): Promise<TrajectoryStatus>;
   trajectoryStatus(): Promise<TrajectoryStatus>;
   inspect(id: number): Promise<VehicleDetail | null>;
+  inspectWalker(id: number): Promise<WalkerDetail | null>;
   hash(): Promise<number>;
   onEvent(listener: (event: HostEvent) => void): () => void;
   terminate(): void;
@@ -133,6 +134,7 @@ export function createEngineClient(worker: Worker): EngineClient {
     setTrajectories: (enabled) => send({ type: 'trajectories', enabled }),
     trajectoryStatus: () => send({ type: 'trajectoryStatus' }),
     inspect: (vehicleId) => send({ type: 'inspect', vehicleId }),
+    inspectWalker: (walkerId) => send({ type: 'inspectWalker', walkerId }),
     hash: () => send({ type: 'hash' }),
     onEvent(listener) {
       listeners.add(listener);

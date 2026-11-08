@@ -22,6 +22,7 @@ import { DEFAULT_SIM_PARAMS } from './params';
 import { createProjector, patchChanges, remapRoute } from './patch';
 import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
+import { createWalkers } from './walkers';
 import type {
   PatchResult,
   TrafficEngine,
@@ -105,6 +106,8 @@ function createRun({
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const signalEpochs = new Map<string, number>();
+  // TASK-111: null without test pedestrians, so the no-walker path does nothing more.
+  const walkers = createWalkers(compiled, scenario, params, vehicles);
   const provider =
     routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
   const observedCosts = createLinkCosts(compiled, params, scenario.startS);
@@ -426,8 +429,24 @@ function createRun({
           obstacle = stopAt;
           leaderSpeed = 0;
         }
+        // TASK-111: a held crossing's near edge is a standing obstacle, clamped like a stop line.
+        const walkerStop = walkers?.blocking ? walkers.hold(id, lane, path) : Infinity;
+        if (walkerStop < Infinity) {
+          if (walkerStop < obstacle) {
+            obstacle = walkerStop;
+            leaderSpeed = 0;
+          }
+          limit[id] = Math.min(limit[id]!, Math.max(position, walkerStop - idm.minGapM));
+        }
         const driving = profile(id);
         const desiredSpeed = Math.min(speedLimit * vehicles.speedFactor[id]!, driving.maxSpeedMps);
+        walkers?.account(
+          id,
+          walkerStop < Infinity && walkerStop <= obstacle,
+          vehicles.speed[id]!,
+          desiredSpeed,
+          walkerStop - position,
+        );
         acceleration[id] = idmAcceleration(
           driving.idm,
           vehicles.speed[id]!,
@@ -782,6 +801,7 @@ function createRun({
       vclass: new Uint8Array(count),
       parkingOccupancy: parking.snapshot(),
       fade: new Float32Array(count),
+      ...(walkers && { walkers: walkers.snapshot() }),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
@@ -893,13 +913,12 @@ function createRun({
     rerouter.patch(next);
     vehicles.resetSegments(next.lanes.length, next.movements.length);
     merges = createMerges(next, vehicles, params);
-    intersections = createIntersections(
-      patchSignals(before, next, time(), signalEpochs),
-      vehicles,
-      params,
-      merges.canEnter,
-      { onDecision: intersectionObserver, acceleration: (id) => reservationAcceleration[id]! },
-    );
+    const signalled = patchSignals(before, next, time(), signalEpochs);
+    walkers?.patch(signalled);
+    intersections = createIntersections(signalled, vehicles, params, merges.canEnter, {
+      onDecision: intersectionObserver,
+      acceleration: (id) => reservationAcceleration[id]!,
+    });
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
@@ -1055,12 +1074,20 @@ function createRun({
     time,
     snapshot,
     inspect,
-    metrics: () => accounting.metrics(time()),
-    stateHash: () => stateHash(time(), vehicles, accounting.trips, parking.stateHash()),
+    metrics: () => {
+      // Assign rather than spread: `tripOutcomes` stays a lazy getter.
+      const metrics = accounting.metrics(time());
+      if (walkers) metrics.walkers = walkers.metrics();
+      return metrics;
+    },
+    inspectWalker: (id: number) => walkers?.inspect(id) ?? null,
+    stateHash: () =>
+      stateHash(time(), vehicles, accounting.trips, parking.stateHash(), walkers ?? undefined),
     step(n: number) {
       for (let i = 0; i < n; i++) {
         const timeS = time();
         intersections.signals(timeS);
+        walkers?.step(timeS);
         connectors.spawn(timeS, hasSpawnGap, releaseTrip);
         rerouter.updateEdits(timeS, editChecked);
         rerouter.update(timeS, (id) => {
@@ -1101,6 +1128,7 @@ export function createEngine() {
     snapshot: () => loaded().snapshot(),
     metrics: () => loaded().metrics(),
     inspect: (id) => loaded().inspect(id),
+    inspectWalker: (id) => loaded().inspectWalker(id),
     stateHash: () => loaded().stateHash(),
   } satisfies TrafficEngine;
 }

@@ -44,12 +44,17 @@ function removeJunctionReferences(city: City, road: Road, patch: CommandPatch): 
     const turnRules = node.turnRules.filter((rule) => !usesRoad(rule));
     const minorRoads = node.minorRoads.filter((id) => id !== road.id);
     let signal = node.signal;
-    if (signal?.phases.some((phase) => phase.groups.some(usesRoad))) {
+    if (
+      signal?.phases.some(
+        (phase) => phase.groups.some(usesRoad) || phase.walk?.some((w) => w.roadId === road.id),
+      )
+    ) {
       signal = {
         ...signal,
         phases: signal.phases.map((phase) => ({
           ...phase,
           groups: phase.groups.filter((group) => !usesRoad(group)),
+          ...(phase.walk && { walk: phase.walk.filter((w) => w.roadId !== road.id) }),
         })),
       };
     }

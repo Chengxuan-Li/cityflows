@@ -14,6 +14,7 @@ const labels: [keyof LayerVisibility, string][] = [
   ['parkingStalls', 'Parking stalls'],
   ['sidewalks', 'Sidewalks'],
   ['footways', 'Footways'],
+  ['pedestrians', 'Pedestrians'],
   ['trees', 'Trees'],
   ['streetTrees', 'Street trees'],
   ['streetLights', 'Street lights'],
@@ -57,6 +58,9 @@ export function Layers() {
     treeCounts.osm + treeCounts.row + treeCounts.wood + treeCounts.scrub + treeCounts.park > 0;
   const hasStreetTrees = Boolean(treeCounts?.street);
   const hasTerrain = useAppStore((state) => Boolean(state.session?.project.city.terrain));
+  const hasWalkers = useAppStore((state) =>
+    Boolean(state.session?.project.scenarios[0]!.walkers?.length),
+  );
   const { toggleLayer, toggleLayers } = useAppStore.getState();
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -94,6 +98,7 @@ export function Layers() {
             (key !== 'trees' || hasTrees) &&
             (key !== 'streetTrees' || hasStreetTrees) &&
             (key !== 'terrain' || hasTerrain) &&
+            (key !== 'pedestrians' || hasWalkers) &&
             (key !== 'curbs' || view3d),
         )
         .map(([key, label]) => (

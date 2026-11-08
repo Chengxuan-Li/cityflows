@@ -166,6 +166,7 @@ function replaceReferences(node: Node, before: string, after: string): Node {
       phases: node.signal.phases.map((phase) => ({
         ...phase,
         groups: phase.groups.map((group) => ({ from: replace(group.from), to: replace(group.to) })),
+        ...(phase.walk && { walk: phase.walk.map((w) => ({ ...w, roadId: replace(w.roadId) })) }),
       })),
     },
   };
@@ -377,7 +378,9 @@ export function editTopology(city: City, command: TopologyCommand): CommandPatch
   for (const node of Object.values(city.nodes)) {
     const turnRules = node.turnRules.filter((rule) => !uses(rule));
     const minorRoads = node.minorRoads.filter((id) => id !== road.id);
-    const signalChanged = node.signal?.phases.some((p) => p.groups.some(uses));
+    const signalChanged = node.signal?.phases.some(
+      (p) => p.groups.some(uses) || p.walk?.some((w) => w.roadId === road.id),
+    );
     if (
       turnRules.length !== node.turnRules.length ||
       minorRoads.length !== node.minorRoads.length ||
@@ -392,6 +395,7 @@ export function editTopology(city: City, command: TopologyCommand): CommandPatch
           phases: node.signal.phases.map((phase) => ({
             ...phase,
             groups: phase.groups.filter((g) => !uses(g)),
+            ...(phase.walk && { walk: phase.walk.filter((w) => w.roadId !== road.id) }),
           })),
         },
       };

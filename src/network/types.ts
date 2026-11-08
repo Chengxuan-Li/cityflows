@@ -161,7 +161,8 @@ export interface CSignal {
   amberS: number;
   allRedS: number;
   cycleS: number;
-  phases: { durationS: number; movements: number[] }[];
+  /** `walk`: TASK-111, the signal crossing links (`CompiledCity.walk`) with walk green. */
+  phases: { durationS: number; movements: number[]; walk: number[] }[];
 }
 export interface CConnector {
   parking?: number;

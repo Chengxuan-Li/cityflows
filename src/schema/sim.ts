@@ -37,4 +37,11 @@ export interface SimParams {
   rerouteHysteresis: number;
   maxReplans: number;
   routeNoise: number;
+  /** TASK-111: walkers' speed, its factor on steps, the walk green a walker needs beyond its
+   * crossing time to step out at a signal, and how far past a lane a walker must be before a car
+   * held for it may go. */
+  walkSpeedMps: number;
+  walkStepsFactor: number;
+  walkClearanceS: number;
+  crossingClearM: number;
 }

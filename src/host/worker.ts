@@ -106,6 +106,8 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return loadedRecorder().trajectoryStatus();
     case 'inspect':
       return engine.inspect(request.vehicleId);
+    case 'inspectWalker':
+      return engine.inspectWalker(request.walkerId);
     case 'hash':
       return engine.stateHash();
   }
@@ -115,8 +117,11 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
   const { id } = request;
   try {
     if (request.type === 'snapshot') {
-      const { timeS, count, parkingOccupancy: occupancy, ...arrays } = engine.snapshot();
+      const { timeS, count, parkingOccupancy: occupancy, walkers, ...arrays } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
+      if (walkers)
+        for (const array of Object.values(walkers))
+          if (typeof array !== 'number') transfer.push(array.buffer);
       const now = performance.now();
       const updateOverlays = now - lastOverlayMs >= 500;
       const roadSpeedRatio = updateOverlays ? engine.metrics().roadSpeedRatio : undefined;
@@ -129,7 +134,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
       const reply: HostReply = {
         id,
         ok: true,
-        result: { timeS, count, ...arrays, roadSpeedRatio, parkingOccupancy },
+        result: { timeS, count, ...arrays, roadSpeedRatio, parkingOccupancy, walkers },
       };
       self.postMessage(reply, { transfer });
     } else {

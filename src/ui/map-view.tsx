@@ -51,6 +51,15 @@ function routeForMap(route: Route, { compiled, loadedCompiled }: Session) {
   };
 }
 
+/** A walker's route links, from the loaded run's walk graph to the displayed one. */
+function walkLinksForMap(links: readonly number[], { compiled, loadedCompiled }: Session) {
+  if (compiled === loadedCompiled) return links;
+  const index = new Map(compiled.walk.links.map((link) => [link.id, link.idx]));
+  return links
+    .map((i) => index.get(loadedCompiled.walk.links[i]!.id))
+    .filter((i) => i !== undefined);
+}
+
 function fitCity(scene: Scene, canvas: HTMLCanvasElement, { project, compiled }: Session) {
   const bounds: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   const points = [
@@ -330,6 +339,7 @@ export function MapView() {
       let drawnSelection: Pick | null = null;
       let drawnRoads: readonly string[] | null = null;
       let drawnRoute: Route | null = null;
+      let drawnWalkerRoute: readonly number[] | null = null;
       let snapshotTime = NaN;
       let drawnSnapshot: VehicleSnapshot | null = null;
       let parkingCounts: number[] | null = null;
@@ -409,24 +419,27 @@ export function MapView() {
           lastFrame = performance.now();
         }
         const { selection, run } = current;
-        if (selection?.kind !== 'vehicle' || !run) return;
+        if ((selection?.kind !== 'vehicle' && selection?.kind !== 'walker') || !run) return;
         if (selection === inspected && run.timeS === inspectedTime) return;
         inspected = selection;
         inspectedTime = run.timeS;
-        const vehicle = await session.engine.inspect(selection.id);
+        const detail =
+          selection.kind === 'vehicle'
+            ? { vehicle: await session.engine.inspect(selection.id) }
+            : { walker: await session.engine.inspectWalker(selection.id) };
         if (
           !signal.aborted &&
           getState().session === session &&
           getState().selection === selection
         ) {
-          setState({ vehicle });
+          setState(detail);
         }
       }
 
       function frame(now: number) {
         animation = requestAnimationFrame(frame);
         if (!active3D) pointer.advance(now);
-        const { session, selection, vehicle, busy } = getState();
+        const { session, selection, vehicle, walker, busy } = getState();
         const elapsedS = Math.max(0, now - lastFrame) / 1000;
         lastFrame = now;
         if (!session || busy) return;
@@ -461,7 +474,7 @@ export function MapView() {
               );
           }
           drawn = session;
-          drawnSelection = drawnRoute = null;
+          drawnSelection = drawnRoute = drawnWalkerRoute = null;
           drawnRoads = null;
           snapshotTime = NaN;
           drawnSnapshot = null;
@@ -532,6 +545,7 @@ export function MapView() {
           three!.setWalkLayers(layers.sidewalks, layers.footways);
           three!.setStreet(layers.streetLights, layers.signs, layers.curbs, layers.markings);
           three!.setTiles(layers.basemap);
+          three!.setPedestrians(layers.pedestrians);
           three!.setSignals(
             getState().run?.timeS ?? 0,
             getState().run?.stale ? null : session.loadedCompiled,
@@ -558,6 +572,11 @@ export function MapView() {
         if (route !== drawnRoute) {
           view.setRouteOverlay(route && routeForMap(route, session));
           drawnRoute = route;
+        }
+        const walkerRoute = walker?.route?.links ?? null;
+        if (walkerRoute !== drawnWalkerRoute) {
+          view.setWalkerRoute(walkerRoute && walkLinksForMap(walkerRoute, session));
+          drawnWalkerRoute = walkerRoute;
         }
         const run = getState().run;
         snapshotAgeS = run?.status === 'playing' ? snapshotAgeS + elapsedS * run.speed : 0;
