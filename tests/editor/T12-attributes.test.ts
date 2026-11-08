@@ -3,7 +3,7 @@ import { createEditor } from '../../src/editor';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import type { City, Command } from '../../src/schema';
 
-const city = grid5x5();
+const city = createEditor(grid5x5()).city;
 const road = Object.values(city.roads).find((road) => road.streetGroupId === null)!;
 const paired = Object.values(city.roads).find((road) => road.streetGroupId !== null)!;
 const signalNode = Object.values(city.nodes).find((node) => node.signal)!;
@@ -89,7 +89,7 @@ const cases: { command: Command; setup?: Command; verify: (edited: City) => void
         name: 'New place',
         connectors: [{ id: connectorId }],
       });
-      expect(edited.nextId).toBe(city.nextId + 2);
+      expect(edited.nextId).toBe(city.nextId + 3);
     },
   },
   {

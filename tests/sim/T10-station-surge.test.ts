@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
 import { createConnectors } from '../../src/sim/connectors';
 import { createAccounting } from '../../src/sim/metrics';
+import { createParking } from '../../src/sim/parking';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { createVehicles } from '../../src/sim/vehicle';
 import { createEngine } from '../../src/sim/engine';
@@ -102,13 +103,15 @@ test('T10 event windows accumulate shared admission quotas without bypassing cap
   ];
   const compiled = setup(city);
   const vehicles = createVehicles(0, compiled.lanes.length, compiled.movements.length);
+  const parking = createParking(compiled, [], scenario(), DEFAULT_SIM_PARAMS, vehicles);
   const connectors = createConnectors(
     compiled,
     [],
     scenario(),
     DEFAULT_SIM_PARAMS,
     vehicles,
-    createAccounting(compiled, vehicles),
+    createAccounting(compiled, vehicles, parking),
+    parking,
   );
   const [first, second] = compiled.connectors;
   expect(connectors.canArrive(first!, 199)).toBe(false);

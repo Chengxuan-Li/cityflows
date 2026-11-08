@@ -36,7 +36,13 @@ export function editPlace(city: City, command: PlaceCommand): Patch {
         ...(nextId === city.nextId ? {} : { nextId }),
       };
     }
-    case 'deletePlace':
-      return { set: {}, remove: { places: [place.id] } };
+    case 'deletePlace': {
+      const patch: Patch = { set: {}, remove: { places: [place.id] } };
+      for (const facility of Object.values(city.parking ?? {})) {
+        if (facility.placeId !== place.id) continue;
+        (patch.remove.parking ??= []).push(facility.id);
+      }
+      return patch;
+    }
   }
 }

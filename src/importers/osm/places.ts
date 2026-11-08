@@ -266,10 +266,15 @@ export function polygonCenter(ring: Vec2[]): Vec2 | undefined {
   if (area !== 0) return { x: origin.x + x / (3 * area), y: origin.y + y / (3 * area) };
 }
 
-export function placeConnector(city: City, compiled: CompiledCity) {
+export function placeConnector(city: City, compiled: CompiledCity, parking = false) {
   const { core } = networkAccess(compiled, false);
   const segments = compiled.lanes
-    .filter((lane) => core.has(lane.idx) && lane.allowed.includes('car'))
+    .filter((lane) => {
+      if ((!parking && !core.has(lane.idx)) || !lane.allowed.includes('car')) return false;
+      const road = city.roads[compiled.roads[lane.road]!.id]!;
+      const access = road.access?.car ?? road.access?.all ?? 'yes';
+      return !parking || (access !== 'no' && access !== 'delivery');
+    })
     .flatMap((lane) =>
       lane.polyline.slice(1).map((b, i) => ({ lane, a: lane.polyline[i]!, b, i })),
     );

@@ -1,6 +1,6 @@
 import { roadWidth } from '../../network/lanes';
 import { allocateId, type City, type Command, type Road, type RoadId } from '../../schema';
-import { requireEntity, type CommandPatch } from './types';
+import { mapConnectors, requireEntity, type CommandPatch } from './types';
 
 type RoadCommand = Extract<
   Command,
@@ -92,21 +92,16 @@ function setRoadLanes(city: City, road: Road, lanes: Road['lanes']): CommandPatc
   }
 
   const curbLane = city.drivingSide === 'right' ? lanes.length - 1 : 0;
-  for (const place of Object.values(city.places)) {
-    const connectors = place.connectors.map((connector) => {
-      if (connector.roadId !== road.id || connector.lane < lanes.length) return connector;
-      (patch.warnings ??= []).push({
-        severity: 'warning',
-        code: 'connector_lane_clamped',
-        refs: [connector.id, place.id, road.id],
-        message: `Moved connector ${connector.id} to lane ${curbLane} on ${road.id}`,
-      });
-      return { ...connector, lane: curbLane };
+  mapConnectors(city, patch, (connector, ownerId) => {
+    if (connector.roadId !== road.id || connector.lane < lanes.length) return connector;
+    (patch.warnings ??= []).push({
+      severity: 'warning',
+      code: 'connector_lane_clamped',
+      refs: [connector.id, ownerId, road.id],
+      message: `Moved connector ${connector.id} to lane ${curbLane} on ${road.id}`,
     });
-    if (connectors.some((connector, index) => connector !== place.connectors[index])) {
-      (patch.set.places ??= {})[place.id] = { ...place, connectors };
-    }
-  }
+    return { ...connector, lane: curbLane };
+  });
   return patch;
 }
 
@@ -144,21 +139,16 @@ function setStreetDirection(
 
   patch.remove.roads = [removed.id];
   removeJunctionReferences(city, removed, patch);
-  for (const place of Object.values(city.places)) {
-    const connectors = place.connectors.filter((connector) => {
-      if (connector.roadId !== removed.id) return true;
-      (patch.warnings ??= []).push({
-        severity: 'warning',
-        code: 'connector_removed',
-        refs: [connector.id, place.id, removed.id],
-        message: `Removed connector ${connector.id} with road ${removed.id}`,
-      });
-      return false;
+  mapConnectors(city, patch, (connector, ownerId) => {
+    if (connector.roadId !== removed.id) return connector;
+    (patch.warnings ??= []).push({
+      severity: 'warning',
+      code: 'connector_removed',
+      refs: [connector.id, ownerId, removed.id],
+      message: `Removed connector ${connector.id} with road ${removed.id}`,
     });
-    if (connectors.length !== place.connectors.length) {
-      (patch.set.places ??= {})[place.id] = { ...place, connectors };
-    }
-  }
+    return null;
+  });
   return patch;
 }
 

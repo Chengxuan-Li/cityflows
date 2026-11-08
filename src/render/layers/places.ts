@@ -25,7 +25,10 @@ export function drawPlaces(
   connectorGraphics: Graphics = graphics,
 ): (zoom: number) => void {
   for (const connector of city.connectors) {
-    const { centroid } = city.places[connector.place]!;
+    const { centroid } =
+      connector.parking === undefined
+        ? city.places[connector.place]!
+        : city.parking[connector.parking]!;
     const end = connectorPosition(city, connector);
     connectorGraphics
       .moveTo(centroid.x, centroid.y)

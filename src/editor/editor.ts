@@ -1,10 +1,14 @@
 import { compile, type Diagnostic } from '../network';
+import { addImplicitGarages } from '../network/parking';
 import type { City, HistoryEntry, Patch } from '../schema';
 import { dispatch } from './commands';
-import { applyPatch, invertPatch } from './patch';
+import { applyPatch, diffCity, invertPatch } from './patch';
 import type { CommitResult, Editor } from './types';
 
 export function createEditor(initialCity: City): Editor {
+  const materialized = { ...initialCity, parking: { ...initialCity.parking } };
+  addImplicitGarages(materialized);
+  if (materialized.nextId !== initialCity.nextId) initialCity = materialized;
   const initial = compile(initialCity);
   if (!initial.ok) {
     throw new Error(
@@ -44,7 +48,11 @@ export function createEditor(initialCity: City): Editor {
       return redoStack.length > 0;
     },
     apply(command) {
-      const { warnings, ...patch } = dispatch(city, command);
+      const { warnings, ...requested } = dispatch(city, command);
+      const draft = applyPatch(city, requested);
+      const materialized = { ...draft, parking: { ...draft.parking } };
+      addImplicitGarages(materialized);
+      const patch = materialized.nextId === draft.nextId ? requested : diffCity(city, materialized);
       const inverse = invertPatch(city, patch);
       const result = commit(patch, warnings);
       if (result.ok) {

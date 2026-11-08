@@ -2,6 +2,7 @@ import type { City, Command } from '../../schema';
 import { batch } from './batch';
 import { editNode } from './node';
 import { editPlace } from './place';
+import { editParking } from './parking';
 import { editRoad } from './road';
 import { editRamp } from './ramp';
 import { editRoundabout } from './roundabout';
@@ -11,6 +12,8 @@ import { diffCity } from '../patch';
 
 export function dispatch(city: City, command: Command): CommandPatch {
   switch (command.kind) {
+    case 'setParkingAttributes':
+      return editParking(city, command);
     case 'restoreCity':
       return diffCity(city, command.city);
     case 'addRoundabout':

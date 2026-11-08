@@ -5,6 +5,7 @@ import type { HistoryEntry } from './history';
 const nodeId = z.string().regex(/^n:\d+$/);
 const roadId = z.string().regex(/^r:\d+$/);
 const placeId = z.string().regex(/^p:\d+$/);
+const parkingId = z.string().regex(/^pk:\d+$/);
 
 export const patchSchema = z.object({
   metadata: z
@@ -18,11 +19,13 @@ export const patchSchema = z.object({
     nodes: z.record(nodeId, projectNodeSchema).optional(),
     roads: z.record(roadId, roadSchema).optional(),
     places: z.record(placeId, placeSchema).optional(),
+    parking: citySchema.shape.parking,
   }),
   remove: z.object({
     nodes: z.array(nodeId).optional(),
     roads: z.array(roadId).optional(),
     places: z.array(placeId).optional(),
+    parking: z.array(parkingId).optional(),
   }),
   nextId: z.int().nonnegative().optional(),
 });

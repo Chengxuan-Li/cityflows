@@ -4,7 +4,7 @@ import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { allocateId } from '../../src/schema';
 
 it('clamps connectors to a remaining curb lane and drops only rules with removed lanes', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const road = Object.values(city.roads).find((road) => road.lanes.length === 2)!;
   const outgoing = Object.values(city.roads).find((other) => other.from === road.to)!;
   const place = Object.values(city.places)[0]!;

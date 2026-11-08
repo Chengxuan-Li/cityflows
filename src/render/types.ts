@@ -30,6 +30,7 @@ export type Pick =
   | { kind: 'lane'; lane: number; road: number }
   | { kind: 'node'; node: number }
   | { kind: 'place'; place: number }
+  | { kind: 'parking'; parking: number }
   | { kind: 'connector'; connector: number };
 
 export interface RouteOverlay {
@@ -49,6 +50,7 @@ export interface LayerVisibility {
   difference: boolean;
   heat: boolean;
   queues: boolean;
+  parkingOccupancy: boolean;
   places: boolean;
   connectors: boolean;
   signals: boolean;
@@ -68,6 +70,7 @@ export const defaultLayers: LayerVisibility = {
   difference: false,
   heat: false,
   queues: false,
+  parkingOccupancy: false,
   places: true,
   connectors: true,
   signals: true,
@@ -90,6 +93,7 @@ export interface Scene {
   setEditOverlay(overlay: EditOverlay | null): void;
   /** Speed divided by free-flow speed, indexed by compiled road. */
   setHeat(roadSpeedRatio: ArrayLike<number> | null): void;
+  setParkingOccupancy(counts: ArrayLike<number> | null): void;
   setDifference(roads: readonly RoadDifference[] | null): void;
   setQueues(snapshot: VehicleSnapshot): void;
   setLayerVisibility(layers: LayerVisibility): void;

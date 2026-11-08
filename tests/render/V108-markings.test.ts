@@ -30,19 +30,19 @@ import { tierCities, unitTest } from '../tier';
 // junctions in Munich and Sindelfingen, which moves their arrows; grid and town arrows are equal.
 const baseline = {
   grid: {
-    compile: 'fcf4d931bbc66167737ec54391d801caf214ade75bb9b20f557d53aebc6745dc',
+    compile: '41664cabf1ab1d44115242181e2d531294b4cd516eb00209669329ad514b53f3',
     arrows: '46a5ce9adeddd011af72c58a0c8ef9e9b315ad7f732ebfa71b2cff6c2d531748',
   },
   town: {
-    compile: '80464e2043f772549c4cd990c689d3aa9884c905316334a946205deb7190a5f5',
+    compile: '3c319559549227be144c8ccb3fa783d7d9ca9bd46c66ecb715cabf26a709fa0d',
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: 'c7efb7a2063a40577c197b7cdeaf12b26d1316c4e960a63e59b25ba643b054e9',
+    compile: '1744e5723dd6fe94d016bd8fbbeee9692ae938bfcbb632d528921a2fefd93bca',
     arrows: '01dc4f7e491f7a406b9d1830d493b82d6f92a5d18831ea143789d7d9d1e747d5',
   },
   munich: {
-    compile: '7f698e83dc854b18fa99c5c21a9758cf490207a964c92b94590f3ced7ad45da3',
+    compile: 'eb2a23ad29932c6960423525c2609e9c3993f85696ee8ec24c27d424c96bb72f',
     arrows: 'e701bfb8559e34f7f97e3a001dc3ad4e9d93e8f6ea6cf24af2e2e8ce46c17af1',
   },
 } as const;

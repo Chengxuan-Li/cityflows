@@ -108,6 +108,7 @@ interface AppState {
   selectedRoads: RoadId[];
   selectRoads: (roads: RoadId[]) => void;
   vehicle: VehicleDetail | null;
+  parkingOccupancy: Record<string, number>;
   diagnosticsOpen: boolean;
   rejectedEdit: Diagnostic[];
   busy: boolean;
@@ -256,7 +257,7 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ comparison: null, compareOpen: false });
       set({
         session: {
-          project: { ...project, population },
+          project: { ...project, city: editor.city, population },
           populationKey: demandKey(project.city),
           demandSummary: demandSummary(trips, project.city),
           editor,
@@ -279,6 +280,7 @@ export const useAppStore = create<AppState>((set, get) => {
           achieved: 0,
         },
         selection: null,
+        parkingOccupancy: {},
         selectedRoads: [],
         vehicle: null,
         diagnosticsOpen: false,
@@ -301,7 +303,8 @@ export const useAppStore = create<AppState>((set, get) => {
         viewMode: viewMode === '2d' ? '3d' : '2d',
         tool: 'select',
         selectedRoads: [],
-        selection: selection?.kind === 'vehicle' ? selection : null,
+        selection:
+          selection?.kind === 'vehicle' || selection?.kind === 'parking' ? selection : null,
         selectionPoint: null,
         vehicle: selection?.kind === 'vehicle' ? get().vehicle : null,
       });
@@ -464,6 +467,7 @@ export const useAppStore = create<AppState>((set, get) => {
       });
     },
     vehicle: null,
+    parkingOccupancy: {},
     diagnosticsOpen: false,
     rejectedEdit: [],
     busy: false,

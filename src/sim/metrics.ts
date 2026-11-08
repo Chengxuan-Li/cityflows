@@ -1,6 +1,7 @@
 import type { CompiledCity } from '../network';
 import { vehicleClasses, type VehicleClass } from '../schema';
 import type { FailReason, Metrics } from './types';
+import type { createParking } from './parking';
 import {
   COMPLETED,
   FAILED,
@@ -10,7 +11,11 @@ import {
   type Vehicles,
 } from './vehicle';
 
-export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
+export function createAccounting(
+  compiled: CompiledCity,
+  vehicles: Vehicles,
+  parking: ReturnType<typeof createParking>,
+) {
   const trips = {
     pending: vehicles.count,
     queuedOrigin: 0,
@@ -27,6 +32,7 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
     no_origin_connector: 0,
     no_destination_connector: 0,
     gridlocked: 0,
+    no_parking: 0,
   };
   let zoneStops = 0;
   let respawns = 0;
@@ -56,6 +62,7 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
     }
     return {
       timeS,
+      parking: parking.metrics(failedByReason.no_parking),
       completedByClass: { ...completedByClass },
       trips: { ...trips },
       failedByReason: { ...failedByReason },
@@ -67,6 +74,7 @@ export function createAccounting(compiled: CompiledCity, vehicles: Vehicles) {
       respawns,
       get tripOutcomes() {
         return Array.from({ length: vehicles.count }, (_, id) => ({
+          ...parking.detail(id, timeS),
           departedS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.departed[id]!,
           arrivedS: Number.isNaN(vehicles.arrived[id]) ? null : vehicles.arrived[id]!,
           freeFlowS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.freeFlow[id]!,

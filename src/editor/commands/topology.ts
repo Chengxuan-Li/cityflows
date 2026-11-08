@@ -3,7 +3,7 @@ import type { Vec2 } from '../../geo/vec2';
 import { compile } from '../../network';
 import { allocateId, type City, type Command, type Node, type Road } from '../../schema';
 import { applyPatch } from '../patch';
-import { requireEntity, type CommandPatch } from './types';
+import { mapConnectors, requireEntity, type CommandPatch } from './types';
 import { withCrossings } from './road';
 
 type TopologyCommand = Extract<
@@ -185,38 +185,39 @@ export function relocateConnectors(
     places: Object.fromEntries(
       Object.entries(draft.places).map(([id, place]) => [id, { ...place, connectors: [] }]),
     ),
+    parking: Object.fromEntries(
+      Object.entries(draft.parking ?? {}).map(([id, facility]) => [
+        id,
+        { ...facility, connectors: [] },
+      ]),
+    ),
   });
   if (!before.ok || !after.ok) return patch; // The editor reports structural errors at commit.
-  for (const place of Object.values(draft.places)) {
-    let changed = false;
-    const connectors = place.connectors.map((connector) => {
-      const old = before.compiled.connectors[before.compiled.index.connector.get(connector.id)!];
-      if (!old) return connector;
-      const lane = before.compiled.lanes[old.lane]!;
-      const point = pointAtDistance(lane.polyline, lane.cumulative, old.positionM);
-      const candidates = replacements[connector.roadId] ?? [connector.roadId];
-      const positions = candidates
-        .map((id) => {
-          const target =
-            after.compiled.lanes[after.compiled.index.lane.get(`${id}#${connector.lane}`)!]!;
-          return { roadId: id, ...nearestPointOnLine(point, target.polyline) };
-        })
-        .sort((a, b) => a.distance - b.distance);
-      const target = positions[0]!;
-      if (target.roadId === connector.roadId && Math.abs(target.atM - connector.positionM) < 1e-8)
-        return connector;
-      changed = true;
-      if (target.distance > 0.01)
-        (patch.warnings ??= []).push({
-          severity: 'warning',
-          code: 'connector_repositioned',
-          refs: [place.id, connector.id, target.roadId],
-          message: `Moved connector ${connector.id} onto the edited lane on ${target.roadId}`,
-        });
-      return { ...connector, roadId: target.roadId, positionM: target.atM };
-    });
-    if (changed) (patch.set.places ??= {})[place.id] = { ...place, connectors };
-  }
+  mapConnectors(draft, patch, (connector, ownerId) => {
+    const old = before.compiled.connectors[before.compiled.index.connector.get(connector.id)!];
+    if (!old) return connector;
+    const lane = before.compiled.lanes[old.lane]!;
+    const point = pointAtDistance(lane.polyline, lane.cumulative, old.positionM);
+    const candidates = replacements[connector.roadId] ?? [connector.roadId];
+    const positions = candidates
+      .map((id) => {
+        const target =
+          after.compiled.lanes[after.compiled.index.lane.get(`${id}#${connector.lane}`)!]!;
+        return { roadId: id, ...nearestPointOnLine(point, target.polyline) };
+      })
+      .sort((a, b) => a.distance - b.distance);
+    const target = positions[0]!;
+    if (target.roadId === connector.roadId && Math.abs(target.atM - connector.positionM) < 1e-8)
+      return connector;
+    if (target.distance > 0.01)
+      (patch.warnings ??= []).push({
+        severity: 'warning',
+        code: 'connector_repositioned',
+        refs: [ownerId, connector.id, target.roadId],
+        message: `Moved connector ${connector.id} onto the edited lane on ${target.roadId}`,
+      });
+    return { ...connector, roadId: target.roadId, positionM: target.atM };
+  });
   return patch;
 }
 
@@ -414,17 +415,15 @@ export function editTopology(city: City, command: TopologyCommand): CommandPatch
       message: `Removed unused node ${id}`,
     });
   }
-  for (const place of Object.values(city.places)) {
-    const connectors = place.connectors.filter((c) => c.roadId !== road.id);
-    if (connectors.length === place.connectors.length) continue;
-    (patch.set.places ??= {})[place.id] = { ...place, connectors };
-    for (const connector of place.connectors.filter((c) => c.roadId === road.id))
-      patch.warnings!.push({
-        severity: 'warning',
-        code: 'connector_removed',
-        refs: [place.id, connector.id, road.id],
-        message: `Removed connector ${connector.id} with road ${road.id}`,
-      });
-  }
+  mapConnectors(city, patch, (connector, ownerId) => {
+    if (connector.roadId !== road.id) return connector;
+    patch.warnings!.push({
+      severity: 'warning',
+      code: 'connector_removed',
+      refs: [ownerId, connector.id, road.id],
+      message: `Removed connector ${connector.id} with road ${road.id}`,
+    });
+    return null;
+  });
   return relocateConnectors(city, patch);
 }

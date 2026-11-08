@@ -7,6 +7,10 @@ export function selectionAfterEdit(
   after: CompiledCity,
 ): Pick | null {
   switch (selection?.kind) {
+    case 'parking': {
+      const parking = after.index.parking.get(before.parking[selection.parking]!.id);
+      return parking === undefined ? null : { kind: 'parking', parking };
+    }
     case 'lane': {
       const previous = before.roads[selection.road]!;
       const laneNumber = before.lanes[selection.lane]!.lane;
@@ -37,6 +41,8 @@ export function selectionAfterEdit(
       const previous = before.connectors[selection.connector]!;
       const connector = after.index.connector.get(previous.id);
       if (connector !== undefined) return { kind: 'connector', connector };
+      if (previous.parking !== undefined)
+        return selectionAfterEdit({ kind: 'parking', parking: previous.parking }, before, after);
       return selectionAfterEdit({ kind: 'place', place: previous.place }, before, after);
     }
     default:

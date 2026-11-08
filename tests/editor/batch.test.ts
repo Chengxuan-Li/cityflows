@@ -4,7 +4,7 @@ import { grid5x5 } from '../../src/fixtures/grid5x5';
 import type { Command } from '../../src/schema';
 
 it('20 lane-count changes commit as one history entry and undo restores every road', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const editor = createEditor(city);
   const roads = Object.values(city.roads).slice(0, 20);
   const commands: Command[] = roads.map((road) => ({

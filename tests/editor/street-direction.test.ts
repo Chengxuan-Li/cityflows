@@ -3,7 +3,7 @@ import { createEditor } from '../../src/editor';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 
 it('makes a street one-way, removes stale references and recreates the opposite road', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const place = Object.values(city.places)[0]!;
   const connector = place.connectors[0]!;
   const removed = city.roads[connector.roadId]!;

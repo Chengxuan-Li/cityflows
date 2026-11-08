@@ -22,14 +22,14 @@ const before = {
     completed: 28,
     meanTravelTimeS: 87.44642857142897,
     meanDelayS: 27.299867625434647,
-    hash: 4155976197,
+    hash: 1689383669, // TASK-102 includes parking stock and car locations in state hashes.
     trips: 56,
   },
   town: {
     completed: 207,
     meanTravelTimeS: 138.45265700483094,
     meanDelayS: 45.9328750119628,
-    hash: 1163897950,
+    hash: 1188370961,
     trips: 414,
   },
 };
@@ -38,7 +38,7 @@ test.each([
   ['grid5x5', grid5x5],
   ['town', town],
 ] as const)(
-  'T46 cars-only %s reproduces pre-class completion, times and state exactly',
+  'T46 cars-only %s preserves pre-class completion and times with deterministic parking state',
   (name, fixture) => {
     const city = fixture(19);
     const scenario = defaultScenario(name, 19);

@@ -31,7 +31,7 @@ test.each([
     expect(plain.ok && plain.city).toStrictEqual(planar);
     expect(cachePath(xml, { ...options, relaxMaxM: 0 })).not.toBe(cachePath(xml, options));
   },
-  60_000,
+  Number(process.env.CITYFLOWS_TEST_TIMEOUT_MS ?? 60_000),
 );
 
 test('the cache key covers the importer, the network it compiles with and their libraries', () => {

@@ -34,10 +34,10 @@ const hash = (value: unknown) =>
 // `van` removed they hash as at 56ffccd. Updated again at the TASK-101 merge (access, zones and
 // retained access-boundary junctions).
 const baselines = {
-  grid: 'a3f4b1fd03c65d0e380c56473b082f0d7dd67565fed7003c7239b8fe0f31bbb3',
-  town: '7f5407b1088b1d219baedc5442270c618ff896125e57d615b67867b4318c15ec',
-  'munich-donnersberger': '114894aea61446a784fca6707c1ef6601080ac8e03d374f0e66586be8b2f36fe',
-  'sindelfingen-a81': '6796e26d82f456a43fd826489ab54f9285f4148ca82c0f3be1ed1a15d8027478',
+  grid: '296948629376e758231293088f0cdb136d7554c269b0d0880a92577177e913a6',
+  town: '96bd0dd88f049e1589aac69b800a1fe25dfb976687b5b55c9874998b7c51b2a6',
+  'munich-donnersberger': '13adf10aeb155f927cdeab07ffdfd655a80da85ca764462cc87848c93a38e931',
+  'sindelfingen-a81': 'bcd1a39665fe5c3ce4f342544916dd5a95cedd2fb6331035eeeb5f6d82cf024f',
 };
 
 unitTest(

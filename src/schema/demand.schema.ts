@@ -77,6 +77,7 @@ export const demandConfigSchema = z.object({
 
 export const simParamsSchema = z
   .object({
+    parkingSearchRadiusM: z.number().nonnegative(),
     dtS: z.number(),
     vehicleClasses: z.record(
       z.enum(vehicleClasses),

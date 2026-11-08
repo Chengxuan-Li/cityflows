@@ -12,6 +12,7 @@ export interface MetricsSample {
   queued: number;
   completed: number;
   meanDelayS: number;
+  parkingOccupancy?: Record<string, number>;
 }
 
 export interface TrajectoryStatus {
@@ -22,6 +23,8 @@ export interface TrajectoryStatus {
 export interface HostSnapshot extends VehicleSnapshot {
   /** Included at most twice per wall second, alongside the matching vehicle positions. */
   roadSpeedRatio?: Float32Array;
+  /** Occupied slots in compiled.parking order, included at most twice per wall second. */
+  parkingOccupancy?: Uint32Array;
 }
 
 export interface HeadlessResult {

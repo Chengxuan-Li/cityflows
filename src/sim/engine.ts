@@ -19,6 +19,7 @@ import { createLaneChanges } from './lane-change';
 import { createLinkCosts } from './link-costs';
 import { createMerges } from './merge';
 import { createAccounting } from './metrics';
+import { createParking } from './parking';
 import { DEFAULT_SIM_PARAMS } from './params';
 import { createProjector, patchChanges, remapRoute } from './patch';
 import { patchSignals } from './signals';
@@ -84,8 +85,17 @@ function createRun({
     );
   }
   const reservationAcceleration = new Float64Array(trips.length);
-  const accounting = createAccounting(compiled, vehicles);
-  const connectors = createConnectors(compiled, trips, scenario, params, vehicles, accounting);
+  const parking = createParking(compiled, trips, scenario, params, vehicles);
+  const accounting = createAccounting(compiled, vehicles, parking);
+  const connectors = createConnectors(
+    compiled,
+    trips,
+    scenario,
+    params,
+    vehicles,
+    accounting,
+    parking,
+  );
   let merges = createMerges(compiled, vehicles, params);
   let intersections = createIntersections(compiled, vehicles, params, merges.canEnter, {
     onDecision: intersectionObserver,
@@ -138,6 +148,7 @@ function createRun({
   const fallback = new Uint8Array(trips.length);
   const waitingForLane = new Uint8Array(trips.length);
   const arrival = new Int32Array(trips.length).fill(-1);
+  const parkingEdit = new Uint8Array(trips.length);
   const order = new Uint32Array(trips.length);
   const acceleration = new Float64Array(trips.length);
   const limit = new Float64Array(trips.length);
@@ -152,6 +163,23 @@ function createRun({
       costs,
       vehicleRouteRequest(vehicles, params, id, lane, positionM),
     );
+  }
+
+  function chooseParkingRoute(id: number, lane: number, positionM: number, timeS: number) {
+    if (
+      !parking.choose(id, timeS, (into) => {
+        vehicles.destination[id] = into;
+        return routeFrom(id, lane, positionM).ok;
+      })
+    )
+      return false;
+    const result = routeFrom(id, lane, positionM);
+    if (!result.ok) throw new Error('Chosen parking route disappeared');
+    vehicles.route[id] = result.route;
+    vehicles.routeStep[id] = 0;
+    routeReasons[id] = 'parking';
+    parkingEdit[id] = 0;
+    return true;
   }
 
   function leaveRoad(id: number, timeS: number, positionM: number) {
@@ -301,9 +329,17 @@ function createRun({
 
   function releaseTrip(id: number, connector: CConnector, timeS: number) {
     const { lane, positionM } = connector;
+    if (
+      parking.required(id) &&
+      !parking.choose(id, timeS, (into) => {
+        vehicles.destination[id] = into;
+        return routeFrom(id, lane, positionM).ok;
+      })
+    ) {
+      return false;
+    }
     const result = routeFrom(id, lane, positionM);
     if (!result.ok) {
-      accounting.fail(id, 'no_route');
       return false;
     }
     vehicles.route[id] = result.route;
@@ -366,6 +402,7 @@ function createRun({
           continue;
         }
         const position = vehicles.position[id]!;
+        if (lane) parking.approach(id, lane.idx, position, timeS);
         const destination = compiled.connectors[arrival[id]!];
         const movement = compiled.movements[vehicles.movement[id]!];
         if (laneChanges.holding[id] && intersections.grants[id] !== -1) intersections.release(id);
@@ -402,7 +439,7 @@ function createRun({
         let obstacle = rear;
         let leaderSpeed = leader === -1 ? 0 : vehicles.speed[leader]!;
         let stopAt = Infinity;
-        if (lane && destination && !connectors.canArrive(destination, timeS)) {
+        if (lane && destination && !connectors.canArrive(destination, timeS, id)) {
           // Put the virtual bumper beyond the portal so standstill occurs at the portal.
           stopAt = destination.positionM + idm.minGapM;
         } else if (
@@ -512,7 +549,34 @@ function createRun({
   function reachDestination(id: number, connector: CConnector, timeS: number) {
     vehicles.position[id] = connector.positionM;
     vehicles.speed[id] = 0;
-    if (connectors.arrive(connector, timeS)) {
+    if (
+      connector.parking !== undefined &&
+      (parking.full(connector.idx) || !parking.admits(id, connector.idx))
+    ) {
+      parking.reject(id, timeS);
+      const lane = vehicles.lane[id]!;
+      if (
+        !parking.choose(id, timeS, (into) => {
+          vehicles.destination[id] = into;
+          return routeFrom(id, lane, connector.positionM).ok;
+        })
+      ) {
+        leaveRoad(id, timeS, connector.positionM);
+        vehicles.remove(id);
+        accounting.fail(id, 'no_parking');
+        return;
+      }
+      const result = routeFrom(id, lane, connector.positionM);
+      if (!result.ok) throw new Error('Chosen parking route disappeared');
+      vehicles.route[id] = result.route;
+      vehicles.routeStep[id] = 0;
+      routeReasons[id] = 'parking';
+      if (vehicles.state[id] === QUEUED_DESTINATION) accounting.transition(id, DRIVING);
+      planLane(id, lane, connector.positionM);
+      return;
+    }
+    if (connectors.arrive(connector, timeS, id)) {
+      parking.arrive(id, connector.idx, timeS);
       leaveRoad(id, timeS, connector.positionM);
       vehicles.remove(id);
       accounting.complete(id, timeS);
@@ -527,7 +591,14 @@ function createRun({
     roadEnteredM[id] = 0;
     if (intersections.grants[id] !== -1) intersections.release(id);
     vehicles.remove(id);
-    if (fallback[id]) {
+    if (parkingEdit[id]) {
+      if (!chooseParkingRoute(id, lane, 0, timeS)) {
+        vehicles.lane[id] = lane;
+        vehicles.position[id] = 0;
+        accounting.fail(id, 'no_parking');
+        return;
+      }
+    } else if (fallback[id]) {
       const result = routeFrom(id, lane, 0);
       if (!result.ok) {
         vehicles.lane[id] = lane;
@@ -736,6 +807,7 @@ function createRun({
       lane: new Int32Array(count),
       state: new Uint8Array(count),
       vclass: new Uint8Array(count),
+      parkingOccupancy: parking.snapshot(),
       fade: new Float32Array(count),
     };
     let i = 0;
@@ -768,6 +840,7 @@ function createRun({
     if (!trip || state === undefined || state === PENDING) return null;
     const route = vehicles.route[id];
     return {
+      ...parking.detail(id, time()),
       id: vehicleId,
       tripId: trip.id,
       personId: trip.personId,
@@ -824,6 +897,7 @@ function createRun({
     )
       throw new Error('Place additions and removals require a restart');
     const before = compiled;
+    parking.patch(next);
     const changes = patchChanges(before, next);
     const project = createProjector(next);
     const oldGrants = intersections.grants.slice();
@@ -862,6 +936,11 @@ function createRun({
       intersections.exitedFrom[id] = changes.movements[oldExits[id]!] ?? -1;
       const oldDestination = before.connectors[vehicles.destination[id]!];
       const mappedDestination = oldDestination ? changes.connectors[oldDestination.idx] : undefined;
+      const lostParking =
+        parking.required(id) &&
+        (parkingEdit[id] !== 0 ||
+          (oldDestination?.parking !== undefined &&
+            (mappedDestination === undefined || mappedDestination === -1)));
       if (
         mappedDestination !== undefined &&
         mappedDestination !== -1 &&
@@ -909,6 +988,16 @@ function createRun({
         } else position = segment.lengthM;
       }
       vehicles.insert(id, newField, position);
+      if (lostParking) {
+        parking.beginSearch(id, time());
+        if (newField < 0) parkingEdit[id] = 1;
+        else if (!chooseParkingRoute(id, newField, position, time())) {
+          vehicles.remove(id);
+          vehicles.speed[id] = 0;
+          accounting.fail(id, 'no_parking');
+          continue;
+        }
+      }
       if (vehicles.destination[id] === -1) {
         vehicles.remove(id);
         vehicles.speed[id] = 0;
@@ -994,7 +1083,7 @@ function createRun({
     snapshot,
     inspect,
     metrics: () => accounting.metrics(time()),
-    stateHash: () => stateHash(time(), vehicles, accounting.trips),
+    stateHash: () => stateHash(time(), vehicles, accounting.trips, parking.stateHash()),
     step(n: number) {
       for (let i = 0; i < n; i++) {
         const timeS = time();

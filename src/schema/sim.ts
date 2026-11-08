@@ -2,6 +2,7 @@ import type { VehicleClass } from './city';
 
 /** Simulation parameters (architecture section 8). Defaults live in src/sim/params.ts. */
 export interface SimParams {
+  parkingSearchRadiusM: number;
   dtS: number;
   vehicleClasses: Record<
     VehicleClass,

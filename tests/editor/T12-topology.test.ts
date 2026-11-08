@@ -7,7 +7,7 @@ import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import { citySchema, historyFileSchema, type Command } from '../../src/schema';
 
 it('T12 adds a faster bypass with legal movements at both ends and undoes it exactly', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const editor = createEditor(city);
   const road = city.roads['r:26']!;
   const command: Command = {
@@ -49,7 +49,7 @@ it('T12 adds a faster bypass with legal movements at both ends and undoes it exa
 });
 
 it('snaps a drawn street to both halves of an existing road in one history entry', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const editor = createEditor(city);
   const command = drawRoadCommand(
     city,
@@ -80,7 +80,7 @@ it('snaps a drawn street to both halves of an existing road in one history entry
 });
 
 it('deletes dependent connectors, turn rules and signal groups with warnings and removes orphan nodes', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   city.nodes['n:2']!.turnRules.push({
     from: 'r:26',
     to: 'r:30',
@@ -119,7 +119,7 @@ it('deletes dependent connectors, turn rules and signal groups with warnings and
 });
 
 it('moves every incident endpoint as one undoable edit', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const editor = createEditor(city);
   const pos = { x: 130, y: 15 };
   expect(editor.apply({ kind: 'moveNode', nodeId: 'n:2', pos }).ok).toBe(true);
@@ -132,7 +132,7 @@ it('moves every incident endpoint as one undoable edit', () => {
 });
 
 it('allocates new endpoints without connecting a grade-separated crossing', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const editor = createEditor(city);
   const from = { x: 60, y: -40 },
     to = { x: 60, y: 520 };
@@ -155,7 +155,7 @@ it('allocates new endpoints without connecting a grade-separated crossing', () =
 });
 
 it('splits and merges a two-way street, preserving attributes, end rules and connector positions', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const road = city.roads['r:26']!;
   city.nodes[road.to]!.turnRules.push({
     from: road.id,
@@ -190,7 +190,7 @@ it('splits and merges a two-way street, preserving attributes, end rules and con
 });
 
 it('keeps connectors on their spatial split half, including lane trimming, and restores them on merge', () => {
-  const city = grid5x5();
+  const city = createEditor(grid5x5()).city;
   const place = city.places['p:104']!;
   const template = place.connectors[0]!;
   place.connectors = [10, 90].map((positionM) => ({

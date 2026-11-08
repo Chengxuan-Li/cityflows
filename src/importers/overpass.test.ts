@@ -43,5 +43,13 @@ test('T44 includes surroundings in the same bbox while preserving the road query
   expect(full.split('->.roads;')[0]).toBe(roads.split('->.roads;')[0]);
   for (const tag of ['building', 'natural', 'landuse', 'leisure', 'amenity', 'railway', 'waterway'])
     expect(full).toContain('[' + tag);
-  expect(roads).not.toContain('[building');
+  expect(roads).not.toContain('[building][building!=no]');
+});
+
+test('T48 garage data is requested independently of decorative surroundings', () => {
+  const query = buildQuery([-74.008, 40.711, -74.004, 40.715], false);
+  expect(query).toContain('nwr[building~"^(parking|garage|garages)$"]');
+  expect(query).toContain('nwr[amenity=parking][parking~"^(underground|multi-storey)$"]');
+  expect(query).toContain('node[entrance=garage]');
+  expect(query).toContain('[service!~"^(parking_aisle|driveway)$"]');
 });

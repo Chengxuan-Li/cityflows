@@ -15,6 +15,7 @@ const labels: [keyof LayerVisibility, string][] = [
   ['difference', 'Comparison road usage'],
   ['heat', 'Road speeds'],
   ['queues', 'Queues'],
+  ['parkingOccupancy', 'Parking occupancy'],
   ['places', 'Places'],
   ['connectors', 'Entrances and exits'],
   ['signals', 'Signals'],
@@ -74,6 +75,9 @@ export function Layers() {
       )}
       {layers.queues && (
         <p className="muted">Larger dots mean more stopped cars near a lane end.</p>
+      )}
+      {layers.parkingOccupancy && (
+        <p className="muted">Green has room · amber is busy · red is full</p>
       )}
     </section>
   );

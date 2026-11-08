@@ -274,8 +274,18 @@ interface WalkLink { id: WalkLinkId; from: WalkNodeId; to: WalkNodeId; line: Vec
 
 Stall geometry, sidewalks along streets and walk links over TASK-091 crossings are derived at
 compile and never saved. `sidewalk` sides are relative to the road's travel direction; absent
-means the default by road class. Compile, routing and the simulation ignore these fields until
-the tasks that own them wire them in.
+means the default by road class. TASK-102 compiles and simulates garages; roadside strips,
+lots and the walk network wait for their owning tasks.
+
+TASK-102 persists OSM garages and inferred private garages on the same `City.parking` format.
+An implicit garage reuses its place's connectors and is marked `implicitGarage` in provenance;
+compile follows the current place connectors after road edits. Capacity is the larger of jobs
+and residents times the inference car share (default 1, matching default demand). A place
+with an explicit facility normally needs no implicit garage. For block-aggregated places
+with several source buildings, mapped slots describe only part of the block: an inferred
+garage supplies the positive remainder, without changing mapped capacities or demand.
+Editor entry and place creation materialize these facilities for stable saved IDs; compile
+derives them on a copy for legacy files and headless callers. Gateways have no garage.
 
 TASK-105 adds optional display-only terrain without a schema-version bump. The boundary
 validates positive spacing, at least two rows and columns, base64 and exactly two bytes per
@@ -338,9 +348,11 @@ interface CompiledCity {
   movements: CMovement[];
   places: CPlace[];
   connectors: CConnector[];
+  parking: CParking[];            // dense garage facilities, TASK-102
   index: {
     node: Map<NodeId, number>; road: Map<RoadId, number>; lane: Map<LaneId, number>;
     movement: Map<MovementId, number>; place: Map<PlaceId, number>; connector: Map<ConnectorId, number>;
+    parking: Map<ParkingId, number>;
   };
   laneSpatial: Flatbush;   // lane segments, for picking and snapping
 }
@@ -363,11 +375,17 @@ interface CMovement { idx: number; id: MovementId; fromLane: number; toLane: num
   conflicts: number[]; priority: number; neverGreen: boolean; turnOnRed?: boolean; }
 interface CSignal { offsetS: number; amberS: number; allRedS: number; cycleS: number;
   phases: { durationS: number; movements: number[] }[]; }
-interface CConnector { idx: number; id: ConnectorId; place: number; lane: number;
+interface CConnector { idx: number; id: ConnectorId; place: number; parking?: number; lane: number;
   positionM: number; direction: 'in' | 'out' | 'both'; throughputPerMin: number; }
 interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   connectorsIn: number[]; connectorsOut: number[]; capacity: number | null; events: PlaceEvent[]; }
 ```
+
+`CParking` carries canonical identity/kind/access/capacity, owner place index (`-1` when
+unowned), centroid, entry/exit connector indices, initial occupancy fraction, resident count
+and the source facility for inspection. An unowned garage connector has `place: -1` and a
+parking index. Implicit entries share their place's connector indices; explicit entries
+are separate. Garage entries obey ordinary road/lane/position validation and route access.
 
 TASK-101 resolves `CRoad.access` for every class. `zone[classIndex]` is `-1` outside local
 access zones. For each class, destination/private roads connected through either shared
@@ -690,6 +708,12 @@ fallback movement; the router does not use it, so a car there must merge upstrea
 
 ## 6. Editing
 
+TASK-102 adds `setParkingAttributes` (capacity and access) and parking collections to patches
+and inverse patches. Inferred facilities become canonical when editing begins or a place is
+added; undo removes newly inferred facilities with their place. Garage connectors follow
+road topology and lane edits. The live engine rejects reducing capacity below occupied slots;
+the inspector uses current occupancy as the minimum. Restart can apply a lower capacity.
+
 Lives in `src/editor`. The editor owns one `City` and exposes:
 
 ```ts
@@ -717,12 +741,13 @@ type Command =
   | { kind: 'updatePlace'; placeId: PlaceId; patch: Partial<Omit<Place, 'id' | 'connectors'>> }
   | { kind: 'setConnectors'; placeId: PlaceId; connectors: Connector[] }
   | { kind: 'deletePlace'; placeId: PlaceId }
+  | { kind: 'setParkingAttributes'; parkingId: ParkingId; capacity?: number; access?: ParkingAccess; source?: ParkingFacility }
   | { kind: 'batch'; label: string; commands: Command[] };                      // Gate 2
 
 interface Patch {
   metadata?: Pick<City, 'name' | 'drivingSide' | 'geo'>;
-  set: { nodes?: Record<NodeId, Node>; roads?: Record<RoadId, Road>; places?: Record<PlaceId, Place> };
-  remove: { nodes?: NodeId[]; roads?: RoadId[]; places?: PlaceId[] };
+  set: { nodes?: Record<NodeId, Node>; roads?: Record<RoadId, Road>; places?: Record<PlaceId, Place>; parking?: Record<ParkingId, ParkingFacility> };
+  remove: { nodes?: NodeId[]; roads?: RoadId[]; places?: PlaceId[]; parking?: ParkingId[] };
   nextId?: number;
 }
 
@@ -911,6 +936,16 @@ only request-independent edges. Origin/destination zones and purpose are evaluat
 request after cache lookup, so local and delivery permissions cannot leak between requests.
 
 ## 8. Simulation
+
+TASK-102 keeps garage stock and person car chains in `sim/parking.ts`, separate from place
+event admission. Initial residential stock uses residents times scenario car share, bounded
+by slots and distributed across facilities; explicit `occupancyAtStart` wins. Otherwise work
+and school garages start 70% occupied from 09:00 to 17:00, retail 35% from 09:00 to 20:00,
+and other non-residential garages start empty. Initial trips reserve distinct parked cars;
+an exhausted origin is a counted `no_parking` failure. A successful departure decrements
+stock once, including across gridlock respawns (recovery queues sit outside garage stock).
+Arrivals increment atomically, never beyond
+capacity, and keep the car's facility for its next trip. These states participate in hashes.
 
 Lives in `src/sim`. Fixed step `dtS = 0.1`. All randomness from the seeded generator in
 `src/geo/random.ts` (mulberry32 or xoshiro128**, with uniform and normal sampling; shared by
@@ -1359,9 +1394,16 @@ variant. Saving a baseline captures current editor state, including unapplied li
   sub-stream per person id, so adding a place does not reshuffle existing persons.
 - Trips are not clipped to the scenario window. The sim releases a trip whose `departS` is
   before `startS` at `startS`; a trip after `endS` stays pending in the counts.
-- Trip ends map to connectors in the sim: origin uses an `out` or `both` connector of the
-  origin place, destination an `in` or `both` connector of the destination place. When a place
-  has several, the sim picks per trip by seeded choice weighted by `throughputPerMin`.
+- TASK-102 local car trips choose the destination's own admissible garage first, then public
+  garages by straight-line walking distance, within `parkingSearchRadiusM` (default 400 m)
+  before those beyond it. Each candidate must have room and a class/purpose-feasible route.
+  Choice happens at departure and capacity is checked again at the entry; a full entry sends
+  the car cruising to the next reachable candidate. Exhaustion fails as `no_parking`.
+  Search time starts on entering the search radius for a fallback, or when an entry is
+  rejected, and ends on parking; walking distance is recorded separately, with no walkers.
+  A person's next car trip waits for the previous trip and leaves from the parked facility,
+  not the activity place. Gateway trips never park at their gateway end. Places with no
+  facilities retain legacy connector admission, including zero-demand event portals.
 - Validation summary (Gate 3 UI): trips by place and hour, total trips, mean length, queued
   unspawned, completed, failed by reason.
 
@@ -1398,6 +1440,11 @@ type HostEvent =
   UI shows the achieved speed, so throttling is visible rather than silent.
 - Snapshots are pulled: the main thread requests one per animation frame with at most one in
   flight; the worker replies with transferable buffers. `tick` events are pushed at 10 Hz.
+- TASK-102 adds `parkingOccupancy`, a separate count array in compiled facility order,
+  transferred with heat at most once per 500 ms; load/restart/patch resets the throttle.
+  Minute metrics history also records occupancy keyed by facility ID. Parking metrics expose
+  current stock, successful parking arrivals, mean search time and counted failures.
+  Inspect/trip outcomes and CSV include facility ID, walking distance and parking search time.
 - TASK-100: the class-index `vclass` buffer transfers with every vehicle snapshot. Inspector
   replies carry class and purpose, headless metrics preserve `completedByClass`, and trip CSV
   records include `class` and `purpose` columns after destination.
@@ -1775,6 +1822,17 @@ baseline.json     { city: City, scenario: Scenario, population?: Person[] } opti
 
 ## 13. OSM import
 
+TASK-102 imports `amenity=parking` with `parking=underground|multi-storey`, and buildings
+tagged `parking|garage|garages`, from nodes, ways and multipolygons. Numeric capacity wins;
+otherwise footprint area times levels / 25 m² estimates slots (levels capped at 20, inferred
+capacity capped at 10000). Guessed/capped values are marked inferred. Amenity parking without
+access is public; yes/permissive/designated are public, customers stays customers and other
+restricted or unlabelled building garages are private. A garage touching an original place
+building footprint serves that place. Garage entrance nodes supply entries; otherwise the
+nearest car-permitted lane is snapped with the shared connector logic. Disconnected garages
+remain mapped and route feasibility excludes them from a particular trip's choices. Implicit
+garages are added after building-demand aggregation. Surface lot and aisle import is deferred.
+
 TASK-101 reads access tags per directed road. Precedence for `all` is `access`, `vehicle`,
 `motor_vehicle`, `motorcar`; per-class tags override that (`goods` for van when present in
 `vehicleClasses`, `hgv` for truck, `psv` then `bus` for bus). A tag's direction suffix
@@ -1965,9 +2023,10 @@ Overpass provider: query drivable highways and restriction relations in a bbox c
 endpoint configurable, OSM attribution recorded. TASK-096 adds the context tag selectors
 (ways and multipolygon relations) inside the same bbox while retaining the road selector.
 TASK-106 adds `node[natural=tree]` and `way[natural=tree_row]` to surroundings only.
-Query version 3 invalidates older extracts that lack tree selectors; the road-only selector
-and restriction closure are unchanged. Imports with surroundings disabled
-fetch the road-only query and bypass the full-context cache, so they cannot poison it. Nominatim, when used, is limited to one
+TASK-102 adds a separate garage and entrance clause to both queries. Query version 4
+invalidates cached extracts missing garages; the road selector and restriction closure stay
+unchanged. Imports with surroundings disabled fetch roads and garages and bypass the
+full-context cache, so they cannot poison it. Nominatim, when used, is limited to one
 request per second and triggered only by an explicit search action.
 
 ## 14. Testing

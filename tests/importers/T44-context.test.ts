@@ -26,15 +26,15 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     expect(off.city).not.toHaveProperty('context');
     const baseline =
       name === 'munich-donnersberger'
-        ? // TASK-101: imported road access/bus reservations and compiled access/zone arrays;
-          // merged with TASK-100's `van`.
+        ? // TASK-102 persists garage IDs, capacity/access inference and the advanced ID counter;
+          // compilation now includes parking facilities and their entries.
           [
-            '5214f5f79a95e4fa038e01fa58ec6aaf65fe74b09cfc495d83dca579ae279b3b',
-            '114894aea61446a784fca6707c1ef6601080ac8e03d374f0e66586be8b2f36fe',
+            '11a7022ffb599e262038854f342a987a0c1fb2ae76d1790623d8ba9be51e9b0e',
+            '13adf10aeb155f927cdeab07ffdfd655a80da85ca764462cc87848c93a38e931',
           ]
         : [
-            '440715f6bc83776119a532b4d27dff374f7d03dc4cceae1d24cbfcddd282ecd8',
-            '6796e26d82f456a43fd826489ab54f9285f4148ca82c0f3be1ed1a15d8027478',
+            '23d8ccc808153bc15f0be4298e07f0c7b56ee4babd4ed57be0d148f7e9e2e5cc',
+            'bcd1a39665fe5c3ce4f342544916dd5a95cedd2fb6331035eeeb5f6d82cf024f',
           ];
     expect(hash(off.city)).toBe(baseline[0]);
     expect(hash(compile(off.city))).toBe(baseline[1]);

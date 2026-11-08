@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { MetricsSample } from '../../host/protocol';
+import type { Metrics } from '../../sim/types';
 import { useAppStore } from '../store';
 
 function clock(timeS: number) {
@@ -15,22 +16,24 @@ const plots = [
 
 export function MetricsPanel() {
   const session = useAppStore((state) => state.session);
+  const selection = useAppStore((state) => state.selection);
   const { toggleMetrics, reportError } = useAppStore.getState();
   const [result, setResult] = useState<{
     engine: NonNullable<typeof session>['engine'];
     samples: MetricsSample[];
+    parking: Metrics['parking'];
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [facilityId, setFacilityId] = useState('');
   // A new loaded city also identifies restart. History lives in the worker, not this sheet.
   useEffect(() => {
     if (!session) return;
     let active = true;
-    void session.engine
-      .metricsSeries()
-      .then((samples) => {
+    void Promise.all([session.engine.metricsSeries(), session.engine.metrics()])
+      .then(([samples, metrics]) => {
         if (active) {
-          setResult({ engine: session.engine, samples });
+          setResult({ engine: session.engine, samples, parking: metrics.parking });
           setLoading(false);
         }
       })
@@ -55,6 +58,29 @@ export function MetricsPanel() {
   const samples = result?.engine === session?.engine ? (result?.samples ?? []) : [];
   const first = samples[0];
   const last = samples.at(-1);
+  const facilities = session?.compiled.parking ?? [];
+  const selectedId = selection?.kind === 'parking' ? facilities[selection.parking]?.id : undefined;
+  const chosen =
+    facilities.find(({ id }) => id === facilityId) ??
+    facilities.find(({ id }) => id === selectedId) ??
+    facilities[0];
+  const parking = result?.engine === session?.engine ? result?.parking : undefined;
+  const charts: { key: string; label: string; color: string; values: number[]; maximum: number }[] =
+    plots.map(([key, label, color]) => ({
+      key,
+      label,
+      color,
+      values: samples.map((sample) => sample[key]),
+      maximum: 1,
+    }));
+  if (chosen)
+    charts.push({
+      key: 'parking',
+      label: 'Parking occupancy',
+      color: '#668e72',
+      values: samples.map((sample) => sample.parkingOccupancy?.[chosen.id] ?? 0),
+      maximum: chosen.capacity,
+    });
   return (
     <section id="metrics-chart" className="chart-sheet" aria-label="Traffic over time">
       <div className="chart-heading">
@@ -76,21 +102,43 @@ export function MetricsPanel() {
           </button>
         </div>
       </div>
+      {parking && (
+        <dl className="details" aria-label="Parking metrics">
+          <dt>Cars parked</dt>
+          <dd>{parking.parked.toLocaleString()}</dd>
+          <dt>Mean parking search</dt>
+          <dd>{parking.meanSearchTimeS.toFixed(1)} s</dd>
+          <dt>Trips failed for lack of parking</dt>
+          <dd>{parking.failed.toLocaleString()}</dd>
+        </dl>
+      )}
+      {chosen && (
+        <label className="edit-field">
+          Occupancy by facility
+          <select value={chosen.id} onChange={(event) => setFacilityId(event.currentTarget.value)}>
+            {facilities.map((facility) => (
+              <option key={facility.id} value={facility.id}>
+                {facility.name ?? facility.id}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="chart-plots">
-        {plots.map(([key, label, color]) => {
-          const max = Math.max(1, ...samples.map((sample) => sample[key]));
+        {charts.map(({ key, label, color, values, maximum }) => {
+          const max = Math.max(1, maximum, ...values);
           const start = first?.timeS ?? 0;
           const duration = Math.max(60, (last?.timeS ?? start) - start);
           const points = samples
             .map(
-              (sample) =>
-                `${36 + (250 * (sample.timeS - start)) / duration},${100 - (76 * Math.max(0, sample[key])) / max}`,
+              (sample, index) =>
+                `${36 + (250 * (sample.timeS - start)) / duration},${100 - (76 * Math.max(0, values[index]!)) / max}`,
             )
             .join(' ');
           return (
             <figure key={key}>
               <figcaption>
-                {label} <strong>{last ? Math.round(last[key]).toLocaleString() : '—'}</strong>
+                {label} <strong>{last ? Math.round(values.at(-1)!).toLocaleString() : '—'}</strong>
               </figcaption>
               <svg viewBox="0 0 300 124" role="img" aria-label={`${label} over simulated time`}>
                 <path d="M36 24V100H286" fill="none" stroke="#dcded2" />

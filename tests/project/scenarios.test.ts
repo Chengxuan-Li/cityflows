@@ -31,7 +31,7 @@ test('baseline round-trips with its scenario in ZIP and JSON; restore is undoabl
   expect(editor.city.roads).toEqual(city.roads);
   expect(editor.city.nodes).toEqual(city.nodes);
   expect(editor.city.places).toEqual(city.places);
-  expect(editor.city.nextId).toBe(city.nextId);
+  expect(editor.city.nextId).toBe(createEditor(city).city.nextId);
   expect(editor.city.name).toBe(city.name);
   expect(editor.city.version).toBe(variant.version + 1);
   editor.undo();

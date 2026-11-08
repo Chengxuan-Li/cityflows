@@ -19,6 +19,7 @@ import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
 import { populateStops } from './stops';
+import { compileParking } from './parking';
 import type {
   CConnector,
   CLane,
@@ -491,6 +492,7 @@ export function compile(city: City): CompileResult {
     movements,
     places,
     connectors,
+    parking: [],
     index: {
       node: nodeIndex,
       road: roadIndex,
@@ -498,9 +500,13 @@ export function compile(city: City): CompileResult {
       movement: indices(movements),
       place: indices(places),
       connector: indices(connectors),
+      parking: new Map(),
     },
     laneSpatial: buildLaneSpatial(lanes),
   };
+  compileParking(city, compiled, diagnostics, centroid);
+  for (const lane of lanes)
+    lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   for (const node of nodes) {
     if (node.control === 'signal') {
       node.signal = compileSignal(node, sourceNodes[node.idx]!.signal!, compiled, diagnostics);

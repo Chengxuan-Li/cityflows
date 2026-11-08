@@ -25,6 +25,9 @@ export function tripRecords(engine: TrafficEngine, trips: readonly TripRequest[]
       delay: travelTime === null ? null : Math.max(0, travelTime - outcome.freeFlowS!),
       failReason: outcome.failReason,
       respawns: outcome.respawns,
+      parkingFacility: outcome.parkingFacility,
+      walkingDistanceM: outcome.walkingDistanceM,
+      parkingSearchTimeS: outcome.parkingSearchTimeS,
     };
   });
 }

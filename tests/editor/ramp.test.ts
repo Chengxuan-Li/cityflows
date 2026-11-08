@@ -20,8 +20,9 @@ test.each(['right', 'left'] as const)(
     place('Destination', 'work', { x: 400, y: 100 }, [
       { road: to, direction: 'in', positionM: 350 },
     ]);
-    const before = structuredClone(city);
+    const sourceBefore = structuredClone(city);
     const editor = createEditor(city);
+    const before = structuredClone(editor.city);
     const result = editor.apply({
       kind: 'addRamp',
       from: { roadId: from.id, atM: 100 },
@@ -60,7 +61,7 @@ test.each(['right', 'left'] as const)(
     expect(editor.city).toEqual({ ...built, version: editor.city.version });
     expect(editor.undo()!.ok).toBe(true);
     expect(editor.city).toEqual({ ...before, version: editor.city.version });
-    expect(city).toEqual(before);
+    expect(city).toEqual(sourceBefore);
   },
 );
 
