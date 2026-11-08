@@ -14,7 +14,12 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
     metrics: () => engine().metrics(),
     hash: () => engine().hash(),
     inspect: (id) => engine().inspect(id),
-    step: (steps) => useAppStore.getState().control('step', steps),
+    // The store drops a command while another runs (`perform`); a scripted step right after a
+    // click (Restart, Step) waits for it instead of vanishing (TASK-115 made clicks fast).
+    step: async (steps) => {
+      while (useAppStore.getState().busy) await new Promise((resolve) => setTimeout(resolve, 10));
+      return useAppStore.getState().control('step', steps);
+    },
     movementId: (index) => useAppStore.getState().session!.loadedCompiled.movements[index]!.id,
   };
 }
