@@ -28,6 +28,9 @@ import { Basemap3D } from './basemap';
 import { buildGeometry } from './geometry';
 import { pickVehicle3D, vehicleScreenPoint } from './picking';
 import { signalMountM, signalRotationY } from './signals';
+import { groundMaterial } from './context';
+import { buildVegetation, surfaceTexture } from './vegetation';
+import { placeTrees } from '../render/vegetation';
 import { Vehicles3D } from './vehicles';
 
 export class Scene3D {
@@ -46,6 +49,8 @@ export class Scene3D {
   private city: CompiledCity | undefined;
   private source: CityGeometry | undefined;
   private geometry: ReturnType<typeof buildGeometry> | undefined;
+  private vegetation: ReturnType<typeof buildVegetation> | undefined;
+  private treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   private ground: Mesh<PlaneGeometry, MeshLambertMaterial> | undefined;
   private buildings: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private surroundings: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
@@ -127,7 +132,16 @@ export class Scene3D {
       this.content.add(mesh);
       return mesh;
     };
-    add(geometry.surfaces, style.asphalt);
+    const asphalt = add(geometry.surfaces, style.asphalt);
+    asphalt.material.map = surfaceTexture('asphalt');
+    const placementStart = performance.now();
+    const placed = placeTrees(city, source);
+    this.canvas.dataset.treePlacementMs = String(performance.now() - placementStart);
+    this.treeCounts = placed.counts;
+    this.canvas.dataset.treeCounts = JSON.stringify(placed.counts);
+    this.canvas.dataset.treeCap = String(placed.capped);
+    this.vegetation = buildVegetation(placed.trees);
+    this.content.add(this.vegetation.group);
     add(geometry.slabs, 0x899b99);
     add(geometry.markings, style.marking, false);
     add(geometry.crossings, style.marking, false);
@@ -139,6 +153,8 @@ export class Scene3D {
     this.buildings.material.vertexColors = true;
     this.surroundings = add(geometry.context.ground, 0xffffff, false);
     this.surroundings.material.vertexColors = true;
+    this.surroundings.material.dispose();
+    this.surroundings.material = groundMaterial();
     // Broad terrain first, then water/green and lines, in one ordered mesh.
     // It cannot write depth against itself where context areas overlap.
     this.surroundings.material.depthWrite = false;
@@ -295,6 +311,16 @@ export class Scene3D {
     if (places) places.visible = visible;
   }
 
+  setTrees(trees: boolean, streetTrees: boolean) {
+    if (!this.vegetation) return;
+    this.vegetation.natural.visible = trees;
+    this.vegetation.street.visible = streetTrees;
+    const counts = this.treeCounts!;
+    this.canvas.dataset.trees = String(
+      trees ? counts.osm + counts.row + counts.wood + counts.scrub + counts.park : 0,
+    );
+    this.canvas.dataset.streetTrees = String(streetTrees ? counts.street : 0);
+  }
   setSurroundings(visible: boolean, buildings: boolean) {
     this.surroundingsVisible = visible;
     this.buildingsVisible = buildings;
@@ -422,7 +448,13 @@ export class Scene3D {
     shadow.right = shadow.top = extent;
     shadow.far = extent * 5;
     shadow.updateProjectionMatrix();
+    this.vegetation?.update(distance);
+    const renderStart = performance.now();
     this.renderer.render(this.scene, this.camera);
+    if (import.meta.env.MODE === 'test') {
+      performance.measure('cityflows:render3d', { start: renderStart, end: performance.now() });
+      performance.clearMeasures('cityflows:render3d');
+    }
     if (import.meta.env.MODE === 'test' && this.capture) {
       this.capture.images.push(this.canvas.toDataURL('image/png'));
       if (this.capture.images.length === 2) {
@@ -438,7 +470,10 @@ export class Scene3D {
       if (object instanceof Mesh) {
         object.geometry.dispose();
         const materials = Array.isArray(object.material) ? object.material : [object.material];
-        for (const material of materials) material.dispose();
+        for (const material of materials) {
+          if (material instanceof MeshLambertMaterial) material.map?.dispose();
+          material.dispose();
+        }
         if (object instanceof InstancedMesh) object.dispose();
       }
     });

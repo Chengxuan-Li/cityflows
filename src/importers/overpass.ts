@@ -1,7 +1,7 @@
 import type { ImportOptions } from './types';
 
 export type Bbox = NonNullable<ImportOptions['bbox']>;
-export const queryVersion = 2;
+export const queryVersion = 3;
 export const defaultEndpoint =
   import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 let active = false;
@@ -35,6 +35,7 @@ export function buildQuery(bbox: Bbox, context = true): string {
         '[landuse~"^(reservoir|basin|grass|meadow|forest|recreation_ground|village_green|allotments|cemetery|residential|commercial|retail|industrial|railway|construction)$"]',
         '[leisure~"^(park|garden|pitch|playground)$"]',
         '[amenity=parking]',
+        '[highway~"^(footway|path|cycleway|pedestrian|steps|track)$"]',
         '[railway~"^(rail|light_rail|subway|narrow_gauge|tram)$"]',
       ]
         .map(
@@ -49,7 +50,8 @@ export function buildQuery(bbox: Bbox, context = true): string {
             [s, w, n, e].join(',') +
             ');',
         )
-        .join('')
+        .join('') +
+      `node[natural=tree](${s},${w},${n},${e});way[natural=tree_row](${s},${w},${n},${e});`
     : '';
   return `[out:xml][timeout:60];way[highway~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service)(_link)?$"][service!~"^(parking_aisle|driveway)$"](${s},${w},${n},${e})->.roads;(.roads;rel(bw.roads)[type=restriction];${surroundings});(._;>>;);out body;`;
 }

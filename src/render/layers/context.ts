@@ -1,15 +1,38 @@
-import { Container, Graphics } from 'pixi.js';
+import { BufferImageSource, Container, FillPattern, Graphics, Matrix, Texture } from 'pixi.js';
 import type { ContextFeature } from '../../schema';
+import { groundSurface, surfaceGrain, type Surface } from '../vegetation';
 import { style } from '../style';
 
 export function drawContext(features: readonly ContextFeature[]) {
   const container = new Container();
   container.eventMode = 'none';
+  const patterns = new Map<Surface, FillPattern>();
+  const pattern = (surface: Surface) => {
+    if (!patterns.has(surface)) {
+      const texture = new Texture({
+        source: new BufferImageSource({
+          resource: surfaceGrain(surface),
+          width: 64,
+          height: 64,
+          alphaMode: 'no-premultiply-alpha',
+        }),
+      });
+      const fill = new FillPattern({ texture, repetition: 'repeat' });
+      fill.setTransform(new Matrix().scale(0.04, 0.04));
+      patterns.set(surface, fill);
+    }
+    return patterns.get(surface)!;
+  };
+  container.on('destroyed', () => {
+    for (const fill of patterns.values()) fill.destroy();
+  });
   const shapes = new Graphics();
   const ties = new Graphics();
   container.addChild(shapes, ties);
   // Broad terrain first, then water/green, then footprints and lines.
   const order = {
+    tree: -1,
+    tree_row: -1,
     landuse: 0,
     green: 1,
     water: 2,
@@ -19,13 +42,26 @@ export function drawContext(features: readonly ContextFeature[]) {
     rail: 6,
     tram: 7,
   };
-  for (const feature of [...features].sort((a, b) => order[a.class] - order[b.class])) {
+  const rank = (f: ContextFeature) =>
+    f.kind === 'area' && f.sub === 'path' ? 3.5 : order[f.class];
+  for (const feature of [...features].sort((a, b) => rank(a) - rank(b))) {
+    if (feature.kind === 'point' || feature.class === 'tree_row') continue;
     if (feature.kind === 'area') {
       const color =
         feature.class === 'landuse'
           ? (style.context.landuseSub[feature.sub ?? ''] ?? style.context.landuse)
           : style.context[feature.class];
-      shapes.poly(feature.rings[0]!).fill(color);
+      const surface = groundSurface(feature);
+      shapes.poly(feature.rings[0]!).fill(
+        surface
+          ? {
+              texture: pattern(surface).texture,
+              matrix: pattern(surface).transform,
+              textureSpace: 'global',
+              color,
+            }
+          : color,
+      );
       for (const hole of feature.rings.slice(1)) shapes.poly(hole);
       if (feature.rings.length > 1) shapes.cut();
       if (feature.class === 'building')

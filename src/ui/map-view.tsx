@@ -489,6 +489,7 @@ export function MapView() {
           three!.setBelowGround(getState().belowGround);
           three!.setPlaces(layers.places);
           three!.setSurroundings(layers.context, getState().buildings);
+          three!.setTrees(layers.trees, layers.streetTrees);
           three!.setTiles(layers.basemap);
           three!.setSignals(
             getState().run?.timeS ?? 0,

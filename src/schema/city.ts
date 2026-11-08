@@ -128,7 +128,8 @@ export interface GeoSource {
 }
 
 export type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-export type ContextLine = 'rail' | 'tram' | 'waterway';
+export type ContextPoint = 'tree';
+export type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
 export type ContextFeature =
   | {
       kind: 'area';
@@ -138,7 +139,22 @@ export type ContextFeature =
       heightM?: number;
       levels?: number;
     }
-  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number };
+  | {
+      kind: 'line';
+      class: ContextLine;
+      line: Vec2[];
+      widthM?: number;
+      layer?: number;
+      spacingM?: number;
+    }
+  | {
+      kind: 'point';
+      class: ContextPoint;
+      pos: Vec2;
+      heightM?: number;
+      crownM?: number;
+      sub?: string;
+    };
 
 export interface City {
   schemaVersion: 2;

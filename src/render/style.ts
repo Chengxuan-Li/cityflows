@@ -49,6 +49,7 @@ export const style = {
     parking: 0xe5e4de,
     landuse: 0xece9df,
     landuseSub: {
+      path: 0xe5e4de,
       residential: 0xeee7de,
       commercial: 0xe9e6e1,
       retail: 0xeee5df,
@@ -59,6 +60,7 @@ export const style = {
     rail: 0xa7aaa5,
     tram: 0xb2b5af,
   },
+  vegetation: { canopy: [0xc0d0b0, 0xc9d6b9, 0xb9cba8], trunk: 0x958c76 },
   asphalt: 0xaebdb8,
   shadow: 0x303d3a,
   deckEdge: 0x6e817b,

@@ -227,14 +227,20 @@ routing, demand and simulation.
 
 ~~~ts
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-type ContextLine = 'rail' | 'tram' | 'waterway';
+type ContextPoint = 'tree';
+type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
 type ContextFeature =
   | { kind: 'area'; class: ContextArea; rings: Vec2[][]; sub?: string; heightM?: number; levels?: number }
-  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number };
+  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number }
+  | { kind: 'point'; class: ContextPoint; pos: Vec2; heightM?: number; crownM?: number; sub?: string };
 ~~~
 
 Rings are closed, outer first then holes, in local metres rounded to 0.1 m. Optional sub is the
 source tag value; tagged building height/levels and line width/layer are retained.
+TASK-106 adds tree points (`sub` is `leaf_type`, dimensions are metres) and tree-row lines
+with optional `spacingM` (minimum 2 m) from OSM `spacing` (default 8 m). This is an optional context
+extension without a schema-version bump. Only imported context is saved; generated trees
+are derived display geometry and never enter the project or compiled network.
 
 Invariants (checked by compile, section 5):
 
@@ -1473,6 +1479,34 @@ Buildings (default on, in 3D) independently hides extrusions. Toggles do not reb
 Flat context follows the below-ground opacity, while buildings retain their shadows.
 The shadow normal offset scales with one world-space shadow texel (minimum 0.05 m) to keep
 broad roofs free of self-shadow stripes.
+TASK-106: `src/render/vegetation.ts` is the shared pure placement module. Seeded per-source
+streams produce OSM node/row trees, street trees and Poisson-disc woodland/scrub/park fills.
+Tree rows use 8 m or tagged spacing. Eligible residential/tertiary/secondary/primary road
+edges get trees 2.5 m outside the compiled surface, every 12 m with ±2 m station jitter;
+inward sides of a corridor pair are omitted. Full canopy circles exclude road surfaces,
+junction outlines and 15 m node buffers, crossing stripes, connector buffers (carriageway
+width + 4 m), buildings, water areas/lines, rail/tram strips, parking, pitches and playgrounds.
+Street trees additionally keep 8 m from imported node/row trees. Forest/wood, scrub and park
+sampling targets one tree per 40, 60 and 300 m², respectively, with minimum separation
+0.7 times the square root of that area per tree. Holes and canopy margins are preserved;
+obstacles can reduce achieved density in small/narrow polygons. Grass/meadow/grassland
+remain open. OSM dimensions win; defaults are 8–14 m tall, 3–4.5 m street crowns or 4–6 m
+woodland crowns; scrub is 3–6 m tall with 3–4 m crowns. Explicit OSM nodes are uncapped;
+all derived row, street and area trees share a 60,000 limit, with counts/cap status exposed.
+
+2D draws three soft green canopy tones above surroundings and below roads, in the same
+base overview texture. 3D batches each trunk and round/conical crown into one coloured instance (four near-tree draw calls); beyond 1200 m
+camera distance these become low-detail crown blobs. Trees use Lambert lighting without casting or sampling shadow maps.
+Every instance reads its base through the `groundAt` callback in `render3d/vegetation.ts`
+(default `groundHeight`, 0 m); TASK-105's terrain ground sampler is wired here at merge.
+Trees and Street trees are independent default-on Layers switches, shown only when placement
+produces their content. Neither changes saved data or rebuilds geometry when toggled.
+Procedural 64×64 repeatable, faint grain textures tint grass, meadow, forest floor, pavement
+and asphalt with the existing palette. 2D context uses repeating world-space fills; 3D ground
+uses one five-slot grain atlas in one ordered mesh, and roads receive world-space asphalt UVs.
+Test-mode scene attributes expose counts, cap, placement and 2D rebuild milliseconds;
+`cityflows:render` and `cityflows:render3d` measures support the on/off frame comparisons.
+
 Terrain elevation and 3D editing remain out of scope.
 
 `src/ui` is the React app with one Zustand store. Layout follows the brief:
@@ -1638,6 +1672,15 @@ Lives in `src/importers/osm`, runs inside an import worker.
    Abandoned/disused rail and tunnel=yes lines at negative layer are omitted. Multipolygons
    share the building ring assembler and bbox clipper. Geometry is clipped, simplified at
    0.3 m, rounded to 0.1 m inside the bbox; areas below 4 mÂ² and lines below 2 m are dropped.
+   TASK-106 also imports `natural=tree` nodes inside the bounds as points (height from `height`,
+   crown diameter from `diameter_crown`, leaf type from `leaf_type`) and clips `natural=tree_row`
+   ways as lines, retaining positive tagged `spacing` in metres. Footway/path/cycleway/
+   pedestrian/steps/track ways intersecting wood/forest/scrub/park areas become clipped display-only `landuse` areas with `sub: path`,
+   using tagged width or 2 m (pedestrian: 3 m). They supply pavement and vegetation exclusions,
+   draw above green areas, and never become canonical roads or affect connectivity. Invalid optional dimensions
+   are omitted. Raw imported node/row counts and visible counts by placement source are
+   reported by V106 for each bundled city; the older bundled extracts contain neither tree
+   nodes nor rows. The dedicated importer case exercises these tags and ZIP/JSON persistence.
    Building height (metres or feet) and building:levels, line width and integer layer are
    retained when valid. Place generation and every network byte stay unchanged.
 10. Diagnostics (T18): everything in section 5.5 plus `osm_unsupported_tag`, `osm_clipped`,
@@ -1677,7 +1720,9 @@ Overpass provider: query drivable highways and restriction relations in a bbox c
 50 km squared, one request at a time, results cached in IndexedDB by bbox and query version,
 endpoint configurable, OSM attribution recorded. TASK-096 adds the context tag selectors
 (ways and multipolygon relations) inside the same bbox while retaining the road selector.
-Query version 2 invalidates older road-only cached extracts. Imports with surroundings disabled
+TASK-106 adds `node[natural=tree]` and `way[natural=tree_row]` to surroundings only.
+Query version 3 invalidates older extracts that lack tree selectors; the road-only selector
+and restriction closure are unchanged. Imports with surroundings disabled
 fetch the road-only query and bypass the full-context cache, so they cannot poison it. Nominatim, when used, is limited to one
 request per second and triggered only by an explicit search action.
 
