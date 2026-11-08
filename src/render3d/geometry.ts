@@ -1,15 +1,14 @@
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { parallelOffset } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
-import { junctionGuides } from '../render/layers/junction-markings';
 import { crossingStripes } from '../render/layers/roads';
 import { signalLayout } from './signals';
-import { placeHue, style } from '../render/style';
+import { placeHue } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
-import { roadMarkings } from './markings';
+import { buildMarkings, goreTriangles, triangleHeight } from './markings';
+import { paintedGores } from '../render/marking-geometry';
 import { buildContext } from './context';
 
 type Vertex = [number, number, number];
@@ -93,41 +92,16 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
     }
 }
 
-function markingStrip(target: number[], line: Vec2[], z: (p: Vec2) => number) {
-  const left = parallelOffset(line, -style.dividerWidthM / 2);
-  const right = parallelOffset(line, style.dividerWidthM / 2);
-  for (let i = 1; i < left.length; i++) {
-    const a = left[i - 1]!,
-      b = left[i]!,
-      c = right[i]!,
-      d = right[i - 1]!;
-    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5));
-    for (let j = 0; j < steps; j++)
-      polygon(
-        target,
-        [
-          mix(a, b, j / steps),
-          mix(a, b, (j + 1) / steps),
-          mix(d, c, (j + 1) / steps),
-          mix(d, c, j / steps),
-        ],
-        z,
-      );
-  }
-}
-
 export function buildGeometry(city: CompiledCity, source: CityGeometry) {
   const heights = cityHeights(city, source);
   const surfaces: number[] = [],
     slabs: number[] = [],
-    markings: number[] = [],
     crossings: number[] = [];
   const piers: { x: number; y: number; height: number }[] = [];
   for (const road of city.roads) {
     const height = heights.roads[road.idx]!;
     roadSurface(surfaces, slabs, road, height);
     const z = (p: Vec2) => heightAt(height, roadStation(road, p)) + 0.02;
-    for (const line of roadMarkings(city, road, source)) markingStrip(markings, line, z);
     for (const atEnd of [false, true])
       for (const stripe of crossingStripes(city, road, atEnd, source))
         polygon(crossings, stripe, z);
@@ -151,8 +125,9 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
   for (const node of city.nodes) {
     const z = heights.nodes[node.idx]!;
     polygon(surfaces, node.outline, () => z);
-    for (const guide of junctionGuides(city, node))
-      for (const dash of guide.dashes) markingStrip(markings, dash, () => z + 0.02);
+    for (const gore of paintedGores(city, node))
+      for (const triangle of goreTriangles(city, heights, gore))
+        polygon(surfaces, triangle.points, (p) => triangleHeight(triangle, p));
     if (z > 0)
       for (let i = 0; i < node.outline.length; i++) {
         const a = node.outline[i]!,
@@ -184,7 +159,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry) {
     context: buildContext(source.context?.features ?? []),
     surfaces: buffer(surfaces, true),
     slabs: buffer(slabs),
-    markings: buffer(markings),
+    markings: buildMarkings(city, source, heights),
     crossings: buffer(crossings),
     places: placeGeometry,
     piers,

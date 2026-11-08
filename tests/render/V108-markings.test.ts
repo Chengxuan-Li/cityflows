@@ -1,0 +1,425 @@
+import { cityHeights } from '../../src/render3d/heights';
+import { goreTriangles, triangleHeight, buildMarkings } from '../../src/render3d/markings';
+import { laneEdges } from '../../src/network/lanes';
+import { booleanOpD, ClipType, FillRule, areaD } from 'clipper2-ts';
+import type { Graphics } from 'pixi.js';
+import { drawRoad, drawMovementArrow } from '../../src/render/layers/roads';
+import { drawTransitions } from '../../src/render/layers/transitions';
+import { drawJunctionMarkings } from '../../src/render/layers/junction-markings';
+import { createHash } from 'node:crypto';
+import { expect, test } from 'vitest';
+import { auditCities, compileAuditCity, loadAuditCity } from '../../bench/junction-audit';
+import {
+  approachMarkings,
+  roadMarkingGeometry,
+  nodeMarkingGeometry,
+  transitionMarkings,
+  markingPolygons,
+  movementMarkings,
+  paintedGores,
+  hatchGeometry,
+} from '../../src/render/marking-geometry';
+import { markingTheme } from '../../src/render/style';
+import { buildGeometry } from '../../src/render3d/geometry';
+import { pointInPolygon, segmentsIntersect, segmentDistance } from '../../src/geo/polyline';
+import { tierCities, unitTest } from '../tier';
+
+// Captured before renderer changes, branch point 56ffccd (main).
+const baseline = {
+  grid: {
+    compile: 'fb4cfd663424228989fac663d73bd7afe7e4cd206d84ba7a9b5c06109e1e8dbb',
+    arrows: '46a5ce9adeddd011af72c58a0c8ef9e9b315ad7f732ebfa71b2cff6c2d531748',
+  },
+  town: {
+    compile: '4c1aca9614d7089f8f168de0178cd6870376b21bfdbc24b6ff0aa577c388c604',
+    arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
+  },
+  sindelfingen: {
+    compile: '1f08fb0aec883ff1024667cd1b2b19ea3e6048f63646bce6449172735417b5d8',
+    arrows: '3ed3ead902ca594a2396c539f951d21f416a98011b29e79448932f020300a519',
+  },
+  munich: {
+    compile: '3c6074345a19e4c4756f978a38464393c573c810825971b214a3cc4a09d8ef92',
+    arrows: 'e5c698a8c5686411555e695c390f8500d57191a06df3ebe59393df980d02a7f7',
+  },
+} as const;
+const hash = (value: unknown) =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(value, (_, v: unknown) =>
+        v instanceof Map
+          ? [...v]
+          : ArrayBuffer.isView(v)
+            ? Array.from(v as unknown as number[])
+            : v,
+      ),
+    )
+    .digest('hex');
+
+test.each(tierCities(auditCities))('V108: %s compile and arrow placement equal main', (name) => {
+  const city = compileAuditCity(name);
+  expect(hash(city)).toBe(baseline[name].compile);
+  expect(hash(city.lanes.map((l) => [l.id, approachMarkings(city, l)]))).toBe(
+    baseline[name].arrows,
+  );
+});
+
+unitTest('V108: German widths and dash patterns are theme data', () => {
+  expect(markingTheme.id).toBe('de');
+  expect(markingTheme.classes.residential.lane).toEqual({ widthM: 0.12, dash: [3, 6] });
+  expect(markingTheme.classes.motorway.lane).toEqual({ widthM: 0.15, dash: [6, 12] });
+  expect(markingTheme.classes.trunk.lane.dash).toEqual([6, 12]);
+  expect(markingTheme.classes.motorway.edge.widthM).toBe(0.3);
+  expect(new Set(Object.values(markingTheme.colors)).size).toBe(1);
+});
+
+unitTest.each(['grid', 'sindelfingen'] as const)(
+  'V108: %s 2D and 3D draw the complete shared geometry including arrows',
+  (name) => {
+    const city = compileAuditCity(name);
+    const shapes = city.roads
+      .flatMap((road) => {
+        const geometry = roadMarkingGeometry(city, road);
+        return [...geometry.below, ...geometry.above, ...transitionMarkings(city, road)];
+      })
+      .concat(
+        city.nodes.flatMap((node) => [
+          ...nodeMarkingGeometry(city, node),
+          ...(node.outline.length
+            ? node.movements.flatMap((i) =>
+                city.movements[i]!.neverGreen ? [] : movementMarkings(city.movements[i]!),
+              )
+            : []),
+        ]),
+      );
+    expect(shapes.some((s) => s.role === 'arrow' && s.kind === 'polygon')).toBe(true);
+    const points = shapes.flatMap((s) => markingPolygons(s).flat());
+    const bounds = (ps: { x: number; y: number }[]) =>
+      ps.reduce(
+        (b, p) => [
+          Math.min(b[0]!, p.x),
+          Math.min(b[1]!, p.y),
+          Math.max(b[2]!, p.x),
+          Math.max(b[3]!, p.y),
+        ],
+        [Infinity, Infinity, -Infinity, -Infinity],
+      );
+    let lineCount = 0,
+      polygonCount = 0;
+    const pen = {
+      poly() {
+        return this;
+      },
+      moveTo() {
+        return this;
+      },
+      lineTo() {
+        return this;
+      },
+      fill() {
+        polygonCount++;
+        return this;
+      },
+      stroke() {
+        lineCount++;
+        return this;
+      },
+    } as unknown as Graphics;
+    const surface = {
+      poly() {
+        return this;
+      },
+      fill() {
+        return this;
+      },
+      stroke() {
+        return this;
+      },
+    } as unknown as Graphics;
+    for (const road of city.roads) {
+      drawRoad(surface, pen, city, road, false, pen);
+      drawTransitions(surface, pen, city, road);
+    }
+    for (const node of city.nodes) drawJunctionMarkings(pen, city, node);
+    for (const movement of city.movements)
+      if (!movement.neverGreen && city.nodes[movement.node]!.outline.length)
+        drawMovementArrow(pen, movement);
+    expect(lineCount).toBe(shapes.filter((s) => s.kind === 'line').length);
+    expect(polygonCount).toBe(shapes.filter((s) => s.kind === 'polygon').length);
+    const expectedArea = shapes.reduce(
+      (sum, shape) =>
+        sum + markingPolygons(shape).reduce((area, ring) => area + Math.abs(areaD(ring)), 0),
+      0,
+    );
+    const geometry = buildGeometry(city, loadAuditCity(name));
+    const position = geometry.markings.getAttribute('position');
+    expect(geometry.markings.userData.markingCounts).toEqual({
+      line: lineCount,
+      polygon: polygonCount,
+    });
+    let renderedArea = 0;
+    for (let i = 0; i < position.count; i += 3)
+      renderedArea +=
+        Math.abs(
+          (position.getX(i + 1) - position.getX(i)) * (position.getZ(i + 2) - position.getZ(i)) -
+            (position.getZ(i + 1) - position.getZ(i)) * (position.getX(i + 2) - position.getX(i)),
+        ) / 2;
+    expect(Math.abs(renderedArea - expectedArea) / expectedArea).toBeLessThan(0.0001);
+    const rendered = Array.from({ length: position.count }, (_, i) => ({
+      x: position.getX(i),
+      y: position.getZ(i),
+    }));
+    bounds(rendered).forEach((v, i) => expect(v).toBeCloseTo(bounds(points)[i]!, 3));
+  },
+);
+
+test.each(tierCities(['munich', 'sindelfingen'] as const))(
+  'V108: %s gores and taper paint stay paved and off lane centrelines',
+  (name) => {
+    const city = compileAuditCity(name);
+    let gores = 0,
+      hatches = 0;
+    const bad: string[] = [];
+    const laneSurfaces = city.roads.flatMap((road) => {
+      const all = road.lanes.map((i) => city.lanes[i]!);
+      return all.map((lane) => {
+        const e = laneEdges(lane, all),
+          ring = [...e.left, ...e.right.reverse()],
+          xs = ring.map((p) => p.x),
+          ys = ring.map((p) => p.y);
+        return {
+          ring,
+          minX: Math.min(...xs),
+          minY: Math.min(...ys),
+          maxX: Math.max(...xs),
+          maxY: Math.max(...ys),
+        };
+      });
+    });
+    const segments = city.lanes.flatMap((l) =>
+      l.polyline.slice(1).map((p, i) => [l.polyline[i]!, p] as const),
+    );
+    const safe = (shape: { points: { x: number; y: number }[] }, label: string) => {
+      const ring = [...shape.points, shape.points[0]!];
+      const xs = ring.map((p) => p.x),
+        ys = ring.map((p) => p.y);
+      for (const ordinal of city.laneSpatial.search(
+        Math.min(...xs),
+        Math.min(...ys),
+        Math.max(...xs),
+        Math.max(...ys),
+      )) {
+        const [a, b] = segments[ordinal]!;
+        if (
+          pointInPolygon(a, ring, 0) ||
+          pointInPolygon(b, ring, 0) ||
+          ring.some((p, i) => i > 0 && segmentsIntersect(a, b, ring[i - 1]!, p))
+        )
+          bad.push(label + ' crosses lane centre');
+      }
+    };
+    for (const node of city.nodes) {
+      const areas = paintedGores(city, node);
+      gores += areas.length;
+      for (const gore of areas) {
+        const shapes = hatchGeometry(gore.ring, gore.heading, gore.road, gore.holes);
+        for (const shape of shapes) {
+          const xs = shape.points.map((p) => p.x),
+            ys = shape.points.map((p) => p.y),
+            minX = Math.min(...xs),
+            maxX = Math.max(...xs),
+            minY = Math.min(...ys),
+            maxY = Math.max(...ys);
+          const laneRings = laneSurfaces
+            .filter((b) => b.minX <= maxX && b.maxX >= minX && b.minY <= maxY && b.maxY >= minY)
+            .map((b) => b.ring);
+          const overlap = booleanOpD(
+            ClipType.Intersection,
+            [shape.points],
+            laneRings,
+            FillRule.NonZero,
+            3,
+          ).reduce((sum, r) => sum + areaD(r), 0);
+          if (overlap > 0.005) bad.push(node.id + ' paint overlaps travel lane');
+        }
+        hatches += shapes.filter((s) => s.role === 'hatch').length;
+        for (const shape of shapes) {
+          safe(shape, node.id);
+          for (const p of shape.points)
+            if (!pointInPolygon(p, [...gore.ring, gore.ring[0]!], 0.003))
+              bad.push(node.id + ' outside gore');
+          for (const index of node.movements) {
+            const movement = city.movements[index]!;
+            if (
+              movement.polyline.some((p) =>
+                pointInPolygon(p, [...shape.points, shape.points[0]!], 0),
+              )
+            )
+              bad.push(node.id + ' on movement ' + movement.id);
+          }
+        }
+      }
+    }
+    for (const road of city.roads)
+      for (const shape of transitionMarkings(city, road))
+        if (shape.role === 'hatch' || shape.role === 'channel') safe(shape, road.id);
+    console.info('V108 gores', name, {
+      gores,
+      hatches,
+      bad: bad.slice(0, 10),
+      nodes: city.nodes.flatMap((n) => (paintedGores(city, n).length ? [n.id] : [])),
+    });
+    const missing = city.nodes
+      .filter((node) => {
+        const incident = city.roads.filter((r) => r.from === node.idx || r.to === node.idx);
+        const pairs = incident.flatMap((r) =>
+          r.roadClass === 'ramp'
+            ? incident.filter(
+                (m) =>
+                  ['motorway', 'trunk'].includes(m.roadClass) &&
+                  m.lanes.length > 1 &&
+                  (m.to === node.idx) === (r.to === node.idx),
+              )
+            : [],
+        );
+        return (
+          pairs.length > 0 &&
+          !nodeMarkingGeometry(city, node).some((s) => s.role === 'hatch') &&
+          !incident.some((r) => transitionMarkings(city, r).some((s) => s.role === 'hatch'))
+        );
+      })
+      .map((n) => n.id);
+    expect(missing).toEqual([]);
+    expect(gores).toBeGreaterThan(0);
+    expect(hatches).toBeGreaterThan(0);
+    expect(bad).toEqual([]);
+    expect(hash(city)).toBe(baseline[name].compile);
+  },
+);
+
+unitTest('V108: chevron bands point upstream and their entire width stays inside the gore', () => {
+  const city = compileAuditCity('grid'),
+    road = city.roads[0]!;
+  const ring = [
+    { x: 0, y: -5 },
+    { x: 20, y: -5 },
+    { x: 20, y: 5 },
+    { x: 0, y: 5 },
+    { x: 0, y: -5 },
+  ];
+  const shapes = hatchGeometry(ring, 0, road).filter((s) => s.role === 'hatch');
+  expect(shapes.length).toBeGreaterThan(4);
+  for (const shape of shapes) {
+    expect(shape.points.every((p) => pointInPolygon(p, ring, 0.003))).toBe(true);
+    const top = shape.points.reduce((a, b) => (a.y > b.y ? a : b));
+    const bottom = shape.points.reduce((a, b) => (a.y < b.y ? a : b));
+    const outer = Math.abs(top.y) > Math.abs(bottom.y) ? top : bottom;
+    const inner = Math.abs(top.y) > Math.abs(bottom.y) ? bottom : top;
+    expect(outer.x - inner.x).toBeGreaterThanOrEqual(-0.01);
+  }
+});
+
+test.each(tierCities(auditCities))(
+  'V108: %s approach and lane-ending arrows stay on their road surface',
+  (name) => {
+    const city = compileAuditCity(name),
+      bad: string[] = [];
+    for (const road of city.roads)
+      for (const shape of [
+        ...roadMarkingGeometry(city, road).above,
+        ...transitionMarkings(city, road),
+      ])
+        if (shape.role === 'arrow')
+          for (const p of shape.points)
+            if (!pointInPolygon(p, [...road.surface, road.surface[0]!], 0.02)) bad.push(road.id);
+    expect([...new Set(bad)]).toEqual([]);
+  },
+);
+
+unitTest('V108: hatching preserves an enclosed exclusion', () => {
+  const city = compileAuditCity('grid');
+  const ring = [
+    { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 20, y: 10 },
+    { x: 0, y: 10 },
+  ];
+  const hole = [
+    { x: 5, y: 3 },
+    { x: 5, y: 7 },
+    { x: 15, y: 7 },
+    { x: 15, y: 3 },
+  ];
+  const shapes = hatchGeometry(ring, 0, city.roads[0]!, [hole]);
+  expect(shapes.filter((s) => s.role === 'hatch').length).toBeGreaterThan(0);
+  for (const shape of shapes) {
+    const overlap = booleanOpD(
+      ClipType.Intersection,
+      [shape.points],
+      [hole],
+      FillRule.NonZero,
+      3,
+    ).reduce((sum, r) => sum + areaD(r), 0);
+    expect(Math.abs(overlap)).toBeLessThan(0.005);
+  }
+});
+
+test.each(tierCities(['sindelfingen', 'munich'] as const))(
+  'V108: %s gore paint follows the actual tessellated pavement',
+  (name) => {
+    const city = compileAuditCity(name),
+      source = loadAuditCity(name),
+      heights = cityHeights(city, source);
+    const geometry = buildMarkings(city, source, heights),
+      positions = geometry.getAttribute('position');
+    let samples = 0;
+    for (const node of city.nodes)
+      for (const gore of paintedGores(city, node)) {
+        const triangles = goreTriangles(city, heights, gore);
+        const boundary = [...gore.ring, gore.ring[0]!];
+        const xs = boundary.map((p) => p.x),
+          ys = boundary.map((p) => p.y),
+          minX = Math.min(...xs),
+          maxX = Math.max(...xs),
+          minY = Math.min(...ys),
+          maxY = Math.max(...ys);
+        for (let i = 0; i < positions.count; i++) {
+          const p = { x: positions.getX(i), y: positions.getZ(i) };
+          if (
+            p.x < minX ||
+            p.x > maxX ||
+            p.y < minY ||
+            p.y > maxY ||
+            !pointInPolygon(p, boundary, 0)
+          )
+            continue;
+          const triangle = triangles.find((t) =>
+            pointInPolygon(p, [...t.points, t.points[0]!], 0.0002),
+          );
+          if (!triangle) continue;
+          const clearance = positions.getY(i) - triangleHeight(triangle, p);
+          // Other road paint can touch the gore boundary; only strictly interior points count.
+          if (
+            Math.abs(clearance - 0.025) > 0.003 &&
+            boundary.some((q, j) => j > 0 && segmentDistance(p, boundary[j - 1]!, q) < 0.003)
+          )
+            continue;
+          // Float32 positions and adjacent tessellation seams retain visible centimetre clearance.
+          expect(clearance, node.id).toBeGreaterThan(0.005);
+          expect(clearance, node.id).toBeLessThan(0.05);
+          samples++;
+        }
+      }
+    expect(samples).toBeGreaterThan(0);
+  },
+  120_000,
+);
+
+unitTest('V108: a lane tapering at both ends keeps its ending arrow', () => {
+  const city = compileAuditCity('sindelfingen');
+  for (const id of ['r:1252', 'r:1254'] as const) {
+    const road = city.roads[city.index.road.get(id)!]!;
+    expect(city.lanes[road.lanes[2]!]!.taperEndM).toBeGreaterThan(0);
+    expect(transitionMarkings(city, road).some((s) => s.role === 'arrow')).toBe(true);
+  }
+});

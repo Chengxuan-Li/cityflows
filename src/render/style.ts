@@ -1,4 +1,125 @@
+import type { Vec2 } from '../geo/vec2';
 import type { RoadClass } from '../schema';
+
+export type MarkingRole = 'edge' | 'lane' | 'centre' | 'channel' | 'hatch' | 'arrow' | 'stop';
+export interface MarkingLineStyle {
+  widthM: number;
+  dash?: readonly [number, number];
+}
+export type ArrowKind =
+  | 'through'
+  | 'left'
+  | 'right'
+  | 'through-left'
+  | 'through-right'
+  | 'left-right'
+  | 'merge-left'
+  | 'merge-right';
+export interface MarkingTheme {
+  id: string;
+  colors: Record<MarkingRole, number>;
+  classes: Record<RoadClass, Record<MarkingRole, MarkingLineStyle>>;
+  guide: MarkingLineStyle;
+  hatch: { widthM: number; townSpacingM: number; highwaySpacingM: number };
+  arrows: Record<ArrowKind, Vec2[][]>;
+  arrowLengthM: number;
+  fastArrowLengthM: number;
+  movementArrow: { head: Vec2[]; maxSizeM: number; lengthDivisor: number; widthM: number };
+}
+
+const polygon = (points: number[][]): Vec2[] => points.map(([x, y]) => ({ x: x!, y: y! }));
+const straight = polygon([
+  [-2.5, -0.15],
+  [1.1, -0.15],
+  [1.1, -0.55],
+  [2.5, 0],
+  [1.1, 0.55],
+  [1.1, 0.15],
+  [-2.5, 0.15],
+]);
+const left = polygon([
+  [-2.5, -0.15],
+  [1.4, -0.15],
+  [1.4, -0.55],
+  [0.8, -0.55],
+  [1.65, -1.3],
+  [2.5, -0.55],
+  [1.85, -0.55],
+  [1.85, 0.15],
+  [-2.5, 0.15],
+]);
+const right = left.map(({ x, y }) => ({ x, y: -y }));
+const mergeLeft = polygon([
+  [-2.5, 0.65],
+  [-0.8, 0.65],
+  [1.1, -0.55],
+  [0.8, -0.9],
+  [2.5, -1.2],
+  [1.7, 0.35],
+  [1.4, 0],
+  [-0.65, 0.95],
+  [-2.5, 0.95],
+]);
+function germanLines(highway: boolean): Record<MarkingRole, MarkingLineStyle> {
+  const widthM = highway ? 0.15 : 0.12;
+  return {
+    edge: { widthM: 0.3 },
+    lane: { widthM, dash: highway ? [6, 12] : [3, 6] },
+    centre: { widthM },
+    channel: { widthM: 0.3 },
+    hatch: { widthM: 0.5 },
+    arrow: { widthM },
+    stop: { widthM: 0.28 },
+  };
+}
+const townLines = germanLines(false),
+  highwayLines = germanLines(true);
+export const markingTheme: MarkingTheme = {
+  id: 'de',
+  colors: {
+    edge: 0xfffcf3,
+    lane: 0xfffcf3,
+    centre: 0xfffcf3,
+    channel: 0xfffcf3,
+    hatch: 0xfffcf3,
+    arrow: 0xfffcf3,
+    stop: 0xfffcf3,
+  },
+  classes: {
+    motorway: highwayLines,
+    trunk: highwayLines,
+    primary: townLines,
+    secondary: townLines,
+    tertiary: townLines,
+    residential: townLines,
+    service: townLines,
+    ramp: highwayLines,
+  },
+  guide: { widthM: 0.12, dash: [1.5, 1.5] },
+  hatch: { widthM: 0.5, townSpacingM: 2, highwaySpacingM: 4 },
+  arrows: {
+    through: [straight],
+    left: [left],
+    right: [right],
+    'through-left': [straight, left],
+    'through-right': [straight, right],
+    'left-right': [left, right],
+    'merge-left': [mergeLeft],
+    'merge-right': [mergeLeft.map(({ x, y }) => ({ x, y: -y }))],
+  },
+  arrowLengthM: 5,
+  fastArrowLengthM: 7.5,
+  movementArrow: {
+    head: polygon([
+      [0, 0],
+      [-1, 0.55],
+      [-1, -0.55],
+    ]),
+    maxSizeM: 1.05,
+    lengthDivisor: 6,
+    widthM: 0.12,
+  },
+};
 
 const local = { color: 0xbcc8c4, vergeM: 0.25 };
 const avenue = { color: 0xa6b7b4, vergeM: 0.55 };
@@ -65,7 +186,7 @@ export const style = {
   deckEdgeWidthM: 0.35,
   tunnelAlpha: 0.55,
   deckGhostAlpha: 0.35,
-  marking: 0xfffcf3,
+  marking: markingTheme.colors.lane,
   connector: 0x6f827a,
   selection: 0x4d8e94,
   route: 0x588eac,
@@ -73,9 +194,7 @@ export const style = {
   signalRed: 0xc95656,
   signalAmber: 0xe7a637,
   signalGreen: 0x30926c,
-  dividerWidthM: 0.18,
-  guideDashM: 1.5,
-  guideGapM: 1.5,
+  dividerWidthM: markingTheme.classes.residential.lane.widthM,
   pointRadiusM: 6,
   connectorRadiusM: 0.7,
   vehicleLengthM: 4.5,

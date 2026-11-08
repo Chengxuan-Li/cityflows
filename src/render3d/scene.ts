@@ -21,7 +21,7 @@ import {
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
-import { style } from '../render/style';
+import { markingTheme, style } from '../render/style';
 import type { CityGeometry, Pick } from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
 import { Basemap3D } from './basemap';
@@ -129,8 +129,8 @@ export class Scene3D {
     };
     add(geometry.surfaces, style.asphalt);
     add(geometry.slabs, 0x899b99);
-    add(geometry.markings, style.marking, false);
-    add(geometry.crossings, style.marking, false);
+    add(geometry.markings, 0xffffff, false).material.vertexColors = true;
+    add(geometry.crossings, markingTheme.colors.stop, false);
     const places = add(geometry.places, 0xffffff, false);
     places.material.vertexColors = true;
     places.name = 'places';
