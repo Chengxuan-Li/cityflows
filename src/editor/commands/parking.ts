@@ -20,6 +20,15 @@ export function editParking(
           ...original,
           ...(command.capacity !== undefined && { capacity: command.capacity }),
           ...(command.access !== undefined && { access: command.access }),
+          // A set value is no longer inferred; a set capacity is a hard limit (src/sim/parking.ts).
+          provenance: {
+            ...original.provenance,
+            inferred: original.provenance.inferred?.filter(
+              (key) =>
+                !(key === 'capacity' && command.capacity !== undefined) &&
+                !(key === 'access' && command.access !== undefined),
+            ),
+          },
         },
       },
     },
