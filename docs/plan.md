@@ -2308,7 +2308,7 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   with TASK-116's times. Traffic: quick 3356 / 20 / 0 against 3209 / 28 / 0, full 3493 / 51
   / 0 against 3378 / 62 / 0; baseline reset to these (stalled heads stays 1). The agent
   relaxed two Munich e2e allowances (T47 180 s, V106 local frame overhead 25%) citing the
-  owner; kept.
+  owner; kept, and the owner confirmed them.
 - TASK-110 review (lead, 2026-11-08): merged after TASK-116. Conflicts with TASK-102/104/109
   kept both sides (layers, styles, imports); the Overpass query is version 6 with the garage,
   lot and walk clauses; walk IDs still come last, after the lots. T49 now hashes through
@@ -2344,6 +2344,10 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   2.5 times German (1.9 s against 0.74 s on Munich, per the agent); German is unchanged.
 
 ## Owner decisions log
+
+- 2026-11-08, TASK-116 test allowances: the owner confirms loosening T47 Munich's total budget
+  to 180 s and V106's local Munich frame overhead to 25%, as the agent recorded in its
+  contract.
 
 - 2026-11-07, Gates 7 to 9: the lead's defaults are accepted (vehicle classes car, van, truck,
   bus; inferred garages and roadside strips where OSM has no parking; AWS Terrain Tiles;
