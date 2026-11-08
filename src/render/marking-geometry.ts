@@ -61,6 +61,62 @@ const fillShape = (role: MarkingRole, points: Vec2[], alpha = 1): MarkingShape =
   points,
   alpha,
 });
+
+// Stencil glyphs in driver coordinates: top forward, B on the driver's left.
+const busGlyphs = [
+  ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
+  ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+  ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+];
+export function busLabels(city: CompiledCity, road: CRoad, source?: CrossingSource) {
+  const labels: { lane: number; stationM: number; shapes: MarkingShape[] }[] = [];
+  for (const index of road.lanes) {
+    const lane = city.lanes[index]!;
+    if (lane.allowed.length !== 1 || lane.allowed[0] !== 'bus') continue;
+    const start = crossingSpan(city, lane, false, source)?.farM ?? 0;
+    const end = Math.min(lane.stopM, crossingSpan(city, lane, true, source)?.farM ?? lane.lengthM);
+    const length = Math.min(4, Math.max(0.2, end - start - 1));
+    const first = Math.min(start + 12, (start + end) / 2);
+    for (
+      let stationM = first;
+      stationM <= Math.max(first, end - length / 2 - 0.5);
+      stationM += 50
+    ) {
+      const shapes: MarkingShape[] = [];
+      const width = lane.widthM * 0.76,
+        cell = width / 17;
+      const world = (f: number, l: number) => {
+        const at = Math.max(0, Math.min(lane.lengthM, stationM + f));
+        const p = pointAtDistance(lane.polyline, lane.cumulative, at),
+          h = headingAtDistance(lane.polyline, lane.cumulative, at);
+        return { x: p.x - Math.sin(h) * l, y: p.y + Math.cos(h) * l };
+      };
+      busGlyphs.forEach((glyph, letter) =>
+        glyph.forEach((row, y) => {
+          for (let x = 0; x < 5; x++) {
+            if (row[x] !== '1') continue;
+            const left = -width / 2 + (letter * 6 + x) * cell;
+            const top = length / 2 - (y * length) / 7;
+            shapes.push(
+              fillShape(
+                'bus',
+                [
+                  world(top, left),
+                  world(top, left + cell),
+                  world(top - length / 7, left + cell),
+                  world(top - length / 7, left),
+                ],
+                0.9,
+              ),
+            );
+          }
+        }),
+      );
+      labels.push({ lane: index, stationM, shapes });
+    }
+  }
+  return labels;
+}
 export function roadMarkingGeometry(city: CompiledCity, road: CRoad, source?: CrossingSource) {
   const belowShapes: MarkingShape[] = [],
     aboveShapes: MarkingShape[] = [],
@@ -150,6 +206,7 @@ export function roadMarkingGeometry(city: CompiledCity, road: CRoad, source?: Cr
     }
     aboveShapes.push(...approachShapes(city, lane, endFarM));
   }
+  belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
   return { below: belowShapes, above: aboveShapes, pavement };
 }
 

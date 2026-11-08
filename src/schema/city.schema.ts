@@ -271,7 +271,7 @@ const contextFeature = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('point'),
-    class: z.literal('tree'),
+    class: z.enum(['tree', 'street_lamp']),
     pos: vec2,
     heightM: z.number().positive().optional(),
     crownM: z.number().positive().optional(),

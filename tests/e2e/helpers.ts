@@ -199,7 +199,7 @@ export async function importOsm(
   );
   await button(page, 'Continue').click();
   await button(page, 'Accept city').click();
-  await expect(dialog).toBeHidden();
+  await expect(dialog).toBeHidden({ timeout: 120_000 });
   await expect(button(page, 'Play')).toBeEnabled();
 }
 

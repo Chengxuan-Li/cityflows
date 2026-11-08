@@ -34,6 +34,8 @@ import { signalMountM, signalRotationY } from './signals';
 import { buildingMaterial, groundMaterial } from './context';
 import { buildVegetation, surfaceTexture } from './vegetation';
 import { placeTrees } from '../render/vegetation';
+import { placeStreet, treeContext } from '../render/street';
+import { buildStreet } from './street';
 import { Vehicles3D } from './vehicles';
 import { groundMesh } from './terrain';
 import { lotGeometry } from './stalls';
@@ -63,6 +65,9 @@ export class Scene3D {
   private source: CityGeometry | undefined;
   private geometry: ReturnType<typeof buildGeometry> | undefined;
   private vegetation: ReturnType<typeof buildVegetation> | undefined;
+  private streetCounts: ReturnType<typeof placeStreet>['counts'] | undefined;
+  private street: ReturnType<typeof buildStreet> | undefined;
+  private paint: Mesh[] = [];
   private treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   private ground: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private terrainEnabled = true;
@@ -219,16 +224,24 @@ export class Scene3D {
     this.setWalkLayers(this.walkVisibility.sidewalks, this.walkVisibility.footways);
     asphalt.material.map = surfaceTexture('asphalt');
     const placementStart = performance.now();
-    const placed = placeTrees(city, source);
+    const placed = placeTrees(city, treeContext(source));
     this.canvas.dataset.treePlacementMs = String(performance.now() - placementStart);
     this.treeCounts = placed.counts;
     this.canvas.dataset.treeCounts = JSON.stringify(placed.counts);
     this.canvas.dataset.treeCap = String(placed.capped);
     this.vegetation = buildVegetation(placed.trees, (p) => terrain.groundAt(p.x, p.y));
     this.content.add(this.vegetation.group);
+    const streetStart = performance.now();
+    const furniture = placeStreet(city, source, placed.trees);
+    this.streetCounts = furniture.counts;
+    this.canvas.dataset.streetCounts = JSON.stringify(furniture.counts);
+    this.canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
+    this.street = buildStreet(furniture, city, geometry.heights);
+    this.content.add(this.street.group);
     add(geometry.slabs, 0x899b99);
-    add(geometry.markings, 0xffffff, false).material.vertexColors = true;
-    add(geometry.crossings, markingTheme.colors.stop, false);
+    const paint = add(geometry.markings, 0xffffff, false);
+    paint.material.vertexColors = true;
+    this.paint = [paint, add(geometry.crossings, markingTheme.colors.stop, false)];
     const lots = lotGeometry(city, renderedSource, terrain);
     add(lots.surface, style.context.parking, false);
     this.parkingStalls = add(lots.paint, style.stall, false);
@@ -502,6 +515,19 @@ export class Scene3D {
     if (places) places.visible = visible;
   }
 
+  setStreet(lights: boolean, signs: boolean, curbs: boolean, markings: boolean) {
+    if (!this.street) return;
+    this.street.lamps.visible = lights;
+    this.street.signs.visible = signs;
+    this.street.curbs.visible = curbs;
+    for (const paint of this.paint) paint.visible = markings;
+    const counts = this.streetCounts!;
+    this.canvas.dataset.streetLights = String(
+      lights ? counts.lamps.osm + counts.lamps.generated : 0,
+    );
+    this.canvas.dataset.accessSigns = String(signs ? counts.signEntries : 0);
+    this.canvas.dataset.curbs = String(curbs ? counts.curbs : 0);
+  }
   setTrees(trees: boolean, streetTrees: boolean) {
     if (!this.vegetation) return;
     if (this.vegetation.natural.visible !== trees || this.vegetation.street.visible !== streetTrees)
@@ -766,7 +792,8 @@ export class Scene3D {
         object.geometry.dispose();
         const materials = Array.isArray(object.material) ? object.material : [object.material];
         for (const material of materials) {
-          if (material instanceof MeshLambertMaterial) material.map?.dispose();
+          if (material instanceof MeshLambertMaterial || material instanceof MeshBasicMaterial)
+            material.map?.dispose();
           material.dispose();
         }
         if (object instanceof InstancedMesh) object.dispose();

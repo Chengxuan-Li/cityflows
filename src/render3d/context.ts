@@ -177,6 +177,7 @@ export function buildContext(
   let groundCount = 0;
   const order = {
     tree: -1,
+    street_lamp: -1,
     tree_row: -1,
     landuse: 0,
     green: 1,
@@ -358,6 +359,7 @@ export function groundMaterial() {
 export function buildTerrainGround(ground: BufferGeometry, features: readonly ContextFeature[]) {
   const order = {
     tree: -1,
+    street_lamp: -1,
     tree_row: -1,
     landuse: 0,
     green: 1,

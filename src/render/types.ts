@@ -51,6 +51,10 @@ export interface LayerVisibility {
   context: boolean;
   trees: boolean;
   streetTrees: boolean;
+  streetLights: boolean;
+  signs: boolean;
+  curbs: boolean;
+  markings: boolean;
   difference: boolean;
   heat: boolean;
   queues: boolean;
@@ -75,6 +79,10 @@ export const defaultLayers: LayerVisibility = {
   context: true,
   trees: true,
   streetTrees: true,
+  streetLights: true,
+  signs: true,
+  curbs: true,
+  markings: true,
   difference: false,
   heat: false,
   queues: false,

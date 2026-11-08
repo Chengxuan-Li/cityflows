@@ -305,7 +305,7 @@ identical with terrain present or absent.
 
 ~~~ts
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-type ContextPoint = 'tree';
+type ContextPoint = 'tree' | 'street_lamp';
 type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
 
 type RoofShape = 'flat' | 'gabled' | 'hipped' | 'pyramidal' | 'skillion' | 'mansard'
@@ -330,6 +330,10 @@ TASK-106 adds tree points (`sub` is `leaf_type`, dimensions are metres) and tree
 with optional `spacingM` (minimum 2 m) from OSM `spacing` (default 8 m). This is an optional context
 extension without a schema-version bump. Only imported context is saved; generated trees
 are derived display geometry and never enter the project or compiled network.
+
+TASK-107 adds `street_lamp` context points: optional `heightM` from `height` and `sub`
+from `lamp_mount`, falling back to `support`. No schema-version bump; old files still open.
+Imported lamps persist, while generated furniture stays renderer-only and is never saved.
 
 Invariants (checked by compile, section 5):
 
@@ -1598,6 +1602,27 @@ the city, and roads retain the strongest tone.
 
 `src/render` draws a `CompiledCity` and the latest `VehicleSnapshot` with PixiJS 8:
 
+- TASK-107: `render/street.ts` derives lamps, access-entry signs and broken curb paths once per
+  city for both views. Imported lamps retain source positions and tagged heights/mounts.
+  Generated lamps use 30 m residential/service or 40 m arterial spacing, 0.5 m outside the
+  outer edge. Wide roads share a reference-station grid across both verges, with a half-spacing
+  offset even on paired directed roads. No generation on motorway,
+  trunk, ramp or negative-grade roads; none within 25 m of an imported lamp, 8 m of a placed tree,
+  near junctions/crossings/connectors, or inside road surfaces, buildings or water. Tree input
+  excludes lamp points without changing TASK-106's placement. One curb-side German sign marks
+  each entering road with changed class access/zone, deduplicated across lanes/classes;
+  internal zone roads and open exits have none. Shapes and label textures are drawn in code.
+  2D furniture appears above its road grade at street zoom (1.5 px/m), hidden at overview.
+  Imported lamp points within 2.5 m of an edge inherit that road height; other points stand on terrain. 3D lamps and signs are
+  instanced, with generated lamp bases and signs following their road height; ground-level outer curbs are 0.2 m wide and 0.12 m high, broken at crossings,
+  6 m driveway openings and same-grade junction surfaces, following road/terrain heights.
+  Overpasses do not cut ground curbs below them. The 3D strips
+  simplify both final edge profiles within 1 cm in plan and 1 mm vertically, retaining every gap endpoint. No sidewalks.
+  Bus-only lanes receive vector `BUS` glyphs at the start and every 50 m from shared
+  `marking-geometry.ts`; the 3D adapter retains 0.025 m paint clearance. Street lights, Signs
+  and 3D Curbs default on; BUS uses the Lane markings switch. Counts and placement timings
+  are exposed on the map canvas in test mode. Neither canonical network nor compile changes.
+
 - TASK-108: `render/marking-geometry.ts` owns world-metre paint shapes (role-coloured
   polylines with widths and dash metadata, and filled polygons). Road clipping, dash phase,
   approach controls and arrows, continuation seams/tapers, junction guides and crossing
@@ -2011,7 +2036,7 @@ or lane reservations differ from the roads outside the proposed cluster. A closu
 lane between open roads cannot disappear; uniform access zones still simplify normally.
 Signal controls are enabled before compiling the geometry used to generate their phases;
 after phase generation, a fresh compile supplies the usable graph for connector placement.
-Time-conditional rules, signs and lane text are outside TASK-101.
+Time-conditional rules are outside TASK-101; TASK-107 renders its access signs and bus-lane text.
 
 TASK-104 appends surface lots after the original public-road and place import. Closed
 `amenity=parking` polygons with `parking=surface`, or absent parking and absent/no building,
@@ -2207,8 +2232,11 @@ Overpass provider: query drivable highways and restriction relations in a bbox c
 endpoint configurable, OSM attribution recorded. TASK-096 adds the context tag selectors
 (ways and multipolygon relations) inside the same bbox while retaining the road selector.
 TASK-106 adds `node[natural=tree]` and `way[natural=tree_row]` to surroundings only.
-TASK-102 adds a separate garage and entrance clause to both queries. Query version 4
-invalidates cached extracts missing garages; the road selector and restriction closure stay
+TASK-102 adds a separate garage and entrance clause to both queries, TASK-104 the lot
+clause, TASK-110 the walk clause and TASK-107 a separate `node[highway=street_lamp]`
+surroundings clause (lamps clipped to the bounds with metric height and mounting
+retained). Query version 7 invalidates cached extracts missing any of them; the road
+selector and restriction closure stay
 unchanged. Imports with surroundings disabled fetch roads and garages and bypass the
 full-context cache, so they cannot poison it. Nominatim, when used, is limited to one
 request per second and triggered only by an explicit search action.

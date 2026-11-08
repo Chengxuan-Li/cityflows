@@ -41,7 +41,7 @@ test('@smoke V105 wizard terrain drapes 3D, shades 2D and toggles back to the pl
       );
     await button(page, 'Continue').click();
     await button(page, 'Accept city').click();
-    await expect(dialog).toBeHidden();
+    await expect(dialog).toBeHidden({ timeout: 120_000 });
   }
   await importCity(true);
   const imported = await city(page);

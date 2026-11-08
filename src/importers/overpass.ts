@@ -1,7 +1,7 @@
 import type { ImportOptions } from './types';
 
 export type Bbox = NonNullable<ImportOptions['bbox']>;
-export const queryVersion = 6;
+export const queryVersion = 7;
 export const defaultEndpoint =
   import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 let active = false;
@@ -51,6 +51,7 @@ export function buildQuery(bbox: Bbox, context = true): string {
             ');',
         )
         .join('') +
+      `node[highway=street_lamp](${s},${w},${n},${e});` +
       `node[natural=tree](${s},${w},${n},${e});way[natural=tree_row](${s},${w},${n},${e});`
     : '';
   const lots = `way[highway=service][service=parking_aisle](${s},${w},${n},${e});way[amenity=parking](${s},${w},${n},${e});rel[amenity=parking][type=multipolygon](${s},${w},${n},${e});`;

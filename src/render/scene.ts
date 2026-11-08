@@ -7,6 +7,8 @@ import { Camera } from './camera';
 import { FrameDemand, renderContinuously } from './frame-demand';
 import { drawVegetation } from './layers/vegetation';
 import { placeTrees } from './vegetation';
+import { placeStreet, treeContext } from './street';
+import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
 import { drawLots } from './layers/stalls';
 import { walkGeometry } from './walk-geometry';
@@ -140,6 +142,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let hillshade: ReturnType<typeof drawHillshade> | undefined;
   let contextCount = 0;
   let vegetation: ReturnType<typeof drawVegetation> | undefined;
+  let furniture: ReturnType<typeof drawStreet> = [];
+  let furnitureCounts: ReturnType<typeof placeStreet>['counts'] | undefined;
   let treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   let city: CompiledCity | undefined;
   let parkingCounts: ArrayLike<number> | null = null;
@@ -171,10 +175,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         updateZoomFade(graphics, camera.zoom);
       for (const child of grade.signals.children)
         if (child instanceof Graphics) updateZoomFade(child, camera.zoom);
-      grade.markings.visible = !overview;
-      grade.guides.visible = !overview;
-      grade.arrows.visible = !overview;
-      grade.crossings.visible = !overview;
+      grade.markings.visible = !overview && layerVisibility.markings;
+      grade.guides.visible = !overview && layerVisibility.markings;
+      grade.arrows.visible = !overview && layerVisibility.markings;
+      grade.crossings.visible = !overview && layerVisibility.markings;
       const next = overview && grade.terrainSize * resolution <= 2048 ? resolution : 0;
       if (next === grade.cacheResolution) continue;
       grade.terrain.cacheAsTexture(false);
@@ -214,6 +218,22 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateTerrainCache();
       grade.terrain.updateCacheTexture();
     }
+    for (const layer of furniture) {
+      layer.container.visible = camera.zoom >= 1.5;
+      layer.lamps.visible = layerVisibility.streetLights;
+      layer.signs.visible = layerVisibility.signs;
+    }
+    canvas.dataset.streetLights = String(
+      layerVisibility.streetLights
+        ? furnitureCounts
+          ? furnitureCounts.lamps.osm + furnitureCounts.lamps.generated
+          : 0
+        : 0,
+    );
+    canvas.dataset.accessSigns = String(
+      layerVisibility.signs ? (furnitureCounts ? furnitureCounts.signEntries : 0) : 0,
+    );
+    updateTerrainCache();
     canvas.dataset.terrain = String(Boolean(hillshade && layerVisibility.terrain));
     if (surroundings && surroundings.container.visible !== layerVisibility.context) {
       surroundings.container.visible = layerVisibility.context;
@@ -338,6 +358,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     vehicleRing.scale.set(1 / camera.zoom);
     vehicles.setZoom(camera.zoom);
     updateTerrainCache();
+    for (const layer of furniture) layer.container.visible = camera.zoom >= 1.5;
     drawEditOverlay(editOverlay, editPreview, camera.zoom);
     updatePlaces?.(camera.zoom);
     if (city) drawParking(parking, city, parkingCounts, camera.zoom);
@@ -396,11 +417,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       const started = performance.now();
       const features = source?.context?.features ?? [];
       const placementStart = performance.now();
-      const placed = placeTrees(compiled, source ?? { nodes: {}, places: {} });
+      const placed = placeTrees(compiled, treeContext(source ?? { nodes: {}, places: {} }));
       treeCounts = placed.counts;
       canvas.dataset.treePlacementMs = String(performance.now() - placementStart);
       canvas.dataset.treeCounts = JSON.stringify(placed.counts);
       canvas.dataset.treeCap = String(placed.capped);
+      const streetStart = performance.now();
+      const street = placeStreet(compiled, source ?? { nodes: {}, places: {} }, placed.trees);
+      furnitureCounts = street.counts;
+      canvas.dataset.streetCounts = JSON.stringify(street.counts);
+      canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
+
       const vegetationStart = performance.now();
       vegetation = drawVegetation(placed.trees);
       canvas.dataset.vegetationRebuildMs = String(performance.now() - vegetationStart);
@@ -433,6 +460,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         visibleGrades[0]!.terrain.addChildAt(hillshade, 0);
       }
       const base = grades.get(0)!;
+      furniture = drawStreet(street, roadGrades);
+      for (const layer of furniture) grades.get(layer.grade)!.group.addChild(layer.container);
       base.group.addChildAt(heat.roads, base.group.getChildIndex(base.connectors));
       base.group.addChildAt(difference, base.group.getChildIndex(base.connectors));
       applyVisibility();

@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { chromium, type Page } from '@playwright/test';
 import { fixtureTerrain } from '../tests/e2e/terrain-fixture';
+import { pointAtDistance } from '../src/geo/polyline';
+import { compile } from '../src/network';
 
 // Fixed-camera images of the geometry rework's cases (TASK-081, docs/plan.md "Geometry rework"):
 // starts the dev server on a free port, imports the Munich extract (or a shot's own, TASK-094)
@@ -132,6 +134,22 @@ export const shots: {
     pitch: 55,
     bearing: 30,
   },
+  ...[
+    { id: 'V107-munich-street', centre: [-300, 290] as [number, number], zoom: 8, bearing: 30 },
+    { id: 'V107-munich-bus-lane', centre: [10, -305] as [number, number], zoom: 16, bearing: 0 },
+    { id: 'V107-munich-zone', centre: [-408, -466] as [number, number], zoom: 20, bearing: 180 },
+  ].flatMap((shot) => [
+    { ...shot, cases: [] },
+    {
+      ...shot,
+      id: `${shot.id}-3d`,
+      cases: [],
+      view: '3d' as const,
+      terrain: true,
+      pitch: shot.id.endsWith('zone') ? 30 : 45,
+      zoom: shot.id.endsWith('zone') ? 55 : shot.zoom,
+    },
+  ]),
   { id: 'V108-munich-exit', cases: [], centre: [0, -256], zoom: 10 },
   { id: 'V108-munich-arrows', cases: [], centre: [10, 170], zoom: 12 },
   {
@@ -491,6 +509,11 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
     selected.sort((a, b) =>
       a.id.replace(/-(on|off)$/, '').localeCompare(b.id.replace(/-(on|off)$/, '')),
     );
+  // The fixture has no destination zone. Capture its inspector edit after the unchanged city.
+  selected.sort(
+    (a, b) =>
+      Number(a.id.startsWith('V107-munich-zone')) - Number(b.id.startsWith('V107-munich-zone')),
+  );
   mkdirSync(out, { recursive: true });
   const port = await freePort();
   const url = process.env.CITYFLOWS_SHOTS_URL ?? `http://127.0.0.1:${port}/`;
@@ -587,14 +610,49 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         await page.addStyleTag({ content: 'canvas.map3d { visibility: visible !important; }' });
       }
       const canvas = page.getByLabel(three ? '3D city view' : 'City map', { exact: true });
+      let localTraffic = false;
       for (const shot of selected) {
         if ((shot.osm ?? MUNICH) !== osm) continue;
         // Hidden controls remain operable for the fixed-camera harness.
-        await page.addStyleTag({ content: 'body * { visibility: visible !important; }' });
+        await page.addStyleTag({
+          content:
+            'body * { visibility: visible !important; } canvas.map[aria-hidden="true"] { visibility: hidden !important; }',
+        });
         // V108's CITYFLOWS_SHOTS_3D renders every shot in 3D (pitch 60, bearing 0); cameras with
         // `view: '3d'` render in 3D at their own pitch and bearing.
         const in3d = three || shot.view === '3d';
         const mode = button('3D');
+        if (shot.id.startsWith('V107-munich-zone') && !localTraffic) {
+          if ((await mode.getAttribute('aria-pressed')) === 'true') await mode.click();
+          const source = await page.evaluate(() => window.cityflows!.city!());
+          const result = compile(source);
+          if (!result.ok) throw new Error('Zone camera city must compile');
+          const road = result.compiled.roads.find((road) => road.id === 'r:1229')!;
+          const lane = result.compiled.lanes[road.lanes[0]!]!;
+          const point = pointAtDistance(
+            lane.polyline,
+            lane.cumulative,
+            Math.min(8, lane.lengthM / 2),
+          );
+          await placeCamera(page, [point.x, point.y], 20);
+          await page.getByLabel('City map', { exact: true }).click({
+            position: await page.evaluate(
+              (point) => window.cityflows!.worldToScreen!(point),
+              point,
+            ),
+          });
+          await page.getByText('Lanes and street settings', { exact: true }).click();
+          await page
+            .getByRole('combobox', { name: 'Access', exact: true })
+            .selectOption('destination');
+          await page.waitForFunction(() =>
+            Object.values(window.cityflows!.city!().roads).some(
+              (road) => road.id === 'r:1229' && road.access?.all === 'destination',
+            ),
+          );
+          await page.keyboard.press('Escape');
+          localTraffic = true;
+        }
         if (((await mode.getAttribute('aria-pressed')) === 'true') !== in3d) await mode.click();
         if (in3d)
           await page.waitForFunction(
@@ -660,6 +718,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         await target.screenshot({ path, animations: 'disabled' });
         records.push({
           ...shot,
+          ...(localTraffic && { accessEdit: 'r:1229 destination, through street inspector' }),
           file: `${shot.id}.png`,
           view: in3d ? '3d' : '2d',
           timing,
