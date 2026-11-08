@@ -1558,16 +1558,16 @@ broad roofs free of self-shadow stripes.
 TASK-106: `src/render/vegetation.ts` is the shared pure placement module. Seeded per-source
 streams produce OSM node/row trees, street trees and Poisson-disc woodland/scrub/park fills.
 Tree rows use 8 m or tagged spacing. Eligible residential/tertiary/secondary/primary road
-edges get trees 2.5 m outside the compiled surface, every 12 m with ±2 m station jitter;
+edges get trees 2.5 m outside the compiled surface, every 12 m with Â±2 m station jitter;
 inward sides of a corridor pair are omitted. Full canopy circles exclude road surfaces,
 junction outlines and 15 m node buffers, crossing stripes, connector buffers (carriageway
 width + 4 m), buildings, water areas/lines, rail/tram strips, parking, pitches and playgrounds.
 Street trees additionally keep 8 m from imported node/row trees. Forest/wood, scrub and park
-sampling targets one tree per 40, 60 and 300 m², respectively, with minimum separation
+sampling targets one tree per 40, 60 and 300 mÂ², respectively, with minimum separation
 0.7 times the square root of that area per tree. Holes and canopy margins are preserved;
 obstacles can reduce achieved density in small/narrow polygons. Grass/meadow/grassland
-remain open. OSM dimensions win; defaults are 8–14 m tall, 3–4.5 m street crowns or 4–6 m
-woodland crowns; scrub is 3–6 m tall with 3–4 m crowns. Explicit OSM nodes are uncapped;
+remain open. OSM dimensions win; defaults are 8â€“14 m tall, 3â€“4.5 m street crowns or 4â€“6 m
+woodland crowns; scrub is 3â€“6 m tall with 3â€“4 m crowns. Explicit OSM nodes are uncapped;
 all derived row, street and area trees share a 60,000 limit, with counts/cap status exposed.
 
 2D draws three soft green canopy tones above surroundings and below roads, in the same
@@ -1577,7 +1577,7 @@ Every instance reads its base through the `groundAt` callback in `render3d/veget
 (default `groundHeight`, 0 m); TASK-105's terrain ground sampler is wired here at merge.
 Trees and Street trees are independent default-on Layers switches, shown only when placement
 produces their content. Neither changes saved data or rebuilds geometry when toggled.
-Procedural 64×64 repeatable, faint grain textures tint grass, meadow, forest floor, pavement
+Procedural 64Ã—64 repeatable, faint grain textures tint grass, meadow, forest floor, pavement
 and asphalt with the existing palette. 2D context uses repeating world-space fills; 3D ground
 uses one five-slot grain atlas in one ordered mesh, and roads receive world-space asphalt UVs.
 Test-mode scene attributes expose counts, cap, placement and 2D rebuild milliseconds;
