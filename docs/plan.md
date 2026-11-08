@@ -2087,6 +2087,17 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   to 56ffccd's with `van` removed) and its save/open case parses the scenario as T14 does.
   Lead verification on main: check 594, city 66, traffic quick 3 233 / 32 (unchanged).
 
+- 2026-11-07, TASK-101 returned (Claude Code, Opus 5.5), not merged. Access rules per class,
+  zones, OSM tags and bus lanes as contracted; the owner allowed `src/sim` (access
+  invalidation), the importer's way splitting and corridor/continuity fixes that keep
+  junctions at access boundaries, with the expectations that move named. On its own it passes
+  the gate (quick 3 111 / 25). The lead merged main into it on `task/101-merge-main` (one class
+  constant, `van` through `goods` and `maxheight`, pinned hashes recomputed; check 639, city 68,
+  full e2e 74) and the traffic gate fails: full 3 009 / 59 / 1 against a floor of 3 193, quick
+  2 804 / 38. All-car and van-free runs give 3 111; with vans the network locks from about
+  07:50 (`r:761`, `r:844`, `r:1368`, `r:83`, `r:1279`, `r:222`, `r:89`), vans no more stuck
+  than cars. The agent continues from `task/101-merge-main`.
+
 ## Owner decisions log
 
 - 2026-11-07, Gates 7 to 9: the lead's defaults are accepted (vehicle classes car, van, truck,
