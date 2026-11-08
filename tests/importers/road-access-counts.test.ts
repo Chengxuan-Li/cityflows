@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { expect, test } from 'vitest';
 import { vehicleClasses } from '../../src/schema';
 import { tierCities } from '../tier';
@@ -22,7 +23,7 @@ const expected = {
 test.each(tierCities(['Munich', 'Sindelfingen'] as const))(
   'T47 %s access counts within ten percent, with curb-side bus lanes',
   (name) => {
-    const { city } = throughputFixture(name);
+    const city = withoutLotAisles(throughputFixture(name).city);
     for (const kind of vehicleClasses) {
       const counts = { yes: 0, no: 0, destination: 0, delivery: 0, private: 0 };
       for (const road of Object.values(city.roads))

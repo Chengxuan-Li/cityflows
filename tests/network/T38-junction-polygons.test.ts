@@ -1,3 +1,4 @@
+import { withoutLotAisles } from '../without-lot-aisles';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import {
@@ -31,7 +32,7 @@ const compiled = new Map<AuditCity, { city: City; net: CompiledCity }>();
 function load(name: AuditCity) {
   let entry = compiled.get(name);
   if (!entry) {
-    const city = loadAuditCity(name);
+    const city = withoutLotAisles(loadAuditCity(name));
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
     compiled.set(name, (entry = { city, net: result.compiled }));

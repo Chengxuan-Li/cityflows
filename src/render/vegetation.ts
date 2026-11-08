@@ -45,6 +45,9 @@ export function placeTrees(city: CompiledCity, source: CityGeometry) {
   const root = createRandom(106);
   const features = source.context?.features ?? [];
   const obstacles: Obstacle[] = [];
+  for (const lot of Object.values(source.parking ?? {}))
+    if (lot.kind === 'lot' && lot.shape?.kind === 'polygon')
+      obstacles.push({ rings: [closed(lot.shape.ring)] });
   for (const road of city.roads)
     if (road.surface.length) obstacles.push({ rings: [closed(road.surface)] });
   for (const node of city.nodes) {

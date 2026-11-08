@@ -484,6 +484,7 @@ export function MapView() {
         );
         if (active3D) {
           three!.setTerrain(layers.terrain);
+          three!.setParkingStalls(layers.parkingStalls);
           three!.setVehicleGeometry(
             session.loadedCompiled,
             session.project.scenarios[0]!.simParams.laneChangeDurationS ??

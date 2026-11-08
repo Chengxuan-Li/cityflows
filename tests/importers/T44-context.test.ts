@@ -1,3 +1,4 @@
+// TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
@@ -29,12 +30,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
         ? // TASK-101: imported road access/bus reservations and compiled access/zone arrays;
           // merged with TASK-100's `van`.
           [
-            '5214f5f79a95e4fa038e01fa58ec6aaf65fe74b09cfc495d83dca579ae279b3b',
-            '114894aea61446a784fca6707c1ef6601080ac8e03d374f0e66586be8b2f36fe',
+            'bc20fb6fdedbc6648393b63bc6ceed3c1212ad8711c59912393e34d5c7b7452e',
+            '558861f3a8c1891ce416cbc00ab29e87f04fc307bbaab1fb16cbeec7cd881778',
           ]
         : [
-            '440715f6bc83776119a532b4d27dff374f7d03dc4cceae1d24cbfcddd282ecd8',
-            '6796e26d82f456a43fd826489ab54f9285f4148ca82c0f3be1ed1a15d8027478',
+            '517440c07e61532e35658b73c704a625f8c34d9d1da145863ae4998062fc921b',
+            'cb217fb864cde5765d8948cdbffb28ea73a23929b9eb0ecc3b4d30334623c626',
           ];
     expect(hash(off.city)).toBe(baseline[0]);
     expect(hash(compile(off.city))).toBe(baseline[1]);
@@ -78,7 +79,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             water: 1,
             green: 115,
             landuse: 61,
-            parking: 79,
+            parking: 57,
             rail: 0,
             tram: 0,
             waterway: 0,
@@ -88,7 +89,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             water: 0,
             green: 59,
             landuse: 10,
-            parking: 33,
+            parking: 2,
             rail: 0,
             tram: 0,
             waterway: 0,

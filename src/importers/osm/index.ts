@@ -5,6 +5,7 @@ import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
 import { importContext } from './context';
+import { addLots } from './lots';
 import { addBuildings } from './buildings';
 import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
 import { drivableClass } from './filter';
@@ -332,8 +333,9 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addGateways(city, roads, base.compiled);
   addOsmPlaces(city, data, positions, bounds, base.compiled);
   addBuildings(city, data, positions, bounds, base.compiled);
+  addLots(city, data, positions, bounds, diagnostics);
   if (options.context !== false)
-    city.context = { features: importContext(data, positions, bounds) };
+    city.context = { features: importContext(data, positions, bounds, true) };
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)
@@ -368,6 +370,11 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     return fail('osm_invalid_city', `${issue.path.join('.')}: ${issue.message}`);
   }
   const final = compile(city);
+  if (final.ok)
+    for (const lot of final.compiled.parking ?? []) {
+      const facility = city.parking![lot.id]!;
+      if (facility.provenance.inferred?.includes('capacity')) facility.capacity = lot.stallCount;
+    }
   diagnostics.push(...final.diagnostics);
   return final.ok ? { ok: true, city, diagnostics } : { ok: false, diagnostics };
 }

@@ -5,7 +5,7 @@ import { defaultScenario } from '../src/fixtures/scenarios';
 import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
 import type { City } from '../src/schema';
-import { createRouteProvider, freeFlowLinkCosts } from '../src/routing';
+import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../src/routing';
 import { createEngine } from '../src/sim/engine';
 import type { TrafficEngine } from '../src/sim/types';
 
@@ -87,7 +87,12 @@ export function probeMorning(
   {
     untilS = 10 * 3600,
     observe,
-  }: { untilS?: number; observe?: (engine: TrafficEngine) => void } = {},
+    routeProvider,
+  }: {
+    untilS?: number;
+    observe?: (engine: TrafficEngine) => void;
+    routeProvider?: RouteProvider;
+  } = {},
 ) {
   const scenario = defaultScenario('grid5x5');
   scenario.demand.personsPerResident = scale;
@@ -96,7 +101,7 @@ export function probeMorning(
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, population, scenario);
   const engine = createEngine();
-  engine.load({ compiled, trips, scenario });
+  engine.load({ compiled, trips, scenario, ...(routeProvider && { routeProvider }) });
   let peak = 0;
   const completedByHalfHour: number[] = [];
   let completedBefore = 0;

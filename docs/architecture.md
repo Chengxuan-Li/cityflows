@@ -262,6 +262,8 @@ interface ParkingFacility {
   strip?: { roadId: RoadId; side: 'left' | 'right'; fromM: number; toM: number;
             layout: 'parallel' | 'angled' | 'perpendicular' };   // roadside only
   aisles?: RoadId[];              // a lot's parking_aisle service roads
+  entries?: NodeId[];             // lot aisle nodes shared with permitted non-aisle roads
+  exclusions?: Vec2[][];          // lot courtyards and building footprints
   occupancyAtStart?: number;      // 0..1; absent = derived from residents
   provenance: Provenance;         // inferred marks facilities generated where OSM has none
 }
@@ -372,7 +374,21 @@ interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
 TASK-101 resolves `CRoad.access` for every class. `zone[classIndex]` is `-1` outside local
 access zones. For each class, destination/private roads connected through either shared
 endpoint form one zone, independent of travel direction; mixed destination/private rules
-join the same zone. Zones are assigned deterministically in compiled road order.
+join the same zone. Zones are assigned deterministically in compiled road order. TASK-104 keeps each lot's aisle
+zone separate from non-lot roads and other lots, even when the adjoining street is private.
+An aisle listed by overlapping facilities belongs to the first facility in compiled id order
+for zone assignment. Thus a neighbouring private-road origin cannot grant aisle access.
+
+TASK-104 derives `CompiledCity.parking?: CLot[]` only when lots exist. Each lot has its
+facility id, entry node ids, `stalls` and `stallCount`. A stall stores `position`, `heading`,
+`widthM`, `lengthM`, `aisleRoad`, `positionM` along that canonical aisle, and four `corners`.
+Capacity remains the canonical facility value; derived geometry is never saved. Both sides
+of each physical aisle are sampled at 2.5 m pitch for perpendicular 2.5 × 5 m bays; a
+one-way aisle at most 4 m wide uses 60-degree bays and the corresponding pitch. Bays are
+kept wholly inside the lot and clear of road/junction surfaces, exclusions and earlier bays.
+Six metres at aisle ends and around entry/junction nodes remain clear. Facility, road and
+bay ordering is deterministic. Building exclusions are saved with lots so disabling display
+surroundings never changes compiled stalls.
 
 ### 5.1 Lane layout
 
@@ -1730,6 +1746,12 @@ Gate 1 edit flows through the inspector: lane count, speed limit, street directi
 allow/ban toggles at a node, signal phase durations. Every committed change shows the
 "restart to apply" state on the run bar.
 
+TASK-104 draws each lot surface once, independently of display surroundings. The shared
+compiled bay corners draw three thin warm-white edges, open toward the aisle. The 2D
+paint fades at overview zoom; 3D paint is split and draped over the terrain triangles like
+other ground paint. The default-on “Parking stalls” layer controls paint in both views,
+leaving the lot surface visible. No parked vehicles or parking simulation are introduced.
+
 ## 12. Project format and migrations
 
 Lives in `src/project`. A project is a ZIP with extension `.cityflows` (fflate), or a single
@@ -1799,6 +1821,25 @@ lane between open roads cannot disappear; uniform access zones still simplify no
 Signal controls are enabled before compiling the geometry used to generate their phases;
 after phase generation, a fresh compile supplies the usable graph for connector placement.
 Time-conditional rules, signs and lane text are outside TASK-101.
+
+TASK-104 appends surface lots after the original public-road and place import. Closed
+`amenity=parking` polygons with `parking=surface`, or absent parking and absent/no building,
+become `lot` facilities. Multipolygon inner rings and intersecting building footprints become
+stall exclusions. Numeric capacity wins; otherwise capacity is the generated count. Access
+maps absent/yes to public, customers to customers, private to private. One touching place
+footprint or matching name supplies `placeId`; ambiguous matches remain null. Only clipped
+parking-aisle sections inside or touching a lot become service roads, at 10 km/h; driveways
+and aisles outside lots remain dropped. Original access restrictions and directional/class
+overrides are retained; otherwise-public aisle access is inferred as destination-only under
+TASK-101, preventing through shortcuts without changing routing or simulation.
+Entries reuse mapped public nodes (including consolidated-node provenance). Unmapped or
+unconnected entries are reported as `parking_unreachable`; no entry aisle is fabricated.
+A mapped mouth that would consume an existing place connector remains disconnected with
+`parking_entry_unreachable`, preserving the original place and demand. Lots add no
+connectors. Original roads, controls, places and their IDs remain untouched. T49 removes
+appended aisles, nodes and facilities, normalizes allocator/provenance counts, and proves
+the canonical and compiled hashes equal main. Overpass query version 4 appends a separate
+parking/aisle clause in both road-only and surroundings queries.
 
 Lives in `src/importers/osm`, runs inside an import worker.
 

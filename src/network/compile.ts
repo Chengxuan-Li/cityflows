@@ -19,6 +19,7 @@ import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
 import { populateStops } from './stops';
+import { generateStalls } from './stalls';
 import type {
   CConnector,
   CLane,
@@ -138,6 +139,11 @@ export function compile(city: City): CompileResult {
   const incident = nodes.map((node) =>
     [...incoming[node.idx]!, ...outgoing[node.idx]!].sort((a, b) => a.idx - b.idx),
   );
+  // A lot grants local access only to its own endpoints, never to neighbouring private streets.
+  const lotByRoad = new Map<string, string>();
+  for (const lot of sortedValues(city.parking ?? {}))
+    if (lot.kind === 'lot')
+      for (const id of lot.aisles ?? []) if (!lotByRoad.has(id)) lotByRoad.set(id, lot.id);
   for (let kind = 0; kind < vehicleClasses.length; kind++) {
     let zone = 0;
     const restricted = (road: CRoad) =>
@@ -151,6 +157,7 @@ export function compile(city: City): CompileResult {
         for (const node of [current.from, current.to])
           for (const next of incident[node]!) {
             if (!restricted(next) || next.zone[kind] !== -1) continue;
+            if (lotByRoad.get(current.id) !== lotByRoad.get(next.id)) continue;
             next.zone[kind] = zone;
             pending.push(next);
           }
@@ -519,6 +526,8 @@ export function compile(city: City): CompileResult {
   }
   warnAboutProvenance([...sourceNodes, ...sourceRoads, ...sourcePlaces], diagnostics);
   populateStops(compiled, city);
+  if (Object.values(city.parking ?? {}).some((lot) => lot.kind === 'lot'))
+    compiled.parking = generateStalls(city, compiled);
   warnAboutConnectivity(compiled, diagnostics);
   return { ok: true, compiled, diagnostics };
 }

@@ -1,3 +1,4 @@
+// TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
@@ -36,8 +37,8 @@ const hash = (value: unknown) =>
 const baselines = {
   grid: 'a3f4b1fd03c65d0e380c56473b082f0d7dd67565fed7003c7239b8fe0f31bbb3',
   town: '7f5407b1088b1d219baedc5442270c618ff896125e57d615b67867b4318c15ec',
-  'munich-donnersberger': '114894aea61446a784fca6707c1ef6601080ac8e03d374f0e66586be8b2f36fe',
-  'sindelfingen-a81': '6796e26d82f456a43fd826489ab54f9285f4148ca82c0f3be1ed1a15d8027478',
+  'munich-donnersberger': '558861f3a8c1891ce416cbc00ab29e87f04fc307bbaab1fb16cbeec7cd881778',
+  'sindelfingen-a81': 'cb217fb864cde5765d8948cdbffb28ea73a23929b9eb0ecc3b4d30334623c626',
 };
 
 unitTest(
