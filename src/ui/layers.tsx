@@ -7,6 +7,7 @@ const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
   ['terrain', 'Terrain'],
   ['context', 'Surroundings'],
+  ['buildingDetails', 'Building details'],
   ['trees', 'Trees'],
   ['streetTrees', 'Street trees'],
   ['roadClasses', 'Road classes'],
@@ -26,6 +27,13 @@ export function Layers() {
   const layers = useAppStore((state) => state.layers);
   const hasGeo = useAppStore((state) => Boolean(state.session?.project.city.geo));
   const hasContext = useAppStore((state) => Boolean(state.session?.project.city.context));
+  const showBuildingDetails = useAppStore(
+    (state) =>
+      state.viewMode === '3d' &&
+      state.buildings &&
+      state.layers.context &&
+      state.session?.project.city.context?.features.some((f) => f.class === 'building'),
+  );
   const session = useAppStore((state) => state.session);
   const treeCounts = useMemo(
     () => (session ? placeTrees(session.compiled, session.project.city).counts : undefined),
@@ -51,6 +59,7 @@ export function Layers() {
           ([key]) =>
             (key !== 'basemap' || hasGeo) &&
             (key !== 'context' || hasContext) &&
+            (key !== 'buildingDetails' || showBuildingDetails) &&
             (key !== 'trees' || hasTrees) &&
             (key !== 'streetTrees' || hasStreetTrees) &&
             (key !== 'terrain' || hasTerrain),

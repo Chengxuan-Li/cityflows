@@ -30,7 +30,7 @@ import { Basemap3D } from './basemap';
 import { buildGeometry } from './geometry';
 import { pickVehicle3D, vehicleScreenPoint } from './picking';
 import { signalMountM, signalRotationY } from './signals';
-import { groundMaterial } from './context';
+import { buildingMaterial, groundMaterial } from './context';
 import { buildVegetation, surfaceTexture } from './vegetation';
 import { placeTrees } from '../render/vegetation';
 import { Vehicles3D } from './vehicles';
@@ -64,6 +64,7 @@ export class Scene3D {
   private surroundings: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private surroundingsVisible = true;
   private buildingsVisible = true;
+  private buildingDetails = true;
   private lamps: InstancedMesh | undefined;
   private selectedId: number | null = null;
   private signalCity: CompiledCity | null = null;
@@ -200,8 +201,17 @@ export class Scene3D {
     places.material.vertexColors = true;
     places.name = 'places';
     places.visible = this.placesVisible;
-    this.buildings = add(geometry.context.buildings, 0xffffff);
-    this.buildings.material.vertexColors = true;
+    this.buildings = add(
+      this.buildingDetails ? geometry.context.detailedBuildings : geometry.context.buildings,
+      0xffffff,
+    );
+    this.buildings.material.dispose();
+    this.buildings.material = buildingMaterial();
+    this.buildings.material.side = DoubleSide;
+    this.canvas.dataset.contextBuildMs = geometry.context.buildMs.toFixed(1);
+    this.canvas.dataset.buildingTriangles = JSON.stringify(geometry.context.buildingTriangles);
+    this.canvas.dataset.roofStats = JSON.stringify(geometry.context.roofStats);
+    this.canvas.dataset.buildingDetails = String(this.buildingDetails);
     this.surroundings = add(geometry.context.ground, 0xffffff, false);
     this.surroundings.material.vertexColors = true;
     this.surroundings.material.dispose();
@@ -436,6 +446,16 @@ export class Scene3D {
     );
   }
 
+  setBuildingDetails(enabled: boolean) {
+    if (this.buildingDetails === enabled) return;
+    this.buildingDetails = enabled;
+    if (this.buildings && this.geometry)
+      this.buildings.geometry = enabled
+        ? this.geometry.context.detailedBuildings
+        : this.geometry.context.buildings;
+    this.canvas.dataset.buildingDetails = String(enabled);
+  }
+
   setView(centre: Vec2, zoom: number, pitch = 55, bearing = 0) {
     // Consume and clear the previous gesture before installing the next view.
     const damping = this.controls.enableDamping;
@@ -583,6 +603,7 @@ export class Scene3D {
       this.canvas.clientHeight,
       this.surroundingsVisible ? 1 : 0,
       this.buildingsVisible ? 1 : 0,
+      this.buildingDetails ? 1 : 0,
       this.vehicles.mesh.count,
     ]
       .map((n) => n.toFixed(4))
@@ -608,6 +629,13 @@ export class Scene3D {
   }
 
   private disposeContent() {
+    if (this.geometry && this.buildings) {
+      const context = this.geometry.context;
+      (this.buildings.geometry === context.buildings
+        ? context.detailedBuildings
+        : context.buildings
+      ).dispose();
+    }
     if (this.terrainGround) {
       const { opaque, transparent } = this.terrainGround;
       (this.surroundings?.geometry === opaque ? transparent : opaque).dispose();

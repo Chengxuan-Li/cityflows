@@ -67,6 +67,8 @@ test('@smoke V105 wizard terrain drapes 3D, shades 2D and toggles back to the pl
   expect(shaded.equals(plain2D)).toBe(false);
   await button(page, '3D').click();
   const three = page.getByLabel('3D city view', { exact: true });
+  // A cold software WebGL context can outlast the ordinary 20 s assertion budget.
+  await expect(three).toHaveAttribute('data-view', '3d', { timeout: 120_000 });
   await expect(three).toHaveAttribute('data-terrain', 'false');
   await page.evaluate(() => window.cityflows!.setView3D!({ x: 66, y: 203 }, 3, 35, 55));
   const flat = await windowFrames();

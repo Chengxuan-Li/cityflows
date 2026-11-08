@@ -131,6 +131,18 @@ export interface GeoSource {
 export type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
 export type ContextPoint = 'tree';
 export type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
+export type RoofShape =
+  | 'flat'
+  | 'gabled'
+  | 'hipped'
+  | 'pyramidal'
+  | 'skillion'
+  | 'mansard'
+  | 'gambrel'
+  | 'half-hipped'
+  | 'round'
+  | 'dome'
+  | 'onion';
 export type ContextFeature =
   | {
       kind: 'area';
@@ -139,6 +151,18 @@ export type ContextFeature =
       sub?: string;
       heightM?: number;
       levels?: number;
+      roof?: {
+        shape: RoofShape;
+        heightM?: number;
+        levels?: number;
+        colour?: string;
+        material?: string;
+        orientation?: 'along' | 'across';
+        directionDeg?: number;
+      };
+      colour?: string;
+      material?: string;
+      minHeightM?: number;
     }
   | {
       kind: 'line';

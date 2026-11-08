@@ -23,6 +23,107 @@ import type { ContextFeature } from '../schema';
 import { groundSurface, surfaceGrain, type Surface } from '../render/vegetation';
 import { style } from '../render/style';
 import { drape, lowestGround, triangulate, type Terrain } from './terrain';
+import { buildRoof } from './roofs';
+
+type Building = Extract<ContextFeature, { kind: 'area' }>;
+
+function windowInfo(geometry: BufferGeometry, values?: number[]) {
+  geometry.setAttribute(
+    'windowInfo',
+    new Float32BufferAttribute(
+      values ?? new Float32Array(geometry.getAttribute('position').count * 3),
+      3,
+    ),
+  );
+  return geometry;
+}
+
+function facade(feature: Building, low: number, high: number) {
+  const positions: number[] = [],
+    bands: number[] = [];
+  const windows =
+    !['roof', 'garage', 'garages', 'shed'].includes(feature.sub ?? '') &&
+    !(feature.sub === 'industrial' && feature.levels === undefined && high - low > 3);
+  const levels = feature.levels ?? Math.max(1, Math.floor((high - low) / 3));
+  const pitch = windows ? (high - low) / levels : 0;
+  for (let r = 0; r < feature.rings.length; r++) {
+    const source = feature.rings[r]!;
+    const ring = areaD(source) > 0 === (r === 0) ? source : [...source].reverse();
+    let distance = 0;
+    for (let i = 1; i < ring.length; i++) {
+      const a = ring[i - 1]!,
+        b = ring[i]!;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      for (const [p, h, u] of [
+        [a, low, distance],
+        [a, high, distance],
+        [b, high, distance + length],
+        [a, low, distance],
+        [b, high, distance + length],
+        [b, low, distance + length],
+      ] as const) {
+        positions.push(p.x, h, p.y);
+        bands.push(u, h - low, pitch);
+      }
+      distance += length;
+    }
+  }
+  const geometry = new BufferGeometry().setAttribute(
+    'position',
+    new Float32BufferAttribute(positions, 3),
+  );
+  geometry.computeVertexNormals();
+  geometry.setAttribute(
+    'uv',
+    new Float32BufferAttribute(new Float32Array((positions.length / 3) * 2), 2),
+  );
+  return windowInfo(geometry, bands);
+}
+
+function buildingColour(feature: Building) {
+  if (feature.colour) return mutedColour(feature.colour, style.context.building);
+  const material = Object.hasOwn(style.buildings.walls, feature.material ?? '')
+    ? style.buildings.walls[feature.material!]
+    : undefined;
+  if (material !== undefined) return material;
+  let hash = 2166136261;
+  for (const p of feature.rings[0]!)
+    for (const n of [p.x, p.y]) hash = Math.imul(hash ^ Math.round(n * 10), 16777619);
+  return new Color(style.context.building).multiplyScalar(0.96 + ((hash >>> 0) % 9) / 100).getHex();
+}
+
+function mutedColour(colour: string, base: number) {
+  return new Color(base).lerp(new Color(colour), style.buildings.taggedColourStrength).getHex();
+}
+
+/** One facade shader for the whole batch; roof and canopy vertices carry a zero pitch. */
+export function buildingMaterial() {
+  const material = new MeshLambertMaterial({ vertexColors: true });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.windowColour = { value: new Color(style.buildings.window) };
+    shader.vertexShader =
+      'attribute vec3 windowInfo; varying vec3 vWindowInfo;\n' +
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\nvWindowInfo = windowInfo;',
+      );
+    shader.fragmentShader =
+      'uniform vec3 windowColour; varying vec3 vWindowInfo;\n' +
+      shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        if (vWindowInfo.z > 0.0) {
+          float level = fract(vWindowInfo.y / vWindowInfo.z);
+          float along = fract(vWindowInfo.x / 2.8);
+          float band = smoothstep(0.28, 0.33, level) * (1.0 - smoothstep(0.72, 0.77, level));
+          band *= smoothstep(0.16, 0.21, along) * (1.0 - smoothstep(0.74, 0.79, along));
+          band *= 1.0 - smoothstep(${style.buildings.windowFadeM[0]}.0, ${style.buildings.windowFadeM[1]}.0, length(vViewPosition));
+          diffuseColor.rgb = mix(diffuseColor.rgb, windowColour, band * ${style.buildings.windowStrength});
+        }`,
+      );
+  };
+  return material;
+}
 
 function shape(rings: Vec2[][]) {
   const points = (ring: Vec2[], clockwise: boolean) => {
@@ -65,8 +166,14 @@ export function buildContext(
   terrain?: Terrain,
   groundMeshes = true,
 ) {
+  const start = performance.now();
   const buildings: BufferGeometry[] = [],
+    detailed: BufferGeometry[] = [],
     ground: BufferGeometry[] = [];
+  const roofStats = {
+    shapes: {} as Record<string, number>,
+    fallbacks: {} as Record<string, number>,
+  };
   let groundCount = 0;
   const order = {
     tree: -1,
@@ -93,6 +200,57 @@ export function buildContext(
       }).rotateX(-Math.PI / 2);
       if (terrain?.grid) geometry.translate(0, lowestGround(feature.rings, terrain, true), 0);
       buildings.push(paint(geometry, style.context.building, style.context.buildingEdge));
+      const canopy = feature.sub === 'roof';
+      const minimum = feature.minHeightM ?? (canopy ? 3 : 0);
+      const roofFeature = canopy
+        ? {
+            ...feature,
+            minHeightM: minimum + 0.2,
+            heightM: Math.max(
+              feature.heightM ??
+                minimum +
+                  0.2 +
+                  (feature.roof?.heightM ??
+                    (feature.roof?.levels !== undefined
+                      ? feature.roof.levels * 3
+                      : feature.roof && feature.roof.shape !== 'flat'
+                        ? 2
+                        : 0)),
+              minimum + 0.2,
+            ),
+          }
+        : feature;
+      const roof = buildRoof(roofFeature);
+      const wallColour = buildingColour(feature);
+      const defaultRoof =
+        roof.shape === 'flat' ? style.buildings.flatRoof : style.buildings.pitchedRoof;
+      const roofColour = feature.roof?.colour
+        ? mutedColour(feature.roof.colour, defaultRoof)
+        : Object.hasOwn(style.buildings.roofs, feature.roof?.material ?? '')
+          ? style.buildings.roofs[feature.roof!.material!]!
+          : defaultRoof;
+      const parts = [windowInfo(paint(roof.roof, roofColour))];
+      if (canopy) roof.infill.dispose();
+      else parts.push(windowInfo(paint(roof.infill, wallColour)));
+      if (canopy) {
+        // A thin slab, with a visible underside and no facade down to the ground.
+        const slab = new ExtrudeGeometry(shape(feature.rings), {
+          depth: 0.2,
+          bevelEnabled: false,
+          steps: 1,
+          curveSegments: 1,
+        })
+          .rotateX(-Math.PI / 2)
+          .translate(0, roof.wallHeightM - 0.2, 0);
+        parts.push(windowInfo(paint(slab, roofColour)));
+      } else if (roof.wallHeightM > minimum)
+        parts.push(paint(facade(feature, minimum, roof.wallHeightM), wallColour));
+      const base = terrain?.grid ? lowestGround(feature.rings, terrain, true) : 0;
+      for (const part of parts) detailed.push(part.translate(0, base, 0));
+      roofStats.shapes[roof.shape] = (roofStats.shapes[roof.shape] ?? 0) + 1;
+      if (roof.fallbackReason)
+        roofStats.fallbacks[roof.fallbackReason] =
+          (roofStats.fallbacks[roof.fallbackReason] ?? 0) + 1;
       continue;
     }
     groundCount++;
@@ -143,8 +301,17 @@ export function buildContext(
     );
     ground.push(paint(geometry, color));
   }
+  const legacy = windowInfo(merged(buildings)),
+    details = merged(detailed);
   return {
-    buildings: merged(buildings),
+    buildings: legacy,
+    detailedBuildings: details,
+    roofStats,
+    buildMs: performance.now() - start,
+    buildingTriangles: {
+      plain: legacy.getAttribute('position').count / 3,
+      detailed: details.getAttribute('position').count / 3,
+    },
     ground: merged(ground),
     buildingCount: buildings.length,
     groundCount,
@@ -264,7 +431,17 @@ export function buildTerrainGround(ground: BufferGeometry, features: readonly Co
       (typeof vertices)[number],
     ];
     const det = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
-    if (Math.abs(det) < 1e-8) continue;
+    if (Math.abs(det) < 1e-8) {
+      // Vertical excavation banks must survive the planar context overlay pass.
+      const color = new Color(style.context.buildingEdge);
+      for (const target of [opaque, transparent])
+        for (const j of ids) {
+          target.positions.push(p.getX(j), p.getY(j), p.getZ(j));
+          target.colors.push(color.r, color.g, color.b);
+          target.normals.push(n.getX(j), n.getY(j), n.getZ(j));
+        }
+      continue;
+    }
     const triangle = vertices.map(({ x, y }) => ({ x, y }));
     if (areaD(triangle) < 0) triangle.reverse();
     let pieces = [triangle];

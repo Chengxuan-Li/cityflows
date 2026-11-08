@@ -322,7 +322,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addOsmPlaces(city, data, positions, bounds, base.compiled);
   addBuildings(city, data, positions, bounds, base.compiled);
   if (options.context !== false)
-    city.context = { features: importContext(data, positions, bounds) };
+    city.context = { features: importContext(data, positions, bounds, diagnostics) };
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)

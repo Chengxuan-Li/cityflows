@@ -440,6 +440,65 @@ export function groundMesh(terrain: Terrain, bounds: Bounds, offset = 0) {
   }
   if (!terrain.grid) return geometry;
   geometry = mergeGroundPlanes(geometry, terrain, offset);
+  // Excavation sides belong to the ground, even when Buildings/Surroundings is hidden.
+  const positionsWithBanks = Array.from(geometry.getAttribute('position').array);
+  for (const patch of patches)
+    for (const ring of patch.rings)
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i]!,
+          b = ring[(i + 1) % ring.length]!;
+        const dx = b.x - a.x,
+          dy = b.y - a.y;
+        const cuts = [0, 1];
+        const crossing = (value: number, start: number, delta: number) => {
+          const t = (value - start) / delta;
+          if (t > 0 && t < 1) cuts.push(t);
+        };
+        const grid = terrain.grid;
+        for (let c = 0; c < grid.cols; c++) crossing(grid.originM.x + c * grid.cellM, a.x, dx);
+        for (let r = 0; r < grid.rows; r++) crossing(grid.originM.y + r * grid.cellM, a.y, dy);
+        // The fixed diagonal folds at x+y = origin.x+origin.y + k*cellM.
+        for (let k = 1; k < grid.cols + grid.rows - 2; k++)
+          crossing(grid.originM.x + grid.originM.y + k * grid.cellM, a.x + a.y, dx + dy);
+        for (const x of [bounds.minX, bounds.maxX]) crossing(x, a.x, dx);
+        for (const y of [bounds.minY, bounds.maxY]) crossing(y, a.y, dy);
+        cuts.sort((a, b) => a - b);
+        for (let j = 1; j < cuts.length; j++) {
+          const t0 = cuts[j - 1]!,
+            t1 = cuts[j]!;
+          if (t1 - t0 < 1e-10) continue;
+          const x = a.x + (dx * (t0 + t1)) / 2,
+            y = a.y + (dy * (t0 + t1)) / 2;
+          if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY) continue;
+          const p = { x: a.x + dx * t0, y: a.y + dy * t0 };
+          const q = { x: a.x + dx * t1, y: a.y + dy * t1 };
+          const low = patch.level + offset;
+          const ph = terrain.surfaceAt(p.x, p.y) + offset;
+          const qh = terrain.surfaceAt(q.x, q.y) + offset;
+          // Ring winding is outer-positive/inner-negative; normals face the excavation.
+          positionsWithBanks.push(
+            p.x,
+            low,
+            p.y,
+            q.x,
+            qh,
+            q.y,
+            p.x,
+            ph,
+            p.y,
+            p.x,
+            low,
+            p.y,
+            q.x,
+            low,
+            q.y,
+            q.x,
+            qh,
+            q.y,
+          );
+        }
+      }
+  geometry.setAttribute('position', new Float32BufferAttribute(positionsWithBanks, 3));
   const p = geometry.getAttribute('position'),
     uv: number[] = [];
   for (let i = 0; i < p.count; i++)
