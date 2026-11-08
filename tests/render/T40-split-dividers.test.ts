@@ -10,7 +10,7 @@ import {
 } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import type { CMovement, CNode, CompiledCity, CRoad } from '../../src/network';
-import { junctionGuides, splitLinedUp } from '../../src/render/layers/junction-markings';
+import { junctionGuides, splitLinedUp } from '../../src/render/marking-geometry';
 import { crossingStripes, markingClips } from '../../src/render/layers/roads';
 import { cityTest, tierCities } from '../tier';
 

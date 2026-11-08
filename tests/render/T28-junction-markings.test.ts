@@ -1,3 +1,4 @@
+import { drawJunctionMarkings } from '../../src/render/layers/junction-markings';
 import { readFileSync } from 'node:fs';
 import { importOsmCached } from '../../bench/city-cache';
 import { expect, test } from 'vitest';
@@ -8,11 +9,7 @@ import { signalApproach } from '../../src/fixtures/signal-approach';
 import { distance, segmentsIntersect } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { compile, type CompiledCity, type CNode } from '../../src/network';
-import {
-  drawJunctionMarkings,
-  junctionGuides,
-  majorThroughs,
-} from '../../src/render/layers/junction-markings';
+import { junctionGuides, majorThroughs } from '../../src/render/marking-geometry';
 import type { City, Node } from '../../src/schema';
 import { insideOutline } from '../network/junction-audit';
 import { tierCities, unitTest } from '../tier';

@@ -1,4 +1,3 @@
-import type { Graphics } from 'pixi.js';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import {
@@ -25,10 +24,9 @@ import {
   crossingDefault,
   crossingPlacement,
   crossingStripes,
-  drawRoad,
 } from '../../src/render/layers/roads';
 import { signalHeads } from '../../src/render/layers/signals';
-import { style } from '../../src/render/style';
+import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { tierCities, unitTest } from '../tier';
 import type { City } from '../../src/schema';
 
@@ -162,37 +160,11 @@ test.each(tierCities(auditCities))(
   120_000,
 );
 
-/** Centre lines `drawRoad` strokes (the divider width at alpha 0.85), both layers. */
+/** Centre lines by role, regardless of their theme's width. */
 function centreLines(city: CompiledCity, road: CRoad): Vec2[][] {
-  const lines: Vec2[][] = [];
-  let pending: Vec2[][] = [];
-  let previous = { x: 0, y: 0 };
-  const graphics = {
-    poly() {
-      pending = [];
-      return this;
-    },
-    fill() {
-      pending = [];
-      return this;
-    },
-    stroke({ width, alpha }: { width: number; alpha?: number }) {
-      if (width === style.dividerWidthM && alpha === 0.85) lines.push(...pending);
-      pending = [];
-      return this;
-    },
-    moveTo(x: number, y: number) {
-      previous = { x, y };
-      return this;
-    },
-    lineTo(x: number, y: number) {
-      pending.push([previous, { x, y }]);
-      previous = { x, y };
-      return this;
-    },
-  } as unknown as Graphics;
-  drawRoad(graphics, graphics, city, road, false, graphics);
-  return lines;
+  return roadMarkingGeometry(city, road)
+    .below.filter((s) => s.kind === 'line' && s.role === 'centre')
+    .flatMap((s) => s.points.slice(1).map((p, i) => [s.points[i]!, p]));
 }
 
 test.each(tierCities(auditCities))(

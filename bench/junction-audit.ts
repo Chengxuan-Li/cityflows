@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { grid5x5 } from '../src/fixtures/grid5x5';
 import { town } from '../src/fixtures/town';
-import type { Graphics } from 'pixi.js';
 import {
   clipOutside,
   cumulativeLengths,
@@ -13,8 +12,7 @@ import {
 import type { Vec2 } from '../src/geo/vec2';
 import { compile, type CMovement, type CompiledCity, type CNode, type CRoad } from '../src/network';
 import { SETBACK_CAP_M } from '../src/network/junctions';
-import { drawRoad } from '../src/render/layers/roads';
-import { style } from '../src/render/style';
+import { roadMarkingGeometry } from '../src/render/marking-geometry';
 import type { City } from '../src/schema';
 import { importOsmCached } from './city-cache';
 
@@ -436,52 +434,22 @@ export function auditJunctions(net: CompiledCity): NodeAudit[] {
   return net.nodes.map((node) => auditNode(net, node));
 }
 
-/** Length of the lane markings `drawRoad` strokes (dividers, centre lines, stop lines, arrow
- * shafts; fills such as arrow heads not counted), in all and outside its nodes' outlines, and
- * of its dividers and centre lines (strokes of the divider width) outside them: TASK-079 draws
- * arrows only where lanes differ, which the outline clip never touched. */
+/** Painted line metres, measured by semantic role rather than a single renderer width.
+ * Filled arrows and hatching are not lane-line paint. */
 export function markingLengths(net: CompiledCity) {
   let total = 0,
     outside = 0,
     lineOutside = 0;
   for (const road of net.roads) {
-    const lines: { line: Vec2[]; divider: boolean }[] = [];
-    let stroked = 0;
-    let previous = { x: 0, y: 0 };
-    const graphics = {
-      poly(points: Vec2[]) {
-        lines.push({ line: points, divider: false });
-        return this;
-      },
-      fill() {
-        lines.pop();
-        stroked = Math.min(stroked, lines.length);
-        return this;
-      },
-      stroke({ width }: { width: number }) {
-        for (const entry of lines.slice(stroked)) entry.divider = width === style.dividerWidthM;
-        stroked = lines.length;
-        return this;
-      },
-      moveTo(x: number, y: number) {
-        previous = { x, y };
-        return this;
-      },
-      lineTo(x: number, y: number) {
-        lines.push({ line: [previous, { x, y }], divider: false });
-        previous = { x, y };
-        return this;
-      },
-    } as unknown as Graphics;
-    drawRoad(graphics, graphics, net, road, false, graphics);
-    const outlines = [road.from, road.to]
-      .map((n) => net.nodes[n]!.outline)
-      .filter((outline) => outline.length);
-    for (const { line, divider } of lines) {
-      total += polylineLength(line);
-      for (const piece of clipOutside(line, outlines, 0)) {
-        outside += polylineLength(piece);
-        if (divider) lineOutside += polylineLength(piece);
+    const geometry = roadMarkingGeometry(net, road);
+    const outlines = [road.from, road.to].map((n) => net.nodes[n]!.outline).filter((r) => r.length);
+    for (const shape of [...geometry.below, ...geometry.above]) {
+      if (shape.kind !== 'line') continue;
+      total += polylineLength(shape.points);
+      for (const piece of clipOutside(shape.points, outlines, 0)) {
+        const length = polylineLength(piece);
+        outside += length;
+        if (shape.role === 'lane' || shape.role === 'centre') lineOutside += length;
       }
     }
   }

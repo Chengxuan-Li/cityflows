@@ -1,4 +1,3 @@
-import type { Graphics } from 'pixi.js';
 import { expect, test } from 'vitest';
 import {
   auditCities,
@@ -10,10 +9,9 @@ import {
   type NodeAudit,
 } from '../../bench/junction-audit';
 import { deepInside } from '../../src/geo/polyline';
-import type { Vec2 } from '../../src/geo/vec2';
 import type { CompiledCity } from '../../src/network';
-import { drawRoad, markingClips } from '../../src/render/layers/roads';
-import { style } from '../../src/render/style';
+import { markingClips } from '../../src/render/layers/roads';
+import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { tierCities } from '../tier';
 
 // T27 (TASK-074): what stays of it after TASK-083. Its outline measures (simple, movements held,
@@ -56,48 +54,17 @@ test.each(tierCities(auditCities))(
   120_000,
 );
 
-/** Records the divider and centre lines drawn (strokes of the divider width); arrows, stop and
- * give-way marks are never clipped (lead review of 142b4d8) and are not recorded. */
-function recorder() {
-  const lines: Vec2[][] = [];
-  let pending: Vec2[][] = [];
-  let previous = { x: 0, y: 0 };
-  const graphics = {
-    poly(points: Vec2[]) {
-      pending = [points];
-      return this;
-    },
-    fill() {
-      pending = [];
-      return this;
-    },
-    stroke({ width }: { width: number }) {
-      if (width === style.dividerWidthM) lines.push(...pending);
-      pending = [];
-      return this;
-    },
-    moveTo(x: number, y: number) {
-      previous = { x, y };
-      return this;
-    },
-    lineTo(x: number, y: number) {
-      pending.push([previous, { x, y }]);
-      previous = { x, y };
-      return this;
-    },
-  };
-  return { graphics: graphics as unknown as Graphics, lines };
-}
-
 test.each(tierCities(auditCities))(
   'T27: %s draws no lane marking in another road’s junction mouth or under an outline',
   (name) => {
     const { net } = audit(name);
     const offending: string[] = [];
     for (const road of net.roads) {
-      const marks = recorder();
-      // Stop and give-way lines go to the controls layer and stay at the stop position.
-      drawRoad(recorder().graphics, marks.graphics, net, road, false, recorder().graphics);
+      const marks = {
+        lines: roadMarkingGeometry(net, road)
+          .below.filter((s) => s.kind === 'line' && (s.role === 'lane' || s.role === 'centre'))
+          .map((s) => s.points),
+      };
       // Its nodes' outlines, and other roads' surfaces within their junction mouths; roads
       // running the same way at the node (the street's other direction, a coincident or
       // overlapping carriageway) never clip each other (lead review of 142b4d8).
@@ -123,6 +90,8 @@ test.each(tierCities(auditCities))(
   120_000,
 );
 
+// TASK-108 remeasures semantic lane-line paint with 3/6 and 6/12 dashes;
+// polygon arrows no longer contribute stroked shafts.
 // 5024a83 measured with bench/junction-audit.ts: metres of dividers and centre lines drawRoad
 // strokes outside its nodes' outlines. TASK-079 draws turn arrows only where a road's lanes
 // differ (B34), so all strokes together fall by design; the clip never acted on arrows. TASK-091
@@ -131,7 +100,7 @@ test.each(tierCities(auditCities))(
 // 46174, munich 38684 m). TASK-094 re-measured: at signals lines end at the stop line behind the
 // set-back crossing (TASK-091: grid 8453, town 83776, sindelfingen 41613, munich 35400 m),
 // measured on main after TASK-092 and TASK-093.
-const mainLineOutsideM = { grid: 8386, town: 81564, sindelfingen: 41664, munich: 35698 };
+const mainLineOutsideM = { grid: 8010, town: 79218, sindelfingen: 40618, munich: 34822 };
 
 test.each(tierCities(auditCities))(
   'T27: %s keeps at least 98 % of main’s lane lines outside outlines',

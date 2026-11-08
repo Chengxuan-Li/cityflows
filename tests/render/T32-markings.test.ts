@@ -1,4 +1,3 @@
-import type { Graphics } from 'pixi.js';
 import { expect, test } from 'vitest';
 import {
   auditCities,
@@ -21,9 +20,9 @@ import {
   approachMarkings,
   crossingPlacement,
   crossingStripes,
-  drawRoad,
 } from '../../src/render/layers/roads';
-import { style } from '../../src/render/style';
+import { markingTheme } from '../../src/render/style';
+import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { cityTest, tierCities, unitTest } from '../tier';
 
 const nets = new Map<string, CompiledCity>();
@@ -32,41 +31,16 @@ const net = (name: AuditCity) => {
   return nets.get(name)!;
 };
 
-/** Strokes `drawRoad` makes, by width: lane lines (the divider width) and arrow shafts. Both
- * layers (below and above the node area) go to the same recorder. */
+/** Semantic geometry, including polygon arrows, independent of paint width. */
 function record(city: CompiledCity, road: CRoad) {
-  const lines: Vec2[][] = [],
-    arrows: Vec2[][] = [];
-  let pending: Vec2[][] = [];
-  let previous = { x: 0, y: 0 };
-  const graphics = {
-    poly(points: Vec2[]) {
-      pending = [points];
-      return this;
-    },
-    fill() {
-      pending = [];
-      return this;
-    },
-    stroke({ width }: { width: number }) {
-      if (width === style.dividerWidthM) lines.push(...pending);
-      else if (width < 0.25) arrows.push(...pending);
-      pending = [];
-      return this;
-    },
-    moveTo(x: number, y: number) {
-      previous = { x, y };
-      return this;
-    },
-    lineTo(x: number, y: number) {
-      pending.push([previous, { x, y }]);
-      previous = { x, y };
-      return this;
-    },
-  } as unknown as Graphics;
-  const ignored = { ...graphics, stroke: () => ignored } as unknown as Graphics;
-  drawRoad(ignored, graphics, city, road, false, graphics);
-  return { lines, arrows };
+  const geometry = roadMarkingGeometry(city, road);
+  const shapes = [...geometry.below, ...geometry.above];
+  return {
+    lines: shapes
+      .filter((s) => s.kind === 'line' && (s.role === 'lane' || s.role === 'centre'))
+      .map((s) => s.points),
+    arrows: shapes.filter((s) => s.role === 'arrow').map((s) => s.points),
+  };
 }
 
 /** Arc length of the nearest point of `lane`, and the signed distance to it (right positive). */
@@ -142,8 +116,12 @@ test.each(tierCities(['grid', 'munich'] as const))(
           // the far edge of the crossing at its start (Munich r:651): no room for a divider.
           if (reach === 0 && stop <= startTrim) continue;
           const heading = headingOf(lane);
+          // A clipped terminal dash can expose the preceding themed off-interval.
+          // Beyond that one gap, the missing tail must still lie on another road.
+          const gap = offset > 0 ? markingTheme.classes[road.roadClass].lane.dash![1] : 0;
+          const blockedFrom = Math.min(stop, reach + gap);
           const covered = Array.from({ length: 9 }, (_, k) => {
-            const s = reach + ((stop - reach) * (k + 0.5)) / 9;
+            const s = blockedFrom + ((stop - blockedFrom) * (k + 0.5)) / 9;
             const point = pointAtDistance(lane.polyline, lane.cumulative, s);
             return (
               others.some((ring) => pointInPolygon(point, ring, 0)) ||
@@ -203,7 +181,14 @@ test.each(tierCities(['grid', 'munich'] as const))(
         const centre = (Math.min(...along) + Math.max(...along)) / 2;
         if (lane.lengthM < 12) wrong.push(`${lane.id}: lane under 12 m`);
         if (alike) wrong.push(`${lane.id}: all lanes of ${road.id} allow the same turns`);
-        if (Math.max(...along) - Math.min(...along) > 4.5) wrong.push(`${lane.id}: more than once`);
+        if (
+          Math.max(...along) - Math.min(...along) >
+          (lane.speedLimitMps >= 70 / 3.6
+            ? markingTheme.fastArrowLengthM
+            : markingTheme.arrowLengthM) +
+            0.2
+        )
+          wrong.push(`${lane.id}: more than once`);
         // TASK-091: behind a crossing set back from the junction an arrow's front stays 0.5 m
         // from it (within the 2.5 m an arrow shape varies by).
         const gap = lane.lengthM - crossingPlacement(city, road, true).farM - Math.max(...along);
@@ -316,6 +301,7 @@ cityTest(
   120_000,
 );
 
+// TASK-108: the new dash/gap ratio reduces painted length; audit by role.
 // 5024a83 measured with bench/junction-audit.ts: dividers and centre lines drawRoad strokes
 // outside its nodes' outlines, and all its strokes (with arrow shafts and stop lines). TASK-091
 // re-measured: lines now end 0.5 m before every crossing, which moved out from the junction to
@@ -325,10 +311,10 @@ cityTest(
 // 83776/87772, sindelfingen 41613/41920, munich 35400/36231 m); measured on main after TASK-092
 // and TASK-093.
 const main = {
-  grid: { lineOutsideM: 8386, markingOutsideM: 8819 },
-  town: { lineOutsideM: 81564, markingOutsideM: 85560 },
-  sindelfingen: { lineOutsideM: 41664, markingOutsideM: 41971 },
-  munich: { lineOutsideM: 35698, markingOutsideM: 36545 },
+  grid: { lineOutsideM: 8010 },
+  town: { lineOutsideM: 79218 },
+  sindelfingen: { lineOutsideM: 40618 },
+  munich: { lineOutsideM: 34822 },
 };
 
 test.each(tierCities(auditCities))(

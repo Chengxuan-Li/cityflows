@@ -22,6 +22,15 @@ export const shots: {
   zoom: number;
   osm?: string;
 }[] = [
+  { id: 'V108-munich-exit', cases: [], centre: [0, -256], zoom: 10 },
+  { id: 'V108-munich-arrows', cases: [], centre: [10, 170], zoom: 12 },
+  {
+    id: 'V108-sindelfingen-exit',
+    cases: [],
+    centre: [685, 247],
+    zoom: 14,
+    osm: 'fixtures/osm/sindelfingen-a81.osm',
+  },
   { id: 'V96-munich-overview', cases: [], centre: [0, 0], zoom: 0.43 },
   { id: 'V96-hbf-tracks', cases: [], centre: [250, -140], zoom: 1.8 },
   {
@@ -321,16 +330,55 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       });
       if (moved.length)
         console.warn('camera anchors moved on this tree:', moved.map(([id]) => id).join(', '));
-      const canvas = page.locator('canvas[aria-label="City map"]');
+      const three = process.env.CITYFLOWS_SHOTS_3D === '1';
+      if (three) {
+        await page.addStyleTag({ content: 'button { visibility: visible !important; }' });
+        await button('3D').click();
+        await page.addStyleTag({ content: 'button { visibility: hidden !important; }' });
+        await page.waitForFunction(() => !!window.cityflows?.view3D?.());
+        await page.addStyleTag({ content: 'canvas.map3d { visibility: visible !important; }' });
+      }
+      const canvas = page.getByLabel(three ? '3D city view' : 'City map', { exact: true });
       for (const shot of selected) {
         if ((shot.osm ?? MUNICH) !== osm) continue;
-        const placed = await placeCamera(page, shot.centre, shot.zoom);
+        const placed = three
+          ? await page.evaluate((shot) => {
+              window.cityflows!.setView3D!(
+                { x: shot.centre[0], y: shot.centre[1] },
+                shot.zoom,
+                60,
+                0,
+              );
+              return { error: 0, zoom: shot.zoom, size: [1280, 800] };
+            }, shot)
+          : await placeCamera(page, shot.centre, shot.zoom);
         await frames(page, 3);
+        const timing =
+          process.env.CITYFLOWS_SHOTS_TIMING === '1' &&
+          ['overview', 'V96-hbf-tracks'].includes(shot.id)
+            ? await page.evaluate(async () => {
+                const samples: number[] = [];
+                let previous = 0;
+                for (let i = 0; i < 150; i++) {
+                  const now = await new Promise<number>((r) => requestAnimationFrame(r));
+                  if (i >= 30) samples.push(now - previous);
+                  previous = now;
+                }
+                const sorted = samples.toSorted((a, b) => a - b);
+                return {
+                  meanMs: samples.reduce((a, b) => a + b, 0) / samples.length,
+                  p95Ms: sorted[Math.floor(sorted.length * 0.95)],
+                  samples: samples.length,
+                };
+              })
+            : undefined;
         const path = join(out, `${shot.id}.png`);
         await canvas.screenshot({ path, animations: 'disabled' });
         records.push({
           ...shot,
           file: `${shot.id}.png`,
+          view: three ? '3d' : '2d',
+          timing,
           centreErrorPx: placed.error,
           zoom: placed.zoom,
           canvas: placed.size,

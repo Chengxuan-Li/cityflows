@@ -1318,6 +1318,33 @@ type HostEvent =
 
 `src/render` draws a `CompiledCity` and the latest `VehicleSnapshot` with PixiJS 8:
 
+- TASK-108: `render/marking-geometry.ts` owns world-metre paint shapes (role-coloured
+  polylines with widths and dash metadata, and filled polygons). Road clipping, dash phase,
+  approach controls and arrows, continuation seams/tapers, junction guides and crossing
+  polygons moved out of the 2D layers; 2D and 3D consume the same shapes. Dash footprints
+  are expanded before either renderer draws them. `render/style.ts` selects the `de`
+  marking theme: warm white in every role, 0.12 m urban and 0.15 m motorway/trunk lane
+  lines, 0.30 m broad edge/channel lines, 3/6 m and 6/12 m lane dash/gap patterns, and
+  1.5/1.5 m junction guides. Theme polygons supply straight, left, right, combined and
+  diagonal lane-ending arrows; approach glyphs are 5 m long, 7.5 m at 70 km/h and above.
+  Existing lane/turn eligibility and stop-relative placement rules remain. Longer glyphs
+  clamp behind crossings; their tails clip at the start of a very short approach.
+  Ramp gores use existing corner pieces and actual facing lane edges, excluding full
+  lane and movement footprints. Owner-authorized renderer-only pavement fills the neutral
+  gap at continuation splits/merges that have no compiled junction surface; both views
+  share it, and it changes no compiled surface, lane or movement. Raised-nose
+  fillets are excluded. Channel borders and 0.5 m chevron bands (2 m urban, 4 m highway
+  spacing) are clipped as filled footprints, with apexes against traffic. Taper paint is
+  limited to the taper's station range and excludes centrelines, replacing TASK-071's
+  two taper chevrons; lanes tapering at both ends retain both painted tapers. The 3D adapter triangulates
+  paint with per-role vertex colours. Added gore pavement and paint interpolate the two
+  branch-edge heights together on one tessellated surface; paint is clipped to those
+  triangles and uses their interpolation, retaining its 0.025 m clearance on ramps.
+  Flat paint strips need no height subdivision. Movement paths remain beneath junction
+  fills in both views; approach arrows remain above.
+  The adapter samples road/node elevations only through
+  `render3d/heights.ts`; no compiled geometry or network behaviour changes.
+
 - TASK-096: optional Surroundings draws above tiles and below every grade group. Muted
   land use, water, green, parking and building fills (courtyard holes, hairline building edges)
   and rail/tram/waterway lines are static and never pickable. Rail cross ties appear at detail

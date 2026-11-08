@@ -1,10 +1,11 @@
 import { expect, test } from 'vitest';
 import { continuity } from '../../src/fixtures/continuity';
 import { compile } from '../../src/network';
+import { transitionMarkings } from '../../src/render/marking-geometry';
 import { transitionGeometry } from '../../src/render/layers/transitions';
 import { distance } from '../../src/geo/polyline';
 
-test('T25: drops shrink to zero with two chevrons, additions grow, and boundaries meet', () => {
+test('T25: drops shrink to zero with a standard merge arrow and hatched verge, additions grow, and boundaries meet', () => {
   const result = compile(continuity());
   if (!result.ok) throw new Error('continuity fixture');
   const net = result.compiled;
@@ -17,11 +18,12 @@ test('T25: drops shrink to zero with two chevrons, additions grow, and boundarie
     expect(added ? widths.at(-1) : widths[0]).toBeCloseTo(3, 3);
     for (let i = 1; i < widths.length; i++)
       expect((widths[i]! - widths[i - 1]!) * (added ? 1 : -1)).toBeGreaterThanOrEqual(-0.001);
-    expect(taper.chevrons).toHaveLength(added ? 0 : 2);
-    for (const chevron of taper.chevrons) {
-      expect(chevron).toHaveLength(3);
-      expect(chevron.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
-    }
+    const marks = transitionMarkings(net, net.roads[lane.road]!);
+    expect(marks.some((s) => s.role === 'arrow')).toBe(!added);
+    expect(
+      marks.every((s) => s.points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))),
+    ).toBe(true);
+    expect(marks.some((s) => s.role === 'hatch')).toBe(true);
     expect(geometry.dividers.length).toBe(2);
   }
 });
