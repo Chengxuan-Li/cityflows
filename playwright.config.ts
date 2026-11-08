@@ -9,7 +9,15 @@ const productionPort = port + 1;
 // here, so a new spec file is never skipped. Unset, every test runs.
 const groups: Record<string, string[]> = {
   a: ['V106-vegetation', 'view3d', 'T19-live-town', 'vehicle-classes'],
-  b: ['T16-performance', 'V105-terrain', 'qa-mobile', 'crossings'],
+  b: [
+    'T16-performance',
+    'V105-terrain',
+    'qa-mobile',
+    'crossings',
+    'gate4-layers',
+    'qa-munich',
+    'gate3-bypass',
+  ],
   c: [
     'V97-grade-shadows',
     'T44-context',
@@ -17,7 +25,6 @@ const groups: Record<string, string[]> = {
     'gate2-import',
     'demo-d-import-edit-share',
     'demo-c-bypass',
-    'gate4-layers',
   ],
 };
 const group = process.env.CITYFLOWS_E2E_GROUP;
