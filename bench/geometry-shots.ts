@@ -525,6 +525,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         if (errors.length) throw new Error(errors.join('\n'));
         const target = in3d ? page.getByLabel('3D city view', { exact: true }) : canvas;
         const timing = await page.evaluate(async () => {
+          window.cityflowsRenderContinuously = true;
           const renders: number[] = [],
             times: number[] = [];
           const observer = new PerformanceObserver((list) => {
@@ -540,6 +541,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
             last = now;
           }
           observer.disconnect();
+          window.cityflowsRenderContinuously = false;
+          if (!renders.length) throw new Error('No drawn frames in timing sample');
           const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
           return { frameMs: mean(times), renderMs: mean(renders) };
         });

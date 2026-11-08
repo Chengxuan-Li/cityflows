@@ -16,11 +16,17 @@ export {
   crossingEnabled,
   crossingPlacement,
 } from '../../network/crossings';
+const zoomFades = new WeakMap<Graphics, { from: number; to: number }>();
+
 export function fadeAtZoom(graphics: Graphics, from: number, to: number) {
-  graphics.onRender ??= () => {
-    const zoom = graphics.parent!.worldTransform.a;
-    graphics.alpha = Math.max(0, Math.min(1, (zoom - from) / (to - from)));
-  };
+  if (!zoomFades.has(graphics)) zoomFades.set(graphics, { from, to });
+}
+
+/** Apply before rendering: onRender changes otherwise need another frame to reach the GPU. */
+export function updateZoomFade(graphics: Graphics, zoom: number) {
+  const range = zoomFades.get(graphics);
+  if (range)
+    graphics.alpha = Math.max(0, Math.min(1, (zoom - range.from) / (range.to - range.from)));
 }
 export function drawMarkings(graphics: Graphics, shapes: readonly MarkingShape[]) {
   for (const shape of shapes) {

@@ -1549,7 +1549,7 @@ Surfaces, marking strips, signal poles and pitched instances share this
 height rule; movements use their node's height and retain the through slope where applicable.
 Raised decks have 0.8 m slabs and piers every 30 m. The 3D camera starts at the 2D centre and
 hands its ground target and scale back on
-return; the hidden Pixi ticker stops while 3D is active. Vehicle raycasting opens the existing
+return; the hidden 2D scene stops drawing while 3D is active. Vehicle raycasting opens the existing
 inspector, with the same eight-pixel picking tolerance as 2D; playback stays live and a
 ground-opacity toggle reveals tunnels. Pedestrian stripes reuse the 2D crossing polygons.
 Signal heads face the approaching lane and hang at 5.5 m from 6 m curbside cantilevers.
@@ -1622,14 +1622,32 @@ the edge-clamped exterior into broad strips rather than tessellating outside the
 Only asphalt above ground enters the terrain view's shadow pass. The draped backdrop uses
 one opaque pass, or one transparent pass with basemap/below-ground visibility. With no
 vehicles, an unchanged camera and layer visibility reuse the
-static shadow map; camera changes, layer changes and vehicles refresh it. The visible scene
-still renders every frame.
+static shadow map; camera changes, layer changes and vehicles refresh it. The visible scene renders on demand (TASK-115).
 Camera targets follow
 the ground. Terrain off rebuilds the original flat geometry and removes the 2D hillshade;
 cities without terrain follow the same path as before. `LayerVisibility.terrain` defaults
 on and its control appears only when the city has terrain. The 2D hillshade uses north-west
 light at 45 degrees, low opacity, below surroundings in the shared overview texture cache.
 3D editing remains out of scope.
+
+TASK-115: each view coalesces visible changes with one scene-owned invalidation flag,
+consumed at most once per animation frame. Zoom-dependent marking/sign opacity is applied
+before drawing, including after geometry rebuilds; render hooks never leave opacity for a
+following frame. Pixi's automatic ticker rendering is disabled;
+its scene explicitly renders after camera/resize, city, selection, overlay, layer or snapshot
+changes. Vehicles redraw on every playing frame or while their extrapolation age changes,
+then settle when paused. The UI does not reapply heat/queues for an unchanged simulation snapshot. The 3D
+scene follows the same rule, with MapControls change events keeping damping live, and
+setters invalidating layer, signal, selection, terrain and shadow changes. Hidden 2D draws
+nothing; returning to it invalidates once. Tile reconciliation runs after view changes,
+loads/retries and during fades, and stops after settling. Vegetation detail and caches
+refresh in the same frame as their triggering camera/layer changes.
+
+In test mode only, `window.cityflowsRenderContinuously = true` overrides the idle guard
+in both views so `cityflows:render` / `cityflows:render3d` keep measuring actual frame cost.
+T16, T44, V106 and geometry shots opt in while measuring. The switch is ignored in production.
+Test canvases expose `data-frames` (actual draws) and 2D `data-active` (visible view);
+V115 proves paused Munich draws zero frames over two seconds in either view.
 
 `src/ui` is the React app with one Zustand store. Layout follows the brief:
 

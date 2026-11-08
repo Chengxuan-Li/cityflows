@@ -24,6 +24,7 @@ import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
 import { markingTheme, style } from '../render/style';
+import { FrameDemand, renderContinuously } from '../render/frame-demand';
 import type { CityGeometry, Pick } from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
 import { Basemap3D } from './basemap';
@@ -40,6 +41,10 @@ import { buildTerrainGround } from './context';
 
 export class Scene3D {
   private readonly scene = new Scene();
+  private readonly demand = new FrameDemand();
+  private readonly invalidate = this.demand.invalidate;
+  private vehicleAgeS = 0;
+  private colourByClass = false;
   private readonly renderer: WebGLRenderer;
   private readonly camera = new PerspectiveCamera(45, 1, 0.2, 50000);
   private readonly controls: MapControls;
@@ -97,6 +102,7 @@ export class Scene3D {
     this.sun.shadow.bias = -0.00008;
     this.sun.shadow.normalBias = 0.05;
     this.controls = new MapControls(this.camera, canvas);
+    this.controls.addEventListener('change', this.invalidate);
     this.controls.minPolarAngle = (5 * Math.PI) / 180;
     this.controls.maxPolarAngle = (80 * Math.PI) / 180;
     this.controls.minDistance = 10;
@@ -108,6 +114,7 @@ export class Scene3D {
     this.observer.observe(canvas);
     this.resize();
     canvas.dataset.view = '3d';
+    if (import.meta.env.MODE === 'test') canvas.dataset.frames = '0';
   }
 
   private resize() {
@@ -116,15 +123,18 @@ export class Scene3D {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.invalidate();
   }
 
-  setCity(city: CompiledCity, source: CityGeometry) {
+  setCity(city: CompiledCity, source: CityGeometry, terrainEnabled = this.terrainEnabled) {
+    this.terrainEnabled = terrainEnabled;
     if (
       this.city === city &&
       this.source === source &&
       this.renderedTerrain === this.terrainEnabled
     )
       return;
+    this.invalidate();
     const start = performance.now();
     this.shadowView = '';
     this.disposeContent();
@@ -329,12 +339,18 @@ export class Scene3D {
   }
   setSnapshot(snapshot: PresentationSnapshot) {
     this.vehicles.setSnapshot(snapshot);
+    this.invalidate();
   }
   setColourVehiclesByClass(enabled: boolean) {
+    if (enabled === this.colourByClass) return;
+    this.colourByClass = enabled;
     this.vehicles.setColourByClass(enabled);
+    this.invalidate();
   }
   setSelection(pick: Pick | null) {
-    this.selectedId = pick?.kind === 'vehicle' ? pick.id : null;
+    const id = pick?.kind === 'vehicle' ? pick.id : null;
+    if (id !== this.selectedId) this.invalidate();
+    this.selectedId = id;
   }
 
   setSignals(timeS: number, loaded: CompiledCity | null = this.signalCity) {
@@ -349,6 +365,7 @@ export class Scene3D {
     const key = [...states].map(([n, s]) => `${n}:${s.phase}:${s.state}`).join('|');
     if (key === this.lastSignalKey) return;
     this.lastSignalKey = key;
+    this.invalidate();
     const color = new Color();
     this.geometry.heads.forEach((head, i) => {
       const state = states.get(head.node);
@@ -374,6 +391,7 @@ export class Scene3D {
   }
 
   setBelowGround(enabled: boolean) {
+    if (this.belowGround !== enabled) this.invalidate();
     this.belowGround = enabled;
     if (this.surroundings) this.surroundings.material.opacity = enabled ? 0.4 : 1;
     this.updateTerrainBackdrop();
@@ -384,6 +402,7 @@ export class Scene3D {
     this.ground.material.needsUpdate = true;
   }
   setTiles(enabled: boolean) {
+    if (this.tilesEnabled !== enabled) this.invalidate();
     this.tilesEnabled = enabled;
     if (this.basemap) this.basemap.group.visible = enabled;
     this.updateTerrainBackdrop();
@@ -407,6 +426,7 @@ export class Scene3D {
     if (this.city && this.source) this.setCity(this.city, this.source);
   }
   setPlaces(visible: boolean) {
+    if (this.placesVisible !== visible) this.invalidate();
     this.placesVisible = visible;
     const places = this.content.getObjectByName('places');
     if (places) places.visible = visible;
@@ -414,6 +434,8 @@ export class Scene3D {
 
   setTrees(trees: boolean, streetTrees: boolean) {
     if (!this.vegetation) return;
+    if (this.vegetation.natural.visible !== trees || this.vegetation.street.visible !== streetTrees)
+      this.invalidate();
     this.vegetation.natural.visible = trees;
     this.vegetation.street.visible = streetTrees;
     const counts = this.treeCounts!;
@@ -423,6 +445,8 @@ export class Scene3D {
     this.canvas.dataset.streetTrees = String(streetTrees ? counts.street : 0);
   }
   setSurroundings(visible: boolean, buildings: boolean) {
+    if (this.surroundingsVisible !== visible || this.buildingsVisible !== buildings)
+      this.invalidate();
     this.surroundingsVisible = visible;
     this.buildingsVisible = buildings;
     if (this.surroundings) this.surroundings.visible = visible;
@@ -458,6 +482,7 @@ export class Scene3D {
   captureFrames(): Promise<string[]> {
     return new Promise((resolve) => {
       this.capture = { images: [], resolve };
+      this.invalidate();
     });
   }
   getView() {
@@ -511,6 +536,34 @@ export class Scene3D {
   render(elapsedS: number, timeS: number) {
     const renderStart = performance.now();
     this.controls.update();
+    this.setSignals(timeS);
+    if (this.vehicleAgeS !== elapsedS && this.vehicles.mesh.count) this.invalidate();
+    this.vehicleAgeS = elapsedS;
+    // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
+    const distance = this.camera.position.distanceTo(this.controls.target);
+    this.camera.near = Math.max(0.2, distance / 10);
+    this.camera.far = Math.max(5000, distance * 10);
+    this.camera.updateProjectionMatrix();
+    this.camera.updateMatrixWorld();
+    const now = performance.now();
+    if (
+      this.basemap &&
+      (this.demand.pending || this.basemap.needsUpdate) &&
+      this.basemap.update(
+        this.camera,
+        this.canvas.clientWidth,
+        this.canvas.clientHeight,
+        now - this.lastRenderMs,
+        this.belowGround,
+      )
+    )
+      this.invalidate();
+    this.lastRenderMs = now;
+    this.canvas.dataset.tiles = String(this.tilesEnabled ? (this.basemap?.visibleCount ?? 0) : 0);
+    this.canvas.dataset.crossings = String(
+      this.geometry?.crossings.getAttribute('position').count ?? 0,
+    );
+    if (!this.demand.consume(renderContinuously())) return;
     if (this.city && this.geometry)
       this.vehicles.animate(elapsedS, this.city, this.geometry.heights);
     if (this.city && this.geometry?.heights.terrain.grid && this.vehicles.poses.snapshot) {
@@ -525,7 +578,6 @@ export class Scene3D {
         this.vehicles.mesh.setMatrixAt(i, this.vehicleMatrix);
       }
     }
-    this.setSignals(timeS);
     const index =
       this.selectedId === null
         ? -1
@@ -537,25 +589,6 @@ export class Scene3D {
       this.vehicles.mesh.getMatrixAt(index, this.selection.matrix);
       this.selection.matrixAutoUpdate = false;
     }
-    // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
-    const distance = this.camera.position.distanceTo(this.controls.target);
-    this.camera.near = Math.max(0.2, distance / 10);
-    this.camera.far = Math.max(5000, distance * 10);
-    this.camera.updateProjectionMatrix();
-    this.camera.updateMatrixWorld();
-    const now = performance.now();
-    this.basemap?.update(
-      this.camera,
-      this.canvas.clientWidth,
-      this.canvas.clientHeight,
-      now - this.lastRenderMs,
-      this.belowGround,
-    );
-    this.lastRenderMs = now;
-    this.canvas.dataset.tiles = String(this.tilesEnabled ? (this.basemap?.visibleCount ?? 0) : 0);
-    this.canvas.dataset.crossings = String(
-      this.geometry?.crossings.getAttribute('position').count ?? 0,
-    );
     // Fit the 2048 shadow map to the camera's ground target, rather than the whole city.
     const extent = Math.max(40, this.camera.position.distanceTo(this.controls.target) * 0.9);
     // A world-space texel offset keeps broad roofs free of self-shadow stripes.
@@ -584,6 +617,8 @@ export class Scene3D {
       this.surroundingsVisible ? 1 : 0,
       this.buildingsVisible ? 1 : 0,
       this.vehicles.mesh.count,
+      this.vegetation?.natural.visible ? 1 : 0,
+      this.vegetation?.street.visible ? 1 : 0,
     ]
       .map((n) => n.toFixed(4))
       .join(',');
@@ -591,8 +626,10 @@ export class Scene3D {
     if (shadowView !== this.shadowView) this.renderer.shadowMap.needsUpdate = true;
     this.shadowView = shadowView;
     this.renderer.render(this.scene, this.camera);
-    if (import.meta.env.MODE === 'test')
+    if (import.meta.env.MODE === 'test') {
+      this.canvas.dataset.frames = String(Number(this.canvas.dataset.frames) + 1);
       this.canvas.dataset.triangles = String(this.renderer.info.render.triangles);
+    }
     if (import.meta.env.MODE === 'test') {
       performance.measure('cityflows:render3d', { start: renderStart, end: performance.now() });
       performance.clearMeasures('cityflows:render3d');
@@ -602,7 +639,7 @@ export class Scene3D {
       if (this.capture.images.length === 2) {
         this.capture.resolve(this.capture.images);
         this.capture = null;
-      }
+      } else this.invalidate();
     }
     this.canvas.dataset.vehicles = String(this.vehicles.mesh.count);
   }

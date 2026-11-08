@@ -54,6 +54,10 @@ export class Basemap3D {
     this.tiles = new Tiles(geo);
   }
 
+  get needsUpdate() {
+    return this.group.visible && this.tiles.needsUpdate;
+  }
+
   update(
     camera: PerspectiveCamera,
     width: number,
@@ -61,14 +65,14 @@ export class Basemap3D {
     deltaMs: number,
     belowGround: boolean,
   ) {
-    if (!this.group.visible) return;
+    if (!this.group.visible) return false;
     this.proxy.fitToBounds(
       groundBounds(camera, this.terrain?.groundAt(camera.position.x, camera.position.z) ?? 0),
       width,
       height,
       0,
     );
-    this.tiles.update(this.proxy, width, height, deltaMs);
+    const changed = this.tiles.update(this.proxy, width, height, deltaMs);
     for (const [sprite, mesh] of this.meshes) {
       mesh.visible = false;
       if (sprite.destroyed) {
@@ -112,6 +116,7 @@ export class Basemap3D {
       mesh.visible = true;
       mesh.material.opacity = sprite.alpha * (belowGround ? 0.4 : 1);
     }
+    return changed;
   }
 
   get visibleCount() {

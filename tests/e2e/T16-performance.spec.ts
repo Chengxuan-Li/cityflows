@@ -186,6 +186,7 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
     await page.waitForTimeout(1000);
     const start = await page.evaluate(async () => {
       const metrics = await window.cityflows!.metrics();
+      window.cityflowsRenderContinuously = true;
       window.performanceSamples.capturing = true;
       return {
         wallMs: performance.now(),
@@ -197,6 +198,7 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
     const end = await page.evaluate(async () => {
       const metrics = await window.cityflows!.metrics();
       window.performanceSamples.capturing = false;
+      window.cityflowsRenderContinuously = false;
       return {
         wallMs: performance.now(),
         timeS: metrics.timeS,
