@@ -16,6 +16,8 @@ export function patchSignals(
         phases: signal.phases.map((phase) => ({
           ...phase,
           movements: phase.movements.map((i) => city.movements[i]!.id),
+          // TASK-111: walk links by id; their indices shift with unrelated edits.
+          walk: phase.walk.map((i) => city.walk.links[i]!.id),
         })),
       })
     );

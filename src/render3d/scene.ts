@@ -38,6 +38,7 @@ import { placeTrees } from '../render/vegetation';
 import { placeStreet, treeContext } from '../render/street';
 import { buildStreet } from './street';
 import { Vehicles3D } from './vehicles';
+import { buildWalkSignals, Walkers3D } from './walkers';
 import { groundMesh } from './terrain';
 import { lotGeometry } from './stalls';
 import { terrainVehicleOffset } from './heights';
@@ -57,6 +58,9 @@ export class Scene3D {
   private readonly observer: ResizeObserver;
   private readonly sun = new DirectionalLight(0xfff8ec, 1.4);
   private readonly vehicles = new Vehicles3D();
+  private readonly walkers = new Walkers3D();
+  private walkSignals: ReturnType<typeof buildWalkSignals> | undefined;
+  private pedestrians = true;
   private readonly selection = new Mesh(
     new BoxGeometry(1.18, 1.27, 1.44).translate(-0.5, 0.53, 0),
     new MeshBasicMaterial({ color: style.selection, wireframe: true }),
@@ -112,6 +116,7 @@ export class Scene3D {
       this.sun.target,
       this.content,
       this.vehicles.mesh,
+      this.walkers.mesh,
       this.selection,
     );
     this.selection.visible = false;
@@ -159,6 +164,7 @@ export class Scene3D {
     if (this.city !== city) {
       this.vehicles.poses.snapshot = null;
       this.vehicles.mesh.count = 0;
+      this.walkers.mesh.count = 0;
     }
     this.city = city;
     const renderedSource = this.terrainEnabled ? source : { ...source, terrain: undefined };
@@ -340,6 +346,8 @@ export class Scene3D {
     });
     poles.castShadow = arms.castShadow = boxes.castShadow = true;
     this.content.add(poles, arms, boxes, this.lamps);
+    this.walkSignals = buildWalkSignals(city, geometry.heights);
+    this.content.add(this.walkSignals.group);
     geometry.surfaces.computeBoundingBox();
     const box = geometry.surfaces.boundingBox!;
     if (box.isEmpty()) {
@@ -398,7 +406,15 @@ export class Scene3D {
   }
   setSnapshot(snapshot: PresentationSnapshot) {
     this.vehicles.setSnapshot(snapshot);
+    if (this.geometry) this.walkers.setSnapshot(snapshot.walkers, this.geometry.heights);
+    this.canvas.dataset.walkers = String(this.walkers.mesh.count);
     this.invalidate();
+  }
+  /** TASK-111: the Pedestrians layer. */
+  setPedestrians(visible: boolean) {
+    if (visible !== this.pedestrians) this.invalidate();
+    this.pedestrians = visible;
+    this.walkers.mesh.visible = visible;
   }
   setColourVehiclesByClass(enabled: boolean) {
     if (enabled === this.colourByClass) return;
@@ -441,6 +457,7 @@ export class Scene3D {
       const signal = index === undefined ? null : loaded!.nodes[index]!.signal;
       if (signal && !states.has(head.node)) states.set(head.node, signalStateAt(signal, timeS));
     }
+    if (this.walkSignals?.update(timeS, loaded)) this.invalidate();
     const key = [...states].map(([n, s]) => `${n}:${s.phase}:${s.state}`).join('|');
     if (key === this.lastSignalKey) return;
     this.lastSignalKey = key;
@@ -641,6 +658,18 @@ export class Scene3D {
       this.canvas.clientHeight,
     );
     if (index !== null) return { kind: 'vehicle', id: this.vehicles.poses.snapshot!.id[index]! };
+    const walker =
+      this.pedestrians && this.walkers.mesh.count
+        ? pickVehicle3D(
+            this.walkers.mesh,
+            this.camera,
+            x,
+            y,
+            this.canvas.clientWidth,
+            this.canvas.clientHeight,
+          )
+        : null;
+    if (walker !== null) return { kind: 'walker', id: this.walkers.snapshot!.id[walker]! };
     if (this.parkingVisible && this.city) {
       const tolerance = Math.max(7, 5 * this.getView().zoom);
       for (let i = this.city.parking.length - 1; i >= 0; i--) {
@@ -725,7 +754,9 @@ export class Scene3D {
     this.vegetation?.update(distance);
     // Reuse an unchanged light map. Moving vehicles always refresh their shadows.
     const cacheShadows =
-      Boolean(this.geometry?.heights.terrain.grid) && this.vehicles.mesh.count === 0;
+      Boolean(this.geometry?.heights.terrain.grid) &&
+      this.vehicles.mesh.count === 0 &&
+      this.walkers.mesh.count === 0;
     const shadowView = [
       this.camera.position.x,
       this.camera.position.y,
@@ -739,6 +770,7 @@ export class Scene3D {
       this.buildingsVisible ? 1 : 0,
       this.buildingDetails ? 1 : 0,
       this.vehicles.mesh.count,
+      this.walkers.mesh.count,
       this.vegetation?.natural.visible ? 1 : 0,
       this.vegetation?.street.visible ? 1 : 0,
     ]
@@ -812,6 +844,7 @@ export class Scene3D {
     this.basemap?.destroy();
     this.disposeContent();
     this.vehicles.destroy();
+    this.walkers.destroy();
     this.selection.geometry.dispose();
     this.selection.material.dispose();
     this.sun.shadow.dispose();

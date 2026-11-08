@@ -51,7 +51,14 @@ export interface SignalProgram {
   offsetS: number;
   amberS: number; // follows every phase
   allRedS: number; // follows amber
-  phases: { durationS: number; groups: { from: RoadId; to: RoadId }[] }[]; // green groups
+  phases: {
+    durationS: number;
+    groups: { from: RoadId; to: RoadId }[]; // green groups
+    /** TASK-111: the crossings with walk green, each named by a road end of its arm. Absent =
+     * derived: an arm's crossing is green where no movement from the arm is (none in a phase
+     * without vehicle groups). Walk groups without vehicle groups: an exclusive pedestrian phase. */
+    walk?: { roadId: RoadId; end: 'start' | 'end' }[];
+  }[];
 }
 
 export interface Lane {

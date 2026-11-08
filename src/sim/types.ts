@@ -8,6 +8,9 @@ import type {
   VehicleClass,
   VehiclePurpose,
 } from '../schema';
+import type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
+
+export type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
 
 export type VehicleState =
   'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed';
@@ -34,6 +37,8 @@ export interface TrafficEngine {
   snapshot(): VehicleSnapshot;
   metrics(): Metrics;
   inspect(vehicleId: number): VehicleDetail | null;
+  /** TASK-111: a test pedestrian, by its snapshot id. */
+  inspectWalker(walkerId: number): WalkerDetail | null;
   stateHash(): number;
 }
 
@@ -59,6 +64,8 @@ export interface VehicleSnapshot {
   vclass: Uint8Array;
   /** TASK-077: 1, or falling to 0 over the last `gridlock.fadeS` before a respawn. */
   fade: Float32Array;
+  /** TASK-111: walkers on the way, present when the scenario has test pedestrians. */
+  walkers?: WalkerSnapshot;
 }
 
 export interface Metrics {
@@ -88,6 +95,8 @@ export interface Metrics {
   zoneStops: number;
   /** TASK-077: respawns over all trips. */
   respawns: number;
+  /** TASK-111: present when the scenario has test pedestrians. */
+  walkers?: WalkerMetrics;
   /** Per loaded trip, in input order; materialized only when requested. */
   readonly tripOutcomes?: TripOutcome[];
 }

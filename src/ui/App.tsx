@@ -6,6 +6,7 @@ import { ParkingInspector } from './inspector/parking';
 import { StreetInspector } from './inspector/street';
 import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
+import { WalkerInspector } from './inspector/walker';
 import { MapView } from './map-view';
 import { Onboarding } from './onboarding';
 import { RunBar } from './run-bar';
@@ -19,6 +20,7 @@ function Inspector() {
   const session = useAppStore((state) => state.session);
   const selection = useAppStore((state) => state.selection);
   const vehicle = useAppStore((state) => state.vehicle);
+  const walker = useAppStore((state) => state.walker);
   const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
   const timeS = useAppStore((state) => (state.diagnosticsOpen ? state.run?.timeS : undefined));
 
@@ -46,6 +48,8 @@ function Inspector() {
       return <ParkingInspector facility={compiled.parking[selection.parking]!} />;
     case 'vehicle':
       return <VehicleInspector id={selection.id} detail={vehicle} city={city} />;
+    case 'walker':
+      return <WalkerInspector id={selection.id} detail={walker} city={city} />;
     case 'lane':
       return (
         <StreetInspector
@@ -97,6 +101,13 @@ export function App() {
       window.cityflows.city = () => useAppStore.getState().session!.project.city;
       window.cityflows.commit = (command) => useAppStore.getState().commit(command);
       window.cityflows.snapshot = () => useAppStore.getState().session!.engine.snapshot();
+      window.cityflows.inspectWalker = (id) =>
+        useAppStore.getState().session!.engine.inspectWalker(id);
+      window.cityflows.setWalkers = async (walkers) => {
+        const { setTestWalkers, control } = useAppStore.getState();
+        await setTestWalkers(walkers);
+        await control('restart');
+      };
     }
   }, []);
   const error = useAppStore((state) => state.error);

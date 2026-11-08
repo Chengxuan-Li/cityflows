@@ -27,6 +27,7 @@ export const signalProgramSchema = z.object({
       z.object({
         durationS: z.number().positive(),
         groups: z.array(z.object({ from: roadId, to: roadId })),
+        walk: z.array(z.object({ roadId, end: z.enum(['start', 'end']) })).optional(),
       }),
     )
     .min(1),

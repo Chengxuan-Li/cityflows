@@ -1,4 +1,5 @@
-import type { SignalProgram } from '../schema';
+import type { City, SignalProgram } from '../schema';
+import { crossingArms } from './crossings';
 import type { CNode, CSignal, CompiledCity, Diagnostic } from './types';
 
 export function compileSignal(
@@ -56,7 +57,7 @@ export function compileSignal(
       }
       served.add(idx);
     }
-    return { durationS, movements };
+    return { durationS, movements, walk: [] as number[] };
   });
 
   for (const idx of node.movements) {
@@ -79,6 +80,94 @@ export function compileSignal(
     phases,
     cycleS: phases.reduce((sum, phase) => sum + (phase.durationS + amberS + allRedS), 0),
   };
+}
+
+/**
+ * TASK-111: each phase's walk green, as the indices of the signal crossing links of the node
+ * (`WalkGraph`, compiled after the signals). Explicit `walk` entries name a road end of the arm
+ * whose crossing is green; an entry naming no crossing of the node is ignored (an edit may have
+ * removed it). Absent: the derived groups, concurrent operation as in Germany: an arm's crossing
+ * is green in every phase in which no movement from the arm is, and in none in a phase without
+ * vehicle groups (an exclusive pedestrian phase is never derived).
+ */
+export function compileSignalWalk(city: CompiledCity, source: City) {
+  const byNode = new Map<number, number[]>();
+  for (const link of city.walk.links)
+    if (link.crossing?.control === 'signal' && link.crossing.node >= 0) {
+      const list = byNode.get(link.crossing.node) ?? [];
+      list.push(link.idx);
+      byNode.set(link.crossing.node, list);
+    }
+  for (const [index, links] of byNode) {
+    const node = city.nodes[index]!;
+    if (!node.signal) continue;
+    const arms = crossingArms(city, node);
+    const program = source.nodes[node.id]!.signal!;
+    node.signal.phases.forEach((phase, p) => {
+      const explicit = program.phases[p]!.walk;
+      let green: Set<number>;
+      if (explicit) {
+        green = new Set(
+          explicit.flatMap(({ roadId, end }) => {
+            const road = city.index.road.get(roadId);
+            const arm = arms.findIndex((ends) =>
+              ends.some((e) => e.road.idx === road && e.atEnd === (end === 'end')),
+            );
+            return arm === -1 ? [] : [arm];
+          }),
+        );
+      } else {
+        green = new Set();
+        if (program.phases[p]!.groups.length)
+          arms.forEach((ends, arm) => {
+            const served = phase.movements.some((m) =>
+              ends.some(
+                (e) => e.atEnd && e.road.idx === city.lanes[city.movements[m]!.fromLane]!.road,
+              ),
+            );
+            if (!served) green.add(arm);
+          });
+      }
+      phase.walk = links.filter((i) => green.has(city.walk.links[i]!.crossing!.arm));
+    });
+  }
+}
+
+/** TASK-111: a signal crossing link's walk green windows in the cycle: the green of the phases
+ * that list the link, run on through the amber and all-red between two such phases. */
+export function walkWindows(signal: CSignal, link: number): [number, number][] {
+  const spans: [number, number][] = [];
+  let start = 0;
+  signal.phases.forEach((phase, p) => {
+    const end = start + phase.durationS + signal.amberS + signal.allRedS;
+    if (phase.walk.includes(link)) {
+      const next = signal.phases[(p + 1) % signal.phases.length]!;
+      const until = next.walk.includes(link) ? end : start + phase.durationS;
+      const last = spans.at(-1);
+      if (last && last[1] === start) last[1] = until;
+      else spans.push([start, until]);
+    }
+    start = end;
+  });
+  return spans;
+}
+
+/** TASK-111: the walk green left at `timeS` on a crossing link of a signal: 0 when its walk light
+ * is red, Infinity when it never turns red. */
+export function walkGreenS(
+  signal: CSignal,
+  link: number,
+  timeS: number,
+  spans = walkWindows(signal, link),
+): number {
+  let elapsed = (timeS + signal.offsetS) % signal.cycleS;
+  if (elapsed < 0) elapsed += signal.cycleS;
+  for (const [from, to] of spans) {
+    if (elapsed < from || elapsed >= to) continue;
+    if (to < signal.cycleS - 1e-9 || spans[0]![0] > 1e-9) return to - elapsed;
+    return from <= 1e-9 ? Infinity : to - elapsed + spans[0]![1];
+  }
+  return 0;
 }
 
 export function signalStateAt(

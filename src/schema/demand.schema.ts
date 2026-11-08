@@ -127,6 +127,10 @@ export const simParamsSchema = z
     rerouteHysteresis: z.number().min(0).max(1),
     maxReplans: z.int().nonnegative(),
     routeNoise: z.number().min(0).max(1),
+    walkSpeedMps: z.number().positive(),
+    walkStepsFactor: z.number().positive().max(1),
+    walkClearanceS: z.number().nonnegative(),
+    crossingClearM: z.number().nonnegative(),
   })
   .partial() satisfies z.ZodType<Partial<SimParams>>;
 
@@ -138,4 +142,9 @@ export const scenarioSchema: z.ZodType<Scenario> = z.object({
   endS: seconds,
   demand: demandConfigSchema,
   simParams: simParamsSchema,
+  walkers: z
+    .array(
+      z.object({ fromPlaceId: placeId, toPlaceId: placeId, perHour: z.number().nonnegative() }),
+    )
+    .optional(),
 });

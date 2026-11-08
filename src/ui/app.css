@@ -769,6 +769,23 @@ dd {
 .signal-movement:hover {
   stroke: #162b28;
 }
+.signal-crossing {
+  stroke: #c95656;
+  stroke-dasharray: 0.6 0.4;
+  cursor: pointer;
+  pointer-events: stroke;
+  opacity: 0.7;
+}
+.signal-crossing.served {
+  stroke: #30926c;
+  opacity: 1;
+}
+.signal-crossing:hover {
+  stroke: #162b28;
+}
+.signal-crossing:focus {
+  outline: none;
+}
 .signal-validation {
   max-height: 7rem;
   overflow: auto;

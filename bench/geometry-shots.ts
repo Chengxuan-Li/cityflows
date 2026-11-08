@@ -15,6 +15,20 @@ import { compile } from '../src/network';
 // npm run geometry-shots -- <out-dir> [--only <id,id>] (TASK-090: only the named shots).
 
 const MUNICH = 'fixtures/osm/munich-donnersberger.osm';
+/** Pairs across the zebras at n:180 and n:212 and the signals at n:963 and n:262 (among T53's
+ * Munich pairs). */
+const v111Walkers = [
+  ['p:1677', 'p:1809'],
+  ['p:1809', 'p:1677'],
+  ['p:1579', 'p:1809'],
+  ['p:1677', 'p:1709'],
+  ['p:1571', 'p:1831'],
+  ['p:1831', 'p:1571'],
+].map(([fromPlaceId, toPlaceId]) => ({
+  fromPlaceId: fromPlaceId!,
+  toPlaceId: toPlaceId!,
+  perHour: 600,
+}));
 
 /** World centre (m, the city's frame) and zoom (screen px per m) of each image; the case ids are
  * bench/geometry-audit.ts's. The map canvas is 1280 x 800 px. */
@@ -31,7 +45,37 @@ export const shots: {
   bearing?: number;
   buildings?: boolean;
   details?: boolean;
+  /** TASK-111: test pedestrians set (restarting the run) before the shot, then `steps` steps. All
+   * walker shots of an extract share one run: the union of their sources, the largest `steps`. */
+  walkers?: { fromPlaceId: string; toPlaceId: string; perHour: number }[];
+  steps?: number;
 }[] = [
+  // TASK-111: walkers on sidewalks and crossings, cars held before zebra stripes at n:180 and the
+  // walk lights at Landsberger Straße by the Donnersbergerbrücke (n:963, n:262), at 07:30.
+  ...[
+    { id: 'V111-munich-zebra', centre: [478, 362] as [number, number], zoom: 13 },
+    { id: 'V111-munich-signal', centre: [-79, 154] as [number, number], zoom: 7 },
+  ].flatMap((shot) =>
+    [false, true].map((three) => ({
+      ...shot,
+      id: `${shot.id}${three ? '-3d' : ''}`,
+      cases: [],
+      walkers: v111Walkers,
+      steps: 18000,
+      ...(three ? { view: '3d' as const, pitch: 50, bearing: 30 } : {}),
+    })),
+  ),
+  ...(['de', 'us', 'uk'] as const).flatMap((theme) =>
+    [false, true].map((three) => ({
+      id: `V117-munich-signs${theme === 'de' ? '' : `-${theme}`}${three ? '-3d' : ''}`,
+      cases: [],
+      centre: (three ? [-20, -222] : [-35, -222]) as [number, number],
+      zoom: 24,
+      theme,
+      ...(three ? { view: '3d' as const, pitch: 20, bearing: 270 } : {}),
+    })),
+  ),
+  { id: 'V117-munich-motorway-uk', cases: [], centre: [0, -256], zoom: 4, theme: 'uk' },
   ...[true, false].flatMap((details) => [
     {
       id: `V109-munich-roofs${details ? '' : '-off'}`,
@@ -539,10 +583,12 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
     selected.sort((a, b) =>
       a.id.replace(/-(on|off)$/, '').localeCompare(b.id.replace(/-(on|off)$/, '')),
     );
-  // The fixture has no destination zone. Capture its inspector edit after the unchanged city.
+  // The fixture has no destination zone. Capture its inspector edit after the unchanged city;
+  // walker shots run the simulation, so they come last too.
   selected.sort(
     (a, b) =>
-      Number(a.id.startsWith('V107-munich-zone')) - Number(b.id.startsWith('V107-munich-zone')),
+      Number(a.id.startsWith('V107-munich-zone')) - Number(b.id.startsWith('V107-munich-zone')) ||
+      Number(!!a.walkers) - Number(!!b.walkers),
   );
   mkdirSync(out, { recursive: true });
   const port = Number(process.env.CITYFLOWS_TEST_PORT) || (await freePort());
@@ -643,6 +689,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
       }
       const canvas = page.getByLabel(three ? '3D city view' : 'City map', { exact: true });
       let localTraffic = false;
+      let walking = false;
       for (const shot of selected) {
         if ((shot.osm ?? MUNICH) !== osm) continue;
         // Hidden controls remain operable for the fixed-camera harness.
@@ -684,6 +731,23 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
           );
           await page.keyboard.press('Escape');
           localTraffic = true;
+        }
+        if (shot.walkers && !walking) {
+          const extract = selected.filter((s) => (s.osm ?? MUNICH) === osm && s.walkers);
+          const sources = [
+            ...new Map(
+              extract.flatMap((s) => s.walkers!).map((w) => [`${w.fromPlaceId}>${w.toPlaceId}`, w]),
+            ).values(),
+          ];
+          const steps = Math.max(...extract.map((s) => s.steps ?? 0));
+          await page.evaluate(
+            async ({ sources, steps }) => {
+              await window.cityflows!.setWalkers!(sources);
+              await window.cityflows!.step(steps);
+            },
+            { sources, steps },
+          );
+          walking = true;
         }
         if (((await mode.getAttribute('aria-pressed')) === 'true') !== in3d) await mode.click();
         if (in3d)
@@ -751,8 +815,12 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         });
         const path = join(out, `${shot.id}.png`);
         await target.screenshot({ path, animations: 'disabled' });
+        const walkerCount = shot.walkers
+          ? await page.evaluate(() => window.cityflows!.drawnSnapshot?.()?.walkers?.count ?? null)
+          : undefined;
         records.push({
           ...shot,
+          ...(walkerCount !== undefined && { walkerCount }),
           ...(localTraffic && { accessEdit: 'r:1229 destination, through street inspector' }),
           importedTheme,
           file: `${shot.id}.png`,

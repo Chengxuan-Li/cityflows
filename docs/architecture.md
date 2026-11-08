@@ -141,7 +141,8 @@ interface SignalProgram {
   offsetS: number;
   amberS: number;          // follows every phase
   allRedS: number;         // follows amber
-  phases: { durationS: number; groups: { from: RoadId; to: RoadId }[] }[];  // green groups
+  phases: { durationS: number; groups: { from: RoadId; to: RoadId }[];     // green groups
+            walk?: { roadId: RoadId; end: 'start' | 'end' }[] }[];          // TASK-111
 }
 
 interface Lane {
@@ -354,6 +355,12 @@ then coarse offline bounds: US/Canada → `us`, UK/Ireland → `uk`, elsewhere �
 Files without the field resolve from their geographic bounding box, else `de`.
 The Layers “Marking style” choice is undoable; its history patch uses `null` to restore an
 absent override. A pure marking-style edit retains the city version and compiled object.
+
+TASK-111 adds optional `SignalProgram.phases[].walk` without a schema-version bump: the
+crossings with walk green in that phase, each named by a road end of its arm (section 5.4).
+Absent means derived; an empty list means none. Road deletion drops entries naming the road,
+a split renames them with its group entries; an entry that names no crossing of the node is
+ignored at compile, so stale entries never fail an edit.
 
 ## 5. Compiled model: `CompiledCity`
 
@@ -727,6 +734,27 @@ the OSM `lanes` tags carry one.
 - Warning `signal_unserved_movement`: a movement at a signalized node that is in no phase. It
   is compiled with `neverGreen: true` and routing excludes it.
 
+TASK-111 (walk groups and crossing spans). Every crossing walk link (section 5.6) carries
+`crossing.node` and `crossing.arm` (the `crossingArms` index; -1 for a midblock zebra) and
+`crossing.spans`: for each lane it crosses, `atM` along the lane where the link meets its
+centreline, `halfM` half the 2.5 m stripes' extent along the lane (divided by the sine of the
+crossing angle, at least 0.3), and `linkM`/`linkHalfM`, the same along the link for the lane's
+width. A generated crossing crosses the lanes of its arm's roads (both directions of a street,
+any carriageway of the arm); a mapped one the same-grade lanes its line meets, or, in a
+junction mouth, the straight 12 m extension of a lane of its arm, the span then sitting at that
+lane end. Crossings near a signal (generated at a signalized node, mapped within 40 m) are
+`signal` crossings; all others are zebras. Spans are derived, never saved, and change no lane,
+movement or stop position.
+
+`CSignal.phases[].walk` lists the node's signal crossing links with walk green, compiled after
+the walk graph (`compileSignalWalk`). Explicit entries select the arms whose road end they
+name. Absent entries are derived, concurrent operation as in Germany: an arm's crossing is
+green in every phase in which no movement from the arm is green; movements into the arm may be
+green at the same time and their drivers yield. A phase without vehicle groups derives none:
+an exclusive pedestrian phase (walk groups, no vehicle groups) is always explicit. Walk green
+follows the green of the phases that list the link and runs on through the amber and all-red
+between two such phases (`walkWindows`, `walkGreenS`); amber and all-red stay vehicle rules.
+
 ### 5.5 Diagnostic codes
 
 Errors (compile fails, editor rejects the commit):
@@ -1020,6 +1048,8 @@ TASK-110 adds `createWalkRouter(graph: WalkGraph)` independently of `RouteProvid
 The result contains directed legs `{ link, fromM, toM }`, link indices, metres and seconds;
 failures are `position_unreachable` or `no_path`. Scratch arrays are reused per router; no
 request-dependent route is cached. No walkers are simulated yet (TASK-111/112).
+TASK-111's test walkers use it once per source (place to place, `walkSpeedMps`,
+`walkStepsFactor`), sharing the route among the source's walkers; live edits route again.
 
 ## 8. Simulation
 
@@ -1329,6 +1359,46 @@ order, by `[id, lane field, round(positionM * 100), round(speedMps * 100)]`, the
 trip counts. Two runs with the same city version, scenario seed and trips produce equal hashes
 at every step (T02).
 
+Pedestrians (TASK-111, `sim/walkers.ts`). `Scenario.walkers?: { fromPlaceId, toPlaceId,
+perHour }[]` is a test source: a Poisson stream per source over the scenario, from
+`createRandom(seed).derive('walkers').derive(source)`, walker ids in spawn order. A source
+without a walk route counts its walkers as spawned and dropped. Without sources the engine
+creates no walker state at all: hashes, metrics and every step equal the run without the
+feature. Walkers advance in the fixed step at `walkSpeedMps` (1.4 m/s; `walkStepsFactor` 0.6
+on steps), right after the signals in each step, and never collide with each other. A crossing run
+is the consecutive crossing legs of one crossing (one node and arm, or one road's midblock
+zebra); a walker waits at its kerb (state waiting) and steps out (state crossing) once
+
+- at a signal, every signal leg of the run has walk green for at least the run's length at
+  walking speed plus `walkClearanceS` (2 s), and
+- every vehicle that reaches a crossed lane up to its span (on the lane, on a movement into it,
+  or on that movement's approach planning it, two levels upstream within 100 m) has passed the
+  span (rear beyond it), or stands, or can stop before it at its class `bMps2` with `minGapM`
+  to spare; a vehicle over the span, or that turned off the lane with its rear still over a span
+  at the lane end, keeps the walker waiting.
+
+A waiting walker that would step out but for the traffic (any zebra walker; a signal walker
+with enough walk green), and a crossing walker for each span it has not passed by
+`crossingClearM` (1 m), hold those lanes: the span's near edge is a standing obstacle for every
+vehicle whose front is still short of it and that can stop before it at `bMps2` (its own lane,
+its planned movement's exit lane and the next route lane, within 100 m), and the commit clamps
+such a vehicle like an ungranted stop line (`edge - minGapM`, or where it stands). A vehicle too
+close to stop passes. A walker already inside a lane's band holds even a vehicle that cannot
+stop comfortably (counted in `hardStops`); a crossing walker does not enter a lane's band while
+a vehicle is over its span or will not stop for it. These give the zebra rule, the turning
+yield at signals (movements into an arm with walk green) and gate 4's invariant: no vehicle body
+overlaps a span while a walker is inside it on that lane.
+
+Once a walker has spawned, the hash appends, per spawned walker in id order, `[id, state, leg,
+round(position along leg or run * 100)]`. `Metrics.walkers` (with sources only) reports
+spawned, completed, dropped and active walkers, mean walk time, mean wait and crossings by
+crossing kind, vehicles that came to a stop for a walker and the time they lost against desired
+speed while yielding (zebra; signal), and hard stops. Snapshots carry `walkers` (id, position
+0.35 m right of the walking direction, heading, state, grade) and `inspectWalker(id)` returns
+route, state and waits. A live edit keeps walkers by link id and walk green by the patched
+signal epochs; a walker whose remaining route lost a link reroutes from where it stands, and is
+dropped when its own link is gone or no route remains.
+
 TASK-030 admission windows: compiled places retain a copy of their events. Each event opens
 `arrivals` admission slots uniformly over its window (floor of the elapsed fraction times
 the count). Quotas add across events, are shared by all arrival connectors, and unused slots
@@ -1599,6 +1669,21 @@ type HostEvent =
 
 ## 11. Rendering and UI
 
+TASK-111: the default-on Pedestrians layer (shown when the scenario has test pedestrians) draws
+walkers as dots at least 2.4 px across in their grade's group above vehicles in 2D (warmer
+while waiting at a kerb), and as instanced upright capsules in 3D at ground plus 5 m per grade
+and the 0.14 m curb. Both kerb ends of each signalised crossing get a small walk light, green
+while `walkGreenS` is positive: rounded squares among the signal heads in 2D (the Signals
+toggle and zoom fade apply), heads on 2.4 m posts in 3D. Walkers are pickable in both views; the
+walker inspector shows places, state, waits and route length, and 2D draws the selected
+walker's route. Walker frames follow the snapshot rule of TASK-115: each new snapshot while
+playing requests a frame. The demand sheet lists the test pedestrians (from, to, per hour) with
+add, remove and rate edits; they are scenario inputs, so the run waits for a restart, and
+Undo/Redo step through them and city edits in one order. The signal inspector lists each
+phase's walk groups (derived or set by hand, with Derive to clear), toggles them from checkboxes
+or the schematic's crossing lines, and adds an exclusive pedestrian phase.
+`window.cityflows.setWalkers` sets the source and restarts (test mode).
+
 TASK-110 adds independent default-on Sidewalks and Footways layers. Both renderers consume
 `render/walk-geometry.ts`: pale paving outside the curb, thinner mapped paths, clipped against
 same-grade asphalt and building footprints, with steps hatched. Boolean fragments below
@@ -1617,7 +1702,7 @@ the city, and roads retain the strongest tone.
   offset even on paired directed roads. No generation on motorway,
   trunk, ramp or negative-grade roads; none within 25 m of an imported lamp, 8 m of a placed tree,
   near junctions/crossings/connectors, or inside road surfaces, buildings or water. Tree input
-  excludes lamp points without changing TASK-106's placement. One curb-side German sign marks
+  excludes lamp points without changing TASK-106's placement. One curb-side access sign marks
   each entering road with changed class access/zone, deduplicated across lanes/classes;
   internal zone roads and open exits have none. Shapes and label textures are drawn in code.
   2D furniture appears above its road grade at street zoom (1.5 px/m), hidden at overview.
@@ -1661,13 +1746,28 @@ the city, and roads retain the strongest tone.
   has double solid yellow opposing centre lines (passing permission is not inferred), 3/9 m
   white lane dashes, white outer edges and yellow left edges on divided roads and ramps.
   UK paint has white centre lines (6/3 m warning lines on primary/secondary/trunk, 3/6 m
-  otherwise), 2/4 m white lane dashes, yellow edges and double dashed give-way bars.
+  otherwise), 2/4 m white lane dashes and double dashed give-way bars.
   Each theme supplies arrow polygons, guide widths/dashes and gore stripe dimensions;
   UK approach arrows are elongated to 6 m (9 m on fast roads). Edge strokes follow compiled
   tapered lane boundaries; close opposing carriageways share centre paint rather than kerb
   lines. Crossings retain their layout.
   Style switches redraw both views even when compiled identity/version stays unchanged;
   the animation loop and simulation remain unchanged.
+- TASK-117: access signs resolve in compiled road order, merging entries with the same street
+  group, effective class access and entry rules when they stand within 15 m of each other (the
+  far end of a long restricted street keeps its own sign). A later sign advances in 0.5 m steps along its
+  own kerb, from the existing 4 m station to at most 12 m (or the edge end). Conservative
+  world-metre disc and label rectangles cover all three themes, keeping posts fixed on theme
+  switches; posts also keep 1.5 m separation. Unresolved pairs stay at the limit and are counted
+  with road indices alongside before/after overlaps, moved and merged counts. Lamps and curbs
+  retain their placement. German signs retain their drawing; US uses R5-1 DO NOT ENTER or white
+  LOCAL TRAFFIC ONLY / DELIVERIES ONLY / PRIVATE ROAD plates. UK uses diagram 616 or diagram
+  619 with Except for access / Except for loading / Private road plates. Both views redraw
+  signs through the existing marking-style invalidation path. UK edge colour is chosen by
+  road and side: yellow only on the nearside of urban residential/tertiary/secondary/primary
+  streets (imported unclassified/living streets use residential); offside/median edges and
+  motorway/trunk/ramp edges are white. `edgeLineColor` is the shared TASK-103 merge hook for
+  omitting no-waiting paint beside parking strips. German and US paint retain their bytes.
 - TASK-100: one generated texture atlas contains class shapes: rounded car, short-bonnet van,
   cab-and-box truck and long rounded bus. Street zoom uses each class's length and width;
   overview uses compact dots. Optional Layers setting "Colour vehicles by class" defaults
