@@ -31,12 +31,13 @@ const hash = (value: unknown) =>
     .update(JSON.stringify(value, (_, v: unknown) => (v instanceof Map ? [...v] : v)))
     .digest('hex');
 // Compiled hashes from 56ffccd, updated at the TASK-100 merge: lanes also allow `van`; with
-// `van` removed they hash as at 56ffccd.
+// `van` removed they hash as at 56ffccd. Updated again at the TASK-101 merge (access, zones and
+// retained access-boundary junctions).
 const baselines = {
-  grid: 'fc4674752be90a2b8b5f169d62aa1cd16315ad960fd2457329523bf30a9772da',
-  town: '0c5b4c1485f3e2a264bd87591da64d8ee7f8552b2eac456301fc56b83874802e',
-  'munich-donnersberger': 'd87aa7b1ca6d437deb1b23800bfdb6ef442d13dff53a71cbf2615addeff5e66a',
-  'sindelfingen-a81': 'c92abc21df8856e3550bbf553dd520833c3d62913262479ed30a701f8f25378a',
+  grid: 'a3f4b1fd03c65d0e380c56473b082f0d7dd67565fed7003c7239b8fe0f31bbb3',
+  town: '7f5407b1088b1d219baedc5442270c618ff896125e57d615b67867b4318c15ec',
+  'munich-donnersberger': '114894aea61446a784fca6707c1ef6601080ac8e03d374f0e66586be8b2f36fe',
+  'sindelfingen-a81': '6796e26d82f456a43fd826489ab54f9285f4148ca82c0f3be1ed1a15d8027478',
 };
 
 unitTest(

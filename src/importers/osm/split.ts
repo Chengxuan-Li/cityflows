@@ -1,6 +1,7 @@
 import { distance, polylineLength } from '../../geo/polyline';
 import type { CompiledCity } from '../../network';
 import { allocateId, type City, type Road } from '../../schema';
+import { vehicleClasses } from '../../schema';
 import type { OsmWay } from './parse';
 import { captureControls, relocateControls } from './controls';
 import type { OsmRoad } from './roads';
@@ -22,6 +23,15 @@ export function consolidateJunctions(
   const parent = new Map(Object.keys(city.nodes).map((id) => [id, id]));
   const members = new Map(Object.keys(city.nodes).map((id) => [id, [id]]));
   const root = (id: string): string => (parent.get(id) === id ? id : root(parent.get(id)!));
+  const permissions = (road: Road) =>
+    JSON.stringify(
+      vehicleClasses.map((kind) => [
+        road.access?.[kind] ?? road.access?.all ?? 'yes',
+        road.lanes.some((lane) => !lane.allowed.includes(kind))
+          ? road.lanes.map((lane) => lane.allowed.includes(kind))
+          : null,
+      ]),
+    );
   const boundaries = new Set(
     Object.values(city.nodes)
       .filter((node) => {
@@ -81,12 +91,23 @@ export function consolidateJunctions(
     const union = [...members.get(a)!, ...members.get(b)!];
     if (union.some((x) => union.some((y) => distance(city.nodes[x]!.pos, city.nodes[y]!.pos) > 60)))
       continue;
+    const outside = new Set(
+      roads
+        .filter(({ road }) => union.includes(road.from) !== union.includes(road.to))
+        .map(({ road }) => permissions(road)),
+    );
     if (
       roads.some(
         ({ road }) =>
           union.includes(road.from) &&
           union.includes(road.to) &&
-          polylineLength(road.centerline) >= 30,
+          (polylineLength(road.centerline) >= 30 ||
+            (vehicleClasses.some(
+              (kind) =>
+                (road.access?.[kind] ?? road.access?.all ?? 'yes') !== 'yes' ||
+                road.lanes.some((lane) => !lane.allowed.includes(kind)),
+            ) &&
+              [...outside].some((permission) => permission !== permissions(road)))),
       )
     )
       continue;

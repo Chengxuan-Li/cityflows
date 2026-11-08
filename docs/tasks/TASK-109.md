@@ -156,8 +156,8 @@ lighting (TASK-107), trees (TASK-106), road markings (TASK-108).
 
 - While iterating: `npm test` (unit tier) and `npm run geometry-shots -- <dir> --only <ids>`.
 - Before committing: `npm run check`, `npm run test:city` and `npm run test:e2e:smoke`.
-- Do not run `npm run test:traffic`, `npm run traffic:quick`, `npm run bench` or the full
-  `npm run test:e2e`; the lead runs them at merge.
+- Do not run `npm run test:traffic`, `npm run traffic:quick`, the full `npm run test:e2e` or
+  `npm run bench`; the lead runs them at merge, and GitHub CI runs the rest after the merge.
 
 ## Acceptance
 

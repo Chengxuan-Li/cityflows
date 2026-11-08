@@ -315,7 +315,10 @@ export function MapView() {
         loading3D = true;
         try {
           const { Scene3D } = await import('../render3d/scene');
-          if (!signal.aborted) three = new Scene3D(canvas3D);
+          if (!signal.aborted) {
+            three = new Scene3D(canvas3D);
+            three.setTerrain(getState().layers.terrain);
+          }
         } catch (error) {
           if (!signal.aborted) {
             setState({ viewMode: '2d' });

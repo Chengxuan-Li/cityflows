@@ -55,6 +55,7 @@ export function createLaneSearch(changeDistanceM: number) {
     costs: ReturnType<typeof routeCosts>,
     request: RouteRequest,
     destination: CConnector,
+    permits: (road: number) => boolean,
   ): Route | null => {
     let outgoing = cache.get(graph);
     if (!outgoing) {
@@ -100,6 +101,7 @@ export function createLaneSearch(changeDistanceM: number) {
       // Fold a run of adjacent changes into the next movement. The shared budget
       // prevents consecutive lane changes from each spending the same road length.
       for (const edge of node === origin ? originEdges : outgoing[node]!) {
+        if (!permits(edge.road)) continue;
         relax(
           edge.to,
           edge.changeCostS + costs.transition(edge.road, edge.penaltyS),

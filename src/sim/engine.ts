@@ -1,9 +1,12 @@
 import { headingAtDistance, pointAtDistance } from '../geo/polyline';
 import type { CConnector, CompiledCity } from '../network';
+import { createGraphCache } from '../routing/graph';
+import { resolveLanes } from '../routing/lanes';
 import {
   createRouteProvider,
   movementPenaltyS,
   reachableLanes,
+  roadAccessFilter,
   type LinkCosts,
   type RouteProvider,
 } from '../routing';
@@ -94,8 +97,38 @@ function createRun({
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const signalEpochs = new Map<string, number>();
-  const provider =
+  const routed =
     routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
+  const graphFor = createGraphCache();
+  const provider: RouteProvider = {
+    route(network, costs, request) {
+      const result = routed.route(network, costs, request);
+      if (!result.ok) return result;
+      if (
+        !result.route.roads.some((road) =>
+          network.roads[road]!.lanes.some(
+            (lane) => !network.lanes[lane]!.allowed.includes(request.vehicleClass),
+          ),
+        )
+      )
+        return result;
+      const destination = network.connectors[request.toConnector]!;
+      // The search picks one timing for each lane change. Drivers may use any feasible exit
+      // along that road chain, so an equal-cost late change cannot prevent passing a queue.
+      const lanes = resolveLanes(
+        network,
+        graphFor(network, request.vehicleClass),
+        result.route.roads,
+        request,
+        destination,
+        params.laneChangeDistanceM,
+      );
+      // An injected provider may use a shorter lane-change distance than the simulation.
+      if (!lanes) return result;
+      lanes.targetLanes[lanes.targetLanes.length - 1] = [destination.lane];
+      return { ok: true, route: { ...result.route, targetLanes: lanes.targetLanes } };
+    },
+  };
   const observedCosts = createLinkCosts(compiled, params, scenario.startS);
   const costs = linkCosts ?? observedCosts.costs;
   const rerouter = createRerouter(compiled, vehicles, params, provider, costs);
@@ -143,12 +176,21 @@ function createRun({
     } else if (planned?.fromLane === lane && allowedLanes[vehicles.vclass[id]!]![planned.toLane]) {
       vehicles.movement[id] = planned.idx;
     } else {
+      const permits = roadAccessFilter(
+        compiled,
+        vehicleRouteRequest(vehicles, params, id, lane, positionM),
+      );
       let penalty = Infinity;
       let routePenalty = Infinity;
       let alternate = -1;
       for (const idx of compiled.lanes[lane]!.out) {
         const movement = compiled.movements[idx]!;
-        if (movement.neverGreen || !allowedLanes[vehicles.vclass[id]!]![movement.toLane]) continue;
+        if (
+          movement.neverGreen ||
+          !allowedLanes[vehicles.vclass[id]!]![movement.toLane] ||
+          !permits(compiled.lanes[movement.toLane]!.road)
+        )
+          continue;
         const cost = movementPenaltyS(compiled, movement);
         if (
           !vehicles.attemptedFallbacks[id]?.has(idx) &&
@@ -886,8 +928,10 @@ function createRun({
       const permitted = allowedLanes[vehicles.vclass[id]!]!;
       const forbiddenMovement = (idx: number) =>
         idx !== -1 && !permitted[next.movements[idx]!.toLane];
+      const accessChanged = route!.roads.slice(step).some((i) => changes.accessChangedRoads.has(i));
       const invalid =
         relocated ||
+        accessChanged ||
         mappedRoute.roads.slice(step).includes(-1) ||
         mappedRoute.movements
           .slice(step)
@@ -908,6 +952,7 @@ function createRun({
         accounting.transition(id, DRIVING);
       if (affected) {
         const immediate =
+          accessChanged ||
           relocated ||
           mappedRoute.roads[step] === -1 ||
           mappedRoute.movements[step] === -1 ||
