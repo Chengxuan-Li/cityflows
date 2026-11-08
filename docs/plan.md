@@ -141,6 +141,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-116](tasks/TASK-116.md) | perf | Lane targets as feasible sets for every route (generalises TASK-101's fix) | `src/routing/index.ts`, `lane-search.ts`, `lanes.ts`, `src/sim/engine.ts`, `lane-change.ts`, `reroute.ts`, `patch.ts` | 076, 101 | T51, T29, T46, traffic quick | done |
 | [TASK-103](tasks/TASK-103.md) | 7 | Visible parking: roadside strips and lot stalls in the simulation, park and leave manoeuvres, parked cars drawn | `strip` facilities (import, inference, compile), inferred lot driveways, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, parked-car layers 2D and 3D, road inspector | 102, 104 | T52, traffic quick, shots | todo |
 | [TASK-111](tasks/TASK-111.md) | 9 | Pedestrian rules: walkers, zebra priority, pedestrian signal phases, a test pedestrian source | new `src/sim/walkers.ts`, crossing spans, `SignalProgram` walk groups, `intersection.ts`, `signals.ts`, walker layers 2D and 3D, signal editor | 110 | T53, traffic quick unchanged, shots | todo |
+| [TASK-117](tasks/TASK-117.md) | 8 | Visual fixes after Phase 2: sign collisions, UK kerb lines only on urban kerbs, access signs by marking theme | `src/render/street.ts` (sign placement), `layers/street.ts`, `render3d/street.ts`, `marking-geometry.ts`, `style.ts` | 107, 114 | V117, shots | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -843,7 +844,7 @@ model and the reasoning effort.
 | 0 | Lead: Phase 1 contracts and branches; the shared formats for Phase 2 on `main` (`ParkingFacility`, the walk network types; done 2026-11-08) | - | half a day |
 | 1 | TASK-100, TASK-101, TASK-105, TASK-106, TASK-108 | - | 1 to 1.5 days |
 | 2 | TASK-102, TASK-104, TASK-107, TASK-109, TASK-110, TASK-114, TASK-115, TASK-116 | 100 and 101 (102, 104, 107), 105 (109), 106 and 108 (107, 114), the Phase 0 formats | 1.5 to 2 days |
-| 3 | TASK-103, TASK-111 | 102 and 104 (103), 110 (111) | 1.5 to 2 days |
+| 3 | TASK-103, TASK-111, TASK-117 | 102 and 104 (103), 110 (111), 107 and 114 (117) | 1.5 to 2 days |
 | 4 | TASK-112 | 103, 110, 111 | 2 to 3 days |
 | 5 | TASK-113 | 112 | half to 1 day |
 
@@ -924,10 +925,17 @@ the scenes, `src/ui/layers.tsx`, `store.ts`, `map-view.tsx`, the metrics panels,
 trip counts and resets the traffic baseline at its merge (owner rule 7); TASK-111 must leave
 traffic unchanged without walkers.
 
+The owner added TASK-117 to Phase 3 (2026-11-08): the small visual fixes from the Phase 2
+review, renderer only. It shares `src/render/street.ts` with TASK-103 (signs against kerbs
+and lamps beside a parking band); at merge the lead also makes UK kerb lines skip TASK-103's
+strip runs. Compile time (the walk graph doubles it) and the Landsberger Straße queues wait
+until after Phase 3.
+
 | Task | Harness | Model | Effort | e2e port |
 | --- | --- | --- | --- | --- |
 | TASK-103 | Codex | GPT-6.1-Sol | xhigh | 5303 |
 | TASK-111 | Claude Code | Opus 5.5 | high | 5311 |
+| TASK-117 | Codex | GPT-6.1 Terra | high | 5317 |
 
 Phase 1 shared files, reconciled by the lead at merge: `src/schema/city.ts` and
 `city.schema.ts` (100 the class and version 3, 101 `Road.access`, 105 `City.terrain`, 106
