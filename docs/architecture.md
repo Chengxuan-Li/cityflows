@@ -1430,10 +1430,11 @@ variant. Saving a baseline captures current editor state, including unapplied li
   departure is a forecast: when every admissible candidate is full, the car heads for the
   first one with any slots, and the entry check decides (lead, TASK-102 merge: a morning
   where every home garage is full until its residents leave failed every trip). An inferred
-  garage whose capacity is still inferred never turns its own place's cars away and holds
-  every resident's car at the start; mapped capacities and capacities set in the inspector
-  are hard limits (lead: a 1 200-slot inferred office garage failed 800 of demo A's 2 000
-  commuters).
+  garage whose capacity is still inferred compiles with at least its place's current
+  population and jobs as slots, so its nameplate always holds the initial stock, and it never
+  turns a car away: not every owner parks there, and mode choice will thin car demand
+  (owner, 2026-11-08, after a 1 200-slot inferred office garage failed 800 of demo A's 2 000
+  commuters). Mapped capacities and capacities set in the inspector are hard limits.
   Search time starts on entering the search radius for a fallback, or when an entry is
   rejected, and ends on parking; walking distance is recorded separately, with no walkers.
   A person's next car trip waits for the previous trip and leaves from the parked facility,

@@ -86,7 +86,22 @@ export function compileParking(
       id: source.id,
       kind: source.kind,
       name: source.name,
-      capacity: source.capacity,
+      // An inferred capacity follows its place's current residents and jobs, less the place's
+      // other garages, so the nameplate holds the initial stock after the place is edited
+      // (owner, 2026-11-08).
+      capacity:
+        implicit && source.provenance.inferred!.includes('capacity') && place !== -1
+          ? Math.max(
+              source.capacity,
+              Math.max(
+                city.places[source.placeId!]!.population,
+                city.places[source.placeId!]!.jobs,
+              ) -
+                Object.values(inferred.parking)
+                  .filter((f) => f.placeId === source.placeId && f.id !== source.id)
+                  .reduce((sum, f) => sum + f.capacity, 0),
+            )
+          : source.capacity,
       access: source.access,
       place,
       centroid: center,
