@@ -1,12 +1,12 @@
 {
-  "tree": "main at the TASK-103 merge (roadside strips and lot stalls in the simulation, on top of TASK-111's pedestrian rules and TASK-117); reset per the owner's rule 7, 2026-11-08. 5 counted parking failures besides the gridlock; stalledHeads stays 1 (the B56 loop at n:263)",
+  "tree": "main at the TASK-103 follow-up (starting stock per person, ownerless lots serve their neighbours), on top of TASK-103, TASK-111 and TASK-117; reset per the owner's rule 7, 2026-11-08. 5 counted parking failures besides the gridlock; this tree measured 0 stalled heads, stalledHeads stays 1 (the B56 loop at n:263)",
   "scale": 0.15,
-  "completed": 3462,
+  "completed": 3491,
   "gridlocked": 72,
   "stalledHeads": 1,
   "quick": {
     "until": "09:30",
-    "completed": 3314,
-    "gridlocked": 33
+    "completed": 3296,
+    "gridlocked": 32
   }
 }

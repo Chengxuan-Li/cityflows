@@ -78,9 +78,9 @@ test('T53 Munich: zone stops do not rise beyond noise and traffic still flows', 
     ],
   });
   expect(walkers.metrics.zoneStops).toBeLessThanOrEqual(plain.metrics.zoneStops * 1.5 + 10);
-  // Lead, TASK-103 merge: with roadside parking the walkers cost 4.5% of the hour's completed
-  // trips (1 907 to 1 822; 1.4% before), parking manoeuvres and zebra holds sharing curb lanes.
-  expect(walkers.metrics.trips.completed).toBeGreaterThan(plain.metrics.trips.completed * 0.94);
+  // Lead: TASK-103 lowered this to 0.94 while unowned stock crowded the curbs; with starting
+  // stock per person the walkers cost 1.4% again (1 938 to 1 911), so TASK-111's 0.97 holds.
+  expect(walkers.metrics.trips.completed).toBeGreaterThan(plain.metrics.trips.completed * 0.97);
   expect(walkers.metrics.failedByReason.gridlocked).toBeLessThanOrEqual(
     plain.metrics.failedByReason.gridlocked + 3,
   );
