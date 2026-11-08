@@ -127,7 +127,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-097](tasks/TASK-097.md) | 6 | Shadows, deck edges, tunnel style and see-through under decks for grade separation | `src/render/layers/shadows.ts`, `scene.ts`, `style.ts`, Layers, shot cameras | 090 | unit, e2e smoke | done |
 | [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | done |
 | [TASK-100](tasks/TASK-100.md) | 7 | Vehicle classes: car, van, truck and bus, each with its own size and driving | `src/schema` (class, version 3), `src/sim/**`, `src/demand/**`, `src/host/**`, vehicle layers 2D and 3D, vehicle inspector | 090 | T46, traffic quick | done |
-| [TASK-101](tasks/TASK-101.md) | 7 | Restricted road access: closed roads, local-traffic zones, delivery and bus lanes | `Road.access` (schema), `compile.ts`, `src/routing/**`, access tags in `roads.ts`, `src/editor`, street inspector | 090 | T47, traffic quick | todo |
+| [TASK-101](tasks/TASK-101.md) | 7 | Restricted road access: closed roads, local-traffic zones, delivery and bus lanes | `Road.access` (schema), `compile.ts`, `src/routing/**`, access tags in `roads.ts`, `src/editor`, street inspector | 090 | T47, traffic quick | done |
 | [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | done |
 | [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | done |
 | [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
@@ -2141,6 +2141,25 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   about 1.25 s, because the 2D scene redraws every frame even when idle and CI's software GPU
   needs about 0.4 s a frame on a slow runner; the test ran out of its 60 s. CI cases now get
   120 s; rendering the 2D scene only on change is the real fix (follow-up).
+
+- 2026-11-08, TASK-101 merged after the agent's second round (Codex, from
+  `task/101-merge-main`). Cause of the mixed-fleet jam: the lane search records one target lane
+  per road with an arbitrary timing for equal-cost changes, and the simulation treats it as
+  compulsory, so a driver could not pass a queue in another legal lane; queues at the reserved
+  Trappentreustrasse approaches (`r:674`, `r:737`, `r:1299`) and Landsberger Strasse (`r:968`)
+  spilled back through Donnersberger. Fix in `src/sim/engine.ts`: a route that crosses a lane
+  its class may not use takes `resolveLanes`' feasible sets on the same roads and movements;
+  other routes keep singleton targets (T46 unchanged); regression
+  `tests/sim/route-lane-options.test.ts`. Also: `map-view.tsx` sets the 3D scene's terrain flag
+  before its first city (V105's first-3D readiness), and T47 imports without surroundings and
+  terrain. Access rules, shares and gates unchanged. Lead verification on main plus 101: check
+  664, city 69, full traffic 3 342 / 75 / 1 (floor 3 193, gridlock cap 85), quick 3 012 / 38 / 0,
+  full e2e 75 passed (24 min local, V106's local ratio included), street inspector checked in
+  the app (Closed with a bus exception, then undo). The baseline stays 3 547 / 57 (101 is not
+  a demand task), so the full run's margin to the floor is 149 trips until TASK-102 resets it.
+  The lead added the lane-option rule to the routing section of `docs/architecture.md`.
+  Follow-up worth weighing: the singleton-target rule may cause the same queue blocking on
+  unrestricted routes; widening the fix changes T46's pinned behaviour, so it needs its own task.
 
 ## Owner decisions log
 
