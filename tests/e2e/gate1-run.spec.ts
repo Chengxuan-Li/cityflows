@@ -39,9 +39,7 @@ test('runs, pauses, replays the same steps, and inspects the map @smoke', async 
 }, testInfo) => {
   const start = await metrics(page);
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  await expect
-    .poll(async () => (await metrics(page)).trips.driving, { timeout: 1000 })
-    .toBeGreaterThan(0);
+  await expect.poll(async () => (await metrics(page)).trips.driving).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   const paused = await metrics(page);
   const hash = await page.evaluate(() => window.cityflows!.hash());

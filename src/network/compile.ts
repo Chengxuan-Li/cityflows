@@ -18,6 +18,7 @@ import {
 import { generateMovements } from './movements';
 import { compileSignal } from './signals';
 import { buildLaneSpatial } from './spatial';
+import { compileWalk, emptyWalkGraph } from './walk';
 import { populateStops } from './stops';
 import type {
   CConnector,
@@ -483,6 +484,7 @@ export function compile(city: City): CompileResult {
   }
 
   const compiled: CompiledCity = {
+    walk: emptyWalkGraph(),
     version: city.version,
     drivingSide: city.drivingSide,
     nodes,
@@ -520,5 +522,6 @@ export function compile(city: City): CompileResult {
   warnAboutProvenance([...sourceNodes, ...sourceRoads, ...sourcePlaces], diagnostics);
   populateStops(compiled, city);
   warnAboutConnectivity(compiled, diagnostics);
+  compiled.walk = compileWalk(city, compiled);
   return { ok: true, compiled, diagnostics };
 }

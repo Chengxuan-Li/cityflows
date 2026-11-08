@@ -295,6 +295,7 @@ const walkNetwork = z.object({
       to: walkNodeId,
       line: z.array(vec2).min(2),
       kind: z.enum(['footway', 'pedestrian', 'path', 'steps', 'living_street', 'crossing']),
+      layer: z.int().optional(),
       widthM: z.number().positive().nullable(),
       provenance,
     }),
@@ -352,6 +353,26 @@ function matchEntityIds(
           path: [...path, id, 'id'],
           message: 'Record key must match entity id',
         });
+    }
+  }
+  for (const link of Object.values(city.walk?.links ?? {})) {
+    for (const end of ['from', 'to'] as const) {
+      const node = city.walk!.nodes[link[end]];
+      if (!node)
+        context.addIssue({
+          code: 'custom',
+          path: ['walk', 'links', link.id, end],
+          message: 'Walk endpoint does not exist',
+        });
+      else {
+        const point = end === 'from' ? link.line[0]! : link.line.at(-1)!;
+        if (Math.hypot(point.x - node.pos.x, point.y - node.pos.y) > 0.001)
+          context.addIssue({
+            code: 'custom',
+            path: ['walk', 'links', link.id, 'line'],
+            message: 'Walk line must meet its endpoints',
+          });
+      }
     }
   }
 }

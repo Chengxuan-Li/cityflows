@@ -4,6 +4,7 @@ import { allocateId, type City, type Road, type RoadClass } from '../../schema';
 import { vehicleClasses, type AccessValue } from '../../schema';
 import type { ClippedPart } from './clip';
 import type { OsmTags, OsmWay } from './parse';
+import { sidewalkTags } from './walk';
 
 const speedKph: Record<RoadClass, number> = {
   motorway: 100,
@@ -255,6 +256,7 @@ export function createRoads(
       const lanes = busLanes(sourceLanes, way.tag, direction, paired, city.drivingSide, inferred);
       const provenance = { ...sourceProvenance, inferred: [...new Set(inferred)] };
       const reversed = direction === 'backward';
+      const sidewalk = sidewalkTags(way.tag, reversed);
       const centerline = offsetPolyline(
         part.points.map(({ pos }) => pos),
         0,
@@ -272,6 +274,7 @@ export function createRoads(
         lanes,
         speedLimitMps,
         ...(access && { access }),
+        ...(sidewalk && { sidewalk }),
         provenance,
         roadClass,
         streetGroupId,

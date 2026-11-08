@@ -1,7 +1,7 @@
 import type { ImportOptions } from './types';
 
 export type Bbox = NonNullable<ImportOptions['bbox']>;
-export const queryVersion = 3;
+export const queryVersion = 4;
 export const defaultEndpoint =
   import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 let active = false;
@@ -53,7 +53,8 @@ export function buildQuery(bbox: Bbox, context = true): string {
         .join('') +
       `node[natural=tree](${s},${w},${n},${e});way[natural=tree_row](${s},${w},${n},${e});`
     : '';
-  return `[out:xml][timeout:60];way[highway~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service)(_link)?$"][service!~"^(parking_aisle|driveway)$"](${s},${w},${n},${e})->.roads;(.roads;rel(bw.roads)[type=restriction];${surroundings});(._;>>;);out body;`;
+  const walk = `way[highway~"^(footway|pedestrian|path|steps)$"](${s},${w},${n},${e});way[footway=crossing](${s},${w},${n},${e});node[entrance](${s},${w},${n},${e});`;
+  return `[out:xml][timeout:60];way[highway~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service)(_link)?$"][service!~"^(parking_aisle|driveway)$"](${s},${w},${n},${e})->.roads;(.roads;rel(bw.roads)[type=restriction];${walk}${surroundings});(._;>>;);out body;`;
 }
 
 export async function fetchOverpass(

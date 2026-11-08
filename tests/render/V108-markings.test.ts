@@ -1,3 +1,4 @@
+import { vehicleJson } from '../vehicle-json';
 import { cityHeights } from '../../src/render3d/heights';
 import { goreTriangles, triangleHeight, buildMarkings } from '../../src/render3d/markings';
 import { laneEdges } from '../../src/network/lanes';
@@ -47,17 +48,7 @@ const baseline = {
   },
 } as const;
 const hash = (value: unknown) =>
-  createHash('sha256')
-    .update(
-      JSON.stringify(value, (_, v: unknown) =>
-        v instanceof Map
-          ? [...v]
-          : ArrayBuffer.isView(v)
-            ? Array.from(v as unknown as number[])
-            : v,
-      ),
-    )
-    .digest('hex');
+  createHash('sha256').update(vehicleJson(value, true)).digest('hex');
 
 test.each(tierCities(auditCities))('V108: %s compile and arrow placement equal main', (name) => {
   const city = compileAuditCity(name);

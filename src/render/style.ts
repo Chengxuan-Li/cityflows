@@ -161,6 +161,7 @@ export function placeHue(id: string): number {
 }
 
 export const style = {
+  walk: { sidewalk: 0xe2ded2, footway: 0xd7d3c5, steps: 0xb2ac9d },
   hillshadeAlpha: 0.3,
   background: 0xf4f1e7,
   context: {

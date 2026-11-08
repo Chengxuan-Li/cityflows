@@ -7,6 +7,8 @@ const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
   ['terrain', 'Terrain'],
   ['context', 'Surroundings'],
+  ['sidewalks', 'Sidewalks'],
+  ['footways', 'Footways'],
   ['trees', 'Trees'],
   ['streetTrees', 'Street trees'],
   ['roadClasses', 'Road classes'],

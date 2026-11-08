@@ -37,6 +37,7 @@ import { Vehicles3D } from './vehicles';
 import { groundMesh } from './terrain';
 import { terrainVehicleOffset } from './heights';
 import { buildTerrainGround } from './context';
+import { buildWalk } from './walk';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -71,6 +72,8 @@ export class Scene3D {
   private capture: { images: string[]; resolve: (images: string[]) => void } | null = null;
   private belowGround = false;
   private placesVisible = true;
+  private walk: { sidewalks: Mesh; footways: Mesh; steps: Mesh } | undefined;
+  private walkVisibility = { sidewalks: true, footways: true };
   private basemap: Basemap3D | undefined;
   private tilesEnabled = true;
   private lastRenderMs = performance.now();
@@ -184,6 +187,13 @@ export class Scene3D {
       this.content.add(caster);
     }
     const asphalt = add(geometry.surfaces, style.asphalt, !terrain.grid);
+    const walk = buildWalk(city, renderedSource, geometry.heights);
+    this.walk = {
+      sidewalks: add(walk.sidewalks, style.walk.sidewalk, false),
+      footways: add(walk.footways, style.walk.footway, false),
+      steps: add(walk.steps, style.walk.steps, false),
+    };
+    this.setWalkLayers(this.walkVisibility.sidewalks, this.walkVisibility.footways);
     asphalt.material.map = surfaceTexture('asphalt');
     const placementStart = performance.now();
     const placed = placeTrees(city, source);
@@ -607,7 +617,18 @@ export class Scene3D {
     this.canvas.dataset.vehicles = String(this.vehicles.mesh.count);
   }
 
+  setWalkLayers(sidewalks: boolean, footways: boolean) {
+    this.walkVisibility = { sidewalks, footways };
+    if (this.walk) {
+      this.walk.sidewalks.visible = sidewalks;
+      this.walk.footways.visible = this.walk.steps.visible = footways;
+    }
+    this.canvas.dataset.sidewalks = String(sidewalks);
+    this.canvas.dataset.footways = String(footways);
+  }
+
   private disposeContent() {
+    this.walk = undefined;
     if (this.terrainGround) {
       const { opaque, transparent } = this.terrainGround;
       (this.surroundings?.geometry === opaque ? transparent : opaque).dispose();
