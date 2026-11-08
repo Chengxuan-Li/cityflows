@@ -2115,6 +2115,15 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   hillsides show open pits. Lead verification on main: check, city, traffic quick 3 233 / 32,
   full e2e, shots read (Sindelfingen A81 and bridge, Munich, hillshade, SF in the app).
 
+- 2026-11-07, CI e2e rebalanced (lead). `--shard` split the sorted file list by count, so the
+  third shard held every heavy 3D case and set the wall time (18 to 27 minutes against 4 to
+  10). Four groups balanced by measured duration now (`CITYFLOWS_E2E_GROUP` in
+  `playwright.config.ts`, about 250 to 300 s each locally; `rest` takes any file not named, so
+  new specs are never skipped). V106's frame comparison takes one sample per state on CI and
+  skips its ratio there, as T44 does. CI prints per-test durations (list reporter). Open:
+  `gate1-run` timed out on CI twice since TASK-106 (Pause click during ×20 playback), which
+  tree layers do not explain locally, even at 4× CPU throttling.
+
 ## Owner decisions log
 
 - 2026-11-07, Gates 7 to 9: the lead's defaults are accepted (vehicle classes car, van, truck,
