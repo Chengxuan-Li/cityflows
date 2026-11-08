@@ -63,7 +63,10 @@ test('T47 Munich local access diverts through traffic and permits a local depart
   const errors = pageErrors(page);
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
-  await importOsm(page, 'fixtures/osm/munich-donnersberger.osm');
+  await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', {
+    surroundings: false,
+    terrain: false,
+  });
   const source = await city(page);
   const result = compile(source);
   if (!result.ok) throw new Error('Munich must compile');

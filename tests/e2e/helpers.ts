@@ -153,10 +153,18 @@ export async function writeMetrics(info: TestInfo, data: unknown) {
   await info.attach('metrics', { body, contentType: 'application/json' });
 }
 
-export async function importOsm(page: Page, path: string) {
+export async function importOsm(
+  page: Page,
+  path: string,
+  options: { surroundings?: boolean; terrain?: boolean } = {},
+) {
   await button(page, 'Import').click();
   const dialog = page.getByRole('dialog', { name: 'Import city' });
   await dialog.getByLabel('OSM file').setInputFiles(path);
+  if (options.surroundings !== undefined)
+    await dialog.getByLabel('Include surroundings').setChecked(options.surroundings);
+  if (options.terrain !== undefined)
+    await dialog.getByLabel('Include terrain').setChecked(options.terrain);
   await button(page, 'Import roads').click();
   await expect(dialog.getByRole('region', { name: 'Import diagnostics' })).toContainText(
     '0 errors',
