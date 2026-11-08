@@ -8,8 +8,12 @@ import { occupiedSpaces } from '../../src/render/parked-cars';
 import { button, city, importOsm, metrics, pageErrors } from './helpers';
 import { fixtureTerrain } from './terrain-fixture';
 
+// CI renders on a software GPU, where frame ratios are noise and 90 frames per sample cost
+// minutes per view (as T44 and V106): there it takes 20 frames and skips the frame allowance.
+const FRAME_SAMPLES = process.env.CI ? 20 : 90;
+
 async function frameTiming(page: Page) {
-  return page.evaluate(async () => {
+  return page.evaluate(async (count) => {
     window.cityflowsRenderContinuously = true;
     const renders: number[] = [],
       frames: number[] = [];
@@ -20,9 +24,9 @@ async function frameTiming(page: Page) {
     });
     observer.observe({ entryTypes: ['measure'] });
     let previous = performance.now();
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < count; i++) {
       const now = await new Promise<number>((resolve) => requestAnimationFrame(resolve));
-      if (i > 9) frames.push(now - previous);
+      if (i > Math.min(9, count / 4)) frames.push(now - previous);
       previous = now;
     }
     observer.disconnect();
@@ -31,7 +35,7 @@ async function frameTiming(page: Page) {
       values.reduce((sum, value) => sum + value, 0) / values.length;
     if (!renders.length) throw new Error('No measured parking frames');
     return { frameMs: mean(frames), renderMs: mean(renders), samples: renders.length };
-  });
+  }, FRAME_SAMPLES);
 }
 
 for (const cameraTarget of [
@@ -213,9 +217,10 @@ for (const cameraTarget of [
       await button(page, 'Layers').click();
       await hide();
       const off = await frameTiming(page);
-      expect
-        .soft(on.frameMs, `controlled customer-lot ${view}: parked cars frame cost`)
-        .toBeLessThanOrEqual(off.frameMs * 1.2);
+      if (!process.env.CI)
+        expect
+          .soft(on.frameMs, `controlled customer-lot ${view}: parked cars frame cost`)
+          .toBeLessThanOrEqual(off.frameMs * 1.2);
       await show();
       await button(page, 'Layers').click();
       await layers.getByLabel('Parked cars', { exact: true }).check();
@@ -379,7 +384,7 @@ for (const name of ['munich-donnersberger', 'sindelfingen-a81']) {
         await button(page, 'Layers').click();
         await hideControls();
         const off = await frameTiming(page);
-        if (name.startsWith('munich'))
+        if (name.startsWith('munich') && !process.env.CI)
           expect
             .soft(on.frameMs, `${camera.id} ${view}: parked cars frame cost`)
             .toBeLessThanOrEqual(off.frameMs * 1.2);

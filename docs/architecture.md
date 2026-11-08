@@ -1608,6 +1608,16 @@ existing unlimited admission rule. Owned lots and garages share one initial resi
 budget. Destination-only road access retains spaces for local parking trips. No fee,
 time-limit or conditional-tag rules are modeled.
 
+Lead follow-up (2026-11-08). Starting stock holds the cars of the persons demand
+generation makes: `ceil(round(residents × personsPerResident) × carShare)` per home, not the
+full population, so every visible parked car belongs to someone; a resident whose moved
+street car a neighbour took starts from the home's inferred garage while the home has cars
+left. A lot whose own place has no demand (an OSM lot imports as its own `parking` place)
+serves the places within 200 m as their car park: a customers lot the visitors of
+non-residential places, a private lot also their workers and residents (and their share of
+starting stock). It ranks first for those destinations, and a lot whose free stalls are all
+spoken for by cars on their way drops out of the choice.
+
 ## 10. Engine host
 
 Lives in `src/host`. The worker owns the engine, the route provider and link costs. The main
