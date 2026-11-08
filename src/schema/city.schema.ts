@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { City, Node } from './city';
+import { vehicleClasses, type City, type Node, type VehicleClass } from './city';
 
 const nodeId = z.string().regex(/^n:\d+$/);
 const roadId = z.string().regex(/^r:\d+$/);
@@ -64,7 +64,7 @@ const junctionSchema = z
 
 export const laneSchema = z.object({
   widthM: z.number().positive(),
-  allowed: z.array(z.enum(['car', 'truck', 'bus'])),
+  allowed: z.array(z.enum(vehicleClasses)),
 });
 
 export const roadSchema = z.object({
@@ -249,9 +249,33 @@ function matchEntityIds(city: Pick<City, 'nodes' | 'roads' | 'places'>, context:
 }
 
 export const citySchema = z
-  .object({ schemaVersion: z.literal(2), ...cityFields })
+  .object({ schemaVersion: z.literal(3), ...cityFields })
   .superRefine(matchEntityIds) satisfies z.ZodType<City>;
-export const legacyCitySchema = z
+export const previousCitySchema = z
+  .object({ schemaVersion: z.literal(2), ...cityFields })
+  .superRefine(matchEntityIds);
+const versionOneCitySchema = z
   .object({ schemaVersion: z.literal(1), ...cityFields, nodes: z.record(nodeId, legacyNodeSchema) })
   .superRefine(matchEntityIds)
-  .transform((city): City => ({ ...city, schemaVersion: 2 }));
+  .transform((city) => ({ ...city, schemaVersion: 2 as const }));
+
+export const legacyCitySchema = z
+  .union([versionOneCitySchema, previousCitySchema])
+  .transform((city): City => ({
+    ...city,
+    schemaVersion: 3,
+    roads: Object.fromEntries(
+      Object.entries(city.roads).map(([id, road]) => [
+        id,
+        {
+          ...road,
+          lanes: road.lanes.map((lane) => ({
+            ...lane,
+            allowed: lane.allowed.flatMap<VehicleClass>((value) =>
+              value === 'car' && !lane.allowed.includes('van') ? ['car', 'van'] : [value],
+            ),
+          })),
+        },
+      ]),
+    ),
+  }));

@@ -1,13 +1,15 @@
-import type { City, PlaceId, TripRequest } from '../schema';
+import type { City, PlaceId, TripRequest, VehicleClass } from '../schema';
 
 export interface DemandSummary {
   totalTrips: number;
   byHour: number[];
   byPlace: Record<PlaceId, { departures: number; arrivals: number }>;
+  byClass: Record<VehicleClass, number>;
 }
 
 export function demandSummary(trips: readonly TripRequest[], city: City): DemandSummary {
   const byHour = Array<number>(24).fill(0);
+  const byClass = { car: 0, van: 0, truck: 0, bus: 0 };
   const byPlace = Object.fromEntries(
     Object.keys(city.places)
       .sort()
@@ -22,7 +24,8 @@ export function demandSummary(trips: readonly TripRequest[], city: City): Demand
     byHour[hour] = byHour[hour]! + 1;
     origin.departures++;
     destination.arrivals++;
+    byClass[trip.vehicleClass]++;
   }
 
-  return { totalTrips: trips.length, byHour, byPlace };
+  return { totalTrips: trips.length, byHour, byPlace, byClass };
 }

@@ -24,7 +24,7 @@ test('T08 limited admission creates spillback and both connectors meter traffic'
   expect(follower.state).toBe('driving');
   expect(follower.speedMps).toBeLessThan(0.05);
   expect(head.positionM - follower.positionM).toBeCloseTo(
-    DEFAULT_SIM_PARAMS.vehicleLengthM + DEFAULT_SIM_PARAMS.idm.minGapM,
+    DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM,
     1,
   );
   for (let id = 2; id <= 3; id++) {

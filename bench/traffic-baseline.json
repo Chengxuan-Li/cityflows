@@ -1,12 +1,12 @@
 {
-  "tree": "task/099b-pull 279b110 (TASK-099), fresh import; reset by the owner 2026-11-07",
+  "tree": "main at the TASK-100 merge (mixed fleet: car, van, truck); reset per the owner's rule for demand-changing tasks, 2026-11-07. stalledHeads stays 1: the mixed fleet measured 0, but the B56 loop at n:263 still locks with cars only",
   "scale": 0.15,
-  "completed": 3390,
-  "gridlocked": 81,
+  "completed": 3547,
+  "gridlocked": 57,
   "stalledHeads": 1,
   "quick": {
     "until": "09:30",
-    "completed": 3067,
-    "gridlocked": 42
+    "completed": 3233,
+    "gridlocked": 32
   }
 }

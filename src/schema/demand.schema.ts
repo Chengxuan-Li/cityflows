@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import type { DemandConfig, Person, Scenario, TripRequest } from './demand';
+import { vehicleClasses } from './city';
+import {
+  DEFAULT_CLASS_SHARES,
+  vehiclePurposes,
+  type DemandConfig,
+  type Person,
+  type Scenario,
+  type TripRequest,
+} from './demand';
 import type { SimParams } from './sim';
 
 const placeId = z.string().regex(/^p:\d+$/);
@@ -21,17 +29,30 @@ export const personSchema = z.object({
   ),
 }) satisfies z.ZodType<Person>;
 
-export const tripRequestSchema = z.object({
-  id: z.string(),
-  personId: z.string().nullable(),
-  originPlaceId: placeId,
-  destinationPlaceId: placeId,
-  departS: seconds,
-  mode,
-  legs: z.array(z.object({ mode, fromPlaceId: placeId, toPlaceId: placeId })),
-}) satisfies z.ZodType<TripRequest>;
+export const tripRequestSchema = z
+  .object({
+    id: z.string(),
+    personId: z.string().nullable(),
+    originPlaceId: placeId,
+    destinationPlaceId: placeId,
+    departS: seconds,
+    mode,
+    legs: z.array(z.object({ mode, fromPlaceId: placeId, toPlaceId: placeId })),
+    vehicleClass: z.enum(vehicleClasses).default('car'),
+    purpose: z.enum(vehiclePurposes).optional(),
+  })
+  .transform((trip): TripRequest => ({
+    ...trip,
+    purpose: trip.purpose ?? (trip.id.startsWith('through:') ? 'through' : 'private'),
+  })) satisfies z.ZodType<TripRequest>;
 
 const distribution = z.object({ meanS: seconds, sdS: seconds });
+const classShares = z
+  .record(z.enum(vehicleClasses), z.number().min(0).max(1))
+  .refine(
+    (shares) => Math.abs(Object.values(shares).reduce((sum, share) => sum + share, 0) - 1) < 1e-9,
+    'Vehicle class shares must sum to 1',
+  );
 
 export const demandConfigSchema = z.object({
   seed: z.int(),
@@ -41,6 +62,10 @@ export const demandConfigSchema = z.object({
   workDuration: distribution,
   gravityScaleM: z.number().positive(),
   throughTripsPerHour: z.array(z.number().nonnegative()).length(24),
+  classShares: z.object({ local: classShares, through: classShares }).default(() => ({
+    local: { ...DEFAULT_CLASS_SHARES.local },
+    through: { ...DEFAULT_CLASS_SHARES.through },
+  })),
   chains: z
     .object({
       schoolShare: z.number().min(0).max(1).optional(),
@@ -53,7 +78,18 @@ export const demandConfigSchema = z.object({
 export const simParamsSchema = z
   .object({
     dtS: z.number(),
-    vehicleLengthM: z.number(),
+    vehicleClasses: z.record(
+      z.enum(vehicleClasses),
+      z.object({
+        lengthM: z.number().positive(),
+        widthM: z.number().positive(),
+        maxSpeedMps: z
+          .union([z.number().positive(), z.literal(Infinity), z.null()])
+          .transform((speed) => speed ?? Infinity),
+        accelFactor: z.number().positive(),
+        decelFactor: z.number().positive(),
+      }),
+    ),
     idm: z.object({
       aMps2: z.number(),
       bMps2: z.number(),
@@ -93,7 +129,7 @@ export const simParamsSchema = z
   })
   .partial() satisfies z.ZodType<Partial<SimParams>>;
 
-export const scenarioSchema = z.object({
+export const scenarioSchema: z.ZodType<Scenario> = z.object({
   id: z.string(),
   name: z.string(),
   seed: z.int(),
@@ -101,4 +137,4 @@ export const scenarioSchema = z.object({
   endS: seconds,
   demand: demandConfigSchema,
   simParams: simParamsSchema,
-}) satisfies z.ZodType<Scenario>;
+});

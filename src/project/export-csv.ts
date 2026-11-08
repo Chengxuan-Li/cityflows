@@ -1,3 +1,5 @@
+import type { VehicleClass, VehiclePurpose } from '../schema';
+
 export interface ExportProvenance {
   seed: number;
   engineVersion: string;
@@ -10,6 +12,8 @@ export interface TripRecord {
   person: string | null;
   origin: string;
   destination: string;
+  vehicleClass: VehicleClass;
+  purpose: VehiclePurpose;
   departure: number | null;
   arrival: number | null;
   travelTime: number | null;
@@ -69,6 +73,8 @@ export function exportTripsCsv(records: readonly TripRecord[], provenance: Expor
       'person',
       'origin',
       'destination',
+      'class',
+      'purpose',
       'departure',
       'arrival',
       'travel time',
@@ -81,6 +87,8 @@ export function exportTripsCsv(records: readonly TripRecord[], provenance: Expor
       r.person,
       r.origin,
       r.destination,
+      r.vehicleClass,
+      r.purpose,
       r.departure,
       r.arrival,
       r.travelTime,

@@ -1,4 +1,5 @@
 import type { Route } from '../routing';
+import { vehicleClasses, type SimParams } from '../schema';
 import type { FailReason } from './types';
 
 // State codes 1 and 2 are also the snapshot's visible states.
@@ -97,6 +98,8 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
     first: (laneField: number) => head[segment(laneField)]!,
     last: (laneField: number) => tail[segment(laneField)]!,
     state: new Uint8Array(count),
+    vclass: new Uint8Array(count),
+    purpose: new Uint8Array(count),
     speed: numbers(),
     speedFactor: numbers(),
     routeSeed: new Uint32Array(count),
@@ -120,3 +123,18 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
 }
 
 export type Vehicles = ReturnType<typeof createVehicles>;
+
+/** Class-indexed, reused driving parameters; no allocations in per-vehicle step passes. */
+export function createVehicleProfiles(params: SimParams) {
+  return vehicleClasses.map((name) => {
+    const profile = params.vehicleClasses[name];
+    return {
+      ...profile,
+      idm: {
+        ...params.idm,
+        aMps2: params.idm.aMps2 * profile.accelFactor,
+        bMps2: params.idm.bMps2 * profile.decelFactor,
+      },
+    };
+  });
+}

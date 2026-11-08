@@ -6,6 +6,7 @@ const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
   ['context', 'Surroundings'],
   ['roadClasses', 'Road classes'],
+  ['vehicleClasses', 'Colour vehicles by class'],
   ['shadows', 'Shadows'],
   ['difference', 'Comparison road usage'],
   ['heat', 'Road speeds'],

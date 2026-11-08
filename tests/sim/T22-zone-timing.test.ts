@@ -56,7 +56,7 @@ test.each([2, 10])(
     vehicles.insert(
       1,
       left.toLane,
-      DEFAULT_SIM_PARAMS.vehicleLengthM + DEFAULT_SIM_PARAMS.idm.minGapM,
+      DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM,
     );
     vehicles.junctionWaiting[0] = 100; // Time approaching the line does not count.
     request(0);
@@ -76,7 +76,7 @@ test('T22: a moving exit queue projected clear lets the candidate enter immediat
   vehicles.insert(
     1,
     left.toLane,
-    DEFAULT_SIM_PARAMS.vehicleLengthM + DEFAULT_SIM_PARAMS.idm.minGapM,
+    DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM,
   );
   vehicles.speed[1] = 3;
   request(0);
@@ -242,7 +242,7 @@ test('T22: a candidate may arrive after a moving holder clears its zone', () => 
   request(0);
   const end = left.conflictZones[left.conflicts.indexOf(through.idx)]![1];
   vehicles.remove(0);
-  vehicles.insert(0, -left.idx - 1, end + DEFAULT_SIM_PARAMS.vehicleLengthM - 0.1);
+  vehicles.insert(0, -left.idx - 1, end + DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM - 0.1);
   vehicles.speed[0] = 5;
   request(1);
   expect(intersections.grants[1]).toBe(through.idx);
@@ -269,7 +269,7 @@ test('T22: shared-exit reservations follow projected clearance but still guard t
   vehicles.insert(0, left.toLane, 0.1);
   expect(intersections.zoneStop(left, 0)).toBe(Infinity); // Same-path following is not a conflict.
   expect(intersections.zoneStop(other, 0)).toBe(start);
-  vehicles.position[0] = DEFAULT_SIM_PARAMS.vehicleLengthM;
+  vehicles.position[0] = DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM;
   expect(intersections.zoneStop(other, 0)).toBe(Infinity);
 });
 
@@ -311,7 +311,7 @@ test.each([0.001, 6.5])(
         expect(
           next.movements[-follower.lane - 1]!.lengthM + exited[0]!.positionM - follower.positionM,
         ).toBeGreaterThanOrEqual(
-          DEFAULT_SIM_PARAMS.vehicleLengthM + DEFAULT_SIM_PARAMS.idm.minGapM - 1e-8,
+          DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM - 1e-8,
         );
       }
       checked = true;
@@ -333,7 +333,7 @@ test('T22: a departing rear still blocks an end-reaching crossing with a differe
   vehicles.insert(0, left.toLane, 0.1);
   const start = through.conflictZones[through.conflicts.indexOf(left.idx)]![0];
   expect(intersections.zoneStop(through, 0)).toBe(start);
-  vehicles.position[0] = DEFAULT_SIM_PARAMS.vehicleLengthM;
+  vehicles.position[0] = DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM;
   expect(intersections.zoneStop(through, 0)).toBe(Infinity);
 });
 

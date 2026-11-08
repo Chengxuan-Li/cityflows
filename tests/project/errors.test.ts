@@ -5,9 +5,10 @@ import { defaultScenario } from '../../src/fixtures/scenarios';
 import { openProject } from '../../src/project/open';
 import { saveProject, saveProjectJson } from '../../src/project/save';
 import type { Project } from '../../src/project/types';
+import { scenarioSchema } from '../../src/schema';
 
 function demoProject(): Project {
-  return { city: grid5x5(), scenarios: [defaultScenario('grid5x5')] };
+  return { city: grid5x5(), scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))] };
 }
 
 it('identifies a tampered ZIP member', async () => {
@@ -72,7 +73,7 @@ it('reports an unsupported city schema version from the migration entry point', 
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const city = JSON.parse(decoder.decode(entries['city.json']!));
-  city.schemaVersion = 3;
+  city.schemaVersion = 4;
   const bytes = encoder.encode(JSON.stringify(city));
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
   const manifest = JSON.parse(decoder.decode(entries['manifest.json']!));

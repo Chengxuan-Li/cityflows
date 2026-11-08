@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import type { City, Scenario } from '../../src/schema';
+import { migrateCity, type City, type Scenario } from '../../src/schema';
 import { compile } from '../../src/network';
 import { button, city, clickGrid, gridPoint, metrics, pageErrors, fitted } from './helpers';
 
@@ -43,6 +43,9 @@ async function openTraffic(page: Page, mode: 'stop' | 'red' | 'roundabout') {
   const scenario = project.scenarios[0]!;
   scenario.startS = 0;
   scenario.demand.workStart = { meanS: 0, sdS: 0 };
+  // Hold the original car fleet fixed when comparing junction controls; V100 covers mixed fleets.
+  const cars = { car: 1, van: 0, truck: 0, bus: 0 };
+  scenario.demand.classShares = { local: cars, through: cars };
   for (const [name, data] of [
     ['city.json', source],
     ['scenarios.json', project.scenarios],
@@ -54,7 +57,8 @@ async function openTraffic(page: Page, mode: 'stop' | 'red' | 'roundabout') {
     buffer: Buffer.from(JSON.stringify(project)),
   });
   await expect(page.getByRole('heading', { name: source.name })).toBeVisible();
-  return source;
+  // The app opens the fixture migrated to the current schema (TASK-100 adds `van`).
+  return migrateCity(source);
 }
 async function queue(page: Page, source: City) {
   const result = compile(source);
@@ -197,7 +201,7 @@ test('open a main-branch project with a v1 roundabout and remove it', async ({ p
   await expect
     .poll(async () => (await city(page)).nodes['n:13']!.roundabout?.ringRoads.length)
     .toBe(8);
-  expect((await city(page)).schemaVersion).toBe(2);
+  expect((await city(page)).schemaVersion).toBe(3);
   await button(page, 'Roundabout').click();
   await clickGrid(page, 240, 240);
   await expect.poll(async () => (await city(page)).nodes['n:13']!.control).toBe('signal');

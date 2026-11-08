@@ -488,6 +488,7 @@ export function MapView() {
           three!.setSelection(selection);
           three!.setBelowGround(getState().belowGround);
           three!.setPlaces(layers.places);
+          three!.setColourVehiclesByClass(layers.vehicleClasses);
           three!.setSurroundings(layers.context, getState().buildings);
           three!.setTiles(layers.basemap);
           three!.setSignals(

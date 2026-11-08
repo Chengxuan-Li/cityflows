@@ -109,7 +109,7 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
         tag[`turn:lanes:${direction}`] ?? (directions.length === 1 ? tag['turn:lanes'] : undefined),
       lanes: Array.from(
         { length: laneCount ?? (roadClass === 'motorway' || roadClass === 'trunk' ? 2 : 1) },
-        (): Road['lanes'][number] => ({ widthM, allowed: ['car', 'truck', 'bus'] }),
+        (): Road['lanes'][number] => ({ widthM, allowed: ['car', 'van', 'truck', 'bus'] }),
       ),
       speedLimitMps: hasSpeed ? taggedSpeed : speedKph[roadClass] / 3.6,
       provenance: { source: 'osm' as const, osmIds: [id], inferred },

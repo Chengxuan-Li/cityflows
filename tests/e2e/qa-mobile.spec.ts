@@ -71,7 +71,10 @@ for (const [label, content] of [
     for (const control of await sheet
       .locator('button:enabled, input:enabled, select:enabled, summary')
       .all()) {
-      if (await control.isVisible()) await reachable(control);
+      if (!(await control.isVisible())) continue;
+      // A sheet taller than the phone scrolls; reach each control as a user would.
+      await control.scrollIntoViewIfNeeded();
+      await reachable(control);
     }
     await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();

@@ -158,6 +158,8 @@ test('T10 a parking departure waits for its arrival, releases a slot and drains 
     originPlaceId: from,
     destinationPlaceId: to,
     departS,
+    vehicleClass: 'car',
+    purpose: 'private',
     mode: 'car',
     legs: [],
   });

@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { runHeadless } from '../../src/host/headless';
 import { createEngine } from '../../src/sim/engine';
+import type { VehicleClass } from '../../src/schema';
 import { scenario, setup, trips } from '../sim/fixtures';
 
 test('same city, demand and seed produce identical comparison numbers', () => {
@@ -14,6 +15,7 @@ test('same city, demand and seed produce identical comparison numbers', () => {
   const baseline = runHeadless(input);
   expect(runHeadless(input)).toEqual(baseline);
   expect(baseline.metrics.trips.completed).toBe(12);
+  expect(baseline.metrics.completedByClass).toEqual({ car: 12, van: 0, truck: 0, bus: 0 });
   expect(baseline.travelTime.meanS).toBeCloseTo(baseline.metrics.meanTravelTimeS, 8);
   expect(baseline.travelTime.meanDelayS).toBeCloseTo(baseline.metrics.meanDelayS, 8);
   expect(baseline.travelTime.p90DelayS).toBeGreaterThan(0);
@@ -49,4 +51,24 @@ test('unfinished and unsupported trips are not included in the completed travel 
     meanDelayS: 0,
     p90DelayS: 0,
   });
+});
+
+test('headless completion accounting preserves all four vehicle classes', () => {
+  const city = grid5x5();
+  const classes: VehicleClass[] = ['car', 'van', 'truck', 'bus'];
+  for (const road of Object.values(city.roads)) {
+    for (const lane of road.lanes) lane.allowed = classes.slice();
+  }
+  const requests = trips(city, 4, 30).map((trip, index) => ({
+    ...trip,
+    vehicleClass: classes[index]!,
+    purpose: 'through' as const,
+  }));
+  const result = runHeadless({
+    compiled: setup(city),
+    trips: requests,
+    scenario: { ...scenario(), endS: 700 },
+  });
+  expect(result.metrics.trips.completed).toBe(4);
+  expect(result.metrics.completedByClass).toEqual({ car: 1, van: 1, truck: 1, bus: 1 });
 });

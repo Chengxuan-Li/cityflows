@@ -4,6 +4,7 @@ import { compile } from '../../src/network';
 import type { SimParams, TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
+import { createRouteProvider, type RouteRequest } from '../../src/routing';
 import { scenario, setup } from './fixtures';
 
 const { respawnS, fadeS, maxRespawns } = DEFAULT_SIM_PARAMS.gridlock;
@@ -16,6 +17,8 @@ function trip(id: number, originPlaceId: string, destinationPlaceId: string, dep
     originPlaceId,
     destinationPlaceId,
     departS,
+    vehicleClass: 'car',
+    purpose: 'private',
     mode: 'car',
     legs: [],
   } satisfies TripRequest;
@@ -78,6 +81,52 @@ function fades(engine: Engine) {
   const snapshot = engine.snapshot();
   return new Map([...snapshot.id].map((id, i) => [id, snapshot.fade[i]!]));
 }
+
+test('T46 gridlock respawn preserves the trip class and purpose in its next route request', () => {
+  const fixture = squareDeadlock(0.1);
+  const firstHead = fixture.heads[0]!;
+  fixture.trips[firstHead - 1]!.vehicleClass = 'van';
+  fixture.trips[firstHead - 1]!.purpose = 'delivery';
+  // Keep the packed fixture's original spacing; this test isolates metadata persistence.
+  const requests: RouteRequest[] = [];
+  const provider = createRouteProvider();
+  const engine = createEngine();
+  engine.load({
+    ...fixture,
+    scenario: scenario(),
+    routeProvider: {
+      route(compiled, costs, request) {
+        requests.push(request);
+        return provider.route(compiled, costs, request);
+      },
+    },
+    params: {
+      ...fixture.params,
+      vehicleClasses: {
+        ...DEFAULT_SIM_PARAMS.vehicleClasses,
+        van: { ...DEFAULT_SIM_PARAMS.vehicleClasses.car },
+      },
+    },
+  });
+  engine.step(1800);
+  expect(engine.inspect(firstHead)).toMatchObject({
+    state: 'queued_origin',
+    vehicleClass: 'van',
+    purpose: 'delivery',
+    respawns: 1,
+  });
+  engine.step(9000);
+  expect(engine.inspect(firstHead)).toMatchObject({
+    state: 'completed',
+    vehicleClass: 'van',
+    purpose: 'delivery',
+    routeReason: 'respawn',
+  });
+  expect(engine.metrics().completedByClass.van).toBe(1);
+  const vanRequests = requests.filter((request) => request.vehicleClass === 'van');
+  expect(vanRequests.length).toBeGreaterThanOrEqual(2);
+  expect(vanRequests.every((request) => request.purpose === 'delivery')).toBe(true);
+});
 
 test('T30 a square deadlock unlocks: the jam heads fade out, respawn at their origins, and every trip completes', () => {
   // A head's origin admits one car per ten minutes, so it cannot drop back into the ring at once.

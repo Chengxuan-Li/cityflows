@@ -24,22 +24,23 @@ import { buildGeometry } from '../../src/render3d/geometry';
 import { pointInPolygon, segmentsIntersect, segmentDistance } from '../../src/geo/polyline';
 import { tierCities, unitTest } from '../tier';
 
-// Captured before renderer changes, branch point 56ffccd (main).
+// Compile hashes captured at 56ffccd (main) before the renderer changes, then updated at the
+// TASK-100 merge: its lanes also allow `van`; with `van` removed they hash as at 56ffccd.
 const baseline = {
   grid: {
-    compile: 'fb4cfd663424228989fac663d73bd7afe7e4cd206d84ba7a9b5c06109e1e8dbb',
+    compile: '395992b0260d4620048866aae894f860231137f54668fe47e04aa5eefc647342',
     arrows: '46a5ce9adeddd011af72c58a0c8ef9e9b315ad7f732ebfa71b2cff6c2d531748',
   },
   town: {
-    compile: '4c1aca9614d7089f8f168de0178cd6870376b21bfdbc24b6ff0aa577c388c604',
+    compile: '2381f5c2443cba6def37b680b1c8be6b2d7a250eca332706d91c7fafecab24c0',
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: '1f08fb0aec883ff1024667cd1b2b19ea3e6048f63646bce6449172735417b5d8',
+    compile: 'b8f36d61b223798eee37a146acf0d7734d6817cc0097b44cc4b5be994f6b0fcc',
     arrows: '3ed3ead902ca594a2396c539f951d21f416a98011b29e79448932f020300a519',
   },
   munich: {
-    compile: '3c6074345a19e4c4756f978a38464393c573c810825971b214a3cc4a09d8ef92',
+    compile: '45d1ca0b196c8f13cab99a99e4a7bda495f72b3477dab4ab6b2f8cc61a8df3cc',
     arrows: 'e5c698a8c5686411555e695c390f8500d57191a06df3ebe59393df980d02a7f7',
   },
 } as const;

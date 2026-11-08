@@ -7,7 +7,7 @@ import {
   type LinkCosts,
   type RouteProvider,
 } from '../routing';
-import type { SimParams, TripRequest } from '../schema';
+import { vehicleClasses, vehiclePurposes, type SimParams, type TripRequest } from '../schema';
 import { createConnectors } from './connectors';
 import { stateHash } from './hash';
 import { idmAcceleration } from './idm';
@@ -27,7 +27,14 @@ import type {
   VehicleSnapshot,
   VehicleState,
 } from './types';
-import { createVehicles, DRIVING, QUEUED_ORIGIN, QUEUED_DESTINATION, PENDING } from './vehicle';
+import {
+  createVehicles,
+  createVehicleProfiles,
+  DRIVING,
+  QUEUED_ORIGIN,
+  QUEUED_DESTINATION,
+  PENDING,
+} from './vehicle';
 
 type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   routeProvider?: RouteProvider;
@@ -62,8 +69,17 @@ function createRun({
       ...overrides?.intersection,
     },
   };
-  const { dtS, vehicleLengthM, idm, spawnMinGapM } = params;
+  const { dtS, idm, spawnMinGapM } = params;
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
+  const profiles = createVehicleProfiles(params);
+  const maxVehicleLength = Math.max(...profiles.map((p) => p.lengthM));
+  const profile = (id: number) => profiles[vehicles.vclass[id]!]!;
+  for (const [id, trip] of trips.entries()) {
+    vehicles.vclass[id] = vehicleClasses.indexOf(trip.vehicleClass ?? 'car');
+    vehicles.purpose[id] = vehiclePurposes.indexOf(
+      trip.purpose ?? (trip.id.startsWith('through:') ? 'through' : 'private'),
+    );
+  }
   const reservationAcceleration = new Float64Array(trips.length);
   const accounting = createAccounting(compiled, vehicles);
   const connectors = createConnectors(compiled, trips, scenario, params, vehicles, accounting);
@@ -74,7 +90,9 @@ function createRun({
   });
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
   let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
-  let carLanes = compiled.lanes.map((lane) => lane.allowed.includes('car'));
+  let allowedLanes = vehicleClasses.map((name) =>
+    compiled.lanes.map((lane) => lane.allowed.includes(name)),
+  );
   const signalEpochs = new Map<string, number>();
   const provider =
     routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
@@ -122,7 +140,7 @@ function createRun({
     waitingForLane[id] = 0;
     if (destination.lane === lane && destination.positionM >= positionM) {
       arrival[id] = destination.idx;
-    } else if (planned?.fromLane === lane) {
+    } else if (planned?.fromLane === lane && allowedLanes[vehicles.vclass[id]!]![planned.toLane]) {
       vehicles.movement[id] = planned.idx;
     } else {
       let penalty = Infinity;
@@ -130,7 +148,7 @@ function createRun({
       let alternate = -1;
       for (const idx of compiled.lanes[lane]!.out) {
         const movement = compiled.movements[idx]!;
-        if (movement.neverGreen || !carLanes[movement.toLane]) continue;
+        if (movement.neverGreen || !allowedLanes[vehicles.vclass[id]!]![movement.toLane]) continue;
         const cost = movementPenaltyS(compiled, movement);
         if (
           !vehicles.attemptedFallbacks[id]?.has(idx) &&
@@ -153,7 +171,7 @@ function createRun({
         const cutoff = finalRoad ? destination.positionM : compiled.roads[next.road]!.lengthM - 10;
         for (const candidate of reachableLanes(
           compiled,
-          carLanes,
+          allowedLanes[vehicles.vclass[id]!]!,
           next.idx,
           cutoff,
           params.laneChangeDistanceM,
@@ -188,9 +206,11 @@ function createRun({
     );
   }
 
-  function hasSpawnGap(connector: CConnector) {
+  function hasSpawnGap(connector: CConnector, vehicle: number) {
     const { lane, positionM } = connector;
-    const spacing = vehicleLengthM + Math.max(spawnMinGapM, idm.minGapM);
+    const gap = Math.max(spawnMinGapM, idm.minGapM);
+    const spacing = profile(vehicle).lengthM + gap;
+    const maxSpacing = maxVehicleLength + gap;
     if (positionM < spacing) {
       for (const idx of compiled.lanes[lane]!.in) {
         if (intersections.occupancy[idx]! > 0) return false;
@@ -217,16 +237,20 @@ function createRun({
     }
     for (
       let id = vehicles.last(lane);
-      id !== -1 && vehicles.position[id]! <= positionM + spacing;
+      id !== -1 && vehicles.position[id]! <= positionM + maxSpacing;
       id = vehicles.previous[id]!
     ) {
-      if (Math.abs(vehicles.position[id]! - positionM) < spacing) return false;
+      const required = vehicles.position[id]! >= positionM ? profile(id).lengthM + gap : spacing;
+      if (Math.abs(vehicles.position[id]! - positionM) < required) return false;
     }
     const source = compiled.lanes[lane]!;
-    if (source.lengthM - positionM < spacing) {
+    if (source.lengthM - positionM < maxSpacing) {
       for (const idx of source.out) {
         const id = vehicles.last(-idx - 1);
-        if (id !== -1 && source.lengthM - positionM + vehicles.position[id]! < spacing)
+        if (
+          id !== -1 &&
+          source.lengthM - positionM + vehicles.position[id]! < profile(id).lengthM + gap
+        )
           return false;
       }
     }
@@ -318,7 +342,9 @@ function createRun({
             const occupant = vehicles.last(-idx - 1);
             if (
               occupant !== -1 &&
-              (leader === -1 || vehicles.position[occupant]! < vehicles.position[leader]!)
+              (leader === -1 ||
+                vehicles.position[occupant]! - profile(occupant).lengthM <
+                  vehicles.position[leader]! - profile(leader).lengthM)
             ) {
               leader = occupant;
             }
@@ -329,7 +355,7 @@ function createRun({
           }
         }
         const rear =
-          leader === -1 ? Infinity : offset + vehicles.position[leader]! - vehicleLengthM;
+          leader === -1 ? Infinity : offset + vehicles.position[leader]! - profile(leader).lengthM;
         limit[id] = Math.max(position, rear - idm.minGapM);
         let obstacle = rear;
         let leaderSpeed = leader === -1 ? 0 : vehicles.speed[leader]!;
@@ -348,10 +374,12 @@ function createRun({
           obstacle = stopAt;
           leaderSpeed = 0;
         }
+        const driving = profile(id);
+        const desiredSpeed = Math.min(speedLimit * vehicles.speedFactor[id]!, driving.maxSpeedMps);
         acceleration[id] = idmAcceleration(
-          idm,
+          driving.idm,
           vehicles.speed[id]!,
-          speedLimit * vehicles.speedFactor[id]!,
+          desiredSpeed,
           leaderSpeed,
           obstacle - position,
         );
@@ -359,16 +387,16 @@ function createRun({
         if (requester !== -1) {
           // TASK-076: the requester's projected rear is a standing leader, braked for at no
           // more than bMps2 (the yielder was picked only if that suffices).
-          const virtualRear = vehicles.position[requester]! - vehicleLengthM;
+          const virtualRear = vehicles.position[requester]! - profile(requester).lengthM;
           limit[id] = Math.min(limit[id]!, Math.max(position, virtualRear - idm.minGapM));
           acceleration[id] = Math.min(
             acceleration[id]!,
             Math.max(
-              -idm.bMps2,
+              -driving.idm.bMps2,
               idmAcceleration(
-                idm,
+                driving.idm,
                 vehicles.speed[id]!,
-                speedLimit * vehicles.speedFactor[id]!,
+                desiredSpeed,
                 0,
                 virtualRear - position,
               ),
@@ -379,9 +407,9 @@ function createRun({
         // from physical following, including for grants awarded later in this resolve.
         // Evaluate at the capped speed: free-flow braking toward a lower limit is not a stop.
         reservationAcceleration[id] = idmAcceleration(
-          idm,
-          Math.min(vehicles.speed[id]!, speedLimit * vehicles.speedFactor[id]!),
-          speedLimit * vehicles.speedFactor[id]!,
+          driving.idm,
+          Math.min(vehicles.speed[id]!, desiredSpeed),
+          desiredSpeed,
           lane && !granted ? (leader === -1 ? 0 : vehicles.speed[leader]!) : leaderSpeed,
           (lane && !granted ? rear : obstacle) - position,
         );
@@ -389,9 +417,9 @@ function createRun({
           acceleration[id] = Math.min(
             merges.stopAcceleration(id, movement),
             idmAcceleration(
-              idm,
+              driving.idm,
               vehicles.speed[id]!,
-              speedLimit * vehicles.speedFactor[id]!,
+              desiredSpeed,
               leader === -1 ? 0 : vehicles.speed[leader]!,
               rear - position,
             ),
@@ -403,7 +431,7 @@ function createRun({
         const speed = vehicles.speed[id]!;
         const requestDistance = Math.max(
           params.intersection.decisionDistanceM,
-          (speed * speed) / (2 * idm.bMps2) + idm.minGapM,
+          (speed * speed) / (2 * driving.idm.bMps2) + idm.minGapM,
         );
         if (
           lane &&
@@ -509,7 +537,7 @@ function createRun({
             previousPosition,
             Math.min(
               position,
-              path.lengthM + vehicles.position[exitTail]! - vehicleLengthM - idm.minGapM,
+              path.lengthM + vehicles.position[exitTail]! - profile(exitTail).lengthM - idm.minGapM,
             ),
           );
         // Earlier commits may have entered a zone that was empty during proposals.
@@ -546,7 +574,7 @@ function createRun({
               lane.lengthM +
                 path.lengthM +
                 vehicles.position[exitTail]! -
-                vehicleLengthM -
+                profile(exitTail).lengthM -
                 idm.minGapM,
             ),
           );
@@ -665,6 +693,7 @@ function createRun({
       lateralM: new Float32Array(count),
       lane: new Int32Array(count),
       state: new Uint8Array(count),
+      vclass: new Uint8Array(count),
       fade: new Float32Array(count),
     };
     let i = 0;
@@ -683,6 +712,7 @@ function createRun({
       snapshot.lateralM[i] = laneChanges.lateralM(id, tick);
       snapshot.lane[i] = field;
       snapshot.state[i] = state;
+      snapshot.vclass[i] = vehicles.vclass[id]!;
       snapshot.fade[i] = fadeS > 0 ? Math.min(1, (respawnS - vehicles.jamS[id]!) / fadeS) : 1;
       i++;
     }
@@ -699,6 +729,8 @@ function createRun({
       id: vehicleId,
       tripId: trip.id,
       personId: trip.personId,
+      vehicleClass: vehicleClasses[vehicles.vclass[id]!]!,
+      purpose: vehiclePurposes[vehicles.purpose[id]!]!,
       originPlace: trip.originPlaceId,
       destinationPlace: trip.destinationPlaceId,
       state: detailStates[state]!,
@@ -780,7 +812,9 @@ function createRun({
       { onDecision: intersectionObserver, acceleration: (id) => reservationAcceleration[id]! },
     );
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
-    carLanes = next.lanes.map((lane) => lane.allowed.includes('car'));
+    allowedLanes = vehicleClasses.map((name) =>
+      next.lanes.map((lane) => lane.allowed.includes(name)),
+    );
 
     for (let id = 0; id < vehicles.count; id++) {
       intersections.exitedFrom[id] = changes.movements[oldExits[id]!] ?? -1;
@@ -817,7 +851,7 @@ function createRun({
       let newField = field >= 0 ? mapped : -mapped - 1;
       let position = vehicles.position[id]!;
       if (!segment || position > segment.lengthM + 1e-9) {
-        const projection = project(source, position);
+        const projection = project(source, position, vehicleClasses[vehicles.vclass[id]!]!);
         if (projection) {
           newField = projection.field;
           position = projection.positionM;
@@ -849,10 +883,16 @@ function createRun({
         if (vehicles.state[id] === QUEUED_DESTINATION) accounting.transition(id, DRIVING);
       }
       const mappedRoute = vehicles.route[id]!;
+      const permitted = allowedLanes[vehicles.vclass[id]!]!;
+      const forbiddenMovement = (idx: number) =>
+        idx !== -1 && !permitted[next.movements[idx]!.toLane];
       const invalid =
         relocated ||
         mappedRoute.roads.slice(step).includes(-1) ||
-        mappedRoute.movements.slice(step).some((i) => i === -1 || next.movements[i]!.neverGreen) ||
+        mappedRoute.movements
+          .slice(step)
+          .some((i) => i === -1 || next.movements[i]!.neverGreen || forbiddenMovement(i)) ||
+        mappedRoute.targetLanes.slice(step).some((lanes) => lanes.every((i) => !permitted[i])) ||
         route!.targetLanes.slice(step).some((lanes) => lanes.some((i) => changes.lanes[i] === -1));
       const destination = next.connectors[vehicles.destination[id]!]!;
       const destinationChanged =
@@ -872,6 +912,7 @@ function createRun({
           mappedRoute.roads[step] === -1 ||
           mappedRoute.movements[step] === -1 ||
           next.movements[mappedRoute.movements[step] ?? -1]?.neverGreen ||
+          forbiddenMovement(mappedRoute.movements[step] ?? -1) ||
           mappedRoute.targetLanes[step]?.length === 0 ||
           destinationChanged;
         rerouter.scheduleEdit(id, time(), invalid || destinationChanged, immediate);

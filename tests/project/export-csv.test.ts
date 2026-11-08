@@ -16,6 +16,8 @@ function run() {
   const city = grid5x5();
   const compiled = setup(city);
   const requests = trips(city, 12, 2);
+  requests[0] = { ...requests[0]!, vehicleClass: 'truck', purpose: 'through' };
+  requests[1] = { ...requests[1]!, vehicleClass: 'bus', purpose: 'service' };
   requests.push({ ...requests[0]!, id: 'unsupported', mode: 'walk' });
   requests.push({ ...requests[0]!, id: 'pending', departS: 8000 });
   const engine = createEngine();
@@ -49,6 +51,8 @@ test('trip export retains every loaded trip and engine outcomes, with nonnegativ
   loop.step(6000);
   const records = tripRecords(engine, requests);
   expect(records).toHaveLength(requests.length);
+  expect(records[0]).toMatchObject({ vehicleClass: 'truck', purpose: 'through' });
+  expect(records[1]).toMatchObject({ vehicleClass: 'bus', purpose: 'service' });
   const completed = records.filter((record) => record.arrival !== null);
   expect(completed.length).toBeGreaterThan(0);
   for (const record of completed) {
@@ -73,9 +77,11 @@ test('trip export retains every loaded trip and engine outcomes, with nonnegativ
   });
   const rows = lines(exportTripsCsv(records, provenance));
   expect(rows[0]).toBe(
-    'id,person,origin,destination,departure,arrival,travel time,delay,fail reason,respawns',
+    'id,person,origin,destination,class,purpose,departure,arrival,travel time,delay,fail reason,respawns',
   );
   expect(rows).toHaveLength(requests.length + 1);
+  expect(rows[1]!.split(',').slice(4, 6)).toEqual(['truck', 'through']);
+  expect(rows[2]!.split(',').slice(4, 6)).toEqual(['bus', 'service']);
 });
 
 test('road metrics record throughput and queue maxima and escape imported names', () => {

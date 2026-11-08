@@ -237,7 +237,7 @@ test('MOBIL resolves competing proposals from 200 vehicles without forcing unsaf
     accepted.add(id);
     const follower = vehicles.next[id]!;
     if (follower === -1) return;
-    const bumperGap = positionM - vehicles.position[follower]! - params.vehicleLengthM;
+    const bumperGap = positionM - vehicles.position[follower]! - params.vehicleClasses.car.lengthM;
     expect(bumperGap).toBeGreaterThanOrEqual(params.idm.minGapM);
     const acceleration = idmAcceleration(
       params.idm,

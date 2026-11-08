@@ -5,6 +5,7 @@ import { compile } from '../../src/network';
 import { openProject } from '../../src/project/open';
 import { saveProject, saveProjectJson } from '../../src/project/save';
 import type { Project } from '../../src/project/types';
+import { scenarioSchema } from '../../src/schema';
 
 it.each([
   ['ZIP', saveProject],
@@ -19,7 +20,7 @@ it.each([
   const [home, work] = Object.values(city.places);
   const project: Project = {
     city,
-    scenarios: [defaultScenario('grid5x5')],
+    scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))],
     population: [
       {
         id: 'person-1',
@@ -77,14 +78,17 @@ it.each([
   };
   const project: Project = {
     city,
-    scenarios: [defaultScenario('grid5x5')],
-    baseline: { city, scenario: defaultScenario('grid5x5') },
+    scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))],
+    baseline: { city, scenario: scenarioSchema.parse(defaultScenario('grid5x5')) },
   };
   expect(await openProject(await save(project))).toEqual({ ok: true, project });
 });
 
 it('T44 opens an older project without surroundings', async () => {
-  const project: Project = { city: grid5x5(), scenarios: [defaultScenario('grid5x5')] };
+  const project: Project = {
+    city: grid5x5(),
+    scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))],
+  };
   const result = await openProject(await saveProject(project));
   expect(result).toEqual({ ok: true, project });
   if (result.ok) expect(result.project.city).not.toHaveProperty('context');

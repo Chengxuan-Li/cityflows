@@ -31,6 +31,10 @@ export function VehicleInspector({
       <h2>Vehicle {id}</h2>
       {detail ? (
         <dl className="details">
+          <dt>Class</dt>
+          <dd className="capitalize">{detail.vehicleClass}</dd>
+          <dt>Purpose</dt>
+          <dd className="capitalize">{detail.purpose}</dd>
           <dt>Origin</dt>
           <dd>{city.places[detail.originPlace]!.name}</dd>
           <dt>Destination</dt>

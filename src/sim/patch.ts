@@ -2,6 +2,7 @@ import { headingAtDistance, pointAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CLane, CMovement, CompiledCity } from '../network';
 import type { Route } from '../routing';
+import type { VehicleClass } from '../schema';
 
 export function patchChanges(before: CompiledCity, after: CompiledCity) {
   const map = (items: { id: string }[], index: Map<string, number>) =>
@@ -81,7 +82,7 @@ export function remapRoute(route: Route, changes: PatchChanges): Route {
 // The index stores polyline segment ordinals, not lane indices.
 export function createProjector(city: CompiledCity) {
   const segmentLanes = city.lanes.flatMap((lane) => lane.polyline.slice(1).map(() => lane.idx));
-  return (source: CLane | CMovement, positionM: number) => {
+  return (source: CLane | CMovement, positionM: number, vehicleClass: VehicleClass = 'car') => {
     const point = pointAtDistance(source.polyline, source.cumulative, positionM);
     const heading = headingAtDistance(source.polyline, source.cumulative, positionM);
     let best: { field: number; positionM: number; distance: number } | null = null;
@@ -112,9 +113,9 @@ export function createProjector(city: CompiledCity) {
       ),
     ].sort((a, b) => a - b);
     for (const idx of lanes)
-      if (city.lanes[idx]!.allowed.includes('car')) consider(city.lanes[idx]!, idx);
+      if (city.lanes[idx]!.allowed.includes(vehicleClass)) consider(city.lanes[idx]!, idx);
     for (const movement of city.movements) {
-      if (city.lanes[movement.toLane]!.allowed.includes('car'))
+      if (city.lanes[movement.toLane]!.allowed.includes(vehicleClass))
         consider(movement, -movement.idx - 1);
     }
     return best as { field: number; positionM: number; distance: number } | null;

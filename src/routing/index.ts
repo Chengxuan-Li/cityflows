@@ -1,5 +1,5 @@
 import type { CompiledCity } from '../network';
-import type { VehicleClass } from '../schema';
+import type { VehicleClass, VehiclePurpose } from '../schema';
 import { createCostCache, routeCosts } from './costs';
 import { createGraphCache } from './graph';
 import { createLaneSearch } from './lane-search';
@@ -14,6 +14,7 @@ export interface RouteRequest {
   fromPosM: number;
   toConnector: number;
   vehicleClass: VehicleClass;
+  purpose?: VehiclePurpose;
   desiredSpeedFactor: number;
   noise: number;
   seed: number;

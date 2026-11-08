@@ -70,6 +70,7 @@ it('snaps a drawn street to both halves of an existing road in one history entry
   expect(created).toHaveLength(2);
   expect(created[0]!.streetGroupId).toBe(created[1]!.streetGroupId);
   for (const r of created) {
+    expect(r.lanes.every((lane) => lane.allowed.includes('van'))).toBe(true);
     const lane = editor.compiled.lanes[editor.compiled.index.lane.get(`${r.id}#0`)!]!;
     expect(lane.in.length).toBeGreaterThan(0);
     expect(lane.out.length).toBeGreaterThan(0);

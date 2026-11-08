@@ -86,9 +86,10 @@ beforeAll(() => {
 test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")', () => {
   // 90 percent of main's completed trips, gridlock at most 1.5 times main's, every failure a
   // gridlock, and no more stalled jam heads than main. The owner reset the baseline at TASK-099
-  // (2026-11-07), which replaced the fixed 3 497 floor and T36.4/T38.5's stage figures. Main's
-  // one stalled head is the deadlock loop through Arnulfstraße and the Donnersberger ramps that
-  // locks at n:263 (B56).
+  // (2026-11-07), which replaced the fixed 3 497 floor and T36.4/T38.5's stage figures; the lead
+  // reset it again at TASK-100 (mixed fleet). The one allowed stalled head is the deadlock loop
+  // through Arnulfstraße and the Donnersberger ramps that locks at n:263 (B56); the mixed fleet
+  // happens to avoid it, a cars-only run does not.
   expect(morning.completed).toBeGreaterThanOrEqual(Math.ceil(0.9 * baseline.completed));
   expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(1.5 * baseline.gridlocked);
   expect(morning.failed).toBe(morning.failedByReason.gridlocked);

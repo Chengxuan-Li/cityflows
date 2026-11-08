@@ -22,9 +22,11 @@ it('exposes the paused rendered position during lane changes in both directions'
     lateralM: new Float32Array([width / 4, -width / 4]),
     lane: new Int32Array([0, 1]),
     state: new Uint8Array([1, 1]),
+    vclass: new Uint8Array([0, 2]),
     fade: new Float32Array([1, 1]),
   };
   const drawn = pausedSnapshot(snapshot, result.compiled, 2);
+  expect(drawn.vclass).toEqual(snapshot.vclass);
   expect(drawn.x).toEqual(snapshot.x);
   // At 3/4 progress the smoothstep leaves 5/32 of the lane width on the source side.
   expect(drawn.y[0]).toBeCloseTo(30 + (width * 5) / 32, 5);

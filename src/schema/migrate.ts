@@ -8,8 +8,9 @@ export function migrateCity(json: unknown): City {
       : undefined;
   switch (version) {
     case 1:
-      return legacyCitySchema.parse(json);
     case 2:
+      return legacyCitySchema.parse(json);
+    case 3:
       return citySchema.parse(json);
     default:
       throw new Error(`Unsupported city schema version: ${String(version)}`);

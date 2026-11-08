@@ -15,7 +15,7 @@ export const generated: Provenance = { source: 'generated' };
 export function buildCity(name: string, seed: number) {
   const random = createRandom(seed);
   const city: City = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     version: 0,
     name,
     drivingSide: 'right',
@@ -66,7 +66,10 @@ export function buildCity(name: string, seed: number) {
       to: to.id,
       centerline: [from.pos, ...via, to.pos],
       lateralOffsetM: streetGroupId === null ? 0 : (lanes * widthM) / 2,
-      lanes: Array.from({ length: lanes }, () => ({ widthM, allowed: ['car', 'truck', 'bus'] })),
+      lanes: Array.from({ length: lanes }, () => ({
+        widthM,
+        allowed: ['car', 'van', 'truck', 'bus'],
+      })),
       roadClass,
       speedLimitMps: speedKmh / 3.6,
       name: null,

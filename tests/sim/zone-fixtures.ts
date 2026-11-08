@@ -79,6 +79,8 @@ export function movementTrips(city: City): TripRequest[] {
         originPlaceId: places[path.fromLane]!,
         destinationPlaceId: places[path.toLane]!,
         departS: 100 + i * 3,
+        vehicleClass: 'car' as const,
+        purpose: 'private' as const,
         mode: 'car' as const,
         legs: [],
       })),

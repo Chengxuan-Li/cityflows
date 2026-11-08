@@ -2,7 +2,7 @@ import { headingAtDistance } from '../geo/polyline';
 import type { CMovement, CompiledCity } from '../network';
 import type { SimParams } from '../schema';
 import { AMBER, GREEN, RED, updateSignals } from './signals';
-import { DRIVING, type Vehicles } from './vehicle';
+import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
 
 /** Constant current acceleration, then the speed cap; a stop short of the target is unreachable. */
 function travelTime(distance: number, speed: number, cap: number, acceleration: number) {
@@ -67,7 +67,8 @@ export function createIntersections(
   const headings = compiled.lanes.map((lane) =>
     headingAtDistance(lane.polyline, lane.cumulative, lane.lengthM),
   );
-  const clearance = params.vehicleLengthM + params.idm.minGapM;
+  const profiles = createVehicleProfiles(params);
+  const profile = (id: number) => profiles[vehicles.vclass[id]!]!;
 
   function signalAllows(id: number, movement: CMovement) {
     if (movement.neverGreen) return false;
@@ -75,7 +76,8 @@ export function createIntersections(
     if (onRed(movement)) return !!redGrants[id] || vehicles.stopped[id]! >= 1 - 1e-9;
     const distance = compiled.lanes[movement.fromLane]!.stopM - vehicles.position[id]!;
     return (
-      colors[movement.idx] === AMBER && vehicles.speed[id]! ** 2 > 2 * params.idm.bMps2 * distance
+      colors[movement.idx] === AMBER &&
+      vehicles.speed[id]! ** 2 > 2 * profile(id).idm.bMps2 * distance
     );
   }
 
@@ -108,17 +110,18 @@ export function createIntersections(
     queue.push(id);
   }
 
-  const movementSpeed = (movement: CMovement) =>
+  const movementSpeed = (movement: CMovement, id: number) =>
     Math.min(
       compiled.lanes[movement.fromLane]!.speedLimitMps,
       compiled.lanes[movement.toLane]!.speedLimitMps,
+      profile(id).maxSpeedMps,
     );
   const candidateTime = (id: number, movement: CMovement, distance: number) =>
     travelTime(
       compiled.lanes[movement.fromLane]!.lengthM - vehicles.position[id]! + distance,
       vehicles.speed[id]!,
-      movementSpeed(movement),
-      params.idm.aMps2,
+      movementSpeed(movement, id),
+      profile(id).idm.aMps2,
     );
 
   function refuse(
@@ -132,6 +135,7 @@ export function createIntersections(
   }
 
   function canGrant(id: number, movement: CMovement) {
+    const clearance = profile(id).lengthM + params.idm.minGapM;
     if (!signalAllows(id, movement)) return refuse(id, movement, 'signal');
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1) {
@@ -139,7 +143,7 @@ export function createIntersections(
         vehicles.stopped[id]! >= params.intersection.boxWaitS
           ? vehicles.position[exitTail]!
           : vehicles.position[exitTail]! -
-            params.vehicleLengthM +
+            profile(exitTail).lengthM +
             vehicles.speed[exitTail]! * candidateTime(id, movement, movement.lengthM);
       if (space < clearance)
         return refuse(id, movement, vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box');
@@ -150,32 +154,31 @@ export function createIntersections(
       const other = compiled.movements[idx]!;
       const [start, end] = opposingZones[movement.idx]![i]!;
       const entry = candidateTime(id, movement, movement.conflictZones[i]![0]);
-      const exit = candidateTime(
-        id,
-        movement,
-        movement.conflictZones[i]![1] + params.vehicleLengthM,
-      );
+      const exit = candidateTime(id, movement, movement.conflictZones[i]![1] + profile(id).lengthM);
       const overlaps = (car: number, remaining: number) => {
-        const acceleration = options.acceleration?.(car) ?? params.idm.aMps2;
+        const acceleration = options.acceleration?.(car) ?? profile(car).idm.aMps2;
         let speed = vehicles.speed[car]!;
         let approachTime = 0;
         if (vehicles.lane[car]! >= 0) {
-          const cap = compiled.lanes[other.fromLane]!.speedLimitMps;
+          const cap = Math.min(
+            compiled.lanes[other.fromLane]!.speedLimitMps,
+            profile(car).maxSpeedMps,
+          );
           approachTime = travelTime(remaining, speed, cap, acceleration);
           if (!Number.isFinite(approachTime)) return false;
           speed = Math.max(0, Math.min(cap, speed + acceleration * approachTime));
           remaining = 0;
         }
-        const cap = movementSpeed(other);
+        const cap = movementSpeed(other, car);
         const arrival = approachTime + travelTime(remaining + start, speed, cap, acceleration);
         if (arrival >= exit + params.intersection.zoneMarginS) return false;
         const clearance =
           approachTime +
-          travelTime(remaining + end + params.vehicleLengthM, speed, cap, acceleration);
+          travelTime(remaining + end + profile(car).lengthM, speed, cap, acceleration);
         return entry < clearance + params.intersection.zoneMarginS;
       };
       for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!) {
-        if (vehicles.position[car]! >= end + params.vehicleLengthM) continue;
+        if (vehicles.position[car]! >= end + profile(car).lengthM) continue;
         if (overlaps(car, -vehicles.position[car]!)) return refuse(id, movement, 'movement', other);
       }
       if (occupancy[idx]! > 0) {
@@ -224,7 +227,7 @@ export function createIntersections(
         exitTail !== -1 &&
         exitedFrom[exitTail] === other.idx &&
         other.lengthM + vehicles.position[exitTail]! > otherStart &&
-        other.lengthM + vehicles.position[exitTail]! < otherEnd + params.vehicleLengthM
+        other.lengthM + vehicles.position[exitTail]! < otherEnd + profile(exitTail).lengthM
       ) {
         stop = start;
         continue;
@@ -236,7 +239,7 @@ export function createIntersections(
       ) {
         const front = vehicles.position[car]!;
         if (front <= otherStart) break;
-        if (front < otherEnd + params.vehicleLengthM) {
+        if (front < otherEnd + profile(car).lengthM) {
           stop = start;
           break;
         }

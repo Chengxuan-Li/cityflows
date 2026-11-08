@@ -1,4 +1,4 @@
-import type { PlaceId } from './city';
+import type { PlaceId, VehicleClass } from './city';
 import type { SimParams } from './sim';
 
 export interface Activity {
@@ -15,6 +15,12 @@ export interface Person {
   agenda: Activity[];
 }
 export type TripMode = 'car' | 'walk' | 'bus' | 'rail';
+export const vehiclePurposes = ['private', 'delivery', 'service', 'taxi', 'through'] as const;
+export type VehiclePurpose = (typeof vehiclePurposes)[number];
+export const DEFAULT_CLASS_SHARES = {
+  local: { car: 0.92, van: 0.08, truck: 0, bus: 0 },
+  through: { car: 0.8, van: 0.08, truck: 0.12, bus: 0 },
+} satisfies Record<'local' | 'through', Record<VehicleClass, number>>;
 export interface Leg {
   mode: TripMode;
   fromPlaceId: PlaceId;
@@ -28,6 +34,8 @@ export interface TripRequest {
   departS: number;
   mode: TripMode;
   legs: Leg[];
+  vehicleClass: VehicleClass;
+  purpose: VehiclePurpose;
 }
 
 export interface DemandConfig {
@@ -38,6 +46,7 @@ export interface DemandConfig {
   workDuration: { meanS: number; sdS: number }; // default 9 h, 1 h
   gravityScaleM: number; // home-work distance decay, default 5000
   throughTripsPerHour: number[]; // 24 values, gateway to gateway (Gate 3)
+  classShares?: { local: Record<VehicleClass, number>; through: Record<VehicleClass, number> };
   chains?: { schoolShare?: number; shopShare?: number; leisureShare?: number };
 }
 

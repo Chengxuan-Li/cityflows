@@ -133,7 +133,7 @@ const blocked = [...groups]
             (car) =>
               car.lane === -idx - 1 &&
               car.positionM > start &&
-              car.positionM < end + DEFAULT_SIM_PARAMS.vehicleLengthM,
+              car.positionM < end + DEFAULT_SIM_PARAMS.vehicleClasses[car.vehicleClass].lengthM,
           )
           .map((car) => ({
             movement: other.id,

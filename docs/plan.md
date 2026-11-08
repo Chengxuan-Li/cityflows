@@ -126,11 +126,11 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-096](tasks/TASK-096.md) | 6 | OSM surroundings (buildings, land use, water, parks, railways) drawn under the roads | `src/importers/osm/context.ts`, `overpass.ts`, `City.context` (schema), `src/render/layers/context.ts`, `scene.ts`, Layers, import wizard | 090 | T44, project round trip, e2e smoke | done |
 | [TASK-097](tasks/TASK-097.md) | 6 | Shadows, deck edges, tunnel style and see-through under decks for grade separation | `src/render/layers/shadows.ts`, `scene.ts`, `style.ts`, Layers, shot cameras | 090 | unit, e2e smoke | done |
 | [TASK-098](tasks/TASK-098.md) | 6 | 3D view of the running city, viewer only (three.js) | `src/render3d/`, shared grade and pose functions, map view toggle, store | 090; phase B 096 | unit, 3D shots, e2e smoke | done |
-| [TASK-100](tasks/TASK-100.md) | 7 | Vehicle classes: car, van, truck and bus, each with its own size and driving | `src/schema` (class, version 3), `src/sim/**`, `src/demand/**`, `src/host/**`, vehicle layers 2D and 3D, vehicle inspector | 090 | T46, traffic quick | todo |
+| [TASK-100](tasks/TASK-100.md) | 7 | Vehicle classes: car, van, truck and bus, each with its own size and driving | `src/schema` (class, version 3), `src/sim/**`, `src/demand/**`, `src/host/**`, vehicle layers 2D and 3D, vehicle inspector | 090 | T46, traffic quick | done |
 | [TASK-101](tasks/TASK-101.md) | 7 | Restricted road access: closed roads, local-traffic zones, delivery and bus lanes | `Road.access` (schema), `compile.ts`, `src/routing/**`, access tags in `roads.ts`, `src/editor`, street inspector | 090 | T47, traffic quick | todo |
 | [TASK-105](tasks/TASK-105.md) | 8 | Terrain: elevation grid at import, relief in 3D, hillshade in 2D | `City.terrain` (schema), `src/importers/terrain.ts`, `render3d/terrain.ts`, `heights.ts`, 2D hillshade layer | 096, 098 | V105, 3D shots | todo |
 | [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | todo |
-| [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | todo |
+| [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -2053,6 +2053,28 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   subagent: round 2 failed traffic (3 390 / 81 / 1 stalled head), round 3 traced the stall to
   B56 and showed the gate's sensitivity. Lead review: before and after shots read (`n:138`,
   `n:638`, `n:104`, `n:967`). Lead verification on main: check 540, city 61.
+
+- 2026-11-07, TASK-108 merged as delivered (Codex, GPT-6.1-Sol). One marking geometry module
+  (`render/marking-geometry.ts`) feeds 2D and 3D; `de` theme (0.12 / 0.15 / 0.30 m, dashes
+  3/6 and 6/12 m, warm white); hatched gores with channel borders, hatched tapers in place
+  of TASK-071's chevrons, standard arrows of 5 and 7.5 m. The owner allowed renderer-only gore
+  pavement where the compiled surfaces leave a gap, and the extra files `render3d/geometry.ts`,
+  `bench/junction-audit.ts`, T25 and T27; compiled cities unchanged. Painted metres fall with
+  the German dash ratio (Munich 35 698 to 34 822 m), which T27/T32 now measure. Frame time: 2D
+  overview +11.7 %, detail +3.3 %, 3D faster. Lead review: shots read (exits, arrows, overview);
+  the `V108-munich-arrows` camera is the same view as `T93-n967` (a redundant camera, left).
+  Lead verification on main: check 554, city 65, traffic quick 3 067 / 42 (unchanged).
+- 2026-11-07, TASK-100 merged after two lead fixes (Claude Code, Opus 5.5). Classes car, van,
+  truck and bus with their own size, speed cap and IDM factors; purpose labels; schema 3 adds
+  `van` beside `car`; shares as contracted, from a separate seeded stream. The owner allowed
+  extra files (City constructors, export CSV, both scenes, `map-view.tsx`, `dev/render.ts`,
+  the editor's default lane permissions). Gate 1 holds beyond T46: with all-car shares the lead
+  reproduced main's quick Munich run exactly (3 067 / 42 / 1 stalled head). The mixed fleet
+  completes more, not fewer, trips: quick 3 233 / 32 / 0, full 3 547 / 57 / 0 (was
+  3 390 / 81 / 1); the baseline is reset to those, keeping one allowed stalled head for B56.
+  Lead fixes at merge: `bench/zone-probe.ts` read the deleted `vehicleLengthM`; V108's compile
+  hashes now include `van` (proved equal to 56ffccd's with `van` removed). Conflicts in
+  `style.ts` and architecture section 11 kept both sides.
 
 ## Owner decisions log
 

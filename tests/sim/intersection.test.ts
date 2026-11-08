@@ -128,7 +128,9 @@ test('a yielding vehicle waits for a higher-priority approach outside the entry 
         const majorPath = compiled.movements[-west.lane - 1]!;
         const minorPath = -north.lane - 1;
         const end = majorPath.conflictZones[majorPath.conflicts.indexOf(minorPath)]![1];
-        expect(west.positionM).toBeGreaterThanOrEqual(end + DEFAULT_SIM_PARAMS.vehicleLengthM);
+        expect(west.positionM).toBeGreaterThanOrEqual(
+          end + DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM,
+        );
       }
       minorCrossed = true;
       break;

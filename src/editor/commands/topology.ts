@@ -88,7 +88,7 @@ export function drawRoadCommand(
         : 0,
       lanes: Array.from({ length: options.lanes }, () => ({
         widthM,
-        allowed: ['car', 'truck', 'bus'],
+        allowed: ['car', 'van', 'truck', 'bus'],
       })),
       roadClass: options.roadClass,
       speedLimitMps: options.speedKph / 3.6,

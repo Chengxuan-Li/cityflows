@@ -1,5 +1,5 @@
 import type { Vec2 } from '../geo/vec2';
-import type { RoadClass } from '../schema';
+import type { RoadClass, VehicleClass } from '../schema';
 
 export type MarkingRole = 'edge' | 'lane' | 'centre' | 'channel' | 'hatch' | 'arrow' | 'stop';
 export interface MarkingLineStyle {
@@ -197,8 +197,15 @@ export const style = {
   dividerWidthM: markingTheme.classes.residential.lane.widthM,
   pointRadiusM: 6,
   connectorRadiusM: 0.7,
-  vehicleLengthM: 4.5,
-  vehicleWidthM: 1.9,
+  vehicleClasses: {
+    car: { lengthM: 4.5, widthM: 1.8, heightM: 1.5, color: 0x789397 },
+    van: { lengthM: 5.5, widthM: 2, heightM: 2.2, color: 0xc49b70 },
+    truck: { lengthM: 12, widthM: 2.5, heightM: 3.5, color: 0xad8385 },
+    bus: { lengthM: 12, widthM: 2.55, heightM: 3.2, color: 0x8c91b2 },
+  } satisfies Record<
+    VehicleClass,
+    { lengthM: number; widthM: number; heightM: number; color: number }
+  >,
   vehicleDotRadiusPx: 1.65,
   vehiclePickRadiusPx: 8,
   detailZoom: 1.45,

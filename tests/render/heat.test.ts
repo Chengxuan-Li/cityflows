@@ -20,6 +20,7 @@ test('queue markers count stopped cars near lane ends, excluding moving cars and
     heading: new Float32Array(5),
     lateralM: new Float32Array(5),
     state: new Uint8Array(5).fill(1),
+    vclass: new Uint8Array([0, 1, 2, 3, 0]),
     fade: new Float32Array(5).fill(1),
   };
   layer.setQueues(snapshot);

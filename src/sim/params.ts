@@ -2,7 +2,12 @@ import type { SimParams } from '../schema';
 
 export const DEFAULT_SIM_PARAMS: SimParams = {
   dtS: 0.1,
-  vehicleLengthM: 4.5,
+  vehicleClasses: {
+    car: { lengthM: 4.5, widthM: 1.8, maxSpeedMps: Infinity, accelFactor: 1, decelFactor: 1 },
+    van: { lengthM: 5.5, widthM: 2, maxSpeedMps: 120 / 3.6, accelFactor: 0.85, decelFactor: 0.95 },
+    truck: { lengthM: 12, widthM: 2.5, maxSpeedMps: 80 / 3.6, accelFactor: 0.5, decelFactor: 0.8 },
+    bus: { lengthM: 12, widthM: 2.55, maxSpeedMps: 80 / 3.6, accelFactor: 0.6, decelFactor: 0.8 },
+  },
   idm: { aMps2: 1.5, bMps2: 2, headwayS: 1.2, minGapM: 2, desiredSpeedSd: 0.08 },
   mobil: { politeness: 0.3, thresholdMps2: 0.2, safeDecelMps2: 3 },
   laneChangeDistanceM: 30,
