@@ -10,7 +10,10 @@ const fixtureUrl = new URL('../../fixtures/projects/grid5x5.cityflows.json', imp
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 const apply = (page: Page) => button(page, 'Apply signal program');
 const metrics = (page: Page) => page.evaluate(() => window.cityflows!.metrics());
-const step = (page: Page, n: number) => page.evaluate((n) => window.cityflows!.step(n), n);
+const step = async (page: Page, n: number) => {
+  await expect(button(page, 'Step')).toBeEnabled();
+  await page.evaluate((n) => window.cityflows!.step(n), n);
+};
 const preview = (page: Page) =>
   page
     .getByLabel('City map')

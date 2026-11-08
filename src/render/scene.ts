@@ -4,6 +4,7 @@ import type { CompiledCity } from '../network';
 import type { Place } from '../schema';
 import { cityGrades } from './grades';
 import { Camera } from './camera';
+import { FrameDemand, renderContinuously } from './frame-demand';
 import { drawVegetation } from './layers/vegetation';
 import { placeTrees } from './vegetation';
 import { drawContext } from './layers/context';
@@ -15,7 +16,7 @@ import { drawRoute, drawSelection } from './layers/overlay';
 import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
 import { drawPlaces } from './layers/places';
-import { drawMovementArrow, drawRoad, drawCrossings } from './layers/roads';
+import { drawMovementArrow, drawRoad, drawCrossings, updateZoomFade } from './layers/roads';
 import { drawTransitions } from './layers/transitions';
 import { drawSignal } from './layers/signals';
 import { drawSigns } from './layers/signs';
@@ -88,9 +89,17 @@ export function createGrade(layer: number) {
 
 export function createScene(canvas: HTMLCanvasElement): Scene & {
   setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
-  animateVehicles(elapsedS: number): void;
+  animateVehicles(elapsedS: number, playing?: boolean): void;
 } {
   const app = new Application();
+  const demand = new FrameDemand();
+  const invalidate = demand.invalidate;
+  let active = true;
+  let animation = 0;
+  let vehicleAgeS = 0;
+  let previewLoaded: CompiledCity | null | undefined;
+  let previewTimeS = NaN;
+  let previewNode: string | null = null;
   const world = new Container();
   world.eventMode = 'none';
   const map = new Container();
@@ -146,6 +155,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     const resolution = 2 ** Math.ceil(Math.log2(camera.zoom * window.devicePixelRatio));
     if (surroundings) surroundings.ties.visible = !overview;
     for (const grade of visibleGrades) {
+      for (const graphics of [grade.markings, grade.guides, grade.arrows, grade.crossings])
+        updateZoomFade(graphics, camera.zoom);
+      for (const child of grade.signals.children)
+        if (child instanceof Graphics) updateZoomFade(child, camera.zoom);
       grade.markings.visible = !overview;
       grade.guides.visible = !overview;
       grade.arrows.visible = !overview;
@@ -156,6 +169,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (next) grade.terrain.cacheAsTexture({ resolution: next, antialias: true });
       grade.cacheResolution = next;
     }
+    for (const ghost of ghosts) ghost.sync();
   }
 
   function applyVisibility() {
@@ -221,6 +235,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   const ready = app
     .init({
       canvas,
+      autoStart: false,
       width: Math.max(1, canvas.clientWidth),
       height: Math.max(1, canvas.clientHeight),
       resolution: window.devicePixelRatio,
@@ -235,9 +250,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       }
       resizeObserver = new ResizeObserver(() => {
         app.renderer.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight));
+        invalidate();
       });
       resizeObserver.observe(canvas);
       if (import.meta.env.MODE === 'test') {
+        canvas.dataset.frames = '0';
+        canvas.dataset.active = String(active);
         const render = app.renderer.render.bind(app.renderer) as (
           options: unknown,
           legacyOptions?: unknown,
@@ -249,12 +267,24 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           performance.clearMeasures('cityflows:render');
         };
       }
-      app.ticker.add(({ deltaMS }) => {
-        if (tilesEnabled && tiles) {
+      let lastFrame = performance.now();
+      const frame = (now: number) => {
+        animation = requestAnimationFrame(frame);
+        // Preserve the ticker's fade delta cap on slow frames.
+        const deltaMS = Math.min(1000 / app.ticker.minFPS, Math.max(0, now - lastFrame));
+        lastFrame = now;
+        if (!active) return;
+        if (tilesEnabled && tiles && (demand.pending || tiles.needsUpdate)) {
           const { width, height } = app.screen;
-          tiles.update(camera, width, height, deltaMS);
+          if (tiles.update(camera, width, height, deltaMS)) invalidate();
         }
-      });
+        if (demand.consume(renderContinuously())) {
+          app.render();
+          if (import.meta.env.MODE === 'test')
+            canvas.dataset.frames = String(Number(canvas.dataset.frames) + 1);
+        }
+      };
+      animation = requestAnimationFrame(frame);
     });
 
   function updateVehicleRing(): void {
@@ -264,6 +294,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
 
   const camera = new Camera(() => {
+    invalidate();
     const { x, y } = camera.worldToScreen({ x: 0, y: 0 });
     world.position.set(x, y);
     world.scale.set(camera.zoom);
@@ -279,13 +310,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   return {
     ready,
     camera,
-    setActive(active) {
-      if (active) app.start();
-      else app.stop();
+    setActive(next) {
+      active = next;
+      if (import.meta.env.MODE === 'test') canvas.dataset.active = String(active);
+      if (active) invalidate();
     },
     setCity(compiled, source) {
       // Versions identify edits within a city. Different source cities can share a version.
       if (city?.version === compiled.version && sourceGeometry === source) return;
+      invalidate();
+      previewLoaded = undefined;
       const rebuildStart = import.meta.env.MODE === 'test' ? performance.now() : 0;
       city = compiled;
       vehicles.setGeometry(compiled);
@@ -428,7 +462,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       redrawTerrain();
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
-        drawSigns(city, node, grade.signals, () => camera.zoom);
+        drawSigns(city, node, grade.signals);
         if (node.signal) updateSignals.push(drawSignal(city, node, grade.signals));
       }
       updatePlaces = drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
@@ -505,12 +539,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       }
     },
     setTiles(enabled) {
+      invalidate();
       tilesEnabled = enabled;
       if (!enabled) tiles?.clearView();
     },
     setSnapshot(snapshot) {
+      invalidate();
       if (!city) return;
       vehicles.update(snapshot);
+      vehicleAgeS = 0;
       for (const update of updateSignals) update(snapshot.timeS);
       for (const ghost of ghosts) ghost.sync();
       if (selection?.kind === 'vehicle') {
@@ -521,12 +558,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     setVehicleGeometry(compiled, laneChangeDurationS) {
       vehicles.setGeometry(compiled, laneChangeDurationS);
     },
-    animateVehicles(elapsedS) {
+    animateVehicles(elapsedS, playing = false) {
+      if (elapsedS === vehicleAgeS && !playing) return;
+      vehicleAgeS = elapsedS;
+      if (vehicles.snapshot?.count) invalidate();
       vehicles.animate(elapsedS);
       for (const ghost of ghosts) ghost.sync();
       updateVehicleRing();
     },
     setSelection(next) {
+      invalidate();
       selection = next;
       if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
       const snapshot = vehicles.snapshot;
@@ -537,10 +578,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateVehicleRing();
     },
     setMultiSelection(roads) {
+      invalidate();
       if (city) drawMultiSelection(multiSelectionOverlay, city, roads);
     },
     setSignalPreview(loaded, timeS) {
       const nodeId = selection?.kind === 'node' ? city!.nodes[selection.node]!.id : null;
+      if (loaded === previewLoaded && timeS === previewTimeS && nodeId === previewNode) return;
+      previewLoaded = loaded;
+      previewTimeS = timeS;
+      previewNode = nodeId;
+      invalidate();
       const preview = drawSignalPreview(signalPreview, loaded, nodeId, timeS);
       canvas.setAttribute(
         'aria-description',
@@ -549,16 +596,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (import.meta.env.MODE === 'test') canvas.dataset.signalPreview = JSON.stringify(preview);
     },
     setRouteOverlay(route) {
+      invalidate();
       if (city) drawRoute(routeOverlay, city, route);
     },
     setEditOverlay(overlay) {
+      invalidate();
       editPreview = overlay;
       drawEditOverlay(editOverlay, overlay, camera.zoom);
     },
     setHeat(ratios) {
+      invalidate();
       if (city) heat.setHeat(ratios);
     },
     setDifference(roads) {
+      invalidate();
       difference.clear();
       differenceCount = 0;
       const max = Math.max(1, ...(roads ?? []).map(({ vehicles }) => Math.abs(vehicles)));
@@ -573,9 +624,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       applyVisibility();
     },
     setQueues(snapshot) {
+      invalidate();
       if (city) heat.setQueues(snapshot);
     },
     setLayerVisibility(layers) {
+      invalidate();
       const recolor = layers.roadClasses !== layerVisibility.roadClasses;
       const reshade = layers.shadows !== layerVisibility.shadows;
       layerVisibility = layers;
@@ -585,6 +638,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       applyVisibility();
     },
     setDisconnected(lanes) {
+      invalidate();
       disconnectedOverlay.clear();
       if (!city) return;
       for (const index of lanes) {
@@ -611,6 +665,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      cancelAnimationFrame(animation);
       for (const ghost of ghosts) ghost.destroy();
       vehicles.destroy();
       hillshade?.destroy({ texture: true, textureSource: true });

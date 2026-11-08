@@ -1,14 +1,10 @@
 import { Container, Graphics } from 'pixi.js';
 import { headingAtDistance } from '../../geo/polyline';
 import type { CNode, CompiledCity } from '../../network';
+import { fadeAtZoom } from './roads';
 
 /** One curb-side sign per controlled approach; compiled priority includes explicit minors. */
-export function drawSigns(
-  city: CompiledCity,
-  node: CNode,
-  container: Container,
-  zoom: () => number,
-) {
+export function drawSigns(city: CompiledCity, node: CNode, container: Container) {
   if (node.control !== 'stop' && node.control !== 'yield') return;
   const roads = new Set(
     node.movements
@@ -41,7 +37,5 @@ export function drawSigns(
         .lineTo(x + 0.9, y)
         .stroke({ width: 0.35, color: 0xfffcf1 });
   }
-  signs.onRender = () => {
-    signs.alpha = Math.max(0, Math.min(1, (zoom() - 0.45) / 0.65));
-  };
+  fadeAtZoom(signs, 0.45, 1.1);
 }

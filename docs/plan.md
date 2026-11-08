@@ -132,7 +132,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-106](tasks/TASK-106.md) | 8 | Vegetation and surfaces: OSM and generated trees, filled woods, ground textures | context points (schema), `context.ts` import, `render/vegetation.ts`, vegetation layers 2D and 3D | 096, 098 | V106, shots | done |
 | [TASK-108](tasks/TASK-108.md) | 8 | Lane marking realism: hatched gores, channelizing lines, a marking theme, standard arrows | `render/marking-geometry.ts`, `roads.ts`, `junction-markings.ts`, `transitions.ts`, `render3d/markings.ts`, `style.ts` | 079, 088, 091, 098 | V108, shots | done |
 | [TASK-109](tasks/TASK-109.md) | 8 | Building details: terrain footprints closed, roof shapes, colours, window bands | building fields of `ContextFeature` (schema), building tags in `context.ts`, `render3d/context.ts`, `terrain.ts` (footprint closure), new `render3d/roofs.ts`, Building details layer | 096, 098, 105 | V109, 3D shots | todo |
-| [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | todo |
+| [TASK-115](tasks/TASK-115.md) | perf | Render on demand: 2D and 3D draw only when something changes; CI e2e timeout back to 60 s | `src/render/scene.ts` and layer setters, `src/render3d/scene.ts`, the frame loop in `map-view.tsx`, frame-timing specs, `playwright.config.ts` | - | V115, T16, T44, V106 | done |
 | [TASK-102](tasks/TASK-102.md) | 7 | Parking model and garages: facilities, choice on arrival, cruising, departures from where parked | `City.parking` refinements, new `importers/osm/parking.ts`, facility compile, new `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, demand, snapshot, facility inspector and occupancy layer | 100, 101, Phase 2 formats | T48, traffic quick | todo |
 | [TASK-104](tasks/TASK-104.md) | 7 | Surface lots: aisles as service roads, generated stalls, stall paint; no simulation | lot fields of `City.parking`, `filter.ts`, new `importers/osm/lots.ts`, aisle roads, new `src/network/stalls.ts`, stall layers 2D and 3D | 096, 101, Phase 2 formats | T49, traffic quick, shots | todo |
 | [TASK-107](tasks/TASK-107.md) | 8 | Street furniture: lamps, 3D curbs, access signs, `BUS` lane text (sidewalks moved to 110) | `street_lamp` context points (schema), `context.ts` import, new `render/street.ts`, street layers 2D and 3D, `BUS` text in `marking-geometry.ts` | 101, 106, 108 | V107, shots | todo |
@@ -2188,6 +2188,20 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   The lead added the lane-option rule to the routing section of `docs/architecture.md`.
   Follow-up worth weighing: the singleton-target rule may cause the same queue blocking on
   unrestricted routes; widening the fix changes T46's pinned behaviour, so it needs its own task.
+
+- 2026-11-08, TASK-115 merged after lead fixes (Codex, GPT-6.1 Terra). One coalescing
+  `FrameDemand` per view (`src/render/frame-demand.ts`): Pixi starts with `autoStart: false`,
+  setters and the camera invalidate, the 3D scene invalidates on control changes, vehicles only
+  while playing or interpolating, tiles only while loading or fading. Test mode exposes
+  `data-frames` and `window.cityflowsRenderContinuously`, which T16, T44, V106 and the shots
+  use while measuring; thresholds unchanged. CI's e2e timeout is 60 s again. Agent figures:
+  idle Munich draws 67 frames in 2 s before and 0 after (2D), 16 and 0 (3D); six shots
+  pixel-identical; full local e2e 38 min to 16 min. Lead: merged main (TASK-101's first-3D
+  terrain line removed, 115's `setCity` terrain argument kept); `gate2-batch`'s mixed-fields
+  case Shift-clicked before the map had drawn the recompiled city (the pointer ignores clicks
+  until then; faster clicks exposed it), now waits for the edit and two frames. Lead
+  verification: check 671, city 69, full e2e 76 of 77 then the fixed spec 3 of 3; in the app the
+  idle 2D map made 0 WebGL draw calls in 2 s, a zoom drew, then 0 again.
 
 ## Owner decisions log
 
