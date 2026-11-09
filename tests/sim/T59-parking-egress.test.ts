@@ -245,6 +245,27 @@ test('T59 a later car trip needs an exit, including beyond the run; a terminal v
   expect(terminal.state.full(strip(terminal.net, w.id).connectorsIn[0]!, 0)).toBe(false);
 });
 
+test.each([false, true])(
+  'T59 gateway visitors retain parking choices while local gateway-bound cars need an exit (%s)',
+  (visitor) => {
+    const w = world();
+    w.city.parking![w.id]!.occupancyAtStart = 0;
+    const gateway = Object.values(w.city.places).find((p) => p.kind === 'gateway')!;
+    const inbound = w.trip('in', 'owner', visitor ? gateway.id : w.home.id);
+    const onward = w.trip('out', 'owner', w.shop.id, gateway.id, 5000);
+    const { state, net } = parking(w, [inbound, onward]);
+    const connector = strip(net, w.id).connectorsIn[0]!;
+    expect(state.full(connector, 0)).toBe(!visitor);
+    expect(state.choose(0, 100, () => true)).toBe(true);
+    expect(state.detail(0, 100).parkingFacility === w.id).toBe(visitor);
+    if (visitor) {
+      state.arrive(0, connector, 110);
+      expect(state.location(0).space).toBe(strip(net, w.id).spaces![0]);
+      expect(state.location(1, true)).toEqual(state.location(0));
+    }
+  },
+);
+
 test.each(['no', 'private'] as const)(
   'T59 an exit through %s access is not a public way out',
   (access) => {

@@ -147,7 +147,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | rejected (lead's premise error; see review), replaced by TASK-122 |
 | [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | round 2: 10 full-e2e specs, on `task/lead-112` (see review) |
 | [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | accepted; merges together with TASK-112 (see review) |
-| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | implemented for review; acceptance conflicts remain (see review entry) |
+| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | implemented for review; owner exceptions applied, traffic/performance gates open (see review entries) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -2574,7 +2574,7 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   trace commit message. No departure check, stock change, gate tightening or network edit was
   made; all implementation gates remain open.
 
-- TASK-122 implementation (2026-11-09): owner authorized the parking-space fix and left the
+- TASK-122 implementation (strict candidate fa0dda3, 2026-11-09): owner authorized the parking-space fix and left the
   original 245 gateway routing failures for another task. Derived departure reachability
   respects vehicle permissions, access zones, lane-change distance and lot circulation;
   starting stock, origin slots and parking before a later car trip use it. Live edits rebuild
@@ -2595,6 +2595,24 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   additional named e2e checks (5) pass, as do typecheck, lint, formatting and build. Full task
   acceptance is not claimed; the last implementation commit carries the complete report,
   before/after measurements, remaining gates and per-trip trace.
+
+- TASK-122 owner follow-up (2026-11-09): preserve existing parking choices for gateway-origin
+  visitors, leaving gateway routing to another task, and preserve the street-share budget,
+  accepting empty blocked strips. The arrival mask now exempts inbound gateway visits while
+  preserving the car's next-trip ownership link; local arrivals with later gateway-bound trips
+  still require a usable exit. T59 adds both cases (15 passing tests). Sindelfingen again has
+  156 completed / zero gridlocked / 245 parking failures / 44 no_route, with exactly the same
+  245 trip IDs, origins, destinations and starting facilities/spaces as before the fix. The
+  prior strict candidate's extra 32 refusals are removed. Empty pk:9127 is now accepted by the
+  owner. Updated Munich 0.15: 3 566 completed / 9 gridlocked / zero parking failures at 09:30,
+  with zero stalled heads, and 3 729 / 25 / 0 at 10:00. The integrated quick gridlock limit
+  remains open: 9 exceeds the reference's 8 plus 10%; other quick traffic limits pass.
+  Full demand with the exception: 1 874 / 185 / 0, passing the 1% parking assertion in
+  498.55 s. Fresh check passes (974 unit tests); T59 passes all 15 cases including onward
+  car ownership. The repeated visual check confirms pk:9127 empty at both times. Current
+  sequential load/step timings grow 88.1% / 32.0%; alternating cold-load medians grow 6.3%
+  (68.14 to 72.46 ms). These mixed samples leave performance acceptance open; no baseline
+  was relaxed. The follow-up commit body contains the consolidated trace and measurements.
 
 ## Owner decisions log
 

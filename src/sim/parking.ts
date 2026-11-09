@@ -265,7 +265,9 @@ export function createParking(
       const before = last.get(trip.personId);
       if (before !== undefined && trips[before]!.destinationPlaceId === trip.originPlaceId) {
         previous[id] = before;
-        nextTrip[before] = id;
+        // Owner (TASK-122): preserve inbound gateway visitors until gateway routing is fixed.
+        const origin = compiled.index.place.get(trips[before]!.originPlaceId)!;
+        if (compiled.places[origin]!.kind !== 'gateway') nextTrip[before] = id;
       }
       last.set(trip.personId, id);
     }

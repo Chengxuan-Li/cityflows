@@ -1723,10 +1723,15 @@ virtual garages need a usable exit too. Assigned cars stay in their garages or u
 eligible space in the existing choice order. Explicit background occupancy is retained.
 Arrival choice requires usable departure space when the person's linked next car trip starts at
 that activity place, including trips beyond the run window. Terminal visits retain their
-existing choices. The next trip's class and purpose determine the departure requirement;
-ranking, walking distance, search radius and stall-choice draws are unchanged. Reachability
+existing choices. Owner exception (TASK-122): arrivals from gateways retain their existing
+parking choices while gateway routing is deferred. Local arrivals still require departure
+reachability when their next trip is gateway-bound. The next trip's class and purpose determine
+the departure requirement; ranking, walking distance, search radius and stall-choice draws
+are unchanged. Reachability
 is not saved and is rebuilt after live edits; existing parked cars keep their spaces and
 their existing departure behavior.
+The owner accepts empty default blocked strips to preserve the residential street-share
+budget; explicit background occupancy remains unchanged.
 
 Lead follow-up (2026-11-08). Starting stock holds the cars of the persons demand
 generation makes: `ceil(round(residents × personsPerResident) × carShare)` per home, not the
