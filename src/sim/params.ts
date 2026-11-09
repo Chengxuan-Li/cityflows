@@ -1,6 +1,8 @@
 import type { SimParams } from '../schema';
 
 export const DEFAULT_SIM_PARAMS: SimParams = {
+  lotSpeedMps: 2.5,
+  stallChoiceSlackM: 25,
   streetParkingShare: 0.3,
   parkManoeuvreS: { parallel: 8, angled: 4, perpendicular: 4 },
   leaveManoeuvreS: 4,

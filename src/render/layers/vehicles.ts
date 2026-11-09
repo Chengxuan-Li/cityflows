@@ -127,7 +127,7 @@ export class Vehicles {
 
     for (const layer of this.layers) layer.count = 0;
     for (let i = 0; i < count; i++) {
-      const laneIndex = lane[i]!;
+      const laneIndex = (snapshot.poseLane?.[i] ?? -1) >= 0 ? snapshot.poseLane![i]! : lane[i]!;
       const layer = (
         laneIndex >= 0 ? this.laneLayers[laneIndex] : this.movementLayers[-laneIndex - 1]
       )!;

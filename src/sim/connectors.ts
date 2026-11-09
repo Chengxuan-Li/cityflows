@@ -210,6 +210,7 @@ export function createConnectors(
         // A parked car must leave beyond its own arrival queue. Otherwise spawning at an
         // upstream "both" portal fills the only lane needed to free the next parking slot.
         const usable = (exit: CConnector) => {
+          if (parking.startsInLot(candidateId)) return parking.canStartLot(candidateId, exit.idx);
           if (!canUse(exit, timeS) || !hasGap(exit, candidateId)) return false;
           if (place.capacity === null) return true;
           for (let car = vehicles.first(exit.lane); car !== -1; car = vehicles.next[car]!) {
@@ -247,8 +248,9 @@ export function createConnectors(
         }
         i++;
         vehicles.waiting[id] = vehicles.waiting[id]! + Math.max(0, timeS - queuedSince(id));
-        parking.depart(id, timeS);
-        recordAdmission(exit, timeS);
+        const inLot = parking.startsInLot(id);
+        parking.depart(id, timeS, exit.idx);
+        if (!inLot) recordAdmission(exit, timeS);
         releasedFrom[id] = idx;
         freedSlot[id] = 0;
         if (inside[place.idx]! && (!tracked[place.idx] || previous !== -1)) {
@@ -371,5 +373,17 @@ export function createConnectors(
     compiled = next;
   }
 
-  return { spawn, canArrive, arrive, queuedSince, requeue, patch };
+  return {
+    spawn,
+    canArrive,
+    arrive,
+    queuedSince,
+    requeue,
+    patch,
+    releaseLot(connector: CConnector, timeS: number) {
+      if (!canUse(connector, timeS)) return false;
+      recordAdmission(connector, timeS);
+      return true;
+    },
+  };
 }

@@ -13,7 +13,7 @@ import type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
 export type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
 
 export type VehicleState =
-  'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed';
+  'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed' | 'in_lot';
 export type FailReason =
   | 'no_route'
   | 'unsupported_mode'
@@ -58,6 +58,8 @@ export interface ParkedCarsSnapshot {
 }
 
 export interface VehicleSnapshot {
+  /** >=0: authoritative parking pose; value is its reference lane for height/layer. */
+  poseLane?: Int32Array;
   parkedCars?: ParkedCarsSnapshot;
   parkingOccupancy?: Uint32Array;
   timeS: number;
@@ -84,6 +86,13 @@ export interface Metrics {
     arrivals: number;
     meanSearchTimeS: number;
     failed: number;
+    motion?: {
+      meanEntryToParkS: number;
+      meanLotDriveS: number;
+      meanLotLeaveS: number;
+      stripManoeuvresPerHour: number;
+      meanStallChoiceRank: number;
+    };
   };
   completedByClass: Record<VehicleClass, number>;
   timeS: number;
@@ -122,6 +131,9 @@ export interface TripOutcome {
 }
 
 export interface VehicleDetail {
+  parkingPhase?: 'drive_in' | 'park' | 'leave' | 'drive_out' | 'exit' | null;
+  parkingSpace?: number | null;
+  stallChoice?: { rank: number; scoreM: number; bestScoreM: number } | null;
   parkingFacility: string | null;
   walkingDistanceM: number;
   parkingSearchTimeS: number;

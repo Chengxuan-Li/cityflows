@@ -774,7 +774,7 @@ export class Scene3D {
         this.vehicles.mesh.getMatrixAt(i, this.vehicleMatrix);
         const e = this.vehicleMatrix.elements,
           p = { x: e[12]!, y: e[14]! },
-          lane = snapshot.lane[i]!;
+          lane = (snapshot.poseLane?.[i] ?? -1) >= 0 ? snapshot.poseLane![i]! : snapshot.lane[i]!;
         e[13]! += terrainVehicleOffset(this.city, heights, lane, p);
         this.vehicles.mesh.setMatrixAt(i, this.vehicleMatrix);
       }

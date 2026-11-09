@@ -205,11 +205,13 @@ for (const cameraTarget of [
   },
   {
     city: 'sindelfingen-a81',
-    lots: ['pk:1475'],
+    // TASK-118: pk:1475's inferred entry lies in its building exclusion. Exercise the
+    // private admission with a street-reachable lot; T54 records the blocked one.
+    lots: ['pk:1474'],
     access: 'private',
-    osmId: 292031578,
-    centre: { x: -381.92, y: -498.81 },
-    zoom: 5,
+    osmId: 220072450,
+    centre: { x: -344, y: -626 },
+    zoom: 7,
     camera: 'V103-sindelfingen-lot',
   },
 ]) {
@@ -233,7 +235,7 @@ for (const cameraTarget of [
       expect(lot.kind).toBe('lot');
       expect(lot.access).toBe(cameraTarget.access);
       if (cameraTarget.city.startsWith('sindelfingen'))
-        expect(lot.provenance.inferred).toContain('driveway');
+        expect(lot.entries!.length).toBeGreaterThan(0);
       expect(lot.placeId).not.toBeNull();
       const placeId = lot.placeId!;
       const event: PlaceEvent = {
@@ -290,6 +292,10 @@ for (const cameraTarget of [
       .toBeCloseTo(8 * 3600, 2);
     const stock = await page.evaluate(() => window.cityflows!.parkedCars!());
     const occupied = occupiedSpaces(stock, net.parkingSpaces!.length);
+    await writeFile(
+      info.outputPath('lot-arrival-metrics.json'),
+      JSON.stringify(await metrics(page), null, 2),
+    );
     const arrivals = [];
     for (const { lotId, placeId, event } of events) {
       const spaces = occupied.filter(

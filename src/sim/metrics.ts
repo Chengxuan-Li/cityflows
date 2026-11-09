@@ -62,7 +62,7 @@ export function createAccounting(
     }
     return {
       timeS,
-      parking: parking.metrics(failedByReason.no_parking),
+      parking: parking.metrics(failedByReason.no_parking, timeS),
       completedByClass: { ...completedByClass },
       trips: { ...trips },
       failedByReason: { ...failedByReason },

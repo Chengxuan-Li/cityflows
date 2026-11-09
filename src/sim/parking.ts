@@ -1,10 +1,42 @@
-import { pointAtDistance } from '../geo/polyline';
+import {
+  distance as pointDistance,
+  headingAtDistance,
+  nearestOnPolyline,
+  pointAtDistance,
+} from '../geo/polyline';
 import { createRandom } from '../geo/random';
 import type { CompiledCity } from '../network';
+import { lotPath } from '../network/lot-paths';
 import type { Scenario, SimParams, TripRequest } from '../schema';
 import type { Metrics, ParkedCarsSnapshot } from './types';
 import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import { parkingHash } from './hash';
+import {
+  bodyClearLane,
+  manoeuvrePath,
+  manoeuvreLaneReach,
+  motionPath,
+  parkedPose,
+  pathPose,
+  type MotionPath,
+  type ParkingPose,
+} from './manoeuvre';
+
+interface ParkingMotion {
+  phase: 'drive_in' | 'park' | 'leave' | 'drive_out' | 'exit';
+  lot: boolean;
+  slot: number;
+  connector: number;
+  lane: number;
+  path: MotionPath;
+  progressM: number;
+  startedS: number;
+  entryS: number;
+  driveS: number;
+  laneHeld: boolean;
+  pose: ParkingPose;
+  speed: number;
+}
 
 /** How far an ownerless lot's car park reaches: the buildings beside it. */
 const LOT_SERVES_M = 200;
@@ -89,6 +121,27 @@ export function createParking(
   let reserved = new Int32Array(spaces.length).fill(-1);
   let revision = 0;
   const rng = createRandom(scenario.seed).derive('street-parking');
+  let lotGraphs = compiled.parking.map(
+    (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
+  );
+  const lotGraph = (facility: number) => lotGraphs[facility];
+  const eligibleSpaces = () =>
+    compiled.parking.map((f) =>
+      (f.spaces ?? []).filter(
+        (i) => f.kind !== 'lot' || !lotGraph(f.idx)?.unreachable.includes(spaces[i]!.lotStall!),
+      ),
+    );
+  let usable = eligibleSpaces();
+  const usableSpaces = (f: CompiledCity['parking'][number]) => usable[f.idx]!;
+  const shuffled = (slots: number[], key: string) => {
+    const copy = slots.slice(),
+      random = rng.derive(key);
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(random.next() * (i + 1));
+      [copy[i], copy[j]] = [copy[j]!, copy[i]!];
+    }
+    return copy;
+  };
   const prefersStreet = (id: number) =>
     rng.derive(trips[id]!.personId ?? trips[id]!.id).next() < params.streetParkingShare;
   const small = (id: number) => vehicles.vclass[id]! < 2;
@@ -116,7 +169,8 @@ export function createParking(
       .map(({ f }) => f);
   };
   for (const f of compiled.parking) {
-    for (const slot of (f.spaces ?? []).slice(0, occupied[f.idx])) stock[slot] = -2;
+    for (const slot of shuffled(usableSpaces(f), `stock:${f.id}`).slice(0, occupied[f.idx]))
+      stock[slot] = -2;
   }
   // Move the residential share out of garages once, in compiled place/facility/slot order.
   for (const p of compiled.places) {
@@ -129,7 +183,7 @@ export function createParking(
     );
     for (const f of nearHome(p.idx)) {
       if (f.occupancyAtStart !== null) continue;
-      for (const slot of f.spaces ?? []) {
+      for (const slot of shuffled(usableSpaces(f), `home:${p.id}:${f.id}`)) {
         if (!count || stock[slot] !== -1) continue;
         const garage = garages.find((g) => occupied[g.idx]! > 0);
         if (!garage) break;
@@ -157,8 +211,6 @@ export function createParking(
   let originSpaces = new Int32Array(trips.length).fill(-1);
   let parkedSpaces = new Int32Array(trips.length).fill(-1);
   const manoeuvreSpaces = new Int32Array(trips.length).fill(-1);
-  const parkUntil = new Float64Array(trips.length).fill(NaN);
-  const leaveUntil = new Float64Array(trips.length).fill(-Infinity);
   const left = new Uint8Array(trips.length);
   const noOriginCar = new Uint8Array(trips.length);
   const searching = new Uint8Array(trips.length);
@@ -212,7 +264,8 @@ export function createParking(
       origins[id] = facility?.idx ?? -1;
       if (facility) {
         available[facility.idx]!--;
-        const slot = facility.spaces?.find((s) => availableSpaces[s] !== -1);
+        const eligible = usableSpaces(facility).filter((s) => availableSpaces[s] !== -1);
+        const slot = eligible.length ? rng.derive(`origin:${trip.id}`).pick(eligible) : undefined;
         if (slot !== undefined) {
           originSpaces[id] = slot;
           availableSpaces[slot] = -1;
@@ -288,8 +341,10 @@ export function createParking(
           occupied[f.idx]! + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) >= f.capacity
         )
           continue;
-        for (const connector of f.connectorsIn) {
-          if (f.kind !== 'garage' && needRoom && !freeSpace(connector, id)) continue;
+        for (const connector of f.kind === 'roadside'
+          ? shuffled(f.connectorsIn, `arrival:${trips[id]!.id}`)
+          : f.connectorsIn) {
+          if (f.kind !== 'garage' && needRoom && !hasFreeSpace(connector, id)) continue;
           if (!accept(connector)) continue;
           chosen[id] = f.idx;
           head(id, f.kind === 'lot' ? f.idx : -1);
@@ -318,27 +373,410 @@ export function createParking(
       compiled.lanes[c.lane]!.cumulative,
       c.positionM,
     );
-    let best: (typeof spaces)[number] | undefined,
-      distance = Infinity;
-    for (const i of f.spaces ?? []) {
+    const scores: { slot: (typeof spaces)[number]; score: number }[] = [];
+    const graph = lotGraph(f.idx),
+      entry = graph?.entries.find((e) => e.connector === connector);
+    for (const i of usableSpaces(f)) {
       const s = spaces[i]!;
       if (stock[i] !== -1 || (reserved[i] !== -1 && reserved[i] !== id)) continue;
       // A roadside driver must stop at the target slot, not another car's slot farther along.
       if (f.kind === 'roadside' && s.connector !== connector) continue;
-      const d = Math.hypot(s.position.x - point.x, s.position.y - point.y);
-      if (d < distance) {
-        best = s;
-        distance = d;
-      }
+      const node = graph?.stallNodes[s.lotStall!];
+      const pathLength =
+        f.kind === 'lot'
+          ? (entry?.distances[node ?? -1] ?? Infinity)
+          : pointDistance(s.position, point);
+      if (!Number.isFinite(pathLength)) continue;
+      scores.push({
+        slot: s,
+        score:
+          pathLength +
+          (f.kind === 'lot' && id >= 0
+            ? pointDistance(s.position, destinationPlace(id).centroid)
+            : 0),
+      });
     }
-    return best;
+    scores.sort((a, b) => a.score - b.score || a.slot.idx - b.slot.idx);
+    if (!scores.length) return undefined;
+    if (f.kind !== 'lot' || id < 0) return scores[0]!.slot;
+    const good = scores.filter(
+      (s) => s.score <= scores[0]!.score + params.stallChoiceSlackM + 1e-9,
+    );
+    return rng.derive(`stall:${trips[id]!.id}`).pick(good).slot;
+  }
+  function hasFreeSpace(connector: number, id: number) {
+    const c = compiled.connectors[connector]!,
+      f = compiled.parking[c.parking ?? -1];
+    if (!f || f.kind === 'garage') return false;
+    const graph = lotGraph(f.idx),
+      entry = graph?.entries.find((e) => e.connector === connector);
+    return usableSpaces(f).some(
+      (i) =>
+        stock[i] === -1 &&
+        (reserved[i] === -1 || reserved[i] === id) &&
+        (f.kind === 'roadside'
+          ? spaces[i]!.connector === connector
+          : Number.isFinite(entry?.distances[graph!.stallNodes[spaces[i]!.lotStall!]!])),
+    );
   }
   function beginSearch(id: number, timeS: number) {
     searching[id] = 1;
     if (Number.isNaN(searchStart[id])) searchStart[id] = timeS;
   }
+  const motions = new Map<number, ParkingMotion>();
+  let approachReach = new Float64Array(spaces.length * 2).fill(NaN);
+  const motionById = Array<ParkingMotion | undefined>(trips.length).fill(undefined);
+  const setMotion = (id: number, m: ParkingMotion) => {
+    motions.set(id, m);
+    motionById[id] = m;
+  };
+  const removeMotion = (id: number) => {
+    motions.delete(id);
+    motionById[id] = undefined;
+  };
+  const choiceRank = new Uint32Array(trips.length),
+    choiceScore = new Float64Array(trips.length),
+    bestScore = new Float64Array(trips.length);
+  let lotArrivals = 0,
+    lotChoices = 0,
+    totalEntryToPark = 0,
+    totalDrive = 0,
+    lotLeaves = 0,
+    totalLeave = 0,
+    stripManoeuvres = 0,
+    totalRank = 0;
+  const length = (id: number) =>
+    params.vehicleClasses[
+      id === -1 ? 'car' : (['car', 'van', 'truck', 'bus'] as const)[vehicles.vclass[id]!]!
+    ].lengthM;
+  const lanePose = (connector: number): ParkingPose => {
+    const c = compiled.connectors[connector]!,
+      l = compiled.lanes[c.lane]!;
+    return {
+      ...pointAtDistance(l.polyline, l.cumulative, c.positionM),
+      heading: headingAtDistance(l.polyline, l.cumulative, c.positionM),
+    };
+  };
+  const localPath = (slot: number, connector: number, reverse = false) => {
+    const space = spaces[slot]!,
+      graph = lotGraph(space.parking)!;
+    const nodes = lotPath(graph, connector, space.lotStall!);
+    if (!nodes) throw new Error('Reserved stall has no circulation path');
+    if (reverse) nodes.reverse();
+    const points = nodes.map((i) => graph.nodes[i]!);
+    if (points.length === 1) points.push(points[0]!);
+    return motionPath(points);
+  };
+  const isLotSpace = (id: number) => {
+    const slot = spaces[originSpace(id)];
+    return !!slot && compiled.parking[slot.parking]!.kind === 'lot' && !left[id];
+  };
+  const lotBusy = (facility: number, leaving: boolean, connector: number) =>
+    [...motions.values()].some(
+      (m) =>
+        m.lot &&
+        spaces[m.slot]!.parking === facility &&
+        ((m.phase === 'leave' || m.phase === 'drive_out' || m.phase === 'exit') !== leaving ||
+          m.connector !== connector),
+    );
+  function startArrival(id: number, connector: number, timeS: number) {
+    const facility = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
+    if (facility?.kind === 'lot' && lotBusy(facility.idx, false, connector)) return false;
+    const slot = freeSpace(connector, id);
+    if (!slot) return false;
+    const lot = compiled.parking[slot.parking]!.kind === 'lot';
+    const leader = vehicles.previous[id]!,
+      key = slot.idx * 2 + vehicles.vclass[id]!;
+    const available =
+      leader === -1 ? Infinity : vehicles.position[leader]! - length(leader) - params.idm.minGapM;
+    if (!lot && available < approachReach[key]!) return false;
+    const from = lanePose(connector),
+      path = lot
+        ? localPath(slot.idx, connector)
+        : manoeuvrePath(from, parkedPose(slot, length(id)), slot.layout === 'parallel');
+    if (!lot && leader !== -1) {
+      const lane = compiled.lanes[compiled.connectors[connector]!.lane]!;
+      const reach = Number.isNaN(approachReach[key])
+        ? (approachReach[key] = manoeuvreLaneReach(
+            path,
+            lane,
+            length(id),
+            params.vehicleClasses[vehicles.vclass[id] === 0 ? 'car' : 'van'].widthM,
+          ))
+        : approachReach[key]!;
+      if (available < reach) return false;
+    }
+    if (
+      lot &&
+      [...motions].some(([otherId, m]) => {
+        if (spaces[m.slot]!.parking !== slot.parking) return false;
+        const hit = nearestOnPolyline(path.points, m.pose);
+        return hit.away < 0.6 && hit.along < length(otherId) + params.idm.minGapM;
+      })
+    )
+      return false;
+    reserved[slot.idx] = id;
+    manoeuvreSpaces[id] = slot.idx;
+    cachedHash = undefined;
+    if (lot) {
+      const graph = lotGraph(slot.parking)!,
+        entry = graph.entries.find((e) => e.connector === connector)!;
+      const scores = usableSpaces(compiled.parking[slot.parking]!)
+        .filter((i) => stock[i] === -1 && (reserved[i] === -1 || reserved[i] === id))
+        .map((i) => ({
+          i,
+          score:
+            entry.distances[graph.stallNodes[spaces[i]!.lotStall!]!]! +
+            pointDistance(spaces[i]!.position, destinationPlace(id).centroid),
+        }))
+        .filter((s) => Number.isFinite(s.score))
+        .sort((a, b) => a.score - b.score || a.i - b.i);
+      choiceRank[id] = scores.findIndex((s) => s.i === slot.idx) + 1;
+      choiceScore[id] = scores.find((s) => s.i === slot.idx)!.score;
+      bestScore[id] = scores[0]!.score;
+      totalRank += choiceRank[id]!;
+      lotChoices++;
+    }
+    setMotion(id, {
+      phase: lot ? 'drive_in' : 'park',
+      lot,
+      slot: slot.idx,
+      connector,
+      lane: compiled.connectors[connector]!.lane,
+      path,
+      progressM: 0,
+      startedS: timeS,
+      entryS: timeS,
+      driveS: 0,
+      laneHeld: !lot,
+      pose: from,
+      speed: 0,
+    });
+    return true;
+  }
+  function arrive(id: number, connector: number, timeS: number) {
+    const f = compiled.connectors[connector]!.parking;
+    if (f === undefined) return;
+    head(id, -1);
+    cachedHash = undefined;
+    if (!hasRoom(compiled.parking[f]!)) throw new Error('Parking admission exceeded capacity');
+    if (compiled.parking[f]!.kind !== 'garage') {
+      const slot = spaces[manoeuvreSpaces[id]!] ?? freeSpace(connector, id);
+      if (!slot || stock[slot.idx] !== -1) throw new Error('Parking slot is occupied');
+      stock[slot.idx] = id;
+      classes[slot.idx] = vehicles.vclass[id]!;
+      reserved[slot.idx] = -1;
+      parkedSpaces[id] = slot.idx;
+      revision++;
+    }
+    occupied[f]!++;
+    parked[id] = f;
+    chosen[id] = f;
+    if (!Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
+    arrivals++;
+    totalSearch += searchTime[id]!;
+  }
+  function nextPath(
+    m: ParkingMotion,
+    path: MotionPath,
+    phase: ParkingMotion['phase'],
+    timeS: number,
+  ) {
+    m.path = path;
+    m.phase = phase;
+    m.progressM = 0;
+    m.startedS = timeS;
+  }
+  const pathMeetings = new WeakMap<
+    MotionPath,
+    WeakMap<MotionPath, { at: number; along: number }[]>
+  >();
+  function meetings(path: MotionPath, other: MotionPath) {
+    let byOther = pathMeetings.get(path);
+    if (!byOther) pathMeetings.set(path, (byOther = new WeakMap()));
+    let shared = byOther.get(other);
+    if (!shared) {
+      shared = [];
+      for (let i = 1; i < path.points.length; i++) {
+        const hit = nearestOnPolyline(other.points, path.points[i]!);
+        if (hit.away <= 0.01) shared.push({ at: path.cumulative[i]!, along: hit.along });
+      }
+      byOther.set(other, shared);
+    }
+    return shared;
+  }
+
+  function advance(
+    timeS: number,
+    callbacks: {
+      clearLane: (id: number) => void;
+      park: (id: number, connector: number) => void;
+      exit: (id: number, connector: number) => boolean;
+      resume: (id: number, connector: number) => void;
+    },
+  ) {
+    const active = [...motions].sort((a, b) => b[1].progressM - a[1].progressM || a[0] - b[0]);
+    const cohorts = new Map<number, typeof active>();
+    for (const pair of active) {
+      const facility = spaces[pair[1].slot]!.parking;
+      let cohort = cohorts.get(facility);
+      if (!cohort) cohorts.set(facility, (cohort = []));
+      cohort.push(pair);
+    }
+    for (const [id, m] of active) {
+      const space = spaces[m.slot]!,
+        before = m.pose;
+      if (m.phase === 'exit') {
+        m.speed = 0;
+        if (callbacks.exit(id, m.connector)) {
+          lotLeaves++;
+          totalLeave += timeS - m.entryS;
+          totalDrive += m.driveS;
+          removeMotion(id);
+        }
+        continue;
+      }
+      const driving = m.phase === 'drive_in' || m.phase === 'drive_out';
+      const duration =
+        m.phase === 'leave' ? params.leaveManoeuvreS : params.parkManoeuvreS[space.layout];
+      let target = driving
+        ? Math.min(m.path.lengthM, m.progressM + params.lotSpeedMps * params.dtS)
+        : (() => {
+            const u = Math.min(1, (timeS - m.startedS) / Math.max(duration, params.dtS));
+            return m.path.lengthM * u * u * (3 - 2 * u);
+          })();
+      if (driving) {
+        for (const [otherId, other] of cohorts.get(space.parking)!) {
+          if (
+            otherId === id ||
+            !motions.has(otherId) ||
+            spaces[other.slot]!.parking !== space.parking
+          )
+            continue;
+          // Neither following nor merge clearance can reach beyond both bodies and gaps.
+          const reach =
+              length(id) +
+              length(otherId) +
+              2 * params.idm.minGapM +
+              params.lotSpeedMps * params.dtS +
+              1,
+            dx = other.pose.x - before.x,
+            dy = other.pose.y - before.y;
+          if (dx * dx + dy * dy > reach * reach) continue;
+          const hit = nearestOnPolyline(m.path.points, other.pose);
+          if (hit.away < 0.6 && hit.along >= m.progressM - 1e-6)
+            target = Math.min(
+              target,
+              Math.max(m.progressM, hit.along - length(otherId) - params.idm.minGapM),
+            );
+          // The first shared vertex is a merge. Whoever is already across it keeps it
+          // until their rear clears; simultaneous approaches use distance, then id.
+          for (const { at, along } of meetings(m.path, other.path)) {
+            if (at < m.progressM - 1e-6 || at > target + length(id) + params.idm.minGapM) continue;
+            const remaining = along - other.progressM;
+            if (
+              remaining < -length(otherId) - params.idm.minGapM ||
+              remaining > length(otherId) + params.idm.minGapM
+            )
+              continue;
+            const own = at - m.progressM;
+            if (
+              remaining <= 0 ||
+              remaining < own - 1e-6 ||
+              (Math.abs(remaining - own) < 1e-6 && otherId < id)
+            )
+              target = Math.min(target, Math.max(m.progressM, at - params.idm.minGapM));
+          }
+        }
+        m.driveS += params.dtS;
+      }
+      m.progressM = target;
+      m.pose = pathPose(m.path, target);
+      m.speed = pointDistance(before, m.pose) / params.dtS;
+      if (
+        !m.lot &&
+        m.phase === 'park' &&
+        m.laneHeld &&
+        bodyClearLane(
+          m.pose,
+          compiled.lanes[m.lane]!,
+          length(id),
+          params.vehicleClasses[vehicles.vclass[id] === 0 ? 'car' : 'van'].widthM,
+        )
+      ) {
+        callbacks.clearLane(id);
+        m.laneHeld = false;
+      }
+      if (target < m.path.lengthM - 1e-8) continue;
+      if (m.phase === 'drive_in') {
+        nextPath(m, manoeuvrePath(m.pose, parkedPose(space, length(id)), false), 'park', timeS);
+      } else if (m.phase === 'park') {
+        if (m.laneHeld) callbacks.clearLane(id);
+        arrive(id, m.connector, timeS);
+        if (m.lot) {
+          lotArrivals++;
+          totalEntryToPark += timeS - m.entryS;
+          totalDrive += m.driveS;
+        } else stripManoeuvres++;
+        callbacks.park(id, m.connector);
+        removeMotion(id);
+      } else if (m.phase === 'leave') {
+        reserved[m.slot] = -1;
+        cachedHash = undefined;
+        if (m.lot) nextPath(m, localPath(m.slot, m.connector, true), 'drive_out', timeS);
+        else {
+          stripManoeuvres++;
+          removeMotion(id);
+          callbacks.resume(id, m.connector);
+        }
+      } else if (m.phase === 'drive_out') {
+        m.phase = 'exit';
+      }
+    }
+  }
   return {
+    advance,
+    motion: (id: number) => motionById[id],
+    startArrival,
+    lotArrival: (connector: number) =>
+      compiled.parking[compiled.connectors[connector]!.parking ?? -1]?.kind === 'lot',
+    startsInLot: isLotSpace,
+    canStartLot(id: number, connector: number) {
+      const slot = spaces[originSpace(id)]!;
+      if (lotBusy(slot.parking, true, connector)) return false;
+      const out = pathPose(localPath(slot.idx, connector, true), 0);
+      return ![...motions].some(
+        ([otherId, m]) =>
+          spaces[m.slot]!.parking === slot.parking &&
+          (m.phase === 'leave' ||
+            pointDistance(out, m.pose) <
+              length(otherId) +
+                params.idm.minGapM +
+                params.lotSpeedMps * (params.leaveManoeuvreS + params.dtS)),
+      );
+    },
     required,
+    departureRoom(id: number) {
+      const slot = spaces[originSpace(id)];
+      if (!slot || left[id] || compiled.parking[slot.parking]!.kind !== 'roadside') return true;
+      const c = compiled.connectors[slot.connector]!,
+        lane = compiled.lanes[c.lane]!,
+        key = slot.idx * 2 + vehicles.vclass[id]!;
+      if (Number.isNaN(approachReach[key]))
+        approachReach[key] = manoeuvreLaneReach(
+          manoeuvrePath(lanePose(c.idx), parkedPose(slot, length(id)), slot.layout === 'parallel'),
+          lane,
+          length(id),
+          params.vehicleClasses[vehicles.vclass[id] === 0 ? 'car' : 'van'].widthM,
+        );
+      for (let other = vehicles.last(c.lane); other !== -1; other = vehicles.previous[other]!) {
+        if (vehicles.position[other]! < c.positionM) continue;
+        return (
+          vehicles.position[other]! - length(other) - params.idm.minGapM >= approachReach[key]!
+        );
+      }
+      return true;
+    },
     choose,
     noOriginCar: (id: number) => !!noOriginCar[id],
     ready(id: number) {
@@ -353,7 +791,24 @@ export function createParking(
     hasOriginFacility: (id: number) => originFacility(id) !== -1,
     exits(id: number, fallback: number[]) {
       const slot = spaces[originSpace(id)];
-      if (slot && !left[id]) return [slot.connector];
+      if (slot && !left[id]) {
+        const facility = compiled.parking[slot.parking]!;
+        if (facility.kind === 'lot') {
+          const graph = lotGraph(slot.parking)!;
+          return facility.connectorsOut
+            .filter((c) => !!lotPath(graph, c, slot.lotStall!))
+            .sort(
+              (a, b) =>
+                graph.entries.find((e) => e.connector === a)!.distances[
+                  graph.stallNodes[slot.lotStall!]!
+                ]! -
+                  graph.entries.find((e) => e.connector === b)!.distances[
+                    graph.stallNodes[slot.lotStall!]!
+                  ]! || a - b,
+            );
+        }
+        return [slot.connector];
+      }
       const f = compiled.parking[originFacility(id)];
       if (!f && previous[id] !== -1 && vehicles.state[previous[id]!] !== COMPLETED) {
         const place = compiled.index.place.get(trips[id]!.originPlaceId);
@@ -368,7 +823,7 @@ export function createParking(
       }
       return f ? f.connectorsOut : fallback;
     },
-    depart(id: number, timeS = scenario.startS) {
+    depart(id: number, timeS = scenario.startS, connector = spaces[originSpace(id)]?.connector) {
       if (left[id]) return;
       cachedHash = undefined;
       const facility = originFacility(id);
@@ -376,34 +831,46 @@ export function createParking(
       const slot = originSpace(id);
       if (slot !== -1) {
         stock[slot] = -1;
-        if (spaces[slot]?.manoeuvre) leaveUntil[id] = timeS + params.leaveManoeuvreS;
+        const space = spaces[slot]!;
+        if (space.manoeuvre && connector !== undefined) {
+          const lot = compiled.parking[space.parking]!.kind === 'lot';
+          const out = lot ? localPath(slot, connector, true) : null;
+          const to = out ? pathPose(out, 0) : lanePose(connector);
+          const pose = parkedPose(space, length(id));
+          const path = manoeuvrePath(pose, to, space.layout === 'parallel', true);
+          reserved[slot] = id;
+          setMotion(id, {
+            phase: 'leave',
+            lot,
+            slot,
+            connector,
+            lane: compiled.connectors[connector]!.lane,
+            path,
+            progressM: 0,
+            startedS: timeS,
+            entryS: timeS,
+            driveS: 0,
+            laneHeld: !lot,
+            pose,
+            speed: 0,
+          });
+        }
         revision++;
       }
       left[id] = 1;
     },
-    departing: (id: number, timeS: number) => timeS < leaveUntil[id]! - 1e-9,
-    leavingSpace: (id: number) => !left[id] && originSpace(id) !== -1,
+    leavingSpace: (id: number) =>
+      (!left[id] && originSpace(id) !== -1) || motionById[id]?.phase === 'exit',
     needsManoeuvre(connector: number) {
       const c = compiled.connectors[connector]!,
         f = compiled.parking[c.parking ?? -1];
       return f?.kind !== 'garage' && (f?.spaces ?? []).some((i) => spaces[i]!.manoeuvre);
     },
-    holdArrival(id: number, connector: number, timeS: number) {
-      if (Number.isNaN(parkUntil[id])) {
-        const slot = freeSpace(connector, id);
-        if (!slot) return false;
-        manoeuvreSpaces[id] = slot.idx;
-        reserved[slot.idx] = id;
-        parkUntil[id] = timeS + params.parkManoeuvreS[slot.layout];
-        cachedHash = undefined;
-      }
-      return timeS >= parkUntil[id]! - 1e-9;
-    },
     full(connector: number, id = -1) {
       const facility = compiled.connectors[connector]!.parking;
       if (facility === undefined) return false;
       const f = compiled.parking[facility]!;
-      return f.kind === 'garage' ? !hasRoom(f) : !freeSpace(connector, id);
+      return f.kind === 'garage' ? !hasRoom(f) : !hasFreeSpace(connector, id);
     },
     admits(id: number, connector: number) {
       const f = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
@@ -426,37 +893,31 @@ export function createParking(
       const f = chosen[id]!;
       const facility = compiled.parking[f];
       // A rejected slot does not exhaust the other slots along the same strip/aisle.
-      if (f !== -1 && !facility!.connectorsIn.some((c) => freeSpace(c, id))) {
+      if (f !== -1 && !facility!.connectorsIn.some((c) => hasFreeSpace(c, id))) {
         if (!rejected.has(id)) rejected.set(id, new Set());
         rejected.get(id)!.add(f);
       }
       beginSearch(id, timeS);
     },
-    arrive(id: number, connector: number, timeS: number) {
-      const f = compiled.connectors[connector]!.parking;
-      if (f === undefined) return;
-      head(id, -1);
-      cachedHash = undefined;
-      if (!hasRoom(compiled.parking[f]!)) throw new Error('Parking admission exceeded capacity');
-      if (compiled.parking[f]!.kind !== 'garage') {
-        const slot = spaces[manoeuvreSpaces[id]!] ?? freeSpace(connector, id);
-        if (!slot || stock[slot.idx] !== -1) throw new Error('Parking slot is occupied');
-        stock[slot.idx] = id;
-        classes[slot.idx] = vehicles.vclass[id]!;
-        reserved[slot.idx] = -1;
-        parkedSpaces[id] = slot.idx;
-        revision++;
-      }
-      occupied[f]!++;
-      parked[id] = f;
-      chosen[id] = f;
-      if (!Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
-      arrivals++;
-      totalSearch += searchTime[id]!;
-    },
+    arrive,
     detail(id: number, timeS: number) {
-      const facility = compiled.parking[parked[id] === -1 ? chosen[id]! : parked[id]!];
+      const motion = motionById[id];
+      const facility =
+        compiled.parking[
+          motion ? spaces[motion.slot]!.parking : parked[id] === -1 ? chosen[id]! : parked[id]!
+        ];
       return {
+        parkingPhase: motion?.phase ?? null,
+        parkingSpace:
+          motion?.slot ??
+          ((parkedSpaces[id] === -1 ? manoeuvreSpaces[id] : parkedSpaces[id]) === -1
+            ? null
+            : parkedSpaces[id] === -1
+              ? manoeuvreSpaces[id]!
+              : parkedSpaces[id]!),
+        stallChoice: choiceRank[id]
+          ? { rank: choiceRank[id]!, scoreM: choiceScore[id]!, bestScoreM: bestScore[id]! }
+          : null,
         parkingFacility: facility?.id ?? null,
         walkingDistanceM: walking[id]!,
         parkingSearchTimeS:
@@ -485,15 +946,34 @@ export function createParking(
     get revision() {
       return revision;
     },
-    stateHash: () =>
-      (cachedHash ??= parkingHash([
+    stateHash: () => {
+      const base = (cachedHash ??= parkingHash([
         occupied,
         origins,
         chosen,
         parked,
         ...(spaces.length ? [stock, originSpaces, parkedSpaces, reserved] : []),
-      ])),
-    metrics(failed: number): Metrics['parking'] {
+      ]));
+      return motions.size
+        ? parkingHash([
+            new Uint32Array([base]),
+            Int32Array.from(
+              [...motions]
+                .sort((a, b) => a[0] - b[0])
+                .flatMap(([id, m]) => [
+                  id,
+                  m.slot,
+                  ['drive_in', 'park', 'leave', 'drive_out', 'exit'].indexOf(m.phase),
+                  Math.round(m.progressM * 100),
+                  Math.round(m.pose.x * 100),
+                  Math.round(m.pose.y * 100),
+                  Math.round(m.pose.heading * 1000),
+                ]),
+            ),
+          ])
+        : base;
+    },
+    metrics(failed: number, timeS = scenario.startS): Metrics['parking'] {
       return {
         facilities: compiled.parking.map((f) => ({
           id: f.id,
@@ -504,9 +984,53 @@ export function createParking(
         arrivals,
         meanSearchTimeS: arrivals ? totalSearch / arrivals : 0,
         failed,
+        motion: {
+          meanEntryToParkS: lotArrivals ? totalEntryToPark / lotArrivals : 0,
+          meanLotDriveS: lotArrivals + lotLeaves ? totalDrive / (lotArrivals + lotLeaves) : 0,
+          meanLotLeaveS: lotLeaves ? totalLeave / lotLeaves : 0,
+          stripManoeuvresPerHour:
+            (stripManoeuvres * 3600) / Math.max(params.dtS, timeS - scenario.startS),
+          meanStallChoiceRank: lotChoices ? totalRank / lotChoices : 0,
+        },
       };
     },
     patch(next: CompiledCity) {
+      const topology = (city: CompiledCity, id: string) => {
+        const graph = city.lots?.find((l) => l.id === id)?.circulation;
+        return (
+          graph && [
+            graph.nodes,
+            graph.edges,
+            graph.stallNodes,
+            graph.entries.map((e) => [
+              city.connectors[e.connector]!.id,
+              e.node,
+              city.connectors[e.connector]!.direction,
+            ]),
+          ]
+        );
+      };
+      // World-space trajectories survive an unrelated edit. Changing an occupied path
+      // requires restart, just as removing its occupied stall does.
+      for (const m of motions.values()) {
+        const old = spaces[m.slot]!,
+          f = compiled.parking[old.parking]!,
+          ordinal = f.spaces!.indexOf(m.slot);
+        const target = next.parking[next.index.parking.get(f.id)!],
+          slot = next.parkingSpaces?.[target?.spaces?.[ordinal] ?? -1];
+        const c = next.connectors[next.index.connector.get(compiled.connectors[m.connector]!.id)!];
+        if (
+          !slot ||
+          !c ||
+          JSON.stringify([slot.position, slot.heading, next.lanes[c.lane]!.polyline]) !==
+            JSON.stringify([old.position, old.heading, compiled.lanes[m.lane]!.polyline]) ||
+          (m.lot &&
+            JSON.stringify(topology(next, f.id)) !== JSON.stringify(topology(compiled, f.id)))
+        )
+          throw new Error(
+            `Parking ${f.id} has an active manoeuvre affected by this edit; restart the run`,
+          );
+      }
       for (const f of compiled.parking) {
         if (f.kind === 'garage') continue;
         const mapped = next.index.parking.get(f.id);
@@ -544,7 +1068,8 @@ export function createParking(
       served = servedPlaces(next);
       const oldSpaces = spaces,
         oldStock = stock,
-        oldClasses = classes;
+        oldClasses = classes,
+        oldReserved = reserved;
       spaces = next.parkingSpaces ?? [];
       const ordinal = new Int32Array(oldSpaces.length);
       for (const f of compiled.parking)
@@ -561,6 +1086,13 @@ export function createParking(
       };
       originSpaces = originSpaces.map(remapSpace);
       parkedSpaces = parkedSpaces.map(remapSpace);
+      for (let i = 0; i < manoeuvreSpaces.length; i++)
+        manoeuvreSpaces[i] = remapSpace(manoeuvreSpaces[i]!);
+      for (const m of motions.values()) {
+        m.slot = remapSpace(m.slot);
+        m.connector = next.index.connector.get(compiled.connectors[m.connector]!.id)!;
+        m.lane = next.connectors[m.connector]!.lane;
+      }
       stock = new Int32Array(spaces.length).fill(-1);
       classes = new Uint8Array(spaces.length);
       reserved = new Int32Array(spaces.length).fill(-1);
@@ -569,12 +1101,16 @@ export function createParking(
         if (mapped !== -1) {
           stock[mapped] = oldStock[s.idx]!;
           classes[mapped] = oldClasses[s.idx]!;
+          reserved[mapped] = oldReserved[s.idx]!;
         }
       }
-      manoeuvreSpaces.fill(-1);
-      parkUntil.fill(NaN);
       revision++;
       compiled = next;
+      lotGraphs = compiled.parking.map(
+        (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
+      );
+      usable = eligibleSpaces();
+      approachReach = new Float64Array(spaces.length * 2).fill(NaN);
     },
   };
 }

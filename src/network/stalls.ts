@@ -147,6 +147,8 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
               continue;
             occupied.push(candidate);
             stalls.push({
+              layout: angle < Math.PI / 2 ? 'angled' : 'perpendicular',
+              access: p,
               position,
               heading,
               widthM: 2.5,
@@ -167,6 +169,7 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
         const edge = edges[0]!;
         const axis = Math.atan2(edge.b.y - edge.a.y, edge.b.x - edge.a.x);
         let best: CStall[] = [];
+        let bestPaths: Vec2[][] = [];
         // Try both bay orientations: a shallow lot may only fit longitudinal parking.
         for (const heading of [axis, axis + Math.PI / 2]) {
           const attempt: CStall[] = [];
@@ -178,12 +181,22 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
             maxU = Math.max(...us),
             minV = Math.min(...vs),
             maxV = Math.max(...vs);
+          const paths: Vec2[][] = [];
+          const at = (x: number, y: number) => ({ x: x * u.x + y * v.x, y: x * u.y + y * v.y });
+          const gaps = new Set<number>();
+          const shallow = maxV - minV < 8 || maxU - minU < 12.5;
           for (
-            let row = 0, y = minV + 2.5;
+            let row = 0, y = minV + (shallow ? 2.5 : 8);
             y + 2.5 <= maxV + 1e-8;
             row++, y += row % 2 === 1 ? 5 : 11
           ) {
-            for (let x = minU + 1.25; x + 1.25 <= maxU + 1e-8; x += 2.5) {
+            const facing = row % 2 === 0 ? 1 : -1;
+            const gap = y - facing * 5.5;
+            for (
+              let x = minU + (shallow ? 1.25 : 6.25);
+              x + (shallow ? 1.25 : 6.25) <= maxU + 1e-8;
+              x += 2.5
+            ) {
               const position = { x: x * u.x + y * v.x, y: x * u.y + y * v.y };
               const corners = [
                 [-1, -1],
@@ -208,22 +221,32 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
               )
                 continue;
               attempt.push({
+                access: at(x, gap),
                 position,
-                heading: heading + Math.PI / 2,
+                heading: heading + (facing * Math.PI) / 2,
                 widthM: 2.5,
                 lengthM: 5,
                 aisleRoad: lot.connectors[0]?.roadId ?? '',
                 positionM: lot.connectors[0]?.positionM ?? 0,
                 corners,
               });
+              gaps.add(gap);
             }
           }
-          if (attempt.length > best.length) best = attempt;
+          const ys = [...gaps].sort((a, b) => a - b);
+          for (const y of ys) paths.push([at(minU + 3, y), at(maxU - 3, y)]);
+          if (ys.length > 1)
+            for (const x of [minU + 3, maxU - 3]) paths.push([at(x, ys[0]!), at(x, ys.at(-1)!)]);
+          if (attempt.length > best.length) {
+            best = attempt;
+            bestPaths = paths;
+          }
         }
         for (const stall of best) {
           stalls.push(stall);
           occupied.push(prepareRing(closed(stall.corners)));
         }
+        result.aislePaths = bestPaths;
       }
       result.stallCount = stalls.length;
       return result;

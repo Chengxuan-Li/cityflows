@@ -57,6 +57,7 @@ export interface CompiledCity {
 }
 
 export interface CParkingSpace {
+  lotStall?: number;
   idx: number;
   parking: number;
   lane: number;
@@ -83,6 +84,8 @@ export interface CStrip {
 }
 
 export interface CStall {
+  layout?: ParkingLayout;
+  access?: Vec2;
   position: Vec2;
   heading: number;
   widthM: number;
@@ -93,11 +96,23 @@ export interface CStall {
 }
 
 export interface CLot {
+  aislePaths?: Vec2[][];
+  circulation?: LotCirculation;
   id: string;
   entries: NodeId[];
   aisles: RoadId[]; // the lot's `parking_aisle` roads (no default crossings)
   stalls: CStall[];
   stallCount: number;
+}
+
+/** Facility-local, bidirectional paths; never edges of the vehicle routing graph. */
+export interface LotCirculation {
+  nodes: Vec2[];
+  edges: { from: number; to: number; lengthM: number }[];
+  adjacency: number[][];
+  stallNodes: number[];
+  entries: { connector: number; node: number; distances: Float64Array; previous: Int32Array }[];
+  unreachable: number[];
 }
 
 export interface CNode {

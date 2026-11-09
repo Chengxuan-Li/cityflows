@@ -10,7 +10,10 @@ export const tripStates = [
   'queuedOrigin',
   'completed',
   'failed',
+  'driving', // in_lot participates in the existing driving trip count, without a lane
 ] as const;
+export const IN_LOT = 6;
+export const OFF_LANE = -2147483648;
 export const [PENDING, DRIVING, QUEUED_DESTINATION, QUEUED_ORIGIN, COMPLETED, FAILED] = [
   0, 1, 2, 3, 4, 5,
 ] as const;
@@ -20,7 +23,8 @@ export type TripState =
   | typeof QUEUED_DESTINATION
   | typeof QUEUED_ORIGIN
   | typeof COMPLETED
-  | typeof FAILED;
+  | typeof FAILED
+  | typeof IN_LOT;
 
 export function createVehicles(count: number, laneCount: number, movementCount: number) {
   const indices = () => new Int32Array(count).fill(-1);

@@ -2,6 +2,7 @@ import type { CompiledCity } from '../network';
 import type { RoadStats, TrajectoryRecord, TripRecord } from '../project/export-csv';
 import type { TripRequest } from '../schema';
 import type { TrafficEngine } from '../sim/types';
+import { OFF_LANE } from '../sim/vehicle';
 
 export function tripRecords(engine: TrafficEngine, trips: readonly TripRequest[]): TripRecord[] {
   const outcomes = engine.metrics().tripOutcomes;
@@ -98,7 +99,10 @@ export function createExportRecorder(engine: TrafficEngine, compiled: CompiledCi
             time: snapshot.timeS,
             x: snapshot.x[i]!,
             y: snapshot.y[i]!,
-            lane: lane?.id ?? compiled.movements[-field - 1]!.id,
+            lane:
+              field === OFF_LANE
+                ? `parking:${engine.inspect(id)!.parkingFacility}`
+                : (lane?.id ?? compiled.movements[-field - 1]!.id),
             speed: snapshot.speed[i]!,
           });
       }
