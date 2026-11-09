@@ -34,4 +34,4 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   expect(morning.gatewayTraffic.trunk!.left).toBeGreaterThan(0);
   expect(morning.sampledRoadTraffic.ramp!.entered).toBeGreaterThan(0);
   expect(morning.sampledRoadTraffic.ramp!.left).toBeGreaterThan(0);
-}, 600_000);
+}, 900_000); // CI runners took 203 to 479 s before TASK-118/119 (lead, 2026-11-09)
