@@ -2,7 +2,9 @@
 
 Owner: unassigned
 Gate: 9 (occupancy-driven trips): parking failures at full demand
-Branch: `task/122-parking-egress` (created by the lead from main after the TASK-112 merge)
+Branch: `task/122-parking-egress` (created by the lead from `task/lead-112`, which integrates TASK-121
+and TASK-112 before they reach main; TASK-112's round 2 runs on that branch at the same time and
+changes e2e specs, so leave `tests/e2e/**` other than your own to it)
 Depends on: TASK-103 (visible parking), TASK-118 and TASK-119 (parking motion, mapped strips),
 TASK-112 (trips made by people; it owns where a person walks to their car).
 Replaces: TASK-120 (dead-end turnarounds), rejected 2026-11-09. Read its review entry in
