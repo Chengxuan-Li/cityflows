@@ -9,16 +9,16 @@ import { withoutLotAisles } from '../without-lot-aisles';
 
 // TASK-110's walk data is excluded, as in T44.
 const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value)).digest('hex');
-// TASK-102's import without lots (its T44 pins; main 806263a before TASK-102). No original
-// entity is reconstructed by the stripping oracle.
+// TASK-119 re-pins parking-place removal and owner links; T55 separately pins main's vehicle
+// geometry. No original entity is reconstructed by the aisle-stripping oracle.
 const main = {
   'munich-donnersberger': [
-    '11a7022ffb599e262038854f342a987a0c1fb2ae76d1790623d8ba9be51e9b0e',
-    '13adf10aeb155f927cdeab07ffdfd655a80da85ca764462cc87848c93a38e931',
+    'f21b3cf5026102ef17ffb480feae8b3183facf2b417b6e11bd8cce96bae14369',
+    '81c78bddaf514290b1294a58104d7fbba4b9b93d48681ad020d04c68ad51fbcf',
   ],
   'sindelfingen-a81': [
-    '23d8ccc808153bc15f0be4298e07f0c7b56ee4babd4ed57be0d148f7e9e2e5cc',
-    'bcd1a39665fe5c3ce4f342544916dd5a95cedd2fb6331035eeeb5f6d82cf024f',
+    'bc59fccd9763465f9d79111f14288686f60d368c3227daf8b8c2bb997581a7e3',
+    '6f15347a7fccaef75e0830d7bc9ba1053aa990c512b6fa56f63fa508ea7453d2',
   ],
 };
 
@@ -51,7 +51,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
     const stalls = compiled.compiled.lots!.reduce((s, lot) => s + lot.stallCount, 0);
     const counts = [lots.length, aisles.size, stalls];
     // TASK-103 also fills lots without mapped aisles, without adding a vehicle road.
-    const expected = name === 'munich-donnersberger' ? [22, 51, 367] : [31, 147, 505];
+    const expected = name === 'munich-donnersberger' ? [25, 51, 395] : [31, 147, 505];
     counts.forEach((value, i) =>
       expect(Math.abs(value - expected[i]!)).toBeLessThanOrEqual(expected[i]! * 0.1),
     );

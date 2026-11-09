@@ -99,7 +99,8 @@ cityTest(
     expect(
       homes.length + work.length + places.filter((p) => p.kind === 'retail').length,
     ).toBeLessThan(100);
-    expect(places.filter((p) => p.kind === 'parking')).toHaveLength(80);
+    // TASK-119's 57 mapped street-side areas are facilities, no longer demand places.
+    expect(places.filter((p) => p.kind === 'parking')).toHaveLength(23);
     expect(places.filter((p) => p.kind === 'school')).toHaveLength(5);
     const northwest = lonLatToLocal(city.geo!, { lon: 11.525, lat: 48.148 });
     const southeast = lonLatToLocal(city.geo!, { lon: 11.545, lat: 48.135 });
@@ -193,9 +194,9 @@ cityTest(
             infeasible.push(`${origin.id}>${destination.id}: ${JSON.stringify(issue)}`);
       }
     }
-    expect(pairs).toBeGreaterThan(40_000);
+    expect(pairs).toBe(24_944); // TASK-119 removes 57 unused parking destinations from all pairs.
     expect(unroutable).toEqual([]);
-    expect(forbidden).toEqual({ from379: 427, from1060: 210, to1059: 1233 });
+    expect(forbidden).toEqual({ from379: 313, from1060: 153, to1059: 891 });
     expect(infeasible).toEqual([]);
   },
   600_000,

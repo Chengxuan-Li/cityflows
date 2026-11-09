@@ -51,9 +51,11 @@ export function compileVisibleParking(
     const firstLane = road && compiled.lanes[road.lanes[0]!]!;
     const center = source.shape
       ? centroid(source.shape)
-      : firstLane && strip
-        ? pointAtDistance(firstLane.polyline, firstLane.cumulative, (strip.fromM + strip.toM) / 2)
-        : null;
+      : strip?.ring
+        ? centroid({ kind: 'polygon', ring: strip.ring })
+        : firstLane && strip
+          ? pointAtDistance(firstLane.polyline, firstLane.cumulative, (strip.fromM + strip.toM) / 2)
+          : null;
     if (!center) continue;
     const place = source.placeId === null ? -1 : (compiled.index.place.get(source.placeId) ?? -1);
     const facility: CParking = {

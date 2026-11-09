@@ -301,6 +301,7 @@ const parkingFacility = z.object({
       fromM: nonnegative,
       toM: nonnegative,
       layout: z.enum(['parallel', 'angled', 'perpendicular']),
+      ring: z.array(vec2).min(3).optional(),
     })
     .refine((strip) => strip.toM > strip.fromM, 'A parking strip must have positive length')
     .optional(),

@@ -262,7 +262,7 @@ interface ParkingFacility {
   connectors: Connector[];        // garage and lot entries/exits; a roadside strip has none
   shape: { kind: 'point'; pos: Vec2 } | { kind: 'polygon'; ring: Vec2[] } | null;
   strip?: { roadId: RoadId; side: 'left' | 'right'; fromM: number; toM: number;
-            layout: 'parallel' | 'angled' | 'perpendicular' };   // roadside only
+            layout: 'parallel' | 'angled' | 'perpendicular'; ring?: Vec2[] }; // roadside only
   aisles?: RoadId[];              // a lot's parking_aisle service roads
   entries?: NodeId[];             // lot aisle nodes shared with permitted non-aisle roads
   exclusions?: Vec2[][];          // lot courtyards/buildings; nearby buildings for safe strip edits
@@ -283,6 +283,9 @@ opening a file without strips does not infer any. A strip is one safe run on one
 road side, with canonical centreline stations in metres; `angled` represents diagonal bays.
 Its capacity is the whole slots at 5.5/2.8/2.5 m pitch (parallel/angled/perpendicular).
 Road-inspector strip edits regenerate safe runs and are ordinary undoable parking patches.
+TASK-119 optionally saves the mapped area's clipped outer `ring` on a strip. Absent rings
+retain the generated-band behavior, including in older saved files. Numeric mapped capacity
+is retained; compiled capacity is the number of slots that fit its run and polygon.
 
 TASK-102 persists OSM garages and inferred private garages on the same `City.parking` format.
 An implicit garage reuses its place's connectors and is marked `implicitGarage` in provenance;
@@ -460,6 +463,10 @@ stalls clipped to its polygon and saved exclusions, without inventing vehicle ro
 `strips` carries pavement polygons and space indices outside the unchanged carriageway:
 bands are 2/4.5/5 m wide. Sidewalks offset outward beside these bands. Vehicle roads, lanes,
 nodes, movements, conflict geometry and existing connectors retain their original data.
+TASK-119 uses a strip's mapped `ring` directly as `CStrip.polygon`. At each slot's centreline
+station, the curb lane's normal intersects the ring; the widest outward interior interval
+supplies the slot centre. Stations with no interior interval produce no slot. Both renderers
+consume this same band and slot geometry.
 
 ### 5.1 Lane layout
 
@@ -2177,6 +2184,26 @@ connectors by 3 m, and restricted/bus-only curb lanes. Bands intersecting buildi
 their runs; nearby footprint exclusions are saved so context-disabled layout edits stay safe.
 Inference is saved with provenance.
 
+TASK-119 imports `amenity=parking` way/multipolygon areas tagged `parking=street_side|lane|
+layby|on_kerb|half_on_kerb` as mapped roadside strips. It chooses the nearest car-permitted
+outside curb within 15 m, with its projected run at least 90% of its depth (allowing near-square
+or slightly skewed bays). Subdividing the long boundary does not affect matching. Both travel
+directions are considered;
+side follows travel direction. The area's centreline projection supplies the clipped run.
+`orientation` or `parking:orientation` supplies parallel/diagonal/perpendicular, otherwise
+depth up to 3/5.5 m selects parallel/angled, then perpendicular. Numeric capacity wins,
+otherwise the existing pitches apply. Private/customers access is retained, otherwise public.
+Restricted strips infer one existing non-parking owner within 200 m, preferring an identical
+name, then a containing footprint, then the nearest centroid with an ID tie-break. Customers
+exclude residential owners. This uses canonical `placeId` and existing simulation admission;
+without a nearby eligible place the facility remains unowned. Public strips remain unowned.
+The mapped polygon supplies the band and slots; its obsolete parking place is removed while
+retaining the legacy ID allocation sequence for unrelated entities. Generated road-tag and
+inferred strips lose only intervals covered by mapped strips on the same directed curb.
+`separate` still suppresses generation. Unmatched areas reuse the surface-lot importer and
+inferred driveway, without adding aisle roads. Incomplete or out-of-bounds areas are diagnosed.
+This happens only on import; opening an existing project materializes nothing new.
+
 TASK-102 imports `amenity=parking` with `parking=underground|multi-storey`, and buildings
 tagged `parking|garage|garages`, from nodes, ways and multipolygons. Numeric capacity wins;
 otherwise footprint area times levels / 25 m² estimates slots (levels capped at 20, inferred
@@ -2231,7 +2258,9 @@ TASK-104 appends surface lots after the original public-road and place import. C
 become `lot` facilities. Multipolygon inner rings and intersecting building footprints become
 stall exclusions. Numeric capacity wins; otherwise capacity is the generated count. Access
 maps absent/yes to public, customers to customers, private to private. One touching place
-footprint or matching name supplies `placeId`; ambiguous matches remain null. Only clipped
+footprint or matching name supplies `placeId`; ambiguous matches remain null. TASK-119 gives
+the parking place with the identical OSM source priority over footprint matches for both lots
+and garages, so a mapped car park remains a usable destination. Only clipped
 parking-aisle sections inside or touching a lot become service roads, at 10 km/h; driveways
 and aisles outside lots remain dropped. Original access restrictions and directional/class
 overrides are retained; otherwise-public aisle access is inferred as destination-only under
