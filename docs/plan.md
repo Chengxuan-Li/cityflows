@@ -142,6 +142,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-103](tasks/TASK-103.md) | 7 | Visible parking: roadside strips and lot stalls in the simulation, park and leave manoeuvres, parked cars drawn | `strip` facilities (import, inference, compile), inferred lot driveways, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, parked-car layers 2D and 3D, road inspector | 102, 104 | T52, traffic quick, shots | done (see review) |
 | [TASK-111](tasks/TASK-111.md) | 9 | Pedestrian rules: walkers, zebra priority, pedestrian signal phases, a test pedestrian source | new `src/sim/walkers.ts`, crossing spans, `SignalProgram` walk groups, `intersection.ts`, `signals.ts`, walker layers 2D and 3D, signal editor | 110 | T53, traffic quick unchanged, shots | done (see review) |
 | [TASK-117](tasks/TASK-117.md) | 8 | Visual fixes after Phase 2: sign collisions, UK kerb lines only on urban kerbs, access signs by marking theme | `src/render/street.ts` (sign placement), `layers/street.ts`, `render3d/street.ts`, `marking-geometry.ts`, `style.ts` | 107, 114 | V117, shots | done (see review) |
+| [TASK-118](tasks/TASK-118.md) | 7 | Parking motion: circulation inside lots, stochastic stall choice, visible strip manoeuvres, individual slot departures (owner bugs 1 and 2) | `src/network/stalls.ts`, new `lot-paths.ts`, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, new `manoeuvre.ts`, renderers | 103, lead follow-up | T54, traffic quick, shots | todo |
+| [TASK-119](tasks/TASK-119.md) | 7 | Mapped street-side parking areas become strips; dropped lots and garage imported (owner bug 3) | `src/importers/osm/strips.ts`, `lots.ts`, `parking.ts`, `places.ts`, `src/network/strips.ts` | 103 | T55, traffic quick, shots | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -845,7 +847,8 @@ model and the reasoning effort.
 | 1 | TASK-100, TASK-101, TASK-105, TASK-106, TASK-108 | - | 1 to 1.5 days |
 | 2 | TASK-102, TASK-104, TASK-107, TASK-109, TASK-110, TASK-114, TASK-115, TASK-116 | 100 and 101 (102, 104, 107), 105 (109), 106 and 108 (107, 114), the Phase 0 formats | 1.5 to 2 days |
 | 3 | TASK-103, TASK-111, TASK-117 | 102 and 104 (103), 110 (111), 107 and 114 (117) | 1.5 to 2 days |
-| 4 | TASK-112 | 103, 110, 111 | 2 to 3 days |
+| 3b | TASK-118, TASK-119 | 103 and the lead's follow-up | 1 to 1.5 days |
+| 4 | TASK-112 | 103, 110, 111, 118 | 2 to 3 days |
 | 5 | TASK-113 | 112 | half to 1 day |
 
 Phase 3 runs two simulation tasks at once, on disjoint files: TASK-103 owns `parking.ts`,
@@ -956,6 +959,23 @@ contract's "In scope" list is the main surface, not a fence. Agents may change w
 the feature needs to be wired in, type-check or be tested, and list it in their report; they
 stop only for a file under "Out of scope", an undescribed contract change or a behaviour
 change to another feature (`AGENTS.md` "Delivering a task").
+
+Phase 3b (owner, 2026-11-08). Testing TASK-103 the owner logged four bugs: lots move cars into
+a stall instantly with no routing inside the lot, and stall choice is always the single best
+stall (1); strip cars vanish into and appear from their slots, and strips empty from one end
+(2); many surface car parks never hold a car (3: 57 of Munich's 80 parking places are mapped
+`parking=street_side` areas that import as places without a facility); no pedestrians are seen
+(4: walkers come only from the test source until TASK-112). TASK-118 takes 1 and 2 (lot
+circulation as a local problem inside each lot, not in the road graph, per the owner's routing
+guidance), TASK-119 takes 3; 4 waits for TASK-112, which now follows TASK-118 (both rewrite
+`src/sim/parking.ts`). TASK-118 owns `src/sim/**`, `src/host/**` and `src/network/stalls.ts`;
+TASK-119 owns `src/importers/**` and `src/network/strips.ts`; both move trip counts and the lead
+resets the baseline at each merge. Simplified CI rule as in Phase 3.
+
+| Task | Harness | Model | Effort | e2e port |
+| --- | --- | --- | --- | --- |
+| TASK-118 | Codex | GPT-6.1-Sol | xhigh | 5318 |
+| TASK-119 | Codex | GPT-6.1 Terra | high | 5319 |
 
 ### Questions for the owner, with the lead's defaults (accepted by the owner, 2026-11-07)
 
