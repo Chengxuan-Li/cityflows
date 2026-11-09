@@ -44,12 +44,12 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: '509a24052120227ec57d346b1c06489d8727560be9394e599abfe3bde6ba5d58',
+    compile: '5bcf195184ec190ba01c109b8290a656d55c0d407bb34aade632180cfb86b39a',
     arrows: '4a050bf9444cf93e96db85004e8d3ea62dca54dcc33d6a794f12c603be8234d3',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
-    compile: 'aad7af3f4d718b78c07b2d1c3766af327349941681430674f537b03477c58ce7',
+    compile: 'dfc5e094dd0d1a92b56a8149c3613079dacf2b6166ba4522ad3006dbc7d2bf99',
     arrows: '58f23f654d47b6df163f7625fc68815d5e2dc06b00437fc2918e30a09dd7abb1',
   },
 } as const;

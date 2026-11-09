@@ -26,6 +26,9 @@ export function VehicleInspector({
   // Use the network acknowledged by the engine, including live patches.
   const compiled = useAppStore((state) => state.session!.loadedCompiled);
   const reason = detail && waitingReason(detail, compiled);
+  const facility = detail?.parkingFacility
+    ? compiled.parking[compiled.index.parking.get(detail.parkingFacility)!]
+    : undefined;
   return (
     <>
       <h2>Vehicle {id}</h2>
@@ -41,6 +44,22 @@ export function VehicleInspector({
           <dd>{city.places[detail.destinationPlace]!.name}</dd>
           <dt>State</dt>
           <dd className="capitalize">{detail.state.replaceAll('_', ' ')}</dd>
+          {detail.parkingPhase && (
+            <>
+              <dt>Parking motion</dt>
+              <dd>
+                {
+                  {
+                    drive_in: 'Driving to stall',
+                    park: 'Pulling in',
+                    leave: 'Pulling out',
+                    drive_out: 'Driving to exit',
+                    exit: 'Waiting for a gap',
+                  }[detail.parkingPhase]
+                }
+              </dd>
+            </>
+          )}
           <dt>Speed</dt>
           <dd>{(detail.speedMps * 3.6).toFixed(1)} km/h</dd>
           <dt>Waiting time</dt>
@@ -49,13 +68,30 @@ export function VehicleInspector({
             <>
               <dt>Parking</dt>
               <dd>
-                {compiled.parking[compiled.index.parking.get(detail.parkingFacility)!]?.name ??
-                  'Garage'}
+                {facility?.name ??
+                  (facility?.kind === 'lot'
+                    ? 'Parking lot'
+                    : facility?.kind === 'roadside'
+                      ? 'Roadside parking'
+                      : 'Garage')}
               </dd>
               <dt>Walk to destination</dt>
               <dd>{Math.round(detail.walkingDistanceM)} m</dd>
               <dt>Parking search</dt>
               <dd>{detail.parkingSearchTimeS.toFixed(1)} s</dd>
+              {detail.stallChoice && (
+                <>
+                  <dt>Chosen stall</dt>
+                  <dd>
+                    {detail.parkingSpace} · rank {detail.stallChoice.rank}
+                  </dd>
+                  <dt>Drive and walk score</dt>
+                  <dd>
+                    {detail.stallChoice.scoreM.toFixed(1)} m (best{' '}
+                    {detail.stallChoice.bestScoreM.toFixed(1)} m)
+                  </dd>
+                </>
+              )}
             </>
           )}
           {reason && (

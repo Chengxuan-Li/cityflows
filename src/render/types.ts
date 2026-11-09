@@ -11,6 +11,7 @@ export interface RoadDifference {
 }
 
 export interface VehicleSnapshot {
+  poseLane?: Int32Array;
   timeS: number;
   count: number;
   id: Uint32Array;

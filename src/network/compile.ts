@@ -22,6 +22,7 @@ import { compileWalk, emptyWalkGraph } from './walk';
 import { populateStops } from './stops';
 import { compileParking, compileVisibleParking } from './parking';
 import { generateStalls } from './stalls';
+import { compileLotPaths } from './lot-paths';
 import type {
   CConnector,
   CLane,
@@ -538,6 +539,7 @@ export function compile(city: City): CompileResult {
     compiled.lots = generateStalls(city, compiled);
   populateStops(compiled, city);
   compileVisibleParking(city, compiled, centroid);
+  compileLotPaths(city, compiled, diagnostics);
   for (const lane of lanes)
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   warnAboutConnectivity(compiled, diagnostics);

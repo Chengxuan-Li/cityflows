@@ -73,7 +73,7 @@ export class Vehicles3D {
     if (!snapshot) return;
     for (let i = 0; i < snapshot.count; i++) {
       const pose = this.poses.at(i, elapsedS);
-      const lane = snapshot.lane[i]!;
+      const lane = (snapshot.poseLane?.[i] ?? -1) >= 0 ? snapshot.poseLane![i]! : snapshot.lane[i]!;
       let z: number,
         slope = 0;
       if (lane < 0) {

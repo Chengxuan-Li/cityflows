@@ -117,6 +117,20 @@ export function MetricsPanel() {
           <dd>{parking.meanSearchTimeS.toFixed(1)} s</dd>
           <dt>Trips failed for lack of parking</dt>
           <dd>{parking.failed.toLocaleString()}</dd>
+          {parking.motion && (
+            <>
+              <dt>Mean lot entry to parked</dt>
+              <dd>{parking.motion.meanEntryToParkS.toFixed(1)} s</dd>
+              <dt>Mean drive inside a lot</dt>
+              <dd>{parking.motion.meanLotDriveS.toFixed(1)} s</dd>
+              <dt>Mean lot departure</dt>
+              <dd>{parking.motion.meanLotLeaveS.toFixed(1)} s</dd>
+              <dt>Strip manoeuvres per hour</dt>
+              <dd>{parking.motion.stripManoeuvresPerHour.toFixed(1)}</dd>
+              <dt>Mean chosen stall rank</dt>
+              <dd>{parking.motion.meanStallChoiceRank.toFixed(1)}</dd>
+            </>
+          )}
         </dl>
       )}
       {walkers && (

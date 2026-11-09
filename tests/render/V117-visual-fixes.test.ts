@@ -158,14 +158,14 @@ const pins = {
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
   munich: {
-    compile: '332a2e3726e8ec9a4a8ba38aafee3a2cd4a1c8dddb527dbe6d3a81f43c712c23',
+    compile: '0646355d3f67598fe38ed6951da2629efd4803c7aaf566f3ad1d7efe27c59b68',
     lamps: 'bc94740d4de607448564eccefc039d3f5e628993d32e633dfdaa99d62d6d1e71',
     curbs: '87bf5ac1b6f01bb6ba7d9e001433c346d60e8b39ea2fbe12e26bbc85e39da18b',
     de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
     us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
   },
   sindelfingen: {
-    compile: '5e7ffd6378f144941c8e4bb48e074000fb966bf22b3af331bec19b8d8360340a',
+    compile: 'f46d855d6bf3d99b41dcdcb1642f5d75abc8e1a10120c73aae0090a2d20092c7',
     lamps: 'acd3b097695fe649986e9236ccf382fa154c19d9487087c2fc6b63395cffbeba',
     curbs: '401236de151028fe921ef2ca483c99218fa4fa8daf258fa45a50da58f3229255',
     de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',

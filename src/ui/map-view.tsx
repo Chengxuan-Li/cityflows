@@ -27,7 +27,11 @@ function snapshotForMap(
   if (compiled === loadedCompiled) return presentation;
 
   // Positions stay in world coordinates. The renderer only needs the remapped index for layering.
-  const lane = snapshot.lane.map((index) => {
+  const poseLane = snapshot.poseLane?.map((index) =>
+    index < 0 ? -1 : (compiled.index.lane.get(loadedCompiled.lanes[index]!.id) ?? 0),
+  );
+  const lane = snapshot.lane.map((index, i) => {
+    if ((snapshot.poseLane?.[i] ?? -1) >= 0) return index;
     if (index >= 0) return compiled.index.lane.get(loadedCompiled.lanes[index]!.id) ?? 0;
     const movement = loadedCompiled.movements[-index - 1]!;
     const current = compiled.index.movement.get(movement.id);
@@ -35,7 +39,7 @@ function snapshotForMap(
       ? (compiled.index.lane.get(loadedCompiled.lanes[movement.toLane]!.id) ?? 0)
       : -current - 1;
   });
-  return { ...presentation, lane };
+  return { ...presentation, lane, poseLane };
 }
 
 function routeForMap(route: Route, { compiled, loadedCompiled }: Session) {

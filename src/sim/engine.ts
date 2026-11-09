@@ -37,6 +37,8 @@ import {
   QUEUED_ORIGIN,
   QUEUED_DESTINATION,
   PENDING,
+  IN_LOT,
+  OFF_LANE,
 } from './vehicle';
 
 type LoadInput = Parameters<TrafficEngine['load']>[0] & {
@@ -51,6 +53,7 @@ const detailStates: (VehicleState | null)[] = [
   'queued_origin',
   'completed',
   'failed',
+  'in_lot',
 ];
 
 function createRun({
@@ -150,6 +153,24 @@ function createRun({
     vehicles.routeStep[id] = 0;
     routeReasons[id] = 'parking';
     parkingEdit[id] = 0;
+    return true;
+  }
+
+  function resumeParkingRoute(id: number, connector: CConnector, timeS: number) {
+    const destination = compiled.connectors[vehicles.destination[id]!];
+    if (
+      parkingEdit[id] ||
+      !destination ||
+      (parking.required(id) && destination.parking === undefined)
+    )
+      return chooseParkingRoute(id, connector.lane, connector.positionM, timeS);
+    const result = routeFrom(id, connector.lane, connector.positionM);
+    if (!result.ok)
+      return (
+        parking.required(id) && chooseParkingRoute(id, connector.lane, connector.positionM, timeS)
+      );
+    vehicles.route[id] = result.route;
+    vehicles.routeStep[id] = 0;
     return true;
   }
 
@@ -286,6 +307,7 @@ function createRun({
     }
     const source = compiled.lanes[lane]!;
     if (parking.leavingSpace(vehicle)) {
+      if (!parking.departureRoom(vehicle)) return false;
       for (let id = vehicles.last(lane); id !== -1; id = vehicles.previous[id]!) {
         if (vehicles.position[id]! >= positionM) break;
         const gapM = positionM - profile(vehicle).lengthM - vehicles.position[id]!;
@@ -346,8 +368,15 @@ function createRun({
     roadEnteredS[id] = timeS;
     roadEnteredM[id] = positionM;
     planLane(id, lane, positionM);
-    vehicles.insert(id, lane, positionM);
-    accounting.transition(id, DRIVING);
+    if (parking.startsInLot(id)) {
+      vehicles.lane[id] = OFF_LANE;
+      vehicles.position[id] = 0;
+      vehicles.speed[id] = 0;
+      accounting.transition(id, IN_LOT);
+    } else {
+      vehicles.insert(id, lane, positionM);
+      accounting.transition(id, DRIVING);
+    }
     return true;
   }
 
@@ -358,7 +387,7 @@ function createRun({
       const lane = compiled.lanes[occupied[i]!]!;
       if (lane.left === -1 && lane.right === -1) continue;
       for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
-        if (vehicles.state[id] !== DRIVING || parking.departing(id, time())) continue;
+        if (vehicles.state[id] !== DRIVING || parking.motion(id)) continue;
         const discretionary =
           intersections.grants[id] === -1 &&
           lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM;
@@ -388,17 +417,15 @@ function createRun({
       let ahead = -1;
       for (let id = head; id !== -1; id = vehicles.next[id]!) {
         order[orderCount++] = id;
+        if (parking.motion(id)) {
+          ahead = id;
+          continue;
+        }
         if (vehicles.state[id] === QUEUED_DESTINATION) {
           ahead = id;
           continue;
         }
         const position = vehicles.position[id]!;
-        if (parking.departing(id, timeS)) {
-          acceleration[id] = 0;
-          limit[id] = position;
-          ahead = id;
-          continue;
-        }
         if (lane) parking.approach(id, lane.idx, position, timeS);
         const destination = compiled.connectors[arrival[id]!];
         const movement = compiled.movements[vehicles.movement[id]!];
@@ -472,13 +499,14 @@ function createRun({
           desiredSpeed,
           walkerStop - position,
         );
-        acceleration[id] = idmAcceleration(
+        const followingAcceleration = idmAcceleration(
           driving.idm,
           vehicles.speed[id]!,
           desiredSpeed,
           leaderSpeed,
           obstacle - position,
         );
+        acceleration[id] = followingAcceleration;
         const requester = lane ? laneChanges.yieldingTo[id]! : -1;
         if (requester !== -1) {
           // TASK-076: the requester's projected rear is a standing leader, braked for at no
@@ -502,13 +530,21 @@ function createRun({
         // A grant removes the virtual stop line on the next step. Predict its motion
         // from physical following, including for grants awarded later in this resolve.
         // Evaluate at the capped speed: free-flow braking toward a lower limit is not a stop.
-        reservationAcceleration[id] = idmAcceleration(
-          driving.idm,
-          Math.min(vehicles.speed[id]!, desiredSpeed),
-          desiredSpeed,
-          lane && !granted ? (leader === -1 ? 0 : vehicles.speed[leader]!) : leaderSpeed,
-          (lane && !granted ? rear : obstacle) - position,
-        );
+        const reservationLeader =
+            lane && !granted ? (leader === -1 ? 0 : vehicles.speed[leader]!) : leaderSpeed,
+          reservationRear = lane && !granted ? rear : obstacle;
+        reservationAcceleration[id] =
+          vehicles.speed[id]! <= desiredSpeed &&
+          reservationLeader === leaderSpeed &&
+          reservationRear === obstacle
+            ? followingAcceleration
+            : idmAcceleration(
+                driving.idm,
+                Math.min(vehicles.speed[id]!, desiredSpeed),
+                desiredSpeed,
+                reservationLeader,
+                reservationRear - position,
+              );
         if (movement?.turn === 'merge' && lane && !granted && stopAt < rear) {
           acceleration[id] = Math.min(
             merges.stopAcceleration(id, movement),
@@ -592,9 +628,27 @@ function createRun({
       planLane(id, lane, connector.positionM);
       return;
     }
-    if (parking.needsManoeuvre(connector.idx) && !parking.holdArrival(id, connector.idx, timeS)) {
-      if (vehicles.state[id] !== QUEUED_DESTINATION) accounting.transition(id, QUEUED_DESTINATION);
-      vehicles.waiting[id] = vehicles.waiting[id]! + dtS;
+    if (parking.needsManoeuvre(connector.idx)) {
+      if (
+        connectors.canArrive(connector, timeS, id) &&
+        parking.startArrival(id, connector.idx, timeS)
+      ) {
+        if (!connectors.arrive(connector, timeS, id))
+          throw new Error('Parking entry admission changed within a step');
+        if (parking.lotArrival(connector.idx)) {
+          leaveRoad(id, timeS, connector.positionM);
+          vehicles.remove(id);
+          intersections.release(id);
+          laneChanges.leaveLane(id);
+          vehicles.lane[id] = OFF_LANE;
+          vehicles.position[id] = 0;
+          accounting.transition(id, IN_LOT);
+        } else accounting.transition(id, QUEUED_DESTINATION);
+      } else {
+        if (vehicles.state[id] !== QUEUED_DESTINATION)
+          accounting.transition(id, QUEUED_DESTINATION);
+        vehicles.waiting[id] = vehicles.waiting[id]! + dtS;
+      }
       return;
     }
     if (connectors.arrive(connector, timeS, id)) {
@@ -650,6 +704,7 @@ function createRun({
   function commit(timeS: number) {
     for (let i = 0; i < orderCount; i++) {
       const id = order[i]!;
+      if (parking.motion(id)) continue;
       const destination = compiled.connectors[arrival[id]!];
       if (vehicles.state[id] === QUEUED_DESTINATION) {
         reachDestination(id, destination!, timeS);
@@ -832,22 +887,31 @@ function createRun({
       parkingOccupancy: parking.snapshot(),
       parkedCars: parking.stockSnapshot(),
       fade: new Float32Array(count),
+      poseLane: new Int32Array(count).fill(-1),
       ...(walkers && { walkers: walkers.snapshot() }),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
       const state = vehicles.state[id]!;
-      if (state !== DRIVING && state !== QUEUED_DESTINATION) continue;
+      if (state !== DRIVING && state !== QUEUED_DESTINATION && state !== IN_LOT) continue;
       const field = vehicles.lane[id]!;
-      const segment = field < 0 ? compiled.movements[-field - 1]! : compiled.lanes[field]!;
+      const motion = parking.motion(id);
+      const segment = motion
+        ? null
+        : field < 0
+          ? compiled.movements[-field - 1]!
+          : compiled.lanes[field]!;
       const position = vehicles.position[id]!;
-      const point = pointAtDistance(segment.polyline, segment.cumulative, position);
+      const point =
+        motion?.pose ?? pointAtDistance(segment!.polyline, segment!.cumulative, position);
       snapshot.id[i] = id + 1;
       snapshot.x[i] = point.x;
       snapshot.y[i] = point.y;
-      snapshot.heading[i] = headingAtDistance(segment.polyline, segment.cumulative, position);
-      snapshot.speed[i] = vehicles.speed[id]!;
-      snapshot.lateralM[i] = laneChanges.lateralM(id, tick);
+      snapshot.heading[i] =
+        motion?.pose.heading ?? headingAtDistance(segment!.polyline, segment!.cumulative, position);
+      snapshot.speed[i] = motion?.speed ?? vehicles.speed[id]!;
+      snapshot.lateralM[i] = motion ? 0 : laneChanges.lateralM(id, tick);
+      snapshot.poseLane![i] = motion?.lane ?? -1;
       snapshot.lane[i] = field;
       snapshot.state[i] = state;
       snapshot.vclass[i] = vehicles.vclass[id]!;
@@ -875,7 +939,7 @@ function createRun({
       state: detailStates[state]!,
       lane: vehicles.lane[id]!,
       positionM: vehicles.position[id]!,
-      speedMps: vehicles.speed[id]!,
+      speedMps: parking.motion(id)?.speed ?? vehicles.speed[id]!,
       // A deferred edit check can retain a broken internal plan until it is due. Do not
       // publish its removed indices as a drawable route.
       route:
@@ -986,6 +1050,16 @@ function createRun({
             .map((i) => changes.movements[i]!)
             .filter((i) => i !== -1),
         );
+      const motion = parking.motion(id);
+      if (motion) {
+        if (lostParking) {
+          parkingEdit[id] = 1;
+          parking.beginSearch(id, time());
+        }
+        if (motion.laneHeld) vehicles.insert(id, motion.lane, vehicles.position[id]!);
+        else vehicles.lane[id] = OFF_LANE;
+        continue;
+      }
       if (vehicles.state[id] !== DRIVING && vehicles.state[id] !== QUEUED_DESTINATION) continue;
       const field = vehicles.lane[id]!;
       const source = field >= 0 ? before.lanes[field]! : before.movements[-field - 1]!;
@@ -1132,6 +1206,51 @@ function createRun({
         resolve(timeS);
         tick++;
         commit(time());
+        parking.advance(time(), {
+          clearLane(id) {
+            if (vehicles.lane[id] !== OFF_LANE) {
+              leaveRoad(id, time(), vehicles.position[id]!);
+              vehicles.remove(id);
+              intersections.release(id);
+              laneChanges.leaveLane(id);
+              vehicles.lane[id] = OFF_LANE;
+            }
+          },
+          park(id, connector) {
+            const c = compiled.connectors[connector]!;
+            vehicles.lane[id] = c.lane;
+            vehicles.position[id] = c.positionM;
+            vehicles.speed[id] = 0;
+            accounting.complete(id, time());
+          },
+          exit(id, connector) {
+            const c = compiled.connectors[connector]!;
+            if (!hasSpawnGap(c, id) || !connectors.releaseLot(c, time())) return false;
+            if (!resumeParkingRoute(id, c, time())) {
+              vehicles.lane[id] = c.lane;
+              vehicles.position[id] = c.positionM;
+              accounting.fail(id, 'no_parking');
+              return true;
+            }
+            vehicles.insert(id, c.lane, c.positionM);
+            vehicles.speed[id] = 0;
+            vehicles.jamS[id] = 0;
+            accounting.transition(id, DRIVING);
+            roadEnteredS[id] = time();
+            roadEnteredM[id] = c.positionM;
+            planLane(id, c.lane, c.positionM);
+            return true;
+          },
+          resume(id, connector) {
+            const c = compiled.connectors[connector]!;
+            if (resumeParkingRoute(id, c, time())) planLane(id, c.lane, c.positionM);
+            else {
+              vehicles.remove(id);
+              vehicles.speed[id] = 0;
+              accounting.fail(id, 'no_parking');
+            }
+          },
+        });
         recoverGridlock(time());
         observedCosts.update(time());
       }

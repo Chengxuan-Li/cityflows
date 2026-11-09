@@ -1,5 +1,6 @@
 import { createEngine } from '../sim/engine';
 import { DEFAULT_SIM_PARAMS } from '../sim/params';
+import { OFF_LANE } from '../sim/vehicle';
 import { createPlayLoop } from './loop';
 import type { HeadlessResult } from './protocol';
 
@@ -30,6 +31,7 @@ export function runHeadless(
   );
   const visited = new Map<number, Set<number>>();
   function observe(id: number, laneField: number) {
+    if (laneField === OFF_LANE) return;
     const road =
       laneField < 0
         ? compiled.lanes[compiled.movements[-laneField - 1]!.fromLane]!.road

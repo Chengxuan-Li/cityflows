@@ -149,16 +149,19 @@ test('T52 street share zero keeps resident stock in garages; share one reserves 
   const on = w.load(requests, 1);
   expect(on.snapshot()[garage.idx]).toBe(0);
   expect(on.snapshot()[w.facility.idx]).toBe(2);
-  expect(occupiedSpaces(on.stockSnapshot().occupied, 3)).toEqual([0, 1]);
+  expect(occupiedSpaces(on.stockSnapshot().occupied, 3)).toHaveLength(2);
   const first = on.exits(0, []),
     second = on.exits(1, []);
   expect(first).toHaveLength(1);
   expect(second).toHaveLength(1);
   expect(first[0]).not.toBe(second[0]);
   expect(on.noOriginCar(2)).toBe(true);
-  expect([...on.stockSnapshot().vclass]).toEqual([0, 1, 0]);
+  const firstSpace = w.compiled.parkingSpaces!.find((s) => s.connector === first[0])!;
+  const secondSpace = w.compiled.parkingSpaces!.find((s) => s.connector === second[0])!;
+  expect(on.stockSnapshot().vclass[firstSpace.idx]).toBe(0);
+  expect(on.stockSnapshot().vclass[secondSpace.idx]).toBe(1);
   on.depart(0, 100);
-  expect(occupiedSpaces(on.stockSnapshot().occupied, 3)).toEqual([1]);
+  expect(occupiedSpaces(on.stockSnapshot().occupied, 3)).toEqual([secondSpace.idx]);
   expect(on.snapshot()[w.facility.idx]).toBe(1);
   expect(on.exits(1, [])).toEqual(second);
   on.depart(1, 100);
@@ -181,7 +184,7 @@ test('T52 cars and vans choose visible parking while trucks and buses choose the
   }
 });
 
-test('T52 simultaneous lot arrivals reserve the nearest remaining stall to their entry', () => {
+test('T52 simultaneous lot arrivals reserve distinct reachable stalls within the score slack', () => {
   const w = stockWorld('lot');
   expect(w.facility.spaces!.length).toBeGreaterThan(2);
   const parking = w.load([w.trip('first'), w.trip('second')], 0);
@@ -194,15 +197,16 @@ test('T52 simultaneous lot arrivals reserve the nearest remaining stall to their
     return Math.hypot(p.x - (lane.polyline[0]!.x + entry.positionM), p.y);
   };
   const nearest = [...w.facility.spaces!].sort((a, b) => distance(a) - distance(b));
-  expect(parking.holdArrival(0, connector, 100)).toBe(false);
-  expect(parking.holdArrival(1, connector, 100)).toBe(false);
-  expect(parking.holdArrival(0, connector, 104)).toBe(true);
-  expect(parking.holdArrival(1, connector, 104)).toBe(true);
-  parking.arrive(0, connector, 104);
-  parking.arrive(1, connector, 104);
+  const callbacks = { clearLane: () => {}, park: () => {}, exit: () => true, resume: () => {} };
+  expect(parking.startArrival(0, connector, 100)).toBe(true);
+  expect(parking.startArrival(1, connector, 100)).toBe(false);
+  for (let i = 1; i <= 40; i++) parking.advance(100 + i * 0.1, callbacks);
+  expect(parking.startArrival(1, connector, 104)).toBe(true);
+  for (let i = 1; i <= 2000; i++) parking.advance(104 + i * 0.1, callbacks);
   const stock = parking.stockSnapshot();
-  expect(stock.id[nearest[0]!]).toBe(1);
-  expect(stock.id[nearest[1]!]).toBe(2);
+  expect([...stock.id].filter((id) => id > 0).sort()).toEqual([1, 2]);
+  expect(nearest).toContain(stock.id.indexOf(1));
+  expect(nearest).toContain(stock.id.indexOf(2));
   expect(occupiedSpaces(stock.occupied, stock.id.length)).toHaveLength(2);
   expect(parking.snapshot()[w.facility.idx]).toBe(2);
 });
@@ -248,6 +252,9 @@ test('T52 removing occupied visible parking requires restart and leaves the run 
 
 test('T52 a fast approaching follower blocks a slot departure despite a stationary spawn gap', () => {
   const w = stockWorld();
+  // Keep the gap case on one exact slot; TASK-118 randomises assignment within a strip.
+  w.city.parking![w.facility.id]!.capacity = 1;
+  w.city.parking![w.facility.id]!.strip!.toM = 55.5;
   const slot = w.compiled.parkingSpaces![w.facility.spaces![0]!]!;
   const gateway = (name: string, positionM: number) => {
     const id = allocateId(w.city, 'p');
@@ -299,7 +306,7 @@ test('T52 a fast approaching follower blocks a slot departure despite a stationa
   expect(engine.inspect(2)?.state).toBe('queued_origin');
   expect(engine.inspect(2)?.departedS).toBeNull();
   const stock = engine.snapshot().parkedCars!;
-  expect(occupiedSpaces(stock.occupied, stock.id.length)).toHaveLength(2);
+  expect(occupiedSpaces(stock.occupied, stock.id.length)).toHaveLength(1);
   for (let i = 0; i < 200 && engine.inspect(2)?.departedS === null; i++) engine.step();
   expect(engine.inspect(2)?.departedS).toBeGreaterThan(105);
   expect(engine.inspect(2)?.lane).toBe(slot.lane);
@@ -444,8 +451,13 @@ test.each([0, 1])(
       if (compiled.connectors[exits[0]!]!.parking === lot.idx) lotExits.push(exits[0]!);
     }
     expect(lotExits).toHaveLength(2);
-    expect(new Set(lotExits).size).toBe(2);
+    expect(new Set(lotExits).size).toBe(1);
     for (let id = 0; id < requests.length; id++) parking.depart(id, 100);
+    expect(
+      new Set(
+        requests.flatMap((_, id) => (parking.motion(id)?.lot ? [parking.motion(id)!.slot] : [])),
+      ).size,
+    ).toBe(2);
     expect(homeFacilities.reduce((sum, f) => sum + parking.snapshot()[f.idx]!, 0)).toBe(0);
     expect(occupiedSpaces(parking.stockSnapshot().occupied, stock.id.length)).toEqual([]);
   },

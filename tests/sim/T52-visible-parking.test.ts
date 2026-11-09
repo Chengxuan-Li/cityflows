@@ -125,7 +125,8 @@ test('T52 the next trip leaves its occupied slot and holds the lane four seconds
   expect(engine.inspect(2)?.lane).toBe(space.lane);
   expect(engine.inspect(2)?.positionM).toBeCloseTo(space.positionM);
   engine.step(38);
-  expect(engine.inspect(2)?.speedMps).toBe(0);
+  expect(engine.inspect(2)?.speedMps).toBeGreaterThan(0);
+  expect(engine.inspect(2)?.positionM).toBeCloseTo(space.positionM);
   engine.step(20);
   expect(engine.inspect(2)?.positionM).toBeGreaterThan(space.positionM);
   expect([...engine.snapshot().parkedCars!.id]).not.toContain(1);
