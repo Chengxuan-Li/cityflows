@@ -1,6 +1,7 @@
 import type { Metrics } from './types';
 import type { Vehicles } from './vehicle';
 import type { Walkers } from './walkers';
+import type { createPersons } from './persons';
 
 // Hash signed or unsigned fields as four little-endian bytes.
 function word(hash: number, value: number): number {
@@ -17,6 +18,7 @@ export function stateHash(
   trips: Metrics['trips'],
   parking?: number,
   walkers?: Walkers,
+  persons?: ReturnType<typeof createPersons>,
 ): number {
   let hash = word(0x811c9dc5, Math.round(timeS * 10));
   for (let id = 0; id < vehicles.count; id++) {
@@ -39,6 +41,7 @@ export function stateHash(
   if (parking !== undefined) hash = word(hash, parking);
   // TASK-111: walkers enter the hash only once one has spawned.
   if (walkers?.spawned) hash = walkers.hash(word, hash);
+  if (persons) hash = persons.hash(word, hash);
   return hash >>> 0;
 }
 

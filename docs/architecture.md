@@ -1087,7 +1087,7 @@ TASK-110 adds `createWalkRouter(graph: WalkGraph)` independently of `RouteProvid
 1.4 m/s and steps factor 0.6. Partial first/last links and same-link shortcuts are included.
 The result contains directed legs `{ link, fromM, toM }`, link indices, metres and seconds;
 failures are `position_unreachable` or `no_path`. Scratch arrays are reused per router; no
-request-dependent route is cached. No walkers are simulated yet (TASK-111/112).
+request-dependent route is cached. The simulation consumes these routes for test and person walkers.
 TASK-111's test walkers use it once per source (place to place, `walkSpeedMps`,
 `walkStepsFactor`), sharing the route among the source's walkers; live edits route again.
 
@@ -1165,18 +1165,20 @@ interface SimParams {
 }
 
 type VehicleState = 'queued_origin' | 'driving' | 'queued_destination' | 'in_lot' | 'completed' | 'failed';
-type FailReason = 'no_route' | 'unsupported_mode' | 'destination_unreachable' | 'stranded'
+type FailReason = 'no_route' | 'no_walk_route' | 'unsupported_mode' | 'destination_unreachable' | 'stranded'
   | 'no_origin_connector' | 'no_destination_connector'
   | 'gridlocked';                                     // TASK-077, after maxRespawns
 
 interface TrafficEngine {
-  load(input: { compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario; params?: Partial<SimParams> }): void;
+  load(input: { compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario; population?: Person[]; params?: Partial<SimParams> }): void;
   patch(compiled: CompiledCity): PatchResult;   // TASK-051, live edits below
   step(n?: number): void;
   readonly timeS: number;        // seconds since midnight of the scenario day
   snapshot(): VehicleSnapshot;
   metrics(): Metrics;
   inspect(vehicleId: number): VehicleDetail | null;
+  inspectWalker(walkerId: number): WalkerDetail | null;
+  inspectPerson(personId: string): PersonDetail | null;
   stateHash(): number;           // 32-bit FNV-1a, see below
 }
 
@@ -1201,7 +1203,7 @@ interface PatchResult {
 interface Metrics {
   timeS: number;
   trips: { pending: number; queuedOrigin: number; driving: number; queuedDestination: number;
-           completed: number; failed: number };       // sum equals trips loaded (T01)
+           completed: number; failed: number };       // vehicle trips; whole walks counted separately
   failedByReason: Record<FailReason, number>;
   completedByClass: Record<VehicleClass, number>;
   meanTravelTimeS: number; meanDelayS: number;        // delay = travel - free-flow estimate
@@ -1249,8 +1251,9 @@ Step sequence, in this order every step:
 2. Spawn: for each `out` or `both` connector in index order, release queued trips whose
    departure time has passed while the lane has a free gap of `spawnMinGapM` at the connector
    and the connector's per-minute budget allows. A released trip gets a route request from the
-   connector lane; `no_route` fails the trip without spawning. Trips whose mode is not `car`
-   fail at load time with `unsupported_mode` (T15).
+   connector lane; `no_route` fails the trip without spawning. TASK-112 holds person car trips
+   until their access walk arrives. Local walk trips use the walker path; bus, rail and walks
+   with a gateway end fail with `unsupported_mode` (T15).
 3. Proposals, for every driving vehicle in (lane idx, position descending) order, from the
    state at the start of the step:
    - Leader: the next vehicle ahead on the same lane, else on the movement the vehicle will
@@ -1435,9 +1438,11 @@ at every step (T02).
 Pedestrians (TASK-111, `sim/walkers.ts`). `Scenario.walkers?: { fromPlaceId, toPlaceId,
 perHour }[]` is a test source: a Poisson stream per source over the scenario, from
 `createRandom(seed).derive('walkers').derive(source)`, walker ids in spawn order. A source
-without a walk route counts its walkers as spawned and dropped. Without sources the engine
-creates no walker state at all: hashes, metrics and every step equal the run without the
-feature. Walkers advance in the fixed step at `walkSpeedMps` (1.4 m/s; `walkStepsFactor` 0.6
+without a walk route counts its walkers as spawned and dropped. TASK-112 reserves all test
+source ids first, then allocates person walker ids monotonically after them without reuse;
+adding person walkers leaves the test sources' ids and seeded departures unchanged. Without
+test sources or person demand the engine creates no walker state. Walkers advance in the fixed
+step at `walkSpeedMps` (1.4 m/s; `walkStepsFactor` 0.6
 on steps), right after the signals in each step, and never collide with each other. A crossing run
 is the consecutive crossing legs of one crossing (one node and arm, or one road's midblock
 zebra); a walker waits at its kerb (state waiting) and steps out (state crossing) once
@@ -1463,14 +1468,38 @@ yield at signals (movements into an arm with walk green) and gate 4's invariant:
 overlaps a span while a walker is inside it on that lane.
 
 Once a walker has spawned, the hash appends, per spawned walker in id order, `[id, state, leg,
-round(position along leg or run * 100)]`. `Metrics.walkers` (with sources only) reports
+round(position along leg or run * 100)]`, with the trip-leg code for person walkers. `Metrics.walkers` reports
 spawned, completed, dropped and active walkers, mean walk time, mean wait and crossings by
 crossing kind, vehicles that came to a stop for a walker and the time they lost against desired
-speed while yielding (zebra; signal), and hard stops. Snapshots carry `walkers` (id, position
-0.35 m right of the walking direction, heading, state, grade) and `inspectWalker(id)` returns
-route, state and waits. A live edit keeps walkers by link id and walk green by the patched
+speed while yielding (zebra; signal), hard stops and peak active walkers. Snapshots carry
+`walkers` (id, position 0.35 m right of the walking direction, heading, state, grade,
+`tripLeg`: 0 test, 1 access, 2 egress, 3 whole walk); `inspectWalker(id)` returns route,
+state, waits, `personId`, `tripId` and the named trip leg. A live edit keeps walkers by link id and walk green by the patched
 signal epochs; a walker whose remaining route lost a link reroutes from where it stands, and is
 dropped when its own link is gone or no route remains.
+
+TASK-112 keeps person journeys in `sim/persons.ts`, leaving parking choice and stock in
+`sim/parking.ts`. A local private car trip starts with an access walk from the origin's walk
+anchor to its parked car. Strip slots and lot stalls project to a walk link within 30 m,
+otherwise use their facility anchor; garages use their connector anchor. The queued car
+becomes ready only when the walker arrives. Parking completes the drive leg and starts an
+egress walk to the destination; the person trip completes at the building. A dependent trip
+waits for this arrival. Gateway ends have no walk leg. Vans, trucks, buses and through trips
+have no occupant or person legs. A local walk-mode trip is one whole-walk leg; a missing route
+fails as `no_walk_route`.
+
+The walker spawn API accepts a routed path, departure time, places, person/trip owner and leg,
+and reports arrival or a dropped walker through its callback. Person routes cache by their
+place/parking anchors. A missing access or egress route advances the person invisibly in a
+straight line at walking speed; it counts a fallback with leg, place, facility and reason,
+and the drive continues. A failed drive ends the person journey without an egress walk.
+Live edits reroute active walkers through the same TASK-111 patch path.
+
+Vehicle accounting retains drive completion. Whole-walk requests are excluded from vehicle
+trip counters; their outcomes and `no_walk_route` failure reasons remain available.
+`Metrics.persons` adds door-to-door `started`, `completed`, `failed`, `walkTripsCompleted`,
+`walkTripsFailed`, access/egress `{ count, meanTimeS, meanDistanceM }`, `walkFallbacks` and
+grouped `fallbacks`. Person state and leg progress participate in the deterministic hash.
 
 TASK-030 admission windows: compiled places retain a copy of their events. Each event opens
 `arrivals` admission slots uniformly over its window (floor of the elapsed fraction times
@@ -1567,8 +1596,8 @@ TASK-100 assigns class after mode choice, using a separate demand-seeded stream 
 trip id, leaving every existing agenda, mode and timing draw unchanged. Omitted shares resolve
 to local car 0.92 / van 0.08 and through car 0.80 / van 0.08 / truck 0.12; buses default to
 zero. Local vans split delivery/service equally by a seeded draw; other local trips are
-private and through trips retain purpose through. Unsupported modes keep car/private metadata
-and still fail as unsupported. Saved trips missing labels parse as car/private, or through
+private and through trips retain purpose through. Walk-mode trips keep car/private metadata
+but travel on foot; bus, rail and gateway-ended walks fail as unsupported. Saved trips missing labels parse as car/private, or through
 for established `through:` trip IDs. Summary counts include each class; the demand panel also
 shows completed trips per class. Buses have no stops, routes or transit operations.
 
@@ -1618,8 +1647,9 @@ variant. Saving a baseline captures current editor state, including unapplied li
   chosen seed. Connector, road and signal edits never touch the population.
 - `scheduleTrips` rebuilds each person's `agenda` in place from the persistent assignments
   (persons without a workplace get a single home activity), then emits one `TripRequest` per
-  agenda transition, mode `car` for persons with a car. Persons without a car get mode `walk`
-  in Gate 1, which the sim reports as unsupported rather than spawning (T15). Population
+  agenda transition, mode `car` for persons with a car and `walk` for those without one.
+  TASK-112 simulates local walks and derives access/drive/egress legs from parking at runtime;
+  `TripRequest.legs` retains the single planned leg. Population
   draws use `DemandConfig.seed`; scheduling draws use `Scenario.seed`; both derive a
   sub-stream per person id, so adding a place does not reshuffle existing persons.
 - Trips are not clipped to the scenario window. The sim releases a trip whose `departS` is
@@ -1638,8 +1668,9 @@ variant. Saving a baseline captures current editor state, including unapplied li
   (owner, 2026-11-08, after a 1 200-slot inferred office garage failed 800 of demo A's 2 000
   commuters). Mapped capacities and capacities set in the inspector are hard limits.
   Search time starts on entering the search radius for a fallback, or when an entry is
-  rejected, and ends on parking; walking distance is recorded separately, with no walkers.
-  A person's next car trip waits for the previous trip and leaves from the parked facility,
+  rejected, and ends on parking; parking choice still uses straight-line walking distance.
+  TASK-112 records the actual walk time and distance separately. A person's next car trip
+  waits for the preceding person journey's arrival and leaves from the parked facility,
   not the activity place. Gateway trips never park at their gateway end. Places with no
   facilities retain legacy connector admission, including zero-demand event portals.
 - Validation summary (Gate 3 UI): trips by place and hour, total trips, mean length, queued
@@ -1680,7 +1711,7 @@ city (structured clone) to the worker on load.
 
 ```ts
 type HostRequest =
-  | { id: number; type: 'load'; compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario }
+  | { id: number; type: 'load'; compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario; population?: Person[] }
   | { id: number; type: 'play' } | { id: number; type: 'pause' }
   | { id: number; type: 'setSpeed'; multiplier: number }       // 1, 2, 5, 10, 20
   | { id: number; type: 'step'; steps: number }
@@ -1692,7 +1723,10 @@ type HostRequest =
   | { id: number; type: 'tripRecords' } | { id: number; type: 'roadStats' }
   | { id: number; type: 'trajectories'; enabled?: boolean }
   | { id: number; type: 'trajectoryStatus' }
-  | { id: number; type: 'inspect'; vehicleId: number } | { id: number; type: 'hash' };
+  | { id: number; type: 'inspect'; vehicleId: number }
+  | { id: number; type: 'inspectWalker'; walkerId: number }
+  | { id: number; type: 'inspectPerson'; personId: string }
+  | { id: number; type: 'hash' };
 type HostReply = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 type HostEvent =
   | { type: 'headlessProgress'; timeS: number }
@@ -1705,6 +1739,12 @@ type HostEvent =
   UI shows the achieved speed, so throttling is visible rather than silent.
 - Snapshots are pulled: the main thread requests one per animation frame with at most one in
   flight; the worker replies with transferable buffers. `tick` events are pushed at 10 Hz.
+- TASK-112 includes saved population in interactive, restarted and comparison loads. Walker
+  buffers, including `tripLeg`, transfer with the existing snapshot. `inspectPerson` returns
+  id, home/work, agenda, journey state, current leg, current car facility/space and trip history.
+  Each trip has places, scheduled departure, state, failure reason and legs; each leg has kind,
+  state, start/arrival times, distance and walker id. Metrics and headless results retain the
+  person metrics alongside vehicle, parking and crossing metrics.
 - TASK-102 adds `parkingOccupancy`, a separate count array in compiled facility order,
   transferred with heat at most once per 500 ms; load/restart/patch resets the throttle.
   Minute metrics history also records occupancy keyed by facility ID. Parking metrics expose
@@ -1774,7 +1814,7 @@ type HostEvent =
 
 ## 11. Rendering and UI
 
-TASK-111: the default-on Pedestrians layer (shown when the scenario has test pedestrians) draws
+TASK-111/112: the default-on Pedestrians layer (shown for person demand or test pedestrians) draws
 walkers as dots at least 2.4 px across in their grade's group above vehicles in 2D (warmer
 while waiting at a kerb), and as instanced upright capsules in 3D at ground plus 5 m per grade
 and the 0.14 m curb. Both kerb ends of each signalised crossing get a small walk light, green
@@ -1788,6 +1828,13 @@ Undo/Redo step through them and city edits in one order. The signal inspector li
 phase's walk groups (derived or set by hand, with Derive to clear), toggles them from checkboxes
 or the schematic's crossing lines, and adds an exclusive pedestrian phase.
 `window.cityflows.setWalkers` sets the source and restarts (test mode).
+
+TASK-112 opens a person's view when their walker is selected or their occupant line is clicked
+in the vehicle inspector. It shows home/work, agenda times, current leg/state, parked car and
+each started trip's leg times and distances. Vehicles without persons show no occupant.
+The demand sheet adds door-to-door and whole-walk counts, mean access/egress walks, grouped
+fallbacks and the existing crossing/vehicle-delay counts. Person walkers use the same 2D dots
+and 3D capsules as test walkers, with the same picking and snapshot update path.
 
 TASK-103 adds a default-on “Parked cars” layer in both views, independent of stall paint and
 facility occupancy labels. TASK-118 draws in-lot travel and strip manoeuvres in the existing
@@ -2608,7 +2655,6 @@ Benchmark the sim step, worker transfer, and render time separately (TASK-044).
 ## 16. Deferred, explicitly
 
 Transit vehicles and GTFS, PBF import and bulk extracts, permissive and actuated signals,
-adaptive routing beyond EWMA, editing in 3D, desktop packaging, bicycles. Parking circulation
-and walking legs are planned for Gates 7 and 9 (plan, "Roadmap: Gates 7 to 9"); their
-contracts are added here when those tasks start. R7's multimodal readiness is covered by `TripRequest.legs` and
+adaptive routing beyond EWMA, editing in 3D, desktop packaging, bicycles, mode choice and
+households sharing a car. R7's multimodal readiness is covered by `TripRequest.legs` and
 `TripMode` in section 9; nothing in the sim assumes a person equals a car.

@@ -145,7 +145,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-118](tasks/TASK-118.md) | 7 | Parking motion: circulation inside lots, stochastic stall choice, visible strip manoeuvres, individual slot departures (owner bugs 1 and 2) | `src/network/stalls.ts`, new `lot-paths.ts`, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, new `manoeuvre.ts`, renderers | 103, lead follow-up | T54, traffic quick, shots | done (see review) |
 | [TASK-119](tasks/TASK-119.md) | 7 | Mapped street-side parking areas become strips; dropped lots and garage imported (owner bug 3) | `src/importers/osm/strips.ts`, `lots.ts`, `parking.ts`, `places.ts`, `src/network/strips.ts` | 103 | T55, traffic quick, shots | done (see review) |
 | [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | active |
-| [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | todo |
+| [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | implemented; walk-quality, quick stalled-head and parked-frame gates blocked |
 | [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -833,6 +833,23 @@ Proposed tasks:
 
 TASK-111 to TASK-113 change `src/sim` and run in sequence. It lifts "walking legs" from
 architecture section 16; transit vehicles, bicycles and parking fees stay deferred.
+
+TASK-112 validation (2026-11-09): Munich at 0.15 has no walk fallbacks. Sindelfingen has
+99 fallback egress legs out of 140 walk legs (70.7%, above the 2% gate), all `no_path` on the
+existing walk graph. For example, `p:1407` is in a different component from garage
+`pk:1453`'s connector; `p:1433` is disconnected from `pk:1466`'s garage connector. These
+journeys continue at walking speed using the contracted fallback. Repairing walk connectivity
+is a lead follow-up: `src/network/**` remains outside TASK-112's scope. Mode choice, shared
+cars, transit, bicycles and walker collisions remain deferred as contracted.
+The 09:30 quick run completes 3,331 drives (main 3,134) with 26 gridlocks (main 40), but
+has three stalled heads (`r:364`, `r:964`, `r:961`) against main's one (`r:402`). Both normal
+runs have zero at 10:00. The quick stalled-head gate therefore remains failed; the lead must
+reconcile this with TASK-121's queue-head work before acceptance.
+The T52 Munich occupied-parking smoke case passes its functional checks but repeats a lot
+2D parked-on/off frame ratio of 1.2042 against the unchanged 1.2 limit (154.785/128.5375 ms),
+including an isolated rerun after CPU checks finish. Its other five camera ratios pass.
+The unchanged case passes on main's test-mode dev app (lot 2D ratio 1.0134); the branch
+retries used its built test-mode preview. The branch's frame gate remains unresolved.
 
 ### Phases (owner-approved, 2026-11-07)
 

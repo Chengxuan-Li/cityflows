@@ -9,7 +9,7 @@ import { scheduleTrips } from '../../src/demand';
 import { createEngine } from '../../src/sim/engine';
 import type { City, Person, Scenario } from '../../src/schema';
 import { placeCamera } from '../../bench/geometry-shots';
-import { button, city, importOsm, pageErrors } from './helpers';
+import { button, city, departVehicle, importOsm, metrics, pageErrors } from './helpers';
 
 const targetTime = 8 * 3600;
 function controlledScenario(): Scenario {
@@ -252,6 +252,13 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
     agenda: [],
   };
   await openProject(page, stripSource, [owner], stripScenario);
+  // The owner now walks to the strip first; observe the first departure after that access leg.
+  await departVehicle(page, 1);
+  expect((await page.evaluate(() => window.cityflows!.inspect(1)))?.parkingPhase).toBe('leave');
+  const stripTimeS = (await metrics(page)).timeS;
+  await expect
+    .poll(() => page.evaluate(() => window.cityflows!.drawnSnapshot!()?.timeS))
+    .toBe(stripTimeS);
   const stripSnapshot = await page.evaluate(() => window.cityflows!.drawnSnapshot!());
   expect(stripSnapshot?.poseLane?.[0]).toBeGreaterThanOrEqual(0);
   const stripShots = await capture(page, info, 'V118-munich-street', 1, strip.centroid, 12);

@@ -288,6 +288,8 @@ test('T52 a fast approaching follower blocks a slot departure despite a stationa
     destinationPlaceId: exit,
   };
   const parked = w.trip('parked', 'car', 105);
+  // This isolates the car's insertion gap; person access timing is covered by T57.
+  parked.personId = null;
   const engine = createEngine();
   engine.load({
     compiled: result.compiled,
@@ -360,7 +362,7 @@ test('T52 an unreachable destination from a parked street origin counts a parkin
   });
   const before = engine.snapshot().parkedCars!;
   expect(occupiedSpaces(before.occupied, before.id.length)).toHaveLength(1);
-  engine.step(10);
+  engine.step(2000); // TASK-112: exhaust the route only after reaching the parked car.
   expect(engine.metrics().failedByReason.no_parking).toBe(1);
   expect(engine.metrics().failedByReason.no_route).toBe(0);
   expect(engine.metrics().trips.failed).toBe(1);

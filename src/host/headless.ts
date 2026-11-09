@@ -6,7 +6,7 @@ import type { HeadlessResult } from './protocol';
 
 type Input = Pick<
   Parameters<ReturnType<typeof createEngine>['load']>[0],
-  'compiled' | 'trips' | 'scenario'
+  'compiled' | 'trips' | 'scenario' | 'population'
 >;
 
 /** Uses a fresh engine; never pulls snapshots for rendering or emits interactive host events. */
@@ -57,6 +57,7 @@ export function runHeadless(
   if (!outcomes) throw new Error('Engine does not expose per-trip accounting');
   const completed: number[] = [];
   for (let id = 0; id < trips.length; id++) {
+    if (trips[id]!.mode !== 'car') continue;
     const outcome = outcomes[id]!;
     if (outcome.departedS === null) continue;
     observe(id + 1, engine.inspect(id + 1)!.lane);

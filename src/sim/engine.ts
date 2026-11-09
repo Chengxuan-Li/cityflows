@@ -23,6 +23,8 @@ import { createProjector, patchChanges, remapRoute } from './patch';
 import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
+import { createPersons, hasPerson } from './persons';
+import type { createWalkRouter } from '../routing/walk';
 import type {
   PatchResult,
   TrafficEngine,
@@ -45,6 +47,7 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   routeProvider?: RouteProvider;
   linkCosts?: LinkCosts;
   intersectionObserver?: IntersectionObserver;
+  walkRouter?: ReturnType<typeof createWalkRouter>;
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -64,6 +67,8 @@ function createRun({
   routeProvider,
   linkCosts,
   intersectionObserver,
+  population,
+  walkRouter,
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -89,6 +94,25 @@ function createRun({
   const reservationAcceleration = new Float64Array(trips.length);
   const parking = createParking(compiled, trips, scenario, params, vehicles);
   const accounting = createAccounting(compiled, vehicles, parking);
+  const walkers = createWalkers(
+    compiled,
+    scenario,
+    params,
+    vehicles,
+    trips.some((trip) => hasPerson(trip) || trip.mode === 'walk'),
+  );
+  const persons = createPersons(
+    compiled,
+    trips,
+    scenario,
+    params,
+    vehicles,
+    parking,
+    accounting,
+    walkers,
+    population,
+    walkRouter,
+  );
   const connectors = createConnectors(
     compiled,
     trips,
@@ -97,6 +121,7 @@ function createRun({
     vehicles,
     accounting,
     parking,
+    persons,
   );
   let merges = createMerges(compiled, vehicles, params);
   let intersections = createIntersections(compiled, vehicles, params, merges.canEnter, {
@@ -109,8 +134,6 @@ function createRun({
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const signalEpochs = new Map<string, number>();
-  // TASK-111: null without test pedestrians, so the no-walker path does nothing more.
-  const walkers = createWalkers(compiled, scenario, params, vehicles);
   const provider =
     routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
   const observedCosts = createLinkCosts(compiled, params, scenario.startS);
@@ -377,6 +400,7 @@ function createRun({
       vehicles.insert(id, lane, positionM);
       accounting.transition(id, DRIVING);
     }
+    persons.departed(id, timeS);
     return true;
   }
 
@@ -931,7 +955,7 @@ function createRun({
       ...parking.detail(id, time()),
       id: vehicleId,
       tripId: trip.id,
-      personId: trip.personId,
+      personId: persons.occupant(id),
       vehicleClass: vehicleClasses[vehicles.vclass[id]!]!,
       purpose: vehiclePurposes[vehicles.purpose[id]!]!,
       originPlace: trip.originPlaceId,
@@ -1009,7 +1033,8 @@ function createRun({
     vehicles.resetSegments(next.lanes.length, next.movements.length);
     merges = createMerges(next, vehicles, params);
     const signalled = patchSignals(before, next, time(), signalEpochs);
-    walkers?.patch(signalled);
+    persons.patch(signalled);
+    walkers?.patch(signalled, time());
     intersections = createIntersections(signalled, vehicles, params, merges.canEnter, {
       onDecision: intersectionObserver,
       acceleration: (id) => reservationAcceleration[id]!,
@@ -1183,15 +1208,25 @@ function createRun({
       // Assign rather than spread: `tripOutcomes` stays a lazy getter.
       const metrics = accounting.metrics(time());
       if (walkers) metrics.walkers = walkers.metrics();
+      if (persons.enabled) metrics.persons = persons.metrics();
       return metrics;
     },
     inspectWalker: (id: number) => walkers?.inspect(id) ?? null,
+    inspectPerson: (id: string) => persons.inspect(id),
     stateHash: () =>
-      stateHash(time(), vehicles, accounting.trips, parking.stateHash(), walkers ?? undefined),
+      stateHash(
+        time(),
+        vehicles,
+        accounting.trips,
+        parking.stateHash(),
+        walkers ?? undefined,
+        persons,
+      ),
     step(n: number) {
       for (let i = 0; i < n; i++) {
         const timeS = time();
         intersections.signals(timeS);
+        persons.step(timeS);
         walkers?.step(timeS);
         connectors.spawn(timeS, hasSpawnGap, releaseTrip);
         rerouter.updateEdits(timeS, editChecked);
@@ -1279,6 +1314,7 @@ export function createEngine() {
     metrics: () => loaded().metrics(),
     inspect: (id) => loaded().inspect(id),
     inspectWalker: (id) => loaded().inspectWalker(id),
+    inspectPerson: (id) => loaded().inspectPerson(id),
     stateHash: () => loaded().stateHash(),
   } satisfies TrafficEngine;
 }

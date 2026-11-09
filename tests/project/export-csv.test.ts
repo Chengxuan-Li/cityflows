@@ -18,7 +18,7 @@ function run() {
   const requests = trips(city, 12, 2);
   requests[0] = { ...requests[0]!, vehicleClass: 'truck', purpose: 'through' };
   requests[1] = { ...requests[1]!, vehicleClass: 'bus', purpose: 'service' };
-  requests.push({ ...requests[0]!, id: 'unsupported', mode: 'walk' });
+  requests.push({ ...requests[0]!, id: 'unsupported', mode: 'bus' });
   requests.push({ ...requests[0]!, id: 'pending', departS: 8000 });
   const engine = createEngine();
   const input = { compiled, trips: requests, scenario: scenario(7) };

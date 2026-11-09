@@ -25,6 +25,7 @@ export function createConnectors(
   vehicles: Vehicles,
   accounting: ReturnType<typeof createAccounting>,
   parking: ReturnType<typeof createParking>,
+  persons?: { handlesWalk(id: number): boolean; ready(id: number): boolean },
 ) {
   let queues = compiled.connectors.map((): number[] => []);
   let head = new Uint32Array(queues.length);
@@ -67,6 +68,7 @@ export function createConnectors(
 
   for (const [id, trip] of trips.entries()) {
     if (trip.mode !== 'car') {
+      if (persons?.handlesWalk(id)) continue;
       accounting.fail(id, 'unsupported_mode');
       continue;
     }
@@ -166,7 +168,9 @@ export function createConnectors(
       if (!queue.length) continue;
       let available = ready[idx]!;
       while (available < queue.length && queuedSince(queue[available]!) <= timeS + 1e-9) {
-        accounting.transition(queue[available++]!, QUEUED_ORIGIN);
+        const id = queue[available++]!;
+        if (vehicles.state[id] !== FAILED && vehicles.state[id] !== COMPLETED)
+          accounting.transition(id, QUEUED_ORIGIN);
       }
       ready[idx] = available;
       let i = head[idx]!;
@@ -174,9 +178,11 @@ export function createConnectors(
         // Cars still approaching a car park do not hold up already parked departures.
         let candidate = i;
         while (candidate < available) {
+          if (vehicles.state[queue[candidate]!] === FAILED) break;
           const previous = previousArrival[queue[candidate]!]!;
           if (
             parking.ready(queue[candidate]!) &&
+            (persons?.ready(queue[candidate]!) ?? true) &&
             (previous === -1 ||
               vehicles.state[previous] === COMPLETED ||
               vehicles.state[previous] === FAILED)
@@ -186,6 +192,11 @@ export function createConnectors(
         }
         if (candidate === available) break;
         const candidateId = queue[candidate]!;
+        if (vehicles.state[candidateId] === FAILED) {
+          [queue[i], queue[candidate]] = [queue[candidate]!, queue[i]!];
+          i++;
+          continue;
+        }
         const previous = previousArrival[candidateId]!;
         if (
           parking.stranded(candidateId) ||

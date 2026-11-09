@@ -83,6 +83,10 @@ test('T10 the bundled station surge peaks within fifteen minutes, slows its appr
   expect(peakS).toBeLessThanOrEqual(event.startS + 900);
   expect(upstreamQueue).toBeGreaterThan(0);
   expect(slow / samples).toBeLessThan(baseline / samples - 0.1);
+  // TASK-112: the final visitors still have their access/egress walks at the window end.
+  engine.step(72000);
+  replay.step(72000);
+  expect(engine.stateHash()).toBe(replay.stateHash());
   expect(engine.metrics().trips.failed).toBe(0);
   expect(engine.metrics().trips.queuedDestination).toBe(0);
   expect(engine.metrics().trips.queuedOrigin).toBe(0);
@@ -219,11 +223,12 @@ test('T10 Station with a second bidirectional connector drains paired visits wit
     expect(engine.stateHash()).toBe(replay.stateHash());
   }
   expect(engine.metrics().trips.failed).toBe(0);
+  // TASK-112: four admitted visitors share capacity while each completes two ~150 s walks.
+  engine.step(72000);
+  replay.step(72000);
+  expect(engine.stateHash()).toBe(replay.stateHash());
   expect(engine.metrics().trips.queuedDestination).toBe(0);
   expect(engine.metrics().trips.queuedOrigin).toBe(0);
-  engine.step(6000);
-  replay.step(6000);
-  expect(engine.stateHash()).toBe(replay.stateHash());
   expect(engine.metrics().trips.driving).toBe(0);
   for (const [id, trip] of trips.entries()) {
     if (trip.originPlaceId !== station.id) continue;

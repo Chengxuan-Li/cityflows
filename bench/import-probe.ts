@@ -6,6 +6,7 @@ import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
 import type { City } from '../src/schema';
 import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../src/routing';
+import { createWalkRouter } from '../src/routing/walk';
 import { createEngine } from '../src/sim/engine';
 import type { TrafficEngine } from '../src/sim/types';
 
@@ -102,12 +103,25 @@ export function probeMorning(
   const trips = scheduleTrips(city, population, scenario);
   const engine = createEngine();
   const provider = routeProvider ?? createRouteProvider();
+  const walkRouter = createWalkRouter(compiled.walk);
   let routeRequests = 0;
   let routeTimeMs = 0;
+  let walkRouteRequests = 0;
+  let walkRouteTimeMs = 0;
   engine.load({
     compiled,
     trips,
     scenario,
+    population,
+    walkRouter: {
+      route(request) {
+        const start = performance.now();
+        const result = walkRouter.route(request);
+        walkRouteTimeMs += performance.now() - start;
+        walkRouteRequests++;
+        return result;
+      },
+    },
     routeProvider: {
       route(network, costs, request) {
         const start = performance.now();
@@ -229,6 +243,9 @@ export function probeMorning(
     completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,
     failedShareOfReleased: releasedTrips ? metrics.trips.failed / releasedTrips : 0,
     peakDriving: peak,
+    peakWalkers: metrics.walkers?.peakActive ?? 0,
+    personMetrics: metrics.persons,
+    walkers: metrics.walkers,
     completedByHalfHour,
     stalledHeads,
     stalledHeadDetails,
@@ -236,6 +253,8 @@ export function probeMorning(
     meanDelayS: metrics.meanDelayS,
     routeRequests,
     meanRouteMs: routeRequests ? routeTimeMs / routeRequests : 0,
+    walkRouteRequests,
+    walkRouteTimeMs,
     zoneStops: metrics.zoneStops,
     respawns: metrics.respawns,
     ...metrics.trips,

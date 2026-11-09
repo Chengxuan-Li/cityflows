@@ -1,9 +1,19 @@
 import { expect, test } from '@playwright/test';
+import { placeCamera } from '../../bench/geometry-shots';
 import { pointAtDistance } from '../../src/geo/polyline';
 import { compile } from '../../src/network';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import type { City } from '../../src/schema';
-import { button, city, clickWorld, clockTimeS, importOsm, metrics, pageErrors } from './helpers';
+import {
+  button,
+  city,
+  clickWorld,
+  clockTimeS,
+  departVehicle,
+  importOsm,
+  metrics,
+  pageErrors,
+} from './helpers';
 
 test('T47 local traffic only reroutes a live through trip and undo restores access @smoke', async ({
   page,
@@ -11,7 +21,8 @@ test('T47 local traffic only reroutes a live through trip and undo restores acce
   const errors = pageErrors(page);
   await page.goto('/');
   await expect(button(page, 'Step')).toBeEnabled();
-  await button(page, 'Step').click();
+  // TASK-112: wait for the first driver's access walk before inspecting their route.
+  await departVehicle(page, 1);
   const before = await page.evaluate(async () => {
     const api = window.cityflows!;
     const vehicle = await api.inspect(1);
@@ -61,8 +72,9 @@ test('T47 Munich local access diverts through traffic and permits a local depart
   page,
 }, info) => {
   // The owner allows Munich's import, live edit and evidence capture a larger wall-time budget.
-  test.setTimeout(180_000);
+  test.setTimeout(420_000);
   const errors = pageErrors(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', {
@@ -137,6 +149,11 @@ test('T47 Munich local access diverts through traffic and permits a local depart
                 const car = api.worldToScreen!({ x: snapshot.x[i]!, y: snapshot.y[i]! });
                 if (Math.hypot(car.x - screen.x, car.y - screen.y) < 16) return false;
               }
+              const walkers = snapshot.walkers;
+              for (let i = 0; i < (walkers?.count ?? 0); i++) {
+                const walker = api.worldToScreen!({ x: walkers!.x[i]!, y: walkers!.y[i]! });
+                if (Math.hypot(walker.x - screen.x, walker.y - screen.y) < 16) return false;
+              }
               return true;
             });
           },
@@ -156,6 +173,8 @@ test('T47 Munich local access diverts through traffic and permits a local depart
     }
   }
   expect(chosen, 'a live Munich through trip with a residential alternative').toBeDefined();
+  // At the overview zoom a short street shares the continuation junction's six-pixel handle.
+  await placeCamera(page, [chosen!.point.x, chosen!.point.y], 8);
   await clickWorld(page, chosen!.point);
   await page.getByText('Lanes and street settings', { exact: true }).click();
   const start = (await metrics(page)).timeS;

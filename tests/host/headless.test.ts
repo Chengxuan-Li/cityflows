@@ -44,7 +44,7 @@ test('same city, demand and seed produce identical comparison numbers', () => {
 test('unfinished and unsupported trips are not included in the completed travel distribution', () => {
   const city = grid5x5();
   const requests = trips(city, 3);
-  requests[1]!.mode = 'walk';
+  requests[1]!.mode = 'bus';
   requests[2]!.departS = 900;
   const result = runHeadless({
     compiled: setup(city),
@@ -80,4 +80,24 @@ test('headless completion accounting preserves all four vehicle classes', () => 
   });
   expect(result.metrics.trips.completed).toBe(4);
   expect(result.metrics.completedByClass).toEqual({ car: 1, van: 1, truck: 1, bus: 1 });
+});
+
+test('whole-walk completion does not enter vehicle travel times or road usage', () => {
+  const city = grid5x5();
+  const requests = trips(city, 1).map((trip) => ({ ...trip, mode: 'walk' as const }));
+  const result = runHeadless({
+    compiled: setup(city),
+    trips: requests,
+    scenario: { ...scenario(), endS: 1100 },
+  });
+  expect(result.metrics.persons?.walkTripsCompleted).toBe(1);
+  expect(result.metrics.trips.completed).toBe(0);
+  expect(result.travelTime).toEqual({
+    travelTimesS: [],
+    delaysS: [],
+    meanS: 0,
+    meanDelayS: 0,
+    p90DelayS: 0,
+  });
+  expect(Object.values(result.roadVehicleCounts).every((count) => count === 0)).toBe(true);
 });
