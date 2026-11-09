@@ -20,7 +20,7 @@ export const munichWalkerPairs: [string, string][] = [
   ['p:1709', 'p:1675'], // zebras at n:79
   ['p:1789', 'p:1793'], // zebras at n:85
   ['p:1573', 'p:1789'], // zebras at n:189
-  ['p:1667', 'p:1673'], // zebra at n:859
+  ['p:1751', 'p:1673'], // zebra at n:859 (TASK-119 removed street-side parking place p:1667)
   ['p:1575', 'p:1669'], // zebra at n:421
   ['p:1677', 'p:1709'], // zebra at n:212
 ];
