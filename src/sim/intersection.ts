@@ -134,9 +134,8 @@ export function createIntersections(
     return false;
   }
 
-  function canGrant(id: number, movement: CMovement) {
+  function blockedExit(id: number, movement: CMovement): 'exit-full' | 'box' | null {
     const clearance = profile(id).lengthM + params.idm.minGapM;
-    if (!signalAllows(id, movement)) return refuse(id, movement, 'signal');
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1) {
       const space =
@@ -145,9 +144,15 @@ export function createIntersections(
           : vehicles.position[exitTail]! -
             profile(exitTail).lengthM +
             vehicles.speed[exitTail]! * candidateTime(id, movement, movement.lengthM);
-      if (space < clearance)
-        return refuse(id, movement, vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box');
+      if (space < clearance) return vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box';
     }
+    return null;
+  }
+
+  function canGrant(id: number, movement: CMovement) {
+    if (!signalAllows(id, movement)) return refuse(id, movement, 'signal');
+    const blocked = blockedExit(id, movement);
+    if (blocked) return refuse(id, movement, blocked);
     const control = compiled.nodes[movement.node]!.control;
     for (let i = 0; i < movement.conflicts.length; i++) {
       const idx = movement.conflicts[i]!;
@@ -310,6 +315,7 @@ export function createIntersections(
 
   return {
     signals,
+    blockedExit,
     /** TASK-077: the movement's signal does not show green (no movement, or no signal: false). */
     red: (movement: number) =>
       movement !== -1 &&

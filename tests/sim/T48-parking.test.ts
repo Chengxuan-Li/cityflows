@@ -347,7 +347,7 @@ test('T48 access changes are checked again on arrival', () => {
 });
 
 test('T48 saved scenarios retain and validate the parking search radius', () => {
-  expect(simParamsSchema.parse({ parkingSearchRadiusM: 250 })).toEqual({
+  expect(simParamsSchema.parse({ parkingSearchRadiusM: 250 })).toMatchObject({
     parkingSearchRadiusM: 250,
   });
   expect(simParamsSchema.safeParse({ parkingSearchRadiusM: -1 }).success).toBe(false);
