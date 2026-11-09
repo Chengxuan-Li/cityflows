@@ -147,7 +147,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | rejected (lead's premise error; see review), replaced by TASK-122 |
 | [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | round 2: 10 full-e2e specs, on `task/lead-112` (see review) |
 | [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | accepted; merges together with TASK-112 (see review) |
-| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | todo |
+| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | trace complete; stopped for lead scope decision (see trace entry) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -2554,6 +2554,25 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   gate5-controls roundabout, qa-mobile and T54. Round 2 for the TASK-112 agent on `task/lead-112`:
   make them pass, fixing the spec where it assumes an instant departure and the product where the
   scenario's point is lost (demo B's second connector must still lower the station peak).
+
+- TASK-122 trace (2026-11-09): stopped under design item 1 before implementation. The three
+  unchanged-tree runs reproduce every parking failure: Munich full demand 30 (1 971 completed,
+  207 gridlocked, 1 729 local arrivals), Munich 0.15 at 10:00 13 (3 571 / 23; 09:30 3 357 / 8),
+  Sindelfingen 0.15 at 10:00 245 (156 / 0). All 245 Sindelfingen failures originate at gateways
+  with no parking facility or space: p:1303 (108), p:1306 (108), p:1315 (29). Their cropped
+  motorway components have no path to local parking; `connectors.spawn` labels a failed route
+  `no_parking` when the destination requires parking. Filtering parking spaces cannot change
+  these departures. Lead decision needed on gateway routing/failure attribution; neither was
+  changed. Munich's eleven never-departed full-demand failures all have allocated strip slots:
+  the old trace mistook `inspect().parkingFacility` (chosen/arrived parking) for origin parking.
+  The full-demand causes are cropped sinks/feeds (21), isolated loops (6), and car-forbidden
+  exits (3). At 0.15: cropped sink (7), isolated loop (5), private-road-only egress (1).
+  Named strips: pk:9339 feeds r:64, pk:9294 feeds car-forbidden r:373; pk:9217's direct exit
+  feeds bus-only r:968#3, so a car needs an upstream lane change. pk:9122's only exit path
+  traverses private r:1109/r:1033 from outside their access zone; a raw movement SCC would
+  miss that restriction. Per-trip origins, slots, lanes, destinations and causes are in the
+  trace commit message. No departure check, stock change, gate tightening or network edit was
+  made; all implementation gates remain open.
 
 ## Owner decisions log
 
