@@ -55,11 +55,13 @@ test('demo B, terminal access: the 08:05 arrival wave queues cars; a dedicated a
   await button(page, 'Layers').click();
   await page.getByLabel('Queues', { exact: true }).check();
   await button(page, 'Layers').click();
-  const without = await sampleQueues(page, 20);
+  const without = await sampleQueues(page, 8);
   expect(beforeEvent(without)).toBeLessThanOrEqual(2);
-  expect(peak(without)).toBeGreaterThan(40);
   await page.screenshot({ path: info.outputPath('queue-one-connector.png') });
 
+  await expect
+    .poll(() => page.evaluate(() => window.cityflows!.drawnSnapshot!()?.timeS))
+    .toBe(without.at(-1)!.timeS);
   const queuedId = await page.evaluate(() => {
     const snapshot = window.cityflows!.drawnSnapshot!();
     const index = snapshot?.state.subarray(0, snapshot.count).indexOf(2) ?? -1;
@@ -72,6 +74,8 @@ test('demo B, terminal access: the 08:05 arrival wave queues cars; a dedicated a
   );
   await page.screenshot({ path: info.outputPath('vehicle-waiting.png') });
   await page.keyboard.press('Escape');
+  without.push(...(await sampleQueues(page, 12)));
+  expect(peak(without)).toBeGreaterThan(40);
 
   await page.mouse.click(at.x, at.y);
   await expect(page.getByRole('heading', { name: 'Station', level: 2 })).toBeVisible();

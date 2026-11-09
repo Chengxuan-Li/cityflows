@@ -66,7 +66,8 @@ test('painted work attracts inspected vehicles and same-seed regeneration replay
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();
   await button(page, 'Step').click();
-  await page.evaluate(() => window.cityflows!.step(1999));
+  // Include the access walks before looking for drivers attracted to the painted work.
+  await page.evaluate(() => window.cityflows!.step(5999));
   const firstHash = await page.evaluate(() => window.cityflows!.hash());
   const vehicle = await page.evaluate(async (destination) => {
     for (let id = 1; id <= 80; id++) {
@@ -85,7 +86,7 @@ test('painted work attracts inspected vehicles and same-seed regeneration replay
   expect((await saved(page)).population).toEqual(generated.population);
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();
-  await page.evaluate(() => window.cityflows!.step(2000));
+  await page.evaluate(() => window.cityflows!.step(6000));
   expect(await page.evaluate(() => window.cityflows!.hash())).toBe(firstHash);
   await page.evaluate(() => window.cityflows!.step(4000));
   expect(

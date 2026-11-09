@@ -1,5 +1,5 @@
 import type { City } from '../schema';
-import { buildCity } from './build-city';
+import { buildCity, generated } from './build-city';
 
 export function station(seed = 1): City {
   const { city, node, road, place } = buildCity('Station', seed);
@@ -23,7 +23,10 @@ export function station(seed = 1): City {
     road(curbWest, curbEast, { roadClass: 'service', speedKmh: 20 }),
     road(curbEast, merge, { roadClass: 'service', speedKmh: 20 }),
   ];
-  for (const link of loop) link.name = 'Pickup loop';
+  for (const link of loop) {
+    link.name = 'Pickup loop';
+    link.sidewalk = { left: 'yes', right: 'yes' };
+  }
   place('West gateway', 'gateway', { x: 0, y: 40 }, [
     { road: approach, direction: 'out', positionM: 20 },
     { road: westReturn, direction: 'in', positionM: 300 },
@@ -41,6 +44,18 @@ export function station(seed = 1): City {
     { road: returnRoad, direction: 'out', positionM: 200 },
   ]);
   const [westGate, eastGate, station, parking] = Object.values(city.places);
+  // Station doors serve both ends of the pickup curb.
+  city.walk = { nodes: {}, links: {} };
+  for (const x of [590, 630]) {
+    const id = `wn:${city.nextId++}`;
+    city.walk.nodes[id] = {
+      id,
+      pos: { x, y: -85 },
+      layer: 0,
+      entrance: { placeId: station!.id },
+      provenance: generated,
+    };
+  }
   westGate!.population = 100;
   westGate!.jobs = 20;
   eastGate!.population = 20;
