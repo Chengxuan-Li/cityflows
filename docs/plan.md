@@ -144,7 +144,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-117](tasks/TASK-117.md) | 8 | Visual fixes after Phase 2: sign collisions, UK kerb lines only on urban kerbs, access signs by marking theme | `src/render/street.ts` (sign placement), `layers/street.ts`, `render3d/street.ts`, `marking-geometry.ts`, `style.ts` | 107, 114 | V117, shots | done (see review) |
 | [TASK-118](tasks/TASK-118.md) | 7 | Parking motion: circulation inside lots, stochastic stall choice, visible strip manoeuvres, individual slot departures (owner bugs 1 and 2) | `src/network/stalls.ts`, new `lot-paths.ts`, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, new `manoeuvre.ts`, renderers | 103, lead follow-up | T54, traffic quick, shots | done (see review) |
 | [TASK-119](tasks/TASK-119.md) | 7 | Mapped street-side parking areas become strips; dropped lots and garage imported (owner bug 3) | `src/importers/osm/strips.ts`, `lots.ts`, `parking.ts`, `places.ts`, `src/network/strips.ts` | 103 | T55, traffic quick, shots | done (see review) |
-| [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | todo |
+| [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | active |
+| [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | todo |
+| [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -333,7 +335,7 @@ exists.
 - `npm audit` reports moderate advisories in dev tooling only (minimatch under
   typescript-eslint); nothing ships to the browser. Revisit when upgrading tooling.
 - B54 east (`n:138`), B55 and B56 (owner, 2026-11-07): outstanding, deferred while Gates 7
-  to 9 proceed. The traffic gate keeps allowing B56's one stalled head, and TASK-099's
+  to 9 proceed; B56 started as TASK-121 (2026-11-09). The traffic gate keeps allowing B56's one stalled head, and TASK-099's
   attachment stays limited to its two named Munich corridors.
 
 ## Owner findings from real OSM testing (2026-11-04)
@@ -395,7 +397,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B53 (done, TASK-094) | TASK-091: at signalised approaches the crossing stays where TASK-072 put it (0.25 to 2.75 m from the cut, between the stop line and the junction); setting it back as the owner asked (B50) moves it 5 to 12 m out, behind the stop line, so cars at red would stand on it (T26). 34 Munich ends (incl. `n:291`) and 4 at Sindelfingen `n:110`. | Simulation rule change, owner to decide: move `stopM` to the crossing's far edge plus 0.5 m (`src/network/stops.ts`), new benchmark hashes. |
 | B54 (Landsberger done, TASK-095 salvage; `n:138` west and `n:638` done, TASK-099; `n:138` east deferred, owner 2026-11-07) | Owner, 2026-11-07 (round 6; screenshots in `docs/findings/2026-11-07-round6/`, 1, 2): one street's carriageways still run apart with irregular voids wider than TASK-093's 3 m: Arnulfstraße at `n:138` west (`r:386`/`r:716`) and east (`r:715`/`r:958`), and east of the Donnersberger bridge at `n:638` (`r:654`/`r:680`; the owner's n:168). "Merge both segments into paired road with center divider marker lines." | TASK-095: attach one corridor's carriageways wherever they run within 20 degrees, with a divider; ease apart only where they part. |
 | B55 (deferred, owner 2026-11-07; TASK-099 did not reach it) | Owner, round 6: "we still need to make the '2 roads approach an intersection at small angle diff or parallel' handling": different streets approaching a node nearly parallel overlap near it (Sindelfingen `n:841`, `n:68`). | TASK-095: hold such pairs side by side up to the node (TASK-089 split ends for any pair), rounded gore, edge line between them. |
-| B56 (deferred, owner 2026-11-07) | TASK-099 round 3: Munich at 0.15 holds a deadlock loop (Arnulfstraße eastbound, `n:138`, the Landsberger ramps, `n:967`'s ramp `r:703`, the Donnersberger ramps through `n:638`, back to `r:884`) that locks at `n:263`, where the head of `r:703#1` waits for good to enter a standing queue in lane 0 instead of re-routing. Main had it before TASK-099 (`r:406#1`'s head waited 6 084 s) without a head standing still long enough to count as stalled; TASK-099 shows it as one stalled head on `r:753#0`. A 1 cm shift of an unrelated road moves completed trips by up to +211 and can stall a head on this corridor. | Simulation rule (owner): let a vehicle stuck at a queue head re-route or give way; then tighten the gate back to 0 stalled heads. |
+| B56 (deferred, owner 2026-11-07; TASK-121, 2026-11-09) | TASK-099 round 3: Munich at 0.15 holds a deadlock loop (Arnulfstraße eastbound, `n:138`, the Landsberger ramps, `n:967`'s ramp `r:703`, the Donnersberger ramps through `n:638`, back to `r:884`) that locks at `n:263`, where the head of `r:703#1` waits for good to enter a standing queue in lane 0 instead of re-routing. Main had it before TASK-099 (`r:406#1`'s head waited 6 084 s) without a head standing still long enough to count as stalled; TASK-099 shows it as one stalled head on `r:753#0`. A 1 cm shift of an unrelated road moves completed trips by up to +211 and can stall a head on this corridor. | Simulation rule (owner): let a vehicle stuck at a queue head re-route or give way; then tighten the gate back to 0 stalled heads. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
 | B26 | Owner: at acute junctions cars stop well away from the junction. Since TASK-061 a lane stops where its lane block clears its neighbours', capped at 10 m, so on an acute approach the car waits at the cap with the lane blocks still overlapping in front of it. The cap exists because a car on a movement blocks every conflicting movement for the movement's whole length. | Simulation (conflict points): resolve conflicts at the crossing point along each movement instead of over the whole movement, so setbacks can follow the geometry again without killing throughput; then lift the cap and let B23's gore surface reach the stop line. Large, needs a design note (architecture 5.3 and 8). |
@@ -850,7 +852,7 @@ model and the reasoning effort.
 | 3 | TASK-103, TASK-111, TASK-117 | 102 and 104 (103), 110 (111), 107 and 114 (117) | 1.5 to 2 days |
 | 3b | TASK-118, TASK-119 | 103 and the lead's follow-up | 1 to 1.5 days |
 | 3c | TASK-120 | 118, 119 | half a day |
-| 4 | TASK-112 | 103, 110, 111, 118 | 2 to 3 days |
+| 4 | TASK-112, TASK-121 (start while TASK-120 runs) | 103, 110, 111, 118 (112); 048, 076, 077, 116 (121) | 2 to 3 days |
 | 5 | TASK-113 | 112 | half to 1 day |
 
 Phase 3 runs two simulation tasks at once, on disjoint files: TASK-103 owns `parking.ts`,
@@ -994,6 +996,26 @@ street access: existing private-road policies still apply (for example at `pk:14
 | TASK-118 | Codex | GPT-6.1-Sol | xhigh | 5318 |
 | TASK-119 | Codex | GPT-6.1 Terra | high | 5319 |
 | TASK-120 | Codex | GPT-6.1 Terra | high | 5320 |
+
+Phase 4 (owner, 2026-11-09). While TASK-120 runs, the owner starts TASK-112 (trips made by
+people, the critical path; it waits on 103, 110, 111 and 118, all merged) and TASK-121 (B56,
+the deferred queue-head deadlock). The three share only hooks in `src/sim/engine.ts`:
+- TASK-120 owns `src/network/**`;
+- TASK-112 owns `src/demand/**`, `src/sim/persons.ts`, `walkers.ts`, `parking.ts` and
+  `connectors.ts`;
+- TASK-121 owns `intersection.ts`, `reroute.ts`, `lane-change.ts` and the gridlock path in
+  `engine.ts`.
+
+All three move trip counts. The lead merges in delivery order (TASK-120 first, expected within
+hours), resets the baseline at each merge (rule 7), and integrates the later branches onto the
+earlier ones. TASK-112 keeps vehicle `completed` as the drive leg, so the traffic gate keeps its
+meaning. Person trips are separate metrics. TASK-121 tightens `stalledHeads` to 0. B54 east and
+B55 are geometry and wait for TASK-120's `junctions.ts` and for TASK-121's stability probe.
+
+| Task | Harness | Model | Effort | e2e port |
+| --- | --- | --- | --- | --- |
+| TASK-112 | Codex | GPT-6.1-Sol | xhigh | 5312 |
+| TASK-121 | Claude Code | Opus 5.5 | high | 5321 |
 
 ### Questions for the owner, with the lead's defaults (accepted by the owner, 2026-11-07)
 
@@ -2475,6 +2497,11 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   rerun alone after load from concurrent lead probes).
 
 ## Owner decisions log
+
+- 2026-11-09, while TASK-120 runs: start TASK-112 (trips made by people) and TASK-121 (B56,
+  queue heads re-route) in parallel. TASK-112's lead defaults (walk legs for local private
+  trips only, walk-mode trips simulated, one car per person, parking choice unchanged, no schema
+  change) stand unless the owner overrides them.
 
 - 2026-11-09, TASK-118/119 merge: accept the full-demand parking failures at 2.5% of local
   arrivals (32 of 1 599) and fix dead-end turnarounds in TASK-120, which restores 2%.
