@@ -17,20 +17,21 @@ import { signalApproach } from '../../src/fixtures/signal-approach';
 import { vehicleClasses } from '../../src/schema';
 
 const allCars = { car: 1, van: 0, truck: 0, bus: 0 };
-// TASK-116: re-pinned after feasible lane targets enabled queue passing for every car.
+// TASK-116: re-pinned after feasible lane targets enabled queue passing for every car. Lead,
+// TASK-103 follow-up: only the hashes moved, as starting stock now follows personsPerResident.
 const before = {
   grid5x5: {
     completed: 28,
     meanTravelTimeS: 87.44642857142897,
     meanDelayS: 27.299867625434647,
-    hash: 1689383669, // TASK-102 includes parking stock and car locations in state hashes.
+    hash: 442178282, // TASK-102 includes parking stock and car locations in state hashes.
     trips: 56,
   },
   town: {
     completed: 207,
     meanTravelTimeS: 138.4507246376812,
     meanDelayS: 45.93094264481305,
-    hash: 1188370961,
+    hash: 2245539670,
     trips: 414,
   },
 };

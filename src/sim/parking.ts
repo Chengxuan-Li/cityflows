@@ -6,6 +6,9 @@ import type { Metrics, ParkedCarsSnapshot } from './types';
 import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import { parkingHash } from './hash';
 
+/** How far an ownerless lot's car park reaches: the buildings beside it. */
+const LOT_SERVES_M = 200;
+
 export function createParking(
   compiled: CompiledCity,
   trips: TripRequest[],
@@ -26,8 +29,16 @@ export function createParking(
     const remaining = new Map<number, number>();
     const hour = (scenario.startS / 3600) % 24;
     return Uint32Array.from(city.parking, (f) => {
+      // Lead (TASK-103 follow-up): the cars of the persons who exist. Demand generation makes
+      // round(residents x personsPerResident) persons per home; full-population stock left
+      // most parked cars without an owner, so they never moved.
       if (!remaining.has(f.place))
-        remaining.set(f.place, Math.ceil(f.residents * scenario.demand.carShare));
+        remaining.set(
+          f.place,
+          Math.ceil(
+            Math.round(f.residents * scenario.demand.personsPerResident) * scenario.demand.carShare,
+          ),
+        );
       const kind = city.places[f.place]?.kind;
       const fraction =
         f.occupancyAtStart ??
@@ -46,6 +57,31 @@ export function createParking(
       return count;
     });
   }
+  /** Lead (TASK-103 follow-up): OSM lots import as their own `parking` place, which nobody
+   * lives at, works at or visits, so a private or customers lot admitted no car. Such a lot
+   * serves the places within `LOT_SERVES_M` instead, as their own car park: a customers lot the
+   * visitors of non-residential places, a private lot also their workers and residents. */
+  let served = servedPlaces(compiled);
+  function servedPlaces(city: CompiledCity) {
+    return city.parking.map((f) => {
+      const owner = city.places[f.place];
+      if (f.kind !== 'lot' || (owner && (owner.kind !== 'parking' || owner.events.length)))
+        return null;
+      return new Set(
+        city.places
+          .filter(
+            (p) =>
+              p.kind !== 'parking' &&
+              p.kind !== 'gateway' &&
+              (f.access !== 'customers' || p.kind !== 'residential') &&
+              Math.hypot(p.centroid.x - f.centroid.x, p.centroid.y - f.centroid.y) <= LOT_SERVES_M,
+          )
+          .map((p) => p.idx),
+      );
+    });
+  }
+  const serves = (f: CompiledCity['parking'][number], place: number) =>
+    f.place === place || (served[f.idx]?.has(place) ?? false);
   let occupied = initialOccupancy(compiled);
   let spaces = compiled.parkingSpaces ?? [];
   let stock = new Int32Array(spaces.length).fill(-1); // -2 is an initially parked car
@@ -69,7 +105,9 @@ export function createParking(
       .filter(
         (f) =>
           f.kind !== 'garage' &&
-          (f.access === 'public' || f.place === place) &&
+          (f.access === 'public' ||
+            f.place === place ||
+            (f.access !== 'customers' && serves(f, place))) &&
           f.connectorsOut.length,
       )
       .map((f) => ({ f, d: Math.hypot(f.centroid.x - p.x, f.centroid.y - p.y) }))
@@ -106,6 +144,15 @@ export function createParking(
   const previous = new Int32Array(trips.length).fill(-1);
   let origins = new Int32Array(trips.length).fill(-1);
   let chosen = new Int32Array(trips.length).fill(-1);
+  // Cars on their way to each lot (lead, TASK-103 follow-up): a lot whose free stalls are all
+  // spoken for drops out of the choice, so its served places do not all converge on it.
+  let heading = new Int32Array(trips.length).fill(-1);
+  let enRoute = new Int32Array(compiled.parking.length);
+  const head = (id: number, facility: number) => {
+    if (heading[id] !== -1) enRoute[heading[id]!]!--;
+    heading[id] = facility;
+    if (facility !== -1) enRoute[facility]!++;
+  };
   let parked = new Int32Array(trips.length).fill(-1);
   let originSpaces = new Int32Array(trips.length).fill(-1);
   let parkedSpaces = new Int32Array(trips.length).fill(-1);
@@ -127,6 +174,12 @@ export function createParking(
     .sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
   const available = occupied.slice();
   const availableSpaces = stock.slice();
+  const homeCars = new Map<number, number>();
+  const carsAt = (own: CompiledCity['parking']) =>
+    Math.ceil(
+      Math.round(Math.max(0, ...own.map((f) => f.residents)) * scenario.demand.personsPerResident) *
+        scenario.demand.carShare,
+    );
   for (const id of chronology) {
     const trip = trips[id]!;
     if (trip.mode !== 'car') continue;
@@ -142,10 +195,20 @@ export function createParking(
       const own = compiled.parking.filter((f) => f.place === place);
       const street =
         small(id) && prefersStreet(id) ? nearHome(place!).filter((f) => f.kind !== 'garage') : [];
-      const facility = [...street, ...own, ...(small(id) ? nearHome(place!) : [])].find(
-        (f) =>
-          f.connectorsOut.length && available[f.idx]! > 0 && (small(id) || f.kind === 'garage'),
-      );
+      if (!homeCars.has(place!)) homeCars.set(place!, carsAt(own));
+      const facility =
+        [...street, ...own, ...(small(id) ? nearHome(place!) : [])].find(
+          (f) =>
+            f.connectorsOut.length && available[f.idx]! > 0 && (small(id) || f.kind === 'garage'),
+        ) ??
+        // Neighbours may have taken the street cars moved out of this home's garage; an
+        // inferred home garage stands in for parking OSM does not map and admits every car,
+        // so a resident's car starts there while the home has residents' cars left (lead,
+        // TASK-103 follow-up).
+        ((homeCars.get(place!) ?? 0) > 0
+          ? own.find((f) => f.kind === 'garage' && soft(f) && f.connectorsOut.length)
+          : undefined);
+      homeCars.set(place!, homeCars.get(place!)! - 1);
       origins[id] = facility?.idx ?? -1;
       if (facility) {
         available[facility.idx]!--;
@@ -175,6 +238,8 @@ export function createParking(
     if (cached) return cached;
     const visit = !['residential', 'work', 'school'].includes(destination.kind);
     const rank = (f: CompiledCity['parking'][number]) => {
+      // A lot serving the destination as its own car park comes first (lead, TASK-103 follow-up).
+      if (f.access !== 'public' && served[f.idx]?.has(destination.idx)) return -1;
       const beyond = distance(id, f.idx) > params.parkingSearchRadiusM;
       const visible = f.kind !== 'garage';
       const ownGarage = f.kind === 'garage' && f.place === destination.idx;
@@ -188,7 +253,7 @@ export function createParking(
         (f) =>
           f.connectorsIn.length &&
           (small(id) || f.kind === 'garage') &&
-          (f.place === destination.idx || f.access === 'public'),
+          (serves(f, destination.idx) || f.access === 'public'),
       )
       .sort(
         (a, b) => rank(a) - rank(b) || distance(id, a.idx) - distance(id, b.idx) || a.idx - b.idx,
@@ -201,7 +266,7 @@ export function createParking(
     // Zero-demand legacy portals (including event gates) retain their admission semantics.
     return (
       destination.kind !== 'gateway' &&
-      compiled.parking.some((f) => f.place === destination.idx || f.access === 'public')
+      compiled.parking.some((f) => serves(f, destination.idx) || f.access === 'public')
     );
   }
   /** `atDeparture`: room now is only a forecast. When every admissible facility is full, the car
@@ -217,13 +282,20 @@ export function createParking(
     for (const needRoom of atDeparture ? [true, false] : [true])
       for (const f of facilitiesFor(id)) {
         if ((needRoom ? !hasRoom(f) : f.capacity === 0) || rejected.get(id)?.has(f.idx)) continue;
+        if (
+          needRoom &&
+          f.kind === 'lot' &&
+          occupied[f.idx]! + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) >= f.capacity
+        )
+          continue;
         for (const connector of f.connectorsIn) {
           if (f.kind !== 'garage' && needRoom && !freeSpace(connector, id)) continue;
           if (!accept(connector)) continue;
           chosen[id] = f.idx;
+          head(id, f.kind === 'lot' ? f.idx : -1);
           cachedHash = undefined;
           walking[id] = distance(id, f.idx);
-          if (f.place !== destinationPlace(id).idx) searching[id] = 1;
+          if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
           return true;
         }
       }
@@ -338,7 +410,7 @@ export function createParking(
       return (
         !f ||
         ((small(id) || f.kind === 'garage') &&
-          (f.access === 'public' || f.place === destinationPlace(id).idx))
+          (f.access === 'public' || serves(f, destinationPlace(id).idx)))
       );
     },
     beginSearch,
@@ -350,6 +422,7 @@ export function createParking(
       if (Math.hypot(p.x - d.x, p.y - d.y) <= params.parkingSearchRadiusM) searchStart[id] = timeS;
     },
     reject(id: number, timeS: number) {
+      head(id, -1);
       const f = chosen[id]!;
       const facility = compiled.parking[f];
       // A rejected slot does not exhaust the other slots along the same strip/aisle.
@@ -362,6 +435,7 @@ export function createParking(
     arrive(id: number, connector: number, timeS: number) {
       const f = compiled.connectors[connector]!.parking;
       if (f === undefined) return;
+      head(id, -1);
       cachedHash = undefined;
       if (!hasRoom(compiled.parking[f]!)) throw new Error('Parking admission exceeded capacity');
       if (compiled.parking[f]!.kind !== 'garage') {
@@ -456,6 +530,9 @@ export function createParking(
       cachedHash = undefined;
       origins = remap(origins);
       chosen = remap(chosen);
+      heading = remap(heading);
+      enRoute = new Int32Array(next.parking.length);
+      for (const f of heading) if (f !== -1) enRoute[f]!++;
       parked = remap(parked);
       const initial = initialOccupancy(next);
       occupied = Uint32Array.from(
@@ -464,6 +541,7 @@ export function createParking(
       );
       rejected.clear();
       candidates.clear();
+      served = servedPlaces(next);
       const oldSpaces = spaces,
         oldStock = stock,
         oldClasses = classes;

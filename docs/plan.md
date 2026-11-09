@@ -2399,6 +2399,18 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   / 20; baseline reset to these. The gate tests now allow counted parking failures under 2% of
   local arrivals (5 of 1 369); T53's Munich walker floor is 0.94 of the no-walker hour (walkers
   now cost 4.5% of completions, 1.4% before parking).
+- Owner, 2026-11-08, testing TASK-103: roadside parked cars never leave and some surface lots
+  stay empty. Lead: starting stock was the full population's cars while demand generation
+  makes persons at the import scale (Munich at 0.15: 31 181 parked cars for 5 315 persons), so
+  most visible cars had no owner; and an OSM lot imports as its own `parking` place, which
+  nobody visits, so private and customers lots admitted no car. Fix: stock per person (a
+  resident whose moved street car a neighbour took starts from the inferred home garage), and
+  an ownerless lot serves the places within 200 m, ranking first for them with cars on their
+  way counted against its stalls. Munich roadside 1 310 at 07:00, 136 by 11:00; lots 305 of
+  367 stalls by 11:00 (was 7). Traffic: full 3491 / 72 / 5, quick 3296 / 32 / 5, mean search
+  10.4 s; baseline reset. T53's walker floor is back at 0.97 (walkers cost 1.4%). CI's e2e
+  timed out on T52's Munich frame samples (software GPU): 20 frames and no frame allowance on
+  CI, as T44 and V106.
 
 ## Owner decisions log
 

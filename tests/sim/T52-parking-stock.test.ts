@@ -8,7 +8,12 @@ import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { createVehicles } from '../../src/sim/vehicle';
 import { scenario } from './fixtures';
 
-function stockWorld(kind: 'roadside' | 'lot' = 'roadside', driveway = false, residents = 2) {
+function stockWorld(
+  kind: 'roadside' | 'lot' = 'roadside',
+  driveway = false,
+  residents = 2,
+  access: 'public' | 'private' | 'customers' = 'public',
+) {
   const { city, node, road, place } = buildCity('Parking stock', 520);
   const a = node(0, 0),
     b = node(300, 0),
@@ -33,7 +38,7 @@ function stockWorld(kind: 'roadside' | 'lot' = 'roadside', driveway = false, res
       kind,
       name: null,
       capacity: kind === 'roadside' ? 3 : 0,
-      access: 'public',
+      access,
       placeId: null,
       connectors: driveway
         ? [
@@ -95,7 +100,12 @@ function stockWorld(kind: 'roadside' | 'lot' = 'roadside', driveway = false, res
     purpose: 'private',
     legs: [],
   });
-  const load = (requests: TripRequest[], streetParkingShare: number, seed = 520) => {
+  const load = (
+    requests: TripRequest[],
+    streetParkingShare: number,
+    seed = 520,
+    personsPerResident = 1,
+  ) => {
     const vehicles = createVehicles(
       requests.length,
       compiled.lanes.length,
@@ -107,7 +117,10 @@ function stockWorld(kind: 'roadside' | 'lot' = 'roadside', driveway = false, res
     return createParking(
       compiled,
       requests,
-      scenario(seed),
+      (() => {
+        const base = scenario(seed);
+        return { ...base, demand: { ...base.demand, personsPerResident } };
+      })(),
       { ...DEFAULT_SIM_PARAMS, streetParkingShare },
       vehicles,
     );
@@ -435,5 +448,35 @@ test.each([0, 1])(
     for (let id = 0; id < requests.length; id++) parking.depart(id, 100);
     expect(homeFacilities.reduce((sum, f) => sum + parking.snapshot()[f.idx]!, 0)).toBe(0);
     expect(occupiedSpaces(parking.stockSnapshot().occupied, stock.id.length)).toEqual([]);
+  },
+);
+
+test('T52 starting stock holds the cars of the persons the demand scale makes (lead)', () => {
+  const w = stockWorld('roadside', false, 40);
+  const garage = w.compiled.parking.find(
+    (f) => f.place === w.compiled.index.place.get(w.home.id) && f.kind === 'garage',
+  )!;
+  // 40 residents at 0.15 are 6 persons with a car each, not 40 parked cars.
+  expect(w.load([], 0, 520, 0.15).snapshot()[garage.idx]).toBe(6);
+  expect(w.load([], 0, 520, 1).snapshot()[garage.idx]).toBe(40);
+});
+
+test.each(['private', 'customers'] as const)(
+  'T52 an ownerless %s lot serves the places beside it as their own car park (lead)',
+  (access) => {
+    const w = stockWorld('lot', true, 2, access);
+    expect(w.facility.place).toBe(-1);
+    expect(w.facility.capacity).toBeGreaterThan(0);
+    const toShop = w.trip('shop');
+    const home = { ...w.trip('home'), originPlaceId: w.shop.id, destinationPlaceId: w.home.id };
+    const parking = w.load([toShop, home], 0);
+    // The shop's visitors take the lot before the shop's own garage.
+    expect(parking.choose(0, 100, () => true)).toBe(true);
+    expect(parking.detail(0, 100).parkingFacility).toBe(w.facility.id);
+    for (const connector of w.facility.connectorsIn) {
+      expect(parking.admits(0, connector)).toBe(true);
+      // A customers lot serves no home; a private one also takes residents' cars.
+      expect(parking.admits(1, connector)).toBe(access === 'private');
+    }
   },
 );
