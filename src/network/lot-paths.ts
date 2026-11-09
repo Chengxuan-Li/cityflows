@@ -10,6 +10,9 @@ import type { City } from '../schema';
 import type { CompiledCity, Diagnostic, LotCirculation } from './types';
 
 const closed = (ring: Vec2[]) => [...ring, ring[0]!];
+// A stall's access point joins the nearest aisle point over a clear link up to one stall
+// length away (a single row whose aisle runs beside it, not through its access points).
+const STALL_LINK_M = 5;
 const mix = (a: Vec2, b: Vec2, t: number) => ({
   x: a.x + (b.x - a.x) * t,
   y: a.y + (b.y - a.y) * t,
@@ -38,13 +41,16 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
     const obstacles = [...exclusions, ...bays];
     const inside = (p: Vec2) =>
       pointInPolygon(p, boundary) && !obstacles.some((r) => pointInPolygon(p, r));
-    const clear = (a: Vec2, b: Vec2, entry = false) => {
+    // `passage`: an entry link may run under a building exclusion (a courtyard lot reached
+    // through a building passage, Munich pk:2037, Sindelfingen pk:1475), never over a bay.
+    const clear = (a: Vec2, b: Vec2, entry = false, passage = false) => {
       const ts = cuts(a, b, [boundary, ...obstacles]);
+      const blocking = passage ? bays : obstacles;
       let entered = false;
       for (let i = 1; i < ts.length; i++) {
         if (ts[i]! - ts[i - 1]! < 1e-8) continue;
         const p = mix(a, b, (ts[i]! + ts[i - 1]!) / 2);
-        if (obstacles.some((r) => pointInPolygon(p, r))) return false;
+        if (blocking.some((r) => pointInPolygon(p, r))) return false;
         if (pointInPolygon(p, boundary)) entered = true;
         else if (!entry || entered) return false;
       }
@@ -152,15 +158,21 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       const choices = segments
         .map((s) => ({ s, hit: nearestOnPolyline([s.a, s.b], p) }))
         .sort((a, b) => a.hit.away - b.hit.away);
-      for (const { s, hit } of choices) {
-        const target = mix(s.a, s.b, hit.along / distance(s.a, s.b));
-        if (distance(p, target) > (entry ? Infinity : 0.25) || !clear(p, target, entry)) continue;
-        s.points.push(target);
-        const from = node(p),
-          to = node(target);
-        link(from, to);
-        return from;
-      }
+      // Entries prefer a clear link; only when none exists may the link take a passage.
+      for (const passage of entry ? [false, true] : [false])
+        for (const { s, hit } of choices) {
+          const target = mix(s.a, s.b, hit.along / distance(s.a, s.b));
+          if (
+            distance(p, target) > (entry ? Infinity : STALL_LINK_M) ||
+            !clear(p, target, entry, passage)
+          )
+            continue;
+          s.points.push(target);
+          const from = node(p),
+            to = node(target);
+          link(from, to);
+          return from;
+        }
       return -1;
     };
     for (const stall of lot.stalls) {

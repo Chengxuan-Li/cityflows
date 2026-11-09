@@ -205,8 +205,8 @@ for (const cameraTarget of [
   },
   {
     city: 'sindelfingen-a81',
-    // TASK-118: pk:1475's inferred entry lies in its building exclusion. Exercise the
-    // private admission with a street-reachable lot; T54 records the blocked one.
+    // TASK-118: private admission at pk:1474. Courtyard pk:1475 is reached through a
+    // building passage; T54's city inventory covers it.
     lots: ['pk:1474'],
     access: 'private',
     osmId: 220072450,

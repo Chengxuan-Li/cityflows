@@ -117,16 +117,13 @@ test.each(['munich-donnersberger', 'sindelfingen-a81'])('T54 %s circulation inve
   const result = compile(imported.city);
   if (!result.ok) throw new Error('compile');
   const lots = result.compiled.lots ?? [];
-  if (name === 'sindelfingen-a81') {
-    const blocked = lots.find((lot) => lot.id === 'pk:1475')!;
-    expect(blocked.circulation!.entries).toHaveLength(0);
-    expect(blocked.circulation!.unreachable).toHaveLength(blocked.stallCount);
-    expect(
-      result.diagnostics.some(
-        (d) => d.code === 'lot_stalls_unreachable' && d.refs.includes(blocked.id),
-      ),
-    ).toBe(true);
-  }
+  // Courtyard lots reached through a building passage: the entry link may run under the
+  // building exclusion (never over a bay), so their stalls stay usable.
+  const courtyard = lots.find(
+    (lot) => lot.id === (name === 'sindelfingen-a81' ? 'pk:1475' : 'pk:2037'),
+  )!;
+  expect(courtyard.circulation!.entries.length).toBeGreaterThan(0);
+  expect(courtyard.circulation!.unreachable.length).toBeLessThan(courtyard.stallCount / 10);
   const sha = (value: string) => createHash('sha256').update(value).digest('hex');
   writeFileSync(
     `node_modules/.cache/task118-hashes-${name}.json`,

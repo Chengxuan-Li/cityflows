@@ -979,14 +979,13 @@ bays. It retains its inferred driveway; changing lot stall dimensions belongs to
 The other 56 Munich areas have usable slots. Counts, timings, traffic and comparison images
 are recorded in the task branch's final commit body.
 
-TASK-118 derives local circulation without changing the vehicle network. Munich has 8 lots
-with locally reachable stalls (110 unreachable stalls); Sindelfingen has 14 (195 unreachable).
-Disconnected or blocked stalls remain painted but unused, with `lot_stalls_unreachable`.
-In particular, Sindelfingen `pk:1475`'s inferred street entry is inside a saved building
-exclusion; its 150 stalls cannot be admitted without correcting that entry. The positive
-private-lot browser scenario uses street-reachable `pk:1474`. Local graph counts do not imply
+TASK-118 derives local circulation without changing the vehicle network. The lead's merge
+lets an entry link pass under a building exclusion when no clear link exists (courtyards
+reached through a passage: Munich `pk:2037` Gewerbehof Westend, Sindelfingen `pk:1475`) and
+lets a stall join an aisle up to 5 m away. Unreachable stalls fall from 110 to 54 in Munich
+(28 of them in TASK-119's two aisle-less fallback lots) and from 195 to 22 in Sindelfingen;
+they stay painted and unused with `lot_stalls_unreachable`. Local graph counts do not imply
 street access: existing private-road policies still apply (for example at `pk:1473`).
-Importer and road-access corrections remain outside TASK-118.
 
 | Task | Harness | Model | Effort | e2e port |
 | --- | --- | --- | --- | --- |

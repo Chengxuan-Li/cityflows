@@ -469,7 +469,11 @@ between disconnected aisle ends stay inside the polygon and clear of stalls and 
 Bridges join the closest disconnected pieces without crossing another path. This handles
 lots whose adjacent access spine lies outside their mapped polygon. Generated rows leave end
 circulation gaps; shallow layouts retain their paint but cannot admit cars without a reachable driving gap.
-Entry links may cross the lot boundary from the street, but cannot cross stalls or exclusions.
+Entry links may cross the lot boundary from the street and never cross stalls. An entry
+prefers a link clear of exclusions; only when none exists may it pass under a building
+exclusion, a courtyard reached through a building passage (Munich `pk:2037`, Sindelfingen
+`pk:1475`). A stall's access point joins the nearest aisle point over a clear link of up to
+5 m (one stall length), so a single row beside its aisle is usable.
 `lot_stalls_unreachable` reports stalls without both an inbound and an outbound path.
 A bay retains its physical lane/station separately from its admission connector; curb
 openings and lamps continue to use physical bay access. No circulation edge enters the
