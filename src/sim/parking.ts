@@ -735,6 +735,11 @@ export function createParking(
     }
   }
   return {
+    location(id: number, atOrigin = false) {
+      const facility = atOrigin ? originFacility(id) : parked[id]!;
+      const space = atOrigin ? originSpace(id) : parkedSpaces[id]!;
+      return { facility, space };
+    },
     advance,
     motion: (id: number) => motionById[id],
     startArrival,

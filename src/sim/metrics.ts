@@ -26,6 +26,7 @@ export function createAccounting(
   };
   const failedByReason: Record<FailReason, number> = {
     no_route: 0,
+    no_walk_route: 0,
     unsupported_mode: 0,
     destination_unreachable: 0,
     stranded: 0,
@@ -39,6 +40,8 @@ export function createAccounting(
   let totalTravel = 0;
   let totalDelay = 0;
   const completedByClass: Record<VehicleClass, number> = { car: 0, van: 0, truck: 0, bus: 0 };
+  let onComplete: ((id: number, timeS: number) => void) | undefined;
+  let onFail: ((id: number, reason: FailReason) => void) | undefined;
 
   function transition(id: number, state: TripState) {
     trips[tripStates[vehicles.state[id] as TripState]]--;
@@ -86,6 +89,22 @@ export function createAccounting(
   }
 
   return {
+    observe(complete: typeof onComplete, fail: typeof onFail) {
+      onComplete = complete;
+      onFail = fail;
+    },
+    // Foot trips have outcomes, but do not count as vehicle trips or class completions.
+    excludeWalk(id: number) {
+      trips.pending--;
+      vehicles.state[id] = COMPLETED;
+    },
+    finishWalk(id: number, startedS: number, arrivedS: number | null, reason: FailReason | null) {
+      vehicles.departed[id] = startedS;
+      if (arrivedS !== null) vehicles.arrived[id] = arrivedS;
+      vehicles.state[id] = reason ? FAILED : COMPLETED;
+      vehicles.failReason[id] = reason;
+      if (reason) failedByReason[reason]++;
+    },
     patch(next: CompiledCity) {
       compiled = next;
     },
@@ -105,6 +124,7 @@ export function createAccounting(
       transition(id, FAILED);
       vehicles.failReason[id] = reason;
       failedByReason[reason]++;
+      onFail?.(id, reason);
     },
     complete(id: number, timeS: number) {
       transition(id, COMPLETED);
@@ -113,6 +133,7 @@ export function createAccounting(
       const travel = timeS - vehicles.departed[id]!;
       totalTravel += travel;
       totalDelay += travel - vehicles.freeFlow[id]!;
+      onComplete?.(id, timeS);
     },
   };
 }

@@ -135,7 +135,7 @@ export function MetricsPanel() {
       )}
       {walkers && (
         <dl className="details" aria-label="Pedestrian metrics">
-          <dt>Test pedestrians out, arrived, without a route</dt>
+          <dt>Pedestrians out, arrived, without a route</dt>
           <dd>
             {walkers.spawned.toLocaleString()}, {walkers.completed.toLocaleString()},{' '}
             {walkers.dropped.toLocaleString()}

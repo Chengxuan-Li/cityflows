@@ -122,6 +122,8 @@ test('T52 the next trip leaves its occupied slot and holds the lane four seconds
   const stock = engine.snapshot().parkedCars!;
   const space = w.compiled.parkingSpaces![stock.id.indexOf(1)]!;
   engine.step(101);
+  // TASK-112: observe the manoeuvre from its actual start after the access walk.
+  while (engine.timeS < 750 && (engine.inspect(2)?.departedS ?? null) === null) engine.step();
   expect(engine.inspect(2)?.lane).toBe(space.lane);
   expect(engine.inspect(2)?.positionM).toBeCloseTo(space.positionM);
   engine.step(38);

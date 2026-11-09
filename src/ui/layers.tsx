@@ -60,7 +60,13 @@ export function Layers() {
   const hasStreetTrees = Boolean(treeCounts?.street);
   const hasTerrain = useAppStore((state) => Boolean(state.session?.project.city.terrain));
   const hasWalkers = useAppStore((state) =>
-    Boolean(state.session?.project.scenarios[0]!.walkers?.length),
+    Boolean(
+      state.session?.project.population.length ||
+      state.session?.project.scenarios[0]!.walkers?.length ||
+      Object.values(state.session?.project.city.places ?? {}).some(({ events }) =>
+        events.some(({ arrivals, departures }) => arrivals > 0 || departures > 0),
+      ),
+    ),
   );
   const { toggleLayer, toggleLayers } = useAppStore.getState();
   useEffect(() => {

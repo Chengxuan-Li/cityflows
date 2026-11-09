@@ -362,6 +362,7 @@ export function MapView() {
       let lastFrame = performance.now();
       let inspected: Pick | null = null;
       let inspectedTime = NaN;
+      let inspectedPersonId: string | null = null;
       let pulling = false;
       let failed: Session | null = null;
       let drawnLayers = getState().layers;
@@ -441,19 +442,29 @@ export function MapView() {
         }
         const { selection, run } = current;
         if ((selection?.kind !== 'vehicle' && selection?.kind !== 'walker') || !run) return;
-        if (selection === inspected && run.timeS === inspectedTime) return;
+        if (
+          selection === inspected &&
+          run.timeS === inspectedTime &&
+          current.personId === inspectedPersonId
+        )
+          return;
         inspected = selection;
         inspectedTime = run.timeS;
         const detail =
           selection.kind === 'vehicle'
             ? { vehicle: await session.engine.inspect(selection.id) }
             : { walker: await session.engine.inspectWalker(selection.id) };
+        const personId =
+          current.personId ?? ('walker' in detail ? detail.walker?.personId : null) ?? null;
+        const person = personId ? await session.engine.inspectPerson(personId) : null;
+        inspectedPersonId = personId;
         if (
           !signal.aborted &&
           getState().session === session &&
-          getState().selection === selection
+          getState().selection === selection &&
+          getState().personId === current.personId
         ) {
-          setState(detail);
+          setState({ ...detail, personId, person });
         }
       }
 

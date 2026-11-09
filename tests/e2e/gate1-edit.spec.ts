@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { City, Scenario } from '../../src/schema';
+import { departVehicle } from './helpers';
 
 const fixtureUrl = new URL('../../fixtures/projects/grid5x5.cityflows.json', import.meta.url);
 
@@ -48,6 +49,8 @@ test('T17 applies an edit while playing and keeps its vehicles inspectable @smok
   await page.getByText('Turns', { exact: true }).click();
   const turn = button(page, 'r:26 lane 1 → r:30 lane 1');
   await expect(turn).toHaveAttribute('aria-pressed', 'true');
+  // TASK-112: reach the first car after its owner's access walk before the live edit.
+  await departVehicle(page, 1);
   await button(page, 'Play').click();
   await expect.poll(async () => (await metrics(page)).trips.driving).toBeGreaterThan(0);
   await expect(button(page, 'Pause')).toBeEnabled();

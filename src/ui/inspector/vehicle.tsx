@@ -38,6 +38,16 @@ export function VehicleInspector({
           <dd className="capitalize">{detail.vehicleClass}</dd>
           <dt>Purpose</dt>
           <dd className="capitalize">{detail.purpose}</dd>
+          <dt>Occupant</dt>
+          <dd>
+            {detail.personId ? (
+              <button onClick={() => useAppStore.getState().selectPerson(detail.personId!)}>
+                {detail.personId}
+              </button>
+            ) : (
+              'None'
+            )}
+          </dd>
           <dt>Origin</dt>
           <dd>{city.places[detail.originPlace]!.name}</dd>
           <dt>Destination</dt>

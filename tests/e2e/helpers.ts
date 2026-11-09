@@ -73,6 +73,52 @@ export async function clickGrid(page: Page, x: number, y: number) {
   await page.mouse.click(p.x, p.y);
 }
 
+/** Advance a paused run until this driver's access walk and origin queue have cleared. */
+export async function departVehicle(page: Page, id: number) {
+  await page.evaluate(async (id) => {
+    const api = window.cityflows!;
+    for (let step = 0; step < 600; step++) {
+      const detail = await api.inspect(id);
+      if (detail?.state === 'driving') return;
+      if (detail?.state === 'failed' || detail?.state === 'completed')
+        throw new Error(`Vehicle ${id} ended before departure could be observed`);
+      await api.step(10);
+    }
+    throw new Error(`Vehicle ${id} did not depart within ten simulated minutes`);
+  }, id);
+}
+
+/** Picks an exposed part of a road without selecting a vehicle or pedestrian over it. */
+export async function clickClearMapPoint(page: Page, points: Vec2[]) {
+  const timeS = (await metrics(page)).timeS;
+  await expect
+    .poll(() => page.evaluate(() => window.cityflows!.drawnSnapshot!()?.timeS))
+    .toBe(timeS);
+  const point = await page.evaluate((points) => {
+    const api = window.cityflows!;
+    const snapshot = api.drawnSnapshot!()!;
+    const canvas = document.querySelector<HTMLCanvasElement>('canvas[aria-label="City map"]')!;
+    const bounds = canvas.getBoundingClientRect();
+    for (const point of points) {
+      const screen = api.worldToScreen!(point);
+      if (document.elementFromPoint(bounds.left + screen.x, bounds.top + screen.y) !== canvas)
+        continue;
+      const overlaps = [snapshot, snapshot.walkers].some((agents) => {
+        if (!agents) return false;
+        for (let i = 0; i < agents.count; i++) {
+          const agent = api.worldToScreen!({ x: agents.x[i]!, y: agents.y[i]! });
+          if (Math.hypot(agent.x - screen.x, agent.y - screen.y) < 16) return true;
+        }
+        return false;
+      });
+      if (!overlaps) return screen;
+    }
+    return null;
+  }, points);
+  expect(point, 'an exposed map point clear of vehicles and pedestrians').not.toBeNull();
+  await page.getByLabel('City map', { exact: true }).click({ position: point! });
+}
+
 /** Picks from the paused renderer snapshot through the map's real pointer path. */
 export async function clickVehicle(page: Page, id: number) {
   if (await button(page, 'Pause').isEnabled()) await button(page, 'Pause').click();
