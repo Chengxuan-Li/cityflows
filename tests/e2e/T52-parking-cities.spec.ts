@@ -114,9 +114,9 @@ for (const cameraTarget of [
     if (!result.ok) throw new Error('Controlled customer-lot city must compile');
     const net = result.compiled;
     const map = page.getByLabel('City map', { exact: true });
-    await expect
-      .poll(async () => Number(await map.getAttribute('data-parked-cars')))
-      .toBeGreaterThan(0);
+    // The layer has drawn; Sindelfingen's few residents may park no visible car by 07:00
+    // (lead, starting stock per person).
+    await expect.poll(() => map.getAttribute('data-parked-cars')).not.toBeNull();
     const initial = await page.evaluate(() => window.cityflows!.parkedCars!());
     expect(
       occupiedSpaces(initial, net.parkingSpaces!.length).filter((index) =>
@@ -262,7 +262,8 @@ for (const name of ['munich-donnersberger', 'sindelfingen-a81']) {
   test(`T52 ${name}: occupied parking in both views and on/off frame times @smoke`, async ({
     page,
   }, info) => {
-    test.setTimeout(420_000);
+    // CI's software GPU ran this past 420 s (TASK-103 merge); 3.3 min locally in CI mode.
+    test.setTimeout(process.env.CI ? 600_000 : 420_000);
     const errors = pageErrors(page);
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -277,9 +278,13 @@ for (const name of ['munich-donnersberger', 'sindelfingen-a81']) {
     if (!result.ok) throw new Error('Imported parking city must compile');
     const net = result.compiled;
     const map = page.getByLabel('City map', { exact: true });
-    await expect
-      .poll(async () => Number(await map.getAttribute('data-parked-cars')))
-      .toBeGreaterThan(0);
+    // The layer has drawn; Sindelfingen's few residents may park no visible car by 07:00
+    // (lead, starting stock per person), Munich's must.
+    await expect.poll(() => map.getAttribute('data-parked-cars')).not.toBeNull();
+    if (name.startsWith('munich'))
+      await expect
+        .poll(async () => Number(await map.getAttribute('data-parked-cars')))
+        .toBeGreaterThan(0);
     const at0700 = await metrics(page);
     const stock0700 = await page.evaluate(() => window.cityflows!.parkedCars!());
     const parked0700 = occupiedSpaces(stock0700, net.parkingSpaces!.length).length;
