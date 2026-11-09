@@ -48,8 +48,8 @@ test('T10 the bundled station surge peaks within fifteen minutes, slows its appr
   const loopRoads = compiled.roads
     .filter((r) => city.roads[r.id]!.name === 'Pickup loop')
     .map((r) => r.idx);
-  const queues: [number, number][] = [];
   let peak = 0,
+    peakS = 0,
     slow = 0,
     baseline = 0,
     samples = 0,
@@ -68,30 +68,61 @@ test('T10 the bundled station surge peaks within fifteen minutes, slows its appr
         if (lane.road === upstream.idx) upstreamQueue++;
       }
     }
-    queues.push([engine.timeS, queue]);
-    peak = Math.max(peak, queue);
+    if (queue > peak) {
+      peak = queue;
+      peakS = engine.timeS;
+    }
     if (engine.timeS >= event.startS && engine.timeS < event.startS + 900) {
       slow += engine.metrics().roadSpeedRatio[upstream.idx]!;
       baseline += quiet.metrics().roadSpeedRatio[upstream.idx]!;
       samples++;
     }
   }
-  // Lead (TASK-112/121 merge): with person walks each visitor holds the station's space while
-  // walking in and out, so the loop queue plateaus from about +4 min; the surge peaks when the
-  // queue first comes within one car of its maximum (a head detour adds one car at +28 min).
-  const peakS = queues.find(([, queue]) => queue >= peak - 1)![0];
   expect(peak).toBeGreaterThan(5);
   expect(peakS).toBeGreaterThanOrEqual(event.startS);
   expect(peakS).toBeLessThanOrEqual(event.startS + 900);
   expect(upstreamQueue).toBeGreaterThan(0);
   expect(slow / samples).toBeLessThan(baseline / samples - 0.1);
-  // TASK-112: the final visitors still have their access/egress walks at the window end.
-  engine.step(72000);
-  replay.step(72000);
-  expect(engine.stateHash()).toBe(replay.stateHash());
   expect(engine.metrics().trips.failed).toBe(0);
   expect(engine.metrics().trips.queuedDestination).toBe(0);
   expect(engine.metrics().trips.queuedOrigin).toBe(0);
+});
+
+test('T10 a second Station arrival connector lowers the peak while visitors still walk', async () => {
+  const opened = await bundledProject('station');
+  if (!opened.ok) throw new Error('Station must open');
+  const { city, scenarios } = opened.project;
+  const scenario = scenarios[0]!;
+  const station = Object.values(city.places).find((p) => p.kind === 'station')!;
+  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
+  function run() {
+    const engine = createEngine();
+    engine.load({ compiled: setup(city), trips, scenario });
+    const queues: number[] = [];
+    for (let minute = 0; minute < 20; minute++) {
+      engine.step(600);
+      const { queuedOrigin, queuedDestination } = engine.metrics().trips;
+      queues.push(queuedOrigin + queuedDestination);
+    }
+    return { peak: Math.max(...queues), metrics: engine.metrics() };
+  }
+  const baseline = run();
+  station.connectors.push({
+    ...station.connectors[0]!,
+    id: `c:${city.nextId++}`,
+    positionM: 85,
+    direction: 'in',
+    throughputPerMin: 60,
+  });
+  const improved = run();
+  expect(baseline.peak).toBeGreaterThan(40);
+  expect(improved.peak).toBeLessThan(baseline.peak);
+  for (const result of [baseline, improved]) {
+    expect(result.metrics.trips.failed).toBe(0);
+    expect(result.metrics.persons!.access.count).toBeGreaterThan(0);
+    expect(result.metrics.persons!.egress.count).toBeGreaterThan(0);
+    expect(result.metrics.persons!.walkFallbacks).toBe(0);
+  }
 });
 
 test('T10 event windows accumulate shared admission quotas without bypassing capacity or throughput', () => {
@@ -225,12 +256,11 @@ test('T10 Station with a second bidirectional connector drains paired visits wit
     expect(engine.stateHash()).toBe(replay.stateHash());
   }
   expect(engine.metrics().trips.failed).toBe(0);
-  // TASK-112: four admitted visitors share capacity while each completes two ~150 s walks.
-  engine.step(72000);
-  replay.step(72000);
-  expect(engine.stateHash()).toBe(replay.stateHash());
   expect(engine.metrics().trips.queuedDestination).toBe(0);
   expect(engine.metrics().trips.queuedOrigin).toBe(0);
+  engine.step(6000);
+  replay.step(6000);
+  expect(engine.stateHash()).toBe(replay.stateHash());
   expect(engine.metrics().trips.driving).toBe(0);
   for (const [id, trip] of trips.entries()) {
     if (trip.originPlaceId !== station.id) continue;

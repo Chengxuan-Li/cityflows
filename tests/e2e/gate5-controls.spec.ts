@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { migrateCity, type City, type Scenario } from '../../src/schema';
 import { compile } from '../../src/network';
-import { button, city, clickGrid, gridPoint, metrics, pageErrors, fitted } from './helpers';
+import { button, city, clickGrid, clickWorld, metrics, pageErrors, fitted } from './helpers';
 
 async function step(page: Page, n: number) {
   await expect(button(page, 'Step')).toBeEnabled();
@@ -141,8 +141,10 @@ test('draw a roundabout, restart, inspect circulating routes and restore the jun
 }, info) => {
   const errors = pageErrors(page);
   const original = await openTraffic(page, 'roundabout');
-  const center = await gridPoint(page, 240, 240),
-    edge = await gridPoint(page, 265, 240);
+  const { center, edge } = await page.evaluate(() => ({
+    center: window.cityflows!.worldToScreen!({ x: 240, y: 240 }),
+    edge: window.cityflows!.worldToScreen!({ x: 265, y: 240 }),
+  }));
   await button(page, 'Roundabout').click();
   await page.mouse.move(center.x, center.y);
   await page.mouse.down();
@@ -190,7 +192,7 @@ test('draw a roundabout, restart, inspect circulating routes and restore the jun
   await page.mouse.wheel(0, -700);
   // The center stays at the zoom anchor, keeping the roundabout legible in the evidence.
   await page.screenshot({ path: info.outputPath('roundabout-yield-signs.png') });
-  await page.mouse.click(center.x, center.y);
+  await clickWorld(page, { x: 240, y: 240 });
   await expect.poll(async () => !!(await city(page)).nodes['n:13']!.roundabout).toBe(false);
   const restored = await city(page);
   expect(restored.roads).toEqual(original.roads);

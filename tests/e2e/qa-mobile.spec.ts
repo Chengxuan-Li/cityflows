@@ -1,5 +1,13 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { button, city, clickVehicle, clickWorld, metrics, pageErrors } from './helpers';
+import {
+  button,
+  city,
+  clickVehicle,
+  clickWorld,
+  departVehicle,
+  metrics,
+  pageErrors,
+} from './helpers';
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -33,6 +41,7 @@ test('QA phone plays and selects a rendered car', async ({ page }) => {
   await expect.poll(async () => (await metrics(page)).trips.driving).toBeGreaterThan(0);
   await reachable(button(page, 'Pause'));
   await button(page, 'Pause').click();
+  await departVehicle(page, 1);
   await clickVehicle(page, 1);
   await reachable(page.getByRole('heading', { name: 'Vehicle 1', exact: true }));
   expect(errors).toEqual([]);

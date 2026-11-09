@@ -2561,6 +2561,19 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   gate5-controls roundabout, qa-mobile and T54. Round 2 for the TASK-112 agent on `task/lead-112`:
   make them pass, fixing the spec where it assumes an instant departure and the product where the
   scenario's point is lost (demo B's second connector must still lower the station peak).
+- TASK-112 round 2 (2026-11-09): fast-forwarded to the lead's integrated baseline. The Station
+  pickup loop now has sidewalks and two station entrances at its curb. Visitors walk locally
+  instead of taking the long path via the main road; the four-space capacity, event demand and
+  six-car/minute arrival connector are unchanged. The minute-sampled queue peak falls from 67
+  to 62 when the UI adds an arrival connector (previously 82 to 82). T10 again checks the true
+  peak time and drains the queues by the original 08:35 end. Specs wait for access walks before
+  inspecting drivers; demo B inspects a destination queue at 08:08 while retaining the full
+  twenty-minute comparison. Layer screenshots exclude the floating sheet's overflow, and the
+  roundabout spec uses the current world projection after fitting and zooming.
+  Verification: full Playwright 93/93 on port 5312, including production; `check` passes (960
+  unit tests passed, one skipped); `test:city` 103 passed (one skipped); quick traffic matches
+  the integrated baseline at 3 357 completed / 8 gridlocks / 13 parking failures (three sampled
+  heads at 09:30, as in the lead review above).
 
 ## Owner decisions log
 

@@ -75,7 +75,7 @@ test('T17 applies an edit while playing and keeps its vehicles inspectable @smok
 test('the first departing vehicle reroutes after banning a movement on its route', async ({
   page,
 }) => {
-  await button(page, 'Step').click();
+  await departVehicle(page, 1);
   const [route] = await routes(page, [1]);
   expect(route).toContain('r:26#0>r:30#0');
   const banned = route![0]!;
@@ -129,9 +129,11 @@ test('a five-second phase changes the queue at the same simulation time', async 
   await page.getByText('Signal phases', { exact: true }).click();
   const phase = page.getByLabel('Phase 1 green (s)');
   await expect(phase).toBeVisible();
-  const step = () => page.evaluate(() => window.cityflows!.step(1500));
+  // The relocated origin needs a 360 m access walk before cars can queue at the signal.
+  const step = () => page.evaluate(() => window.cityflows!.step(4500));
   await step();
   const baseline = await metrics(page);
+  expect(baseline.persons!.access.count).toBeGreaterThan(0);
   await phase.fill('5');
   await phase.press('Enter');
   await button(page, 'Apply signal program').click();
@@ -142,7 +144,7 @@ test('a five-second phase changes the queue at the same simulation time', async 
   await step();
   const edited = await metrics(page);
   expect(edited.timeS).toBe(baseline.timeS);
-  expect(edited.trips.queuedOrigin).not.toBe(baseline.trips.queuedOrigin);
+  expect(edited.trips.queuedOrigin).toBeGreaterThan(baseline.trips.queuedOrigin);
 });
 
 test('a rejected signal edit preserves history and valid edits can be undone and redone', async ({

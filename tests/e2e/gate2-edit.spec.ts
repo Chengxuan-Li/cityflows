@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { unzipSync, strFromU8 } from 'fflate';
 import type { City } from '../../src/schema';
-import { clickVehicle } from './helpers';
+import { clickVehicle, departVehicle } from './helpers';
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 
@@ -64,7 +64,7 @@ test('T12 draws a snapped two-way bypass and an inspected vehicle uses it after 
   await button(page, 'Select').click();
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();
-  await button(page, 'Step').click();
+  await departVehicle(page, 1);
   const movements = await page.evaluate(async () => {
     const vehicle = await window.cityflows!.inspect(1);
     return vehicle!.route!.movements.map((index) => window.cityflows!.movementId(index));
