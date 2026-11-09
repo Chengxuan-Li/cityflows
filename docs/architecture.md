@@ -1710,6 +1710,24 @@ reservation is immediate. The inspector records the space, score, best score and
 Destination-only road access retains spaces for local parking trips. No fee,
 time-limit or conditional-tag rules are modeled.
 
+TASK-122 derives departure reachability once per compiled city, vehicle class, delivery
+purpose and origin access zone. It reuses routing's legal movement graph and selects its
+largest strongly connected components (including equal-size ties, so small one-way fixtures
+do not depend on an arbitrary component). Private/destination roads are legal only in the
+origin zone, and delivery roads only for delivery trips. Reverse propagation includes the
+distance needed for each lane change, so a late strip slot cannot borrow an upstream exit.
+A lot stall also needs a local circulation path to a usable outbound connector.
+
+Residential street-stock transfers and first-trip origin allocation skip unusable spaces;
+virtual garages need a usable exit too. Assigned cars stay in their garages or use the next
+eligible space in the existing choice order. Explicit background occupancy is retained.
+Arrival choice requires usable departure space when the person's linked next car trip starts at
+that activity place, including trips beyond the run window. Terminal visits retain their
+existing choices. The next trip's class and purpose determine the departure requirement;
+ranking, walking distance, search radius and stall-choice draws are unchanged. Reachability
+is not saved and is rebuilt after live edits; existing parked cars keep their spaces and
+their existing departure behavior.
+
 Lead follow-up (2026-11-08). Starting stock holds the cars of the persons demand
 generation makes: `ceil(round(residents × personsPerResident) × carShare)` per home, not the
 full population, so every visible parked car belongs to someone; a resident whose moved

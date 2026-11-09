@@ -147,7 +147,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | rejected (lead's premise error; see review), replaced by TASK-122 |
 | [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | round 2: 10 full-e2e specs, on `task/lead-112` (see review) |
 | [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | accepted; merges together with TASK-112 (see review) |
-| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | trace complete; stopped for lead scope decision (see trace entry) |
+| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | implemented for review; acceptance conflicts remain (see review entry) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -2573,6 +2573,28 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   miss that restriction. Per-trip origins, slots, lanes, destinations and causes are in the
   trace commit message. No departure check, stock change, gate tightening or network edit was
   made; all implementation gates remain open.
+
+- TASK-122 implementation (2026-11-09): owner authorized the parking-space fix and left the
+  original 245 gateway routing failures for another task. Derived departure reachability
+  respects vehicle permissions, access zones, lane-change distance and lot circulation;
+  starting stock, origin slots and parking before a later car trip use it. Live edits rebuild
+  it without moving existing cars. Munich full demand: 1 785 completed / 199 gridlocked /
+  zero parking failures (before: 1 971 / 207 / 30), so the parking gate is tightened to 1%.
+  Munich 0.15: 3 370 / 11 / 0 at 09:30 and 3 643 / 24 / 0 at 10:00. Original Sindelfingen
+  gateway failures are unchanged, but strict later-trip filtering rejects 32 additional
+  inbound p:1300 visitors that formerly parked on isolated pk:2369; total 277, failing the
+  non-rise gate. No routing/network exception was introduced to conceal this conflict.
+  Starting stock totals remain 31 181 / 4 679 / 1 (Munich full / 0.15 / Sindelfingen 0.15).
+  Explicit background occupancy stays put; default blocked strips can become empty when their
+  residents' cars stay in garages. In the source app at scale 0.15 with Parked cars on,
+  pk:9127's 16 bays remain drawn but empty at both 07:00 and 09:30; full-strip acceptance is open.
+  Quick traffic also has 11 gridlocked versus the integrated reference's 8, and two stalled
+  heads versus its zero: those acceptance limits are not met. Cold paired load median is
+  113.28 ms versus 125.92 ms; quick phase load/step 77.01 / 75 626.27 ms versus reference
+  119.37 / 98 467.46 ms. T59's 13 tests, all 972 unit tests, city tier (103), smoke (39) and
+  additional named e2e checks (5) pass, as do typecheck, lint, formatting and build. Full task
+  acceptance is not claimed; the last implementation commit carries the complete report,
+  before/after measurements, remaining gates and per-trip trace.
 
 ## Owner decisions log
 
