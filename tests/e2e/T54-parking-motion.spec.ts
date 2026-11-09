@@ -73,6 +73,13 @@ async function capture(
     'aria-hidden',
     'false',
   );
+  // The projection API switches from 3D on the render frame after the React control.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
   for (const view of ['2d', '3d']) {
     if (view === '2d') await placeCamera(page, [centre.x, centre.y], zoom);
     else {

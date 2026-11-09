@@ -25,10 +25,9 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   expect(morning.failed).toBe(
     morning.failedByReason.gridlocked + morning.failedByReason.no_parking,
   );
-  // Lead (TASK-118/119 merge, owner-accepted 2026-11-09): 2.5% until TASK-120. Cars parked on
-  // strips along dead-end lanes cannot turn around and leave (32 of 1 599, main 21 of 1 433);
-  // TASK-120 adds dead-end turnarounds and restores 2%.
-  expect(morning.failedByReason.no_parking).toBeLessThan(0.025 * morning.localArrivals);
+  // Lead (TASK-121/112 merge, 2026-11-09): back to 2% (30 of 1 729). Most failures are still trip
+  // cars on strips they cannot drive away from (one-way lanes into the crop); TASK-122 removes them.
+  expect(morning.failedByReason.no_parking).toBeLessThan(0.02 * morning.localArrivals);
   expect(morning.completed).toBeGreaterThanOrEqual(Math.floor(445 * 0.99));
   expect(morning.gatewayTraffic.trunk!.entered).toBeGreaterThan(0);
   expect(morning.gatewayTraffic.trunk!.left).toBeGreaterThan(0);

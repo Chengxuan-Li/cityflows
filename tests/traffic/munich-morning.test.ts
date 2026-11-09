@@ -88,7 +88,8 @@ test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")
   // gridlock or a counted parking failure, and no more stalled jam heads than main. The owner reset the baseline at TASK-099
   // (2026-11-07), which replaced the fixed 3 497 floor and T36.4/T38.5's stage figures; the lead
   // reset it again at TASK-100 (mixed fleet), TASK-104 (surface lots), TASK-102 (garages), TASK-116,
-  // TASK-103 (visible parking) and TASK-118/119 (parking motion). TASK-121 restores zero stalled heads.
+  // TASK-103 (visible parking), TASK-118/119 (parking motion) and TASK-121/112 (queue-head
+  // detours, person walks). TASK-121 restores zero stalled heads.
   expect(morning.completed).toBeGreaterThanOrEqual(Math.ceil(0.9 * baseline.completed));
   expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(1.5 * baseline.gridlocked);
   // TASK-103: a counted parking failure is the other allowed failure, under 2% of local arrivals.

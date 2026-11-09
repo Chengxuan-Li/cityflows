@@ -108,7 +108,7 @@ const TRIP_LEGS: WalkerTripLeg[] = ['test', 'access', 'egress', 'walk'];
 
 function grow<T extends Numbers>(values: T, capacity: number, fill = 0): T {
   const next = new (values.constructor as { new (length: number): T })(capacity);
-  if (fill) next.fill(fill);
+  if (fill !== 0) next.fill(fill); // NaN is falsy: arrivedS grows with NaN (lead)
   next.set(values);
   return next;
 }
