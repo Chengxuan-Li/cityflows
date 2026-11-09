@@ -833,19 +833,33 @@ their road, `start`/`end` (or `midblock` for mapped crossings) and `zebra`/`sign
 
 Default 2 m sidewalks follow the compiled outer curb, their centre 1 m beyond it, on
 residential, tertiary, secondary and primary streets. Motorways, trunks, ramps and service
-roads get none by default. Explicit `no` and `separate` suppress generation; `yes` enables it.
+roads get none by default. Explicit `no` suppresses generation; `yes` enables it. For
+`separate`, a parallel same-grade mapped path within 4 m supplies the curb. Four-metre
+coverage samples retain generated curb runs on unserved portions (TASK-123).
 An inward side of paired carriageways is always suppressed, including divided corridors.
 Corners follow the existing curb returns on the outside; through seams join the same curb.
-TASK-091/094 crossing placement and road-end overrides supply cross-street walk links.
+TASK-123 fills disconnected same-grade curb ends within 12 m along the junction's outer
+boundary (at most 40 m), including service-driveway mouths and dead-end caps. These joins
+cannot cross an ordinary road reference. Local endpoint joins also run from generated
+sidewalk ends to mapped through paths within 4 m; additions join disconnected sets only.
+TASK-091/094 crossing placement and road-end overrides supply cross-street walk links,
+including separately mapped curbs. Generated walk crossings exclude motorway, trunk and
+ramp arms. The vehicle network, crossing placement and stop positions are unchanged.
 
 Same-grade mapped intersections split links. Mapped endpoints snap within 4 m (curb width
 and imported alignment), with no inferred shortcut across an ordinary street; explicit OSM
-shared endpoints can join grades at abutments. Entrances attach their places; otherwise
+shared endpoints can join grades at abutments. Generated sidewalks on mapped bridge/tunnel
+roads also retain the shared road node's grade
+at an explicit approach to a road on that grade (TASK-123, owner-approved endpoint rule).
+Their interiors retain the deck/tunnel grade; coincident but unshared roads do not join.
+Entrances attach their places; otherwise
 access uses the nearest part of the place shape. Short access links prefer the main walk
 component within 150 m, retaining local paths when no main-component access fits. Access
 links may cross service driveways,
 but never an ordinary road centreline. A door with no viable attachment falls back to the
-place shape. Parking shapes, roadside strips and car connectors use the same access rule.
+place shape. Parking shapes, roadside strips and car connectors use the same access rule. Equidistant
+connector curb candidates prefer the owning place or facility's chosen access curb (TASK-123),
+so joining components cannot flip a car onto the opposite curb and create a long detour.
 No access is invented beyond the distance limit or across an incompatible grade. Access is a
 straight connection, not obstacle-avoiding navigation through a block. Building clipping is
 presentation-only; display context still cannot change compiled connectivity.

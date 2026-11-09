@@ -9,6 +9,7 @@ import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../s
 import { createWalkRouter } from '../src/routing/walk';
 import { createEngine } from '../src/sim/engine';
 import type { TrafficEngine } from '../src/sim/types';
+import { walkComponents } from '../src/network/walk-joins';
 
 // Import an OSM fixture, compile it, and run its morning headless: the baseline the import
 // wave measures against. Usage: npm run import-probe -- fixtures/osm/<name>.osm w s e n [--scale n]
@@ -50,6 +51,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
   const { compiled } = result;
+  console.info('Walk connectivity', probeWalk(city, compiled));
   const compiledCodes = new Map<string, number>();
   for (const { code } of result.diagnostics)
     compiledCodes.set(code, (compiledCodes.get(code) ?? 0) + 1);
@@ -77,6 +79,48 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
     }
   console.info({ connectorPairs: total, routable: ok });
   console.info(probeMorning(city, compiled, scale));
+}
+
+/** Count actual walk anchors separately from entities with no viable attachment. */
+export function probeWalk(city: City, compiled: CompiledCity) {
+  const graph = compiled.walk,
+    { labels, sizes, core } = walkComponents(graph);
+  const outside = (anchors: Map<string, number[]>) =>
+    [...anchors].filter(([, nodes]) => !nodes.some((i) => labels[i] === core)).map(([id]) => id);
+  const kinds: Record<string, number> = {},
+    rules: Record<string, number> = {};
+  for (const l of graph.links) {
+    kinds[l.kind] = (kinds[l.kind] ?? 0) + 1;
+    if (!l.generated) continue;
+    const rule =
+      l.kind === 'sidewalk' &&
+      city.roads[compiled.roads[l.road!]!.id]!.sidewalk?.[l.side!] === 'separate'
+        ? 'separateFallback'
+        : l.id.split(':')[0]!;
+    rules[rule] = (rules[rule] ?? 0) + 1;
+  }
+  return {
+    nodes: graph.nodes.length,
+    links: graph.links.length,
+    components: sizes.length,
+    largest: sizes[core] ?? 0,
+    kinds,
+    generatedByRule: rules,
+    places: {
+      anchors: graph.places.size,
+      outside: outside(graph.places),
+      unattached: Object.keys(city.places).filter((id) => !graph.places.has(id)),
+    },
+    parking: {
+      anchors: graph.parking.size,
+      outside: outside(graph.parking),
+      unattached: Object.keys(city.parking ?? {}).filter((id) => !graph.parking.has(id)),
+    },
+    connectors: {
+      anchors: graph.connectors.size,
+      outside: [...graph.connectors].filter(([, i]) => labels[i] !== core).map(([id]) => id),
+    },
+  };
 }
 
 /** `untilS` stops the run early (the same demand, a prefix of the morning: `traffic:quick`);

@@ -142,6 +142,8 @@ unitTest('V117 UK kerb lines leave out parking strip runs (lead, TASK-103 merge)
 // Lead, TASK-111 merge: compile pins follow V107 (crossing spans and walk phases added; the
 // previous pins return with them stripped); TASK-103 moves Munich and Sindelfingen as in V107,
 // and its parking bands move their lamps and curbs outward (V103 covers them).
+// TASK-123: only the walk graph and derived signal walk indices move.
+// TASK-123: only the walk graph and derived signal walk indices move.
 const pins = {
   grid: {
     compile: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
@@ -158,14 +160,14 @@ const pins = {
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
   munich: {
-    compile: '957ba69ccc067af30863ed9bedbc42250cfbbe4814cb9d5918202a3bed9be1f3',
+    compile: '105da1c18c0821e2d5c66042f061a1203acd3838ef492dd7a997cce05df98bb1',
     lamps: '89a545b414573da69366d35620e687835e065912a93c7c4c99efc362fdb772ec',
     curbs: '3cc58a9cc69242c36cb266d4f9a24b12f033be69e76529b3109ba643ea4bf63e',
     de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
     us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
   },
   sindelfingen: {
-    compile: '73c5ee3e218246e323a3342969e591dc4f97b51c09511cb99dbac554a5d2fed1',
+    compile: 'e36adffcef98af6d874028216bd58d946f24a77757add6690068d111c13f5a86',
     lamps: '9ec921f871252a427fd77f07e59db60ac6d205535f3c75bfcbf7521feae0490d',
     curbs: 'f6f1915996eb0586f11c25639ba6bc0290e7e277cbb180a6402489e4f19b134e',
     de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
 import { compile } from '../../src/network';
-import { pointInPolygon } from '../../src/geo/polyline';
+import { pointInPolygon, nearestOnPolyline } from '../../src/geo/polyline';
 import { walkGeometry } from '../../src/render/walk-geometry';
 import { buildWalk } from '../../src/render3d/walk';
 import { cityHeights } from '../../src/render3d/heights';
@@ -28,7 +28,12 @@ test('V110 sidewalk paving is clipped by buildings and the carriageway in shared
         y: tri.reduce((s, v) => s + v.y, 0) / tri.length,
       };
       expect(pointInPolygon(p, ring, 0)).toBe(false);
-      expect(Math.abs(p.y)).toBeGreaterThanOrEqual(3);
+      // T60 also paves around the end caps, where x (rather than y) clears the road.
+      for (const road of r.compiled.roads)
+        expect(pointInPolygon(p, [...road.surface, road.surface[0]!], 0)).toBe(false);
+      for (const node of r.compiled.nodes)
+        if (node.outline.length && pointInPolygon(p, node.outline, 0))
+          expect(nearestOnPolyline(node.outline, p).away).toBeLessThan(0.001);
     }
   city.context.features = [
     {
