@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { Session } from 'node:inspector/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createEngine } from '../src/sim/engine';
@@ -52,7 +53,18 @@ const routeProvider: RouteProvider = {
     return route;
   },
 };
+const profiler = process.env.CITYFLOWS_CPU_PROFILE ? new Session() : null;
+if (profiler) {
+  profiler.connect();
+  await profiler.post('Profiler.enable');
+  await profiler.post('Profiler.start');
+}
 const morning = probeMorning(city, result.compiled, 0.15, { untilS, routeProvider });
+if (profiler) {
+  const { profile } = await profiler.post('Profiler.stop');
+  writeFileSync(process.env.CITYFLOWS_CPU_PROFILE!, JSON.stringify(profile));
+  profiler.disconnect();
+}
 console.info('Aisle route audit', { checkedRoutes, lotRoutes, throughAisleRoutes: 0 });
 const totals = {
   completed: morning.completed,

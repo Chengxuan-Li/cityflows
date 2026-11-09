@@ -177,6 +177,6 @@ test('T52 a lot without mapped aisles generates contained stalls and uses its dr
   const result = compile(city);
   if (!result.ok) throw new Error('compile');
   expect(result.compiled.parking[0]!.capacity).toBeGreaterThan(10);
-  expect(result.compiled.parkingSpaces!.every((s) => !s.manoeuvre)).toBe(true);
+  expect(result.compiled.parkingSpaces!.every((s) => s.manoeuvre)).toBe(true);
   expect(new Set(result.compiled.parkingSpaces!.map((s) => s.connector)).size).toBe(1);
 });

@@ -32,12 +32,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           [
             // TASK-103: saved strips and inferred lot entries; compiled visible spaces.
             // T49 retains the original main hashes with appended parking removed.
-            'a038d7c4db3a8ce5df9de5f5ed2fa8724708e71c0a6c0580825a1df496c63918',
-            '8e189112199f82e59cddca6814e0a452a48e2b2e87f24139bf78388fa7cddadd',
+            'fbaa018ae4bb87cad006057918252db2dd838f49630f5018c9177a9504c25136',
+            'd74939ad885aa89a6d644356115596404030c1abaa2a622e678fd82b13f79630',
           ]
         : [
-            'd62aff2344691921a50f3829a5ab8f494a0f619d31108b9e4bbc28d62af9de5f',
-            '19ea2cae8ee6f1450fdef9cecfb49e462f2aecb9410f7c814ccc802600027ba3',
+            '46e0e602d10f95519d92031296170ee5771ce6a8ba362002260bdc456a30ee35',
+            '0314cf5c18d75f5ee826b293a7c9fcc63cc73d7cdd01557b5d99898883213d71',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

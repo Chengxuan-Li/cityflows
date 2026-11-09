@@ -73,6 +73,10 @@ export class VehiclePoses {
       this.widths = new Float32Array(snapshot.count);
     }
     for (let i = 0; i < snapshot.count; i++) {
+      if ((snapshot.poseLane?.[i] ?? -1) >= 0) {
+        this.widths[i] = 0;
+        continue;
+      }
       const lane = snapshot.motionLane?.[i] ?? snapshot.lane[i]!;
       const segment = lane >= 0 ? this.city!.lanes[lane]! : this.city!.movements[-lane - 1]!;
       this.segments[i] = segment;
@@ -89,6 +93,8 @@ export class VehiclePoses {
 
   at(i: number, elapsedS: number) {
     const snapshot = this.snapshot!;
+    if ((snapshot.poseLane?.[i] ?? -1) >= 0)
+      return { x: snapshot.x[i]!, y: snapshot.y[i]!, heading: snapshot.heading[i]! };
     const pose =
       elapsedS > 0
         ? advanceAlong(this.segments[i]!, this.distances[i]!, snapshot.speed[i]!, elapsedS)

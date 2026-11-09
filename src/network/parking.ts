@@ -51,9 +51,11 @@ export function compileVisibleParking(
     const firstLane = road && compiled.lanes[road.lanes[0]!]!;
     const center = source.shape
       ? centroid(source.shape)
-      : firstLane && strip
-        ? pointAtDistance(firstLane.polyline, firstLane.cumulative, (strip.fromM + strip.toM) / 2)
-        : null;
+      : strip?.ring
+        ? centroid({ kind: 'polygon', ring: strip.ring })
+        : firstLane && strip
+          ? pointAtDistance(firstLane.polyline, firstLane.cumulative, (strip.fromM + strip.toM) / 2)
+          : null;
     if (!center) continue;
     const place = source.placeId === null ? -1 : (compiled.index.place.get(source.placeId) ?? -1);
     const facility: CParking = {
@@ -99,12 +101,19 @@ export function compileVisibleParking(
         space.connector = connector(space.lane, space.positionM, `c:${source.id}:${localIdx}`);
       }
     } else if (source.kind === 'lot' && lot) {
-      const driveway = source.provenance.inferred?.includes('driveway');
       const entries = source.connectors
         .map((entry) => {
           const r = compiled.roads[compiled.index.road.get(entry.roadId)!];
           const l = r && compiled.lanes[r.lanes[entry.lane]!];
-          return l ? connector(l.idx, entry.positionM, entry.id) : -1;
+          if (!l) return -1;
+          const idx = connector(l.idx, entry.positionM, entry.id);
+          compiled.connectors[idx]!.direction = entry.direction;
+          compiled.connectors[idx]!.throughputPerMin = entry.throughputPerMin;
+          if (entry.direction === 'out')
+            facility.connectorsIn = facility.connectorsIn.filter((i) => i !== idx);
+          if (entry.direction === 'in')
+            facility.connectorsOut = facility.connectorsOut.filter((i) => i !== idx);
+          return idx;
         })
         .filter((i) => i !== -1);
       const lanes = (source.aisles ?? []).flatMap((id) => {
@@ -121,26 +130,45 @@ export function compileVisibleParking(
             ) ?? []
         );
       });
-      if (
-        (driveway && !entries.length) ||
-        (!driveway && !source.entries?.length && !source.connectors.length)
-      ) {
-        // Hand-drawn standalone aisles remain usable, while an imported isolated lot needs
-        // its materialized inferred driveway rather than spawning onto an isolated aisle.
-        if (source.provenance.source === 'osm') continue;
-      }
-      for (const stall of lot.stalls) {
-        const candidate = lanes
-          .map((lane) => ({ lane, hit: nearestOnPolyline(lane.polyline, stall.position) }))
-          .sort((a, b) => a.hit.away - b.hit.away || a.lane.idx - b.lane.idx)[0];
-        const entry = driveway ? compiled.connectors[entries[0]!] : undefined;
-        if (!entry && !candidate) continue;
-        const lane = entry?.lane ?? candidate!.lane.idx;
-        const positionM = entry?.positionM ?? candidate!.hit.along;
+      // Mapped aisles stay in the vehicle network, but parking search ends at their entry.
+      // A hand-drawn standalone aisle uses its first stall access as its local portal.
+      if (!entries.length)
+        for (const lane of lanes) {
+          const r = city.roads[compiled.roads[lane.road]!.id]!;
+          const start = source.entries?.includes(r.from) || !source.entries?.length;
+          const end = source.entries?.includes(r.to);
+          if (!start && !end) continue;
+          if (source.provenance.source === 'osm' && !source.entries?.length) continue;
+          entries.push(
+            connector(
+              lane.idx,
+              !source.entries?.length && lot.stalls.length
+                ? Math.min(
+                    ...lot.stalls.map(
+                      (s) => nearestOnPolyline(lane.polyline, s.access ?? s.position).along,
+                    ),
+                  )
+                : start
+                  ? 0
+                  : lane.lengthM,
+              `c:${source.id}:entry:${lane.id}`,
+            ),
+          );
+        }
+      const entry = compiled.connectors[entries[0]!];
+      if (!entry) continue;
+      for (const [lotStall, stall] of lot.stalls.entries()) {
+        const candidate = !source.provenance.inferred?.includes('driveway')
+          ? lanes
+              .map((lane) => ({ lane, hit: nearestOnPolyline(lane.polyline, stall.position) }))
+              .sort((a, b) => a.hit.away - b.hit.away || a.lane.idx - b.lane.idx)[0]
+          : undefined;
+        const lane = candidate?.lane.idx ?? entry.lane,
+          positionM = candidate?.hit.along ?? entry.positionM;
         const idx = (compiled.parkingSpaces ??= []).length;
-        const c =
-          entry?.idx ?? connector(lane, positionM, `c:${source.id}:${facility.spaces!.length}`);
+        const c = entry.idx;
         compiled.parkingSpaces.push({
+          lotStall,
           idx,
           parking: facility.idx,
           lane,
@@ -149,17 +177,13 @@ export function compileVisibleParking(
           heading: stall.heading,
           widthM: stall.widthM,
           lengthM: stall.lengthM,
-          layout: 'perpendicular',
           connector: c,
-          manoeuvre: !driveway,
+          layout: stall.layout ?? 'perpendicular',
+          manoeuvre: true,
         });
         facility.spaces!.push(idx);
       }
       facility.capacity = facility.spaces!.length;
-      if (!driveway)
-        for (const lane of lanes)
-          if (!facility.connectorsIn.some((i) => compiled.connectors[i]!.lane === lane.idx))
-            connector(lane.idx, lane.lengthM / 2, `c:${source.id}:aisle:${lane.id}`);
     }
   }
 }

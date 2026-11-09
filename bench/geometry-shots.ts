@@ -80,6 +80,22 @@ export const shots: {
   { id: 'V117-munich-motorway-uk', cases: [], centre: [0, -256], zoom: 4, theme: 'uk' },
   ...(['2d', '3d'] as const).flatMap((view) => [
     {
+      id: `V118-munich-lot${view === '3d' ? '-3d' : ''}`,
+      cases: [],
+      centre: [135.7, 305.3] as [number, number],
+      zoom: 7,
+      timeS: 8 * 3600,
+      ...(view === '3d' && { view, terrain: true, pitch: 55 }),
+    },
+    {
+      id: `V118-munich-street${view === '3d' ? '-3d' : ''}`,
+      cases: [],
+      centre: [-300, 290] as [number, number],
+      zoom: 8,
+      timeS: 8 * 3600,
+      ...(view === '3d' && { view, terrain: true, pitch: 60, bearing: 30 }),
+    },
+    {
       id: `V103-munich-street${view === '3d' ? '-3d' : ''}`,
       cases: [],
       centre: [-300, 290] as [number, number],

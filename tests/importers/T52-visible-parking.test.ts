@@ -158,12 +158,18 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
     expect(counts.inferred).toBeGreaterThan(0);
     const expected =
       name === 'munich-donnersberger'
-        ? { mapped: 33, inferred: 224, slots: 2149 }
-        : { mapped: 15, inferred: 56, slots: 1111 };
+        ? { mapped: 79, inferred: 203, slots: 2419 }
+        : { mapped: 17, inferred: 56, slots: 1122 };
     for (const key of ['mapped', 'inferred', 'slots'] as const)
       expect(Math.abs(counts[key] - expected[key])).toBeLessThanOrEqual(expected[key] * 0.1);
-    expect(counts.slots).toBe(strips.reduce((n, s) => n + s.capacity, 0));
+    expect(counts.slots).toBe(
+      after.compiled.parking
+        .filter((p) => p.kind === 'roadside')
+        .reduce((n, p) => n + p.capacity, 0),
+    );
     for (const strip of after.compiled.strips ?? []) {
+      // Mapped areas retain their projected run and capacity; generated runs keep safety cuts.
+      if (city.parking![strip.id]!.strip!.ring) continue;
       const road = after.compiled.roads[strip.road]!;
       expect(strip.fromM).toBeGreaterThanOrEqual(5);
       expect(strip.toM).toBeLessThanOrEqual(road.lengthM - 5 + 1e-6);
@@ -241,6 +247,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
       f.kind === 'area' && f.class === 'building' ? [prepareRing(f.rings[0]!)] : [],
     );
     const overlaps = (after.compiled.strips ?? [])
+      .filter((s) => !city.parking![s.id]!.strip!.ring)
       .filter((s) => {
         const box = prepareRing(s.polygon).box;
         return buildings.some(

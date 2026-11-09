@@ -152,13 +152,13 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 const baselines = {
   grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
   town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
-  'munich-donnersberger': '332a2e3726e8ec9a4a8ba38aafee3a2cd4a1c8dddb527dbe6d3a81f43c712c23',
-  'sindelfingen-a81': '5e7ffd6378f144941c8e4bb48e074000fb966bf22b3af331bec19b8d8360340a',
+  'munich-donnersberger': '957ba69ccc067af30863ed9bedbc42250cfbbe4814cb9d5918202a3bed9be1f3',
+  'sindelfingen-a81': '73c5ee3e218246e323a3342969e591dc4f97b51c09511cb99dbac554a5d2fed1',
 };
 const lampCounts = {
   grid: [0, 0],
   town: [0, 410],
-  'munich-donnersberger': [113, 388],
+  'munich-donnersberger': [113, 430], // TASK-119 mapped bands move generated furniture outward.
   'sindelfingen-a81': [47, 531],
 };
 test.each(tierCities(Object.keys(baselines) as (keyof typeof baselines)[]))(

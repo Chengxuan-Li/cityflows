@@ -2,6 +2,7 @@ import type { CompiledCity } from '../../src/network';
 import type { TrafficEngine } from '../../src/sim/types';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { vehicleClasses } from '../../src/schema';
+import { OFF_LANE } from '../../src/sim/vehicle';
 
 /** Front past the start and rear before the end: a car clamped exactly at the start is outside. */
 export function sampleConflictZones(engine: TrafficEngine, compiled: CompiledCity) {
@@ -9,7 +10,7 @@ export function sampleConflictZones(engine: TrafficEngine, compiled: CompiledCit
   const snapshot = engine.snapshot();
   for (let i = 0; i < snapshot.count; i++) {
     const field = snapshot.lane[i]!;
-    if (field >= 0) continue;
+    if (field >= 0 || field === OFF_LANE) continue; // TASK-118: off-lane in a lot or manoeuvre
     const idx = -field - 1;
     const positions = occupied.get(idx) ?? [];
     positions.push({

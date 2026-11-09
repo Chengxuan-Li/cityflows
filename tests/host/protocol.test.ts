@@ -88,7 +88,8 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect([...snapshot.vclass]).toEqual([2]);
   // TASK-103: four separate stock buffers accompany the first snapshot, even in a city
   // with no visible spaces, so replacing a previous city's stock also clears the layer.
-  expect(transferred).toEqual(Array(16).fill(0));
+  // TASK-118 transfers the authoritative parking-pose lane alongside moving vehicles.
+  expect(transferred).toEqual(Array(17).fill(0));
   expect(snapshot.parkedCars?.occupied).toBeInstanceOf(Uint8Array);
   expect(snapshot.roadSpeedRatio).toHaveLength(input.compiled.roads.length);
   expect(snapshot.parkingOccupancy).toBeInstanceOf(Uint32Array);
@@ -98,7 +99,7 @@ test('round-trips every request through the worker and matches replies by ID', a
   expect(throttled.roadSpeedRatio).toBeUndefined();
   expect(throttled.parkingOccupancy).toBeUndefined();
   expect(throttled.parkedCars).toBeUndefined();
-  expect(transferred).toEqual(Array(10).fill(0));
+  expect(transferred).toEqual(Array(11).fill(0));
   now = 500;
   const updated = await client.snapshot();
   expect(updated.roadSpeedRatio).toHaveLength(input.compiled.roads.length);

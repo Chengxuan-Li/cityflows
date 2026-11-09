@@ -2,6 +2,8 @@ import type { VehicleClass } from './city';
 
 /** Simulation parameters (architecture section 8). Defaults live in src/sim/params.ts. */
 export interface SimParams {
+  lotSpeedMps: number;
+  stallChoiceSlackM: number;
   streetParkingShare: number;
   parkManoeuvreS: { parallel: number; angled: number; perpendicular: number };
   leaveManoeuvreS: number;

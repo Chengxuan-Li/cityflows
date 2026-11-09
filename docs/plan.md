@@ -142,8 +142,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-103](tasks/TASK-103.md) | 7 | Visible parking: roadside strips and lot stalls in the simulation, park and leave manoeuvres, parked cars drawn | `strip` facilities (import, inference, compile), inferred lot driveways, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, parked-car layers 2D and 3D, road inspector | 102, 104 | T52, traffic quick, shots | done (see review) |
 | [TASK-111](tasks/TASK-111.md) | 9 | Pedestrian rules: walkers, zebra priority, pedestrian signal phases, a test pedestrian source | new `src/sim/walkers.ts`, crossing spans, `SignalProgram` walk groups, `intersection.ts`, `signals.ts`, walker layers 2D and 3D, signal editor | 110 | T53, traffic quick unchanged, shots | done (see review) |
 | [TASK-117](tasks/TASK-117.md) | 8 | Visual fixes after Phase 2: sign collisions, UK kerb lines only on urban kerbs, access signs by marking theme | `src/render/street.ts` (sign placement), `layers/street.ts`, `render3d/street.ts`, `marking-geometry.ts`, `style.ts` | 107, 114 | V117, shots | done (see review) |
-| [TASK-118](tasks/TASK-118.md) | 7 | Parking motion: circulation inside lots, stochastic stall choice, visible strip manoeuvres, individual slot departures (owner bugs 1 and 2) | `src/network/stalls.ts`, new `lot-paths.ts`, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, new `manoeuvre.ts`, renderers | 103, lead follow-up | T54, traffic quick, shots | todo |
-| [TASK-119](tasks/TASK-119.md) | 7 | Mapped street-side parking areas become strips; dropped lots and garage imported (owner bug 3) | `src/importers/osm/strips.ts`, `lots.ts`, `parking.ts`, `places.ts`, `src/network/strips.ts` | 103 | T55, traffic quick, shots | todo |
+| [TASK-118](tasks/TASK-118.md) | 7 | Parking motion: circulation inside lots, stochastic stall choice, visible strip manoeuvres, individual slot departures (owner bugs 1 and 2) | `src/network/stalls.ts`, new `lot-paths.ts`, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, new `manoeuvre.ts`, renderers | 103, lead follow-up | T54, traffic quick, shots | done (see review) |
+| [TASK-119](tasks/TASK-119.md) | 7 | Mapped street-side parking areas become strips; dropped lots and garage imported (owner bug 3) | `src/importers/osm/strips.ts`, `lots.ts`, `parking.ts`, `places.ts`, `src/network/strips.ts` | 103 | T55, traffic quick, shots | done (see review) |
+| [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -848,6 +849,7 @@ model and the reasoning effort.
 | 2 | TASK-102, TASK-104, TASK-107, TASK-109, TASK-110, TASK-114, TASK-115, TASK-116 | 100 and 101 (102, 104, 107), 105 (109), 106 and 108 (107, 114), the Phase 0 formats | 1.5 to 2 days |
 | 3 | TASK-103, TASK-111, TASK-117 | 102 and 104 (103), 110 (111), 107 and 114 (117) | 1.5 to 2 days |
 | 3b | TASK-118, TASK-119 | 103 and the lead's follow-up | 1 to 1.5 days |
+| 3c | TASK-120 | 118, 119 | half a day |
 | 4 | TASK-112 | 103, 110, 111, 118 | 2 to 3 days |
 | 5 | TASK-113 | 112 | half to 1 day |
 
@@ -972,10 +974,26 @@ guidance), TASK-119 takes 3; 4 waits for TASK-112, which now follows TASK-118 (b
 TASK-119 owns `src/importers/**` and `src/network/strips.ts`; both move trip counts and the lead
 resets the baseline at each merge. Simplified CI rule as in Phase 3.
 
+TASK-119 imports all 57 Munich street-side areas (54 strips, 3 fallback lots) and both
+Sindelfingen areas (strips), with no orphan parking places. Munich way 135296620 remains a
+zero-stall fallback lot: its 76.11 × 1.99 m footprint cannot fit the existing 2.5 m-wide lot
+bays. It retains its inferred driveway; changing lot stall dimensions belongs to TASK-118.
+The other 56 Munich areas have usable slots. Counts, timings, traffic and comparison images
+are recorded in the task branch's final commit body.
+
+TASK-118 derives local circulation without changing the vehicle network. The lead's merge
+lets an entry link pass under a building exclusion when no clear link exists (courtyards
+reached through a passage: Munich `pk:2037` Gewerbehof Westend, Sindelfingen `pk:1475`) and
+lets a stall join an aisle up to 5 m away. Unreachable stalls fall from 110 to 54 in Munich
+(28 of them in TASK-119's two aisle-less fallback lots) and from 195 to 22 in Sindelfingen;
+they stay painted and unused with `lot_stalls_unreachable`. Local graph counts do not imply
+street access: existing private-road policies still apply (for example at `pk:1473`).
+
 | Task | Harness | Model | Effort | e2e port |
 | --- | --- | --- | --- | --- |
 | TASK-118 | Codex | GPT-6.1-Sol | xhigh | 5318 |
 | TASK-119 | Codex | GPT-6.1 Terra | high | 5319 |
+| TASK-120 | Codex | GPT-6.1 Terra | high | 5320 |
 
 ### Questions for the owner, with the lead's defaults (accepted by the owner, 2026-11-07)
 
@@ -2432,7 +2450,34 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   timed out on T52's Munich frame samples (software GPU): 20 frames and no frame allowance on
   CI, as T44 and V106.
 
+- TASK-119 review (lead, 2026-11-09): accepted as delivered, merged first in Phase 3b. Munich
+  57 street-side areas (54 strips, 3 fallback lots), Sindelfingen 2 (strips), no parking place
+  without a facility; the two private lots and the garage were linked to the wrong place, not
+  dropped. Route requests in the quick run rise to 182 916 (main 117 272): parking search tries
+  the 466 new slot connectors and most attempts fail fast, as measured at TASK-103; the run is
+  6% slower (39.1 s against 36.9 s).
+- TASK-118 review (lead, 2026-11-09): merged on top of TASK-119. As delivered it left 305 lot
+  stalls unreachable (Munich 8 of 22 lots usable, Sindelfingen 14 of 31) and gridlock 52
+  against 32 in the quick run (1.63 times, over the gate). Lead fix in `lot-paths.ts`: an entry
+  link may pass under a building exclusion when no clear link exists, never over a bay
+  (courtyards behind a building passage: Munich `pk:2037`, Sindelfingen `pk:1475`, 227 stalls),
+  and a stall joins an aisle over a clear link up to 5 m (single rows beside their aisle).
+  Unreachable stalls: Munich 54 (28 in TASK-119's aisle-less fallback lots), Sindelfingen 22.
+  No car stays stuck in a lot (quick run: at most 11 inside at once, longest 140 s, none at
+  09:30); mean entry to parked 51.6 s. Hash pins re-derived for the combined merge. Traffic
+  tests: T53's walker pair from removed place p:1667 now starts at p:1751 (same zebra n:859);
+  T21's conflict-zone sampler skips `OFF_LANE`. Traffic: full 3334 / 81 / 13 parking failures
+  (gate 3142 and 108), quick 3134 / 40 / 13 (run 40.6 s against 36.9 s on main); baseline reset
+  to these. Full demand: 32 parking failures of 1 599 local arrivals (main 21 of 1 433), over
+  2%, mostly resident cars on strips along dead-end lanes that cannot turn around (also on
+  main); zeroing those strips raised it to 51 (their residents then have no car). The owner
+  accepted the full-demand test at 2.5% until TASK-120. e2e 92 of 92 (qa-mobile and T52 Munich
+  rerun alone after load from concurrent lead probes).
+
 ## Owner decisions log
+
+- 2026-11-09, TASK-118/119 merge: accept the full-demand parking failures at 2.5% of local
+  arrivals (32 of 1 599) and fix dead-end turnarounds in TASK-120, which restores 2%.
 
 - 2026-11-08, TASK-116 test allowances: the owner confirms loosening T47 Munich's total budget
   to 180 s and V106's local Munich frame overhead to 25%, as the agent recorded in its

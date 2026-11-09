@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 const port = Number(process.env.CITYFLOWS_TEST_PORT ?? 4173);
-const productionPort = port + 1;
+const productionPort = Number(process.env.CITYFLOWS_PRODUCTION_TEST_PORT ?? port + 1);
 
 // CI runs four e2e jobs balanced by measured duration (lead, 2026-11-07): `--shard` splits the
 // sorted file list by count, which gave the last shard every heavy 3D case (20 to 27 minutes

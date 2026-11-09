@@ -122,7 +122,7 @@ export function addOsmGarages(
       name: tag.name ?? null,
       capacity,
       access,
-      placeId: (owner ?? parkingPlace)?.id ?? null,
+      placeId: (parkingPlace ?? owner)?.id ?? null,
       connectors: connector ? entryPoints.map(connector) : [],
       shape,
       provenance: { source: 'osm', osmIds: [id], inferred },

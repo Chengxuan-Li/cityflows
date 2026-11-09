@@ -5,6 +5,7 @@ import {
   pointAtDistance,
   polylineLength,
   polylineCrossings,
+  pointInPolygon,
   prepareRing,
 } from '../geo/polyline';
 import type { City, ParkingLayout, Road } from '../schema';
@@ -208,7 +209,7 @@ export function compileStrip(city: City, compiled: CompiledCity, facility: CPark
     widthM: width,
     layout: source.layout,
     slots: [],
-    polygon: bandPolygon(road, lane, source.side, source.fromM, source.toM, width),
+    polygon: source.ring ?? bandPolygon(road, lane, source.side, source.fromM, source.toM, width),
   };
   const pitch = stripPitch(source.layout);
   const count = Math.min(facility.capacity, Math.floor((source.toM - source.fromM + 1e-8) / pitch));
@@ -217,13 +218,39 @@ export function compileStrip(city: City, compiled: CompiledCity, facility: CPark
     const station = source.fromM + inset + (i + 0.5) * pitch;
     const positionM = onLane(station);
     const tangent = headingAtDistance(lane.polyline, lane.cumulative, positionM);
+    let position = pose(station, sign * (lane.widthM / 2 + width / 2));
+    if (source.ring) {
+      const p = pointAtDistance(lane.polyline, lane.cumulative, positionM);
+      const normal = { x: -Math.sin(tangent), y: Math.cos(tangent) };
+      const extent = Math.max(...source.ring.map((q) => Math.hypot(q.x - p.x, q.y - p.y))) + 1;
+      const ring = [...source.ring, source.ring[0]!];
+      const across = (offset: number) => ({
+        x: p.x + normal.x * offset,
+        y: p.y + normal.y * offset,
+      });
+      const offsets = polylineCrossings([across(-extent), across(extent)], ring)
+        .map((hit) => hit.alongA - extent)
+        .sort((a, b) => a - b);
+      const intervals = offsets
+        .slice(1)
+        .flatMap((to, i) => {
+          const from = offsets[i]!,
+            middle = (from + to) / 2;
+          return sign * middle > 0 && pointInPolygon(across(middle), ring)
+            ? [{ middle, width: to - from }]
+            : [];
+        })
+        .sort((a, b) => b.width - a.width);
+      if (!intervals.length) continue;
+      position = across(intervals[0]!.middle);
+    }
     const idx = (compiled.parkingSpaces ??= []).length;
     const space: CParkingSpace = {
       idx,
       parking: facility.idx,
       lane: lane.idx,
       positionM,
-      position: pose(station, sign * (lane.widthM / 2 + width / 2)),
+      position,
       heading:
         tangent +
         (source.layout === 'parallel'
@@ -239,6 +266,6 @@ export function compileStrip(city: City, compiled: CompiledCity, facility: CPark
     (facility.spaces ??= []).push(idx);
     strip.slots.push(idx);
   }
-  facility.capacity = count;
+  facility.capacity = strip.slots.length;
   (compiled.strips ??= []).push(strip);
 }

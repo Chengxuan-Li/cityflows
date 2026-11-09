@@ -262,7 +262,7 @@ interface ParkingFacility {
   connectors: Connector[];        // garage and lot entries/exits; a roadside strip has none
   shape: { kind: 'point'; pos: Vec2 } | { kind: 'polygon'; ring: Vec2[] } | null;
   strip?: { roadId: RoadId; side: 'left' | 'right'; fromM: number; toM: number;
-            layout: 'parallel' | 'angled' | 'perpendicular' };   // roadside only
+            layout: 'parallel' | 'angled' | 'perpendicular'; ring?: Vec2[] }; // roadside only
   aisles?: RoadId[];              // a lot's parking_aisle service roads
   entries?: NodeId[];             // lot aisle nodes shared with permitted non-aisle roads
   exclusions?: Vec2[][];          // lot courtyards/buildings; nearby buildings for safe strip edits
@@ -283,6 +283,9 @@ opening a file without strips does not infer any. A strip is one safe run on one
 road side, with canonical centreline stations in metres; `angled` represents diagonal bays.
 Its capacity is the whole slots at 5.5/2.8/2.5 m pitch (parallel/angled/perpendicular).
 Road-inspector strip edits regenerate safe runs and are ordinary undoable parking patches.
+TASK-119 optionally saves the mapped area's clipped outer `ring` on a strip. Absent rings
+retain the generated-band behavior, including in older saved files. Numeric mapped capacity
+is retained; compiled capacity is the number of slots that fit its run and polygon.
 
 TASK-102 persists OSM garages and inferred private garages on the same `City.parking` format.
 An implicit garage reuses its place's connectors and is marked `implicitGarage` in provenance;
@@ -452,14 +455,37 @@ surroundings never changes compiled stalls.
 
 TASK-103 compiles lots and roadside facilities into `CParking`. `parkingSpaces` is a dense,
 deterministic array: each space has its facility, lane, lane station, centre pose, dimensions,
-layout, connector and manoeuvre flag. Facilities carry space indices. Mapped aisle stalls
-and strip slots have derived, facility-local entry/exit connectors; an inferred lot driveway
-shares its canonical connector between stalls and uses garage-style admission. Lot simulation
-capacity equals generated stall count. A lot without mapped aisles gets a derived grid of
-stalls clipped to its polygon and saved exclusions, without inventing vehicle roads.
+layout, connector and manoeuvre flag. Facilities carry space indices. Strip slots have
+derived, facility-local entry/exit connectors. TASK-118 ends a lot road
+route at a canonical entry or the end of a mapped aisle lane; stalls share these entries.
+Lot simulation capacity equals the reachable generated stall count. A lot without mapped
+aisles gets a derived grid of stalls clipped to its polygon and saved exclusions, without
+inventing vehicle roads.
+TASK-118 adds `CLot.circulation`: local nodes, bidirectional edges and adjacency, one access
+node per stall, and entry connector nodes with precomputed shortest-path distances and
+predecessors. Mapped aisle lane centrelines and their existing joining curves are read-only
+geometry inputs, retaining every split section. Generated row gaps and short visible bridges
+between disconnected aisle ends stay inside the polygon and clear of stalls and exclusions.
+Bridges join the closest disconnected pieces without crossing another path. This handles
+lots whose adjacent access spine lies outside their mapped polygon. Generated rows leave end
+circulation gaps; shallow layouts retain their paint but cannot admit cars without a reachable driving gap.
+Entry links may cross the lot boundary from the street and never cross stalls. An entry
+prefers a link clear of exclusions; only when none exists may it pass under a building
+exclusion, a courtyard reached through a building passage (Munich `pk:2037`, Sindelfingen
+`pk:1475`). A stall's access point joins the nearest aisle point over a clear link of up to
+5 m (one stall length), so a single row beside its aisle is usable.
+`lot_stalls_unreachable` reports stalls without both an inbound and an outbound path.
+A bay retains its physical lane/station separately from its admission connector; curb
+openings and lamps continue to use physical bay access. No circulation edge enters the
+vehicle router.
+
 `strips` carries pavement polygons and space indices outside the unchanged carriageway:
 bands are 2/4.5/5 m wide. Sidewalks offset outward beside these bands. Vehicle roads, lanes,
 nodes, movements, conflict geometry and existing connectors retain their original data.
+TASK-119 uses a strip's mapped `ring` directly as `CStrip.polygon`. At each slot's centreline
+station, the curb lane's normal intersects the ring; the widest outward interior interval
+supplies the slot centre. Stations with no interior interval produce no slot. Both renderers
+consume this same band and slot geometry.
 
 ### 5.1 Lane layout
 
@@ -1077,16 +1103,37 @@ stock once, including across gridlock respawns (recovery queues sit outside gara
 Arrivals increment atomically, never beyond
 capacity, and keep the car's facility for its next trip. These states participate in hashes.
 
-TASK-103 gives visible spaces exclusive stock and arrival reservations. Cars and vans brake
-at the target curb/aisle station, hold their lane for `parkManoeuvreS` (parallel 8 s, angled
-and perpendicular 4 s), then occupy the space. A departure uses its exact space connector,
-requires the ordinary spawn clearance and a follower insertion deceleration within the
-existing merge bound, then holds the lane for `leaveManoeuvreS` (4 s). Inferred driveways
-and garages retain immediate connector admission. Trucks and buses use garages only.
-Occupancy changes atomically, and a dependent trip keeps the preceding trip's space.
-An edit that removes an occupied visible space requires a restart, as an occupied garage
-capacity reduction already does; rejection occurs before mutating the run. Other edits remap
-stock by facility ID and local space ordinal, including stalls sharing an inferred driveway.
+TASK-103 gives visible spaces exclusive stock and arrival reservations. TASK-118 replaces
+its stationary holds with front-bumper trajectories. A strip arrival stops at its slot,
+then drives forward and reverses along an S-curve for parallel parking, or takes a forward
+arc for angled/perpendicular parking. The pull-in lasts `parkManoeuvreS` (8/4/4 s); the lane
+is held until the entire body clears it. A departure removes the parked sprite, follows the
+reverse path over `leaveManoeuvreS` (4 s), holds its accepted lane gap and joins at speed 0.
+Both admission directions require room ahead for the full swept body, including the forward
+setup of a parallel manoeuvre. Local reversing departures also allow for traffic that can
+reach their access point during the leave duration.
+Curve progress is eased, and snapshots carry the moving body throughout the handover.
+
+A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
+and becomes `in_lot` (counted among driving trips). It follows its local shortest path at
+`lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
+across it; tied approaches use distance, then id. Narrow local paths admit one entry/direction
+cohort at a time to prevent opposing cars deadlocking. Reversing departures take an aisle
+gap, leave their stall, follow the local path to an outbound entry, wait for the existing
+spawn/insertion gap and connector budget, and enter the street at speed 0. Gridlock recovery
+never applies inside a lot. Trucks and buses use garages only; garage admission and stock
+rules are unchanged.
+
+Occupancy changes atomically, and a dependent trip keeps the preceding trip's exact space.
+An edit that removes an occupied visible space, or changes an active lot's circulation topology
+(including bridges and portal directions) or a strip trajectory,
+requires a restart before mutating the run. Unaffected edits remap stock, reservations and
+moving cars by facility/connector id and local space ordinal. Motion phase and progress
+participate in the deterministic hash. Active parking trajectories advance after the lane
+commit and before gridlock recovery. Off-lane trajectory exports use `parking:<facilityId>`
+as their segment id and do not contribute to road speed or queue statistics. Parking metrics
+add mean entry-to-park, local drive and departure times, strip manoeuvres per simulated hour
+and mean chosen stall rank.
 
 Lives in `src/sim`. Fixed step `dtS = 0.1`. All randomness from the seeded generator in
 `src/geo/random.ts` (mulberry32 or xoshiro128**, with uniform and normal sampling; shared by
@@ -1117,7 +1164,7 @@ interface SimParams {
   routeNoise: 0.1;
 }
 
-type VehicleState = 'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed';
+type VehicleState = 'queued_origin' | 'driving' | 'queued_destination' | 'in_lot' | 'completed' | 'failed';
 type FailReason = 'no_route' | 'unsupported_mode' | 'destination_unreachable' | 'stranded'
   | 'no_origin_connector' | 'no_destination_connector'
   | 'gridlocked';                                     // TASK-077, after maxRespawns
@@ -1137,8 +1184,9 @@ interface VehicleSnapshot {
   timeS: number; count: number;
   id: Uint32Array; x: Float32Array; y: Float32Array; heading: Float32Array;
   speed: Float32Array; lateralM: Float32Array;       // lateral offset while changing lanes
-  lane: Int32Array;                                   // lane idx, or -(movement idx + 1) on a movement
-  state: Uint8Array;                                  // 1 driving, 2 queued_destination
+  lane: Int32Array;                                   // lane idx, -(movement idx + 1) on a movement, or -2147483648 off-lane
+  poseLane?: Int32Array;                             // >=0: authoritative parking pose, reference lane for layer/height
+  state: Uint8Array;                                  // 1 driving, 2 queued_destination, 6 in_lot
   vclass: Uint8Array;                                 // car 0, van 1, truck 2, bus 3
   fade: Float32Array;                                 // TASK-077: 1, or falling to 0 before a respawn
 }
@@ -1602,10 +1650,16 @@ share `streetParkingShare` (default 0.3) seeks visible parking before their home
 Other visits rank admissible strips/lots within the walking radius first, then the own
 garage, public garages within the radius, then farther facilities by distance. Public
 spaces admit anyone; private/customers spaces admit their destination's visitors. The same
-share of initial residential garage stock moves to nearby visible spaces, nearest first
-up to capacity; explicit starting occupancy wins. Imported inferred garages retain their
-existing unlimited admission rule. Owned lots and garages share one initial resident-stock
-budget. Destination-only road access retains spaces for local parking trips. No fee,
+share of initial residential garage stock moves to nearby visible facilities, nearest first
+up to capacity; eligible spaces within each facility are shuffled with the scenario seed;
+explicit starting occupancy wins. Imported inferred garages retain their existing unlimited
+admission rule. Owned lots and garages share one initial resident-stock
+budget. TASK-118 also chooses each initial person's exact space by a seeded draw rather
+than compiled order. At a lot entry, free/unreserved stalls are scored by local path length
+plus straight-line walking distance to the destination. Stalls within `stallChoiceSlackM`
+(default 25 m) of the best score are equally likely, on a per-vehicle scenario-seeded stream;
+reservation is immediate. The inspector records the space, score, best score and rank.
+Destination-only road access retains spaces for local parking trips. No fee,
 time-limit or conditional-tag rules are modeled.
 
 Lead follow-up (2026-11-08). Starting stock holds the cars of the persons demand
@@ -1736,7 +1790,13 @@ or the schematic's crossing lines, and adds an exclusive pedestrian phase.
 `window.cityflows.setWalkers` sets the source and restarts (test mode).
 
 TASK-103 adds a default-on “Parked cars” layer in both views, independent of stall paint and
-facility occupancy labels. Parked class shapes are instanced at compiled space poses,
+facility occupancy labels. TASK-118 draws in-lot travel and strip manoeuvres in the existing
+moving-vehicle layer. A nonnegative snapshot `poseLane` identifies a parking pose: both views
+use its supplied position/heading without projecting or extrapolating it along a road.
+`lane` is the off-lane sentinel while a car is inside a lot or has cleared a strip lane;
+`poseLane` supplies only the grade/layer reference. Parked sprites leave when departure starts
+and appear only after the pull-in ends. Snapshot changes invalidate frames under TASK-115.
+Parked class shapes are instanced at compiled space poses,
 slightly dimmed, destination-tinted, and pickable (including initial stock without a trip).
 Bands draw beside carriageways, with bay ticks only on mapped strips. Derived curbs and
 generated lamp positions move to the band's outside edge. The road inspector exposes each
@@ -2177,6 +2237,26 @@ connectors by 3 m, and restricted/bus-only curb lanes. Bands intersecting buildi
 their runs; nearby footprint exclusions are saved so context-disabled layout edits stay safe.
 Inference is saved with provenance.
 
+TASK-119 imports `amenity=parking` way/multipolygon areas tagged `parking=street_side|lane|
+layby|on_kerb|half_on_kerb` as mapped roadside strips. It chooses the nearest car-permitted
+outside curb within 15 m, with its projected run at least 90% of its depth (allowing near-square
+or slightly skewed bays). Subdividing the long boundary does not affect matching. Both travel
+directions are considered;
+side follows travel direction. The area's centreline projection supplies the clipped run.
+`orientation` or `parking:orientation` supplies parallel/diagonal/perpendicular, otherwise
+depth up to 3/5.5 m selects parallel/angled, then perpendicular. Numeric capacity wins,
+otherwise the existing pitches apply. Private/customers access is retained, otherwise public.
+Restricted strips infer one existing non-parking owner within 200 m, preferring an identical
+name, then a containing footprint, then the nearest centroid with an ID tie-break. Customers
+exclude residential owners. This uses canonical `placeId` and existing simulation admission;
+without a nearby eligible place the facility remains unowned. Public strips remain unowned.
+The mapped polygon supplies the band and slots; its obsolete parking place is removed while
+retaining the legacy ID allocation sequence for unrelated entities. Generated road-tag and
+inferred strips lose only intervals covered by mapped strips on the same directed curb.
+`separate` still suppresses generation. Unmatched areas reuse the surface-lot importer and
+inferred driveway, without adding aisle roads. Incomplete or out-of-bounds areas are diagnosed.
+This happens only on import; opening an existing project materializes nothing new.
+
 TASK-102 imports `amenity=parking` with `parking=underground|multi-storey`, and buildings
 tagged `parking|garage|garages`, from nodes, ways and multipolygons. Numeric capacity wins;
 otherwise footprint area times levels / 25 m² estimates slots (levels capped at 20, inferred
@@ -2231,7 +2311,9 @@ TASK-104 appends surface lots after the original public-road and place import. C
 become `lot` facilities. Multipolygon inner rings and intersecting building footprints become
 stall exclusions. Numeric capacity wins; otherwise capacity is the generated count. Access
 maps absent/yes to public, customers to customers, private to private. One touching place
-footprint or matching name supplies `placeId`; ambiguous matches remain null. Only clipped
+footprint or matching name supplies `placeId`; ambiguous matches remain null. TASK-119 gives
+the parking place with the identical OSM source priority over footprint matches for both lots
+and garages, so a mapped car park remains a usable destination. Only clipped
 parking-aisle sections inside or touching a lot become service roads, at 10 km/h; driveways
 and aisles outside lots remain dropped. Original access restrictions and directional/class
 overrides are retained; otherwise-public aisle access is inferred as destination-only under

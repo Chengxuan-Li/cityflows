@@ -199,7 +199,7 @@ function StripFields({
     facilities.map((facility) =>
       facility.provenance.source === 'authored'
         ? 'Edited'
-        : facility.provenance.inferred?.length
+        : facility.provenance.inferred?.length && !facility.strip?.ring
           ? 'Inferred'
           : 'Mapped',
     ),

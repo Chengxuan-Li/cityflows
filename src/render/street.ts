@@ -268,6 +268,36 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
     }
   }
   const osmLamps = [...lamps];
+  // Curb openings belong to physical bay access, not TASK-118's road-route endpoints.
+  const access = city.connectors
+    .filter((c) => {
+      const f = city.parking[c.parking ?? -1];
+      return (
+        f?.kind !== 'roadside' &&
+        (f?.kind !== 'lot' || f.source.connectors.some((e) => e.id === c.id))
+      );
+    })
+    .map(({ lane, positionM }) => ({ lane, positionM }));
+  for (const f of city.parking) {
+    if (f.kind !== 'lot' || f.source.provenance.inferred?.includes('driveway')) continue;
+    if (
+      f.source.provenance.source === 'osm' &&
+      !f.source.entries?.length &&
+      !f.source.connectors.length
+    )
+      continue;
+    const bays = (f.spaces ?? []).map((i) => city.parkingSpaces![i]!);
+    access.push(...bays.map(({ lane, positionM }) => ({ lane, positionM })));
+    for (const id of f.source.aisles ?? []) {
+      const r = city.roads[city.index.road.get(id)!];
+      if (!r || ['no', 'delivery'].includes(r.access[0]!)) continue;
+      for (const idx of r.lanes) {
+        const lane = city.lanes[idx]!;
+        if (lane.allowed.includes('car') && !bays.some((s) => s.lane === idx))
+          access.push({ lane: idx, positionM: lane.lengthM / 2 });
+      }
+    }
+  }
   const signs: AccessSign[] = [],
     curbs: Curb[] = [];
   const obstacles: Obstacle[] = [];
@@ -365,9 +395,8 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
     const crossings = [false, true].flatMap((end) =>
       crossingEnabled(city, road, end, source) ? crossingPlacement(city, road, end).stripes : [],
     );
-    const connectors = city.connectors
+    const connectors = access
       .filter((c) => {
-        if (c.parking !== undefined && city.parking[c.parking]!.kind === 'roadside') return false;
         const other = city.roads[city.lanes[c.lane]!.road]!;
         return (
           other.idx === road.idx ||
