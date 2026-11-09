@@ -7,7 +7,7 @@ import {
   ringsOverlap,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import { compile, type Diagnostic } from '../../network';
+import { compile, type CompiledCity, type Diagnostic } from '../../network';
 import {
   allocateId,
   vehicleClasses,
@@ -32,9 +32,12 @@ export function addLots(
   positions: Map<number, Vec2>,
   bounds: Bounds,
   diagnostics: Diagnostic[],
+  sources = polygonSources(data, surfaceLot),
+  includeAisles = true,
+  compiled?: CompiledCity,
 ) {
   const close = (ring: Vec2[]) => [...ring, ring[0]!];
-  const shapes = polygonSources(data, surfaceLot).flatMap((source) => {
+  const shapes = sources.flatMap((source) => {
     const rings = source.rings.flatMap(({ role, ids }) => {
       const points = ids.slice(0, -1).map((id) => positions.get(id));
       if (!points.every((p): p is Vec2 => !!p)) return [];
@@ -64,13 +67,26 @@ export function addLots(
   const lots = shapes.map(({ id: osmId, tag, ring, holes }) => {
     const id = allocateId(city, 'pk');
     const capacity = /^\d+$/.test(tag.capacity ?? '') ? Number(tag.capacity) : undefined;
-    const touches = (other: Vec2[]) =>
-      ringsOverlap(prepareRing(close(ring)), prepareRing(close(other)), 0) ||
-      polylineCrossings(close(ring), close(other)).length > 0;
+    const boundary = close(ring),
+      prepared = prepareRing(boundary);
+    const touches = (other: Vec2[]) => {
+      const otherBoundary = close(other),
+        candidate = prepareRing(otherBoundary);
+      const a = prepared.box,
+        b = candidate.box;
+      if (a.maxX < b.minX || a.minX > b.maxX || a.maxY < b.minY || a.minY > b.maxY) return false;
+      return (
+        ringsOverlap(prepared, candidate, 0) ||
+        polylineCrossings(boundary, otherBoundary).length > 0
+      );
+    };
     const matches = Object.values(city.places).filter(
       (place) =>
         (tag.name && place.name.toLocaleLowerCase() === tag.name.toLocaleLowerCase()) ||
         (place.shape.kind === 'polygon' && touches(place.shape.ring)),
+    );
+    const parkingPlace = matches.find(
+      (place) => place.kind === 'parking' && place.provenance.osmIds?.includes(osmId),
     );
     const lot: ParkingFacility = {
       id,
@@ -83,7 +99,7 @@ export function addLots(
           : tag.access === undefined || ['yes', 'permissive', 'designated'].includes(tag.access)
             ? 'public'
             : 'private',
-      placeId: matches.length === 1 ? matches[0]!.id : null,
+      placeId: parkingPlace?.id ?? (matches.length === 1 ? matches[0]!.id : null),
       shape: { kind: 'polygon', ring },
       connectors: [],
       aisles: [],
@@ -106,6 +122,7 @@ export function addLots(
       polylineCrossings(line, close(lot.shape.ring)).length > 0);
   const ways = data.way.filter(
     (way) =>
+      includeAisles &&
       way.tag.highway === 'service' &&
       way.tag.service === 'parking_aisle' &&
       way.nd.every((id) => positions.has(id)) &&
@@ -193,7 +210,7 @@ export function addLots(
   const aisleIds = new Set(lots.flatMap((lot) => lot.aisles!));
   // A new mouth can consume a short road's existing connector. Keep that mapped access
   // disconnected and diagnose it rather than moving an unrelated place or its demand.
-  const attached = compile(city);
+  const attached = compiled ? { ok: true as const, compiled } : compile(city);
   if (!attached.ok) {
     const blocked = new Set(
       attached.diagnostics
@@ -236,7 +253,7 @@ export function addLots(
     }
   }
   // Entry reachability propagates through the mapped aisle network, including one-way direction.
-  const withAisles = compile(city);
+  const withAisles = compiled ? { ok: true as const, compiled } : compile(city);
   if (!withAisles.ok) return;
   for (const lot of lots) {
     const aisleNodes = new Set(

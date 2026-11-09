@@ -15,11 +15,12 @@ import { test } from 'vitest';
 // targets. Access rules still change none of these on an unrestricted network; target sets
 // now expose alternatives, with the chosen movement's lane first (T51). Sindelfingen and Munich
 // re-pinned at the merge after TASK-102/104 (lot aisles); equal to main fc5bf2f's routes.
+// TASK-119 removes parking-place connectors, changing the sampled pairs; routing itself is unchanged.
 const hashes = {
   grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
-  Sindelfingen: 'a46d1f5718d0f7706a60b3c5659d2ad435feb10e755a9e4bf6f430d77b3fade1',
-  Munich: '58909a710bc0ed2f0cbaecd380cfa6c3bfb0b0ae6abb18b9f7f04af5d0c870e0',
+  Sindelfingen: '24d5bb2a0ab8e4e622a00371f34ab3f10212b928141f312cde86900345927fa0',
+  Munich: 'e431c35a3993fe8dee7708443a8f3d171bdd9c16f980e1b6d6b76daf282eb818',
 };
 
 test.each(tierCities(throughputCities))(

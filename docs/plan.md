@@ -143,7 +143,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-111](tasks/TASK-111.md) | 9 | Pedestrian rules: walkers, zebra priority, pedestrian signal phases, a test pedestrian source | new `src/sim/walkers.ts`, crossing spans, `SignalProgram` walk groups, `intersection.ts`, `signals.ts`, walker layers 2D and 3D, signal editor | 110 | T53, traffic quick unchanged, shots | done (see review) |
 | [TASK-117](tasks/TASK-117.md) | 8 | Visual fixes after Phase 2: sign collisions, UK kerb lines only on urban kerbs, access signs by marking theme | `src/render/street.ts` (sign placement), `layers/street.ts`, `render3d/street.ts`, `marking-geometry.ts`, `style.ts` | 107, 114 | V117, shots | done (see review) |
 | [TASK-118](tasks/TASK-118.md) | 7 | Parking motion: circulation inside lots, stochastic stall choice, visible strip manoeuvres, individual slot departures (owner bugs 1 and 2) | `src/network/stalls.ts`, new `lot-paths.ts`, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, new `manoeuvre.ts`, renderers | 103, lead follow-up | T54, traffic quick, shots | todo |
-| [TASK-119](tasks/TASK-119.md) | 7 | Mapped street-side parking areas become strips; dropped lots and garage imported (owner bug 3) | `src/importers/osm/strips.ts`, `lots.ts`, `parking.ts`, `places.ts`, `src/network/strips.ts` | 103 | T55, traffic quick, shots | todo |
+| [TASK-119](tasks/TASK-119.md) | 7 | Mapped street-side parking areas become strips; dropped lots and garage imported (owner bug 3) | `src/importers/osm/strips.ts`, `lots.ts`, `parking.ts`, `places.ts`, `src/network/strips.ts` | 103 | T55, traffic quick, shots | review |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -971,6 +971,13 @@ guidance), TASK-119 takes 3; 4 waits for TASK-112, which now follows TASK-118 (b
 `src/sim/parking.ts`). TASK-118 owns `src/sim/**`, `src/host/**` and `src/network/stalls.ts`;
 TASK-119 owns `src/importers/**` and `src/network/strips.ts`; both move trip counts and the lead
 resets the baseline at each merge. Simplified CI rule as in Phase 3.
+
+TASK-119 imports all 57 Munich street-side areas (54 strips, 3 fallback lots) and both
+Sindelfingen areas (strips), with no orphan parking places. Munich way 135296620 remains a
+zero-stall fallback lot: its 76.11 × 1.99 m footprint cannot fit the existing 2.5 m-wide lot
+bays. It retains its inferred driveway; changing lot stall dimensions belongs to TASK-118.
+The other 56 Munich areas have usable slots. Counts, timings, traffic and comparison images
+are recorded in the task branch's final commit body.
 
 | Task | Harness | Model | Effort | e2e port |
 | --- | --- | --- | --- | --- |

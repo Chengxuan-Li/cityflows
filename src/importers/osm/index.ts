@@ -344,7 +344,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addImplicitGarages(city);
   addLots(city, data, positions, bounds, diagnostics);
   importWalk(city, data, positions, bounds);
-  addStrips(city, data, positions);
+  addStrips(city, data, positions, bounds, diagnostics);
   if (options.context !== false)
     city.context = { features: importContext(data, positions, bounds, diagnostics, true) };
 

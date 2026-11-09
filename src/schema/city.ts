@@ -161,6 +161,7 @@ export interface ParkingFacility {
     fromM: number; // along the road's centreline
     toM: number;
     layout: ParkingLayout;
+    ring?: Vec2[]; // mapped street-side area; absent uses a generated band
   };
   aisles?: RoadId[]; // a lot's `parking_aisle` service roads
   entries?: NodeId[]; // lot nodes shared with a non-aisle road

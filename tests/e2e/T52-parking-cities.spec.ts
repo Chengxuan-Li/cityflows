@@ -1,16 +1,171 @@
 import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { placeCamera } from '../../bench/geometry-shots';
 import { compile } from '../../src/network';
 import type { Vec2 } from '../../src/geo/vec2';
 import type { PlaceEvent } from '../../src/schema';
 import { occupiedSpaces } from '../../src/render/parked-cars';
-import { button, city, importOsm, metrics, pageErrors } from './helpers';
+import { button, city, clickWorld, importOsm, metrics, pageErrors } from './helpers';
+import { headingAtDistance, pointAtDistance, pointInPolygon } from '../../src/geo/polyline';
 import { fixtureTerrain } from './terrain-fixture';
 
 // CI renders on a software GPU, where frame ratios are noise and 90 frames per sample cost
 // minutes per view (as T44 and V106): there it takes 20 frames and skips the frame allowance.
 const FRAME_SAMPLES = process.env.CI ? 20 : 90;
+
+test('T55 mapped Munich street-side bands hold real parked cars in both views @smoke', async ({
+  page,
+}, info) => {
+  test.setTimeout(420_000);
+  const errors = pageErrors(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route(/^https:\/\//, (route) => route.abort());
+  const osm = 'fixtures/osm/munich-donnersberger.osm';
+  await fixtureTerrain(page, osm);
+  await page.goto('/');
+  await expect(button(page, 'Play')).toBeEnabled();
+  await importOsm(page, osm, { terrain: true });
+  const source = await city(page);
+  const compiled = compile(source);
+  if (!compiled.ok) throw new Error('compile');
+  const net = compiled.compiled;
+  const mapped = new Set(net.parking.filter((p) => p.source.strip?.ring).map((p) => p.idx));
+  const initial = await page.evaluate(() => window.cityflows!.parkedCars!());
+  const initialSpaces = occupiedSpaces(initial, net.parkingSpaces!.length).filter((i) =>
+    mapped.has(net.parkingSpaces![i]!.parking),
+  );
+  await button(page, 'Play').click();
+  await expect.poll(async () => (await metrics(page)).timeS).toBeGreaterThan(7 * 3600);
+  await button(page, 'Pause').click();
+  const advance = async (timeS: number, targetPage = page) => {
+    const now = (await metrics(targetPage)).timeS;
+    await targetPage.evaluate(
+      (steps) => window.cityflows!.step(steps),
+      Math.round((timeS - now) / 0.1),
+    );
+    await expect
+      .poll(() => targetPage.evaluate(() => window.cityflows!.drawnSnapshot!()?.timeS), {
+        timeout: 120000,
+      })
+      .toBeCloseTo(timeS, 2);
+  };
+  await advance(8 * 3600);
+  const stock = await page.evaluate(() => window.cityflows!.parkedCars!());
+  const spaces = occupiedSpaces(stock, net.parkingSpaces!.length).filter((i) =>
+    mapped.has(net.parkingSpaces![i]!.parking),
+  );
+  expect(spaces.length).toBeGreaterThan(0);
+  const index = [...spaces].sort((a, b) => {
+    const x = net.parkingSpaces![a]!.position,
+      y = net.parkingSpaces![b]!.position;
+    return Math.hypot(x.x + 300, x.y - 290) - Math.hypot(y.x + 300, y.y - 290);
+  })[0]!;
+  const space = net.parkingSpaces![index]!,
+    facility = net.parking[space.parking]!,
+    ring = facility.source.strip!.ring!;
+  expect(pointInPolygon(space.position, [...ring, ring[0]!])).toBe(true);
+  const centre = space.position,
+    zoom = 12;
+  await button(page, 'Layers').click();
+  for (const label of ['Basemap', 'Places', 'Entrances and exits'])
+    await page
+      .getByRole('region', { name: 'Map layers' })
+      .getByLabel(label, { exact: true })
+      .uncheck();
+  await button(page, 'Layers').click();
+  const capture = async (prefix: string, targetPage = page) => {
+    for (const view of ['2d', '3d']) {
+      if (view === '2d') await placeCamera(targetPage, [centre.x, centre.y], zoom);
+      else {
+        await button(targetPage, '3D').click();
+        await expect
+          .poll(() => targetPage.evaluate(() => !!window.cityflows?.view3D?.()), {
+            timeout: 120000,
+          })
+          .toBe(true);
+        await targetPage.evaluate(
+          ({ centre, zoom }) => window.cityflows!.setView3D!(centre, zoom, 60, 30),
+          { centre, zoom },
+        );
+      }
+      await targetPage
+        .getByLabel(view === '2d' ? 'City map' : '3D city view', { exact: true })
+        .screenshot({
+          path: info.outputPath(`${prefix}${view === '3d' ? '-3d' : ''}.png`),
+          animations: 'disabled',
+        });
+    }
+  };
+  await placeCamera(page, [centre.x, centre.y], zoom);
+  const lane = net.lanes[space.lane]!;
+  const p = pointAtDistance(lane.polyline, lane.cumulative, space.positionM);
+  const h = headingAtDistance(lane.polyline, lane.cumulative, space.positionM);
+  const offset = (facility.source.strip!.side === 'right' ? -1 : 1) * lane.widthM * 0.4;
+  // Pick clear pavement beside the slot's lane connector and any car at its stop station.
+  await clickWorld(page, { x: p.x - Math.sin(h) * offset, y: p.y + Math.cos(h) * offset });
+  const inspector = page.getByRole('complementary', { name: 'Inspector' });
+  await expect(inspector.getByText('Roadside parking', { exact: true })).toBeVisible();
+  await inspector.getByText('Roadside parking', { exact: true }).click();
+  await expect(inspector).toContainText('Mapped');
+  await button(page, 'Close inspector').click();
+  await capture('V119-munich-street-side');
+  await advance(9.5 * 3600);
+  const later = await page.evaluate(() => window.cityflows!.parkedCars!());
+  const laterSpaces = occupiedSpaces(later, net.parkingSpaces!.length).filter((i) =>
+    mapped.has(net.parkingSpaces![i]!.parking),
+  );
+  expect(laterSpaces.map((i) => later!.id[i])).not.toEqual(spaces.map((i) => stock!.id[i]));
+  await writeFile(
+    info.outputPath('V119-parking.json'),
+    JSON.stringify(
+      {
+        centre,
+        zoom,
+        osmIds: facility.source.provenance.osmIds,
+        initial: initialSpaces.length,
+        at0800: spaces.length,
+        at0930: laterSpaces.length,
+        vehicles: spaces.map((i) => stock!.id[i]),
+      },
+      null,
+      2,
+    ),
+  );
+  // A local T55 comparison run materializes the main import; CI needs only the current view.
+  const baseline = 'node_modules/.cache/task119-main.city.json';
+  if (existsSync(baseline)) {
+    const baselinePage = await page.context().newPage();
+    baselinePage.on('pageerror', (error) => errors.push(error.message));
+    await baselinePage.setViewportSize({ width: 1280, height: 800 });
+    await baselinePage.emulateMedia({ reducedMotion: 'reduce' });
+    await baselinePage.route(/^https:\/\//, (route) => route.abort());
+    await baselinePage.goto('/');
+    await expect(button(baselinePage, 'Play')).toBeEnabled();
+    await baselinePage.getByLabel('Open project').setInputFiles(baseline);
+    await expect
+      .poll(async () => Object.keys((await city(baselinePage)).roads).length, { timeout: 120_000 })
+      .toBe(net.roads.length);
+    await expect(button(baselinePage, 'Play')).toBeEnabled({ timeout: 120_000 });
+    await expect
+      .poll(async () =>
+        Object.values((await city(baselinePage)).parking!).some((p) => p.strip?.ring),
+      )
+      .toBe(false);
+    await button(baselinePage, 'Layers').click();
+    for (const label of ['Basemap', 'Places', 'Entrances and exits'])
+      await baselinePage
+        .getByRole('region', { name: 'Map layers' })
+        .getByLabel(label, { exact: true })
+        .uncheck();
+    await button(baselinePage, 'Layers').click();
+    await advance(8 * 3600, baselinePage);
+    await capture('V119-munich-street-side-main', baselinePage);
+    await baselinePage.close();
+  }
+  expect(errors).toEqual([]);
+});
 
 async function frameTiming(page: Page) {
   return page.evaluate(async (count) => {
