@@ -104,10 +104,19 @@ export function probeMorning(
   const provider = routeProvider ?? createRouteProvider();
   let routeRequests = 0;
   let routeTimeMs = 0;
+  const detoured = new Set<number>();
+  const headDetourRoads: Record<string, number> = {};
+  let headDetours = 0;
   engine.load({
     compiled,
     trips,
     scenario,
+    headDetourObserver(id, lane) {
+      headDetours++;
+      detoured.add(id);
+      const road = compiled.roads[compiled.lanes[lane]!.road]!.id;
+      headDetourRoads[road] = (headDetourRoads[road] ?? 0) + 1;
+    },
     routeProvider: {
       route(network, costs, request) {
         const start = performance.now();
@@ -235,6 +244,10 @@ export function probeMorning(
     gridlockedRoads,
     meanDelayS: metrics.meanDelayS,
     routeRequests,
+    headDetours,
+    detouredHeads: detoured.size,
+    detouredFailed: [...detoured].filter((id) => engine.inspect(id + 1)?.state === 'failed').length,
+    headDetourRoads,
     meanRouteMs: routeRequests ? routeTimeMs / routeRequests : 0,
     zoneStops: metrics.zoneStops,
     respawns: metrics.respawns,

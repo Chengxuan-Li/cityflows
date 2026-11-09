@@ -45,6 +45,7 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   routeProvider?: RouteProvider;
   linkCosts?: LinkCosts;
   intersectionObserver?: IntersectionObserver;
+  headDetourObserver?: (id: number, lane: number, movement: number) => void;
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -64,6 +65,7 @@ function createRun({
   routeProvider,
   linkCosts,
   intersectionObserver,
+  headDetourObserver,
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -183,6 +185,7 @@ function createRun({
   }
 
   function planLane(id: number, lane: number, positionM: number) {
+    vehicles.headDetourS[id] = 0;
     const destination = compiled.connectors[vehicles.destination[id]!]!;
     const route = vehicles.route[id]!;
     const step = vehicles.routeStep[id]!;
@@ -417,6 +420,7 @@ function createRun({
       let ahead = -1;
       for (let id = head; id !== -1; id = vehicles.next[id]!) {
         order[orderCount++] = id;
+        if (ahead !== -1 || !lane) vehicles.headDetourS[id] = 0;
         if (parking.motion(id)) {
           ahead = id;
           continue;
@@ -597,6 +601,63 @@ function createRun({
     // and speeds are still from the start of the step.
     prepareTravel(timeS);
     intersections.resolve();
+  }
+
+  function detourHeads() {
+    for (const segment of vehicles.occupied) {
+      const lane = compiled.lanes[segment];
+      if (!lane) break;
+      const id = vehicles.first(segment);
+      const planned = compiled.movements[vehicles.movement[id]!];
+      if (
+        vehicles.state[id] !== DRIVING ||
+        !planned ||
+        vehicles.speed[id]! >= 0.1 ||
+        lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM ||
+        laneChanges.holding[id] ||
+        !intersections.blockedExit(id, planned)
+      ) {
+        vehicles.headDetourS[id] = 0;
+        continue;
+      }
+      if (intersections.red(planned.idx)) continue;
+      vehicles.headDetourS[id] = vehicles.headDetourS[id]! + dtS;
+      if (vehicles.headDetourS[id]! + 1e-9 < params.headDetourS) continue;
+      if (lane.out.length < 2) continue;
+      const permits = roadAccessFilter(
+        compiled,
+        vehicleRouteRequest(vehicles, params, id, lane.idx, vehicles.position[id]!),
+      );
+      let best = -1;
+      let cost = Infinity;
+      for (const idx of lane.out) {
+        const movement = compiled.movements[idx]!;
+        const tail = vehicles.last(movement.toLane);
+        if (
+          idx === planned.idx ||
+          movement.neverGreen ||
+          vehicles.attemptedFallbacks[id]?.has(idx) ||
+          !allowedLanes[vehicles.vclass[id]!]![movement.toLane] ||
+          !permits(compiled.lanes[movement.toLane]!.road) ||
+          (tail !== -1 && vehicles.position[tail]! < profile(id).lengthM + idm.minGapM) ||
+          intersections.blockedExit(id, movement)
+        )
+          continue;
+        const result = routeFrom(id, movement.toLane, 0);
+        if (
+          result.ok &&
+          (result.route.costS < cost || (result.route.costS === cost && idx < best))
+        ) {
+          best = idx;
+          cost = result.route.costS;
+        }
+      }
+      if (best === -1) continue;
+      if (hasGrant(id)) intersections.release(id);
+      vehicles.movement[id] = best;
+      fallback[id] = 2;
+      vehicles.headDetourS[id] = 0;
+    }
   }
 
   function reachDestination(id: number, connector: CConnector, timeS: number) {
@@ -789,6 +850,7 @@ function createRun({
       } else if (position >= lane.lengthM) {
         if (granted !== -1) {
           if (fallback[id]) {
+            if (fallback[id] === 2) headDetourObserver?.(id, lane.idx, granted);
             vehicles.missedTurn[id] = 1;
             routeReasons[id] = 'missed_turn';
             (vehicles.attemptedFallbacks[id] ??= new Set()).add(granted);
@@ -854,6 +916,7 @@ function createRun({
       laneChanges.holding[id] = 0;
       vehicles.speed[id] = 0;
       vehicles.jamS[id] = 0;
+      vehicles.headDetourS[id] = 0;
       vehicles.stopped[id] = 0;
       vehicles.junctionWaiting[id] = 0;
       if (vehicles.respawns[id]! >= maxRespawns) {
@@ -986,6 +1049,7 @@ function createRun({
       throw new Error('Place additions and removals require a restart');
     const before = compiled;
     parking.patch(next);
+    vehicles.headDetourS.fill(0);
     const changes = patchChanges(before, next);
     const project = createProjector(next);
     const oldGrants = intersections.grants.slice();
@@ -1204,6 +1268,7 @@ function createRun({
         });
         proposeLaneChanges();
         resolve(timeS);
+        detourHeads();
         tick++;
         commit(time());
         parking.advance(time(), {

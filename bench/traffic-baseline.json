@@ -1,9 +1,9 @@
 {
-  "tree": "main at the TASK-118/119 merge (lot circulation, strip manoeuvres, mapped street-side strips; lead: courtyard entries through building passages, 5 m stall links), reset per the owner's rule 7, 2026-11-09. 13 counted parking failures besides the gridlock; this tree measured 0 stalled heads, stalledHeads stays 1 (the B56 loop at n:263)",
+  "tree": "main at the TASK-118/119 merge (lot circulation, strip manoeuvres, mapped street-side strips; lead: courtyard entries through building passages, 5 m stall links), reset per the owner's rule 7, 2026-11-09. 13 counted parking failures besides the gridlock; TASK-121 restores the zero-stalled-head gate. The lead resets trip and gridlock baselines at merge.",
   "scale": 0.15,
   "completed": 3334,
   "gridlocked": 81,
-  "stalledHeads": 1,
+  "stalledHeads": 0,
   "quick": {
     "until": "09:30",
     "completed": 3134,

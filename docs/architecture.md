@@ -1152,6 +1152,7 @@ interface SimParams {
   mandatoryUrgencyM: 10;         // extra margin before a required change becomes forced
   cooperativeYieldS: 3;          // TASK-076: held this long, a car gets a gap from behind
   missedTurnAfterS: 30;          // TASK-076: held this long, it gives the change up
+  headDetourS: 45;               // TASK-121: a stopped head tries another exit
   intersection: { decisionDistanceM: 15; gapS: 4; creepSpeedMps: 1.0;
                   zoneMarginS: 1.0; boxWaitS: 10 };   // TASK-065, B27 and B28
   spawnMinGapM: 8;
@@ -1339,6 +1340,22 @@ route must beat the remaining incumbent's cost, repriced with current costs and 
 noise, by `rerouteHysteresis`; at most `maxReplans` congestion switches occur per trip.
 Switches release approach grants, reset the route cursor and lane plan, and set
 `routeReason: 'congestion'`.
+
+Queue-head detours (TASK-121). A driving car first on its lane, within `decisionDistanceM`
+of `stopM`, accumulates `headDetourS` while below 0.1 m/s and its planned exit is refused
+for `exit-full` or `box`. A red signal pauses the timer; movement, becoming a follower,
+changing the lane plan or a live patch resets it. This also checks an approach grant or
+an automatic continuation whose exit has filled since admission. After 45 s by default,
+it tries other movements from its current lane, excluding `neverGreen`, class/access bans
+and movements in its trip's `attemptedFallbacks`. A candidate needs room on its exit now
+and a route from that exit to the current destination connector. The lowest remaining
+route cost wins, with movement index breaking ties. It releases any approach grant and
+requests the chosen movement through ordinary signal, gap and conflict arbitration.
+Taking it uses the existing `missed_turn` fallback and reroutes on the next lane, without
+spending a congestion replan. After the delay it remains eligible as room opens; an
+unsuccessful search does not restart the delay. Without an alternative it keeps waiting;
+TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
+not contain the other per-vehicle timers).
 
 Stop positions (TASK-072, TASK-094). `CLane.stopM` is where an ungranted vehicle stops. On a
 signalized approach with a served movement and a crossing, `stopM` is the crossing's far edge

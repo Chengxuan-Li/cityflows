@@ -21,6 +21,7 @@ export const DEFAULT_SIM_PARAMS: SimParams = {
   mandatoryUrgencyM: 10,
   cooperativeYieldS: 3,
   missedTurnAfterS: 30,
+  headDetourS: 45,
   intersection: { decisionDistanceM: 15, gapS: 4, creepSpeedMps: 1, zoneMarginS: 1, boxWaitS: 10 },
   spawnMinGapM: 8,
   gridlock: { respawnS: 180, fadeS: 5, maxRespawns: 3 },
