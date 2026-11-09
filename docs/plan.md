@@ -145,8 +145,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-118](tasks/TASK-118.md) | 7 | Parking motion: circulation inside lots, stochastic stall choice, visible strip manoeuvres, individual slot departures (owner bugs 1 and 2) | `src/network/stalls.ts`, new `lot-paths.ts`, `src/sim/parking.ts`, `connectors.ts`, `engine.ts`, new `manoeuvre.ts`, renderers | 103, lead follow-up | T54, traffic quick, shots | done (see review) |
 | [TASK-119](tasks/TASK-119.md) | 7 | Mapped street-side parking areas become strips; dropped lots and garage imported (owner bug 3) | `src/importers/osm/strips.ts`, `lots.ts`, `parking.ts`, `places.ts`, `src/network/strips.ts` | 103 | T55, traffic quick, shots | done (see review) |
 | [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | rejected (lead's premise error; see review), replaced by TASK-122 |
-| [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | round 2: 10 full-e2e specs, on `task/lead-112` (see review) |
-| [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | accepted; merges together with TASK-112 (see review) |
+| [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | done (round 2; see review) |
+| [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | done (merged with TASK-112; see review) |
 | [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | todo |
 | [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | todo |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -1027,7 +1027,7 @@ B55 are geometry and wait for TASK-120's `junctions.ts` and for TASK-121's stabi
 | TASK-121 | Codex | (not recorded) | | 5321 |
 
 Phase 4 result (lead, 2026-11-09). TASK-120 was rejected (see its review entry). TASK-121 and
-TASK-112 are integrated on `task/lead-112`, which goes to main once TASK-112's round 2 makes the
+TASK-112 were integrated on `task/lead-112` and merged to main after TASK-112's round 2 made the
 full e2e suite green. Phase 4b: TASK-122 makes trip cars start and park only on spaces they
 can drive away from, which is the fix TASK-120 was meant to be. It owns `src/sim/parking.ts`,
 `connectors.ts` and `persons.ts`. B54 east and B55 can follow (geometry); TASK-113 follows
@@ -2574,6 +2574,15 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   unit tests passed, one skipped); `test:city` 103 passed (one skipped); quick traffic matches
   the integrated baseline at 3 357 completed / 8 gridlocks / 13 parking failures (three sampled
   heads at 09:30, as in the lead review above).
+- Lead, TASK-112 round 2 review (2026-11-09): accepted. The Station fix is in the fixture, not
+  the sim: the pickup loop gets sidewalks and the station two entrances at its curb, so visitors
+  walk a few metres instead of about 150 s by the main road, and the loop drains within the
+  original window again. T10 is back to the true peak time (the lead's plateau rule is removed)
+  and a new T10 case checks that a second arrival connector lowers the peak (67 to 62). The spec
+  changes wait for the access walk (`departVehicle`, longer steps) without dropping assertions;
+  the five-second phase now asserts a longer queue, which is stricter. On the merged tree:
+  `check` 960 passed; the 10 round-1 failures plus T53, T54 and T57 pass (36 of 36, port 5390).
+  The traffic numbers above stand (no sim change). Merged to main with TASK-121.
 
 ## Owner decisions log
 
