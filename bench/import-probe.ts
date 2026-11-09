@@ -6,6 +6,7 @@ import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
 import type { City } from '../src/schema';
 import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../src/routing';
+import { createWalkRouter } from '../src/routing/walk';
 import { createEngine } from '../src/sim/engine';
 import type { TrafficEngine } from '../src/sim/types';
 
@@ -102,12 +103,34 @@ export function probeMorning(
   const trips = scheduleTrips(city, population, scenario);
   const engine = createEngine();
   const provider = routeProvider ?? createRouteProvider();
+  const walkRouter = createWalkRouter(compiled.walk);
   let routeRequests = 0;
   let routeTimeMs = 0;
+  const detoured = new Set<number>();
+  const headDetourRoads: Record<string, number> = {};
+  let headDetours = 0;
+  let walkRouteRequests = 0;
+  let walkRouteTimeMs = 0;
   engine.load({
     compiled,
     trips,
     scenario,
+    headDetourObserver(id, lane) {
+      headDetours++;
+      detoured.add(id);
+      const road = compiled.roads[compiled.lanes[lane]!.road]!.id;
+      headDetourRoads[road] = (headDetourRoads[road] ?? 0) + 1;
+    },
+    population,
+    walkRouter: {
+      route(request) {
+        const start = performance.now();
+        const result = walkRouter.route(request);
+        walkRouteTimeMs += performance.now() - start;
+        walkRouteRequests++;
+        return result;
+      },
+    },
     routeProvider: {
       route(network, costs, request) {
         const start = performance.now();
@@ -229,13 +252,22 @@ export function probeMorning(
     completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,
     failedShareOfReleased: releasedTrips ? metrics.trips.failed / releasedTrips : 0,
     peakDriving: peak,
+    peakWalkers: metrics.walkers?.peakActive ?? 0,
+    personMetrics: metrics.persons,
+    walkers: metrics.walkers,
     completedByHalfHour,
     stalledHeads,
     stalledHeadDetails,
     gridlockedRoads,
     meanDelayS: metrics.meanDelayS,
     routeRequests,
+    headDetours,
+    detouredHeads: detoured.size,
+    detouredFailed: [...detoured].filter((id) => engine.inspect(id + 1)?.state === 'failed').length,
+    headDetourRoads,
     meanRouteMs: routeRequests ? routeTimeMs / routeRequests : 0,
+    walkRouteRequests,
+    walkRouteTimeMs,
     zoneStops: metrics.zoneStops,
     respawns: metrics.respawns,
     ...metrics.trips,

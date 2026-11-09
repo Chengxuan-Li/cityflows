@@ -38,8 +38,7 @@ const remainingDeadEnds: Record<string, string> = {
     'Service approach meets the reverse direction of Josef-Obenhin-Straße; all exits are U-turns.',
   'r:1103#0':
     'One-way Georg-Lindau-Straße fragment leaves the crop without a route from the main network.',
-  'r:1161#0':
-    'Isolated service spur has no legal return through the retained Hansastraße boundary junction.',
+  'r:1161#0': 'Cropped Hansastraße boundary; an artificial crop is not a physical cul-de-sac.',
   'r:1173#0':
     'Westendstraße faces a one-way approach; the only outgoing road reverses its own street group.',
   'r:350#0':

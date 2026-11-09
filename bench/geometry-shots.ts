@@ -50,8 +50,29 @@ export const shots: {
   walkers?: { fromPlaceId: string; toPlaceId: string; perHour: number }[];
   steps?: number;
   timeS?: number;
+  demandScale?: number;
   parkingTarget?: 'street' | 'inferred-lot';
 }[] = [
+  ...(['2d', '3d'] as const).flatMap((view) => [
+    {
+      id: `V112-munich-street${view === '3d' ? '-3d' : ''}`,
+      cases: [],
+      centre: [-300, 290] as [number, number],
+      zoom: 8,
+      timeS: 7.5 * 3600,
+      demandScale: 0.15,
+      ...(view === '3d' && { view, terrain: true, pitch: 60, bearing: 30 }),
+    },
+    {
+      id: `V112-munich-lot${view === '3d' ? '-3d' : ''}`,
+      cases: [],
+      centre: [135.7, 305.3] as [number, number],
+      zoom: 7,
+      timeS: 8.5 * 3600,
+      demandScale: 0.15,
+      ...(view === '3d' && { view, terrain: true, pitch: 55 }),
+    },
+  ]),
   // TASK-111: walkers on sidewalks and crossings, cars held before zebra stripes at n:180 and the
   // walk lights at Landsberger Straße by the Donnersbergerbrücke (n:963, n:262), at 07:30.
   ...[
@@ -693,6 +714,11 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         .getByText('0 errors')
         .waitFor({ timeout: 420_000 });
       await button('Continue').click();
+      const demandScale = selected.find(
+        (shot) => (shot.osm ?? MUNICH) === osm && shot.demandScale !== undefined,
+      )?.demandScale;
+      if (demandScale !== undefined)
+        await dialog.getByRole('slider', { name: 'Demand', exact: true }).fill(String(demandScale));
       await button('Accept city').click();
       await dialog.waitFor({ state: 'hidden', timeout: 420_000 });
       await page.waitForFunction(() => !!window.cityflows?.city?.());
@@ -925,12 +951,20 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         }
         const path = join(out, `${shot.id}.png`);
         await target.screenshot({ path, animations: 'disabled' });
-        const walkerCount = shot.walkers
-          ? await page.evaluate(() => window.cityflows!.drawnSnapshot?.()?.walkers?.count ?? null)
+        const walkerCount =
+          shot.walkers || shot.id.startsWith('V112-')
+            ? await page.evaluate(() => window.cityflows!.drawnSnapshot?.()?.walkers?.count ?? null)
+            : undefined;
+        const personMetrics = shot.id.startsWith('V112-')
+          ? await page.evaluate(async () => {
+              const { timeS, persons, walkers } = await window.cityflows!.metrics();
+              return { timeS, persons, walkers };
+            })
           : undefined;
         records.push({
           ...shot,
           ...(walkerCount !== undefined && { walkerCount }),
+          ...(personMetrics && { personMetrics }),
           ...(localTraffic && { accessEdit: 'r:1229 destination, through street inspector' }),
           importedTheme,
           file: `${shot.id}.png`,

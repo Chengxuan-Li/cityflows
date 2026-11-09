@@ -106,6 +106,8 @@ test('T48 own garage first; a returning car departs from where it parked', () =>
   expect(engine.inspect(1)?.walkingDistanceM).toBe(100);
   expect(engine.metrics().parking.facilities.find((f) => f.id === w.near.id)?.occupied).toBe(1);
   engine.step(201);
+  // TASK-112: the driver must finish egress and return to this garage on foot first.
+  while (engine.timeS < 600 && engine.inspect(2)?.departedS === null) engine.step();
   expect(engine.inspect(2)?.positionM).toBeGreaterThanOrEqual(300);
   expect(engine.metrics().parking.facilities.find((f) => f.id === w.near.id)?.occupied).toBe(0);
   engine.step(1800);
@@ -145,7 +147,7 @@ test('T48 restricted garages reject other places; beyond-radius fallback and cou
   expect(engine.inspect(1)?.walkingDistanceM).toBe(700);
   w.far.capacity = 0;
   const failed = w.run().engine;
-  failed.step();
+  failed.step(200); // TASK-112: access to the garage precedes the parking-route check.
   expect(failed.metrics().failedByReason.no_parking).toBe(1);
   expect(failed.metrics().parking.failed).toBe(1);
 });
@@ -229,7 +231,7 @@ test('T48 departures allocate the counted initial cars across all home garages',
   second.occupancyAtStart = 1;
   w.own.capacity = 3;
   const { engine } = w.run([w.trip('one'), w.trip('two'), w.trip('three')]);
-  engine.step(100);
+  engine.step(500); // TASK-112: reach the second garage, 15 m farther from the home.
   expect(engine.inspect(2)?.route?.roads.length).toBeGreaterThan(0);
   expect(engine.inspect(2)?.departedS).not.toBeNull();
   expect(engine.metrics().failedByReason.no_parking).toBe(1);
@@ -347,7 +349,7 @@ test('T48 access changes are checked again on arrival', () => {
 });
 
 test('T48 saved scenarios retain and validate the parking search radius', () => {
-  expect(simParamsSchema.parse({ parkingSearchRadiusM: 250 })).toEqual({
+  expect(simParamsSchema.parse({ parkingSearchRadiusM: 250 })).toMatchObject({
     parkingSearchRadiusM: 250,
   });
   expect(simParamsSchema.safeParse({ parkingSearchRadiusM: -1 }).success).toBe(false);

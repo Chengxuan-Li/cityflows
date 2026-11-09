@@ -24,7 +24,7 @@ export interface VehicleSnapshot {
   state: Uint8Array; // 1 driving, 2 queued_destination
   vclass: Uint8Array; // schema vehicleClasses index: car, van, truck, bus
   fade: Float32Array; // sprite alpha: 1, falling to 0 before a gridlock respawn (TASK-077)
-  walkers?: WalkerSnapshot; // TASK-111: test pedestrians, when the scenario has them
+  walkers?: WalkerSnapshot;
 }
 
 export interface WalkerSnapshot {
@@ -35,6 +35,7 @@ export interface WalkerSnapshot {
   heading: Float32Array;
   state: Uint8Array; // 1 walking, 2 waiting at a kerb, 3 crossing
   layer: Int8Array;
+  tripLeg: Uint8Array; // 0 test, 1 access, 2 egress, 3 whole walk
 }
 
 export interface ParkedCarsSnapshot {

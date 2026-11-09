@@ -6,7 +6,7 @@ import type { PlaceId, Scenario, SimParams } from '../schema';
 import { createVehicleProfiles, type Vehicles } from './vehicle';
 
 /**
- * TASK-111: test pedestrians and the rules between them and vehicles (architecture section 8).
+ * Test and person pedestrians and the rules between them and vehicles (architecture section 8).
  * Walkers follow walk routes (TASK-110) at a fixed speed and never collide with each other. A
  * crossing run is a maximal sequence of crossing legs; a walker waits at its kerb until it may
  * step out: every approaching vehicle on the crossed lanes can stop comfortably before the
@@ -40,12 +40,28 @@ export interface WalkerSnapshot {
   heading: Float32Array;
   state: Uint8Array; // WALKER_STATES index: 1 walking, 2 waiting, 3 crossing
   layer: Int8Array; // grade of the walk link
+  tripLeg: Uint8Array; // 0 test, 1 access, 2 egress, 3 whole walk
+}
+
+export type WalkerTripLeg = 'test' | 'access' | 'egress' | 'walk';
+
+export interface WalkerSpawn {
+  route: WalkRoute;
+  timeS: number;
+  fromPlaceId: PlaceId;
+  toPlaceId: PlaceId;
+  personId: string;
+  tripId: string;
+  tripLeg: Exclude<WalkerTripLeg, 'test'>;
 }
 
 export interface WalkerDetail {
   id: number;
   fromPlace: PlaceId;
   toPlace: PlaceId;
+  personId: string | null;
+  tripId: string | null;
+  tripLeg: WalkerTripLeg;
   state: WalkerState;
   spawnedS: number;
   arrivedS: number | null;
@@ -65,6 +81,7 @@ export interface WalkerMetrics {
   completed: number;
   dropped: number;
   active: number;
+  peakActive: number;
   meanWalkTimeS: number;
   /** Mean wait at the kerb per crossing taken, by crossing kind. */
   meanWaitS: { zebra: number; signal: number };
@@ -86,6 +103,15 @@ interface RunSpan {
 }
 
 type Profiles = ReturnType<typeof createVehicleProfiles>;
+type Numbers = Uint8Array | Uint16Array | Int32Array | Float64Array;
+const TRIP_LEGS: WalkerTripLeg[] = ['test', 'access', 'egress', 'walk'];
+
+function grow<T extends Numbers>(values: T, capacity: number, fill = 0): T {
+  const next = new (values.constructor as { new (length: number): T })(capacity);
+  if (fill !== 0) next.fill(fill); // NaN is falsy: arrivedS grows with NaN (lead)
+  next.set(values);
+  return next;
+}
 
 const legLength = (leg: WalkLeg) => Math.abs(leg.toM - leg.fromM);
 const kindOf = (city: CompiledCity, legs: WalkLeg[], start: number, end: number) =>
@@ -98,9 +124,10 @@ export function createWalkers(
   scenario: Scenario,
   params: SimParams,
   vehicles: Vehicles,
+  enabled = false,
 ) {
   const sources = scenario.walkers ?? [];
-  if (!sources.length) return null;
+  if (!sources.length && !enabled) return null;
   let city = initial;
   const { dtS } = params;
   const profiles: Profiles = createVehicleProfiles(params);
@@ -121,23 +148,57 @@ export function createWalkers(
     }
   });
   spawns.sort((a, b) => a.timeS - b.timeS || a.source - b.source);
-  const count = spawns.length;
+  // Every test-source id is reserved up front; person ids follow them, without reuse.
+  const testCount = spawns.length;
+  let count = testCount;
+  let capacity = testCount;
   const source = Int32Array.from(spawns, (s) => s.source);
-  const spawnS = Float64Array.from(spawns, (s) => s.timeS);
-  const state = new Uint8Array(count);
-  const route: (WalkRoute | null)[] = Array(count).fill(null);
-  const leg = new Int32Array(count);
-  const along = new Float64Array(count);
-  const runEnd = new Int32Array(count).fill(-1);
-  const runPos = new Float64Array(count);
-  const runLength = new Float64Array(count);
-  const runKind = new Uint8Array(count);
-  const runSpans: (RunSpan[] | null)[] = Array(count).fill(null);
-  const waitS = new Float64Array(count);
-  const currentWaitS = new Float64Array(count);
-  const arrivedS = new Float64Array(count).fill(NaN);
-  const crossings = new Uint16Array(count);
+  let spawnS = Float64Array.from(spawns, (s) => s.timeS);
+  let state = new Uint8Array(capacity);
+  const route: (WalkRoute | null)[] = Array(capacity).fill(null);
+  let leg = new Int32Array(capacity);
+  let along = new Float64Array(capacity);
+  let runEnd = new Int32Array(capacity).fill(-1);
+  let runPos = new Float64Array(capacity);
+  let runLength = new Float64Array(capacity);
+  let runKind = new Uint8Array(capacity);
+  const runSpans: (RunSpan[] | null)[] = Array(capacity).fill(null);
+  let waitS = new Float64Array(capacity);
+  let currentWaitS = new Float64Array(capacity);
+  let arrivedS = new Float64Array(capacity).fill(NaN);
+  let crossings = new Uint16Array(capacity);
+  let green = new Uint8Array(capacity);
+  let tripLeg = new Uint8Array(capacity);
+  const owners: ({
+    fromPlaceId: PlaceId;
+    toPlaceId: PlaceId;
+    personId: string;
+    tripId: string;
+    target: { linkId: string; positionM: number } | null;
+    onArrival: ((timeS: number, dropped: boolean) => void) | null;
+  } | null)[] = Array(capacity).fill(null);
+  function reserve() {
+    if (count < capacity) return;
+    capacity = Math.max(16, capacity * 2);
+    spawnS = grow(spawnS, capacity);
+    state = grow(state, capacity);
+    leg = grow(leg, capacity);
+    along = grow(along, capacity);
+    runEnd = grow(runEnd, capacity, -1);
+    runPos = grow(runPos, capacity);
+    runLength = grow(runLength, capacity);
+    runKind = grow(runKind, capacity);
+    waitS = grow(waitS, capacity);
+    currentWaitS = grow(currentWaitS, capacity);
+    arrivedS = grow(arrivedS, capacity, NaN);
+    crossings = grow(crossings, capacity);
+    green = grow(green, capacity);
+    tripLeg = grow(tripLeg, capacity);
+  }
   let next = 0;
+  let lastTimeS = scenario.startS;
+  let activeCount = 0;
+  let peakActive = 0;
   let active: number[] = [];
   const totals = {
     spawned: 0,
@@ -167,6 +228,12 @@ export function createWalkers(
   let sourceRoutes = sources.map(({ fromPlaceId, toPlaceId }) =>
     routeBetween(fromPlaceId, toPlaceId),
   );
+
+  function activate(id: number) {
+    active.push(id);
+    activeCount++;
+    peakActive = Math.max(peakActive, activeCount);
+  }
 
   // Lanes held this step: flat [lo, hi, inside, kind] per lane.
   let blocks: (number[] | undefined)[] = [];
@@ -284,15 +351,31 @@ export function createWalkers(
   }
 
   // Whether each waiting walker has enough walk green this step (set in `step`).
-  const green = new Uint8Array(count);
   const canStepOut = (id: number) =>
     green[id] === 1 && runSpans[id]!.every((span) => clear(span.lane, span.lo, span.hi, true));
 
   function finish(id: number, timeS: number) {
+    if (state[id] !== PENDING) activeCount--;
     state[id] = DONE;
     arrivedS[id] = timeS;
     totals.completed++;
     totals.walkTimeS += timeS - spawnS[id]!;
+    notify(id, timeS, false);
+  }
+
+  function notify(id: number, timeS: number, dropped: boolean) {
+    const owner = owners[id];
+    const callback = owner?.onArrival;
+    if (!callback) return;
+    owner.onArrival = null;
+    callback(timeS, dropped);
+  }
+
+  function drop(id: number, timeS: number) {
+    state[id] = DROPPED;
+    activeCount--;
+    totals.dropped++;
+    notify(id, timeS, true);
   }
 
   /** Walk on from the current leg position by `distance`, stopping at a crossing's kerb. */
@@ -428,9 +511,35 @@ export function createWalkers(
   }
 
   return {
+    /** Returns the public id (1-based); an empty route arrives immediately. */
+    spawn(input: WalkerSpawn, onArrival: (timeS: number, dropped: boolean) => void) {
+      reserve();
+      const id = count++;
+      const last = input.route.legs.at(-1);
+      owners[id] = {
+        fromPlaceId: input.fromPlaceId,
+        toPlaceId: input.toPlaceId,
+        personId: input.personId,
+        tripId: input.tripId,
+        target: last ? { linkId: link(last.link).id, positionM: last.toM } : null,
+        onArrival,
+      };
+      tripLeg[id] = TRIP_LEGS.indexOf(input.tripLeg);
+      route[id] = input.route;
+      spawnS[id] = input.timeS;
+      totals.spawned++;
+      if (!last) finish(id, input.timeS);
+      else {
+        state[id] = WALKING;
+        activate(id);
+        if (isCrossing(input.route.legs, 0)) beginRun(id);
+      }
+      return id + 1;
+    },
     /** Spawn and advance walkers, then mark the lanes they hold this step. */
     step(timeS: number) {
-      while (next < count && spawnS[next]! <= timeS + 1e-9) {
+      lastTimeS = timeS;
+      while (next < testCount && spawnS[next]! <= timeS + 1e-9) {
         const id = next++;
         totals.spawned++;
         const path = sourceRoutes[source[id]!]!;
@@ -443,10 +552,12 @@ export function createWalkers(
         leg[id] = 0;
         along[id] = 0;
         state[id] = WALKING;
-        active.push(id);
+        activate(id);
         if (isCrossing(path.legs, 0)) beginRun(id);
       }
-      for (const id of active) {
+      const advancing = active.length;
+      for (let i = 0; i < advancing; i++) {
+        const id = active[i]!;
         if (state[id] === WALKING) walk(id, params.walkSpeedMps * dtS, timeS);
         else if (state[id] === WAITING) {
           green[id] = Number(greenEnough(id, timeS));
@@ -500,6 +611,7 @@ export function createWalkers(
         heading: new Float32Array(n),
         state: new Uint8Array(n),
         layer: new Int8Array(n),
+        tripLeg: new Uint8Array(n),
       };
       visible.forEach((id, i) => {
         const { link: index, s, forward } = where(id);
@@ -514,6 +626,7 @@ export function createWalkers(
         snapshot.id[i] = id + 1;
         snapshot.state[i] = state[id]!;
         snapshot.layer[i] = line.layer;
+        snapshot.tripLeg[i] = tripLeg[id]!;
       });
       return snapshot;
     },
@@ -523,7 +636,8 @@ export function createWalkers(
         spawned: totals.spawned,
         completed: totals.completed,
         dropped: totals.dropped,
-        active: active.length,
+        active: activeCount,
+        peakActive,
         meanWalkTimeS: mean(totals.walkTimeS, totals.completed),
         meanWaitS: {
           zebra: mean(totals.waits[ZEBRA]!, totals.crossings[ZEBRA]!),
@@ -539,11 +653,15 @@ export function createWalkers(
       const id = walkerId - 1;
       if (id < 0 || id >= count || state[id] === PENDING) return null;
       const path = route[id];
-      const position = path && state[id] !== DROPPED ? where(id) : null;
+      const position = path?.legs.length && state[id] !== DROPPED ? where(id) : null;
+      const owner = owners[id];
       return {
         id: walkerId,
-        fromPlace: sources[source[id]!]!.fromPlaceId,
-        toPlace: sources[source[id]!]!.toPlaceId,
+        fromPlace: owner?.fromPlaceId ?? sources[source[id]!]!.fromPlaceId,
+        toPlace: owner?.toPlaceId ?? sources[source[id]!]!.toPlaceId,
+        personId: owner?.personId ?? null,
+        tripId: owner?.tripId ?? null,
+        tripLeg: TRIP_LEGS[tripLeg[id]!]!,
         state: WALKER_STATES[state[id]!]!,
         spawnedS: spawnS[id]!,
         arrivedS: Number.isNaN(arrivedS[id]) ? null : arrivedS[id]!,
@@ -563,20 +681,23 @@ export function createWalkers(
     },
     /** Walker state for the state hash, once any walker has spawned. */
     hash(word: (hash: number, value: number) => number, hash: number) {
-      for (let id = 0; id < next; id++) {
+      const append = (id: number) => {
         hash = word(hash, id + 1);
         hash = word(hash, state[id]!);
         hash = word(hash, leg[id]!);
         hash = word(hash, Math.round((state[id] === CROSSING ? runPos[id]! : along[id]!) * 100));
-      }
+        if (owners[id]) hash = word(hash, tripLeg[id]!);
+      };
+      for (let id = 0; id < next; id++) append(id);
+      for (let id = testCount; id < count; id++) append(id);
       return hash;
     },
     get spawned() {
-      return next;
+      return totals.spawned;
     },
     /** TASK-051 live edits: links keep walkers by id; a walker whose remaining route lost a link
      * reroutes from where it stands, and is dropped if its own link is gone or no route remains. */
-    patch(signalled: CompiledCity) {
+    patch(signalled: CompiledCity, timeS = lastTimeS) {
       const before = city;
       city = signalled;
       router = createWalkRouter(city.walk);
@@ -589,7 +710,7 @@ export function createWalkers(
       blocking = false;
       const index = city.walk.links.map((l) => l.id);
       const byId = new Map(index.map((id, i) => [id, i]));
-      for (const id of active) {
+      for (const id of active.slice()) {
         const path = route[id]!;
         const remap = (l: number) => byId.get(before.walk.links[l]!.id) ?? -1;
         const legs = path.legs.map((l) => ({ ...l, link: remap(l.link) }));
@@ -597,8 +718,7 @@ export function createWalkers(
         const here = where(id, before);
         const own = remap(here.link);
         if (own === -1) {
-          state[id] = DROPPED;
-          totals.dropped++;
+          drop(id, timeS);
           continue;
         }
         const s = Math.min(here.s, city.walk.links[own]!.lengthM);
@@ -611,15 +731,27 @@ export function createWalkers(
         if (!broken) {
           route[id] = { ...path, legs, links: legs.map((l) => l.link) };
         } else {
+          const target = owners[id]?.target;
+          const targetLink = target ? byId.get(target.linkId) : undefined;
+          if (target && targetLink === undefined) {
+            drop(id, timeS);
+            continue;
+          }
           const result = router.route({
             from: { link: own, positionM: s },
-            to: { placeId: sources[source[id]!]!.toPlaceId },
+            to: target
+              ? { link: targetLink!, positionM: target.positionM }
+              : { placeId: sources[source[id]!]!.toPlaceId },
             speedMps: params.walkSpeedMps,
             stepsFactor: params.walkStepsFactor,
           });
           if (!result.ok || !result.route.legs.length) {
-            state[id] = DROPPED;
-            totals.dropped++;
+            if (result.ok && owners[id]) {
+              route[id] = result.route;
+              leg[id] = 0;
+              along[id] = 0;
+              finish(id, timeS);
+            } else drop(id, timeS);
             continue;
           }
           route[id] = result.route;
@@ -643,7 +775,7 @@ export function createWalkers(
           }
         }
       }
-      active = active.filter((id) => state[id] !== DROPPED);
+      active = active.filter((id) => state[id] !== DROPPED && state[id] !== DONE);
       stoppedFor.fill(0);
       hardFor.fill(0);
     },

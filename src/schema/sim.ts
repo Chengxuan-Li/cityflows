@@ -26,6 +26,7 @@ export interface SimParams {
   mandatoryUrgencyM: number; // extra margin before a required change becomes forced
   cooperativeYieldS: number; // TASK-076: a car held this long for a mandatory change gets a gap
   missedTurnAfterS: number; // TASK-076: then it gives up the change and takes a legal movement
+  headDetourS: number;
   intersection: {
     decisionDistanceM: number;
     gapS: number;

@@ -117,6 +117,7 @@ export const simParamsSchema = z
     mandatoryUrgencyM: z.number(),
     cooperativeYieldS: z.number().nonnegative(),
     missedTurnAfterS: z.number().nonnegative(),
+    headDetourS: z.number().nonnegative().default(45),
     intersection: z.object({
       decisionDistanceM: z.number(),
       gapS: z.number(),

@@ -34,7 +34,10 @@ test('explicit vehicle parameters round-trip JSON with no speed cap', () => {
       bus: { ...car, maxSpeedMps: 80 / 3.6 },
     },
   };
-  expect(simParamsSchema.parse(JSON.parse(JSON.stringify(params)))).toEqual(params);
+  expect(simParamsSchema.parse(JSON.parse(JSON.stringify(params)))).toEqual({
+    ...params,
+    headDetourS: 45,
+  });
 });
 
 test('default class shares belong to each loaded configuration', () => {
@@ -66,7 +69,7 @@ test('legacy trips and demand receive vehicle defaults at the saved-data boundar
     local: { car: 0.92, van: 0.08, truck: 0, bus: 0 },
     through: { car: 0.8, van: 0.08, truck: 0.12, bus: 0 },
   });
-  expect(simParamsSchema.parse({ vehicleLengthM: 9 })).toEqual({});
+  expect(simParamsSchema.parse({ vehicleLengthM: 9 })).toEqual({ headDetourS: 45 });
 });
 
 test('class shares reject empty or non-unit groups and accept bus as an explicit class', () => {

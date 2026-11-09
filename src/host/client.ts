@@ -1,4 +1,4 @@
-import type { Metrics, VehicleDetail, WalkerDetail } from '../sim/types';
+import type { Metrics, PersonDetail, VehicleDetail, WalkerDetail } from '../sim/types';
 import type { CompiledCity } from '../network';
 import type { RoadStats, TrajectoryRecord, TripRecord } from '../project/export-csv';
 import type {
@@ -35,6 +35,7 @@ export interface EngineClient {
   trajectoryStatus(): Promise<TrajectoryStatus>;
   inspect(id: number): Promise<VehicleDetail | null>;
   inspectWalker(id: number): Promise<WalkerDetail | null>;
+  inspectPerson(id: string): Promise<PersonDetail | null>;
   hash(): Promise<number>;
   onEvent(listener: (event: HostEvent) => void): () => void;
   terminate(): void;
@@ -106,13 +107,14 @@ export function createEngineClient(worker: Worker): EngineClient {
       const { data, byteOffset } = compiled.laneSpatial;
       return send({ type: 'patch', compiled: { ...compiled, laneSpatial: { data, byteOffset } } });
     },
-    load({ compiled, trips, scenario }) {
+    load({ compiled, trips, scenario, population }) {
       const { data, byteOffset } = compiled.laneSpatial;
       return send({
         type: 'load',
         compiled: { ...compiled, laneSpatial: { data, byteOffset } },
         trips,
         scenario,
+        population,
       });
     },
     play: () => send({ type: 'play' }),
@@ -135,6 +137,7 @@ export function createEngineClient(worker: Worker): EngineClient {
     trajectoryStatus: () => send({ type: 'trajectoryStatus' }),
     inspect: (vehicleId) => send({ type: 'inspect', vehicleId }),
     inspectWalker: (walkerId) => send({ type: 'inspectWalker', walkerId }),
+    inspectPerson: (personId) => send({ type: 'inspectPerson', personId }),
     hash: () => send({ type: 'hash' }),
     onEvent(listener) {
       listeners.add(listener);

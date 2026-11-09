@@ -1,7 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { clickVehicle } from './helpers';
+import { pointAtDistance } from '../../src/geo/polyline';
+import { compile } from '../../src/network';
+import { clickClearMapPoint, clickVehicle, departVehicle } from './helpers';
 
 async function metrics(page: Page) {
   return page.evaluate(() => window.cityflows!.metrics());
@@ -38,6 +40,7 @@ test('runs, pauses, replays the same steps, and inspects the map @smoke', async 
   page,
 }, testInfo) => {
   const start = await metrics(page);
+  await page.getByRole('combobox', { name: 'Speed', exact: true }).selectOption('20');
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   // The first worker tick must finish without relying on slow map redraws during the click.
   await expect.poll(async () => (await metrics(page)).trips.driving).toBeGreaterThan(0);
@@ -46,12 +49,14 @@ test('runs, pauses, replays the same steps, and inspects the map @smoke', async 
   const hash = await page.evaluate(() => window.cityflows!.hash());
   await expect(page.getByRole('button', { name: 'Step', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeDisabled();
-  const step = page.getByRole('button', { name: 'Step', exact: true });
   const restart = page.getByRole('button', { name: 'Restart', exact: true });
 
   await restart.click();
   await expect.poll(async () => (await metrics(page)).timeS).toBe(start.timeS);
-  for (let i = 0; i < Math.round((paused.timeS - start.timeS) / 0.1); i++) await step.click();
+  await page.evaluate(
+    (steps) => window.cityflows!.step(steps),
+    Math.round((paused.timeS - start.timeS) / 0.1),
+  );
   await expect.poll(() => page.evaluate(() => window.cityflows!.hash())).toBe(hash);
 
   const inspector = page.getByRole('complementary', { name: 'Inspector' });
@@ -61,10 +66,10 @@ test('runs, pauses, replays the same steps, and inspects the map @smoke', async 
   await page.screenshot({ path: testInfo.outputPath('diagnostics-open.png') });
   await page.keyboard.press('Escape');
 
-  // One fixed step places the first car at the origin connector for a repeatable click.
+  // TASK-112: the first owner reaches their car before this repeatable vehicle click.
   await restart.click();
-  await step.click();
-  await expect.poll(async () => (await metrics(page)).timeS).toBeCloseTo(start.timeS + 0.1, 6);
+  await departVehicle(page, 1);
+  expect((await metrics(page)).timeS).toBeGreaterThan(start.timeS);
   const map = page.getByLabel('City map');
   const bounds = (await map.boundingBox())!;
   // The demo is centered on (240, 240), with 510 m north to south including the two places.
@@ -85,7 +90,14 @@ test('runs, pauses, replays the same steps, and inspects the map @smoke', async 
   await page.keyboard.press('Escape');
   await expect(inspector).toBeHidden();
 
-  await pick(60, 2);
+  const network = compile(await page.evaluate(() => window.cityflows!.city!()));
+  if (!network.ok) throw new Error('The displayed grid must compile');
+  await clickClearMapPoint(
+    page,
+    network.compiled.lanes.map((lane) =>
+      pointAtDistance(lane.polyline, lane.cumulative, lane.lengthM / 2),
+    ),
+  );
   await expect(inspector.getByRole('heading', { name: /^Street / })).toBeVisible();
   await pick(240, 240);
   await expect(inspector.getByRole('heading', { name: /^Signal / })).toBeVisible();

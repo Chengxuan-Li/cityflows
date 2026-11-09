@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { City, Scenario } from '../../src/schema';
+import { departVehicle } from './helpers';
 
 const fixtureUrl = new URL('../../fixtures/projects/grid5x5.cityflows.json', import.meta.url);
 
@@ -48,6 +49,8 @@ test('T17 applies an edit while playing and keeps its vehicles inspectable @smok
   await page.getByText('Turns', { exact: true }).click();
   const turn = button(page, 'r:26 lane 1 → r:30 lane 1');
   await expect(turn).toHaveAttribute('aria-pressed', 'true');
+  // TASK-112: reach the first car after its owner's access walk before the live edit.
+  await departVehicle(page, 1);
   await button(page, 'Play').click();
   await expect.poll(async () => (await metrics(page)).trips.driving).toBeGreaterThan(0);
   await expect(button(page, 'Pause')).toBeEnabled();
@@ -72,7 +75,7 @@ test('T17 applies an edit while playing and keeps its vehicles inspectable @smok
 test('the first departing vehicle reroutes after banning a movement on its route', async ({
   page,
 }) => {
-  await button(page, 'Step').click();
+  await departVehicle(page, 1);
   const [route] = await routes(page, [1]);
   expect(route).toContain('r:26#0>r:30#0');
   const banned = route![0]!;
@@ -126,9 +129,11 @@ test('a five-second phase changes the queue at the same simulation time', async 
   await page.getByText('Signal phases', { exact: true }).click();
   const phase = page.getByLabel('Phase 1 green (s)');
   await expect(phase).toBeVisible();
-  const step = () => page.evaluate(() => window.cityflows!.step(1500));
+  // The relocated origin needs a 360 m access walk before cars can queue at the signal.
+  const step = () => page.evaluate(() => window.cityflows!.step(4500));
   await step();
   const baseline = await metrics(page);
+  expect(baseline.persons!.access.count).toBeGreaterThan(0);
   await phase.fill('5');
   await phase.press('Enter');
   await button(page, 'Apply signal program').click();
@@ -139,7 +144,7 @@ test('a five-second phase changes the queue at the same simulation time', async 
   await step();
   const edited = await metrics(page);
   expect(edited.timeS).toBe(baseline.timeS);
-  expect(edited.trips.queuedOrigin).not.toBe(baseline.trips.queuedOrigin);
+  expect(edited.trips.queuedOrigin).toBeGreaterThan(baseline.trips.queuedOrigin);
 });
 
 test('a rejected signal edit preserves history and valid edits can be undone and redone', async ({

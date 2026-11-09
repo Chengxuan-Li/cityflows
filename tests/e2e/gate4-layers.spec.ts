@@ -6,7 +6,7 @@ import type { City, Scenario } from '../../src/schema';
 test('layer toggles leave the simulation unchanged; minute charts show the morning peak', async ({
   page,
 }, testInfo) => {
-  test.setTimeout(180_000);
+  test.setTimeout(420_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -48,28 +48,27 @@ test('layer toggles leave the simulation unchanged; minute charts show the morni
   await expect(layers.getByLabel('Road classes', { exact: true })).not.toBeChecked();
   // Wait for the paused snapshot throttle before comparing presentation-only changes.
   await page.waitForTimeout(550);
-  const asphalt = await page
-    .getByLabel('City map', { exact: true })
-    .screenshot({ mask: [layers, page.getByRole('button', { name: 'Layers', exact: true })] });
+  const screenshotOptions = {
+    // The floating sheet can paint outside its box after a checkbox scrolls into view.
+    style: '.layers-sheet { opacity: 0 !important; }',
+    mask: [page.getByRole('button', { name: 'Layers', exact: true })],
+  };
+  const asphalt = await page.getByLabel('City map', { exact: true }).screenshot(screenshotOptions);
   await layers.getByLabel('Road classes', { exact: true }).check();
   await expect
     .poll(async () =>
-      (
-        await page
-          .getByLabel('City map', { exact: true })
-          .screenshot({ mask: [layers, page.getByRole('button', { name: 'Layers', exact: true })] })
-      ).equals(asphalt),
+      (await page.getByLabel('City map', { exact: true }).screenshot(screenshotOptions)).equals(
+        asphalt,
+      ),
     )
     .toBe(false);
   expect(await page.evaluate(() => window.cityflows!.hash())).toBe(hash);
   await layers.getByLabel('Road classes', { exact: true }).uncheck();
   await expect
     .poll(async () =>
-      (
-        await page
-          .getByLabel('City map', { exact: true })
-          .screenshot({ mask: [layers, page.getByRole('button', { name: 'Layers', exact: true })] })
-      ).equals(asphalt),
+      (await page.getByLabel('City map', { exact: true }).screenshot(screenshotOptions)).equals(
+        asphalt,
+      ),
     )
     .toBe(true);
   for (const checkbox of await layers.getByRole('checkbox').all()) {

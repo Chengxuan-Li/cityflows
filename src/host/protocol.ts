@@ -1,5 +1,5 @@
 import type { CompiledCity } from '../network';
-import type { Scenario, TripRequest } from '../schema';
+import type { Person, Scenario, TripRequest } from '../schema';
 import type { Metrics, PatchResult, VehicleSnapshot } from '../sim/types';
 
 export interface HostPatchResult extends PatchResult {
@@ -42,7 +42,14 @@ export interface HeadlessResult {
 }
 
 export type HostRequest =
-  | { id: number; type: 'load'; compiled: CompiledCity; trips: TripRequest[]; scenario: Scenario }
+  | {
+      id: number;
+      type: 'load';
+      compiled: CompiledCity;
+      trips: TripRequest[];
+      scenario: Scenario;
+      population?: Person[];
+    }
   | { id: number; type: 'patch'; compiled: CompiledCity }
   | { id: number; type: 'play' }
   | { id: number; type: 'pause' }
@@ -59,6 +66,7 @@ export type HostRequest =
   | { id: number; type: 'trajectoryStatus' }
   | { id: number; type: 'inspect'; vehicleId: number }
   | { id: number; type: 'inspectWalker'; walkerId: number }
+  | { id: number; type: 'inspectPerson'; personId: string }
   | { id: number; type: 'hash' };
 
 export type HostReply =

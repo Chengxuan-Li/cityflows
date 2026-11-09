@@ -79,7 +79,8 @@ test.each([118, 2, 7, 31, 52])(
     let together = 0,
       leaving = 0;
     const poses = new Map<number, { x: number; y: number }>();
-    for (let step = 0; step < 7000; step++) {
+    // TASK-112: the two return drivers walk back to their stalls before leaving.
+    for (let step = 0; step < 12000; step++) {
       engine.step();
       const s = engine.snapshot();
       for (let i = 0; i < s.count; i++) {
@@ -228,7 +229,7 @@ test('T54 a strip departure replans after a patch shifts its destination connect
     trips: [w.trip('owner')],
     scenario: { ...w.scenario, simParams: { streetParkingShare: 1 } },
   });
-  engine.step(20);
+  while (engine.timeS < 500 && (engine.snapshot().poseLane?.[0] ?? -1) < 0) engine.step();
   expect(engine.snapshot().poseLane?.[0]).toBeGreaterThanOrEqual(0);
   delete w.city.parking!['pk:0'];
   w.city.version++;
@@ -384,7 +385,8 @@ test('T54 strip body holds the lane until clear; leaving starts at its exact par
   let sawHeld = false,
     sawClear = false,
     sawLeave = false;
-  for (let step = 0; step < 2300; step++) {
+  // TASK-112: this one-way fixture's sidewalk route takes the driver around the block twice.
+  for (let step = 0; step < 8000; step++) {
     engine.step();
     const s = engine.snapshot();
     for (let i = 0; i < s.count; i++) {

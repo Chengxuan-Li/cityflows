@@ -100,7 +100,7 @@ test('demo B: the 08:05 train queues cars at the Station; a second arrival conne
 
   await button(page, 'Restart').click();
   await expect(button(page, 'Step')).toBeEnabled();
-  const first = await sampleQueues(page, 20);
+  const first = await sampleQueues(page, 8);
   const before = (samples: typeof first) =>
     Math.max(
       ...samples.filter(({ timeS }) => timeS <= 8 * 3600 + 5 * 60).map(({ queue }) => queue),
@@ -109,7 +109,6 @@ test('demo B: the 08:05 train queues cars at the Station; a second arrival conne
   // Only through traffic before the train; afterwards 80 pickups meet a 6 car/min curb and
   // 80 departures wait for their pickups, so the queue climbs past 40 within ten minutes.
   expect(before(first)).toBeLessThanOrEqual(2);
-  expect(peak(first)).toBeGreaterThan(40);
 
   // A car at the head of the pickup queue explains its wait in the inspector.
   const queued = await page.evaluate(async () => {
@@ -126,6 +125,8 @@ test('demo B: the 08:05 train queues cars at the Station; a second arrival conne
     /Waiting for space at the destination|Waiting to enter at the origin|Yielding at a junction|Stopped at a signal/,
   );
   await page.screenshot({ path: info.outputPath('vehicle-waiting.png') });
+  first.push(...(await sampleQueues(page, 12)));
+  expect(peak(first)).toBeGreaterThan(40);
 
   await page.mouse.click(at.x, at.y);
   await expect(page.getByRole('heading', { name: 'Station', level: 2 })).toBeVisible();

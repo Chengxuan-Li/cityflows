@@ -7,7 +7,8 @@ import { useAppStore, type TestWalkers } from '../store';
 const failReasons: Record<FailReason, string> = {
   no_parking: 'No parking available',
   no_route: 'No route between the places',
-  unsupported_mode: 'Not travelling by car',
+  no_walk_route: 'No walking route between the places',
+  unsupported_mode: 'Unsupported travel mode',
   destination_unreachable: 'Destination unreachable from the road',
   stranded: 'Stranded on the way',
   no_origin_connector: 'Origin has no exit',
@@ -136,6 +137,8 @@ export function DemandPanel() {
     failedByReason: Metrics['failedByReason'];
     completedByClass: Metrics['completedByClass'];
     respawns: number;
+    persons: Metrics['persons'];
+    walkers: Metrics['walkers'];
   } | null>(null);
   const pausedTime = run.status === 'playing' ? null : run.timeS;
   // Trip counts arrive with every tick; the failure breakdown is read on open, after each
@@ -145,8 +148,17 @@ export function DemandPanel() {
     const read = () =>
       void engine
         .metrics()
-        .then(({ timeS, failedByReason, completedByClass, respawns }) => {
-          if (active) setFailed({ engine, at: timeS, failedByReason, completedByClass, respawns });
+        .then(({ timeS, failedByReason, completedByClass, respawns, persons, walkers }) => {
+          if (active)
+            setFailed({
+              engine,
+              at: timeS,
+              failedByReason,
+              completedByClass,
+              respawns,
+              persons,
+              walkers,
+            });
         })
         .catch((error: unknown) => {
           if (active) reportError(error);
@@ -173,6 +185,8 @@ export function DemandPanel() {
   const reasons = (Object.keys(failReasons) as FailReason[]).filter(
     (reason) => failed?.engine === engine && failed.failedByReason[reason] > 0,
   );
+  const journeys = failed?.engine === engine ? failed.persons : undefined;
+  const walkers = failed?.engine === engine ? failed.walkers : undefined;
   return (
     <section id="demand" className="chart-sheet demand-sheet" aria-label="Demand">
       <div className="chart-heading">
@@ -260,6 +274,66 @@ export function DemandPanel() {
               </>
             )}
           </dl>
+          {journeys && (
+            <dl className="details" aria-label="Person journeys">
+              <dt>Person trips started, arrived, failed</dt>
+              <dd>
+                {journeys.started.toLocaleString()}, {journeys.completed.toLocaleString()},{' '}
+                {journeys.failed.toLocaleString()}
+              </dd>
+              <dt>Walk trips arrived, failed</dt>
+              <dd>
+                {journeys.walkTripsCompleted.toLocaleString()},{' '}
+                {journeys.walkTripsFailed.toLocaleString()}
+              </dd>
+              <dt>Mean walk to car</dt>
+              <dd>
+                {journeys.access.meanTimeS.toFixed(1)} s ·{' '}
+                {Math.round(journeys.access.meanDistanceM)} m
+              </dd>
+              <dt>Mean walk from car</dt>
+              <dd>
+                {journeys.egress.meanTimeS.toFixed(1)} s ·{' '}
+                {Math.round(journeys.egress.meanDistanceM)} m
+              </dd>
+              <dt>Walks across a network gap</dt>
+              <dd>{journeys.walkFallbacks.toLocaleString()}</dd>
+              {journeys.fallbacks.map((fallback) => (
+                <Fragment
+                  key={`${fallback.leg}:${fallback.placeId}:${fallback.facilityId}:${fallback.reason}`}
+                >
+                  <dt>
+                    {fallback.leg === 'access' ? 'To car' : 'From car'} at{' '}
+                    {city.places[fallback.placeId]?.name ?? fallback.placeId}
+                    {fallback.facilityId ? ` · ${fallback.facilityId}` : ''} ·{' '}
+                    {fallback.reason.replaceAll('_', ' ')}
+                  </dt>
+                  <dd>{fallback.count.toLocaleString()}</dd>
+                </Fragment>
+              ))}
+            </dl>
+          )}
+          {walkers && (
+            <dl className="details" aria-label="Pedestrian crossings">
+              <dt>Crossings at zebras, at signals</dt>
+              <dd>
+                {walkers.crossings.zebra.toLocaleString()},{' '}
+                {walkers.crossings.signal.toLocaleString()}
+              </dd>
+              <dt>Vehicles stopped at zebras, at signals</dt>
+              <dd>
+                {walkers.vehicleStops.zebra.toLocaleString()},{' '}
+                {walkers.vehicleStops.signal.toLocaleString()}
+              </dd>
+              <dt>Vehicle delay at crossings</dt>
+              <dd>
+                {Math.round(
+                  walkers.vehicleDelayS.zebra + walkers.vehicleDelayS.signal,
+                ).toLocaleString()}{' '}
+                s
+              </dd>
+            </dl>
+          )}
         </figure>
         <div>
           <table aria-label="Trips by place">

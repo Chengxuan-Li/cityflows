@@ -23,6 +23,8 @@ import { createProjector, patchChanges, remapRoute } from './patch';
 import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
+import { createPersons, hasPerson } from './persons';
+import type { createWalkRouter } from '../routing/walk';
 import type {
   PatchResult,
   TrafficEngine,
@@ -45,6 +47,8 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   routeProvider?: RouteProvider;
   linkCosts?: LinkCosts;
   intersectionObserver?: IntersectionObserver;
+  headDetourObserver?: (id: number, lane: number, movement: number) => void;
+  walkRouter?: ReturnType<typeof createWalkRouter>;
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -64,6 +68,9 @@ function createRun({
   routeProvider,
   linkCosts,
   intersectionObserver,
+  headDetourObserver,
+  population,
+  walkRouter,
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -89,6 +96,25 @@ function createRun({
   const reservationAcceleration = new Float64Array(trips.length);
   const parking = createParking(compiled, trips, scenario, params, vehicles);
   const accounting = createAccounting(compiled, vehicles, parking);
+  const walkers = createWalkers(
+    compiled,
+    scenario,
+    params,
+    vehicles,
+    trips.some((trip) => hasPerson(trip) || trip.mode === 'walk'),
+  );
+  const persons = createPersons(
+    compiled,
+    trips,
+    scenario,
+    params,
+    vehicles,
+    parking,
+    accounting,
+    walkers,
+    population,
+    walkRouter,
+  );
   const connectors = createConnectors(
     compiled,
     trips,
@@ -97,6 +123,7 @@ function createRun({
     vehicles,
     accounting,
     parking,
+    persons,
   );
   let merges = createMerges(compiled, vehicles, params);
   let intersections = createIntersections(compiled, vehicles, params, merges.canEnter, {
@@ -109,8 +136,6 @@ function createRun({
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const signalEpochs = new Map<string, number>();
-  // TASK-111: null without test pedestrians, so the no-walker path does nothing more.
-  const walkers = createWalkers(compiled, scenario, params, vehicles);
   const provider =
     routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
   const observedCosts = createLinkCosts(compiled, params, scenario.startS);
@@ -183,6 +208,7 @@ function createRun({
   }
 
   function planLane(id: number, lane: number, positionM: number) {
+    vehicles.headDetourS[id] = 0;
     const destination = compiled.connectors[vehicles.destination[id]!]!;
     const route = vehicles.route[id]!;
     const step = vehicles.routeStep[id]!;
@@ -377,6 +403,7 @@ function createRun({
       vehicles.insert(id, lane, positionM);
       accounting.transition(id, DRIVING);
     }
+    persons.departed(id, timeS);
     return true;
   }
 
@@ -417,6 +444,7 @@ function createRun({
       let ahead = -1;
       for (let id = head; id !== -1; id = vehicles.next[id]!) {
         order[orderCount++] = id;
+        if (ahead !== -1 || !lane) vehicles.headDetourS[id] = 0;
         if (parking.motion(id)) {
           ahead = id;
           continue;
@@ -597,6 +625,63 @@ function createRun({
     // and speeds are still from the start of the step.
     prepareTravel(timeS);
     intersections.resolve();
+  }
+
+  function detourHeads() {
+    for (const segment of vehicles.occupied) {
+      const lane = compiled.lanes[segment];
+      if (!lane) break;
+      const id = vehicles.first(segment);
+      const planned = compiled.movements[vehicles.movement[id]!];
+      if (
+        vehicles.state[id] !== DRIVING ||
+        !planned ||
+        vehicles.speed[id]! >= 0.1 ||
+        lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM ||
+        laneChanges.holding[id] ||
+        !intersections.blockedExit(id, planned)
+      ) {
+        vehicles.headDetourS[id] = 0;
+        continue;
+      }
+      if (intersections.red(planned.idx)) continue;
+      vehicles.headDetourS[id] = vehicles.headDetourS[id]! + dtS;
+      if (vehicles.headDetourS[id]! + 1e-9 < params.headDetourS) continue;
+      if (lane.out.length < 2) continue;
+      const permits = roadAccessFilter(
+        compiled,
+        vehicleRouteRequest(vehicles, params, id, lane.idx, vehicles.position[id]!),
+      );
+      let best = -1;
+      let cost = Infinity;
+      for (const idx of lane.out) {
+        const movement = compiled.movements[idx]!;
+        const tail = vehicles.last(movement.toLane);
+        if (
+          idx === planned.idx ||
+          movement.neverGreen ||
+          vehicles.attemptedFallbacks[id]?.has(idx) ||
+          !allowedLanes[vehicles.vclass[id]!]![movement.toLane] ||
+          !permits(compiled.lanes[movement.toLane]!.road) ||
+          (tail !== -1 && vehicles.position[tail]! < profile(id).lengthM + idm.minGapM) ||
+          intersections.blockedExit(id, movement)
+        )
+          continue;
+        const result = routeFrom(id, movement.toLane, 0);
+        if (
+          result.ok &&
+          (result.route.costS < cost || (result.route.costS === cost && idx < best))
+        ) {
+          best = idx;
+          cost = result.route.costS;
+        }
+      }
+      if (best === -1) continue;
+      if (hasGrant(id)) intersections.release(id);
+      vehicles.movement[id] = best;
+      fallback[id] = 2;
+      vehicles.headDetourS[id] = 0;
+    }
   }
 
   function reachDestination(id: number, connector: CConnector, timeS: number) {
@@ -789,6 +874,7 @@ function createRun({
       } else if (position >= lane.lengthM) {
         if (granted !== -1) {
           if (fallback[id]) {
+            if (fallback[id] === 2) headDetourObserver?.(id, lane.idx, granted);
             vehicles.missedTurn[id] = 1;
             routeReasons[id] = 'missed_turn';
             (vehicles.attemptedFallbacks[id] ??= new Set()).add(granted);
@@ -854,6 +940,7 @@ function createRun({
       laneChanges.holding[id] = 0;
       vehicles.speed[id] = 0;
       vehicles.jamS[id] = 0;
+      vehicles.headDetourS[id] = 0;
       vehicles.stopped[id] = 0;
       vehicles.junctionWaiting[id] = 0;
       if (vehicles.respawns[id]! >= maxRespawns) {
@@ -931,7 +1018,7 @@ function createRun({
       ...parking.detail(id, time()),
       id: vehicleId,
       tripId: trip.id,
-      personId: trip.personId,
+      personId: persons.occupant(id),
       vehicleClass: vehicleClasses[vehicles.vclass[id]!]!,
       purpose: vehiclePurposes[vehicles.purpose[id]!]!,
       originPlace: trip.originPlaceId,
@@ -986,6 +1073,7 @@ function createRun({
       throw new Error('Place additions and removals require a restart');
     const before = compiled;
     parking.patch(next);
+    vehicles.headDetourS.fill(0);
     const changes = patchChanges(before, next);
     const project = createProjector(next);
     const oldGrants = intersections.grants.slice();
@@ -1009,7 +1097,8 @@ function createRun({
     vehicles.resetSegments(next.lanes.length, next.movements.length);
     merges = createMerges(next, vehicles, params);
     const signalled = patchSignals(before, next, time(), signalEpochs);
-    walkers?.patch(signalled);
+    persons.patch(signalled);
+    walkers?.patch(signalled, time());
     intersections = createIntersections(signalled, vehicles, params, merges.canEnter, {
       onDecision: intersectionObserver,
       acceleration: (id) => reservationAcceleration[id]!,
@@ -1183,15 +1272,25 @@ function createRun({
       // Assign rather than spread: `tripOutcomes` stays a lazy getter.
       const metrics = accounting.metrics(time());
       if (walkers) metrics.walkers = walkers.metrics();
+      if (persons.enabled) metrics.persons = persons.metrics();
       return metrics;
     },
     inspectWalker: (id: number) => walkers?.inspect(id) ?? null,
+    inspectPerson: (id: string) => persons.inspect(id),
     stateHash: () =>
-      stateHash(time(), vehicles, accounting.trips, parking.stateHash(), walkers ?? undefined),
+      stateHash(
+        time(),
+        vehicles,
+        accounting.trips,
+        parking.stateHash(),
+        walkers ?? undefined,
+        persons,
+      ),
     step(n: number) {
       for (let i = 0; i < n; i++) {
         const timeS = time();
         intersections.signals(timeS);
+        persons.step(timeS);
         walkers?.step(timeS);
         connectors.spawn(timeS, hasSpawnGap, releaseTrip);
         rerouter.updateEdits(timeS, editChecked);
@@ -1204,6 +1303,7 @@ function createRun({
         });
         proposeLaneChanges();
         resolve(timeS);
+        detourHeads();
         tick++;
         commit(time());
         parking.advance(time(), {
@@ -1279,6 +1379,7 @@ export function createEngine() {
     metrics: () => loaded().metrics(),
     inspect: (id) => loaded().inspect(id),
     inspectWalker: (id) => loaded().inspectWalker(id),
+    inspectPerson: (id) => loaded().inspectPerson(id),
     stateHash: () => loaded().stateHash(),
   } satisfies TrafficEngine;
 }

@@ -88,6 +88,43 @@ test('T10 the bundled station surge peaks within fifteen minutes, slows its appr
   expect(engine.metrics().trips.queuedOrigin).toBe(0);
 });
 
+test('T10 a second Station arrival connector lowers the peak while visitors still walk', async () => {
+  const opened = await bundledProject('station');
+  if (!opened.ok) throw new Error('Station must open');
+  const { city, scenarios } = opened.project;
+  const scenario = scenarios[0]!;
+  const station = Object.values(city.places).find((p) => p.kind === 'station')!;
+  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
+  function run() {
+    const engine = createEngine();
+    engine.load({ compiled: setup(city), trips, scenario });
+    const queues: number[] = [];
+    for (let minute = 0; minute < 20; minute++) {
+      engine.step(600);
+      const { queuedOrigin, queuedDestination } = engine.metrics().trips;
+      queues.push(queuedOrigin + queuedDestination);
+    }
+    return { peak: Math.max(...queues), metrics: engine.metrics() };
+  }
+  const baseline = run();
+  station.connectors.push({
+    ...station.connectors[0]!,
+    id: `c:${city.nextId++}`,
+    positionM: 85,
+    direction: 'in',
+    throughputPerMin: 60,
+  });
+  const improved = run();
+  expect(baseline.peak).toBeGreaterThan(40);
+  expect(improved.peak).toBeLessThan(baseline.peak);
+  for (const result of [baseline, improved]) {
+    expect(result.metrics.trips.failed).toBe(0);
+    expect(result.metrics.persons!.access.count).toBeGreaterThan(0);
+    expect(result.metrics.persons!.egress.count).toBeGreaterThan(0);
+    expect(result.metrics.persons!.walkFallbacks).toBe(0);
+  }
+});
+
 test('T10 event windows accumulate shared admission quotas without bypassing capacity or throughput', () => {
   const { city, node, road, place } = buildCity('Event windows', 1);
   const link = road(node(0, 0), node(300, 0));

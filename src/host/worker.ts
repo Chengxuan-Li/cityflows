@@ -60,12 +60,13 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return { ...result, timeS: engine.timeS };
     }
     case 'load': {
-      const { compiled, trips, scenario } = request;
+      const { compiled, trips, scenario, population } = request;
       const { data, byteOffset } = compiled.laneSpatial;
       return load({
         compiled: { ...compiled, laneSpatial: Flatbush.from(data, byteOffset) },
         trips,
         scenario,
+        population,
       });
     }
     case 'play':
@@ -110,6 +111,8 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return engine.inspect(request.vehicleId);
     case 'inspectWalker':
       return engine.inspectWalker(request.walkerId);
+    case 'inspectPerson':
+      return engine.inspectPerson(request.personId);
     case 'hash':
       return engine.stateHash();
   }

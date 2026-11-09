@@ -22,12 +22,13 @@ import type {
   Metrics,
   ParkedCarsSnapshot,
   PatchResult,
+  PersonDetail,
   VehicleDetail,
   WalkerDetail,
 } from '../sim/types';
 import { bundledProject } from './bundled-projects';
 import { selectionAfterEdit } from './edit-selection';
-import { comparisonTrips, restoreBaseline, saveBaseline, type Variant } from '../project/scenarios';
+import { restoreBaseline, saveBaseline, type Variant } from '../project/scenarios';
 import type { HeadlessResult } from '../host/protocol';
 import type { RoadDifference } from '../render/types';
 
@@ -122,6 +123,9 @@ interface AppState {
   selectRoads: (roads: RoadId[]) => void;
   vehicle: VehicleDetail | null;
   walker: WalkerDetail | null;
+  personId: string | null;
+  person: PersonDetail | null;
+  selectPerson: (id: string) => void;
   parkingOccupancy: Record<string, number>;
   parkedCars: ParkedCarsSnapshot | null;
   diagnosticsOpen: boolean;
@@ -257,7 +261,12 @@ export const useAppStore = create<AppState>((set, get) => {
             session: { ...session!, loadedCompiled },
             run: { ...run!, cityVersion: patch.version, timeS, counts, patch },
             vehicle: null,
-            selection: selection?.kind === 'vehicle' ? { ...selection } : selection,
+            walker: null,
+            person: null,
+            selection:
+              selection?.kind === 'vehicle' || selection?.kind === 'walker'
+                ? { ...selection }
+                : selection,
           }));
           return;
         } catch (error) {
@@ -316,7 +325,7 @@ export const useAppStore = create<AppState>((set, get) => {
       new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' }),
     );
     try {
-      await engine.load({ compiled: editor.compiled, trips, scenario });
+      await engine.load({ compiled: editor.compiled, trips, scenario, population });
       const { timeS, trips: counts } = await engine.metrics();
       engine.onEvent((event) => onEvent(engine, event));
       get().session?.engine.terminate();
@@ -355,6 +364,8 @@ export const useAppStore = create<AppState>((set, get) => {
         selectedRoads: [],
         vehicle: null,
         walker: null,
+        personId: null,
+        person: null,
         diagnosticsOpen: false,
         rejectedEdit: [],
       });
@@ -435,7 +446,10 @@ export const useAppStore = create<AppState>((set, get) => {
         const original = compile(baseline.city);
         if (!original.ok)
           throw new Error(original.diagnostics.map(({ message }) => message).join('\n'));
-        const trips = comparisonTrips(baseline);
+        const population = structuredClone(
+          baseline.population ?? generatePopulation(baseline.city, baseline.scenario.demand),
+        );
+        const trips = scheduleTrips(baseline.city, population, baseline.scenario);
         for (const trip of trips) {
           if (
             !session.editor.city.places[trip.originPlaceId] ||
@@ -461,11 +475,21 @@ export const useAppStore = create<AppState>((set, get) => {
             });
           }
         });
-        await worker.load({ compiled: original.compiled, trips, scenario: baseline.scenario });
+        await worker.load({
+          compiled: original.compiled,
+          trips,
+          scenario: baseline.scenario,
+          population,
+        });
         const baselineResult = await worker.runHeadless();
         run = 'Variant';
         set({ comparisonProgress: { run, fraction: 0 } });
-        await worker.load({ compiled: session.compiled, trips, scenario: baseline.scenario });
+        await worker.load({
+          compiled: session.compiled,
+          trips,
+          scenario: baseline.scenario,
+          population,
+        });
         const variantResult = await worker.runHeadless();
         const roads = new Map(original.compiled.roads.map((road) => [road.id, road]));
         for (const road of session.compiled.roads) roads.set(road.id, road);
@@ -517,7 +541,16 @@ export const useAppStore = create<AppState>((set, get) => {
     tool: 'select',
     setTool: (tool) => {
       if (get().viewMode === '3d') return;
-      set({ tool, selection: null, selectedRoads: [], vehicle: null, selectionPoint: null });
+      set({
+        tool,
+        selection: null,
+        selectedRoads: [],
+        vehicle: null,
+        walker: null,
+        personId: null,
+        person: null,
+        selectionPoint: null,
+      });
     },
     selectionPoint: null,
     session: null,
@@ -539,12 +572,18 @@ export const useAppStore = create<AppState>((set, get) => {
                 lane: compiled!.roads[road]!.lanes[0]!,
               },
         vehicle: null,
+        walker: null,
+        personId: null,
+        person: null,
         diagnosticsOpen: false,
         rejectedEdit: [],
       });
     },
     vehicle: null,
     walker: null,
+    personId: null,
+    person: null,
+    selectPerson: (personId) => set({ personId, person: null }),
     parkingOccupancy: {},
     parkedCars: null,
     diagnosticsOpen: false,
@@ -557,6 +596,8 @@ export const useAppStore = create<AppState>((set, get) => {
         selectedRoads: [],
         vehicle: null,
         walker: null,
+        personId: null,
+        person: null,
         diagnosticsOpen: false,
         rejectedEdit: [],
       }),
@@ -697,7 +738,13 @@ export const useAppStore = create<AppState>((set, get) => {
             set({
               session: { ...session, loadedCompiled: session.compiled },
               run: { ...run, status: 'paused', achieved: 0, timeS, counts, patch: undefined },
-              ...(get().selection?.kind === 'vehicle' && { selection: null, vehicle: null }),
+              ...(['vehicle', 'walker'].includes(get().selection?.kind ?? '') && {
+                selection: null,
+                vehicle: null,
+                walker: null,
+                personId: null,
+                person: null,
+              }),
             });
             return;
           }
@@ -708,7 +755,7 @@ export const useAppStore = create<AppState>((set, get) => {
               ? project.population
               : generatePopulation(editor.city, scenario.demand);
           const trips = scheduleTrips(editor.city, population, scenario);
-          await engine.load({ compiled, trips, scenario });
+          await engine.load({ compiled, trips, scenario, population });
           signalEpochs.clear();
           const { timeS, trips: counts } = await engine.metrics();
           set({
@@ -732,7 +779,13 @@ export const useAppStore = create<AppState>((set, get) => {
               achieved: 0,
               patch: undefined,
             },
-            ...(get().selection?.kind === 'vehicle' && { selection: null, vehicle: null }),
+            ...(['vehicle', 'walker'].includes(get().selection?.kind ?? '') && {
+              selection: null,
+              vehicle: null,
+              walker: null,
+              personId: null,
+              person: null,
+            }),
           });
           return;
         }
@@ -775,6 +828,7 @@ declare global {
       /** TASK-111: set the test pedestrians and restart the run with them. */
       setWalkers?: (walkers: TestWalkers) => Promise<void>;
       inspectWalker?: EngineClient['inspectWalker'];
+      inspectPerson?: EngineClient['inspectPerson'];
       movementId(index: number): string;
       resetHints?: () => void;
     };

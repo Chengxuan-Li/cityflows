@@ -2,6 +2,7 @@ import type { CompiledCity } from '../network';
 import type { Route } from '../routing';
 import type {
   PlaceId,
+  Person,
   Scenario,
   SimParams,
   TripRequest,
@@ -9,6 +10,8 @@ import type {
   VehiclePurpose,
 } from '../schema';
 import type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
+import type { PersonDetail, PersonMetrics } from './persons';
+export type { PersonDetail, PersonMetrics, PersonLegDetail, PersonTripDetail } from './persons';
 
 export type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
 
@@ -16,6 +19,7 @@ export type VehicleState =
   'queued_origin' | 'driving' | 'queued_destination' | 'completed' | 'failed' | 'in_lot';
 export type FailReason =
   | 'no_route'
+  | 'no_walk_route'
   | 'unsupported_mode'
   | 'destination_unreachable'
   | 'stranded'
@@ -30,6 +34,7 @@ export interface TrafficEngine {
     trips: TripRequest[];
     scenario: Scenario;
     params?: Partial<SimParams>;
+    population?: Person[];
   }): void;
   patch(compiled: CompiledCity): PatchResult;
   step(n?: number): void;
@@ -39,6 +44,7 @@ export interface TrafficEngine {
   inspect(vehicleId: number): VehicleDetail | null;
   /** TASK-111: a test pedestrian, by its snapshot id. */
   inspectWalker(walkerId: number): WalkerDetail | null;
+  inspectPerson(personId: string): PersonDetail | null;
   stateHash(): number;
 }
 
@@ -115,6 +121,7 @@ export interface Metrics {
   respawns: number;
   /** TASK-111: present when the scenario has test pedestrians. */
   walkers?: WalkerMetrics;
+  persons?: PersonMetrics;
   /** Per loaded trip, in input order; materialized only when requested. */
   readonly tripOutcomes?: TripOutcome[];
 }
