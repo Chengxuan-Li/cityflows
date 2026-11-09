@@ -228,5 +228,6 @@ test.each(
     // Owner-approved exception: these remaining lanes have no eligible acute pair.
     expect(next.short).toBeLessThanOrEqual(old.short);
   },
-  Number(process.env.CITYFLOWS_TEST_TIMEOUT_MS ?? 60_000),
+  // Three Munich imports: 23 s locally, 44 to 70 s on CI runners since TASK-103's strips.
+  Number(process.env.CITYFLOWS_TEST_TIMEOUT_MS ?? 180_000),
 );
