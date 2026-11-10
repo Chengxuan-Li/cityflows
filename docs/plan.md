@@ -147,8 +147,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | rejected (lead's premise error; see review), replaced by TASK-122 |
 | [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | done (round 2; see review) |
 | [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | done (merged with TASK-112; see review) |
-| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | round 2 (see review) |
-| [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | round 2 (see review) |
+| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | on hold until B58 (see review) |
+| [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | round 3: T53 (see review) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -2623,6 +2623,24 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   The lead accepts the southern neighbourhood across the A81 (no mapped way in the extract) as a
   real gap; the 2% fallback gate counts walk legs outside listed real gaps. The bridge and
   tunnel endpoint joins the owner approved for the agent stand.
+- Lead, TASK-122 round 2 review (2026-11-10): hold until B58. The fallback works as asked
+  (current-position test, `parkedWithoutExit` 20, T53 passes), but the lead's 10:00 gate run of
+  the branch alone (`tests/traffic/munich-morning.test.ts`'s probe) has 3 643 / 19 / 3 stalled
+  heads against 0, and total parking search is 286 602 s against main's 56 894 (44 searches
+  over an hour; 130 408 s at `pk:9181` alone). Strip slots are not claimed, so many cars with a
+  later trip chase the same freed slot. With TASK-123 merged as well it is 3 356 / 39 / 2
+  (limit 34). A lead experiment, giving up the exit test after 300 s of search, moved the time
+  into `pk:1981` (148 375 s) and still failed (3 559 / 26 / 2). Both trap garages are B58; fix
+  B58 first, then re-measure TASK-122 on top of it.
+- Lead, TASK-123 round 2 review (2026-11-10): the duplicate sidewalks are gone (Munich
+  fallback 993 links to 3, new crossings 65 to 1), compile is within budget, the vehicle hash
+  is equal, and the lead's 10:00 gate run is 3 567 / 15 / 0. `check` passes; the full e2e
+  passes except `gate3-bypass`, which also fails on main (flaky). One gate fails: the traffic
+  tier's T53 (`tests/traffic/T53-munich-pedestrians.test.ts`, which the report does not run),
+  zone stops 35 without and 63 with the test walkers against a limit of 62.5. Main is 51 and
+  57. Round 3: trace both changes against main (which junctions gain or lose zone stops, and
+  whether the test pairs now walk over different crossings), fix what the walk graph causes,
+  and pass T53 unchanged.
 
 ## Owner decisions log
 
