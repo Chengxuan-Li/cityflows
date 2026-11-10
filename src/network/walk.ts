@@ -833,7 +833,17 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       .map((l) => l.id.slice(0, l.id.lastIndexOf('/'))),
   );
   const isCore = (i: number) => coreLinks.has(raw[i]!.id);
-  const attached = new Map<string, Vec2>();
+  const attached = new Map<string, { pos: Vec2; target: Raw }>();
+  const owningCurb = (access: ReturnType<typeof attached.get>, road: CRoad) => {
+    if (!access || access.target.layer !== layerOf(road)) return;
+    if (access.target.road === road.idx) return access.pos;
+    if (access.target.generated) return;
+    const along = nearestOnPolyline(road.reference, access.pos),
+      direction = nearestOnPolyline(access.target.line, access.pos).direction;
+    if (Math.abs(along.direction.x * direction.x + along.direction.y * direction.y) <= 0.8) return;
+    const edge = nearestOnPolyline([...road.surface, road.surface[0]!], access.pos);
+    if (edge.away <= COVER_M && clear(access.pos, edge.point, layerOf(road))) return access.pos;
+  };
   const attach = (
     id: string,
     type: 'places' | 'parking' | 'connectors',
@@ -906,7 +916,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     const group = infillGroups.get(best.target.id);
     if (group !== undefined) neededInfill.add(group);
     const b = on(best.target, best.b);
-    attached.set(`${type}:${id}`, b);
+    attached.set(`${type}:${id}`, { pos: b, target: best.target });
     anchors.push({ id, type, pos: best.a, layer });
     add({
       id: `access:${type}:${id}:${anchors.length}`,
@@ -951,13 +961,14 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     for (const c of p.connectors) {
       const r = city.roads[city.index.road.get(c.roadId)!];
       if (!r) continue;
-      const l = city.lanes[r.lanes[c.lane]!]!;
+      const l = city.lanes[r.lanes[c.lane]!]!,
+        preferred = attached.get(`parking:${p.id}`);
       attach(
         c.id,
         'connectors',
         { kind: 'point', pos: pointAtDistance(l.polyline, l.cumulative, c.positionM) },
         layerOf(r),
-        attached.get(`parking:${p.id}`),
+        owningCurb(preferred, r),
       );
     }
   }
@@ -967,6 +978,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     const preferred =
       (facility && attached.get(`parking:${facility.id}`)) ??
       attached.get(`places:${city.places[c.place]?.id ?? facility?.source.placeId}`);
+    // A remote entrance on another path cannot identify this road's owning curb.
     const l = city.lanes[c.lane]!,
       r = city.roads[l.road]!;
     attach(
@@ -974,7 +986,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       'connectors',
       { kind: 'point', pos: pointAtDistance(l.polyline, l.cumulative, c.positionM) },
       layerOf(r),
-      preferred,
+      owningCurb(preferred, r),
     );
   }
   const { graph, nodeAt } = materializeWalk(

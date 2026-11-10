@@ -866,8 +866,11 @@ component within 150 m, retaining local paths when no main-component access fits
 links may cross service driveways,
 but never an ordinary road centreline. A door with no viable attachment falls back to the
 place shape. Parking shapes, roadside strips and car connectors use the same access rule. Equidistant
-connector curb candidates prefer the owning place or facility's chosen access curb (TASK-123),
-so joining components cannot flip a car onto the opposite curb and create a long detour.
+connector curb candidates prefer the owning place or facility's chosen access curb on that
+same road (TASK-123). A parallel mapped path also identifies that curb within 12 m of the
+road edge, on the same grade and without an intervening ordinary road. A remote entrance
+does not change the stable nearest-curb order. This prevents both long local detours and
+remote entrances flipping an already usable car access to the opposite curb.
 No access is invented beyond the distance limit or across an incompatible grade. Access is a
 straight connection, not obstacle-avoiding navigation through a block. Building clipping is
 presentation-only; display context still cannot change compiled connectivity.

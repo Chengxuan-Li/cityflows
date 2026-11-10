@@ -234,6 +234,36 @@ test('T60 equidistant car connectors use the curb beside their owning place', ()
   if (route.ok) expect(route.route.lengthM).toBeLessThan(40);
 });
 
+test('T60 a remote mapped entrance does not flip an equidistant connector curb', () => {
+  const { city, node, road, place } = buildCity('Remote entrance', 1);
+  const r = road(node(0, 0), node(200, 0));
+  mapped(city, [
+    { x: 0, y: 2.5 },
+    { x: -20, y: 2.5 },
+    { x: -20, y: 40 },
+    { x: 200, y: 40 },
+  ]);
+  place('Owner', 'work', { x: 100, y: 45 }, [{ road: r, direction: 'both', positionM: 100 }]);
+  const p = Object.values(city.places)[0]!;
+  const g = graph(city);
+  const access = g.links.find((l) => l.id.startsWith(`access:connectors:${p.connectors[0]!.id}:`))!;
+  expect(access.line.at(-1)!.y).toBeLessThan(0);
+});
+
+test('T60 a local mapped sidewalk still identifies the owning curb', () => {
+  const { city, node, road, place } = buildCity('Local mapped entrance', 1);
+  const r = road(node(0, 0), node(200, 0));
+  mapped(city, [
+    { x: 0, y: 4 },
+    { x: 200, y: 4 },
+  ]);
+  place('Owner', 'work', { x: 100, y: 10 }, [{ road: r, direction: 'both', positionM: 100 }]);
+  const p = Object.values(city.places)[0]!;
+  const g = graph(city);
+  const access = g.links.find((l) => l.id.startsWith(`access:connectors:${p.connectors[0]!.id}:`))!;
+  expect(access.line.at(-1)!.y).toBeGreaterThan(0);
+});
+
 test('T60 existing main-network access is retained ahead of an inferred separate curb', () => {
   const { city, node, street, place } = buildCity('Retain mapped access', 1);
   const j = node(120, 0);
