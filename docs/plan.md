@@ -2652,6 +2652,18 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 
 ## Owner decisions log
 
+- 2026-11-10, CI and delivery: two tiers. The light tier (`check`, `test:city`,
+  `test:traffic:light` with the 10:00 gate and T53, `test:e2e:light`, plus the specs a task
+  names) runs everywhere by default: agents' deliveries, the lead's merges, every push and PR
+  (docs-only pushes run nothing). The full tier (full demand, the whole e2e in five groups,
+  `npm run bench`) runs only at checkpoints: a pushed `checkpoint-*` tag, a manual run of the
+  Full workflow, or nightly when main changed. A red full run blocks new merges until fixed. The
+  lead tags a checkpoint before a gate is marked done and at least once per wave.
+- 2026-11-10, TASK-124 (lead ruling, owner go-ahead): a reachable arrival connector that fails
+  the departure check stays as an arrival and gains a separate departure connector; only an
+  unreachable one moves. Moving Munich's arrivals missed the quick gate (3 260 / 16); the split
+  passes (3 552 / 8 / 0).
+
 - 2026-11-10, TASK-122 and TASK-123 round 2: write TASK-124 (B58, every garage and place has a
   car exit). TASK-122 waits for it; TASK-123's round 3 (T53) runs alongside.
 - Lead, TASK-124 trace (766a4d5, 2026-11-10): the agent stopped correctly on two contract
