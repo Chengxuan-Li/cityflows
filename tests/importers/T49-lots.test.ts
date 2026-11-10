@@ -14,8 +14,8 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // geometry. No original entity is reconstructed by the aisle-stripping oracle.
 const main = {
   'munich-donnersberger': [
-    '6481a7518b7fec3fc2599358602c9a50e73ae982af2d935c46a1f4cc3441b01d',
-    'c6466371c1f015dede1d9f1c70ef9dfb7f76ab7f3dd15bf1918fcc1d144558ba',
+    'a2f83f3c5dd766da70144e7cee24a09e391959e5508295a86f89e9034cbaeed8',
+    '63899972db79853a2da216cba54798d61f2606bcff218e0ecda9f39c13d0aedf',
   ],
   'sindelfingen-a81': [
     '4bfc2462a47e79af02a0c23bd2b66ad11b850220365bfe81ba58860267048763',

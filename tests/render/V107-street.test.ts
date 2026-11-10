@@ -154,7 +154,7 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 const baselines = {
   grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
   town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
-  'munich-donnersberger': 'ae811dae1c4bda7a9591cc5b17ffafef264ce6445bc26a7628a9709a65f72ff9',
+  'munich-donnersberger': 'b574f0a7bbc73bdcf9cfa3bed179cd0662ffdcc5f72723ba0afa71ad4b8020b6',
   'sindelfingen-a81': 'cf231f89f2e857679d373f4f9df238e59997fc6b3a495fc63e726ed39fc946cf',
 };
 const lampCounts = {

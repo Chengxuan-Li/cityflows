@@ -38,7 +38,7 @@ const baselines = {
   grid: '296948629376e758231293088f0cdb136d7554c269b0d0880a92577177e913a6',
   town: '96bd0dd88f049e1589aac69b800a1fe25dfb976687b5b55c9874998b7c51b2a6',
   // TASK-119 updates parking data and removes obsolete places; T55 pins unchanged vehicle geometry.
-  'munich-donnersberger': 'af31f1ea11238377f7891e20f1980e863e0c20b579302e9a15fb644e198802c7',
+  'munich-donnersberger': 'a6ac904232fb968e8e209f99c523c1d53ac6697d3581416f313edc47e0844a14',
   'sindelfingen-a81': 'e6d11ed599baf4afd9edfdc277dfdf30070d4923bff67277645c27ecec679d6b',
 };
 

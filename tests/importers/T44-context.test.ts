@@ -33,8 +33,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           [
             // TASK-103: saved strips and inferred lot entries; compiled visible spaces.
             // T49 retains the original main hashes with appended parking removed.
-            '2a89b12b62bc9e6cb3356bbf21254f68e0741ab6749a17b24199227d59fcb23e',
-            'af31f1ea11238377f7891e20f1980e863e0c20b579302e9a15fb644e198802c7',
+            'ae55aea30a59d933765aee873ea7c27191c9a281976ac5ce45ee4a42738f4385',
+            'a6ac904232fb968e8e209f99c523c1d53ac6697d3581416f313edc47e0844a14',
           ]
         : [
             '367728c5b236cbe80d8afd034f86b2c5ed475c79ad832ad4aec12e1874d5e4c9',

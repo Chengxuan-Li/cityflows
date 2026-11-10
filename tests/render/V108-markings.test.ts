@@ -50,7 +50,7 @@ const baseline = {
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
-    compile: 'd881d48fd2b60c7f4aa0ecf73f1fc55e2d71d409d645ab30fcceef13c5a61ec9',
+    compile: '80abd8d18ce21ac01cb561601227beb555890dd5b5ee4c6344c5b0d2decdc312',
     arrows: '58f23f654d47b6df163f7625fc68815d5e2dc06b00437fc2918e30a09dd7abb1',
   },
 } as const;

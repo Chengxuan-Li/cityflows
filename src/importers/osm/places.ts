@@ -335,6 +335,16 @@ export function placeConnector(
     if (compiled.parking[space.parking]!.kind === 'roadside')
       bays[space.lane]!.push(space.positionM);
   const candidates = compiled.lanes.flatMap((lane) => {
+    // Lead (TASK-124 review): a new portal is a driveway on the curb lane of an at-grade
+    // street, never in a tunnel, on a bridge, on a motorway, trunk or ramp, or on an inner lane.
+    const road = compiled.roads[lane.road]!,
+      source = city.roads[road.id]!;
+    if (
+      (source.layer ?? 0) !== 0 ||
+      ['motorway', 'trunk', 'ramp'].includes(source.roadClass) ||
+      lane.lane !== (city.drivingSide === 'left' ? 0 : road.lanes.length - 1)
+    )
+      return [];
     const inset = Math.min(10, lane.lengthM / 2);
     const last = Math.min(lane.lengthM - inset, access.latestDeparture(lane.idx));
     if (last < inset) return [];

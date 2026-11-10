@@ -161,7 +161,7 @@ const pins = {
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
   munich: {
-    compile: 'ae811dae1c4bda7a9591cc5b17ffafef264ce6445bc26a7628a9709a65f72ff9',
+    compile: 'b574f0a7bbc73bdcf9cfa3bed179cd0662ffdcc5f72723ba0afa71ad4b8020b6',
     lamps: '27483774592d8fd96b6a5ab0a4126d9aeaa8ef05f184a2d6222cc7bad0d33f89',
     curbs: 'fc216c4ce748916e00e0ae196aae0d9875f4dc1c0f9b47f53e61f30ded45a934',
     de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
