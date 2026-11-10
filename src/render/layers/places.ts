@@ -38,6 +38,7 @@ export function drawPlaces(
   }
   const points: Graphics[] = [];
   for (const { idx, id, kind } of city.places) {
+    if (kind === 'station' && city.rail?.platforms.some((p) => p.station === id)) continue;
     const shape = shapes[idx]!;
     let target = graphics;
     let local = shape;

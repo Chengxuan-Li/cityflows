@@ -46,6 +46,8 @@ export interface ParkedCarsSnapshot {
 }
 
 export type Pick =
+  | { kind: 'track'; track: number }
+  | { kind: 'platform'; platform: number }
   | { kind: 'vehicle'; id: number }
   | { kind: 'walker'; id: number }
   | { kind: 'parked'; space: number }
@@ -61,6 +63,7 @@ export interface RouteOverlay {
 }
 
 export interface LayerVisibility {
+  rail: boolean;
   buildingDetails: boolean;
   parkingStalls: boolean;
   parkedCars: boolean;
@@ -91,6 +94,7 @@ export interface LayerVisibility {
 }
 
 export const defaultLayers: LayerVisibility = {
+  rail: true,
   buildingDetails: true,
   parkingStalls: true,
   parkedCars: true,
@@ -147,6 +151,7 @@ export interface Scene {
 }
 
 export type CityGeometry = {
+  rail?: City['rail'];
   parking?: City['parking'];
   markingTheme?: City['markingTheme'];
   nodes: City['nodes'];

@@ -150,7 +150,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | on hold until B58 (see review) |
 | [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | done (round 3; see review) |
 | [TASK-124](tasks/TASK-124.md) | 9 | Every garage and place has a car exit (B58): connectors snap to lanes a car can leave; `parking_no_exit` and `place_no_exit` warnings | `src/importers/osm/places.ts` (car core, `placeConnector`), `parking.ts`, `src/network/parking.ts`, `diagnostics.ts` | 102, 103, 104, 119 | T61, exit census, traffic gates | done (see review) |
-| [TASK-126](tasks/TASK-126.md) | 10 | Railway tracks and stations: a track graph imported, compiled, saved and drawn; stations tied to platforms and walk entrances | new `src/importers/osm/rail.ts`, `src/network/rail.ts`, rail layers, `src/schema` (rail network), fixtures (railway ways appended) | 096, 110, 123 | T62, census, traffic unchanged, shots | open |
+| [TASK-126](tasks/TASK-126.md) | 10 | Railway tracks and stations: a track graph imported, compiled, saved and drawn; stations tied to platforms and walk entrances | new `src/importers/osm/rail.ts`, `src/network/rail.ts`, rail layers, `src/schema` (rail network), fixtures (railway ways appended) | 096, 110, 123 | T62, census, traffic unchanged, shots | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1078,7 +1078,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
 | TASK-125 (contract after TASK-124 merges) | Parking claims: cars heading for a strip space or a garage count against it, as cars heading for a lot already do (TASK-103 follow-up). A space claimed by another car is taken; a strip or garage whose free spaces are all spoken for drops out of the choice; a claim is released when the car chooses again, fails or parks. Overflow cars go straight to the next option instead of circling. | Only lots count cars en route. A strip space is reserved when the car starts its manoeuvre, so many cars chase one freed space (TASK-122 round 2: 44 searches over an hour). | TASK-124 |
-| TASK-126 (contract written; Codex) | Railway tracks and stations (R1 and R2 merged, owner 2026-11-10): rail, light rail, subway and tram ways as their own track graph (nodes, switches, platforms), compiled, saved and drawn; stations tied to their platforms and to the walk network by their entrances, drawn as stations. Munich's Donnersbergerbrücke S-Bahn station is the example. Train routing comes later. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096); place kind `station` from `railway=station`; the synthetic Station fixture (T10). The bundled extracts hold no track ways yet. | none |
+| TASK-126 (done 2026-11-10) | Railway tracks and stations (R1 and R2 merged, owner 2026-11-10): rail, light rail, subway and tram ways as their own track graph (nodes, switches, platforms), compiled, saved and drawn; stations tied to their platforms and to the walk network by their entrances, drawn as stations. Munich's Donnersbergerbrücke S-Bahn station is the example. Train routing comes later. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096); place kind `station` from `railway=station`; the synthetic Station fixture (T10). The bundled extracts hold no track ways yet. | none |
 | TASK-127 | Decorative trains: arrivals, departures and through trains that pass without stopping, on TASK-126's tracks by a simple timetable. Visual only. | none | TASK-126 |
 | TASK-128 | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
 | TASK-129 | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
@@ -2684,6 +2684,28 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   new exits). Lead runs: `check`, `test:city` (T23 timed out under load and passes alone), the
   light traffic tier, the light e2e (37 passed), T61, T54 and T52 (the Munich 3D frame ratio
   1.22 failed while TASK-126's agent loaded the machine; it passed in the agent's run).
+- Lead, TASK-126 review (2026-11-10): accepted with small lead fixes. Both extracts gained their
+  railway ways from date-pinned Overpass queries, appended only (T62 rebuilds each original file
+  byte for byte from the head of the new one). `City.rail` holds nodes, track sections and
+  platforms; a station place lists its platforms and entrances. The compiled graph joins tracks
+  only at shared nodes, on the same layer, within 30° of straight. Munich: 676 sections (622 rail,
+  54 tram), 154 switches, 30 platforms; Donnersbergerbrücke has its two S-Bahn platforms (from the
+  stop-area relation) and three entrances on the main walk component. Sindelfingen: 74 rail
+  sections, no station. Integration: the rail import runs after TASK-124's exit repair, so every
+  earlier id equals main's; the lanes and movements hash equals main's in both cities. The
+  whole-city pins moved; with the rail data stripped Sindelfingen equals main's pins, and Munich
+  differs only in the station's new platform outline and its three entrances (one, `wn:2279`,
+  named a removed place `p:1523` on main). Lead fixes: (1) the 2D frame gate failed twice on an
+  idle machine (Rail on +11.4% and +10.9% at 1.6 px/m): 10 300 of the 17 500 rail triangles are
+  the 0.18 m twin rails, sub-pixel at that zoom, so the main-line twin rails now draw in their
+  own 2D layer from 3 px/m (tram rails at every zoom, since a street tram has no bed); T62 then
+  passes at 2D +6.2% and 3D +3.8%. (2) T62's frame gate skips on CI, as T44's does. (3) Re-pins
+  for the combined tree, including T62's lanes/movements pin, which held the pre-TASK-124 value.
+  (4) "Running line" instead of "Main line" for untagged non-rail tracks. Known: the station's
+  car connector line on the Entrances and exits layer now starts at the platforms' centre
+  (TASK-128). At 0.15 every count equals main (10:00 gate 3 571 / 23 / 0 stalled heads; T53
+  51 / 57). Lead runs: `check`, `test:city`, the light traffic tier, the light e2e (37 passed),
+  gate4-layers, T44-context, V97-grade-shadows and T62.
 
 ## Owner decisions log
 

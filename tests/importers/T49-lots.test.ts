@@ -1,4 +1,5 @@
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
+// TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
@@ -14,12 +15,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // geometry. No original entity is reconstructed by the aisle-stripping oracle.
 const main = {
   'munich-donnersberger': [
-    'a2f83f3c5dd766da70144e7cee24a09e391959e5508295a86f89e9034cbaeed8',
-    '63899972db79853a2da216cba54798d61f2606bcff218e0ecda9f39c13d0aedf',
+    'f52edaa0ff5c23d7de8300137b1e53115bd9973624af0118b1a00d1fc25a3298',
+    '8846eeb733bf90d36dada9f385d827ae676653bce395b935d415c73d3294f9c4',
   ],
   'sindelfingen-a81': [
-    '4bfc2462a47e79af02a0c23bd2b66ad11b850220365bfe81ba58860267048763',
-    '8bf06b8ea699f40d4bda2e16fd758317d61b038a5685816a2156bfc2dca5e2a3',
+    '777b8bb1abc8c4322c18c32df720ec9805e8e37c10db5d40b5907df672367c35',
+    '3ed28ca7897dc715f814402303a35ba75e3c6e257a51a48fb7fb3a385bd661c9',
   ],
 };
 

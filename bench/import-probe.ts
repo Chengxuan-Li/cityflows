@@ -33,6 +33,7 @@ export function carExitCensus(compiled: CompiledCity) {
     gateways: places.filter((p) => p.kind === 'gateway').map((p) => p.id),
   };
 }
+import { railCensus } from '../src/network/rail';
 
 // Import an OSM fixture, compile it, and run its morning headless: the baseline the import
 // wave measures against. Usage: npm run import-probe -- fixtures/osm/<name>.osm w s e n [--scale n]
@@ -82,6 +83,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const { compiled } = result;
   console.info('Walk connectivity', probeWalk(city, compiled));
   console.info('Car exits', carExitCensus(compiled));
+  if (compiled.rail) console.info('Rail census', railCensus(city, compiled.rail));
   const compiledCodes = new Map<string, number>();
   for (const { code } of result.diagnostics)
     compiledCodes.set(code, (compiledCodes.get(code) ?? 0) + 1);

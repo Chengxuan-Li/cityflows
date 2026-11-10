@@ -12,6 +12,8 @@ import { placeTrees } from './vegetation';
 import { placeStreet, treeContext } from './street';
 import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
+import { drawRail } from './layers/rail';
+import { railGeometry, pickRail } from './rail-geometry';
 import { drawLots } from './layers/stalls';
 import { walkGeometry } from './walk-geometry';
 import { drawWalk } from './layers/walk';
@@ -68,6 +70,9 @@ export function createGrade(layer: number) {
   const group = new Container();
   const terrain = new Container();
   const surfaces = new Graphics();
+  const rail = new Graphics();
+  const railDetail = new Graphics();
+  const tram = new Graphics();
   const sidewalks = new Graphics();
   const footways = new Graphics();
   const markings = new Graphics();
@@ -84,6 +89,8 @@ export function createGrade(layer: number) {
   const bands = new Graphics();
   const slotTicks = new Graphics();
   terrain.addChild(
+    rail,
+    railDetail,
     footways,
     sidewalks,
     bands,
@@ -92,6 +99,7 @@ export function createGrade(layer: number) {
     markings,
     arrows,
     nodes,
+    tram,
     guides,
     crossings,
   );
@@ -110,7 +118,10 @@ export function createGrade(layer: number) {
     terrain,
     surfaces,
     sidewalks,
+    rail,
+    railDetail,
     footways,
+    tram,
     markings,
     nodes,
     guides,
@@ -217,6 +228,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     const resolution = 2 ** Math.ceil(Math.log2(camera.zoom * window.devicePixelRatio));
     if (surroundings) surroundings.ties.visible = !overview;
     for (const grade of visibleGrades) {
+      // Twin rails are 0.18 m wide: below 3 px/m they are sub-pixel slivers that cost frame time.
+      const detail = layerVisibility.rail && camera.zoom >= 3;
+      if (grade.rail.visible !== layerVisibility.rail || grade.railDetail.visible !== detail) {
+        grade.rail.visible = layerVisibility.rail;
+        grade.railDetail.visible = detail;
+        grade.tram.visible = layerVisibility.rail;
+        grade.terrain.updateCacheTexture();
+      }
       for (const graphics of [grade.markings, grade.guides, grade.arrows, grade.crossings])
         updateZoomFade(graphics, camera.zoom);
       for (const child of grade.signals.children)
@@ -260,6 +279,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       }
     }
     canvas.dataset.sidewalks = String(layerVisibility.sidewalks);
+    canvas.dataset.railTracks = String(layerVisibility.rail ? (city?.rail?.tracks.length ?? 0) : 0);
+    selectionOverlay.visible =
+      layerVisibility.rail ||
+      (selection?.kind !== 'track' &&
+        selection?.kind !== 'platform' &&
+        !(
+          selection?.kind === 'place' &&
+          sourceGeometry?.places[city!.places[selection.place]!.id]?.station
+        ));
     canvas.dataset.footways = String(layerVisibility.footways);
     if (hillshade && hillshade.visible !== layerVisibility.terrain) {
       hillshade.visible = layerVisibility.terrain;
@@ -474,7 +502,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
 
       if (tiles) map.addChild(tiles.container);
       const started = performance.now();
-      const features = source?.context?.features ?? [];
+      const features = (source?.context?.features ?? []).filter(
+        (f) => !compiled.rail || (f.class !== 'rail' && f.class !== 'tram'),
+      );
       const placementStart = performance.now();
       const placed = placeTrees(compiled, treeContext(source ?? { nodes: {}, places: {} }));
       treeCounts = placed.counts;
@@ -500,8 +530,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ...nodeGrades,
         ...roadGrades,
         ...compiled.walk.links.map((l) => l.layer),
+        ...(compiled.rail?.tracks.map((t) => t.layer) ?? []),
+        ...(compiled.rail?.platforms.map((p) => p.layer) ?? []),
       ]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
+      for (const shape of railGeometry(compiled, source)) {
+        const grade = grades.get(shape.layer)!;
+        const tram =
+          shape.pick?.kind === 'track' && compiled.rail!.tracks[shape.pick.track]!.kind === 'tram';
+        drawRail(tram ? grade.tram : shape.detail ? grade.railDetail : grade.rail, shape);
+      }
       walkerLayers = new Map(visibleGrades.map((grade) => [grade.layer, grade.walkers]));
       drawnWalkers = false;
       for (const shape of walkGeometry(compiled, source)) {
@@ -864,12 +902,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             )
           : null;
       const parked = layerVisibility.parkedCars ? parkedCars.pick(point) : null;
+      const staticHit = staticPick?.(point, camera.zoom);
+      const roadGrade =
+        city && staticHit?.kind === 'lane'
+          ? cityGrades(city, sourceGeometry).roadGrades[staticHit.road]!
+          : -Infinity;
       return (
         vehicle ??
         (walker?.kind === 'vehicle' ? { kind: 'walker' as const, id: walker.id } : null) ??
         (parked === null ? null : { kind: 'parked' as const, space: parked }) ??
         (city && layerVisibility.parkingOccupancy ? pickParking(city, point, camera.zoom) : null) ??
-        staticPick?.(point, camera.zoom) ??
+        (city && layerVisibility.rail ? pickRail(city, point, camera.zoom, roadGrade) : null) ??
+        staticHit ??
         null
       );
     },

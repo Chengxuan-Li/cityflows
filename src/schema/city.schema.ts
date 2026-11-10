@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { railSchema, stationSchema } from './rail.schema';
 import { vehicleClasses, type City, type Node, type VehicleClass } from './city';
 
 const nodeId = z.string().regex(/^n:\d+$/);
@@ -119,6 +120,7 @@ export const connectorSchema = z.object({
 });
 
 export const placeSchema = z.object({
+  station: stationSchema.optional(),
   id: placeId,
   kind: z.enum([
     'residential',
@@ -339,6 +341,7 @@ const walkNetwork = z.object({
 });
 
 const cityFields = {
+  rail: railSchema.optional(),
   markingTheme: z.enum(['de', 'us', 'uk']).optional(),
   version: count,
   name: z.string(),
