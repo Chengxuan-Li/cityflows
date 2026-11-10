@@ -18,7 +18,14 @@ function setup(endS = 100, facilities: { id: string; occupied: number; capacity:
     },
     metrics: () => ({
       meanDelayS: steps / 100,
-      parking: { facilities, parked: 0, arrivals: 0, meanSearchTimeS: 0, failed: 0 },
+      parking: {
+        facilities,
+        parked: 0,
+        arrivals: 0,
+        parkedWithoutExit: 0,
+        meanSearchTimeS: 0,
+        failed: 0,
+      },
       trips: {
         pending: 0,
         queuedOrigin: 0,

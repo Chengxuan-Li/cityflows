@@ -1820,6 +1820,39 @@ reservation is immediate. The inspector records the space, score, best score and
 Destination-only road access retains spaces for local parking trips. No fee,
 time-limit or conditional-tag rules are modeled.
 
+TASK-122 derives departure reachability once per compiled city, vehicle class, delivery
+purpose and origin access zone. It reuses routing's legal movement graph and selects its
+largest strongly connected components (including equal-size ties, so small one-way fixtures
+do not depend on an arbitrary component). Private/destination roads are legal only in the
+origin zone, and delivery roads only for delivery trips. Reverse propagation includes the
+distance needed for each lane change, so a late strip slot cannot borrow an upstream exit.
+A lot stall also needs a local circulation path to a usable outbound connector.
+
+Residential street-stock transfers and first-trip origin allocation skip unusable spaces;
+virtual garages need a usable exit too. Assigned cars stay in their garages or use the next
+eligible space in the existing choice order. Explicit background occupancy is retained.
+Arrival choice prefers an available, reachable space within the search radius with a usable
+departure when the person's linked next car trip starts at that activity place, including
+trips beyond the run window. If none is available, it retains the existing parking choice
+instead of cruising for an occupied safe space or extending the search. The chosen fallback
+also applies during space admission and manoeuvres. Reachability is tested from the car's
+current lane and position, not the originally chosen garage's arrival road. While searching,
+the engine checks once per simulated second for a filled safe target or newly available
+alternatives to a fallback. A temporarily rejected facility may qualify again once it has a
+free safe space. Keeping the same target preserves the installed route. Terminal visits retain their
+existing choices. Owner exception (TASK-122): arrivals from gateways retain their existing
+parking choices while gateway routing is deferred. The preference still applies to local
+arrivals whose next trip is gateway-bound. The next trip's class and purpose determine
+the departure requirement; ranking, walking distance, search radius and stall-choice draws
+are unchanged. `Metrics.parking.parkedWithoutExit` counts actual arrivals with a later car trip
+whose admitted space (or virtual garage) has no usable departure, including gateway visitors.
+Forecasts, rejected choices, terminal visits and starting stock do not increment it. Arrival
+uses the current compiled reachability, so a live edit that opens an exit before parking
+avoids the count. Reachability is not saved and is rebuilt after live edits; existing parked cars keep their spaces and
+their existing departure behavior.
+The owner accepts empty default blocked strips to preserve the residential street-share
+budget; explicit background occupancy remains unchanged.
+
 Lead follow-up (2026-11-08). Starting stock holds the cars of the persons demand
 generation makes: `ceil(round(residents × personsPerResident) × carShare)` per home, not the
 full population, so every visible parked car belongs to someone; a resident whose moved

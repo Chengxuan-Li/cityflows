@@ -147,7 +147,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | rejected (lead's premise error; see review), replaced by TASK-122 |
 | [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | done (round 2; see review) |
 | [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | done (merged with TASK-112; see review) |
-| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | on hold until B58 (see review) |
+| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | done (lead re-measure on TASK-124 and TASK-125; see review) |
 | [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | done (round 3; see review) |
 | [TASK-124](tasks/TASK-124.md) | 9 | Every garage and place has a car exit (B58): connectors snap to lanes a car can leave; `parking_no_exit` and `place_no_exit` warnings | `src/importers/osm/places.ts` (car core, `placeConnector`), `parking.ts`, `src/network/parking.ts`, `diagnostics.ts` | 102, 103, 104, 119 | T61, exit census, traffic gates | done (see review) |
 | [TASK-125](tasks/TASK-125.md) | 9 | Parking claims: a car that chooses a strip space, garage or lot claims it; claimed spaces are taken for others and full-by-claims facilities drop out; every exit path releases the claim | `src/sim/parking.ts`, release calls in `src/sim/engine.ts`, metrics | 102, 103, 118, 124 | T63, Munich 0.15 gate with lower search time, T53, baseline reset | done |
@@ -410,7 +410,7 @@ triage by the lead; the agents' investigation may move items between groups.
 | B54 (Landsberger done, TASK-095 salvage; `n:138` west and `n:638` done, TASK-099; `n:138` east deferred, owner 2026-11-07) | Owner, 2026-11-07 (round 6; screenshots in `docs/findings/2026-11-07-round6/`, 1, 2): one street's carriageways still run apart with irregular voids wider than TASK-093's 3 m: Arnulfstraße at `n:138` west (`r:386`/`r:716`) and east (`r:715`/`r:958`), and east of the Donnersberger bridge at `n:638` (`r:654`/`r:680`; the owner's n:168). "Merge both segments into paired road with center divider marker lines." | TASK-095: attach one corridor's carriageways wherever they run within 20 degrees, with a divider; ease apart only where they part. |
 | B55 (deferred, owner 2026-11-07; TASK-099 did not reach it) | Owner, round 6: "we still need to make the '2 roads approach an intersection at small angle diff or parallel' handling": different streets approaching a node nearly parallel overlap near it (Sindelfingen `n:841`, `n:68`). | TASK-095: hold such pairs side by side up to the node (TASK-089 split ends for any pair), rounded gore, edge line between them. |
 | B57 (TASK-123, 2026-11-09) | TASK-112 report: in Sindelfingen at 0.15, 99 of 140 walk legs (70.7%) have no walk route and fall back to a straight line, all egress from a garage. The walk graph (TASK-110) puts places and the garages they use in different components, for example `p:1407` (component 27) and `pk:1453`'s connector (component 2), and `p:1433` and `pk:1466`. Munich has none. | Walk network (`src/network/walk*`): connect every place entrance and parking connector to the main walk component, or explain which gaps are real. Gate: walk fallbacks under 2% in both cities. |
-| B56 (closed, TASK-121, 2026-11-09) | TASK-099 round 3: Munich at 0.15 holds a deadlock loop (Arnulfstraße eastbound, `n:138`, the Landsberger ramps, `n:967`'s ramp `r:703`, the Donnersberger ramps through `n:638`, back to `r:884`) that locks at `n:263`, where the head of `r:703#1` waits for good to enter a standing queue in lane 0 instead of re-routing. Main had it before TASK-099 (`r:406#1`'s head waited 6 084 s) without a head standing still long enough to count as stalled; TASK-099 shows it as one stalled head on `r:753#0`. A 1 cm shift of an unrelated road moves completed trips by up to +211 and can stall a head on this corridor. | Simulation rule (owner): let a vehicle stuck at a queue head re-route or give way; then tighten the gate back to 0 stalled heads. |
+| B56 (reopened 2026-11-10, TASK-130; head detours TASK-121, 2026-11-09) | TASK-099 round 3: Munich at 0.15 holds a deadlock loop (Arnulfstraße eastbound, `n:138`, the Landsberger ramps, `n:967`'s ramp `r:703`, the Donnersberger ramps through `n:638`, back to `r:884`) that locks at `n:263`, where the head of `r:703#1` waits for good to enter a standing queue in lane 0 instead of re-routing. Main had it before TASK-099 (`r:406#1`'s head waited 6 084 s) without a head standing still long enough to count as stalled; TASK-099 shows it as one stalled head on `r:753#0`. A 1 cm shift of an unrelated road moves completed trips by up to +211 and can stall a head on this corridor. | Simulation rule (owner): let a vehicle stuck at a queue head re-route or give way; then tighten the gate back to 0 stalled heads. |
 | B58 (done, TASK-124, 2026-11-10) | TASK-122 review: two large Munich garages have no car exit. `pk:1981` (capacity 1 071, `p:1733`) leaves only onto `r:379#0` of two-way Trappentreustraße, whose one movement enters the bus-only `r:373`; `pk:2035` (441, `p:1841`) leaves via `r:1060` into private `r:921`. Their exit connector sits on one direction of the road only. On main their cars park in the morning and could not leave in the evening; with TASK-122 they are refused and cruise for street space for up to two hours. | Network (connectors): a driveway on a two-way road should reach both directions (a left turn out), or the importer should find the facility's real exit. Gate: no garage or lot of more than 20 spaces without a car exit in either city. |
 | B31 (done, TASK-068) | Acute approaches (B26, B21): cars stop well before the junction because a lane at a sharp angle only clears its neighbour far out, and lifting the setback cap to follow that geometry cuts the approach lanes to stubs and costs a quarter of Munich's morning (TASK-065 review: `r:961#0` 41.5 to 4.8 m, `r:706#1` storage 70 to 41 m). | Importer, with TASK-066's smoothing: realign the last 15 to 25 m of a minor approach that meets another road at under about 45 degrees, bending it to meet at 60 degrees or more as road design does, so setbacks stay short, lanes keep their storage and stop lines sit at the junction. Junction node fixed; bounded lateral shift; the 10 m cap then rarely binds. |
 | B30 (closed, TASK-068) | Munich at 0.15 completes 2 005 trips by 10:00 after TASK-066's smoothing, against 2 231 before (wave 12), with routes, junction headings and warning lists unchanged. | Investigate with TASK-065's zone probe: which junctions gained queues, and whether smoothed approach lengths moved setbacks or movement lengths. Not attributed yet. |
@@ -2761,8 +2761,121 @@ as T62 has. Lead runs: `check` (two Munich/Sindelfingen tests timed out under lo
 agents, passed alone), `test:city`, the light traffic tier, the light e2e (37 passed), T64, T62,
 gate4-layers, V97 (6 passed).
 
+TASK-122 re-measure (lead, 2026-11-10; merged): TASK-122 round 2 on top of TASK-124 (car exits)
+and TASK-125 (claims). Lead merge: the exit check and the claims combined in `choose()` and
+`hasFreeSpace()` (`src/sim/parking.ts`); two T59 tests modelled a car taking a space another car
+had chosen, which claims prevent, and now expect the claims outcome. Munich 0.15 to 10:00:
+3 665 completed (main 3 592), 30 gridlocked (17), 0 parking failures (13), 1 stalled head (0);
+mean delay 709 s (796); parking search per arrival 1.2 s (3.4); entry rejections 0 (18). Over
+three demand seeds gridlock is noise (main 17 / 35 / 43, TASK-122 30 / 32 / 36) and every stalled
+head on either tree is on the Landsberger loop (`r:961`, `r:364`, `r:248`): about 20 cars stand on
+each of `r:961`, `r:364`, `r:248`, `r:703`, `r:273`, `r:997` at 10:00 with waits of 80 to 100
+minutes on both trees; 743 cars pass `r:961` against 609 on main because fewer cars fail or search
+upstream. The 07:00 stock moves about 40 cars between strips, none near the loop. B56 reopens as
+TASK-130. T53's walker cost is systematic: 2.2 to 4.1% over three seeds (main 0.4 to 1.9%); the
+owner relaxed its limit to 5%. Main also fails T53's zone-stop rule on seed 3 (43 to 91). Full
+demand passes (parking failures under 1%). The baseline resets (rule 7): 3 665 / 30 / 1 stalled
+head (`r:961`), quick 09:30 3 439 / 13 / 2 stalled heads (`r:248`, `r:961`). T63's gridlock and
+stalled-head pins move to the baseline gate. Lead runs: `check`, `test:city`, the light traffic
+tier, the full-demand test, the light e2e, demo-a-commute, T16, T52, T54, T57, qa-exports, T63.
+
+- TASK-122 trace (2026-11-09): stopped under design item 1 before implementation. The three
+  unchanged-tree runs reproduce every parking failure: Munich full demand 30 (1 971 completed,
+  207 gridlocked, 1 729 local arrivals), Munich 0.15 at 10:00 13 (3 571 / 23; 09:30 3 357 / 8),
+  Sindelfingen 0.15 at 10:00 245 (156 / 0). All 245 Sindelfingen failures originate at gateways
+  with no parking facility or space: p:1303 (108), p:1306 (108), p:1315 (29). Their cropped
+  motorway components have no path to local parking; `connectors.spawn` labels a failed route
+  `no_parking` when the destination requires parking. Filtering parking spaces cannot change
+  these departures. Lead decision needed on gateway routing/failure attribution; neither was
+  changed. Munich's eleven never-departed full-demand failures all have allocated strip slots:
+  the old trace mistook `inspect().parkingFacility` (chosen/arrived parking) for origin parking.
+  The full-demand causes are cropped sinks/feeds (21), isolated loops (6), and car-forbidden
+  exits (3). At 0.15: cropped sink (7), isolated loop (5), private-road-only egress (1).
+  Named strips: pk:9339 feeds r:64, pk:9294 feeds car-forbidden r:373; pk:9217's direct exit
+  feeds bus-only r:968#3, so a car needs an upstream lane change. pk:9122's only exit path
+  traverses private r:1109/r:1033 from outside their access zone; a raw movement SCC would
+  miss that restriction. Per-trip origins, slots, lanes, destinations and causes are in the
+  trace commit message. No departure check, stock change, gate tightening or network edit was
+  made; all implementation gates remain open.
+
+- TASK-122 implementation (strict candidate fa0dda3, 2026-11-09): owner authorized the parking-space fix and left the
+  original 245 gateway routing failures for another task. Derived departure reachability
+  respects vehicle permissions, access zones, lane-change distance and lot circulation;
+  starting stock, origin slots and parking before a later car trip use it. Live edits rebuild
+  it without moving existing cars. Munich full demand: 1 785 completed / 199 gridlocked /
+  zero parking failures (before: 1 971 / 207 / 30), so the parking gate is tightened to 1%.
+  Munich 0.15: 3 370 / 11 / 0 at 09:30 and 3 643 / 24 / 0 at 10:00. Original Sindelfingen
+  gateway failures are unchanged, but strict later-trip filtering rejects 32 additional
+  inbound p:1300 visitors that formerly parked on isolated pk:2369; total 277, failing the
+  non-rise gate. No routing/network exception was introduced to conceal this conflict.
+  Starting stock totals remain 31 181 / 4 679 / 1 (Munich full / 0.15 / Sindelfingen 0.15).
+  Explicit background occupancy stays put; default blocked strips can become empty when their
+  residents' cars stay in garages. In the source app at scale 0.15 with Parked cars on,
+  pk:9127's 16 bays remain drawn but empty at both 07:00 and 09:30; full-strip acceptance is open.
+  Quick traffic also has 11 gridlocked versus the integrated reference's 8, and two stalled
+  heads versus its zero: those acceptance limits are not met. Cold paired load median is
+  113.28 ms versus 125.92 ms; quick phase load/step 77.01 / 75 626.27 ms versus reference
+  119.37 / 98 467.46 ms. T59's 13 tests, all 972 unit tests, city tier (103), smoke (39) and
+  additional named e2e checks (5) pass, as do typecheck, lint, formatting and build. Full task
+  acceptance is not claimed; the last implementation commit carries the complete report,
+  before/after measurements, remaining gates and per-trip trace.
+
+- TASK-122 owner follow-up (2026-11-09): preserve existing parking choices for gateway-origin
+  visitors, leaving gateway routing to another task, and preserve the street-share budget,
+  accepting empty blocked strips. The arrival mask now exempts inbound gateway visits while
+  preserving the car's next-trip ownership link; local arrivals with later gateway-bound trips
+  still require a usable exit. T59 adds both cases (15 passing tests). Sindelfingen again has
+  156 completed / zero gridlocked / 245 parking failures / 44 no_route, with exactly the same
+  245 trip IDs, origins, destinations and starting facilities/spaces as before the fix. The
+  prior strict candidate's extra 32 refusals are removed. Empty pk:9127 is now accepted by the
+  owner. Updated Munich 0.15: 3 566 completed / 9 gridlocked / zero parking failures at 09:30,
+  with zero stalled heads, and 3 729 / 25 / 0 at 10:00. The integrated quick gridlock limit
+  remains open: 9 exceeds the reference's 8 plus 10%; other quick traffic limits pass.
+  Full demand with the exception: 1 874 / 185 / 0, passing the 1% parking assertion in
+  498.55 s. Fresh check passes (974 unit tests); T59 passes all 15 cases including onward
+  car ownership. The repeated visual check confirms pk:9127 empty at both times. Current
+  sequential load/step timings grow 88.1% / 32.0%; alternating cold-load medians grow 6.3%
+  (68.14 to 72.46 ms). These mixed samples leave performance acceptance open; no baseline
+  was relaxed. The follow-up commit body contains the consolidated trace and measurements.
+
+- TASK-122 round 2 (2026-11-09): read the lead's review on main (bc7656a) and reproduced T53's
+  1 924 to 1 841 completions (4.3% cost). The owner clarified that availability and reachability
+  are checked from the car's current position, retaining today's ranking and search radius;
+  only when no free leavable space can be reached does it retain the legacy choice. The same
+  decision runs while searching. Filled targets are reconsidered before arrival, temporarily
+  rejected facilities can qualify again, and unchanged targets keep their routes. No original
+  garage anchor, roadside forecast or extra search-radius constraint is retained.
+  `parking.parkedWithoutExit` counts actual later-trip arrivals without usable departures,
+  including gateway visitors, not forecasts or background cars. At Munich 0.15: 3 106 leavable
+  admissions and 20 without exits (pk:2035: 15; pk:1981: 5). T53 passes at 1 854 / 1 848 (0.3%
+  cost), with crossing safety and zone-stop limits intact. T59's 25 tests pass, independently
+  reviewed. At 09:30: 3 444 completed / 9 gridlocked / zero parking failures; at 10:00:
+  3 643 / 19 / 0. The original 245 Sindelfingen failures remain unchanged; its new metric is 32.
+  Search acceptance is still open: total search over all trips falls from 433 686 to 286 602 s,
+  versus main's 56 894 s. p:1733 still accounts for 236 241 s; 33 trips search over an hour.
+  The clarified rule keeps choosing reachable free safe bays in these cases, so this fallback
+  does not alone restore near-main search time. No threshold was relaxed or B58 geometry changed.
+  Fresh check passes (984 unit tests) and city passes (103). Quick has three stalled heads,
+  matching the lead's corrected 09:30 baseline of three (main f5dfe24); the prior zero-head
+  comparison in this branch's historical entries was incorrect. Concurrent quick phase load
+  and step times grow 69.1% and 51.6%; performance acceptance is not established by that pair.
+  Full demand passes the unchanged 1% parking gate: 1 970 completed / 209 gridlocked / zero
+  parking failures, 1 689 local arrivals, `parkedWithoutExit` 35, in 689.52 s. Its mean successful
+  search grows to 75.28 s (main 8.35 s); no full-demand search improvement is claimed.
+  Of the 20 without-exit admissions, seven are new local fallbacks (all pk:2035); thirteen
+  retain the gateway exception (eight pk:2035, five pk:1981). No local pk:1981 visit falls back
+  in this run: free reachable safe alternatives continue to take precedence.
+  Smoke: 38 pass, one Munich overview frame-cost failure (1.267x, allowance 1.2x); the isolated
+  retry passes at 1.008x without threshold changes. The five additional named e2e scenarios
+  also pass (six including the retry). All smoke cases have a passing result. Search-time
+  and performance acceptance remain open; no full TASK-122 acceptance is claimed.
+  The last round-2 commit body carries the complete measurements, checks and per-trip trace.
+
 ## Owner decisions log
 
+- 2026-11-10, TASK-122: merge on top of TASK-124 and TASK-125 with the baseline reset; the
+  stalled head on `r:961` is the Landsberger loop's (B56), not TASK-122's; a new task (TASK-130)
+  breaks the loop. T53's walker-cost limit relaxes from 3% to 5%.
 - 2026-11-10, rail: TASK-128 (stations as trip ends) starts now on Codex while the lead
   re-measures TASK-122; riders are walk-only and their profile is constants, no scenario field.
 - 2026-11-10, TASK-125: owner confirms approving the claimed-space row in the vehicle

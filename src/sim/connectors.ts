@@ -85,12 +85,13 @@ export function createConnectors(
       rng,
     );
     const destination = place(trip.destinationPlaceId);
-    const own = compiled.parking
-      .filter((f) => f.place === destination.idx)
-      .flatMap((f) => f.connectorsIn);
     const into = pickConnector(
       compiled,
-      destination.connectorsIn.length ? destination.connectorsIn : own,
+      destination.connectorsIn.length
+        ? destination.connectorsIn
+        : compiled.parking
+            .filter((f) => f.place === destination.idx)
+            .flatMap((f) => f.connectorsIn),
       rng,
     );
     if (out === -1 || (into === -1 && !parking.required(id))) {
