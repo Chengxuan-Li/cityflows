@@ -19,19 +19,20 @@ import { vehicleClasses } from '../../src/schema';
 const allCars = { car: 1, van: 0, truck: 0, bus: 0 };
 // TASK-116: re-pinned after feasible lane targets enabled queue passing for every car. Lead,
 // TASK-112: access walks shift departure/traffic timing; person legs also enter the hash.
+// TASK-125: claim arrays enter the parking hash; completions and travel times are unchanged.
 const before = {
   grid5x5: {
     completed: 28,
     meanTravelTimeS: 87.4571428571427,
     meanDelayS: 27.280803928948625,
-    hash: 186552430,
+    hash: 1210534642,
     trips: 56,
   },
   town: {
     completed: 207,
     meanTravelTimeS: 139.12753623188408,
     meanDelayS: 46.17287949926406,
-    hash: 1517248527,
+    hash: 2437126976,
     trips: 414,
   },
 };
