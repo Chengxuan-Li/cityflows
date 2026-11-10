@@ -2647,6 +2647,13 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 
 - 2026-11-10, TASK-122 and TASK-123 round 2: write TASK-124 (B58, every garage and place has a
   car exit). TASK-122 waits for it; TASK-123's round 3 (T53) runs alongside.
+- Lead, TASK-124 trace (766a4d5, 2026-11-10): the agent stopped correctly on two contract
+  errors. A public-only car core is 62 lanes in Sindelfingen, disjoint from the network cars
+  use (the circulation runs through private zones), and 721 Sindelfingen strip spaces (2.39%)
+  sit on roads cut by the crop or closed in by private zones, where no connector move helps.
+  Ruling: "car exit" means TASK-122's per-zone departure check, ported to `src/network/`; the
+  traced strips are accepted real gaps and leave the 2% count, which now covers garages, lots
+  and places; gateways are counted but not gated. Contract amended.
 
 - 2026-11-09, while TASK-112's round 2 and TASK-122 run: write TASK-123 (B57, one connected
   walk network) and run it in parallel. B54 east, B55 and TASK-113 wait until TASK-122 is merged.
