@@ -1,12 +1,12 @@
 {
-  "tree": "main at the TASK-125 merge (parking claims: strip spaces and garages claimed at choice, released on every trip exit), reset per the owner's rule 7, 2026-11-10. 13 counted parking failures besides the gridlock; 0 stalled heads at 10:00 (1 at the 09:30 quick sample, r:961, as on main).",
+  "tree": "main at the TASK-122 merge (parking egress: trip cars start and park only where they can leave, on top of TASK-124 exits and TASK-125 claims), reset per the owner's rule 7, 2026-11-10. 0 counted parking failures besides the gridlock; 1 stalled head at 10:00 (r:961) and 2 at the 09:30 quick sample (r:248, r:961), all the Landsberger loop (B56), which is as locked on main.",
   "scale": 0.15,
-  "completed": 3592,
-  "gridlocked": 17,
-  "stalledHeads": 0,
+  "completed": 3665,
+  "gridlocked": 30,
+  "stalledHeads": 1,
   "quick": {
     "until": "09:30",
-    "completed": 3357,
+    "completed": 3439,
     "gridlocked": 13
   }
 }

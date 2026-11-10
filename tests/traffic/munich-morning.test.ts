@@ -89,7 +89,9 @@ test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")
   // (2026-11-07), which replaced the fixed 3 497 floor and T36.4/T38.5's stage figures; the lead
   // reset it again at TASK-100 (mixed fleet), TASK-104 (surface lots), TASK-102 (garages), TASK-116,
   // TASK-103 (visible parking), TASK-118/119 (parking motion) and TASK-121/112 (queue-head
-  // detours, person walks) and TASK-125 (parking claims). TASK-121 restores zero stalled heads.
+  // detours, person walks), TASK-125 (parking claims) and TASK-122 (parking egress). TASK-121
+  // restored zero stalled heads; since TASK-122 the baseline holds one, the queue head of the
+  // Landsberger loop (B56, `r:961`), which is as locked on main (lead, 2026-11-10).
   expect(morning.completed).toBeGreaterThanOrEqual(Math.ceil(0.9 * baseline.completed));
   expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(1.5 * baseline.gridlocked);
   // TASK-103: a counted parking failure is the other allowed failure, under 2% of local arrivals.
@@ -101,10 +103,10 @@ test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")
 });
 
 test('T63 parking claims meet the TASK-125 Munich 10:00 gate', () => {
+  // Lead (TASK-122 merge): gridlock and stalled heads are gated against the baseline above; over
+  // three demand seeds gridlock is noise (main 17 / 35 / 43, TASK-122 30 / 32 / 36).
   expect(morning.completed).toBeGreaterThanOrEqual(3571);
-  expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(23);
   expect(morning.failedByReason.no_parking).toBeLessThanOrEqual(13);
-  expect(morning.stalledHeads).toBe(0);
   expect(morning.parkingSearchTimeS).toBeLessThan(56894);
   expect(morning.parking.claims!.simultaneousStripChoices).toBe(0);
 });

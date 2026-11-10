@@ -79,8 +79,11 @@ test('T53 Munich: zone stops do not rise beyond noise and traffic still flows', 
   });
   expect(walkers.metrics.zoneStops).toBeLessThanOrEqual(plain.metrics.zoneStops * 1.5 + 10);
   // Lead: TASK-103 lowered this to 0.94 while unowned stock crowded the curbs; with starting
-  // stock per person the walkers cost 1.4% again (1 938 to 1 911), so TASK-111's 0.97 holds.
-  expect(walkers.metrics.trips.completed).toBeGreaterThan(plain.metrics.trips.completed * 0.97);
+  // stock per person the walkers cost 1.4% again (1 938 to 1 911), so TASK-111's 0.97 held.
+  // TASK-122 (owner, 2026-11-10): 0.95. Cars that no longer park where they cannot leave send
+  // more traffic through the Landsberger corridor two walker pairs cross; over three demand seeds
+  // the walkers cost 2.2 to 4.1% (main 0.4 to 1.9%).
+  expect(walkers.metrics.trips.completed).toBeGreaterThan(plain.metrics.trips.completed * 0.95);
   expect(walkers.metrics.failedByReason.gridlocked).toBeLessThanOrEqual(
     plain.metrics.failedByReason.gridlocked + 3,
   );
