@@ -2761,6 +2761,98 @@ as T62 has. Lead runs: `check` (two Munich/Sindelfingen tests timed out under lo
 agents, passed alone), `test:city`, the light traffic tier, the light e2e (37 passed), T64, T62,
 gate4-layers, V97 (6 passed).
 
+- TASK-122 trace (2026-11-09): stopped under design item 1 before implementation. The three
+  unchanged-tree runs reproduce every parking failure: Munich full demand 30 (1 971 completed,
+  207 gridlocked, 1 729 local arrivals), Munich 0.15 at 10:00 13 (3 571 / 23; 09:30 3 357 / 8),
+  Sindelfingen 0.15 at 10:00 245 (156 / 0). All 245 Sindelfingen failures originate at gateways
+  with no parking facility or space: p:1303 (108), p:1306 (108), p:1315 (29). Their cropped
+  motorway components have no path to local parking; `connectors.spawn` labels a failed route
+  `no_parking` when the destination requires parking. Filtering parking spaces cannot change
+  these departures. Lead decision needed on gateway routing/failure attribution; neither was
+  changed. Munich's eleven never-departed full-demand failures all have allocated strip slots:
+  the old trace mistook `inspect().parkingFacility` (chosen/arrived parking) for origin parking.
+  The full-demand causes are cropped sinks/feeds (21), isolated loops (6), and car-forbidden
+  exits (3). At 0.15: cropped sink (7), isolated loop (5), private-road-only egress (1).
+  Named strips: pk:9339 feeds r:64, pk:9294 feeds car-forbidden r:373; pk:9217's direct exit
+  feeds bus-only r:968#3, so a car needs an upstream lane change. pk:9122's only exit path
+  traverses private r:1109/r:1033 from outside their access zone; a raw movement SCC would
+  miss that restriction. Per-trip origins, slots, lanes, destinations and causes are in the
+  trace commit message. No departure check, stock change, gate tightening or network edit was
+  made; all implementation gates remain open.
+
+- TASK-122 implementation (strict candidate fa0dda3, 2026-11-09): owner authorized the parking-space fix and left the
+  original 245 gateway routing failures for another task. Derived departure reachability
+  respects vehicle permissions, access zones, lane-change distance and lot circulation;
+  starting stock, origin slots and parking before a later car trip use it. Live edits rebuild
+  it without moving existing cars. Munich full demand: 1 785 completed / 199 gridlocked /
+  zero parking failures (before: 1 971 / 207 / 30), so the parking gate is tightened to 1%.
+  Munich 0.15: 3 370 / 11 / 0 at 09:30 and 3 643 / 24 / 0 at 10:00. Original Sindelfingen
+  gateway failures are unchanged, but strict later-trip filtering rejects 32 additional
+  inbound p:1300 visitors that formerly parked on isolated pk:2369; total 277, failing the
+  non-rise gate. No routing/network exception was introduced to conceal this conflict.
+  Starting stock totals remain 31 181 / 4 679 / 1 (Munich full / 0.15 / Sindelfingen 0.15).
+  Explicit background occupancy stays put; default blocked strips can become empty when their
+  residents' cars stay in garages. In the source app at scale 0.15 with Parked cars on,
+  pk:9127's 16 bays remain drawn but empty at both 07:00 and 09:30; full-strip acceptance is open.
+  Quick traffic also has 11 gridlocked versus the integrated reference's 8, and two stalled
+  heads versus its zero: those acceptance limits are not met. Cold paired load median is
+  113.28 ms versus 125.92 ms; quick phase load/step 77.01 / 75 626.27 ms versus reference
+  119.37 / 98 467.46 ms. T59's 13 tests, all 972 unit tests, city tier (103), smoke (39) and
+  additional named e2e checks (5) pass, as do typecheck, lint, formatting and build. Full task
+  acceptance is not claimed; the last implementation commit carries the complete report,
+  before/after measurements, remaining gates and per-trip trace.
+
+- TASK-122 owner follow-up (2026-11-09): preserve existing parking choices for gateway-origin
+  visitors, leaving gateway routing to another task, and preserve the street-share budget,
+  accepting empty blocked strips. The arrival mask now exempts inbound gateway visits while
+  preserving the car's next-trip ownership link; local arrivals with later gateway-bound trips
+  still require a usable exit. T59 adds both cases (15 passing tests). Sindelfingen again has
+  156 completed / zero gridlocked / 245 parking failures / 44 no_route, with exactly the same
+  245 trip IDs, origins, destinations and starting facilities/spaces as before the fix. The
+  prior strict candidate's extra 32 refusals are removed. Empty pk:9127 is now accepted by the
+  owner. Updated Munich 0.15: 3 566 completed / 9 gridlocked / zero parking failures at 09:30,
+  with zero stalled heads, and 3 729 / 25 / 0 at 10:00. The integrated quick gridlock limit
+  remains open: 9 exceeds the reference's 8 plus 10%; other quick traffic limits pass.
+  Full demand with the exception: 1 874 / 185 / 0, passing the 1% parking assertion in
+  498.55 s. Fresh check passes (974 unit tests); T59 passes all 15 cases including onward
+  car ownership. The repeated visual check confirms pk:9127 empty at both times. Current
+  sequential load/step timings grow 88.1% / 32.0%; alternating cold-load medians grow 6.3%
+  (68.14 to 72.46 ms). These mixed samples leave performance acceptance open; no baseline
+  was relaxed. The follow-up commit body contains the consolidated trace and measurements.
+
+- TASK-122 round 2 (2026-11-09): read the lead's review on main (bc7656a) and reproduced T53's
+  1 924 to 1 841 completions (4.3% cost). The owner clarified that availability and reachability
+  are checked from the car's current position, retaining today's ranking and search radius;
+  only when no free leavable space can be reached does it retain the legacy choice. The same
+  decision runs while searching. Filled targets are reconsidered before arrival, temporarily
+  rejected facilities can qualify again, and unchanged targets keep their routes. No original
+  garage anchor, roadside forecast or extra search-radius constraint is retained.
+  `parking.parkedWithoutExit` counts actual later-trip arrivals without usable departures,
+  including gateway visitors, not forecasts or background cars. At Munich 0.15: 3 106 leavable
+  admissions and 20 without exits (pk:2035: 15; pk:1981: 5). T53 passes at 1 854 / 1 848 (0.3%
+  cost), with crossing safety and zone-stop limits intact. T59's 25 tests pass, independently
+  reviewed. At 09:30: 3 444 completed / 9 gridlocked / zero parking failures; at 10:00:
+  3 643 / 19 / 0. The original 245 Sindelfingen failures remain unchanged; its new metric is 32.
+  Search acceptance is still open: total search over all trips falls from 433 686 to 286 602 s,
+  versus main's 56 894 s. p:1733 still accounts for 236 241 s; 33 trips search over an hour.
+  The clarified rule keeps choosing reachable free safe bays in these cases, so this fallback
+  does not alone restore near-main search time. No threshold was relaxed or B58 geometry changed.
+  Fresh check passes (984 unit tests) and city passes (103). Quick has three stalled heads,
+  matching the lead's corrected 09:30 baseline of three (main f5dfe24); the prior zero-head
+  comparison in this branch's historical entries was incorrect. Concurrent quick phase load
+  and step times grow 69.1% and 51.6%; performance acceptance is not established by that pair.
+  Full demand passes the unchanged 1% parking gate: 1 970 completed / 209 gridlocked / zero
+  parking failures, 1 689 local arrivals, `parkedWithoutExit` 35, in 689.52 s. Its mean successful
+  search grows to 75.28 s (main 8.35 s); no full-demand search improvement is claimed.
+  Of the 20 without-exit admissions, seven are new local fallbacks (all pk:2035); thirteen
+  retain the gateway exception (eight pk:2035, five pk:1981). No local pk:1981 visit falls back
+  in this run: free reachable safe alternatives continue to take precedence.
+  Smoke: 38 pass, one Munich overview frame-cost failure (1.267x, allowance 1.2x); the isolated
+  retry passes at 1.008x without threshold changes. The five additional named e2e scenarios
+  also pass (six including the retry). All smoke cases have a passing result. Search-time
+  and performance acceptance remain open; no full TASK-122 acceptance is claimed.
+  The last round-2 commit body carries the complete measurements, checks and per-trip trace.
+
 ## Owner decisions log
 
 - 2026-11-10, rail: TASK-128 (stations as trip ends) starts now on Codex while the lead

@@ -7,7 +7,8 @@ import {
 import { createRandom } from '../geo/random';
 import type { CompiledCity } from '../network';
 import { lotPath } from '../network/lot-paths';
-import type { Scenario, SimParams, TripRequest } from '../schema';
+import { vehicleClasses, type Scenario, type SimParams, type TripRequest } from '../schema';
+import { parkingEgress } from './parking-egress';
 import type { Metrics, ParkedCarsSnapshot, ParkingClaimsSnapshot } from './types';
 import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import { parkingHash } from './hash';
@@ -133,6 +134,20 @@ export function createParking(
     );
   let usable = eligibleSpaces();
   const usableSpaces = (f: CompiledCity['parking'][number]) => usable[f.idx]!;
+  let departures: ReturnType<typeof parkingEgress>[] = [];
+  const departure = (id: number) => departures[id]!;
+  // Materialize before stock allocation, and again after a network edit. No per-trip searches.
+  const prepareDepartures = () => {
+    departures = trips.map((trip, id) =>
+      parkingEgress(
+        compiled,
+        params.laneChangeDistanceM,
+        vehicleClasses[vehicles.vclass[id]!]!,
+        trip.purpose === 'delivery',
+      ),
+    );
+  };
+  prepareDepartures();
   const shuffled = (slots: number[], key: string) => {
     const copy = slots.slice(),
       random = rng.derive(key);
@@ -172,9 +187,18 @@ export function createParking(
     for (const slot of shuffled(usableSpaces(f), `stock:${f.id}`).slice(0, occupied[f.idx]))
       stock[slot] = -2;
   }
+  const stockDepartures = parkingEgress(compiled, params.laneChangeDistanceM);
+  const homeDepartures = new Map<string, Set<ReturnType<typeof parkingEgress>>>();
+  for (const [id, trip] of trips.entries()) {
+    if (trip.mode !== 'car' || !small(id)) continue;
+    let masks = homeDepartures.get(trip.originPlaceId);
+    if (!masks) homeDepartures.set(trip.originPlaceId, (masks = new Set()));
+    masks.add(departure(id));
+  }
   // Move the residential share out of garages once, in compiled place/facility/slot order.
   for (const p of compiled.places) {
     if (p.kind !== 'residential') continue;
+    const masks = [...(homeDepartures.get(p.id) ?? [stockDepartures])];
     const garages = compiled.parking.filter(
       (f) => f.place === p.idx && f.kind === 'garage' && f.occupancyAtStart === null,
     );
@@ -185,6 +209,7 @@ export function createParking(
       if (f.occupancyAtStart !== null) continue;
       for (const slot of shuffled(usableSpaces(f), `home:${p.id}:${f.id}`)) {
         if (!count || stock[slot] !== -1) continue;
+        if (masks.some((mask) => !mask.spaces[slot])) continue;
         const garage = garages.find((g) => occupied[g.idx]! > 0);
         if (!garage) break;
         stock[slot] = -2;
@@ -196,6 +221,8 @@ export function createParking(
   }
   let cachedHash: number | undefined;
   const previous = new Int32Array(trips.length).fill(-1);
+  const nextTrip = new Int32Array(trips.length).fill(-1);
+  const allowWithoutExit = new Uint32Array(trips.length);
   let origins = new Int32Array(trips.length).fill(-1);
   let chosen = new Int32Array(trips.length).fill(-1);
   // Hard facilities count cars en route; roadside claims also identify one exact space.
@@ -269,6 +296,7 @@ export function createParking(
   const walking = new Float64Array(trips.length);
   const rejected = new Map<number, Set<number>>();
   let arrivals = 0;
+  let parkedWithoutExit = 0;
   let totalSearch = 0;
   const last = new Map<string, number>();
   const chronology = trips
@@ -287,8 +315,10 @@ export function createParking(
     if (trip.mode !== 'car') continue;
     if (trip.personId !== null) {
       const before = last.get(trip.personId);
-      if (before !== undefined && trips[before]!.destinationPlaceId === trip.originPlaceId)
+      if (before !== undefined && trips[before]!.destinationPlaceId === trip.originPlaceId) {
         previous[id] = before;
+        nextTrip[before] = id;
+      }
       last.set(trip.personId, id);
     }
     if (previous[id] === -1) {
@@ -301,20 +331,26 @@ export function createParking(
       const facility =
         [...street, ...own, ...(small(id) ? nearHome(place!) : [])].find(
           (f) =>
-            f.connectorsOut.length && available[f.idx]! > 0 && (small(id) || f.kind === 'garage'),
+            departure(id).facilities[f.idx] &&
+            available[f.idx]! > 0 &&
+            (small(id) || f.kind === 'garage') &&
+            (f.kind === 'garage' ||
+              usableSpaces(f).some((s) => departure(id).spaces[s] && availableSpaces[s] !== -1)),
         ) ??
         // Neighbours may have taken the street cars moved out of this home's garage; an
         // inferred home garage stands in for parking OSM does not map and admits every car,
         // so a resident's car starts there while the home has residents' cars left (lead,
         // TASK-103 follow-up).
         ((homeCars.get(place!) ?? 0) > 0
-          ? own.find((f) => f.kind === 'garage' && soft(f) && f.connectorsOut.length)
+          ? own.find((f) => f.kind === 'garage' && soft(f) && departure(id).facilities[f.idx])
           : undefined);
       homeCars.set(place!, homeCars.get(place!)! - 1);
       origins[id] = facility?.idx ?? -1;
       if (facility) {
         available[facility.idx]!--;
-        const eligible = usableSpaces(facility).filter((s) => availableSpaces[s] !== -1);
+        const eligible = usableSpaces(facility).filter(
+          (s) => departure(id).spaces[s] && availableSpaces[s] !== -1,
+        );
         const slot = eligible.length ? rng.derive(`origin:${trip.id}`).pick(eligible) : undefined;
         if (slot !== undefined) {
           originSpaces[id] = slot;
@@ -326,6 +362,10 @@ export function createParking(
   }
   const destinationPlace = (id: number) =>
     compiled.places[compiled.index.place.get(trips[id]!.destinationPlaceId)!]!;
+  const requiresExit = (id: number) =>
+    id >= 0 &&
+    nextTrip[id] !== -1 &&
+    compiled.places[compiled.index.place.get(trips[id]!.originPlaceId)!]!.kind !== 'gateway';
   const distance = (id: number, facility: number) => {
     const a = destinationPlace(id).centroid,
       b = compiled.parking[facility]!.centroid;
@@ -384,36 +424,52 @@ export function createParking(
   ) {
     clockS = timeS;
     release(id, timeS);
-    for (const needRoom of atDeparture ? [true, false] : [true])
-      for (const f of facilitiesFor(id)) {
-        if ((needRoom ? !hasRoom(f) : f.capacity === 0) || rejected.get(id)?.has(f.idx)) continue;
-        if (
-          needRoom &&
-          !soft(f) &&
-          occupied[f.idx]! + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) >= f.capacity
-        )
-          continue;
-        for (const connector of f.kind === 'roadside'
-          ? shuffled(f.connectorsIn, `arrival:${trips[id]!.id}`)
-          : f.connectorsIn) {
-          if (f.kind !== 'garage' && needRoom && !hasFreeSpace(connector, id)) continue;
-          if (!accept(connector)) continue;
-          chosen[id] = f.idx;
-          if (needRoom && !soft(f)) {
-            head(id, f.idx);
-            claimSince[id] = timeS;
-            if (f.kind === 'roadside') {
-              const slot = freeSpace(connector, id)!.idx;
-              claimedSpaces[id] = slot;
-              claimedBy[slot] = id;
+    // TASK-122: prefer an available, reachable space with an exit nearby. Otherwise retain the
+    // legacy choice, rather than forecasting an occupied safe strip and cruising until it
+    // empties. TASK-125: a choice with room claims its space (strip) or one place (garage, lot).
+    for (const checkExit of requiresExit(id) ? [true, false] : [false])
+      for (const needRoom of checkExit || !atDeparture ? [true] : [true, false])
+        for (const f of facilitiesFor(id)) {
+          if (checkExit && distance(id, f.idx) > params.parkingSearchRadiusM) continue;
+          if (
+            (needRoom ? !hasRoom(f) : f.capacity === 0) ||
+            (!checkExit && rejected.get(id)?.has(f.idx))
+          )
+            continue;
+          if (
+            needRoom &&
+            !soft(f) &&
+            occupied[f.idx]! + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) >= f.capacity
+          )
+            continue;
+          if (checkExit && !departure(nextTrip[id]!).facilities[f.idx]) continue;
+          for (const connector of f.kind === 'roadside'
+            ? shuffled(f.connectorsIn, `arrival:${trips[id]!.id}`)
+            : f.connectorsIn) {
+            if (
+              f.kind !== 'garage' &&
+              (needRoom || checkExit) &&
+              !hasFreeSpace(connector, id, needRoom, checkExit)
+            )
+              continue;
+            if (!accept(connector)) continue;
+            chosen[id] = f.idx;
+            allowWithoutExit[id] = Number(requiresExit(id) && !checkExit);
+            if (needRoom && !soft(f)) {
+              head(id, f.idx);
+              claimSince[id] = timeS;
+              if (f.kind === 'roadside') {
+                const slot = freeSpace(connector, id)!.idx;
+                claimedSpaces[id] = slot;
+                claimedBy[slot] = id;
+              }
             }
+            cachedHash = undefined;
+            walking[id] = distance(id, f.idx);
+            if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
+            return true;
           }
-          cachedHash = undefined;
-          walking[id] = distance(id, f.idx);
-          if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
-          return true;
         }
-      }
     if (searching[id] && !Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
     return false;
   }
@@ -434,6 +490,7 @@ export function createParking(
       c.positionM,
     );
     const scores: { slot: (typeof spaces)[number]; score: number }[] = [];
+    const checkExit = requiresExit(id) && !allowWithoutExit[id];
     const graph = lotGraph(f.idx),
       entry = graph?.entries.find((e) => e.connector === connector);
     for (const i of usableSpaces(f)) {
@@ -446,6 +503,7 @@ export function createParking(
         continue;
       // A roadside driver must stop at the target slot, not another car's slot farther along.
       if (f.kind === 'roadside' && s.connector !== connector) continue;
+      if (checkExit && !departure(nextTrip[id]!).spaces[i]) continue;
       const node = graph?.stallNodes[s.lotStall!];
       const pathLength =
         f.kind === 'lot'
@@ -469,7 +527,12 @@ export function createParking(
     );
     return rng.derive(`stall:${trips[id]!.id}`).pick(good).slot;
   }
-  function hasFreeSpace(connector: number, id: number) {
+  function hasFreeSpace(
+    connector: number,
+    id: number,
+    needRoom = true,
+    checkExit = requiresExit(id) && !allowWithoutExit[id],
+  ) {
     const c = compiled.connectors[connector]!,
       f = compiled.parking[c.parking ?? -1];
     if (!f || f.kind === 'garage') return false;
@@ -477,12 +540,14 @@ export function createParking(
       entry = graph?.entries.find((e) => e.connector === connector);
     return usableSpaces(f).some(
       (i) =>
-        stock[i] === -1 &&
-        (reserved[i] === -1 || reserved[i] === id) &&
-        (claimedBy[i] === -1 || claimedBy[i] === id) &&
+        (!needRoom ||
+          (stock[i] === -1 &&
+            (reserved[i] === -1 || reserved[i] === id) &&
+            (claimedBy[i] === -1 || claimedBy[i] === id))) &&
         (f.kind === 'roadside'
           ? spaces[i]!.connector === connector
-          : Number.isFinite(entry?.distances[graph!.stallNodes[spaces[i]!.lotStall!]!])),
+          : Number.isFinite(entry?.distances[graph!.stallNodes[spaces[i]!.lotStall!]!])) &&
+        (!checkExit || departure(nextTrip[id]!).spaces[i]),
     );
   }
   function beginSearch(id: number, timeS: number) {
@@ -638,6 +703,14 @@ export function createParking(
     occupied[f]!++;
     parked[id] = f;
     chosen[id] = f;
+    const later = nextTrip[id]!;
+    if (
+      later !== -1 &&
+      !(compiled.parking[f]!.kind === 'garage'
+        ? departure(later).facilities[f]
+        : departure(later).spaces[parkedSpaces[id]!])
+    )
+      parkedWithoutExit++;
     if (!Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
     arrivals++;
     totalSearch += searchTime[id]!;
@@ -975,6 +1048,16 @@ export function createParking(
         (f.kind !== 'garage' && !hasFreeSpace(connector, id))
       );
     },
+    needsChoice(id: number) {
+      if (!requiresExit(id) || Number.isNaN(searchStart[id])) return false;
+      const connector = compiled.connectors[vehicles.destination[id]!]!;
+      const facility = compiled.parking[connector.parking ?? -1];
+      return (
+        !!facility &&
+        (!!allowWithoutExit[id] ||
+          (facility.kind === 'garage' ? !hasRoom(facility) : !hasFreeSpace(connector.idx, id)))
+      );
+    },
     admits(id: number, connector: number) {
       const f = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
       return (
@@ -1075,6 +1158,7 @@ export function createParking(
         claimedSpaces,
         Int32Array.from(claimSince, (t) => (Number.isNaN(t) ? -1 : Math.round(t * 10))),
         parked,
+        ...(allowWithoutExit.some(Boolean) ? [allowWithoutExit] : []),
         ...(spaces.length ? [stock, originSpaces, parkedSpaces, reserved] : []),
       ]));
       return motions.size
@@ -1121,6 +1205,7 @@ export function createParking(
         })),
         parked: occupied.reduce((a, b) => a + b, 0),
         arrivals,
+        parkedWithoutExit,
         meanSearchTimeS: arrivals ? totalSearch / arrivals : 0,
         failed,
         claims: {
@@ -1284,6 +1369,7 @@ export function createParking(
         (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
       );
       usable = eligibleSpaces();
+      prepareDepartures();
       approachReach = new Float64Array(spaces.length * 2).fill(NaN);
     },
   };

@@ -21,13 +21,13 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   expect(morning.releasedTrips).toBeGreaterThan(10_000);
   // At full demand the city jams; the only failures are trips stuck at a jam head again after
   // their last respawn (TASK-077).
-  // TASK-103: a counted parking failure is the other allowed failure, under 2% of local arrivals.
+  // TASK-122: counted parking failures stay below 1% of local arrivals.
   expect(morning.failed).toBe(
     morning.failedByReason.gridlocked + morning.failedByReason.no_parking,
   );
-  // Lead (TASK-121/112 merge, 2026-11-09): back to 2% (30 of 1 729). Most failures are still trip
-  // cars on strips they cannot drive away from (one-way lanes into the crop); TASK-122 removes them.
-  expect(morning.failedByReason.no_parking).toBeLessThan(0.02 * morning.localArrivals);
+  // Starting spaces require a legal departure; fallback arrivals are counted separately.
+  expect(morning.failedByReason.no_parking).toBeLessThan(0.01 * morning.localArrivals);
+  expect(morning.failedByReason.no_parking).toBeLessThanOrEqual(15);
   expect(morning.completed).toBeGreaterThanOrEqual(Math.floor(445 * 0.99));
   expect(morning.gatewayTraffic.trunk!.entered).toBeGreaterThan(0);
   expect(morning.gatewayTraffic.trunk!.left).toBeGreaterThan(0);
