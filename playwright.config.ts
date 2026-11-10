@@ -28,17 +28,17 @@ const groups: Record<string, string[]> = {
     'gate3-bypass',
   ],
   c: [
-    'V97-grade-shadows',
     'T44-context',
-    'gate3-places',
     'gate2-import',
-    'demo-d-import-edit-share',
     'demo-c-bypass',
     'V115-redraw',
     'T54-parking-motion',
     'V109-buildings',
   ],
-  d: ['T52-parking-cities'],
+  // Lead, 2026-11-10: rebalanced from the Full run of a2e1f06 (c 836 s, d 486 s of tests).
+  d: ['T52-parking-cities', 'V97-grade-shadows', 'demo-d-import-edit-share', 'gate3-places'],
+  // Rail (TASK-126, later TASK-127's trains): Munich imports with long frame-time samples.
+  e: ['T62-rail-stations'],
 };
 // The light set (lead, 2026-11-10): editor, run and person flows on the small synthetic cities,
 // no Munich import or 3D, about 5 minutes on CI. Every push and merge runs it; the full suite
