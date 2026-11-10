@@ -128,3 +128,32 @@ test.each([20, 100])(
     if (opened.ok) expect(opened.project.city.rail).toEqual(city.rail);
   },
 );
+
+test('T64 OSM preferred directions follow way order after splitting and survive ZIP save/open', async () => {
+  const { city } = buildCity('Direction', 1);
+  const data = parseOsm(`<osm>
+    <node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0"><tag k="railway" v="signal"/></node><node id="3" lat="0" lon="0"/>
+    <way id="10"><nd ref="1"/><nd ref="2"/><nd ref="3"/><tag k="railway" v="rail"/><tag k="railway:preferred_direction" v="backward"/></way>
+    </osm>`);
+  if (typeof data === 'string') throw Error(data);
+  importRail(
+    city,
+    data,
+    new Map([
+      [1, { x: -500, y: 0 }],
+      [2, { x: 0, y: 0 }],
+      [3, { x: 500, y: 0 }],
+    ]),
+    { min: { x: -1000, y: -1000 }, max: { x: 1000, y: 1000 } },
+    [],
+  );
+  expect(Object.values(city.rail!.tracks).map((t) => t.preferredDirection)).toEqual([
+    'backward',
+    'backward',
+  ]);
+  const opened = await openProject(
+    await saveProject({ city, scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))] }),
+  );
+  expect(opened.ok).toBe(true);
+  if (opened.ok) expect(opened.project.city.rail).toEqual(city.rail);
+});

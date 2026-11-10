@@ -130,6 +130,12 @@ export function importRail(
             ...(w.tag.tunnel && w.tag.tunnel !== 'no' ? { tunnel: true } : {}),
             ...(w.tag.service ? { service: w.tag.service } : {}),
             ...(w.tag.usage ? { usage: w.tag.usage } : {}),
+            ...(['forward', 'backward', 'both'].includes(w.tag['railway:preferred_direction'] ?? '')
+              ? {
+                  preferredDirection: w.tag['railway:preferred_direction'] as
+                    'forward' | 'backward' | 'both',
+                }
+              : {}),
             ...(w.tag.name ? { name: w.tag.name } : {}),
             ...(maxSpeedMps > 0 ? { maxSpeedMps } : {}),
           };

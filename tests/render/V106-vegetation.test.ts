@@ -1,3 +1,4 @@
+// TASK-127: compiled rail gains boundary flags; T62 still pins unchanged lanes/movements.
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
@@ -39,8 +40,8 @@ const baselines = {
   grid: '296948629376e758231293088f0cdb136d7554c269b0d0880a92577177e913a6',
   town: '96bd0dd88f049e1589aac69b800a1fe25dfb976687b5b55c9874998b7c51b2a6',
   // TASK-119 updates parking data and removes obsolete places; T55 pins unchanged vehicle geometry.
-  'munich-donnersberger': '48c088b4d7877a7b7d9073f058d448e34306b0c835ef860ed081e0a25e4ff0c7',
-  'sindelfingen-a81': '3fff4b365df0e910b04338fa40676d953fdde038ded8ddcf1cb0440231ecbdae',
+  'munich-donnersberger': 'f4fbae8e2a21a68e16235788dc7253a49aae164f64dd87301b13ae8bd3e7a101',
+  'sindelfingen-a81': '0737536af9f7de2f24a487564a7b615e7b8609dccb2731d9543486af9c04d4fa',
 };
 
 unitTest(

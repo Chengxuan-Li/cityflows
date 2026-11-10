@@ -35,6 +35,7 @@ export const railSchema = z
         tunnel: z.boolean().optional(),
         service: z.string().optional(),
         usage: z.string().optional(),
+        preferredDirection: z.enum(['forward', 'backward', 'both']).optional(),
         name: z.string().optional(),
         maxSpeedMps: z.number().positive().optional(),
         osmId: z.int().optional(),

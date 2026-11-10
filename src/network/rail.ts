@@ -1,11 +1,12 @@
 import Flatbush from 'flatbush';
+import { lonLatToLocal } from '../geo/projection';
 import { cumulativeLengths, distance, polylineCrossings, polylineLength } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City } from '../schema';
 import type { RailNode, RailTrack, RailPlatform } from '../schema/rail';
 
 export interface RailGraph {
-  nodes: (RailNode & { idx: number; tracks: number[] })[];
+  nodes: (RailNode & { idx: number; tracks: number[]; boundary: boolean })[];
   tracks: (RailTrack & {
     idx: number;
     fromNode: number;
@@ -25,7 +26,7 @@ export function compileRail(city: City): RailGraph | undefined {
   if (!city.rail) return undefined;
   const nodes = Object.values(city.rail.nodes)
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((n, idx) => ({ ...n, idx, tracks: [] as number[] }));
+    .map((n, idx) => ({ ...n, idx, tracks: [] as number[], boundary: false }));
   const index = new Map(nodes.map((n) => [n.id, n.idx]));
   const tracks = Object.values(city.rail.tracks)
     .sort((a, b) => a.id.localeCompare(b.id))
@@ -41,6 +42,26 @@ export function compileRail(city: City): RailGraph | undefined {
     nodes[t.fromNode]!.tracks.push(t.idx);
     nodes[t.toNode]!.tracks.push(t.idx);
   }
+  const points = city.geo
+    ? [
+        lonLatToLocal(city.geo, { lon: city.geo.bbox[0], lat: city.geo.bbox[3] }),
+        lonLatToLocal(city.geo, { lon: city.geo.bbox[2], lat: city.geo.bbox[1] }),
+      ]
+    : nodes.map((n) => n.pos);
+  const x0 = Math.min(...points.map((p) => p.x)),
+    x1 = Math.max(...points.map((p) => p.x)),
+    y0 = Math.min(...points.map((p) => p.y)),
+    y1 = Math.max(...points.map((p) => p.y));
+  for (const n of nodes)
+    n.boundary =
+      n.kind !== 'buffer_stop' &&
+      n.tracks.length === 1 &&
+      Math.min(
+        Math.abs(n.pos.x - x0),
+        Math.abs(n.pos.x - x1),
+        Math.abs(n.pos.y - y0),
+        Math.abs(n.pos.y - y1),
+      ) < 0.1;
   const connections: RailGraph['connections'] = [];
   const outward = (t: RailTrack, id: string) => {
     const start = t.from === id;

@@ -1,3 +1,4 @@
+// TASK-127: compiled rail gains boundary flags; T62 still pins unchanged lanes/movements.
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 import { createHash } from 'node:crypto';
@@ -162,14 +163,14 @@ const pins = {
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
   munich: {
-    compile: 'd8191fa39ec06e5504abde5711ab02a992fab15ed47fc20daa837d390d9da9dc',
+    compile: 'ba6c3c0c73b69f8bcf0e10ba90d6a0e6b23b40221de750135d916df0181ceb0b',
     lamps: '27483774592d8fd96b6a5ab0a4126d9aeaa8ef05f184a2d6222cc7bad0d33f89',
     curbs: 'fc216c4ce748916e00e0ae196aae0d9875f4dc1c0f9b47f53e61f30ded45a934',
     de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
     us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
   },
   sindelfingen: {
-    compile: 'dea66c80f1e22f42cce2fe73ef9e2425c431b63993eeec09d9f43a67b33de40a',
+    compile: 'e0e1d4e5644f67db5e98189ca29eba7655757570bb703cd9b899aa103ae7d3b1',
     lamps: '0563d1323ef08a9cb2b3b71280f6ae9e1cf5208c3f7caebcfddfe55aa1d8a2ad',
     curbs: '9fe71ec6feadfb41a3c86111638d13618b7731286d4ec4104c4d3832b20233ce',
     de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',

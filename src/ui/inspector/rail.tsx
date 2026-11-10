@@ -1,5 +1,36 @@
 import type { Place } from '../../schema';
 import { useAppStore } from '../store';
+import { trainTimetable, trainsAt } from '../../network/trains';
+
+export function TrainInspector({ id, route }: { id: string; route: number }) {
+  const session = useAppStore((s) => s.session);
+  const timeS = useAppStore((s) => s.run?.timeS ?? 0);
+  if (!session?.compiled.rail) return null;
+  const rail = session.compiled.rail,
+    table = trainTimetable(rail),
+    service = table.routes[route];
+  if (!service) return null;
+  const train = trainsAt(rail, table, timeS).find((t) => t.id === id);
+  return (
+    <section aria-label="Train inspector">
+      <h2>{service.kind === 'sbahn' ? 'S-Bahn' : 'Main-line train'}</h2>
+      <dl>
+        <dt>Route</dt>
+        <dd>
+          {rail.nodes[service.from]!.id} →{' '}
+          {service.terminal !== undefined && <>{rail.nodes[service.terminal]!.id} → </>}
+          {rail.nodes[service.to]!.id}
+        </dd>
+        <dt>Station stops</dt>
+        <dd>{[...new Set(service.stops.map((s) => s.name))].join(', ') || 'Passes through'}</dd>
+        <dt>Next</dt>
+        <dd>{train?.next ?? 'Exited'}</dd>
+        <dt>Status</dt>
+        <dd>{!train ? 'Outside city' : train.speedMps < 0.01 ? 'Stopped' : 'Running'}</dd>
+      </dl>
+    </section>
+  );
+}
 
 const names = {
   rail: 'Rail',
