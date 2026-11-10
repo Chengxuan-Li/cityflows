@@ -13,29 +13,35 @@ test.use({
   },
 });
 
+// Lead, 2026-11-10: CI skips the frame gate, and 120-frame samples on its software GPU pushed the
+// spec past 420 s (checkpoint-2026-11-10), so CI takes short samples for the report only.
+const sample = process.env.CI ? { frames: 12, warm: 2 } : { frames: 120, warm: 30 };
 async function timing(page: Page, measure: string) {
-  return page.evaluate(async (measure) => {
-    window.cityflowsRenderContinuously = true;
-    const frames: number[] = [],
-      renders: number[] = [];
-    let capture = false,
-      last = 0;
-    const observer = new PerformanceObserver((list) => {
-      if (capture)
-        for (const e of list.getEntries()) if (e.name === measure) renders.push(e.duration);
-    });
-    observer.observe({ entryTypes: ['measure'] });
-    for (let i = 0; i < 120; i++) {
-      const now = await new Promise<number>((resolve) => requestAnimationFrame(resolve));
-      capture = i >= 30;
-      if (capture && last) frames.push(now - last);
-      last = now;
-    }
-    observer.disconnect();
-    window.cityflowsRenderContinuously = false;
-    const mean = (samples: number[]) => samples.reduce((s, v) => s + v, 0) / samples.length;
-    return { frameMs: mean(frames), renderMs: mean(renders), drawn: renders.length };
-  }, measure);
+  return page.evaluate(
+    async ({ measure, sample }) => {
+      window.cityflowsRenderContinuously = true;
+      const frames: number[] = [],
+        renders: number[] = [];
+      let capture = false,
+        last = 0;
+      const observer = new PerformanceObserver((list) => {
+        if (capture)
+          for (const e of list.getEntries()) if (e.name === measure) renders.push(e.duration);
+      });
+      observer.observe({ entryTypes: ['measure'] });
+      for (let i = 0; i < sample.frames; i++) {
+        const now = await new Promise<number>((resolve) => requestAnimationFrame(resolve));
+        capture = i >= sample.warm;
+        if (capture && last) frames.push(now - last);
+        last = now;
+      }
+      observer.disconnect();
+      window.cityflowsRenderContinuously = false;
+      const mean = (samples: number[]) => samples.reduce((s, v) => s + v, 0) / samples.length;
+      return { frameMs: mean(frames), renderMs: mean(renders), drawn: renders.length };
+    },
+    { measure, sample },
+  );
 }
 async function click(page: Page, point: Vec2, view: '2d' | '3d') {
   const position = await page.evaluate((p) => window.cityflows!.worldToScreen!(p), point);

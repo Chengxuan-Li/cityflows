@@ -28,6 +28,9 @@ const groups: Record<string, string[]> = {
     'gate3-bypass',
   ],
   c: [
+    'V97-grade-shadows',
+    'demo-d-import-edit-share',
+    'gate3-places',
     'T44-context',
     'gate2-import',
     'demo-c-bypass',
@@ -35,8 +38,8 @@ const groups: Record<string, string[]> = {
     'T54-parking-motion',
     'V109-buildings',
   ],
-  // Lead, 2026-11-10: rebalanced from the Full run of a2e1f06 (c 836 s, d 486 s of tests).
-  d: ['T52-parking-cities', 'V97-grade-shadows', 'demo-d-import-edit-share', 'gate3-places'],
+  // Lead, 2026-11-10: T52 alone took 14 min on checkpoint-2026-11-10 (8 min before TASK-124/126).
+  d: ['T52-parking-cities'],
   // Rail (TASK-126, later TASK-127's trains): Munich imports with long frame-time samples.
   e: ['T62-rail-stations'],
 };

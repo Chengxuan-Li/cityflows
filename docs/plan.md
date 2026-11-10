@@ -2710,9 +2710,12 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   (TASK-128). At 0.15 every count equals main (10:00 gate 3 571 / 23 / 0 stalled heads; T53
   51 / 57). Lead runs: `check`, `test:city`, the light traffic tier, the light e2e (37 passed),
   gate4-layers, T44-context, V97-grade-shadows and T62.
-- Lead housekeeping (2026-11-10): the full e2e runs in six groups. Group c (836 s of tests on the
-  Full run of a2e1f06) gives V97-grade-shadows, demo-d-import-edit-share and gate3-places to d
-  (486 s); a new group e holds the rail specs (T62, later TASK-127's T64). T23's Munich case
+- Lead housekeeping (2026-11-10): the full e2e runs in six groups; a new group e holds the rail
+  specs (T62, later TASK-127's T64). Moving three specs from c to d backfired: on
+  `checkpoint-2026-11-10` T52-parking-cities alone took 14 min (8 min on a2e1f06, before
+  TASK-124 and TASK-126; every test passed), so they went back to c. T62 timed out at 420 s on
+  CI: its 120-frame samples on the software GPU are only for a gate CI skips, so CI now takes
+  12-frame samples. T23's Munich case
   gets a 180 s limit, as T24 has: it takes 20 s locally and 45 to 61 s on CI runners (one
   timeout on ab41f86). Checkpoint `checkpoint-2026-11-10` runs the full tier with TASK-124 and
   TASK-126 on main.
