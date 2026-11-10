@@ -1171,6 +1171,19 @@ stock once, including across gridlock respawns (recovery queues sit outside gara
 Arrivals increment atomically, never beyond
 capacity, and keep the car's facility for its next trip. These states participate in hashes.
 
+TASK-125 claims parking when the room-required choice pass accepts a reachable entry. A car
+holds at most one claim: an exact roadside space, or one capacity unit in a hard garage or lot.
+Claimed roadside spaces are unavailable to other cars; hard facilities drop out when occupied
+plus claimed reaches capacity. Entry checks exclude the asking car's own claim. The full-facility
+departure forecast makes no claim. Soft inferred garages remain unlimited and are not counted.
+Choosing again, entry rejection, parking, failure and gridlock respawn release through the same
+parking release operation; trip accounting covers every terminal path. Claims never move origin
+stock. Live edits remap claims by facility/entry id and space ordinal, releasing removed targets.
+Claims and their start times participate in parking hashes and the engine's claim snapshot;
+parking detail reports a claimed strip space before its manoeuvre. A debug engine flag checks
+claim ownership and counts after each step. Metrics record entry rejection locations and the
+empty time of released and still-active strip claims (including the pull-in).
+
 TASK-103 gives visible spaces exclusive stock and arrival reservations. TASK-118 replaces
 its stationary holds with front-bumper trajectories. A strip arrival stops at its slot,
 then drives forward and reverses along an S-curve for parallel parking, or takes a forward

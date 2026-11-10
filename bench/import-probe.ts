@@ -40,12 +40,16 @@ import { railCensus } from '../src/network/rail';
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const [file, ...args] = process.argv.slice(2);
   if (!file || args.length < 4 || (args.length - 4) % 2)
-    throw new Error('Usage: import-probe <file.osm> w s e n [--scale n] [--walk-legs file.json]');
+    throw new Error(
+      'Usage: import-probe <file.osm> w s e n [--scale n] [--walk-legs file.json] [--parking-report file.json]',
+    );
   let scaleArg = '1',
-    walkLegsFile: string | undefined;
+    walkLegsFile: string | undefined,
+    parkingReportFile: string | undefined;
   for (let i = 4; i < args.length; i += 2) {
     if (args[i] === '--scale') scaleArg = args[i + 1]!;
     else if (args[i] === '--walk-legs') walkLegsFile = args[i + 1]!;
+    else if (args[i] === '--parking-report') parkingReportFile = args[i + 1]!;
     else throw new Error(`Unknown option: ${args[i]}`);
   }
   const scale = Number(scaleArg);
@@ -114,6 +118,22 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
     includeWalkLegs: !!walkLegsFile,
   });
   if (walkLegsFile) writeFileSync(walkLegsFile, JSON.stringify(walkLegs, null, 2));
+  if (parkingReportFile)
+    writeFileSync(
+      parkingReportFile,
+      JSON.stringify(
+        {
+          completed: morning.completed,
+          gridlocked: morning.failedByReason.gridlocked,
+          noParking: morning.failedByReason.no_parking,
+          stalledHeads: morning.stalledHeads,
+          totalSearchS: morning.parkingSearchTimeS,
+          ...morning.parking,
+        },
+        null,
+        2,
+      ),
+    );
   console.info(morning);
 }
 

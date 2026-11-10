@@ -49,6 +49,7 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   intersectionObserver?: IntersectionObserver;
   headDetourObserver?: (id: number, lane: number, movement: number) => void;
   walkRouter?: ReturnType<typeof createWalkRouter>;
+  debugParkingClaims?: boolean;
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -71,6 +72,7 @@ function createRun({
   headDetourObserver,
   population,
   walkRouter,
+  debugParkingClaims = false,
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -94,8 +96,10 @@ function createRun({
     );
   }
   const reservationAcceleration = new Float64Array(trips.length);
+  let tick = 0;
+  const time = () => scenario.startS + tick * dtS;
   const parking = createParking(compiled, trips, scenario, params, vehicles);
-  const accounting = createAccounting(compiled, vehicles, parking);
+  const accounting = createAccounting(compiled, vehicles, parking, time);
   const walkers = createWalkers(
     compiled,
     scenario,
@@ -153,8 +157,6 @@ function createRun({
   const limit = new Float64Array(trips.length);
   const respawning: number[] = [];
   let orderCount = 0;
-  let tick = 0;
-  const time = () => scenario.startS + tick * dtS;
 
   function routeFrom(id: number, lane: number, positionM: number) {
     return provider.route(
@@ -972,6 +974,7 @@ function createRun({
       state: new Uint8Array(count),
       vclass: new Uint8Array(count),
       parkingOccupancy: parking.snapshot(),
+      parkingClaims: parking.claimSnapshot(),
       parkedCars: parking.stockSnapshot(),
       fade: new Float32Array(count),
       poseLane: new Int32Array(count).fill(-1),
@@ -1352,6 +1355,7 @@ function createRun({
           },
         });
         recoverGridlock(time());
+        if (debugParkingClaims) parking.assertClaims();
         observedCosts.update(time());
       }
     },

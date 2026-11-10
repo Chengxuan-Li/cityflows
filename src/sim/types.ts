@@ -63,11 +63,19 @@ export interface ParkedCarsSnapshot {
   hues: Uint32Array;
 }
 
+export interface ParkingClaimsSnapshot {
+  /** Dense trip order, -1 for no claim. Soft garages do not need claims. */
+  facility: Int32Array;
+  space: Int32Array;
+  sinceS: Float64Array;
+}
+
 export interface VehicleSnapshot {
   /** >=0: authoritative parking pose; value is its reference lane for height/layer. */
   poseLane?: Int32Array;
   parkedCars?: ParkedCarsSnapshot;
   parkingOccupancy?: Uint32Array;
+  parkingClaims?: ParkingClaimsSnapshot;
   timeS: number;
   count: number;
   id: Uint32Array;
@@ -92,6 +100,23 @@ export interface Metrics {
     arrivals: number;
     meanSearchTimeS: number;
     failed: number;
+    claims?: {
+      active: number;
+      entryRejections: number;
+      simultaneousStripChoices: number;
+      rejectedEntries: { facility: string; kind: string; space: number | null; count: number }[];
+      stripHeld: {
+        count: number;
+        totalS: number;
+        meanS: number;
+        p50S: number;
+        p90S: number;
+        p95S: number;
+        p99S: number;
+        maxS: number;
+        longest: { vehicleId: number; facility: string; space: number; heldS: number }[];
+      };
+    };
     motion?: {
       meanEntryToParkS: number;
       meanLotDriveS: number;

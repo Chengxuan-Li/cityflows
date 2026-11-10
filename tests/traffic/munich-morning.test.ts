@@ -100,6 +100,15 @@ test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")
   expect(morning.stalledHeads).toBeLessThanOrEqual(baseline.stalledHeads);
 });
 
+test('T63 parking claims meet the TASK-125 Munich 10:00 gate', () => {
+  expect(morning.completed).toBeGreaterThanOrEqual(3571);
+  expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(23);
+  expect(morning.failedByReason.no_parking).toBeLessThanOrEqual(13);
+  expect(morning.stalledHeads).toBe(0);
+  expect(morning.parkingSearchTimeS).toBeLessThan(56894);
+  expect(morning.parking.claims!.simultaneousStripChoices).toBe(0);
+});
+
 test('T21: Munich at scale 0.15 has no contacting-zone overlap at any morning step', () => {
   expect(zones.overlap).toBe('');
   expect(zones.contacts).toBeGreaterThan(0);

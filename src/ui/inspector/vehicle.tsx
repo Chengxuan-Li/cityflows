@@ -89,6 +89,16 @@ export function VehicleInspector({
               <dd>{Math.round(detail.walkingDistanceM)} m</dd>
               <dt>Parking search</dt>
               <dd>{detail.parkingSearchTimeS.toFixed(1)} s</dd>
+              {facility?.kind === 'roadside' && detail.parkingSpace !== null && (
+                <>
+                  <dt>
+                    {detail.parkingPhase === null && detail.state === 'driving'
+                      ? 'Claimed space'
+                      : 'Parking space'}
+                  </dt>
+                  <dd>{detail.parkingSpace}</dd>
+                </>
+              )}
               {detail.stallChoice && (
                 <>
                   <dt>Chosen stall</dt>
