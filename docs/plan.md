@@ -1064,6 +1064,21 @@ only the walk network: `src/sim/**` and `tests/e2e/**` are out of its scope. It 
    90 percent rule still protects every other task.
 8. Night lighting by the simulation clock is optional in TASK-107 and deferred.
 
+## Owner backlog (2026-11-10)
+
+Logged by the owner on 2026-11-10; contracts are written when each item starts. Order: TASK-124,
+then TASK-125, then the lead re-measures TASK-122 on both. The rail items touch the importer,
+network and renderer, not `src/sim/parking.ts`, so they can run alongside the parking work.
+
+| Item | What | Today | Depends on |
+| --- | --- | --- | --- |
+| TASK-125 (contract after TASK-124 merges) | Parking claims: cars heading for a strip space or a garage count against it, as cars heading for a lot already do (TASK-103 follow-up). A space claimed by another car is taken; a strip or garage whose free spaces are all spoken for drops out of the choice; a claim is released when the car chooses again, fails or parks. Overflow cars go straight to the next option instead of circling. | Only lots count cars en route. A strip space is reserved when the car starts its manoeuvre, so many cars chase one freed space (TASK-122 round 2: 44 searches over an hour). | TASK-124 |
+| R1 | Railway tracks as a network with nodes: rail, light rail, subway and tram ways imported as their own track graph (nodes, junctions, platforms), compiled and drawn. Routing for trains and metro comes later, not in this item. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096). | none |
+| R2 | Stations as special buildings: a railway or subway station place tied to its platforms on the track network and to the walk network by its entrances, drawn as a station. Munich's S-Bahn station at Donnersbergerbrücke is the example. | Place kind `station` from `railway=station` (importer); the synthetic Station fixture (T10). | R1 |
+| R3 | Decorative trains: arrivals, departures and through trains that pass without stopping, on R1's tracks by a simple timetable. Visual only. | none | R1, R2 |
+| R4 | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | R2 (R3 to time the arrivals) |
+| O1 | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
+
 ## Lead handover
 
 How the lead runs this project, for whoever takes the role on another machine. Everything
@@ -2651,6 +2666,12 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   the traffic tier, the full e2e (93 passed) and the bench (equal to main) are green.
 
 ## Owner decisions log
+
+- 2026-11-10, backlog: parking claims become their own task (TASK-125), started after TASK-124;
+  rail network, stations, decorative trains, stations as trip ends and car ownership logged
+  under "Owner backlog (2026-11-10)". The owner confirms the decisions the agents reported: gateway
+  visitors keep their parking and blocked strips may stay empty (TASK-122), and the bridge and
+  tunnel endpoint joins (TASK-123).
 
 - 2026-11-10, CI and delivery: two tiers. The light tier (`check`, `test:city`,
   `test:traffic:light` with the 10:00 gate and T53, `test:e2e:light`, plus the specs a task
