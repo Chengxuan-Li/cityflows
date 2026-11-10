@@ -150,7 +150,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | on hold until B58 (see review) |
 | [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | done (round 3; see review) |
 | [TASK-124](tasks/TASK-124.md) | 9 | Every garage and place has a car exit (B58): connectors snap to lanes a car can leave; `parking_no_exit` and `place_no_exit` warnings | `src/importers/osm/places.ts` (car core, `placeConnector`), `parking.ts`, `src/network/parking.ts`, `diagnostics.ts` | 102, 103, 104, 119 | T61, exit census, traffic gates | done (see review) |
-| [TASK-125](tasks/TASK-125.md) | 9 | Parking claims: a car that chooses a strip space, garage or lot claims it; claimed spaces are taken for others and full-by-claims facilities drop out; every exit path releases the claim | `src/sim/parking.ts`, release calls in `src/sim/engine.ts`, metrics | 102, 103, 118, 124 | T63, Munich 0.15 gate with lower search time, T53, baseline reset | open |
+| [TASK-125](tasks/TASK-125.md) | 9 | Parking claims: a car that chooses a strip space, garage or lot claims it; claimed spaces are taken for others and full-by-claims facilities drop out; every exit path releases the claim | `src/sim/parking.ts`, release calls in `src/sim/engine.ts`, metrics | 102, 103, 118, 124 | T63, Munich 0.15 gate with lower search time, T53, baseline reset | done |
 | [TASK-126](tasks/TASK-126.md) | 10 | Railway tracks and stations: a track graph imported, compiled, saved and drawn; stations tied to platforms and walk entrances | new `src/importers/osm/rail.ts`, `src/network/rail.ts`, rail layers, `src/schema` (rail network), fixtures (railway ways appended) | 096, 110, 123 | T62, census, traffic unchanged, shots | done |
 | [TASK-127](tasks/TASK-127.md) | 10 | Decorative trains: S-Bahn trains stop at Donnersbergerbrücke, main-line trains pass through, by a deterministic timetable on the sim clock; drawn in 2D and 3D; no sim change | new routes/timetable/motion module, train layers, `src/network/rail.ts`, rail schema (preferred direction) | 126 | T64, traffic and sim hash unchanged, frame time, shots | open |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -1081,7 +1081,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
-| TASK-125 (contract written; Codex) | Parking claims: cars heading for a strip space or a garage count against it, as cars heading for a lot already do (TASK-103 follow-up). A space claimed by another car is taken; a strip or garage whose free spaces are all spoken for drops out of the choice; a claim is released when the car chooses again, fails or parks. Overflow cars go straight to the next option instead of circling. | Only lots count cars en route. A strip space is reserved when the car starts its manoeuvre, so many cars chase one freed space (TASK-122 round 2: 44 searches over an hour). | TASK-124 |
+| TASK-125 (done 2026-11-10) | Parking claims: cars heading for a strip space or a garage count against it, as cars heading for a lot already do (TASK-103 follow-up). A space claimed by another car is taken; a strip or garage whose free spaces are all spoken for drops out of the choice; a claim is released when the car chooses again, fails or parks. Overflow cars go straight to the next option instead of circling. | Only lots count cars en route. A strip space is reserved when the car starts its manoeuvre, so many cars chase one freed space (TASK-122 round 2: 44 searches over an hour). | TASK-124 |
 | TASK-126 (done 2026-11-10) | Railway tracks and stations (R1 and R2 merged, owner 2026-11-10): rail, light rail, subway and tram ways as their own track graph (nodes, switches, platforms), compiled, saved and drawn; stations tied to their platforms and to the walk network by their entrances, drawn as stations. Munich's Donnersbergerbrücke S-Bahn station is the example. Train routing comes later. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096); place kind `station` from `railway=station`; the synthetic Station fixture (T10). The bundled extracts hold no track ways yet. | none |
 | TASK-127 (contract written; Codex) | Decorative trains: arrivals, departures and through trains that pass without stopping, on TASK-126's tracks by a simple timetable. Visual only. | none | TASK-126 |
 | TASK-128 | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
@@ -2719,6 +2719,24 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   gets a 180 s limit, as T24 has: it takes 20 s locally and 45 to 61 s on CI runners (one
   timeout on ab41f86). Checkpoint `checkpoint-2026-11-10` runs the full tier with TASK-124 and
   TASK-126 on main.
+- Lead, TASK-125 review (2026-11-10): accepted. A car that chooses with room claims one exact
+  strip space, or one count against a garage or lot (soft inferred garages stay unlimited); the
+  departure forecast to a full facility claims nothing. One idempotent `parking.release` runs on
+  parking, choosing again, entry rejection and every completion, failure and respawn (through
+  the shared accounting), and a live edit releases claims whose target vanished. The agent
+  confirmed the lot leak on main: a car failed for gridlock kept its lot count. Munich at 0.15 to
+  10:00: 3 592 completed (3 571), 17 gridlocked (23), 13 parking failures (13), 0 stalled heads;
+  parking search 10 999 s (56 894 s, -81%); entry rejections 18 (133); same strip space chosen by
+  two cars at once 0 (146). The cost: claimed strip spaces stay empty while their car is on the
+  way, 112 claims with median 312 s, p90 4 410 s and longest 6 482 s (cars held in queues). T53
+  30 / 42 zone stops (main 51 / 57). Sindelfingen 156 / 0 / 245 unchanged; its 245 parking
+  failures have no route from any origin exit (reach, not claims). Full demand (agent run):
+  1 896 / 249 to 1 983 / 203, stalled heads 2 to 3. Controlled wall time +2.2%. The baseline
+  resets (rule 7): 3 592 / 17 / 0 stalled heads, quick 09:30 3 357 / 13 (1 stalled head on
+  `r:961`, one of main's three). The agent also showed the claimed strip space in the vehicle
+  inspector (`src/ui/inspector/vehicle.tsx`, outside the contract's scope); it reports owner
+  approval. Lead: re-recorded the baseline and put the T63 e2e spec in group b. Lead runs:
+  `check`, `test:city`, the light traffic tier, the light e2e (37 passed), T54, T16, T49, T63.
 
 ## Owner decisions log
 

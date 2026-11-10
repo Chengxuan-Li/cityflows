@@ -15,6 +15,7 @@ export function createAccounting(
   compiled: CompiledCity,
   vehicles: Vehicles,
   parking: ReturnType<typeof createParking>,
+  time?: () => number,
 ) {
   const trips = {
     pending: vehicles.count,
@@ -114,6 +115,7 @@ export function createAccounting(
     },
     /** A driving trip goes back to its origin queue (TASK-077). */
     respawn(id: number) {
+      parking.release(id, time?.());
       transition(id, QUEUED_ORIGIN);
       vehicles.respawns[id]!++;
       respawns++;
@@ -121,12 +123,14 @@ export function createAccounting(
     transition,
     metrics,
     fail(id: number, reason: FailReason) {
+      parking.release(id, time?.());
       transition(id, FAILED);
       vehicles.failReason[id] = reason;
       failedByReason[reason]++;
       onFail?.(id, reason);
     },
     complete(id: number, timeS: number) {
+      parking.release(id, timeS);
       transition(id, COMPLETED);
       completedByClass[vehicleClasses[vehicles.vclass[id]!]!]++;
       vehicles.arrived[id] = timeS;

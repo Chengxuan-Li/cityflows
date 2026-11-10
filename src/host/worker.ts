@@ -126,11 +126,14 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
         timeS,
         count,
         parkingOccupancy: occupancy,
+        parkingClaims,
         parkedCars: stock,
         walkers,
         ...arrays
       } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
+      if (parkingClaims)
+        for (const array of Object.values(parkingClaims)) transfer.push(array.buffer);
       if (walkers)
         for (const array of Object.values(walkers))
           if (typeof array !== 'number') transfer.push(array.buffer);
@@ -163,6 +166,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
           ...arrays,
           roadSpeedRatio,
           parkingOccupancy,
+          parkingClaims,
           parkedCars,
           walkers,
         },
