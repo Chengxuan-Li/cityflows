@@ -13,6 +13,8 @@ import { placeStreet, treeContext } from './street';
 import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
 import { drawRail } from './layers/rail';
+import { drawTrains, pickTrain, trainLayers } from './layers/trains';
+import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
 import { railGeometry, pickRail } from './rail-geometry';
 import { drawLots } from './layers/stalls';
 import { walkGeometry } from './walk-geometry';
@@ -72,6 +74,7 @@ export function createGrade(layer: number) {
   const surfaces = new Graphics();
   const rail = new Graphics();
   const railDetail = new Graphics();
+  const trains = new Graphics();
   const tram = new Graphics();
   const sidewalks = new Graphics();
   const footways = new Graphics();
@@ -110,6 +113,7 @@ export function createGrade(layer: number) {
     signals,
     parkedCars.container,
     vehicles.container,
+    trains,
     walkers,
   );
   return {
@@ -120,6 +124,7 @@ export function createGrade(layer: number) {
     sidewalks,
     rail,
     railDetail,
+    trains,
     footways,
     tram,
     markings,
@@ -192,6 +197,24 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let furnitureCounts: ReturnType<typeof placeStreet>['counts'] | undefined;
   let treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   let city: CompiledCity | undefined;
+  let trainPoses: TrainPose[] = [];
+  let trainTimeS = 0;
+  let trainsVisible = true;
+  const updateTrainPoses = () => {
+    if (!layerVisibility.rail) return;
+    trainPoses = city?.rail ? trainsAt(city.rail, trainTimetable(city.rail), trainTimeS) : [];
+    redrawTrains();
+  };
+  const redrawTrains = () => {
+    if (!city?.rail) return;
+    drawTrains(
+      trainLayers(visibleGrades),
+      city.rail,
+      trainPoses,
+      selection?.kind === 'train' ? selection.id : null,
+    );
+    canvas.dataset.trains = String(layerVisibility.rail ? trainPoses.length : 0);
+  };
   let parkingCounts: ArrayLike<number> | null = null;
   let tiles: Tiles | undefined;
   let tilesEnabled = true;
@@ -254,6 +277,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
 
   function applyVisibility() {
+    if (trainsVisible !== layerVisibility.rail) {
+      trainsVisible = layerVisibility.rail;
+      if (trainsVisible) updateTrainPoses();
+    }
+    for (const grade of visibleGrades) grade.trains.visible = layerVisibility.rail;
+    canvas.dataset.trains = String(layerVisibility.rail ? trainPoses.length : 0);
     for (const grade of visibleGrades)
       grade.parkedCars.container.visible = layerVisibility.parkedCars;
     canvas.dataset.parkedCars = String(layerVisibility.parkedCars ? parkedCars.count : 0);
@@ -751,6 +780,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     setSnapshot(snapshot) {
       invalidate();
       if (!city) return;
+      trainTimeS = snapshot.timeS;
+      updateTrainPoses();
       vehicles.update(snapshot);
       vehicleAgeS = 0;
       walkerSnapshot = snapshot.walkers;
@@ -783,6 +814,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     setSelection(next) {
       invalidate();
       selection = next;
+      redrawTrains();
       if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
       const snapshot = vehicles.snapshot;
       selectedVehicle =
@@ -907,7 +939,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         city && staticHit?.kind === 'lane'
           ? cityGrades(city, sourceGeometry).roadGrades[staticHit.road]!
           : -Infinity;
+      const train =
+        city?.rail && layerVisibility.rail
+          ? pickTrain(
+              trainPoses,
+              point,
+              camera.zoom,
+              city.rail,
+              staticHit?.kind === 'node'
+                ? cityGrades(city, sourceGeometry).nodeGrades[staticHit.node]!
+                : roadGrade,
+            )
+          : null;
       return (
+        train ??
         vehicle ??
         (walker?.kind === 'vehicle' ? { kind: 'walker' as const, id: walker.id } : null) ??
         (parked === null ? null : { kind: 'parked' as const, space: parked }) ??

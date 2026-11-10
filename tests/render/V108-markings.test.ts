@@ -1,3 +1,4 @@
+// TASK-127: compiled rail gains boundary flags; T62 still pins unchanged lanes/movements.
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
@@ -46,12 +47,12 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: '8b645ca58c750cdfbf08aab72f5df9df1bec73a8c5e757455685bb96b688da28',
+    compile: '083fa06c401c206f9d3fcc71c92d956ab3c5ab51fd42cdeec8307bccb458f5d5',
     arrows: '4a050bf9444cf93e96db85004e8d3ea62dca54dcc33d6a794f12c603be8234d3',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
-    compile: 'ec95cd3bbc6c07455a09052d58f1121cf936ac2f49d9897a98a7c693a4ae25e4',
+    compile: '1c0ebd9aaf9762e1210e5335472c62b481c09b423c841e1758dc3ccd591c5302',
     arrows: '58f23f654d47b6df163f7625fc68815d5e2dc06b00437fc2918e30a09dd7abb1',
   },
 } as const;

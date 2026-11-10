@@ -39,6 +39,10 @@ preferred direction.
 1. **Routes.** Build train routes from the compiled rail graph:
    - A route is a path through permitted `connections` from one boundary end to another. A
      boundary end is a track end at the city's edge, not a buffer stop.
+   - **Owner clarification (2026-11-10):** Sindelfingen has no permitted boundary-to-boundary
+     path. When no through route exists, allow boundary-to-buffer terminal services: stop
+     with the nose at the buffer, dwell 40 s, then reverse back to the entry boundary.
+     Never reverse at a switch or against a preferred-direction tag.
    - Prefer running lines (no `service`) and respect `railway:preferred_direction`. Store it on
      the track as an optional field: a contract change this task describes, in
      `docs/architecture.md` section 4, with the same schema and migration rules TASK-126

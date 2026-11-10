@@ -39,6 +39,7 @@ const groups: Record<string, string[]> = {
     'V109-buildings',
   ],
   d: ['T52-parking-cities'],
+  e: ['T62-rail-stations', 'T64-trains'],
 };
 // The light set (lead, 2026-11-10): editor, run and person flows on the small synthetic cities,
 // no Munich import or 3D, about 5 minutes on CI. Every push and merge runs it; the full suite

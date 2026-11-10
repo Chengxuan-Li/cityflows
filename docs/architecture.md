@@ -384,6 +384,10 @@ closed platform rings. No rail data is a road lane or a car connector. Station c
 connectors and parking retain their imported values. Stations without mapped buildings gain
 a platform-covering bounding polygon; mapped building shapes remain intact.
 
+TASK-127 adds optional track `preferredDirection: 'forward' | 'backward' | 'both'`, relative
+to the stored polyline, from `railway:preferred_direction`. No schema-version bump: omitted
+values leave direction undecided and all existing migration/boundary schemas preserve it.
+
 ## 5. Compiled model: `CompiledCity`
 
 `compile(city: City): CompileResult` lives in `src/network` and is a pure, deterministic
@@ -514,6 +518,31 @@ may join grades at mapped abutments. Components report physical track connectivi
 branches that cannot be traversed directly. Same-grade road/track intersections carry road ID,
 track index, position and metre station on both polylines. They are derived from current road
 geometry, so deleting a road drops only its crossing records. No car/walker control reads them.
+
+TASK-127 marks degree-one, non-buffer nodes within 0.1 m of the geographic bbox as boundary
+ends (synthetic cities use their rail extent). `network/trains.ts` builds oriented paths through
+the compiled continuations only. Preferred direction is binding; untagged parallel running
+tracks within 12 m favor right-hand operation. Route search penalizes service tracks and
+opposing parallel geometry, rejects paths with more than 15% against that geometry, and keeps
+the longest station-serving paths first, excluding duplicated directed sections. Station rail
+platforms classify S-Bahn routes; other running paths are main line. A route ends at another
+boundary, never at a switch or an arbitrary dead end. Owner-approved exception (2026-11-10):
+Sindelfingen has no permitted boundary-to-boundary path; there, boundary-to-buffer services
+stop with their nose at the buffer, dwell 40 s, and reverse back to their boundary. They never
+reverse at a switch, and preferred-direction tracks cannot carry a reversing service.
+
+The derived timetable is cached by rail graph identity, outside `CompiledCity` and simulation
+state. Defaults in one module: S-Bahn 240 s / 135 m / 80 km/h, main line 360 s / 200 m /
+100 km/h; tagged track speeds override these. Route-ID hash offsets are deterministic. Motion
+uses 0.8 m/s² acceleration/braking and 40 s platform dwells with the train's middle at the
+projected platform middle. A periodic reservation table reserves every occupied section from
+nose entry through tail exit, including adjacent cycles. Conflicts delay departure outside
+the boundary. The nominal cycle is 720 s; an overloaded network lengthens that cycle until
+all requests fit, reporting actual rates and boundary waits in `trainCensus`. Terminal services
+reserve each section through their return, conservatively. `trainsAt(rail, timetable, timeS)`
+returns whole-train occupancy and articulated car poses without frame history. Arrivals are
+the timetable departure plus each route stop's `arrivalS`, repeated by `periodS`; terminal
+services include station visits on both legs.
 
 ### 5.1 Lane layout
 
@@ -1908,6 +1937,13 @@ Rail layer is independent of Surroundings. Imported network rails replace contex
 lines permanently, so turning Rail off cannot restore the old lines. Tracks/platforms and
 station markers are pickable in both views; inspectors expose track kind/name/service/length,
 platform served tracks and station platform/entrance counts. Tracks have no editing tools.
+
+TASK-127 draws articulated red/white S-Bahn and blue/grey main-line cars in grade-local 2D
+layers and two instanced 3D batches. Train poses use snapshot/simulation time only; paused
+trains request no frames. Bridges occlude lower trains; tunnels hide train bodies (3D reveals
+them with See below ground). Rail hides tracks and trains together. Picking exposes train
+kind, route ends, station stops and next stop/exit; no train state enters car/walker counts,
+traffic controls, routing, demand or simulation hashes.
 
 
 TASK-111/112: the default-on Pedestrians layer (shown for person demand or test pedestrians) draws

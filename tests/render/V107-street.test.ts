@@ -1,3 +1,4 @@
+// TASK-127: compiled rail gains boundary flags; T62 still pins unchanged lanes/movements.
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 import { createHash } from 'node:crypto';
@@ -155,8 +156,8 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 const baselines = {
   grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
   town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
-  'munich-donnersberger': 'd8191fa39ec06e5504abde5711ab02a992fab15ed47fc20daa837d390d9da9dc',
-  'sindelfingen-a81': 'dea66c80f1e22f42cce2fe73ef9e2425c431b63993eeec09d9f43a67b33de40a',
+  'munich-donnersberger': 'ba6c3c0c73b69f8bcf0e10ba90d6a0e6b23b40221de750135d916df0181ceb0b',
+  'sindelfingen-a81': 'e0e1d4e5644f67db5e98189ca29eba7655757570bb703cd9b899aa103ae7d3b1',
 };
 const lampCounts = {
   grid: [0, 0],
