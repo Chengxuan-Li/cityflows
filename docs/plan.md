@@ -2609,8 +2609,13 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
      links (8.4 km), and 7.9 km of them run parallel to a mapped footway within 12 m (385 links
      within 4 m, 405 at 4 to 8 m). The test for a mapped sidewalk along a side looks only 4 m
      out. The duplicates bring 65 new crossings, zebra delay rises 31% (10 499 to 13 737 s), and
-     Munich's traffic gate fails: quick 3 497 / 18 gridlocked / 1 stalled head against 3 357 / 8
-     / 0 (limit 12), and the agent's 10:00 run 42 gridlocked against 23 (limit 34).
+     Munich's traffic gate fails on gridlock: quick 3 497 / 18 gridlocked / 1 stalled head
+     against 3 357 / 8 / 3 (limits 12 gridlocked, 3 stalled heads), and the agent's 10:00 run 42
+     gridlocked against 23 (limit 34). Correction, 2026-11-09: this entry first gave main's
+     09:30 stalled heads as 0; that is the 10:00 gate's figure (`bench/traffic-baseline.json`,
+     checked by `tests/traffic/munich-morning.test.ts`). Main's 09:30 heads are signal queues
+     just over the probe's 300 s sample (see the TASK-112 review). Stalled heads are judged at
+     10:00, against 0.
   2. Routed egress walks are long: Sindelfingen's mean egress grows from 308 m (straight line)
      to 1 051 m; `pk:1453` to `p:1407` routes 1 944 m. Report each leg's detour (routed against
      straight-line length) and trace legs over three times.
