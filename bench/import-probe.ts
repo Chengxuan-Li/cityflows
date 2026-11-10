@@ -11,6 +11,28 @@ import { distance, pointAtDistance } from '../src/geo/polyline';
 import { createEngine } from '../src/sim/engine';
 import type { TrafficEngine } from '../src/sim/types';
 import { walkComponents } from '../src/network/walk-joins';
+import { parkingEgress } from '../src/network/parking-egress';
+
+/** Car departure census, independent of the pedestrian counters. Gateways and strips are reported separately. */
+export function carExitCensus(compiled: CompiledCity) {
+  const exits = parkingEgress(compiled, 30);
+  const facilities = compiled.parking.filter((f) => !exits.facilities[f.idx]);
+  const places = compiled.places.filter(
+    (p) => p.connectorsOut.length && !p.connectorsOut.some((i) => exits.connectors[i]),
+  );
+  return {
+    facilities: facilities.length,
+    spaces: facilities.reduce((n, f) => n + f.capacity, 0),
+    garagesAndLots: facilities
+      .filter((f) => f.kind !== 'roadside')
+      .map((f) => ({ id: f.id, spaces: f.capacity })),
+    strips: facilities
+      .filter((f) => f.kind === 'roadside')
+      .map((f) => ({ id: f.id, spaces: f.capacity })),
+    places: places.filter((p) => p.kind !== 'gateway').map((p) => p.id),
+    gateways: places.filter((p) => p.kind === 'gateway').map((p) => p.id),
+  };
+}
 
 // Import an OSM fixture, compile it, and run its morning headless: the baseline the import
 // wave measures against. Usage: npm run import-probe -- fixtures/osm/<name>.osm w s e n [--scale n]
@@ -59,6 +81,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
   const { compiled } = result;
   console.info('Walk connectivity', probeWalk(city, compiled));
+  console.info('Car exits', carExitCensus(compiled));
   const compiledCodes = new Map<string, number>();
   for (const { code } of result.diagnostics)
     compiledCodes.set(code, (compiledCodes.get(code) ?? 0) + 1);
@@ -490,6 +513,7 @@ export function probeMorning(
     ...metrics.trips,
     failedByReason: metrics.failedByReason,
     parking: metrics.parking,
+    parkingSearchTimeS: (metrics.tripOutcomes ?? []).reduce((n, t) => n + t.parkingSearchTimeS, 0),
     localArrivals: trips.filter(
       (trip, id) =>
         city.places[trip.destinationPlaceId]!.kind !== 'gateway' &&

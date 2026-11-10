@@ -5,7 +5,7 @@ import { allocateId, type City, type ParkingFacility } from '../../schema';
 import { clip, polygonSources } from './buildings';
 import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
-import { placeConnector, polygonCenter } from './places';
+import { layoutConnector, polygonCenter } from './places';
 
 function garage(tag: OsmTags): boolean {
   return (
@@ -39,13 +39,14 @@ export function addOsmGarages(
   positions: Map<number, Vec2>,
   bounds: Bounds,
   compiled: CompiledCity,
-): void {
+) {
+  const footprintsByFacility = new Map<string, Vec2[][]>();
   const hasEntry = compiled.lanes.some((lane) => {
     const road = city.roads[compiled.roads[lane.road]!.id]!;
     const access = road.access?.car ?? road.access?.all ?? 'yes';
     return lane.allowed.includes('car') && access !== 'no' && access !== 'delivery';
   });
-  const connector = hasEntry ? placeConnector(city, compiled, true) : undefined;
+  const connector = hasEntry ? layoutConnector(city, compiled, true) : undefined;
   const shapes = polygonSources(data, () => true).flatMap(({ id, rings }) =>
     rings
       .filter((r) => r.role === 'outer')
@@ -128,6 +129,7 @@ export function addOsmGarages(
       provenance: { source: 'osm', osmIds: [id], inferred },
     };
     (city.parking ??= {})[facilityId] = facility;
+    footprintsByFacility.set(facilityId, footprints);
   }
 
   for (const source of polygonSources(data, garage)) {
@@ -161,4 +163,5 @@ export function addOsmGarages(
     if (garage(node.tag))
       add(node.id, node.tag, { kind: 'point', pos: positions.get(node.id)! }, 25);
   }
+  return footprintsByFacility;
 }

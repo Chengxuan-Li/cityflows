@@ -14,6 +14,7 @@ import { throughputCities, throughputFixture, throughputRequests } from './throu
 // TASK-101: real-city samples recaptured after retained access boundaries changed connector
 // keys and access rules changed paths. T47 separately compares unrestricted routes exactly
 // against 56ffccd's router on the same canonical networks.
+// TASK-124 recaptures real-city samples because connector endpoints split or move; T61 pins the vehicle graph.
 const recorded = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<
   string,
   Record<string, string[] | string>

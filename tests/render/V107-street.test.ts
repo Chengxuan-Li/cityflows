@@ -1,3 +1,4 @@
+// TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 import { createHash } from 'node:crypto';
 import { InstancedMesh, Matrix4, Mesh } from 'three';
 import { readFileSync } from 'node:fs';
@@ -153,8 +154,8 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 const baselines = {
   grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
   town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
-  'munich-donnersberger': 'a94950eb3cd55d8d755cfaaad1fb7f5e104110362aa8bcc78980378812dab515',
-  'sindelfingen-a81': '21ad4f3b76c74f8395c2e1975453507c94f764d21a2f5d3ea252a622ee22143c',
+  'munich-donnersberger': 'ae811dae1c4bda7a9591cc5b17ffafef264ce6445bc26a7628a9709a65f72ff9',
+  'sindelfingen-a81': 'cf231f89f2e857679d373f4f9df238e59997fc6b3a495fc63e726ed39fc946cf',
 };
 const lampCounts = {
   grid: [0, 0],

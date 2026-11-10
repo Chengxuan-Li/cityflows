@@ -19,14 +19,14 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       result = compile(imported.city),
       compileMs = performance.now() - start;
     if (!result.ok) throw new Error('compile failed');
-    // T60 repairs derived walking only: keep TASK-123's lead-112 vehicle bytes pinned.
+    // TASK-124 changes car connectors; T61 separately pins the unchanged lanes/movements.
     const { lanes, movements, connectors } = result.compiled;
     expect(
       createHash('sha256').update(JSON.stringify({ lanes, movements, connectors })).digest('hex'),
     ).toBe(
       name.startsWith('munich')
-        ? '8d3a14f68d4899705207050b9cba385415aed6e02892c9738a46f3eaaac59050'
-        : 'f8809ebb2e99256b69a3327aeee87eae8095237f5ff4fa8429afca3a6a2d8473',
+        ? 'c0e282211ea08ea12e4d9238486445dc432ee7989b38cc298359e50c2280a071'
+        : 'fa151a5ebe6007e2d6fbddea44d2d4268a55907c66f3448e69ac84b3e7d81a38',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')
