@@ -823,6 +823,16 @@ following movements and lane changes),
 fallback movement; the router does not use it, so a car there must merge upstream),
 `inferred_attributes` (count of imported defaults, from provenance).
 
+TASK-124 adds `place_no_exit` and `parking_no_exit`: no departure connector of a place,
+or of a garage or lot, can reach its car circulation core. Each warning names the owner,
+the trapped connectors and their lanes (or reports that no departure connector exists).
+The check uses TASK-122's largest movement SCC per origin access zone, excluding
+`neverGreen` and lane-drop fallback movements; adjacent-lane changes need 30 m each,
+measured from the connector's actual station. Car access is `yes`, or `private`/`destination`
+in the origin's own zone. Tied largest SCCs all seed the check. Strips retain their mapped
+roads and are counted separately by the import probe. Warnings do not move saved connectors
+or prevent compilation; re-import repairs the source portals.
+
 ### 5.6 Pedestrian graph (TASK-110)
 
 `CompiledCity.walk: WalkGraph` is derived after the unchanged vehicle compile. Dense nodes
@@ -2357,6 +2367,25 @@ building footprint serves that place. Garage entrance nodes supply entries; othe
 nearest car-permitted lane is snapped with the shared connector logic. Disconnected garages
 remain mapped and route feasibility excludes them from a particular trip's choices. Implicit
 garages are added after building-demand aggregation. Surface lot and aisle import is deferred.
+
+TASK-124 repairs trapped place, garage and lot portals after the original parking layout is
+materialized, preserving the vehicle graph, strip bands, slots and their IDs. The importer
+and compile diagnostics share the per-zone departure check in `src/network/parking-egress.ts`.
+Replacement arrival/departure portals also have a forward path from that core; out-only
+portals need only the departure check. All replacements keep 3 m clear of existing
+roadside bay centres. Mapped parking replacements are at most 30 m from the footprint
+(including its interior), or from a point facility; no connection is invented beyond that
+limit and the original portal remains diagnosed. Inferred place portals use the nearest
+compatible lane to the place's point or polygon centre. Private and destination portals
+remain when their departure check passes. Mapped aisle roads and junctions never move.
+
+When an existing portal fails departure but is reachable by car from its core, it remains
+at the same station as `in` and a separate `out` portal supplies the car exit. Only an
+unreachable arrival moves. Implicit garages share their place's split portals. The exit
+warnings examine only departure portals; a split pair retains ordinary connector reachability.
+Saving generated lot entries records `materializedAisleEntries` in provenance. Their unchanged
+endpoints and car-only split exits retain the lot's existing pedestrian door, avoiding new walk
+shortcuts solely from saving the entries. Moved arrivals can attach to their new curb.
 
 TASK-110 imports footway, pedestrian, path, steps and living_street ways into `City.walk`,
 using `footway=crossing` for the crossing kind, positive metre widths, and the existing OSM

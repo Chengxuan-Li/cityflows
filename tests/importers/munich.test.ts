@@ -195,7 +195,9 @@ cityTest(
     }
     expect(pairs).toBe(24_944); // TASK-119 removes 57 unused parking destinations from all pairs.
     expect(unroutable).toEqual([]);
-    expect(forbidden).toEqual({ from379: 313, from1060: 153, to1059: 891 });
+    // TASK-124 keeps arrivals on r:379/r:1060 and adds legal exits; the fixed-size
+    // connector sample now includes 15 more destinations on still-restricted r:1059.
+    expect(forbidden).toEqual({ from379: 0, from1060: 0, to1059: 906 });
     expect(infeasible).toEqual([]);
   },
   600_000,
@@ -212,9 +214,11 @@ unitTest.each([
   const result = importOsmCached(xml, options);
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error('Import failed');
-  // TASK-104 diagnoses new lots and aisle mouths separately from the public-network budget.
+  // TASK-104 diagnoses new lots separately; TASK-124 exit warnings have their own T61 gate.
   const original = compile(withoutLotAisles(result.city));
-  expect(original.diagnostics.filter((d) => d.severity === 'warning').length).toBeLessThanOrEqual(
-    baseline,
-  );
+  expect(
+    original.diagnostics.filter(
+      (d) => d.severity === 'warning' && !['parking_no_exit', 'place_no_exit'].includes(d.code),
+    ).length,
+  ).toBeLessThanOrEqual(baseline);
 });

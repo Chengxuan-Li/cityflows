@@ -963,6 +963,19 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       if (!r) continue;
       const l = city.lanes[r.lanes[c.lane]!]!,
         preferred = attached.get(`parking:${p.id}`);
+      // Generated aisle entries had no walk link. Keep their facility's pedestrian door
+      // when saving them, including car-only split exits; a moved arrival can still attach.
+      if (p.provenance.inferred?.includes('materializedAisleEntries') && c.direction === 'out')
+        continue;
+      if (
+        p.provenance.inferred?.includes('materializedAisleEntries') &&
+        p.aisles?.includes(c.roadId)
+      ) {
+        const road = source.roads[c.roadId]!;
+        const start = p.entries?.includes(road.from) || !p.entries?.length;
+        const end = p.entries?.includes(road.to);
+        if ((start || end) && Math.abs(c.positionM - (start ? 0 : l.lengthM)) < 1e-9) continue;
+      }
       attach(
         c.id,
         'connectors',

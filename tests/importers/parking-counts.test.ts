@@ -66,12 +66,10 @@ test.each(tierCities(['Munich', 'Sindelfingen'] as const))(
         }
       }
     }
-    // Closest entries on disconnected local roads are kept as mapped; choice must skip
+    // TASK-124 repairs the two large Sindelfingen entries. Remaining local gaps stay mapped; choice must skip
     // rejected routes. Driveways and parking aisles are deferred to TASK-104.
     expect(rejected.sort((a, b) => a - b)).toEqual(
-      name === 'Munich'
-        ? [366044184, 543004600, 636485626, 1311608337]
-        : [25979999, 31583990, 443814543, 803877761],
+      name === 'Munich' ? [366044184, 543004600, 636485626, 1311608337] : [443814543, 803877761],
     );
   },
 );

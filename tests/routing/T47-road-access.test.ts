@@ -1,3 +1,4 @@
+// TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { createHash } from 'node:crypto';
 import { expect } from 'vitest';
@@ -19,8 +20,8 @@ import { test } from 'vitest';
 const hashes = {
   grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
-  Sindelfingen: '24d5bb2a0ab8e4e622a00371f34ab3f10212b928141f312cde86900345927fa0',
-  Munich: 'e431c35a3993fe8dee7708443a8f3d171bdd9c16f980e1b6d6b76daf282eb818',
+  Sindelfingen: '87e2a86968b33b38b19b2d3d73602f81bba5b8458eb0638dff533401080ca670',
+  Munich: 'b7df6e0118cc9fe59c75b70e8c7bb24abc3ef1c79c58193cd92d0e9df2c9ba4c',
 };
 
 test.each(tierCities(throughputCities))(

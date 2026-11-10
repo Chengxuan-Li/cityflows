@@ -16,7 +16,7 @@ import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls'
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
 import { addOsmGarages } from './parking';
-import { addGateways, addOsmPlaces } from './places';
+import { addGateways, addOsmPlaces, connectCarExits } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
 import { smoothRoads } from './smooth';
@@ -340,11 +340,12 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addGateways(city, roads, base.compiled);
   addOsmPlaces(city, data, positions, bounds, base.compiled);
   addBuildings(city, data, positions, bounds, base.compiled);
-  addOsmGarages(city, data, positions, bounds, base.compiled);
+  const garageFootprints = addOsmGarages(city, data, positions, bounds, base.compiled);
   addImplicitGarages(city);
-  addLots(city, data, positions, bounds, diagnostics);
+  const parkingGraph = addLots(city, data, positions, bounds, diagnostics) ?? base.compiled;
   importWalk(city, data, positions, bounds);
   addStrips(city, data, positions, bounds, diagnostics);
+  connectCarExits(city, parkingGraph, garageFootprints);
   if (options.context !== false)
     city.context = { features: importContext(data, positions, bounds, diagnostics, true) };
 

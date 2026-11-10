@@ -4,7 +4,7 @@ import type { CompiledCity } from '../../network';
 import type { City, Place } from '../../schema';
 import type { Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
-import { addPlace, placeConnector, polygonCenter } from './places';
+import { addPlace, layoutConnector, polygonCenter } from './places';
 
 type Use = 'residential' | 'commercial' | 'retail' | 'industrial';
 const uses = new Set(['residential', 'commercial', 'retail', 'industrial']);
@@ -295,7 +295,7 @@ export function addBuildings(
     if (group) group.push(item);
     else groups.push([item]);
   }
-  const connector = placeConnector(city, compiled);
+  const connector = layoutConnector(city, compiled);
   for (const group of groups) {
     const first = group[0]!;
     const total = group.reduce((sum, item) => sum + item.count, 0);
