@@ -1,3 +1,4 @@
+// TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 import { createHash } from 'node:crypto';
 import { compileAuditCity, loadAuditCity } from '../../bench/junction-audit';
 import { placeTrees } from '../../src/render/vegetation';
@@ -160,14 +161,14 @@ const pins = {
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
   munich: {
-    compile: 'a94950eb3cd55d8d755cfaaad1fb7f5e104110362aa8bcc78980378812dab515',
+    compile: 'e5e74e0a803aca48bc8433027d18e1765d5951a141fa2bcb332b873575ca08be',
     lamps: '89a545b414573da69366d35620e687835e065912a93c7c4c99efc362fdb772ec',
     curbs: '3cc58a9cc69242c36cb266d4f9a24b12f033be69e76529b3109ba643ea4bf63e',
     de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
     us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
   },
   sindelfingen: {
-    compile: '21ad4f3b76c74f8395c2e1975453507c94f764d21a2f5d3ea252a622ee22143c',
+    compile: 'c40035436a0e18ccaaa78be9cdce5f836bd74ba29a11ef2d6a7a03b9c97042fe',
     lamps: '9ec921f871252a427fd77f07e59db60ac6d205535f3c75bfcbf7521feae0490d',
     curbs: 'f6f1915996eb0586f11c25639ba6bc0290e7e277cbb180a6402489e4f19b134e',
     de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',

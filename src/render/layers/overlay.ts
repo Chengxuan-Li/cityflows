@@ -34,6 +34,26 @@ export function drawSelection(
   if (!selection) return;
   const stroke = { color: style.selection, width: 1.4, alpha: 0.55 };
   switch (selection.kind) {
+    case 'track': {
+      const track = city.rail?.tracks[selection.track];
+      if (track) graphics.poly(track.line, false).stroke({ ...stroke, width: 3 });
+      break;
+    }
+    case 'platform': {
+      const p = city.rail?.platforms[selection.platform];
+      if (p?.shape.kind === 'point') {
+        graphics.circle(p.shape.pos.x, p.shape.pos.y, 3).stroke(stroke);
+        break;
+      }
+      if (p)
+        graphics
+          .poly(
+            p.shape.kind === 'polygon' ? p.shape.ring : p.shape.line,
+            p.shape.kind === 'polygon',
+          )
+          .stroke(stroke);
+      break;
+    }
     case 'parked': {
       const space = city.parkingSpaces?.[selection.space];
       if (space)

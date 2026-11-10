@@ -1,3 +1,4 @@
+// TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
@@ -13,12 +14,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // geometry. No original entity is reconstructed by the aisle-stripping oracle.
 const main = {
   'munich-donnersberger': [
-    'f21b3cf5026102ef17ffb480feae8b3183facf2b417b6e11bd8cce96bae14369',
-    '81c78bddaf514290b1294a58104d7fbba4b9b93d48681ad020d04c68ad51fbcf',
+    'b9e14cb96434dda6ab6fd158d24c4d2bedd3c8bf8d696e211ac352ac39eee0a1',
+    '7b24104ca8181b3f68ab0a37e0a9ddfc6df087258e50ee070e4dd38aa5fb091c',
   ],
   'sindelfingen-a81': [
-    'bc59fccd9763465f9d79111f14288686f60d368c3227daf8b8c2bb997581a7e3',
-    '6f15347a7fccaef75e0830d7bc9ba1053aa990c512b6fa56f63fa508ea7453d2',
+    '0276e2d0a9c01e568440ae061de59394e2134f0932398d86e7d7c9e72bed8bc6',
+    '3afa943a3d2cee83a1f5b519ace9486617f2819d0335472ec451ae965a5b3d2a',
   ],
 };
 

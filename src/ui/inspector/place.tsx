@@ -5,6 +5,7 @@ import type { Vec2 } from '../../geo/vec2';
 import { useAppStore } from '../store';
 import { nearestPlaceLane } from '../tools/place-brush';
 import { NumberField } from './number-field';
+import { StationRailDetails } from './rail';
 
 const directions = { in: 'Arrivals', out: 'Departures', both: 'Arrivals and departures' };
 const kinds: PlaceKind[] = [
@@ -377,6 +378,7 @@ export function PlaceInspector({ place, connectorId }: { place: Place; connector
         {summary?.departures ?? 0} trips produced · {summary?.arrivals ?? 0} attracted
       </p>
       {!summary && <p className="muted">Regenerate demand to schedule this place.</p>}
+      <StationRailDetails place={place} />
       {session.compiled.parking
         .filter((facility) => facility.source.placeId === place.id)
         .map((facility) => (

@@ -1,3 +1,4 @@
+// TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { vehicleJson } from '../vehicle-json';
 import { cityHeights } from '../../src/render3d/heights';
@@ -44,12 +45,12 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: 'c218f78229de5e4aae6ae8f6f90aceb37497ed3185759576a3d2d2aa8905ba61',
+    compile: '5dcd7d3f451f0addba78bfa6d19ebfe4476df6728a073ef94b23fac5ad985468',
     arrows: '4a050bf9444cf93e96db85004e8d3ea62dca54dcc33d6a794f12c603be8234d3',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
-    compile: '7df9903dd8a949cb581c6aea3c67f8999e96e7671337de25725b48d970cdbca4',
+    compile: 'd6dc1b7c15a66894ead0784003dca564d773e8a812ff93ccb9d8e13ef76e249e',
     arrows: '58f23f654d47b6df163f7625fc68815d5e2dc06b00437fc2918e30a09dd7abb1',
   },
 } as const;

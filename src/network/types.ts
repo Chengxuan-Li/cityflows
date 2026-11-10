@@ -1,5 +1,6 @@
 import type Flatbush from 'flatbush';
 import type { WalkGraph } from './walk';
+import type { RailGraph } from './rail';
 import type { Vec2 } from '../geo/vec2';
 import type {
   Control,
@@ -31,6 +32,7 @@ export interface Diagnostic {
 }
 
 export interface CompiledCity {
+  rail?: RailGraph;
   walk: WalkGraph;
   version: number;
   drivingSide: DrivingSide;

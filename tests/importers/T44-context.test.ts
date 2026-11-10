@@ -1,3 +1,4 @@
+// TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { vehicleJson } from '../vehicle-json';
 import { createHash } from 'node:crypto';
@@ -32,12 +33,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           [
             // TASK-103: saved strips and inferred lot entries; compiled visible spaces.
             // T49 retains the original main hashes with appended parking removed.
-            'fbaa018ae4bb87cad006057918252db2dd838f49630f5018c9177a9504c25136',
-            'd74939ad885aa89a6d644356115596404030c1abaa2a622e678fd82b13f79630',
+            '09e6c07919f4546b0123800dcf31903521938b8e0357b52b876297c2823eb6d1',
+            '6ca88093526759e7f50f88848a652419808c305ddf324642556c6a09e964330d',
           ]
         : [
-            '46e0e602d10f95519d92031296170ee5771ce6a8ba362002260bdc456a30ee35',
-            '0314cf5c18d75f5ee826b293a7c9fcc63cc73d7cdd01557b5d99898883213d71',
+            '759b1ba1d29f259fd98da2c61995339b560e05a59682c65f00d8c9f65732641c',
+            '8cd48000d48d9a87d2a8cd55d77dd11dfb0abade7fb64eddb4cc2547d924084f',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

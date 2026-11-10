@@ -1,3 +1,4 @@
+import { compileRail } from './rail';
 import { cumulativeLengths, headingAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, Place, RoadClass } from '../schema';
@@ -545,5 +546,6 @@ export function compile(city: City): CompileResult {
   warnAboutConnectivity(compiled, diagnostics);
   compiled.walk = compileWalk(city, compiled);
   compileSignalWalk(compiled, city);
+  if (city.rail) compiled.rail = compileRail(city);
   return { ok: true, compiled, diagnostics };
 }

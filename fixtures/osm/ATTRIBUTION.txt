@@ -35,3 +35,26 @@ Source: https://overpass-api.de/api/interpreter
 OSM snapshot: 2026-11-04T06:18:55Z
 BBox: 8.98, 48.69, 9.0, 48.702
 Contents: highway ways and nodes, turn restrictions, buildings, land use and amenities.
+
+TASK-126 railway supplement, downloaded November 10, 2026: munich-donnersberger.osm
+Source: https://overpass-api.de/api/interpreter
+Query (historical snapshot; osm_base in response is the server freshness, not query date):
+[out:xml][timeout:90][date:"2026-11-04T05:53:36Z"];(way[railway~"^(rail|light_rail|subway|narrow_gauge|tram)$"](48.135,11.525,48.148,11.545);way[railway=platform](48.135,11.525,48.148,11.545);way[public_transport=platform](48.135,11.525,48.148,11.545););(._;>;);out body;
+Appended only missing element IDs: {'node': 2412, 'way': 335}. Railway way tags: {'rail': 317, 'tram': 4, 'platform': 14}.
+All 21704 existing elements verified byte for byte and in order. Removing
+the appended block restores the original file SHA-256 25f3fdb1539f3fe6d8b818555614de770310c44fc8368d82bc277bef840246ae.
+
+TASK-126 railway supplement, downloaded November 10, 2026: sindelfingen-a81.osm
+Source: https://overpass-api.de/api/interpreter
+Query (historical snapshot; osm_base in response is the server freshness, not query date):
+[out:xml][timeout:90][date:"2026-11-04T06:18:55Z"];(way[railway~"^(rail|light_rail|subway|narrow_gauge|tram)$"](48.69,8.98,48.702,9.0);way[railway=platform](48.69,8.98,48.702,9.0);way[public_transport=platform](48.69,8.98,48.702,9.0););(._;>;);out body;
+Appended only missing element IDs: {'node': 161, 'way': 20}. Railway way tags: {'rail': 20}.
+All 5895 existing elements verified byte for byte and in order. Removing
+the appended block restores the original file SHA-256 ce190658582d4468d365d4f6ba33939ebe078a7405fd7249e5dc08cd9417e16d.
+
+Munich railway platforms: two S-Bahn platform multipolygons (4178303, 4178304)
+and their rail stop area (4245550), with missing recursive members. Query:
+[out:xml][timeout:90][date:"2026-11-04T05:53:36Z"];(rel[railway=platform](48.135,11.525,48.148,11.545);rel[public_transport=platform](48.135,11.525,48.148,11.545);rel[public_transport=stop_area](48.135,11.525,48.148,11.545););(._;>>;);out body;
+Only rail platform/rail stop-area relations and their members were appended; bus
+stop areas from the response were excluded. Added {'relation': 3, 'way': 4, 'node': 28}.
+All 21704 original elements remain byte-identical and ordered.

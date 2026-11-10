@@ -192,6 +192,7 @@ interface PlaceEvent {
 }
 
 interface Place {
+  station?: { platforms: string[]; entrances: WalkNodeId[] }; // TASK-126
   id: PlaceId;
   kind: PlaceKind;
   name: string;
@@ -215,6 +216,7 @@ interface GeoSource {
 }
 
 interface City {
+  rail?: RailNetwork;      // TASK-126: independent track network
   schemaVersion: 3;
   version: number;         // bumps on every committed edit; caches key on it
   name: string;
@@ -369,6 +371,19 @@ Absent means derived; an empty list means none. Road deletion drops entries nami
 a split renames them with its group entries; an entry that names no crossing of the node is
 ignored at compile, so stale entries never fail an edit.
 
+TASK-126 adds optional `City.rail: RailNetwork` and `Place.station?: { platforms: string[];
+entrances: WalkNodeId[] }` without a version bump. Old projects omit them; current, v2 and
+v1 boundary schemas retain them through JSON/ZIP save/open. Rail IDs use the shared counter,
+after vehicle, parking and walk import allocation: `rn:` nodes, `rt:` tracks, `rp:` platforms.
+`schema/rail.ts` defines nodes (position, layer, plain/switch/buffer_stop/stop/level_crossing,
+optional OSM ID and signal flag), undirected tracks (endpoints, polyline, kind, layer, optional
+bridge/tunnel/service/usage/name/maxSpeedMps/OSM ID), and platforms (polygon, line or mapped point, layer,
+mode rail/tram/bus, name, served track IDs, station place ID or null). Boundary validation
+checks IDs, track references/endpoints and positive lengths, platform track references and
+closed platform rings. No rail data is a road lane or a car connector. Station car demand,
+connectors and parking retain their imported values. Stations without mapped buildings gain
+a platform-covering bounding polygon; mapped building shapes remain intact.
+
 ## 5. Compiled model: `CompiledCity`
 
 `compile(city: City): CompileResult` lives in `src/network` and is a pure, deterministic
@@ -387,6 +402,7 @@ interface Diagnostic {
 }
 
 interface CompiledCity {
+  rail?: RailGraph;        // TASK-126: derived tracks, continuations and crossings
   version: number;
   drivingSide: DrivingSide;
   nodes: CNode[];
@@ -487,6 +503,17 @@ TASK-119 uses a strip's mapped `ring` directly as `CStrip.polygon`. At each slot
 station, the curb lane's normal intersects the ring; the widest outward interior interval
 supplies the slot centre. Stations with no interior interval produce no slot. Both renderers
 consume this same band and slot geometry.
+
+TASK-126 derives optional `CompiledCity.rail` after walk compilation, in `network/rail.ts`.
+Dense nodes list incident track indices; dense tracks carry canonical identity/geometry,
+endpoint indices, cumulative metres and length. Directed continuation pairs connect different
+tracks only at a shared node and at deflection <=30 degrees: shallow turnout branches connect
+to their stem, while branch-to-branch reversals and sharp corners do not. Buffer stops have
+no continuations. Geographic crossings never create rail connectivity; explicitly shared nodes
+may join grades at mapped abutments. Components report physical track connectivity, including
+branches that cannot be traversed directly. Same-grade road/track intersections carry road ID,
+track index, position and metre station on both polylines. They are derived from current road
+geometry, so deleting a road drops only its crossing records. No car/walker control reads them.
 
 ### 5.1 Lane layout
 
@@ -875,6 +902,11 @@ remote entrances flipping an already usable car access to the opposite curb.
 No access is invented beyond the distance limit or across an incompatible grade. Access is a
 straight connection, not obstacle-avoiding navigation through a block. Building clipping is
 presentation-only; display context still cannot change compiled connectivity.
+
+TASK-126 associates public-transport station entrances with canonical walk nodes, preserving
+existing walk IDs. Entrance association uses a matching name when present, then the nearest
+station within 250 m, excluding foot/access=no. The existing 150 m, same-grade, no-road-crossing
+access attachment above supplies streets; stations without doors use the platform/building shape.
 
 ## 6. Editing
 
@@ -1857,6 +1889,17 @@ type HostEvent =
 
 ## 11. Rendering and UI
 
+TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
+line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,
+switch discs, platforms and small station discs. Same-grade asphalt clips non-tram paint;
+each 2D grade caches rail beds below roads and a separate tram-rail batch above road and junction surfaces, below crossing paint. 3D uses one vertex-colour batch with mapped grades
+and existing terrain/height interpolation; tunnels follow grade visibility. The default-on
+Rail layer is independent of Surroundings. Imported network rails replace context rail/tram
+lines permanently, so turning Rail off cannot restore the old lines. Tracks/platforms and
+station markers are pickable in both views; inspectors expose track kind/name/service/length,
+platform served tracks and station platform/entrance counts. Tracks have no editing tools.
+
+
 TASK-111/112: the default-on Pedestrians layer (shown for person demand or test pedestrians) draws
 walkers as dots at least 2.4 px across in their grade's group above vehicles in 2D (warmer
 while waiting at a kerb), and as instanced upright capsules in 3D at ground plus 5 m per grade
@@ -2315,6 +2358,18 @@ baseline.json     { city: City, scenario: Scenario, population?: Person[] } opti
   the existing GeoJSON output and names files with the project name and scenario ID.
 
 ## 13. OSM import
+
+TASK-126's queryVersion 8 requests active rail/light_rail/subway/narrow_gauge/tram ways,
+railway/public-transport platforms (including multipolygons), station and entrance nodes and
+stop areas independently of display surroundings. Rail import runs after existing ID allocation,
+clips to the metric bbox, breaks at missing nodes, and splits at shared/tagged railway nodes.
+Platform polygons reuse the existing multipolygon assembler. Platforms serve same-grade,
+mode-compatible tracks within 5 m of their boundary. A mapped stop area's explicit station
+membership wins; otherwise rail platforms match the same normalized station name within 500 m.
+Bus/tram platforms do not inherit a rail station by proximity/name alone. The bundled extracts
+append only missing IDs at each original historical snapshot; ATTRIBUTION.txt records queries
+and original-file hashes. T62 proves original bytes and lane/movement hashes remain unchanged.
+
 
 TASK-103 maps `parking:left|right|both` lane/street_side/on_kerb/half_on_kerb/shoulder
 and orientation tags, plus legacy `parking:lane:<side>` layouts. Explicit no/no_parking/

@@ -1,3 +1,4 @@
+// TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { vehicleJson } from '../vehicle-json';
 import { createHash } from 'node:crypto';
@@ -37,8 +38,8 @@ const baselines = {
   grid: '296948629376e758231293088f0cdb136d7554c269b0d0880a92577177e913a6',
   town: '96bd0dd88f049e1589aac69b800a1fe25dfb976687b5b55c9874998b7c51b2a6',
   // TASK-119 updates parking data and removes obsolete places; T55 pins unchanged vehicle geometry.
-  'munich-donnersberger': 'd74939ad885aa89a6d644356115596404030c1abaa2a622e678fd82b13f79630',
-  'sindelfingen-a81': '0314cf5c18d75f5ee826b293a7c9fcc63cc73d7cdd01557b5d99898883213d71',
+  'munich-donnersberger': '6ca88093526759e7f50f88848a652419808c305ddf324642556c6a09e964330d',
+  'sindelfingen-a81': '8cd48000d48d9a87d2a8cd55d77dd11dfb0abade7fb64eddb4cc2547d924084f',
 };
 
 unitTest(

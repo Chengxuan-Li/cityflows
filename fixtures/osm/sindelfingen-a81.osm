@@ -17049,4 +17049,603 @@
     <tag k="type" v="restriction"/>
   </relation>
 
+
+<!-- TASK-126: snapshot-pinned railway supplement; see ATTRIBUTION.txt. -->
+<node id="344710841" lat="48.6992257" lon="8.9999717">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710846" lat="48.6990426" lon="8.9999555"/>
+<node id="344710847" lat="48.7000699" lon="9.0003151"/>
+<node id="344710848" lat="48.6998519" lon="9.0002129"/>
+<node id="344710849" lat="48.6997676" lon="9.0001925"/>
+<node id="344710850" lat="48.6994731" lon="9.0001119"/>
+<node id="344710851" lat="48.6992529" lon="8.9999882">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710877" lat="48.6988232" lon="8.9995701"/>
+<node id="344710878" lat="48.6986734" lon="8.9993509">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710879" lat="48.6979780" lon="8.9981870"/>
+<node id="344710880" lat="48.6988988" lon="8.9998041"/>
+<node id="344710881" lat="48.6976523" lon="8.9977606"/>
+<node id="344710882" lat="48.6986345" lon="8.9993910">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710883" lat="48.6988512" lon="8.9996754"/>
+<node id="344710884" lat="48.6989128" lon="8.9997331"/>
+<node id="344710885" lat="48.6985088" lon="8.9989981"/>
+<node id="344710886" lat="48.6984510" lon="8.9988165"/>
+<node id="344710888" lat="48.6983520" lon="8.9984950"/>
+<node id="344710889" lat="48.6970531" lon="8.9960767">
+    <tag k="railway" v="switch"/>
+    <tag k="railway:switch" v="double_slip"/>
+    <tag k="railway:switch:configuration" v="inside"/>
+  </node>
+<node id="344710890" lat="48.6976933" lon="8.9977048"/>
+<node id="344710891" lat="48.6974473" lon="8.9971267">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710892" lat="48.6972047" lon="8.9965990"/>
+<node id="344710893" lat="48.6955853" lon="8.9923117">
+    <tag k="railway" v="buffer_stop"/>
+  </node>
+<node id="344710894" lat="48.6956298" lon="8.9922680">
+    <tag k="railway" v="buffer_stop"/>
+  </node>
+<node id="344710895" lat="48.6968229" lon="8.9955974">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710896" lat="48.6973266" lon="8.9968075">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710897" lat="48.6973000" lon="8.9967276"/>
+<node id="344710899" lat="48.6971875" lon="8.9961889"/>
+<node id="344710901" lat="48.6971643" lon="8.9966437">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710902" lat="48.6955455" lon="8.9923301">
+    <tag k="railway" v="buffer_stop"/>
+  </node>
+<node id="344710903" lat="48.6969678" lon="8.9959872">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710904" lat="48.6973699" lon="8.9971604">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710905" lat="48.6954740" lon="8.9923632"/>
+<node id="344710907" lat="48.6960347" lon="8.9938250"/>
+<node id="344710908" lat="48.6962227" lon="8.9942864"/>
+<node id="344710910" lat="48.6968479" lon="8.9959495"/>
+<node id="344710912" lat="48.6970207" lon="8.9963940"/>
+<node id="344710913" lat="48.6973140" lon="8.9970215">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710917" lat="48.6944467" lon="8.9895585"/>
+<node id="344710918" lat="48.6947812" lon="8.9904464">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710920" lat="48.6948774" lon="8.9906741"/>
+<node id="344710922" lat="48.6953037" lon="8.9912967"/>
+<node id="344710926" lat="48.6977877" lon="8.9930819"/>
+<node id="344710927" lat="48.6949146" lon="8.9907467">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710928" lat="48.6960029" lon="8.9917431"/>
+<node id="344710929" lat="48.6970158" lon="8.9924869">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710930" lat="48.6977524" lon="8.9929605"/>
+<node id="344710932" lat="48.6981072" lon="8.9932377"/>
+<node id="344710933" lat="48.6979698" lon="8.9931691">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710934" lat="48.6982262" lon="8.9933108">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344710936" lat="48.6994212" lon="8.9941896"/>
+<node id="344710941" lat="48.6998379" lon="8.9943300"/>
+<node id="344710942" lat="48.6999816" lon="8.9943127"/>
+<node id="344710943" lat="48.7002631" lon="8.9941663">
+    <tag k="railway" v="switch"/>
+    <tag k="railway:switch" v="double_slip"/>
+    <tag k="railway:switch:configuration" v="inside"/>
+  </node>
+<node id="344710944" lat="48.7005025" lon="8.9940242"/>
+<node id="344710945" lat="48.7006273" lon="8.9939912"/>
+<node id="344710946" lat="48.7007487" lon="8.9939918"/>
+<node id="344710947" lat="48.7000976" lon="8.9943460"/>
+<node id="344710949" lat="48.7000214" lon="8.9944673"/>
+<node id="344710953" lat="48.6994223" lon="8.9962177">
+    <tag k="railway" v="buffer_stop"/>
+  </node>
+<node id="344710955" lat="48.7005242" lon="8.9939287"/>
+<node id="344710956" lat="48.7005759" lon="8.9938940"/>
+<node id="344710958" lat="48.7006692" lon="8.9938507"/>
+<node id="344710961" lat="48.7008701" lon="8.9938066"/>
+<node id="344710965" lat="48.7009545" lon="8.9938095"/>
+<node id="344710969" lat="48.7027687" lon="8.9949869"/>
+<node id="344710971" lat="48.7008964" lon="8.9940177"/>
+<node id="344710974" lat="48.7011804" lon="8.9941883"/>
+<node id="344710976" lat="48.7012485" lon="8.9942615"/>
+<node id="344710977" lat="48.7014530" lon="8.9944657"/>
+<node id="344710979" lat="48.7016080" lon="8.9945952"/>
+<node id="344710980" lat="48.7018246" lon="8.9947559"/>
+<node id="344710982" lat="48.7021956" lon="8.9950310"/>
+<node id="344710984" lat="48.7023395" lon="8.9951372"/>
+<node id="344710985" lat="48.7024845" lon="8.9952278"/>
+<node id="344711098" lat="48.6940316" lon="8.9884258"/>
+<node id="344711100" lat="48.6939358" lon="8.9878432"/>
+<node id="344711102" lat="48.6939314" lon="8.9875347">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="344711104" lat="48.6940015" lon="8.9869947"/>
+<node id="344711105" lat="48.6949976" lon="8.9838876">
+    <tag k="railway" v="buffer_stop"/>
+  </node>
+<node id="344711106" lat="48.6939440" lon="8.9871690"/>
+<node id="344711107" lat="48.6939790" lon="8.9868063"/>
+<node id="344711109" lat="48.6940559" lon="8.9864665"/>
+<node id="344711110" lat="48.6946215" lon="8.9846008">
+    <tag k="railway" v="buffer_stop"/>
+  </node>
+<node id="352952438" lat="48.7001105" lon="9.0007396"/>
+<node id="352953634" lat="48.6999995" lon="9.0005368">
+    <tag k="crossing:barrier" v="no"/>
+    <tag k="railway" v="level_crossing"/>
+  </node>
+<node id="352953635" lat="48.6999701" lon="9.0006370">
+    <tag k="crossing:barrier" v="no"/>
+    <tag k="railway" v="level_crossing"/>
+  </node>
+<node id="352953657" lat="48.6972108" lon="8.9963689">
+    <tag k="railway" v="railway_crossing"/>
+  </node>
+<node id="353315569" lat="48.6975435" lon="8.9969613"/>
+<node id="4406670535" lat="48.7008040" lon="8.9938144"/>
+<node id="4406670536" lat="48.7008093" lon="8.9939996"/>
+<node id="4406755984" lat="48.6974659" lon="8.9927508"/>
+<node id="4406757139" lat="48.7002048" lon="9.0004120"/>
+<node id="4565516260" lat="48.7001375" lon="9.0006406"/>
+<node id="8218560346" lat="48.6939290" lon="8.9877046"/>
+<node id="8218560349" lat="48.6939613" lon="8.9880908"/>
+<node id="8218560352" lat="48.6964437" lon="8.9921417">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="8218560353" lat="48.6969592" lon="8.9924468">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="8218560354" lat="48.6971383" lon="8.9925628"/>
+<node id="8218560355" lat="48.6973724" lon="8.9928289"/>
+<node id="8218560356" lat="48.6977270" lon="8.9930135"/>
+<node id="8660200425" lat="48.7028749" lon="8.9950793">
+    <tag k="railway" v="level_crossing"/>
+  </node>
+<node id="8660200461" lat="48.7028653" lon="8.9950696"/>
+<node id="8660200462" lat="48.7029232" lon="8.9951279"/>
+<node id="8660200469" lat="48.7009897" lon="8.9940543"/>
+<node id="8660200473" lat="48.6989123" lon="8.9996789"/>
+<node id="8660200474" lat="48.6990177" lon="8.9997849"/>
+<node id="8660200475" lat="48.6987530" lon="8.9994711"/>
+<node id="8660200476" lat="48.6995753" lon="9.0001443"/>
+<node id="8660200477" lat="48.6989654" lon="8.9998814"/>
+<node id="8660200478" lat="48.6988274" lon="8.9997098"/>
+<node id="8660200493" lat="48.6995514" lon="8.9942703"/>
+<node id="8660200494" lat="48.6976173" lon="8.9929949"/>
+<node id="8660200495" lat="48.6978439" lon="8.9930955"/>
+<node id="8660200496" lat="48.6972917" lon="8.9926414"/>
+<node id="8660200497" lat="48.6968018" lon="8.9923476"/>
+<node id="8660200498" lat="48.6966062" lon="8.9922497"/>
+<node id="8660200499" lat="48.6961313" lon="8.9918382">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="8660200500" lat="48.6959843" lon="8.9917515"/>
+<node id="8660200501" lat="48.6958079" lon="8.9916636"/>
+<node id="8660200502" lat="48.6956857" lon="8.9915868">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="8660200504" lat="48.6952101" lon="8.9911502"/>
+<node id="8660200505" lat="48.6951957" lon="8.9911813"/>
+<node id="8660200506" lat="48.6951071" lon="8.9910423"/>
+<node id="8660200507" lat="48.6950940" lon="8.9910549"/>
+<node id="8660200508" lat="48.6953167" lon="8.9912415"/>
+<node id="8660200509" lat="48.6948300" lon="8.9905662"/>
+<node id="8660200510" lat="48.6982725" lon="8.9983296"/>
+<node id="8660200511" lat="48.6977572" lon="8.9973399"/>
+<node id="8660200512" lat="48.6986122" lon="8.9992419"/>
+<node id="8660200513" lat="48.6985650" lon="8.9991367"/>
+<node id="8660200514" lat="48.6968935" lon="8.9957653"/>
+<node id="8660200515" lat="48.6972433" lon="8.9965334"/>
+<node id="8660230319" lat="48.6973904" lon="8.9969866"/>
+<node id="8660230320" lat="48.6973398" lon="8.9968768"/>
+<node id="8660230321" lat="48.6972629" lon="8.9967233"/>
+<node id="8660230322" lat="48.6971057" lon="8.9963488"/>
+<node id="8660230323" lat="48.6970891" lon="8.9964084"/>
+<node id="8660230324" lat="48.6970341" lon="8.9961874"/>
+<node id="8660230325" lat="48.6970883" lon="8.9965632"/>
+<node id="8660230326" lat="48.6972385" lon="8.9968582"/>
+<node id="8660230327" lat="48.6976096" lon="8.9975317"/>
+<node id="8660230328" lat="48.6975433" lon="8.9973769"/>
+<node id="8660230329" lat="48.6978019" lon="8.9978958">
+    <tag k="railway" v="switch"/>
+  </node>
+<node id="8660230330" lat="48.6976092" lon="8.9975985"/>
+<node id="8660230331" lat="48.6975009" lon="8.9974159"/>
+<node id="8660230332" lat="48.6975205" lon="8.9974947"/>
+<node id="8660230333" lat="48.6963302" lon="8.9945639"/>
+<node id="8660230334" lat="48.6953983" lon="8.9921597"/>
+<node id="8660230336" lat="48.6941101" lon="8.9886640"/>
+<node id="8660230338" lat="48.6939939" lon="8.9882657"/>
+<node id="8660230339" lat="48.6939560" lon="8.9869849"/>
+<node id="8660230340" lat="48.6940756" lon="8.9867236"/>
+<node id="8660230341" lat="48.6940145" lon="8.9866237"/>
+<node id="8660230345" lat="48.6939433" lon="8.9873680"/>
+<node id="8660230346" lat="48.6939590" lon="8.9872244"/>
+<node id="8660230347" lat="48.6939300" lon="8.9875897"/>
+<node id="9486976783" lat="48.6971688" lon="8.9960650"/>
+<node id="9486976784" lat="48.6971494" lon="8.9959640"/>
+<node id="9486976786" lat="48.6969185" lon="8.9953101"/>
+<node id="9826284456" lat="48.7001276" lon="8.9942569"/>
+<way id="31002066">
+    <nd ref="4565516260"/>
+    <nd ref="352953634"/>
+    <nd ref="344710851"/>
+    <nd ref="344710841"/>
+    <nd ref="8660200474"/>
+    <nd ref="8660200473"/>
+    <nd ref="344710877"/>
+    <nd ref="8660200475"/>
+    <nd ref="344710878"/>
+    <nd ref="344710879"/>
+    <nd ref="8660230329"/>
+    <nd ref="344710890"/>
+    <nd ref="8660230327"/>
+    <nd ref="8660230328"/>
+    <nd ref="344710891"/>
+    <nd ref="8660230319"/>
+    <nd ref="8660230320"/>
+    <nd ref="8660230321"/>
+    <nd ref="344710892"/>
+    <nd ref="8660230322"/>
+    <nd ref="344710903"/>
+    <nd ref="344710895"/>
+    <nd ref="344710893"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002068">
+    <nd ref="344710985"/>
+    <nd ref="344710984"/>
+    <nd ref="344710982"/>
+    <nd ref="344710980"/>
+    <nd ref="344710979"/>
+    <nd ref="344710977"/>
+    <nd ref="352953663"/>
+    <nd ref="344710976"/>
+    <nd ref="344710974"/>
+    <nd ref="344710973"/>
+    <nd ref="8660200469"/>
+    <nd ref="344710971"/>
+    <nd ref="4406670536"/>
+    <nd ref="344710946"/>
+    <nd ref="344710945"/>
+    <nd ref="344710944"/>
+    <nd ref="352953630"/>
+    <nd ref="344710943"/>
+    <nd ref="9826284456"/>
+    <nd ref="344710942"/>
+    <nd ref="344710941"/>
+    <nd ref="344710940"/>
+    <nd ref="8660200493"/>
+    <nd ref="344710936"/>
+    <nd ref="344710934"/>
+    <nd ref="344710930"/>
+    <nd ref="4406755984"/>
+    <nd ref="8660200496"/>
+    <nd ref="8218560354"/>
+    <nd ref="344710929"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002088">
+    <nd ref="344710841"/>
+    <nd ref="344710884"/>
+    <nd ref="344710883"/>
+    <nd ref="344710882"/>
+    <tag k="electrified" v="no"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002089">
+    <nd ref="344710878"/>
+    <nd ref="8660200512"/>
+    <nd ref="8660200513"/>
+    <nd ref="344710885"/>
+    <nd ref="352953622"/>
+    <nd ref="344710886"/>
+    <nd ref="352953620"/>
+    <nd ref="344710888"/>
+    <nd ref="8660200510"/>
+    <nd ref="8660200511"/>
+    <nd ref="353315569"/>
+    <nd ref="8660200516"/>
+    <nd ref="352953657"/>
+    <nd ref="344710889"/>
+    <nd ref="8660200514"/>
+    <nd ref="344710895"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002090">
+    <nd ref="344710891"/>
+    <nd ref="344710896"/>
+    <nd ref="344710889"/>
+    <nd ref="344710894"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002091">
+    <nd ref="344710896"/>
+    <nd ref="344710897"/>
+    <nd ref="8660200515"/>
+    <nd ref="352953657"/>
+    <nd ref="8660230317"/>
+    <nd ref="344710899"/>
+    <nd ref="9486976783"/>
+    <nd ref="9486976784"/>
+    <nd ref="9486976785"/>
+    <nd ref="9486976786"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002092">
+    <nd ref="344710901"/>
+    <nd ref="8660230323"/>
+    <nd ref="8660230324"/>
+    <nd ref="344710903"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002093">
+    <nd ref="344710913"/>
+    <nd ref="8660230326"/>
+    <nd ref="8660230325"/>
+    <nd ref="344710912"/>
+    <nd ref="344710910"/>
+    <nd ref="8660230333"/>
+    <nd ref="344710908"/>
+    <nd ref="344710907"/>
+    <nd ref="344710905"/>
+    <nd ref="8660230334"/>
+    <nd ref="344711048"/>
+    <nd ref="344711085"/>
+    <nd ref="344710918"/>
+    <nd ref="352953625"/>
+    <nd ref="344710917"/>
+    <nd ref="8660230336"/>
+    <nd ref="344711098"/>
+    <nd ref="8660230338"/>
+    <nd ref="8218560349"/>
+    <nd ref="344711100"/>
+    <nd ref="8218560346"/>
+    <nd ref="8218560348"/>
+    <nd ref="8660230347"/>
+    <nd ref="344711102"/>
+    <nd ref="8660230344"/>
+    <nd ref="8660230345"/>
+    <nd ref="8660230346"/>
+    <nd ref="344711104"/>
+    <nd ref="8660230340"/>
+    <nd ref="4406755947"/>
+    <nd ref="344711105"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002094">
+    <nd ref="344710918"/>
+    <nd ref="8660200509"/>
+    <nd ref="344710920"/>
+    <nd ref="344710927"/>
+    <nd ref="352953623"/>
+    <nd ref="8660200507"/>
+    <nd ref="8660200505"/>
+    <nd ref="344710922"/>
+    <nd ref="8218560350"/>
+    <nd ref="8660200502"/>
+    <nd ref="352953660"/>
+    <nd ref="8218560352"/>
+    <nd ref="8218560355"/>
+    <nd ref="8660200494"/>
+    <nd ref="344710926"/>
+    <nd ref="344710933"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="layer" v="-1"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002096">
+    <nd ref="344710927"/>
+    <nd ref="8660200503"/>
+    <nd ref="8660200506"/>
+    <nd ref="8660200504"/>
+    <nd ref="8660200508"/>
+    <nd ref="8218560351"/>
+    <nd ref="344710928"/>
+    <nd ref="8660200499"/>
+    <nd ref="352953658"/>
+    <nd ref="8218560353"/>
+    <nd ref="344710929"/>
+    <nd ref="8218560356"/>
+    <nd ref="8660200495"/>
+    <nd ref="344710933"/>
+    <nd ref="344710932"/>
+    <nd ref="344710934"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31002097">
+    <nd ref="8660200462"/>
+    <nd ref="8660200425"/>
+    <nd ref="8660200461"/>
+    <nd ref="344710969"/>
+    <nd ref="344710968"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+    <tag k="tunnel" v="building_passage"/>
+  </way>
+<way id="31002110">
+    <nd ref="344711102"/>
+    <nd ref="8218560347"/>
+    <nd ref="344711106"/>
+    <nd ref="8660230339"/>
+    <nd ref="344711107"/>
+    <nd ref="8660230341"/>
+    <nd ref="344711109"/>
+    <nd ref="4406755941"/>
+    <nd ref="4565516236"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31541265">
+    <nd ref="344710968"/>
+    <nd ref="344710966"/>
+    <nd ref="344710965"/>
+    <nd ref="344710961"/>
+    <nd ref="4406670535"/>
+    <nd ref="344710960"/>
+    <nd ref="344710958"/>
+    <nd ref="344710956"/>
+    <nd ref="344710955"/>
+    <nd ref="352953632"/>
+    <nd ref="344710943"/>
+    <nd ref="344710947"/>
+    <nd ref="344710949"/>
+    <nd ref="344710950"/>
+    <nd ref="344710952"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31541269">
+    <nd ref="344710952"/>
+    <nd ref="344710953"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="layer" v="-1"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+    <tag k="tunnel" v="building_passage"/>
+  </way>
+<way id="31541270">
+    <nd ref="352952438"/>
+    <nd ref="352953635"/>
+    <nd ref="344710846"/>
+    <nd ref="8660200477"/>
+    <nd ref="344710880"/>
+    <nd ref="8660200478"/>
+    <nd ref="344710882"/>
+    <nd ref="344710881"/>
+    <nd ref="8660230332"/>
+    <nd ref="344710904"/>
+    <nd ref="344710913"/>
+    <nd ref="344710901"/>
+    <nd ref="344710902"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="31541272">
+    <nd ref="4406757139"/>
+    <nd ref="344710847"/>
+    <nd ref="344710848"/>
+    <nd ref="344710849"/>
+    <nd ref="352953644"/>
+    <nd ref="8660200476"/>
+    <nd ref="344710850"/>
+    <nd ref="344710851"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="460984652">
+    <nd ref="4565516236"/>
+    <nd ref="344711110"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+    <tag k="tunnel" v="building_passage"/>
+  </way>
+<way id="883682866">
+    <nd ref="8218560352"/>
+    <nd ref="8660200498"/>
+    <nd ref="8660200497"/>
+    <nd ref="8218560353"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="operator" v="Mercedes Benz AG"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="934438738">
+    <nd ref="8660200502"/>
+    <nd ref="8660200501"/>
+    <nd ref="8660200500"/>
+    <nd ref="8660200499"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
+<way id="934438739">
+    <nd ref="344710904"/>
+    <nd ref="8660230331"/>
+    <nd ref="8660230330"/>
+    <nd ref="8660230329"/>
+    <tag k="electrified" v="no"/>
+    <tag k="gauge" v="1435"/>
+    <tag k="railway" v="rail"/>
+    <tag k="service" v="spur"/>
+  </way>
 </osm>

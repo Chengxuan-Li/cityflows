@@ -10,6 +10,7 @@ import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
 import { importContext } from './context';
 import { addLots } from './lots';
 import { importWalk } from './walk';
+import { importRail } from './rail';
 import { addStrips } from './strips';
 import { addBuildings } from './buildings';
 import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
@@ -345,8 +346,13 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addLots(city, data, positions, bounds, diagnostics);
   importWalk(city, data, positions, bounds);
   addStrips(city, data, positions, bounds, diagnostics);
+  importRail(city, data, positions, bounds, diagnostics);
   if (options.context !== false)
     city.context = { features: importContext(data, positions, bounds, diagnostics, true) };
+  if (city.rail && city.context)
+    city.context.features = city.context.features.filter(
+      (f) => f.class !== 'rail' && f.class !== 'tram',
+    );
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)

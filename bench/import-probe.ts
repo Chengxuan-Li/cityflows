@@ -11,6 +11,7 @@ import { distance, pointAtDistance } from '../src/geo/polyline';
 import { createEngine } from '../src/sim/engine';
 import type { TrafficEngine } from '../src/sim/types';
 import { walkComponents } from '../src/network/walk-joins';
+import { railCensus } from '../src/network/rail';
 
 // Import an OSM fixture, compile it, and run its morning headless: the baseline the import
 // wave measures against. Usage: npm run import-probe -- fixtures/osm/<name>.osm w s e n [--scale n]
@@ -59,6 +60,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
   const { compiled } = result;
   console.info('Walk connectivity', probeWalk(city, compiled));
+  if (compiled.rail) console.info('Rail census', railCensus(city, compiled.rail));
   const compiledCodes = new Map<string, number>();
   for (const { code } of result.diagnostics)
     compiledCodes.set(code, (compiledCodes.get(code) ?? 0) + 1);

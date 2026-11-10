@@ -75,6 +75,7 @@ export function createPicker(
     if (hit) return hit;
 
     for (let place = shapes.length - 1; place >= 0; place--) {
+      if (city.rail?.platforms.some((p) => p.station === city.places[place]!.id)) continue;
       const shape = shapes[place]!;
       if (
         shape.kind === 'polygon'

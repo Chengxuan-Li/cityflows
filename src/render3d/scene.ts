@@ -47,6 +47,7 @@ import { buildTerrainGround } from './context';
 import { Parking3D } from './parking';
 import { ParkedCars3D } from './parked-cars';
 import { buildWalk } from './walk';
+import { buildRail, pickRail3D } from './rail';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -69,6 +70,9 @@ export class Scene3D {
   );
   private content = new Group();
   private city: CompiledCity | undefined;
+  private rail: ReturnType<typeof buildRail> | undefined;
+  private railVisible = true;
+  private railSelection: string | undefined;
   private source: CityGeometry | undefined;
   private geometry: ReturnType<typeof buildGeometry> | undefined;
   private vegetation: ReturnType<typeof buildVegetation> | undefined;
@@ -181,6 +185,10 @@ export class Scene3D {
       Boolean(renderedSource.terrain),
     ));
     const terrain = geometry.heights.terrain;
+    this.rail = buildRail(city, renderedSource, geometry.heights);
+    this.railSelection = undefined;
+    this.content.add(this.rail.group);
+    this.setRail(this.railVisible);
     this.parking = new Parking3D(city, (p) => terrain.groundAt(p.x, p.y));
     this.parking.group.visible = this.parkingVisible;
     this.parking.setCounts(this.parkingCounts);
@@ -459,6 +467,12 @@ export class Scene3D {
     this.invalidate();
   }
   setSelection(pick: Pick | null) {
+    const key = JSON.stringify(pick);
+    if (this.railSelection !== key) {
+      this.railSelection = key;
+      this.rail?.select(pick);
+      this.invalidate();
+    }
     const id = pick?.kind === 'vehicle' ? pick.id : null;
     const parking = pick?.kind === 'parking' ? pick.parking : null;
     const space = pick?.kind === 'parked' ? pick.space : null;
@@ -663,10 +677,10 @@ export class Scene3D {
           this.camera.position.distanceTo(this.controls.target)),
     };
   }
-  worldToScreen(point: Vec2) {
+  worldToScreen(point: Vec2, heightM = 1) {
     const p = new Vector3(
       point.x,
-      (this.geometry?.heights.terrain.groundAt(point.x, point.y) ?? 0) + 1,
+      (this.geometry?.heights.terrain.groundAt(point.x, point.y) ?? 0) + heightM,
       point.y,
     ).project(this.camera);
     return {
@@ -729,7 +743,9 @@ export class Scene3D {
           return { kind: 'parking', parking: facility.idx };
       }
     }
-    return null;
+    return this.city && this.railVisible
+      ? pickRail3D(this.city, { x, y }, (p, heightM) => this.worldToScreen(p, heightM + 0.06))
+      : null;
   }
 
   render(elapsedS: number, timeS: number) {
@@ -869,6 +885,12 @@ export class Scene3D {
     }
     this.canvas.dataset.sidewalks = String(sidewalks);
     this.canvas.dataset.footways = String(footways);
+  }
+  setRail(visible: boolean) {
+    if (this.railVisible !== visible) this.invalidate();
+    this.railVisible = visible;
+    if (this.rail) this.rail.group.visible = visible;
+    this.canvas.dataset.railTracks = String(visible ? (this.city?.rail?.tracks.length ?? 0) : 0);
   }
 
   private disposeContent() {
