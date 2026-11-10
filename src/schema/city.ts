@@ -1,5 +1,6 @@
 import type { GeoReference } from '../geo/projection';
 import type { Vec2 } from '../geo/vec2';
+import type { RailNetwork } from './rail';
 
 export type NodeId = string; // "n:12"
 export type RoadId = string; // "r:12"
@@ -123,6 +124,7 @@ export interface PlaceEvent {
 }
 
 export interface Place {
+  station?: { platforms: string[]; entrances: WalkNodeId[] };
   id: PlaceId;
   kind: PlaceKind;
   name: string;
@@ -257,6 +259,7 @@ export type ContextFeature =
 export type MarkingThemeId = 'de' | 'us' | 'uk';
 
 export interface City {
+  rail?: RailNetwork;
   schemaVersion: 3;
   version: number; // bumps on every committed edit; caches key on it
   name: string;

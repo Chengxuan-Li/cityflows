@@ -10,6 +10,7 @@ const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
   ['terrain', 'Terrain'],
   ['context', 'Surroundings'],
+  ['rail', 'Rail'],
   ['buildingDetails', 'Building details'],
   ['parkingStalls', 'Parking stalls'],
   ['parkedCars', 'Parked cars'],
@@ -101,6 +102,7 @@ export function Layers() {
           ([key]) =>
             (key !== 'basemap' || hasGeo) &&
             (key !== 'context' || hasContext) &&
+            (key !== 'rail' || Boolean(session?.project.city.rail)) &&
             (key !== 'buildingDetails' || showBuildingDetails) &&
             (key !== 'trees' || hasTrees) &&
             (key !== 'streetTrees' || hasStreetTrees) &&

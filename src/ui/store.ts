@@ -389,6 +389,14 @@ export const useAppStore = create<AppState>((set, get) => {
         selection:
           selection?.kind === 'vehicle' ||
           selection?.kind === 'walker' ||
+          selection?.kind === 'track' ||
+          selection?.kind === 'platform' ||
+          (selection?.kind === 'place' &&
+            Boolean(
+              get().session?.project.city.places[
+                get().session!.compiled.places[selection.place]!.id
+              ]?.station,
+            )) ||
           selection?.kind === 'parking'
             ? selection
             : null,

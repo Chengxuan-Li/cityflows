@@ -159,6 +159,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
   const places: number[] = [],
     colors: number[] = [];
   for (const place of city.places) {
+    if (source.places[place.id]!.station?.platforms.length) continue;
     const shape = source.places[place.id]!.shape;
     const ring =
       shape.kind === 'polygon'
@@ -201,7 +202,13 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
     parts[2]?.dispose();
     return indexTerrain(result);
   };
-  const context = buildContext(source.context?.features ?? [], heights.terrain, !omitContextGround);
+  const context = buildContext(
+    (source.context?.features ?? []).filter(
+      (f) => !city.rail || (f.class !== 'rail' && f.class !== 'tram'),
+    ),
+    heights.terrain,
+    !omitContextGround,
+  );
   if (source.terrain) context.ground = indexTerrain(context.ground);
   const surfaceGeometry = terrainBuffer(surfaces, landSurfaces, true, flatAreas);
   const positions = surfaceGeometry.getAttribute('position');

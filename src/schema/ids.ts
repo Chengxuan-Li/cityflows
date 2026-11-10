@@ -2,7 +2,7 @@ import type { City, LaneId, MovementId, RoadId } from './city';
 
 export function allocateId(
   city: Pick<City, 'nextId'>,
-  prefix: 'n' | 'r' | 'p' | 'c' | 'pk' | 'wn' | 'wl',
+  prefix: 'n' | 'r' | 'p' | 'c' | 'pk' | 'wn' | 'wl' | 'rn' | 'rt' | 'rp',
 ): string {
   return `${prefix}:${city.nextId++}`;
 }
