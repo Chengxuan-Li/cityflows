@@ -1,4 +1,12 @@
 import type { Vec2 } from '../../geo/vec2';
+import {
+  nearestOnPolyline,
+  pointAtDistance,
+  pointInPolygon,
+  polylineCrossings,
+} from '../../geo/polyline';
+import { parkingEgress } from '../../network/parking-egress';
+import { compileVisibleParking } from '../../network/parking';
 import { lonLatToLocal } from '../../geo/projection';
 import type { CompiledCity } from '../../network';
 import { allocateId, type City, type Place, type RoadClass } from '../../schema';
@@ -266,7 +274,8 @@ export function polygonCenter(ring: Vec2[]): Vec2 | undefined {
   if (area !== 0) return { x: origin.x + x / (3 * area), y: origin.y + y / (3 * area) };
 }
 
-export function placeConnector(city: City, compiled: CompiledCity, parking = false) {
+// Preserve the original layout and ID allocation while generating fixed roadside strips.
+export function layoutConnector(city: City, compiled: CompiledCity, parking = false) {
   const { core } = networkAccess(compiled, false);
   const segments = compiled.lanes
     .filter((lane) => {
@@ -311,6 +320,250 @@ export function placeConnector(city: City, compiled: CompiledCity, parking = fal
   };
 }
 
+// Mapped facilities get a short inferred driveway, never an invented street connection.
+export const PARKING_SNAP_LIMIT_M = 30;
+
+export function placeConnector(
+  city: City,
+  compiled: CompiledCity,
+  parking = false,
+  departureOnly = false,
+) {
+  const access = parkingEgress(compiled, 30);
+  const bays = compiled.lanes.map((): number[] => []);
+  for (const space of compiled.parkingSpaces ?? [])
+    if (compiled.parking[space.parking]!.kind === 'roadside')
+      bays[space.lane]!.push(space.positionM);
+  const candidates = compiled.lanes.flatMap((lane) => {
+    // Lead (TASK-124 review): a new portal is a driveway on the curb lane of an at-grade
+    // street, never in a tunnel, on a bridge, on a motorway, trunk or ramp, or on an inner lane.
+    const road = compiled.roads[lane.road]!,
+      source = city.roads[road.id]!;
+    if (
+      (source.layer ?? 0) !== 0 ||
+      ['motorway', 'trunk', 'ramp'].includes(source.roadClass) ||
+      lane.lane !== (city.drivingSide === 'left' ? 0 : road.lanes.length - 1)
+    )
+      return [];
+    const inset = Math.min(10, lane.lengthM / 2);
+    const last = Math.min(lane.lengthM - inset, access.latestDeparture(lane.idx));
+    if (last < inset) return [];
+    const first = departureOnly ? inset : Math.max(inset, access.earliestArrival(lane.idx));
+    if (first > last) return [];
+    let ranges: [number, number][] = [[first, last]];
+    // New portals fit between existing bays; the strips and their slots do not move.
+    for (const positionM of bays[lane.idx]!) {
+      const lo = positionM - 3.000001,
+        hi = positionM + 3.000001;
+      ranges = ranges.flatMap(([a, b]) =>
+        hi <= a || lo >= b
+          ? [[a, b] as [number, number]]
+          : [
+              ...(lo >= a ? [[a, lo] as [number, number]] : []),
+              ...(hi <= b ? [[hi, b] as [number, number]] : []),
+            ],
+      );
+    }
+    return ranges.map(([first, last]) => ({
+      lane,
+      first,
+      line: [
+        pointAtDistance(lane.polyline, lane.cumulative, first),
+        ...lane.polyline.filter(
+          (_, i) => lane.cumulative[i]! > first && lane.cumulative[i]! < last,
+        ),
+        pointAtDistance(lane.polyline, lane.cumulative, last),
+      ],
+    }));
+  });
+  return (
+    point: Vec2,
+    footprints: Vec2[][] = [],
+    mappedEntrance = false,
+    existingId?: string,
+  ): Place['connectors'][number] | undefined => {
+    // Keep allocation stable even when a mapped facility has no entry within the limit.
+    const id = existingId ?? allocateId(city, 'c');
+    const rings = footprints.map((ring) => [...ring, ring[0]!]);
+    const extent = rings.length ? rings.flat() : [point];
+    const minX = Math.min(...extent.map((p) => p.x)) - PARKING_SNAP_LIMIT_M;
+    const maxX = Math.max(...extent.map((p) => p.x)) + PARKING_SNAP_LIMIT_M;
+    const minY = Math.min(...extent.map((p) => p.y)) - PARKING_SNAP_LIMIT_M;
+    const maxY = Math.max(...extent.map((p) => p.y)) + PARKING_SNAP_LIMIT_M;
+    const distanceToFootprint = (p: Vec2) =>
+      rings.length
+        ? Math.min(
+            ...rings.map((ring) => (pointInPolygon(p, ring) ? 0 : nearestOnPolyline(ring, p).away)),
+          )
+        : Math.hypot(p.x - point.x, p.y - point.y);
+    let best:
+      { lane: (typeof compiled.lanes)[number]; positionM: number; rank: number } | undefined;
+    for (const { lane, first, line } of candidates) {
+      if (
+        parking &&
+        (line.every((p) => p.x < minX) ||
+          line.every((p) => p.x > maxX) ||
+          line.every((p) => p.y < minY) ||
+          line.every((p) => p.y > maxY))
+      )
+        continue;
+      let hit = nearestOnPolyline(line, point);
+      if (line[0]!.x === line.at(-1)!.x && line[0]!.y === line.at(-1)!.y && line.length === 2)
+        hit = {
+          ...hit,
+          point: line[0]!,
+          away: Math.hypot(line[0]!.x - point.x, line[0]!.y - point.y),
+        };
+      let distance = distanceToFootprint(hit.point);
+      if (rings.length && !mappedEntrance) {
+        const options = rings.flatMap((ring) => [
+          ...ring.map((p) => nearestOnPolyline(line, p)),
+          ...line.map((p) => ({ ...nearestOnPolyline(line, p), away: distanceToFootprint(p) })),
+          ...polylineCrossings(line, ring).map((c) => ({
+            ...nearestOnPolyline(line, c.point),
+            away: 0,
+          })),
+        ]);
+        for (const option of options) {
+          const away = distanceToFootprint(option.point);
+          if (
+            away < distance ||
+            (away === distance &&
+              Math.hypot(option.point.x - point.x, option.point.y - point.y) <
+                Math.hypot(hit.point.x - point.x, hit.point.y - point.y))
+          ) {
+            hit = option;
+            distance = away;
+          }
+        }
+      }
+      if (parking && distance > PARKING_SNAP_LIMIT_M) continue;
+      const rank = rings.length && !mappedEntrance ? distance : hit.away;
+      if (!best || rank < best.rank) best = { lane, positionM: first + hit.along, rank };
+    }
+    return (
+      best && {
+        id,
+        roadId: compiled.roads[best.lane.road]!.id,
+        lane: best.lane.lane,
+        positionM: best.positionM,
+        direction: departureOnly ? 'out' : 'both',
+        throughputPerMin: 30,
+      }
+    );
+  };
+}
+
+/** Final import pass: keep the mapped vehicle/parking layout, repair only trapped portals. */
+export function connectCarExits(
+  city: City,
+  compiled: CompiledCity,
+  garageFootprints?: Map<string, Vec2[][]>,
+): boolean {
+  const exits = parkingEgress(compiled, 30);
+  // Reuse the finished car graph and the parking compiler, without compiling the walk graph
+  // or vehicle geometry again. Lots appended by mapped-strip fallback add no vehicle roads.
+  const layout: CompiledCity = {
+    ...compiled,
+    lanes: compiled.lanes.map((lane) => ({ ...lane, connectors: [] })),
+    connectors: [],
+    parking: [],
+    parkingSpaces: [],
+    strips: [],
+    index: { ...compiled.index, connector: new Map(), parking: new Map() },
+  };
+  compileVisibleParking(city, layout, (shape) =>
+    shape.kind === 'point' ? shape.pos : (polygonCenter(shape.ring) ?? null),
+  );
+  const ordinary: ReturnType<typeof placeConnector>[] = [];
+  const parking: ReturnType<typeof placeConnector>[] = [];
+  let changed = false;
+  const repair = (
+    entry: Place['connectors'][number],
+    entries: Place['connectors'],
+    footprints: Vec2[][],
+    mapped: boolean,
+    anchor?: Vec2,
+  ) => {
+    if (entry.direction === 'in') return false;
+    const road = compiled.roads[compiled.index.road.get(entry.roadId)!]!;
+    const lane = compiled.lanes[road.lanes[entry.lane]!]!;
+    if (entry.positionM <= exits.latestDeparture(lane.idx) + 1e-9) return false;
+    const reachableArrival =
+      entry.direction !== 'out' && entry.positionM + 1e-9 >= exits.earliestArrival(lane.idx);
+    const departureOnly = reachableArrival || entry.direction === 'out';
+    const point = anchor ?? pointAtDistance(lane.polyline, lane.cumulative, entry.positionM);
+    const factories = mapped ? parking : ordinary;
+    const snap = (factories[Number(departureOnly)] ??= placeConnector(
+      city,
+      layout,
+      mapped,
+      departureOnly,
+    ));
+    const candidate = snap(point, footprints, false, entry.id);
+    if (!candidate) return false;
+    if (reachableArrival) {
+      entry.direction = 'in';
+      entries.push({
+        ...candidate,
+        id: allocateId(city, 'c'),
+        direction: 'out',
+        throughputPerMin: entry.throughputPerMin,
+      });
+    } else {
+      Object.assign(entry, candidate, {
+        direction: entry.direction,
+        throughputPerMin: entry.throughputPerMin,
+      });
+    }
+    changed = true;
+    return true;
+  };
+  for (const place of Object.values(city.places)) {
+    if (place.kind === 'gateway') continue;
+    const anchor =
+      place.shape.kind === 'point' ? place.shape.pos : polygonCenter(place.shape.ring)!;
+    for (const entry of [...place.connectors]) repair(entry, place.connectors, [], false, anchor);
+  }
+  for (const source of Object.values(city.parking ?? {})) {
+    if (source.kind === 'roadside' || source.provenance.inferred?.includes('implicitGarage'))
+      continue;
+    const facilityIndex = layout.index.parking.get(source.id);
+    const facility = facilityIndex === undefined ? undefined : layout.parking[facilityIndex];
+    const footprints =
+      garageFootprints?.get(source.id) ??
+      (source.shape?.kind === 'polygon' ? [source.shape.ring] : []);
+    const entries = source.connectors.length
+      ? source.connectors
+      : [...new Set([...(facility?.connectorsIn ?? []), ...(facility?.connectorsOut ?? [])])].map(
+          (i) => {
+            const c = layout.connectors[i]!,
+              lane = layout.lanes[c.lane]!;
+            return {
+              id: c.id,
+              roadId: compiled.roads[lane.road]!.id,
+              lane: lane.lane,
+              positionM: c.positionM,
+              direction: c.direction,
+              throughputPerMin: c.throughputPerMin,
+            };
+          },
+        );
+    let moved = false;
+    const anchor = source.shape?.kind === 'point' ? source.shape.pos : undefined;
+    for (const entry of [...entries])
+      moved = repair(entry, entries, footprints, true, anchor) || moved;
+    if (moved) {
+      if (!source.connectors.length)
+        (source.provenance.inferred ??= []).push('materializedAisleEntries');
+      source.connectors = entries.map((entry) =>
+        /^c:\d+$/.test(entry.id) ? entry : { ...entry, id: allocateId(city, 'c') },
+      );
+    }
+  }
+  return changed;
+}
+
 export function addOsmPlaces(
   city: City,
   data: OsmData,
@@ -318,7 +571,7 @@ export function addOsmPlaces(
   bounds: Bounds,
   compiled: CompiledCity,
 ): void {
-  const connector = placeConnector(city, compiled);
+  const connector = layoutConnector(city, compiled);
   function add(id: number, tag: OsmTags, kind: Place['kind'], shape: Place['shape'], point: Vec2) {
     if (!contains(bounds, point)) return;
     const place = addPlace(city, kind, tag.name ?? kind, shape, {

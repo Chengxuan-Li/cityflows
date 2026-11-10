@@ -1,3 +1,4 @@
+// TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
@@ -13,12 +14,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // geometry. No original entity is reconstructed by the aisle-stripping oracle.
 const main = {
   'munich-donnersberger': [
-    'f21b3cf5026102ef17ffb480feae8b3183facf2b417b6e11bd8cce96bae14369',
-    '81c78bddaf514290b1294a58104d7fbba4b9b93d48681ad020d04c68ad51fbcf',
+    'a2f83f3c5dd766da70144e7cee24a09e391959e5508295a86f89e9034cbaeed8',
+    '63899972db79853a2da216cba54798d61f2606bcff218e0ecda9f39c13d0aedf',
   ],
   'sindelfingen-a81': [
-    'bc59fccd9763465f9d79111f14288686f60d368c3227daf8b8c2bb997581a7e3',
-    '6f15347a7fccaef75e0830d7bc9ba1053aa990c512b6fa56f63fa508ea7453d2',
+    '4bfc2462a47e79af02a0c23bd2b66ad11b850220365bfe81ba58860267048763',
+    '8bf06b8ea699f40d4bda2e16fd758317d61b038a5685816a2156bfc2dca5e2a3',
   ],
 };
 

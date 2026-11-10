@@ -1,3 +1,4 @@
+// TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 import { createHash } from 'node:crypto';
 import { compileAuditCity, loadAuditCity } from '../../bench/junction-audit';
 import { placeTrees } from '../../src/render/vegetation';
@@ -160,16 +161,16 @@ const pins = {
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
   munich: {
-    compile: 'a94950eb3cd55d8d755cfaaad1fb7f5e104110362aa8bcc78980378812dab515',
-    lamps: '89a545b414573da69366d35620e687835e065912a93c7c4c99efc362fdb772ec',
-    curbs: '3cc58a9cc69242c36cb266d4f9a24b12f033be69e76529b3109ba643ea4bf63e',
+    compile: 'b574f0a7bbc73bdcf9cfa3bed179cd0662ffdcc5f72723ba0afa71ad4b8020b6',
+    lamps: '27483774592d8fd96b6a5ab0a4126d9aeaa8ef05f184a2d6222cc7bad0d33f89',
+    curbs: 'fc216c4ce748916e00e0ae196aae0d9875f4dc1c0f9b47f53e61f30ded45a934',
     de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
     us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
   },
   sindelfingen: {
-    compile: '21ad4f3b76c74f8395c2e1975453507c94f764d21a2f5d3ea252a622ee22143c',
-    lamps: '9ec921f871252a427fd77f07e59db60ac6d205535f3c75bfcbf7521feae0490d',
-    curbs: 'f6f1915996eb0586f11c25639ba6bc0290e7e277cbb180a6402489e4f19b134e',
+    compile: 'cf231f89f2e857679d373f4f9df238e59997fc6b3a495fc63e726ed39fc946cf',
+    lamps: '0563d1323ef08a9cb2b3b71280f6ae9e1cf5208c3f7caebcfddfe55aa1d8a2ad',
+    curbs: '9fe71ec6feadfb41a3c86111638d13618b7731286d4ec4104c4d3832b20233ce',
     de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',
     us: 'c323dc2ff69850bb63f12141e3b2b00e81520238f7411e8e11ecf0c082b2d3d4',
   },

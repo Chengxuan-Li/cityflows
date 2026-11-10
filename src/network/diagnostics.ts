@@ -9,6 +9,7 @@ import {
 } from '../schema';
 import type { CompiledCity, CRoad, Diagnostic } from './types';
 import { isLaneDrop } from './lane-drop';
+import { parkingEgress } from './parking-egress';
 
 export function validateCity(
   city: City,
@@ -214,6 +215,25 @@ export function warnAboutConnectivity(city: CompiledCity, diagnostics: Diagnosti
   const info = (code: string, refs: string[], message: string) => {
     diagnostics.push({ severity: 'info', code, refs, message });
   };
+  if (city.places.length || city.parking.length) {
+    const exits = parkingEgress(city, 30);
+    for (const [owners, code] of [
+      [city.places, 'place_no_exit'],
+      [city.parking.filter((f) => f.kind !== 'roadside'), 'parking_no_exit'],
+    ] as const)
+      for (const owner of owners) {
+        if (owner.connectorsOut.some((i) => exits.connectors[i])) continue;
+        const refs = owner.connectorsOut.flatMap((i) => [
+          city.connectors[i]!.id,
+          city.lanes[city.connectors[i]!.lane]!.id,
+        ]);
+        warn(
+          code,
+          [owner.id, ...refs],
+          `${owner.id} has no car exit${refs.length ? ` through ${refs.join(', ')}` : ' (no out connector)'}`,
+        );
+      }
+  }
   const out = lanes.map((): number[] => []);
   const incoming = lanes.map((): number[] => []);
   const links = lanes.map((): number[] => []);

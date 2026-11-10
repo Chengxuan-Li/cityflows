@@ -26,7 +26,10 @@ test('T49 imports surface facilities and only their aisles, retaining capacity, 
   const lots = Object.values(result.city.parking ?? {}).filter((p) => p.kind === 'lot');
   expect(lots).toHaveLength(1);
   const lot = lots[0]!;
-  expect(lot).toMatchObject({ kind: 'lot', capacity: 99, access: 'customers', connectors: [] });
+  // TASK-124 materializes repaired aisle portals so their car exits survive save/open.
+  expect(lot).toMatchObject({ kind: 'lot', capacity: 99, access: 'customers' });
+  expect(lot.connectors).toHaveLength(3);
+  expect(lot.connectors.map((c) => c.direction).sort()).toEqual(['both', 'in', 'out']);
   expect(lot.aisles).toHaveLength(2);
   expect(lot.entries).toHaveLength(1);
   for (const id of lot.aisles!)
