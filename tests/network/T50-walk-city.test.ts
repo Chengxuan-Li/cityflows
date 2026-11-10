@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
@@ -18,6 +19,15 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       result = compile(imported.city),
       compileMs = performance.now() - start;
     if (!result.ok) throw new Error('compile failed');
+    // T60 repairs derived walking only: keep TASK-123's lead-112 vehicle bytes pinned.
+    const { lanes, movements, connectors } = result.compiled;
+    expect(
+      createHash('sha256').update(JSON.stringify({ lanes, movements, connectors })).digest('hex'),
+    ).toBe(
+      name.startsWith('munich')
+        ? '8d3a14f68d4899705207050b9cba385415aed6e02892c9738a46f3eaaac59050'
+        : 'f8809ebb2e99256b69a3327aeee87eae8095237f5ff4fa8429afca3a6a2d8473',
+    );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')
       ? { footway: 2125, living_street: 32, steps: 72, path: 982, pedestrian: 42, crossing: 170 }
@@ -51,6 +61,14 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       .map((p) => p.id);
     const router = createWalkRouter(g),
       queryStart = performance.now();
+    if (name.startsWith('sindelfingen')) {
+      const garage = result.compiled.parking.find((p) => p.id === 'pk:1453')!;
+      const connector = connectors.find((c) => c.parking === garage.idx)!;
+      expect(
+        router.route({ from: { node: g.connectors.get(connector.id)! }, to: { placeId: 'p:1407' } })
+          .ok,
+      ).toBe(true);
+    }
     for (let i = 0; i < 100; i++)
       router.route({ from: { placeId: central }, to: { placeId: places[i % places.length]!.id } });
     const queryMs = (performance.now() - queryStart) / 100;

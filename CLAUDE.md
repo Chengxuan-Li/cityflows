@@ -7,7 +7,9 @@ only adds Claude Code specifics.
 - Before claiming a task done, run `npm run check` and paste the final lines of its output in
   the PR description. For UI tasks, also open the app with the preview tooling and exercise the
   workflow you built; describe what you saw.
-- Also run the task's tiers (AGENTS.md "Delivering a task"): `test:city`, `traffic:quick`, `test:e2e:smoke`.
+- Also run the task's light tiers (AGENTS.md "Delivering a task"): `test:city`,
+  `test:traffic:light`, `test:e2e:light`, and the specs the task names. The full tier runs only at
+  checkpoints.
 - Keep edits to the task's "In scope" files plus what the feature needs to be wired in,
   type-check or be tested; list the extra files in your report. Stop and report only for a file
   under "Out of scope", a contract change (`src/schema`, `docs/architecture.md`) the task does

@@ -16,6 +16,7 @@ import type { Vec2 } from '../geo/vec2';
 import type { City, WalkKind } from '../schema';
 import { crossingArms, crossingEnabled, crossingPlacement } from './crossings';
 import { junctionCorners } from './junctions';
+import { curbJoin, walkComponents, walkRoots, uncoveredCurb } from './walk-joins';
 import type { CompiledCity, CRoad } from './types';
 
 export interface CWalkNode {
@@ -73,9 +74,12 @@ export interface WalkGraph {
 type Raw = Omit<CWalkLink, 'idx' | 'from' | 'to' | 'cumulative' | 'lengthM'> & {
   cuts: number[];
   sourceEnds?: [string, string];
+  endpointLayers?: [number, number];
+  infill?: boolean;
 };
 const SIDES = ['left', 'right'] as const;
 const SNAP_M = 4;
+const COVER_M = 12;
 const ACCESS_M = 150;
 export const emptyWalkGraph = (): WalkGraph => ({
   nodes: [],
@@ -114,44 +118,114 @@ function prepareNearest(line: Vec2[]) {
     .flatMap((b, i) => (b.x === line[i]!.x && b.y === line[i]!.y ? [] : [[line[i]!, b]]));
   if (!segments.length) return (p: Vec2) => nearestOnPolyline(line, p);
   const tree = spatial(segments);
-  const boxes = segments.map(([a, b]) => [
-    Math.min(a!.x, b!.x),
-    Math.min(a!.y, b!.y),
-    Math.max(a!.x, b!.x),
-    Math.max(a!.y, b!.y),
-  ]);
+  const geometry = segments.map(([a, b]) => {
+    const dx = b!.x - a!.x,
+      dy = b!.y - a!.y,
+      length = Math.hypot(dx, dy);
+    return {
+      a: a!,
+      dx,
+      dy,
+      length,
+      square: length ** 2,
+      box: [Math.min(a!.x, b!.x), Math.min(a!.y, b!.y), Math.max(a!.x, b!.x), Math.max(a!.y, b!.y)],
+    };
+  });
   return (p: Vec2) => {
     // Best-first over segment boxes: stop once a box is farther than the best exact distance.
     // Same result and tie-break (lowest index) as scanning every segment (lead, TASK-110 merge:
     // a radius box search cost Sindelfingen's compile 8 times main's).
-    let index = -1;
-    let best: ReturnType<typeof nearestOnPolyline> | undefined;
+    let index = -1,
+      away = Infinity,
+      along = 0,
+      x = 0,
+      y = 0;
     tree.neighbors(p.x, p.y, 1, Infinity, (i) => {
-      const [x0, y0, x1, y1] = boxes[i]!;
+      const segment = geometry[i]!;
+      const [x0, y0, x1, y1] = segment.box;
       const dx = Math.max(x0! - p.x, 0, p.x - x1!),
         dy = Math.max(y0! - p.y, 0, p.y - y1!);
-      if (best && Math.hypot(dx, dy) > best.away) return true;
-      const n = nearestOnPolyline(segments[i]!, p);
-      if (!best || n.away < best.away || (n.away === best.away && i < index)) {
-        best = n;
+      if (dx * dx + dy * dy > away * away) return true;
+      const t = Math.max(
+        0,
+        Math.min(
+          1,
+          ((p.x - segment.a.x) * segment.dx + (p.y - segment.a.y) * segment.dy) / segment.square,
+        ),
+      );
+      const nx = segment.a.x + t * segment.dx,
+        ny = segment.a.y + t * segment.dy;
+      const d = Math.hypot(p.x - nx, p.y - ny);
+      if (d < away || (d === away && i < index)) {
+        away = d;
+        x = nx;
+        y = ny;
+        along = t * segment.length;
         index = i;
       }
       return false;
     });
-    return best!;
+    const segment = geometry[index]!;
+    return {
+      point: { x, y },
+      along,
+      away,
+      direction: { x: segment.dx / segment.length, y: segment.dy / segment.length },
+    };
   };
 }
 
 /** Derived after the vehicle compile; never mutates City or vehicle geometry. */
 export function compileWalk(source: City, city: CompiledCity): WalkGraph {
   const raw: Raw[] = [];
-  const sidewalks = new Map<string, Raw>();
-  const layerOf = (r: CRoad) =>
-    source.roads[r.id]!.layer ??
-    Math.min(
-      source.nodes[city.nodes[r.from]!.id]!.layer,
-      source.nodes[city.nodes[r.to]!.id]!.layer,
+  const sidewalks = new Map<string, Raw[]>();
+  const joins: { a: Raw; b: Raw; link: Omit<Raw, 'cuts'> }[] = [];
+  const repairs: typeof joins = [];
+  const layers = city.roads.map(
+    (r) =>
+      source.roads[r.id]!.layer ??
+      Math.min(
+        source.nodes[city.nodes[r.from]!.id]!.layer,
+        source.nodes[city.nodes[r.to]!.id]!.layer,
+      ),
+  );
+  const layerOf = (r: CRoad) => layers[r.idx]!;
+  const incident = city.nodes.map((): CRoad[] => []);
+  for (const road of city.roads) {
+    incident[road.from]!.push(road);
+    incident[road.to]!.push(road);
+  }
+  // A mapped deck/portal can meet its explicitly shared approach, just as mapped walk
+  // links do. This does not infer grade changes between nearby, unrelated roads.
+  const gradeApproach = (a: CRoad, b: CRoad, node: number) => {
+    const ground = source.nodes[city.nodes[node]!.id]!.layer;
+    return (
+      layerOf(a) !== layerOf(b) &&
+      [layerOf(a), layerOf(b)].includes(ground) &&
+      [a, b].some((r) => {
+        const original = source.roads[r.id]!;
+        return (
+          original.layer !== undefined &&
+          original.layer !== 0 &&
+          original.provenance.source === 'osm'
+        );
+      })
     );
+  };
+  const endpointGrade = (r: CRoad, node: number) =>
+    incident[node]!.some((other) => gradeApproach(r, other, node))
+      ? source.nodes[city.nodes[node]!.id]!.layer
+      : layerOf(r);
+  const layerAt = (link: Raw, pos: Vec2) => {
+    if (!link.sourceEnds && !link.endpointLayers) return link.layer;
+    const along = nearestOnPolyline(link.line, pos).along;
+    const end = along < 0.05 ? 0 : polylineLength(link.line) - along < 0.05 ? 1 : undefined;
+    return end === undefined
+      ? link.layer
+      : link.sourceEnds
+        ? source.walk!.nodes[link.sourceEnds[end]!]!.layer
+        : link.endpointLayers![end]!;
+  };
   const add = (link: Omit<Raw, 'cuts'>) => {
     const length = polylineLength(link.line);
     if (length < 0.01) return;
@@ -164,6 +238,69 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     link.cuts.push(n.along);
     return n.point;
   };
+  const nearestCache = new Map<Raw, { near: ReturnType<typeof prepareNearest>; box: number[] }>();
+  const prepare = (link: Raw) => {
+    let prepared = nearestCache.get(link);
+    if (!prepared) {
+      let x0 = Infinity,
+        y0 = Infinity,
+        x1 = -Infinity,
+        y1 = -Infinity;
+      for (const p of link.line) {
+        x0 = Math.min(x0, p.x);
+        y0 = Math.min(y0, p.y);
+        x1 = Math.max(x1, p.x);
+        y1 = Math.max(y1, p.y);
+      }
+      prepared = { near: prepareNearest(link.line), box: [x0, y0, x1, y1] };
+      nearestCache.set(link, prepared);
+    }
+    return prepared;
+  };
+  const roadTree = spatial(city.roads.map((r) => r.reference));
+  const clear = (a: Vec2, b: Vec2, layer: number) => {
+    const length = distance(a, b);
+    return roadTree
+      .search(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y))
+      .every((i) => {
+        const r = city.roads[i];
+        // Access may cross a driveway/service aisle; an ordinary street needs a crossing.
+        if (!r || r.roadClass === 'service' || layerOf(r) !== layer) return true;
+        // polylineCrossings([a, b], reference) without its cumulative lengths of the reference.
+        const ref = r.reference;
+        for (let j = 1; j < ref.length; j++) {
+          const p = ref[j - 1]!,
+            q = ref[j]!;
+          if (
+            Math.max(a.x, b.x) < Math.min(p.x, q.x) ||
+            Math.max(p.x, q.x) < Math.min(a.x, b.x) ||
+            Math.max(a.y, b.y) < Math.min(p.y, q.y) ||
+            Math.max(p.y, q.y) < Math.min(a.y, b.y)
+          )
+            continue;
+          const point = segmentIntersection(a, b, p, q);
+          if (!point) continue;
+          const along = distance(a, point);
+          if (along > 0.2 && along < length - 0.2) return false;
+        }
+        return true;
+      });
+  };
+
+  const mappedLinks = Object.values(source.walk?.links ?? {})
+    .filter((l) => polylineLength(l.line) >= 0.01)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const mappedTree = spatial(mappedLinks.map((l) => l.line));
+  const mappedIncident = new Map<string, typeof mappedLinks>();
+  for (const link of mappedLinks) {
+    if (link.kind === 'crossing') continue;
+    for (const id of [link.from, link.to]) {
+      const list = mappedIncident.get(id) ?? [];
+      list.push(link);
+      mappedIncident.set(id, list);
+    }
+  }
+  const mappedRaw = new Map<string, Raw>();
   const groups = new Map<string, CRoad[]>();
   for (const r of city.roads) {
     const key = r.corridorId ?? r.streetGroupId ?? r.id;
@@ -177,8 +314,8 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         tag = original.sidewalk?.[side];
       if (
         tag === 'no' ||
-        tag === 'separate' ||
-        (!tag && ['motorway', 'trunk', 'ramp', 'service'].includes(r.roadClass))
+        ((!tag || tag === 'separate') &&
+          ['motorway', 'trunk', 'ramp', 'service'].includes(r.roadClass))
       )
         continue;
       const half = r.surface.length / 2;
@@ -203,139 +340,95 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         );
       });
       if (internal) continue;
-      const s = add({
-        id: `sidewalk:${r.id}:${side}`,
-        kind: 'sidewalk',
-        generated: true,
-        road: r.idx,
-        side,
-        layer: layerOf(r),
-        widthM: 2,
-        line: (() => {
-          const bands = city.strips?.filter((s) => s.road === r.idx && s.side === side) ?? [];
-          if (!bands.length) return offsetPolyline(edge, sign);
-          const edgeLengths = cumulativeLengths(edge),
-            length = edgeLengths.at(-1)!;
-          const points = Array.from({ length: Math.ceil(length / 2) + 1 }, (_, i) =>
-            pointAtDistance(edge, edgeLengths, Math.min(length, i * 2)),
+      const line = (() => {
+        const bands = city.strips?.filter((s) => s.road === r.idx && s.side === side) ?? [];
+        if (!bands.length) return offsetPolyline(edge, sign);
+        const edgeLengths = cumulativeLengths(edge),
+          length = edgeLengths.at(-1)!;
+        const points = Array.from({ length: Math.ceil(length / 2) + 1 }, (_, i) =>
+          pointAtDistance(edge, edgeLengths, Math.min(length, i * 2)),
+        );
+        return points.map((p) => {
+          const station = nearestOnPolyline(r.reference, p).along;
+          const width = Math.max(
+            0,
+            ...bands.filter((s) => station >= s.fromM && station <= s.toM).map((s) => s.widthM),
           );
-          return points.map((p) => {
-            const station = nearestOnPolyline(r.reference, p).along;
-            const width = Math.max(
-              0,
-              ...bands.filter((s) => station >= s.fromM && station <= s.toM).map((s) => s.widthM),
-            );
-            const hit = nearestOnPolyline(edge, p);
-            return {
-              x: p.x - hit.direction.y * sign * (1 + width),
-              y: p.y + hit.direction.x * sign * (1 + width),
-            };
-          });
-        })(),
+          const hit = nearestOnPolyline(edge, p);
+          return {
+            x: p.x - hit.direction.y * sign * (1 + width),
+            y: p.y + hit.direction.x * sign * (1 + width),
+          };
+        });
+      })();
+      const lines =
+        tag === 'separate'
+          ? uncoveredCurb(line, (p) => {
+              const direction = nearestOnPolyline(r.reference, p).direction;
+              const parallel = (other: Vec2) =>
+                Math.abs(other.x * direction.x + other.y * direction.y) > 0.8;
+              return mappedTree
+                .search(p.x - COVER_M, p.y - COVER_M, p.x + COVER_M, p.y + COVER_M)
+                .some((i) => {
+                  const link = mappedLinks[i];
+                  if (!link) return false;
+                  if (
+                    link.kind === 'crossing' ||
+                    (link.layer ?? source.walk!.nodes[link.from]!.layer) !== layerOf(r)
+                  )
+                    return false;
+                  const near = nearestOnPolyline(link.line, p);
+                  const pastEnd = Math.abs(
+                    (p.x - near.point.x) * near.direction.x +
+                      (p.y - near.point.y) * near.direction.y,
+                  );
+                  const end =
+                    near.along < 0.01
+                      ? link.from
+                      : polylineLength(link.line) - near.along < 0.01
+                        ? link.to
+                        : undefined;
+                  const continues =
+                    end !== undefined &&
+                    mappedIncident
+                      .get(end)
+                      ?.some(
+                        (other) =>
+                          other !== link &&
+                          (other.layer ?? source.walk!.nodes[other.from]!.layer) === layerOf(r) &&
+                          parallel(nearestOnPolyline(other.line, near.point).direction),
+                      );
+                  return (
+                    near.away <= COVER_M &&
+                    (near.away <= SNAP_M || pastEnd < 0.01 || continues) &&
+                    parallel(near.direction) &&
+                    clear(p, near.point, layerOf(r))
+                  );
+                });
+            })
+          : [line];
+      const parts = lines.flatMap((part, i) => {
+        const endpointLayers: [number, number] = [
+          distance(part[0]!, line[0]!) < 0.05 ? endpointGrade(r, r.from) : layerOf(r),
+          distance(part.at(-1)!, line.at(-1)!) < 0.05 ? endpointGrade(r, r.to) : layerOf(r),
+        ];
+        const s = add({
+          id: `sidewalk:${r.id}:${side}${lines.length > 1 ? `:${i}` : ''}`,
+          kind: 'sidewalk',
+          generated: true,
+          road: r.idx,
+          side,
+          layer: layerOf(r),
+          widthM: 2,
+          line: part,
+          infill: tag === 'separate',
+          ...(endpointLayers.some((l) => l !== layerOf(r)) ? { endpointLayers } : {}),
+        });
+        return s ? [s] : [];
       });
-      if (s) sidewalks.set(`${r.idx}:${side}`, s);
+      sidewalks.set(`${r.idx}:${side}`, parts);
     }
-  for (const node of city.nodes) {
-    const ends = [...sidewalks.values()].filter((s) => {
-      const r = city.roads[s.road!]!;
-      return r.from === node.idx || r.to === node.idx;
-    });
-    for (const [i, corner] of junctionCorners(node).entries()) {
-      if (!corner.curve || corner.kind === 'nose' || corner.kind === 'gore') continue;
-      const curve = corner.curve;
-      const curbSide = (road: number, first: boolean) => {
-        const from = city.roads[road]!.from === node.idx;
-        return sidewalks.get(`${road}:${from === first ? 'right' : 'left'}`);
-      };
-      const a = curbSide(corner.roads[0], true),
-        b = curbSide(corner.roads[1], false);
-      if (!a || !b || a === b || a.layer !== b.layer) continue;
-      let line = offsetPolyline(curve, 1);
-      if (pointInPolygon(line[Math.floor(line.length / 2)]!, node.outline, 0))
-        line = offsetPolyline(curve, -1);
-      line[0] = on(a, line[0]!);
-      line[line.length - 1] = on(b, line.at(-1)!);
-      add({
-        id: `corner:${node.id}:${i}`,
-        line,
-        kind: 'corner',
-        generated: true,
-        widthM: 2,
-        layer: a.layer,
-        node: node.idx,
-      });
-    }
-    if (!node.outline.length)
-      for (let i = 0; i < ends.length; i++)
-        for (let j = i + 1; j < ends.length; j++) {
-          const a = ends[i]!,
-            b = ends[j]!,
-            ra = city.roads[a.road!]!,
-            rb = city.roads[b.road!]!;
-          if (ra.idx === rb.idx || a.layer !== b.layer) continue;
-          const pa = ra.from === node.idx ? a.line[0]! : a.line.at(-1)!,
-            pb = rb.from === node.idx ? b.line[0]! : b.line.at(-1)!;
-          if (distance(pa, pb) > 2.1) continue;
-          add({
-            id: `seam:${node.id}:${i}:${j}`,
-            line: [pa, pb],
-            kind: 'corner',
-            generated: true,
-            widthM: 2,
-            layer: a.layer,
-            node: node.idx,
-          });
-        }
-    for (const [i, arm] of crossingArms(city, node).entries()) {
-      if (
-        arm.some((e) => source.roads[e.road.id]!.crossings?.[e.atEnd ? 'end' : 'start'] === false)
-      )
-        continue;
-      const served = arm.find(
-        (e) =>
-          crossingEnabled(city, e.road, e.atEnd, source) &&
-          crossingPlacement(city, e.road, e.atEnd).stripes.length,
-      );
-      if (!served) continue;
-      const { road, atEnd } = served,
-        curb = ends.filter((s) => arm.some((e) => e.road.idx === s.road));
-      if (curb.length < 2) continue;
-      const placement = crossingPlacement(city, road, atEnd),
-        lane = city.lanes[road.lanes[0]!]!;
-      const d = (placement.nearM + placement.farM) / 2,
-        s = atEnd ? lane.lengthM - d : d;
-      const p = pointAtDistance(lane.polyline, lane.cumulative, s),
-        heading = headingAtDistance(lane.polyline, lane.cumulative, s);
-      const normal = { x: -Math.sin(heading), y: Math.cos(heading) };
-      const ray = [-100, 100].map((v) => ({ x: p.x + normal.x * v, y: p.y + normal.y * v }));
-      const hits = curb
-        .flatMap((s) => polylineCrossings(ray, s.line).map((hit) => ({ s, hit })))
-        .sort((a, b) => a.hit.alongA - b.hit.alongA);
-      const a = hits[0],
-        b = hits.at(-1);
-      if (!a || !b || a.s === b.s || a.s.layer !== b.s.layer) continue;
-      add({
-        id: `crossing:${node.id}:${i}`,
-        line: [on(a.s, a.hit.point), on(b.s, b.hit.point)],
-        kind: 'crossing',
-        generated: true,
-        widthM: 2.5,
-        layer: a.s.layer,
-        crossing: {
-          road: road.idx,
-          end: atEnd ? 'end' : 'start',
-          control: node.signal ? 'signal' : 'zebra',
-          node: node.idx,
-          arm: i,
-          spans: [],
-        },
-      });
-    }
-  }
-  const roadTree = spatial(city.roads.map((r) => r.reference));
-  for (const link of Object.values(source.walk?.links ?? {}).sort((a, b) =>
-    a.id.localeCompare(b.id),
-  )) {
+  for (const link of mappedLinks) {
     const layer = link.layer ?? source.walk!.nodes[link.from]!.layer;
     let crossing: CWalkLink['crossing'];
     if (link.kind === 'crossing') {
@@ -380,7 +473,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         };
       }
     }
-    add({
+    const compiled = add({
       id: link.id,
       line: link.line,
       kind: link.kind,
@@ -390,38 +483,193 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       ...(crossing ? { crossing, road: crossing.road } : {}),
       sourceEnds: [link.from, link.to],
     });
+    if (compiled) mappedRaw.set(link.id, compiled);
   }
 
-  if (!raw.length) return materializeWalk(source, raw).graph;
-
-  const clear = (a: Vec2, b: Vec2, layer: number) => {
-    const length = distance(a, b);
-    return roadTree
-      .search(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y))
-      .every((i) => {
-        const r = city.roads[i];
-        // Access may cross a driveway/service aisle; an ordinary street needs a crossing.
-        if (!r || r.roadClass === 'service' || layerOf(r) !== layer) return true;
-        // polylineCrossings([a, b], reference) without its cumulative lengths of the reference.
-        const ref = r.reference;
-        for (let j = 1; j < ref.length; j++) {
-          const p = ref[j - 1]!,
-            q = ref[j]!;
-          if (
-            Math.max(a.x, b.x) < Math.min(p.x, q.x) ||
-            Math.max(p.x, q.x) < Math.min(a.x, b.x) ||
-            Math.max(a.y, b.y) < Math.min(p.y, q.y) ||
-            Math.max(p.y, q.y) < Math.min(a.y, b.y)
-          )
-            continue;
-          const point = segmentIntersection(a, b, p, q);
-          if (!point) continue;
-          const along = distance(a, point);
-          if (along > 0.2 && along < length - 0.2) return false;
-        }
-        return true;
-      });
+  const walkSide = (road: CRoad, side: 'left' | 'right', p: Vec2) => {
+    const parts = sidewalks.get(`${road.idx}:${side}`);
+    if (source.roads[road.id]!.sidewalk?.[side] !== 'separate') return parts?.[0];
+    const generated = parts
+      ?.map((s) => ({ s, away: nearestOnPolyline(s.line, p).away }))
+      .filter(({ away }) => away <= SNAP_M)
+      .sort((a, b) => a.away - b.away)[0]?.s;
+    if (generated || source.roads[road.id]!.sidewalk?.[side] !== 'separate') return generated;
+    if (!mappedLinks.length) return;
+    return mappedTree
+      .search(p.x - SNAP_M, p.y - SNAP_M, p.x + SNAP_M, p.y + SNAP_M)
+      .map((i) => mappedRaw.get(mappedLinks[i]!.id)!)
+      .filter((l) => l.kind !== 'crossing' && l.layer === layerOf(road))
+      .map((l) => ({ l, near: nearestOnPolyline(l.line, p) }))
+      .filter(({ near }) => near.away <= SNAP_M && clear(p, near.point, layerOf(road)))
+      .sort((a, b) => a.near.away - b.near.away)[0]?.l;
   };
+  const separateCurb = (link: Raw) =>
+    !link.generated ||
+    (link.side !== undefined &&
+      source.roads[city.roads[link.road!]!.id]!.sidewalk?.[link.side] === 'separate');
+  for (const node of city.nodes) {
+    const joined = new Set<string>();
+    const ends = incident[node.idx]!.flatMap((r) =>
+      SIDES.flatMap((side) => {
+        const half = r.surface.length / 2;
+        const p =
+          side === 'left'
+            ? r.surface[r.from === node.idx ? 0 : half - 1]!
+            : r.surface[r.from === node.idx ? r.surface.length - 1 : half]!;
+        const s = walkSide(r, side, p);
+        if (!s) return [];
+        const pos = s.generated
+          ? r.from === node.idx
+            ? s.line[0]!
+            : s.line.at(-1)!
+          : nearestOnPolyline(s.line, p).point;
+        return [{ s, r, pos }];
+      }),
+    );
+    for (const [i, corner] of junctionCorners(node).entries()) {
+      if (!corner.curve || corner.kind === 'nose' || corner.kind === 'gore') continue;
+      const curve = corner.curve;
+      const curbSide = (road: number, first: boolean) => {
+        const from = city.roads[road]!.from === node.idx;
+        return walkSide(
+          city.roads[road]!,
+          from === first ? 'right' : 'left',
+          first ? curve[0]! : curve.at(-1)!,
+        );
+      };
+      const a = curbSide(corner.roads[0], true),
+        b = curbSide(corner.roads[1], false);
+      if (!a || !b || a === b) continue;
+      const repair = separateCurb(a) || separateCurb(b);
+      const graded = a.layer !== b.layer;
+      if (
+        graded &&
+        !gradeApproach(city.roads[corner.roads[0]]!, city.roads[corner.roads[1]]!, node.idx)
+      )
+        continue;
+      let line = offsetPolyline(curve, 1);
+      if (pointInPolygon(line[Math.floor(line.length / 2)]!, node.outline, 0))
+        line = offsetPolyline(curve, -1);
+      line[0] = repair ? nearestOnPolyline(a.line, line[0]!).point : on(a, line[0]!);
+      line[line.length - 1] = repair
+        ? nearestOnPolyline(b.line, line.at(-1)!).point
+        : on(b, line.at(-1)!);
+      const endpointLayers: [number, number] = [layerAt(a, line[0]!), layerAt(b, line.at(-1)!)];
+      if (
+        graded &&
+        line.some(
+          (p, i) => i && (!clear(line[i - 1]!, p, a.layer) || !clear(line[i - 1]!, p, b.layer)),
+        )
+      )
+        continue;
+      joined.add([a.id, b.id].sort().join('|'));
+      const deck = [a, b].find((l) => l.layer !== source.nodes[node.id]!.layer);
+      const link: Omit<Raw, 'cuts'> = {
+        id: `corner:${node.id}:${i}`,
+        infill: a.infill || b.infill,
+        line,
+        kind: 'corner',
+        generated: true,
+        widthM: 2,
+        layer: graded ? deck!.layer : a.layer,
+        node: node.idx,
+        ...(graded ? { road: deck!.road } : {}),
+        ...(endpointLayers.some((l) => l !== (graded ? deck!.layer : a.layer))
+          ? { endpointLayers }
+          : {}),
+      };
+      if (repair) repairs.push({ a, b, link });
+      else add(link);
+    }
+    for (let i = 0; i < ends.length; i++)
+      for (let j = i + 1; j < ends.length; j++) {
+        const { s: a, r: ra, pos: pa } = ends[i]!,
+          { s: b, r: rb, pos: pb } = ends[j]!;
+        if (a === b) continue;
+        if (
+          (a.layer !== b.layer && !gradeApproach(ra, rb, node.idx)) ||
+          joined.has([a.id, b.id].sort().join('|'))
+        )
+          continue;
+        if (distance(pa, pb) > 12) continue;
+        const line = [pa, pb];
+        const deck =
+          a.layer === b.layer
+            ? undefined
+            : [a, b].find((l) => l.layer !== source.nodes[node.id]!.layer);
+        const link: Omit<Raw, 'cuts'> = {
+          id: `seam:${node.id}:${i}:${j}`,
+          infill: a.infill || b.infill,
+          line,
+          kind: 'corner',
+          generated: true,
+          widthM: 2,
+          layer: deck?.layer ?? a.layer,
+          node: node.idx,
+          ...(deck ? { road: deck.road } : {}),
+          ...(a.endpointLayers || b.endpointLayers || a.layer !== b.layer
+            ? { endpointLayers: [layerAt(a, pa), layerAt(b, pb)] as [number, number] }
+            : {}),
+        };
+        if (!node.outline.length && ra !== rb && a.layer === b.layer && distance(pa, pb) <= 2.1)
+          add(link);
+        else joins.push({ a, b, link });
+      }
+    for (const [i, arm] of crossingArms(city, node).entries()) {
+      if (
+        arm.some((e) => ['motorway', 'trunk', 'ramp'].includes(e.road.roadClass)) ||
+        arm.some((e) => source.roads[e.road.id]!.crossings?.[e.atEnd ? 'end' : 'start'] === false)
+      )
+        continue;
+      const served = arm.find(
+        (e) =>
+          crossingEnabled(city, e.road, e.atEnd, source) &&
+          crossingPlacement(city, e.road, e.atEnd).stripes.length,
+      );
+      if (!served) continue;
+      const { road, atEnd } = served,
+        curb = [
+          ...new Set(
+            ends.filter(({ r }) => arm.some((e) => e.road.idx === r.idx)).map(({ s }) => s),
+          ),
+        ];
+      const placement = crossingPlacement(city, road, atEnd),
+        lane = city.lanes[road.lanes[0]!]!;
+      const d = (placement.nearM + placement.farM) / 2,
+        s = atEnd ? lane.lengthM - d : d;
+      const p = pointAtDistance(lane.polyline, lane.cumulative, s),
+        heading = headingAtDistance(lane.polyline, lane.cumulative, s);
+      const normal = { x: -Math.sin(heading), y: Math.cos(heading) };
+      const ray = [-100, 100].map((v) => ({ x: p.x + normal.x * v, y: p.y + normal.y * v }));
+      const hits = curb
+        .flatMap((s) => polylineCrossings(ray, s.line).map((hit) => ({ s, hit })))
+        .sort((a, b) => a.hit.alongA - b.hit.alongA);
+      const a = hits[0],
+        b = hits.at(-1);
+      if (!a || !b || a.s === b.s || a.s.layer !== b.s.layer) continue;
+      const repair = separateCurb(a.s) || separateCurb(b.s);
+      const link: Omit<Raw, 'cuts'> = {
+        id: `crossing:${node.id}:${i}`,
+        infill: a.s.infill || b.s.infill,
+        line: repair ? [a.hit.point, b.hit.point] : [on(a.s, a.hit.point), on(b.s, b.hit.point)],
+        kind: 'crossing',
+        generated: true,
+        widthM: 2.5,
+        layer: a.s.layer,
+        crossing: {
+          road: road.idx,
+          end: atEnd ? 'end' : 'start',
+          control: node.signal ? 'signal' : 'zebra',
+          node: node.idx,
+          arm: i,
+          spans: [],
+        },
+      };
+      if (repair) repairs.push({ a: a.s, b: b.s, link });
+      else add(link);
+    }
+  }
+  if (!raw.length) return materializeWalk(source, raw).graph;
 
   // Segment boxes keep local joins cheap even for long, curved OSM ways.
   const segments = raw.flatMap((link, r) => {
@@ -452,35 +700,99 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     }
   const pathTree = spatial(raw.map((l) => l.line)),
     baseCount = raw.length;
-  for (let i = 0; i < baseCount; i++) {
-    const link = raw[i]!;
-    if (link.generated) continue;
-    for (const [end, p] of [link.line[0]!, link.line.at(-1)!].entries()) {
-      const endpointLayer = link.sourceEnds
-        ? source.walk!.nodes[link.sourceEnds[end]!]!.layer
-        : link.layer;
-      const candidates = pathTree
-        .neighbors(p.x, p.y, 32, SNAP_M, (j) => {
-          if (j === i || raw[j]!.layer !== endpointLayer) return false;
-          const own = source.walk?.links[link.id]?.provenance.osmIds;
-          const other = source.walk?.links[raw[j]!.id]?.provenance.osmIds;
-          return !own?.some((id) => other?.includes(id));
-        })
-        .map((j) => ({ target: raw[j]!, near: nearestOnPolyline(raw[j]!.line, p) }))
-        .sort((a, b) => a.near.away - b.near.away);
-      for (const best of candidates)
-        if (
-          best.near.away <= SNAP_M &&
-          (link.kind === 'crossing' || clear(p, best.near.point, endpointLayer))
-        )
-          add({
-            id: `join:${i}:${p.x}:${p.y}`,
-            line: [p, on(best.target, p)],
-            kind: 'access',
-            generated: true,
-            widthM: 1.5,
-            layer: endpointLayer,
-          });
+  const { root, unite } = walkRoots(source, raw);
+  const originalRoots = walkRoots(
+    source,
+    raw.filter((l) => !l.infill),
+  );
+  const connected = (a: Raw, b: Raw) =>
+    !a.infill && !b.infill
+      ? originalRoots.root(a.id) === originalRoots.root(b.id)
+      : root(a.id) === root(b.id);
+  const connect = (a: Raw, b: Raw) => {
+    unite(a.id, b.id);
+    if (!a.infill && !b.infill) originalRoots.unite(a.id, b.id);
+  };
+  for (const generated of [false, true]) {
+    if (generated) {
+      for (const { a, b, link } of repairs) {
+        if (connected(a, b)) continue;
+        on(a, link.line[0]!);
+        on(b, link.line.at(-1)!);
+        add(link);
+        connect(a, b);
+      }
+      for (const { a, b, link } of joins.sort(
+        (a, b) => polylineLength(a.link.line) - polylineLength(b.link.line),
+      )) {
+        if (connected(a, b)) continue;
+        const line = curbJoin(
+          city.nodes[link.node!]!.outline,
+          link.line[0]!,
+          link.line[1]!,
+          (p, q) => clear(p, q, a.layer) && (a.layer === b.layer || clear(p, q, b.layer)),
+        );
+        if (!line) continue;
+        line[0] = on(a, line[0]!);
+        line[line.length - 1] = on(b, line.at(-1)!);
+        add({ ...link, line });
+        connect(a, b);
+      }
+    }
+    for (let i = 0; i < baseCount; i++) {
+      const link = raw[i]!;
+      if (link.generated !== generated || (generated && link.kind !== 'sidewalk')) continue;
+      const handoff =
+        generated &&
+        source.roads[city.roads[link.road!]!.id]!.sidewalk?.[link.side!] === 'separate';
+      const radius = handoff ? COVER_M : SNAP_M;
+      for (const [end, p] of [link.line[0]!, link.line.at(-1)!].entries()) {
+        const endpointLayer = link.sourceEnds
+          ? source.walk!.nodes[link.sourceEnds[end]!]!.layer
+          : (link.endpointLayers?.[end] ?? link.layer);
+        const candidates = pathTree
+          .neighbors(p.x, p.y, 32, radius, (j) => {
+            if (
+              j === i ||
+              (raw[j]!.layer !== endpointLayer && !raw[j]!.endpointLayers?.includes(endpointLayer))
+            )
+              return false;
+            if (link.generated && connected(link, raw[j]!)) return false;
+            if (link.generated && raw[j]!.kind !== 'sidewalk' && raw[j]!.generated) return false;
+            const own = source.walk?.links[link.id]?.provenance.osmIds;
+            const other = source.walk?.links[raw[j]!.id]?.provenance.osmIds;
+            return !own?.some((id) => other?.includes(id));
+          })
+          .map((j) => ({ target: raw[j]!, near: prepare(raw[j]!).near(p) }))
+          .sort((a, b) => a.near.away - b.near.away);
+        for (const best of candidates)
+          if (
+            (!link.generated || !connected(link, best.target)) &&
+            best.near.away <= radius &&
+            (best.near.away <= SNAP_M ||
+              (!best.target.generated &&
+                best.target.kind !== 'crossing' &&
+                Math.abs(
+                  best.near.direction.x *
+                    nearestOnPolyline(city.roads[link.road!]!.reference, p).direction.x +
+                    best.near.direction.y *
+                      nearestOnPolyline(city.roads[link.road!]!.reference, p).direction.y,
+                ) > 0.8)) &&
+            layerAt(best.target, best.near.point) === endpointLayer &&
+            (link.kind === 'crossing' || clear(p, best.near.point, endpointLayer))
+          ) {
+            add({
+              id: `join:${i}:${end}:${best.target.id}`,
+              infill: link.infill || best.target.infill,
+              line: [p, on(best.target, p)],
+              kind: 'access',
+              generated: true,
+              widthM: 1.5,
+              layer: endpointLayer,
+            });
+            connect(link, best.target);
+          }
+      }
     }
   }
   const anchors: {
@@ -493,36 +805,51 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
   // connectors. Retain isolated mapped paths, but do not strand a door on a courtyard stub
   // when a reachable path is also within the short access radius.
   const preliminary = materializeWalk(source, raw).graph;
-  const labels = new Int32Array(preliminary.nodes.length).fill(-1),
-    sizes: number[] = [];
-  for (const node of preliminary.nodes) {
-    if (labels[node.idx] !== -1) continue;
-    const component = sizes.length,
-      queue = [node.idx];
-    labels[node.idx] = component;
-    for (const n of queue)
-      for (const i of preliminary.nodes[n]!.links) {
-        const l = preliminary.links[i]!,
-          next = l.from === n ? l.to : l.from;
-        if (labels[next] !== -1) continue;
-        labels[next] = component;
-        queue.push(next);
-      }
-    sizes.push(queue.length);
+  const { labels, core } = walkComponents(preliminary);
+  const rawId = (id: string) => id.slice(0, id.lastIndexOf('/'));
+  const infillIds = new Set(raw.filter((l) => l.infill).map((l) => l.id));
+  const infill = preliminary.links.map((l) => infillIds.has(rawId(l.id)));
+  const baseComponents = walkComponents(preliminary, (l) => !infill[l.idx]);
+  const infillComponents = walkComponents(preliminary, (l) => infill[l.idx]!);
+  const baseNodes = preliminary.nodes.map((n) => n.links.some((i) => !infill[i]));
+  const infillGroups = new Map<string, number>();
+  const connections = new Map<number, Set<number>>();
+  for (const link of preliminary.links) {
+    if (!infill[link.idx]) continue;
+    const group = infillComponents.labels[link.from]!;
+    infillGroups.set(rawId(link.id), group);
+    const roots = connections.get(group) ?? new Set<number>();
+    for (const n of [link.from, link.to]) if (baseNodes[n]) roots.add(baseComponents.labels[n]!);
+    connections.set(group, roots);
   }
-  const core = sizes.indexOf(Math.max(0, ...sizes));
+  // A mapped-sidewalk fallback must fill a connection/access gap, not add an unused branch
+  // to an already connected public network. Standalone new networks still get sidewalks.
+  const neededInfill = new Set(
+    [...connections].filter(([, roots]) => roots.size !== 1).map(([id]) => id),
+  );
   const coreLinks = new Set(
     preliminary.links
       .filter((l) => labels[l.from] === core)
       .map((l) => l.id.slice(0, l.id.lastIndexOf('/'))),
   );
   const isCore = (i: number) => coreLinks.has(raw[i]!.id);
-  const nearestCache = new Map<Raw, { near: ReturnType<typeof prepareNearest>; box: number[] }>();
+  const attached = new Map<string, { pos: Vec2; target: Raw }>();
+  const owningCurb = (access: ReturnType<typeof attached.get>, road: CRoad) => {
+    if (!access || access.target.layer !== layerOf(road)) return;
+    if (access.target.road === road.idx) return access.pos;
+    if (access.target.generated) return;
+    const along = nearestOnPolyline(road.reference, access.pos),
+      direction = nearestOnPolyline(access.target.line, access.pos).direction;
+    if (Math.abs(along.direction.x * direction.x + along.direction.y * direction.y) <= 0.8) return;
+    const edge = nearestOnPolyline([...road.surface, road.surface[0]!], access.pos);
+    if (edge.away <= COVER_M && clear(access.pos, edge.point, layerOf(road))) return access.pos;
+  };
   const attach = (
     id: string,
     type: 'places' | 'parking' | 'connectors',
     shape: { kind: 'point'; pos: Vec2 } | { kind: 'polygon'; ring: Vec2[] },
     layer = 0,
+    preferred?: Vec2,
   ) => {
     const points = shape.kind === 'point' ? [shape.pos] : [...shape.ring, shape.ring[0]!];
     const nearShape = shape.kind === 'polygon' ? prepareNearest(points) : undefined;
@@ -539,58 +866,57 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     const candidates = pathTree
       .search(x0 - ACCESS_M, y0 - ACCESS_M, x1 + ACCESS_M, y1 + ACCESS_M)
       .filter((j) => raw[j]!.layer === layer && raw[j]!.kind !== 'crossing');
-    let best: { target: Raw; a: Vec2; b: Vec2; away: number; core: boolean } | undefined;
+    let best: { target: Raw; a: Vec2; b: Vec2; away: number; rank: number } | undefined;
     for (const j of candidates.sort((a, b) => a - b)) {
       const target = raw[j]!,
         probes = [...points];
-      const targetCore = isCore(j);
-      let prepared = nearestCache.get(target);
-      if (!prepared) {
-        let x0 = Infinity,
-          y0 = Infinity,
-          x1 = -Infinity,
-          y1 = -Infinity;
-        for (const p of target.line) {
-          x0 = Math.min(x0, p.x);
-          y0 = Math.min(y0, p.y);
-          x1 = Math.max(x1, p.x);
-          y1 = Math.max(y1, p.y);
-        }
-        prepared = { near: prepareNearest(target.line), box: [x0, y0, x1, y1] };
-        nearestCache.set(target, prepared);
-      }
+      // Fill missing access without moving an existing main-network entrance onto infill.
+      const rank = (isCore(j) ? 0 : 2) + (target.generated && separateCurb(target) ? 1 : 0);
+      const prepared = prepare(target);
       if (best) {
         // Every probe lies in the shape's box, so the per-probe tests below would reject this
         // whole target; skip its polygon projections (lead, TASK-110 merge: compile time).
-        if (best.core && !targetCore) continue;
-        if (best.core === targetCore) {
+        if (rank > best.rank) continue;
+        if (rank === best.rank) {
           const [tx0, ty0, tx1, ty1] = prepared.box as [number, number, number, number];
           const dx = Math.max(tx0 - x1, 0, x0 - tx1),
             dy = Math.max(ty0 - y1, 0, y0 - ty1);
-          if (dx * dx + dy * dy >= best.away * best.away) continue;
+          if (dx * dx + dy * dy > (best.away + (preferred ? 1e-6 : 0)) ** 2) continue;
         }
       }
       if (shape.kind === 'polygon') for (const p of target.line) probes.push(nearShape!(p).point);
+      let previousProbe: Vec2 | undefined;
       for (const a of probes) {
-        if (best && best.core === targetCore) {
+        if (previousProbe?.x === a.x && previousProbe.y === a.y) continue;
+        previousProbe = a;
+        if (best && best.rank === rank) {
           const [x0, y0, x1, y1] = prepared.box as [number, number, number, number];
           const dx = Math.max(x0 - a.x, 0, a.x - x1),
             dy = Math.max(y0 - a.y, 0, a.y - y1);
-          if (dx * dx + dy * dy >= best.away * best.away) continue;
+          if (dx * dx + dy * dy > (best.away + (preferred ? 1e-6 : 0)) ** 2) continue;
         }
         const n = prepared.near(a);
         if (
           n.away > ACCESS_M ||
           (best &&
-            ((!targetCore && best.core) || (targetCore === best.core && n.away >= best.away))) ||
+            (rank > best.rank ||
+              (rank === best.rank &&
+                (preferred
+                  ? n.away > best.away + 1e-6 ||
+                    (Math.abs(n.away - best.away) <= 1e-6 &&
+                      distance(n.point, preferred) >= distance(best.b, preferred))
+                  : n.away >= best.away)))) ||
           !clear(a, n.point, layer)
         )
           continue;
-        best = { target, a, b: n.point, away: n.away, core: targetCore };
+        best = { target, a, b: n.point, away: n.away, rank };
       }
     }
     if (!best) return;
+    const group = infillGroups.get(best.target.id);
+    if (group !== undefined) neededInfill.add(group);
     const b = on(best.target, best.b);
+    attached.set(`${type}:${id}`, { pos: b, target: best.target });
     anchors.push({ id, type, pos: best.a, layer });
     add({
       id: `access:${type}:${id}:${anchors.length}`,
@@ -635,17 +961,24 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     for (const c of p.connectors) {
       const r = city.roads[city.index.road.get(c.roadId)!];
       if (!r) continue;
-      const l = city.lanes[r.lanes[c.lane]!]!;
+      const l = city.lanes[r.lanes[c.lane]!]!,
+        preferred = attached.get(`parking:${p.id}`);
       attach(
         c.id,
         'connectors',
         { kind: 'point', pos: pointAtDistance(l.polyline, l.cumulative, c.positionM) },
         layerOf(r),
+        owningCurb(preferred, r),
       );
     }
   }
   for (const c of city.connectors) {
     if (c.parking !== undefined && city.parking[c.parking]!.kind !== 'garage') continue;
+    const facility = c.parking === undefined ? undefined : city.parking[c.parking]!;
+    const preferred =
+      (facility && attached.get(`parking:${facility.id}`)) ??
+      attached.get(`places:${city.places[c.place]?.id ?? facility?.source.placeId}`);
+    // A remote entrance on another path cannot identify this road's owning curb.
     const l = city.lanes[c.lane]!,
       r = city.roads[l.road]!;
     attach(
@@ -653,9 +986,16 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       'connectors',
       { kind: 'point', pos: pointAtDistance(l.polyline, l.cumulative, c.positionM) },
       layerOf(r),
+      owningCurb(preferred, r),
     );
   }
-  const { graph, nodeAt } = materializeWalk(source, raw);
+  const { graph, nodeAt } = materializeWalk(
+    source,
+    raw.filter((link) => {
+      const group = infillGroups.get(link.id);
+      return group === undefined || neededInfill.has(group);
+    }),
+  );
   addCrossingSpans(city, graph, layerOf);
   for (const a of anchors) {
     const idx = nodeAt(a.pos, a.layer);
@@ -796,11 +1136,17 @@ function materializeWalk(source: City, raw: Raw[]) {
         from =
           link.sourceEnds && cuts[i - 1]! < 0.05
             ? graph.sourceNodes.get(link.sourceEnds[0])!
-            : nodeAt(line[0]!, link.layer),
+            : nodeAt(
+                line[0]!,
+                cuts[i - 1]! < 0.05 ? (link.endpointLayers?.[0] ?? link.layer) : link.layer,
+              ),
         to =
           link.sourceEnds && length - cuts[i]! < 0.05
             ? graph.sourceNodes.get(link.sourceEnds[1])!
-            : nodeAt(line.at(-1)!, link.layer);
+            : nodeAt(
+                line.at(-1)!,
+                length - cuts[i]! < 0.05 ? (link.endpointLayers?.[1] ?? link.layer) : link.layer,
+              );
       if (from === to) continue;
       const idx = graph.links.length;
       graph.links.push({

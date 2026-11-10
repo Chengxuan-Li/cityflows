@@ -52,7 +52,8 @@ requirements R1 to R8 and tests T01 to T18 are binding and referenced below by I
 cities. Both go through the same compile and validation as hand edits. The layer rule in
 `AGENTS.md` is enforced by ESLint.
 
-Deployment (TASK-067): the app is a static site. CI builds it on every push to `main` and
+Deployment (TASK-067): the app is a static site. CI builds it on every push to `main` (docs-only
+pushes excepted) and
 publishes it to GitHub Pages with the repository's base path; pull requests build but do not
 publish. Test hooks stay out of the production build (`MODE` is neither `development` nor
 `test`). The raster tile URL and the Overpass endpoint come from build-time variables
@@ -833,19 +834,44 @@ their road, `start`/`end` (or `midblock` for mapped crossings) and `zebra`/`sign
 
 Default 2 m sidewalks follow the compiled outer curb, their centre 1 m beyond it, on
 residential, tertiary, secondary and primary streets. Motorways, trunks, ramps and service
-roads get none by default. Explicit `no` and `separate` suppress generation; `yes` enables it.
+roads get none by default. Explicit `no` suppresses generation; `yes` enables it. For
+`separate`, a parallel same-grade mapped path on that side within 12 m supplies the curb.
+Four-metre coverage samples use the road tangent and follow continuous mapped ways through
+their vertices, without extending coverage past a true path end beyond the 4 m snap range.
+Generated infill remains only where it connects distinct existing walk components, supplies
+otherwise missing anchor access, or forms a standalone walk network (TASK-123 round 2).
 An inward side of paired carriageways is always suppressed, including divided corridors.
 Corners follow the existing curb returns on the outside; through seams join the same curb.
-TASK-091/094 crossing placement and road-end overrides supply cross-street walk links.
+TASK-123 fills disconnected same-grade curb ends within 12 m along the junction's outer
+boundary (at most 40 m), including service-driveway mouths and dead-end caps. These joins
+cannot cross an ordinary road reference. Local endpoint joins also run from generated
+sidewalk ends to mapped through paths within 4 m; additions join disconnected sets only.
+An inferred `separate` curb can hand off to its parallel mapped path within the 12 m coverage
+range, on the same layer and without crossing an ordinary road. Existing main-network access
+takes precedence over an inferred curb. Infill cannot conceal a gap between existing curbs
+when their joins are compiled, and unused branches into one existing component are discarded.
+TASK-091/094 crossing placement and road-end overrides supply cross-street walk links,
+including separately mapped curbs. Generated walk crossings exclude motorway, trunk and
+ramp arms. The vehicle network, crossing placement and stop positions are unchanged.
+New mapped-curb corners and crossings are added only where the existing network has a gap.
 
 Same-grade mapped intersections split links. Mapped endpoints snap within 4 m (curb width
 and imported alignment), with no inferred shortcut across an ordinary street; explicit OSM
-shared endpoints can join grades at abutments. Entrances attach their places; otherwise
+shared endpoints can join grades at abutments. Generated sidewalks on mapped bridge/tunnel
+roads also retain the shared road node's grade
+at an explicit approach to a road on that grade (TASK-123, owner-approved endpoint rule).
+Their interiors retain the deck/tunnel grade; coincident but unshared roads do not join.
+Entrances attach their places; otherwise
 access uses the nearest part of the place shape. Short access links prefer the main walk
 component within 150 m, retaining local paths when no main-component access fits. Access
 links may cross service driveways,
 but never an ordinary road centreline. A door with no viable attachment falls back to the
-place shape. Parking shapes, roadside strips and car connectors use the same access rule.
+place shape. Parking shapes, roadside strips and car connectors use the same access rule. Equidistant
+connector curb candidates prefer the owning place or facility's chosen access curb on that
+same road (TASK-123). A parallel mapped path also identifies that curb within 12 m of the
+road edge, on the same grade and without an intervening ordinary road. A remote entrance
+does not change the stable nearest-curb order. This prevents both long local detours and
+remote entrances flipping an already usable car access to the opposite curb.
 No access is invented beyond the distance limit or across an incompatible grade. Access is a
 straight connection, not obstacle-avoiding navigation through a block. Building clipping is
 presentation-only; display context still cannot change compiled connectivity.

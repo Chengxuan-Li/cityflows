@@ -148,7 +148,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | done (round 2; see review) |
 | [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | done (merged with TASK-112; see review) |
 | [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | on hold until B58 (see review) |
-| [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | round 3: T53 (see review) |
+| [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | done (round 3; see review) |
 | [TASK-124](tasks/TASK-124.md) | 9 | Every garage and place has a car exit (B58): connectors snap to lanes a car can leave; `parking_no_exit` and `place_no_exit` warnings | `src/importers/osm/places.ts` (car core, `placeConnector`), `parking.ts`, `src/network/parking.ts`, `diagnostics.ts` | 102, 103, 104, 119 | T61, exit census, traffic gates | open |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -2642,11 +2642,37 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   57. Round 3: trace both changes against main (which junctions gain or lose zone stops, and
   whether the test pairs now walk over different crossings), fix what the walk graph causes,
   and pass T53 unchanged.
+- Lead, TASK-123 round 3 (2026-11-10): accepted. The T53 shift came from one access
+  attachment: an owner-curb tie-break used a mapped entrance about 100 m away and moved
+  `p:1769`'s access to the other curb of `r:62`, which changed one person's walk and the
+  departures after it. With the fix T53 is 51 / 57 zone stops (main's, event for event), and
+  the 10:00 gate is 3 571 / 23 / 13 parking failures / 0 stalled heads, main's exactly. Lead
+  runs on the merged tree: `check` (two Sindelfingen tests timed out under load and pass alone),
+  the traffic tier, the full e2e (93 passed) and the bench (equal to main) are green.
 
 ## Owner decisions log
 
+- 2026-11-10, CI and delivery: two tiers. The light tier (`check`, `test:city`,
+  `test:traffic:light` with the 10:00 gate and T53, `test:e2e:light`, plus the specs a task
+  names) runs everywhere by default: agents' deliveries, the lead's merges, every push and PR
+  (docs-only pushes run nothing). The full tier (full demand, the whole e2e in five groups,
+  `npm run bench`) runs only at checkpoints: a pushed `checkpoint-*` tag, a manual run of the
+  Full workflow, or nightly when main changed. A red full run blocks new merges until fixed. The
+  lead tags a checkpoint before a gate is marked done and at least once per wave.
+- 2026-11-10, TASK-124 (lead ruling, owner go-ahead): a reachable arrival connector that fails
+  the departure check stays as an arrival and gains a separate departure connector; only an
+  unreachable one moves. Moving Munich's arrivals missed the quick gate (3 260 / 16); the split
+  passes (3 552 / 8 / 0).
+
 - 2026-11-10, TASK-122 and TASK-123 round 2: write TASK-124 (B58, every garage and place has a
   car exit). TASK-122 waits for it; TASK-123's round 3 (T53) runs alongside.
+- Lead, TASK-124 trace (766a4d5, 2026-11-10): the agent stopped correctly on two contract
+  errors. A public-only car core is 62 lanes in Sindelfingen, disjoint from the network cars
+  use (the circulation runs through private zones), and 721 Sindelfingen strip spaces (2.39%)
+  sit on roads cut by the crop or closed in by private zones, where no connector move helps.
+  Ruling: "car exit" means TASK-122's per-zone departure check, ported to `src/network/`; the
+  traced strips are accepted real gaps and leave the 2% count, which now covers garages, lots
+  and places; gateways are counted but not gated. Contract amended.
 
 - 2026-11-09, while TASK-112's round 2 and TASK-122 run: write TASK-123 (B57, one connected
   walk network) and run it in parallel. B54 east, B55 and TASK-113 wait until TASK-122 is merged.
