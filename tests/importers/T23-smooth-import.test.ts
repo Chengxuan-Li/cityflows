@@ -262,7 +262,8 @@ test.each(
     });
     expect(importOsm(xml, { ...options, bbox: bbox && [...bbox] })).toEqual(imported);
   },
-  60_000,
+  // Lead, 2026-11-10: Munich takes 20 s locally but 45-61 s on CI runners (as T24).
+  Number(process.env.CITYFLOWS_TEST_TIMEOUT_MS ?? 180_000),
 );
 unitTest('T23: a two-way OSM bend has mirrored fillets and smoothing provenance', () => {
   const xml = `<osm>
