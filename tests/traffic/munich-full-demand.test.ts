@@ -25,7 +25,7 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   expect(morning.failed).toBe(
     morning.failedByReason.gridlocked + morning.failedByReason.no_parking,
   );
-  // Starting spaces and later local parking choices must admit a legal departure.
+  // Starting spaces require a legal departure; fallback arrivals are counted separately.
   expect(morning.failedByReason.no_parking).toBeLessThan(0.01 * morning.localArrivals);
   expect(morning.failedByReason.no_parking).toBeLessThanOrEqual(15);
   expect(morning.completed).toBeGreaterThanOrEqual(Math.floor(445 * 0.99));

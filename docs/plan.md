@@ -147,7 +147,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-120](tasks/TASK-120.md) | 7 | Dead-end turnarounds: an implicit U-turn at single-road dead ends, so strip cars there can leave; restores the 2% full-demand parking gate | `src/network/movements.ts`, `junctions.ts` (dead-end cap), `diagnostics.ts` | 118, 119 | T56, traffic quick, shots | rejected (lead's premise error; see review), replaced by TASK-122 |
 | [TASK-112](tasks/TASK-112.md) | 9 | Trips made by people: access walk to the parked car, drive, egress walk to the destination; walk-mode trips simulated; person view (owner bug 4) | new `src/sim/persons.ts`, `walkers.ts` (spawn API), `parking.ts`, `connectors.ts`, `src/demand/**`, host snapshot and person inspect, person view, walker layers | 103, 110, 111, 118 | T57, traffic quick, shots | round 2: 10 full-e2e specs, on `task/lead-112` (see review) |
 | [TASK-121](tasks/TASK-121.md) | 7 | Queue heads that cannot enter re-route (B56): a head detour after `headDetourS`, gate back to 0 stalled heads | `src/sim/engine.ts` (`planLane`, fallback), `intersection.ts`, `reroute.ts`, `SimParams.headDetourS` | 048, 076, 077, 116 | T58, traffic quick, stability probe | accepted; merges together with TASK-112 (see review) |
-| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | implemented for review; owner exceptions applied, traffic/performance gates open (see review entries) |
+| [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | round 2 implemented for review; near-main search-time target remains open |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -2613,6 +2613,39 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   sequential load/step timings grow 88.1% / 32.0%; alternating cold-load medians grow 6.3%
   (68.14 to 72.46 ms). These mixed samples leave performance acceptance open; no baseline
   was relaxed. The follow-up commit body contains the consolidated trace and measurements.
+
+- TASK-122 round 2 (2026-11-09): read the lead's review on main (bc7656a) and reproduced T53's
+  1 924 to 1 841 completions (4.3% cost). The owner clarified that availability and reachability
+  are checked from the car's current position, retaining today's ranking and search radius;
+  only when no free leavable space can be reached does it retain the legacy choice. The same
+  decision runs while searching. Filled targets are reconsidered before arrival, temporarily
+  rejected facilities can qualify again, and unchanged targets keep their routes. No original
+  garage anchor, roadside forecast or extra search-radius constraint is retained.
+  `parking.parkedWithoutExit` counts actual later-trip arrivals without usable departures,
+  including gateway visitors, not forecasts or background cars. At Munich 0.15: 3 106 leavable
+  admissions and 20 without exits (pk:2035: 15; pk:1981: 5). T53 passes at 1 854 / 1 848 (0.3%
+  cost), with crossing safety and zone-stop limits intact. T59's 25 tests pass, independently
+  reviewed. At 09:30: 3 444 completed / 9 gridlocked / zero parking failures; at 10:00:
+  3 643 / 19 / 0. The original 245 Sindelfingen failures remain unchanged; its new metric is 32.
+  Search acceptance is still open: total search over all trips falls from 433 686 to 286 602 s,
+  versus main's 56 894 s. p:1733 still accounts for 236 241 s; 33 trips search over an hour.
+  The clarified rule keeps choosing reachable free safe bays in these cases, so this fallback
+  does not alone restore near-main search time. No threshold was relaxed or B58 geometry changed.
+  Fresh check passes (984 unit tests) and city passes (103). Quick has three stalled heads,
+  matching the lead's corrected 09:30 baseline of three (main f5dfe24); the prior zero-head
+  comparison in this branch's historical entries was incorrect. Concurrent quick phase load
+  and step times grow 69.1% and 51.6%; performance acceptance is not established by that pair.
+  Full demand passes the unchanged 1% parking gate: 1 970 completed / 209 gridlocked / zero
+  parking failures, 1 689 local arrivals, `parkedWithoutExit` 35, in 689.52 s. Its mean successful
+  search grows to 75.28 s (main 8.35 s); no full-demand search improvement is claimed.
+  Of the 20 without-exit admissions, seven are new local fallbacks (all pk:2035); thirteen
+  retain the gateway exception (eight pk:2035, five pk:1981). No local pk:1981 visit falls back
+  in this run: free reachable safe alternatives continue to take precedence.
+  Smoke: 38 pass, one Munich overview frame-cost failure (1.267x, allowance 1.2x); the isolated
+  retry passes at 1.008x without threshold changes. The five additional named e2e scenarios
+  also pass (six including the retry). All smoke cases have a passing result. Search-time
+  and performance acceptance remain open; no full TASK-122 acceptance is claimed.
+  The last round-2 commit body carries the complete measurements, checks and per-trip trace.
 
 ## Owner decisions log
 

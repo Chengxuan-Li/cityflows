@@ -262,7 +262,171 @@ test.each([false, true])(
       state.arrive(0, connector, 110);
       expect(state.location(0).space).toBe(strip(net, w.id).spaces![0]);
       expect(state.location(1, true)).toEqual(state.location(0));
+      expect(state.metrics(0).parkedWithoutExit).toBe(1);
     }
+  },
+);
+
+test.each(['none', 'full', 'unreachable', 'beyond', 'available'] as const)(
+  'T59 a later-trip arrival keeps its garage when no usable local space is available (%s)',
+  (alternative) => {
+    const w = world();
+    w.shop.kind = 'work';
+    w.shop.connectors = w.shop.connectors.map((c) => ({
+      ...c,
+      roadId: w.sink.id,
+      lane: 0,
+      positionM: 60,
+    }));
+    w.city.parking![w.id]!.occupancyAtStart = 0;
+    const safeId = allocateId(w.city, 'pk');
+    if (alternative !== 'none') {
+      w.city.parking![safeId] = {
+        ...w.city.parking![w.id]!,
+        id: safeId,
+        occupancyAtStart: alternative === 'full' ? 1 : 0,
+        strip: {
+          ...w.city.parking![w.id]!.strip!,
+          roadId: Object.values(w.city.roads)[0]!.id,
+          fromM: 200,
+          toM: 288,
+        },
+      };
+    }
+    if (alternative === 'beyond')
+      Object.assign(w.scenario.simParams, { parkingSearchRadiusM: 100 });
+    const inbound = w.trip('in', 'owner');
+    const onward = w.trip('out', 'owner', w.shop.id, w.home.id, 5000);
+    const { state, net, vehicles } = parking(w, [inbound, onward]);
+    const garage = net.parking.find((f) => f.place === net.index.place.get(w.shop.id))!;
+    const accept = (c: number) =>
+      alternative !== 'unreachable' || net.parking[net.connectors[c]!.parking!]?.id !== safeId;
+    for (const forecast of [true, false]) {
+      expect(state.choose(0, 100, accept, forecast)).toBe(true);
+      expect(state.detail(0, 100).parkingFacility).toBe(
+        alternative === 'available' ? safeId : garage.id,
+      );
+      expect(state.metrics(0).parkedWithoutExit).toBe(0);
+    }
+    const f = alternative === 'available' ? strip(net, safeId) : garage;
+    vehicles.destination[0] = f.connectorsIn[0]!;
+    state.beginSearch(0, 100);
+    expect(state.needsChoice(0)).toBe(alternative !== 'available');
+    state.arrive(0, f.connectorsIn[0]!, 110);
+    expect(state.metrics(0).parkedWithoutExit).toBe(alternative === 'available' ? 0 : 1);
+    expect(state.location(1, true)).toEqual(state.location(0));
+  },
+);
+
+test('T59 a temporarily rejected safe strip is reconsidered when a car leaves', () => {
+  const w = world(true);
+  w.city.parking![w.id]!.capacity = 1;
+  w.city.parking![w.id]!.strip!.toM = 35.5;
+  w.city.parking![w.id]!.occupancyAtStart = 0;
+  const trips = ['a', 'b'].flatMap((person) => [
+    w.trip(`${person}-in`, person),
+    w.trip(`${person}-out`, person, w.shop.id, w.home.id, 5000),
+  ]);
+  const { state, net } = parking(w, trips);
+  const connector = strip(net, w.id).connectorsIn[0]!;
+  const accept = (c: number) => c === connector;
+  expect(state.choose(0, 100, accept)).toBe(true);
+  state.arrive(2, connector, 101);
+  state.reject(0, 102);
+  state.depart(3, 103, connector);
+  for (let i = 0; i < 200; i++)
+    state.advance(103 + i / 10, {
+      clearLane: () => {},
+      park: () => {},
+      exit: () => true,
+      resume: () => {},
+    });
+  expect(state.full(connector, 0)).toBe(false);
+  expect(state.choose(0, 124, accept)).toBe(true);
+});
+
+test('T59 a car rechecks a filled safe space from its current position before reaching it', () => {
+  const w = world();
+  w.scenario.simParams.streetParkingShare = 0;
+  w.shop.kind = 'work';
+  w.shop.connectors = w.shop.connectors.map((c) => ({
+    ...c,
+    roadId: w.sink.id,
+    lane: 0,
+    positionM: 60,
+  }));
+  w.city.parking![w.id]!.occupancyAtStart = 0;
+  const street = Object.values(w.city.roads)[0]!;
+  const safeId = allocateId(w.city, 'pk');
+  w.city.parking![safeId] = {
+    ...w.city.parking![w.id]!,
+    id: safeId,
+    capacity: 1,
+    occupancyAtStart: 0,
+    strip: { ...w.city.parking![w.id]!.strip!, roadId: street.id, fromM: 200, toM: 205.5 },
+  };
+  w.place('Near home', 'residential', { x: 190, y: -20 }, [
+    { road: street, positionM: 190, direction: 'both' },
+  ]);
+  const near = Object.values(w.city.places).find((p) => p.name === 'Near home')!;
+  near.population = 2;
+  const trips = [
+    w.trip('far-in', 'far'),
+    w.trip('far-out', 'far', w.shop.id, w.home.id, 5000),
+    w.trip('near-in', 'near', near.id, w.shop.id, 145),
+    w.trip('near-out', 'near', w.shop.id, near.id, 5000),
+  ];
+  const engine = createEngine();
+  const twin = createEngine();
+  const net = compiled(w.city);
+  for (const run of [engine, twin]) run.load({ compiled: net, trips, scenario: w.scenario });
+  let firstChoice = false;
+  let changedBeforeArrival = false;
+  for (let i = 0; i < 6000; i++) {
+    engine.step();
+    twin.step();
+    if (i % 100 === 0) expect(engine.stateHash()).toBe(twin.stateHash());
+    const car = engine.inspect(1)!;
+    if (car.parkingFacility === safeId) firstChoice = true;
+    if (firstChoice && car.routeReason === 'parking' && car.parkingFacility !== safeId) {
+      changedBeforeArrival = car.positionM < 200;
+      break;
+    }
+  }
+  expect(firstChoice).toBe(true);
+  expect(changedBeforeArrival).toBe(true);
+  engine.step(6000);
+  twin.step(6000);
+  expect(engine.stateHash()).toBe(twin.stateHash());
+  expect(engine.inspect(1)!.state).toBe('completed');
+  expect(engine.metrics().parking.parkedWithoutExit).toBe(1);
+});
+
+test.each(['later', 'terminal', 'opened'] as const)(
+  'T59 fallback strip admissions count actual departure reachability (%s)',
+  (kind) => {
+    const w = world();
+    w.city.parking![w.id]!.occupancyAtStart = 0;
+    const inbound = w.trip('in', 'owner');
+    const trips = [inbound];
+    if (kind !== 'terminal') trips.push(w.trip('out', 'owner', w.shop.id, w.home.id, 5000));
+    const { state, net } = parking(w, trips);
+    const connector = strip(net, w.id).connectorsIn[0]!;
+    expect(state.choose(0, 100, (c) => net.connectors[c]!.parking === strip(net, w.id).idx)).toBe(
+      true,
+    );
+    expect(state.full(connector, 0)).toBe(false);
+    expect(state.metrics(0).parkedWithoutExit).toBe(0);
+    let arrival = connector;
+    if (kind === 'opened') {
+      w.road(w.boundary, w.b);
+      w.city.version++;
+      const next = compiled(w.city);
+      state.patch(next);
+      arrival = next.index.connector.get(net.connectors[connector]!.id)!;
+    }
+    state.arrive(0, arrival, 110);
+    expect(state.metrics(0).parkedWithoutExit).toBe(kind === 'later' ? 1 : 0);
   },
 );
 

@@ -90,6 +90,8 @@ export interface Metrics {
     facilities: { id: string; occupied: number; capacity: number }[];
     parked: number;
     arrivals: number;
+    /** Arrivals with a later car trip that parked without a usable departure. */
+    parkedWithoutExit: number;
     meanSearchTimeS: number;
     failed: number;
     motion?: {

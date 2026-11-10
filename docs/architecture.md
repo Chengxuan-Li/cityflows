@@ -1721,14 +1721,24 @@ A lot stall also needs a local circulation path to a usable outbound connector.
 Residential street-stock transfers and first-trip origin allocation skip unusable spaces;
 virtual garages need a usable exit too. Assigned cars stay in their garages or use the next
 eligible space in the existing choice order. Explicit background occupancy is retained.
-Arrival choice requires usable departure space when the person's linked next car trip starts at
-that activity place, including trips beyond the run window. Terminal visits retain their
+Arrival choice prefers an available, reachable space within the search radius with a usable
+departure when the person's linked next car trip starts at that activity place, including
+trips beyond the run window. If none is available, it retains the existing parking choice
+instead of cruising for an occupied safe space or extending the search. The chosen fallback
+also applies during space admission and manoeuvres. Reachability is tested from the car's
+current lane and position, not the originally chosen garage's arrival road. While searching,
+the engine checks once per simulated second for a filled safe target or newly available
+alternatives to a fallback. A temporarily rejected facility may qualify again once it has a
+free safe space. Keeping the same target preserves the installed route. Terminal visits retain their
 existing choices. Owner exception (TASK-122): arrivals from gateways retain their existing
-parking choices while gateway routing is deferred. Local arrivals still require departure
-reachability when their next trip is gateway-bound. The next trip's class and purpose determine
+parking choices while gateway routing is deferred. The preference still applies to local
+arrivals whose next trip is gateway-bound. The next trip's class and purpose determine
 the departure requirement; ranking, walking distance, search radius and stall-choice draws
-are unchanged. Reachability
-is not saved and is rebuilt after live edits; existing parked cars keep their spaces and
+are unchanged. `Metrics.parking.parkedWithoutExit` counts actual arrivals with a later car trip
+whose admitted space (or virtual garage) has no usable departure, including gateway visitors.
+Forecasts, rejected choices, terminal visits and starting stock do not increment it. Arrival
+uses the current compiled reachability, so a live edit that opens an exit before parking
+avoids the count. Reachability is not saved and is rebuilt after live edits; existing parked cars keep their spaces and
 their existing departure behavior.
 The owner accepts empty default blocked strips to preserve the residential street-share
 budget; explicit background occupancy remains unchanged.

@@ -83,6 +83,7 @@ function createRun({
     },
   };
   const { dtS, idm, spawnMinGapM } = params;
+  const parkingCheckSteps = Math.max(1, Math.round(1 / dtS));
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
   const profiles = createVehicleProfiles(params);
   const maxVehicleLength = Math.max(...profiles.map((p) => p.lengthM));
@@ -164,7 +165,14 @@ function createRun({
     );
   }
 
-  function chooseParkingRoute(id: number, lane: number, positionM: number, timeS: number) {
+  function chooseParkingRoute(
+    id: number,
+    lane: number,
+    positionM: number,
+    timeS: number,
+    keepCurrent = false,
+  ) {
+    const previousDestination = vehicles.destination[id]!;
     if (
       !parking.choose(id, timeS, (into) => {
         vehicles.destination[id] = into;
@@ -172,6 +180,7 @@ function createRun({
       })
     )
       return false;
+    if (keepCurrent && vehicles.destination[id] === previousDestination) return true;
     const result = routeFrom(id, lane, positionM);
     if (!result.ok) throw new Error('Chosen parking route disappeared');
     vehicles.route[id] = result.route;
@@ -454,6 +463,19 @@ function createRun({
           continue;
         }
         const position = vehicles.position[id]!;
+        // A safe parking target can fill while the car is en route. Reconsider from here
+        // once a second, before a one-way approach commits it to cruising past the target.
+        if (
+          lane &&
+          (tick + id) % parkingCheckSteps === 0 &&
+          intersections.grants[id] === -1 &&
+          parking.needsChoice(id)
+        ) {
+          const previousDestination = vehicles.destination[id]!;
+          if (chooseParkingRoute(id, lane.idx, position, timeS, true)) {
+            if (vehicles.destination[id] !== previousDestination) planLane(id, lane.idx, position);
+          } else vehicles.destination[id] = previousDestination;
+        }
         if (lane) parking.approach(id, lane.idx, position, timeS);
         const destination = compiled.connectors[arrival[id]!];
         const movement = compiled.movements[vehicles.movement[id]!];
