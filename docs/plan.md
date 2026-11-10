@@ -154,6 +154,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-126](tasks/TASK-126.md) | 10 | Railway tracks and stations: a track graph imported, compiled, saved and drawn; stations tied to platforms and walk entrances | new `src/importers/osm/rail.ts`, `src/network/rail.ts`, rail layers, `src/schema` (rail network), fixtures (railway ways appended) | 096, 110, 123 | T62, census, traffic unchanged, shots | done |
 | [TASK-127](tasks/TASK-127.md) | 10 | Decorative trains: S-Bahn trains stop at Donnersbergerbrücke, main-line trains pass through, by a deterministic timetable on the sim clock; drawn in 2D and 3D; no sim change | new routes/timetable/motion module, train layers, `src/network/rail.ts`, rail schema (preferred direction) | 126 | T64, traffic and sim hash unchanged, frame time, shots | done |
 | [TASK-128](tasks/TASK-128.md) | 10 | Stations as trip ends: S-Bahn riders walk out of Donnersbergerbrücke after each stop, walk to work or a visit nearby, and walk back to board; walk-only, timed by TASK-127's timetable | new rider module in `src/demand/`, `schedule.ts`, person inspector, rider census | 126, 127 | T65, Munich 0.15 gate with riders, Sindelfingen and synthetic trips unchanged, shots | open |
+| [TASK-130](tasks/TASK-130.md) | 7 | Break the Landsberger loop (B56 reopened): trace the cycle TASK-121's head detours do not clear, then the smallest general rule (box entry, zipper or wider detours) so the corridor drains | `src/sim/intersection.ts`, `engine.ts`, `reroute.ts`, `lane-change.ts`, `merge.ts`, `params.ts`, probe seeds | 121, 122, 077 | T66, 0 stalled heads over seeds 1 to 3, loop waits under 15 min, baseline reset | open |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1080,6 +1081,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-126 | Codex | GPT-6.1-Sol | high | 5326 (production 5426) |
 | TASK-127 | Codex | GPT-6.1-Sol | high | 5328 (production 5428) |
 | TASK-128 | Codex | GPT-6.1-Sol | xhigh | 5329 (production 5429) |
+| TASK-130 | Codex | GPT-6.1-Sol | xhigh | 5330 (production 5430) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -2873,6 +2875,8 @@ tier, the full-demand test, the light e2e, demo-a-commute, T16, T52, T54, T57, q
 
 ## Owner decisions log
 
+- 2026-11-10, B56: TASK-130 (break the Landsberger loop) contract written after the TASK-122
+  merge; it can run alongside TASK-128.
 - 2026-11-10, TASK-122: merge on top of TASK-124 and TASK-125 with the baseline reset; the
   stalled head on `r:961` is the Landsberger loop's (B56), not TASK-122's; a new task (TASK-130)
   breaks the loop. T53's walker-cost limit relaxes from 3% to 5%.
