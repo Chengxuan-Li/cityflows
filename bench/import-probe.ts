@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation, scheduleTrips } from '../src/demand';
 import { defaultScenario } from '../src/fixtures/scenarios';
@@ -6,7 +6,8 @@ import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
 import type { City } from '../src/schema';
 import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../src/routing';
-import { createWalkRouter } from '../src/routing/walk';
+import { createWalkRouter, type WalkRequest, type WalkRoute } from '../src/routing/walk';
+import { distance, pointAtDistance } from '../src/geo/polyline';
 import { createEngine } from '../src/sim/engine';
 import type { TrafficEngine } from '../src/sim/types';
 import { walkComponents } from '../src/network/walk-joins';
@@ -15,9 +16,15 @@ import { walkComponents } from '../src/network/walk-joins';
 // wave measures against. Usage: npm run import-probe -- fixtures/osm/<name>.osm w s e n [--scale n]
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const [file, ...args] = process.argv.slice(2);
-  if (!file || (args.length !== 4 && !(args.length === 6 && args[4] === '--scale')))
-    throw new Error('Usage: import-probe <file.osm> w s e n [--scale n]');
-  const scaleArg = args[5] ?? '1';
+  if (!file || args.length < 4 || (args.length - 4) % 2)
+    throw new Error('Usage: import-probe <file.osm> w s e n [--scale n] [--walk-legs file.json]');
+  let scaleArg = '1',
+    walkLegsFile: string | undefined;
+  for (let i = 4; i < args.length; i += 2) {
+    if (args[i] === '--scale') scaleArg = args[i + 1]!;
+    else if (args[i] === '--walk-legs') walkLegsFile = args[i + 1]!;
+    else throw new Error(`Unknown option: ${args[i]}`);
+  }
   const scale = Number(scaleArg);
   if (!scaleArg.trim() || !Number.isFinite(scale) || scale < 0)
     throw new Error('--scale must be a finite, nonnegative number');
@@ -78,7 +85,52 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
       if (route.ok) ok++;
     }
   console.info({ connectorPairs: total, routable: ok });
-  console.info(probeMorning(city, compiled, scale));
+  const { walkLegs, ...morning } = probeMorning(city, compiled, scale, {
+    includeWalkLegs: !!walkLegsFile,
+  });
+  if (walkLegsFile) writeFileSync(walkLegsFile, JSON.stringify(walkLegs, null, 2));
+  console.info(morning);
+}
+
+/** Compare the actual routed endpoints, including direction and partial first/last links. */
+export function walkDetour(graph: CompiledCity['walk'], route: WalkRoute) {
+  const point = (leg: WalkRoute['legs'][number], at: number) => {
+    const link = graph.links[leg.link]!;
+    return pointAtDistance(link.line, link.cumulative, at);
+  };
+  const first = route.legs[0],
+    last = route.legs.at(-1);
+  const from = first ? point(first, first.fromM) : null;
+  const to = last ? point(last, last.toM) : null;
+  const straightM = from && to ? distance(from, to) : 0;
+  return {
+    from,
+    to,
+    straightM,
+    detour:
+      straightM > 0 ? route.lengthM / straightM : route.lengthM === 0 ? 1 : ('unbounded' as const),
+  };
+}
+
+export function matchWalkRoute<T extends { legs: WalkRoute['legs'] }>(
+  candidates: T[],
+  walker: { state: string; link: number | null; positionM: number },
+): T {
+  const matches = candidates.filter(({ legs }) => {
+    if (!legs.length) return walker.state === 'done' && walker.link === -1;
+    if (walker.state === 'done') {
+      const last = legs.at(-1);
+      return last?.link === walker.link && Math.abs(last.toM - walker.positionM) < 1e-6;
+    }
+    return legs.some(
+      (leg) =>
+        leg.link === walker.link &&
+        walker.positionM >= Math.min(leg.fromM, leg.toM) - 1e-6 &&
+        walker.positionM <= Math.max(leg.fromM, leg.toM) + 1e-6,
+    );
+  });
+  if (matches.length !== 1) throw new Error(`Measured walk has ${matches.length} matching paths`);
+  return matches[0]!;
 }
 
 /** Count actual walk anchors separately from entities with no viable attachment. */
@@ -133,10 +185,12 @@ export function probeMorning(
     untilS = 10 * 3600,
     observe,
     routeProvider,
+    includeWalkLegs = false,
   }: {
     untilS?: number;
     observe?: (engine: TrafficEngine) => void;
     routeProvider?: RouteProvider;
+    includeWalkLegs?: boolean;
   } = {},
 ) {
   const scenario = defaultScenario('grid5x5');
@@ -155,6 +209,15 @@ export function probeMorning(
   let headDetours = 0;
   let walkRouteRequests = 0;
   let walkRouteTimeMs = 0;
+  const routeKey = (route: { links: number[]; lengthM: number }, from = '', to = '') =>
+    `${from}>${to}:${route.links.join(',')}:${route.lengthM}`;
+  const walkRoutes = new Map<
+    string,
+    (ReturnType<typeof walkDetour> & {
+      request: WalkRequest;
+      legs: WalkRoute['legs'];
+    })[]
+  >();
   engine.load({
     compiled,
     trips,
@@ -172,6 +235,29 @@ export function probeMorning(
         const result = walkRouter.route(request);
         walkRouteTimeMs += performance.now() - start;
         walkRouteRequests++;
+        if (includeWalkLegs && result.ok) {
+          const key = routeKey(
+            result.route,
+            'placeId' in request.from ? request.from.placeId : '',
+            'placeId' in request.to ? request.to.placeId : '',
+          );
+          const candidates = walkRoutes.get(key) ?? [];
+          if (
+            !candidates.some((c) =>
+              c.legs.every(
+                (leg, i) =>
+                  leg.fromM === result.route.legs[i]!.fromM &&
+                  leg.toM === result.route.legs[i]!.toM,
+              ),
+            )
+          )
+            candidates.push({
+              ...walkDetour(compiled.walk, result.route),
+              request: { from: { ...request.from }, to: { ...request.to } },
+              legs: result.route.legs.map((leg) => ({ ...leg })),
+            });
+          walkRoutes.set(key, candidates);
+        }
         return result;
       },
     },
@@ -288,6 +374,92 @@ export function probeMorning(
     }
   }
   const releasedTrips = trips.length - metrics.trips.pending;
+  const parkingNodes = new Map<number, Set<string>>();
+  const parkingAt = (node: number, id: string) => {
+    const list = parkingNodes.get(node) ?? new Set<string>();
+    list.add(id);
+    parkingNodes.set(node, list);
+  };
+  if (includeWalkLegs) {
+    for (const [id, nodes] of compiled.walk.parking) for (const n of nodes) parkingAt(n, id);
+    for (const c of compiled.connectors) {
+      const node = compiled.walk.connectors.get(c.id);
+      if (node !== undefined && c.parking !== undefined)
+        parkingAt(node, compiled.parking[c.parking]!.id);
+    }
+  }
+  const walkLegs = includeWalkLegs
+    ? population.flatMap(({ id }) => {
+        const person = engine.inspectPerson(id);
+        return (
+          person?.trips.flatMap((trip) =>
+            trip.legs
+              .filter((leg) => leg.kind !== 'drive' && leg.startedS !== null)
+              .map((leg) => {
+                const walker = leg.walkerId === null ? null : engine.inspectWalker(leg.walkerId);
+                const info = walker?.route
+                  ? matchWalkRoute(
+                      walkRoutes.get(
+                        routeKey(
+                          walker.route,
+                          leg.kind === 'egress' ? '' : trip.originPlaceId,
+                          leg.kind === 'access' ? '' : trip.destinationPlaceId,
+                        ),
+                      ) ?? [],
+                      walker,
+                    )
+                  : undefined;
+                if (walker?.route && !info)
+                  throw new Error(`Missing measured walk route: ${walker.id}`);
+                const position = info?.legs.length
+                  ? leg.kind === 'access'
+                    ? info.request.to
+                    : info.request.from
+                  : undefined;
+                return {
+                  personId: id,
+                  tripId: trip.tripId,
+                  kind: leg.kind,
+                  state: leg.state,
+                  originPlaceId: trip.originPlaceId,
+                  destinationPlaceId: trip.destinationPlaceId,
+                  startedS: leg.startedS,
+                  arrivedS: leg.arrivedS,
+                  distanceM: leg.distanceM,
+                  routedM: info ? leg.distanceM : null,
+                  routing:
+                    leg.distanceM === 0 && leg.state !== 'failed'
+                      ? 'zero'
+                      : info
+                        ? 'routed'
+                        : leg.state === 'failed'
+                          ? 'unreachable'
+                          : leg.distanceM === 0
+                            ? 'zero'
+                            : 'fallback',
+                  from: info?.from ?? null,
+                  to: info?.to ?? null,
+                  straightM: info?.straightM ?? leg.distanceM,
+                  detour: info?.detour ?? (leg.state === 'failed' ? null : 1),
+                  parkingCandidates:
+                    position && 'node' in position
+                      ? [...(parkingNodes.get(position.node) ?? [])]
+                      : [],
+                  carFacilityAtEnd: person.car.facility,
+                  path:
+                    info && (info.detour === 'unbounded' || info.detour > 3)
+                      ? info.legs.map((leg) => ({
+                          link: compiled.walk.links[leg.link]!.id,
+                          fromM: leg.fromM,
+                          toM: leg.toM,
+                        }))
+                      : undefined,
+                };
+              }),
+          ) ?? []
+        );
+      })
+    : undefined;
   return {
     scale,
     persons: population.length,
@@ -298,6 +470,7 @@ export function probeMorning(
     peakDriving: peak,
     peakWalkers: metrics.walkers?.peakActive ?? 0,
     personMetrics: metrics.persons,
+    walkLegs,
     walkers: metrics.walkers,
     completedByHalfHour,
     stalledHeads,

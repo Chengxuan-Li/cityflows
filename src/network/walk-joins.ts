@@ -108,7 +108,10 @@ export function walkRoots(
   };
 }
 
-export function walkComponents(graph: WalkGraph) {
+export function walkComponents(
+  graph: WalkGraph,
+  include: (link: WalkGraph['links'][number]) => boolean = () => true,
+) {
   const labels = new Int32Array(graph.nodes.length).fill(-1),
     sizes: number[] = [];
   for (const node of graph.nodes) {
@@ -120,6 +123,7 @@ export function walkComponents(graph: WalkGraph) {
       for (const i of graph.nodes[n]!.links) {
         const l = graph.links[i]!,
           next = l.from === n ? l.to : l.from;
+        if (!include(l)) continue;
         if (labels[next] !== -1) continue;
         labels[next] = component;
         queue.push(next);

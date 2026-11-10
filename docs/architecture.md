@@ -834,17 +834,25 @@ their road, `start`/`end` (or `midblock` for mapped crossings) and `zebra`/`sign
 Default 2 m sidewalks follow the compiled outer curb, their centre 1 m beyond it, on
 residential, tertiary, secondary and primary streets. Motorways, trunks, ramps and service
 roads get none by default. Explicit `no` suppresses generation; `yes` enables it. For
-`separate`, a parallel same-grade mapped path within 4 m supplies the curb. Four-metre
-coverage samples retain generated curb runs on unserved portions (TASK-123).
+`separate`, a parallel same-grade mapped path on that side within 12 m supplies the curb.
+Four-metre coverage samples use the road tangent and follow continuous mapped ways through
+their vertices, without extending coverage past a true path end beyond the 4 m snap range.
+Generated infill remains only where it connects distinct existing walk components, supplies
+otherwise missing anchor access, or forms a standalone walk network (TASK-123 round 2).
 An inward side of paired carriageways is always suppressed, including divided corridors.
 Corners follow the existing curb returns on the outside; through seams join the same curb.
 TASK-123 fills disconnected same-grade curb ends within 12 m along the junction's outer
 boundary (at most 40 m), including service-driveway mouths and dead-end caps. These joins
 cannot cross an ordinary road reference. Local endpoint joins also run from generated
 sidewalk ends to mapped through paths within 4 m; additions join disconnected sets only.
+An inferred `separate` curb can hand off to its parallel mapped path within the 12 m coverage
+range, on the same layer and without crossing an ordinary road. Existing main-network access
+takes precedence over an inferred curb. Infill cannot conceal a gap between existing curbs
+when their joins are compiled, and unused branches into one existing component are discarded.
 TASK-091/094 crossing placement and road-end overrides supply cross-street walk links,
 including separately mapped curbs. Generated walk crossings exclude motorway, trunk and
 ramp arms. The vehicle network, crossing placement and stop positions are unchanged.
+New mapped-curb corners and crossings are added only where the existing network has a gap.
 
 Same-grade mapped intersections split links. Mapped endpoints snap within 4 m (curb width
 and imported alignment), with no inferred shortcut across an ordinary street; explicit OSM

@@ -75,9 +75,11 @@ type Raw = Omit<CWalkLink, 'idx' | 'from' | 'to' | 'cumulative' | 'lengthM'> & {
   cuts: number[];
   sourceEnds?: [string, string];
   endpointLayers?: [number, number];
+  infill?: boolean;
 };
 const SIDES = ['left', 'right'] as const;
 const SNAP_M = 4;
+const COVER_M = 12;
 const ACCESS_M = 150;
 export const emptyWalkGraph = (): WalkGraph => ({
   nodes: [],
@@ -116,31 +118,60 @@ function prepareNearest(line: Vec2[]) {
     .flatMap((b, i) => (b.x === line[i]!.x && b.y === line[i]!.y ? [] : [[line[i]!, b]]));
   if (!segments.length) return (p: Vec2) => nearestOnPolyline(line, p);
   const tree = spatial(segments);
-  const boxes = segments.map(([a, b]) => [
-    Math.min(a!.x, b!.x),
-    Math.min(a!.y, b!.y),
-    Math.max(a!.x, b!.x),
-    Math.max(a!.y, b!.y),
-  ]);
+  const geometry = segments.map(([a, b]) => {
+    const dx = b!.x - a!.x,
+      dy = b!.y - a!.y,
+      length = Math.hypot(dx, dy);
+    return {
+      a: a!,
+      dx,
+      dy,
+      length,
+      square: length ** 2,
+      box: [Math.min(a!.x, b!.x), Math.min(a!.y, b!.y), Math.max(a!.x, b!.x), Math.max(a!.y, b!.y)],
+    };
+  });
   return (p: Vec2) => {
     // Best-first over segment boxes: stop once a box is farther than the best exact distance.
     // Same result and tie-break (lowest index) as scanning every segment (lead, TASK-110 merge:
     // a radius box search cost Sindelfingen's compile 8 times main's).
-    let index = -1;
-    let best: ReturnType<typeof nearestOnPolyline> | undefined;
+    let index = -1,
+      away = Infinity,
+      along = 0,
+      x = 0,
+      y = 0;
     tree.neighbors(p.x, p.y, 1, Infinity, (i) => {
-      const [x0, y0, x1, y1] = boxes[i]!;
+      const segment = geometry[i]!;
+      const [x0, y0, x1, y1] = segment.box;
       const dx = Math.max(x0! - p.x, 0, p.x - x1!),
         dy = Math.max(y0! - p.y, 0, p.y - y1!);
-      if (best && Math.hypot(dx, dy) > best.away) return true;
-      const n = nearestOnPolyline(segments[i]!, p);
-      if (!best || n.away < best.away || (n.away === best.away && i < index)) {
-        best = n;
+      if (dx * dx + dy * dy > away * away) return true;
+      const t = Math.max(
+        0,
+        Math.min(
+          1,
+          ((p.x - segment.a.x) * segment.dx + (p.y - segment.a.y) * segment.dy) / segment.square,
+        ),
+      );
+      const nx = segment.a.x + t * segment.dx,
+        ny = segment.a.y + t * segment.dy;
+      const d = Math.hypot(p.x - nx, p.y - ny);
+      if (d < away || (d === away && i < index)) {
+        away = d;
+        x = nx;
+        y = ny;
+        along = t * segment.length;
         index = i;
       }
       return false;
     });
-    return best!;
+    const segment = geometry[index]!;
+    return {
+      point: { x, y },
+      along,
+      away,
+      direction: { x: segment.dx / segment.length, y: segment.dy / segment.length },
+    };
   };
 }
 
@@ -149,6 +180,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
   const raw: Raw[] = [];
   const sidewalks = new Map<string, Raw[]>();
   const joins: { a: Raw; b: Raw; link: Omit<Raw, 'cuts'> }[] = [];
+  const repairs: typeof joins = [];
   const layers = city.roads.map(
     (r) =>
       source.roads[r.id]!.layer ??
@@ -259,6 +291,15 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     .filter((l) => polylineLength(l.line) >= 0.01)
     .sort((a, b) => a.id.localeCompare(b.id));
   const mappedTree = spatial(mappedLinks.map((l) => l.line));
+  const mappedIncident = new Map<string, typeof mappedLinks>();
+  for (const link of mappedLinks) {
+    if (link.kind === 'crossing') continue;
+    for (const id of [link.from, link.to]) {
+      const list = mappedIncident.get(id) ?? [];
+      list.push(link);
+      mappedIncident.set(id, list);
+    }
+  }
   const mappedRaw = new Map<string, Raw>();
   const groups = new Map<string, CRoad[]>();
   for (const r of city.roads) {
@@ -322,9 +363,12 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       })();
       const lines =
         tag === 'separate'
-          ? uncoveredCurb(line, (p, heading) => {
+          ? uncoveredCurb(line, (p) => {
+              const direction = nearestOnPolyline(r.reference, p).direction;
+              const parallel = (other: Vec2) =>
+                Math.abs(other.x * direction.x + other.y * direction.y) > 0.8;
               return mappedTree
-                .search(p.x - SNAP_M, p.y - SNAP_M, p.x + SNAP_M, p.y + SNAP_M)
+                .search(p.x - COVER_M, p.y - COVER_M, p.x + COVER_M, p.y + COVER_M)
                 .some((i) => {
                   const link = mappedLinks[i];
                   if (!link) return false;
@@ -334,11 +378,31 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
                   )
                     return false;
                   const near = nearestOnPolyline(link.line, p);
+                  const pastEnd = Math.abs(
+                    (p.x - near.point.x) * near.direction.x +
+                      (p.y - near.point.y) * near.direction.y,
+                  );
+                  const end =
+                    near.along < 0.01
+                      ? link.from
+                      : polylineLength(link.line) - near.along < 0.01
+                        ? link.to
+                        : undefined;
+                  const continues =
+                    end !== undefined &&
+                    mappedIncident
+                      .get(end)
+                      ?.some(
+                        (other) =>
+                          other !== link &&
+                          (other.layer ?? source.walk!.nodes[other.from]!.layer) === layerOf(r) &&
+                          parallel(nearestOnPolyline(other.line, near.point).direction),
+                      );
                   return (
-                    near.away <= 4 &&
-                    Math.abs(
-                      near.direction.x * Math.cos(heading) + near.direction.y * Math.sin(heading),
-                    ) > 0.8
+                    near.away <= COVER_M &&
+                    (near.away <= SNAP_M || pastEnd < 0.01 || continues) &&
+                    parallel(near.direction) &&
+                    clear(p, near.point, layerOf(r))
                   );
                 });
             })
@@ -357,6 +421,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
           layer: layerOf(r),
           widthM: 2,
           line: part,
+          infill: tag === 'separate',
           ...(endpointLayers.some((l) => l !== layerOf(r)) ? { endpointLayers } : {}),
         });
         return s ? [s] : [];
@@ -438,6 +503,10 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       .filter(({ near }) => near.away <= SNAP_M && clear(p, near.point, layerOf(road)))
       .sort((a, b) => a.near.away - b.near.away)[0]?.l;
   };
+  const separateCurb = (link: Raw) =>
+    !link.generated ||
+    (link.side !== undefined &&
+      source.roads[city.roads[link.road!]!.id]!.sidewalk?.[link.side] === 'separate');
   for (const node of city.nodes) {
     const joined = new Set<string>();
     const ends = incident[node.idx]!.flatMap((r) =>
@@ -471,6 +540,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       const a = curbSide(corner.roads[0], true),
         b = curbSide(corner.roads[1], false);
       if (!a || !b || a === b) continue;
+      const repair = separateCurb(a) || separateCurb(b);
       const graded = a.layer !== b.layer;
       if (
         graded &&
@@ -480,8 +550,10 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       let line = offsetPolyline(curve, 1);
       if (pointInPolygon(line[Math.floor(line.length / 2)]!, node.outline, 0))
         line = offsetPolyline(curve, -1);
-      line[0] = on(a, line[0]!);
-      line[line.length - 1] = on(b, line.at(-1)!);
+      line[0] = repair ? nearestOnPolyline(a.line, line[0]!).point : on(a, line[0]!);
+      line[line.length - 1] = repair
+        ? nearestOnPolyline(b.line, line.at(-1)!).point
+        : on(b, line.at(-1)!);
       const endpointLayers: [number, number] = [layerAt(a, line[0]!), layerAt(b, line.at(-1)!)];
       if (
         graded &&
@@ -492,8 +564,9 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         continue;
       joined.add([a.id, b.id].sort().join('|'));
       const deck = [a, b].find((l) => l.layer !== source.nodes[node.id]!.layer);
-      add({
+      const link: Omit<Raw, 'cuts'> = {
         id: `corner:${node.id}:${i}`,
+        infill: a.infill || b.infill,
         line,
         kind: 'corner',
         generated: true,
@@ -504,7 +577,9 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         ...(endpointLayers.some((l) => l !== (graded ? deck!.layer : a.layer))
           ? { endpointLayers }
           : {}),
-      });
+      };
+      if (repair) repairs.push({ a, b, link });
+      else add(link);
     }
     for (let i = 0; i < ends.length; i++)
       for (let j = i + 1; j < ends.length; j++) {
@@ -524,6 +599,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
             : [a, b].find((l) => l.layer !== source.nodes[node.id]!.layer);
         const link: Omit<Raw, 'cuts'> = {
           id: `seam:${node.id}:${i}:${j}`,
+          infill: a.infill || b.infill,
           line,
           kind: 'corner',
           generated: true,
@@ -571,9 +647,11 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       const a = hits[0],
         b = hits.at(-1);
       if (!a || !b || a.s === b.s || a.s.layer !== b.s.layer) continue;
-      add({
+      const repair = separateCurb(a.s) || separateCurb(b.s);
+      const link: Omit<Raw, 'cuts'> = {
         id: `crossing:${node.id}:${i}`,
-        line: [on(a.s, a.hit.point), on(b.s, b.hit.point)],
+        infill: a.s.infill || b.s.infill,
+        line: repair ? [a.hit.point, b.hit.point] : [on(a.s, a.hit.point), on(b.s, b.hit.point)],
         kind: 'crossing',
         generated: true,
         widthM: 2.5,
@@ -586,7 +664,9 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
           arm: i,
           spans: [],
         },
-      });
+      };
+      if (repair) repairs.push({ a: a.s, b: b.s, link });
+      else add(link);
     }
   }
   if (!raw.length) return materializeWalk(source, raw).graph;
@@ -621,12 +701,31 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
   const pathTree = spatial(raw.map((l) => l.line)),
     baseCount = raw.length;
   const { root, unite } = walkRoots(source, raw);
+  const originalRoots = walkRoots(
+    source,
+    raw.filter((l) => !l.infill),
+  );
+  const connected = (a: Raw, b: Raw) =>
+    !a.infill && !b.infill
+      ? originalRoots.root(a.id) === originalRoots.root(b.id)
+      : root(a.id) === root(b.id);
+  const connect = (a: Raw, b: Raw) => {
+    unite(a.id, b.id);
+    if (!a.infill && !b.infill) originalRoots.unite(a.id, b.id);
+  };
   for (const generated of [false, true]) {
     if (generated) {
+      for (const { a, b, link } of repairs) {
+        if (connected(a, b)) continue;
+        on(a, link.line[0]!);
+        on(b, link.line.at(-1)!);
+        add(link);
+        connect(a, b);
+      }
       for (const { a, b, link } of joins.sort(
         (a, b) => polylineLength(a.link.line) - polylineLength(b.link.line),
       )) {
-        if (root(a.id) === root(b.id)) continue;
+        if (connected(a, b)) continue;
         const line = curbJoin(
           city.nodes[link.node!]!.outline,
           link.line[0]!,
@@ -637,24 +736,28 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         line[0] = on(a, line[0]!);
         line[line.length - 1] = on(b, line.at(-1)!);
         add({ ...link, line });
-        unite(a.id, b.id);
+        connect(a, b);
       }
     }
     for (let i = 0; i < baseCount; i++) {
       const link = raw[i]!;
       if (link.generated !== generated || (generated && link.kind !== 'sidewalk')) continue;
+      const handoff =
+        generated &&
+        source.roads[city.roads[link.road!]!.id]!.sidewalk?.[link.side!] === 'separate';
+      const radius = handoff ? COVER_M : SNAP_M;
       for (const [end, p] of [link.line[0]!, link.line.at(-1)!].entries()) {
         const endpointLayer = link.sourceEnds
           ? source.walk!.nodes[link.sourceEnds[end]!]!.layer
           : (link.endpointLayers?.[end] ?? link.layer);
         const candidates = pathTree
-          .neighbors(p.x, p.y, 32, SNAP_M, (j) => {
+          .neighbors(p.x, p.y, 32, radius, (j) => {
             if (
               j === i ||
               (raw[j]!.layer !== endpointLayer && !raw[j]!.endpointLayers?.includes(endpointLayer))
             )
               return false;
-            if (link.generated && root(link.id) === root(raw[j]!.id)) return false;
+            if (link.generated && connected(link, raw[j]!)) return false;
             if (link.generated && raw[j]!.kind !== 'sidewalk' && raw[j]!.generated) return false;
             const own = source.walk?.links[link.id]?.provenance.osmIds;
             const other = source.walk?.links[raw[j]!.id]?.provenance.osmIds;
@@ -664,20 +767,30 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
           .sort((a, b) => a.near.away - b.near.away);
         for (const best of candidates)
           if (
-            (!link.generated || root(link.id) !== root(best.target.id)) &&
-            best.near.away <= SNAP_M &&
+            (!link.generated || !connected(link, best.target)) &&
+            best.near.away <= radius &&
+            (best.near.away <= SNAP_M ||
+              (!best.target.generated &&
+                best.target.kind !== 'crossing' &&
+                Math.abs(
+                  best.near.direction.x *
+                    nearestOnPolyline(city.roads[link.road!]!.reference, p).direction.x +
+                    best.near.direction.y *
+                      nearestOnPolyline(city.roads[link.road!]!.reference, p).direction.y,
+                ) > 0.8)) &&
             layerAt(best.target, best.near.point) === endpointLayer &&
             (link.kind === 'crossing' || clear(p, best.near.point, endpointLayer))
           ) {
             add({
               id: `join:${i}:${end}:${best.target.id}`,
+              infill: link.infill || best.target.infill,
               line: [p, on(best.target, p)],
               kind: 'access',
               generated: true,
               widthM: 1.5,
               layer: endpointLayer,
             });
-            unite(link.id, best.target.id);
+            connect(link, best.target);
           }
       }
     }
@@ -693,6 +806,27 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
   // when a reachable path is also within the short access radius.
   const preliminary = materializeWalk(source, raw).graph;
   const { labels, core } = walkComponents(preliminary);
+  const rawId = (id: string) => id.slice(0, id.lastIndexOf('/'));
+  const infillIds = new Set(raw.filter((l) => l.infill).map((l) => l.id));
+  const infill = preliminary.links.map((l) => infillIds.has(rawId(l.id)));
+  const baseComponents = walkComponents(preliminary, (l) => !infill[l.idx]);
+  const infillComponents = walkComponents(preliminary, (l) => infill[l.idx]!);
+  const baseNodes = preliminary.nodes.map((n) => n.links.some((i) => !infill[i]));
+  const infillGroups = new Map<string, number>();
+  const connections = new Map<number, Set<number>>();
+  for (const link of preliminary.links) {
+    if (!infill[link.idx]) continue;
+    const group = infillComponents.labels[link.from]!;
+    infillGroups.set(rawId(link.id), group);
+    const roots = connections.get(group) ?? new Set<number>();
+    for (const n of [link.from, link.to]) if (baseNodes[n]) roots.add(baseComponents.labels[n]!);
+    connections.set(group, roots);
+  }
+  // A mapped-sidewalk fallback must fill a connection/access gap, not add an unused branch
+  // to an already connected public network. Standalone new networks still get sidewalks.
+  const neededInfill = new Set(
+    [...connections].filter(([, roots]) => roots.size !== 1).map(([id]) => id),
+  );
   const coreLinks = new Set(
     preliminary.links
       .filter((l) => labels[l.from] === core)
@@ -722,17 +856,18 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     const candidates = pathTree
       .search(x0 - ACCESS_M, y0 - ACCESS_M, x1 + ACCESS_M, y1 + ACCESS_M)
       .filter((j) => raw[j]!.layer === layer && raw[j]!.kind !== 'crossing');
-    let best: { target: Raw; a: Vec2; b: Vec2; away: number; core: boolean } | undefined;
+    let best: { target: Raw; a: Vec2; b: Vec2; away: number; rank: number } | undefined;
     for (const j of candidates.sort((a, b) => a - b)) {
       const target = raw[j]!,
         probes = [...points];
-      const targetCore = isCore(j);
+      // Fill missing access without moving an existing main-network entrance onto infill.
+      const rank = (isCore(j) ? 0 : 2) + (target.generated && separateCurb(target) ? 1 : 0);
       const prepared = prepare(target);
       if (best) {
         // Every probe lies in the shape's box, so the per-probe tests below would reject this
         // whole target; skip its polygon projections (lead, TASK-110 merge: compile time).
-        if (best.core && !targetCore) continue;
-        if (best.core === targetCore) {
+        if (rank > best.rank) continue;
+        if (rank === best.rank) {
           const [tx0, ty0, tx1, ty1] = prepared.box as [number, number, number, number];
           const dx = Math.max(tx0 - x1, 0, x0 - tx1),
             dy = Math.max(ty0 - y1, 0, y0 - ty1);
@@ -740,8 +875,11 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         }
       }
       if (shape.kind === 'polygon') for (const p of target.line) probes.push(nearShape!(p).point);
+      let previousProbe: Vec2 | undefined;
       for (const a of probes) {
-        if (best && best.core === targetCore) {
+        if (previousProbe?.x === a.x && previousProbe.y === a.y) continue;
+        previousProbe = a;
+        if (best && best.rank === rank) {
           const [x0, y0, x1, y1] = prepared.box as [number, number, number, number];
           const dx = Math.max(x0 - a.x, 0, a.x - x1),
             dy = Math.max(y0 - a.y, 0, a.y - y1);
@@ -751,8 +889,8 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         if (
           n.away > ACCESS_M ||
           (best &&
-            ((!targetCore && best.core) ||
-              (targetCore === best.core &&
+            (rank > best.rank ||
+              (rank === best.rank &&
                 (preferred
                   ? n.away > best.away + 1e-6 ||
                     (Math.abs(n.away - best.away) <= 1e-6 &&
@@ -761,10 +899,12 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
           !clear(a, n.point, layer)
         )
           continue;
-        best = { target, a, b: n.point, away: n.away, core: targetCore };
+        best = { target, a, b: n.point, away: n.away, rank };
       }
     }
     if (!best) return;
+    const group = infillGroups.get(best.target.id);
+    if (group !== undefined) neededInfill.add(group);
     const b = on(best.target, best.b);
     attached.set(`${type}:${id}`, b);
     anchors.push({ id, type, pos: best.a, layer });
@@ -837,7 +977,13 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       preferred,
     );
   }
-  const { graph, nodeAt } = materializeWalk(source, raw);
+  const { graph, nodeAt } = materializeWalk(
+    source,
+    raw.filter((link) => {
+      const group = infillGroups.get(link.id);
+      return group === undefined || neededInfill.has(group);
+    }),
+  );
   addCrossingSpans(city, graph, layerOf);
   for (const a of anchors) {
     const idx = nodeAt(a.pos, a.layer);

@@ -7,6 +7,7 @@ import { walkRoots } from '../../src/network/walk-joins';
 import { createWalkRouter } from '../../src/routing/walk';
 import { allocateId, type City } from '../../src/schema';
 import type { Vec2 } from '../../src/geo/vec2';
+import { walkDetour, matchWalkRoute } from '../../bench/import-probe';
 
 function graph(city: City) {
   const result = compile(city);
@@ -25,7 +26,7 @@ function mapped(city: City, line: Vec2[], layer = 0) {
   city.walk.links[id] = {
     id,
     from: ids[0]!,
-    to: ids[1]!,
+    to: ids.at(-1)!,
     line,
     layer,
     kind: 'footway',
@@ -38,6 +39,69 @@ function mapped(city: City, line: Vec2[], layer = 0) {
 function connected(g: WalkGraph, a: number, b: number) {
   return createWalkRouter(g).route({ from: { node: a }, to: { node: b } }).ok;
 }
+
+test.each([false, true])('T60 detours use the oriented partial leg endpoints (%s)', (reverse) => {
+  const { city } = buildCity('Detour endpoints', 1);
+  mapped(city, [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+  ]);
+  const g = graph(city);
+  const link = g.links[0]!.idx;
+  const route = createWalkRouter(g).route({
+    from: { link, positionM: reverse ? 150 : 50 },
+    to: { link, positionM: reverse ? 50 : 150 },
+  });
+  if (!route.ok) throw new Error('route');
+  const report = walkDetour(g, route.route);
+  expect(report.from).toEqual(reverse ? { x: 100, y: 50 } : { x: 50, y: 0 });
+  expect(report.to).toEqual(reverse ? { x: 50, y: 0 } : { x: 100, y: 50 });
+  expect(report.straightM).toBeCloseTo(Math.hypot(50, 50));
+  expect(report.detour).toBeCloseTo(Math.SQRT2);
+});
+
+test('T60 equal-length walks from different entrances keep their actual detour measurement', () => {
+  const { city } = buildCity('Two measured entrances', 1);
+  const ends = mapped(city, [
+    { x: 0, y: 0 },
+    { x: 30, y: 0 },
+    { x: 30, y: 170 },
+  ]);
+  const g = graph(city),
+    link = g.links[0]!.idx;
+  g.places.set('door', [g.sourceNodes.get(ends[0]!)!, g.sourceNodes.get(ends.at(-1)!)!]);
+  const router = createWalkRouter(g);
+  const routes = [75, 125].map((positionM) => {
+    const result = router.route({ from: { placeId: 'door' }, to: { link, positionM } });
+    if (!result.ok) throw new Error('route');
+    return result.route;
+  });
+  expect(routes.map((r) => r.lengthM)).toEqual([75, 75]);
+  expect(routes[0]!.links).toEqual(routes[1]!.links);
+  for (const [i, positionM] of [75, 125].entries()) {
+    const measured = matchWalkRoute(routes, { state: 'done', link, positionM });
+    expect(measured).toBe(routes[i]);
+    expect(walkDetour(g, measured).detour).toBeCloseTo(i === 0 ? 75 / Math.hypot(30, 45) : 1);
+  }
+});
+
+test('T60 a successful zero-length walk is measured without inventing an endpoint', () => {
+  const { city } = buildCity('Zero walk', 1);
+  mapped(city, [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+  ]);
+  const g = graph(city),
+    link = g.links[0]!.idx;
+  const result = createWalkRouter(g).route({
+    from: { link, positionM: 50 },
+    to: { link, positionM: 50 },
+  });
+  if (!result.ok) throw new Error('route');
+  const route = matchWalkRoute([result.route], { state: 'done', link: -1, positionM: 0 });
+  expect(walkDetour(g, route)).toEqual({ from: null, to: null, straightM: 0, detour: 1 });
+});
 
 test.each([
   { order: [0, 1, 2], same: false },
@@ -90,33 +154,72 @@ test('T60 missing separate sidewalks join a residential arm to a place across th
 });
 
 test('T60 a mapped sidewalk is used without a generated duplicate on that side', () => {
-  const { city, node, street } = buildCity('Mapped separate sidewalk', 1);
+  const { city, node, street, place } = buildCity('Mapped separate sidewalk', 1);
   const roads = street(node(0, 0), node(120, 0));
   for (const r of roads) r.sidewalk = { left: 'separate', right: 'separate' };
   const ids = mapped(city, [
     { x: 0, y: 5 },
     { x: 120, y: 5 },
   ]);
+  place('Unserved north door', 'work', { x: 60, y: -10 }, []);
   const g = graph(city);
   expect(g.links.some((l) => l.kind === 'sidewalk' && l.line[0]!.y > 0)).toBe(false);
   expect(g.links.some((l) => l.kind === 'sidewalk' && l.line[0]!.y < 0)).toBe(true);
   expect(connected(g, g.sourceNodes.get(ids[0]!)!, g.sourceNodes.get(ids[1]!)!)).toBe(true);
 });
 
-test('T60 a short mapped sidewalk suppresses only the covered part of a separate side', () => {
-  const { city, node, street } = buildCity('Partial mapped sidewalk', 1);
-  for (const r of street(node(0, 0), node(120, 0)))
+test.each([8, 12, 16])(
+  'T60 a mapped sidewalk %i m from the road centre covers its own curb',
+  (y) => {
+    const { city, node, street, place } = buildCity('Set-back mapped sidewalk', 1);
+    for (const r of street(node(0, 0), node(120, 0)))
+      r.sidewalk = { left: 'separate', right: 'separate' };
+    mapped(city, [
+      { x: 0, y },
+      { x: 120, y },
+    ]);
+    place('Unserved north door', 'work', { x: 60, y: -10 }, []);
+    const g = graph(city);
+    const south = g.links.filter((l) => l.kind === 'sidewalk' && l.line[0]!.y > 0);
+    expect(south).toHaveLength(0);
+    expect(g.links.some((l) => l.kind === 'sidewalk' && l.line[0]!.y < 0)).toBe(true);
+  },
+);
+
+test.each([5, 12])('T60 a short mapped sidewalk at y=%i suppresses only its covered curb', (y) => {
+  const { city, node, street, place } = buildCity('Partial mapped sidewalk', 1);
+  for (const r of street(node(0, 0), node(600, 0)))
     r.sidewalk = { left: 'separate', right: 'separate' };
   const ids = mapped(city, [
-    { x: 50, y: 5 },
-    { x: 70, y: 5 },
+    { x: 250, y },
+    { x: 350, y },
   ]);
+  place('West door', 'work', { x: 20, y: 5 }, []);
+  place('East door', 'work', { x: 580, y: 5 }, []);
   const g = graph(city);
   const south = g.links.filter((l) => l.kind === 'sidewalk' && l.line[0]!.y > 0);
   expect(south.some((l) => l.line.some((p) => p.x < 40))).toBe(true);
-  expect(south.some((l) => l.line.some((p) => p.x > 80))).toBe(true);
-  expect(south.some((l) => l.line.some((p) => p.x > 54 && p.x < 66))).toBe(false);
+  expect(south.some((l) => l.line.some((p) => p.x > 560))).toBe(true);
+  expect(south.some((l) => l.line.some((p) => p.x > 270 && p.x < 330))).toBe(false);
   expect(connected(g, g.sourceNodes.get(ids[0]!)!, south[0]!.from)).toBe(true);
+});
+
+test('T60 a mapped sidewalk vertex is not a gap beside the curb', () => {
+  const { city, node, street } = buildCity('Mapped sidewalk bend', 1);
+  for (const r of street(node(0, 0), node(120, 0)))
+    r.sidewalk = { left: 'separate', right: 'separate' };
+  const west = mapped(city, [
+    { x: 0, y: 12 },
+    { x: 60, y: 11.5 },
+  ]);
+  const east = mapped(city, [
+    { x: 60, y: 11.5 },
+    { x: 120, y: 12 },
+  ]);
+  const link = Object.values(city.walk!.links).find((l) => l.from === east[0])!;
+  link.from = west[1]!;
+  delete city.walk!.nodes[east[0]!];
+  expect(graph(city).links.some((l) => l.kind === 'sidewalk' && l.line[0]!.y > 0)).toBe(false);
 });
 
 test('T60 equidistant car connectors use the curb beside their owning place', () => {
@@ -129,6 +232,32 @@ test('T60 equidistant car connectors use the curb beside their owning place', ()
   });
   expect(route.ok).toBe(true);
   if (route.ok) expect(route.route.lengthM).toBeLessThan(40);
+});
+
+test('T60 existing main-network access is retained ahead of an inferred separate curb', () => {
+  const { city, node, street, place } = buildCity('Retain mapped access', 1);
+  const j = node(120, 0);
+  const separate = street(node(0, 0), j);
+  for (const r of separate) r.sidewalk = { left: 'separate', right: 'separate' };
+  street(j, node(240, 0));
+  mapped(city, [
+    { x: 0, y: 20 },
+    { x: 240, y: 20 },
+  ]);
+  mapped(city, [
+    { x: 220, y: 20 },
+    { x: 220, y: 4 },
+  ]);
+  place('Door', 'work', { x: 60, y: 10 }, []);
+  const p = Object.values(city.places)[0]!;
+  const g = graph(city);
+  const access = g.links.find((l) => l.id.startsWith(`access:places:${p.id}:`))!;
+  expect(access.line.at(-1)!.y).toBe(20);
+  expect(
+    g.links.some(
+      (l) => l.kind === 'sidewalk' && separate.some((r) => l.id.startsWith(`sidewalk:${r.id}:`)),
+    ),
+  ).toBe(false);
 });
 
 test('T60 a mapped sub-centimetre segment omitted from geometry cannot crash a curb join', () => {
@@ -160,6 +289,39 @@ test('T60 residential sidewalks and a crossing use the mapped separate sidewalks
     expect(result.route.links.some((i) => !g.links[i]!.generated)).toBe(true);
     expect(result.route.links.some((i) => g.links[i]!.kind === 'crossing')).toBe(true);
   }
+});
+
+test('T60 an already connected mapped sidewalk loop does not gain redundant crossings', () => {
+  const { city, roads } = junction();
+  for (const line of [
+    [
+      { x: -120, y: -5 },
+      { x: 120, y: -5 },
+    ],
+    [
+      { x: 120, y: -5 },
+      { x: 120, y: 5 },
+    ],
+    [
+      { x: 120, y: 5 },
+      { x: -120, y: 5 },
+    ],
+    [
+      { x: -120, y: 5 },
+      { x: -120, y: -5 },
+    ],
+  ])
+    mapped(city, line);
+  const compiled = compile(city);
+  if (!compiled.ok) throw new Error('compile');
+  expect(
+    compiled.compiled.walk.links.filter(
+      (l) =>
+        l.generated &&
+        l.crossing &&
+        roads.some((r) => r.id === compiled.compiled.roads[l.crossing!.road]!.id),
+    ),
+  ).toHaveLength(0);
 });
 
 test.each([0, 1])(
