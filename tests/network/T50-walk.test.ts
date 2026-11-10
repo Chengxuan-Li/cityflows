@@ -25,13 +25,15 @@ test('T50 sidewalks occupy the outer curbs of a two-way pair, and both one-way c
   expect(graph(city)).toEqual(walk);
 });
 
-test('T50 no default sidewalks on service roads or expressways; separate is not generated', () => {
+test('T50 no default sidewalks on service roads or expressways; absent separate falls back on streets', () => {
   const { city, node, road } = buildCity('Sidewalk rules', 1);
   for (const [i, roadClass] of (['service', 'motorway', 'trunk', 'ramp'] as const).entries())
     road(node(0, i * 50), node(120, i * 50), { roadClass });
   const r = road(node(0, 250), node(120, 250));
   r.sidewalk = { left: 'separate', right: 'no' };
-  expect(graph(city).links).toHaveLength(0);
+  const sidewalks = graph(city).links.filter((l) => l.kind === 'sidewalk');
+  expect(sidewalks).toHaveLength(1);
+  expect(sidewalks[0]!.side).toBe('left');
 });
 
 test('T50 corners and crossings join the grid, and crossing overrides remove only walk crossings', () => {
