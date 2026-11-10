@@ -165,10 +165,12 @@ npm run dev            # Vite dev server
 npm run check          # typecheck + lint + format:check + unit tests + build (run before a PR)
 npm test               # Vitest unit tier: no Munich import or simulation (about 20 s)
 npm run test:city      # Munich's import and geometry tests
-npm run test:traffic   # the Munich mornings: the traffic gate at 0.15 and full demand (2 min)
-npm run traffic:quick  # advisory: Munich at 0.15 to 09:30 against main (under 30 s)
-npm run test:e2e       # Playwright (first run: npx playwright install chromium)
-npm run test:e2e:smoke # the @smoke Playwright tests (under 3 min)
+npm run test:traffic:light # the 10:00 traffic gate at 0.15 and T53 (about 5 min)
+npm run test:traffic   # the whole traffic tier, with full demand (checkpoints; 10 min or more)
+npm run traffic:quick  # advisory: Munich at 0.15 to 09:30 against main, phase timings
+npm run test:e2e:light # the light Playwright set: synthetic-city flows (about 5 min)
+npm run test:e2e       # the whole Playwright suite (checkpoints; first run: npx playwright install chromium)
+npm run test:e2e:smoke # the @smoke Playwright tests, including heavy Munich cases
 npm run format         # Prettier
 ```
 
@@ -186,10 +188,14 @@ the importer's sources); `CITYFLOWS_NO_CACHE=1` imports fresh.
    change to another feature.
 3. Build the feature end to end, including the test IDs listed in the task. Tests named by a
    handoff T-ID live in `tests/<module>/<Txx>-<name>.test.ts`.
-4. `npm run check` must pass, plus the tiers that match the task: `npm run test:city` for
-   network, importer and render geometry; `npm run traffic:quick` while iterating on anything
-   that moves traffic; `npm run test:e2e:smoke` for UI. The lead runs `test:city`,
-   `test:traffic` and the full `test:e2e` at merge.
+4. `npm run check` must pass, plus the light tiers that match the task: `npm run test:city`
+   for network, importer and render geometry; `npm run test:traffic:light` for anything that
+   moves traffic (`npm run traffic:quick` while iterating); `npm run test:e2e:light` for UI;
+   and every spec or test your task file names. The lead runs the same light tiers at merge,
+   and so does CI on every push. The full tier (`test:traffic` with full demand, the whole
+   `test:e2e`, `npm run bench`) runs only at checkpoints: a pushed `checkpoint-*` tag, a manual
+   run of the Full workflow, or the nightly run. A red full run blocks new merges until it is
+   fixed.
 5. Open a PR with: what works, what is explicitly unsupported, how it was verified, any
    contract change (requires lead approval), any new dependency (with justification), any
    copied code (with a `NOTICE` entry). Commit messages use Conventional Commits

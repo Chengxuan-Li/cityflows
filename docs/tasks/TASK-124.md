@@ -68,8 +68,13 @@ garages (`placeConnector(..., parking = true)`) skip the core test altogether.
    your census on main: Munich 21 facilities / 1 607 spaces, Sindelfingen 44 / 8 523.
 
    Use it in `placeConnector` for places and for every garage and lot entry the importer places,
-   mapped or inferred. A connector then sits on a lane a car can both reach and leave, on
-   whichever direction of a two-way street does that. Measure a mapped garage's or lot's
+   mapped or inferred. Where today's connector can be reached by car but fails the check, keep
+   it as an arrival (`direction: 'in'`) and add a departure connector (`direction: 'out'`) on
+   the nearest lane that passes it, within the same limits (lead ruling, 2026-11-10: moving
+   Munich's arrivals missed the quick gate at 3 260 / 16, the split passes at 3 552 / 8 / 0).
+   Only a connector that cannot be reached either moves. Implicit garages follow their place.
+   `parking_no_exit` and `place_no_exit` fire only when no out connector passes the check, and
+   `connector_unreachable` must not fire on a split pair. Measure a mapped garage's or lot's
    distance from its footprint, not its centroid. State the distance limit you use and what
    happens beyond it. If `pk:1443` has no candidate within a limit you can justify, report the
    distance and stop there for that one garage.
@@ -162,7 +167,7 @@ Pre-approved, no need to ask:
 5. **Performance.** Import within 5% of main's on both cities, compile within 5%. Measure warm
    runs, side by side.
 6. **Checks.** `npm run check`, `npm run test:city`, `npm run traffic:quick` and
-   `npm run test:e2e:smoke` are green. Run e2e with `CITYFLOWS_TEST_PORT=5325` and
+   `npm run test:e2e:light` are green (the light tier; lead, 2026-11-10). Run e2e with `CITYFLOWS_TEST_PORT=5325` and
    `CITYFLOWS_PRODUCTION_TEST_PORT=5425`; never use port 4173 or 5173. Before committing, also
    run `demo-a-commute`, `T52`, `T54-parking-motion`, `T57-person-trips` and the import specs
    (`gate5-controls`' Import OSM case, `qa-mobile`'s import case).
@@ -171,7 +176,7 @@ Pre-approved, no need to ask:
 
 - While iterating: `npm test` (unit tier), T61, the import probe on both cities.
 - Before committing: `npm run check`, `npm run test:city`, `npm run traffic:quick`, the three
-  traffic tests named in gate 4, `npm run test:e2e:smoke` and the e2e specs in gate 6.
+  traffic tests named in gate 4, `npm run test:e2e:light` and the e2e specs in gate 6.
 - Do not run the whole `npm run test:traffic`, the full `npm run test:e2e` or `npm run bench`. The
   lead runs them at merge, and GitHub CI runs the rest after the merge.
 

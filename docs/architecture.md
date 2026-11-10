@@ -52,7 +52,8 @@ requirements R1 to R8 and tests T01 to T18 are binding and referenced below by I
 cities. Both go through the same compile and validation as hand edits. The layer rule in
 `AGENTS.md` is enforced by ESLint.
 
-Deployment (TASK-067): the app is a static site. CI builds it on every push to `main` and
+Deployment (TASK-067): the app is a static site. CI builds it on every push to `main` (docs-only
+pushes excepted) and
 publishes it to GitHub Pages with the repository's base path; pull requests build but do not
 publish. Test hooks stay out of the production build (`MODE` is neither `development` nor
 `test`). The raster tile URL and the Overpass endpoint come from build-time variables
