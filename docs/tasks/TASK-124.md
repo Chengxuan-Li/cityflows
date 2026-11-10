@@ -56,21 +56,34 @@ garages (`placeConnector(..., parking = true)`) skip the core test altogether.
 
    Group by cause and put the table in your report. If a large group needs a change in the
    vehicle network (lanes, movements, junctions), stop and report to the lead before building it.
-2. **A car core for snapping.** Build the core that `placeConnector` uses from lanes and
-   movements open to cars: lanes that allow `car`, roads whose car access is not `no`,
-   `delivery` or `private`, and movements that are not `neverGreen`. Lane changes count as
-   today. Use it for places and for every garage and lot entry the importer places, mapped or
-   inferred. A connector then sits on a lane a car can both reach and leave, on whichever
-   direction of a two-way street does that. Where a mapped entrance or the nearest car-core lane
-   is far from the facility, state the distance limit you use and what happens beyond it.
+2. **A car exit for snapping.** "Has a car exit" means exactly what TASK-122's departure check
+   (`parkingEgress` in `src/sim/parking-egress.ts` on `task/122-parking-egress`) decides for a
+   car: per origin access zone, the lanes open to it (`car` allowed, access `yes`, or `private`
+   or `destination` in the origin's own zone), the largest strongly connected set of them, and
+   the backward pass with lane changes at 30 m. Do not build a separate public-only core (lead
+   ruling, 2026-11-10: in Sindelfingen it is 62 lanes, disjoint from the network cars actually
+   use, because the circulation runs through private zones). Port that definition into a new
+   module in `src/network/` that the importer and the diagnostics share; TASK-122 will use it
+   when it is re-integrated. Before changing any connector, show that the module reproduces
+   your census on main: Munich 21 facilities / 1 607 spaces, Sindelfingen 44 / 8 523.
+
+   Use it in `placeConnector` for places and for every garage and lot entry the importer places,
+   mapped or inferred. A connector then sits on a lane a car can both reach and leave, on
+   whichever direction of a two-way street does that. Measure a mapped garage's or lot's
+   distance from its footprint, not its centroid. State the distance limit you use and what
+   happens beyond it. If `pk:1443` has no candidate within a limit you can justify, report the
+   distance and stop there for that one garage.
 3. **Private and destination roads.** A facility whose only road is a private or destination
    road (`pk:1456`, `pk:1457`, `pk:1474`) may keep its entry there when that road leads into the
    car core. Only where it leads nowhere does the connector move. Say which rule each of these
    three follows.
 4. **What the network cannot fix here.** Strips sit on their own mapped road, so their slots do
-   not move. A strip on a closed aisle loop or a road cut by the crop stays as it is and is listed
-   as a real gap, with its reason. A missing junction between a mapped aisle and the street is a
-   vehicle-network change: report it, do not add it.
+   not move. A strip on a road cut by the crop, or on roads whose only way out is a private
+   zone it cannot enter, stays as it is and is listed as a real gap, with its reason. The lead
+   accepts the strips in the trace of 766a4d5 on these grounds (Munich 16 strips / 85 spaces,
+   Sindelfingen 32 / 721). A missing junction between a mapped aisle and the street is a
+   vehicle-network change: report it, do not add it. Gateways sit on the crop edge by design;
+   count them, but they are not part of the place gate.
 5. **A warning for saved projects.** Connectors are saved in the project, so files imported
    before this task keep their traps. Add a compile warning `parking_no_exit` for a garage or lot
    whose out connectors cannot reach the car core, and `place_no_exit` for a place whose out
@@ -97,6 +110,7 @@ Pre-approved, no need to ask:
 - `src/importers/osm/places.ts` (`networkAccess`, `placeConnector`), `parking.ts`,
   `buildings.ts`, and the other importer files that place connectors. If the Overpass query
   changes, bump `queryVersion` in `src/importers/overpass.ts`;
+- a new module in `src/network/` for the car-exit check (Design 2);
 - `src/network/parking.ts` (implicit garages, entry checks) and `src/network/diagnostics.ts`;
 - `docs/architecture.md` sections 4, 5 (diagnostics) and 13;
 - `bench/import-probe.ts`: an exit census (facilities, spaces and places without a car exit).
@@ -126,10 +140,11 @@ Pre-approved, no need to ask:
    - a private road that leads into the car core keeps its connector;
    - `parking_no_exit` and `place_no_exit` appear for a saved city whose connector is on a trap
      lane, and not after re-import.
-2. **Exits.** No garage or lot with more than 20 spaces, and no place with residents or jobs,
-   lacks a car exit in either city, except the real gaps you list with their reasons. The real
-   gaps hold at most 2% of each city's parking spaces. `pk:1981`, `pk:2035` and `pk:1443` are
-   not real gaps.
+2. **Exits.** No garage or lot with more than 20 spaces, and no place other than a gateway with
+   residents or jobs, lacks a car exit in either city, except the real gaps you list with their
+   reasons. Garages, lots and places in the real gaps hold at most 2% of each city's garage and
+   lot spaces. Strips are listed but do not count toward that 2% (Design 4). `pk:1981`,
+   `pk:2035` and `pk:1443` are not real gaps, unless you stop on `pk:1443` under Design 2.
 3. **Cars unchanged.** The lanes and movements hash equals main's in both cities. Connectors may
    move.
 4. **Traffic.** On Munich at 0.15:
