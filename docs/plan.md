@@ -150,6 +150,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-122](tasks/TASK-122.md) | 9 | Trip cars start and park only on spaces they can drive away from (replaces TASK-120): halves the full-demand parking failures | `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, new departure check in `src/sim/` | 103, 112, 118, 119 | T59, full-demand test, traffic quick | on hold until B58 (see review) |
 | [TASK-123](tasks/TASK-123.md) | 9 | One connected walk network (B57): Sindelfingen places and garages join the main walk network, so walk legs stop falling back to a straight line | `src/network/walk.ts`, `crossings.ts` (defaults), `src/importers/osm/walk.ts`, new join helper in `src/network/` | 110, 111, 112 | T60, walk fallbacks under 2%, traffic quick, shots | done (round 3; see review) |
 | [TASK-124](tasks/TASK-124.md) | 9 | Every garage and place has a car exit (B58): connectors snap to lanes a car can leave; `parking_no_exit` and `place_no_exit` warnings | `src/importers/osm/places.ts` (car core, `placeConnector`), `parking.ts`, `src/network/parking.ts`, `diagnostics.ts` | 102, 103, 104, 119 | T61, exit census, traffic gates | open |
+| [TASK-126](tasks/TASK-126.md) | 10 | Railway tracks and stations: a track graph imported, compiled, saved and drawn; stations tied to platforms and walk entrances | new `src/importers/osm/rail.ts`, `src/network/rail.ts`, rail layers, `src/schema` (rail network), fixtures (railway ways appended) | 096, 110, 123 | T62, census, traffic unchanged, shots | open |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1070,14 +1071,17 @@ Logged by the owner on 2026-11-10; contracts are written when each item starts. 
 then TASK-125, then the lead re-measures TASK-122 on both. The rail items touch the importer,
 network and renderer, not `src/sim/parking.ts`, so they can run alongside the parking work.
 
+| Task | Harness | Model | Effort | e2e port |
+| --- | --- | --- | --- | --- |
+| TASK-126 | Codex | GPT-6.1-Sol | high | 5326 (production 5426) |
+
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
 | TASK-125 (contract after TASK-124 merges) | Parking claims: cars heading for a strip space or a garage count against it, as cars heading for a lot already do (TASK-103 follow-up). A space claimed by another car is taken; a strip or garage whose free spaces are all spoken for drops out of the choice; a claim is released when the car chooses again, fails or parks. Overflow cars go straight to the next option instead of circling. | Only lots count cars en route. A strip space is reserved when the car starts its manoeuvre, so many cars chase one freed space (TASK-122 round 2: 44 searches over an hour). | TASK-124 |
-| R1 | Railway tracks as a network with nodes: rail, light rail, subway and tram ways imported as their own track graph (nodes, junctions, platforms), compiled and drawn. Routing for trains and metro comes later, not in this item. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096). | none |
-| R2 | Stations as special buildings: a railway or subway station place tied to its platforms on the track network and to the walk network by its entrances, drawn as a station. Munich's S-Bahn station at Donnersbergerbrücke is the example. | Place kind `station` from `railway=station` (importer); the synthetic Station fixture (T10). | R1 |
-| R3 | Decorative trains: arrivals, departures and through trains that pass without stopping, on R1's tracks by a simple timetable. Visual only. | none | R1, R2 |
-| R4 | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | R2 (R3 to time the arrivals) |
-| O1 | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
+| TASK-126 (contract written; Codex) | Railway tracks and stations (R1 and R2 merged, owner 2026-11-10): rail, light rail, subway and tram ways as their own track graph (nodes, switches, platforms), compiled, saved and drawn; stations tied to their platforms and to the walk network by their entrances, drawn as stations. Munich's Donnersbergerbrücke S-Bahn station is the example. Train routing comes later. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096); place kind `station` from `railway=station`; the synthetic Station fixture (T10). The bundled extracts hold no track ways yet. | none |
+| TASK-127 | Decorative trains: arrivals, departures and through trains that pass without stopping, on TASK-126's tracks by a simple timetable. Visual only. | none | TASK-126 |
+| TASK-128 | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
+| TASK-129 | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
 
 ## Lead handover
 
@@ -2667,6 +2671,8 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 
 ## Owner decisions log
 
+- 2026-11-10, rail: R1 and R2 merge into TASK-126 (Codex), started now; backlog items carry
+  task numbers (TASK-127 trains, TASK-128 stations as trip ends, TASK-129 car ownership).
 - 2026-11-10, backlog: parking claims become their own task (TASK-125), started after TASK-124;
   rail network, stations, decorative trains, stations as trip ends and car ownership logged
   under "Owner backlog (2026-11-10)". The owner confirms the decisions the agents reported: gateway
