@@ -152,7 +152,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-124](tasks/TASK-124.md) | 9 | Every garage and place has a car exit (B58): connectors snap to lanes a car can leave; `parking_no_exit` and `place_no_exit` warnings | `src/importers/osm/places.ts` (car core, `placeConnector`), `parking.ts`, `src/network/parking.ts`, `diagnostics.ts` | 102, 103, 104, 119 | T61, exit census, traffic gates | done (see review) |
 | [TASK-125](tasks/TASK-125.md) | 9 | Parking claims: a car that chooses a strip space, garage or lot claims it; claimed spaces are taken for others and full-by-claims facilities drop out; every exit path releases the claim | `src/sim/parking.ts`, release calls in `src/sim/engine.ts`, metrics | 102, 103, 118, 124 | T63, Munich 0.15 gate with lower search time, T53, baseline reset | done |
 | [TASK-126](tasks/TASK-126.md) | 10 | Railway tracks and stations: a track graph imported, compiled, saved and drawn; stations tied to platforms and walk entrances | new `src/importers/osm/rail.ts`, `src/network/rail.ts`, rail layers, `src/schema` (rail network), fixtures (railway ways appended) | 096, 110, 123 | T62, census, traffic unchanged, shots | done |
-| [TASK-127](tasks/TASK-127.md) | 10 | Decorative trains: S-Bahn trains stop at Donnersbergerbrücke, main-line trains pass through, by a deterministic timetable on the sim clock; drawn in 2D and 3D; no sim change | new routes/timetable/motion module, train layers, `src/network/rail.ts`, rail schema (preferred direction) | 126 | T64, traffic and sim hash unchanged, frame time, shots | open |
+| [TASK-127](tasks/TASK-127.md) | 10 | Decorative trains: S-Bahn trains stop at Donnersbergerbrücke, main-line trains pass through, by a deterministic timetable on the sim clock; drawn in 2D and 3D; no sim change | new routes/timetable/motion module, train layers, `src/network/rail.ts`, rail schema (preferred direction) | 126 | T64, traffic and sim hash unchanged, frame time, shots | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1083,7 +1083,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | --- | --- | --- | --- |
 | TASK-125 (done 2026-11-10) | Parking claims: cars heading for a strip space or a garage count against it, as cars heading for a lot already do (TASK-103 follow-up). A space claimed by another car is taken; a strip or garage whose free spaces are all spoken for drops out of the choice; a claim is released when the car chooses again, fails or parks. Overflow cars go straight to the next option instead of circling. | Only lots count cars en route. A strip space is reserved when the car starts its manoeuvre, so many cars chase one freed space (TASK-122 round 2: 44 searches over an hour). | TASK-124 |
 | TASK-126 (done 2026-11-10) | Railway tracks and stations (R1 and R2 merged, owner 2026-11-10): rail, light rail, subway and tram ways as their own track graph (nodes, switches, platforms), compiled, saved and drawn; stations tied to their platforms and to the walk network by their entrances, drawn as stations. Munich's Donnersbergerbrücke S-Bahn station is the example. Train routing comes later. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096); place kind `station` from `railway=station`; the synthetic Station fixture (T10). The bundled extracts hold no track ways yet. | none |
-| TASK-127 (contract written; Codex) | Decorative trains: arrivals, departures and through trains that pass without stopping, on TASK-126's tracks by a simple timetable. Visual only. | none | TASK-126 |
+| TASK-127 (done 2026-11-10; Codex) | Decorative trains: arrivals, departures and through trains that pass without stopping, on TASK-126's tracks by a simple timetable. Visual only. | none | TASK-126 |
 | TASK-128 | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
 | TASK-129 | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
 
@@ -2734,12 +2734,37 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
   1 896 / 249 to 1 983 / 203, stalled heads 2 to 3. Controlled wall time +2.2%. The baseline
   resets (rule 7): 3 592 / 17 / 0 stalled heads, quick 09:30 3 357 / 13 (1 stalled head on
   `r:961`, one of main's three). The agent also showed the claimed strip space in the vehicle
-  inspector (`src/ui/inspector/vehicle.tsx`, outside the contract's scope); it reports owner
-  approval. Lead: re-recorded the baseline and put the T63 e2e spec in group b. Lead runs:
+  inspector (`src/ui/inspector/vehicle.tsx`, outside the contract's scope); the owner
+  confirmed approving it. Lead: re-recorded the baseline and put the T63 e2e spec in group b. Lead runs:
   `check`, `test:city`, the light traffic tier, the light e2e (37 passed), T54, T16, T49, T63.
+
+TASK-127 review (lead, 2026-11-10; Codex GPT-6.1-Sol high, merged): decorative trains on
+TASK-126's tracks. Routes run between boundary ends (degree-one, non-buffer nodes on the bbox)
+through permitted connections only; `railway:preferred_direction` is a new optional track field
+and binding; untagged parallel running tracks run on the right; station-serving paths are
+S-Bahn, the other running paths main line; trams excluded. Owner exception: Sindelfingen has no
+boundary-to-boundary path, so its services run boundary to buffer, dwell 40 s and reverse.
+Munich: 20 routes, 30 S-Bahn and 180 main-line trains per hour, 15 stops per hour at each of
+`rp:10736` and `rp:10737`; 265 sections used, 411 unused (54 trams among them). Sindelfingen:
+2 terminal routes, 20 per hour; level crossings `r:982`/`rt:2547` occupied 773 s per hour and
+`r:976`/`rt:2450` 413 s. A periodic reservation table keeps every section to one train; both
+cities fit a 720 s cycle with no boundary waits. `trainsAt` is pure and imports no `src/sim`;
+the timetable is cached by rail graph outside `CompiledCity`. Traffic and the simulation hash
+are unchanged (light traffic tier equal to the TASK-125 baseline); lanes and movements unchanged;
+whole-city and compile pins move (T44, T49, V106, V107, V108, V117) for compiled boundary flags and
+Munich's preferred directions. Timetable build 9.9 ms in Munich (+1.0% of compile). Frame gate,
+lead run on the merged tree: 2D +6.1% and +6.3%, 3D +6.5% and +5.7% (agent: 2D +6.1/+6.1, 3D
++4.9/+5.1). Lead: resolved the group e conflict (T62 and T64), gave T64 short frame samples on CI
+as T62 has. Lead runs: `check` (two Munich/Sindelfingen tests timed out under load from other
+agents, passed alone), `test:city`, the light traffic tier, the light e2e (37 passed), T64, T62,
+gate4-layers, V97 (6 passed).
 
 ## Owner decisions log
 
+- 2026-11-10, TASK-125: owner confirms approving the claimed-space row in the vehicle
+  inspector, outside the contract's scope.
+- 2026-11-10, TASK-127: owner allows Sindelfingen boundary-to-buffer terminal services,
+  returning to their entry boundary, because its graph has no permitted through path.
 - 2026-11-10, rail: TASK-127 (decorative trains) starts now on Codex alongside TASK-125; it
   stays out of `src/sim` so the two do not collide. Trams wait for a later task.
 - 2026-11-10, parking: TASK-125 (parking claims) starts now on Codex, after TASK-124 and

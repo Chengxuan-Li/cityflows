@@ -48,6 +48,8 @@ import { Parking3D } from './parking';
 import { ParkedCars3D } from './parked-cars';
 import { buildWalk } from './walk';
 import { buildRail, pickRail3D } from './rail';
+import { Trains3D } from './trains';
+import { trainTimetable, trainsAt } from '../network/trains';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -72,6 +74,9 @@ export class Scene3D {
   private city: CompiledCity | undefined;
   private rail: ReturnType<typeof buildRail> | undefined;
   private railVisible = true;
+  private trains: Trains3D | undefined;
+  private trainTimeS = NaN;
+  private selectedTrain: string | null = null;
   private railSelection: string | undefined;
   private source: CityGeometry | undefined;
   private geometry: ReturnType<typeof buildGeometry> | undefined;
@@ -186,6 +191,12 @@ export class Scene3D {
     ));
     const terrain = geometry.heights.terrain;
     this.rail = buildRail(city, renderedSource, geometry.heights);
+    if (city.rail) {
+      const table = trainTimetable(city.rail);
+      this.trains = new Trains3D(city.rail, geometry.heights, table);
+      this.content.add(this.trains.group);
+    } else this.trains = undefined;
+    this.trainTimeS = NaN;
     this.railSelection = undefined;
     this.content.add(this.rail.group);
     this.setRail(this.railVisible);
@@ -467,6 +478,12 @@ export class Scene3D {
     this.invalidate();
   }
   setSelection(pick: Pick | null) {
+    const train = pick?.kind === 'train' ? pick.id : null;
+    if (train !== this.selectedTrain) {
+      this.selectedTrain = train;
+      this.trainTimeS = NaN;
+      this.invalidate();
+    }
     const key = JSON.stringify(pick);
     if (this.railSelection !== key) {
       this.railSelection = key;
@@ -540,6 +557,7 @@ export class Scene3D {
   }
 
   setBelowGround(enabled: boolean) {
+    if (this.belowGround !== enabled) this.trainTimeS = NaN;
     if (this.belowGround !== enabled) this.invalidate();
     this.belowGround = enabled;
     if (this.surroundings) this.surroundings.material.opacity = enabled ? 0.4 : 1;
@@ -702,6 +720,17 @@ export class Scene3D {
         );
   }
   pick(x: number, y: number): Pick | null {
+    if (this.trains && this.railVisible) {
+      const car = pickVehicle3D(
+        this.trains.body,
+        this.camera,
+        x,
+        y,
+        this.canvas.clientWidth,
+        this.canvas.clientHeight,
+      );
+      if (car !== null) return this.trains.pick(car);
+    }
     const index = pickVehicle3D(
       this.vehicles.mesh,
       this.camera,
@@ -752,6 +781,13 @@ export class Scene3D {
     const renderStart = performance.now();
     this.controls.update();
     this.setSignals(timeS);
+    if (this.city?.rail && this.trains && this.railVisible && this.trainTimeS !== timeS) {
+      const poses = trainsAt(this.city.rail, trainTimetable(this.city.rail), timeS);
+      this.trains.update(poses, this.belowGround, this.selectedTrain);
+      this.canvas.dataset.trains = String(poses.length);
+      this.trainTimeS = timeS;
+      this.invalidate();
+    }
     if (this.vehicleAgeS !== elapsedS && this.vehicles.mesh.count) this.invalidate();
     this.vehicleAgeS = elapsedS;
     // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
@@ -887,9 +923,15 @@ export class Scene3D {
     this.canvas.dataset.footways = String(footways);
   }
   setRail(visible: boolean) {
-    if (this.railVisible !== visible) this.invalidate();
+    if (this.railVisible !== visible) {
+      this.invalidate();
+      this.trainTimeS = NaN;
+    }
     this.railVisible = visible;
     if (this.rail) this.rail.group.visible = visible;
+    if (this.trains) this.trains.group.visible = visible;
+    if (!visible) this.canvas.dataset.trains = '0';
+
     this.canvas.dataset.railTracks = String(visible ? (this.city?.rail?.tracks.length ?? 0) : 0);
   }
 

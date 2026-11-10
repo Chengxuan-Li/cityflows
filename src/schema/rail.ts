@@ -21,6 +21,7 @@ export interface RailTrack {
   tunnel?: boolean;
   service?: string;
   usage?: string;
+  preferredDirection?: 'forward' | 'backward' | 'both';
   name?: string;
   maxSpeedMps?: number;
   osmId?: number;
