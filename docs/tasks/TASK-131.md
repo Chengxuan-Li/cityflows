@@ -175,6 +175,37 @@ The rest:
 Checkpoint 1: unit tests of the model and the compile. The lead reviews the schema and the compile
 before any drawing.
 
+**Checkpoint 1 outcome (owner, 2026-11-11; Phase 1 `c7c9a18`).** The owner reviewed the shots.
+
+1. **Grouping order.** `merge-first` with via nodes becomes the default: signal stop positions are
+   merged before grouping, and restriction via nodes may join a group, with their restrictions
+   kept at that member.
+2. **Inner links carry no control.**
+   - **What a driver sees:** no signal heads, stop lines or yield lines on an inner link, and no
+     extra traffic light inside a group.
+   - **How it behaves:** a car on an inner link was cleared at the group's entry, and drives on to
+     its exit.
+   - **In the compile:** movements from an inner road are not stopped by the group's signal; the
+     program's amber and all-red clear them.
+3. **Whole junction complexes are one group.**
+   - **Munich `n:247`:** the two carriageway pairs either side of the Donnersberger bridge
+     (`jg:10788`, `jg:10789`) form one group of four nodes, with no traffic light inside.
+   - **Munich `n:638`:** so do the two ramp pairs (`jg:10815`, `jg:10816`).
+4. **Length alone is not the criterion.** Whether a link joins two nodes into one junction depends
+   on its length against the width of the roads it joins, not on its length alone.
+   - **Separate:** a link much longer than the roads are wide, such as `n:570`'s service streets
+     (12 to 29 m long, about 4 m wide), keeps its nodes apart: no group.
+   - **Together:** a link across a dual carriageway's median, or between two such crossings with
+     no other junction in between, joins them.
+
+   The owner allows case-by-case handling where no rule fits yet. The agent proposes the rule
+   with measurements; the lead and the owner approve it.
+5. **Geometry still wrong.** These are Phase 2 items:
+   - Landsberger's carriageways at `n:247` are still distorted (the passes to turn off);
+   - at `n:638`, where the eastbound street gains two lanes and the ramp to the overpass branches
+     off, lanes overlap and the street is distorted;
+   - `n:638`'s `jg:10783` has missing curb fillets and possible overlaps.
+
 ### Phase 2 — Geometry and drawing
 
 1. **Passes.** Apply the Phase 0 decisions:
