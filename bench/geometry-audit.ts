@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs';
+import { sideBySideEdges } from '../src/render/side-by-side';
 import process from 'node:process';
 import type { Graphics } from 'pixi.js';
 import {
@@ -873,6 +874,9 @@ export function unrelatedOverlaps(city: City, net: CompiledCity): UnrelatedOverl
       },
     };
   });
+  const sideBySide = new Set(
+    sideBySideEdges(net, city).map(({ roads: [a, b] }) => `${Math.min(a, b)}>${Math.max(a, b)}`),
+  );
   const sorted = [...items].sort((a, b) => a.box.minX - b.box.minX);
   const overlaps: UnrelatedOverlap[] = [];
   for (let i = 0; i < sorted.length; i++) {
@@ -884,6 +888,12 @@ export function unrelatedOverlaps(city: City, net: CompiledCity): UnrelatedOverl
         rb = b.road;
       if ([ra.from, ra.to].some((n) => n === rb.from || n === rb.to)) continue;
       if (ra.streetGroupId !== null && ra.streetGroupId === rb.streetGroupId) continue;
+      // TASK-131: roads at members of one junction group meet in its one surface; two roads drawn
+      // side by side on their OSM lines (B55, an edge line between them) overlap by design.
+      const groupsOf = (r: typeof ra) =>
+        [r.from, r.to].map((n) => net.nodes[n]!.group).filter((g) => g !== undefined);
+      if (groupsOf(ra).some((g) => groupsOf(rb).includes(g))) continue;
+      if (sideBySide.has(`${Math.min(ra.idx, rb.idx)}>${Math.max(ra.idx, rb.idx)}`)) continue;
       if (!ringsOverlap(prepareRing(a.ring), prepareRing(b.ring), 0.01)) continue;
       const inA = preparePolygon(a.ring, 0),
         inB = preparePolygon(b.ring, 0);

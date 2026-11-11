@@ -64,8 +64,11 @@ cityTest(
     const diagnostics = compile(city).diagnostics;
     const count = (code: string) => diagnostics.filter((d) => d.code === code).length;
     expect(count('connector_unreachable')).toBe(0);
-    expect(count('road_too_short')).toBeLessThanOrEqual(15);
-    expect(count('dead_end')).toBeLessThanOrEqual(7);
+    // TASK-131 keeps OSM geometry: short roads between close nodes stay as roads (no longer
+    // merged into one node); inner roads of groups are not counted. Dead ends: lanes of a group's
+    // inner links or arms that end without a movement at the next member (r:252#2, r:966#2).
+    expect(count('road_too_short')).toBeLessThanOrEqual(27);
+    expect(count('dead_end')).toBeLessThanOrEqual(11);
     const roads = Object.values(city.roads);
     const signals = Object.values(city.nodes).filter((n) => n.control === 'signal');
     expect(signals).toHaveLength(14);
@@ -205,10 +208,11 @@ cityTest(
 
 unitTest.each([
   // Warnings only: lane_requires_merge (TASK-069) and realign_limited (TASK-068) are notes.
-  ['downtown', 28],
-  ['highway', 15], // TASK-101 retains short access boundaries and their lane-length warnings.
+  // TASK-131: OSM geometry kept, short roads between close nodes stay (inner roads not counted).
+  ['downtown', 49],
+  ['highway', 23], // TASK-101 short access boundaries; TASK-131 short roads kept.
   ['suburb', 7],
-  ['sindelfingen-a81', 58], // TASK-101: retained restricted segments and final signal geometry.
+  ['sindelfingen-a81', 77], // TASK-101 restricted segments; TASK-131 short roads kept.
 ] as const)('%s stays within its import warning baseline', (name, baseline) => {
   const { xml, options } = fixture(name);
   const result = importOsmCached(xml, options);

@@ -531,6 +531,11 @@ export function compile(city: City): CompileResult {
   if (city.junctionGroups && Object.keys(city.junctionGroups).length) {
     compiled.groups = compileGroups(city, compiled);
     compiled.index.group = indices(compiled.groups);
+    // An inner road is the junction's interior: the members' polygons take most of it by design,
+    // so it is not too short for its setbacks (n:138's crossing keeps 4.5 m of lane).
+    for (let i = diagnostics.length - 1; i >= 0; i--)
+      if (diagnostics[i]!.code === 'road_too_short' && innerRoads.has(diagnostics[i]!.refs[0]!))
+        diagnostics.splice(i, 1);
   }
   const programs = new Map<number, { program: SignalProgram; vehicles: boolean[] }>();
   for (const node of nodes) {
