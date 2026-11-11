@@ -49,8 +49,36 @@ export interface RailPlatform {
   station: string | null;
   osmId?: number;
 }
+/**
+ * TASK-137: a tram stop is one platform island and the tram track sections it serves. A stop of a
+ * mapped platform keeps that platform's shape (an `rp:` platform, a polygon or a line); a stop
+ * with only stop positions gets an island generated beside its track (`ring`, closed, clear of
+ * every carriageway lane), or `null` when no room was left.
+ */
+export interface TramStop {
+  id: string;
+  name: string;
+  /** Lines calling here: `route_ref`, else route relations, else the stop's description. */
+  lines: string[];
+  layer: number;
+  /** The served tram track sections. */
+  tracks: string[];
+  /** Where trams halt: the stop positions on the served tracks. */
+  halts: { track: string; pos: Vec2 }[];
+  platform: { kind: 'mapped'; platform: string } | { kind: 'generated'; ring: Vec2[] } | null;
+  /** From the platform's or the stop's tags `shelter`, `bench`, `covered`, `tactile_paving`. */
+  shelter?: boolean;
+  bench?: boolean;
+  covered?: boolean;
+  tactilePaving?: boolean;
+  /** The OSM nodes, ways and relations it was built from. */
+  osmIds: number[];
+  provenance?: Provenance;
+}
 export interface RailNetwork {
   nodes: Record<string, RailNode>;
   tracks: Record<string, RailTrack>;
   platforms: Record<string, RailPlatform>;
+  /** TASK-137; absent on cities without tram stops and on older projects. */
+  tramStops?: Record<string, TramStop>;
 }

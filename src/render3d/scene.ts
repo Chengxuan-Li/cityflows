@@ -50,7 +50,9 @@ import { buildWalk } from './walk';
 import { buildRail, pickRail3D } from './rail';
 import { Trains3D } from './trains';
 import { Stations3D } from './stations';
+import { TramStops3D } from './tram-stops';
 import { noFurniture, placeStationFurniture } from '../render/station-furniture';
+import { noTramStops, placeTramStops } from '../render/tram-stops';
 import { trainTimetable, trainsAt } from '../network/trains';
 
 export class Scene3D {
@@ -78,6 +80,7 @@ export class Scene3D {
   private railVisible = true;
   private trains: Trains3D | undefined;
   private stations: Stations3D | undefined;
+  private tramStops: TramStops3D | undefined;
   private trainTimeS = NaN;
   private selectedTrain: string | null = null;
   private railSelection: string | undefined;
@@ -205,7 +208,9 @@ export class Scene3D {
         geometry.heights,
       );
       this.content.add(this.stations.group);
-    } else this.trains = this.stations = undefined;
+      this.tramStops = new TramStops3D(placeTramStops(city, renderedSource), geometry.heights);
+      this.content.add(this.tramStops.group);
+    } else this.trains = this.stations = this.tramStops = undefined;
     this.trainTimeS = NaN;
     this.railSelection = undefined;
     this.content.add(this.rail.group);
@@ -943,11 +948,15 @@ export class Scene3D {
     if (this.rail) this.rail.group.visible = visible;
     if (this.trains) this.trains.group.visible = visible;
     if (this.stations) this.stations.group.visible = visible;
+    if (this.tramStops) this.tramStops.group.visible = visible;
     if (!visible) this.canvas.dataset.trains = '0';
 
     this.canvas.dataset.railTracks = String(visible ? (this.city?.rail?.tracks.length ?? 0) : 0);
     this.canvas.dataset.stationFurniture = JSON.stringify(
       visible && this.stations ? this.stations.furnitureCounts : noFurniture,
+    );
+    this.canvas.dataset.tramStops = JSON.stringify(
+      visible && this.tramStops ? this.tramStops.counts : noTramStops,
     );
   }
 

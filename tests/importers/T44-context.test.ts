@@ -41,7 +41,10 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // and e4654d8 (merging lanes kept on a group's inner roads).
             // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
             // import without assignTramForms) every pin equals c3a6ec2's.
-            'c227f80f3bec1ef5bd1ebd5d8357c41282c259f54806d35bc09084e0455e95a2',
+            // TASK-137: Munich gains 14 `rail.tramStops` (ids ts:10812 to ts:10825 move `nextId`);
+            // with those removed and `nextId` 14 lower, the city hash is c227f80f…, and the
+            // compile hash is unchanged.
+            '20b41e80576c9838a0379cb846abe8608b490e9e0de2eaccd2e41a09727f69b8',
             'aa2452fc15dd7a09e52430e31ac4aa1685adfdc65cc3e8a2068f96ec71822dca',
           ]
         : [

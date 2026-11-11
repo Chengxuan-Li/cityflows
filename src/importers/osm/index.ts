@@ -12,6 +12,7 @@ import { importContext } from './context';
 import { addLots } from './lots';
 import { importWalk } from './walk';
 import { assignTramForms, importRail } from './rail';
+import { importTramStops } from './tram-stops';
 import { addStrips } from './strips';
 import { addBuildings } from './buildings';
 import { addGroupSignal, addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
@@ -411,6 +412,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
         return [id, { ...group, id }];
       }),
     );
+
+  importTramStops(city, data, positions, bounds, parkingGraph, diagnostics);
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)
