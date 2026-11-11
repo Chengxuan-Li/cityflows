@@ -2,6 +2,7 @@ import { createRandom } from '../geo/random';
 import type { City, Person, Scenario, TripRequest } from '../schema';
 import { buildAgenda } from './agenda';
 import { eventTrips } from './events';
+import { assignCars } from './households';
 import { throughTrips } from './through';
 import { tripVehicle } from './vehicle';
 
@@ -10,11 +11,15 @@ export function scheduleTrips(city: City, persons: Person[], scenario: Scenario)
   const random = createRandom(scenario.seed).derive('schedule');
   const trips: TripRequest[] = [];
 
-  for (const person of persons) {
-    const { id, hasCar } = person;
-    person.agenda = buildAgenda(city, person, scenario, random.derive(id));
+  for (const person of persons)
+    person.agenda = buildAgenda(city, person, scenario, random.derive(person.id));
+  // TASK-129: a person drives a household car only when one is free for their whole day away.
+  const drivers = assignCars(persons);
 
-    const mode = hasCar ? 'car' : 'walk';
+  for (const person of persons) {
+    const { id } = person;
+    const carId = drivers.get(id);
+    const mode = carId ? 'car' : 'walk';
     for (let i = 1; i < person.agenda.length; i++) {
       const from = person.agenda[i - 1]!;
       const to = person.agenda[i]!;
@@ -26,6 +31,7 @@ export function scheduleTrips(city: City, persons: Person[], scenario: Scenario)
         departS: to.startS,
         mode,
         legs: [{ mode, fromPlaceId: from.placeId, toPlaceId: to.placeId }],
+        ...(carId ? { carId } : {}),
         ...tripVehicle(`${id}:trip:${i}`, scenario.demand, 'local', mode),
       });
     }

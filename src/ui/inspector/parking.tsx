@@ -3,6 +3,7 @@ import { vehicleClasses, type ParkingAccess } from '../../schema';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
 import { remapParkedCars } from '../drawn-snapshot';
+import { HouseholdCar } from './vehicle';
 
 export function ParkingInspector({ facility }: { facility: CParking }) {
   const occupied = useAppStore((state) => state.parkingOccupancy[facility.id]);
@@ -97,6 +98,7 @@ export function ParkedSpaceInspector({ space }: { space: number }) {
             <>
               <dt>Class</dt>
               <dd className="capitalize">{vehicleClasses[parkedCars!.vclass[space]!]}</dd>
+              <HouseholdCar vehicleId={parkedCars!.id[space]!} />
             </>
           )}
           <dt>Parking</dt>

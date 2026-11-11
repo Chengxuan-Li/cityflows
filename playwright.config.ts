@@ -65,6 +65,7 @@ const light = [
   'T52-visible-parking',
   'T53-pedestrians',
   'T57-person-trips',
+  'T67-car-ownership',
 ];
 const group =
   process.env.CITYFLOWS_E2E_GROUP ??

@@ -188,6 +188,7 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
   const population: Person[] = ['a', 'b'].map((id) => ({
     id: `v118:${id}`,
     homePlaceId: home.id,
+    householdId: `hh:${home.id}:${id}`,
     workPlaceId: net.places[lot.place]!.id,
     hasCar: true,
     agenda: [],
@@ -254,6 +255,7 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
   const owner: Person = {
     id: 'v118:strip',
     homePlaceId: origin.id,
+    householdId: `hh:${origin.id}:0`,
     workPlaceId: net.places[lot.place]!.id,
     hasCar: true,
     agenda: [],
