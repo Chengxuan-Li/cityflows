@@ -1,10 +1,13 @@
 import { Graphics } from 'pixi.js';
-import type { RailGraph } from '../../network/rail';
+import { trackGrade, type RailGraph } from '../../network/rail';
 import type { TrainPose } from '../../network/trains';
 import type { Vec2 } from '../../geo/vec2';
 import type { Pick } from '../types';
 
 export const trainColors = { sbahn: 0xbc4647, mainline: 0x607e99, roof: 0xecebe4 };
+/** TASK-132: tunnels and roofs hide trains in 2D; a ground track keeps them whatever its layer. */
+const hidden = (track: RailGraph['tracks'][number]) =>
+  trackGrade(track) === 'tunnel' || trackGrade(track) === 'covered';
 export function drawTrains(
   layers: Map<number, Graphics>,
   rail: RailGraph,
@@ -16,7 +19,7 @@ export function drawTrains(
     for (const car of train.cars) {
       const track = rail.tracks[car.track]!;
       const g = layers.get(track.layer)!;
-      if (track.tunnel || track.layer < 0) continue;
+      if (hidden(track)) continue;
       const c = Math.cos(car.heading),
         s = Math.sin(car.heading);
       const rectangle = (length: number, width: number) =>
@@ -42,7 +45,7 @@ export function pickTrain(
   for (const train of trains)
     for (const car of train.cars) {
       const track = rail.tracks[car.track]!;
-      if (track.tunnel || track.layer < 0 || track.layer < minimumGrade) continue;
+      if (hidden(track) || track.layer < minimumGrade) continue;
       const dx = point.x - car.x,
         dy = point.y - car.y,
         c = Math.cos(car.heading),

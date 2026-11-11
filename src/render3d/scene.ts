@@ -196,7 +196,7 @@ export class Scene3D {
     this.rail = buildRail(city, renderedSource, geometry.heights);
     if (city.rail) {
       const table = trainTimetable(city.rail);
-      this.trains = new Trains3D(city.rail, geometry.heights, table);
+      this.trains = new Trains3D(city.rail, geometry.heights, this.rail.heights!, table);
       this.content.add(this.trains.group);
       this.stations = new Stations3D(
         placeStationFurniture(city, renderedSource),
@@ -570,6 +570,7 @@ export class Scene3D {
     if (this.belowGround !== enabled) this.trainTimeS = NaN;
     if (this.belowGround !== enabled) this.invalidate();
     this.belowGround = enabled;
+    this.rail?.setBelowGround(enabled);
     if (this.surroundings) this.surroundings.material.opacity = enabled ? 0.4 : 1;
     this.updateTerrainBackdrop();
     if (!this.ground || this.ground.material.transparent === enabled) return;
@@ -783,7 +784,13 @@ export class Scene3D {
       }
     }
     return this.city && this.railVisible
-      ? pickRail3D(this.city, { x, y }, (p, heightM) => this.worldToScreen(p, heightM + 0.06))
+      ? pickRail3D(
+          this.city,
+          this.rail?.heights,
+          { x, y },
+          (p, heightM) => this.worldToScreen(p, heightM + 0.06),
+          this.belowGround,
+        )
       : null;
   }
 

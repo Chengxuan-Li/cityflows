@@ -20,14 +20,16 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // and e4654d8 (merging lanes kept on a group's inner roads).
 // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
 // import without assignTramForms) every pin equals c3a6ec2's.
+// TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
+// stripped every pin equals 2df05a1's.
 const baseline = {
   'munich-donnersberger': [
-    'dfd83d498c8c03090f4d5aa3dad9e4fd86a37de21b50fb3cb839d1c7b679da64',
-    'ffae41b7e350c45a73b2ce4069df6a1a4ebc8d2011ea58c0a2c5366907739bb2',
+    'b8370f9b0bd0f466fd350c9512399fd84e653bf788e72470bfd91e8de1b6e67f',
+    '188fc25155395afd66f5bfd082cd9eed5a62cc6bfebc34d0655250bba92ce159',
   ],
   'sindelfingen-a81': [
-    '5a966f46bb257988768af34b7171cf187663652a3c70fb1a73e6c65158877798',
-    '8af4c67e354db7c26073363c0aaf96de68a73e9d8673014eed99e3164c0e23b9',
+    '15a7f2c2c6558ec3bb140ede002575f4120e79dfe8bb993f4a059c56794c4ad8',
+    '24799232e25ba8b7c3e1bb39a3d7625972046e41362759a451eff593710da38f',
   ],
 };
 

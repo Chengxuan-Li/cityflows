@@ -24,6 +24,8 @@ export interface RailTrack {
   layer: number;
   bridge?: boolean;
   tunnel?: boolean;
+  /** TASK-132: at grade under a roof (`tunnel=building_passage`, `covered=yes`), not below ground. */
+  covered?: boolean;
   service?: string;
   usage?: string;
   preferredDirection?: 'forward' | 'backward' | 'both';
