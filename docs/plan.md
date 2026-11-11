@@ -1097,11 +1097,11 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-132 | Rail heights: tunnels and elevated sections at their true height in 2D and 3D, with portals and supports; at least one Munich tunnel is not shown today. | TASK-126 imports `layer`, `bridge` and `tunnel` on tracks; heights are not applied everywhere. | TASK-126 |
 | TASK-133 | Station furniture: station signage, name boards, departure displays, shelters and benches at platforms. | Stations drawn as platforms and small discs. | TASK-126, TASK-127 (displays read the timetable) |
 | TASK-134 | Overhead lines: catenary masts shared by parallel tracks close together, with a portal or truss across them and a contact wire over each track. `electrified=contact_line` (or `yes`) draws it, `electrified=no` (or `rail`, third rail) does not, no tag draws it anyway (owner); mapped `power=catenary_mast` nodes place masts where present. | None. | TASK-126, TASK-132 (heights) |
-| TASK-135 | Trams as their own kind of track, distinct from railways (owner's note to be completed). | Tram tracks drawn almost like railway tracks. | TASK-126 |
+| TASK-135 | Trams as their own kind of track: a distinct track type with its own visual quality (rails, bed, sleepers or embedded track), in 2D and 3D, clearly unlike railway tracks. | Tram tracks drawn almost like railway tracks. | TASK-126 |
 | TASK-136 | Level crossings: railway crossings (`railway=level_crossing`, `crossing:barrier`, `crossing:light`, `crossing:bell`) always get gates, St Andrew's cross signs, lights and road markings; tram crossings (`railway=tram_level_crossing`) get tram signals, and trams may have priority. Road traffic stops for trains and trams in the simulation. | Tracks cross roads with no facility and no effect. | TASK-127, TASK-131, TASK-135; TASK-138 for trams |
 | TASK-137 | Tram stops: stops in the middle of the street (`railway=tram_stop`, `public_transport=platform`) with platforms, shelters, markings and displays. | None. | TASK-135 |
 | TASK-138 | Tram vehicles: timetabled trams on the tram tracks that interact with cars, signals and level crossings (not only decorative). | TASK-127 trains are decorative and run on rail only. | TASK-135, TASK-136, TASK-130, TASK-131 Phase 3 |
-| TASK-139 | Trams beside and in streets: tracks in a median keep their own space beside parallel carriageways without overlapping them; street-running trams (`embedded=yes`, `embedded_rails=*`) run in a road lane shared with cars. Reconcile with TASK-131's keep-the-geometry rule (overlaps come from lane widths, not OSM lines). | Tram tracks drawn over road surfaces; no shared lanes. | TASK-131, TASK-135, TASK-138 |
+| TASK-139 (dropped for now, owner 2026-11-11) | Trams beside and in streets: tracks in a median keep their own space beside parallel carriageways without overlapping them; street-running trams (`embedded=yes`, `embedded_rails=*`) run in a road lane shared with cars. Reconcile with TASK-131's keep-the-geometry rule (overlaps come from lane widths, not OSM lines). | Tram tracks drawn over road surfaces; no shared lanes. | TASK-131, TASK-135, TASK-138 |
 
 ## Lead handover
 
@@ -2887,6 +2887,12 @@ tier, the full-demand test, the light e2e, demo-a-commute, T16, T52, T54, T57, q
 
 ## Owner decisions log
 
+- 2026-11-11, orchestration (owner): after the current TASK-131 round, the lead runs the
+  backlog itself as Claude Code subagents from the lead's session (Claude models, at most Opus
+  5.5 at high effort), in parallel where file surfaces allow and in sequence where they do not,
+  without stopping for the owner's approval or review. The lead still reviews and merges every
+  task and reports outcomes. TASK-135: trams become a distinct track type with their own look.
+  TASK-139 (trams pushing roads apart, street-running trams) is dropped for now.
 - 2026-11-11, TASK-131: lane lines may be drawn on inner links (no centre, stop or yield lines,
   crossings or signal heads there).
 - 2026-11-11, rail and tram backlog (owner, before stations as destinations and multimodal travel):
