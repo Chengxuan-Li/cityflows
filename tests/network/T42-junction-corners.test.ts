@@ -179,6 +179,11 @@ const named: Record<AuditCity, Record<string, string>> = {
     'n:52 r:54>r:1312': groupInner('r:1312', 4.2),
     'n:597 r:609>r:598': groupInner('r:598', 3),
     'n:621 r:623>r:1245': groupInner('r:1245', 2.5),
+    // TASK-131 fix round: the arc may reach half of a longer inner road, and the corner lies
+    // beyond that half.
+    'n:474 r:1355>r:476': groupInner('r:1355', 18.2),
+    'n:483 r:944>r:485': groupInner('r:485', 10.1),
+    'n:52 r:1305>r:700': groupInner('r:700', 11.1),
   },
 };
 
@@ -238,7 +243,8 @@ cityTest(
   'T42.3: split-pair median noses are rounded at n:104, n:774, n:949 and n:1181',
   () => {
     const { city, net } = load('munich');
-    for (const id of ['n:104', 'n:1307', 'n:774', 'n:1365', 'n:366', 'n:417', 'n:474', 'n:1353'])
+    // n:474's corner from the Barthstraße crossing r:1355 to r:476 is named in T42.1.
+    for (const id of ['n:104', 'n:1307', 'n:774', 'n:1365', 'n:366', 'n:417', 'n:1353'])
       expect(
         cornerAudit(city, net, node(net, id))
           .filter((c) => c.sharp)

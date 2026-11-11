@@ -734,6 +734,11 @@ services include station visits on both legs.
   road edges along them (TASK-089), reaching at most half of each arm. A split pair's median
   ends in a half-circle nose at the junction edge. The audit's measure 10 (corner sharpness:
   a missing or degenerate curb, or a turn over 30 degrees between 0.5 m samples) checks it.
+  TASK-131: where the edges' lines meet far behind one cut and just behind the other (an arm
+  meeting a group's short inner road, n:638's members), the arc's tangent point on the far edge
+  lies on that edge's line behind its cut, and the curb runs straight to it from the cut corner
+  (limit `far`). A curb's cut region is closed on its far side along the corner's bisector, and a
+  dead end's cap is joined to every end's cut.
 - TASK-093 (one street's carriageways, B49, B45, B47). A second OSM way of a carriageway (the
   importer pairs one partner per road) joins its pair's corridor after realignment, so
   realignment and relaxation are unchanged; TASK-089's jog rule measures the lanes that

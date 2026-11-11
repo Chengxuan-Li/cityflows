@@ -971,9 +971,10 @@ export interface JunctionCorner {
   /** Curbs: what set the tangent length (the class radius; a cut farther from the corner than
    * the class tangent, the arc then meeting that cut's corner; the class radius beyond the
    * nearer cut, which keeps the curb from bulging past its road ends; the first half of a road; a
-   * movement surface it would cut into; a road edge bending away from the arc), the class radius,
+   * movement surface it would cut into; a road edge bending away from the arc; TASK-131: the far
+   * cut, the arc's tangent point on that edge's line behind it, `farFillet`), the class radius,
    * the radius used, the arc's centre and its tangent points. Noses: the half circle's radius. */
-  limit?: 'class' | 'cut' | 'lobe' | 'road' | 'turn' | 'edge';
+  limit?: 'class' | 'cut' | 'lobe' | 'road' | 'turn' | 'edge' | 'far';
   /** Curbs and noses: the boundary, from the first road's edge to the second's, leaving and
    * meeting each along it; and the region beyond it, between the road edges, taken out of the
    * polygon. */
@@ -985,6 +986,77 @@ export interface JunctionCorner {
   tangents?: [Vec2, Vec2];
   /** Gores: the fillet rounding the tip, in the notch beyond it (TASK-092). */
   fillet?: Vec2[];
+}
+
+/** TASK-131: a curb where no arc tangent to both edges fits beyond both cuts, because the edges'
+ * lines meet far behind one cut and just behind the other (n:638's members, where a five-lane arm
+ * meets a short inner road): the arc's tangent point on the far side lies behind that cut, on the
+ * edge's line, which the curb follows straight from the cut corner (as the lanes beside it do),
+ * unless a movement surface reaches beyond the arc. Replaces the chord between the cuts, which
+ * kinked there. `roomA`, `roomB`: how far along each edge from its cut corner a tangent point may lie
+ * (`corner`). */
+function farFillet(
+  a: PolygonEnd,
+  b: PolygonEnd,
+  roads: [number, number],
+  classRadius: number,
+  surface: Vec2[],
+  roomA: number,
+  roomB: number,
+): JunctionCorner | undefined {
+  const ka = a.right[0]!,
+    kb = b.left[0]!;
+  const da = leaving(a.right),
+    db = leaving(b.left);
+  const c = cross(da, db);
+  if (c < 0.02) return undefined;
+  const w = sub(kb, ka);
+  const sa = cross(w, db) / c,
+    sb = cross(w, da) / c;
+  if (sa > 0 || sb > 0) return undefined;
+  const theta = Math.acos(Math.max(-1, Math.min(1, dot(da, db))));
+  const perRadius = 1 / Math.tan(theta / 2);
+  // The near cut bounds the tangent from below and its edge's room from above; the far cut bounds
+  // it from above (the far tangent point stays on its edge's line, between the apex and the cut).
+  const nearA = -sa < -sb;
+  const lo = nearA ? -sa : -sb;
+  const t = Math.min(nearA ? roomA - sa : roomB - sb, nearA ? -sb : -sa, classRadius * perRadius);
+  const radius = t / perRadius;
+  if (t < lo || radius < MIN_CURB_M) return undefined;
+  const p = { x: ka.x + da.x * sa, y: ka.y + da.y * sa };
+  const qa = { x: p.x + da.x * t, y: p.y + da.y * t },
+    qb = { x: p.x + db.x * t, y: p.y + db.y * t };
+  const bisector = unit({ x: da.x + db.x, y: da.y + db.y });
+  const d = radius / Math.sin(theta / 2);
+  const o = { x: p.x + bisector.x * d, y: p.y + bisector.y * d };
+  // As `corner`'s curbs, an edge-following cubic, here from the far cut corner along its edge's
+  // line to the arc, and on to the near edge.
+  const nb = nearestOnPolyline(b.left, qb);
+  const curve = [ka, ...edgeCurve(qa, neg(da), nb.point, nb.direction)];
+  const far = 2 * (radius + distance(ka, kb)) + 1;
+  const cut = [
+    ...curve,
+    { x: nb.point.x + db.x * far, y: nb.point.y + db.y * far },
+    { x: nb.point.x + (db.x + bisector.x) * far, y: nb.point.y + (db.y + bisector.y) * far },
+    { x: ka.x + (da.x + bisector.x) * far, y: ka.y + (da.y + bisector.y) * far },
+    { x: ka.x + da.x * far, y: ka.y + da.y * far },
+  ];
+  const beyond = preparePolygon([...cut, cut[0]!]);
+  const boundary = [cut.at(-1)!, ...curve, cut[curve.length]!];
+  if (surface.some((q) => beyond(q) && nearestOnPolyline(boundary, q).away > 0.05))
+    return undefined;
+  return {
+    kind: 'curb',
+    roads,
+    ring: [...curve, ...edgeUpTo(b.left, nb.along).reverse(), kb],
+    curve,
+    cut,
+    limit: 'far',
+    classRadius,
+    radius,
+    centre: o,
+    tangents: [qa, qb],
+  };
 }
 
 /** The corner between one approach's right edge `a` and the next approach's left edge `b`: a
@@ -1054,9 +1126,12 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
   // between the group's carriageways, and the arm's far end, a node on along the carriageway, has
   // no curb on that edge: the arc may use the arm's whole edge (n:138's east nose).
   const median = a.inner !== b.inner;
+  // Between two inner roads (n:823's median between Marsstraße's inner carriageway and the
+  // Weiglstraße crossing) the corner is the median's nose: it may use either road's whole edge.
+  const innerPair = a.inner && b.inner;
   const room = (edge: Vec2[], end: PolygonEnd, s: number) =>
     Math.min(
-      median && !end.inner ? Infinity : CURB_REACH * end.road.lengthM - end.setback,
+      (median && !end.inner) || innerPair ? Infinity : CURB_REACH * end.road.lengthM - end.setback,
       cumulativeLengths(edge).at(-1)!,
     ) - s;
   // The edges' lines meeting beyond a cut: a gore where the edges cross there (a capped acute
@@ -1089,10 +1164,17 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
         ),
       ),
     );
+    // TASK-131: an inner road under 5 m is not cut back (compile's trim scale), so its edge
+    // crosses the arm's beyond its cut as at a gore (n:171's 4.5 m r:173 with service r:303): the
+    // fillet, the corner's curb, may use its edge to 0.5 m before the next member.
+    const filletRoom = (edge: Vec2[], end: PolygonEnd, along: number) =>
+      end.inner && end.road.lengthM < 5
+        ? cumulativeLengths(edge).at(-1)! - 0.5 - along
+        : room(edge, end, along);
     const t = Math.min(
       Math.min(GORE_RADIUS_M, classRadius) / Math.tan(theta / 2),
-      room(a.right, a, hit.alongA),
-      room(b.left, b, hit.alongB),
+      filletRoom(a.right, a, hit.alongA),
+      filletRoom(b.left, b, hit.alongB),
     );
     const pa = pointAtDistance(a.right, la, hit.alongA + t),
       pb = pointAtDistance(b.left, lb, hit.alongB + t);
@@ -1206,7 +1288,8 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
   if (!fits(tangent)) {
     let low = Math.max(0, -best.sa, -best.sb),
       high = tangent;
-    if (!fits(low)) return undefined;
+    if (!fits(low))
+      return farFillet(a, b, roads, classRadius, surface, room(a.right, a, 0), room(b.left, b, 0));
     for (let k = 0; k < 10; k++) {
       const mid = (low + high) / 2;
       if (fits(mid)) low = mid;
@@ -1246,9 +1329,20 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     roads,
     ring: block,
     curve,
+    // TASK-131: closed on the corner's far side, along its bisector: where the edges open wide
+    // (n:471's r:1048 and r:491, 150 degrees apart) the chord between the two far points ran
+    // through the junction and took its movement surfaces out.
     cut: [
       ...curve,
       { x: nb.point.x + arrive.x * far, y: nb.point.y + arrive.y * far },
+      {
+        x: nb.point.x + (arrive.x + bisector.x) * far,
+        y: nb.point.y + (arrive.y + bisector.y) * far,
+      },
+      {
+        x: na.point.x + (bisector.x - leave.x) * far,
+        y: na.point.y + (bisector.y - leave.y) * far,
+      },
       { x: na.point.x - leave.x * far, y: na.point.y - leave.y * far },
     ],
     limit,
@@ -1332,6 +1426,12 @@ function cutRegion(
     const a = group[0]!.left[0]!,
       b = group.at(-1)!.right[0]!;
     if (distance(a, b) > 1e-6) fan.push(cap(a, b, leaving(group[0]!.left)));
+    // TASK-131: the fan over the ends' cuts, so an end cut back farther than the chord (n:1282's
+    // three-lane r:1284 beside the one-lane r:1283) meets the outline.
+    group.forEach((end, k) => {
+      fan.push([centre, end.left[0]!, end.right[0]!]);
+      if (k + 1 < group.length) fan.push([centre, end.right[0]!, group[k + 1]!.left[0]!]);
+    });
     return { fan, corners };
   }
   // The far side of a through road: the two approaches' facing ends are a through pair, whose strip

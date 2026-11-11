@@ -236,10 +236,12 @@ test.each(tierCities(auditCities))(
           const t = corner.tangents![k]!;
           if (distance(edge[0]!, atEnd ? (k === 0 ? left : right) : k === 0 ? right : left) > 1e-6)
             failures.push(`${where}: edge does not start at the cut`);
-          // A tangent point may lie a hair behind its cut, on the edge's straight extension.
+          // A tangent point may lie a hair behind its cut, on the edge's straight extension;
+          // TASK-131: a far fillet's on the far edge's line behind the cut (`farFillet`).
           const d = { x: edge[1]!.x - edge[0]!.x, y: edge[1]!.y - edge[0]!.y };
           const l = Math.hypot(d.x, d.y);
-          edge.unshift({ x: edge[0]!.x - (d.x / l) * 0.5, y: edge[0]!.y - (d.y / l) * 0.5 });
+          const behind = corner.limit === 'far' ? distance(edge[0]!, t) + 0.5 : 0.5;
+          edge.unshift({ x: edge[0]!.x - (d.x / l) * behind, y: edge[0]!.y - (d.y / l) * behind });
           if (nearestOnPolyline(edge, t).away > 0.25)
             failures.push(
               `${where}: tangent ${k} off its edge ${nearestOnPolyline(edge, t).away.toFixed(3)} ${corner.limit} ${corner.radius!.toFixed(2)}`,
