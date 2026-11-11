@@ -75,7 +75,8 @@ export function memberPairs(
  * the road pairs at the node of the chains its green groups name, so that one green clears a
  * car from the entry to the exit. Walk entries keep those naming a road end at the node.
  * `vehicles[p]` says whether the group's phase p has vehicle groups at all (TASK-111's derived
- * walk green: none in an exclusive pedestrian phase). Invalid green groups are errors.
+ * walk green: none in an exclusive pedestrian phase). Invalid green groups are errors. `free`:
+ * the movements from inner roads, green in every phase.
  */
 export function memberProgram(
   city: City,
@@ -83,9 +84,23 @@ export function memberProgram(
   group: CGroup,
   node: number,
   diagnostics: Diagnostic[],
-): { program: SignalProgram; vehicles: boolean[] } {
+): { program: SignalProgram; vehicles: boolean[]; free: Set<number> } {
   const program = city.junctionGroups![group.id]!.signal!;
   const id = compiled.nodes[node]!.id;
+  // Inner links carry no control (owner, checkpoint 1): a car on one was cleared at the group's
+  // entry and drives on, so the movements from inner roads are green in every phase; the
+  // amber and all-red clear them, and they never count as a phase conflict.
+  const inner = new Set(group.innerRoads);
+  const free = new Set(
+    compiled.nodes[node]!.movements.filter((m) =>
+      inner.has(compiled.lanes[compiled.movements[m]!.fromLane]!.road),
+    ),
+  );
+  const roadId = (lane: number) => compiled.roads[compiled.lanes[lane]!.road]!.id;
+  const innerPairs = [...free].map((m) => {
+    const movement = compiled.movements[m]!;
+    return `${roadId(movement.fromLane)}>${roadId(movement.toLane)}`;
+  });
   const phases = program.phases.map(({ durationS, groups, walk }, phase) => {
     const pairs = new Set<string>();
     for (const { from, to } of groups) {
@@ -108,6 +123,7 @@ export function memberProgram(
       }
       for (const pair of memberPairs(compiled, group, node, entry, exit)) pairs.add(pair);
     }
+    for (const pair of innerPairs) pairs.add(pair);
     return {
       durationS,
       groups: [...pairs].sort().map((pair) => {
@@ -125,5 +141,6 @@ export function memberProgram(
   return {
     program: { ...program, phases },
     vehicles: program.phases.map((phase) => phase.groups.length > 0),
+    free,
   };
 }

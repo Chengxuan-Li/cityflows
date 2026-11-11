@@ -296,6 +296,12 @@ const deferredCorridor = new WeakMap<Road, string>();
 /** Corridor ids of the second ways of carriageways drawn as two (`assignCorridors`). */
 const thirdWay = new WeakMap<Road, string>();
 
+/** The corridor a road belongs to once the realignment has run: its own, or the one it joins
+ * then (a carriageway's second way, an unnamed pair that `separateDual` may push). */
+export function finalCorridor(road: Road): string | null {
+  return thirdWay.get(road) ?? road.corridorId ?? deferredCorridor.get(road) ?? null;
+}
+
 function pushable(
   city: City,
   roads: OsmRoad[],
@@ -416,34 +422,10 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
         -side *
         ((nearest[i]!.point.x - p.x) * normals[i]!.x + (nearest[i]!.point.y - p.y) * normals[i]!.y),
     );
-    // TASK-093 (B45), TASK-095 (B54): a median void narrower than `ATTACH_GAP_M` (the gap between
-    // the two blocks beyond the median) closes too, each road pulled toward the pair's middle line
-    // by its share; so does a wider stretch shorter than twice the taper between two such, which
-    // easing out and back in would leave as a dent. Where the pair opens from together (within
-    // half a metre of the median) past the limit at more than 20 degrees, it parts where it was
-    // last together.
-    const edges = gaps.map((gap) => gap - clearance + MEDIAN_M);
-    const closing = edges.map((edge) => edge < ATTACH_GAP_M);
-    for (const order of [1, -1]) {
-      const at = (k: number) => (order > 0 ? k : edges.length - 1 - k);
-      for (let k = 0; k < edges.length; k++) {
-        if (closing[at(k)]) continue;
-        let together = k;
-        while (together > 0 && edges[at(together)]! > MEDIAN_M + 0.5) together--;
-        const run = Math.abs(lengths[at(k)]! - lengths[at(together)]!);
-        if ((edges[at(k)]! - edges[at(together)]!) / Math.max(SAMPLE_M, run) > PART_SLOPE)
-          for (let m = together + 1; m < k; m++) closing[at(m)] = false;
-        while (k < edges.length && !closing[at(k)]) k++;
-      }
-    }
-    const reach = 2 * Math.min(taperLength(a.road), taperLength(b.road));
-    for (let i = 0; i < closing.length; i++) {
-      if (closing[i] || !closing[i - 1]) continue;
-      let j = i;
-      while (j < closing.length && !closing[j]) j++;
-      if (j < closing.length && lengths[j]! - lengths[i - 1]! < reach) closing.fill(true, i, j);
-      i = j;
-    }
+    // TASK-131 (owner, checkpoint 0): only where the blocks overlap or leave less than the
+    // median; a pair with space between its blocks everywhere stays where it is drawn.
+    if (gaps.every((gap) => gap >= clearance)) continue;
+    const closing = gaps.map(() => false);
     const centerlines = [a, b].map(({ road }, k) => {
       // The push this road needs (its share of the shortfall), unclamped and clamped at zero.
       const shortfall = gaps.map((gap) => ((clearance - gap) * shares[k]!) / clearance);

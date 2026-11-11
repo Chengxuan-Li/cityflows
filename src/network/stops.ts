@@ -8,7 +8,8 @@ import type { CompiledCity } from './types';
  * end: other crossings are decorative. */
 export function populateStops(city: CompiledCity, source?: CrossingSource): void {
   for (const lane of city.lanes) {
-    if (!servedSignal(city, city.roads[lane.road]!)) {
+    // TASK-131: an inner road of a junction group carries no control and no stop line.
+    if (city.roads[lane.road]!.group !== undefined || !servedSignal(city, city.roads[lane.road]!)) {
       lane.stopM = lane.lengthM;
       continue;
     }

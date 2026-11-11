@@ -59,6 +59,7 @@ export function generateGroupSignalProgram(
   diagnostics: Diagnostic[],
 ): SignalProgram {
   const group = compiled.groups![compiled.index.group!.get(groupId)!]!;
+  const inner = new Set(group.innerRoads);
   const units = new Map<string, Unit>();
   for (const chain of group.chains) {
     const key = `${chain.from}>${chain.to}`;
@@ -67,6 +68,8 @@ export function generateGroupSignalProgram(
       const pairs = new Set(memberPairs(compiled, group, n, chain.from, chain.to));
       return compiled.nodes[n]!.movements.filter((m) => {
         const movement = compiled.movements[m]!;
+        // Movements from inner roads are green in every phase (`memberProgram`).
+        if (inner.has(compiled.lanes[movement.fromLane]!.road)) return false;
         return pairs.has(
           `${compiled.roads[compiled.lanes[movement.fromLane]!.road]!.id}>${compiled.roads[compiled.lanes[movement.toLane]!.road]!.id}`,
         );

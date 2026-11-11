@@ -7,6 +7,7 @@ export function compileSignal(
   program: SignalProgram,
   city: CompiledCity,
   diagnostics: Diagnostic[],
+  free: ReadonlySet<number> = new Set(),
 ): CSignal {
   const { offsetS, amberS, allRedS } = program;
   const served = new Set<number>();
@@ -45,7 +46,7 @@ export function compileSignal(
     for (const idx of movements) {
       const movement = city.movements[idx]!;
       for (const conflict of movement.conflicts) {
-        if (conflict > idx && members.has(conflict)) {
+        if (conflict > idx && members.has(conflict) && !free.has(idx) && !free.has(conflict)) {
           const other = city.movements[conflict]!;
           diagnostics.push({
             severity: 'error',

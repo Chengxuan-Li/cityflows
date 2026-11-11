@@ -221,6 +221,11 @@ export function compile(city: City): CompileResult {
     city.drivingSide,
     sourceNodes,
     converging,
+    new Set(
+      Object.values(city.junctionGroups ?? {}).flatMap((g) =>
+        g.nodes.map((n) => nodeIndex.get(n)!),
+      ),
+    ),
   ).shifts.forEach(({ start, end }, idx) => {
     roads[idx]!.startShift = start;
     roads[idx]!.endShift = end;
@@ -532,9 +537,10 @@ export function compile(city: City): CompileResult {
       : {
           program: sourceNodes[node.idx]!.signal!,
           vehicles: sourceNodes[node.idx]!.signal!.phases.map((p) => p.groups.length > 0),
+          free: new Set<number>(),
         };
     programs.set(node.idx, entry);
-    node.signal = compileSignal(node, entry.program, compiled, diagnostics);
+    node.signal = compileSignal(node, entry.program, compiled, diagnostics, entry.free);
   }
   if (diagnostics.some((item) => item.severity === 'error')) return { ok: false, diagnostics };
   for (const lane of lanes) {

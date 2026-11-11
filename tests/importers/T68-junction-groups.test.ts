@@ -67,9 +67,9 @@ describe('T68 junction groups at import', () => {
 
   it('T68.2: a link longer than junctionGroupMaxM leaves two separate junctions', () => {
     expect(load(dualSingle(40)).city.junctionGroups).toBeUndefined();
-    // The threshold is the import option: 15 m does not group the 20 m link, 45 m groups 40 m.
-    expect(load(dualSingle(20), 15).city.junctionGroups).toBeUndefined();
-    expect(Object.values(load(dualSingle(40), 45).city.junctionGroups ?? {})).toHaveLength(1);
+    // The threshold is the import option: 20 m does not group a 24 m crossing, 30 m does.
+    expect(load(dualSingle(24), 20).city.junctionGroups).toBeUndefined();
+    expect(Object.values(load(dualSingle(24)).city.junctionGroups ?? {})).toHaveLength(1);
   });
 
   it('T68.3: turn permissions through the group equal those of the merged node', () => {

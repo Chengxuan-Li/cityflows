@@ -17,13 +17,4 @@ export interface ImportOptions {
   /** OSM only (TASK-131): nodes joined by roads of at most this length form a junction group;
    * default `DEFAULT_JUNCTION_GROUP_MAX_M` (30 m). */
   junctionGroupMaxM?: number;
-  /** OSM only (TASK-131 proposals, the owner to decide; default 'shortest', the approved rule):
-   * the order links unite in. 'pairs-first' unites the links between the two carriageways of
-   * one street first, so the 60 m span cap cannot leave them apart; 'merge-first' joins the
-   * degree-2 artefacts (a signal's stop position) before grouping, so no group chains through
-   * a node that is then merged away. */
-  junctionGroupOrder?: 'shortest' | 'pairs-first' | 'merge-first';
-  /** OSM only (TASK-131 proposal, off until the owner decides): restriction via nodes may join
-   * junction groups; their restrictions stay at the member. */
-  junctionGroupViaNodes?: boolean;
 }

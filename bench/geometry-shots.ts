@@ -592,6 +592,24 @@ export const shots: {
   })),
   // The signalised group at n:247 closer: the signal heads and stop lines drawn now.
   { id: 'T131-p1-n247-signals', cases: [], centre: [-19.28, 166.81], zoom: 10 },
+  // TASK-131 Phase 2 (owner, checkpoint 1): n:638's eastbound lane gain and ramp branch, and the
+  // n:138 group's curbs, at 10 px/m.
+  {
+    id: 'T131-p2-n638-east',
+    cases: [],
+    centre: [125, -520],
+    zoom: 10,
+    osmLines: 'Munich, Arnulfstraße east of n:638 (main), lane gain and ramp',
+    groups: true,
+  },
+  {
+    id: 'T131-p2-n138-curbs',
+    cases: [],
+    centre: [-18.85, -540.61],
+    zoom: 10,
+    osmLines: 'Munich n:138 (main), the group at the synthetic median crossing',
+    groups: true,
+  },
 ];
 
 /** TASK-131: an extract's drivable OSM ways (the importer's filter) and the nodes where they

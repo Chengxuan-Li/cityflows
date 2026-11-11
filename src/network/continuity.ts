@@ -718,6 +718,7 @@ export function convergingShifts(
   side: 'left' | 'right',
   sourceNodes: Node[],
   found?: ConvergingGroup[],
+  groupMembers: ReadonlySet<number> = new Set(),
 ): { shifts: { start: Float64Array; end: Float64Array }[]; groups: ConvergingGroup[] } {
   const sigma = side === 'right' ? 1 : -1;
   const key = (road: number, incoming: boolean) => `${road}:${incoming ? 'end' : 'start'}`;
@@ -1269,6 +1270,9 @@ export function convergingShifts(
     return (f.p.x - node.pos.x) * n.x + (f.p.y - node.pos.y) * n.y;
   };
   for (const node of nodes) {
+    // TASK-131: not across a junction group's member, whose roads keep their OSM lines; the
+    // lanes join inside the group.
+    if (groupMembers.has(node.idx)) continue;
     const ends = incident[node.idx]!.filter((r) => r.from !== r.to);
     const facing = (a: CRoad, b: CRoad) => {
       const [ta, tb] = [chord(a, true), chord(b, false)];

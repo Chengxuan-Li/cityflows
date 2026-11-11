@@ -21,20 +21,19 @@ import { addGateways, addOsmPlaces, connectCarExits } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
 import { smoothRoads } from './smooth';
-import { realignRoads } from './realign';
 import {
   assignCorridors,
   pairSameDirection,
   sampleSameDirection,
   separateCoincident,
   separateDual,
-  attachCarriageways,
 } from './corridors';
 import { DEFAULT_RELAX_MAX_M, relaxRoads } from './relax';
 import {
   DEFAULT_JUNCTION_GROUP_MAX_M,
   formJunctionGroups,
   joinDividedFeeders,
+  prepareJunctions,
   junctions,
   mergeShortRoads,
   splitWay,
@@ -272,16 +271,20 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   for (const node of nodes.values()) {
     addLocalTurnarounds(node, incidents.get(node.id)!);
   }
-  const originalControls = Object.values(city.nodes)
-    .filter((node) => node.control !== 'uncontrolled')
-    .map((node) => node.id);
-  const { signalIds, groups } = formJunctionGroups(
+  const { signalIds, sources } = prepareJunctions(
     city,
     roads,
     signals.map((n) => n.id),
+  );
+  // Corridors before the groups: a median crossing joins the two carriageways of one corridor.
+  const coincident = assignCorridors(city, roads);
+  const sameDirection = pairSameDirection(roads);
+  const groups = formJunctionGroups(
+    city,
+    roads,
     options.junctionGroupMaxM ?? DEFAULT_JUNCTION_GROUP_MAX_M,
-    options.junctionGroupOrder,
-    options.junctionGroupViaNodes,
+    sources,
+    new Set(signalIds),
   );
   // Provisional group ids: the final ones are allocated last, so that no other id moves.
   if (groups.length)
@@ -301,25 +304,15 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
         },
       ]),
     );
-  const members = groups.flatMap(({ nodes }) => nodes);
-  const coincident = assignCorridors(city, roads);
-  const sameDirection = pairSameDirection(roads);
+  // TASK-131 (checkpoint 0): no realignment and no attachment; smoothing keeps every node and
+  // the 30 m around it; the collision model is off by default.
   smoothRoads(
     city,
     roads,
-    new Set([...protectedNodes, ...originalControls, ...signalIds, ...members]),
     new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
-  );
-  realignRoads(
-    city,
-    roads,
-    new Set([...protectedNodes, ...originalControls, ...signalIds]),
-    new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
-    diagnostics,
   );
   separateCoincident(city, coincident);
   separateDual(city, roads);
-  attachCarriageways(city, roads);
   relaxRoads(city, roads, options.relaxMaxM ?? DEFAULT_RELAX_MAX_M);
   sampleSameDirection(sameDirection);
   incidents.clear();

@@ -178,6 +178,9 @@ export function roadMarkingGeometry(
   const belowShapes: MarkingShape[] = [],
     aboveShapes: MarkingShape[] = [],
     pavement: Vec2[][] = [];
+  // TASK-131: an inner road of a junction group is part of the junction surface: no centre,
+  // lane or edge line on it (tram and rail crossings are the rail layer's, still drawn).
+  if (road.group !== undefined) return { below: belowShapes, above: aboveShapes, pavement };
   const medianOnRight = city.drivingSide === 'left';
   const tapered = road.lanes.some((i) => city.lanes[i]!.taperStartM || city.lanes[i]!.taperEndM);
   // TASK-079: a line runs to its lane's stop position. Where the junction surface covers the end
@@ -602,10 +605,15 @@ export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM =
     lane.lengthM - crossingFarM - ARROW_CLEAR_M - ARROW_HALF_M * scale,
   );
   return {
-    stop: controlled && (node.signal !== null || (node.control === 'stop' && minor)),
-    yield: controlled && node.control === 'yield' && minor,
+    // TASK-131: no stop or yield line on a junction group's inner road.
+    stop:
+      controlled &&
+      road.group === undefined &&
+      (node.signal !== null || (node.control === 'stop' && minor)),
+    yield: controlled && road.group === undefined && node.control === 'yield' && minor,
     arrowAt,
     turns:
+      road.group === undefined &&
       differ &&
       lane.lengthM >= ARROW_MIN_LANE_M &&
       arrowAt >= ARROW_HALF_M * scale &&
