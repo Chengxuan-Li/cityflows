@@ -11,10 +11,9 @@ import {
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity } from '../../src/network';
-import { ATTACH_GAP_M } from '../../src/network/lanes';
 import { crossingStripes } from '../../src/render/layers/roads';
 import type { City, Road } from '../../src/schema';
-import { junctionOverlaps } from '../network/junction-audit';
+import { importedRoadBodyOverlaps, junctionOverlaps } from '../network/junction-audit';
 import { cityTest, tierCities, unitTest } from '../tier';
 
 // T39 (TASK-087, B41, B42): carriageways of one street must not overlap outside the junction
@@ -251,6 +250,19 @@ const unrelated: Record<AuditCity, Record<string, number>> = {
  * r:1354/r:447 at n:382). */
 const corridorResiduals: Record<string, string> = {
   'r:259/r:694': 'Trappentreustraße shares no node; the blocks touch near n:257.',
+  // TASK-131: pairs that keep their OSM nodes.
+  'r:1030/r:687':
+    'Trappentreutunnel, set apart by pushOverlapping (no shared node), whose push eases to zero at its end at n:194 (2.2 m2).',
+  'r:1264/r:1265':
+    'Barthstraße, the 11.4 m inner road of n:2 and n:993: each direction continues r:3/r:4 across n:2 along its own heading ray (T35.1, 0.01 m2).',
+};
+/** TASK-131: the Sindelfingen corridor pairs left, and why. Benzstraße's r:868/r:869 and
+ * r:903/r:904 no longer overlap since 797678e; the A 81's unnamed carriageways (one ref) now pair
+ * and pushOverlapping sets them apart, eased to zero toward their ends. */
+const sindelfingenResiduals: Record<string, string> = {
+  'r:464/r:543': 'The push eases to zero at n:542, where r:543 gains a lane (16.5 m2).',
+  'r:1252/r:545':
+    'The network continuation offset moves the two-lane r:545 1.75 m toward the median at n:1251; the importer push cannot act at a node (6.25 m2).',
 };
 
 test.each(tierCities(auditCities))(
@@ -272,9 +284,7 @@ test.each(tierCities(auditCities))(
       name === 'munich'
         ? Object.keys(corridorResiduals).sort()
         : name === 'sindelfingen'
-          ? // TASK-131: two unnamed carriageway pairs that no longer meet one merged node, and that
-            // separateDual (pairs between the same two nodes) does not push: named, not fixed.
-            ['r:868/r:869', 'r:903/r:904']
+          ? Object.keys(sindelfingenResiduals).sort()
           : [],
     );
     const others = overlaps.filter((o) => !o.corridor);
@@ -470,41 +480,62 @@ cityTest(
   () => {
     const { city, net } = load('munich');
     // Pushed apart (TASK-087), or set side by side where they converge (TASK-089): no two lanes
-    // cross within 40 m.
+    // cross within 40 m. TASK-131 keeps OSM nodes: main's merged n:949, n:1181 and n:382 are the
+    // groups of n:366 and n:417, of n:474 and n:1353, and of n:384 and n:396; at n:721, n:104,
+    // n:774, n:446 and n:823 each carriageway crosses its own group member (n:1361, n:1307,
+    // n:1365, n:1349, n:478 and n:1369). At n:474 Barthstraße's inner links cross the end of the
+    // acute r:728, a recorded road-body crossing (`importedRoadBodyOverlaps`).
+    const recorded = Object.keys(importedRoadBodyOverlaps['munich-donnersberger']!);
     for (const id of [
       'n:324',
       'n:721',
+      'n:1361',
       'n:104',
+      'n:1307',
       'n:774',
+      'n:1365',
       'n:446',
-      'n:949',
+      'n:1349',
+      'n:366',
+      'n:417',
       'n:823',
-      'n:1181',
-      'n:382',
+      'n:478',
+      'n:1369',
+      'n:474',
+      'n:1353',
+      'n:384',
+      'n:396',
     ])
-      expect(crossingsNear(net, id), id).toEqual([]);
-    // n:1181: r:729 lies beside r:984, not on it, and no longer runs under r:476's exit crossing
-    // (TASK-088's R3-1 finding). TASK-089: the two and r:476 are one approach, set side by side,
-    // each cut by its own edges; r:729 is cut no farther out than r:984 (1.75 m nearer the node),
-    // and the exit crossing shows all its stripes, as does r:984's (r:729's lies under its turn
-    // into r:476, none on main either).
-    const node = net.nodes[net.index.node.get('n:1181')!]!;
-    const incident = net.roads.filter((r) => r.from === node.idx || r.to === node.idx);
-    const setback = (id: string) => node.setbacks[incident.findIndex((r) => r.id === id)]!;
-    expect(setback('r:729')).toBeLessThan(setback('r:984') + 0.5);
-    for (const [id, stripes] of [
-      ['r:476', 8],
-      ['r:984', 8],
+      expect(
+        crossingsNear(net, id).filter((c) => !recorded.includes(c)),
+        id,
+      ).toEqual([]);
+    const group = (id: string) => net.nodes[net.index.node.get(id as `n:${number}`)!]!.group;
+    expect(group('n:1353')).toBe(group('n:474'));
+    // n:1181: r:729 lay beside r:984 there, set side by side as one approach with r:476 (TASK-088,
+    // TASK-089). TASK-131: main's r:729 is r:728 (way 151912581), which ends at n:474, and r:984
+    // ends at n:1353, 18 m apart: two approaches on their OSM lines (offsets 0, no longer -3.5 m
+    // and 1.75 m), so their setbacks are no longer compared. The group's exit r:476 and entry
+    // r:984 keep all their crossing stripes.
+    for (const [id, at, stripes] of [
+      ['r:476', 'n:474', 8],
+      ['r:984', 'n:1353', 8],
     ] as const) {
       const road = net.roads[net.index.road.get(id)!]!;
-      expect(crossingStripes(net, road, road.to === node.idx).length, id).toBe(stripes);
+      const node = net.index.node.get(at)!;
+      expect(crossingStripes(net, road, road.to === node).length, id).toBe(stripes);
     }
-    expect(city.roads['r:729']!.lateralOffsetM).toBe(-3.5);
-    expect(city.roads['r:984']!.lateralOffsetM).toBe(1.75);
-    expect(laneOverlaps(city, net, false).filter((o) => /r:(729|984)\b/.test(o.roads))).toEqual([]);
-    // TASK-089: the west carriageways r:981/r:1358 meet n:1181 from one side only; the network sets
-    // them side by side there, so they no longer overlap under the polygon either.
-    expect(laneOverlaps(city, net, false).map((o) => o.roads)).not.toContain('r:1358/r:981');
+    expect(city.roads['r:728']!.lateralOffsetM).toBe(0);
+    expect(city.roads['r:984']!.lateralOffsetM).toBe(0);
+    // r:728 overlaps only the inner links it crosses at n:474 (above), never r:984.
+    expect(
+      laneOverlaps(city, net, false)
+        .filter((o) => /r:(728|984)\b/.test(o.roads))
+        .map((o) => o.roads),
+    ).toEqual(['r:1355/r:728', 'r:1356/r:728']);
+    // TASK-089: the west carriageways meet n:1181 from one side only and do not overlap under the
+    // polygon. TASK-131: they are r:981 into n:474 and r:1354 out of n:1353 (main's r:981/r:1358).
+    expect(laneOverlaps(city, net, false).map((o) => o.roads)).not.toContain('r:1354/r:981');
     // B42: Arnulfstraße west of n:138 is one corridor arm pointing along its carriageways' mean
     // direction, 60 degrees from Donnersbergerstraße, so Donnersbergerstraße is not bent.
     for (const id of ['r:140', 'r:141'])
@@ -523,50 +554,67 @@ function medianEdge(net: CompiledCity, id: string, node: number) {
   return road.to === node ? [...side].reverse() : side;
 }
 
+// TASK-131 rewrote T39.6 and T39.7: they pinned TASK-099/TASK-095's attachment (B49, B54), which
+// pulled the carriageways of a real median together to 0.5 m. The attachment is deleted
+// (decision 2: where the real gap leaves space between the lane blocks, the median shows as it is,
+// with no divider), so they check that the carriageways keep their OSM lines with the median open.
 cityTest(
-  'T39.6: n:247, Landsberger r:961 and r:1276 meet the junction side by side with the median (B49)',
+  'T39.6: n:247, Landsberger r:961 and r:1276 meet the junction on their OSM lines (B49 amended)',
   () => {
     const { city, net } = load('munich');
-    // r:961 continues r:1368, r:1276's pair, across n:936: a third way of their corridor.
+    // r:961 continues r:1366, r:1276's pair, across n:936: a third way of their corridor.
     expect(city.roads['r:961']!.corridorId).toBe(city.roads['r:1276']!.corridorId);
     expect(
       laneOverlaps(city, net).filter(
         (o) => /\br:961\b/.test(o.roads) && /\br:1276\b/.test(o.roads),
       ),
     ).toEqual([]);
-    // No lane of the two crosses another within 40 m (main: r:1276#0 over r:961#0). The west
-    // arm's r:248 and r:364, which a ramp beside them keeps as drawn, cross as on main.
-    expect(crossingsNear(net, 'n:247').filter((c) => /r:(961|1276)#/.test(c))).toEqual([]);
-    // The retained node is n:247 (formerly consolidated into n:967). Its facing edges stay
-    // within 0.15 m of the 0.5 m median through 40 m, tighter than the former ±0.5 m gate.
-    const node = net.index.node.get('n:247')!;
+    // Main's n:247 (formerly n:967) is the four-node group around the Donnersberger bridge: r:961
+    // enters it at n:362 and r:1276 leaves it at n:249, 23 m apart. No lane of the two crosses
+    // another within 40 m of either.
+    const group = (id: string) => net.nodes[net.index.node.get(id as `n:${number}`)!]!.group;
+    expect(group('n:249')).toBe(group('n:362'));
+    for (const id of ['n:362', 'n:249'])
+      expect(
+        crossingsNear(net, id).filter((c) => /r:(961|1276)#/.test(c)),
+        id,
+      ).toEqual([]);
+    for (const id of ['r:961', 'r:1276'] as const) {
+      expect(city.roads[id]!.lateralOffsetM).toBe(0);
+      expect(city.roads[id]!.provenance.inferred).not.toContain('separated');
+    }
+    // The facing edges, from r:961's cut at n:362 out to 40 m: the OSM median, 11.7 m narrowing
+    // to 8 m (main attached them at 0.5 m).
+    const node = net.index.node.get('n:362')!;
     const [a, b] = [medianEdge(net, 'r:961', node), medianEdge(net, 'r:1276', node)];
     const lengths = cumulativeLengths(a);
-    const start = nearestOnPolyline(a, b[0]!).along + 0.5;
-    for (const d of [0, 10, 20, 40]) {
-      const gap = nearestOnPolyline(b, pointAtDistance(a, lengths, start + d)).away;
-      expect(gap).toBeGreaterThanOrEqual(0.35);
-      expect(gap).toBeLessThanOrEqual(0.65);
-    }
+    const start = nearestOnPolyline(a, b[0]!).along;
+    for (const [d, gap] of [
+      [0, 11.75],
+      [10, 10.52],
+      [20, 9.67],
+      [40, 7.98],
+    ] as const)
+      expect(nearestOnPolyline(b, pointAtDistance(a, lengths, start + d)).away).toBeCloseTo(gap, 1);
   },
   120_000,
 );
 
 cityTest(
-  'T39.7: Landsberger between n:721 and n:328 keeps no median void under the gap limit (B45, B54)',
+  'T39.7: Landsberger between n:721 and n:328 keeps its real median open (B45, B54 amended)',
   () => {
-    const { net } = load('munich');
-    // Facing edges of r:724 and r:1279 every metre: attached at the 0.5 m median all the way
-    // (TASK-095: closed under the 15 m gap limit; TASK-093's 3 m left a lens of up to 8.2 m).
+    const { city, net } = load('munich');
+    // Facing edges of r:724 and r:1279 every metre (TASK-095 attached them at the 0.5 m median
+    // under the 15 m gap limit): on their OSM lines they stay 5.9 to 8.6 m apart, no void closed.
     const node = net.index.node.get('n:721')!;
     const [a, b] = [medianEdge(net, 'r:724', node), medianEdge(net, 'r:1279', node)];
     const lengths = cumulativeLengths(a);
-    const open: number[] = [];
-    for (let s = 0; s <= lengths.at(-1)!; s += 1) {
-      const gap = nearestOnPolyline(b, pointAtDistance(a, lengths, s)).away;
-      if (gap > 0.75 && gap < ATTACH_GAP_M) open.push(s);
-    }
-    expect(open).toEqual([]);
+    const gaps: number[] = [];
+    for (let s = 0; s <= lengths.at(-1)!; s += 1)
+      gaps.push(nearestOnPolyline(b, pointAtDistance(a, lengths, s)).away);
+    expect(Math.min(...gaps)).toBeGreaterThan(5.5);
+    expect(Math.max(...gaps)).toBeLessThan(9);
+    for (const id of ['r:724', 'r:1279'] as const) expect(city.roads[id]!.lateralOffsetM).toBe(0);
   },
   120_000,
 );
@@ -577,10 +625,13 @@ cityTest(
     const { net } = load('munich');
     // n:212: the one-way r:213 into r:1172; n:55: r:192 into the one-way r:57. Each lane line,
     // extended to the node, passes it at the same offset within 0.1 m; the shifted road is held
-    // to its cut, so its lane leaves the cut along its own reference line.
-    for (const [id, from, to, shifted] of [
-      ['n:212', 'r:213', 'r:1172', 'r:213'],
-      ['n:55', 'r:192', 'r:57', 'r:57'],
+    // to its cut, so its lane leaves the cut along its own reference line. TASK-131: r:213's
+    // 12-degree OSM vertex 6.9 m from n:212 is no longer filleted (smoothing stays 30 m clear of
+    // nodes), so its last segment meets the 4.8 m r:1172 11.8 degrees apart and the extended lane
+    // lines pass the node 0.115 m apart (0.1 -> 0.12 there).
+    for (const [id, from, to, shifted, bound] of [
+      ['n:212', 'r:213', 'r:1172', 'r:213', 0.12],
+      ['n:55', 'r:192', 'r:57', 'r:57', 0.1],
     ] as const) {
       const node = net.nodes[net.index.node.get(id)!]!;
       const lane = (road: string) => net.lanes[net.roads[net.index.road.get(road)!]!.lanes[0]!]!;
@@ -593,7 +644,7 @@ cityTest(
       expect(
         Math.abs(offset(la.polyline.at(-1)!, ha) - offset(lb.polyline[0]!, hb)),
         id,
-      ).toBeLessThan(0.1);
+      ).toBeLessThan(bound);
       const road = net.roads[net.index.road.get(shifted)!]!;
       const atEnd = road.to === node.idx;
       const profile = atEnd ? road.endShift : road.startShift;

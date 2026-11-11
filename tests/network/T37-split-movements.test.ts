@@ -172,10 +172,12 @@ cityTest(
     ]);
     // Already complete before TASK-085: r:730's single lane feeds every lane of r:968, and under
     // the unequal-count slice r:1275 lines up with r:968's right lanes; r:968#1 lines up with none.
+    // TASK-131 keeps OSM nodes: n:201 now leads into way 4513904 (r:203, three lanes, 29 m to
+    // n:202, where r:968 widens to four), so r:730 and r:1275 fill its three lanes one to one.
     expect(at('n:201')).toEqual([
-      ['r:730#0>r:968#0', 'merge'],
-      ['r:1275#0>r:968#2', 'merge'],
-      ['r:1275#1>r:968#3', 'merge'],
+      ['r:730#0>r:203#0', 'merge'],
+      ['r:1275#0>r:203#1', 'merge'],
+      ['r:1275#1>r:203#2', 'merge'],
     ]);
     // r:687#2 lines up with r:416#2, but OSM turn:lanes sends it only to r:196.
     expect(at('n:194')).toEqual([
@@ -196,15 +198,18 @@ cityTest(
 // away from the other, so at n:104, n:324, n:446, n:721, n:774 and n:823 the through road is
 // classified through again (its curb lanes gain the through pairing; e.g. r:1276#0>r:1277#0)
 // and turns between a corridor's two carriageways are u-turns, not lefts.
+// TASK-131 keeps every OSM node (no merge): the nodes main merged into one junction are each a
+// node of their own, many of them TASK-071 continuations, so Munich 72 nodes, 166 pairs, 1356
+// movements -> 125, 273, 1646 and Sindelfingen 59, 116, 1174 -> 118, 251, 1383.
 test.each(
   tierCities([
-    ['Munich', 72, 166, 1, 1356], // TASK-101: retained access boundaries and final signal geometry.
+    ['Munich', 125, 273, 1, 1646], // TASK-101: retained access boundaries and final signal geometry.
     // TASK-087: Sindelfingen's n:580 becomes a continuation node (r:585/r:586 runs on into the
     // unnamed pair r:582/r:583, now side by side): its two lined-up pairs are added, r:586>r:582
     // is classified through, and the turn r:583#0>r:582#0 between the pair's carriageways goes.
     // TASK-089: unchanged (the network keeps every movement where it splits converging nodes).
     // TASK-101 retains the junctions beside short access boundaries.
-    ['Sindelfingen', 59, 116, 0, 1174],
+    ['Sindelfingen', 118, 251, 0, 1383],
   ] as const),
 )(
   'T37: %s gives every lined-up trunk and branch lane a movement unless banned',
@@ -222,6 +227,17 @@ test.each(
   },
   60_000,
 );
+
+/** TASK-131 keeps OSM geometry (realignRoads deleted, the merge gone): a two-way street forking
+ * into two two-way streets at an acute OSM angle is a TASK-071 split node, and the merge into
+ * one fork crosses the diverge into the other, as on the road. Munich n:235 (Schulstraße, arms
+ * r:1113 and r:236 26 degrees apart), Sindelfingen n:27 (service, r:28 and r:697 27 degrees
+ * apart) and n:68 (r:69 and r:245 19 degrees apart, the B55 case). */
+const acuteForks = [
+  'r:1113#0>r:1115#0 x r:1116#0>r:237#0',
+  'r:697#0>r:30#0 x r:31#0>r:29#0',
+  'r:73#0>r:245#0 x r:69#0>r:72#0',
+];
 
 test.each(tierCities(['Munich', 'Sindelfingen'] as const))(
   'T37: %s lined-up movements do not cross each other at a node',
@@ -244,7 +260,7 @@ test.each(tierCities(['Munich', 'Sindelfingen'] as const))(
           );
           if (cross) crossings.push(`${a.id} x ${b.id}`);
         }
-    expect(crossings).toEqual([]);
+    expect(crossings.filter((c) => !acuteForks.includes(c))).toEqual([]);
   },
   60_000,
 );

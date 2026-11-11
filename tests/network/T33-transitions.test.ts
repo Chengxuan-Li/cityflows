@@ -175,16 +175,16 @@ test('T33.2: transition lanes never cross themselves and keep a continuous headi
     // r:1308#0 folds within its first 0.2 m at n:104 (its far end from the n:643 widening), as
     // on main: the offset of a sharp source corner, not a transition.
     // TASK-131 keeps OSM geometry: smoothing leaves the vertices within 30 m of a node, so lanes
-    // offset from sharp source corners fold there. r:728#0 (Landsberger StraÃŸe, -3.5 m, the OSM
+    // offset from sharp source corners fold there. r:728#0 (Landsberger Straße, -3.5 m, the OSM
     // curve into n:474 with vertices 2 m apart) backs up 0.34 m and 0.15 m 18 to 20 m in;
-    // r:256#0 (TrappentreustraÃŸe, 1.5 m start offset, a corner 19.8 m from n:207) repeats a
+    // r:256#0 (Trappentreustraße, 1.5 m start offset, a corner 19.8 m from n:207) repeats a
     // vertex at 16.5 m, a zero-length step rather than a visible fold.
     const folds = ['r:1308#0', 'r:728#0', 'r:256#0'];
     expect(selfIntersections(net, transitions).filter((id) => !folds.includes(id))).toEqual([]);
     // TASK-131 keeps OSM geometry: tapers and shifts squeezed into roads between OSM nodes main
-    // merged into one turn more than 5 degrees per vertex: WestendstraÃŸe r:1284 (16.6 m, n:841 to
-    // n:1282, a 10.7 m taper), HansastraÃŸe r:1287 (8.2 m, n:1285 to n:1286, 5.3 m) and
-    // ArnulfstraÃŸe r:700 (8 m, n:52 to n:695, jg:10778's inner road, a 1.75 m end shift).
+    // merged into one turn more than 5 degrees per vertex: Westendstraße r:1284 (16.6 m, n:841 to
+    // n:1282, a 10.7 m taper), Hansastraße r:1287 (8.2 m, n:1285 to n:1286, 5.3 m) and
+    // Arnulfstraße r:700 (8 m, n:52 to n:695, jg:10778's inner road, a 1.75 m end shift).
     const squeezed = ['r:1284#2', 'r:1287#1', 'r:700#0', 'r:700#1'];
     expect(
       kinks(net, city, transitions).filter((id) => !squeezed.includes(id.split('@')[0]!)),

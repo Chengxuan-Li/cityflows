@@ -23,7 +23,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const { lanes, movements, rail, walk } = result.compiled;
     // Lead (TASK-126 merge): main f34639b's lanes/movements (TASK-124 portals moved lane connectors).
     // TASK-131 keeps OSM geometry (no node merges, junction groups): lanes and movements no
-    // longer equal main's (Munich 56bb20f0â€¦, Sindelfingen 52c6d9ddâ€¦).
+    // longer equal main's (Munich 56bb20f0…, Sindelfingen 52c6d9dd…).
     expect(createHash('sha256').update(JSON.stringify({ lanes, movements })).digest('hex')).toBe(
       name.startsWith('munich')
         ? 'cf3cc838656b87e943c9d88211a6787afc6c1a78dd7992a16feb1f4581f97919'

@@ -263,7 +263,7 @@ unitTest.each([
   ['downtown', 49],
   ['highway', 23], // TASK-101 short access boundaries; TASK-131 short roads kept.
   ['suburb', 7],
-  // TASK-101 restricted segments; TASK-131 short roads kept, and BenzstraÃŸe r:1065 is short since
+  // TASK-101 restricted segments; TASK-131 short roads kept, and Benzstraße r:1065 is short since
   // its split n:867 (merged on main) is a junction with a 10 m setback.
   ['sindelfingen-a81', 78],
 ] as const)('%s stays within its import warning baseline', (name, baseline) => {

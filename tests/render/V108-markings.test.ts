@@ -324,7 +324,7 @@ unitTest('V108: chevron bands point upstream and their entire width stays inside
   }
 });
 
-// TASK-131 keeps OSM geometry: Sindelfingen's BenzstraÃŸe r:137 is an 11 m road between n:134 and
+// TASK-131 keeps OSM geometry: Sindelfingen's Benzstraße r:137 is an 11 m road between n:134 and
 // n:136 (one node on main); its 2-to-1 lane drop tapers within those 11 m and the lane-ending
 // arrow's tip stands 0.52 m past the taper edge.
 const offSurfaceArrows: Partial<Record<(typeof auditCities)[number], string[]>> = {

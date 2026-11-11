@@ -1,7 +1,7 @@
 import { withoutLotAisles } from '../without-lot-aisles';
 import { readFileSync } from 'node:fs';
 import { expect, vi } from 'vitest';
-import { directionPairs, pairGapAudit, unrelatedOverlaps } from '../../bench/geometry-audit';
+import { unrelatedOverlaps } from '../../bench/geometry-audit';
 import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
@@ -83,15 +83,19 @@ cityTest(
 
     const city = munich();
     const roads = city.roads;
-    // Marsstraße: opposite one-way ways 51775137 and 69811613 drawn on one centerline.
-    expect(roads['r:368']!.corridorId).toBe('corridor:51775137+69811613');
-    expect(roads['r:480']!.corridorId).toBe('corridor:51775137+69811613');
+    // Marsstraße's opposite one-way ways 51775137 and 69811613 were one centerline only because
+    // the merge joined their far ends. TASK-131 keeps OSM nodes: r:368 runs to n:1369 and r:480
+    // from n:478 (15 m apart) and they leave n:366 53 degrees apart, a wedge and not a pair.
+    expect(roads['r:368']!.corridorId).toBeNull();
+    expect(roads['r:480']!.corridorId).toBeNull();
     // Arnulfstraße west of n:138: one-way carriageways about 15 m apart.
     expect(roads['r:715']!.corridorId).toBe('corridor:151784477+316052825');
     expect(roads['r:958']!.corridorId).toBe('corridor:151784477+316052825');
     expect(roads['r:715']!.provenance.inferred).not.toContain('separated');
     // Arnulfstraße's way 54200280 pairs with 57832630 on two sections: numbered like street groups.
-    expect(roads['r:395']!.corridorId).toBe('corridor:54200280+57832630');
+    // TASK-131: with OSM nodes kept, the first section's 54200280 carriageway is r:1350 (r:395,
+    // its 30 m piece between n:150 and n:1349, has no partner).
+    expect(roads['r:1350']!.corridorId).toBe('corridor:54200280+57832630');
     expect(roads['r:451']!.corridorId).toBe('corridor:54200280+57832630/1');
 
     const ids = (c: City) => Object.values(c.roads).map((r) => [r.id, r.corridorId]);
@@ -130,25 +134,31 @@ cityTest(
       else kinds.pushed++;
     }
     console.info('T36.1 Munich corridors', kinds);
-    // TASK-101: retained truck-delivery boundaries make r:392/r:402, r:406/r:1346 and
-    // r:451/r:1342 pushed rather than coincident; retained r:1322/r:1350 adds one pair (7-3+1).
-    expect(kinds.coincident).toBe(5);
+    // TASK-131 keeps OSM nodes: main's five coincident pairs ran between the same two nodes only
+    // because the merge joined their ends (5 -> 0).
+    expect(kinds.coincident).toBe(0);
     expect(kinds.dual).toBeGreaterThan(0);
-    // TASK-087 (T39): three dual carriageways pushed apart (Landsberger r:325/r:941, r:327/r:1330,
-    // r:724/r:1279) and the same-direction Landsberger pair r:729/r:984. TASK-089: two more whose
-    // continuation across a node the network now sets side by side (Landsberger r:1277/r:1362 at
-    // n:774, Arnulfstraße r:1354/r:447 at n:382).
-    expect(kinds.pushed).toBe(5);
-    expect(kinds.sameDirection).toBe(1);
-    // TASK-093: Landsberger r:961 (beside r:1276 into n:967), r:1044 and r:1308, Marsstraße r:944
-    // and r:698 continue their pair's carriageway.
+    // TASK-131: main's pushed pairs (TASK-087's Landsberger r:325/r:941, r:327/r:1330,
+    // r:724/r:1279 and TASK-089's r:1277/r:1362, r:1354/r:447) were close only after the merge
+    // and the median pull; on their OSM lines their medians are 9 m or more, so they stay dual.
+    // The one pushed pair is Trappentreutunnel r:687/r:1030 (10.1 m apart for 10.5 m of lanes,
+    // pushOverlapping) (5 -> 1). The same-direction Landsberger pair r:729/r:984 met at main's
+    // merged n:1181; kept, r:728 and r:984 end at n:474 and n:1353 (1 -> 0).
+    expect(kinds.pushed).toBe(1);
+    expect(kinds.sameDirection).toBe(0);
+    // TASK-093: Landsberger r:961 (beside r:1276 and r:1366 into n:362), r:978 (r:476/r:1308) and
+    // r:644 (r:922/r:964), Marsstraße r:944 (r:845/r:1370) and Arnulfstraße r:654 (r:680/r:698)
+    // continue their pair's carriageway.
     expect(kinds.thirdWay).toBe(5);
   },
   120_000,
 );
 
+// TASK-131 rewrote T36.2: it pinned separateCoincident on Marsstraße r:368/r:480, a pair the merge
+// had made coincident (offset 3.75 m, a 0.5 m median) and TASK-099's attached joint n:652. With
+// OSM nodes kept they are a real divided pair (a wedge out of n:366): drawn where OSM draws them.
 cityTest(
-  'T36.2: Marsstraße becomes a divided pair with a 0.5 m median, topology unchanged',
+  'T36.2: Marsstraße keeps its OSM lines, topology unchanged and no node moved',
   () => {
     const city = munich();
     const before = observed.beforeSeparation!;
@@ -160,35 +170,22 @@ cityTest(
         original.to,
         original.provenance.osmIds,
       ]);
-      expect(original.lateralOffsetM).toBe(0);
-      // Half its two 3.5 m lanes plus half the median, to the right of travel.
-      expect(road.lateralOffsetM).toBe(3.75);
-      expect(road.provenance.inferred).toContain('separated');
+      expect(road.lateralOffsetM).toBe(0);
+      expect(road.provenance.inferred).not.toContain('separated');
+      expect(road.centerline).toEqual(original.centerline);
     }
-    expect(a.centerline).toEqual(before.roads['r:368']!.centerline);
-    expect(b.centerline).toEqual([...a.centerline].reverse());
+    expect(a.from).toBe(b.to);
+    expect(a.to).not.toBe(b.from);
     expect(Object.keys(city.roads)).toEqual(Object.keys(before.roads));
-    // TASK-099: a joint of an attached carriageway moves with it (n:652, 2.24 m).
-    const joint = (id: string) => {
-      const incident = Object.values(city.roads).filter((r) => r.from === id || r.to === id);
-      return (
-        incident.length === 2 && incident.every((r) => r.provenance.inferred!.includes('attached'))
-      );
-    };
+    // TASK-131: attachCarriageways is deleted, and no later pass moves a node.
     for (const node of Object.values(city.nodes))
-      if (!joint(node.id)) expect(node.pos).toEqual(before.nodes[node.id]!.pos);
+      expect(node.pos).toEqual(before.nodes[node.id]!.pos);
 
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    const net = result.compiled;
-    const pair = directionPairs(city, net).find(({ a: x, b: y }) =>
-      [x.id, y.id].every((id) => id === 'r:368' || id === 'r:480'),
-    )!;
-    // Measure 2: the median edges run 0.5 m apart (7 m overlapping before).
-    const gap = pairGapAudit(net, pair.a, pair.b, pair.kind, [0, 0]);
-    expect(gap.signedM).toBeCloseTo(0.5, 2);
-    expect(gap.maxM).toBeCloseTo(0.5, 2);
-    expect(unrelatedOverlaps(city, net).filter((o) => /r:(368|480)\b/.test(o.roads))).toEqual([]);
+    expect(
+      unrelatedOverlaps(city, result.compiled).filter((o) => /r:(368|480)\b/.test(o.roads)),
+    ).toEqual([]);
   },
   120_000,
 );

@@ -15,7 +15,7 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // TASK-119 re-pins parking-place removal and owner links; T55 separately pins main's vehicle
 // geometry. No original entity is reconstructed by the aisle-stripping oracle.
 // TASK-131 keeps OSM geometry (no node merges, junction groups): the aisle-free networks no
-// longer equal main's (main: Munich 33bfd6b9â€¦/3c6dfcc5â€¦, Sindelfingen b72831fbâ€¦/c9e05f99â€¦).
+// longer equal main's (main: Munich 33bfd6b9…/3c6dfcc5…, Sindelfingen b72831fb…/c9e05f99…).
 const baseline = {
   'munich-donnersberger': [
     'ec85fdc1c23d96eb2271b32e9c63edf48179e545867e78aa811ddd744082cd94',

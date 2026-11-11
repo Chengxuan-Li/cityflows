@@ -18,7 +18,7 @@ import { test } from 'vitest';
 // re-pinned at the merge after TASK-102/104 (lot aisles); equal to main fc5bf2f's routes.
 // TASK-119 removes parking-place connectors, changing the sampled pairs; routing itself is unchanged.
 // TASK-131 keeps OSM geometry (no node merges, junction groups): both networks, connectors and
-// samples move, so the routes no longer equal main's (Munich b7df6e01â€¦, Sindelfingen 87e2a869â€¦).
+// samples move, so the routes no longer equal main's (Munich b7df6e01…, Sindelfingen 87e2a869…).
 const hashes = {
   grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',

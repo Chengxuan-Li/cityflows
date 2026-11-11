@@ -172,7 +172,7 @@ unitTest('T28.2: no guides without a major road or at a signal', () => {
   ).toEqual(['centre', 'divider', 'divider', 'edge', 'edge']);
 });
 
-// TASK-131 keeps OSM geometry: MarsstraÃŸe's 2-lane split at n:478 now follows jg:10807's 5.1 m
+// TASK-131 keeps OSM geometry: Marsstraße's 2-lane split at n:478 now follows jg:10807's 5.1 m
 // inner road r:846, and each lane turns both ways (r:480 and r:933); the two dividers start at
 // the same point and run 0.06 m apart for 0.5 m, which counts as one crossing.
 const sharedDividerStarts: Record<string, number> = { 'n:478': 1 };

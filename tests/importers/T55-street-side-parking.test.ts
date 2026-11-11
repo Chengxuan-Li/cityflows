@@ -388,7 +388,7 @@ test.each(
   };
   console.info('T55 census', name, JSON.stringify(counts));
   // TASK-131 keeps OSM geometry (no node merges, junction groups): the vehicle network no longer
-  // equals main's (main: Munich 51b6cf03â€¦, Sindelfingen ac619150â€¦).
+  // equals main's (main: Munich 51b6cf03…, Sindelfingen ac619150…).
   expect(vehicleHash(net)).toBe(
     name.startsWith('munich')
       ? '4340d6433b3dc7e2c8523d1c1c0da6577afe30ca3676447ec1d936603a1c9344'
