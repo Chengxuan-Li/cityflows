@@ -78,13 +78,15 @@ export function assignCorridors(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
       const fraction = shorter.within1 / shorter.samples;
       if (fraction >= 0.8) coincident.push({ pair: [a, b], score: fraction });
       else if (
-        (a.road.name !== null
-          ? a.road.name === b.road.name
-          : b.road.name === null &&
-            a.road.roadClass === b.road.roadClass &&
+        (a.road.name !== null && a.road.name === b.road.name
+          ? true
+          : a.road.roadClass === b.road.roadClass &&
             a.wayId !== b.wayId &&
-            a.road.from === b.road.to &&
-            a.road.to === b.road.from) &&
+            ((a.road.name === null &&
+              b.road.name === null &&
+              a.road.from === b.road.to &&
+              a.road.to === b.road.from) ||
+              sameRef(a, b))) &&
         Math.min(ab.within25, ba.within25) >= 50
       )
         dual.push({ pair: [a, b], score: Math.min(ab.within25, ba.within25) });
@@ -131,7 +133,13 @@ export function assignCorridors(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
     paired.add(loose);
     thirdWay.set(loose.road, id!);
   }
-  const unnamed = duals.filter(([a]) => a.road.name === null);
+  const unnamed = duals.filter(
+    ([a, b]) =>
+      a.road.name === null &&
+      b.road.name === null &&
+      a.road.from === b.road.to &&
+      a.road.to === b.road.from,
+  );
   // TASK-089: a pair pushable only because its continuation converges with its own other
   // carriageway joins its corridor after the realignment (`separateDual`), which bends a
   // corridor's carriageways as one arm: as two arms there, the realignment and the turns it
@@ -145,6 +153,13 @@ export function assignCorridors(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
       }
   return pairs;
 }
+
+const refOf = ({ attributes }: OsmRoad) =>
+  (JSON.parse(attributes) as string[][]).find(([key]) => key === 'ref')?.[1];
+/** TASK-131: one road's carriageways by their `ref` where at most one is named (Sindelfingen's
+ * A 81 `r:464`/`r:543`; Munich's Trappentreutunnel `r:687` beside the unnamed B 2R `r:1030`). */
+const sameRef = (a: OsmRoad, b: OsmRoad) =>
+  (a.road.name === null || b.road.name === null) && refOf(a) !== undefined && refOf(a) === refOf(b);
 
 /**
  * Same-direction coincident pairs (TASK-087): two one-way roads of one name and grade from the
@@ -254,6 +269,29 @@ export function separateCoincident(city: City, pairs: [OsmRoad, OsmRoad][]): voi
         inferred: [...road.provenance.inferred!, 'separated'],
       };
   }
+}
+
+/** The mean of `values` (at stations `lengths`) over `window` about each point, a window
+ * shrinking to nothing at the ends, by the trapezoid integral from station 0. */
+function movingMean(values: number[], lengths: Float64Array, window: number): number[] {
+  const total = lengths[lengths.length - 1]!;
+  const prefix = [0];
+  for (let i = 1; i < values.length; i++)
+    prefix.push(
+      prefix[i - 1]! + ((values[i - 1]! + values[i]!) / 2) * (lengths[i]! - lengths[i - 1]!),
+    );
+  const integral = (s: number) => {
+    let i = 1;
+    while (i < values.length - 1 && lengths[i]! < s) i++;
+    const t = (s - lengths[i - 1]!) / (lengths[i]! - lengths[i - 1]! || 1);
+    const value = values[i - 1]! + (values[i]! - values[i - 1]!) * t;
+    return prefix[i - 1]! + ((values[i - 1]! + value) / 2) * (s - lengths[i - 1]!);
+  };
+  return values.map((v, i) => {
+    const s = lengths[i]!;
+    const half = Math.min(window / 2, s, total - s);
+    return half > 1e-9 ? (integral(s + half) - integral(s - half)) / (2 * half) : v;
+  });
 }
 
 /** Dual-carriageway corridors of two zero-offset roads between the same two nodes. */
@@ -401,7 +439,6 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
     const points = resample(a.road.centerline, SAMPLE_M);
     const normals = vertexNormals(points);
     const lengths = cumulativeLengths(points);
-    const total = lengths.at(-1)!;
     const nearest = points.map((p) => nearestOnPolyline(b.road.centerline, p));
     // The nearest points must run back along b; a pair that folds the map stays as drawn.
     if (nearest.some((n, i) => i > 0 && n.along > nearest[i - 1]!.along + 1e-9)) continue;
@@ -420,30 +457,7 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
       const shortfall = gaps.map((gap) => ((clearance - gap) * shares[k]!) / clearance);
       const needed = shortfall.map((value) => Math.max(0, value));
       const pull = shortfall.map((value, i) => (closing[i] ? Math.min(0, value) : 0));
-      // The mean of `values` over `window` about each point (a window shrinking to nothing at the
-      // nodes), by the trapezoid integral from station 0.
-      const mean = (values: number[], window: number) => {
-        const prefix = [0];
-        for (let i = 1; i <= points.length; i++)
-          prefix.push(
-            prefix[i - 1]! +
-              (i < points.length
-                ? ((values[i - 1]! + values[i]!) / 2) * (lengths[i]! - lengths[i - 1]!)
-                : 0),
-          );
-        const integral = (s: number) => {
-          let i = 1;
-          while (i < points.length - 1 && lengths[i]! < s) i++;
-          const t = (s - lengths[i - 1]!) / (lengths[i]! - lengths[i - 1]! || 1);
-          const value = values[i - 1]! + (values[i]! - values[i - 1]!) * t;
-          return prefix[i - 1]! + ((values[i - 1]! + value) / 2) * (s - lengths[i - 1]!);
-        };
-        return values.map((v, i) => {
-          const s = lengths[i]!;
-          const half = Math.min(window / 2, s, total - s);
-          return half > 1e-9 ? (integral(s + half) - integral(s - half)) / (2 * half) : v;
-        });
-      };
+      const mean = (values: number[], window: number) => movingMean(values, lengths, window);
       const taper = taperLength(road);
       // With a pull, push and pull ease together by two means over half the taper each, so the
       // lanes keep a continuous curvature where one gives way to the other.
@@ -497,4 +511,95 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
       };
     }
   }
+  pushOverlapping(city, roads);
+}
+
+/**
+ * TASK-131 (owner decision 2): opposite carriageways of one road that share no node (one
+ * corridor, one name, or one class and `ref` with at most one named: Sindelfingen's A 81) and
+ * whose lane blocks overlap or leave less than `MEDIAN_M` are pushed apart there, each block to its
+ * own side of travel by its share of the shortfall, as `separateDual` shares it. The push is a
+ * moving average over the road's taper length and eases to nothing over the taper toward each
+ * end, so no node and no road end moves; elsewhere both keep their OSM lines. A road is measured
+ * against every such opposite road (a carriageway drawn as several ways), on the lines as they
+ * were before any of them moved. Returns the pairs pushed.
+ */
+export function pushOverlapping(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad][] {
+  const side = city.drivingSide === 'right' ? 1 : -1;
+  const street = (a: OsmRoad, b: OsmRoad) =>
+    (!!a.road.corridorId && a.road.corridorId === b.road.corridorId) ||
+    (a.road.name !== null && a.road.name === b.road.name) ||
+    (a.road.roadClass === b.road.roadClass && sameRef(a, b));
+  const oneWay = roads.filter(
+    ({ road }) => road.streetGroupId === null && road.lateralOffsetM === 0,
+  );
+  const boxes = new Map(oneWay.map((source) => [source, boxOf(source.road.centerline)]));
+  const lines = new Map(oneWay.map(({ road }) => [road, road.centerline]));
+  const pushes = new Map<OsmRoad, number[]>();
+  const pairs: [OsmRoad, OsmRoad][] = [];
+  // The push `x` needs against `y`, per point of `points` (x's line every metre).
+  const needed = (x: OsmRoad, y: OsmRoad, points: Vec2[], normals: Vec2[]) => {
+    const share = halfBlock(x.road) + MEDIAN_M / 2;
+    const clearance = share + halfBlock(y.road) + MEDIAN_M / 2;
+    const other = lines.get(y.road)!;
+    const lengthY = cumulativeLengths(other).at(-1)!;
+    return points.map((p, i) => {
+      const q = nearestOnPolyline(other, p);
+      const n = normals[i]!;
+      // Beside and travelling the other way: y's direction within 30 degrees of x's reversed.
+      if (
+        q.along <= 0 ||
+        q.along >= lengthY ||
+        q.direction.y * n.x - q.direction.x * n.y < cosine30
+      )
+        return 0;
+      // Signed gap along x's normal, positive when y lies on the side opposite to the push.
+      const gap = -side * ((q.point.x - p.x) * n.x + (q.point.y - p.y) * n.y);
+      return gap > 0 ? Math.max(0, ((clearance - gap) * share) / clearance) : 0;
+    });
+  };
+  const sampled = new Map(
+    oneWay.map((source) => {
+      const points = resample(source.road.centerline, SAMPLE_M);
+      return [source, { points, normals: vertexNormals(points) }];
+    }),
+  );
+  for (const [i, a] of oneWay.entries())
+    for (const b of oneWay.slice(i + 1)) {
+      if (a.layer !== b.layer || !near(boxes.get(a)!, boxes.get(b)!, 25)) continue;
+      const ends = [b.road.from, b.road.to];
+      if (ends.includes(a.road.from) || ends.includes(a.road.to) || !street(a, b)) continue;
+      const found = ([a, b] as const).map((x, k) => {
+        const y = k === 0 ? b : a;
+        const { points, normals } = sampled.get(x)!;
+        return needed(x, y, points, normals);
+      });
+      // Pushes under 5 cm (blocks touching within rounding) leave both lines as drawn.
+      if (found.every((values) => values.every((v) => v < 0.05))) continue;
+      pairs.push([a, b]);
+      for (const [k, x] of [a, b].entries()) {
+        const before = pushes.get(x);
+        pushes.set(x, before ? before.map((v, j) => Math.max(v, found[k]![j]!)) : found[k]!);
+      }
+    }
+  for (const [source, values] of pushes) {
+    const { road } = source;
+    const { points, normals } = sampled.get(source)!;
+    const lengths = cumulativeLengths(points);
+    const total = lengths.at(-1)!;
+    const taper = taperLength(road);
+    const means = movingMean(values, lengths, taper);
+    road.centerline = points.map((p, i) => {
+      const s = lengths[i]!;
+      const push = side * means[i]! * smoothstep(Math.min(s, total - s) / taper);
+      return { x: p.x + normals[i]!.x * push, y: p.y + normals[i]!.y * push };
+    });
+    road.centerline[0] = city.nodes[road.from]!.pos;
+    road.centerline[road.centerline.length - 1] = city.nodes[road.to]!.pos;
+    road.provenance = {
+      ...road.provenance,
+      inferred: [...road.provenance.inferred!, 'separated'],
+    };
+  }
+  return pairs;
 }

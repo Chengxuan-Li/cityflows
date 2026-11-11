@@ -694,6 +694,22 @@ export const shots: {
     osmLines: 'Sindelfingen service r:13 beside r:442, 94 m, no overlap',
     osm: SINDELFINGEN,
   },
+  // Checkpoint 2 (lead): the A 81 carriageways r:464 and r:543 (different end nodes) pushed apart
+  // only where their blocks overlap: the lane gain at n:542, the widest overlap, the bbox cut.
+  ...(
+    [
+      ['east', [400, 300], 'n:542, where r:543 gains a lane into r:1254'],
+      ['mid', [-15, 494], 'the widest overlap (1.15 m on the OSM lines)'],
+      ['west', [-140, 615], 'the bbox cut ends n:463 and n:541'],
+    ] as [string, [number, number], string][]
+  ).map(([id, centre, label]) => ({
+    id: `T131-p2-a81-${id}`,
+    cases: [],
+    centre,
+    zoom: 5,
+    osmLines: `Sindelfingen A 81 r:464 / r:543, ${label}`,
+    osm: SINDELFINGEN,
+  })),
 ];
 
 /** TASK-131: an extract's drivable OSM ways (the importer's filter) and the nodes where they
