@@ -137,7 +137,7 @@ interface Cluster {
   hint?: Vec2;
 }
 
-export interface TramStopSkip {
+interface Skip {
   osmId: number;
   name: string;
   reason: 'outside' | 'off_track';
@@ -151,7 +151,7 @@ export interface TramStopSkip {
  * on them. Stop positions without a platform get an island generated: 2.5 m wide and 30 m long
  * beside the track, on the side of a platform node or marker, else on the side with more room,
  * or one centre island between two tracks of the same name; clipped clear of every carriageway
- * and of other tram beds. Returns the stop positions it left out.
+ * and of other tram beds. Stop positions it leaves out are noted as infos.
  */
 export function importTramStops(
   city: City,
@@ -160,12 +160,12 @@ export function importTramStops(
   bounds: Bounds,
   compiled: CompiledCity,
   diagnostics: Diagnostic[],
-): TramStopSkip[] {
+): void {
   const rail = city.rail;
   const trams = Object.values(rail?.tracks ?? {})
     .filter((t) => t.kind === 'tram')
     .sort((a, b) => a.id.localeCompare(b.id));
-  if (!rail || !trams.length) return [];
+  if (!rail || !trams.length) return;
   const samples = new Map(trams.map((t) => [t.id, sample(t.line)]));
   const tagged = new Map<string, OsmTags>();
   for (const [type, items] of [
@@ -209,7 +209,7 @@ export function importTramStops(
   }
 
   // Stop positions: on a track, markers beside one, or outside the extract.
-  const skipped: TramStopSkip[] = [];
+  const skipped: Skip[] = [];
   const onTrack: StopNode[] = [],
     markers: StopNode[] = [];
   for (const n of data.node.filter((n) => isTramStopNode(n.tag))) {
@@ -391,7 +391,10 @@ export function importTramStops(
         .map((r) => ({ r, area: areaD(r) }))
         .filter(({ area }) => area >= tramIsland.minAreaM2)
         .sort((x, y) => y.area - x.area)[0];
-      return best ? { ring: [...best.r, best.r[0]!], area: best.area } : null;
+      // Clipper's points carry a `z`; the city stores plain points.
+      return best
+        ? { ring: [...best.r, best.r[0]!].map(({ x, y }) => ({ x, y })), area: best.area }
+        : null;
     };
     const { clearM, widthM } = tramIsland;
     if (c.nodes.length > 1) {
@@ -522,5 +525,4 @@ export function importTramStops(
     noIsland,
     `${noIsland.length} tram stops have no room for a platform island`,
   );
-  return skipped;
 }

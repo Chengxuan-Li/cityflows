@@ -107,16 +107,23 @@ test('T73 tram stops in Munich: both views, the Rail layer carries them, shots',
   const placements = placeTramStops(compiled.compiled, source);
   const expected = tramStopCounts(placements);
   expect(expected.stops).toBe(14);
-  const stop = (id: string) => placements.find((p) => p.stop === id)!;
-  // Trappentreustraße on Landsberger Straße beside the junction group of `n:246`, and
-  // Donnersbergerstraße in Arnulfstraße's median beside the group of `n:640`.
+  // Trappentreustraße on Landsberger Straße beside the junction group of the ramps at (-47, 164),
+  // and Donnersbergerstraße in Arnulfstraße's median either side of the bridge and the group at
+  // (67, -531). Stops are found by name and place, so a change of rail ids moves nothing here.
+  const named = (name: string, side?: (x: number) => boolean) =>
+    placements.filter((p) => p.name === name && (!side || side(p.marks[0]!.x)));
   const sites = {
-    trappentreustrasse: { at: { x: 17, y: 170 }, stops: ['ts:10812', 'ts:10815'] },
-    'donnersbergerstrasse-east': { at: { x: 113, y: -520 }, stops: ['ts:10819'] },
-    'donnersbergerstrasse-west': { at: { x: 18, y: -540 }, stops: ['ts:10825'] },
+    trappentreustrasse: { at: { x: 17, y: 170 }, stops: named('Trappentreustraße') },
+    'donnersbergerstrasse-east': {
+      at: { x: 113, y: -520 },
+      stops: named('Donnersbergerstraße', (x) => x > 60),
+    },
+    'donnersbergerstrasse-west': {
+      at: { x: 18, y: -540 },
+      stops: named('Donnersbergerstraße', (x) => x < 60),
+    },
   };
-  for (const { stops } of Object.values(sites))
-    for (const id of stops) expect(stop(id)).toBeTruthy();
+  expect(Object.values(sites).map((s) => s.stops.length)).toEqual([2, 1, 1]);
   await button(page, 'Layers').click();
   const layers = page.getByRole('region', { name: 'Map layers' }),
     toggle = layers.getByLabel('Rail', { exact: true });
@@ -131,7 +138,7 @@ test('T73 tram stops in Munich: both views, the Rail layer carries them, shots',
       await centre(page, at, view, view === '2d' ? 16 : 40, 45, 0);
       await shot(canvas, info, `T73-${name}-${view}.png`);
       // The close shots stand at the first canopy of the site.
-      const shelter = stop(stops.find((id) => stop(id).shelters.length)!).shelters[0]!;
+      const shelter = stops.find((p) => p.shelters.length)!.shelters[0]!;
       if (view === '2d') {
         // Name and lines at high zoom, at most 12 labels.
         await centre(page, shelter, view, 28);
@@ -145,7 +152,7 @@ test('T73 tram stops in Munich: both views, the Rail layer carries them, shots',
     }
     if (view === '2d') {
       // A mapped island is its platform: the inspector names the stop, its lines and amenities.
-      const strip = stop('ts:10812').tactile!,
+      const strip = sites.trappentreustrasse.stops[0]!.tactile!,
         kerb = strip[Math.floor(strip.length / 2)]!;
       await centre(page, kerb, view, 16);
       await clickWorld(page, kerb);

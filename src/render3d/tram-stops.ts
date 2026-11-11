@@ -11,9 +11,11 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   Object3D,
+  PlaneGeometry,
   ShapeUtils,
   Vector2,
 } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxCorners } from '../render/layers/stations';
 import { tramStopColors } from '../render/layers/tram-stops';
 import type { FurnitureBox } from '../render/station-furniture';
@@ -349,7 +351,12 @@ export class TramStops3D {
     this.glass.count = glass.length;
     for (const mesh of [this.posts, this.roofs, this.glass]) if (mesh.count) this.group.add(mesh);
 
-    const edge = lambert(0x7d8b86);
+    // A panel is two planes back to back, each reading correctly from its own side: one draw
+    // call per text, where a textured box takes six (one per face).
+    const panelGeometry = mergeGeometries([
+      new PlaneGeometry(1, 1).translate(0, 0, 0.5),
+      new PlaneGeometry(1, 1).rotateY(Math.PI).translate(0, 0, -0.5),
+    ])!;
     for (const [key, { name, display, items }] of panels) {
       if (!this.textures.has(key))
         this.textures.set(
@@ -361,12 +368,7 @@ export class TramStops3D {
       const size = display
         ? { w: tramStopSize.display.length, h: dims.displayHeight, centre: dims.displayCentre }
         : { w: tramStopSize.board.length, h: dims.boardHeight, centre: dims.boardCentre };
-      // BoxGeometry face order: +x, -x, +y, -y, +z, -z.
-      const mesh = new InstancedMesh(
-        new BoxGeometry(1, 1, 1),
-        [edge, edge, edge, edge, face, face],
-        items.length,
-      );
+      const mesh = new InstancedMesh(panelGeometry, face, items.length);
       items.forEach((it, i) =>
         place(
           mesh,
