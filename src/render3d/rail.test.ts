@@ -4,23 +4,26 @@ import { buildCity } from '../fixtures/build-city';
 import { compile } from '../network';
 import { cityHeights } from './heights';
 import { buildRail, pickRail3D } from './rail';
+import { railHeights } from '../network/rail';
+import { cityGrades } from '../render/grades';
 
 function bridge() {
   const { city, node, road } = buildCity('Bridge rail', 1);
   road(node(-100, 30), node(100, 30));
   city.rail = {
     nodes: {
-      'rn:1': { id: 'rn:1', pos: { x: -100, y: 0 }, kind: 'plain', layer: 0 },
-      'rn:2': { id: 'rn:2', pos: { x: 100, y: 0 }, kind: 'plain', layer: 0 },
+      'rn:1': { id: 'rn:1', pos: { x: -200, y: 0 }, kind: 'plain', layer: 0 },
+      'rn:2': { id: 'rn:2', pos: { x: 200, y: 0 }, kind: 'plain', layer: 0 },
     },
     tracks: {
       'rt:1': {
         id: 'rt:1',
         from: 'rn:1',
         to: 'rn:2',
+        // TASK-132: long enough for 4% ramps from both ground ends to reach the 5 m deck.
         line: [
-          { x: -100, y: 0 },
-          { x: 100, y: 0 },
+          { x: -200, y: 0 },
+          { x: 200, y: 0 },
         ],
         kind: 'rail',
         layer: 1,
@@ -42,8 +45,17 @@ test('T62 a two-vertex bridge has a raised deck and ground endpoints', () => {
   expect(Math.min(...heights)).toBeCloseTo(0.06, 3);
 });
 test('T62 bridge approach picking uses the same endpoint height as its mesh', () => {
-  const { compiled } = bridge();
+  const { city, compiled } = bridge();
+  const { roadGrades, nodeGrades } = cityGrades(compiled, city);
   expect(
-    pickRail3D(compiled, { x: -100, y: 0 }, (p, heightM) => ({ x: p.x, y: heightM * 100 })),
+    pickRail3D(
+      compiled,
+      railHeights(compiled, roadGrades, nodeGrades),
+      { x: -200, y: 0 },
+      (p, heightM) => ({
+        x: p.x,
+        y: heightM * 100,
+      }),
+    ),
   ).toEqual({ kind: 'track', track: 0 });
 });

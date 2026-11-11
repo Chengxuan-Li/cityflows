@@ -427,6 +427,11 @@ paved under a paved `surface` (asphalt, paving_stones, concrete, sett, paved) an
 otherwise. No schema-version bump: older projects omit both, and a tram without a form draws as
 embedded.
 
+TASK-132 adds optional track `covered: true` for `tunnel=building_passage` and `covered=yes`
+ways: the track stays at grade under its roof. Its `layer` (-1 by the road rule) and `tunnel`
+flag are unchanged, so crossings, continuations and drawing order are as before. No
+schema-version bump: older projects omit it and their building passages draw as tunnels.
+
 ## 5. Compiled model: `CompiledCity`
 
 `compile(city: City): CompileResult` lives in `src/network` and is a pure, deterministic
@@ -591,6 +596,26 @@ reserve each section through their return, conservatively. `trainsAt(rail, timet
 returns whole-train occupancy and articulated car poses without frame history. Arrivals are
 the timetable departure plus each route stop's `arrivalS`, repeated by `periodS`; terminal
 services include station visits on both legs.
+
+TASK-132 derives each track's height profile, `railHeights(compiled, roadGrades, nodeGrades)`
+in `network/rail.ts`, cached by rail graph identity outside `CompiledCity` like the timetable.
+Tags decide the grade, not `layer`: `covered` track is at grade; a tunnel's rail top lies at
+-7 m (a 4.5 m train under 1 m of structure and 1.5 m of cover) and 5 m deeper per layer below
+-1; a bridge deck at 5 m per layer, raised to clear every lower road it crosses by 4.7 m and
+every lower non-tunnel track by 6 m (overhead line), each under a 1 m deck; any other track,
+whatever its `layer`, at grade. Profiles are sampled every 2 m over the whole graph. Pins hold
+0 m: switches between non-structure tracks, level-crossing nodes, covered track, ground-track
+samples on a road or junction surface at grade or above (one sample beyond each edge), within
+4 m of a crossing with a non-tunnel track away from shared nodes, within 5 m of a served
+platform's extent, and a structure's single-track end node mapped at layer 0. A structure's
+level is first clamped within the 4% (trams 6%) cone from the nearest pin; then every pin and
+structure sample bounds the profile above and below by its cone, and each sample takes its
+track's level (0 at grade) within those bounds, or their midpoint where two structures are too
+close for both (the bounds cross). So ramps lie on the ground-level side of a portal or
+abutment unless a pin is too close, and then continue inside the structure; no sample-to-sample
+slope exceeds the track's limit. Heights are rounded to micrometres. Portals are structure ends
+at a node shared with another grade (or a pinned single-track end). Nothing here enters
+routing, demand, the timetable or simulation state.
 
 ### 5.1 Lane layout
 
@@ -2088,6 +2113,21 @@ grooved street rails. Ballast beds show sleepers every 0.9 m with the detail rai
 sides (below the 0.14 m kerbs, so median islands cover it as in 2D), sleepers 0.13 m, rails
 0.17 m on the bed and 0.06 m in the street; grass beds take a per-vertex procedural tone in the
 same vertex-colour batch. The track inspector names a tram's form and whether it was inferred.
+
+TASK-132 draws rail at its grade (section 5). 2D: tunnel and covered track keep their faded bed
+in their grade and add a dashed outline (0.3 m outside the bed, 3 m dashes) in the tram-rail
+batch of the ground grade, above road surfaces and ground-level beds, so a tunnel under a track
+field or a road shows; tunnel portals get a bar across the track with its ends turned out to the
+ground; bridges get a deck 1 m beyond their beds, one union per grade, outlined in the deck-edge
+colour, below their beds. Trains hide on tunnel and covered track only, so ground track at a
+negative `layer` shows its trains. 3D: beds follow the profiles above the terrain; tunnel track
+is a separate batch inside a translucent tube (walls 1 m beyond the bed, roof 6.3 m over the
+rail), both shown only with See below ground, which also reveals the trains in it (they hide on
+tunnel track otherwise; covered track stays visible at grade). Portals are two jambs and a
+lintel at the tunnel's end, up to a headwall 0.9 m above the ground; ground track below grade
+runs between cutting walls that end in 0.9 m parapets; bridges have a 1 m slab with parapets
+on piers every 20 m; ground track raised toward a bridge stands on 1:1.5 embankments. Tunnel
+tracks are not pickable in 3D unless See below ground is on.
 
 TASK-127 draws articulated red/white S-Bahn and blue/grey main-line cars in grade-local 2D
 layers and two instanced 3D batches. Train poses use snapshot/simulation time only; paused

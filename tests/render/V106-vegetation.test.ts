@@ -46,8 +46,10 @@ const baselines = {
   // and e4654d8 (merging lanes kept on a group's inner roads).
   // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
   // import without assignTramForms) every pin equals c3a6ec2's.
-  'munich-donnersberger': 'aa2452fc15dd7a09e52430e31ac4aa1685adfdc65cc3e8a2068f96ec71822dca',
-  'sindelfingen-a81': 'a589e6ac91b11181ba2c7cf29252f47c8ee790e72c53825ebe4ab3cfa4bf5c5b',
+  // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
+  // stripped every pin equals 2df05a1's.
+  'munich-donnersberger': 'e7029914cced84906799aca18363b1f9091c027c5beea803e7fde2b52b402fa3',
+  'sindelfingen-a81': 'cfeb9233811bd1418a7c8e8842a90c80d7f9061de45c934766e3f6e53ec7790b',
 };
 
 unitTest(

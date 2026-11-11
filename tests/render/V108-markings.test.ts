@@ -41,6 +41,8 @@ import { tierCities, unitTest } from '../tier';
 // lanes and arrows move, so their compile and arrow hashes no longer equal main's.
 // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
 // and e4654d8 (merging lanes kept on a group's inner roads).
+// TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
+// stripped every pin equals 2df05a1's.
 const baseline = {
   grid: {
     compile: '41664cabf1ab1d44115242181e2d531294b4cd516eb00209669329ad514b53f3',
@@ -51,14 +53,14 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: '89d42975d465f04553dac433729539592b9c7dc9c819d75b3a22bba03c5805a6',
+    compile: '2afe5ea9a0c7b769b9029156862f003221c5e409f8bc773f714622e3cc2a911d',
     arrows: '29bd956f1a3e4825fe96236f91eb9bfbd94b07e62f23f9eff2f7f0e51621ba0a',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
     // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
     // import without assignTramForms) every pin equals c3a6ec2's.
-    compile: 'b577b1a39f501bf37a72c0aadf65237250448fabfda5b8004019ee02f8eed4e1',
+    compile: 'd401e6e710bc9d689fca8daf878137ab0387aea7896427f24c7584f880351906',
     arrows: 'fc74b34d263cdc6c945bc4bdc85edf24e21476112116318b50a927271ede139e',
   },
 } as const;

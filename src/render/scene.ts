@@ -602,7 +602,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       }
       for (const shape of railGeometry(compiled, source)) {
         const grade = grades.get(shape.layer)!;
-        const over = shape.tram === 'rail' || shape.tram === 'street';
+        const over = shape.tram === 'rail' || shape.tram === 'street' || shape.over;
         drawRail(over ? grade.tram : shape.detail ? grade.railDetail : grade.rail, shape);
       }
       walkerLayers = new Map(visibleGrades.map((grade) => [grade.layer, grade.walkers]));
