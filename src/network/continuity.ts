@@ -281,6 +281,14 @@ export function continuationLayout(
         sharedWidth.push(reused.reduce((sum, [i]) => sum + trunkSource.lanes[i]!.widthM, 0));
         const [firstTrunk, firstBranch] = matches[0]!;
         const offsetM = laneOffset(trunkSource, firstTrunk) - laneOffset(source, firstBranch);
+        // A direction of a two-way street never moves (architecture 5): where a carriageway
+        // continues into one at a node of its own (TASK-131 keeps Benzstrasse's splits n:867 and
+        // n:902 apart), lining the lanes up would lay it over its other direction; the node stays
+        // a junction.
+        if (source.streetGroupId !== null && Math.abs(offsetM) > 0.01) {
+          valid = false;
+          break;
+        }
         if (
           matches.some(
             ([a, b]) =>

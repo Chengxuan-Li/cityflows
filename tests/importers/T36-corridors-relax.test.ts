@@ -320,7 +320,9 @@ unitTest(
         radius: [minimumRadius(major.centerline), minimumRadius(minor.centerline)],
       },
     );
-    expect(overlapOn).toBeLessThan(overlapOff / 4);
+    // TASK-131 (B55): two streets overlapping side by side are drawn with an edge line between
+    // them and are not unrelated overlap, relaxed or not; the clearance above is the measure.
+    expect([overlapOff, overlapOn]).toEqual([0, 0]);
     expect(JSON.stringify(run(3))).toBe(JSON.stringify(city));
     // A bridge does not interact with the road under it.
     const bridge = importOsm(parallel({ bridge: 'yes', layer: '1' }), { importerVersion: 'test' });

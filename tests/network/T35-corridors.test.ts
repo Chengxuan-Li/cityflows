@@ -104,7 +104,9 @@ function widthOutsideTransitions(city: City, net: CompiledCity, road: CRoad) {
   let worst = { errorM: 0, atM: 0 },
     skipped = 0;
   for (const { s, p, n, along } of samples) {
-    if (s <= s0 || s >= s1 || s - s0 <= audit.zones[0] || s1 - s <= audit.zones[1]) continue;
+    // TASK-131: a cut on a sampled station (r:15 at 2.5 m) is the edge's end, not a width.
+    if (s <= s0 + 1e-6 || s >= s1 - 1e-6 || s - s0 <= audit.zones[0] || s1 - s <= audit.zones[1])
+      continue;
     if (
       eased.some((e) => Math.abs(e - s) <= PAD_M) ||
       moving.some(([a, b]) => along >= a - PAD_M && along <= b + PAD_M)

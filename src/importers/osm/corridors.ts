@@ -530,8 +530,12 @@ export function pushOverlapping(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
     (!!a.road.corridorId && a.road.corridorId === b.road.corridorId) ||
     (a.road.name !== null && a.road.name === b.road.name) ||
     (a.road.roadClass === b.road.roadClass && sameRef(a, b));
+  // Not a pair `separateCoincident` or `separateDual` already set apart.
   const oneWay = roads.filter(
-    ({ road }) => road.streetGroupId === null && road.lateralOffsetM === 0,
+    ({ road }) =>
+      road.streetGroupId === null &&
+      road.lateralOffsetM === 0 &&
+      !road.provenance.inferred!.includes('separated'),
   );
   const boxes = new Map(oneWay.map((source) => [source, boxOf(source.road.centerline)]));
   const lines = new Map(oneWay.map(({ road }) => [road, road.centerline]));
