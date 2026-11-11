@@ -746,7 +746,8 @@ services include station visits on both legs.
   count or directions change across a two-arm or through node (a one-way continuing as a
   two-way street), the road with fewer lanes shifts so its lanes continue the matching travel
   direction's lanes (within 0.1 m at the node), eased over the TASK-080 taper; a direction of a
-  two-way street is never shifted, and a shift steeper than 1 in 4 is not applied.
+  two-way street is never shifted (TASK-131: also where a carriageway continues into one at a
+  node of its own; that node stays a junction), and a shift steeper than 1 in 4 is not applied.
 - TASK-099 (attached carriageways, B54; removed by TASK-131: nothing called it, and the
   owner's TASK-131 decision keeps OSM geometry). After `separateDual`, `attachCarriageways` pulled one
   corridor's two carriageways together until their lane blocks meet at the 0.5 m median: the
@@ -2803,7 +2804,13 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
     its OSM position and only interior vertices are filleted), and no fillet lies within 30 m of
     a road's end nodes (`SMOOTH_CLEAR_M`). Relaxation (`relaxRoads`) defaults to 0 m: the owner
     asked for no collision model, so roads keep their OSM lines; `separateDual` only pushes a
-    corridor's carriageways apart where their lane blocks overlap.
+    corridor's carriageways apart where their lane blocks overlap. Opposite carriageways of one
+    road that share no node (one corridor, one name, or one class and `ref` with at most one
+    named: Sindelfingen's A 81) are pushed apart the same way only where their blocks overlap or
+    leave less than the 0.5 m median, each by its share, eased to nothing over the taper toward
+    each end, so no node moves (`pushOverlapping`); such a pair is also a dual-carriageway
+    corridor candidate by its `ref`. A median crossing (`joinDividedFeeders`) takes half its
+    feeder's lane block as its offset.
 12. Realign acute approaches (TASK-068, B31; removed by TASK-131, which keeps OSM geometry:
     `realignRoads` is deleted and acute approaches keep their lines). After smoothing, at every junction node (three
     or more road ends, or two that are not sections of one street), take each pair of
