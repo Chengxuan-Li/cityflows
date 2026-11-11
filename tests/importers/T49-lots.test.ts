@@ -18,10 +18,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // longer equal main's (main: Munich 33bfd6b9…/3c6dfcc5…, Sindelfingen b72831fb…/c9e05f99…).
 // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
 // and e4654d8 (merging lanes kept on a group's inner roads).
+// TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
+// import without assignTramForms) every pin equals c3a6ec2's.
 const baseline = {
   'munich-donnersberger': [
-    'c0bb230b6e1da33b288c01b2a522a1b5b0746c2a9196b621fffd4f1115428e74',
-    '436fe0b0f79c0f6f55617eeefddd32de72763453d5b3d8689340d29eb390af42',
+    'dfd83d498c8c03090f4d5aa3dad9e4fd86a37de21b50fb3cb839d1c7b679da64',
+    'ffae41b7e350c45a73b2ce4069df6a1a4ebc8d2011ea58c0a2c5366907739bb2',
   ],
   'sindelfingen-a81': [
     '5a966f46bb257988768af34b7171cf187663652a3c70fb1a73e6c65158877798',

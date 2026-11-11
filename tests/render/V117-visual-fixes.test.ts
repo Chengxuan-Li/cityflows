@@ -167,7 +167,9 @@ const pins = {
   // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
   // and e4654d8 (merging lanes kept on a group's inner roads).
   munich: {
-    compile: '631ecdfee4077ce65b34b20e085afeada4914d5b9016ad776a8ac75703778088',
+    // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
+    // import without assignTramForms) every pin equals c3a6ec2's.
+    compile: 'be2ad6533f395351d68f51e43f3e614eb70ae03788a2e30e0df55c8e8a4f5fcb',
     lamps: 'a6367b276c0f7db6c9a4a9fe6e103d4f020b6bbf93bef7df2d2ec3fd5c2cfc00',
     curbs: 'fc71fa74c90f8e5cc094edc6990c5325cda2afd4d585fe6d38f783ac0a8e0c73',
     de: '1ed078929a1d637608b74c6a816a19c5c97d7b5ce290b3305bcdbca3cdf65e0d',
