@@ -13,6 +13,8 @@ import { placeStreet, treeContext } from './street';
 import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
 import { drawRail } from './layers/rail';
+import { catenaryZooms, drawCatenary } from './layers/catenary';
+import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawStations } from './layers/stations';
 import { noFurniture, placeStationFurniture } from './station-furniture';
@@ -204,6 +206,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let trainTimeS = 0;
   let trainsVisible = true;
   let stations: ReturnType<typeof drawStations> | undefined;
+  let overhead: { grades: ReturnType<typeof drawCatenary>; counts: string } | undefined;
+  /** TASK-134: overhead lines with Rail and Overhead lines on; supports and wires by zoom. */
+  const updateCatenary = () => {
+    const visible = layerVisibility.rail && layerVisibility.overheadLines;
+    for (const { container, supports, wires } of overhead?.grades.values() ?? []) {
+      container.visible = visible;
+      supports.visible = camera.zoom >= catenaryZooms.supports;
+      wires.visible = camera.zoom >= catenaryZooms.wires;
+    }
+    canvas.dataset.catenary = visible && overhead ? overhead.counts : '';
+  };
   const updateStations = () => {
     if (!stations) return;
     const a = camera.screenToWorld({ x: 0, y: 0 }),
@@ -305,6 +318,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     for (const grade of visibleGrades) grade.trains.visible = layerVisibility.rail;
     canvas.dataset.trains = String(layerVisibility.rail ? trainPoses.length : 0);
     updateStations();
+    updateCatenary();
     canvas.dataset.stationFurniture = JSON.stringify(
       layerVisibility.rail && stations ? stations.counts : noFurniture,
     );
@@ -495,6 +509,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     parkedCars.setStyle(camera.zoom, layerVisibility.vehicleClasses);
     updateTerrainCache();
     for (const layer of furniture) layer.container.visible = camera.zoom >= 1.5;
+    updateCatenary();
     drawEditOverlay(editOverlay, editPreview, camera.zoom);
     updatePlaces?.(camera.zoom);
     updateStations();
@@ -600,6 +615,22 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
       }
+      if (compiled.rail) {
+        const lines = catenary(compiled, roadGrades, nodeGrades);
+        overhead = {
+          grades: drawCatenary(lines),
+          counts: JSON.stringify({
+            supports: lines.supports.length,
+            masts: lines.supports.reduce((n, s) => n + s.masts.length, 0),
+            wires: lines.wires.filter((w) => !w.hidden).length,
+          }),
+        };
+        // Above the trains: the wires hang over them.
+        for (const [layer, { container }] of overhead.grades) {
+          const grade = grades.get(layer) ?? grades.get(0)!;
+          grade.group.addChildAt(container, grade.group.getChildIndex(grade.trains) + 1);
+        }
+      } else overhead = undefined;
       for (const shape of railGeometry(compiled, source)) {
         const grade = grades.get(shape.layer)!;
         const over = shape.tram === 'rail' || shape.tram === 'street' || shape.over;

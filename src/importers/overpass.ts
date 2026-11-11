@@ -1,7 +1,7 @@
 import type { ImportOptions } from './types';
 
 export type Bbox = NonNullable<ImportOptions['bbox']>;
-export const queryVersion = 8;
+export const queryVersion = 9;
 export const defaultEndpoint =
   import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 let active = false;
@@ -57,7 +57,7 @@ export function buildQuery(bbox: Bbox, context = true): string {
   const lots = `way[highway=service][service=parking_aisle](${s},${w},${n},${e});way[amenity=parking](${s},${w},${n},${e});rel[amenity=parking][type=multipolygon](${s},${w},${n},${e});`;
   const garages = `nwr[building~"^(parking|garage|garages)$"](${s},${w},${n},${e});nwr[amenity=parking][parking~"^(underground|multi-storey)$"](${s},${w},${n},${e});node[entrance=garage](${s},${w},${n},${e});`;
   const walk = `way[highway~"^(footway|pedestrian|path|steps)$"](${s},${w},${n},${e});way[footway=crossing](${s},${w},${n},${e});node[entrance](${s},${w},${n},${e});`;
-  const rail = `way[railway~"^(rail|light_rail|subway|narrow_gauge|tram)$"](${s},${w},${n},${e});nwr[railway=platform](${s},${w},${n},${e});nwr[public_transport=platform](${s},${w},${n},${e});node[railway=station](${s},${w},${n},${e});node[public_transport=entrance](${s},${w},${n},${e});rel[public_transport=stop_area](${s},${w},${n},${e});`;
+  const rail = `way[railway~"^(rail|light_rail|subway|narrow_gauge|tram)$"](${s},${w},${n},${e});nwr[railway=platform](${s},${w},${n},${e});nwr[public_transport=platform](${s},${w},${n},${e});node[railway=station](${s},${w},${n},${e});node[public_transport=entrance](${s},${w},${n},${e});rel[public_transport=stop_area](${s},${w},${n},${e});node[power=catenary_mast](${s},${w},${n},${e});`;
   return `[out:xml][timeout:60];way[highway~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service)(_link)?$"][service!~"^(parking_aisle|driveway)$"](${s},${w},${n},${e})->.roads;(.roads;rel(bw.roads)[type=restriction];${garages}${lots}${walk}${rail}${surroundings});(._;>>;);out body;`;
 }
 

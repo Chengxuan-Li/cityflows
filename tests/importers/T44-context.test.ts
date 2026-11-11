@@ -43,12 +43,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // import without assignTramForms) every pin equals c3a6ec2's.
             // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
             // stripped every pin equals 2df05a1's.
-            '5d48635d82019b207f79839c9d4efaaa42b71ad3ecc6b45a2866e0fbd5634b63',
-            'e7029914cced84906799aca18363b1f9091c027c5beea803e7fde2b52b402fa3',
+            'f84b2bb2d40e63a3c31786477da4a688a8d9d35f2f8dc728361e7dfbedda37c3',
+            '652e6c1d2ec3002b23b36faf9697faf0ba67530f1ad7de8c9c68c5d2d9007b3f',
           ]
         : [
-            '07d2c05ef625a096d10f920f09d620abdbb3d9d38de5509d6dfffb9571f2a985',
-            'cfeb9233811bd1418a7c8e8842a90c80d7f9061de45c934766e3f6e53ec7790b',
+            'd2376c18e9e572547b2ad37b391fb043177e24e649156a0d43ee976064cea243',
+            'f984571c1588469cd1f122f59e751656522545a536c6412586d643f656cd9bb9',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

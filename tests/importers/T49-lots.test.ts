@@ -24,12 +24,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // stripped every pin equals 2df05a1's.
 const baseline = {
   'munich-donnersberger': [
-    'b8370f9b0bd0f466fd350c9512399fd84e653bf788e72470bfd91e8de1b6e67f',
-    '188fc25155395afd66f5bfd082cd9eed5a62cc6bfebc34d0655250bba92ce159',
+    '7aae3111c0b8ddaa059099429646b706327436f90a7768726852f11019fd7d44',
+    'fd50eaa229f3d0dae7e5d9804a42ecac6f8937237e6218c344a6cd755ad3bbcd',
   ],
   'sindelfingen-a81': [
-    '15a7f2c2c6558ec3bb140ede002575f4120e79dfe8bb993f4a059c56794c4ad8',
-    '24799232e25ba8b7c3e1bb39a3d7625972046e41362759a451eff593710da38f',
+    '7e125a5d7795b42664912c038f092ab6a0c55205402e9c262f8c4ce4c776bb91',
+    '3825bc3b6d7fb9cec76ef7eaa692951871f7010df981e8e911c345b9af161318',
   ],
 };
 

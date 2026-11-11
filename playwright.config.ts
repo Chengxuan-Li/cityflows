@@ -41,8 +41,8 @@ const groups: Record<string, string[]> = {
   ],
   // Lead, 2026-11-10: T52 alone took 14 min on checkpoint-2026-11-10 (8 min before TASK-124/126).
   d: ['T52-parking-cities'],
-  // Rail (TASK-126, TASK-127, TASK-133): Munich imports with long frame-time samples.
-  e: ['T62-rail-stations', 'T64-trains', 'T70-station-furniture'],
+  // Rail (TASK-126, TASK-127, TASK-133, TASK-134): Munich imports with long frame-time samples.
+  e: ['T62-rail-stations', 'T64-trains', 'T70-station-furniture', 'T74-overhead-lines'],
 };
 // The light set (lead, 2026-11-10): editor, run and person flows on the small synthetic cities,
 // no Munich import or 3D, about 5 minutes on CI. Every push and merge runs it; the full suite

@@ -48,6 +48,7 @@ import { Parking3D } from './parking';
 import { ParkedCars3D } from './parked-cars';
 import { buildWalk } from './walk';
 import { buildRail, pickRail3D } from './rail';
+import { buildCatenary } from './catenary';
 import { Trains3D } from './trains';
 import { Stations3D } from './stations';
 import { noFurniture, placeStationFurniture } from '../render/station-furniture';
@@ -76,6 +77,8 @@ export class Scene3D {
   private city: CompiledCity | undefined;
   private rail: ReturnType<typeof buildRail> | undefined;
   private railVisible = true;
+  private catenary: ReturnType<typeof buildCatenary> | undefined;
+  private overheadVisible = true;
   private trains: Trains3D | undefined;
   private stations: Stations3D | undefined;
   private trainTimeS = NaN;
@@ -209,6 +212,9 @@ export class Scene3D {
     this.trainTimeS = NaN;
     this.railSelection = undefined;
     this.content.add(this.rail.group);
+    this.catenary = buildCatenary(city, renderedSource, geometry.heights);
+    this.catenary.setBelowGround(this.belowGround);
+    this.content.add(this.catenary.group);
     this.setRail(this.railVisible);
     this.parking = new Parking3D(city, (p) => terrain.groundAt(p.x, p.y));
     this.parking.group.visible = this.parkingVisible;
@@ -571,6 +577,7 @@ export class Scene3D {
     if (this.belowGround !== enabled) this.invalidate();
     this.belowGround = enabled;
     this.rail?.setBelowGround(enabled);
+    this.catenary?.setBelowGround(enabled);
     if (this.surroundings) this.surroundings.material.opacity = enabled ? 0.4 : 1;
     this.updateTerrainBackdrop();
     if (!this.ground || this.ground.material.transparent === enabled) return;
@@ -951,11 +958,22 @@ export class Scene3D {
     if (this.trains) this.trains.group.visible = visible;
     if (this.stations) this.stations.group.visible = visible;
     if (!visible) this.canvas.dataset.trains = '0';
+    this.setOverheadLines(this.overheadVisible);
 
     this.canvas.dataset.railTracks = String(visible ? (this.city?.rail?.tracks.length ?? 0) : 0);
     this.canvas.dataset.stationFurniture = JSON.stringify(
       visible && this.stations ? this.stations.furnitureCounts : noFurniture,
     );
+  }
+
+  /** TASK-134: overhead lines, shown with Rail. */
+  setOverheadLines(visible: boolean) {
+    if (this.overheadVisible !== visible) this.invalidate();
+    this.overheadVisible = visible;
+    const shown = visible && this.railVisible;
+    if (this.catenary) this.catenary.group.visible = shown;
+    this.canvas.dataset.catenary =
+      shown && this.catenary ? JSON.stringify(this.catenary.counts) : '';
   }
 
   private disposeContent() {
