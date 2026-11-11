@@ -659,6 +659,33 @@ export const shots: {
     osmLines: `Sindelfingen ${label}`,
     osm: SINDELFINGEN,
   })),
+  // Checkpoint 2 (coordinator): the 30-degree limit, n:68 in 3D, and the doubtful new cases.
+  {
+    id: 'T131-p2-b55-3d-n68',
+    cases: [],
+    centre: [352, -494] as [number, number],
+    zoom: 10,
+    view: '3d' as const,
+    pitch: 50,
+    bearing: 0,
+    buildings: false,
+    osm: SINDELFINGEN,
+  },
+  {
+    id: 'T131-p2-b55-r636',
+    cases: [],
+    centre: [456, -426] as [number, number],
+    zoom: 10,
+    osmLines: 'Munich r:636 Arnulfstrasse x r:933 Marsstrasse, 26 degrees',
+  },
+  {
+    id: 'T131-p2-b55-r442',
+    cases: [],
+    centre: [185, 78] as [number, number],
+    zoom: 10,
+    osmLines: 'Sindelfingen service r:13 beside r:442, 94 m, no overlap',
+    osm: SINDELFINGEN,
+  },
 ];
 
 /** TASK-131: an extract's drivable OSM ways (the importer's filter) and the nodes where they

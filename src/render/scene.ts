@@ -661,12 +661,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           drawRoadJoins(grade.surfaces, compiled, road, layerVisibility.roadClasses);
           drawCrossings(grade.crossings, compiled, road, sourceGeometry, markingTheme);
         }
-        // TASK-131 (B55): two roads side by side on their OSM lines, an edge line between them.
-        for (const { roads, line } of sideBySide)
-          grades
-            .get(roadGrades[roads[0]]!)!
-            .surfaces.poly(line, false)
-            .stroke({ color: style.walk.sidewalk, width: SIDE_BY_SIDE_EDGE_M, cap: 'round' });
         for (const node of compiled.nodes) {
           drawNode(
             grades.get(nodeGrades[node.idx]!)!.nodes,
@@ -674,6 +668,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             nodeColor(compiled, node, layerVisibility.roadClasses),
           );
         }
+        // TASK-131 (B55): two roads side by side on their OSM lines, an edge line between them,
+        // over the junction surface where it runs on into a junction both meet at.
+        for (const { roads, line } of sideBySide)
+          grades
+            .get(roadGrades[roads[0]]!)!
+            .nodes.poly(line, false)
+            .stroke({ color: style.walk.sidewalk, width: SIDE_BY_SIDE_EDGE_M, cap: 'round' });
         for (const movement of compiled.movements) {
           if (!movement.neverGreen && compiled.nodes[movement.node]!.outline.length)
             drawMovementArrow(

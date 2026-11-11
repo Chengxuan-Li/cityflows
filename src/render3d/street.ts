@@ -74,8 +74,9 @@ export function buildCurbs(
 ) {
   const positions: number[] = [];
   for (const curb of curbs) {
-    const a = parallelOffset(curb.points, -0.1),
-      b = parallelOffset(curb.points, 0.1);
+    const half = curb.halfWidthM ?? 0.1;
+    const a = parallelOffset(curb.points, -half),
+      b = parallelOffset(curb.points, half);
     const road = city.roads[curb.road]!,
       profile = heights.roads[curb.road]!;
     const vertex = (p: { x: number; y: number }, up: number) => {
