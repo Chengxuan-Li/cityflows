@@ -2,6 +2,7 @@ import { createRandom } from '../geo/random';
 import type { City, Person, Scenario, TripRequest } from '../schema';
 import { buildAgenda } from './agenda';
 import { eventTrips } from './events';
+import { stationRiders } from './stations';
 import { throughTrips } from './through';
 import { tripVehicle } from './vehicle';
 
@@ -32,5 +33,6 @@ export function scheduleTrips(city: City, persons: Person[], scenario: Scenario)
   }
 
   trips.push(...throughTrips(city, scenario), ...eventTrips(city, scenario));
+  trips.push(...stationRiders(city, scenario).trips);
   return trips.sort((a, b) => a.departS - b.departS || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }

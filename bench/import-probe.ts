@@ -1,10 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation, scheduleTrips } from '../src/demand';
+import { riderOf, stationRiders } from '../src/demand/stations';
 import { defaultScenario } from '../src/fixtures/scenarios';
 import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
-import type { City } from '../src/schema';
+import type { City, Scenario, TripRequest } from '../src/schema';
 import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../src/routing';
 import { createWalkRouter, type WalkRequest, type WalkRoute } from '../src/routing/walk';
 import { distance, pointAtDistance } from '../src/geo/polyline';
@@ -553,5 +554,82 @@ export function probeMorning(
     gatewayTraffic,
     sampledRoadTraffic,
     failures: Object.fromEntries(failures),
+    riders: riderCensus(city, scenario, trips, engine, untilS),
+  };
+}
+
+/** TASK-128: S-Bahn riders, generated over the day and run to `untilS`. */
+export function riderCensus(
+  city: City,
+  scenario: Scenario,
+  trips: TripRequest[],
+  engine: TrafficEngine,
+  untilS: number,
+) {
+  const { stops } = stationRiders(city, scenario);
+  if (!stops.length) return null;
+  const perHour: Record<number, { commuter: number; visitor: number }> = {};
+  const perPlatform: Record<string, number> = {};
+  const emptyStops: Record<string, number> = {};
+  for (const s of stops) {
+    const hour = Math.floor(s.arrivalS / 3600);
+    if (s.kind) (perHour[hour] ??= { commuter: 0, visitor: 0 })[s.kind] += s.riders;
+    perPlatform[s.platform] = (perPlatform[s.platform] ?? 0) + s.riders;
+    if (s.empty) emptyStops[s.empty] = (emptyStops[s.empty] ?? 0) + 1;
+  }
+  const doors = stops.map((s) => s.doorS).sort((a, b) => a - b);
+  const riderTrips = trips.filter((t) => t.personId && riderOf(t.personId));
+  const destinations: Record<string, number> = {};
+  for (const t of riderTrips)
+    if (t.id.endsWith(':back'))
+      destinations[t.originPlaceId] = (destinations[t.originPlaceId] ?? 0) + 1;
+  const outcome = { released: 0, started: 0, completed: 0, active: 0, failed: 0, walkFallbacks: 0 };
+  const failedByReason: Record<string, number> = {};
+  const distances: number[] = [];
+  const delays: number[] = [];
+  for (const id of new Set(riderTrips.map((t) => t.personId!))) {
+    const person = engine.inspectPerson(id)!;
+    for (const trip of person.trips) {
+      if (trip.departS <= untilS) outcome.released++;
+      if (trip.state === 'pending') continue;
+      outcome.started++;
+      if (trip.state === 'completed') outcome.completed++;
+      if (trip.state === 'active') outcome.active++;
+      if (trip.state === 'failed') {
+        outcome.failed++;
+        failedByReason[trip.failReason!] = (failedByReason[trip.failReason!] ?? 0) + 1;
+      }
+      const leg = trip.legs[0];
+      if (leg?.walkerId !== null && leg?.walkerId !== undefined) distances.push(leg.distanceM);
+      else if (leg && trip.state !== 'failed') outcome.walkFallbacks++;
+      if (trip.tripId.endsWith(':out') && leg?.startedS !== null && leg?.startedS !== undefined)
+        delays.push(leg.startedS - riderOf(id)!.arrivalS);
+    }
+  }
+  distances.sort((a, b) => a - b);
+  delays.sort((a, b) => a - b);
+  const at = (list: number[], q: number) =>
+    list[Math.min(list.length - 1, Math.floor(q * list.length))] ?? null;
+  return {
+    riders: stops.reduce((n, s) => n + s.riders, 0),
+    stops: stops.length,
+    perHour,
+    perPlatform,
+    emptyStops,
+    doorDelayS: { median: at(doors, 0.5), max: doors.at(-1) ?? null },
+    startDelayS: { median: at(delays, 0.5), max: delays.at(-1) ?? null },
+    topDestinations: Object.entries(destinations)
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, 10)
+      .map(([id, count]) => ({
+        id,
+        name: city.places[id]!.name,
+        kind: city.places[id]!.kind,
+        count,
+      })),
+    walkM: { median: at(distances, 0.5), p90: at(distances, 0.9), legs: distances.length },
+    trips: riderTrips.length,
+    ...outcome,
+    failedByReason,
   };
 }

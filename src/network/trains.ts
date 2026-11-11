@@ -594,6 +594,46 @@ export function platformDepartures(
   return found.sort((a, b) => a.departureS - b.departureS || a.route - b.route).slice(0, count);
 }
 
+export interface StationArrival {
+  platform: string;
+  route: number;
+  kind: TrainKind;
+  /** When the train comes to a stand at the platform. */
+  arrivalS: number;
+  /** The train's middle while it stands there. */
+  middle: Vec2;
+}
+
+/** Every platform stop with its arrival in `[fromS, toS)`, by time then platform. Read-only. */
+export function stationArrivals(
+  rail: RailGraph,
+  table: TrainTimetable,
+  fromS: number,
+  toS: number,
+): StationArrival[] {
+  const found: StationArrival[] = [];
+  for (const departure of table.departures) {
+    const route = table.routes[departure.route]!;
+    for (const stop of route.stops) {
+      const base = departure.timeS + stop.arrivalS,
+        middle = trainPoint(rail, route, stop.positionM);
+      for (let k = Math.ceil((fromS - base) / table.periodS); base + k * table.periodS < toS; k++)
+        found.push({
+          platform: stop.platform,
+          route: departure.route,
+          kind: route.kind,
+          arrivalS: base + k * table.periodS,
+          middle: { x: middle.x, y: middle.y },
+        });
+    }
+  }
+  return found.sort(
+    (a, b) =>
+      a.arrivalS - b.arrivalS ||
+      (a.platform < b.platform ? -1 : a.platform > b.platform ? 1 : a.route - b.route),
+  );
+}
+
 export function trainCensus(rail: RailGraph, table = trainTimetable(rail)) {
   const rate = (route: number) =>
     (table.departures.filter((d) => d.route === route).length * 3600) / table.periodS;
