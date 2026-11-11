@@ -2879,6 +2879,13 @@ tier, the full-demand test, the light e2e, demo-a-commute, T16, T52, T54, T57, q
 
 ## Owner decisions log
 
+- 2026-11-10, TASK-131 checkpoint 0 (audit `d4a5918`): the owner approved the lead's
+  recommendations: groups replace `consolidateJunctions`; `realignRoads`, `attachCarriageways`
+  and `relaxRoads` off; `separateCoincident`, `separateDual` and `convergingShifts` only where
+  carriageways overlap; no smoothing within 30 m of a node; Arnulfstraße's B54 corridors drawn
+  apart at their real 6 to 8 m medians; synthetic median crossings kept as hidden inner links; no
+  groups at dead ends; the 60 m span and 30 m inner-road rules kept; Phase 2 lists every B55-like
+  near-parallel overlap. Phase 1 started.
 - 2026-11-10, road geometry (TASK-131): keep the OSM geometry and stop merging close nodes;
   nodes joined by links up to 30 m (`junctionGroupMaxM`, adjustable) form a junction group whose
   inner links are routed but not drawn as roads, and where no car is cleared in unless cleared
