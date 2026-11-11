@@ -17,9 +17,12 @@ import {
   offsetPolyline,
   pointAtDistance,
   pointInPolygon,
+  trimPolyline,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
+import { railHeights } from '../network/rail';
+import type { RailTrack } from '../schema/rail';
 import { cityGrades } from './grades';
 import { style } from './style';
 import type { CityGeometry, Pick } from './types';
@@ -39,6 +42,34 @@ export interface RailShape {
   /** Outline rings of a tram part, for its 3D sides. */
   outline?: Vec2[][];
   grass?: boolean;
+  /** TASK-132: drawn in 2D only (3D builds its own decks and portals), and in 2D in the batch
+   * above road surfaces when `over`. */
+  only2d?: boolean;
+  over?: boolean;
+  /** The rail node a switch disc marks, for its 3D height. */
+  node?: number;
+}
+/** TASK-132: bridge decks, and the dashed outline and portal marks of tunnel and covered track. */
+const structureStyle = { deck: 0xd8d5cb, edge: 0x7d817b, tunnelEdge: 0x6d716b, portal: 0x5d615c };
+export const bedWidthM = (t: {
+  kind: RailTrack['kind'];
+  service?: string;
+  form?: RailTrack['form'];
+}) =>
+  t.kind === 'tram'
+    ? t.form === 'embedded' || !t.form
+      ? 2.2
+      : style.tram.bedWidthM
+    : t.service
+      ? 2.1
+      : 2.7;
+/** Pieces of `line` `on` metres long, `off` apart. */
+function dashes(line: Vec2[], on: number, off: number) {
+  const length = cumulativeLengths(line).at(-1)!;
+  const pieces: Vec2[][] = [];
+  for (let s = 0; s < length; s += on + off)
+    pieces.push(trimPolyline(line, s, Math.max(0, length - s - on)));
+  return pieces;
 }
 /** Rail centres of a 1 435 mm gauge track, measured to the inner faces of the rail heads. */
 const tramRailOffsetM = (1.435 + style.tram.railWidthM) / 2;
@@ -160,8 +191,52 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
           obstacles[i]!.layer === layer &&
           pointInPolygon(p, [...obstacles[i]!.ring, obstacles[i]!.ring[0]!]),
       );
+  const heights = railHeights(city, roadGrades, nodeGrades);
+  // Bridge decks below their beds, one union per grade, with their outline.
+  for (const layer of new Set(
+    city.rail.tracks.filter((t) => heights.grades[t.idx] === 'bridge').map((t) => t.layer),
+  )) {
+    const deck = booleanOpD(
+      ClipType.Union,
+      city.rail.tracks
+        .filter((t) => heights.grades[t.idx] === 'bridge' && t.layer === layer)
+        .flatMap((t) =>
+          inflatePathsD([t.line], bedWidthM(t) / 2 + 1, JoinType.Round, EndType.Butt, 2, 3),
+        ),
+      [],
+      FillRule.NonZero,
+      3,
+    );
+    add(deck, layer, structureStyle.deck, 1, true, undefined, false, { only2d: true });
+    add(
+      inflatePathsD(deck, style.deckEdgeWidthM / 2, JoinType.Miter, EndType.Polygon, 2, 3),
+      layer,
+      structureStyle.edge,
+      1,
+      true,
+      undefined,
+      false,
+      { only2d: true },
+    );
+  }
   for (const t of city.rail.tracks) {
-    const alpha = t.tunnel ? 0.4 : 1;
+    const grade = heights.grades[t.idx]!;
+    const alpha = grade === 'tunnel' || grade === 'covered' ? 0.4 : 1;
+    // Tunnel and covered track also show a dashed outline above the ground's roads and beds.
+    if (alpha < 1)
+      for (const side of [-1, 1])
+        add(
+          dashes(offsetPolyline(t.line, side * (bedWidthM(t) / 2 + 0.3)), 3, 3).flatMap((dash) =>
+            inflatePathsD([dash], 0.15, JoinType.Miter, EndType.Butt, 2, 3),
+          ),
+          Math.max(0, t.layer),
+          structureStyle.tunnelEdge,
+          1,
+          true,
+          undefined,
+          false,
+          { only2d: true, over: true },
+        );
     const pick: Pick = { kind: 'track', track: t.idx };
     if (t.kind === 'tram') {
       const rails = [-tramRailOffsetM, tramRailOffsetM].flatMap((side) =>
@@ -252,12 +327,41 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
           stationWays.has(t.osmId ?? t.id)
         ? 0x8aa6a6
         : 0xb5ae9e;
-    stroke(t.line, t.service ? 2.1 : 2.7, t.layer, color, alpha, false, pick);
+    stroke(t.line, bedWidthM(t), t.layer, color, alpha, false, pick);
     for (const side of [-0.72, 0.72])
       stroke(offsetPolyline(t.line, side), 0.18, t.layer, 0x777b78, alpha, false, pick, true);
   }
+  // A portal: a bar across the track at the tunnel's mouth, its ends turned out to the ground.
+  for (const portal of heights.portals.filter((p) => p.kind === 'tunnel')) {
+    const t = city.rail.tracks[portal.track]!,
+      p = city.rail.nodes[portal.node]!.pos;
+    const inward =
+      headingAtDistance(t.line, t.cumulative, portal.atEnd ? t.lengthM : 0) +
+      (portal.atEnd ? Math.PI : 0);
+    const u = { x: Math.cos(inward), y: Math.sin(inward) },
+      v = { x: -u.y, y: u.x },
+      half = bedWidthM(t) / 2 + 1;
+    const at = (a: number, b: number) => ({
+      x: p.x + u.x * a + v.x * b,
+      y: p.y + u.y * a + v.y * b,
+    });
+    add(
+      [
+        [at(0.3, -half), at(0.3, half)],
+        [at(0.3, -half), at(-1.2, -half - 1.2)],
+        [at(0.3, half), at(-1.2, half + 1.2)],
+      ].flatMap((line) => inflatePathsD([line], 0.3, JoinType.Round, EndType.Round, 2, 3)),
+      Math.max(0, t.layer),
+      structureStyle.portal,
+      1,
+      true,
+      undefined,
+      false,
+      { only2d: true, over: true },
+    );
+  }
   for (const n of city.rail.nodes.filter((n) => n.kind === 'switch'))
-    add([circle(n.pos, 1.3)], n.layer, 0x77857d, 1);
+    add([circle(n.pos, 1.3)], n.layer, 0x77857d, 1, false, undefined, false, { node: n.idx });
   for (const [platform, p] of city.rail.platforms.entries()) {
     const paths =
       p.shape.kind === 'polygon'

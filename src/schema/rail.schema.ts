@@ -33,6 +33,7 @@ export const railSchema = z
         layer: z.int(),
         bridge: z.boolean().optional(),
         tunnel: z.boolean().optional(),
+        covered: z.boolean().optional(),
         service: z.string().optional(),
         usage: z.string().optional(),
         preferredDirection: z.enum(['forward', 'backward', 'both']).optional(),

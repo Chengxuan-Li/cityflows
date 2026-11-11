@@ -8,7 +8,7 @@ import {
   MeshLambertMaterial,
   Vector3,
 } from 'three';
-import type { RailGraph } from '../network/rail';
+import type { RailGraph, RailHeights } from '../network/rail';
 import {
   trainDefaults,
   type TrainPose,
@@ -16,7 +16,8 @@ import {
   type TrainTimetable,
 } from '../network/trains';
 import { trainColors } from '../render/layers/trains';
-import { heightAt, type cityHeights } from './heights';
+import type { cityHeights } from './heights';
+import { railElevation } from './rail';
 
 export class Trains3D {
   readonly group = new Group();
@@ -31,6 +32,7 @@ export class Trains3D {
   constructor(
     private readonly rail: RailGraph,
     private readonly heights: ReturnType<typeof cityHeights>,
+    private readonly railHeights: RailHeights,
     timetable: TrainTimetable,
   ) {
     const capacity = Math.max(
@@ -59,23 +61,10 @@ export class Trains3D {
     this.ids = [];
     for (const train of trains)
       for (const car of train.cars) {
-        const track = this.rail.tracks[car.track]!;
-        if (!below && (track.tunnel || track.layer < 0)) continue;
-        const elevation = (p: TrainTrackPose) => {
-          const track = this.rail.tracks[p.track]!;
-          return (
-            this.heights.terrain.groundAt(p.x, p.y) +
-            heightAt(
-              {
-                lengthM: track.lengthM,
-                fromM: this.rail.nodes[track.fromNode]!.layer * 5,
-                toM: this.rail.nodes[track.toNode]!.layer * 5,
-                deckM: track.layer * 5,
-              },
-              p.trackM,
-            )
-          );
-        };
+        // TASK-132: only a tunnel hides a train; covered track stays at grade inside its building.
+        if (!below && this.railHeights.grades[car.track] === 'tunnel') continue;
+        const elevation = (p: TrainTrackPose) =>
+          railElevation(this.heights, this.railHeights, this.rail.tracks[p.track]!, p.trackM, p);
         const y = elevation(car) + 1.5;
         const dx = car.front.x - car.rear.x,
           dy = car.front.y - car.rear.y;

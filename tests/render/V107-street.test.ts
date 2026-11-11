@@ -165,8 +165,10 @@ const baselines = {
   // TASK-135 and TASK-140 together.
   grid: '6c1e86734dfc688415bd805d175bc5d173385a0a83fb18da32136aa1018fb3e7',
   town: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
-  'munich-donnersberger': 'de01862d691b76c54914b9d0be1b1d6a4f59aa9e09165b874d09cf516d486311',
-  'sindelfingen-a81': 'f7e3d6bb757423a89a699d66f6bb59f5cb198f00f14fbad683f9dc94738b74c2',
+  // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
+  // stripped every pin equals 2df05a1's.
+  'munich-donnersberger': '676aaf55097be0142eda7650a59a841fae3a66c85e18e543733ee604b0578eff',
+  'sindelfingen-a81': '597469fd0bf7a68823bcbf8d2dc3deeea0c8946e0920dcb7a35e9a46808d4ca5',
 };
 const lampCounts = {
   grid: [0, 0],

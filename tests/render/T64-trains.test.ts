@@ -2,7 +2,10 @@ import { expect, test } from 'vitest';
 import { Matrix4, Vector3 } from 'three';
 import { buildCity } from '../../src/fixtures/build-city';
 import { compile } from '../../src/network';
-import { compileRail } from '../../src/network/rail';
+import { compileRail, railHeights } from '../../src/network/rail';
+import type { CompiledCity } from '../../src/network';
+import type { City } from '../../src/schema';
+import { cityGrades } from '../../src/render/grades';
 import { trainTimetable, trainsAt } from '../../src/network/trains';
 import { Trains3D } from '../../src/render3d/trains';
 import { cityHeights } from '../../src/render3d/heights';
@@ -27,33 +30,48 @@ function fixture(tunnel = false) {
         ],
         kind: 'rail',
         layer: 1,
+        // TASK-132: tags, not the layer, raise a track; the bridge ramps up from its ground end.
+        ...(tunnel ? { tunnel: true } : { bridge: true }),
         preferredDirection: 'forward',
-        ...(tunnel ? { tunnel: true } : {}),
       },
     },
     platforms: {},
   };
   const result = compile(city);
   if (!result.ok) throw Error('compile');
-  return { city, compiled: result.compiled, rail: compileRail(city)! };
+  return { city, compiled: result.compiled, rail: result.compiled.rail! };
 }
+const heightsOf = (compiled: CompiledCity, city: City) => {
+  const { roadGrades, nodeGrades } = cityGrades(compiled, city);
+  return railHeights(compiled, roadGrades, nodeGrades);
+};
 
 test('T64 3D train bodies pitch with the rail ramp and tunnel bodies follow below-ground visibility', () => {
   const { city, compiled, rail } = fixture(),
-    table = trainTimetable(rail),
-    trains = trainsAt(rail, table, table.departures[0]!.timeS + 15);
-  const layer = new Trains3D(rail, cityHeights(compiled, city), table);
+    table = trainTimetable(rail);
+  // TASK-132: the ramp is the bridge's first 125 m (5 m at 4%); catch the leading car on it.
+  let time = table.departures[0]!.timeS;
+  while ((trainsAt(rail, table, time)[0]?.cars[0]?.trackM ?? 0) < 40) time += 0.25;
+  const trains = trainsAt(rail, table, time);
+  const layer = new Trains3D(rail, cityHeights(compiled, city), heightsOf(compiled, city), table);
   layer.update(trains, false, null);
   const matrix = new Matrix4();
   layer.body.getMatrixAt(0, matrix);
   const direction = new Vector3(1, 0, 0).transformDirection(matrix);
   expect(direction.y).toBeGreaterThan(0.001);
   expect(layer.pick(0).id).toBe(trains[0]!.id);
-  rail.tracks[0]!.tunnel = true;
-  layer.update(trains, false, null);
-  expect(layer.body.count).toBe(0);
-  layer.update(trains, true, null);
-  expect(layer.body.count).toBeGreaterThan(0);
+  // TASK-132: a tunnel's grade is read when the layer is built, so the tunnel is its own city.
+  const tunnel = fixture(true),
+    below = new Trains3D(
+      tunnel.rail,
+      cityHeights(tunnel.compiled, tunnel.city),
+      heightsOf(tunnel.compiled, tunnel.city),
+      table,
+    );
+  below.update(trains, false, null);
+  expect(below.body.count).toBe(0);
+  below.update(trains, true, null);
+  expect(below.body.count).toBeGreaterThan(0);
 });
 
 test('T64 a train hidden below a bridge cannot intercept the bridge pick', () => {
@@ -91,7 +109,12 @@ test('T64 instance capacity includes trains still in the city from earlier timet
   const rail = compileRail(city)!,
     table = trainTimetable(rail),
     poses = trainsAt(rail, table, 3600),
-    layer = new Trains3D(rail, cityHeights(compiled, city), table);
+    layer = new Trains3D(
+      rail,
+      cityHeights(compiled, city),
+      heightsOf({ ...compiled, rail }, city),
+      table,
+    );
   layer.update(poses, false, null);
   expect(layer.body.count).toBeGreaterThan(32);
   expect(layer.body.count).toBeLessThanOrEqual(layer.body.instanceMatrix.count);

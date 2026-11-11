@@ -23,6 +23,9 @@ import type { OsmData, OsmTags } from './parse';
 import { osmLayer } from './roads';
 
 const isTrack = (t: OsmTags) => railKinds.includes(t.railway as RailKind);
+/** TASK-132: a building passage or covered way stays at grade under its roof; its `layer` (and
+ * `tunnel`) still order it below the building, as before. */
+const covered = (t: OsmTags) => t.tunnel === 'building_passage' || t.covered === 'yes';
 const isPlatform = (t: OsmTags) => t.railway === 'platform' || t.public_transport === 'platform';
 const normalize = (name: string) => name.normalize('NFKC').toLocaleLowerCase('de').trim();
 const pointsOf = (p: RailPlatform) =>
@@ -142,6 +145,7 @@ export function importRail(
             osmId: w.id,
             ...(w.tag.bridge && w.tag.bridge !== 'no' ? { bridge: true } : {}),
             ...(w.tag.tunnel && w.tag.tunnel !== 'no' ? { tunnel: true } : {}),
+            ...(covered(w.tag) ? { covered: true } : {}),
             ...(w.tag.service ? { service: w.tag.service } : {}),
             ...(w.tag.usage ? { usage: w.tag.usage } : {}),
             ...(['forward', 'backward', 'both'].includes(w.tag['railway:preferred_direction'] ?? '')
