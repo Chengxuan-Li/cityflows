@@ -1,0 +1,7966 @@
+[
+  {
+    "node": "n:4",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": 610.49,
+      "y": -197.82
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:4",
+        "osmIds": [6727768567],
+        "kind": "osm",
+        "movedM": 4.44,
+        "movedFinalM": 4.44
+      },
+      {
+        "node": "n:5",
+        "osmIds": [6727768569],
+        "kind": "osm",
+        "movedM": 4.44,
+        "movedFinalM": 4.44
+      }
+    ],
+    "spreadM": 8.87,
+    "innerRoads": [
+      {
+        "road": "r:6",
+        "from": "n:4",
+        "to": "n:5",
+        "ways": [6060348],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 8.87
+      }
+    ],
+    "streets": ["way/715914317", "way/715914319"],
+    "arms": [
+      {
+        "road": "r:1005",
+        "street": "way/715914317",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [6727768567],
+        "headingBefore": 141,
+        "headingAfterMerge": 140.9,
+        "headingFinal": 140.9,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:1009",
+        "street": "way/715914319",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [6727768569],
+        "headingBefore": -38.8,
+        "headingAfterMerge": -39.3,
+        "headingFinal": -39.3,
+        "turnDeg": 0.5
+      }
+    ],
+    "minArmAngleBefore": 179.8,
+    "minArmAngleFinal": 179.7,
+    "maxArmTurnDeg": 0.5,
+    "maxMoveM": 4.44
+  },
+  {
+    "node": "n:18",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -315.23,
+      "y": 336
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:18",
+        "osmIds": [11422480614],
+        "kind": "osm",
+        "movedM": 11.1,
+        "movedFinalM": 11.1
+      },
+      {
+        "node": "n:1182",
+        "osmIds": [11422480613],
+        "kind": "osm",
+        "movedM": 11.1,
+        "movedFinalM": 11.1
+      }
+    ],
+    "spreadM": 22.19,
+    "innerRoads": [
+      {
+        "road": "r:1183",
+        "from": "n:18",
+        "to": "n:1182",
+        "ways": [1231631264],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 22.19
+      },
+      {
+        "road": "r:1184",
+        "from": "n:1182",
+        "to": "n:18",
+        "ways": [1231631264],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 22.19
+      }
+    ],
+    "streets": ["way/7973183"],
+    "arms": [
+      {
+        "road": "r:19",
+        "street": "way/7973183",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422480614],
+        "headingBefore": 165.1,
+        "headingAfterMerge": 178,
+        "headingFinal": 178,
+        "turnDeg": 13
+      },
+      {
+        "road": "r:20",
+        "street": "way/7973183",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422480614],
+        "headingBefore": 165.1,
+        "headingAfterMerge": 178,
+        "headingFinal": 178,
+        "turnDeg": 13
+      },
+      {
+        "road": "r:22",
+        "street": "way/7973183",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422480614],
+        "headingBefore": -13.7,
+        "headingAfterMerge": -30.3,
+        "headingFinal": -30.3,
+        "turnDeg": 16.6
+      },
+      {
+        "road": "r:23",
+        "street": "way/7973183",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422480614],
+        "headingBefore": -13.7,
+        "headingAfterMerge": -30.3,
+        "headingFinal": -30.3,
+        "turnDeg": 16.6
+      }
+    ],
+    "minArmAngleBefore": 178.7,
+    "minArmAngleFinal": 151.7,
+    "maxArmTurnDeg": 16.6,
+    "maxMoveM": 11.1
+  },
+  {
+    "node": "n:42",
+    "cls": "other: dead end",
+    "pos": {
+      "x": -84.82,
+      "y": 667.88
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:39",
+        "osmIds": [77630886],
+        "kind": "osm",
+        "movedM": 5.54,
+        "movedFinalM": 5.54
+      },
+      {
+        "node": "n:42",
+        "osmIds": [9772675],
+        "kind": "clip",
+        "movedM": 0,
+        "movedFinalM": 0
+      },
+      {
+        "node": "n:465",
+        "osmIds": [143905782],
+        "kind": "clip",
+        "movedM": 14.34,
+        "movedFinalM": 14.34
+      }
+    ],
+    "spreadM": 15.14,
+    "innerRoads": [
+      {
+        "road": "r:43",
+        "from": "n:39",
+        "to": "n:42",
+        "ways": [9772675],
+        "name": "Melli-Beese-Straße",
+        "roadClass": "residential",
+        "lengthM": 5.56
+      },
+      {
+        "road": "r:44",
+        "from": "n:42",
+        "to": "n:39",
+        "ways": [9772675],
+        "name": "Melli-Beese-Straße",
+        "roadClass": "residential",
+        "lengthM": 5.56
+      },
+      {
+        "road": "r:466",
+        "from": "n:39",
+        "to": "n:465",
+        "ways": [143905782],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 16.14
+      },
+      {
+        "road": "r:467",
+        "from": "n:465",
+        "to": "n:39",
+        "ways": [143905782],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 16.14
+      }
+    ],
+    "streets": ["Melli-Beese-Straße"],
+    "arms": [
+      {
+        "road": "r:40",
+        "street": "Melli-Beese-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [77630886],
+        "headingBefore": -60.4,
+        "headingAfterMerge": -44.5,
+        "headingFinal": -44.5,
+        "turnDeg": 15.9
+      },
+      {
+        "road": "r:41",
+        "street": "Melli-Beese-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [77630886],
+        "headingBefore": -60.4,
+        "headingAfterMerge": -44.5,
+        "headingFinal": -44.5,
+        "turnDeg": 15.9
+      }
+    ],
+    "minArmAngleBefore": 360,
+    "minArmAngleFinal": 360,
+    "maxArmTurnDeg": 15.9,
+    "maxMoveM": 14.34
+  },
+  {
+    "node": "n:68",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 349.82,
+      "y": -487.76
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:68",
+        "osmIds": [352952327],
+        "kind": "osm",
+        "movedM": 5.15,
+        "movedFinalM": 5.15
+      },
+      {
+        "node": "n:71",
+        "osmIds": [330942959],
+        "kind": "osm",
+        "movedM": 18.92,
+        "movedFinalM": 18.92
+      },
+      {
+        "node": "n:244",
+        "osmIds": [352952330],
+        "kind": "osm",
+        "movedM": 23.53,
+        "movedFinalM": 23.53
+      }
+    ],
+    "spreadM": 42.39,
+    "innerRoads": [
+      {
+        "road": "r:72",
+        "from": "n:68",
+        "to": "n:71",
+        "ways": [18968138],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 14.69
+      },
+      {
+        "road": "r:73",
+        "from": "n:71",
+        "to": "n:68",
+        "ways": [18968138],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 14.69
+      },
+      {
+        "road": "r:245",
+        "from": "n:68",
+        "to": "n:244",
+        "ways": [31541254],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 28.39
+      },
+      {
+        "road": "r:246",
+        "from": "n:244",
+        "to": "n:68",
+        "ways": [31541254],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 28.39
+      }
+    ],
+    "streets": ["way/18968138", "way/31541255", "way/683770304", "way/683770306"],
+    "arms": [
+      {
+        "road": "r:69",
+        "street": "way/18968138",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952327],
+        "headingBefore": -64.2,
+        "headingAfterMerge": -60.6,
+        "headingFinal": -60.6,
+        "turnDeg": 3.6
+      },
+      {
+        "road": "r:70",
+        "street": "way/18968138",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952327],
+        "headingBefore": -64.2,
+        "headingAfterMerge": -60.6,
+        "headingFinal": -60.6,
+        "turnDeg": 3.6
+      },
+      {
+        "road": "r:248",
+        "street": "way/31541255",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952330],
+        "headingBefore": -65.1,
+        "headingAfterMerge": -71,
+        "headingFinal": -71,
+        "turnDeg": 5.9
+      },
+      {
+        "road": "r:249",
+        "street": "way/31541255",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952330],
+        "headingBefore": -65.1,
+        "headingAfterMerge": -71,
+        "headingFinal": -71,
+        "turnDeg": 5.9
+      },
+      {
+        "road": "r:976",
+        "street": "way/683770304",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [330942959],
+        "headingBefore": -152.3,
+        "headingAfterMerge": -173.3,
+        "headingFinal": -173.3,
+        "turnDeg": 21
+      },
+      {
+        "road": "r:977",
+        "street": "way/683770304",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [330942959],
+        "headingBefore": -152.3,
+        "headingAfterMerge": -173.3,
+        "headingFinal": -173.3,
+        "turnDeg": 21
+      },
+      {
+        "road": "r:982",
+        "street": "way/683770306",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [330942959],
+        "headingBefore": 113.4,
+        "headingAfterMerge": 110.9,
+        "headingFinal": 110.9,
+        "turnDeg": 2.5
+      },
+      {
+        "road": "r:983",
+        "street": "way/683770306",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [330942959],
+        "headingBefore": 113.4,
+        "headingAfterMerge": 110.9,
+        "headingFinal": 110.9,
+        "turnDeg": 2.5
+      }
+    ],
+    "minArmAngleBefore": 0.9,
+    "minArmAngleFinal": 10.4,
+    "maxArmTurnDeg": 21,
+    "maxMoveM": 23.53
+  },
+  {
+    "node": "n:89",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 439.65,
+      "y": 572.29
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:89",
+        "osmIds": [4035273155],
+        "kind": "osm",
+        "movedM": 11.21,
+        "movedFinalM": 11.21
+      },
+      {
+        "node": "n:90",
+        "osmIds": [5619431203],
+        "kind": "osm",
+        "movedM": 7.05,
+        "movedFinalM": 7.05
+      },
+      {
+        "node": "n:944",
+        "osmIds": [5619431197],
+        "kind": "osm",
+        "movedM": 17.77,
+        "movedFinalM": 17.77
+      }
+    ],
+    "spreadM": 28.87,
+    "innerRoads": [
+      {
+        "road": "r:91",
+        "from": "n:89",
+        "to": "n:90",
+        "ways": [24973498],
+        "name": "Thea-Rasche-Straße",
+        "roadClass": "residential",
+        "lengthM": 5.89
+      },
+      {
+        "road": "r:92",
+        "from": "n:90",
+        "to": "n:89",
+        "ways": [24973498],
+        "name": "Thea-Rasche-Straße",
+        "roadClass": "residential",
+        "lengthM": 5.89
+      },
+      {
+        "road": "r:947",
+        "from": "n:90",
+        "to": "n:944",
+        "ways": [588356908],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 25.77
+      },
+      {
+        "road": "r:948",
+        "from": "n:944",
+        "to": "n:90",
+        "ways": [588356908],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 25.77
+      }
+    ],
+    "streets": ["Thea-Rasche-Straße", "Umberto-Nobile-Straße", "way/588356907", "way/588356908"],
+    "arms": [
+      {
+        "road": "r:94",
+        "street": "Thea-Rasche-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431203],
+        "headingBefore": -71.6,
+        "headingAfterMerge": -95.5,
+        "headingFinal": -95.5,
+        "turnDeg": 24
+      },
+      {
+        "road": "r:95",
+        "street": "Thea-Rasche-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431203],
+        "headingBefore": -71.6,
+        "headingAfterMerge": -95.5,
+        "headingFinal": -95.5,
+        "turnDeg": 24
+      },
+      {
+        "road": "r:111",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4035273155],
+        "headingBefore": 165.8,
+        "headingAfterMerge": 166,
+        "headingFinal": 166,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:112",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4035273155],
+        "headingBefore": 165.8,
+        "headingAfterMerge": 166,
+        "headingFinal": 166,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:945",
+        "street": "way/588356907",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431197],
+        "headingBefore": 75.6,
+        "headingAfterMerge": 43.5,
+        "headingFinal": 43.5,
+        "turnDeg": 32.1
+      },
+      {
+        "road": "r:946",
+        "street": "way/588356907",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431197],
+        "headingBefore": 75.6,
+        "headingAfterMerge": 43.5,
+        "headingFinal": 43.5,
+        "turnDeg": 32.1
+      },
+      {
+        "road": "r:950",
+        "street": "way/588356908",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431197],
+        "headingBefore": -15.2,
+        "headingAfterMerge": -10.8,
+        "headingFinal": -10.8,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:951",
+        "street": "way/588356908",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431197],
+        "headingBefore": -15.2,
+        "headingAfterMerge": -10.8,
+        "headingFinal": -10.8,
+        "turnDeg": 4.3
+      }
+    ],
+    "minArmAngleBefore": 56.4,
+    "minArmAngleFinal": 54.3,
+    "maxArmTurnDeg": 32.1,
+    "maxMoveM": 17.77
+  },
+  {
+    "node": "n:93",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 434.97,
+      "y": 523.98
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:93",
+        "osmIds": [5619431211],
+        "kind": "osm",
+        "movedM": 6.93,
+        "movedFinalM": 6.93
+      },
+      {
+        "node": "n:952",
+        "osmIds": [5619431210],
+        "kind": "osm",
+        "movedM": 6.93,
+        "movedFinalM": 6.93
+      }
+    ],
+    "spreadM": 13.86,
+    "innerRoads": [
+      {
+        "road": "r:953",
+        "from": "n:93",
+        "to": "n:952",
+        "ways": [588356911],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 13.86
+      },
+      {
+        "road": "r:954",
+        "from": "n:952",
+        "to": "n:93",
+        "ways": [588356911],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 13.86
+      }
+    ],
+    "streets": ["Thea-Rasche-Straße"],
+    "arms": [
+      {
+        "road": "r:94",
+        "street": "Thea-Rasche-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431211],
+        "headingBefore": 75.5,
+        "headingAfterMerge": 84.5,
+        "headingFinal": 84.5,
+        "turnDeg": 9
+      },
+      {
+        "road": "r:95",
+        "street": "Thea-Rasche-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431211],
+        "headingBefore": 75.5,
+        "headingAfterMerge": 84.5,
+        "headingFinal": 84.5,
+        "turnDeg": 9
+      },
+      {
+        "road": "r:97",
+        "street": "Thea-Rasche-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431211],
+        "headingBefore": -104.4,
+        "headingAfterMerge": -108.5,
+        "headingFinal": -108.5,
+        "turnDeg": 4.1
+      },
+      {
+        "road": "r:98",
+        "street": "Thea-Rasche-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431211],
+        "headingBefore": -104.4,
+        "headingAfterMerge": -108.5,
+        "headingFinal": -108.5,
+        "turnDeg": 4.1
+      }
+    ],
+    "minArmAngleBefore": 179.9,
+    "minArmAngleFinal": 167.1,
+    "maxArmTurnDeg": 9,
+    "maxMoveM": 6.93
+  },
+  {
+    "node": "n:110",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 309.96,
+      "y": 604.74
+    },
+    "control": "signal",
+    "members": [
+      {
+        "node": "n:110",
+        "osmIds": [4413553756],
+        "kind": "osm",
+        "movedM": 11.72,
+        "movedFinalM": 11.72
+      },
+      {
+        "node": "n:57",
+        "osmIds": [77628071],
+        "kind": "osm",
+        "movedM": 0.89,
+        "movedFinalM": 0.89
+      },
+      {
+        "node": "n:675",
+        "osmIds": [4413553754],
+        "kind": "osm",
+        "movedM": 12.61,
+        "movedFinalM": 12.61
+      }
+    ],
+    "spreadM": 24.32,
+    "innerRoads": [
+      {
+        "road": "r:113",
+        "from": "n:110",
+        "to": "n:57",
+        "ways": [24973501],
+        "name": "Umberto-Nobile-Straße",
+        "roadClass": "residential",
+        "lengthM": 10.82
+      },
+      {
+        "road": "r:114",
+        "from": "n:57",
+        "to": "n:110",
+        "ways": [24973501],
+        "name": "Umberto-Nobile-Straße",
+        "roadClass": "residential",
+        "lengthM": 10.82
+      },
+      {
+        "road": "r:676",
+        "from": "n:57",
+        "to": "n:675",
+        "ways": [443245849],
+        "name": "Umberto-Nobile-Straße",
+        "roadClass": "residential",
+        "lengthM": 13.5
+      },
+      {
+        "road": "r:677",
+        "from": "n:675",
+        "to": "n:57",
+        "ways": [443245849],
+        "name": "Umberto-Nobile-Straße",
+        "roadClass": "residential",
+        "lengthM": 13.5
+      }
+    ],
+    "streets": ["Margret-Fusbahn-Straße", "Umberto-Nobile-Straße"],
+    "arms": [
+      {
+        "road": "r:58",
+        "street": "Margret-Fusbahn-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [77628071],
+        "headingBefore": -103.9,
+        "headingAfterMerge": -102.4,
+        "headingFinal": -102.4,
+        "turnDeg": 1.5
+      },
+      {
+        "road": "r:59",
+        "street": "Margret-Fusbahn-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [77628071],
+        "headingBefore": -103.9,
+        "headingAfterMerge": -102.4,
+        "headingFinal": -102.4,
+        "turnDeg": 1.5
+      },
+      {
+        "road": "r:111",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4413553756],
+        "headingBefore": -14.1,
+        "headingAfterMerge": -14,
+        "headingFinal": -14,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:112",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4413553756],
+        "headingBefore": -14.1,
+        "headingAfterMerge": -14,
+        "headingFinal": -14,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:414",
+        "street": "Margret-Fusbahn-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [77628071],
+        "headingBefore": 74.3,
+        "headingAfterMerge": 72.7,
+        "headingFinal": 72.7,
+        "turnDeg": 1.6
+      },
+      {
+        "road": "r:415",
+        "street": "Margret-Fusbahn-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [77628071],
+        "headingBefore": 74.3,
+        "headingAfterMerge": 72.7,
+        "headingFinal": 72.7,
+        "turnDeg": 1.6
+      },
+      {
+        "road": "r:679",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4413553754],
+        "headingBefore": 163.6,
+        "headingAfterMerge": 164.2,
+        "headingFinal": 164.2,
+        "turnDeg": 0.6
+      },
+      {
+        "road": "r:680",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4413553754],
+        "headingBefore": 163.6,
+        "headingAfterMerge": 164.2,
+        "headingFinal": 164.2,
+        "turnDeg": 0.6
+      }
+    ],
+    "minArmAngleBefore": 88.4,
+    "minArmAngleFinal": 86.7,
+    "maxArmTurnDeg": 1.6,
+    "maxMoveM": 12.61
+  },
+  {
+    "node": "n:129",
+    "cls": "other: dead end",
+    "pos": {
+      "x": -387.11,
+      "y": -667.96
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:129",
+        "osmIds": [26156109],
+        "kind": "clip",
+        "movedM": 0,
+        "movedFinalM": 0
+      },
+      {
+        "node": "n:130",
+        "osmIds": [286420792],
+        "kind": "osm",
+        "movedM": 22.64,
+        "movedFinalM": 22.64
+      },
+      {
+        "node": "n:1",
+        "osmIds": [242703],
+        "kind": "osm",
+        "movedM": 30.55,
+        "movedFinalM": 30.55
+      },
+      {
+        "node": "n:2",
+        "osmIds": [1165433838],
+        "kind": "osm",
+        "movedM": 17.37,
+        "movedFinalM": 17.37
+      },
+      {
+        "node": "n:1233",
+        "osmIds": [1234559325],
+        "kind": "clip",
+        "movedM": 17.99,
+        "movedFinalM": 17.99
+      }
+    ],
+    "spreadM": 32.21,
+    "innerRoads": [
+      {
+        "road": "r:3",
+        "from": "n:1",
+        "to": "n:2",
+        "ways": [4067030],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 27.88
+      },
+      {
+        "road": "r:131",
+        "from": "n:129",
+        "to": "n:130",
+        "ways": [26156109],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 22.72
+      },
+      {
+        "road": "r:132",
+        "from": "n:130",
+        "to": "n:1",
+        "ways": [26156109],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 7.94
+      },
+      {
+        "road": "r:1234",
+        "from": "n:2",
+        "to": "n:1233",
+        "ways": [1234559325],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 4.36
+      }
+    ],
+    "streets": ["Benzstraße"],
+    "arms": [
+      {
+        "road": "r:903",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [242703],
+        "headingBefore": 113.8,
+        "headingAfterMerge": 95.8,
+        "headingFinal": 95.8,
+        "turnDeg": 18
+      },
+      {
+        "road": "r:904",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [242703],
+        "headingBefore": 113.8,
+        "headingAfterMerge": 95.8,
+        "headingFinal": 95.8,
+        "turnDeg": 18
+      }
+    ],
+    "minArmAngleBefore": 360,
+    "minArmAngleFinal": 360,
+    "maxArmTurnDeg": 18,
+    "maxMoveM": 30.55
+  },
+  {
+    "node": "n:139",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -174.64,
+      "y": -599.95
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:139",
+        "osmIds": [11418492016],
+        "kind": "osm",
+        "movedM": 11.59,
+        "movedFinalM": 11.59
+      },
+      {
+        "node": "n:142",
+        "osmIds": [330935466],
+        "kind": "osm",
+        "movedM": 6.12,
+        "movedFinalM": 6.12
+      },
+      {
+        "node": "n:145",
+        "osmIds": [330933285],
+        "kind": "osm",
+        "movedM": 2.79,
+        "movedFinalM": 2.79
+      },
+      {
+        "node": "n:177",
+        "osmIds": [11418492014],
+        "kind": "osm",
+        "movedM": 14.09,
+        "movedFinalM": 14.09
+      },
+      {
+        "node": "n:183",
+        "osmIds": [11418492012],
+        "kind": "osm",
+        "movedM": 13.68,
+        "movedFinalM": 13.68
+      },
+      {
+        "node": "n:522",
+        "osmIds": [4565770893],
+        "kind": "osm",
+        "movedM": 22.75,
+        "movedFinalM": 22.75
+      }
+    ],
+    "spreadM": 34.19,
+    "innerRoads": [
+      {
+        "road": "r:143",
+        "from": "n:139",
+        "to": "n:142",
+        "ways": [29072504],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 6.26
+      },
+      {
+        "road": "r:144",
+        "from": "n:142",
+        "to": "n:139",
+        "ways": [29072504],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 6.26
+      },
+      {
+        "road": "r:146",
+        "from": "n:142",
+        "to": "n:145",
+        "ways": [29072504],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 4.47
+      },
+      {
+        "road": "r:147",
+        "from": "n:145",
+        "to": "n:142",
+        "ways": [29072504],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 4.47
+      },
+      {
+        "road": "r:178",
+        "from": "n:145",
+        "to": "n:177",
+        "ways": [30047157],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 11.35
+      },
+      {
+        "road": "r:184",
+        "from": "n:142",
+        "to": "n:183",
+        "ways": [30047267],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.02
+      },
+      {
+        "road": "r:523",
+        "from": "n:183",
+        "to": "n:522",
+        "ways": [220072434],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 23.78
+      },
+      {
+        "road": "r:524",
+        "from": "n:522",
+        "to": "n:183",
+        "ways": [220072434],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 23.78
+      },
+      {
+        "road": "r:863",
+        "from": "n:522",
+        "to": "n:145",
+        "ways": [461011611],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 24.69
+      },
+      {
+        "road": "r:864",
+        "from": "n:145",
+        "to": "n:522",
+        "ways": [461011611],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 24.69
+      }
+    ],
+    "streets": [
+      "way/29072504",
+      "way/30047157",
+      "way/30047267",
+      "way/30047270",
+      "way/165456713",
+      "way/220072434"
+    ],
+    "arms": [
+      {
+        "road": "r:140",
+        "street": "way/29072504",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11418492016],
+        "headingBefore": -155,
+        "headingAfterMerge": -152.7,
+        "headingFinal": -127.7,
+        "turnDeg": 27.3
+      },
+      {
+        "road": "r:141",
+        "street": "way/29072504",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11418492016],
+        "headingBefore": -155,
+        "headingAfterMerge": -152.7,
+        "headingFinal": -127.7,
+        "turnDeg": 27.3
+      },
+      {
+        "road": "r:180",
+        "street": "way/30047157",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [11418492014],
+        "headingBefore": -32.5,
+        "headingAfterMerge": -59.2,
+        "headingFinal": -59.2,
+        "turnDeg": 26.6
+      },
+      {
+        "road": "r:182",
+        "street": "way/30047267",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [330935466],
+        "headingBefore": -64.1,
+        "headingAfterMerge": -67.6,
+        "headingFinal": -67.6,
+        "turnDeg": 3.5
+      },
+      {
+        "road": "r:186",
+        "street": "way/30047270",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11418492014],
+        "headingBefore": 61.3,
+        "headingAfterMerge": 25.9,
+        "headingFinal": 0.9,
+        "turnDeg": 60.4
+      },
+      {
+        "road": "r:187",
+        "street": "way/30047270",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11418492014],
+        "headingBefore": 61.3,
+        "headingAfterMerge": 25.9,
+        "headingFinal": 0.9,
+        "turnDeg": 60.4
+      },
+      {
+        "road": "r:475",
+        "street": "way/165456713",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11418492016],
+        "headingBefore": 162.7,
+        "headingAfterMerge": -156.4,
+        "headingFinal": -156.4,
+        "turnDeg": 41
+      },
+      {
+        "road": "r:476",
+        "street": "way/165456713",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11418492016],
+        "headingBefore": 162.7,
+        "headingAfterMerge": -156.4,
+        "headingFinal": -156.4,
+        "turnDeg": 41
+      },
+      {
+        "road": "r:520",
+        "street": "way/220072434",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11418492012],
+        "headingBefore": -153.5,
+        "headingAfterMerge": -161.8,
+        "headingFinal": 151.2,
+        "turnDeg": 55.2
+      },
+      {
+        "road": "r:521",
+        "street": "way/220072434",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11418492012],
+        "headingBefore": -153.5,
+        "headingAfterMerge": -161.8,
+        "headingFinal": 151.2,
+        "turnDeg": 55.2
+      },
+      {
+        "road": "r:525",
+        "street": "way/220072434",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565770893],
+        "headingBefore": 26.6,
+        "headingAfterMerge": 33.6,
+        "headingFinal": 33.6,
+        "turnDeg": 7
+      },
+      {
+        "road": "r:526",
+        "street": "way/220072434",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565770893],
+        "headingBefore": 26.6,
+        "headingAfterMerge": 33.6,
+        "headingFinal": 33.6,
+        "turnDeg": 7
+      }
+    ],
+    "minArmAngleBefore": 1.5,
+    "minArmAngleFinal": 8.4,
+    "maxArmTurnDeg": 60.4,
+    "maxMoveM": 22.75
+  },
+  {
+    "node": "n:148",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -16.1,
+      "y": -507.39
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:148",
+        "osmIds": [330924754],
+        "kind": "osm",
+        "movedM": 9.08,
+        "movedFinalM": 9.08
+      },
+      {
+        "node": "n:532",
+        "osmIds": [3373714521],
+        "kind": "osm",
+        "movedM": 0.46,
+        "movedFinalM": 0.46
+      },
+      {
+        "node": "n:569",
+        "osmIds": [3373714520],
+        "kind": "osm",
+        "movedM": 9.54,
+        "movedFinalM": 9.54
+      }
+    ],
+    "spreadM": 18.61,
+    "innerRoads": [
+      {
+        "road": "r:533",
+        "from": "n:148",
+        "to": "n:532",
+        "ways": [220072434],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 8.62
+      },
+      {
+        "road": "r:534",
+        "from": "n:532",
+        "to": "n:148",
+        "ways": [220072434],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 8.62
+      },
+      {
+        "road": "r:570",
+        "from": "n:532",
+        "to": "n:569",
+        "ways": [330410537],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 10
+      },
+      {
+        "road": "r:571",
+        "from": "n:569",
+        "to": "n:532",
+        "ways": [330410537],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 10
+      }
+    ],
+    "streets": ["way/30046652", "way/220072434", "way/460913559"],
+    "arms": [
+      {
+        "road": "r:150",
+        "street": "way/30046652",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [330924754],
+        "headingBefore": -64,
+        "headingAfterMerge": -68.3,
+        "headingFinal": -68.3,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:151",
+        "street": "way/30046652",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [330924754],
+        "headingBefore": -64,
+        "headingAfterMerge": -68.3,
+        "headingFinal": -68.3,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:530",
+        "street": "way/220072434",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [330924754],
+        "headingBefore": -153.7,
+        "headingAfterMerge": -153.7,
+        "headingFinal": -153.7,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:531",
+        "street": "way/220072434",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [330924754],
+        "headingBefore": -153.7,
+        "headingAfterMerge": -153.7,
+        "headingFinal": -153.7,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:759",
+        "street": "way/460913559",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [3373714520],
+        "headingBefore": 26.3,
+        "headingAfterMerge": 26.3,
+        "headingFinal": 26.3,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:760",
+        "street": "way/460913559",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [3373714520],
+        "headingBefore": 26.3,
+        "headingAfterMerge": 26.3,
+        "headingFinal": 26.3,
+        "turnDeg": 0
+      }
+    ],
+    "minArmAngleBefore": 89.8,
+    "minArmAngleFinal": 85.5,
+    "maxArmTurnDeg": 4.3,
+    "maxMoveM": 9.54
+  },
+  {
+    "node": "n:161",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -606.39,
+      "y": 190.5
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:161",
+        "osmIds": [9973025956],
+        "kind": "osm",
+        "movedM": 9.98,
+        "movedFinalM": 9.98
+      },
+      {
+        "node": "n:164",
+        "osmIds": [9973025953],
+        "kind": "osm",
+        "movedM": 9.98,
+        "movedFinalM": 9.98
+      }
+    ],
+    "spreadM": 19.96,
+    "innerRoads": [
+      {
+        "road": "r:165",
+        "from": "n:161",
+        "to": "n:164",
+        "ways": [30047099],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 19.96
+      },
+      {
+        "road": "r:166",
+        "from": "n:164",
+        "to": "n:161",
+        "ways": [30047099],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 19.96
+      }
+    ],
+    "streets": ["way/30047099", "way/1088543392"],
+    "arms": [
+      {
+        "road": "r:162",
+        "street": "way/30047099",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9973025956],
+        "headingBefore": 26.1,
+        "headingAfterMerge": 26.1,
+        "headingFinal": 26.1,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:163",
+        "street": "way/30047099",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9973025956],
+        "headingBefore": 26.1,
+        "headingAfterMerge": 26.1,
+        "headingFinal": 26.1,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:168",
+        "street": "way/30047099",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9973025953],
+        "headingBefore": -154,
+        "headingAfterMerge": -154,
+        "headingFinal": -154,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:169",
+        "street": "way/30047099",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9973025953],
+        "headingBefore": -154,
+        "headingAfterMerge": -154,
+        "headingFinal": -154,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:1116",
+        "street": "way/1088543392",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9973025953],
+        "headingBefore": -63.7,
+        "headingAfterMerge": -73.4,
+        "headingFinal": -73.4,
+        "turnDeg": 9.6
+      },
+      {
+        "road": "r:1117",
+        "street": "way/1088543392",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9973025953],
+        "headingBefore": -63.7,
+        "headingAfterMerge": -73.4,
+        "headingFinal": -73.4,
+        "turnDeg": 9.6
+      },
+      {
+        "road": "r:1118",
+        "street": "way/1088543392",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9973025956],
+        "headingBefore": -64.7,
+        "headingAfterMerge": -47.2,
+        "headingFinal": -34.3,
+        "turnDeg": 30.4
+      },
+      {
+        "road": "r:1119",
+        "street": "way/1088543392",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9973025956],
+        "headingBefore": -64.7,
+        "headingAfterMerge": -47.2,
+        "headingFinal": -34.3,
+        "turnDeg": 30.4
+      }
+    ],
+    "minArmAngleBefore": 89.8,
+    "minArmAngleFinal": 39.1,
+    "maxArmTurnDeg": 30.4,
+    "maxMoveM": 9.98
+  },
+  {
+    "node": "n:198",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 189.43,
+      "y": -618.16
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:198",
+        "osmIds": [352952325],
+        "kind": "osm",
+        "movedM": 5.94,
+        "movedFinalM": 5.94
+      },
+      {
+        "node": "n:201",
+        "osmIds": [4565516258],
+        "kind": "osm",
+        "movedM": 2.08,
+        "movedFinalM": 2.08
+      },
+      {
+        "node": "n:853",
+        "osmIds": [4565516257],
+        "kind": "osm",
+        "movedM": 8.02,
+        "movedFinalM": 8.02
+      }
+    ],
+    "spreadM": 13.96,
+    "innerRoads": [
+      {
+        "road": "r:202",
+        "from": "n:198",
+        "to": "n:201",
+        "ways": [30047740],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 3.85
+      },
+      {
+        "road": "r:203",
+        "from": "n:201",
+        "to": "n:198",
+        "ways": [30047740],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 3.85
+      },
+      {
+        "road": "r:854",
+        "from": "n:201",
+        "to": "n:853",
+        "ways": [460984705],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 10.1
+      },
+      {
+        "road": "r:855",
+        "from": "n:853",
+        "to": "n:201",
+        "ways": [460984705],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 10.1
+      }
+    ],
+    "streets": ["way/30047740", "way/31541253", "way/460984706"],
+    "arms": [
+      {
+        "road": "r:199",
+        "street": "way/30047740",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952325],
+        "headingBefore": -154.8,
+        "headingAfterMerge": -154.7,
+        "headingFinal": -154.7,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:200",
+        "street": "way/30047740",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952325],
+        "headingBefore": -154.8,
+        "headingAfterMerge": -154.7,
+        "headingFinal": -154.7,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:242",
+        "street": "way/31541253",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952325],
+        "headingBefore": 116.4,
+        "headingAfterMerge": 116.2,
+        "headingFinal": 116.2,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:243",
+        "street": "way/31541253",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952325],
+        "headingBefore": 116.4,
+        "headingAfterMerge": 116.2,
+        "headingFinal": 116.2,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:857",
+        "street": "way/460984706",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516257],
+        "headingBefore": 25.4,
+        "headingAfterMerge": 25.4,
+        "headingFinal": 25.4,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:858",
+        "street": "way/460984706",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516257],
+        "headingBefore": 25.4,
+        "headingAfterMerge": 25.4,
+        "headingFinal": 25.4,
+        "turnDeg": 0
+      }
+    ],
+    "minArmAngleBefore": 88.8,
+    "minArmAngleFinal": 89.1,
+    "maxArmTurnDeg": 0.2,
+    "maxMoveM": 8.02
+  },
+  {
+    "node": "n:220",
+    "cls": "roundabout",
+    "pos": {
+      "x": 108.85,
+      "y": 49.18
+    },
+    "control": "yield",
+    "members": [
+      {
+        "node": "n:220",
+        "osmIds": [196375513],
+        "kind": "osm",
+        "movedM": 9.04,
+        "movedFinalM": 9.04
+      },
+      {
+        "node": "n:213",
+        "osmIds": [344711038],
+        "kind": "osm",
+        "movedM": 9.04,
+        "movedFinalM": 9.04
+      }
+    ],
+    "spreadM": 18.08,
+    "innerRoads": [
+      {
+        "road": "r:221",
+        "from": "n:220",
+        "to": "n:213",
+        "ways": [31002101],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 18.1
+      },
+      {
+        "road": "r:222",
+        "from": "n:213",
+        "to": "n:220",
+        "ways": [31002101],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 18.1
+      }
+    ],
+    "streets": ["way/31002100", "way/683770306"],
+    "arms": [
+      {
+        "road": "r:214",
+        "street": "way/31002100",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [344711038],
+        "headingBefore": -15.9,
+        "headingAfterMerge": -2,
+        "headingFinal": -2,
+        "turnDeg": 14
+      },
+      {
+        "road": "r:216",
+        "street": "way/31002100",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [344711038],
+        "headingBefore": 83.8,
+        "headingAfterMerge": 49,
+        "headingFinal": 49,
+        "turnDeg": 34.8
+      },
+      {
+        "road": "r:988",
+        "street": "way/683770306",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [196375513],
+        "headingBefore": -64.2,
+        "headingAfterMerge": -70.1,
+        "headingFinal": -70.1,
+        "turnDeg": 5.9
+      },
+      {
+        "road": "r:989",
+        "street": "way/683770306",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [196375513],
+        "headingBefore": -64.2,
+        "headingAfterMerge": -70.1,
+        "headingFinal": -70.1,
+        "turnDeg": 5.9
+      },
+      {
+        "road": "r:990",
+        "street": "way/683770306",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [196375513],
+        "headingBefore": 117.5,
+        "headingAfterMerge": 128.9,
+        "headingFinal": 128.9,
+        "turnDeg": 11.4
+      },
+      {
+        "road": "r:991",
+        "street": "way/683770306",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [196375513],
+        "headingBefore": 117.5,
+        "headingAfterMerge": 128.9,
+        "headingFinal": 128.9,
+        "turnDeg": 11.4
+      }
+    ],
+    "minArmAngleBefore": 33.8,
+    "minArmAngleFinal": 50.9,
+    "maxArmTurnDeg": 34.8,
+    "maxMoveM": 9.04
+  },
+  {
+    "node": "n:234",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 25.53,
+      "y": 140.93
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:234",
+        "osmIds": [344711097],
+        "kind": "osm",
+        "movedM": 4.66,
+        "movedFinalM": 4.66
+      },
+      {
+        "node": "n:229",
+        "osmIds": [344711072],
+        "kind": "osm",
+        "movedM": 4.66,
+        "movedFinalM": 4.66
+      }
+    ],
+    "spreadM": 9.32,
+    "innerRoads": [
+      {
+        "road": "r:239",
+        "from": "n:234",
+        "to": "n:229",
+        "ways": [31002109],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 9.33
+      },
+      {
+        "road": "r:240",
+        "from": "n:229",
+        "to": "n:234",
+        "ways": [31002109],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 9.33
+      }
+    ],
+    "streets": ["way/31002105", "way/31002108"],
+    "arms": [
+      {
+        "road": "r:231",
+        "street": "way/31002105",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [344711072],
+        "headingBefore": 56.6,
+        "headingAfterMerge": 56.7,
+        "headingFinal": 56.7,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:232",
+        "street": "way/31002105",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [344711072],
+        "headingBefore": 56.6,
+        "headingAfterMerge": 56.7,
+        "headingFinal": 56.7,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:235",
+        "street": "way/31002108",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [344711097],
+        "headingBefore": 150.3,
+        "headingAfterMerge": 154.6,
+        "headingFinal": 154.6,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:236",
+        "street": "way/31002108",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [344711097],
+        "headingBefore": 150.3,
+        "headingAfterMerge": 154.6,
+        "headingFinal": 154.6,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:237",
+        "street": "way/31002108",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [344711097],
+        "headingBefore": -30.5,
+        "headingAfterMerge": -36.2,
+        "headingFinal": -36.2,
+        "turnDeg": 5.7
+      },
+      {
+        "road": "r:238",
+        "street": "way/31002108",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [344711097],
+        "headingBefore": -30.5,
+        "headingAfterMerge": -36.2,
+        "headingFinal": -36.2,
+        "turnDeg": 5.7
+      }
+    ],
+    "minArmAngleBefore": 87.1,
+    "minArmAngleFinal": 92.8,
+    "maxArmTurnDeg": 5.7,
+    "maxMoveM": 4.66
+  },
+  {
+    "node": "n:241",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 159.5,
+      "y": -557.38
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:241",
+        "osmIds": [352952326],
+        "kind": "osm",
+        "movedM": 6.17,
+        "movedFinalM": 6.17
+      },
+      {
+        "node": "n:846",
+        "osmIds": [4565516255],
+        "kind": "osm",
+        "movedM": 1.98,
+        "movedFinalM": 1.98
+      },
+      {
+        "node": "n:204",
+        "osmIds": [4565516256],
+        "kind": "osm",
+        "movedM": 8.13,
+        "movedFinalM": 8.13
+      }
+    ],
+    "spreadM": 14.3,
+    "innerRoads": [
+      {
+        "road": "r:847",
+        "from": "n:846",
+        "to": "n:204",
+        "ways": [460984701],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 10.1
+      },
+      {
+        "road": "r:848",
+        "from": "n:204",
+        "to": "n:846",
+        "ways": [460984701],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 10.1
+      },
+      {
+        "road": "r:851",
+        "from": "n:241",
+        "to": "n:846",
+        "ways": [460984703],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 4.22
+      },
+      {
+        "road": "r:852",
+        "from": "n:846",
+        "to": "n:241",
+        "ways": [460984703],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 4.22
+      }
+    ],
+    "streets": ["way/30047748", "way/31541253", "way/460984703"],
+    "arms": [
+      {
+        "road": "r:206",
+        "street": "way/30047748",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516256],
+        "headingBefore": 25.2,
+        "headingAfterMerge": 25.2,
+        "headingFinal": 25.2,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:207",
+        "street": "way/30047748",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516256],
+        "headingBefore": 25.2,
+        "headingAfterMerge": 25.2,
+        "headingFinal": 25.2,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:242",
+        "street": "way/31541253",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952326],
+        "headingBefore": -63.6,
+        "headingAfterMerge": -63.8,
+        "headingFinal": -63.8,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:243",
+        "street": "way/31541253",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952326],
+        "headingBefore": -63.6,
+        "headingAfterMerge": -63.8,
+        "headingFinal": -63.8,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:849",
+        "street": "way/460984703",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952326],
+        "headingBefore": -154.5,
+        "headingAfterMerge": -154.6,
+        "headingFinal": -154.6,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:850",
+        "street": "way/460984703",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952326],
+        "headingBefore": -154.5,
+        "headingAfterMerge": -154.6,
+        "headingFinal": -154.6,
+        "turnDeg": 0.1
+      }
+    ],
+    "minArmAngleBefore": 88.8,
+    "minArmAngleFinal": 89,
+    "maxArmTurnDeg": 0.2,
+    "maxMoveM": 8.13
+  },
+  {
+    "node": "n:251",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 384.99,
+      "y": -561.11
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:251",
+        "osmIds": [352952357],
+        "kind": "osm",
+        "movedM": 6.49,
+        "movedFinalM": 6.49
+      },
+      {
+        "node": "n:65",
+        "osmIds": [352952361],
+        "kind": "osm",
+        "movedM": 6.49,
+        "movedFinalM": 6.49
+      }
+    ],
+    "spreadM": 12.98,
+    "innerRoads": [
+      {
+        "road": "r:1097",
+        "from": "n:251",
+        "to": "n:65",
+        "ways": [1037417763],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 12.98
+      },
+      {
+        "road": "r:1098",
+        "from": "n:65",
+        "to": "n:251",
+        "ways": [1037417763],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 12.98
+      }
+    ],
+    "streets": ["way/18968138", "way/31541258"],
+    "arms": [
+      {
+        "road": "r:66",
+        "street": "way/18968138",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952361],
+        "headingBefore": -59.1,
+        "headingAfterMerge": -45.4,
+        "headingFinal": -45.4,
+        "turnDeg": 13.7
+      },
+      {
+        "road": "r:67",
+        "street": "way/18968138",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952361],
+        "headingBefore": -59.1,
+        "headingAfterMerge": -45.4,
+        "headingFinal": -45.4,
+        "turnDeg": 13.7
+      },
+      {
+        "road": "r:69",
+        "street": "way/18968138",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952361],
+        "headingBefore": 123.3,
+        "headingAfterMerge": 98.6,
+        "headingFinal": 98.6,
+        "turnDeg": 24.6
+      },
+      {
+        "road": "r:70",
+        "street": "way/18968138",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952361],
+        "headingBefore": 123.3,
+        "headingAfterMerge": 98.6,
+        "headingFinal": 98.6,
+        "turnDeg": 24.6
+      },
+      {
+        "road": "r:252",
+        "street": "way/31541258",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352952357],
+        "headingBefore": -154.6,
+        "headingAfterMerge": -154.1,
+        "headingFinal": -154.1,
+        "turnDeg": 0.6
+      },
+      {
+        "road": "r:253",
+        "street": "way/31541258",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352952357],
+        "headingBefore": -154.6,
+        "headingAfterMerge": -154.1,
+        "headingFinal": -154.1,
+        "turnDeg": 0.6
+      }
+    ],
+    "minArmAngleBefore": 82.1,
+    "minArmAngleFinal": 107.3,
+    "maxArmTurnDeg": 24.6,
+    "maxMoveM": 6.49
+  },
+  {
+    "node": "n:261",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -495.52,
+      "y": 419.76
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:261",
+        "osmIds": [11422474867],
+        "kind": "osm",
+        "movedM": 17.09,
+        "movedFinalM": 17.09
+      },
+      {
+        "node": "n:1188",
+        "osmIds": [11422474812],
+        "kind": "osm",
+        "movedM": 7.24,
+        "movedFinalM": 7.24
+      },
+      {
+        "node": "n:1189",
+        "osmIds": [11422474810],
+        "kind": "osm",
+        "movedM": 17.59,
+        "movedFinalM": 17.59
+      },
+      {
+        "node": "n:1194",
+        "osmIds": [11422474811],
+        "kind": "osm",
+        "movedM": 23.99,
+        "movedFinalM": 23.99
+      }
+    ],
+    "spreadM": 39.78,
+    "innerRoads": [
+      {
+        "road": "r:1190",
+        "from": "n:1188",
+        "to": "n:1189",
+        "ways": [1231631964],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 23.89
+      },
+      {
+        "road": "r:1191",
+        "from": "n:1189",
+        "to": "n:1188",
+        "ways": [1231631964],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 23.89
+      },
+      {
+        "road": "r:1192",
+        "from": "n:261",
+        "to": "n:1188",
+        "ways": [1231631965],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 14.05
+      },
+      {
+        "road": "r:1193",
+        "from": "n:1188",
+        "to": "n:261",
+        "ways": [1231631965],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 14.05
+      },
+      {
+        "road": "r:1195",
+        "from": "n:1188",
+        "to": "n:1194",
+        "ways": [1231631965],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 25.91
+      },
+      {
+        "road": "r:1196",
+        "from": "n:1194",
+        "to": "n:1188",
+        "ways": [1231631965],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 25.91
+      }
+    ],
+    "streets": ["way/31541291"],
+    "arms": [
+      {
+        "road": "r:262",
+        "street": "way/31541291",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422474867],
+        "headingBefore": 25.2,
+        "headingAfterMerge": 37.6,
+        "headingFinal": 37.6,
+        "turnDeg": 12.4
+      },
+      {
+        "road": "r:263",
+        "street": "way/31541291",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422474867],
+        "headingBefore": 25.2,
+        "headingAfterMerge": 37.6,
+        "headingFinal": 37.6,
+        "turnDeg": 12.4
+      },
+      {
+        "road": "r:265",
+        "street": "way/31541291",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422474867],
+        "headingBefore": 167,
+        "headingAfterMerge": 152.9,
+        "headingFinal": 152.9,
+        "turnDeg": 14.1
+      },
+      {
+        "road": "r:266",
+        "street": "way/31541291",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422474867],
+        "headingBefore": 167,
+        "headingAfterMerge": 152.9,
+        "headingFinal": 152.9,
+        "turnDeg": 14.1
+      }
+    ],
+    "minArmAngleBefore": 141.8,
+    "minArmAngleFinal": 115.3,
+    "maxArmTurnDeg": 14.1,
+    "maxMoveM": 23.99
+  },
+  {
+    "node": "n:270",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -664.64,
+      "y": 491.4
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:270",
+        "osmIds": [352953507],
+        "kind": "osm",
+        "movedM": 10.74,
+        "movedFinalM": 10.74
+      },
+      {
+        "node": "n:1050",
+        "osmIds": [8767007673],
+        "kind": "osm",
+        "movedM": 10.74,
+        "movedFinalM": 10.74
+      }
+    ],
+    "spreadM": 21.49,
+    "innerRoads": [
+      {
+        "road": "r:1051",
+        "from": "n:270",
+        "to": "n:1050",
+        "ways": [947116167],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 21.49
+      },
+      {
+        "road": "r:1052",
+        "from": "n:1050",
+        "to": "n:270",
+        "ways": [947116167],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 21.49
+      }
+    ],
+    "streets": ["way/31541291", "way/947116167", "way/1231631963"],
+    "arms": [
+      {
+        "road": "r:271",
+        "street": "way/31541291",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352953507],
+        "headingBefore": -11,
+        "headingAfterMerge": -24.6,
+        "headingFinal": -54.3,
+        "turnDeg": 43.3
+      },
+      {
+        "road": "r:272",
+        "street": "way/31541291",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352953507],
+        "headingBefore": -11,
+        "headingAfterMerge": -24.6,
+        "headingFinal": -54.3,
+        "turnDeg": 43.3
+      },
+      {
+        "road": "r:274",
+        "street": "way/31541291",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352953507],
+        "headingBefore": 177.4,
+        "headingAfterMerge": -141.7,
+        "headingFinal": -141.7,
+        "turnDeg": 40.9
+      },
+      {
+        "road": "r:275",
+        "street": "way/31541291",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352953507],
+        "headingBefore": 177.4,
+        "headingAfterMerge": -141.7,
+        "headingFinal": -141.7,
+        "turnDeg": 40.9
+      },
+      {
+        "road": "r:1053",
+        "street": "way/947116167",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [8767007673],
+        "headingBefore": -13,
+        "headingAfterMerge": 0.5,
+        "headingFinal": 0.5,
+        "turnDeg": 13.5
+      },
+      {
+        "road": "r:1054",
+        "street": "way/947116167",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [8767007673],
+        "headingBefore": -13,
+        "headingAfterMerge": 0.5,
+        "headingFinal": 0.5,
+        "turnDeg": 13.5
+      },
+      {
+        "road": "r:1186",
+        "street": "way/1231631963",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [8767007673],
+        "headingBefore": 77.7,
+        "headingAfterMerge": 77.5,
+        "headingFinal": 77.5,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:1187",
+        "street": "way/1231631963",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [8767007673],
+        "headingBefore": 77.7,
+        "headingAfterMerge": 77.5,
+        "headingFinal": 77.5,
+        "turnDeg": 0.1
+      }
+    ],
+    "minArmAngleBefore": 2,
+    "minArmAngleFinal": 54.8,
+    "maxArmTurnDeg": 43.3,
+    "maxMoveM": 10.74
+  },
+  {
+    "node": "n:276",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -570.82,
+      "y": 384.71
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:276",
+        "osmIds": [352953549],
+        "kind": "osm",
+        "movedM": 3.08,
+        "movedFinalM": 3.08
+      },
+      {
+        "node": "n:282",
+        "osmIds": [352953555],
+        "kind": "osm",
+        "movedM": 3.08,
+        "movedFinalM": 3.08
+      }
+    ],
+    "spreadM": 6.16,
+    "innerRoads": [
+      {
+        "road": "r:288",
+        "from": "n:276",
+        "to": "n:282",
+        "ways": [31541325],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 6.16
+      },
+      {
+        "road": "r:289",
+        "from": "n:282",
+        "to": "n:276",
+        "ways": [31541325],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 6.16
+      }
+    ],
+    "streets": ["way/31541291", "way/31541324", "way/31541325"],
+    "arms": [
+      {
+        "road": "r:277",
+        "street": "way/31541291",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352953549],
+        "headingBefore": 161.2,
+        "headingAfterMerge": 157.3,
+        "headingFinal": 157.3,
+        "turnDeg": 3.9
+      },
+      {
+        "road": "r:278",
+        "street": "way/31541291",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352953549],
+        "headingBefore": 161.2,
+        "headingAfterMerge": 157.3,
+        "headingFinal": 157.3,
+        "turnDeg": 3.9
+      },
+      {
+        "road": "r:284",
+        "street": "way/31541324",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352953555],
+        "headingBefore": -18.8,
+        "headingAfterMerge": -21.7,
+        "headingFinal": -21.7,
+        "turnDeg": 2.9
+      },
+      {
+        "road": "r:285",
+        "street": "way/31541324",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352953555],
+        "headingBefore": -18.8,
+        "headingAfterMerge": -21.7,
+        "headingFinal": -21.7,
+        "turnDeg": 2.9
+      },
+      {
+        "road": "r:286",
+        "street": "way/31541325",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352953549],
+        "headingBefore": 77.4,
+        "headingAfterMerge": 78,
+        "headingFinal": 78,
+        "turnDeg": 0.6
+      },
+      {
+        "road": "r:287",
+        "street": "way/31541325",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352953549],
+        "headingBefore": 77.4,
+        "headingAfterMerge": 78,
+        "headingFinal": 78,
+        "turnDeg": 0.6
+      },
+      {
+        "road": "r:291",
+        "street": "way/31541325",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [352953555],
+        "headingBefore": -101.2,
+        "headingAfterMerge": -99.1,
+        "headingFinal": -99.1,
+        "turnDeg": 2.1
+      },
+      {
+        "road": "r:292",
+        "street": "way/31541325",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [352953555],
+        "headingBefore": -101.2,
+        "headingAfterMerge": -99.1,
+        "headingFinal": -99.1,
+        "turnDeg": 2.1
+      }
+    ],
+    "minArmAngleBefore": 82.4,
+    "minArmAngleFinal": 77.4,
+    "maxArmTurnDeg": 3.9,
+    "maxMoveM": 3.08
+  },
+  {
+    "node": "n:303",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 523.64,
+      "y": 103.24
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:303",
+        "osmIds": [353403398],
+        "kind": "osm",
+        "movedM": 10.17,
+        "movedFinalM": 10.17
+      },
+      {
+        "node": "n:318",
+        "osmIds": [11509635155],
+        "kind": "osm",
+        "movedM": 10.17,
+        "movedFinalM": 10.17
+      }
+    ],
+    "spreadM": 20.33,
+    "innerRoads": [
+      {
+        "road": "r:319",
+        "from": "n:303",
+        "to": "n:318",
+        "ways": [31583972],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 20.33
+      },
+      {
+        "road": "r:320",
+        "from": "n:318",
+        "to": "n:303",
+        "ways": [31583972],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 20.33
+      }
+    ],
+    "streets": ["way/31583966"],
+    "arms": [
+      {
+        "road": "r:304",
+        "street": "way/31583966",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403398],
+        "headingBefore": 26.6,
+        "headingAfterMerge": 43.4,
+        "headingFinal": 43.4,
+        "turnDeg": 16.8
+      },
+      {
+        "road": "r:305",
+        "street": "way/31583966",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403398],
+        "headingBefore": 26.6,
+        "headingAfterMerge": 43.4,
+        "headingFinal": 43.4,
+        "turnDeg": 16.8
+      },
+      {
+        "road": "r:307",
+        "street": "way/31583966",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403398],
+        "headingBefore": -154.2,
+        "headingAfterMerge": -170.3,
+        "headingFinal": -170.3,
+        "turnDeg": 16.1
+      },
+      {
+        "road": "r:308",
+        "street": "way/31583966",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403398],
+        "headingBefore": -154.2,
+        "headingAfterMerge": -170.3,
+        "headingFinal": -170.3,
+        "turnDeg": 16.1
+      }
+    ],
+    "minArmAngleBefore": 179.3,
+    "minArmAngleFinal": 146.4,
+    "maxArmTurnDeg": 16.8,
+    "maxMoveM": 10.17
+  },
+  {
+    "node": "n:322",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 645.96,
+      "y": 22.5
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:322",
+        "osmIds": [353403703],
+        "kind": "osm",
+        "movedM": 6.3,
+        "movedFinalM": 6.3
+      },
+      {
+        "node": "n:337",
+        "osmIds": [11422610531],
+        "kind": "osm",
+        "movedM": 6.3,
+        "movedFinalM": 6.3
+      }
+    ],
+    "spreadM": 12.6,
+    "innerRoads": [
+      {
+        "road": "r:338",
+        "from": "n:322",
+        "to": "n:337",
+        "ways": [31583987],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 12.6
+      },
+      {
+        "road": "r:339",
+        "from": "n:337",
+        "to": "n:322",
+        "ways": [31583987],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 12.6
+      }
+    ],
+    "streets": ["way/31583974", "way/31583987", "way/1231649709"],
+    "arms": [
+      {
+        "road": "r:323",
+        "street": "way/31583974",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403703],
+        "headingBefore": 25.8,
+        "headingAfterMerge": 35.9,
+        "headingFinal": 35.9,
+        "turnDeg": 10.1
+      },
+      {
+        "road": "r:324",
+        "street": "way/31583974",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403703],
+        "headingBefore": 25.8,
+        "headingAfterMerge": 35.9,
+        "headingFinal": 35.9,
+        "turnDeg": 10.1
+      },
+      {
+        "road": "r:325",
+        "street": "way/31583974",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403703],
+        "headingBefore": -153.1,
+        "headingAfterMerge": -165.9,
+        "headingFinal": -165.9,
+        "turnDeg": 12.8
+      },
+      {
+        "road": "r:326",
+        "street": "way/31583974",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403703],
+        "headingBefore": -153.1,
+        "headingAfterMerge": -165.9,
+        "headingFinal": -165.9,
+        "turnDeg": 12.8
+      },
+      {
+        "road": "r:340",
+        "street": "way/31583987",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422610531],
+        "headingBefore": -62.1,
+        "headingAfterMerge": -76.2,
+        "headingFinal": -76.2,
+        "turnDeg": 14.1
+      },
+      {
+        "road": "r:341",
+        "street": "way/31583987",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422610531],
+        "headingBefore": -62.1,
+        "headingAfterMerge": -76.2,
+        "headingFinal": -76.2,
+        "turnDeg": 14.1
+      },
+      {
+        "road": "r:1200",
+        "street": "way/1231649709",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422610531],
+        "headingBefore": -14.4,
+        "headingAfterMerge": -20.1,
+        "headingFinal": -20.1,
+        "turnDeg": 5.7
+      },
+      {
+        "road": "r:1201",
+        "street": "way/1231649709",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422610531],
+        "headingBefore": -14.4,
+        "headingAfterMerge": -20.1,
+        "headingFinal": -20.1,
+        "turnDeg": 5.7
+      }
+    ],
+    "minArmAngleBefore": 40.2,
+    "minArmAngleFinal": 56,
+    "maxArmTurnDeg": 14.1,
+    "maxMoveM": 6.3
+  },
+  {
+    "node": "n:331",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 659.16,
+      "y": -31.21
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:331",
+        "osmIds": [353403738],
+        "kind": "osm",
+        "movedM": 23.49,
+        "movedFinalM": 23.49
+      },
+      {
+        "node": "n:342",
+        "osmIds": [353403753],
+        "kind": "osm",
+        "movedM": 11.54,
+        "movedFinalM": 11.54
+      },
+      {
+        "node": "n:345",
+        "osmIds": [353403744],
+        "kind": "osm",
+        "movedM": 22.77,
+        "movedFinalM": 22.77
+      },
+      {
+        "node": "n:348",
+        "osmIds": [353403749],
+        "kind": "osm",
+        "movedM": 23.1,
+        "movedFinalM": 23.1
+      },
+      {
+        "node": "n:351",
+        "osmIds": [353403759],
+        "kind": "osm",
+        "movedM": 10.51,
+        "movedFinalM": 10.51
+      },
+      {
+        "node": "n:334",
+        "osmIds": [353403727],
+        "kind": "osm",
+        "movedM": 24.61,
+        "movedFinalM": 24.61
+      }
+    ],
+    "spreadM": 47.29,
+    "innerRoads": [
+      {
+        "road": "r:335",
+        "from": "n:331",
+        "to": "n:334",
+        "ways": [31583984],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 27
+      },
+      {
+        "road": "r:336",
+        "from": "n:334",
+        "to": "n:331",
+        "ways": [31583984],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 27
+      },
+      {
+        "road": "r:343",
+        "from": "n:331",
+        "to": "n:342",
+        "ways": [31583987],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 19.36
+      },
+      {
+        "road": "r:344",
+        "from": "n:342",
+        "to": "n:331",
+        "ways": [31583987],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 19.36
+      },
+      {
+        "road": "r:346",
+        "from": "n:342",
+        "to": "n:345",
+        "ways": [31583987],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 20.41
+      },
+      {
+        "road": "r:347",
+        "from": "n:345",
+        "to": "n:342",
+        "ways": [31583987],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 20.41
+      },
+      {
+        "road": "r:349",
+        "from": "n:345",
+        "to": "n:348",
+        "ways": [31583987],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 21.28
+      },
+      {
+        "road": "r:350",
+        "from": "n:348",
+        "to": "n:345",
+        "ways": [31583987],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 21.28
+      },
+      {
+        "road": "r:352",
+        "from": "n:342",
+        "to": "n:351",
+        "ways": [31583988],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 22.04
+      },
+      {
+        "road": "r:353",
+        "from": "n:351",
+        "to": "n:342",
+        "ways": [31583988],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 22.04
+      }
+    ],
+    "streets": ["way/31583984", "way/31583987", "way/443029526"],
+    "arms": [
+      {
+        "road": "r:332",
+        "street": "way/31583984",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403738],
+        "headingBefore": 27,
+        "headingAfterMerge": 50.6,
+        "headingFinal": 50.6,
+        "turnDeg": 23.6
+      },
+      {
+        "road": "r:333",
+        "street": "way/31583984",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403738],
+        "headingBefore": 27,
+        "headingAfterMerge": 50.6,
+        "headingFinal": 50.6,
+        "turnDeg": 23.6
+      },
+      {
+        "road": "r:340",
+        "street": "way/31583987",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403738],
+        "headingBefore": 117.9,
+        "headingAfterMerge": 103.8,
+        "headingFinal": 103.8,
+        "turnDeg": 14.1
+      },
+      {
+        "road": "r:341",
+        "street": "way/31583987",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403738],
+        "headingBefore": 117.9,
+        "headingAfterMerge": 103.8,
+        "headingFinal": 103.8,
+        "turnDeg": 14.1
+      },
+      {
+        "road": "r:626",
+        "street": "way/443029526",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403744],
+        "headingBefore": -19.7,
+        "headingAfterMerge": -36.8,
+        "headingFinal": -36.8,
+        "turnDeg": 17.1
+      },
+      {
+        "road": "r:627",
+        "street": "way/443029526",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403744],
+        "headingBefore": -19.7,
+        "headingAfterMerge": -36.8,
+        "headingFinal": -36.8,
+        "turnDeg": 17.1
+      }
+    ],
+    "minArmAngleBefore": 46.7,
+    "minArmAngleFinal": 53.2,
+    "maxArmTurnDeg": 23.6,
+    "maxMoveM": 24.61
+  },
+  {
+    "node": "n:355",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 699.8,
+      "y": -41.05
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:355",
+        "osmIds": [4428016544],
+        "kind": "osm",
+        "movedM": 3.79,
+        "movedFinalM": 3.79
+      },
+      {
+        "node": "n:730",
+        "osmIds": [4428016543],
+        "kind": "osm",
+        "movedM": 3.79,
+        "movedFinalM": 3.79
+      }
+    ],
+    "spreadM": 7.58,
+    "innerRoads": [
+      {
+        "road": "r:731",
+        "from": "n:355",
+        "to": "n:730",
+        "ways": [445357907],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 7.58
+      },
+      {
+        "road": "r:732",
+        "from": "n:730",
+        "to": "n:355",
+        "ways": [445357907],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 7.58
+      }
+    ],
+    "streets": ["way/31583989"],
+    "arms": [
+      {
+        "road": "r:356",
+        "street": "way/31583989",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4428016544],
+        "headingBefore": 115.9,
+        "headingAfterMerge": 125.4,
+        "headingFinal": 125.4,
+        "turnDeg": 9.5
+      },
+      {
+        "road": "r:357",
+        "street": "way/31583989",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4428016544],
+        "headingBefore": 115.9,
+        "headingAfterMerge": 125.4,
+        "headingFinal": 125.4,
+        "turnDeg": 9.5
+      },
+      {
+        "road": "r:359",
+        "street": "way/31583989",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4428016544],
+        "headingBefore": -62.1,
+        "headingAfterMerge": -63,
+        "headingFinal": -63,
+        "turnDeg": 0.9
+      },
+      {
+        "road": "r:360",
+        "street": "way/31583989",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4428016544],
+        "headingBefore": -62.1,
+        "headingAfterMerge": -63,
+        "headingFinal": -63,
+        "turnDeg": 0.9
+      }
+    ],
+    "minArmAngleBefore": 178,
+    "minArmAngleFinal": 171.6,
+    "maxArmTurnDeg": 9.5,
+    "maxMoveM": 3.79
+  },
+  {
+    "node": "n:358",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 718.48,
+      "y": -77.77
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:358",
+        "osmIds": [4428016547],
+        "kind": "osm",
+        "movedM": 3.12,
+        "movedFinalM": 3.12
+      },
+      {
+        "node": "n:727",
+        "osmIds": [4428016546],
+        "kind": "osm",
+        "movedM": 3.12,
+        "movedFinalM": 3.12
+      }
+    ],
+    "spreadM": 6.24,
+    "innerRoads": [
+      {
+        "road": "r:728",
+        "from": "n:358",
+        "to": "n:727",
+        "ways": [445357904],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 6.24
+      },
+      {
+        "road": "r:729",
+        "from": "n:727",
+        "to": "n:358",
+        "ways": [445357904],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 6.24
+      }
+    ],
+    "streets": ["way/31583989"],
+    "arms": [
+      {
+        "road": "r:359",
+        "street": "way/31583989",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4428016547],
+        "headingBefore": 117.9,
+        "headingAfterMerge": 117,
+        "headingFinal": 117,
+        "turnDeg": 0.9
+      },
+      {
+        "road": "r:360",
+        "street": "way/31583989",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4428016547],
+        "headingBefore": 117.9,
+        "headingAfterMerge": 117,
+        "headingFinal": 117,
+        "turnDeg": 0.9
+      },
+      {
+        "road": "r:362",
+        "street": "way/31583989",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4428016547],
+        "headingBefore": -64.1,
+        "headingAfterMerge": -68.2,
+        "headingFinal": -68.2,
+        "turnDeg": 4.1
+      },
+      {
+        "road": "r:363",
+        "street": "way/31583989",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4428016547],
+        "headingBefore": -64.1,
+        "headingAfterMerge": -68.2,
+        "headingFinal": -68.2,
+        "turnDeg": 4.1
+      }
+    ],
+    "minArmAngleBefore": 178,
+    "minArmAngleFinal": 174.9,
+    "maxArmTurnDeg": 4.1,
+    "maxMoveM": 3.12
+  },
+  {
+    "node": "n:371",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -599.66,
+      "y": -140.64
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:371",
+        "osmIds": [353406037],
+        "kind": "osm",
+        "movedM": 11.35,
+        "movedFinalM": 11.35
+      },
+      {
+        "node": "n:372",
+        "osmIds": [9535611968],
+        "kind": "osm",
+        "movedM": 11.35,
+        "movedFinalM": 11.35
+      }
+    ],
+    "spreadM": 22.71,
+    "innerRoads": [
+      {
+        "road": "r:373",
+        "from": "n:371",
+        "to": "n:372",
+        "ways": [31584034],
+        "name": "Daimlerwerk Tor 10",
+        "roadClass": "residential",
+        "lengthM": 22.74
+      },
+      {
+        "road": "r:374",
+        "from": "n:372",
+        "to": "n:371",
+        "ways": [31584034],
+        "name": "Daimlerwerk Tor 10",
+        "roadClass": "residential",
+        "lengthM": 22.74
+      }
+    ],
+    "streets": ["Benzstraße", "way/332201667"],
+    "arms": [
+      {
+        "road": "r:428",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353406037],
+        "headingBefore": 115.3,
+        "headingAfterMerge": 125.1,
+        "headingFinal": 125.1,
+        "turnDeg": 9.8
+      },
+      {
+        "road": "r:596",
+        "street": "way/332201667",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9535611968],
+        "headingBefore": -37.1,
+        "headingAfterMerge": -33.2,
+        "headingFinal": -33.2,
+        "turnDeg": 3.9
+      },
+      {
+        "road": "r:597",
+        "street": "way/332201667",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9535611968],
+        "headingBefore": -37.1,
+        "headingAfterMerge": -33.2,
+        "headingFinal": -33.2,
+        "turnDeg": 3.9
+      },
+      {
+        "road": "r:886",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353406037],
+        "headingBefore": 115.3,
+        "headingAfterMerge": 125.1,
+        "headingFinal": 125.1,
+        "turnDeg": 9.8
+      },
+      {
+        "road": "r:888",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353406037],
+        "headingBefore": -64.4,
+        "headingAfterMerge": -70.5,
+        "headingFinal": -70.5,
+        "turnDeg": 6.1
+      },
+      {
+        "road": "r:889",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353406037],
+        "headingBefore": -64.4,
+        "headingAfterMerge": -70.5,
+        "headingFinal": -70.5,
+        "turnDeg": 6.1
+      }
+    ],
+    "minArmAngleBefore": 27.3,
+    "minArmAngleFinal": 37.3,
+    "maxArmTurnDeg": 9.8,
+    "maxMoveM": 11.35
+  },
+  {
+    "node": "n:376",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -444.13,
+      "y": -461.22
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:376",
+        "osmIds": [1769978539],
+        "kind": "osm",
+        "movedM": 8.37,
+        "movedFinalM": 8.37
+      },
+      {
+        "node": "n:598",
+        "osmIds": [353406113],
+        "kind": "osm",
+        "movedM": 8.37,
+        "movedFinalM": 8.37
+      }
+    ],
+    "spreadM": 16.75,
+    "innerRoads": [
+      {
+        "road": "r:599",
+        "from": "n:376",
+        "to": "n:598",
+        "ways": [332201735],
+        "name": "Daimlerwerk Tor 9",
+        "roadClass": "residential",
+        "lengthM": 16.75
+      },
+      {
+        "road": "r:600",
+        "from": "n:598",
+        "to": "n:376",
+        "ways": [332201735],
+        "name": "Daimlerwerk Tor 9",
+        "roadClass": "residential",
+        "lengthM": 16.75
+      }
+    ],
+    "streets": ["way/31584038", "Benzstraße"],
+    "arms": [
+      {
+        "road": "r:377",
+        "street": "way/31584038",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [1769978539],
+        "headingBefore": 86.1,
+        "headingAfterMerge": 87.5,
+        "headingFinal": 87.5,
+        "turnDeg": 1.3
+      },
+      {
+        "road": "r:378",
+        "street": "way/31584038",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [1769978539],
+        "headingBefore": 86.1,
+        "headingAfterMerge": 87.5,
+        "headingFinal": 87.5,
+        "turnDeg": 1.3
+      },
+      {
+        "road": "r:898",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [353406113],
+        "headingBefore": -65.9,
+        "headingAfterMerge": -68.3,
+        "headingFinal": -68.3,
+        "turnDeg": 2.4
+      }
+    ],
+    "minArmAngleBefore": 152,
+    "minArmAngleFinal": 155.7,
+    "maxArmTurnDeg": 2.4,
+    "maxMoveM": 8.37
+  },
+  {
+    "node": "n:379",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -90.82,
+      "y": -544.25
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:379",
+        "osmIds": [353406407],
+        "kind": "osm",
+        "movedM": 7.78,
+        "movedFinalM": 7.78
+      },
+      {
+        "node": "n:527",
+        "osmIds": [330925660],
+        "kind": "osm",
+        "movedM": 7.78,
+        "movedFinalM": 7.78
+      }
+    ],
+    "spreadM": 15.57,
+    "innerRoads": [
+      {
+        "road": "r:528",
+        "from": "n:379",
+        "to": "n:527",
+        "ways": [220072434],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 15.57
+      },
+      {
+        "road": "r:529",
+        "from": "n:527",
+        "to": "n:379",
+        "ways": [220072434],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 15.57
+      }
+    ],
+    "streets": ["way/31584040", "way/220072434", "way/330410531"],
+    "arms": [
+      {
+        "road": "r:381",
+        "street": "way/31584040",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [353406407],
+        "headingBefore": 115.8,
+        "headingAfterMerge": 120.1,
+        "headingFinal": 120.1,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:525",
+        "street": "way/220072434",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353406407],
+        "headingBefore": -153.4,
+        "headingAfterMerge": -146.4,
+        "headingFinal": -146.4,
+        "turnDeg": 7
+      },
+      {
+        "road": "r:526",
+        "street": "way/220072434",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353406407],
+        "headingBefore": -153.4,
+        "headingAfterMerge": -146.4,
+        "headingFinal": -146.4,
+        "turnDeg": 7
+      },
+      {
+        "road": "r:530",
+        "street": "way/220072434",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [330925660],
+        "headingBefore": 26.3,
+        "headingAfterMerge": 26.3,
+        "headingFinal": 26.3,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:531",
+        "street": "way/220072434",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [330925660],
+        "headingBefore": 26.3,
+        "headingAfterMerge": 26.3,
+        "headingFinal": 26.3,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:562",
+        "street": "way/330410531",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [330925660],
+        "headingBefore": 116.7,
+        "headingAfterMerge": 112.4,
+        "headingFinal": 86.4,
+        "turnDeg": 30.4
+      }
+    ],
+    "minArmAngleBefore": 0.9,
+    "minArmAngleFinal": 33.8,
+    "maxArmTurnDeg": 30.4,
+    "maxMoveM": 7.78
+  },
+  {
+    "node": "n:380",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -142.54,
+      "y": -455.06
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:380",
+        "osmIds": [3373714519],
+        "kind": "osm",
+        "movedM": 4.39,
+        "movedFinalM": 4.39
+      },
+      {
+        "node": "n:559",
+        "osmIds": [3373714517],
+        "kind": "osm",
+        "movedM": 4.39,
+        "movedFinalM": 4.39
+      }
+    ],
+    "spreadM": 8.78,
+    "innerRoads": [
+      {
+        "road": "r:560",
+        "from": "n:380",
+        "to": "n:559",
+        "ways": [330410529],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 8.78
+      }
+    ],
+    "streets": ["way/31584040", "way/460913557"],
+    "arms": [
+      {
+        "road": "r:381",
+        "street": "way/31584040",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [3373714519],
+        "headingBefore": -64.2,
+        "headingAfterMerge": -59.9,
+        "headingFinal": -59.9,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:755",
+        "street": "way/460913557",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [3373714517],
+        "headingBefore": 116.5,
+        "headingAfterMerge": 116.4,
+        "headingFinal": 116.4,
+        "turnDeg": 0.1
+      }
+    ],
+    "minArmAngleBefore": 179.3,
+    "minArmAngleFinal": 176.3,
+    "maxArmTurnDeg": 4.3,
+    "maxMoveM": 4.39
+  },
+  {
+    "node": "n:387",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -456.01,
+      "y": -103.31
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:387",
+        "osmIds": [4565516237],
+        "kind": "osm",
+        "movedM": 3.89,
+        "movedFinalM": 3.89
+      },
+      {
+        "node": "n:789",
+        "osmIds": [4565516238],
+        "kind": "osm",
+        "movedM": 3.89,
+        "movedFinalM": 3.89
+      }
+    ],
+    "spreadM": 7.77,
+    "innerRoads": [
+      {
+        "road": "r:790",
+        "from": "n:387",
+        "to": "n:789",
+        "ways": [460984653],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 7.77
+      },
+      {
+        "road": "r:791",
+        "from": "n:789",
+        "to": "n:387",
+        "ways": [460984653],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 7.77
+      }
+    ],
+    "streets": ["way/31584053", "way/460984654"],
+    "arms": [
+      {
+        "road": "r:388",
+        "street": "way/31584053",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516237],
+        "headingBefore": -152.8,
+        "headingAfterMerge": -152.9,
+        "headingFinal": -152.9,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:389",
+        "street": "way/31584053",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516237],
+        "headingBefore": -152.8,
+        "headingAfterMerge": -152.9,
+        "headingFinal": -152.9,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:793",
+        "street": "way/460984654",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516238],
+        "headingBefore": 26.2,
+        "headingAfterMerge": 28.7,
+        "headingFinal": 28.7,
+        "turnDeg": 2.5
+      },
+      {
+        "road": "r:794",
+        "street": "way/460984654",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516238],
+        "headingBefore": 26.2,
+        "headingAfterMerge": 28.7,
+        "headingFinal": 28.7,
+        "turnDeg": 2.5
+      }
+    ],
+    "minArmAngleBefore": 178.9,
+    "minArmAngleFinal": 178.4,
+    "maxArmTurnDeg": 2.5,
+    "maxMoveM": 3.89
+  },
+  {
+    "node": "n:396",
+    "cls": "dual x single",
+    "pos": {
+      "x": -385.29,
+      "y": 481.47
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:396",
+        "osmIds": [369595456],
+        "kind": "osm",
+        "movedM": 7.34,
+        "movedFinalM": 7.34
+      },
+      {
+        "node": "n:577",
+        "osmIds": [369595990],
+        "kind": "osm",
+        "movedM": 2.38,
+        "movedFinalM": 2.38
+      },
+      {
+        "node": "n:581",
+        "osmIds": [3393128407],
+        "kind": "osm",
+        "movedM": 9.73,
+        "movedFinalM": 9.73
+      }
+    ],
+    "spreadM": 17.07,
+    "innerRoads": [
+      {
+        "road": "r:578",
+        "from": "n:396",
+        "to": "n:577",
+        "ways": [332200792],
+        "name": "Daimlerwerk Tor 12",
+        "roadClass": "residential",
+        "lengthM": 4.96
+      },
+      {
+        "road": "r:579",
+        "from": "n:577",
+        "to": "n:396",
+        "ways": [332200792],
+        "name": "Daimlerwerk Tor 12",
+        "roadClass": "residential",
+        "lengthM": 4.96
+      },
+      {
+        "road": "r:592",
+        "from": "n:577",
+        "to": "n:581",
+        "ways": [332200797],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 12.11
+      },
+      {
+        "road": "r:593",
+        "from": "n:581",
+        "to": "n:577",
+        "ways": [332200797],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 12.11
+      }
+    ],
+    "streets": ["Entenseestraße", "corridor:332200794+332200795"],
+    "arms": [
+      {
+        "road": "r:397",
+        "street": "Entenseestraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [369595456],
+        "headingBefore": 84.9,
+        "headingAfterMerge": 89,
+        "headingFinal": 89,
+        "turnDeg": 4.2
+      },
+      {
+        "road": "r:398",
+        "street": "Entenseestraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [369595456],
+        "headingBefore": 84.9,
+        "headingAfterMerge": 89,
+        "headingFinal": 89,
+        "turnDeg": 4.2
+      },
+      {
+        "road": "r:399",
+        "street": "Entenseestraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [369595456],
+        "headingBefore": -98,
+        "headingAfterMerge": -101.1,
+        "headingFinal": -101.1,
+        "turnDeg": 3.1
+      },
+      {
+        "road": "r:400",
+        "street": "Entenseestraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [369595456],
+        "headingBefore": -98,
+        "headingAfterMerge": -101.1,
+        "headingFinal": -101.1,
+        "turnDeg": 3.1
+      },
+      {
+        "road": "r:582",
+        "street": "corridor:332200794+332200795",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [3393128407],
+        "headingBefore": -20,
+        "headingAfterMerge": -15.3,
+        "headingFinal": -10.3,
+        "turnDeg": 9.6
+      },
+      {
+        "road": "r:583",
+        "street": "corridor:332200794+332200795",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [3393128407],
+        "headingBefore": -4,
+        "headingAfterMerge": -5.2,
+        "headingFinal": -10.3,
+        "turnDeg": 6.3
+      }
+    ],
+    "minArmAngleBefore": 86,
+    "minArmAngleFinal": 90.8,
+    "maxArmTurnDeg": 9.6,
+    "maxMoveM": 9.73
+  },
+  {
+    "node": "n:434",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": 48.4,
+      "y": 167.1
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:434",
+        "osmIds": [925584835],
+        "kind": "osm",
+        "movedM": 20.99,
+        "movedFinalM": 20.99
+      },
+      {
+        "node": "n:438",
+        "osmIds": [344711068],
+        "kind": "osm",
+        "movedM": 21.12,
+        "movedFinalM": 21.12
+      },
+      {
+        "node": "n:440",
+        "osmIds": [4406755953],
+        "kind": "osm",
+        "movedM": 6.96,
+        "movedFinalM": 6.96
+      },
+      {
+        "node": "n:660",
+        "osmIds": [4406755957],
+        "kind": "osm",
+        "movedM": 33.48,
+        "movedFinalM": 33.48
+      }
+    ],
+    "spreadM": 54.09,
+    "innerRoads": [
+      {
+        "road": "r:441",
+        "from": "n:438",
+        "to": "n:440",
+        "ways": [79238473],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 24.91
+      },
+      {
+        "road": "r:447",
+        "from": "n:434",
+        "to": "n:438",
+        "ways": [79238476],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.17
+      },
+      {
+        "road": "r:448",
+        "from": "n:438",
+        "to": "n:434",
+        "ways": [79238476],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.17
+      },
+      {
+        "road": "r:739",
+        "from": "n:440",
+        "to": "n:660",
+        "ways": [456238714],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 29.56
+      },
+      {
+        "road": "r:740",
+        "from": "n:660",
+        "to": "n:440",
+        "ways": [456238714],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 29.56
+      }
+    ],
+    "streets": ["way/79238469", "way/79238473", "way/79238476", "way/443029541"],
+    "arms": [
+      {
+        "road": "r:435",
+        "street": "way/79238469",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [925584835],
+        "headingBefore": 146.2,
+        "headingAfterMerge": 137.1,
+        "headingFinal": 137.1,
+        "turnDeg": 9.1
+      },
+      {
+        "road": "r:439",
+        "street": "way/79238473",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [344711068],
+        "headingBefore": 146.5,
+        "headingAfterMerge": 154.6,
+        "headingFinal": 154.6,
+        "turnDeg": 8.1
+      },
+      {
+        "road": "r:442",
+        "street": "way/79238473",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [4406755953],
+        "headingBefore": -29.6,
+        "headingAfterMerge": -37.3,
+        "headingFinal": -37.3,
+        "turnDeg": 7.7
+      },
+      {
+        "road": "r:445",
+        "street": "way/79238476",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [925584835],
+        "headingBefore": -22.6,
+        "headingAfterMerge": -22.2,
+        "headingFinal": -22.2,
+        "turnDeg": 0.4
+      },
+      {
+        "road": "r:446",
+        "street": "way/79238476",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [925584835],
+        "headingBefore": -22.6,
+        "headingAfterMerge": -22.2,
+        "headingFinal": -22.2,
+        "turnDeg": 0.4
+      },
+      {
+        "road": "r:662",
+        "street": "way/443029541",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4406755957],
+        "headingBefore": -30.7,
+        "headingAfterMerge": -30.5,
+        "headingFinal": -30.5,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:663",
+        "street": "way/443029541",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4406755957],
+        "headingBefore": -30.7,
+        "headingAfterMerge": -30.5,
+        "headingFinal": -30.5,
+        "turnDeg": 0.2
+      }
+    ],
+    "minArmAngleBefore": 0.3,
+    "minArmAngleFinal": 6.8,
+    "maxArmTurnDeg": 9.1,
+    "maxMoveM": 33.48
+  },
+  {
+    "node": "n:436",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": 238.19,
+      "y": 48.61
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:436",
+        "osmIds": [925584842],
+        "kind": "osm",
+        "movedM": 3.7,
+        "movedFinalM": 3.7
+      },
+      {
+        "node": "n:12",
+        "osmIds": [925584853],
+        "kind": "osm",
+        "movedM": 3.7,
+        "movedFinalM": 3.7
+      }
+    ],
+    "spreadM": 7.39,
+    "innerRoads": [
+      {
+        "road": "r:437",
+        "from": "n:436",
+        "to": "n:12",
+        "ways": [79238472],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 7.39
+      }
+    ],
+    "streets": ["way/6060415", "way/79238473"],
+    "arms": [
+      {
+        "road": "r:13",
+        "street": "way/6060415",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [925584853],
+        "headingBefore": 149.9,
+        "headingAfterMerge": 150.4,
+        "headingFinal": 150.4,
+        "turnDeg": 0.5
+      },
+      {
+        "road": "r:15",
+        "street": "way/6060415",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [925584853],
+        "headingBefore": -30.2,
+        "headingAfterMerge": -32.4,
+        "headingFinal": -32.4,
+        "turnDeg": 2.2
+      },
+      {
+        "road": "r:442",
+        "street": "way/79238473",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [925584842],
+        "headingBefore": 151.4,
+        "headingAfterMerge": 148.4,
+        "headingFinal": 148.4,
+        "turnDeg": 3
+      },
+      {
+        "road": "r:444",
+        "street": "way/79238473",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [925584842],
+        "headingBefore": -31.6,
+        "headingAfterMerge": -28.1,
+        "headingFinal": -28.1,
+        "turnDeg": 3.6
+      }
+    ],
+    "minArmAngleBefore": 1.4,
+    "minArmAngleFinal": 2,
+    "maxArmTurnDeg": 3.6,
+    "maxMoveM": 3.7
+  },
+  {
+    "node": "n:449",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -650.13,
+      "y": -614.53
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:449",
+        "osmIds": [4450500986],
+        "kind": "osm",
+        "movedM": 21.07,
+        "movedFinalM": 21.07
+      },
+      {
+        "node": "n:733",
+        "osmIds": [4450500985],
+        "kind": "osm",
+        "movedM": 4.67,
+        "movedFinalM": 4.67
+      },
+      {
+        "node": "n:736",
+        "osmIds": [803877761],
+        "kind": "osm",
+        "movedM": 24.3,
+        "movedFinalM": 24.3
+      }
+    ],
+    "spreadM": 45.24,
+    "innerRoads": [
+      {
+        "road": "r:734",
+        "from": "n:449",
+        "to": "n:733",
+        "ways": [447989529],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 18.47
+      },
+      {
+        "road": "r:735",
+        "from": "n:733",
+        "to": "n:449",
+        "ways": [447989529],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 18.47
+      },
+      {
+        "road": "r:737",
+        "from": "n:733",
+        "to": "n:736",
+        "ways": [447989530],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 29.61
+      },
+      {
+        "road": "r:738",
+        "from": "n:736",
+        "to": "n:733",
+        "ways": [447989530],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 29.61
+      }
+    ],
+    "streets": ["way/100848933", "way/66320217"],
+    "arms": [
+      {
+        "road": "r:424",
+        "street": "way/100848933",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4450500986],
+        "headingBefore": -134.5,
+        "headingAfterMerge": -127.6,
+        "headingFinal": -127.6,
+        "turnDeg": 6.9
+      },
+      {
+        "road": "r:451",
+        "street": "way/66320217",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4450500986],
+        "headingBefore": -134.5,
+        "headingAfterMerge": -127.6,
+        "headingFinal": -127.6,
+        "turnDeg": 6.9
+      }
+    ],
+    "minArmAngleBefore": 0,
+    "minArmAngleFinal": 0,
+    "maxArmTurnDeg": 6.9,
+    "maxMoveM": 24.3
+  },
+  {
+    "node": "n:452",
+    "cls": "dual x single",
+    "pos": {
+      "x": -605.5,
+      "y": 21.87
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:452",
+        "osmIds": [1410350434],
+        "kind": "osm",
+        "movedM": 12.37,
+        "movedFinalM": 12.37
+      },
+      {
+        "node": "n:453",
+        "osmIds": [9533306656],
+        "kind": "osm",
+        "movedM": 5.06,
+        "movedFinalM": 5.06
+      },
+      {
+        "node": "n:456",
+        "osmIds": [1410350387],
+        "kind": "osm",
+        "movedM": 17.41,
+        "movedFinalM": 17.41
+      }
+    ],
+    "spreadM": 29.78,
+    "innerRoads": [
+      {
+        "road": "r:454",
+        "from": "n:452",
+        "to": "n:453",
+        "ways": [127414615],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 7.36
+      },
+      {
+        "road": "r:455",
+        "from": "n:453",
+        "to": "n:452",
+        "ways": [127414615],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 7.36
+      },
+      {
+        "road": "r:457",
+        "from": "n:453",
+        "to": "n:456",
+        "ways": [127414615],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 22.46
+      },
+      {
+        "road": "r:458",
+        "from": "n:456",
+        "to": "n:453",
+        "ways": [127414615],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 22.46
+      }
+    ],
+    "streets": ["corridor:219071841+500711365", "Daimlerwerk Tor 5", "way/500711366"],
+    "arms": [
+      {
+        "road": "r:500",
+        "street": "corridor:219071841+500711365",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [9533306656],
+        "headingBefore": -154.2,
+        "headingAfterMerge": -128.7,
+        "headingFinal": -129.2,
+        "turnDeg": 25
+      },
+      {
+        "road": "r:595",
+        "street": "Daimlerwerk Tor 5",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [9533306656],
+        "headingBefore": 25.3,
+        "headingAfterMerge": 14.5,
+        "headingFinal": 14.5,
+        "turnDeg": 10.8
+      },
+      {
+        "road": "r:876",
+        "street": "corridor:219071841+500711365",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [1410350434],
+        "headingBefore": -155.1,
+        "headingAfterMerge": -134.1,
+        "headingFinal": -119.9,
+        "turnDeg": 35.3
+      },
+      {
+        "road": "r:880",
+        "street": "way/500711366",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [1410350434],
+        "headingBefore": 25.6,
+        "headingAfterMerge": 0,
+        "headingFinal": -19.4,
+        "turnDeg": 45
+      }
+    ],
+    "minArmAngleBefore": 0.3,
+    "minArmAngleFinal": 33.9,
+    "maxArmTurnDeg": 45,
+    "maxMoveM": 17.41
+  },
+  {
+    "node": "n:481",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -61.11,
+      "y": 60.85
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:481",
+        "osmIds": [11420963739],
+        "kind": "osm",
+        "movedM": 4.21,
+        "movedFinalM": 4.21
+      },
+      {
+        "node": "n:484",
+        "osmIds": [4565516246],
+        "kind": "osm",
+        "movedM": 4.21,
+        "movedFinalM": 4.21
+      }
+    ],
+    "spreadM": 8.42,
+    "innerRoads": [
+      {
+        "road": "r:485",
+        "from": "n:481",
+        "to": "n:484",
+        "ways": [171615286],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 8.42
+      },
+      {
+        "road": "r:486",
+        "from": "n:484",
+        "to": "n:481",
+        "ways": [171615286],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 8.42
+      }
+    ],
+    "streets": ["way/171615286", "way/460984674", "way/460984672", "way/1231453408"],
+    "arms": [
+      {
+        "road": "r:482",
+        "street": "way/171615286",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11420963739],
+        "headingBefore": -153.9,
+        "headingAfterMerge": -153.8,
+        "headingFinal": -153.8,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:483",
+        "street": "way/171615286",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11420963739],
+        "headingBefore": -153.9,
+        "headingAfterMerge": -153.8,
+        "headingFinal": -153.8,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:806",
+        "street": "way/460984674",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516246],
+        "headingBefore": 26.8,
+        "headingAfterMerge": 27,
+        "headingFinal": 27,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:810",
+        "street": "way/460984672",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516246],
+        "headingBefore": 26.8,
+        "headingAfterMerge": 27,
+        "headingFinal": 27,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:1146",
+        "street": "way/1231453408",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11420963739],
+        "headingBefore": -63.4,
+        "headingAfterMerge": -68.8,
+        "headingFinal": -68.8,
+        "turnDeg": 5.4
+      },
+      {
+        "road": "r:1147",
+        "street": "way/1231453408",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11420963739],
+        "headingBefore": -63.4,
+        "headingAfterMerge": -68.8,
+        "headingFinal": -68.8,
+        "turnDeg": 5.4
+      }
+    ],
+    "minArmAngleBefore": 0,
+    "minArmAngleFinal": 0,
+    "maxArmTurnDeg": 5.4,
+    "maxMoveM": 4.21
+  },
+  {
+    "node": "n:567",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -130.12,
+      "y": -448.68
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:567",
+        "osmIds": [3373714516],
+        "kind": "osm",
+        "movedM": 4.68,
+        "movedFinalM": 4.68
+      },
+      {
+        "node": "n:561",
+        "osmIds": [3373714518],
+        "kind": "osm",
+        "movedM": 4.68,
+        "movedFinalM": 4.68
+      }
+    ],
+    "spreadM": 9.37,
+    "innerRoads": [
+      {
+        "road": "r:568",
+        "from": "n:567",
+        "to": "n:561",
+        "ways": [330410535],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 9.37
+      }
+    ],
+    "streets": ["way/330410531", "way/460913555"],
+    "arms": [
+      {
+        "road": "r:562",
+        "street": "way/330410531",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [3373714518],
+        "headingBefore": -63.3,
+        "headingAfterMerge": -67.6,
+        "headingFinal": -67.6,
+        "turnDeg": 4.4
+      },
+      {
+        "road": "r:751",
+        "street": "way/460913555",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [3373714516],
+        "headingBefore": 115.5,
+        "headingAfterMerge": 115.5,
+        "headingFinal": 115.5,
+        "turnDeg": 0
+      }
+    ],
+    "minArmAngleBefore": 178.7,
+    "minArmAngleFinal": 176.9,
+    "maxArmTurnDeg": 4.4,
+    "maxMoveM": 4.68
+  },
+  {
+    "node": "n:584",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -262.29,
+      "y": 470.15
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:584",
+        "osmIds": [7168509734],
+        "kind": "osm",
+        "movedM": 8.65,
+        "movedFinalM": 8.65
+      },
+      {
+        "node": "n:587",
+        "osmIds": [7168509732],
+        "kind": "osm",
+        "movedM": 8.65,
+        "movedFinalM": 8.65
+      }
+    ],
+    "spreadM": 17.31,
+    "innerRoads": [
+      {
+        "road": "r:588",
+        "from": "n:584",
+        "to": "n:587",
+        "ways": [332200796],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.83
+      },
+      {
+        "road": "r:589",
+        "from": "n:587",
+        "to": "n:584",
+        "ways": [332200796],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.83
+      }
+    ],
+    "streets": ["way/332200796", "way/767771117", "way/767771119"],
+    "arms": [
+      {
+        "road": "r:585",
+        "street": "way/332200796",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [7168509734],
+        "headingBefore": 162.4,
+        "headingAfterMerge": 144.1,
+        "headingFinal": 166.8,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:586",
+        "street": "way/332200796",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [7168509734],
+        "headingBefore": 162.4,
+        "headingAfterMerge": 144.1,
+        "headingFinal": 166.8,
+        "turnDeg": 4.3
+      },
+      {
+        "road": "r:590",
+        "street": "way/332200796",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [7168509732],
+        "headingBefore": -113.7,
+        "headingAfterMerge": -92.9,
+        "headingFinal": -92.9,
+        "turnDeg": 20.9
+      },
+      {
+        "road": "r:591",
+        "street": "way/332200796",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [7168509732],
+        "headingBefore": -113.7,
+        "headingAfterMerge": -92.9,
+        "headingFinal": -92.9,
+        "turnDeg": 20.9
+      },
+      {
+        "road": "r:1027",
+        "street": "way/767771117",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [7168509734],
+        "headingBefore": 108.4,
+        "headingAfterMerge": 113,
+        "headingFinal": 113,
+        "turnDeg": 4.5
+      },
+      {
+        "road": "r:1033",
+        "street": "way/767771119",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [7168509732],
+        "headingBefore": 35.9,
+        "headingAfterMerge": 19,
+        "headingFinal": 19,
+        "turnDeg": 16.9
+      }
+    ],
+    "minArmAngleBefore": 54,
+    "minArmAngleFinal": 53.8,
+    "maxArmTurnDeg": 20.9,
+    "maxMoveM": 8.65
+  },
+  {
+    "node": "n:608",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 253.6,
+      "y": 584.31
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:608",
+        "osmIds": [5619431193],
+        "kind": "osm",
+        "movedM": 24,
+        "movedFinalM": 24
+      },
+      {
+        "node": "n:609",
+        "osmIds": [5619431191],
+        "kind": "osm",
+        "movedM": 17.84,
+        "movedFinalM": 17.84
+      },
+      {
+        "node": "n:932",
+        "osmIds": [5619431189],
+        "kind": "osm",
+        "movedM": 5.61,
+        "movedFinalM": 5.61
+      },
+      {
+        "node": "n:933",
+        "osmIds": [5619431190],
+        "kind": "osm",
+        "movedM": 17.63,
+        "movedFinalM": 17.63
+      },
+      {
+        "node": "n:938",
+        "osmIds": [5619431192],
+        "kind": "osm",
+        "movedM": 29.83,
+        "movedFinalM": 29.83
+      }
+    ],
+    "spreadM": 53.82,
+    "innerRoads": [
+      {
+        "road": "r:610",
+        "from": "n:608",
+        "to": "n:609",
+        "ways": [428923199],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 6.15
+      },
+      {
+        "road": "r:611",
+        "from": "n:609",
+        "to": "n:608",
+        "ways": [428923199],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 6.15
+      },
+      {
+        "road": "r:934",
+        "from": "n:932",
+        "to": "n:933",
+        "ways": [588356898],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 23.24
+      },
+      {
+        "road": "r:935",
+        "from": "n:933",
+        "to": "n:932",
+        "ways": [588356898],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 23.24
+      },
+      {
+        "road": "r:936",
+        "from": "n:609",
+        "to": "n:932",
+        "ways": [588356899],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 12.23
+      },
+      {
+        "road": "r:937",
+        "from": "n:932",
+        "to": "n:609",
+        "ways": [588356899],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 12.23
+      },
+      {
+        "road": "r:941",
+        "from": "n:933",
+        "to": "n:938",
+        "ways": [588356902],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 12.2
+      },
+      {
+        "road": "r:942",
+        "from": "n:938",
+        "to": "n:933",
+        "ways": [588356902],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 12.2
+      }
+    ],
+    "streets": ["way/588356896", "way/588356901"],
+    "arms": [
+      {
+        "road": "r:928",
+        "street": "way/588356896",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431193],
+        "headingBefore": -105.3,
+        "headingAfterMerge": -145,
+        "headingFinal": -145,
+        "turnDeg": 39.7
+      },
+      {
+        "road": "r:929",
+        "street": "way/588356896",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431193],
+        "headingBefore": -105.3,
+        "headingAfterMerge": -145,
+        "headingFinal": -145,
+        "turnDeg": 39.7
+      },
+      {
+        "road": "r:930",
+        "street": "way/588356896",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431193],
+        "headingBefore": 75.2,
+        "headingAfterMerge": 116.6,
+        "headingFinal": 116.6,
+        "turnDeg": 41.5
+      },
+      {
+        "road": "r:931",
+        "street": "way/588356896",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431193],
+        "headingBefore": 75.2,
+        "headingAfterMerge": 116.6,
+        "headingFinal": 116.6,
+        "turnDeg": 41.5
+      },
+      {
+        "road": "r:939",
+        "street": "way/588356901",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431192],
+        "headingBefore": -13.8,
+        "headingAfterMerge": -13.8,
+        "headingFinal": -13.8,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:940",
+        "street": "way/588356901",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431192],
+        "headingBefore": -13.8,
+        "headingAfterMerge": -13.8,
+        "headingFinal": -13.8,
+        "turnDeg": 0
+      }
+    ],
+    "minArmAngleBefore": 89,
+    "minArmAngleFinal": 98.4,
+    "maxArmTurnDeg": 41.5,
+    "maxMoveM": 29.83
+  },
+  {
+    "node": "n:631",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 86.71,
+      "y": 274.9
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:631",
+        "osmIds": [4406755926],
+        "kind": "osm",
+        "movedM": 2.57,
+        "movedFinalM": 2.57
+      },
+      {
+        "node": "n:634",
+        "osmIds": [11422468131],
+        "kind": "osm",
+        "movedM": 2.57,
+        "movedFinalM": 2.57
+      }
+    ],
+    "spreadM": 5.15,
+    "innerRoads": [
+      {
+        "road": "r:635",
+        "from": "n:631",
+        "to": "n:634",
+        "ways": [443029529],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 5.15
+      },
+      {
+        "road": "r:636",
+        "from": "n:634",
+        "to": "n:631",
+        "ways": [443029529],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 5.15
+      }
+    ],
+    "streets": ["way/443029529", "way/767771118", "way/1231631251"],
+    "arms": [
+      {
+        "road": "r:632",
+        "street": "way/443029529",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4406755926],
+        "headingBefore": 26.9,
+        "headingAfterMerge": 27.4,
+        "headingFinal": 27.4,
+        "turnDeg": 0.4
+      },
+      {
+        "road": "r:633",
+        "street": "way/443029529",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4406755926],
+        "headingBefore": 26.9,
+        "headingAfterMerge": 27.4,
+        "headingFinal": 27.4,
+        "turnDeg": 0.4
+      },
+      {
+        "road": "r:637",
+        "street": "way/443029529",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422468131],
+        "headingBefore": -109,
+        "headingAfterMerge": -110.8,
+        "headingFinal": -110.8,
+        "turnDeg": 1.8
+      },
+      {
+        "road": "r:638",
+        "street": "way/443029529",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422468131],
+        "headingBefore": -109,
+        "headingAfterMerge": -110.8,
+        "headingFinal": -110.8,
+        "turnDeg": 1.8
+      },
+      {
+        "road": "r:1029",
+        "street": "way/767771118",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4406755926],
+        "headingBefore": 140.9,
+        "headingAfterMerge": 140.1,
+        "headingFinal": 140.1,
+        "turnDeg": 0.8
+      },
+      {
+        "road": "r:1030",
+        "street": "way/767771118",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4406755926],
+        "headingBefore": 140.9,
+        "headingAfterMerge": 140.1,
+        "headingFinal": 140.1,
+        "turnDeg": 0.8
+      },
+      {
+        "road": "r:1178",
+        "street": "way/1231631251",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422468131],
+        "headingBefore": 140.9,
+        "headingAfterMerge": 141.6,
+        "headingFinal": -174.7,
+        "turnDeg": 44.4
+      },
+      {
+        "road": "r:1179",
+        "street": "way/1231631251",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422468131],
+        "headingBefore": 140.9,
+        "headingAfterMerge": 141.6,
+        "headingFinal": -174.7,
+        "turnDeg": 44.4
+      }
+    ],
+    "minArmAngleBefore": 0.1,
+    "minArmAngleFinal": 45.2,
+    "maxArmTurnDeg": 44.4,
+    "maxMoveM": 2.57
+  },
+  {
+    "node": "n:678",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 232.33,
+      "y": 626.69
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:678",
+        "osmIds": [5619431185],
+        "kind": "osm",
+        "movedM": 7.4,
+        "movedFinalM": 7.4
+      },
+      {
+        "node": "n:681",
+        "osmIds": [4413680921],
+        "kind": "osm",
+        "movedM": 7.4,
+        "movedFinalM": 7.4
+      }
+    ],
+    "spreadM": 14.8,
+    "innerRoads": [
+      {
+        "road": "r:682",
+        "from": "n:678",
+        "to": "n:681",
+        "ways": [443245849],
+        "name": "Umberto-Nobile-Straße",
+        "roadClass": "residential",
+        "lengthM": 14.8
+      },
+      {
+        "road": "r:683",
+        "from": "n:681",
+        "to": "n:678",
+        "ways": [443245849],
+        "name": "Umberto-Nobile-Straße",
+        "roadClass": "residential",
+        "lengthM": 14.8
+      }
+    ],
+    "streets": ["Umberto-Nobile-Straße", "way/443829044", "way/588356896"],
+    "arms": [
+      {
+        "road": "r:679",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431185],
+        "headingBefore": -16.4,
+        "headingAfterMerge": -15.8,
+        "headingFinal": -15.8,
+        "turnDeg": 0.6
+      },
+      {
+        "road": "r:680",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431185],
+        "headingBefore": -16.4,
+        "headingAfterMerge": -15.8,
+        "headingFinal": -15.8,
+        "turnDeg": 0.6
+      },
+      {
+        "road": "r:684",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4413680921],
+        "headingBefore": 164.3,
+        "headingAfterMerge": 164.4,
+        "headingFinal": 164.4,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:685",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4413680921],
+        "headingBefore": 164.3,
+        "headingAfterMerge": 164.4,
+        "headingFinal": 164.4,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:716",
+        "street": "way/443829044",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4413680921],
+        "headingBefore": -105.3,
+        "headingAfterMerge": -127.7,
+        "headingFinal": -127.7,
+        "turnDeg": 22.4
+      },
+      {
+        "road": "r:717",
+        "street": "way/443829044",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4413680921],
+        "headingBefore": -105.3,
+        "headingAfterMerge": -127.7,
+        "headingFinal": -127.7,
+        "turnDeg": 22.4
+      },
+      {
+        "road": "r:930",
+        "street": "way/588356896",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [5619431185],
+        "headingBefore": -104.8,
+        "headingAfterMerge": -63.4,
+        "headingFinal": -63.4,
+        "turnDeg": 41.5
+      },
+      {
+        "road": "r:931",
+        "street": "way/588356896",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [5619431185],
+        "headingBefore": -104.8,
+        "headingAfterMerge": -63.4,
+        "headingFinal": -63.4,
+        "turnDeg": 41.5
+      }
+    ],
+    "minArmAngleBefore": 0.5,
+    "minArmAngleFinal": 47.6,
+    "maxArmTurnDeg": 41.5,
+    "maxMoveM": 7.4
+  },
+  {
+    "node": "n:696",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -179,
+      "y": 374.78
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:696",
+        "osmIds": [8869619524],
+        "kind": "osm",
+        "movedM": 11.44,
+        "movedFinalM": 11.44
+      },
+      {
+        "node": "n:27",
+        "osmIds": [59630030],
+        "kind": "osm",
+        "movedM": 11.44,
+        "movedFinalM": 11.44
+      }
+    ],
+    "spreadM": 22.88,
+    "innerRoads": [
+      {
+        "road": "r:697",
+        "from": "n:696",
+        "to": "n:27",
+        "ways": [443397755],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 22.88
+      },
+      {
+        "road": "r:698",
+        "from": "n:27",
+        "to": "n:696",
+        "ways": [443397755],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 22.88
+      }
+    ],
+    "streets": ["way/7973188", "way/715914317"],
+    "arms": [
+      {
+        "road": "r:28",
+        "street": "way/7973188",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [59630030],
+        "headingBefore": -167.1,
+        "headingAfterMerge": 165.2,
+        "headingFinal": 165.2,
+        "turnDeg": 27.7
+      },
+      {
+        "road": "r:29",
+        "street": "way/7973188",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [59630030],
+        "headingBefore": -167.1,
+        "headingAfterMerge": 165.2,
+        "headingFinal": 165.2,
+        "turnDeg": 27.7
+      },
+      {
+        "road": "r:30",
+        "street": "way/7973188",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [59630030],
+        "headingBefore": 31.8,
+        "headingAfterMerge": 35.5,
+        "headingFinal": 35.5,
+        "turnDeg": 3.7
+      },
+      {
+        "road": "r:31",
+        "street": "way/7973188",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [59630030],
+        "headingBefore": 31.8,
+        "headingAfterMerge": 35.5,
+        "headingFinal": 35.5,
+        "turnDeg": 3.7
+      },
+      {
+        "road": "r:1002",
+        "street": "way/715914317",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [8869619524],
+        "headingBefore": 174.6,
+        "headingAfterMerge": -167,
+        "headingFinal": -140.2,
+        "turnDeg": 45.2
+      },
+      {
+        "road": "r:1003",
+        "street": "way/715914317",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [8869619524],
+        "headingBefore": -3.2,
+        "headingAfterMerge": -26.6,
+        "headingFinal": -26.6,
+        "turnDeg": 23.4
+      }
+    ],
+    "minArmAngleBefore": 18.2,
+    "minArmAngleFinal": 54.6,
+    "maxArmTurnDeg": 45.2,
+    "maxMoveM": 11.44
+  },
+  {
+    "node": "n:711",
+    "cls": "other: dead end",
+    "pos": {
+      "x": 328.56,
+      "y": 667.88
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:413",
+        "osmIds": [4413553722],
+        "kind": "osm",
+        "movedM": 11.5,
+        "movedFinalM": 11.5
+      },
+      {
+        "node": "n:416",
+        "osmIds": [4413553721],
+        "kind": "osm",
+        "movedM": 8.94,
+        "movedFinalM": 8.94
+      },
+      {
+        "node": "n:419",
+        "osmIds": [916840818],
+        "kind": "osm",
+        "movedM": 6.08,
+        "movedFinalM": 6.08
+      },
+      {
+        "node": "n:711",
+        "osmIds": [443814544],
+        "kind": "clip",
+        "movedM": 0,
+        "movedFinalM": 0
+      }
+    ],
+    "spreadM": 11.5,
+    "innerRoads": [
+      {
+        "road": "r:417",
+        "from": "n:413",
+        "to": "n:416",
+        "ways": [64410171],
+        "name": "Margret-Fusbahn-Straße",
+        "roadClass": "residential",
+        "lengthM": 2.56
+      },
+      {
+        "road": "r:418",
+        "from": "n:416",
+        "to": "n:413",
+        "ways": [64410171],
+        "name": "Margret-Fusbahn-Straße",
+        "roadClass": "residential",
+        "lengthM": 2.56
+      },
+      {
+        "road": "r:420",
+        "from": "n:416",
+        "to": "n:419",
+        "ways": [64410171],
+        "name": "Margret-Fusbahn-Straße",
+        "roadClass": "residential",
+        "lengthM": 2.86
+      },
+      {
+        "road": "r:421",
+        "from": "n:419",
+        "to": "n:416",
+        "ways": [64410171],
+        "name": "Margret-Fusbahn-Straße",
+        "roadClass": "residential",
+        "lengthM": 2.86
+      },
+      {
+        "road": "r:712",
+        "from": "n:419",
+        "to": "n:711",
+        "ways": [443814544],
+        "name": "Margret-Fusbahn-Straße",
+        "roadClass": "residential",
+        "lengthM": 6.08
+      },
+      {
+        "road": "r:713",
+        "from": "n:711",
+        "to": "n:419",
+        "ways": [443814544],
+        "name": "Margret-Fusbahn-Straße",
+        "roadClass": "residential",
+        "lengthM": 6.08
+      }
+    ],
+    "streets": ["Margret-Fusbahn-Straße"],
+    "arms": [
+      {
+        "road": "r:414",
+        "street": "Margret-Fusbahn-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4413553722],
+        "headingBefore": -105.7,
+        "headingAfterMerge": -105.6,
+        "headingFinal": -105.6,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:415",
+        "street": "Margret-Fusbahn-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4413553722],
+        "headingBefore": -105.7,
+        "headingAfterMerge": -105.6,
+        "headingFinal": -105.6,
+        "turnDeg": 0.2
+      }
+    ],
+    "minArmAngleBefore": 360,
+    "minArmAngleFinal": 360,
+    "maxArmTurnDeg": 0.2,
+    "maxMoveM": 11.5
+  },
+  {
+    "node": "n:753",
+    "cls": "dual x single",
+    "pos": {
+      "x": -203.15,
+      "y": -328.17
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:753",
+        "osmIds": [4564953098],
+        "kind": "osm",
+        "movedM": 18.71,
+        "movedFinalM": 18.71
+      },
+      {
+        "node": "n:771",
+        "osmIds": [353406155],
+        "kind": "osm",
+        "movedM": 1.66,
+        "movedFinalM": 1.66
+      },
+      {
+        "node": "n:745",
+        "osmIds": [330926227],
+        "kind": "osm",
+        "movedM": 14.21,
+        "movedFinalM": 14.21
+      },
+      {
+        "node": "n:747",
+        "osmIds": [4564953095],
+        "kind": "osm",
+        "movedM": 22.96,
+        "movedFinalM": 22.96
+      },
+      {
+        "node": "n:612",
+        "osmIds": [353406476],
+        "kind": "osm",
+        "movedM": 19.45,
+        "movedFinalM": 19.45
+      },
+      {
+        "node": "n:613",
+        "osmIds": [4406667980],
+        "kind": "osm",
+        "movedM": 30.23,
+        "movedFinalM": 30.23
+      }
+    ],
+    "spreadM": 52.79,
+    "innerRoads": [
+      {
+        "road": "r:614",
+        "from": "n:612",
+        "to": "n:613",
+        "ways": [443019033],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 22.39
+      },
+      {
+        "road": "r:615",
+        "from": "n:613",
+        "to": "n:612",
+        "ways": [443019033],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 22.39
+      },
+      {
+        "road": "r:748",
+        "from": "n:745",
+        "to": "n:747",
+        "ways": [460913551],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.73
+      },
+      {
+        "road": "r:772",
+        "from": "n:771",
+        "to": "n:745",
+        "ways": [460914724],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 15.65
+      },
+      {
+        "road": "r:773",
+        "from": "n:745",
+        "to": "n:771",
+        "ways": [460914724],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 15.65
+      },
+      {
+        "road": "r:801",
+        "from": "n:753",
+        "to": "n:771",
+        "ways": [460984663],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.8
+      },
+      {
+        "road": "r:802",
+        "from": "n:771",
+        "to": "n:612",
+        "ways": [460984663],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 20.23
+      }
+    ],
+    "streets": [
+      "way/443019035",
+      "corridor:460913551+460984663",
+      "way/460913554",
+      "way/460913556",
+      "way/460914724"
+    ],
+    "arms": [
+      {
+        "road": "r:616",
+        "street": "way/443019035",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4406667980],
+        "headingBefore": -153.1,
+        "headingAfterMerge": -164.9,
+        "headingFinal": -164.9,
+        "turnDeg": 11.8
+      },
+      {
+        "road": "r:617",
+        "street": "way/443019035",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4406667980],
+        "headingBefore": -153.1,
+        "headingAfterMerge": -164.9,
+        "headingFinal": -164.9,
+        "turnDeg": 11.8
+      },
+      {
+        "road": "r:746",
+        "street": "corridor:460913551+460984663",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [330926227],
+        "headingBefore": 116.2,
+        "headingAfterMerge": 114.6,
+        "headingFinal": 114.6,
+        "turnDeg": 1.6
+      },
+      {
+        "road": "r:750",
+        "street": "way/460913554",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [4564953095],
+        "headingBefore": -63.8,
+        "headingAfterMerge": -47.3,
+        "headingFinal": -47.3,
+        "turnDeg": 16.5
+      },
+      {
+        "road": "r:754",
+        "street": "way/460913556",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [4564953098],
+        "headingBefore": -63.5,
+        "headingAfterMerge": -66.3,
+        "headingFinal": -66.3,
+        "turnDeg": 2.8
+      },
+      {
+        "road": "r:775",
+        "street": "way/460914724",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [330926227],
+        "headingBefore": 25,
+        "headingAfterMerge": 24.9,
+        "headingFinal": 24.9,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:776",
+        "street": "way/460914724",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [330926227],
+        "headingBefore": 25,
+        "headingAfterMerge": 24.9,
+        "headingFinal": 24.9,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:803",
+        "street": "corridor:460913551+460984663",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [353406476],
+        "headingBefore": 116.1,
+        "headingAfterMerge": 114.6,
+        "headingFinal": 114.6,
+        "turnDeg": 1.5
+      }
+    ],
+    "minArmAngleBefore": 0.3,
+    "minArmAngleFinal": 19.1,
+    "maxArmTurnDeg": 16.5,
+    "maxMoveM": 30.23
+  },
+  {
+    "node": "n:765",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 170.13,
+      "y": -302.01
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:765",
+        "osmIds": [4564962129],
+        "kind": "osm",
+        "movedM": 11.7,
+        "movedFinalM": 11.7
+      },
+      {
+        "node": "n:761",
+        "osmIds": [4564962130],
+        "kind": "osm",
+        "movedM": 11.7,
+        "movedFinalM": 11.7
+      }
+    ],
+    "spreadM": 23.41,
+    "innerRoads": [
+      {
+        "road": "r:766",
+        "from": "n:765",
+        "to": "n:761",
+        "ways": [460914721],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 23.41
+      },
+      {
+        "road": "r:767",
+        "from": "n:761",
+        "to": "n:765",
+        "ways": [460914721],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 23.41
+      }
+    ],
+    "streets": ["way/460914719", "way/683770305"],
+    "arms": [
+      {
+        "road": "r:763",
+        "street": "way/460914719",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4564962130],
+        "headingBefore": 116.2,
+        "headingAfterMerge": 116,
+        "headingFinal": 116,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:764",
+        "street": "way/460914719",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4564962130],
+        "headingBefore": 116.2,
+        "headingAfterMerge": 116,
+        "headingFinal": 116,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:980",
+        "street": "way/683770305",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4564962129],
+        "headingBefore": -62.7,
+        "headingAfterMerge": -63.1,
+        "headingFinal": -63.1,
+        "turnDeg": 0.4
+      },
+      {
+        "road": "r:981",
+        "street": "way/683770305",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4564962129],
+        "headingBefore": -62.7,
+        "headingAfterMerge": -63.1,
+        "headingFinal": -63.1,
+        "turnDeg": 0.4
+      }
+    ],
+    "minArmAngleBefore": 178.9,
+    "minArmAngleFinal": 179.2,
+    "maxArmTurnDeg": 0.4,
+    "maxMoveM": 11.7
+  },
+  {
+    "node": "n:774",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 76.12,
+      "y": -198.53
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:774",
+        "osmIds": [14345346536],
+        "kind": "osm",
+        "movedM": 6.68,
+        "movedFinalM": 6.68
+      },
+      {
+        "node": "n:777",
+        "osmIds": [4564962133],
+        "kind": "osm",
+        "movedM": 6.68,
+        "movedFinalM": 6.68
+      }
+    ],
+    "spreadM": 13.35,
+    "innerRoads": [
+      {
+        "road": "r:1259",
+        "from": "n:774",
+        "to": "n:777",
+        "ways": [1575065336],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 13.35
+      },
+      {
+        "road": "r:1260",
+        "from": "n:777",
+        "to": "n:774",
+        "ways": [1575065336],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 13.35
+      }
+    ],
+    "streets": ["way/460914724", "way/460914725"],
+    "arms": [
+      {
+        "road": "r:775",
+        "street": "way/460914724",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [14345346536],
+        "headingBefore": -155,
+        "headingAfterMerge": -155.1,
+        "headingFinal": -155.1,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:776",
+        "street": "way/460914724",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [14345346536],
+        "headingBefore": -155,
+        "headingAfterMerge": -155.1,
+        "headingFinal": -155.1,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:779",
+        "street": "way/460914725",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4564962133],
+        "headingBefore": 23.7,
+        "headingAfterMerge": 23.9,
+        "headingFinal": 23.9,
+        "turnDeg": 0.2
+      },
+      {
+        "road": "r:780",
+        "street": "way/460914725",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4564962133],
+        "headingBefore": 23.7,
+        "headingAfterMerge": 23.9,
+        "headingFinal": 23.9,
+        "turnDeg": 0.2
+      }
+    ],
+    "minArmAngleBefore": 178.7,
+    "minArmAngleFinal": 179,
+    "maxArmTurnDeg": 0.2,
+    "maxMoveM": 6.68
+  },
+  {
+    "node": "n:792",
+    "cls": "dual x single",
+    "pos": {
+      "x": -336.06,
+      "y": -37.68
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:792",
+        "osmIds": [353406163],
+        "kind": "osm",
+        "movedM": 11.07,
+        "movedFinalM": 11.07
+      },
+      {
+        "node": "n:799",
+        "osmIds": [4565516241],
+        "kind": "osm",
+        "movedM": 9.97,
+        "movedFinalM": 9.97
+      },
+      {
+        "node": "n:572",
+        "osmIds": [4565516239],
+        "kind": "osm",
+        "movedM": 13.9,
+        "movedFinalM": 13.9
+      },
+      {
+        "node": "n:970",
+        "osmIds": [11420963766],
+        "kind": "osm",
+        "movedM": 14.63,
+        "movedFinalM": 14.63
+      },
+      {
+        "node": "n:797",
+        "osmIds": [4565516240],
+        "kind": "osm",
+        "movedM": 12.08,
+        "movedFinalM": 12.08
+      },
+      {
+        "node": "n:741",
+        "osmIds": [4565516242],
+        "kind": "osm",
+        "movedM": 6.67,
+        "movedFinalM": 6.67
+      },
+      {
+        "node": "n:742",
+        "osmIds": [330931927],
+        "kind": "osm",
+        "movedM": 8.22,
+        "movedFinalM": 8.22
+      },
+      {
+        "node": "n:477",
+        "osmIds": [1826168773],
+        "kind": "osm",
+        "movedM": 30.44,
+        "movedFinalM": 30.44
+      }
+    ],
+    "spreadM": 43.45,
+    "innerRoads": [
+      {
+        "road": "r:743",
+        "from": "n:741",
+        "to": "n:742",
+        "ways": [460913551],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 10.09
+      },
+      {
+        "road": "r:744",
+        "from": "n:742",
+        "to": "n:477",
+        "ways": [460913551],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 23.86
+      },
+      {
+        "road": "r:795",
+        "from": "n:792",
+        "to": "n:742",
+        "ways": [460984654],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 14.73
+      },
+      {
+        "road": "r:796",
+        "from": "n:742",
+        "to": "n:792",
+        "ways": [460984654],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 14.73
+      },
+      {
+        "road": "r:798",
+        "from": "n:797",
+        "to": "n:741",
+        "ways": [460984655],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 6.67
+      },
+      {
+        "road": "r:800",
+        "from": "n:799",
+        "to": "n:572",
+        "ways": [460984661],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 6.97
+      },
+      {
+        "road": "r:804",
+        "from": "n:792",
+        "to": "n:799",
+        "ways": [460984663],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 9.69
+      },
+      {
+        "road": "r:972",
+        "from": "n:970",
+        "to": "n:797",
+        "ways": [683684880],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 2.85
+      }
+    ],
+    "streets": [
+      "way/171615286",
+      "way/330410538",
+      "corridor:460913551+460984663",
+      "way/460984654",
+      "way/683684880",
+      "way/1231453413"
+    ],
+    "arms": [
+      {
+        "road": "r:479",
+        "street": "way/171615286",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [1826168773],
+        "headingBefore": 25.3,
+        "headingAfterMerge": 16.6,
+        "headingFinal": 16.6,
+        "turnDeg": 8.7
+      },
+      {
+        "road": "r:480",
+        "street": "way/171615286",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [1826168773],
+        "headingBefore": 25.3,
+        "headingAfterMerge": 16.6,
+        "headingFinal": 16.6,
+        "turnDeg": 8.7
+      },
+      {
+        "road": "r:574",
+        "street": "way/330410538",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [4565516239],
+        "headingBefore": 116.1,
+        "headingAfterMerge": 119.6,
+        "headingFinal": 119.6,
+        "turnDeg": 3.5
+      },
+      {
+        "road": "r:746",
+        "street": "corridor:460913551+460984663",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [1826168773],
+        "headingBefore": -63.8,
+        "headingAfterMerge": -65.4,
+        "headingFinal": -65.4,
+        "turnDeg": 1.6
+      },
+      {
+        "road": "r:793",
+        "street": "way/460984654",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353406163],
+        "headingBefore": -153.8,
+        "headingAfterMerge": -151.3,
+        "headingFinal": -151.3,
+        "turnDeg": 2.5
+      },
+      {
+        "road": "r:794",
+        "street": "way/460984654",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353406163],
+        "headingBefore": -153.8,
+        "headingAfterMerge": -151.3,
+        "headingFinal": -151.3,
+        "turnDeg": 2.5
+      },
+      {
+        "road": "r:803",
+        "street": "corridor:460913551+460984663",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [353406163],
+        "headingBefore": -64,
+        "headingAfterMerge": -65.4,
+        "headingFinal": -65.4,
+        "turnDeg": 1.4
+      },
+      {
+        "road": "r:971",
+        "street": "way/683684880",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [11420963766],
+        "headingBefore": 116.3,
+        "headingAfterMerge": 114.2,
+        "headingFinal": 114.2,
+        "turnDeg": 2.1
+      },
+      {
+        "road": "r:1155",
+        "street": "way/1231453413",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11420963766],
+        "headingBefore": 163.5,
+        "headingAfterMerge": 116.5,
+        "headingFinal": 116.5,
+        "turnDeg": 47
+      },
+      {
+        "road": "r:1156",
+        "street": "way/1231453413",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11420963766],
+        "headingBefore": 163.5,
+        "headingAfterMerge": 116.5,
+        "headingFinal": 116.5,
+        "turnDeg": 47
+      }
+    ],
+    "minArmAngleBefore": 0.2,
+    "minArmAngleFinal": 2.3,
+    "maxArmTurnDeg": 47,
+    "maxMoveM": 30.44
+  },
+  {
+    "node": "n:823",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 10.69,
+      "y": 23.59
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:823",
+        "osmIds": [4565516250],
+        "kind": "osm",
+        "movedM": 8.86,
+        "movedFinalM": 8.86
+      },
+      {
+        "node": "n:817",
+        "osmIds": [4565516249],
+        "kind": "osm",
+        "movedM": 8.86,
+        "movedFinalM": 8.86
+      }
+    ],
+    "spreadM": 17.73,
+    "innerRoads": [
+      {
+        "road": "r:824",
+        "from": "n:823",
+        "to": "n:817",
+        "ways": [460984682],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.73
+      },
+      {
+        "road": "r:825",
+        "from": "n:817",
+        "to": "n:823",
+        "ways": [460984682],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.73
+      }
+    ],
+    "streets": ["way/460984679", "way/460984686"],
+    "arms": [
+      {
+        "road": "r:819",
+        "street": "way/460984679",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516249],
+        "headingBefore": 116.5,
+        "headingAfterMerge": 116.6,
+        "headingFinal": 116.6,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:820",
+        "street": "way/460984679",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516249],
+        "headingBefore": 116.5,
+        "headingAfterMerge": 116.6,
+        "headingFinal": 116.6,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:827",
+        "street": "way/460984686",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516250],
+        "headingBefore": -63.9,
+        "headingAfterMerge": -64,
+        "headingFinal": -64,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:828",
+        "street": "way/460984686",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516250],
+        "headingBefore": -63.9,
+        "headingAfterMerge": -64,
+        "headingFinal": -64,
+        "turnDeg": 0
+      }
+    ],
+    "minArmAngleBefore": 179.6,
+    "minArmAngleFinal": 179.5,
+    "maxArmTurnDeg": 0.1,
+    "maxMoveM": 8.86
+  },
+  {
+    "node": "n:829",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 51.11,
+      "y": -59.16
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:829",
+        "osmIds": [4565516252],
+        "kind": "osm",
+        "movedM": 9.08,
+        "movedFinalM": 9.08
+      },
+      {
+        "node": "n:826",
+        "osmIds": [4565516251],
+        "kind": "osm",
+        "movedM": 9.08,
+        "movedFinalM": 9.08
+      }
+    ],
+    "spreadM": 18.15,
+    "innerRoads": [
+      {
+        "road": "r:830",
+        "from": "n:829",
+        "to": "n:826",
+        "ways": [460984688],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 18.15
+      },
+      {
+        "road": "r:831",
+        "from": "n:826",
+        "to": "n:829",
+        "ways": [460984688],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 18.15
+      }
+    ],
+    "streets": ["way/460984686", "way/460984692"],
+    "arms": [
+      {
+        "road": "r:827",
+        "street": "way/460984686",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516251],
+        "headingBefore": 116.1,
+        "headingAfterMerge": 116,
+        "headingFinal": 116,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:828",
+        "street": "way/460984686",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516251],
+        "headingBefore": 116.1,
+        "headingAfterMerge": 116,
+        "headingFinal": 116,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:834",
+        "street": "way/460984692",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4565516252],
+        "headingBefore": -59,
+        "headingAfterMerge": -61.8,
+        "headingFinal": -61.8,
+        "turnDeg": 2.8
+      },
+      {
+        "road": "r:835",
+        "street": "way/460984692",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4565516252],
+        "headingBefore": -59,
+        "headingAfterMerge": -61.8,
+        "headingFinal": -61.8,
+        "turnDeg": 2.8
+      }
+    ],
+    "minArmAngleBefore": 175,
+    "minArmAngleFinal": 177.8,
+    "maxArmTurnDeg": 2.8,
+    "maxMoveM": 9.08
+  },
+  {
+    "node": "n:867",
+    "cls": "carriageways merging or splitting",
+    "pos": {
+      "x": -706.04,
+      "y": 60.42
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:867",
+        "osmIds": [4916981962],
+        "kind": "osm",
+        "movedM": 1.53,
+        "movedFinalM": 1.53
+      },
+      {
+        "node": "n:673",
+        "osmIds": [4407142313],
+        "kind": "osm",
+        "movedM": 16.65,
+        "movedFinalM": 16.65
+      },
+      {
+        "node": "n:431",
+        "osmIds": [4916981961],
+        "kind": "osm",
+        "movedM": 17.79,
+        "movedFinalM": 17.79
+      }
+    ],
+    "spreadM": 34.42,
+    "innerRoads": [
+      {
+        "road": "r:868",
+        "from": "n:867",
+        "to": "n:673",
+        "ways": [500711360],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 15.57
+      },
+      {
+        "road": "r:869",
+        "from": "n:673",
+        "to": "n:867",
+        "ways": [500711360],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 15.57
+      },
+      {
+        "road": "r:1065",
+        "from": "n:867",
+        "to": "n:431",
+        "ways": [1034903778],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 18.98
+      }
+    ],
+    "streets": ["Benzstraße", "way/443077652"],
+    "arms": [
+      {
+        "road": "r:432",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [4916981961],
+        "headingBefore": -108.4,
+        "headingAfterMerge": -70,
+        "headingFinal": -116.6,
+        "turnDeg": 8.2
+      },
+      {
+        "road": "r:674",
+        "street": "way/443077652",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [4407142313],
+        "headingBefore": -50.8,
+        "headingAfterMerge": -54,
+        "headingFinal": -11.9,
+        "turnDeg": 39
+      },
+      {
+        "road": "r:866",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [4916981961],
+        "headingBefore": 126.6,
+        "headingAfterMerge": 125.7,
+        "headingFinal": 163,
+        "turnDeg": 36.5
+      },
+      {
+        "road": "r:871",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [4916981962],
+        "headingBefore": 103.8,
+        "headingAfterMerge": 111.4,
+        "headingFinal": 111.4,
+        "turnDeg": 7.6
+      },
+      {
+        "road": "r:873",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4407142313],
+        "headingBefore": -64.3,
+        "headingAfterMerge": -62.6,
+        "headingFinal": -62.6,
+        "turnDeg": 1.7
+      },
+      {
+        "road": "r:874",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4407142313],
+        "headingBefore": -64.3,
+        "headingAfterMerge": -62.6,
+        "headingFinal": -62.6,
+        "turnDeg": 1.7
+      }
+    ],
+    "minArmAngleBefore": 13.5,
+    "minArmAngleFinal": 50.7,
+    "maxArmTurnDeg": 39,
+    "maxMoveM": 17.79
+  },
+  {
+    "node": "n:887",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -575.57,
+      "y": -216.82
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:887",
+        "osmIds": [9533280069],
+        "kind": "osm",
+        "movedM": 4.09,
+        "movedFinalM": 4.09
+      },
+      {
+        "node": "n:883",
+        "osmIds": [9533296841],
+        "kind": "osm",
+        "movedM": 4.09,
+        "movedFinalM": 4.09
+      }
+    ],
+    "spreadM": 8.19,
+    "innerRoads": [
+      {
+        "road": "r:1092",
+        "from": "n:887",
+        "to": "n:883",
+        "ways": [1035587313],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 8.19
+      },
+      {
+        "road": "r:1093",
+        "from": "n:883",
+        "to": "n:887",
+        "ways": [1035587313],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 8.19
+      }
+    ],
+    "streets": ["Benzstraße", "way/1035187483"],
+    "arms": [
+      {
+        "road": "r:884",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [9533296841],
+        "headingBefore": 122.5,
+        "headingAfterMerge": 132.8,
+        "headingFinal": 157.5,
+        "turnDeg": 35
+      },
+      {
+        "road": "r:888",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9533280069],
+        "headingBefore": 112.8,
+        "headingAfterMerge": 102.7,
+        "headingFinal": 102.7,
+        "turnDeg": 10.1
+      },
+      {
+        "road": "r:889",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9533280069],
+        "headingBefore": 112.8,
+        "headingAfterMerge": 102.7,
+        "headingFinal": 102.7,
+        "turnDeg": 10.1
+      },
+      {
+        "road": "r:891",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9533280069],
+        "headingBefore": -65.7,
+        "headingAfterMerge": -54.3,
+        "headingFinal": -54.3,
+        "turnDeg": 11.4
+      },
+      {
+        "road": "r:892",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9533280069],
+        "headingBefore": -65.7,
+        "headingAfterMerge": -54.3,
+        "headingFinal": -54.3,
+        "turnDeg": 11.4
+      },
+      {
+        "road": "r:1091",
+        "street": "way/1035187483",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [9533296841],
+        "headingBefore": -64.1,
+        "headingAfterMerge": -65.1,
+        "headingFinal": -105.4,
+        "turnDeg": 41.3
+      }
+    ],
+    "minArmAngleBefore": 1.6,
+    "minArmAngleFinal": 51.1,
+    "maxArmTurnDeg": 41.3,
+    "maxMoveM": 4.09
+  },
+  {
+    "node": "n:908",
+    "cls": "roundabout",
+    "pos": {
+      "x": -628.68,
+      "y": -667.96
+    },
+    "control": "yield",
+    "members": [
+      {
+        "node": "n:123",
+        "osmIds": [282832391],
+        "kind": "osm",
+        "movedM": 6.55,
+        "movedFinalM": 6.55
+      },
+      {
+        "node": "n:908",
+        "osmIds": [500711406],
+        "kind": "clip",
+        "movedM": 0,
+        "movedFinalM": 0
+      }
+    ],
+    "spreadM": 6.55,
+    "innerRoads": [
+      {
+        "road": "r:909",
+        "from": "n:123",
+        "to": "n:908",
+        "ways": [500711406],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 6.55
+      }
+    ],
+    "streets": ["way/25928244", "way/1241461802"],
+    "arms": [
+      {
+        "road": "r:124",
+        "street": "way/25928244",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [282832391],
+        "headingBefore": 61.8,
+        "headingAfterMerge": 63.8,
+        "headingFinal": 63.8,
+        "turnDeg": 2.1
+      },
+      {
+        "road": "r:1239",
+        "street": "way/1241461802",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [282832391],
+        "headingBefore": -152.2,
+        "headingAfterMerge": 180,
+        "headingFinal": 180,
+        "turnDeg": 27.8
+      }
+    ],
+    "minArmAngleBefore": 146.1,
+    "minArmAngleFinal": 116.2,
+    "maxArmTurnDeg": 27.8,
+    "maxMoveM": 6.55
+  },
+  {
+    "node": "n:911",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -324.65,
+      "y": -667.96
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:913",
+        "osmIds": [2291918195],
+        "kind": "osm",
+        "movedM": 34.39,
+        "movedFinalM": 34.39
+      },
+      {
+        "node": "n:134",
+        "osmIds": [2291918194],
+        "kind": "osm",
+        "movedM": 25.43,
+        "movedFinalM": 25.43
+      },
+      {
+        "node": "n:1047",
+        "osmIds": [11458220003],
+        "kind": "osm",
+        "movedM": 23.02,
+        "movedFinalM": 23.02
+      },
+      {
+        "node": "n:910",
+        "osmIds": [4916981983],
+        "kind": "osm",
+        "movedM": 16.23,
+        "movedFinalM": 16.23
+      },
+      {
+        "node": "n:136",
+        "osmIds": [3289730608],
+        "kind": "osm",
+        "movedM": 35.82,
+        "movedFinalM": 35.82
+      },
+      {
+        "node": "n:911",
+        "osmIds": [500711427],
+        "kind": "clip",
+        "movedM": 0,
+        "movedFinalM": 0
+      }
+    ],
+    "spreadM": 35.82,
+    "innerRoads": [
+      {
+        "road": "r:137",
+        "from": "n:134",
+        "to": "n:136",
+        "ways": [26564239],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 10.99
+      },
+      {
+        "road": "r:912",
+        "from": "n:910",
+        "to": "n:911",
+        "ways": [500711427],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 16.23
+      },
+      {
+        "road": "r:1048",
+        "from": "n:913",
+        "to": "n:1047",
+        "ways": [932032170],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 11.43
+      },
+      {
+        "road": "r:1049",
+        "from": "n:1047",
+        "to": "n:910",
+        "ways": [932032170],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 6.86
+      },
+      {
+        "road": "r:1229",
+        "from": "n:134",
+        "to": "n:1047",
+        "ways": [1234479807],
+        "name": "Benzstraße",
+        "roadClass": "residential",
+        "lengthM": 8.66
+      }
+    ],
+    "streets": ["Benzstraße", "Daimlerwerk Tor 7"],
+    "arms": [
+      {
+        "road": "r:135",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [2291918194],
+        "headingBefore": -153.1,
+        "headingAfterMerge": 180,
+        "headingFinal": 180,
+        "turnDeg": 26.9
+      },
+      {
+        "road": "r:601",
+        "street": "Daimlerwerk Tor 7",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [3289730608],
+        "headingBefore": 23,
+        "headingAfterMerge": 38,
+        "headingFinal": 80.6,
+        "turnDeg": 57.6
+      },
+      {
+        "road": "r:914",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [2291918195],
+        "headingBefore": 26.2,
+        "headingAfterMerge": 30.7,
+        "headingFinal": 30.7,
+        "turnDeg": 4.5
+      }
+    ],
+    "minArmAngleBefore": 3.2,
+    "minArmAngleFinal": 49.9,
+    "maxArmTurnDeg": 57.6,
+    "maxMoveM": 35.82
+  },
+  {
+    "node": "n:1006",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": 616.91,
+      "y": -192.35
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1006",
+        "osmIds": [6727768565],
+        "kind": "osm",
+        "movedM": 4.39,
+        "movedFinalM": 4.39
+      },
+      {
+        "node": "n:1001",
+        "osmIds": [6727768568],
+        "kind": "osm",
+        "movedM": 4.39,
+        "movedFinalM": 4.39
+      }
+    ],
+    "spreadM": 8.79,
+    "innerRoads": [
+      {
+        "road": "r:1007",
+        "from": "n:1006",
+        "to": "n:1001",
+        "ways": [715914318],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 8.79
+      }
+    ],
+    "streets": ["way/715914317", "way/715914323"],
+    "arms": [
+      {
+        "road": "r:1002",
+        "street": "way/715914317",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [6727768568],
+        "headingBefore": 141,
+        "headingAfterMerge": 141,
+        "headingFinal": 141,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:1019",
+        "street": "way/715914323",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [6727768565],
+        "headingBefore": -38,
+        "headingAfterMerge": -38.2,
+        "headingFinal": -38.2,
+        "turnDeg": 0.2
+      }
+    ],
+    "minArmAngleBefore": 179,
+    "minArmAngleFinal": 179.2,
+    "maxArmTurnDeg": 0.2,
+    "maxMoveM": 4.39
+  },
+  {
+    "node": "n:1008",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": 658.71,
+      "y": -237.3
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1008",
+        "osmIds": [6727768570],
+        "kind": "osm",
+        "movedM": 6.7,
+        "movedFinalM": 6.7
+      },
+      {
+        "node": "n:1010",
+        "osmIds": [6727768562],
+        "kind": "osm",
+        "movedM": 6.7,
+        "movedFinalM": 6.7
+      }
+    ],
+    "spreadM": 13.41,
+    "innerRoads": [
+      {
+        "road": "r:1011",
+        "from": "n:1008",
+        "to": "n:1010",
+        "ways": [715914320],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 13.41
+      }
+    ],
+    "streets": ["way/715914319", "way/715914321"],
+    "arms": [
+      {
+        "road": "r:1009",
+        "street": "way/715914319",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [6727768570],
+        "headingBefore": 141,
+        "headingAfterMerge": 140.7,
+        "headingFinal": 140.7,
+        "turnDeg": 0.3
+      },
+      {
+        "road": "r:1013",
+        "street": "way/715914321",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [6727768562],
+        "headingBefore": -38.5,
+        "headingAfterMerge": -38.4,
+        "headingFinal": -38.4,
+        "turnDeg": 0
+      }
+    ],
+    "minArmAngleBefore": 179.5,
+    "minArmAngleFinal": 179.1,
+    "maxArmTurnDeg": 0.3,
+    "maxMoveM": 6.7
+  },
+  {
+    "node": "n:1015",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": 667.74,
+      "y": -232.36
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1015",
+        "osmIds": [6727768563],
+        "kind": "osm",
+        "movedM": 7.9,
+        "movedFinalM": 7.9
+      },
+      {
+        "node": "n:1017",
+        "osmIds": [6727768564],
+        "kind": "osm",
+        "movedM": 7.9,
+        "movedFinalM": 7.9
+      }
+    ],
+    "spreadM": 15.8,
+    "innerRoads": [
+      {
+        "road": "r:1018",
+        "from": "n:1015",
+        "to": "n:1017",
+        "ways": [715914322],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 15.8
+      }
+    ],
+    "streets": ["way/715914321", "way/715914323"],
+    "arms": [
+      {
+        "road": "r:1016",
+        "street": "way/715914321",
+        "incoming": true,
+        "oneWay": true,
+        "osmNode": [6727768563],
+        "headingBefore": -37.4,
+        "headingAfterMerge": -37.8,
+        "headingFinal": -37.8,
+        "turnDeg": 0.4
+      },
+      {
+        "road": "r:1019",
+        "street": "way/715914323",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [6727768564],
+        "headingBefore": 142,
+        "headingAfterMerge": 141.8,
+        "headingFinal": 141.8,
+        "turnDeg": 0.2
+      }
+    ],
+    "minArmAngleBefore": 179.4,
+    "minArmAngleFinal": 179.6,
+    "maxArmTurnDeg": 0.4,
+    "maxMoveM": 7.9
+  },
+  {
+    "node": "n:1028",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -95.94,
+      "y": 427.53
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1028",
+        "osmIds": [11422468133],
+        "kind": "osm",
+        "movedM": 5.99,
+        "movedFinalM": 5.99
+      },
+      {
+        "node": "n:655",
+        "osmIds": [4406755915],
+        "kind": "osm",
+        "movedM": 5.99,
+        "movedFinalM": 5.99
+      }
+    ],
+    "spreadM": 11.98,
+    "innerRoads": [
+      {
+        "road": "r:1031",
+        "from": "n:1028",
+        "to": "n:655",
+        "ways": [767771118],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 11.98
+      },
+      {
+        "road": "r:1032",
+        "from": "n:655",
+        "to": "n:1028",
+        "ways": [767771118],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 11.98
+      }
+    ],
+    "streets": ["way/443029537", "way/767771118", "way/1231631251", "way/1231631252"],
+    "arms": [
+      {
+        "road": "r:657",
+        "street": "way/443029537",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [4406755915],
+        "headingBefore": 128.8,
+        "headingAfterMerge": 130.7,
+        "headingFinal": 130.7,
+        "turnDeg": 1.8
+      },
+      {
+        "road": "r:1029",
+        "street": "way/767771118",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422468133],
+        "headingBefore": -39.7,
+        "headingAfterMerge": -39.7,
+        "headingFinal": -39.7,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:1030",
+        "street": "way/767771118",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422468133],
+        "headingBefore": -39.7,
+        "headingAfterMerge": -39.7,
+        "headingFinal": -39.7,
+        "turnDeg": 0
+      },
+      {
+        "road": "r:1178",
+        "street": "way/1231631251",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4406755915],
+        "headingBefore": -53.7,
+        "headingAfterMerge": -58.3,
+        "headingFinal": -94.6,
+        "turnDeg": 41
+      },
+      {
+        "road": "r:1179",
+        "street": "way/1231631251",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4406755915],
+        "headingBefore": -53.7,
+        "headingAfterMerge": -58.3,
+        "headingFinal": -94.6,
+        "turnDeg": 41
+      },
+      {
+        "road": "r:1180",
+        "street": "way/1231631252",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422468133],
+        "headingBefore": 27.4,
+        "headingAfterMerge": 21.3,
+        "headingFinal": 21.3,
+        "turnDeg": 6.1
+      },
+      {
+        "road": "r:1181",
+        "street": "way/1231631252",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422468133],
+        "headingBefore": 27.4,
+        "headingAfterMerge": 21.3,
+        "headingFinal": 21.3,
+        "turnDeg": 6.1
+      }
+    ],
+    "minArmAngleBefore": 13.9,
+    "minArmAngleFinal": 54.9,
+    "maxArmTurnDeg": 41,
+    "maxMoveM": 5.99
+  },
+  {
+    "node": "n:1075",
+    "cls": "other: with one-way streets",
+    "pos": {
+      "x": -475.44,
+      "y": -448.95
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1075",
+        "osmIds": [9535601864],
+        "kind": "osm",
+        "movedM": 12.04,
+        "movedFinalM": 12.04
+      },
+      {
+        "node": "n:1083",
+        "osmIds": [9535605502],
+        "kind": "osm",
+        "movedM": 4.44,
+        "movedFinalM": 4.44
+      },
+      {
+        "node": "n:890",
+        "osmIds": [286420793],
+        "kind": "osm",
+        "movedM": 9.11,
+        "movedFinalM": 9.11
+      }
+    ],
+    "spreadM": 20.89,
+    "innerRoads": [
+      {
+        "road": "r:1084",
+        "from": "n:1075",
+        "to": "n:1083",
+        "ways": [1035185840],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 16.79
+      },
+      {
+        "road": "r:1085",
+        "from": "n:1083",
+        "to": "n:1075",
+        "ways": [1035185840],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 16.79
+      },
+      {
+        "road": "r:1086",
+        "from": "n:1083",
+        "to": "n:890",
+        "ways": [1035185840],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 7.86
+      },
+      {
+        "road": "r:1087",
+        "from": "n:890",
+        "to": "n:1083",
+        "ways": [1035185840],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 7.86
+      }
+    ],
+    "streets": ["Benzstraße", "way/1035185358", "way/1035185840", "way/1035187483"],
+    "arms": [
+      {
+        "road": "r:891",
+        "street": "Benzstraße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [286420793],
+        "headingBefore": 91,
+        "headingAfterMerge": 71.4,
+        "headingFinal": 71.4,
+        "turnDeg": 19.6
+      },
+      {
+        "road": "r:892",
+        "street": "Benzstraße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [286420793],
+        "headingBefore": 91,
+        "headingAfterMerge": 71.4,
+        "headingFinal": 71.4,
+        "turnDeg": 19.6
+      },
+      {
+        "road": "r:1076",
+        "street": "way/1035185358",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9535601864],
+        "headingBefore": -154.7,
+        "headingAfterMerge": -150.7,
+        "headingFinal": -150.7,
+        "turnDeg": 4
+      },
+      {
+        "road": "r:1077",
+        "street": "way/1035185358",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9535601864],
+        "headingBefore": -154.7,
+        "headingAfterMerge": -150.7,
+        "headingFinal": -150.7,
+        "turnDeg": 4
+      },
+      {
+        "road": "r:1080",
+        "street": "way/1035185840",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [286420793],
+        "headingBefore": -22.4,
+        "headingAfterMerge": -3.8,
+        "headingFinal": -3.8,
+        "turnDeg": 18.6
+      },
+      {
+        "road": "r:1081",
+        "street": "way/1035185840",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9535601864],
+        "headingBefore": -33.1,
+        "headingAfterMerge": -72.7,
+        "headingFinal": -72.7,
+        "turnDeg": 39.7
+      },
+      {
+        "road": "r:1082",
+        "street": "way/1035185840",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9535601864],
+        "headingBefore": -33.1,
+        "headingAfterMerge": -72.7,
+        "headingFinal": -72.7,
+        "turnDeg": 39.7
+      },
+      {
+        "road": "r:1088",
+        "street": "way/1035185840",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [286420793],
+        "headingBefore": -22.4,
+        "headingAfterMerge": -3.8,
+        "headingFinal": -3.8,
+        "turnDeg": 18.6
+      },
+      {
+        "road": "r:1091",
+        "street": "way/1035187483",
+        "incoming": false,
+        "oneWay": true,
+        "osmNode": [9535605502],
+        "headingBefore": 92.8,
+        "headingAfterMerge": 96.6,
+        "headingFinal": 125.3,
+        "turnDeg": 32.5
+      }
+    ],
+    "minArmAngleBefore": 1.8,
+    "minArmAngleFinal": 54,
+    "maxArmTurnDeg": 39.7,
+    "maxMoveM": 12.04
+  },
+  {
+    "node": "n:1120",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -566.12,
+      "y": 146.97
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1120",
+        "osmIds": [9973025957],
+        "kind": "osm",
+        "movedM": 7.85,
+        "movedFinalM": 7.85
+      },
+      {
+        "node": "n:1115",
+        "osmIds": [9973025958],
+        "kind": "osm",
+        "movedM": 7.85,
+        "movedFinalM": 7.85
+      }
+    ],
+    "spreadM": 15.69,
+    "innerRoads": [
+      {
+        "road": "r:1121",
+        "from": "n:1120",
+        "to": "n:1115",
+        "ways": [1088543393],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 15.69
+      },
+      {
+        "road": "r:1122",
+        "from": "n:1115",
+        "to": "n:1120",
+        "ways": [1088543393],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 15.69
+      }
+    ],
+    "streets": ["way/1088543392"],
+    "arms": [
+      {
+        "road": "r:1116",
+        "street": "way/1088543392",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9973025958],
+        "headingBefore": -134.7,
+        "headingAfterMerge": -149.5,
+        "headingFinal": -149.5,
+        "turnDeg": 14.8
+      },
+      {
+        "road": "r:1117",
+        "street": "way/1088543392",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9973025958],
+        "headingBefore": -134.7,
+        "headingAfterMerge": -149.5,
+        "headingFinal": -149.5,
+        "turnDeg": 14.8
+      },
+      {
+        "road": "r:1118",
+        "street": "way/1088543392",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [9973025958],
+        "headingBefore": 115.3,
+        "headingAfterMerge": 132.8,
+        "headingFinal": 132.8,
+        "turnDeg": 17.5
+      },
+      {
+        "road": "r:1119",
+        "street": "way/1088543392",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [9973025958],
+        "headingBefore": 115.3,
+        "headingAfterMerge": 132.8,
+        "headingFinal": 132.8,
+        "turnDeg": 17.5
+      }
+    ],
+    "minArmAngleBefore": 110,
+    "minArmAngleFinal": 77.7,
+    "maxArmTurnDeg": 17.5,
+    "maxMoveM": 7.85
+  },
+  {
+    "node": "n:1126",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 134.87,
+      "y": 667.88
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:686",
+        "osmIds": [10978910749],
+        "kind": "osm",
+        "movedM": 14.45,
+        "movedFinalM": 14.45
+      },
+      {
+        "node": "n:689",
+        "osmIds": [4413756319],
+        "kind": "osm",
+        "movedM": 16.2,
+        "movedFinalM": 16.2
+      },
+      {
+        "node": "n:1126",
+        "osmIds": [1182252288],
+        "kind": "clip",
+        "movedM": 0,
+        "movedFinalM": 0
+      }
+    ],
+    "spreadM": 16.2,
+    "innerRoads": [
+      {
+        "road": "r:690",
+        "from": "n:686",
+        "to": "n:689",
+        "ways": [443245849],
+        "name": "Umberto-Nobile-Straße",
+        "roadClass": "residential",
+        "lengthM": 7.08
+      },
+      {
+        "road": "r:691",
+        "from": "n:689",
+        "to": "n:686",
+        "ways": [443245849],
+        "name": "Umberto-Nobile-Straße",
+        "roadClass": "residential",
+        "lengthM": 7.08
+      },
+      {
+        "road": "r:1127",
+        "from": "n:686",
+        "to": "n:1126",
+        "ways": [1182252288],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 14.45
+      },
+      {
+        "road": "r:1128",
+        "from": "n:1126",
+        "to": "n:686",
+        "ways": [1182252288],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 14.45
+      }
+    ],
+    "streets": ["Umberto-Nobile-Straße", "way/443839227"],
+    "arms": [
+      {
+        "road": "r:687",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [10978910749],
+        "headingBefore": -14.5,
+        "headingAfterMerge": -30.3,
+        "headingFinal": -30.3,
+        "turnDeg": 15.8
+      },
+      {
+        "road": "r:688",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [10978910749],
+        "headingBefore": -14.5,
+        "headingAfterMerge": -30.3,
+        "headingFinal": -30.3,
+        "turnDeg": 15.8
+      },
+      {
+        "road": "r:693",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4413756319],
+        "headingBefore": 165.5,
+        "headingAfterMerge": 180,
+        "headingFinal": 180,
+        "turnDeg": 14.5
+      },
+      {
+        "road": "r:694",
+        "street": "Umberto-Nobile-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4413756319],
+        "headingBefore": 165.5,
+        "headingAfterMerge": 180,
+        "headingFinal": 180,
+        "turnDeg": 14.5
+      },
+      {
+        "road": "r:719",
+        "street": "way/443839227",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [4413756319],
+        "headingBefore": -104.1,
+        "headingAfterMerge": -111.7,
+        "headingFinal": -111.7,
+        "turnDeg": 7.6
+      },
+      {
+        "road": "r:720",
+        "street": "way/443839227",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [4413756319],
+        "headingBefore": -104.1,
+        "headingAfterMerge": -111.7,
+        "headingFinal": -111.7,
+        "turnDeg": 7.6
+      }
+    ],
+    "minArmAngleBefore": 89.6,
+    "minArmAngleFinal": 68.3,
+    "maxArmTurnDeg": 15.8,
+    "maxMoveM": 16.2
+  },
+  {
+    "node": "n:1132",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 55.15,
+      "y": 615
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1132",
+        "osmIds": [10978910802],
+        "kind": "osm",
+        "movedM": 16.96,
+        "movedFinalM": 16.96
+      },
+      {
+        "node": "n:1135",
+        "osmIds": [10978910804],
+        "kind": "osm",
+        "movedM": 1.34,
+        "movedFinalM": 1.34
+      },
+      {
+        "node": "n:722",
+        "osmIds": [10978910800],
+        "kind": "osm",
+        "movedM": 18.3,
+        "movedFinalM": 18.3
+      }
+    ],
+    "spreadM": 35.27,
+    "innerRoads": [
+      {
+        "road": "r:1136",
+        "from": "n:1132",
+        "to": "n:1135",
+        "ways": [1182252295],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 15.62
+      },
+      {
+        "road": "r:1137",
+        "from": "n:1135",
+        "to": "n:1132",
+        "ways": [1182252295],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 15.62
+      },
+      {
+        "road": "r:1138",
+        "from": "n:1135",
+        "to": "n:722",
+        "ways": [1182252295],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 19.65
+      },
+      {
+        "road": "r:1139",
+        "from": "n:722",
+        "to": "n:1135",
+        "ways": [1182252295],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 19.65
+      }
+    ],
+    "streets": ["Melli-Beese-Straße", "way/1182252295", "way/1182252296", "way/1182252297"],
+    "arms": [
+      {
+        "road": "r:723",
+        "street": "Melli-Beese-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [10978910800],
+        "headingBefore": 74.7,
+        "headingAfterMerge": 94.8,
+        "headingFinal": 94.8,
+        "turnDeg": 20.2
+      },
+      {
+        "road": "r:724",
+        "street": "Melli-Beese-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [10978910800],
+        "headingBefore": 74.7,
+        "headingAfterMerge": 94.8,
+        "headingFinal": 94.8,
+        "turnDeg": 20.2
+      },
+      {
+        "road": "r:725",
+        "street": "Melli-Beese-Straße",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [10978910800],
+        "headingBefore": -105.4,
+        "headingAfterMerge": -128.6,
+        "headingFinal": -128.6,
+        "turnDeg": 23.3
+      },
+      {
+        "road": "r:726",
+        "street": "Melli-Beese-Straße",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [10978910800],
+        "headingBefore": -105.4,
+        "headingAfterMerge": -128.6,
+        "headingFinal": -128.6,
+        "turnDeg": 23.3
+      },
+      {
+        "road": "r:1133",
+        "street": "way/1182252295",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [10978910802],
+        "headingBefore": -14,
+        "headingAfterMerge": -14.1,
+        "headingFinal": -14.1,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:1134",
+        "street": "way/1182252295",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [10978910802],
+        "headingBefore": -14,
+        "headingAfterMerge": -14.1,
+        "headingFinal": -14.1,
+        "turnDeg": 0.1
+      },
+      {
+        "road": "r:1141",
+        "street": "way/1182252296",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [10978910802],
+        "headingBefore": -103.4,
+        "headingAfterMerge": -88.3,
+        "headingFinal": -74.3,
+        "turnDeg": 29.1
+      },
+      {
+        "road": "r:1142",
+        "street": "way/1182252296",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [10978910802],
+        "headingBefore": -103.4,
+        "headingAfterMerge": -88.3,
+        "headingFinal": -74.3,
+        "turnDeg": 29.1
+      },
+      {
+        "road": "r:1144",
+        "street": "way/1182252297",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [10978910804],
+        "headingBefore": -104.8,
+        "headingAfterMerge": -103.2,
+        "headingFinal": -103.2,
+        "turnDeg": 1.6
+      },
+      {
+        "road": "r:1145",
+        "street": "way/1182252297",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [10978910804],
+        "headingBefore": -104.8,
+        "headingAfterMerge": -103.2,
+        "headingFinal": -103.2,
+        "turnDeg": 1.6
+      }
+    ],
+    "minArmAngleBefore": 0.6,
+    "minArmAngleFinal": 25.5,
+    "maxArmTurnDeg": 29.1,
+    "maxMoveM": 18.3
+  },
+  {
+    "node": "n:1161",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": -171.73,
+      "y": 342.03
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1161",
+        "osmIds": [11422468114],
+        "kind": "osm",
+        "movedM": 7.28,
+        "movedFinalM": 7.28
+      },
+      {
+        "node": "n:1167",
+        "osmIds": [11422468112],
+        "kind": "osm",
+        "movedM": 7.28,
+        "movedFinalM": 7.28
+      }
+    ],
+    "spreadM": 14.56,
+    "innerRoads": [
+      {
+        "road": "r:1174",
+        "from": "n:1161",
+        "to": "n:1167",
+        "ways": [1231631249],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 15.5
+      },
+      {
+        "road": "r:1175",
+        "from": "n:1167",
+        "to": "n:1161",
+        "ways": [1231631249],
+        "name": null,
+        "roadClass": "service",
+        "lengthM": 15.5
+      }
+    ],
+    "streets": ["way/1231631248", "way/1231631249"],
+    "arms": [
+      {
+        "road": "r:1163",
+        "street": "way/1231631248",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422468114],
+        "headingBefore": 145.8,
+        "headingAfterMerge": 167.7,
+        "headingFinal": 167.7,
+        "turnDeg": 21.9
+      },
+      {
+        "road": "r:1164",
+        "street": "way/1231631248",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422468114],
+        "headingBefore": 145.8,
+        "headingAfterMerge": 167.7,
+        "headingFinal": 167.7,
+        "turnDeg": 21.9
+      },
+      {
+        "road": "r:1168",
+        "street": "way/1231631249",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422468112],
+        "headingBefore": -176.8,
+        "headingAfterMerge": 150.1,
+        "headingFinal": 135.1,
+        "turnDeg": 48.1
+      },
+      {
+        "road": "r:1169",
+        "street": "way/1231631249",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422468112],
+        "headingBefore": -176.8,
+        "headingAfterMerge": 150.1,
+        "headingFinal": 135.1,
+        "turnDeg": 48.1
+      },
+      {
+        "road": "r:1170",
+        "street": "way/1231631249",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422468112],
+        "headingBefore": 3.2,
+        "headingAfterMerge": 11.5,
+        "headingFinal": 11.5,
+        "turnDeg": 8.3
+      },
+      {
+        "road": "r:1171",
+        "street": "way/1231631249",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422468112],
+        "headingBefore": 3.2,
+        "headingAfterMerge": 11.5,
+        "headingFinal": 11.5,
+        "turnDeg": 8.3
+      },
+      {
+        "road": "r:1172",
+        "street": "way/1231631249",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [11422468114],
+        "headingBefore": -25.8,
+        "headingAfterMerge": -41.3,
+        "headingFinal": -41.3,
+        "turnDeg": 15.5
+      },
+      {
+        "road": "r:1173",
+        "street": "way/1231631249",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [11422468114],
+        "headingBefore": -25.8,
+        "headingAfterMerge": -41.3,
+        "headingFinal": -41.3,
+        "turnDeg": 15.5
+      }
+    ],
+    "minArmAngleBefore": 37.4,
+    "minArmAngleFinal": 32.7,
+    "maxArmTurnDeg": 48.1,
+    "maxMoveM": 7.28
+  },
+  {
+    "node": "n:1202",
+    "cls": "other: two-way streets",
+    "pos": {
+      "x": 734.77,
+      "y": 85.81
+    },
+    "control": "uncontrolled",
+    "members": [
+      {
+        "node": "n:1202",
+        "osmIds": [1231649717],
+        "kind": "clip",
+        "movedM": 0,
+        "movedFinalM": 0
+      },
+      {
+        "node": "n:293",
+        "osmIds": [353403150],
+        "kind": "osm",
+        "movedM": 17.59,
+        "movedFinalM": 17.59
+      },
+      {
+        "node": "n:327",
+        "osmIds": [353403685],
+        "kind": "osm",
+        "movedM": 40.89,
+        "movedFinalM": 40.89
+      }
+    ],
+    "spreadM": 40.89,
+    "innerRoads": [
+      {
+        "road": "r:1203",
+        "from": "n:1202",
+        "to": "n:293",
+        "ways": [1231649717],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.59
+      },
+      {
+        "road": "r:1204",
+        "from": "n:293",
+        "to": "n:1202",
+        "ways": [1231649717],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 17.59
+      },
+      {
+        "road": "r:1205",
+        "from": "n:293",
+        "to": "n:327",
+        "ways": [1231649717],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 23.3
+      },
+      {
+        "road": "r:1206",
+        "from": "n:327",
+        "to": "n:293",
+        "ways": [1231649717],
+        "name": null,
+        "roadClass": "residential",
+        "lengthM": 23.3
+      }
+    ],
+    "streets": ["way/31583966", "way/31583984", "way/1231649717"],
+    "arms": [
+      {
+        "road": "r:295",
+        "street": "way/31583966",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403150],
+        "headingBefore": 116.6,
+        "headingAfterMerge": 137.6,
+        "headingFinal": 137.6,
+        "turnDeg": 21
+      },
+      {
+        "road": "r:296",
+        "street": "way/31583966",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403150],
+        "headingBefore": 116.6,
+        "headingAfterMerge": 137.6,
+        "headingFinal": 137.6,
+        "turnDeg": 21
+      },
+      {
+        "road": "r:329",
+        "street": "way/31583984",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403685],
+        "headingBefore": -66.3,
+        "headingAfterMerge": -110.3,
+        "headingFinal": -96.3,
+        "turnDeg": 30
+      },
+      {
+        "road": "r:330",
+        "street": "way/31583984",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403685],
+        "headingBefore": -66.3,
+        "headingAfterMerge": -110.3,
+        "headingFinal": -96.3,
+        "turnDeg": 30
+      },
+      {
+        "road": "r:1207",
+        "street": "way/1231649717",
+        "incoming": false,
+        "oneWay": false,
+        "osmNode": [353403685],
+        "headingBefore": -154.1,
+        "headingAfterMerge": -153.2,
+        "headingFinal": -153.2,
+        "turnDeg": 0.8
+      },
+      {
+        "road": "r:1208",
+        "street": "way/1231649717",
+        "incoming": true,
+        "oneWay": false,
+        "osmNode": [353403685],
+        "headingBefore": -154.1,
+        "headingAfterMerge": -153.2,
+        "headingFinal": -153.2,
+        "turnDeg": 0.8
+      }
+    ],
+    "minArmAngleBefore": 87.8,
+    "minArmAngleFinal": 56.9,
+    "maxArmTurnDeg": 30,
+    "maxMoveM": 40.89
+  }
+]

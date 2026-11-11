@@ -1,0 +1,159 @@
+[
+  {
+    "corridor": "corridor:49527726+133482733",
+    "roads": ["r:412", "r:461"],
+    "name": "Flugfeld-Allee",
+    "sampledM": 109,
+    "awayM": 59,
+    "gapMinM": 4.58,
+    "gapP10M": 4.59,
+    "gapMedianM": 4.66,
+    "gapMaxM": 4.77,
+    "gapMinAllM": 4.48,
+    "negativeAwayM": 0,
+    "under05AwayM": 0,
+    "negativeNearM": 0,
+    "under05NearM": 0,
+    "movedBy": {
+      "smoothRoads": 0.08
+    },
+    "drawnGapMedianM": 4.65,
+    "drawnGapMinM": 4.59,
+    "stretches": []
+  },
+  {
+    "corridor": "corridor:219071841+500711365",
+    "roads": ["r:500", "r:876"],
+    "name": null,
+    "sampledM": 44,
+    "awayM": 0,
+    "gapMinM": null,
+    "gapP10M": 0,
+    "gapMedianM": 0,
+    "gapMaxM": null,
+    "gapMinAllM": 1.42,
+    "negativeAwayM": 0,
+    "under05AwayM": 0,
+    "negativeNearM": 0,
+    "under05NearM": 0,
+    "movedBy": {
+      "consolidateJunctions": 12.28,
+      "separateCoincident": 2.84
+    },
+    "drawnGapMedianM": 0,
+    "drawnGapMinM": null,
+    "stretches": []
+  },
+  {
+    "corridor": "corridor:332200794+332200795",
+    "roads": ["r:582", "r:583"],
+    "name": null,
+    "sampledM": 154,
+    "awayM": 93,
+    "gapMinM": 1.54,
+    "gapP10M": 1.99,
+    "gapMedianM": 2.72,
+    "gapMaxM": 3.67,
+    "gapMinAllM": -3,
+    "negativeAwayM": 0,
+    "under05AwayM": 0,
+    "negativeNearM": 37,
+    "under05NearM": 44,
+    "movedBy": {
+      "consolidateJunctions": 9.73,
+      "smoothRoads": 0.19,
+      "separateDual": 1.74
+    },
+    "drawnGapMedianM": 0.52,
+    "drawnGapMinM": 0.5,
+    "stretches": [
+      {
+        "road": "r:582",
+        "fromM": 0.3,
+        "toM": 9.3,
+        "minGapM": -2.89,
+        "at": {
+          "x": -300,
+          "y": 477.8
+        },
+        "nearNode": true
+      },
+      {
+        "road": "r:582",
+        "fromM": 66.3,
+        "toM": 77.3,
+        "minGapM": -2.81,
+        "at": {
+          "x": -375,
+          "y": 480.1
+        },
+        "nearNode": true
+      },
+      {
+        "road": "r:583",
+        "fromM": 0,
+        "toM": 12,
+        "minGapM": -3,
+        "at": {
+          "x": -375.6,
+          "y": 480.3
+        },
+        "nearNode": true
+      },
+      {
+        "road": "r:583",
+        "fromM": 67,
+        "toM": 75,
+        "minGapM": -2.65,
+        "at": {
+          "x": -300.7,
+          "y": 477.9
+        },
+        "nearNode": true
+      }
+    ]
+  },
+  {
+    "corridor": "corridor:443806513+666947342+1298781915",
+    "roads": ["r:705", "r:1244", "r:1245"],
+    "name": "Flugfeld-Allee",
+    "sampledM": 393,
+    "awayM": 296,
+    "gapMinM": 4.85,
+    "gapP10M": 5.35,
+    "gapMedianM": 5.45,
+    "gapMaxM": 5.65,
+    "gapMinAllM": 4.49,
+    "negativeAwayM": 0,
+    "under05AwayM": 0,
+    "negativeNearM": 0,
+    "under05NearM": 0,
+    "movedBy": {},
+    "drawnGapMedianM": 5.45,
+    "drawnGapMinM": 4.84,
+    "stretches": []
+  },
+  {
+    "corridor": "corridor:460913551+460984663",
+    "roads": ["r:746", "r:803"],
+    "name": null,
+    "sampledM": 636,
+    "awayM": 517,
+    "gapMinM": 8.45,
+    "gapP10M": 8.52,
+    "gapMedianM": 8.75,
+    "gapMaxM": 9.2,
+    "gapMinAllM": 8.44,
+    "negativeAwayM": 0,
+    "under05AwayM": 0,
+    "negativeNearM": 0,
+    "under05NearM": 0,
+    "movedBy": {
+      "consolidateJunctions": 14.19,
+      "separateCoincident": 3.25
+    },
+    "drawnGapMedianM": 0.5,
+    "drawnGapMinM": 0.5,
+    "stretches": []
+  }
+]

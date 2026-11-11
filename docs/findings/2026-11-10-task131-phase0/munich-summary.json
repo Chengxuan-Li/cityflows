@@ -1,0 +1,407 @@
+{
+  "name": "munich",
+  "importMs": 16156,
+  "laterMoves": 0,
+  "validation": {
+    "clusters": 84,
+    "todayGroups": 89,
+    "clustersNotReproduced": []
+  },
+  "mergedShort": {
+    "beforeConsolidation": ["n:718", "n:764", "n:935", "n:1022", "n:1107"],
+    "insideConsolidation": [
+      "n:326",
+      "n:334",
+      "n:382",
+      "n:387",
+      "n:391",
+      "n:394",
+      "n:401",
+      "n:448",
+      "n:475",
+      "n:916",
+      "n:957",
+      "n:967"
+    ]
+  },
+  "medianNodes": [
+    {
+      "node": "n:1303",
+      "ways": [134583817],
+      "final": "n:1303"
+    },
+    {
+      "node": "n:1307",
+      "ways": [133184448],
+      "final": "merged"
+    },
+    {
+      "node": "n:1311",
+      "ways": [146018788],
+      "final": "merged"
+    },
+    {
+      "node": "n:1315",
+      "ways": [151784481],
+      "final": "merged"
+    },
+    {
+      "node": "n:1321",
+      "ways": [54200286],
+      "final": "merged"
+    },
+    {
+      "node": "n:1325",
+      "ways": [300081443],
+      "final": "merged"
+    },
+    {
+      "node": "n:1329",
+      "ways": [300081443],
+      "final": "merged"
+    },
+    {
+      "node": "n:1333",
+      "ways": [151847531],
+      "final": "merged"
+    },
+    {
+      "node": "n:1337",
+      "ways": [316110478],
+      "final": "merged"
+    },
+    {
+      "node": "n:1341",
+      "ways": [54200280],
+      "final": "merged"
+    },
+    {
+      "node": "n:1345",
+      "ways": [54200280],
+      "final": "merged"
+    },
+    {
+      "node": "n:1349",
+      "ways": [54200280],
+      "final": "merged"
+    },
+    {
+      "node": "n:1353",
+      "ways": [54200280],
+      "final": "merged"
+    },
+    {
+      "node": "n:1357",
+      "ways": [316110478],
+      "final": "merged"
+    },
+    {
+      "node": "n:1361",
+      "ways": [300081440, 1421494357],
+      "final": "merged"
+    },
+    {
+      "node": "n:1367",
+      "ways": [300081440, 1421494357],
+      "final": "merged"
+    },
+    {
+      "node": "n:1371",
+      "ways": [51775137],
+      "final": "merged"
+    },
+    {
+      "node": "n:1375",
+      "ways": [316110482],
+      "final": "n:1375"
+    }
+  ],
+  "medianCrossings": [
+    {
+      "road": "r:1305",
+      "from": "n:52",
+      "to": "n:1303",
+      "lengthM": 15.92,
+      "kept": false
+    },
+    {
+      "road": "r:1306",
+      "from": "n:1303",
+      "to": "n:52",
+      "lengthM": 15.92,
+      "kept": false
+    },
+    {
+      "road": "r:1309",
+      "from": "n:104",
+      "to": "n:1307",
+      "lengthM": 14.79,
+      "kept": false
+    },
+    {
+      "road": "r:1310",
+      "from": "n:1307",
+      "to": "n:104",
+      "lengthM": 14.79,
+      "kept": false
+    },
+    {
+      "road": "r:1313",
+      "from": "n:124",
+      "to": "n:1311",
+      "lengthM": 15.44,
+      "kept": false
+    },
+    {
+      "road": "r:1314",
+      "from": "n:1311",
+      "to": "n:124",
+      "lengthM": 15.44,
+      "kept": false
+    },
+    {
+      "road": "r:1317",
+      "from": "n:138",
+      "to": "n:1315",
+      "lengthM": 17.82,
+      "kept": false
+    },
+    {
+      "road": "r:1318",
+      "from": "n:1315",
+      "to": "n:138",
+      "lengthM": 17.82,
+      "kept": false
+    },
+    {
+      "road": "r:1319",
+      "from": "n:153",
+      "to": "n:138",
+      "lengthM": 18.31,
+      "kept": true
+    },
+    {
+      "road": "r:1320",
+      "from": "n:138",
+      "to": "n:153",
+      "lengthM": 18.31,
+      "kept": true
+    },
+    {
+      "road": "r:1323",
+      "from": "n:158",
+      "to": "n:1321",
+      "lengthM": 11.61,
+      "kept": false
+    },
+    {
+      "road": "r:1324",
+      "from": "n:1321",
+      "to": "n:158",
+      "lengthM": 11.61,
+      "kept": false
+    },
+    {
+      "road": "r:1327",
+      "from": "n:279",
+      "to": "n:1325",
+      "lengthM": 12.54,
+      "kept": false
+    },
+    {
+      "road": "r:1328",
+      "from": "n:1325",
+      "to": "n:279",
+      "lengthM": 12.54,
+      "kept": false
+    },
+    {
+      "road": "r:1331",
+      "from": "n:328",
+      "to": "n:1329",
+      "lengthM": 14.1,
+      "kept": false
+    },
+    {
+      "road": "r:1332",
+      "from": "n:1329",
+      "to": "n:328",
+      "lengthM": 14.1,
+      "kept": false
+    },
+    {
+      "road": "r:1335",
+      "from": "n:340",
+      "to": "n:1333",
+      "lengthM": 12.12,
+      "kept": false
+    },
+    {
+      "road": "r:1336",
+      "from": "n:1333",
+      "to": "n:340",
+      "lengthM": 12.12,
+      "kept": false
+    },
+    {
+      "road": "r:1339",
+      "from": "n:351",
+      "to": "n:1337",
+      "lengthM": 13.56,
+      "kept": false
+    },
+    {
+      "road": "r:1340",
+      "from": "n:1337",
+      "to": "n:351",
+      "lengthM": 13.56,
+      "kept": false
+    },
+    {
+      "road": "r:1343",
+      "from": "n:400",
+      "to": "n:1341",
+      "lengthM": 15.47,
+      "kept": false
+    },
+    {
+      "road": "r:1344",
+      "from": "n:1341",
+      "to": "n:400",
+      "lengthM": 15.47,
+      "kept": false
+    },
+    {
+      "road": "r:1347",
+      "from": "n:405",
+      "to": "n:1345",
+      "lengthM": 12.45,
+      "kept": false
+    },
+    {
+      "road": "r:1348",
+      "from": "n:1345",
+      "to": "n:405",
+      "lengthM": 12.45,
+      "kept": false
+    },
+    {
+      "road": "r:1351",
+      "from": "n:407",
+      "to": "n:1349",
+      "lengthM": 12.21,
+      "kept": false
+    },
+    {
+      "road": "r:1352",
+      "from": "n:1349",
+      "to": "n:407",
+      "lengthM": 12.21,
+      "kept": false
+    },
+    {
+      "road": "r:1355",
+      "from": "n:446",
+      "to": "n:1353",
+      "lengthM": 13.1,
+      "kept": false
+    },
+    {
+      "road": "r:1356",
+      "from": "n:1353",
+      "to": "n:446",
+      "lengthM": 13.1,
+      "kept": false
+    },
+    {
+      "road": "r:1359",
+      "from": "n:474",
+      "to": "n:1357",
+      "lengthM": 18.17,
+      "kept": false
+    },
+    {
+      "road": "r:1360",
+      "from": "n:1357",
+      "to": "n:474",
+      "lengthM": 18.17,
+      "kept": false
+    },
+    {
+      "road": "r:1363",
+      "from": "n:719",
+      "to": "n:1361",
+      "lengthM": 11.87,
+      "kept": false
+    },
+    {
+      "road": "r:1364",
+      "from": "n:1361",
+      "to": "n:719",
+      "lengthM": 11.87,
+      "kept": false
+    },
+    {
+      "road": "r:1365",
+      "from": "n:721",
+      "to": "n:1278",
+      "lengthM": 12.95,
+      "kept": false
+    },
+    {
+      "road": "r:1366",
+      "from": "n:1278",
+      "to": "n:721",
+      "lengthM": 12.95,
+      "kept": false
+    },
+    {
+      "road": "r:1369",
+      "from": "n:774",
+      "to": "n:1367",
+      "lengthM": 12.79,
+      "kept": false
+    },
+    {
+      "road": "r:1370",
+      "from": "n:1367",
+      "to": "n:774",
+      "lengthM": 12.79,
+      "kept": false
+    },
+    {
+      "road": "r:1373",
+      "from": "n:823",
+      "to": "n:1371",
+      "lengthM": 11.65,
+      "kept": false
+    },
+    {
+      "road": "r:1374",
+      "from": "n:1371",
+      "to": "n:823",
+      "lengthM": 11.65,
+      "kept": false
+    },
+    {
+      "road": "r:1377",
+      "from": "n:983",
+      "to": "n:1375",
+      "lengthM": 14.08,
+      "kept": false
+    },
+    {
+      "road": "r:1378",
+      "from": "n:1375",
+      "to": "n:983",
+      "lengthM": 14.08,
+      "kept": false
+    }
+  ],
+  "finalNodeMoves": {
+    "count": 384,
+    "moved001": 237,
+    "moved1": 224,
+    "max": 34.76
+  }
+}

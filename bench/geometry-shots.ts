@@ -1,11 +1,15 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { chromium, type Page } from '@playwright/test';
 import { fixtureTerrain } from '../tests/e2e/terrain-fixture';
 import { pointAtDistance } from '../src/geo/polyline';
+import { lonLatToLocal, type GeoReference } from '../src/geo/projection';
+import type { Vec2 } from '../src/geo/vec2';
+import { drivableClass } from '../src/importers/osm/filter';
+import { parseOsm } from '../src/importers/osm/parse';
 import { compile } from '../src/network';
 
 // Fixed-camera images of the geometry rework's cases (TASK-081, docs/plan.md "Geometry rework"):
@@ -15,6 +19,7 @@ import { compile } from '../src/network';
 // npm run geometry-shots -- <out-dir> [--only <id,id>] (TASK-090: only the named shots).
 
 const MUNICH = 'fixtures/osm/munich-donnersberger.osm';
+const SINDELFINGEN = 'fixtures/osm/sindelfingen-a81.osm';
 /** Pairs across the zebras at n:180 and n:212 and the signals at n:963 and n:262 (among T53's
  * Munich pairs). */
 const v111Walkers = [
@@ -52,6 +57,10 @@ export const shots: {
   timeS?: number;
   demandScale?: number;
   parkingTarget?: 'street' | 'inferred-lot';
+  /** TASK-131: the extract's raw drivable OSM way lines and junction nodes drawn on top, with
+   * this label; `node` is the city node the camera is centred on (checked against the import). */
+  osmLines?: string;
+  node?: string;
 }[] = [
   ...(['2d', '3d'] as const).flatMap((view) => [
     {
@@ -526,7 +535,68 @@ export const shots: {
     zoom: 10,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
+  // TASK-131 Phase 0: today's import against the raw OSM ways, one scale (5 px/m), centred on
+  // the reference nodes (n:967 is n:247 since TASK-101) and the five clusters whose arms turn
+  // most (bench/task131-audit.ts).
+  ...(
+    [
+      ['n138', 'n:138', [-18.85, -540.61], 'reference: Arnulfstraße x Donnersbergerstraße'],
+      ['n638', 'n:638', [90.29, -526.03], 'reference: Arnulfstraße x Landshuter Allee'],
+      ['n247', 'n:247', [-19.28, 166.81], 'reference (n:967 before TASK-101): Landsberger Straße'],
+      ['n263', 'n:263', [-21.4, 106.86], 'reference: Landsberger ramps'],
+      ['n936', 'n:936', [37.81, 163.9], 'reference: Landsberger Straße'],
+      ['n570', 'n:570', [-571.33, -530.29], 'worst cluster 1, an arm turned 120 degrees'],
+      ['n894', 'n:894', [-5.8, -183.37], 'worst cluster 2, an arm turned 76 degrees'],
+      ['n446', 'n:446', [-464.79, -642.32], 'worst cluster 3, an arm turned 70 degrees'],
+      ['sindelfingen-n841', 'n:841', [312.7, -595.66], 'reference: B55', SINDELFINGEN],
+      ['sindelfingen-n68', 'n:68', [349.82, -487.76], 'reference: B55', SINDELFINGEN],
+      [
+        'sindelfingen-n139',
+        'n:139',
+        [-174.64, -599.95],
+        'worst cluster 4, an arm turned 60 degrees',
+        SINDELFINGEN,
+      ],
+      [
+        'sindelfingen-n911',
+        'n:911',
+        [-324.65, -667.96],
+        'worst cluster 5, an arm turned 58 degrees',
+        SINDELFINGEN,
+      ],
+    ] as [string, string, [number, number], string, string?][]
+  ).map(([id, node, centre, label, osm]) => ({
+    id: `T131-${id}`,
+    cases: [],
+    centre,
+    zoom: 5,
+    node,
+    osmLines: `${osm ? 'Sindelfingen' : 'Munich'} ${node}, ${label}`,
+    ...(osm && { osm }),
+  })),
 ];
+
+/** TASK-131: an extract's drivable OSM ways (the importer's filter) and the nodes where they
+ * meet or end, in the city's frame. */
+function osmWayLines(osm: string, geo: GeoReference) {
+  const data = parseOsm(readFileSync(osm, 'utf8'));
+  if (typeof data === 'string') throw new Error(data);
+  const nodes = new Map(data.node.map((n) => [n.id, n]));
+  const ways = data.way.filter((way) => drivableClass(way));
+  const uses = new Map<number, number>();
+  for (const { nd } of ways)
+    nd.forEach((id, i) =>
+      uses.set(id, (uses.get(id) ?? 0) + (i === 0 || i === nd.length - 1 ? 2 : 1)),
+    );
+  const at = (id: number): Vec2[] => {
+    const node = nodes.get(id);
+    return node ? [lonLatToLocal(geo, node)] : [];
+  };
+  return {
+    lines: ways.map(({ nd }) => nd.flatMap(at)),
+    junctions: [...uses].filter(([, count]) => count >= 2).flatMap(([id]) => at(id)),
+  };
+}
 
 export const VIEWPORT = { width: 1280, height: 800 };
 
@@ -949,8 +1019,77 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
           parkedOffTiming = await sampleTiming();
           await setParked(true);
         }
+        let nodeOffsetM: number | null = null;
+        if (shot.osmLines) {
+          const city = await page.evaluate(() => window.cityflows!.city!());
+          const { lines, junctions } = osmWayLines(osm, city.geo!);
+          const pos = city.nodes[shot.node as never]?.pos;
+          nodeOffsetM = pos ? Math.hypot(pos.x - centre[0], pos.y - centre[1]) : null;
+          if (nodeOffsetM === null || nodeOffsetM > 0.05)
+            console.warn(`${shot.id}: ${shot.node} is not at the camera centre (${nodeOffsetM} m)`);
+          const near = (p: Vec2) =>
+            Math.abs(p.x - centre[0]) < 300 && Math.abs(p.y - centre[1]) < 200;
+          await page.evaluate(
+            ({ lines, junctions, label, zoom }) => {
+              const map = document.querySelector<HTMLCanvasElement>(
+                'canvas[aria-label="City map"]',
+              )!;
+              const rect = map.getBoundingClientRect();
+              const overlay = document.createElement('canvas');
+              overlay.id = 'osm-overlay';
+              overlay.width = rect.width;
+              overlay.height = rect.height;
+              Object.assign(overlay.style, {
+                position: 'fixed',
+                left: `${rect.left}px`,
+                top: `${rect.top}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+                pointerEvents: 'none',
+                zIndex: '1000',
+              });
+              overlay.style.setProperty('visibility', 'visible', 'important');
+              const ctx = overlay.getContext('2d')!;
+              const at = window.cityflows!.worldToScreen!;
+              ctx.strokeStyle = 'rgba(214, 0, 128, 0.85)';
+              ctx.lineWidth = 1.5;
+              for (const line of lines) {
+                ctx.beginPath();
+                line.forEach((p, i) => {
+                  const q = at(p);
+                  if (i) ctx.lineTo(q.x, q.y);
+                  else ctx.moveTo(q.x, q.y);
+                });
+                ctx.stroke();
+              }
+              for (const p of junctions) {
+                const q = at(p);
+                ctx.beginPath();
+                ctx.arc(q.x, q.y, 3.5, 0, 2 * Math.PI);
+                ctx.stroke();
+              }
+              ctx.font = '14px sans-serif';
+              const text = `${label}. Magenta: OSM ways and their junction nodes.`;
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+              ctx.fillRect(8, 8, ctx.measureText(text).width + 12, 24);
+              ctx.fillRect(8, rect.height - 36, 20 * zoom + 70, 28);
+              ctx.fillStyle = '#222';
+              ctx.fillText(text, 14, 25);
+              ctx.fillRect(14, rect.height - 18, 20 * zoom, 3);
+              ctx.fillText('20 m', 20 * zoom + 22, rect.height - 14);
+              document.body.appendChild(overlay);
+            },
+            {
+              lines: lines.filter((line) => line.some(near)),
+              junctions: junctions.filter(near),
+              label: shot.osmLines,
+              zoom: shot.zoom,
+            },
+          );
+        }
         const path = join(out, `${shot.id}.png`);
         await target.screenshot({ path, animations: 'disabled' });
+        await page.evaluate(() => document.getElementById('osm-overlay')?.remove());
         const walkerCount =
           shot.walkers || shot.id.startsWith('V112-')
             ? await page.evaluate(() => window.cityflows!.drawnSnapshot?.()?.walkers?.count ?? null)
@@ -973,6 +1112,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
           parkedOffTiming,
           parkedCars: await target.getAttribute('data-parked-cars'),
           actualCentre: centre,
+          ...(nodeOffsetM !== null && { nodeOffsetM }),
           centreErrorPx: placed.error,
           zoom: placed.zoom,
           canvas: placed.size,

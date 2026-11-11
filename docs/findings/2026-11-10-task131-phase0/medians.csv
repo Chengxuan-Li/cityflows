@@ -1,0 +1,35 @@
+city,corridor,name,roads,away_m,gap_min,gap_p10,gap_median,gap_max,negative_away_m,under05_away_m,negative_near_m,under05_near_m,drawn_gap_median,drawn_gap_min
+munich,corridor:22931319+145795414,Trappentreustraße,r:259 r:694,149,0.64,0.79,1.32,2.31,0,0,0,6,1.36,-2.23
+munich,corridor:27764286+27764289,Donnersbergerbrücke,r:307 r:313,66,1.3,1.36,1.52,1.72,0,0,0,0,1.54,1.38
+munich,corridor:33487057+300081443,Landsberger Straße,r:325 r:941,156,5.41,5.43,5.53,5.67,0,0,0,0,0.74,0.5
+munich,corridor:33487057+300081443/1,Landsberger Straße,r:327 r:1330,75,5.76,5.78,5.83,6.48,0,0,0,0,5.81,5.34
+munich,corridor:51775137+69811613,Marsstraße,r:368 r:480,8,4.24,4.24,4.47,4.77,0,0,8,10,0,Infinity
+munich,corridor:54200280+151784481,Arnulfstraße,r:386 r:716,109,5.73,5.89,6.64,8.71,0,0,0,0,0.49,0.04
+munich,corridor:54200280+54200286,Arnulfstraße,r:388 r:408,69,4.8,4.84,5.01,5.23,0,0,0,0,0.5,0.5
+munich,corridor:54200280+54200284,Arnulfstraße,r:392 r:402,142,8.53,8.55,8.66,8.82,0,0,0,0,0.5,0.5
+munich,corridor:54200280+57832630,Arnulfstraße,r:395 r:449,0,Infinity,0,0,-Infinity,0,0,0,0,0,Infinity
+munich,corridor:54200280+54200284/1,Arnulfstraße,r:406 r:1346,95,6.06,6.25,7.01,8.32,0,0,0,0,0.5,0.5
+munich,corridor:54200280+57832630/1,Arnulfstraße,r:451 r:1342,36,8.02,8.04,8.19,8.29,0,0,0,0,0.5,0.5
+munich,corridor:69810212+316110474,Landsberger Straße,r:476 r:978 r:1308,283,8.27,8.57,9.45,9.98,0,0,0,0,9.04,5.23
+munich,corridor:126760928+315127281,Arnulfstraße,r:636 r:950,28,4.98,5.17,6.47,7.95,0,0,0,0,0.53,0.53
+munich,corridor:133184448+316068184,Landsberger Straße,r:644 r:964,221,5.71,5.75,5.93,6.66,0,0,0,0,3.52,0.49
+munich,corridor:134171421+134583817,Arnulfstraße,r:654 r:680 r:698,187,4.03,5.61,6.12,8.82,0,0,0,0,0.48,-6.39
+munich,corridor:134583817+146018788,Arnulfstraße,r:682 r:699,194,5.53,5.69,6.06,6.74,0,0,0,0,5.99,4.18
+munich,corridor:151521563+315127283,Arnulfstraße,r:712 r:955,108,5.74,6.42,8.26,11.52,0,0,0,0,0.52,0.51
+munich,corridor:151784477+316052825,Arnulfstraße,r:715 r:958,53,7.95,7.97,8.03,8.16,0,0,0,0,9.05,7.61
+munich,corridor:151847531+1421494356,Landsberger Straße,r:724 r:1279,307,5.98,6.03,6.24,8.62,0,0,0,0,0.5,0.43
+munich,corridor:151912581+316110478,Landsberger Straße,r:729 r:984,0,Infinity,0,0,-Infinity,0,0,0,0,0,Infinity
+munich,corridor:51775137+180175487,Marsstraße,r:845 r:944 r:1372,321,1.2,1.43,4.58,5.07,0,0,0,0,1.7,0.46
+munich,corridor:224855182+315127282,Arnulfstraße,r:873 r:953,284,2.96,3,3.17,4.75,0,0,0,0,3.17,2.96
+munich,corridor:313579597+313579599,Marsstraße,r:946 r:948,93,3.76,4.01,4.55,4.86,0,0,0,0,4.69,1.74
+munich,corridor:300081440+1421494354+1421494357,Landsberger Straße,r:961 r:1276 r:1368,158,6.44,6.79,7.96,10.87,0,0,0,0,0.5,0.5
+munich,corridor:316110477+316110478,Landsberger Straße,r:981 r:1044 r:1358,280,5.02,5.13,5.77,8.84,0,0,0,0,4.73,-2.94
+munich,corridor:1302572922+1302572923,Donnersbergerbrücke,r:1258 r:1259,27,2.04,2.07,2.14,2.25,0,0,0,0,2.14,2.06
+munich,corridor:151847531+300081440+1421494355+1421494357,Landsberger Straße,r:1277 r:1362,170,4.97,5.04,5.32,5.67,0,0,0,0,0.5,0.5
+munich,corridor:151847531+1421494357,Landsberger Straße,r:1280 r:1334,70,5.26,5.3,5.49,5.72,0,0,0,0,0.5,0.5
+munich,corridor:54200280+54200286/1,Arnulfstraße,r:1322 r:1350,0,Infinity,0,0,-Infinity,0,0,0,0,0,Infinity
+sindelfingen,corridor:49527726+133482733,Flugfeld-Allee,r:412 r:461,59,4.58,4.59,4.66,4.77,0,0,0,0,4.65,4.59
+sindelfingen,corridor:219071841+500711365,null,r:500 r:876,0,Infinity,0,0,-Infinity,0,0,0,0,0,Infinity
+sindelfingen,corridor:332200794+332200795,null,r:582 r:583,93,1.54,1.99,2.72,3.67,0,0,37,44,0.52,0.5
+sindelfingen,corridor:443806513+666947342+1298781915,Flugfeld-Allee,r:705 r:1244 r:1245,296,4.85,5.35,5.45,5.65,0,0,0,0,5.45,4.84
+sindelfingen,corridor:460913551+460984663,null,r:746 r:803,517,8.45,8.52,8.75,9.2,0,0,0,0,0.5,0.5
