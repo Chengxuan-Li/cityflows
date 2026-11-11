@@ -1094,6 +1094,14 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-127 (done 2026-11-10; Codex) | Decorative trains: arrivals, departures and through trains that pass without stopping, on TASK-126's tracks by a simple timetable. Visual only. | none | TASK-126 |
 | TASK-128 (contract written; Codex) | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
 | TASK-129 (contract written; Codex) | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
+| TASK-132 | Rail heights: tunnels and elevated sections at their true height in 2D and 3D, with portals and supports; at least one Munich tunnel is not shown today. | TASK-126 imports `layer`, `bridge` and `tunnel` on tracks; heights are not applied everywhere. | TASK-126 |
+| TASK-133 | Station furniture: station signage, name boards, departure displays, shelters and benches at platforms. | Stations drawn as platforms and small discs. | TASK-126, TASK-127 (displays read the timetable) |
+| TASK-134 | Overhead lines: catenary masts shared by parallel tracks close together, with a portal or truss across them and a contact wire over each track. `electrified=contact_line` (or `yes`) draws it, `electrified=no` (or `rail`, third rail) does not, no tag draws it anyway (owner); mapped `power=catenary_mast` nodes place masts where present. | None. | TASK-126, TASK-132 (heights) |
+| TASK-135 | Trams as their own kind of track, distinct from railways (owner's note to be completed). | Tram tracks drawn almost like railway tracks. | TASK-126 |
+| TASK-136 | Level crossings: railway crossings (`railway=level_crossing`, `crossing:barrier`, `crossing:light`, `crossing:bell`) always get gates, St Andrew's cross signs, lights and road markings; tram crossings (`railway=tram_level_crossing`) get tram signals, and trams may have priority. Road traffic stops for trains and trams in the simulation. | Tracks cross roads with no facility and no effect. | TASK-127, TASK-131, TASK-135; TASK-138 for trams |
+| TASK-137 | Tram stops: stops in the middle of the street (`railway=tram_stop`, `public_transport=platform`) with platforms, shelters, markings and displays. | None. | TASK-135 |
+| TASK-138 | Tram vehicles: timetabled trams on the tram tracks that interact with cars, signals and level crossings (not only decorative). | TASK-127 trains are decorative and run on rail only. | TASK-135, TASK-136, TASK-130, TASK-131 Phase 3 |
+| TASK-139 | Trams beside and in streets: tracks in a median keep their own space beside parallel carriageways without overlapping them; street-running trams (`embedded=yes`, `embedded_rails=*`) run in a road lane shared with cars. Reconcile with TASK-131's keep-the-geometry rule (overlaps come from lane widths, not OSM lines). | Tram tracks drawn over road surfaces; no shared lanes. | TASK-131, TASK-135, TASK-138 |
 
 ## Lead handover
 
@@ -2879,6 +2887,12 @@ tier, the full-demand test, the light e2e, demo-a-commute, T16, T52, T54, T57, q
 
 ## Owner decisions log
 
+- 2026-11-11, TASK-131: lane lines may be drawn on inner links (no centre, stop or yield lines,
+  crossings or signal heads there).
+- 2026-11-11, rail and tram backlog (owner, before stations as destinations and multimodal travel):
+  TASK-132 rail heights, TASK-133 station furniture, TASK-134 overhead lines, TASK-135 trams as
+  their own track kind, TASK-136 level crossings, TASK-137 tram stops, TASK-138 tram vehicles,
+  TASK-139 trams beside and in streets. No contracts yet.
 - 2026-11-11, TASK-131 checkpoint 1 (Phase 1 `c7c9a18`): `merge-first` grouping with via
   nodes is the default. Inner links carry no signal heads, stop lines or extra lights: a car
   cleared into a group drives through. Junction complexes join into one group (Munich `n:247`'s
