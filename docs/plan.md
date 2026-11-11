@@ -2879,6 +2879,12 @@ tier, the full-demand test, the light e2e, demo-a-commute, T16, T52, T54, T57, q
 
 ## Owner decisions log
 
+- 2026-11-11, TASK-131 checkpoint 1 (Phase 1 `c7c9a18`): `merge-first` grouping with via
+  nodes is the default. Inner links carry no signal heads, stop lines or extra lights: a car
+  cleared into a group drives through. Junction complexes join into one group (Munich `n:247`'s
+  four Landsberger nodes, `n:638`'s four ramp nodes). Grouping weighs a link's length against the
+  width of the roads it joins, not length alone, so long service links (`n:570`) stay separate;
+  case by case where no rule fits yet. Geometry errors at `n:247` and `n:638` go to Phase 2.
 - 2026-11-10, TASK-131 checkpoint 0 (audit `d4a5918`): the owner approved the lead's
   recommendations: groups replace `consolidateJunctions`; `realignRoads`, `attachCarriageways`
   and `relaxRoads` off; `separateCoincident`, `separateDual` and `convergingShifts` only where
