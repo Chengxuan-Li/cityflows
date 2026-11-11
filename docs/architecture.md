@@ -986,6 +986,24 @@ including separately mapped curbs. Generated walk crossings exclude motorway, tr
 ramp arms. The vehicle network, crossing placement and stop positions are unchanged.
 New mapped-curb corners and crossings are added only where the existing network has a gap.
 
+TASK-140 (B59): the stripes' centreline is a crossing's one position (`crossingCentreM`,
+`crossingLine` in `src/network/crossings.ts`). A crossing link runs across each road end it
+crosses at the centre of the stripes that end draws, through every lane's edges, so it meets each
+lane there; at a served signal approach that draws none, at TASK-072's crossing 1.5 m from the cut
+(in front of its `lengthM - 3` stop line); the ends of one arm are joined in order across, over a
+median or a jog. A generated crossing follows this line, extended 100 m each way, between its
+outermost curb hits; its other ends without stripes use 1.5 m. A mapped crossing at a junction
+(`end` start or end, or a signal's) does the same: its links at that node, joined through nodes
+no other walk link uses (the node where OSM splits a crossing way on a road's centreline), become
+one link that keeps the first link's id and crossing data and reaches 1 m beyond the outer road
+edges; two straight kerb links (`<id>:kerb:0|1`, kind `crossing`, generated, no crossing data:
+not drawn, no wait, never a join target) tie it to the chain's mapped end nodes, so mapped
+connectivity is unchanged; the dissolved nodes stay as nodes without links. An unmarked road end
+(no stripes, no served signal) keeps the mapped crossing's own position. A mapped crossing stays
+as mapped if it crosses no lane, crosses a lane of a road that does not end at its node, crosses
+no marked end, or lies more than 12 m from the stripes (another crossing along the street, Munich
+`n:16`). The walk lights stand at the link's ends (`walkSignalMarks`), so at the stripes' ends.
+
 Same-grade mapped intersections split links. Mapped endpoints snap within 4 m (curb width
 and imported alignment), with no inferred shortcut across an ordinary street; explicit OSM
 shared endpoints can join grades at abutments. Generated sidewalks on mapped bridge/tunnel
@@ -1664,7 +1682,11 @@ close to stop passes. A walker already inside a lane's band holds even a vehicle
 stop comfortably (counted in `hardStops`); a crossing walker does not enter a lane's band while
 a vehicle is over its span or will not stop for it. These give the zebra rule, the turning
 yield at signals (movements into an arm with walk green) and gate 4's invariant: no vehicle body
-overlaps a span while a walker is inside it on that lane.
+overlaps a span while a walker is inside it on that lane. TASK-140 (B59): a crossing link meets
+every lane of a road end that draws stripes at the stripes' centre (section 5.6), so each span
+covers the stripes, the stop line (`farM - 0.5`) stays behind it, and a walker waits at the
+stripes' end, where the kerb link from a mapped kerb node meets the crossing (kerb links are not
+crossing legs).
 
 Once a walker has spawned, the hash appends, per spawned walker in id order, `[id, state, leg,
 round(position along leg or run * 100)]`, with the trip-leg code for person walkers. `Metrics.walkers` reports
