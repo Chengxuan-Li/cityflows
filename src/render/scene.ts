@@ -18,6 +18,7 @@ import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
 import { railGeometry, pickRail } from './rail-geometry';
 import { drawLots } from './layers/stalls';
 import { walkGeometry } from './walk-geometry';
+import { SIDE_BY_SIDE_EDGE_M, sideBySideEdges } from './side-by-side';
 import { drawWalk } from './layers/walk';
 import { drawHillshade } from './layers/hillshade';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
@@ -623,6 +624,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           : null;
       };
 
+      const sideBySide = sideBySideEdges(compiled, source);
       redrawTerrain = () => {
         for (const grade of visibleGrades) {
           grade.terrain.cacheAsTexture(false);
@@ -659,6 +661,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           drawRoadJoins(grade.surfaces, compiled, road, layerVisibility.roadClasses);
           drawCrossings(grade.crossings, compiled, road, sourceGeometry, markingTheme);
         }
+        // TASK-131 (B55): two roads side by side on their OSM lines, an edge line between them.
+        for (const { roads, line } of sideBySide)
+          grades
+            .get(roadGrades[roads[0]]!)!
+            .surfaces.poly(line, false)
+            .stroke({ color: style.walk.sidewalk, width: SIDE_BY_SIDE_EDGE_M, cap: 'round' });
         for (const node of compiled.nodes) {
           drawNode(
             grades.get(nodeGrades[node.idx]!)!.nodes,

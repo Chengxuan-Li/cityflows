@@ -643,6 +643,22 @@ export const shots: {
     bearing: 0,
     buildings: false,
   },
+  // Checkpoint 2 (lead), B55 on the new geometry: n:68 (the service road around the fire station
+  // beside the main road) and the two largest overlaps of a service road and a street.
+  ...(
+    [
+      ['n68', [352, -494], 'n:68, the fire-station service road beside the main road'],
+      ['r1029', [-74, 406], 'r:1029 x service r:1178 (largest overlap)'],
+      ['r13', [-73, 226], 'service r:13 x r:439 at n:10 (second)'],
+    ] as [string, [number, number], string][]
+  ).map(([id, centre, label]) => ({
+    id: `T131-p2-b55-${id}`,
+    cases: [],
+    centre,
+    zoom: 10,
+    osmLines: `Sindelfingen ${label}`,
+    osm: SINDELFINGEN,
+  })),
 ];
 
 /** TASK-131: an extract's drivable OSM ways (the importer's filter) and the nodes where they
