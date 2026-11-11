@@ -14,6 +14,8 @@ import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
 import { drawRail } from './layers/rail';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
+import { drawStations } from './layers/stations';
+import { noFurniture, placeStationFurniture } from './station-furniture';
 import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
 import { railGeometry, pickRail } from './rail-geometry';
 import { drawLots } from './layers/stalls';
@@ -201,6 +203,24 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let trainPoses: TrainPose[] = [];
   let trainTimeS = 0;
   let trainsVisible = true;
+  let stations: ReturnType<typeof drawStations> | undefined;
+  const updateStations = () => {
+    if (!stations) return;
+    const a = camera.screenToWorld({ x: 0, y: 0 }),
+      b = camera.screenToWorld({ x: app.screen.width, y: app.screen.height });
+    stations.update(
+      camera.zoom,
+      { minX: a.x, minY: a.y, maxX: b.x, maxY: b.y },
+      trainTimeS,
+      layerVisibility.rail,
+    );
+    if (import.meta.env.MODE === 'test') {
+      canvas.dataset.stationLabels = String(stations.labelCount);
+      canvas.dataset.stationDisplays = JSON.stringify(
+        layerVisibility.rail ? stations.displayTexts(trainTimeS) : [],
+      );
+    }
+  };
   const updateTrainPoses = () => {
     if (!layerVisibility.rail) return;
     trainPoses = city?.rail ? trainsAt(city.rail, trainTimetable(city.rail), trainTimeS) : [];
@@ -284,6 +304,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     }
     for (const grade of visibleGrades) grade.trains.visible = layerVisibility.rail;
     canvas.dataset.trains = String(layerVisibility.rail ? trainPoses.length : 0);
+    updateStations();
+    canvas.dataset.stationFurniture = JSON.stringify(
+      layerVisibility.rail && stations ? stations.counts : noFurniture,
+    );
     for (const grade of visibleGrades)
       grade.parkedCars.container.visible = layerVisibility.parkedCars;
     canvas.dataset.parkedCars = String(layerVisibility.parkedCars ? parkedCars.count : 0);
@@ -473,6 +497,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     for (const layer of furniture) layer.container.visible = camera.zoom >= 1.5;
     drawEditOverlay(editOverlay, editPreview, camera.zoom);
     updatePlaces?.(camera.zoom);
+    updateStations();
     if (city) drawParking(parking, city, parkingCounts, camera.zoom);
     if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
     redrawWalkers();
@@ -564,6 +589,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ...(compiled.rail?.platforms.map((p) => p.layer) ?? []),
       ]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
+      stations = compiled.rail
+        ? drawStations(
+            placeStationFurniture(compiled, source ?? { nodes: {}, places: {} }),
+            compiled.rail,
+            trainTimetable(compiled.rail),
+          )
+        : undefined;
+      for (const [layer, { container }] of stations?.grades ?? []) {
+        const grade = grades.get(layer) ?? grades.get(0)!;
+        grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
+      }
       for (const shape of railGeometry(compiled, source)) {
         const grade = grades.get(shape.layer)!;
         const tram =
@@ -791,6 +827,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (!city) return;
       trainTimeS = snapshot.timeS;
       updateTrainPoses();
+      updateStations();
       vehicles.update(snapshot);
       vehicleAgeS = 0;
       walkerSnapshot = snapshot.walkers;

@@ -2051,6 +2051,29 @@ them with See below ground). Rail hides tracks and trains together. Picking expo
 kind, route ends, station stops and next stop/exit; no train state enters car/walker counts,
 traffic controls, routing, demand or simulation hashes.
 
+TASK-133 dresses stations (places with `station`, their rail platforms and entrances) in both
+views from one pure placement, `render/station-furniture.ts`. It is display-only: no schema,
+simulation, routing, demand, walk or timetable change, and the Rail layer hides it with the
+tracks. A polygon platform gets a centreline and half widths from slices across its principal
+axis (a mapped platform edge is the 2 m strip the rail layer draws, too narrow for anything).
+Every item is an oriented box whose centre, corners and side midpoints lie inside the polygon
+and at least 0.6 m from its edge, or it is dropped. Name boards (station name, 4.4 m) stand on
+the centreline at both ends and every 40 m or so. Shelters are canopy bays of at most 12 m where
+a mapped `building=roof` or `train_station` overlaps the centreline for 3 m or more (the 3D
+view already draws that roof, so it adds only posts); without one a 10 m shelter stands near the
+middle. A platform's `covered`, `shelter`, `bench` and `bin` tags are not in `City`, so they are
+not read. Benches and bins come every 25 m, jittered and put on a side by a generator seeded
+from the platform id. One display per platform stands near its middle, clear of boards and
+canopies. It shows the next three departures from `platformDepartures` (a read-only helper in
+`network/trains.ts`) at the simulation time: line kind, compass direction of travel (the
+timetable names no destinations) and minutes, "now" while the train stands. An entrance sign
+(a train seen from the front, no operator mark, with the station name) stands at
+each entrance node, facing away from the station. 2D draws symbols from 1.5 px/m, benches and bins from 4,
+and text from 6 to 12 px/m, only for the at most 24 labels nearest the view centre. 3D batches
+posts, roofs, benches and bins as instanced meshes, boards and entrance signs as one instanced
+mesh per station name with a cached canvas texture, and each display as a mesh whose canvas
+repaints, when it is in view, at most once per 30 simulated seconds.
+
 
 TASK-111/112: the default-on Pedestrians layer (shown for person demand or test pedestrians) draws
 walkers as dots at least 2.4 px across in their grade's group above vehicles in 2D (warmer

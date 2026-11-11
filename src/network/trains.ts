@@ -450,7 +450,24 @@ export function buildTimetable(rail: RailGraph): TrainTimetable {
     departures,
     unused: rail.tracks.filter((t) => !used.has(t.idx)).map((t) => t.id),
   };
-  return { ...table, hash: hash(JSON.stringify(table)) };
+  // The hash covers what the timetable decides (routes, stops, departures), with times to 0.01 s.
+  // Raw floats would not do: the same import in a browser and in Node differs by about 1e-9 m in
+  // projected coordinates, so hashing every float made one timetable look like two.
+  const cs = (v: number) => Math.round(v * 100) / 100;
+  const canonical = {
+    periodS,
+    routes: routes.map((r) => [
+      r.id,
+      r.kind,
+      r.terminal ?? null,
+      r.sections.map((s) => [s.track, s.forward]),
+      r.stops.map((s) => [s.platform, cs(s.arrivalS)]),
+      cs(r.durationS),
+    ]),
+    departures: departures.map((d) => [d.route, cs(d.timeS), d.requestedS]),
+    unused: table.unused,
+  };
+  return { ...table, hash: hash(JSON.stringify(canonical)) };
 }
 const cache = new WeakMap<RailGraph, TrainTimetable>();
 export function trainTimetable(rail: RailGraph) {
@@ -535,6 +552,46 @@ export function trainsAt(rail: RailGraph, table: TrainTimetable, timeS: number):
     }
   }
   return result;
+}
+
+export interface PlatformDeparture {
+  route: number;
+  kind: TrainKind;
+  arrivalS: number;
+  departureS: number;
+  /** Heading of the train standing at the platform, radians in the local frame. */
+  heading: number;
+}
+
+/** The next `count` departures from a platform after `timeS`: a train standing at it counts
+ * until it leaves. Read-only: the timetable repeats every `periodS` in both directions. */
+export function platformDepartures(
+  rail: RailGraph,
+  table: TrainTimetable,
+  platform: string,
+  timeS: number,
+  count = 3,
+): PlatformDeparture[] {
+  const found: PlatformDeparture[] = [];
+  for (const departure of table.departures) {
+    const route = table.routes[departure.route]!;
+    for (const stop of route.stops) {
+      if (stop.platform !== platform) continue;
+      const first = departure.timeS + stop.arrivalS + trainDefaults.dwellS;
+      const cycle = Math.floor((timeS - first) / table.periodS) + 1;
+      const returning = route.turnaroundS !== undefined && stop.arrivalS > route.turnaroundS;
+      const heading = trainPoint(rail, route, stop.positionM).heading + (returning ? Math.PI : 0);
+      for (let k = cycle; k < cycle + count; k++)
+        found.push({
+          route: departure.route,
+          kind: route.kind,
+          arrivalS: first - trainDefaults.dwellS + k * table.periodS,
+          departureS: first + k * table.periodS,
+          heading,
+        });
+    }
+  }
+  return found.sort((a, b) => a.departureS - b.departureS || a.route - b.route).slice(0, count);
 }
 
 export function trainCensus(rail: RailGraph, table = trainTimetable(rail)) {
