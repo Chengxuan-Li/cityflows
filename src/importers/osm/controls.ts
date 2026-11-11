@@ -129,6 +129,14 @@ export function assignSignalLanes(city: City, signals: string[], compiled: Compi
       groups.set(key, group);
     }
     for (const group of groups.values()) {
+      // TASK-131: a car on a group's inner road was cleared at the group's entry and is never
+      // stopped there, so its lanes merge as at an uncontrolled lane drop (Munich r:252#2 into
+      // r:482 at n:246 kept its only movement).
+      if (
+        compiled.roads[compiled.lanes[compiled.movements[group[0]!]!.fromLane]!.road]!.group !==
+        undefined
+      )
+        continue;
       const accepted: number[] = [];
       for (const idx of group) {
         const m = compiled.movements[idx]!;
