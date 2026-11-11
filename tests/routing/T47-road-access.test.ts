@@ -20,7 +20,7 @@ import { test } from 'vitest';
 const hashes = {
   grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
-  Sindelfingen: '87e2a86968b33b38b19b2d3d73602f81bba5b8458eb0638dff533401080ca670',
+  Sindelfingen: '1bc9a0138a6034667ee1993cb19bd39880fb095947ba44ac0aa7e701933ccb22',
   Munich: 'b7df6e0118cc9fe59c75b70e8c7bb24abc3ef1c79c58193cd92d0e9df2c9ba4c',
 };
 

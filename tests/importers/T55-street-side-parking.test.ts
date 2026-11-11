@@ -390,7 +390,7 @@ test.each(
   expect(vehicleHash(net)).toBe(
     name.startsWith('munich')
       ? '51b6cf03763f8e00adfa31cb11d06f565c5d40955e5a1142c4e191946a6a8997'
-      : '2cd1a2ae35f1f7dc74515b9aa2c174ce2a159f98aef9de7110c08c4b60a326bc',
+      : 'ac6191501a58b16fa8de6704fb9e8d718173a8edb0d29b9abb43f3e3d25fcd34',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

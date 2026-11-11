@@ -41,7 +41,7 @@ const baselines = {
   town: '96bd0dd88f049e1589aac69b800a1fe25dfb976687b5b55c9874998b7c51b2a6',
   // TASK-119 updates parking data and removes obsolete places; T55 pins unchanged vehicle geometry.
   'munich-donnersberger': 'f4fbae8e2a21a68e16235788dc7253a49aae164f64dd87301b13ae8bd3e7a101',
-  'sindelfingen-a81': '0737536af9f7de2f24a487564a7b615e7b8609dccb2731d9543486af9c04d4fa',
+  'sindelfingen-a81': '9fc0a12ed112559d18a44ffa31587f2159ebb1ed265aebfa7d1251b8dadec760',
 };
 
 unitTest(

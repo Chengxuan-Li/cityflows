@@ -20,7 +20,7 @@ const main = {
     '3c6dfcc5fe1a94bb3aef87843ad53d47516e52058f26e95c148ecb5ce08157c7',
   ],
   'sindelfingen-a81': [
-    '777b8bb1abc8c4322c18c32df720ec9805e8e37c10db5d40b5907df672367c35',
+    'b72831fb3ea521315c6b5cc814e761c09e4d1f9375af6224bc9c355d713fedea',
     'c9e05f99fb6b35fbbb28e5a954cc29f865ef26ca58c613b8cff1b79f90f99f30',
   ],
 };

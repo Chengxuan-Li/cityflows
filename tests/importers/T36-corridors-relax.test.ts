@@ -5,7 +5,6 @@ import { directionPairs, pairGapAudit, unrelatedOverlaps } from '../../bench/geo
 import { cumulativeLengths, nearestOnPolyline, pointAtDistance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
-import { DEFAULT_RELAX_MAX_M } from '../../src/importers/osm/relax';
 import { compile } from '../../src/network';
 import type { City, Road } from '../../src/schema';
 import { cityTest, unitTest } from '../tier';
@@ -282,7 +281,8 @@ unitTest(
       return withoutLotAisles(result.city);
     };
     const off = run(0);
-    const city = run(DEFAULT_RELAX_MAX_M);
+    // TASK-131: the collision model is off by default; it still works at its former 3 m bound.
+    const city = run(3);
     const [major, minor] = [city.roads['r:3']!, city.roads['r:6']!];
     expect([major.name, minor.name]).toEqual(['Major', 'Minor']);
     for (const road of Object.values(off.roads)) {
@@ -321,7 +321,7 @@ unitTest(
       },
     );
     expect(overlapOn).toBeLessThan(overlapOff / 4);
-    expect(JSON.stringify(run(DEFAULT_RELAX_MAX_M))).toBe(JSON.stringify(city));
+    expect(JSON.stringify(run(3))).toBe(JSON.stringify(city));
     // A bridge does not interact with the road under it.
     const bridge = importOsm(parallel({ bridge: 'yes', layer: '1' }), { importerVersion: 'test' });
     if (!bridge.ok) throw new Error(JSON.stringify(bridge.diagnostics));

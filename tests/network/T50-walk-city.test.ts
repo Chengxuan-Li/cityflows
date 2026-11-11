@@ -26,7 +26,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     ).toBe(
       name.startsWith('munich')
         ? '7ae427770d90dfeb5d6af716b1f898b48fb2ec7c1319093f09c74c1fdeff21f3'
-        : 'fa151a5ebe6007e2d6fbddea44d2d4268a55907c66f3448e69ac84b3e7d81a38',
+        : 'd00fba47f6e5b0b8ad651dbcd4a6b17e587c0efe418fe5ab934b9152c744db7f',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')

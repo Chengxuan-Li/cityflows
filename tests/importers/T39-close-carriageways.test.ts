@@ -149,15 +149,15 @@ unitTest(
       expect(road.centerline[0]).toEqual(city.nodes[road.from]!.pos);
       expect(road.centerline.at(-1)).toEqual(city.nodes[road.to]!.pos);
     }
-    // Near the nodes the centerlines are one middle line, the blocks 7.5 m apart. TASK-095 (B54):
-    // in the middle, where the source draws them 12 m apart (a 4.5 m void, under the 15 m gap
-    // limit; 3 m before), the blocks close to the median too, each 2.25 m toward the other.
+    // Near the nodes the centerlines are one middle line, the blocks 7.5 m apart. TASK-131
+    // (decision 2): in the middle, where the source draws them 12 m apart (a 4.5 m void), the
+    // blocks stay where the source draws them (TASK-095's pull closed it, 2.25 m each).
     const length = cumulativeLengths(a.centerline).at(-1)!;
     for (const s of [0, 2, 5, 10, length - 5, length]) {
       const p = pointAtDistance(a.centerline, cumulativeLengths(a.centerline), s);
       expect(nearestOnPolyline(b.centerline, p).away).toBeLessThan(1e-6);
     }
-    expect(Math.abs(blockAt(a, 100).y - a.centerline[0]!.y + 2.25)).toBeLessThan(0.1);
+    expect(Math.abs(blockAt(a, 100).y - a.centerline[0]!.y)).toBeLessThan(0.1);
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
     expect(laneOverlaps(city, result.compiled).filter((o) => o.corridor)).toEqual([]);
@@ -268,7 +268,15 @@ test.each(tierCities(auditCities))(
         .filter((o) => o.corridor)
         .map((o) => o.roads)
         .sort(),
-    ).toEqual(name === 'munich' ? Object.keys(corridorResiduals).sort() : []);
+    ).toEqual(
+      name === 'munich'
+        ? Object.keys(corridorResiduals).sort()
+        : name === 'sindelfingen'
+          ? // TASK-131: two unnamed carriageway pairs that no longer meet one merged node, and that
+            // separateDual (pairs between the same two nodes) does not push: named, not fixed.
+            ['r:868/r:869', 'r:903/r:904']
+          : [],
+    );
     const others = overlaps.filter((o) => !o.corridor);
     const recorded = Object.values(unrelated[name]);
     expect(others.length).toBeLessThanOrEqual(Math.floor(1.1 * recorded.length));

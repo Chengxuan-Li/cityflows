@@ -47,7 +47,7 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: '083fa06c401c206f9d3fcc71c92d956ab3c5ab51fd42cdeec8307bccb458f5d5',
+    compile: 'da7c5be6a56e7bda111ab1f7a192506849a6b13708e871399fdc0744d612a12c',
     arrows: '4a050bf9444cf93e96db85004e8d3ea62dca54dcc33d6a794f12c603be8234d3',
   },
   munich: {

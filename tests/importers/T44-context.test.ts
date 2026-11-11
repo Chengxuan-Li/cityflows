@@ -39,8 +39,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             'f4fbae8e2a21a68e16235788dc7253a49aae164f64dd87301b13ae8bd3e7a101',
           ]
         : [
-            'ac7fc230a198ef626d8dcae3ddd110d11afcd587120812537240bde21ce32ce0',
-            '0737536af9f7de2f24a487564a7b615e7b8609dccb2731d9543486af9c04d4fa',
+            '13c07f3b468122ac2a19412a0659cf070fba79af17607af924babf0c92839131',
+            '9fc0a12ed112559d18a44ffa31587f2159ebb1ed265aebfa7d1251b8dadec760',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

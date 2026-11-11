@@ -157,7 +157,7 @@ const baselines = {
   grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
   town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
   'munich-donnersberger': 'ba6c3c0c73b69f8bcf0e10ba90d6a0e6b23b40221de750135d916df0181ceb0b',
-  'sindelfingen-a81': 'e0e1d4e5644f67db5e98189ca29eba7655757570bb703cd9b899aa103ae7d3b1',
+  'sindelfingen-a81': '51b18d12df46cf933b0360e93559cdf6be0f01ae7df13dd8e8d48f2ce6227e38',
 };
 const lampCounts = {
   grid: [0, 0],

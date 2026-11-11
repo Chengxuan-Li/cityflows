@@ -25,7 +25,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     expect(createHash('sha256').update(JSON.stringify({ lanes, movements })).digest('hex')).toBe(
       name.startsWith('munich')
         ? '56bb20f0d83a90b236213d93e3dc17e6bc60a7953121063274209bbc730db2de'
-        : '52c6d9dd3fccc399be3cfe4c30249fe12a3d2942eb5ee32a9423a7659704ee21',
+        : '98ce7691e9622cd6b7bd7b43aa7bbeac7c5d3882a87824f68cbd679533d76915',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);
     expect(

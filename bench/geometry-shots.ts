@@ -602,6 +602,22 @@ export const shots: {
     osmLines: 'Munich, Arnulfstraße east of n:638 (main), lane gain and ramp',
     groups: true,
   },
+  ...(
+    [
+      ['n247', [-19.28, 166.81]],
+      ['n638', [90.29, -526.03]],
+      ['n138', [-18.85, -540.61]],
+    ] as [string, [number, number]][]
+  ).map(([id, centre]) => ({
+    id: `T131-p2-3d-${id}`,
+    cases: [],
+    centre,
+    zoom: 5,
+    view: '3d' as const,
+    pitch: 50,
+    bearing: 0,
+    buildings: false,
+  })),
   {
     id: 'T131-p2-n138-curbs',
     cases: [],

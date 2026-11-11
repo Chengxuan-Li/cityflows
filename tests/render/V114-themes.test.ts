@@ -52,7 +52,7 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
     expect(paintHash(shapes)).toBe(
       name === 'munich'
         ? 'daa10aa317588784bde607254aeb399d8ecf32a5b0f671b98fc274a49c0daf7f'
-        : '5c57369ee33cbac0c85fdaa5bd78c5d724b03378b0064daa4ca6ec47e54a4bdb',
+        : '463a324f84bdf969c6cef7f295fcc7b96fb10b6638e2e38a9f470b94556d16ae',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

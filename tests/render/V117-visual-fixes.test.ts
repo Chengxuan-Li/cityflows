@@ -170,7 +170,7 @@ const pins = {
     us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
   },
   sindelfingen: {
-    compile: 'e0e1d4e5644f67db5e98189ca29eba7655757570bb703cd9b899aa103ae7d3b1',
+    compile: '51b18d12df46cf933b0360e93559cdf6be0f01ae7df13dd8e8d48f2ce6227e38',
     lamps: '0563d1323ef08a9cb2b3b71280f6ae9e1cf5208c3f7caebcfddfe55aa1d8a2ad',
     curbs: '9fe71ec6feadfb41a3c86111638d13618b7731286d4ec4104c4d3832b20233ce',
     de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',
