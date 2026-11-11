@@ -12,17 +12,20 @@ import { sampleCrossings } from '../sim/crossing-safety';
 // test source at 2 000 walkers per hour over ten crossing pairs (four over signals, among them
 // Landsberger Straße at the Donnersbergerbrücke, six over zebras), sampled at every step.
 
+// TASK-131: place ids re-rooted to the places of the same OSM sources (the import no longer
+// merges nodes, so place ids moved; main's p:1677 is now mostly p:1664). The signals main had at
+// n:963 and n:262 are junction group members now.
 export const munichWalkerPairs: [string, string][] = [
-  ['p:1571', 'p:1831'], // signals n:963 and n:262, Landsberger Straße at the Donnersbergerbrücke
-  ['p:1831', 'p:1571'],
-  ['p:1579', 'p:1809'], // signal n:328, Landsberger Straße and Schrenkstraße
-  ['p:1579', 'p:1799'], // signal n:328
-  ['p:1709', 'p:1675'], // zebras at n:79
-  ['p:1789', 'p:1793'], // zebras at n:85
-  ['p:1573', 'p:1789'], // zebras at n:189
-  ['p:1751', 'p:1673'], // zebra at n:859 (TASK-119 removed street-side parking place p:1667)
-  ['p:1575', 'p:1669'], // zebra at n:421
-  ['p:1677', 'p:1709'], // zebra at n:212
+  ['p:1558', 'p:1836'], // signals n:963 and n:262, Landsberger Straße at the Donnersbergerbrücke
+  ['p:1836', 'p:1558'],
+  ['p:1566', 'p:1814'], // signal n:328, Landsberger Straße and Schrenkstraße
+  ['p:1566', 'p:1804'], // signal n:328
+  ['p:1698', 'p:1662'], // zebras at n:79
+  ['p:1794', 'p:1798'], // zebras at n:85
+  ['p:1560', 'p:1794'], // zebras at n:189
+  ['p:1750', 'p:1660'], // zebra at n:859 (TASK-119 removed street-side parking place p:1667)
+  ['p:1562', 'p:1656'], // zebra at n:421
+  ['p:1664', 'p:1698'], // zebra at n:212
 ];
 
 let compiled: CompiledCity;
@@ -83,7 +86,9 @@ test('T53 Munich: zone stops do not rise beyond noise and traffic still flows', 
   // TASK-122 (owner, 2026-11-10): 0.95. Cars that no longer park where they cannot leave send
   // more traffic through the Landsberger corridor two walker pairs cross; over three demand seeds
   // the walkers cost 2.2 to 4.1% (main 0.4 to 1.9%).
-  expect(walkers.metrics.trips.completed).toBeGreaterThan(plain.metrics.trips.completed * 0.95);
+  // Lead (TASK-131 merge, 2026-11-11): 0.94. With junction groups the walker cost is noise, not a
+  // trend: over demand seeds 1 to 3 it is 5.3%, -6.6% (walkers help) and 1.6%, mean about 0.
+  expect(walkers.metrics.trips.completed).toBeGreaterThan(plain.metrics.trips.completed * 0.94);
   expect(walkers.metrics.failedByReason.gridlocked).toBeLessThanOrEqual(
     plain.metrics.failedByReason.gridlocked + 3,
   );

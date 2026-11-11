@@ -162,19 +162,23 @@ const pins = {
     de: '84454e2c6b1b1eeac928e004cdab547b5884ab43d3f70b7e8f6c7d7fb89ba7da',
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
+  // TASK-131 keeps OSM geometry (no node merges, junction groups): the real cities' roads,
+  // lamps, curbs and paint move, so they no longer equal main's.
+  // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+  // and e4654d8 (merging lanes kept on a group's inner roads).
   munich: {
-    compile: 'ba6c3c0c73b69f8bcf0e10ba90d6a0e6b23b40221de750135d916df0181ceb0b',
-    lamps: '27483774592d8fd96b6a5ab0a4126d9aeaa8ef05f184a2d6222cc7bad0d33f89',
-    curbs: 'fc216c4ce748916e00e0ae196aae0d9875f4dc1c0f9b47f53e61f30ded45a934',
-    de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
-    us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
+    compile: '631ecdfee4077ce65b34b20e085afeada4914d5b9016ad776a8ac75703778088',
+    lamps: 'a6367b276c0f7db6c9a4a9fe6e103d4f020b6bbf93bef7df2d2ec3fd5c2cfc00',
+    curbs: 'fc71fa74c90f8e5cc094edc6990c5325cda2afd4d585fe6d38f783ac0a8e0c73',
+    de: '1ed078929a1d637608b74c6a816a19c5c97d7b5ce290b3305bcdbca3cdf65e0d',
+    us: '57215568bce015e0ef08eb2cf31dcb676ad2352b354ac5cc13aac0c5c3254f5f',
   },
   sindelfingen: {
-    compile: 'e0e1d4e5644f67db5e98189ca29eba7655757570bb703cd9b899aa103ae7d3b1',
-    lamps: '0563d1323ef08a9cb2b3b71280f6ae9e1cf5208c3f7caebcfddfe55aa1d8a2ad',
-    curbs: '9fe71ec6feadfb41a3c86111638d13618b7731286d4ec4104c4d3832b20233ce',
-    de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',
-    us: 'c323dc2ff69850bb63f12141e3b2b00e81520238f7411e8e11ecf0c082b2d3d4',
+    compile: 'a851c7347f235b5fdc1e129dc23d3cd86dac9642a6c2ba7bc37c67141645f927',
+    lamps: 'd132b1397f6687261fee0b42ab85450dc755962e9e0f71d04d61bc6c5f6396dc',
+    curbs: '01ac870cb31f5ab4b49445e52c22fff08002ef267bc1164fa822d79ab8e3afd2',
+    de: '877ba82e15fd54f8991c41eb4b7e6f3479e365c3fd825b7f31ea38dcf5117aa8',
+    us: '5123166085444642e41754bf48771f0abbb3bd18ebdc0b43c48d84a7d9745fb7',
   },
 } as const;
 const hash = (value: unknown) =>

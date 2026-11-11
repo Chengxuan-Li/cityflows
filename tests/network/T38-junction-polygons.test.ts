@@ -63,15 +63,21 @@ cityTest(
   'T38.1: G2, Landsberger Straße keeps its alignment across n:774 and n:719',
   () => {
     const { city, net } = load('munich');
-    for (const id of ['n:774', 'n:719']) {
+    // TASK-131 keeps OSM nodes: main merged each carriageway's crossing node into one junction
+    // with two through pairs. Kept, each carriageway crosses its own group member (n:774 with
+    // n:1365 across the 12.8 m median link, n:719 with n:1357 across 11.9 m): one pair at each.
+    for (const id of ['n:774', 'n:1365', 'n:719', 'n:1357']) {
       const n = node(net, id);
       const through = throughAudit(city, net, n)!;
-      expect(through.pairs, id).toBe(2);
+      expect(n.group, id).toBeDefined();
+      expect(through.pairs, id).toBe(1);
       expect(through.farM, id).toBeLessThanOrEqual(0.1);
       expect(through.nearM, id).toBeLessThanOrEqual(0.1);
       expect(through.laneM, id).toBeLessThan(0.1);
       expect(junctionShapeAudit(city, net, n)!.bulgeM2, id).toBe(0);
     }
+    expect(node(net, 'n:1365').group).toBe(node(net, 'n:774').group);
+    expect(node(net, 'n:1357').group).toBe(node(net, 'n:719').group);
   },
   120_000,
 );
@@ -154,6 +160,32 @@ const stage2 = {
   munich: { bulgeM2: 905.25, overlapM2: 118.13 },
 };
 
+/** TASK-131: unrelated overlap on the kept OSM geometry, m², re-pinned (relax off, the merge and
+ * the median pull gone; the coordinator's ruling: different roads overlapping are not moved).
+ * The ten largest pairs, m², and their causes:
+ * - Sindelfingen 240.88 (was 92.26 + 0.06):
+ *   - r:927/r:997 96.56: unnamed opposite one-way service roads with no ref, so no pair; their
+ *     OSM ways run 2.95 m apart for 1 + 2 lanes (4.5 m).
+ *   - r:1228/r:140 42.94: a driveway 4.6 m beside a street, 3 m of lanes each; both unnamed, so
+ *     not a B55 side-by-side pair.
+ *   - r:1061/r:966 19.69, r:1055/r:80 7.19, r:965/r:975 4.75: the plant road's carriageways
+ *     (lanes=4 beside 1 lane, OSM 6.9 to 7.0 m apart for 7.5 m), unnamed with no ref: not paired.
+ *   - A 81 r:464/r:543 17.13: pushOverlapping eases its push to zero at n:542's lane gain and at
+ *     the bbox cut ends.
+ *   - A 81 r:1254/r:464 13.44: r:1254 is 48 m long, the push eased to zero at both ends.
+ *   - A 81 r:1255/r:545 16.81, r:1255/r:464 9.81, r:1252/r:545 6.25: the network's continuation
+ *     offset moves the two-lane r:1255 and r:545 1.75 m toward the median at the lane changes
+ *     (n:1251, n:1253); the importer's push cannot act at nodes.
+ *   The retained r:1060/r:966 pair still has 0.75 m² (stage 2: 0.69 m²).
+ * - Munich 106.58 (was 118.13):
+ *   - r:259/r:694 70.25, r:416/r:694 0.94: r:694's -1.75 m continuation offset at n:320, beside
+ *     n:257.
+ *   - r:1030/r:416 15.63, r:1030/r:687 4.75: the Trappentreutunnel pair ends at n:320, n:257
+ *     and n:194, where its push eases to zero.
+ *   - r:735/r:925 7.13, r:196/r:259 4.75, r:259/r:261 2.5, r:685/r:997 0.63: a ramp beside a
+ *     trunk within 20 m of their merge or diverge node (n:924, n:195, n:675). */
+const keptOverlapM2: Partial<Record<AuditCity, number>> = { sindelfingen: 240.88, munich: 106.58 };
+
 test.each(tierCities(auditCities))(
   'T38.2: %s bulge is at most a quarter of stage 2’s and no unrelated overlap is added',
   (name) => {
@@ -165,10 +197,7 @@ test.each(tierCities(auditCities))(
     const overlap = unrelatedOverlaps(city, net).reduce((sum, o) => sum + o.areaM2, 0);
     console.info('T38.2', name, 'bulge', bulge.toFixed(2), 'overlap', overlap.toFixed(2));
     expect(bulge).toBeLessThanOrEqual(stage2[name].bulgeM2 / 4);
-    // The retained r:1060/r:966 pair has 0.75 m² rather than stage 2's 0.69 m².
-    expect(overlap).toBeLessThanOrEqual(
-      stage2[name].overlapM2 + (name === 'sindelfingen' ? 0.06 : 0) + 0.01,
-    );
+    expect(overlap).toBeLessThanOrEqual((keptOverlapM2[name] ?? stage2[name].overlapM2) + 0.01);
   },
   120_000,
 );
@@ -207,10 +236,12 @@ test.each(tierCities(auditCities))(
           const t = corner.tangents![k]!;
           if (distance(edge[0]!, atEnd ? (k === 0 ? left : right) : k === 0 ? right : left) > 1e-6)
             failures.push(`${where}: edge does not start at the cut`);
-          // A tangent point may lie a hair behind its cut, on the edge's straight extension.
+          // A tangent point may lie a hair behind its cut, on the edge's straight extension;
+          // TASK-131: a far fillet's on the far edge's line behind the cut (`farFillet`).
           const d = { x: edge[1]!.x - edge[0]!.x, y: edge[1]!.y - edge[0]!.y };
           const l = Math.hypot(d.x, d.y);
-          edge.unshift({ x: edge[0]!.x - (d.x / l) * 0.5, y: edge[0]!.y - (d.y / l) * 0.5 });
+          const behind = corner.limit === 'far' ? distance(edge[0]!, t) + 0.5 : 0.5;
+          edge.unshift({ x: edge[0]!.x - (d.x / l) * behind, y: edge[0]!.y - (d.y / l) * behind });
           if (nearestOnPolyline(edge, t).away > 0.25)
             failures.push(
               `${where}: tangent ${k} off its edge ${nearestOnPolyline(edge, t).away.toFixed(3)} ${corner.limit} ${corner.radius!.toFixed(2)}`,
@@ -445,7 +476,9 @@ const stage2Lanes = JSON.parse(
 // Lanes that lose more on main 5568eed, each with its reason. TASK-090: a budget, not this exact
 // list (every junction geometry task renamed lanes in it): at most `storageBudget` lanes lose more than
 // 2 m, none more than 10 m.
-const storageBudget: Record<AuditCity, number> = { grid: 0, town: 0, sindelfingen: 4, munich: 30 };
+// TASK-131: stage 2 re-recorded on the cities that keep OSM geometry (797678e); Sindelfingen's
+// budget 4 -> 19, each lane named below. Munich loses 4 (r:410#0, r:552#0, r:600#0, r:601#0).
+const storageBudget: Record<AuditCity, number> = { grid: 0, town: 0, sindelfingen: 19, munich: 30 };
 const storageExceptions: Record<AuditCity, Record<string, string>> = {
   grid: {},
   town: {},
@@ -455,6 +488,30 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
     // TASK-089.
     'r:1109#0':
       'n:594: r:1061/r:966 converge there and are set side by side, so the side street meets a wider approach (2.1 m).',
+    // TASK-131: Benzstraße's split nodes n:867 and n:902 (merged on main) are junctions since
+    // 797678e (a two-way direction never shifts at a continuation), each with a 10 m radius.
+    'r:1065#0': 'Leaves n:867, cut 8.9 m out (8.8 m).',
+    'r:868#0': 'Leaves n:867 beside r:871, cut 4 m out (4.7 m).',
+    'r:868#1': 'As r:868#0 (4.7 m).',
+    'r:869#0': 'Enters n:867, cut 2.5 m out (2.5 m).',
+    'r:871#0': 'Enters n:867, cut at its 10 m radius (10.42 m, `beyondTen`).',
+    'r:871#1': 'As r:871#0 (9.7 m).',
+    'r:1225#0': 'Enters n:902, cut at its 10 m radius (10.0002 m, `beyondTen`).',
+    'r:1225#1': 'As r:1225#0 (10.0 m).',
+    'r:1246#0': 'Leaves n:902, cut at its 10 m radius (9.9 m).',
+    'r:903#0': 'Enters n:902 (3.2 m).',
+    'r:904#0': 'Leaves n:902 (3.6 m).',
+    // TASK-131: TASK-089's converging pair at n:580 and n:581, on OSM nodes.
+    'r:582#0': 'The unnamed pair from n:580 to n:581, cut 2.5 m out at both (5.0 m).',
+    'r:583#0': 'As r:582#0, its other carriageway (5.0 m).',
+    'r:585#0': 'Into n:580 beside the pair (2.0 m).',
+    'r:586#0': 'As r:585#0, its other direction (2.1 m).',
+    'r:592#0': 'Way 332200797 into n:581 beside the pair (2.6 m).',
+    'r:593#0': 'As r:592#0, its other direction (2.4 m).',
+    // TASK-131: smoothing no longer fillets within 30 m of a node.
+    'r:626#0':
+      'Its 86-degree OSM vertex 5.3 m from n:345 is eased to radius 3.25 m and the lane is cut beyond it (2.7 m).',
+    'r:627#0': 'As r:626#0, its other direction (2.1 m).',
   },
   munich: {
     'r:1024#0':
@@ -497,6 +554,14 @@ const storageExceptions: Record<AuditCity, Record<string, string>> = {
   },
 };
 
+/** TASK-131: lanes that lose more than 10 m, each with its bound. Sindelfingen r:871#0 and
+ * r:1225#0 enter Benzstraße's splits n:867 and n:902, junctions with a 10 m radius since 797678e
+ * (merged on main): 10.42 m and 10.0002 m. */
+const beyondTen: Record<string, number> = {
+  'sindelfingen r:871#0': 10.5,
+  'sindelfingen r:1225#0': 10.01,
+};
+
 test.each(tierCities(auditCities))(
   'T38.4: %s loses more than 2 m on few lanes and no more than 10 m on any against stage 2',
   (name) => {
@@ -508,7 +573,9 @@ test.each(tierCities(auditCities))(
     const unrecorded = losses.filter((lane) => !storageExceptions[name][lane.id]);
     console.info('T38.4', name, losses.length, 'lanes lose over 2 m; not recorded:', unrecorded);
     expect(losses.length).toBeLessThanOrEqual(storageBudget[name]);
-    expect(losses.filter((lane) => lane.lossM > 10)).toEqual([]);
+    expect(losses.filter((lane) => lane.lossM > (beyondTen[`${name} ${lane.id}`] ?? 10))).toEqual(
+      [],
+    );
   },
   120_000,
 );

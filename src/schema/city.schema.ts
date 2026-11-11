@@ -9,6 +9,7 @@ const connectorId = z.string().regex(/^c:\d+$/);
 const parkingId = z.string().regex(/^pk:\d+$/);
 const walkNodeId = z.string().regex(/^wn:\d+$/);
 const walkLinkId = z.string().regex(/^wl:\d+$/);
+const junctionGroupId = z.string().regex(/^jg:\d+$/);
 const count = z.int().nonnegative();
 const nonnegative = z.number().nonnegative();
 const vec2 = z.object({ x: z.number(), y: z.number() });
@@ -52,20 +53,17 @@ const junctionControls = z.object({
 
 const requiresSignal = (node: z.infer<typeof junctionControls>) =>
   node.control !== 'signal' || node.signal !== null;
-const signalRequired = {
-  path: ['signal'],
-  message: 'Signal-controlled nodes require a signal program',
-};
+const SIGNAL_REQUIRED = 'Signal-controlled nodes require a signal program';
+const signalRequired = { path: ['signal'], message: SIGNAL_REQUIRED };
 
-const junctionSchema = z
-  .object({
-    id: nodeId,
-    pos: vec2,
-    layer: z.int(),
-    ...junctionControls.shape,
-    provenance,
-  })
-  .refine(requiresSignal, signalRequired);
+// A signal node's program may be its junction group's (TASK-131): checked per city.
+const junctionSchema = z.object({
+  id: nodeId,
+  pos: vec2,
+  layer: z.int(),
+  ...junctionControls.shape,
+  provenance,
+});
 
 export const laneSchema = z.object({
   widthM: z.number().positive(),
@@ -171,6 +169,14 @@ const roundaboutSchema = z.object({
 });
 export const nodeSchema = junctionSchema.safeExtend({
   roundabout: roundaboutSchema.optional(),
+});
+
+export const junctionGroupSchema = z.object({
+  id: junctionGroupId,
+  nodes: z.array(nodeId).min(2),
+  innerRoads: z.array(roadId).min(1),
+  signal: signalProgramSchema.nullable(),
+  provenance,
 });
 
 const legacyNodeSchema = junctionSchema
@@ -353,6 +359,7 @@ const cityFields = {
   context: z.object({ features: z.array(contextFeature) }).optional(),
   parking: z.record(parkingId, parkingFacility).optional(),
   walk: walkNetwork.optional(),
+  junctionGroups: z.record(junctionGroupId, junctionGroupSchema).optional(),
   terrain: z
     .object({
       source: z.string().min(1),
@@ -373,8 +380,52 @@ const cityFields = {
   nextId: count,
 };
 
+/** The problems of a city's junction groups and signal programs (TASK-131), also reported by
+ * the compile as diagnostics: each with the path of the offending entity. */
+export function junctionGroupIssues(
+  city: Pick<City, 'nodes' | 'roads' | 'junctionGroups'>,
+): { path: (string | number)[]; message: string }[] {
+  const issues: { path: (string | number)[]; message: string }[] = [];
+  const groupOf = new Map<string, string>();
+  for (const group of Object.values(city.junctionGroups ?? {})) {
+    const path = ['junctionGroups', group.id];
+    const members = new Set(group.nodes);
+    if (members.size !== group.nodes.length)
+      issues.push({ path: [...path, 'nodes'], message: 'Group nodes must be distinct' });
+    for (const id of group.nodes) {
+      const node = city.nodes[id];
+      if (!node) {
+        issues.push({ path: [...path, 'nodes'], message: `Group node ${id} does not exist` });
+        continue;
+      }
+      if (groupOf.has(id))
+        issues.push({ path: [...path, 'nodes'], message: `Node ${id} is in two groups` });
+      groupOf.set(id, group.id);
+      if ((node.control === 'signal') !== (group.signal !== null) || node.signal !== null)
+        issues.push({
+          path: ['nodes', id, 'signal'],
+          message: group.signal
+            ? 'Members of a signalised group have control signal and no program of their own'
+            : 'Members of a group without signals have no signal control',
+        });
+    }
+    for (const id of group.innerRoads) {
+      const road = city.roads[id];
+      if (!road || !members.has(road.from) || !members.has(road.to))
+        issues.push({
+          path: [...path, 'innerRoads'],
+          message: `Inner road ${id} must join two nodes of the group`,
+        });
+    }
+  }
+  for (const node of Object.values(city.nodes))
+    if (node.control === 'signal' && node.signal === null && !groupOf.has(node.id))
+      issues.push({ path: ['nodes', node.id, 'signal'], message: SIGNAL_REQUIRED });
+  return issues;
+}
+
 function matchEntityIds(
-  city: Pick<City, 'nodes' | 'roads' | 'places' | 'parking' | 'walk'>,
+  city: Pick<City, 'nodes' | 'roads' | 'places' | 'parking' | 'walk' | 'junctionGroups'>,
   context: z.RefinementCtx,
 ) {
   const records: [string[], Record<string, { id: string }>][] = [
@@ -384,6 +435,7 @@ function matchEntityIds(
     [['parking'], city.parking ?? {}],
     [['walk', 'nodes'], city.walk?.nodes ?? {}],
     [['walk', 'links'], city.walk?.links ?? {}],
+    [['junctionGroups'], city.junctionGroups ?? {}],
   ];
   for (const [path, record] of records) {
     for (const [id, entity] of Object.entries(record)) {
@@ -395,6 +447,8 @@ function matchEntityIds(
         });
     }
   }
+  for (const { path, message } of junctionGroupIssues(city))
+    context.addIssue({ code: 'custom', path, message });
   for (const link of Object.values(city.walk?.links ?? {})) {
     for (const end of ['from', 'to'] as const) {
       const node = city.walk!.nodes[link[end]];

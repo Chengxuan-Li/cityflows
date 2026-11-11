@@ -1,5 +1,6 @@
 import { polylineLength } from '../geo/polyline';
 import {
+  junctionGroupIssues,
   placeSchema,
   signalProgramSchema,
   type City,
@@ -21,6 +22,16 @@ export function validateCity(
   const error = (code: string, refs: string[], message: string) => {
     diagnostics.push({ severity: 'error', code, refs, message });
   };
+
+  // TASK-131: junction groups, as the city schema checks them.
+  // A signal node with no program and no group is `signal_missing`, below.
+  for (const { path, message } of junctionGroupIssues(city))
+    if (path[0] === 'junctionGroups' || !message.startsWith('Signal-controlled'))
+      error('junction_group_invalid', [String(path[1])], message);
+  const grouped = new Set(Object.values(city.junctionGroups ?? {}).flatMap((g) => g.nodes));
+  for (const group of Object.values(city.junctionGroups ?? {}))
+    if (group.signal && !signalProgramSchema.safeParse(group.signal).success)
+      error('signal_phase_invalid', [group.id], `Signal of ${group.id} has an invalid program`);
 
   for (const road of roads) {
     const from = city.nodes[road.from];
@@ -105,7 +116,12 @@ export function validateCity(
     }
     if (node.control !== 'signal') continue;
     if (!node.signal) {
-      error('signal_missing', [node.id], `Signal-controlled node ${node.id} is missing a program`);
+      if (!grouped.has(node.id))
+        error(
+          'signal_missing',
+          [node.id],
+          `Signal-controlled node ${node.id} is missing a program`,
+        );
     } else {
       const program = signalProgramSchema.safeParse(node.signal);
       if (!program.success) {

@@ -213,6 +213,9 @@ unitTest('T25: lane edges retain shared miter corners away from a taper', () => 
 // 32 and the grid 2), so Munich may move 12 and the grid none. Outlines are T38's.
 // TASK-101: Munich's reference is main 56ffccd compiled on the same retained-access City;
 // comparing with the old collapsed topology would count removed and re-rooted junctions.
+// TASK-131 keeps OSM geometry, so Munich's reference is again main 7a93d97 compiled on
+// the same canonical City, with junction groups removed and their signals given one empty phase
+// (as T38.4); only the 8 group members' setbacks differ from it.
 const recordedSetbacks = JSON.parse(
   readFileSync('tests/network/T25-setbacks.json', 'utf8'),
 ) as Record<string, Record<string, number[]>>;
@@ -221,7 +224,9 @@ test.each(
   tierCities([
     ['grid', 0, 0],
     // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
-    ['Munich', 65, 12], // TASK-101 retains two additional continuation nodes; budget unchanged.
+    // TASK-101 retains two additional continuation nodes; budget unchanged. TASK-131: 115, as
+    // every OSM node of two arms stays a continuation node (main's compiler gives 115 too).
+    ['Munich', 115, 12],
   ] as const),
 )(
   'T25: %s keeps the baseline setbacks of ordinary junctions within 0.5 m',

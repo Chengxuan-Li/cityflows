@@ -17,6 +17,11 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     'r:29#0>r:958#3': 'The same source slip road crosses the adjacent Arnulfstraße lane.',
     'r:196#0>r:416#2':
       'The source ramp crosses the trunk lane body at n:194; TASK-071 removes the capped-setback classification at this continuation.',
+    // TASK-131 keeps OSM geometry (different roads are not moved): Landsberger Straße's tertiary
+    // r:728 meets n:474 at about 24 degrees to Barthstraße's inner links of jg:10798 (main's
+    // n:1181), an acute OSM arm, and crosses both inner-link lanes in its last 5 m.
+    'r:1355#0>r:728#0': 'Barthstraße inner link n:474 to n:1353 crosses the end of r:728.',
+    'r:1356#0>r:728#0': 'Barthstraße inner link n:1353 to n:474 crosses the end of r:728.',
     // TASK-083: r:565#0>r:589#0 and r:325#0>r:941#0 no longer cross (r:565/r:589 lie on each
     // other; r:325/r:941 part where they used to cross once the realignment leaves corridors whole).
     // TASK-074: r:566#0>r:588#0 no longer crosses: of two coincident ends the shadowed one keeps

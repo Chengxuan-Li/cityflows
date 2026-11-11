@@ -267,7 +267,12 @@ function createRun({
           continue;
         const finalRoad = step + 1 === route.roads.length - 1;
         const targets = finalRoad ? [destination.lane] : route.targetLanes[step + 1]!;
-        const cutoff = finalRoad ? destination.positionM : compiled.roads[next.road]!.lengthM - 10;
+        // Lead (TASK-131 merge): an inner road of a junction group can be shorter than 10 m; a
+        // negative cutoff found no lane at all and sent a car already in its target lane to the
+        // fallback, which stranded it when the new route looped back (Munich r:663 > r:275).
+        const cutoff = finalRoad
+          ? destination.positionM
+          : Math.max(0, compiled.roads[next.road]!.lengthM - 10);
         for (const candidate of reachableLanes(
           compiled,
           allowedLanes[vehicles.vclass[id]!]!,

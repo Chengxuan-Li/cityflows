@@ -1,4 +1,5 @@
 import type { City, Command, Patch, TurnRule } from '../../schema';
+import { editGroupControl, groupOf } from './groups';
 import { requireEntity } from './types';
 
 type NodeCommand = Extract<
@@ -13,6 +14,9 @@ function sameKey(a: TurnKey, b: TurnKey): boolean {
 
 export function editNode(city: City, command: NodeCommand): Patch {
   const node = requireEntity(city.nodes, command.nodeId);
+  const group = groupOf(city, node.id);
+  if (group && (command.kind === 'setControl' || command.kind === 'setSignal'))
+    return editGroupControl(city, group, command);
   let next = { ...node };
   switch (command.kind) {
     case 'setTurnRule': {

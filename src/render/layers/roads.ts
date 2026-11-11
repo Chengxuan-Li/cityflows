@@ -1,6 +1,7 @@
 import type { Graphics } from 'pixi.js';
 import type { CompiledCity, CRoad, CMovement } from '../../network';
 import type { CrossingSource } from '../../network/crossings';
+import { roadFill } from './nodes';
 import { roadStyle, markingTheme as defaultTheme, type MarkingTheme } from '../style';
 import {
   roadMarkingGeometry,
@@ -62,7 +63,8 @@ export function drawRoad(
   source?: CrossingSource,
   markingTheme: MarkingTheme = defaultTheme,
 ): void {
-  const { color, vergeM } = roadStyle(road, roadClasses);
+  const { vergeM } = roadStyle(road, roadClasses);
+  const color = roadFill(city, road, roadClasses);
   surface
     .poly(road.surface)
     .fill(color)

@@ -11,6 +11,7 @@ export type MovementId = string; // derived: `${LaneId}>${LaneId}`
 export type ParkingId = string; // "pk:12"
 export type WalkNodeId = string; // "wn:12"
 export type WalkLinkId = string; // "wl:12"
+export type JunctionGroupId = string; // "jg:12"
 
 export type RoadClass =
   'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'ramp';
@@ -35,6 +36,23 @@ export interface Node {
   turnRules: TurnRule[];
   roundabout?: Roundabout;
   signal: SignalProgram | null; // required when control === 'signal'
+  provenance: Provenance;
+}
+
+/**
+ * TASK-131: nodes joined by short links (`ImportOptions.junctionGroupMaxM`) that are controlled
+ * and drawn as one junction. Members keep their positions; inner roads stay real roads. A group
+ * is signalised if and only if `signal` is not null: then every member has `control: 'signal'`
+ * and `signal: null`, and the group's program runs at all members in lockstep. Members of a
+ * group without signals keep their own control, minor roads and turn rules.
+ */
+export interface JunctionGroup {
+  id: JunctionGroupId;
+  nodes: NodeId[]; // two or more; a node is in at most one group
+  innerRoads: RoadId[]; // directed roads with both ends in the group
+  /** Green groups name an entry road (ending in the group, not inner) and an exit road
+   * (starting in it, not inner); walk entries name a road end at any member's crossing. */
+  signal: SignalProgram | null;
   provenance: Provenance;
 }
 
@@ -272,6 +290,7 @@ export interface City {
   context?: { features: ContextFeature[] };
   parking?: Record<ParkingId, ParkingFacility>; // Phase 2; absent = none
   walk?: { nodes: Record<WalkNodeId, WalkNode>; links: Record<WalkLinkId, WalkLink> };
+  junctionGroups?: Record<JunctionGroupId, JunctionGroup>; // TASK-131; absent = none
   terrain?: {
     source: string;
     originM: Vec2;

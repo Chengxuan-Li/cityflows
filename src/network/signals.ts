@@ -1,12 +1,21 @@
-import type { City, SignalProgram } from '../schema';
+import type { SignalProgram } from '../schema';
 import { crossingArms } from './crossings';
-import type { CNode, CSignal, CompiledCity, Diagnostic } from './types';
+import type { CMovement, CNode, CSignal, CompiledCity, Diagnostic } from './types';
+
+/** TASK-131: two movements into one lane of a group's inner road merge inside the junction, as
+ * at an uncontrolled lane drop: one green serves both and the grant rule orders them (Munich
+ * r:480's left and through lanes into the one-lane crossing r:713 at n:366). */
+export function intoInnerLane(city: CompiledCity, a: CMovement, b: number): boolean {
+  const lane = city.lanes[a.toLane]!;
+  return lane.idx === city.movements[b]!.toLane && city.roads[lane.road]!.group !== undefined;
+}
 
 export function compileSignal(
   node: CNode,
   program: SignalProgram,
   city: CompiledCity,
   diagnostics: Diagnostic[],
+  free: ReadonlySet<number> = new Set(),
 ): CSignal {
   const { offsetS, amberS, allRedS } = program;
   const served = new Set<number>();
@@ -45,7 +54,13 @@ export function compileSignal(
     for (const idx of movements) {
       const movement = city.movements[idx]!;
       for (const conflict of movement.conflicts) {
-        if (conflict > idx && members.has(conflict)) {
+        if (
+          conflict > idx &&
+          members.has(conflict) &&
+          !free.has(idx) &&
+          !free.has(conflict) &&
+          !intoInnerLane(city, movement, conflict)
+        ) {
           const other = city.movements[conflict]!;
           diagnostics.push({
             severity: 'error',
@@ -90,7 +105,10 @@ export function compileSignal(
  * is green in every phase in which no movement from the arm is, and in none in a phase without
  * vehicle groups (an exclusive pedestrian phase is never derived).
  */
-export function compileSignalWalk(city: CompiledCity, source: City) {
+export function compileSignalWalk(
+  city: CompiledCity,
+  programs: Map<number, { program: SignalProgram; vehicles: boolean[] }>,
+) {
   const byNode = new Map<number, number[]>();
   for (const link of city.walk.links)
     if (link.crossing?.control === 'signal' && link.crossing.node >= 0) {
@@ -102,7 +120,7 @@ export function compileSignalWalk(city: CompiledCity, source: City) {
     const node = city.nodes[index]!;
     if (!node.signal) continue;
     const arms = crossingArms(city, node);
-    const program = source.nodes[node.id]!.signal!;
+    const { program, vehicles } = programs.get(index)!;
     node.signal.phases.forEach((phase, p) => {
       const explicit = program.phases[p]!.walk;
       let green: Set<number>;
@@ -118,7 +136,7 @@ export function compileSignalWalk(city: CompiledCity, source: City) {
         );
       } else {
         green = new Set();
-        if (program.phases[p]!.groups.length)
+        if (vehicles[p])
           arms.forEach((ends, arm) => {
             const served = phase.movements.some((m) =>
               ends.some(

@@ -109,7 +109,7 @@ export function orderBranches(
 /** TASK-071's default slice: the [trunk lane, branch lane] pairs that line up for the branch at
  * `position` (left to right), `cursor` being the first trunk lane right of the slices before
  * it. Balanced branches take consecutive slices; when the lane counts differ the first branch
- * keeps the trunk's left lanes and the others its right lanes. */
+ * keeps the trunk's left lanes and the others its right lanes, without crossing. */
 export function defaultSlice(
   trunkLanes: number,
   branchLanes: number[],
@@ -120,6 +120,21 @@ export function defaultSlice(
   const lanes = branchLanes[position]!;
   const balanced = branchLanes.reduce((sum, n) => sum + n, 0) === trunkLanes;
   if (!balanced && branchLanes.length > 1) {
+    const [a, b] = branchLanes.map((n) => Math.min(n, trunkLanes)) as [number, number];
+    // TASK-131: two branches sharing more than one trunk lane would cross (Munich r:846 at n:478,
+    // two lanes into two two-lane branches): the trunk's lanes divide between them in proportion,
+    // left to right, and each trunk lane feeds the branch lanes beside it.
+    if (branchLanes.length === 2 && a + b > trunkLanes + 1) {
+      const left = Math.min(
+        trunkLanes - 1,
+        Math.max(
+          1,
+          Math.round((trunkLanes * branchLanes[0]!) / (branchLanes[0]! + branchLanes[1]!)),
+        ),
+      );
+      const [first, count] = position === 0 ? [0, left] : [left, trunkLanes - left];
+      return Array.from({ length: lanes }, (_, i) => [first + Math.floor((i * count) / lanes), i]);
+    }
     const shared = Math.min(lanes, trunkLanes);
     return Array.from({ length: shared }, (_, i) =>
       position === 0 ? [i, i] : [trunkLanes - shared + i, lanes - shared + i],
@@ -281,6 +296,14 @@ export function continuationLayout(
         sharedWidth.push(reused.reduce((sum, [i]) => sum + trunkSource.lanes[i]!.widthM, 0));
         const [firstTrunk, firstBranch] = matches[0]!;
         const offsetM = laneOffset(trunkSource, firstTrunk) - laneOffset(source, firstBranch);
+        // A direction of a two-way street never moves (architecture 5): where a carriageway
+        // continues into one at a node of its own (TASK-131 keeps Benzstrasse's splits n:867 and
+        // n:902 apart), lining the lanes up would lay it over its other direction; the node stays
+        // a junction.
+        if (source.streetGroupId !== null && Math.abs(offsetM) > 0.01) {
+          valid = false;
+          break;
+        }
         if (
           matches.some(
             ([a, b]) =>
@@ -718,6 +741,7 @@ export function convergingShifts(
   side: 'left' | 'right',
   sourceNodes: Node[],
   found?: ConvergingGroup[],
+  groupMembers: ReadonlySet<number> = new Set(),
 ): { shifts: { start: Float64Array; end: Float64Array }[]; groups: ConvergingGroup[] } {
   const sigma = side === 'right' ? 1 : -1;
   const key = (road: number, incoming: boolean) => `${road}:${incoming ? 'end' : 'start'}`;
@@ -1269,6 +1293,9 @@ export function convergingShifts(
     return (f.p.x - node.pos.x) * n.x + (f.p.y - node.pos.y) * n.y;
   };
   for (const node of nodes) {
+    // TASK-131: not across a junction group's member, whose roads keep their OSM lines; the
+    // lanes join inside the group.
+    if (groupMembers.has(node.idx)) continue;
     const ends = incident[node.idx]!.filter((r) => r.from !== r.to);
     const facing = (a: CRoad, b: CRoad) => {
       const [ta, tb] = [chord(a, true), chord(b, false)];

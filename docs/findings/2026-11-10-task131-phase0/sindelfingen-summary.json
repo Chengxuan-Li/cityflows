@@ -1,0 +1,64 @@
+{
+  "name": "sindelfingen",
+  "importMs": 14048,
+  "laterMoves": 0,
+  "validation": {
+    "clusters": 62,
+    "todayGroups": 74,
+    "clustersNotReproduced": []
+  },
+  "mergedShort": {
+    "beforeConsolidation": [
+      "n:188",
+      "n:208",
+      "n:423",
+      "n:427",
+      "n:517",
+      "n:699",
+      "n:805",
+      "n:877",
+      "n:963",
+      "n:973",
+      "n:1066",
+      "n:1078",
+      "n:1230",
+      "n:1240",
+      "n:1241"
+    ],
+    "insideConsolidation": [
+      "n:119",
+      "n:121",
+      "n:404",
+      "n:406",
+      "n:407",
+      "n:546",
+      "n:547",
+      "n:549",
+      "n:551",
+      "n:553",
+      "n:554",
+      "n:563",
+      "n:564",
+      "n:707",
+      "n:762",
+      "n:768",
+      "n:836",
+      "n:837",
+      "n:905",
+      "n:906",
+      "n:919",
+      "n:1216",
+      "n:1218",
+      "n:1220",
+      "n:1222"
+    ]
+  },
+  "medianNodes": [],
+  "medianCrossings": [],
+  "finalNodeMoves": {
+    "count": 351,
+    "moved001": 175,
+    "moved1": 162,
+    "max": 40.89
+  }
+}

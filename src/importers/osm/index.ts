@@ -1,6 +1,7 @@
 import { polylineLength } from '../../geo/polyline';
 import { lonLatToLocal } from '../../geo/projection';
 import { compile, type Diagnostic } from '../../network';
+import { groupAngle, groupExits } from '../../network/groups';
 import { addImplicitGarages } from '../../network/parking';
 import { geographicMarkingTheme } from '../../schema/marking-theme';
 import { osmMarkingTheme } from './controls';
@@ -13,7 +14,7 @@ import { importWalk } from './walk';
 import { importRail } from './rail';
 import { addStrips } from './strips';
 import { addBuildings } from './buildings';
-import { addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
+import { addGroupSignal, addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
 import { addOsmGarages } from './parking';
@@ -21,19 +22,19 @@ import { addGateways, addOsmPlaces, connectCarExits } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
 import { smoothRoads } from './smooth';
-import { realignRoads } from './realign';
 import {
   assignCorridors,
   pairSameDirection,
   sampleSameDirection,
   separateCoincident,
   separateDual,
-  attachCarriageways,
 } from './corridors';
 import { DEFAULT_RELAX_MAX_M, relaxRoads } from './relax';
 import {
-  consolidateJunctions,
+  DEFAULT_JUNCTION_GROUP_MAX_M,
+  formJunctionGroups,
   joinDividedFeeders,
+  prepareJunctions,
   junctions,
   mergeShortRoads,
   splitWay,
@@ -271,36 +272,48 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   for (const node of nodes.values()) {
     addLocalTurnarounds(node, incidents.get(node.id)!);
   }
-  const beforeConsolidation = compile(city);
-  if (!beforeConsolidation.ok)
-    return { ok: false, diagnostics: [...diagnostics, ...beforeConsolidation.diagnostics] };
-  const originalControls = Object.values(city.nodes)
-    .filter((node) => node.control !== 'uncontrolled')
-    .map((node) => node.id);
-  const signalIds = consolidateJunctions(
+  const { signalIds, sources } = prepareJunctions(
     city,
     roads,
-    beforeConsolidation.compiled,
     signals.map((n) => n.id),
   );
+  // Corridors before the groups: a median crossing joins the two carriageways of one corridor.
   const coincident = assignCorridors(city, roads);
   const sameDirection = pairSameDirection(roads);
+  const groups = formJunctionGroups(
+    city,
+    roads,
+    options.junctionGroupMaxM ?? DEFAULT_JUNCTION_GROUP_MAX_M,
+    sources,
+    new Set(signalIds),
+  );
+  // Provisional group ids: the final ones are allocated last, so that no other id moves.
+  if (groups.length)
+    city.junctionGroups = Object.fromEntries(
+      groups.map(({ nodes, innerRoads }, i) => [
+        `jg:${i}`,
+        {
+          id: `jg:${i}`,
+          nodes,
+          innerRoads,
+          signal: null,
+          provenance: {
+            source: 'osm' as const,
+            osmIds: nodes.flatMap((id) => city.nodes[id]!.provenance.osmIds!),
+            inferred: ['junctionGroup'],
+          },
+        },
+      ]),
+    );
+  // TASK-131 (checkpoint 0): no realignment and no attachment; smoothing keeps every node and
+  // the 30 m around it; the collision model is off by default.
   smoothRoads(
     city,
     roads,
-    new Set([...protectedNodes, ...originalControls, ...signalIds]),
     new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
-  );
-  realignRoads(
-    city,
-    roads,
-    new Set([...protectedNodes, ...originalControls, ...signalIds]),
-    new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
-    diagnostics,
   );
   separateCoincident(city, coincident);
   separateDual(city, roads);
-  attachCarriageways(city, roads);
   relaxRoads(city, roads, options.relaxMaxM ?? DEFAULT_RELAX_MAX_M);
   sampleSameDirection(sameDirection);
   incidents.clear();
@@ -310,22 +323,57 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     incidents.get(road.road.from)!.outgoing.push(road);
     incidents.get(road.road.to)!.incoming.push(road);
   }
+  // TASK-131: an entry's arrows choose among the group's exits, reached along the inner roads,
+  // with the angles of the node the merge used to make.
+  const inner = new Set(groups.flatMap(({ innerRoads }) => innerRoads));
+  const exitsVia = groupExits(city);
+  const members = new Set(groups.flatMap(({ nodes }) => nodes));
   for (const node of Object.values(city.nodes))
-    addLaneTurns(node, incidents.get(node.id)!, city.drivingSide, diagnostics);
+    addLaneTurns(
+      node,
+      incidents.get(node.id)!,
+      city.drivingSide,
+      diagnostics,
+      members.has(node.id)
+        ? { entry: (road) => !inner.has(road.id), exitsVia, angle: groupAngle }
+        : undefined,
+    );
   markRoundaboutEntries(city, data);
+  // One signal anywhere in a group makes the group signalised, as the merged node was.
+  const signalGroups = Object.values(city.junctionGroups ?? {}).filter((g) =>
+    g.nodes.some((id) => signalIds.includes(id)),
+  );
+  const groupedSignals = new Set(signalGroups.flatMap((g) => g.nodes));
+  const nodeSignals = signalIds.filter((id) => !groupedSignals.has(id));
   let base = compile(city);
   if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
-  if (assignSignalLanes(city, signalIds, base.compiled)) base = compile(city);
+  if (assignSignalLanes(city, [...nodeSignals, ...groupedSignals], base.compiled))
+    base = compile(city);
   if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
   // Signal control changes junction geometry. Fix it before choosing compatible greens.
-  for (const id of signalIds) {
+  const placeholder = () => ({
+    offsetS: 0,
+    amberS: 3,
+    allRedS: 1,
+    phases: [{ durationS: 30, groups: [] }],
+  });
+  for (const id of nodeSignals) {
     const node = city.nodes[id]!;
     node.control = 'signal';
-    node.signal = { offsetS: 0, amberS: 3, allRedS: 1, phases: [{ durationS: 30, groups: [] }] };
+    node.signal = placeholder();
+  }
+  for (const group of signalGroups) {
+    for (const id of group.nodes) {
+      city.nodes[id]!.control = 'signal';
+      city.nodes[id]!.signal = null;
+    }
+    group.signal = placeholder();
   }
   base = compile(city);
   if (!base.ok) return { ok: false, diagnostics: [...diagnostics, ...base.diagnostics] };
-  for (const id of signalIds) {
+  for (const group of signalGroups)
+    addGroupSignal(city, group.id, base.compiled, diagnostics, data);
+  for (const id of nodeSignals) {
     addSignal(
       city,
       city.nodes[id]!,
@@ -353,6 +401,14 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   if (city.rail && city.context)
     city.context.features = city.context.features.filter(
       (f) => f.class !== 'rail' && f.class !== 'tram',
+    );
+
+  if (city.junctionGroups)
+    city.junctionGroups = Object.fromEntries(
+      Object.values(city.junctionGroups).map((group) => {
+        const id = allocateId(city, 'jg');
+        return [id, { ...group, id }];
+      }),
     );
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);

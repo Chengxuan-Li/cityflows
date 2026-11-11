@@ -1,4 +1,5 @@
-import { generateSignalProgram } from '../../importers/signal-program';
+import { useState } from 'react';
+import { generateGroupSignalProgram, generateSignalProgram } from '../../network/signal-program';
 import type { CNode, CompiledCity, Turn } from '../../network';
 import {
   crossingArms,
@@ -12,6 +13,7 @@ import {
   type City,
   type Command,
   type Control,
+  type JunctionGroup,
   type Node,
   type SignalProgram,
 } from '../../schema';
@@ -117,7 +119,9 @@ export function NodeInspector({
       movements: byPair.get(`${from.idx}>${to.idx}`) ?? [],
     })),
   );
-  const signal = source.signal;
+  // TASK-131: a member's control and program are its junction group's (read-only program).
+  const group = Object.values(city.junctionGroups ?? {}).find((g) => g.nodes.includes(nodeId));
+  const signal = group ? group.signal : source.signal;
 
   return (
     <>
@@ -136,13 +140,20 @@ export function NodeInspector({
                 nodeId,
                 control,
                 ...(control === 'signal' && {
-                  signal: generateSignalProgram(
-                    useAppStore.getState().session!.project.city,
-                    source,
-                    incoming.length,
-                    compiled,
-                    [],
-                  ),
+                  signal: group
+                    ? generateGroupSignalProgram(
+                        useAppStore.getState().session!.project.city,
+                        group.id,
+                        compiled,
+                        [],
+                      )
+                    : generateSignalProgram(
+                        useAppStore.getState().session!.project.city,
+                        source,
+                        incoming.length,
+                        compiled,
+                        [],
+                      ),
                 }),
               });
             }}
@@ -155,7 +166,20 @@ export function NodeInspector({
           </select>
         </label>
       </div>
-      {signal && <SignalInspector node={node} source={source} compiled={compiled} />}
+      {group && (
+        <p className="muted" aria-label="Junction group">
+          Junction {group.id}: {group.nodes.join(', ')}
+        </p>
+      )}
+      <JunctionGroupControls nodeId={nodeId} group={group} compiled={compiled} node={node} />
+      {signal && (
+        <SignalInspector
+          node={node}
+          source={source}
+          compiled={compiled}
+          {...(group && { group })}
+        />
+      )}
       {node.outline.length > 0 && <Crossings node={node} compiled={compiled} city={city} />}
       <details className="disclosure">
         <summary>Turns</summary>
@@ -227,6 +251,76 @@ export function NodeInspector({
           ))}
         </ul>
       </details>
+    </>
+  );
+}
+
+/** TASK-131: join this junction with a neighbouring one (a node one road away, or its group), or
+ * take it out of its group; both undo as one step. */
+function JunctionGroupControls({
+  nodeId,
+  group,
+  compiled,
+  node,
+}: {
+  nodeId: string;
+  group: JunctionGroup | undefined;
+  compiled: CompiledCity;
+  node: CNode;
+}) {
+  const busy = useAppStore((state) => state.busy);
+  const neighbours = [
+    ...new Set(
+      compiled.roads
+        .filter((r) => r.from === node.idx || r.to === node.idx)
+        .map((r) => compiled.nodes[r.from === node.idx ? r.to : r.from]!.id),
+    ),
+  ]
+    .filter((id) => id !== nodeId && !group?.nodes.includes(id))
+    .sort();
+  const [other, setOther] = useState('');
+  const target = neighbours.includes(other) ? other : (neighbours[0] ?? '');
+  const { commit } = useAppStore.getState();
+  return (
+    <>
+      {neighbours.length > 0 && (
+        <div className="edit-fields">
+          <label className="edit-field">
+            Join with
+            <select
+              aria-label="Junction to join"
+              value={target}
+              onChange={(event) => setOther(event.currentTarget.value)}
+            >
+              {neighbours.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      <div className="controls">
+        {neighbours.length > 0 && (
+          <button
+            type="button"
+            disabled={busy || !target}
+            onClick={() => void commit({ kind: 'joinJunctions', nodeIds: [nodeId, target] })}
+          >
+            Join junction
+          </button>
+        )}
+        {group && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void commit({ kind: 'leaveJunctionGroup', nodeId })}
+          >
+            Leave junction group
+          </button>
+        )}
+      </div>
     </>
   );
 }

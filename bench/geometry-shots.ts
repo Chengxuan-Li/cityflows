@@ -1,11 +1,16 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { chromium, type Page } from '@playwright/test';
 import { fixtureTerrain } from '../tests/e2e/terrain-fixture';
-import { pointAtDistance } from '../src/geo/polyline';
+import { cumulativeLengths, pointAtDistance, polylineLength } from '../src/geo/polyline';
+import type { City } from '../src/schema';
+import { lonLatToLocal, type GeoReference } from '../src/geo/projection';
+import type { Vec2 } from '../src/geo/vec2';
+import { drivableClass } from '../src/importers/osm/filter';
+import { parseOsm } from '../src/importers/osm/parse';
 import { compile } from '../src/network';
 
 // Fixed-camera images of the geometry rework's cases (TASK-081, docs/plan.md "Geometry rework"):
@@ -15,20 +20,50 @@ import { compile } from '../src/network';
 // npm run geometry-shots -- <out-dir> [--only <id,id>] (TASK-090: only the named shots).
 
 const MUNICH = 'fixtures/osm/munich-donnersberger.osm';
+const SINDELFINGEN = 'fixtures/osm/sindelfingen-a81.osm';
 /** Pairs across the zebras at n:180 and n:212 and the signals at n:963 and n:262 (among T53's
- * Munich pairs). */
+ * Munich pairs; TASK-131 re-rooted them to the places of the same OSM sources). */
 const v111Walkers = [
-  ['p:1677', 'p:1809'],
-  ['p:1809', 'p:1677'],
-  ['p:1579', 'p:1809'],
-  ['p:1677', 'p:1709'],
-  ['p:1571', 'p:1831'],
-  ['p:1831', 'p:1571'],
+  ['p:1664', 'p:1814'],
+  ['p:1814', 'p:1664'],
+  ['p:1566', 'p:1814'],
+  ['p:1664', 'p:1698'],
+  ['p:1558', 'p:1836'],
+  ['p:1836', 'p:1558'],
 ].map(([fromPlaceId, toPlaceId]) => ({
   fromPlaceId: fromPlaceId!,
   toPlaceId: toPlaceId!,
   perHour: 600,
 }));
+
+/** TASK-131 reference cases: shot id, main's node there, the camera centre (main's node
+ * position), label, extract. */
+const T131_CASES = [
+  ['n138', 'n:138', [-18.85, -540.61], 'reference: Arnulfstraße x Donnersbergerstraße'],
+  ['n638', 'n:638', [90.29, -526.03], 'reference: Arnulfstraße x Landshuter Allee'],
+  ['n247', 'n:247', [-19.28, 166.81], 'reference (n:967 before TASK-101): Landsberger Straße'],
+  ['n263', 'n:263', [-21.4, 106.86], 'reference: Landsberger ramps'],
+  ['n936', 'n:936', [37.81, 163.9], 'reference: Landsberger Straße'],
+  ['n570', 'n:570', [-571.33, -530.29], 'worst cluster 1, an arm turned 120 degrees'],
+  ['n894', 'n:894', [-5.8, -183.37], 'worst cluster 2, an arm turned 76 degrees'],
+  ['n446', 'n:446', [-464.79, -642.32], 'worst cluster 3, an arm turned 70 degrees'],
+  ['sindelfingen-n841', 'n:841', [312.7, -595.66], 'reference: B55', SINDELFINGEN],
+  ['sindelfingen-n68', 'n:68', [349.82, -487.76], 'reference: B55', SINDELFINGEN],
+  [
+    'sindelfingen-n139',
+    'n:139',
+    [-174.64, -599.95],
+    'worst cluster 4, an arm turned 60 degrees',
+    SINDELFINGEN,
+  ],
+  [
+    'sindelfingen-n911',
+    'n:911',
+    [-324.65, -667.96],
+    'worst cluster 5, an arm turned 58 degrees',
+    SINDELFINGEN,
+  ],
+] as [string, string, [number, number], string, string?][];
 
 /** World centre (m, the city's frame) and zoom (screen px per m) of each image; the case ids are
  * bench/geometry-audit.ts's. The map canvas is 1280 x 800 px. */
@@ -52,6 +87,12 @@ export const shots: {
   timeS?: number;
   demandScale?: number;
   parkingTarget?: 'street' | 'inferred-lot';
+  /** TASK-131: the extract's raw drivable OSM way lines and junction nodes drawn on top, with
+   * this label; `node` is the city node the camera is centred on (checked against the import). */
+  osmLines?: string;
+  node?: string;
+  /** TASK-131 Phase 1: the junction groups on top of the OSM overlay. */
+  groups?: boolean;
 }[] = [
   ...(['2d', '3d'] as const).flatMap((view) => [
     {
@@ -526,7 +567,218 @@ export const shots: {
     zoom: 10,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
+  // TASK-131 Phase 0: the import against the raw OSM ways, one scale (5 px/m), centred on the
+  // reference nodes as main placed them (n:967 is n:247 since TASK-101) and the five clusters
+  // whose arms turn most (bench/task131-audit.ts).
+  ...T131_CASES.map(([id, node, centre, label, osm]) => ({
+    id: `T131-${id}`,
+    cases: [],
+    centre,
+    zoom: 5,
+    node,
+    osmLines: `${osm ? 'Sindelfingen' : 'Munich'} ${node}, ${label}`,
+    ...(osm && { osm }),
+  })),
+  // TASK-131 Phase 1: the same framing with the junction groups drawn on top; the members keep
+  // their OSM positions, so the camera no longer sits on a merged node.
+  ...T131_CASES.map(([id, node, centre, label, osm]) => ({
+    id: `T131-p1-${id}`,
+    cases: [],
+    centre,
+    zoom: 5,
+    osmLines: `${osm ? 'Sindelfingen' : 'Munich'} ${node} (main's), ${label}`,
+    groups: true,
+    ...(osm && { osm }),
+  })),
+  // The signalised group at n:247 closer: the signal heads and stop lines drawn now.
+  { id: 'T131-p1-n247-signals', cases: [], centre: [-19.28, 166.81], zoom: 10 },
+  // TASK-131 Phase 2 (owner, checkpoint 1): n:638's eastbound lane gain and ramp branch, and the
+  // n:138 group's curbs, at 10 px/m.
+  {
+    id: 'T131-p2-n638-east',
+    cases: [],
+    centre: [125, -520],
+    zoom: 10,
+    osmLines: 'Munich, Arnulfstraße east of n:638 (main), lane gain and ramp',
+    groups: true,
+  },
+  ...(
+    [
+      ['n247', [-19.28, 166.81]],
+      ['n638', [90.29, -526.03]],
+      ['n138', [-18.85, -540.61]],
+    ] as [string, [number, number]][]
+  ).map(([id, centre]) => ({
+    id: `T131-p2-3d-${id}`,
+    cases: [],
+    centre,
+    zoom: 5,
+    view: '3d' as const,
+    pitch: 50,
+    bearing: 0,
+    buildings: false,
+  })),
+  // Checkpoint 2 (lead): one surface per group, curbs only on its outside, rounded median noses;
+  // at 10 px/m without the group overlay so the curbs show, and n:138 in 3D at the same scale.
+  ...(
+    [
+      ['n247', [-19.28, 166.81], 'Landsberger Strasse x Donnersberger Bruecke'],
+      ['n638', [90.29, -526.03], 'Arnulfstrasse x Landshuter Allee'],
+      ['n138', [-18.85, -540.61], 'Arnulfstrasse x Donnersbergerstrasse'],
+    ] as [string, [number, number], string][]
+  ).map(([id, centre, label]) => ({
+    id: `T131-p2-curbs-${id}`,
+    cases: [],
+    centre,
+    zoom: 10,
+    osmLines: `Munich ${id.replace('n', 'n:')} (main), ${label}: one surface per group`,
+  })),
+  {
+    id: 'T131-p2-3d-curbs-n138',
+    cases: [],
+    centre: [-18.85, -540.61] as [number, number],
+    zoom: 10,
+    view: '3d' as const,
+    pitch: 50,
+    bearing: 0,
+    buildings: false,
+  },
+  // Checkpoint 2 (lead), B55 on the new geometry: n:68 (the service road around the fire station
+  // beside the main road) and the two largest overlaps of a service road and a street.
+  ...(
+    [
+      ['n68', [352, -494], 'n:68, the fire-station service road beside the main road'],
+      ['r1029', [-74, 406], 'r:1029 x service r:1178 (largest overlap)'],
+      ['r13', [-73, 226], 'service r:13 x r:439 at n:10 (second)'],
+    ] as [string, [number, number], string][]
+  ).map(([id, centre, label]) => ({
+    id: `T131-p2-b55-${id}`,
+    cases: [],
+    centre,
+    zoom: 10,
+    osmLines: `Sindelfingen ${label}`,
+    osm: SINDELFINGEN,
+  })),
+  // Checkpoint 2 (owner): lane lines on a group's inner roads, n:247 under the bridge.
+  {
+    id: 'T131-p2-lanes-n247',
+    cases: [],
+    centre: [-45.6, 163.8] as [number, number],
+    zoom: 10,
+    osmLines: 'Munich n:247 (main), the group under Donnersberger Bruecke: inner road lane lines',
+  },
+  // Checkpoint 2 (coordinator): the 30-degree limit, n:68 in 3D, and the doubtful new cases.
+  {
+    id: 'T131-p2-b55-3d-n68',
+    cases: [],
+    centre: [352, -494] as [number, number],
+    zoom: 10,
+    view: '3d' as const,
+    pitch: 50,
+    bearing: 0,
+    buildings: false,
+    osm: SINDELFINGEN,
+  },
+  {
+    id: 'T131-p2-b55-r636',
+    cases: [],
+    centre: [456, -426] as [number, number],
+    zoom: 10,
+    osmLines: 'Munich r:636 Arnulfstrasse x r:933 Marsstrasse, 26 degrees',
+  },
+  {
+    id: 'T131-p2-b55-r442',
+    cases: [],
+    centre: [185, 78] as [number, number],
+    zoom: 10,
+    osmLines: 'Sindelfingen service r:13 beside r:442, 94 m, no overlap',
+    osm: SINDELFINGEN,
+  },
+  // Checkpoint 2 (lead): the A 81 carriageways r:464 and r:543 (different end nodes) pushed apart
+  // only where their blocks overlap: the lane gain at n:542, the widest overlap, the bbox cut.
+  ...(
+    [
+      ['east', [400, 300], 'n:542, where r:543 gains a lane into r:1254'],
+      ['mid', [-15, 494], 'the widest overlap (1.15 m on the OSM lines)'],
+      ['west', [-140, 615], 'the bbox cut ends n:463 and n:541'],
+    ] as [string, [number, number], string][]
+  ).map(([id, centre, label]) => ({
+    id: `T131-p2-a81-${id}`,
+    cases: [],
+    centre,
+    zoom: 5,
+    osmLines: `Sindelfingen A 81 r:464 / r:543, ${label}`,
+    osm: SINDELFINGEN,
+  })),
+  // TASK-131 fix round (lead), 10 px/m: Marsstrasse's lanes and arrows at n:366/n:417, the split
+  // n:478, n:471's outline, the curbs at n:638's members.
+  ...(
+    [
+      ['mars', [479, -406]],
+      ['n478', [498, -451]],
+      ['n471', [26, -237]],
+      ['n638-members', [67, -531]],
+    ] as [string, [number, number]][]
+  ).map(([id, centre]) => ({ id: `T131-p2fix-${id}`, cases: [], centre, zoom: 10 })),
 ];
+
+/** TASK-131: an extract's drivable OSM ways (the importer's filter) and the nodes where they
+ * meet or end, in the city's frame. */
+function osmWayLines(osm: string, geo: GeoReference) {
+  const data = parseOsm(readFileSync(osm, 'utf8'));
+  if (typeof data === 'string') throw new Error(data);
+  const nodes = new Map(data.node.map((n) => [n.id, n]));
+  const ways = data.way.filter((way) => drivableClass(way));
+  const uses = new Map<number, number>();
+  for (const { nd } of ways)
+    nd.forEach((id, i) =>
+      uses.set(id, (uses.get(id) ?? 0) + (i === 0 || i === nd.length - 1 ? 2 : 1)),
+    );
+  const at = (id: number): Vec2[] => {
+    const node = nodes.get(id);
+    return node ? [lonLatToLocal(geo, node)] : [];
+  };
+  return {
+    lines: ways.map(({ nd }) => nd.flatMap(at)),
+    junctions: [...uses].filter(([, count]) => count >= 2).flatMap(([id]) => at(id)),
+  };
+}
+
+/** TASK-131 Phase 1: per junction group, its member positions, inner roads with their lengths
+ * and midpoints, and its entry and exit road ends 4 m out from the member, in a colour each. */
+function junctionGroupMarks(city: City) {
+  const result = compile(city);
+  if (!result.ok) throw new Error('Group overlay city must compile');
+  const net = result.compiled;
+  const colours = ['#0072b2', '#e69f00', '#009e73', '#cc79a7', '#d55e00', '#56b4e9', '#7a5c00'];
+  return (net.groups ?? []).map((group) => {
+    const atM = (line: Vec2[], m: number) => {
+      const lengths = cumulativeLengths(line);
+      return pointAtDistance(line, lengths, Math.min(m, lengths.at(-1)!));
+    };
+    return {
+      id: group.id,
+      colour: colours[group.idx % colours.length]!,
+      members: group.nodes.map((n) => net.nodes[n]!.pos),
+      inner: group.innerRoads
+        .map((r) => city.roads[net.roads[r]!.id]!.centerline)
+        .map((line) => {
+          const lengthM = polylineLength(line);
+          return { line, lengthM, middle: atM(line, lengthM / 2) };
+        }),
+      ends: [
+        ...group.entries.map((r) => ({
+          pos: atM([...city.roads[net.roads[r]!.id]!.centerline].reverse(), 4),
+          entry: true,
+        })),
+        ...group.exits.map((r) => ({
+          pos: atM(city.roads[net.roads[r]!.id]!.centerline, 4),
+          entry: false,
+        })),
+      ],
+    };
+  });
+}
 
 export const VIEWPORT = { width: 1280, height: 800 };
 
@@ -949,8 +1201,127 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
           parkedOffTiming = await sampleTiming();
           await setParked(true);
         }
+        let nodeOffsetM: number | null = null;
+        if (shot.osmLines) {
+          const city = await page.evaluate(() => window.cityflows!.city!());
+          const { lines, junctions } = osmWayLines(osm, city.geo!);
+          if (shot.node) {
+            const pos = city.nodes[shot.node as never]?.pos;
+            nodeOffsetM = pos ? Math.hypot(pos.x - centre[0], pos.y - centre[1]) : null;
+            if (nodeOffsetM === null || nodeOffsetM > 0.05)
+              console.warn(
+                `${shot.id}: ${shot.node} is not at the camera centre (${nodeOffsetM} m)`,
+              );
+          }
+          const near = (p: Vec2) =>
+            Math.abs(p.x - centre[0]) < 300 && Math.abs(p.y - centre[1]) < 200;
+          const groups = shot.groups
+            ? junctionGroupMarks(city).filter((g) => g.members.some(near))
+            : [];
+          await page.evaluate(
+            ({ lines, junctions, label, zoom, groups }) => {
+              const map = document.querySelector<HTMLCanvasElement>(
+                'canvas[aria-label="City map"]',
+              )!;
+              const rect = map.getBoundingClientRect();
+              const overlay = document.createElement('canvas');
+              overlay.id = 'osm-overlay';
+              overlay.width = rect.width;
+              overlay.height = rect.height;
+              Object.assign(overlay.style, {
+                position: 'fixed',
+                left: `${rect.left}px`,
+                top: `${rect.top}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+                pointerEvents: 'none',
+                zIndex: '1000',
+              });
+              overlay.style.setProperty('visibility', 'visible', 'important');
+              const ctx = overlay.getContext('2d')!;
+              const at = window.cityflows!.worldToScreen!;
+              ctx.strokeStyle = 'rgba(214, 0, 128, 0.85)';
+              ctx.lineWidth = 1.5;
+              for (const line of lines) {
+                ctx.beginPath();
+                line.forEach((p, i) => {
+                  const q = at(p);
+                  if (i) ctx.lineTo(q.x, q.y);
+                  else ctx.moveTo(q.x, q.y);
+                });
+                ctx.stroke();
+              }
+              for (const p of junctions) {
+                const q = at(p);
+                ctx.beginPath();
+                ctx.arc(q.x, q.y, 3.5, 0, 2 * Math.PI);
+                ctx.stroke();
+              }
+              // TASK-131: inner roads (with lengths), entry ends (filled) and exit ends (hollow),
+              // members (circles), one colour per group, labelled with the group id.
+              ctx.font = '12px sans-serif';
+              ctx.lineCap = 'round';
+              for (const group of groups) {
+                ctx.strokeStyle = group.colour;
+                ctx.fillStyle = group.colour;
+                for (const road of group.inner) {
+                  ctx.globalAlpha = 0.45;
+                  ctx.lineWidth = 7;
+                  ctx.beginPath();
+                  road.line.forEach((p, i) => {
+                    const q = at(p);
+                    if (i) ctx.lineTo(q.x, q.y);
+                    else ctx.moveTo(q.x, q.y);
+                  });
+                  ctx.stroke();
+                  ctx.globalAlpha = 1;
+                  const m = at(road.middle);
+                  ctx.fillText(`${road.lengthM.toFixed(1)} m`, m.x + 5, m.y - 5);
+                }
+                ctx.lineWidth = 2;
+                for (const { pos, entry } of group.ends) {
+                  const q = at(pos);
+                  ctx.beginPath();
+                  ctx.rect(q.x - 3, q.y - 3, 6, 6);
+                  if (entry) ctx.fill();
+                  else ctx.stroke();
+                }
+                for (const p of group.members) {
+                  const q = at(p);
+                  ctx.beginPath();
+                  ctx.arc(q.x, q.y, 9, 0, 2 * Math.PI);
+                  ctx.stroke();
+                }
+                const top = group.members.map((p) => at(p)).reduce((a, b) => (b.y < a.y ? b : a));
+                ctx.font = 'bold 13px sans-serif';
+                ctx.fillText(group.id, top.x + 11, top.y - 11);
+                ctx.font = '12px sans-serif';
+              }
+              ctx.font = '14px sans-serif';
+              const text = groups.length
+                ? `${label}. Magenta: OSM ways. Colours: junction groups (members, inner roads, entries filled, exits hollow).`
+                : `${label}. Magenta: OSM ways and their junction nodes.`;
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+              ctx.fillRect(8, 8, ctx.measureText(text).width + 12, 24);
+              ctx.fillRect(8, rect.height - 36, 20 * zoom + 70, 28);
+              ctx.fillStyle = '#222';
+              ctx.fillText(text, 14, 25);
+              ctx.fillRect(14, rect.height - 18, 20 * zoom, 3);
+              ctx.fillText('20 m', 20 * zoom + 22, rect.height - 14);
+              document.body.appendChild(overlay);
+            },
+            {
+              lines: lines.filter((line) => line.some(near)),
+              junctions: junctions.filter(near),
+              label: shot.osmLines,
+              zoom: shot.zoom,
+              groups,
+            },
+          );
+        }
         const path = join(out, `${shot.id}.png`);
         await target.screenshot({ path, animations: 'disabled' });
+        await page.evaluate(() => document.getElementById('osm-overlay')?.remove());
         const walkerCount =
           shot.walkers || shot.id.startsWith('V112-')
             ? await page.evaluate(() => window.cityflows!.drawnSnapshot?.()?.walkers?.count ?? null)
@@ -973,6 +1344,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
           parkedOffTiming,
           parkedCars: await target.getAttribute('data-parked-cars'),
           actualCentre: centre,
+          ...(nodeOffsetM !== null && { nodeOffsetM }),
           centreErrorPx: placed.error,
           zoom: placed.zoom,
           canvas: placed.size,

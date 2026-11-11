@@ -119,8 +119,10 @@ test.each(['munich-donnersberger', 'sindelfingen-a81'])('T54 %s circulation inve
   const lots = result.compiled.lots ?? [];
   // Courtyard lots reached through a building passage: the entry link may run under the
   // building exclusion (never over a bay), so their stalls stay usable.
+  // TASK-131 keeps OSM geometry and shifts parking ids: main's pk:1475 (way 292031578) and
+  // pk:2037 (Gewerbehof Westend, way 84303381) are pk:1476 and pk:2048.
   const courtyard = lots.find(
-    (lot) => lot.id === (name === 'sindelfingen-a81' ? 'pk:1475' : 'pk:2037'),
+    (lot) => lot.id === (name === 'sindelfingen-a81' ? 'pk:1476' : 'pk:2048'),
   )!;
   expect(courtyard.circulation!.entries.length).toBeGreaterThan(0);
   expect(courtyard.circulation!.unreachable.length).toBeLessThan(courtyard.stallCount / 10);

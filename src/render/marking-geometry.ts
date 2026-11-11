@@ -204,6 +204,24 @@ export function roadMarkingGeometry(
       ...above.map((points) => lineShape(road, 'lane', points, alpha, markingTheme)),
     );
   };
+  // TASK-131 (owner, checkpoint 2): an inner road of a junction group is part of the junction
+  // surface, but its lanes run on through the group: dashed lines between lanes of one direction,
+  // as on any road; no centre or edge line, and no stop, yield or crossing (`approachMarkings`).
+  if (road.group !== undefined) {
+    for (const index of road.lanes) {
+      const lane = city.lanes[index]!;
+      if (lane.right < 0) continue;
+      draw(
+        roadDashes(
+          parallelOffset(lane.polyline, lane.widthM / 2),
+          true,
+          markingTheme.classes[road.roadClass].lane.dash!,
+        ),
+        0.78,
+      );
+    }
+    return { below: belowShapes, above: aboveShapes, pavement };
+  }
   // B46 (TASK-091): a centre line ends at the junction mouth, also where the outline reaches back
   // over the end of the approach: no centre line inside a junction polygon, and no piece shorter
   // than a dash left between two (a stub road inside a junction, Munich r:1172 at n:182).
@@ -602,10 +620,15 @@ export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM =
     lane.lengthM - crossingFarM - ARROW_CLEAR_M - ARROW_HALF_M * scale,
   );
   return {
-    stop: controlled && (node.signal !== null || (node.control === 'stop' && minor)),
-    yield: controlled && node.control === 'yield' && minor,
+    // TASK-131: no stop or yield line on a junction group's inner road.
+    stop:
+      controlled &&
+      road.group === undefined &&
+      (node.signal !== null || (node.control === 'stop' && minor)),
+    yield: controlled && road.group === undefined && node.control === 'yield' && minor,
     arrowAt,
     turns:
+      road.group === undefined &&
       differ &&
       lane.lengthM >= ARROW_MIN_LANE_M &&
       arrowAt >= ARROW_HALF_M * scale &&

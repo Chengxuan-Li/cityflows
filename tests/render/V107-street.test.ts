@@ -153,11 +153,14 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 // Lead, TASK-103 merge: Munich and Sindelfingen add parking bands, entries and spaces; with
 // TASK-111's fields stripped they hash to TASK-103's own pins (35122d76…, 1b4fdcc4…).
 // TASK-123: derived walk joins/fallback curbs only; vehicle hashes are unchanged.
+// TASK-131 keeps OSM geometry (no node merges, junction groups): both real cities re-pinned.
+// Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+// and e4654d8 (merging lanes kept on a group's inner roads).
 const baselines = {
   grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
   town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
-  'munich-donnersberger': 'ba6c3c0c73b69f8bcf0e10ba90d6a0e6b23b40221de750135d916df0181ceb0b',
-  'sindelfingen-a81': 'e0e1d4e5644f67db5e98189ca29eba7655757570bb703cd9b899aa103ae7d3b1',
+  'munich-donnersberger': '631ecdfee4077ce65b34b20e085afeada4914d5b9016ad776a8ac75703778088',
+  'sindelfingen-a81': 'a851c7347f235b5fdc1e129dc23d3cd86dac9642a6c2ba7bc37c67141645f927',
 };
 const lampCounts = {
   grid: [0, 0],

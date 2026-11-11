@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { compile, signalStateAt } from '../../src/network';
-import { generateSignalProgram } from '../../src/importers/signal-program';
+import { generateSignalProgram } from '../../src/network/signal-program';
 import { unzipSync, strFromU8 } from 'fflate';
 import type { City, Scenario } from '../../src/schema';
 

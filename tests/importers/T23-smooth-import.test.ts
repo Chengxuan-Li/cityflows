@@ -23,7 +23,6 @@ const observed = vi.hoisted(() => ({
 // T23 checks step 11's two-metre bound; step 12 has its own eight-metre contract (T24), the
 // separation of coincident pairs and the relaxation (TASK-084) theirs (T36), the separation of
 // close dual carriageways (TASK-087) its own (T39).
-vi.mock(import('../../src/importers/osm/realign'), () => ({ realignRoads() {} }));
 vi.mock(import('../../src/importers/osm/corridors'), async (load) => ({
   ...(await load()),
   separateCoincident() {},
@@ -246,8 +245,10 @@ test.each(
     expect(maxDeviation).toBeLessThanOrEqual(2 + 1e-8);
     expect(maxHeadingChange).toBeLessThanOrEqual(degree + 1e-6);
     expect(untouched).toBeGreaterThan(0);
+    // TASK-131 (owner, checkpoint 0): smoothing never moves a node, so no Munich node moves (on
+    // main, unstopped class seams and two-arm vertices were filleted away).
+    expect(moved).toBe(0);
     if (name === 'munich-donnersberger') {
-      expect(moved).toBeGreaterThan(0);
       console.info(
         'T23 Munich forced fillets (directed interiors, shared seams counted once)',
         forced,
@@ -284,7 +285,9 @@ unitTest('T23: a two-way OSM bend has mirrored fillets and smoothing provenance'
 });
 
 unitTest.each([false, true])(
-  'T23: smooths a class transition unless it carried a stop (%s)',
+  // TASK-131 (owner, checkpoint 0): smoothing never moves a node, so a class transition keeps its
+  // seam with or without a stop (it used to fillet the seam when no stop was there).
+  'T23: a class transition keeps its seam node (stop %s)',
   (stop) => {
     const xml = `<osm>
     <node id="1" lat="48" lon="11"/>
@@ -301,11 +304,7 @@ unitTest.each([false, true])(
     if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
     const seam = Object.values(imported.city.nodes).find((n) => n.provenance.osmIds!.includes(2))!;
     expect(seam.control).toBe('uncontrolled');
-    if (stop) {
-      expect(seam.pos).toEqual(observed.before!.nodes[seam.id]!.pos);
-    } else {
-      expect(seam.pos).not.toEqual(observed.before!.nodes[seam.id]!.pos);
-      expect(observed.fillets.map((f) => f.target)).toEqual([50]);
-    }
+    expect(seam.pos).toEqual(observed.before!.nodes[seam.id]!.pos);
+    expect(observed.fillets).toEqual([]);
   },
 );

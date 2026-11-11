@@ -146,6 +146,14 @@ interface SignalProgram {
             walk?: { roadId: RoadId; end: 'start' | 'end' }[] }[];          // TASK-111
 }
 
+interface JunctionGroup {  // TASK-131, id "jg:<int>"
+  id: JunctionGroupId;
+  nodes: NodeId[];         // two or more; a node is in at most one group
+  innerRoads: RoadId[];    // directed roads with both ends in the group
+  signal: SignalProgram | null; // the group's one program; null = no signals
+  provenance: Provenance;
+}
+
 interface Lane {
   widthM: number;
   allowed: VehicleClass[];
@@ -229,11 +237,30 @@ interface City {
   context?: { features: ContextFeature[] }; // display-only OSM surroundings, see below
   parking?: Record<ParkingId, ParkingFacility>; // Phase 2 format, see below
   walk?: { nodes: Record<WalkNodeId, WalkNode>; links: Record<WalkLinkId, WalkLink> };
+  junctionGroups?: Record<JunctionGroupId, JunctionGroup>; // TASK-131, absent = none
   terrain?: { source: string; originM: Vec2; cellM: number; cols: number; rows: number;
               baseM: number; heights: string }; // base64 Int16 LE decimetres above baseM
   nextId: number;          // single counter for all id kinds
 }
 ```
+
+TASK-131 adds optional junction groups without a schema-version change: an old city has none
+and compiles to the same result. A group is nodes joined by short links that are controlled and
+drawn as one junction; each member keeps its position, the inner roads stay real roads with
+their true lengths. Drawing: the members and inner roads are one surface (one tone with road classes on;
+curbs only on the group's outside, a median between member arms rounded at both ends); an inner
+road draws its lane lines (dashed between lanes of one direction) but no centre, edge, stop or
+yield line, crossing, arrow or signal head; turn arrows stand at entries only. B55: two
+different streets (or a street and a service road) on their OSM lines within 30 degrees whose
+surfaces overlap or touch get a 0.5 m edge strip midway between the lines, in 2D and as a low
+curb in 3D (`render/side-by-side.ts`, once per compiled city). A group is signalised if and only if `signal` is not null: every member
+then has `control: 'signal'` and `signal: null`, and the program's green groups name an entry
+road (ending at a member, not inner) and an exit road (starting at one, not inner); walk entries
+name a road end at any member's crossing. Members of a group without signals keep their own
+control, minor roads and turn rules. The city schema and the compile (`junction_group_invalid`)
+check that members and inner roads exist, that a node is in one group, that inner roads join
+members, and the control rule; a signal node needs its own program unless it is a member of a
+signalised group.
 
 TASK-100 advances the city schema to 3. Version 2 lanes gain `van` immediately after `car`
 where cars were allowed; version 1 first restores its node defaults, then follows the same
@@ -421,17 +448,26 @@ interface CompiledCity {
     node: Map<NodeId, number>; road: Map<RoadId, number>; lane: Map<LaneId, number>;
     movement: Map<MovementId, number>; place: Map<PlaceId, number>; connector: Map<ConnectorId, number>;
     parking: Map<ParkingId, number>;
+    group?: Map<JunctionGroupId, number>;   // TASK-131, with `groups`
   };
+  groups?: CGroup[];       // TASK-131; absent, with CNode.group and CRoad.group, without groups
   laneSpatial: Flatbush;   // lane segments, for picking and snapping
 }
 
 interface CNode { idx: number; id: NodeId; pos: Vec2; radiusM: number; control: Control;
-  movements: number[]; signal: CSignal | null; }
+  movements: number[]; signal: CSignal | null; group?: number; }
+interface CGroup { idx: number; id: JunctionGroupId; nodes: number[]; innerRoads: number[];
+  entries: number[]; exits: number[];          // road idx entering / leaving the group
+  chains: { from: number; to: number; movements: number[] }[]; signalised: boolean; }
 interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[];
   access: AccessValue[]; zone: Int32Array; // indexed by vehicleClasses
   roadClass: RoadClass; classRank: number; speedLimitMps: number; lengthM: number;
   streetGroupId: string | null; corridorId: string | null;   // corridorId ?? streetGroupId
-  surface: Vec2[]; /* polygon for rendering */ }
+  surface: Vec2[]; /* polygon for rendering */ group?: number; /* inner road's group */ }
+
+A group's chains (TASK-131) are its lane paths: from a lane of an entry road, the member-node
+movements along inner-road lanes to a lane of an exit road, no lane twice in a chain. The road
+pairs with a chain are the group's turn permissions, those the merged node of TASK-049 allowed.
 interface CLane { idx: number; id: LaneId; road: number; lane: number; polyline: Vec2[];
   cumulative: Float64Array; lengthM: number; widthM: number; allowed: VehicleClass[];
   speedLimitMps: number; left: number; right: number;   // adjacent lane idx or -1
@@ -698,6 +734,11 @@ services include station visits on both legs.
   road edges along them (TASK-089), reaching at most half of each arm. A split pair's median
   ends in a half-circle nose at the junction edge. The audit's measure 10 (corner sharpness:
   a missing or degenerate curb, or a turn over 30 degrees between 0.5 m samples) checks it.
+  TASK-131: where the edges' lines meet far behind one cut and just behind the other (an arm
+  meeting a group's short inner road, n:638's members), the arc's tangent point on the far edge
+  lies on that edge's line behind its cut, and the curb runs straight to it from the cut corner
+  (limit `far`). A curb's cut region is closed on its far side along the corner's bisector, and a
+  dead end's cap is joined to every end's cut.
 - TASK-093 (one street's carriageways, B49, B45, B47). A second OSM way of a carriageway (the
   importer pairs one partner per road) joins its pair's corridor after realignment, so
   realignment and relaxation are unchanged; TASK-089's jog rule measures the lanes that
@@ -710,8 +751,10 @@ services include station visits on both legs.
   count or directions change across a two-arm or through node (a one-way continuing as a
   two-way street), the road with fewer lanes shifts so its lanes continue the matching travel
   direction's lanes (within 0.1 m at the node), eased over the TASK-080 taper; a direction of a
-  two-way street is never shifted, and a shift steeper than 1 in 4 is not applied.
-- TASK-099 (attached carriageways, B54). After `separateDual`, `attachCarriageways` pulls one
+  two-way street is never shifted (TASK-131: also where a carriageway continues into one at a
+  node of its own; that node stays a junction), and a shift steeper than 1 in 4 is not applied.
+- TASK-099 (attached carriageways, B54; removed by TASK-131: nothing called it, and the
+  owner's TASK-131 decision keeps OSM geometry). After `separateDual`, `attachCarriageways` pulled one
   corridor's two carriageways together until their lane blocks meet at the 0.5 m median: the
   gap is measured between the blocks' median edges along rays, the pull is smoothed so it never
   undershoots and fades over 15 m from every chain end, and at a lane-count joint it follows
@@ -823,11 +866,20 @@ the OSM `lanes` tags carry one.
 - OSM imports set the flag only if explicit country tags are present: United States true,
   all other or mixed countries false; absent country leaves the flag omitted.
 
+- TASK-131: a signalised junction group's program runs at every member in lockstep. Each member
+  compiles a derived program: the group's timing, and in each phase the road pairs at that member
+  of the chains of the phase's green groups (entry to exit), so one green clears a car from the
+  entry to the exit. Its walk entries are those at the member; derived walk green stays per
+  crossing. A green group that does not name an entry and an exit is `signal_phase_invalid`.
+  Until Phase 3 there is no box rule: a car can stop on an inner road at the next member.
 - Each phase's `groups` expand to every movement between the named road pair. A movement may
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
 - State at simulation time `t`: `((t + offsetS) mod cycleS)` locates the phase and whether it
   is in green, amber or all-red. Amber means vehicles that can stop before the stop line do.
-- Error `signal_conflict`: two conflicting movements in the same phase (T13).
+- Error `signal_conflict`: two conflicting movements in the same phase (T13). TASK-131: two
+  movements into one lane of a group's inner road are not a conflict for the signal; they merge
+  inside the junction as at a lane drop, ordered by the grant rule (Munich r:480's two lanes into
+  the one-lane crossing r:713).
 - Warning `signal_unserved_movement`: a movement at a signalized node that is in no phase. It
   is compiled with `neverGreen: true` and routing excludes it.
 
@@ -856,7 +908,8 @@ between two such phases (`walkWindows`, `walkGreenS`); amber and all-red stay ve
 
 Errors (compile fails, editor rejects the commit):
 `dangling_ref`, `road_degenerate`, `lane_invalid`, `connector_invalid`, `turnrule_invalid`,
-`signal_missing`, `signal_phase_invalid`, `signal_conflict`, `place_invalid`.
+`signal_missing`, `signal_phase_invalid`, `signal_conflict`, `place_invalid`,
+`junction_group_invalid` (TASK-131).
 
 TASK-069: a third severity, `info`, for facts that need no action. `Diagnostic.severity`
 is `'error' | 'warning' | 'info'`. The validation badge counts errors and warnings only; the
@@ -948,6 +1001,13 @@ station within 250 m, excluding foot/access=no. The existing 150 m, same-grade, 
 access attachment above supplies streets; stations without doors use the platform/building shape.
 
 ## 6. Editing
+
+TASK-131: patches carry `junctionGroups` (set and remove), so undo restores a group. A topology
+edit (`addRoad`, `deleteRoad`, `splitRoad`, `mergeRoads`, roundabouts, ramps, `reverseRoad`,
+`setStreetDirection`) that touches a member node, an inner road or a road at a member dissolves
+the group; each remaining member of a signalised group gets its own generated program
+(`network/signal-program.ts`). `setControl` and `setSignal` on a member apply to the whole group.
+The node inspector shows the group and its program read-only.
 
 TASK-102 adds `setParkingAttributes` (capacity and access) and parking collections to patches
 and inverse patches. Inferred facilities become canonical when editing begins or a place is
@@ -2644,7 +2704,17 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    nodes stay separate.
    External road-pair reachability through each cluster becomes explicit turn rules, and
    signals move to its representative. Canonical lane assignment then applies at the combined
-   junction. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
+   junction. TASK-131 replaces this merge with junction groups. First the controls on
+   non-junction nodes move to the nearest junction and degree-two artefacts (a signal's stop
+   position) join (`prepareJunctions`); corridors are assigned; then close nodes form groups:
+   (a) a median crossing of at most 30 m between the two carriageways of one corridor, (b) a
+   complex, two signalised crossings joined by opposite one-way carriageway links of at most
+   60 m, (c) any other link of at most `junctionGroupMaxM` (default 30 m) and at most 1.5 times
+   the widest road block at its ends; (a) and (c) span at most 60 m. A candidate needs an entry,
+   an exit and three street arms; restriction via nodes may join, their restrictions staying at
+   the member. Every node keeps its OSM position and its turn rules, and the inner roads stay.
+   One signal anywhere in a group makes the group signalised, with one program over its
+   entry-to-exit chains. Group ids are allocated last, so they move no other id. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
    in provenance; disconnected roads and remaining short-road/dead-end warnings stay visible.
 5. Roads: an integer `layer` tag takes precedence. With the tag absent, a bridge other
    than `bridge=no` uses +1, a tunnel other than `tunnel=no` or `covered=yes` uses −1,
@@ -2671,6 +2741,11 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    deferred at intermediate way boundaries; a same-name continuation bending less than 90
    degrees counts as through. An arrow with no matching exit is recorded as `turnLanesDeferred`
    instead of prohibiting every exit at an earlier junction. Relation bans still take priority.
+   TASK-131: at a junction group's member, an entry's arrows are matched against the group's
+   exits, reached along the inner roads (no member twice, no road-level ban), with the angle
+   between the roads' chords over 20 m from the junction, as at the node the merge made; a
+   marked lane may enter an inner road if an exit beyond it takes one of its arrows, in lane
+   order. Two one-way carriageways of one name meeting at more than 90 degrees are a U-turn.
 7. Control: `highway=traffic_signals` on the node gives `signal` with a generated program:
    two 30 s phases for the two opposing approach axes with amber 3 s and all-red 1 s; a
    road-pair group that conflicts with its phase, or a left turn at a node with four or more
@@ -2761,8 +2836,19 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
     the tangent length fits in half of each adjacent segment and the fillet strays at most
     2 m from the original vertex; arcs are sampled at most 2 m or 5 degrees apart. Roundabout
     rings and hand-drawn or GeoJSON roads are unchanged; provenance records
-    `smoothed:<count>` per road.
-12. Realign acute approaches (TASK-068, B31). After smoothing, at every junction node (three
+    `smoothed:<count>` per road. TASK-131: smoothing moves no node (a degree-two node stays on
+    its OSM position and only interior vertices are filleted), and no fillet lies within 30 m of
+    a road's end nodes (`SMOOTH_CLEAR_M`). Relaxation (`relaxRoads`) defaults to 0 m: the owner
+    asked for no collision model, so roads keep their OSM lines; `separateDual` only pushes a
+    corridor's carriageways apart where their lane blocks overlap. Opposite carriageways of one
+    road that share no node (one corridor, one name, or one class and `ref` with at most one
+    named: Sindelfingen's A 81) are pushed apart the same way only where their blocks overlap or
+    leave less than the 0.5 m median, each by its share, eased to nothing over the taper toward
+    each end, so no node moves (`pushOverlapping`); such a pair is also a dual-carriageway
+    corridor candidate by its `ref`. A median crossing (`joinDividedFeeders`) takes half its
+    feeder's lane block as its offset.
+12. Realign acute approaches (TASK-068, B31; removed by TASK-131, which keeps OSM geometry:
+    `realignRoads` is deleted and acute approaches keep their lines). After smoothing, at every junction node (three
     or more road ends, or two that are not sections of one street), take each pair of
     angularly adjacent arms whose headings at the node differ by less than 45 degrees. Leave
     the pair alone when it is a merge or diverge by design: either arm is a motorway, trunk
@@ -2822,7 +2908,7 @@ Headless tests run in Vitest from fixtures in `src/fixtures` (generated) and `fi
 | T21 conflict zones: no two vehicles inside contacting zones at once; cleared zones free | network, sim | four-way signal, junction fixture, Munich | TASK-064, TASK-065 |
 | T22 zone timing and box: a far grant lets a crossing car through; no waiting in the box | sim | four-way signal, grid, Munich | TASK-065 |
 | T23 smooth imports: tangent continuity, bounded deviation, fixed junctions | importers | Munich, Sindelfingen, downtown | TASK-066 |
-| T24 acute approaches: realigned to 60 degrees, merges untouched, shorter setbacks | importers, network | Munich, Sindelfingen, an acute-Y OSM fixture | TASK-068 |
+| T24 acute approaches (retired by TASK-131: realignment removed) | importers, network | Munich, Sindelfingen, an acute-Y OSM fixture | TASK-068 |
 | T25 lane continuity: no pinch at splits and merges, tapers at drops | network, render | grid, a split-merge fixture, Munich | TASK-071 |
 | T26 stop positions: cars stop before the crossing, crossings on the road | network, sim, render | four-way signal, grid, Munich | TASK-072 |
 | T27 junction shapes: no overlap outside outlines, smooth curbs, markings clipped | network, render | grid, town, Sindelfingen, Munich | TASK-074 |
