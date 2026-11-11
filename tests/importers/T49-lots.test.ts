@@ -22,9 +22,11 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // import without assignTramForms) every pin equals c3a6ec2's.
 // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
 // stripped every pin equals 2df05a1's.
+// TASK-137: Munich gains 14 `rail.tramStops` (ids ts:10812 to ts:10825 move `nextId`); with those
+// removed and `nextId` 14 lower, the city hash is dfd83d49…, and the compile hash is unchanged.
 const baseline = {
   'munich-donnersberger': [
-    'b8370f9b0bd0f466fd350c9512399fd84e653bf788e72470bfd91e8de1b6e67f',
+    '12c00211a406d16ea5c6827173ec62ced8b683997f5f1ff6187c0558a1f3c3fb',
     '188fc25155395afd66f5bfd082cd9eed5a62cc6bfebc34d0655250bba92ce159',
   ],
   'sindelfingen-a81': [

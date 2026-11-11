@@ -431,6 +431,18 @@ TASK-132 adds optional track `covered: true` for `tunnel=building_passage` and `
 ways: the track stays at grade under its roof. Its `layer` (-1 by the road rule) and `tunnel`
 flag are unchanged, so crossings, continuations and drawing order are as before. No
 schema-version bump: older projects omit it and their building passages draw as tunnels.
+TASK-137 adds optional `RailNetwork.tramStops`, a record of `TramStop` keyed `ts:<n>` (ids from
+the shared counter, allocated after the junction groups') without a version bump; cities without
+tram stops and older projects omit it. A stop is one platform island and the tram track sections
+it serves: `name`, `lines` (from `route_ref`, else tram route relations in the data, else the
+`Tram 18/19/N19` of the stop's or platform's description), `layer`, served `tracks`, `halts` (a
+point on a served track per stop position), `platform` (`{ kind: 'mapped', platform: rp:… }`
+keeps an imported polygon or line platform as it is, `{ kind: 'generated', ring }` is an island
+the import laid beside the track, `null` when no room was left), the tags `shelter`, `bench`,
+`covered` and `tactilePaving` as booleans where the platform or stop gives them, `osmIds` and
+`provenance` (`inferred: ['platform']` on a generated island). Boundary validation checks that
+the ids match, tracks and platforms exist and generated rings are closed. Tram stops are not
+network: compile ignores them, and no lane, connector, route or simulation hash reads them.
 
 ## 5. Compiled model: `CompiledCity`
 
@@ -2159,6 +2171,23 @@ posts, roofs, benches and bins as instanced meshes, boards and entrance signs as
 mesh per station name with a cached canvas texture, and each display as a mesh whose canvas
 repaints, when it is in view, at most once per 30 simulated seconds.
 
+TASK-137 draws tram stops (`City.rail.tramStops`) in both views from one pure placement,
+`render/tram-stops.ts`, display-only like station furniture and hidden with the Rail layer. The
+island is the mapped platform's shape (a line draws 2 m wide, as the rail layer does) or the
+generated ring, with a curb edge and a tactile strip 0.4 m wide, ribbed every 0.6 m, along the
+kerb facing the track. Items are oriented boxes at least 0.25 m inside the island: a shelter of 8 m
+(12 m where `covered=yes`; none where `shelter=no`) at the island's middle on its back side, away
+from the track, narrowed to leave 0.9 m to walk; a name board at both ends; and one display of
+1.2 m near the shelter showing the name and the lines. A thin box across the track at each halt
+marks where trams stop. 2D draws the island from 1.5 px/m, the marking from 3, the strip and
+furniture from 4, and the name above the lines on the island's clear back half from 12, at most
+12 labels. 3D raises the island 0.25 m (kerb sides a shade darker), lays the strip and marking
+(0.145 m on a bed, 0.075 m in the street) in the same vertex-coloured mesh, and instances posts,
+canopies, a translucent back wall, and one panel mesh per board name or display text with cached
+canvas textures. Mapped islands are the rail layer's platforms and pickable as such, and the
+platform inspector names the stop, its lines and tagged amenities; generated islands are not
+pickable.
+
 
 TASK-111/112: the default-on Pedestrians layer (shown for person demand or test pedestrians) draws
 walkers as dots at least 2.4 px across in their grade's group above vehicles in 2D (warmer
@@ -2627,7 +2656,26 @@ Platform polygons reuse the existing multipolygon assembler. Platforms serve sam
 mode-compatible tracks within 5 m of their boundary. A mapped stop area's explicit station
 membership wins; otherwise rail platforms match the same normalized station name within 500 m.
 Bus/tram platforms do not inherit a rail station by proximity/name alone. Tram tracks then take
-their form (section 4) from their tags and the import's compiled road surfaces. The bundled extracts
+their form (section 4) from their tags and the import's compiled road surfaces.
+
+TASK-137 groups tram stops last, after the junction groups have their ids (`osm/tram-stops.ts`).
+Stop positions are `railway=tram_stop`, or `public_transport=stop_position` / `railway=stop` with
+`tram=yes`; a `public_transport=station` node names a stop and is no halting position, even on the
+line. A mapped platform is any rail platform with `tram=yes` (read from the tags, since the rail
+layer's `mode` lets `bus=yes` win), or a `railway=platform` that no railway claimed beside a tram
+track. It serves the tram tracks within 2.5 m of its edge and takes the stop positions of its name
+that lie on those tracks, the nearest platform first; a platform with no stop position is a stop
+too. Stop positions left without a platform join the nearest same-name stop within 80 m (a marker
+or station node), or make a stop of their own: an island 2.5 m wide and 30 m long is laid beside
+the track from 1.4 m off its axis, on the side of a platform node or marker if one is near, else
+the side with more room. Two such stop positions of one name on tracks 4.8 to 12 m apart share a
+centre island between them. An island is clipped clear of every same-grade road surface and
+junction outline and of other tram beds; under 8 m² is no island (`osm_tram_stop_no_island`, an
+info). Stop positions outside the area, or over 25 m from a tram track, are left out and listed in
+`osm_tram_stop_skipped` infos by node. The Overpass query is unchanged: it fetches the stop
+positions on the ways and the platforms, but no route relations, so `lines` come from
+`route_ref` or descriptions unless the data carries tram route relations.
+ The bundled extracts
 append only missing IDs at each original historical snapshot; ATTRIBUTION.txt records queries
 and original-file hashes. T62 proves original bytes and lane/movement hashes remain unchanged.
 

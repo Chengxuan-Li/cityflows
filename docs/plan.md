@@ -162,7 +162,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-140](tasks/TASK-140.md) | 9 | Crossing walk links, pedestrian heads and walker conflict zones at the zebra stripes (B59) | `src/network/crossings.ts`, `walk.ts`, `walk-joins.ts`, `conflicts.ts`, head drawing | 091, 094, 110, 111, 131 | T71, every link within 0.5 m of its stripes, T53, baseline reset | done 2026-11-11 |
 | [TASK-132](tasks/TASK-132.md) | 10 | Rail heights: tunnels below ground with portals, bridges and viaducts on piers, ramps within 4% (trams 6%); find and draw the Munich tunnel missing today | `src/network/rail.ts`, rail drawing 2D and 3D, `src/render3d/heights.ts` (rail), small importer functions | 126, 127, 135 | T72, the tunnel drawn, no sim hash change | done 2026-11-11 |
 | [TASK-134](tasks/TASK-134.md) | 10 | Overhead lines: wired by `electrified` (no tag draws it), close parallel tracks share masts and portals every 40 to 60 m clear of switches, crossings, roads and platforms, a contact and messenger wire over each track; 2D and 3D | new catenary modules, scene hooks, a small `electrified` read in the rail importer | 126, 132, 135 | T74, counts and shots, no hash change | open |
-| [TASK-137](tasks/TASK-137.md) | 10 | Tram stops: imported stops and platforms grouped per stop, generated islands for node-only stops, shelters, names, markings and a name-and-lines display; visual only | new tram-stop modules, `src/schema/rail.ts` (optional stops), scene hooks, rail inspector | 126, 133, 135 | T73, every Munich tram stop placed or listed, no sim hash change | open |
+| [TASK-137](tasks/TASK-137.md) | 10 | Tram stops: imported stops and platforms grouped per stop, generated islands for node-only stops, shelters, names, markings and a name-and-lines display; visual only | new tram-stop modules, `src/schema/rail.ts` (optional stops), scene hooks, rail inspector | 126, 133, 135 | T73, every Munich tram stop placed or listed, no sim hash change | done 2026-11-11 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1112,7 +1112,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-134 (contract written) | Overhead lines: catenary masts shared by parallel tracks close together, with a portal or truss across them and a contact wire over each track. `electrified=contact_line` (or `yes`) draws it, `electrified=no` (or `rail`, third rail) does not, no tag draws it anyway (owner); mapped `power=catenary_mast` nodes place masts where present. | None. | TASK-126, TASK-132 (heights) |
 | TASK-135 (done 2026-11-11) | Trams as their own kind of track: a distinct track type with its own visual quality (rails, bed, sleepers or embedded track), in 2D and 3D, clearly unlike railway tracks. | Tram tracks drawn almost like railway tracks. | TASK-126 |
 | TASK-136 | Level crossings: railway crossings (`railway=level_crossing`, `crossing:barrier`, `crossing:light`, `crossing:bell`) always get gates, St Andrew's cross signs, lights and road markings; tram crossings (`railway=tram_level_crossing`) get tram signals, and trams may have priority. Road traffic stops for trains and trams in the simulation. | Tracks cross roads with no facility and no effect. | TASK-127, TASK-131, TASK-135; TASK-138 for trams |
-| TASK-137 (contract written) | Tram stops: stops in the middle of the street (`railway=tram_stop`, `public_transport=platform`) with platforms, shelters, markings and displays. | None. | TASK-135 |
+| TASK-137 (done 2026-11-11) | Tram stops: stops in the middle of the street (`railway=tram_stop`, `public_transport=platform`) with platforms, shelters, markings and displays. | None. | TASK-135 |
 | TASK-138 | Tram vehicles: timetabled trams on the tram tracks that interact with cars, signals and level crossings (not only decorative). | TASK-127 trains are decorative and run on rail only. | TASK-135, TASK-136, TASK-130, TASK-131 Phase 3 |
 | TASK-139 (dropped for now, owner 2026-11-11) | Trams beside and in streets: tracks in a median keep their own space beside parallel carriageways without overlapping them; street-running trams (`embedded=yes`, `embedded_rails=*`) run in a road lane shared with cars. Reconcile with TASK-131's keep-the-geometry rule (overlaps come from lane widths, not OSM lines). | Tram tracks drawn over road surfaces; no shared lanes. | TASK-131, TASK-135, TASK-138 |
 
@@ -2975,6 +2975,19 @@ reaches 5.1 m of 7, its portal -4.1 m of -7). 3D: tunnel tubes with "See below g
 cutting walls always, decks with parapets on piers. Simulation and timetable hashes unchanged; load
 +1.3%, 3D frame +2.3 to 2.6%. T62 and T64 frame gates sit at their 10% limit on the loaded machine,
 as main does (they are skipped on CI). Lead runs: `check`, `test:city`, the light e2e (37), T70.
+
+TASK-137 (Claude Code subagent, Sonnet 5.5 high, 2026-11-11; merged): tram stops as
+`RailNetwork.tramStops` (new id prefix `ts`, allocated after everything else so no other id
+moves). A stop is a platform island plus the tram sections it serves: mapped platforms keep their
+shape, a node-only stop gets a generated 2.5 by 30 m island clipped clear of carriageways (none
+needed in Munich), and two same-name positions on tracks 4.8 to 12 m apart share a centre island.
+Munich: 14 stops, all on mapped platforms (7 of the 19 `railway=tram_stop` nodes lie inside the
+extract, plus 6 from the `railway=stop` positions on Arnulfstraße; the rest are listed as
+`osm_tram_stop_skipped`). Shelters, name boards, a name-and-lines display (from `route_ref`), a
+tactile strip and a track marking, in 2D and 3D; TASK-133's furniture output is unchanged. 3D
+islands use the platforms' layer height, as station platforms still do after TASK-132. Only the
+Munich city hash pins moved. Lead merge: T44 and T49 re-pinned for TASK-132 and TASK-137 together.
+Lead runs: `check`, `test:city`, the light e2e (37), T70, T73.
 
 ## Owner decisions log
 
