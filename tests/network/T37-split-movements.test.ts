@@ -203,7 +203,8 @@ cityTest(
 // movements -> 125, 273, 1646 and Sindelfingen 59, 116, 1174 -> 118, 251, 1383.
 test.each(
   tierCities([
-    ['Munich', 125, 273, 1, 1646], // TASK-101: retained access boundaries and final signal geometry.
+    // e4654d8: r:252#2>r:482#1 and r:966#2>r:703#1 merge on their inner roads (1646 -> 1648).
+    ['Munich', 125, 273, 1, 1648], // TASK-101: retained access boundaries and final signal geometry.
     // TASK-087: Sindelfingen's n:580 becomes a continuation node (r:585/r:586 runs on into the
     // unnamed pair r:582/r:583, now side by side): its two lined-up pairs are added, r:586>r:582
     // is classified through, and the turn r:583#0>r:582#0 between the pair's carriageways goes.
