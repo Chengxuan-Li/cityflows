@@ -26,7 +26,7 @@ import type { cityHeights } from './heights';
 
 /** A display redraws at most once per this many simulated seconds. */
 export const displayRefreshS = 30;
-const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
+export const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
 const dims = {
   boardHeight: 0.8,
   boardCentre: 2.0,
@@ -40,11 +40,11 @@ const dims = {
   entrance: { length: 3, height: 1.6, centre: 3.0 },
 };
 export type CreateCanvas = (width: number, height: number) => HTMLCanvasElement;
-const documentCanvas: CreateCanvas = (width, height) =>
+export const documentCanvas: CreateCanvas = (width, height) =>
   Object.assign(document.createElement('canvas'), { width, height });
 
 /** Fit `text` on one line of at most `width` pixels, from `size` px down. */
-function fitText(
+export function fitText(
   ctx: CanvasRenderingContext2D,
   text: string,
   font: string,
@@ -109,7 +109,7 @@ function entranceTexture(create: CreateCanvas, name: string) {
   return canvasTexture(canvas);
 }
 
-function canvasTexture(canvas: HTMLCanvasElement) {
+export function canvasTexture(canvas: HTMLCanvasElement) {
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   texture.anisotropy = 8;

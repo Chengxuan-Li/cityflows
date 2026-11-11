@@ -87,6 +87,21 @@ export function RailInspector({ kind, index }: { kind: 'track' | 'platform'; ind
   }
   const p = rail.platforms[index]!;
   const station = p.station ? session.project.city.places[p.station] : undefined;
+  const stop = Object.values(session.project.city.rail?.tramStops ?? {}).find(
+    (s) => s.platform?.kind === 'mapped' && s.platform.platform === p.id,
+  );
+  const amenities = stop
+    ? (
+        [
+          [stop.shelter, 'shelter'],
+          [stop.covered, 'covered'],
+          [stop.bench, 'bench'],
+          [stop.tactilePaving, 'tactile paving'],
+        ] as const
+      )
+        .filter(([has]) => has)
+        .map(([, label]) => label)
+    : [];
   return (
     <section aria-label="Platform inspector">
       <h2>
@@ -97,6 +112,12 @@ export function RailInspector({ kind, index }: { kind: 'track' | 'platform'; ind
         {p.mode === 'rail' ? 'Rail' : p.mode === 'tram' ? 'Tram' : 'Bus'} platform ·{' '}
         {p.tracks.length} track sections
       </p>
+      {stop && (
+        <p>
+          Tram stop{stop.lines.length ? ' · lines ' + stop.lines.join(', ') : ''}
+          {amenities.length ? ' · ' + amenities.join(', ') : ''}
+        </p>
+      )}
       {station && (
         <button
           onClick={() =>

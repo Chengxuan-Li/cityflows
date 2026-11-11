@@ -76,7 +76,7 @@ function hash32(value: string) {
 
 /** The platform's centreline and half width at each of its vertices, from slices across its
  * principal axis. The axis points east (or south) so placement never depends on ring order. */
-function spine(ring: readonly Vec2[]) {
+export function spine(ring: readonly Vec2[]) {
   const pts = ring.slice(0, -1);
   const c = {
     x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
@@ -123,7 +123,7 @@ function spine(ring: readonly Vec2[]) {
   return line.length >= 2 ? { line, half } : null;
 }
 
-function platformRing(shape: RailPlatform['shape']): Vec2[] | null {
+export function platformRing(shape: RailPlatform['shape']): Vec2[] | null {
   if (shape.kind === 'polygon') return shape.ring;
   if (shape.kind === 'point') return null;
   // A mapped platform edge draws 2 m wide (rail-geometry).

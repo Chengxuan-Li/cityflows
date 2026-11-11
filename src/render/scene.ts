@@ -15,6 +15,8 @@ import { drawContext } from './layers/context';
 import { drawRail } from './layers/rail';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawStations } from './layers/stations';
+import { drawTramStops } from './layers/tram-stops';
+import { noTramStops, placeTramStops } from './tram-stops';
 import { noFurniture, placeStationFurniture } from './station-furniture';
 import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
 import { railGeometry, pickRail } from './rail-geometry';
@@ -204,17 +206,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let trainTimeS = 0;
   let trainsVisible = true;
   let stations: ReturnType<typeof drawStations> | undefined;
+  let tramStops: ReturnType<typeof drawTramStops> | undefined;
   const updateStations = () => {
     if (!stations) return;
     const a = camera.screenToWorld({ x: 0, y: 0 }),
       b = camera.screenToWorld({ x: app.screen.width, y: app.screen.height });
-    stations.update(
-      camera.zoom,
-      { minX: a.x, minY: a.y, maxX: b.x, maxY: b.y },
-      trainTimeS,
-      layerVisibility.rail,
-    );
+    const view = { minX: a.x, minY: a.y, maxX: b.x, maxY: b.y };
+    stations.update(camera.zoom, view, trainTimeS, layerVisibility.rail);
+    tramStops?.update(camera.zoom, view, layerVisibility.rail);
     if (import.meta.env.MODE === 'test') {
+      canvas.dataset.tramStopLabels = String(tramStops?.labelCount ?? 0);
       canvas.dataset.stationLabels = String(stations.labelCount);
       canvas.dataset.stationDisplays = JSON.stringify(
         layerVisibility.rail ? stations.displayTexts(trainTimeS) : [],
@@ -307,6 +308,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     updateStations();
     canvas.dataset.stationFurniture = JSON.stringify(
       layerVisibility.rail && stations ? stations.counts : noFurniture,
+    );
+    canvas.dataset.tramStops = JSON.stringify(
+      layerVisibility.rail && tramStops ? tramStops.counts : noTramStops,
     );
     for (const grade of visibleGrades)
       grade.parkedCars.container.visible = layerVisibility.parkedCars;
@@ -597,6 +601,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           )
         : undefined;
       for (const [layer, { container }] of stations?.grades ?? []) {
+        const grade = grades.get(layer) ?? grades.get(0)!;
+        grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
+      }
+      tramStops = compiled.rail
+        ? drawTramStops(placeTramStops(compiled, source ?? { nodes: {}, places: {} }))
+        : undefined;
+      for (const [layer, { container }] of tramStops?.grades ?? []) {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
       }
