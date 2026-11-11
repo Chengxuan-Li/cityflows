@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { railKinds, type RailNetwork } from './rail';
+import { railKinds, trackForms, type RailNetwork } from './rail';
 
 const point = z.object({ x: z.number(), y: z.number() });
 const nodeId = z.string().regex(/^rn:\d+$/);
@@ -39,6 +39,14 @@ export const railSchema = z
         name: z.string().optional(),
         maxSpeedMps: z.number().positive().optional(),
         osmId: z.int().optional(),
+        form: z.enum(trackForms).optional(),
+        provenance: z
+          .object({
+            source: z.enum(['osm', 'authored', 'generated']),
+            osmIds: z.array(z.int()).optional(),
+            inferred: z.array(z.string()).optional(),
+          })
+          .optional(),
       }),
     ),
     platforms: z.record(

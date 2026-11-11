@@ -35,6 +35,24 @@ const v111Walkers = [
   toPlaceId: toPlaceId!,
   perHour: 600,
 }));
+/** TASK-140 (B59): pairs whose walks cross at n:34 (three arms), n:372, n:23 and the crossing of
+ * Landsberger Straße split at the median between n:251 and n:246. */
+const t140Walkers = [
+  ['p:1754', 'p:1786'],
+  ['p:1786', 'p:1754'],
+  ['p:1754', 'p:1788'],
+  ['p:1788', 'p:1754'],
+  ['p:1488', 'p:1794'],
+  ['p:1794', 'p:1488'],
+  ['p:1488', 'p:1664'],
+  ['p:1664', 'p:1488'],
+  ['p:1780', 'p:1836'],
+  ['p:1836', 'p:1780'],
+].map(([fromPlaceId, toPlaceId]) => ({
+  fromPlaceId: fromPlaceId!,
+  toPlaceId: toPlaceId!,
+  perHour: 1200,
+}));
 
 /** TASK-131 reference cases: shot id, main's node there, the camera centre (main's node
  * position), label, extract. */
@@ -129,6 +147,13 @@ export const shots: {
       ...(three ? { view: '3d' as const, pitch: 50, bearing: 30 } : {}),
     })),
   ),
+  // TASK-140 (B59): walk links, walk lights and walkers on the zebra stripes, at 10 px/m.
+  ...[
+    { id: 'T140-munich-n34', centre: [542.8, -701.1] as [number, number] },
+    { id: 'T140-munich-n372', centre: [-45.5, 545] as [number, number] },
+    { id: 'T140-munich-n23', centre: [-52, 594.6] as [number, number] },
+    { id: 'T140-munich-n251-median', centre: [-78, 162] as [number, number] },
+  ].map((shot) => ({ ...shot, cases: [], zoom: 10, walkers: t140Walkers, steps: 18000 })),
   ...(['de', 'us', 'uk'] as const).flatMap((theme) =>
     [false, true].map((three) => ({
       id: `V117-munich-signs${theme === 'de' ? '' : `-${theme}`}${three ? '-3d' : ''}`,
@@ -567,6 +592,31 @@ export const shots: {
     zoom: 10,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
+  // TASK-135: tram tracks by form. Arnulfstraße's median through the n:638 complex (n:640 to
+  // n:650), Landsberger at n:247 (main's positions before TASK-131), rt:10220 (79% inside road,
+  // the stretch closest to embedded), and a main line crossing Landsberger's tram on a bridge.
+  ...(
+    [
+      ['n638', [70, -530], 5],
+      ['n638-close', [62, -531], 10],
+      ['n247', [-19.28, 166.81], 5],
+      ['n247-close', [-60, 162], 10],
+      ['rt10220', [600, -365], 5],
+      ['rail-beside', [-470, 95], 3],
+    ] as [string, [number, number], number][]
+  ).flatMap(([id, centre, zoom]) => [
+    { id: `T135-${id}`, cases: [], centre, zoom },
+    {
+      id: `T135-${id}-3d`,
+      cases: [],
+      centre,
+      zoom,
+      view: '3d' as const,
+      pitch: 50,
+      bearing: 20,
+      buildings: false,
+    },
+  ]),
   // TASK-131 Phase 0: the import against the raw OSM ways, one scale (5 px/m), centred on the
   // reference nodes as main placed them (n:967 is n:247 since TASK-101) and the five clusters
   // whose arms turn most (bench/task131-audit.ts).

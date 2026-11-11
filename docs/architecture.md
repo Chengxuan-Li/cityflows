@@ -415,6 +415,18 @@ TASK-127 adds optional track `preferredDirection: 'forward' | 'backward' | 'both
 to the stored polyline, from `railway:preferred_direction`. No schema-version bump: omitted
 values leave direction undecided and all existing migration/boundary schemas preserve it.
 
+TASK-135 adds optional tram-track `form: 'embedded' | 'grass' | 'paved' | 'ballast'` and
+`provenance` (`{ source: 'osm', inferred: ['form'] }` when no tag decided the form). The import
+sets `form` on every tram track and on no other kind. The way's tags decide first:
+`embedded=yes` is embedded; `embedded=no` is an own bed of the tagged surface or ballast;
+`surface=grass` or `railway:track_ballast=no` is grass, `railway:track_ballast=yes` ballast. A
+track lying over half its length inside highways tagged `embedded_rails=tram` is embedded. Any
+other track is inferred from the compiled geometry: inside same-grade road or junction surface
+over at least 80% of its length (sampled every metre) it is embedded, otherwise an own bed,
+paved under a paved `surface` (asphalt, paving_stones, concrete, sett, paved) and ballast
+otherwise. No schema-version bump: older projects omit both, and a tram without a form draws as
+embedded.
+
 ## 5. Compiled model: `CompiledCity`
 
 `compile(city: City): CompileResult` lives in `src/network` and is a pure, deterministic
@@ -973,6 +985,24 @@ TASK-091/094 crossing placement and road-end overrides supply cross-street walk 
 including separately mapped curbs. Generated walk crossings exclude motorway, trunk and
 ramp arms. The vehicle network, crossing placement and stop positions are unchanged.
 New mapped-curb corners and crossings are added only where the existing network has a gap.
+
+TASK-140 (B59): the stripes' centreline is a crossing's one position (`crossingCentreM`,
+`crossingLine` in `src/network/crossings.ts`). A crossing link runs across each road end it
+crosses at the centre of the stripes that end draws, through every lane's edges, so it meets each
+lane there; at a served signal approach that draws none, at TASK-072's crossing 1.5 m from the cut
+(in front of its `lengthM - 3` stop line); the ends of one arm are joined in order across, over a
+median or a jog. A generated crossing follows this line, extended 100 m each way, between its
+outermost curb hits; its other ends without stripes use 1.5 m. A mapped crossing at a junction
+(`end` start or end, or a signal's) does the same: its links at that node, joined through nodes
+no other walk link uses (the node where OSM splits a crossing way on a road's centreline), become
+one link that keeps the first link's id and crossing data and reaches 1 m beyond the outer road
+edges; two straight kerb links (`<id>:kerb:0|1`, kind `crossing`, generated, no crossing data:
+not drawn, no wait, never a join target) tie it to the chain's mapped end nodes, so mapped
+connectivity is unchanged; the dissolved nodes stay as nodes without links. An unmarked road end
+(no stripes, no served signal) keeps the mapped crossing's own position. A mapped crossing stays
+as mapped if it crosses no lane, crosses a lane of a road that does not end at its node, crosses
+no marked end, or lies more than 12 m from the stripes (another crossing along the street, Munich
+`n:16`). The walk lights stand at the link's ends (`walkSignalMarks`), so at the stripes' ends.
 
 Same-grade mapped intersections split links. Mapped endpoints snap within 4 m (curb width
 and imported alignment), with no inferred shortcut across an ordinary street; explicit OSM
@@ -1652,7 +1682,11 @@ close to stop passes. A walker already inside a lane's band holds even a vehicle
 stop comfortably (counted in `hardStops`); a crossing walker does not enter a lane's band while
 a vehicle is over its span or will not stop for it. These give the zebra rule, the turning
 yield at signals (movements into an arm with walk green) and gate 4's invariant: no vehicle body
-overlaps a span while a walker is inside it on that lane.
+overlaps a span while a walker is inside it on that lane. TASK-140 (B59): a crossing link meets
+every lane of a road end that draws stripes at the stripes' centre (section 5.6), so each span
+covers the stripes, the stop line (`farM - 0.5`) stays behind it, and a walker waits at the
+stripes' end, where the kerb link from a mapped kerb node meets the crossing (kerb links are not
+crossing legs).
 
 Once a walker has spawned, the hash appends, per spawned walker in id order, `[id, state, leg,
 round(position along leg or run * 100)]`, with the trip-leg code for person walkers. `Metrics.walkers` reports
@@ -2043,6 +2077,17 @@ Rail layer is independent of Surroundings. Imported network rails replace contex
 lines permanently, so turning Rail off cannot restore the old lines. Tracks/platforms and
 station markers are pickable in both views; inspectors expose track kind/name/service/length,
 platform served tracks and station platform/entrance counts. Tracks have no editing tools.
+
+TASK-135 gives trams their own look from `style.tram`, railways unchanged. An embedded track is
+two dark grooved rails at the 1 435 mm gauge, flush with the road, in the tram-rail batch above
+road and junction surfaces and below crossing paint. An own bed is a 3.2 m bed (green grass,
+warm grey paving, stone grey ballast) clipped by same-grade asphalt like railway beds, drawn
+below roads; its rails lie on the bed, and where the bed gives way to asphalt they continue as
+grooved street rails. Ballast beds show sleepers every 0.9 m with the detail rails (from
+3 px/m); grass and paved beds show none. 3D raises each part: the bed to 0.12 m with darker
+sides (below the 0.14 m kerbs, so median islands cover it as in 2D), sleepers 0.13 m, rails
+0.17 m on the bed and 0.06 m in the street; grass beds take a per-vertex procedural tone in the
+same vertex-colour batch. The track inspector names a tram's form and whether it was inferred.
 
 TASK-127 draws articulated red/white S-Bahn and blue/grey main-line cars in grade-local 2D
 layers and two instanced 3D batches. Train poses use snapshot/simulation time only; paused
@@ -2541,7 +2586,8 @@ clips to the metric bbox, breaks at missing nodes, and splits at shared/tagged r
 Platform polygons reuse the existing multipolygon assembler. Platforms serve same-grade,
 mode-compatible tracks within 5 m of their boundary. A mapped stop area's explicit station
 membership wins; otherwise rail platforms match the same normalized station name within 500 m.
-Bus/tram platforms do not inherit a rail station by proximity/name alone. The bundled extracts
+Bus/tram platforms do not inherit a rail station by proximity/name alone. Tram tracks then take
+their form (section 4) from their tags and the import's compiled road surfaces. The bundled extracts
 append only missing IDs at each original historical snapshot; ATTRIBUTION.txt records queries
 and original-file hashes. T62 proves original bytes and lane/movement hashes remain unchanged.
 

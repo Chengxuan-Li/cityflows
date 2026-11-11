@@ -156,11 +156,17 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 // TASK-131 keeps OSM geometry (no node merges, junction groups): both real cities re-pinned.
 // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
 // and e4654d8 (merging lanes kept on a group's inner roads).
+// TASK-140 (B59): crossing walk links run along the stripes' centreline; only the walk graph and
+// the signal phases' walk lists move (stripped of both, every city hashes as main c3a6ec2:
+// grid dfe0b271…, town e546aee8…, Munich d03b61a3…, Sindelfingen 815bbb52…).
 const baselines = {
-  grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
-  town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
-  'munich-donnersberger': '631ecdfee4077ce65b34b20e085afeada4914d5b9016ad776a8ac75703778088',
-  'sindelfingen-a81': 'a851c7347f235b5fdc1e129dc23d3cd86dac9642a6c2ba7bc37c67141645f927',
+  // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
+  // import without assignTramForms) every pin equals c3a6ec2's. Lead: Munich re-pinned for
+  // TASK-135 and TASK-140 together.
+  grid: '6c1e86734dfc688415bd805d175bc5d173385a0a83fb18da32136aa1018fb3e7',
+  town: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
+  'munich-donnersberger': 'de01862d691b76c54914b9d0be1b1d6a4f59aa9e09165b874d09cf516d486311',
+  'sindelfingen-a81': 'f7e3d6bb757423a89a699d66f6bb59f5cb198f00f14fbad683f9dc94738b74c2',
 };
 const lampCounts = {
   grid: [0, 0],

@@ -1,12 +1,12 @@
 {
-  "tree": "main at the TASK-131 merge (junction groups: OSM node positions kept, close nodes grouped as one junction, collision model off, carriageways side by side only where they overlap; plus the lead's planLane cutoff fix for sub-10 m inner roads), reset per the owner's rule 7, 2026-11-11. 0 parking failures, 0 stranded; every failure is gridlock. 0 stalled heads at 10:00 and at the 09:30 quick sample: the Landsberger loop (B56) no longer holds a head standing still, though TASK-130 still owns the loop.",
+  "tree": "main at the TASK-140 merge (crossing walk links, walk lights and walker conflict zones at the zebra stripes, B59; with TASK-135 tram tracks, which moves no traffic), on top of TASK-131's junction groups, reset per the owner's rule 7, 2026-11-11. 0 parking failures, 0 stranded; every failure is gridlock. 0 stalled heads at 10:00 and at the 09:30 quick sample.",
   "scale": 0.15,
-  "completed": 4197,
-  "gridlocked": 35,
+  "completed": 4113,
+  "gridlocked": 26,
   "stalledHeads": 0,
   "quick": {
     "until": "09:30",
-    "completed": 3809,
-    "gridlocked": 19
+    "completed": 3777,
+    "gridlocked": 12
   }
 }

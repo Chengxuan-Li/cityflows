@@ -44,7 +44,9 @@ const baselines = {
   // hash as on main.
   // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
   // and e4654d8 (merging lanes kept on a group's inner roads).
-  'munich-donnersberger': '9229a604c2216fdaac67b3f7d5c351cbcb4fbbfe42594c466ecfc63b0da56e66',
+  // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
+  // import without assignTramForms) every pin equals c3a6ec2's.
+  'munich-donnersberger': 'aa2452fc15dd7a09e52430e31ac4aa1685adfdc65cc3e8a2068f96ec71822dca',
   'sindelfingen-a81': 'a589e6ac91b11181ba2c7cf29252f47c8ee790e72c53825ebe4ab3cfa4bf5c5b',
 };
 

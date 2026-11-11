@@ -1,0 +1,318 @@
+[
+  {
+    "id": "T140-munich-n34",
+    "centre": [542.8, -701.1],
+    "cases": [],
+    "zoom": 10.00000000000091,
+    "walkers": [
+      {
+        "fromPlaceId": "p:1754",
+        "toPlaceId": "p:1786",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1786",
+        "toPlaceId": "p:1754",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1754",
+        "toPlaceId": "p:1788",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1788",
+        "toPlaceId": "p:1754",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1488",
+        "toPlaceId": "p:1794",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1794",
+        "toPlaceId": "p:1488",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1488",
+        "toPlaceId": "p:1664",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1664",
+        "toPlaceId": "p:1488",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1780",
+        "toPlaceId": "p:1836",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1836",
+        "toPlaceId": "p:1780",
+        "perHour": 1200
+      }
+    ],
+    "steps": 18000,
+    "walkerCount": 698,
+    "importedTheme": "de",
+    "file": "T140-munich-n34.png",
+    "view": "2d",
+    "timing": {
+      "frameMs": 134.41333333280352,
+      "renderMs": 0.5078651824694002
+    },
+    "parkedCars": "1320",
+    "actualCentre": [542.8, -701.1],
+    "centreErrorPx": 0,
+    "canvas": [1280, 800],
+    "frameMs": 134.41333333280352,
+    "renderMs": 0.5078651824694002,
+    "buildMs": null,
+    "triangles": null,
+    "contextBuildMs": null,
+    "buildingTriangles": null,
+    "roofStats": null,
+    "gpu": null
+  },
+  {
+    "id": "T140-munich-n372",
+    "centre": [-45.5, 545],
+    "cases": [],
+    "zoom": 10.000000000000227,
+    "walkers": [
+      {
+        "fromPlaceId": "p:1754",
+        "toPlaceId": "p:1786",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1786",
+        "toPlaceId": "p:1754",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1754",
+        "toPlaceId": "p:1788",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1788",
+        "toPlaceId": "p:1754",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1488",
+        "toPlaceId": "p:1794",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1794",
+        "toPlaceId": "p:1488",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1488",
+        "toPlaceId": "p:1664",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1664",
+        "toPlaceId": "p:1488",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1780",
+        "toPlaceId": "p:1836",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1836",
+        "toPlaceId": "p:1780",
+        "perHour": 1200
+      }
+    ],
+    "steps": 18000,
+    "walkerCount": 698,
+    "importedTheme": "de",
+    "file": "T140-munich-n372.png",
+    "view": "2d",
+    "timing": {
+      "frameMs": 142.01444444338478,
+      "renderMs": 0.4370786554357979
+    },
+    "parkedCars": "1320",
+    "actualCentre": [-45.5, 545],
+    "centreErrorPx": 0,
+    "canvas": [1280, 800],
+    "frameMs": 142.01444444338478,
+    "renderMs": 0.4370786554357979,
+    "buildMs": null,
+    "triangles": null,
+    "contextBuildMs": null,
+    "buildingTriangles": null,
+    "roofStats": null,
+    "gpu": null
+  },
+  {
+    "id": "T140-munich-n23",
+    "centre": [-52, 594.6],
+    "cases": [],
+    "zoom": 10,
+    "walkers": [
+      {
+        "fromPlaceId": "p:1754",
+        "toPlaceId": "p:1786",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1786",
+        "toPlaceId": "p:1754",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1754",
+        "toPlaceId": "p:1788",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1788",
+        "toPlaceId": "p:1754",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1488",
+        "toPlaceId": "p:1794",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1794",
+        "toPlaceId": "p:1488",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1488",
+        "toPlaceId": "p:1664",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1664",
+        "toPlaceId": "p:1488",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1780",
+        "toPlaceId": "p:1836",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1836",
+        "toPlaceId": "p:1780",
+        "perHour": 1200
+      }
+    ],
+    "steps": 18000,
+    "walkerCount": 698,
+    "importedTheme": "de",
+    "file": "T140-munich-n23.png",
+    "view": "2d",
+    "timing": {
+      "frameMs": 153.30333333333337,
+      "renderMs": 0.4393258443039455
+    },
+    "parkedCars": "1320",
+    "actualCentre": [-52, 594.6],
+    "centreErrorPx": 1.1368683772161603e-13,
+    "canvas": [1280, 800],
+    "frameMs": 153.30333333333337,
+    "renderMs": 0.4393258443039455,
+    "buildMs": null,
+    "triangles": null,
+    "contextBuildMs": null,
+    "buildingTriangles": null,
+    "roofStats": null,
+    "gpu": null
+  },
+  {
+    "id": "T140-munich-n251-median",
+    "centre": [-78, 162],
+    "cases": [],
+    "zoom": 10,
+    "walkers": [
+      {
+        "fromPlaceId": "p:1754",
+        "toPlaceId": "p:1786",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1786",
+        "toPlaceId": "p:1754",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1754",
+        "toPlaceId": "p:1788",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1788",
+        "toPlaceId": "p:1754",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1488",
+        "toPlaceId": "p:1794",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1794",
+        "toPlaceId": "p:1488",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1488",
+        "toPlaceId": "p:1664",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1664",
+        "toPlaceId": "p:1488",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1780",
+        "toPlaceId": "p:1836",
+        "perHour": 1200
+      },
+      {
+        "fromPlaceId": "p:1836",
+        "toPlaceId": "p:1780",
+        "perHour": 1200
+      }
+    ],
+    "steps": 18000,
+    "walkerCount": 698,
+    "importedTheme": "de",
+    "file": "T140-munich-n251-median.png",
+    "view": "2d",
+    "timing": {
+      "frameMs": 156.43888888941873,
+      "renderMs": 0.39213482717449744
+    },
+    "parkedCars": "1320",
+    "actualCentre": [-78, 162],
+    "centreErrorPx": 0,
+    "canvas": [1280, 800],
+    "frameMs": 156.43888888941873,
+    "renderMs": 0.39213482717449744,
+    "buildMs": null,
+    "triangles": null,
+    "contextBuildMs": null,
+    "buildingTriangles": null,
+    "roofStats": null,
+    "gpu": null
+  }
+]

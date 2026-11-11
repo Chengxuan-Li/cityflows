@@ -9,21 +9,39 @@ import {
   inflatePathsD,
   JoinType,
 } from 'clipper2-ts';
-import { distance, nearestOnPolyline, offsetPolyline, pointInPolygon } from '../geo/polyline';
+import {
+  cumulativeLengths,
+  distance,
+  headingAtDistance,
+  nearestOnPolyline,
+  offsetPolyline,
+  pointAtDistance,
+  pointInPolygon,
+} from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import { cityGrades } from './grades';
+import { style } from './style';
 import type { CityGeometry, Pick } from './types';
 
 export interface RailShape {
   layer: number;
   color: number;
   alpha: number;
+  /** Triangles; tram sleepers are quads. */
   polygons: Vec2[][];
   pick?: Pick;
   /** Sub-pixel at ordinary 2D zoom; the 2D map draws it only close up (lead, TASK-126 merge). */
   detail?: boolean;
+  /** TASK-135: the part of a tram track. Rails draw above road surfaces in 2D (`street` where
+   * they run in the road, `rail` on an own bed); 3D raises each part to its own height. */
+  tram?: 'bed' | 'sleepers' | 'rail' | 'street';
+  /** Outline rings of a tram part, for its 3D sides. */
+  outline?: Vec2[][];
+  grass?: boolean;
 }
+/** Rail centres of a 1 435 mm gauge track, measured to the inner faces of the rail heads. */
+const tramRailOffsetM = (1.435 + style.tram.railWidthM) / 2;
 const circle = (p: Vec2, r: number) =>
   Array.from({ length: 16 }, (_, i) => ({
     x: p.x + Math.cos((i * Math.PI) / 8) * r,
@@ -58,13 +76,14 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
     layer: number,
     color: number,
     alpha: number,
-    tram = false,
+    unclipped = false,
     pick?: Pick,
     detail = false,
+    extra: Partial<RailShape> = {},
   ) => {
     let rings = paths.map(positive);
     const clips =
-      tram || !obstacles.length
+      unclipped || !obstacles.length
         ? []
         : spatial
             .search(...box(rings.flat()))
@@ -94,7 +113,17 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
         ]);
       });
     if (polygons.length)
-      shapes.push({ layer, color, alpha, polygons, pick, ...(detail ? { detail } : {}) });
+      shapes.push({
+        layer,
+        color,
+        alpha,
+        polygons,
+        pick,
+        ...(detail ? { detail } : {}),
+        ...extra,
+        ...(extra.tram ? { outline: rings } : {}),
+      });
+    return rings;
   };
   const stroke = (
     line: Vec2[],
@@ -123,9 +152,98 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
       .filter(Boolean)
       .map((t) => t.osmId ?? t.id),
   );
+  const onAsphalt = (p: Vec2, layer: number) =>
+    spatial
+      .search(p.x, p.y, p.x, p.y)
+      .some(
+        (i) =>
+          obstacles[i]!.layer === layer &&
+          pointInPolygon(p, [...obstacles[i]!.ring, obstacles[i]!.ring[0]!]),
+      );
   for (const t of city.rail.tracks) {
-    const tram = t.kind === 'tram',
-      alpha = t.tunnel ? 0.4 : 1;
+    const alpha = t.tunnel ? 0.4 : 1;
+    const pick: Pick = { kind: 'track', track: t.idx };
+    if (t.kind === 'tram') {
+      const rails = [-tramRailOffsetM, tramRailOffsetM].flatMap((side) =>
+        inflatePathsD(
+          [offsetPolyline(t.line, side)],
+          style.tram.railWidthM / 2,
+          JoinType.Round,
+          EndType.Butt,
+          2,
+          3,
+        ),
+      );
+      // Tracks of older projects carry no form: drawn as street-running rails, as before.
+      const form = t.form ?? 'embedded';
+      if (form === 'embedded') {
+        add(rails, t.layer, style.tram.groove, alpha, true, pick, false, { tram: 'street' });
+        continue;
+      }
+      const bed = add(
+        inflatePathsD([t.line], style.tram.bedWidthM / 2, JoinType.Round, EndType.Butt, 2, 3),
+        t.layer,
+        style.tram.beds[form],
+        alpha,
+        false,
+        pick,
+        false,
+        { tram: 'bed', ...(form === 'grass' ? { grass: true } : {}) },
+      );
+      if (form === 'ballast') {
+        // Sleepers only on the bed: none where the track crosses same-grade asphalt.
+        const lengths = cumulativeLengths(t.line),
+          sleepers: Vec2[][] = [];
+        const { sleeperSpacingM: step, sleeperLengthM, sleeperWidthM } = style.tram;
+        for (let at = step / 2; at < lengths.at(-1)!; at += step) {
+          const p = pointAtDistance(t.line, lengths, at),
+            h = headingAtDistance(t.line, lengths, at);
+          if (onAsphalt(p, t.layer)) continue;
+          const a = sleeperWidthM / 2,
+            b = sleeperLengthM / 2;
+          const u = { x: Math.cos(h), y: Math.sin(h) },
+            v = { x: -u.y, y: u.x };
+          sleepers.push([
+            { x: p.x - u.x * a - v.x * b, y: p.y - u.y * a - v.y * b },
+            { x: p.x + u.x * a - v.x * b, y: p.y + u.y * a - v.y * b },
+            { x: p.x + u.x * a + v.x * b, y: p.y + u.y * a + v.y * b },
+            { x: p.x - u.x * a + v.x * b, y: p.y - u.y * a + v.y * b },
+          ]);
+        }
+        if (sleepers.length)
+          shapes.push({
+            layer: t.layer,
+            color: style.tram.sleeper,
+            alpha,
+            polygons: sleepers,
+            pick,
+            detail: true,
+            tram: 'sleepers',
+          });
+      }
+      // Rails sit on the bed; where the bed gives way to asphalt they run in the road.
+      add(
+        booleanOpD(ClipType.Intersection, rails, bed, FillRule.NonZero, 3),
+        t.layer,
+        style.tram.rail,
+        alpha,
+        true,
+        pick,
+        false,
+        { tram: 'rail' },
+      );
+      add(
+        booleanOpD(ClipType.Difference, rails, bed, FillRule.NonZero, 3),
+        t.layer,
+        style.tram.groove,
+        alpha,
+        true,
+        pick,
+        false,
+        { tram: 'street' },
+      );
+      continue;
+    }
     const color = t.service
       ? 0xb6aa98
       : t.kind === 'subway' ||
@@ -134,19 +252,9 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
           stationWays.has(t.osmId ?? t.id)
         ? 0x8aa6a6
         : 0xb5ae9e;
-    const pick: Pick = { kind: 'track', track: t.idx };
-    if (!tram) stroke(t.line, t.service ? 2.1 : 2.7, t.layer, color, alpha, false, pick);
+    stroke(t.line, t.service ? 2.1 : 2.7, t.layer, color, alpha, false, pick);
     for (const side of [-0.72, 0.72])
-      stroke(
-        offsetPolyline(t.line, side),
-        0.18,
-        t.layer,
-        tram ? 0x798c91 : 0x777b78,
-        alpha,
-        tram,
-        pick,
-        !tram,
-      );
+      stroke(offsetPolyline(t.line, side), 0.18, t.layer, 0x777b78, alpha, false, pick, true);
   }
   for (const n of city.rail.nodes.filter((n) => n.kind === 'switch'))
     add([circle(n.pos, 1.3)], n.layer, 0x77857d, 1);

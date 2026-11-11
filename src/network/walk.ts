@@ -14,7 +14,15 @@ import {
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, WalkKind } from '../schema';
-import { crossingArms, crossingEnabled, crossingPlacement } from './crossings';
+import {
+  crossingArms,
+  crossingCentreM,
+  crossingEnabled,
+  crossingLine,
+  crossingPlacement,
+  UNMARKED_CENTRE_M,
+  type CrossedEnd,
+} from './crossings';
 import { junctionCorners } from './junctions';
 import { curbJoin, walkComponents, walkRoots, uncoveredCurb } from './walk-joins';
 import type { CompiledCity, CRoad } from './types';
@@ -485,6 +493,11 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     });
     if (compiled) mappedRaw.set(link.id, compiled);
   }
+  {
+    const { removed, added } = anchorMappedCrossings(source, city, raw, layerOf);
+    raw.splice(0, raw.length, ...raw.filter((link) => !removed.has(link)));
+    for (const link of added) add(link);
+  }
 
   const walkSide = (road: CRoad, side: 'left' | 'right', p: Vec2) => {
     const parts = sidewalks.get(`${road.idx}:${side}`);
@@ -633,14 +646,24 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
             ends.filter(({ r }) => arm.some((e) => e.road.idx === r.idx)).map(({ s }) => s),
           ),
         ];
-      const placement = crossingPlacement(city, road, atEnd),
-        lane = city.lanes[road.lanes[0]!]!;
-      const d = (placement.nearM + placement.farM) / 2,
-        s = atEnd ? lane.lengthM - d : d;
-      const p = pointAtDistance(lane.polyline, lane.cumulative, s),
-        heading = headingAtDistance(lane.polyline, lane.cumulative, s);
-      const normal = { x: -Math.sin(heading), y: Math.cos(heading) };
-      const ray = [-100, 100].map((v) => ({ x: p.x + normal.x * v, y: p.y + normal.y * v }));
+      // TASK-140 (B59): along the stripes' centreline of every end of the arm, extended 100 m
+      // each way, between its outermost curb hits.
+      const across = crossingLine(
+        city,
+        arm.map((e) => ({
+          ...e,
+          atM: crossingCentreM(city, e.road, e.atEnd, source) ?? UNMARKED_CENTRE_M,
+        })),
+      );
+      const beyond = (p: Vec2, q: Vec2) => {
+        const length = distance(p, q) || 1;
+        return { x: p.x + ((p.x - q.x) / length) * 100, y: p.y + ((p.y - q.y) / length) * 100 };
+      };
+      const ray = [
+        beyond(across[0]!, across[1]!),
+        ...across,
+        beyond(across.at(-1)!, across.at(-2)!),
+      ];
       const hits = curb
         .flatMap((s) => polylineCrossings(ray, s.line).map((hit) => ({ s, hit })))
         .sort((a, b) => a.hit.alongA - b.hit.alongA);
@@ -651,7 +674,11 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       const link: Omit<Raw, 'cuts'> = {
         id: `crossing:${node.id}:${i}`,
         infill: a.s.infill || b.s.infill,
-        line: repair ? [a.hit.point, b.hit.point] : [on(a.s, a.hit.point), on(b.s, b.hit.point)],
+        line: [
+          repair ? a.hit.point : on(a.s, a.hit.point),
+          ...trimPolyline(ray, a.hit.alongA, polylineLength(ray) - b.hit.alongA).slice(1, -1),
+          repair ? b.hit.point : on(b.s, b.hit.point),
+        ],
         kind: 'crossing',
         generated: true,
         widthM: 2.5,
@@ -759,6 +786,8 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
               return false;
             if (link.generated && connected(link, raw[j]!)) return false;
             if (link.generated && raw[j]!.kind !== 'sidewalk' && raw[j]!.generated) return false;
+            // TASK-140: a crossing's kerb link already joins its mapped kerb node.
+            if (raw[j]!.kind === 'crossing' && raw[j]!.generated && !raw[j]!.crossing) return false;
             const own = source.walk?.links[link.id]?.provenance.osmIds;
             const other = source.walk?.links[raw[j]!.id]?.provenance.osmIds;
             return !own?.some((id) => other?.includes(id));
@@ -1022,31 +1051,204 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
   return graph;
 }
 
+/** TASK-140: a mapped crossing farther than this from the stripes of a road end it crosses is
+ * another crossing along the street (Munich n:16's lies 23 m beyond its stripes). */
+const ANCHOR_M = 12;
+/** TASK-140: a re-anchored mapped crossing reaches this far beyond the outer road edges, as a
+ * generated one reaches the generated sidewalk's centre 1 m beyond the curb. */
+const KERB_M = 1;
+
+/**
+ * TASK-140 (B59): a mapped crossing at a junction runs along the stripes' centreline. Its links
+ * at one junction, joined through nodes no other walk link uses, become one link across the road
+ * ends it crosses, each at its `crossingCentreM` (an unmarked end at its own position), reaching
+ * 1 m beyond the outer road edges; straight kerb links join its ends to the mapped end nodes.
+ * Kerb links are kind `crossing` without crossing data: not drawn, no wait, no span. A crossing
+ * stays as mapped if it crosses a lane of a road that does not end at its node, crosses no end
+ * with a centre, or lies more than 12 m from one.
+ */
+function anchorMappedCrossings(
+  source: City,
+  city: CompiledCity,
+  raw: Raw[],
+  layerOf: (r: CRoad) => number,
+): { removed: Set<Raw>; added: Omit<Raw, 'cuts'>[] } {
+  const removed = new Set<Raw>(),
+    added: Omit<Raw, 'cuts'>[] = [];
+  const degree = new Map<string, number>();
+  for (const link of Object.values(source.walk?.links ?? {}))
+    for (const id of [link.from, link.to]) degree.set(id, (degree.get(id) ?? 0) + 1);
+  const crossings = raw.filter(
+    (l) => l.kind === 'crossing' && !l.generated && l.crossing && l.crossing.arm >= 0,
+  );
+  const at = new Map<string, Raw[]>();
+  for (const link of crossings)
+    for (const id of link.sourceEnds!) at.set(id, [...(at.get(id) ?? []), link]);
+  // A node only two crossing links of one junction use (OSM splits a crossing way where it meets
+  // the road's centreline: Munich n:372's west carriageway, whose halves are nearest to different
+  // arms) lies on the road, not on a kerb or an island.
+  const through = (id: string) => {
+    const links = at.get(id);
+    return (
+      degree.get(id) === 2 &&
+      links?.length === 2 &&
+      links[0]!.crossing!.node === links[1]!.crossing!.node
+    );
+  };
+  const other = (link: Raw, id: string) =>
+    link.sourceEnds![0] === id ? link.sourceEnds![1] : link.sourceEnds![0];
+  const visited = new Set<Raw>();
+  const arms = new Map<number, ReturnType<typeof crossingArms>>();
+  for (const start of crossings) {
+    if (visited.has(start)) continue;
+    visited.add(start);
+    // The chain of links through pass-through nodes, ordered from `first` to `last`.
+    const chain = [start];
+    let first = start.sourceEnds![0],
+      last = start.sourceEnds![1];
+    for (const forward of [false, true]) {
+      let link = start,
+        id = forward ? last : first;
+      while (through(id)) {
+        const next = at.get(id)!.find((l) => l !== link)!;
+        if (visited.has(next)) break;
+        visited.add(next);
+        if (forward) chain.push(next);
+        else chain.unshift(next);
+        id = other(next, id);
+        link = next;
+      }
+      if (forward) last = id;
+      else first = id;
+    }
+    if (first === last) continue;
+    const line: Vec2[] = [];
+    let cursor = first;
+    for (const link of chain) {
+      const points = link.sourceEnds![0] === cursor ? link.line : link.line.toReversed();
+      line.push(...(line.length ? points.slice(1) : points));
+      cursor = other(link, cursor);
+    }
+    const { node } = start.crossing!;
+    let ends = arms.get(node);
+    if (!ends) arms.set(node, (ends = crossingArms(city, city.nodes[node]!)));
+    const armRoads = [
+      ...new Set(chain.flatMap((link) => ends[link.crossing!.arm]!.map((e) => e.road))),
+    ];
+    const lanes = [...new Set([...lanesNear(city, line), ...armRoads.flatMap((r) => r.lanes)])]
+      .filter((i) => layerOf(city.roads[city.lanes[i]!.road]!) === start.layer)
+      .sort((a, b) => a - b);
+    const spans = crossingSpans(city, line, lanes, { roads: armRoads, node });
+    // Each road end crossed, with the mean distance from its cut at which the link meets it.
+    const crossed = new Map<number, { road: CRoad; atEnd: boolean; sum: number; count: number }>();
+    let elsewhere = false;
+    for (const span of spans.values()) {
+      const lane = city.lanes[span.lane]!,
+        road = city.roads[lane.road]!;
+      if (road.from !== node && road.to !== node) elsewhere = true;
+      const atEnd = road.to === node && (road.from !== node || span.atM > lane.lengthM / 2);
+      const entry = crossed.get(road.idx) ?? { road, atEnd, sum: 0, count: 0 };
+      entry.sum += atEnd ? lane.lengthM - span.atM : span.atM;
+      entry.count++;
+      crossed.set(road.idx, entry);
+    }
+    if (elsewhere || !crossed.size) continue;
+    let marked = false,
+      far = false;
+    const across: CrossedEnd[] = [...crossed.values()].map(({ road, atEnd, sum, count }) => {
+      const centre = crossingCentreM(city, road, atEnd, source);
+      if (centre !== null) {
+        marked = true;
+        far ||= Math.abs(sum / count - centre) > ANCHOR_M;
+      }
+      return { road, atEnd, atM: centre ?? sum / count };
+    });
+    if (!marked || far) continue;
+    let centre = crossingLine(city, across);
+    const beyond = (p: Vec2, q: Vec2) => {
+      const length = distance(p, q) || 1;
+      return { x: p.x + ((p.x - q.x) / length) * KERB_M, y: p.y + ((p.y - q.y) / length) * KERB_M };
+    };
+    const kerbs = [first, last].map((id) => source.walk!.nodes[id]!);
+    let a = beyond(centre[0]!, centre[1]!),
+      b = beyond(centre.at(-1)!, centre.at(-2)!);
+    if (
+      distance(kerbs[0]!.pos, a) + distance(kerbs[1]!.pos, b) >
+      distance(kerbs[0]!.pos, b) + distance(kerbs[1]!.pos, a)
+    ) {
+      centre = centre.toReversed();
+      [a, b] = [b, a];
+    }
+    for (const link of chain) removed.add(link);
+    added.push({ ...start, sourceEnds: undefined, line: [a, ...centre, b] });
+    for (const [i, end] of [a, b].entries()) {
+      const kerb = kerbs[i]!;
+      added.push({
+        id: `${start.id}:kerb:${i}`,
+        kind: 'crossing',
+        generated: true,
+        widthM: start.widthM,
+        layer: start.layer,
+        line: [kerb.pos, end],
+        ...(kerb.layer !== start.layer
+          ? { endpointLayers: [kerb.layer, start.layer] as [number, number] }
+          : {}),
+      });
+    }
+  }
+  return { removed, added };
+}
+
 const STRIPES_HALF_M = 1.25;
 const EXTEND_M = 12;
 
-/** TASK-111: the lanes each crossing link crosses, at its grade. A generated crossing crosses the
- * lanes of its arm's roads (both directions of a street, any carriageways of the arm); a mapped
- * one the lanes its line meets. A mapped crossing in a junction mouth can lie beyond a trimmed
- * lane end of its arm: the lane's straight extension (up to 12 m) then meets it, and the span sits
- * at that lane end. The vehicle network is not touched. */
-function addCrossingSpans(city: CompiledCity, graph: WalkGraph, layerOf: (r: CRoad) => number) {
-  const arms = new Map<number, ReturnType<typeof crossingArms>>();
-  const segmentLanes = city.lanes.flatMap((lane) => lane.polyline.slice(1).map(() => lane.idx));
+const segmentLanes = new WeakMap<CompiledCity, number[]>();
+/** The lanes whose polylines `line`'s bounding box touches (`laneSpatial` holds lane segments). */
+function lanesNear(city: CompiledCity, line: readonly Vec2[]): number[] {
+  let lanes = segmentLanes.get(city);
+  if (!lanes) {
+    lanes = city.lanes.flatMap((lane) => lane.polyline.slice(1).map(() => lane.idx));
+    segmentLanes.set(city, lanes);
+  }
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity;
+  for (const p of line) {
+    x0 = Math.min(x0, p.x);
+    y0 = Math.min(y0, p.y);
+    x1 = Math.max(x1, p.x);
+    y1 = Math.max(y1, p.y);
+  }
+  return [...new Set(city.laneSpatial.search(x0, y0, x1, y1).map((i) => lanes[i]!))].sort(
+    (a, b) => a - b,
+  );
+}
+
+/** TASK-111: where `line` (a crossing link) meets each of the `direct` lanes, and, for the lanes of
+ * `extend.roads` among them it does not meet, their straight extension up to 12 m beyond their end
+ * at `extend.node` (a mapped crossing in a junction mouth beyond a trimmed lane end; the span then
+ * sits at that lane end). */
+function crossingSpans(
+  city: CompiledCity,
+  line: readonly Vec2[],
+  direct: readonly number[],
+  extend?: { roads: readonly CRoad[]; node: number },
+): Map<number, CrossingSpan> {
+  const lineLengths = cumulativeLengths(line);
   const meet = (
-    link: CWalkLink,
-    line: Vec2[],
+    path: Vec2[],
     index: number,
     clamp: (along: number) => number,
   ): CrossingSpan | undefined => {
     const lane = city.lanes[index]!;
-    const lengths = cumulativeLengths(line);
-    for (let i = 1; i < link.line.length; i++) {
-      const a = link.line[i - 1]!,
-        b = link.line[i]!;
-      for (let j = 1; j < line.length; j++) {
-        const p = line[j - 1]!,
-          q = line[j]!;
+    const lengths = cumulativeLengths(path);
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1]!,
+        b = line[i]!;
+      for (let j = 1; j < path.length; j++) {
+        const p = path[j - 1]!,
+          q = path[j]!;
         const point = segmentIntersection(a, b, p, q);
         if (!point) continue;
         const sin = Math.max(
@@ -1058,12 +1260,39 @@ function addCrossingSpans(city: CompiledCity, graph: WalkGraph, layerOf: (r: CRo
           lane: index,
           atM: clamp(lengths[j - 1]! + distance(p, point)),
           halfM: STRIPES_HALF_M / sin,
-          linkM: link.cumulative[i - 1]! + distance(a, point),
+          linkM: lineLengths[i - 1]! + distance(a, point),
           linkHalfM: lane.widthM / 2 / sin,
         };
       }
     }
   };
+  const spans = new Map<number, CrossingSpan>();
+  for (const index of direct) {
+    const hit = meet(city.lanes[index]!.polyline, index, (along) => along);
+    if (hit) spans.set(index, hit);
+  }
+  for (const r of extend?.roads ?? [])
+    for (const index of r.lanes) {
+      if (spans.has(index) || !direct.includes(index)) continue;
+      const lane = city.lanes[index]!;
+      const atEnd = r.to === extend!.node;
+      const s = atEnd ? lane.lengthM : 0,
+        p = pointAtDistance(lane.polyline, lane.cumulative, s),
+        h = headingAtDistance(lane.polyline, lane.cumulative, s),
+        sign = atEnd ? EXTEND_M : -EXTEND_M;
+      const ray = [p, { x: p.x + sign * Math.cos(h), y: p.y + sign * Math.sin(h) }];
+      const hit = meet(ray, index, () => s);
+      if (hit) spans.set(index, hit);
+    }
+  return spans;
+}
+
+/** TASK-111: the lanes each crossing link crosses, at its grade. A generated crossing crosses the
+ * lanes of its arm's roads (both directions of a street, any carriageways of the arm); a mapped
+ * one the lanes its line meets, or the extension of its arm's lanes (`crossingSpans`). The vehicle
+ * network is not touched. */
+function addCrossingSpans(city: CompiledCity, graph: WalkGraph, layerOf: (r: CRoad) => number) {
+  const arms = new Map<number, ReturnType<typeof crossingArms>>();
   for (const link of graph.links) {
     if (!link.crossing) continue;
     const { road, node, arm } = link.crossing;
@@ -1071,42 +1300,21 @@ function addCrossingSpans(city: CompiledCity, graph: WalkGraph, layerOf: (r: CRo
     if (node >= 0 && !ends) arms.set(node, (ends = crossingArms(city, city.nodes[node]!)));
     const armRoads = ends ? ends[arm]!.map((e) => e.road) : [city.roads[road]!];
     const sameGrade = (lane: number) => layerOf(city.roads[city.lanes[lane]!.road]!) === link.layer;
-    let direct: number[];
-    if (link.generated) direct = armRoads.flatMap((r) => r.lanes);
-    else {
-      let x0 = Infinity,
-        y0 = Infinity,
-        x1 = -Infinity,
-        y1 = -Infinity;
-      for (const p of link.line) {
-        x0 = Math.min(x0, p.x);
-        y0 = Math.min(y0, p.y);
-        x1 = Math.max(x1, p.x);
-        y1 = Math.max(y1, p.y);
-      }
-      direct = [
-        ...new Set(city.laneSpatial.search(x0, y0, x1, y1).map((i) => segmentLanes[i]!)),
-      ].sort((a, b) => a - b);
-    }
-    const spans = new Map<number, CrossingSpan>();
-    for (const index of direct.filter(sameGrade)) {
-      const hit = meet(link, city.lanes[index]!.polyline, index, (along) => along);
-      if (hit) spans.set(index, hit);
-    }
-    if (ends && !link.generated)
-      for (const r of armRoads)
-        for (const index of r.lanes) {
-          if (spans.has(index) || !sameGrade(index)) continue;
-          const lane = city.lanes[index]!;
-          const atEnd = r.to === node;
-          const s = atEnd ? lane.lengthM : 0,
-            p = pointAtDistance(lane.polyline, lane.cumulative, s),
-            h = headingAtDistance(lane.polyline, lane.cumulative, s),
-            sign = atEnd ? EXTEND_M : -EXTEND_M;
-          const ray = [p, { x: p.x + sign * Math.cos(h), y: p.y + sign * Math.sin(h) }];
-          const hit = meet(link, ray, index, () => s);
-          if (hit) spans.set(index, hit);
-        }
+    const spans = link.generated
+      ? crossingSpans(city, link.line, armRoads.flatMap((r) => r.lanes).filter(sameGrade))
+      : crossingSpans(
+          city,
+          link.line,
+          [
+            ...new Set([
+              ...lanesNear(city, link.line),
+              ...(ends ? armRoads.flatMap((r) => r.lanes) : []),
+            ]),
+          ]
+            .filter(sameGrade)
+            .sort((a, b) => a - b),
+          ends ? { roads: armRoads, node } : undefined,
+        );
     link.crossing = {
       ...link.crossing,
       spans: [...spans.values()].sort((a, b) => a.lane - b.lane),

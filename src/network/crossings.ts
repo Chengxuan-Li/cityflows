@@ -327,3 +327,78 @@ export function crossingSpan(
   if (!stripes.length) return null;
   return atEnd ? { nearM: lane.lengthM - nearM, farM: lane.lengthM - farM } : { nearM, farM };
 }
+
+/** TASK-072's crossing, 0.25 to 2.75 m from the cut, which a served signal's stop line keeps
+ * clear where its end draws no stripes (`populateStops`: lengthM - 3 on lanes of 10 m or more). */
+export const UNMARKED_CENTRE_M = 1.5;
+
+/**
+ * TASK-140 (B59): where a crossing walk link crosses a road end, in metres from the cut. Where
+ * the end draws stripes, the centre of the stripes, so the walk link, its walk lights at the
+ * link's ends and the walker conflict zone (the link's spans) lie where the stripes are drawn,
+ * with the stop line behind them; at a served signal that draws none, the centre of TASK-072's
+ * crossing in front of the stop line. Null elsewhere, where an unmarked crossing keeps its own
+ * position; a junction group's inner road has neither (TASK-131).
+ */
+export function crossingCentreM(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): number | null {
+  if (road.group !== undefined) return null;
+  if (crossingEnabled(city, road, atEnd, source)) {
+    const { stripes, nearM, farM } = crossingPlacement(city, road, atEnd);
+    if (stripes.length) return (nearM + farM) / 2;
+  }
+  return atEnd && servedSignal(city, road) && road.lanes.every((i) => city.lanes[i]!.lengthM >= 10)
+    ? UNMARKED_CENTRE_M
+    : null;
+}
+
+/** A road end crossed at `atM` metres from its cut. */
+export interface CrossedEnd {
+  road: CRoad;
+  atEnd: boolean;
+  atM: number;
+}
+
+/**
+ * TASK-140: the line a crossing walk link follows over road ends: across each end's lanes at
+ * `atM` from the cut (measured along each lane, as `crossingSpan` does), through every lane's
+ * left and right edges, so the link meets each lane's centreline at `atM` in the middle of a
+ * segment; the ends in order across, joined where they meet or across a median.
+ */
+export function crossingLine(city: CompiledCity, ends: CrossedEnd[]): Vec2[] {
+  const pieces = ends.map(({ road, atEnd, atM }) => {
+    const points: Vec2[] = [];
+    for (const index of road.lanes) {
+      const lane = city.lanes[index]!;
+      const s = Math.min(lane.lengthM, Math.max(0, atEnd ? lane.lengthM - atM : atM));
+      const p = pointAtDistance(lane.polyline, lane.cumulative, s);
+      const h = headingAtDistance(lane.polyline, lane.cumulative, s);
+      const dx = Math.sin(h) * (lane.widthM / 2),
+        dy = -Math.cos(h) * (lane.widthM / 2);
+      push(points, { x: p.x + dx, y: p.y + dy });
+      points.push({ x: p.x - dx, y: p.y - dy });
+    }
+    return points;
+  });
+  const first = pieces[0]!;
+  const axis = { x: first.at(-1)!.x - first[0]!.x, y: first.at(-1)!.y - first[0]!.y };
+  const along = (p: Vec2) => p.x * axis.x + p.y * axis.y;
+  const line: Vec2[] = [];
+  for (const piece of pieces
+    .map((p) => (along(p.at(-1)!) < along(p[0]!) ? p.toReversed() : p))
+    .sort((a, b) => along(a[0]!) + along(a.at(-1)!) - along(b[0]!) - along(b.at(-1)!)))
+    for (const p of piece) push(line, p);
+  return line;
+}
+
+/** Appends `p`, merging it with the last point when they are within 5 cm. */
+function push(line: Vec2[], p: Vec2) {
+  const last = line.at(-1);
+  if (last && Math.hypot(p.x - last.x, p.y - last.y) < 0.05)
+    line[line.length - 1] = { x: (p.x + last.x) / 2, y: (p.y + last.y) / 2 };
+  else line.push(p);
+}

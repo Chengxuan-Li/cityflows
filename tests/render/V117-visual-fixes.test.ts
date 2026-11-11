@@ -147,16 +147,18 @@ unitTest('V117 UK kerb lines leave out parking strip runs (lead, TASK-103 merge)
 // and its parking bands move their lamps and curbs outward (V103 covers them).
 // TASK-123: only the walk graph and derived signal walk indices move.
 // TASK-123: only the walk graph and derived signal walk indices move.
+// TASK-140 (B59): compile pins follow V107 (walk links at the stripes; only the walk graph and
+// the signal walk lists move).
 const pins = {
   grid: {
-    compile: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
+    compile: '6c1e86734dfc688415bd805d175bc5d173385a0a83fb18da32136aa1018fb3e7',
     lamps: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
     curbs: 'e45b9bee6d047cf3354bb3e6f57e86ae929db7210a24bf866f44e2e46892736d',
     de: 'e2a4f545e1d33189b550c6ab045eaef2ed5305a3f8def23d48d86f6d990c4852',
     us: '15ec3e5bd9c9bae2e76e2aede004db70fa1f18dc6f9a7af2197f22138009f570',
   },
   town: {
-    compile: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
+    compile: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
     lamps: 'bd56acb9b3028f1d5a884f0926a86e19405a839f16185957cb0479a89ee99d7f',
     curbs: 'e5b1df98b54b260c89c37bf096c4aa51ba309b50ed7b6dfdb318d0487fe170ca',
     de: '84454e2c6b1b1eeac928e004cdab547b5884ab43d3f70b7e8f6c7d7fb89ba7da',
@@ -167,14 +169,17 @@ const pins = {
   // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
   // and e4654d8 (merging lanes kept on a group's inner roads).
   munich: {
-    compile: '631ecdfee4077ce65b34b20e085afeada4914d5b9016ad776a8ac75703778088',
+    // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
+    // import without assignTramForms) every pin equals c3a6ec2's. Lead: Munich re-pinned for
+    // TASK-135 and TASK-140 together.
+    compile: 'de01862d691b76c54914b9d0be1b1d6a4f59aa9e09165b874d09cf516d486311',
     lamps: 'a6367b276c0f7db6c9a4a9fe6e103d4f020b6bbf93bef7df2d2ec3fd5c2cfc00',
     curbs: 'fc71fa74c90f8e5cc094edc6990c5325cda2afd4d585fe6d38f783ac0a8e0c73',
     de: '1ed078929a1d637608b74c6a816a19c5c97d7b5ce290b3305bcdbca3cdf65e0d',
     us: '57215568bce015e0ef08eb2cf31dcb676ad2352b354ac5cc13aac0c5c3254f5f',
   },
   sindelfingen: {
-    compile: 'a851c7347f235b5fdc1e129dc23d3cd86dac9642a6c2ba7bc37c67141645f927',
+    compile: 'f7e3d6bb757423a89a699d66f6bb59f5cb198f00f14fbad683f9dc94738b74c2',
     lamps: 'd132b1397f6687261fee0b42ab85450dc755962e9e0f71d04d61bc6c5f6396dc',
     curbs: '01ac870cb31f5ab4b49445e52c22fff08002ef267bc1164fa822d79ab8e3afd2',
     de: '877ba82e15fd54f8991c41eb4b7e6f3479e365c3fd825b7f31ea38dcf5117aa8',

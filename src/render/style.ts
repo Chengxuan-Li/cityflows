@@ -327,6 +327,18 @@ export const style = {
     windowFadeM: [150, 600] as const,
   },
   vegetation: { canopy: [0xc0d0b0, 0xc9d6b9, 0xb9cba8], trunk: 0x958c76 },
+  /** TASK-135: tram track forms, apart from the railway palette in `rail-geometry.ts`. */
+  tram: {
+    beds: { grass: 0x9dbf88, paved: 0xc4b9a8, ballast: 0x9e9c95 },
+    sleeper: 0xc6c2b8,
+    rail: 0x5b6266,
+    groove: 0x4a5054,
+    bedWidthM: 3.2,
+    railWidthM: 0.16,
+    sleeperSpacingM: 0.9,
+    sleeperLengthM: 2.3,
+    sleeperWidthM: 0.26,
+  },
   asphalt: 0xaebdb8,
   shadow: 0x303d3a,
   deckEdge: 0x6e817b,
