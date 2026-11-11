@@ -26,10 +26,11 @@ import { frame, rayCrossings } from './geometry-audit';
 // the lane blocks of each paired carriageway at OSM positions, and (6) the junction groups a
 // link threshold would form. The pipeline is src/importers/osm/index.ts itself, copied to a
 // temporary directory with snapshot calls inserted after each pass (src/ is not changed); the
-// copy's final city must equal the cached import. Usage:
+// copy's final city must equal the cached import. It instruments the importer as it stood before
+// TASK-131 Phase 1 (consolidateJunctions, audit d4a5918); run it on that tree. Usage:
 // node --experimental-strip-types --import ./bench/register.ts ./bench/task131-audit.ts <out-dir>
-// then npx prettier --write <out-dir>, so the JSON dumps pass format:check.
-// (then npx prettier --write <out-dir>, so the JSON dumps pass format:check)
+// [--json <scratch-dir>]: the CSVs and summaries go to <out-dir>, the per-cluster, per-pass,
+// per-corridor and per-group JSON detail to <scratch-dir> when given.
 
 type Hooks = {
   snap?: (name: string, city: City, roads: OsmRoad[], extra?: unknown) => void;
@@ -1106,20 +1107,25 @@ function auditCity(name: string, file: string, bbox: [number, number, number, nu
 
 // ---------------------------------------------------------------------------------------------
 
-const out = process.argv[2];
-if (!out) throw new Error('Usage: task131-audit.ts <out-dir>');
+const [out, flag, scratch] = process.argv.slice(2);
+if (!out || (flag !== undefined && (flag !== '--json' || !scratch)))
+  throw new Error('Usage: task131-audit.ts <out-dir> [--json <scratch-dir>]');
 mkdirSync(out, { recursive: true });
+if (scratch) mkdirSync(scratch, { recursive: true });
 const cities = [
   auditCity('munich', 'fixtures/osm/munich-donnersberger.osm', [11.525, 48.135, 11.545, 48.148]),
   auditCity('sindelfingen', 'fixtures/osm/sindelfingen-a81.osm', [8.98, 48.69, 9.0, 48.702]),
 ];
 for (const city of cities) {
   const { clusters, displacement, medians, groups, ...rest } = city;
-  writeFileSync(join(out, `${city.name}-clusters.json`), JSON.stringify(clusters, null, 1));
-  writeFileSync(join(out, `${city.name}-passes.json`), JSON.stringify(displacement, null, 1));
-  writeFileSync(join(out, `${city.name}-medians.json`), JSON.stringify(medians, null, 1));
-  writeFileSync(join(out, `${city.name}-groups.json`), JSON.stringify(groups, null, 1));
-  writeFileSync(join(out, `${city.name}-summary.json`), JSON.stringify(rest, null, 1));
+  writeFileSync(
+    join(out, `${city.name}-summary.json`),
+    `${JSON.stringify(rest, null, 2)}
+`,
+  );
+  if (!scratch) continue;
+  for (const [part, data] of Object.entries({ clusters, passes: displacement, medians, groups }))
+    writeFileSync(join(scratch, `${city.name}-${part}.json`), JSON.stringify(data, null, 1));
 }
 const csv = (rows: (string | number | boolean | null)[][]) =>
   rows

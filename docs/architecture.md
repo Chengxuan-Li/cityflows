@@ -146,6 +146,14 @@ interface SignalProgram {
             walk?: { roadId: RoadId; end: 'start' | 'end' }[] }[];          // TASK-111
 }
 
+interface JunctionGroup {  // TASK-131, id "jg:<int>"
+  id: JunctionGroupId;
+  nodes: NodeId[];         // two or more; a node is in at most one group
+  innerRoads: RoadId[];    // directed roads with both ends in the group
+  signal: SignalProgram | null; // the group's one program; null = no signals
+  provenance: Provenance;
+}
+
 interface Lane {
   widthM: number;
   allowed: VehicleClass[];
@@ -229,11 +237,24 @@ interface City {
   context?: { features: ContextFeature[] }; // display-only OSM surroundings, see below
   parking?: Record<ParkingId, ParkingFacility>; // Phase 2 format, see below
   walk?: { nodes: Record<WalkNodeId, WalkNode>; links: Record<WalkLinkId, WalkLink> };
+  junctionGroups?: Record<JunctionGroupId, JunctionGroup>; // TASK-131, absent = none
   terrain?: { source: string; originM: Vec2; cellM: number; cols: number; rows: number;
               baseM: number; heights: string }; // base64 Int16 LE decimetres above baseM
   nextId: number;          // single counter for all id kinds
 }
 ```
+
+TASK-131 adds optional junction groups without a schema-version change: an old city has none
+and compiles to the same result. A group is nodes joined by short links that are controlled and
+drawn as one junction; each member keeps its position, the inner roads stay real roads with
+their true lengths. A group is signalised if and only if `signal` is not null: every member
+then has `control: 'signal'` and `signal: null`, and the program's green groups name an entry
+road (ending at a member, not inner) and an exit road (starting at one, not inner); walk entries
+name a road end at any member's crossing. Members of a group without signals keep their own
+control, minor roads and turn rules. The city schema and the compile (`junction_group_invalid`)
+check that members and inner roads exist, that a node is in one group, that inner roads join
+members, and the control rule; a signal node needs its own program unless it is a member of a
+signalised group.
 
 TASK-100 advances the city schema to 3. Version 2 lanes gain `van` immediately after `car`
 where cars were allowed; version 1 first restores its node defaults, then follows the same
@@ -421,17 +442,26 @@ interface CompiledCity {
     node: Map<NodeId, number>; road: Map<RoadId, number>; lane: Map<LaneId, number>;
     movement: Map<MovementId, number>; place: Map<PlaceId, number>; connector: Map<ConnectorId, number>;
     parking: Map<ParkingId, number>;
+    group?: Map<JunctionGroupId, number>;   // TASK-131, with `groups`
   };
+  groups?: CGroup[];       // TASK-131; absent, with CNode.group and CRoad.group, without groups
   laneSpatial: Flatbush;   // lane segments, for picking and snapping
 }
 
 interface CNode { idx: number; id: NodeId; pos: Vec2; radiusM: number; control: Control;
-  movements: number[]; signal: CSignal | null; }
+  movements: number[]; signal: CSignal | null; group?: number; }
+interface CGroup { idx: number; id: JunctionGroupId; nodes: number[]; innerRoads: number[];
+  entries: number[]; exits: number[];          // road idx entering / leaving the group
+  chains: { from: number; to: number; movements: number[] }[]; signalised: boolean; }
 interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[];
   access: AccessValue[]; zone: Int32Array; // indexed by vehicleClasses
   roadClass: RoadClass; classRank: number; speedLimitMps: number; lengthM: number;
   streetGroupId: string | null; corridorId: string | null;   // corridorId ?? streetGroupId
-  surface: Vec2[]; /* polygon for rendering */ }
+  surface: Vec2[]; /* polygon for rendering */ group?: number; /* inner road's group */ }
+
+A group's chains (TASK-131) are its lane paths: from a lane of an entry road, the member-node
+movements along inner-road lanes to a lane of an exit road, no lane twice in a chain. The road
+pairs with a chain are the group's turn permissions, those the merged node of TASK-049 allowed.
 interface CLane { idx: number; id: LaneId; road: number; lane: number; polyline: Vec2[];
   cumulative: Float64Array; lengthM: number; widthM: number; allowed: VehicleClass[];
   speedLimitMps: number; left: number; right: number;   // adjacent lane idx or -1
@@ -823,6 +853,12 @@ the OSM `lanes` tags carry one.
 - OSM imports set the flag only if explicit country tags are present: United States true,
   all other or mixed countries false; absent country leaves the flag omitted.
 
+- TASK-131: a signalised junction group's program runs at every member in lockstep. Each member
+  compiles a derived program: the group's timing, and in each phase the road pairs at that member
+  of the chains of the phase's green groups (entry to exit), so one green clears a car from the
+  entry to the exit. Its walk entries are those at the member; derived walk green stays per
+  crossing. A green group that does not name an entry and an exit is `signal_phase_invalid`.
+  Until Phase 3 there is no box rule: a car can stop on an inner road at the next member.
 - Each phase's `groups` expand to every movement between the named road pair. A movement may
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
 - State at simulation time `t`: `((t + offsetS) mod cycleS)` locates the phase and whether it
@@ -856,7 +892,8 @@ between two such phases (`walkWindows`, `walkGreenS`); amber and all-red stay ve
 
 Errors (compile fails, editor rejects the commit):
 `dangling_ref`, `road_degenerate`, `lane_invalid`, `connector_invalid`, `turnrule_invalid`,
-`signal_missing`, `signal_phase_invalid`, `signal_conflict`, `place_invalid`.
+`signal_missing`, `signal_phase_invalid`, `signal_conflict`, `place_invalid`,
+`junction_group_invalid` (TASK-131).
 
 TASK-069: a third severity, `info`, for facts that need no action. `Diagnostic.severity`
 is `'error' | 'warning' | 'info'`. The validation badge counts errors and warnings only; the
@@ -948,6 +985,13 @@ station within 250 m, excluding foot/access=no. The existing 150 m, same-grade, 
 access attachment above supplies streets; stations without doors use the platform/building shape.
 
 ## 6. Editing
+
+TASK-131: patches carry `junctionGroups` (set and remove), so undo restores a group. A topology
+edit (`addRoad`, `deleteRoad`, `splitRoad`, `mergeRoads`, roundabouts, ramps, `reverseRoad`,
+`setStreetDirection`) that touches a member node, an inner road or a road at a member dissolves
+the group; each remaining member of a signalised group gets its own generated program
+(`network/signal-program.ts`). `setControl` and `setSignal` on a member apply to the whole group.
+The node inspector shows the group and its program read-only.
 
 TASK-102 adds `setParkingAttributes` (capacity and access) and parking collections to patches
 and inverse patches. Inferred facilities become canonical when editing begins or a place is
@@ -2621,7 +2665,17 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    nodes stay separate.
    External road-pair reachability through each cluster becomes explicit turn rules, and
    signals move to its representative. Canonical lane assignment then applies at the combined
-   junction. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
+   junction. TASK-131 replaces this merge with junction groups: the same clusters (links of at
+   most `junctionGroupMaxM`, default 30 m; at most 60 m across; a longer road between members
+   splits a candidate) with an entry, an exit and three street arms become groups, every node
+   keeps its OSM position and its turn rules, and the inner roads stay. Controls on non-junction
+   nodes still move to the nearest junction and degree-two artefacts (a signal's stop position)
+   still join; one signal anywhere in a group makes the group signalised, with one program over
+   its entry-to-exit chains. Group ids are allocated last, so they move no other id. Two
+   proposals wait for the owner, off by default: `junctionGroupOrder: 'merge-first'` joins the
+   degree-two artefacts before grouping (`'pairs-first'` unites carriageway links first instead),
+   so the 60 m span cannot keep a carriageway pair apart; `junctionGroupViaNodes` lets
+   restriction via nodes join groups, their restrictions staying at the member. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
    in provenance; disconnected roads and remaining short-road/dead-end warnings stay visible.
 5. Roads: an integer `layer` tag takes precedence. With the tag absent, a bridge other
    than `bridge=no` uses +1, a tunnel other than `tunnel=no` or `covered=yes` uses −1,

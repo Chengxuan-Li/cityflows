@@ -1,5 +1,4 @@
 import { distance, polylineLength } from '../../geo/polyline';
-import type { CompiledCity } from '../../network';
 import { allocateId, type City, type Road } from '../../schema';
 import { vehicleClasses } from '../../schema';
 import type { OsmWay } from './parse';
@@ -7,19 +6,82 @@ import { captureControls, relocateControls } from './controls';
 import type { OsmRoad } from './roads';
 import { roadHeading } from './turns';
 
-// Collapse a compact cluster of junctions only along existing roads. The lane paths through
-// the old cluster become explicit rules, so contraction cannot introduce a prohibited turn.
-export function consolidateJunctions(
+/** Roads that cross a dual carriageway between its two carriageways: their two ends each meet a
+ * one-way road of one name (not their own), and those run within 30 degrees of opposite. */
+function carriagewayLinks(roads: OsmRoad[]): Set<string> {
+  const oneWay = new Map<string, Road[]>();
+  for (const { road } of roads)
+    if (road.streetGroupId === null && road.name)
+      for (const id of [road.from, road.to]) oneWay.set(id, [...(oneWay.get(id) ?? []), road]);
+  // Travel direction of `road` where it meets `node`.
+  const heading = (road: Road, node: string) => roadHeading(road, road.to === node);
+  const links = new Set<string>();
+  for (const { road } of roads)
+    for (const a of oneWay.get(road.from) ?? [])
+      for (const b of oneWay.get(road.to) ?? [])
+        if (
+          a.name === b.name &&
+          a.name !== road.name &&
+          a !== road &&
+          b !== road &&
+          Math.cos(heading(a, road.from) - heading(b, road.to)) < -Math.cos(Math.PI / 6)
+        )
+          links.add(road.id);
+  return links;
+}
+
+/** `ImportOptions.junctionGroupMaxM`'s default (owner, TASK-131). */
+export const DEFAULT_JUNCTION_GROUP_MAX_M = 30;
+
+export interface PendingGroup {
+  nodes: string[];
+  innerRoads: string[];
+}
+
+/**
+ * TASK-131: the junction groups (nodes joined by roads of at most `maxM`), which replace the
+ * merge of TASK-049's consolidation: every node keeps its position, the roads between members
+ * stay as inner roads, and the members keep their turn rules, so the lane paths through a group
+ * are those the merged node's rules allowed. The cluster rules stay: no group across a
+ * controlled node, a motorway, a restriction via node, a bridge, a roundabout ring or an access
+ * change on the inner road; a group spans at most 60 m; a road longer than `maxM` with both ends
+ * in a candidate group splits it. Groups need an entry, an exit and three street arms: a dead
+ * end or a stretch of one road is not a junction and forms none. Controls on non-junction nodes move to the nearest junction as before; the
+ * returned signal ids are the nodes that carry a signal.
+ */
+export function formJunctionGroups(
   city: City,
   roads: OsmRoad[],
-  compiled: CompiledCity,
   signals: string[],
-): string[] {
+  maxM: number,
+  order: 'shortest' | 'pairs-first' | 'merge-first' = 'shortest',
+  viaNodes = false,
+): { signalIds: string[]; groups: PendingGroup[] } {
   const capturedControls = captureControls(
     city,
     roads.map(({ road }) => road),
     signals,
   );
+  // Controls removed from non-junction nodes leave degree-2 artefacts (a signal's stop position
+  // before its junction): merged as before, with the members kept until the groups are known.
+  const relocateAndMerge = () => {
+    const ids = relocateControls(city, capturedControls, new Map());
+    mergeShortRoads(
+      city,
+      roads,
+      new Set([
+        ...ids,
+        ...Object.values(city.nodes)
+          .filter((n) => n.turnRules.length)
+          .map((n) => n.id),
+      ]),
+      new Set(capturedControls.sources.map(({ id }) => id)),
+    );
+    return ids;
+  };
+  // 'merge-first' (proposal, owner to decide): the artefacts join before the grouping, so no
+  // group chains through a node that is then merged away.
+  const merged = order === 'merge-first' ? relocateAndMerge() : undefined;
   const parent = new Map(Object.keys(city.nodes).map((id) => [id, id]));
   const members = new Map(Object.keys(city.nodes).map((id) => [id, [id]]));
   const root = (id: string): string => (parent.get(id) === id ? id : root(parent.get(id)!));
@@ -66,8 +128,13 @@ export function consolidateJunctions(
       .filter((n) => n.turnRules.some((r) => r.provenance.osmIds?.length))
       .map((n) => n.id),
   );
+  // 'pairs-first' (proposal, owner to decide): a cross road's link between the two carriageways
+  // of one street unites before any other link, so the span cap cannot leave the pair apart.
+  const pairs = order === 'pairs-first' ? carriagewayLinks(roads) : new Set<string>();
   for (const { road, attributes } of [...roads].sort(
-    (a, b) => polylineLength(a.road.centerline) - polylineLength(b.road.centerline),
+    (a, b) =>
+      Number(pairs.has(b.road.id)) - Number(pairs.has(a.road.id)) ||
+      polylineLength(a.road.centerline) - polylineLength(b.road.centerline),
   )) {
     if (boundaries.has(road.from) || boundaries.has(road.to)) continue;
     // Bridges keep their own junctions; roundabout rings are short arcs by design (TASK-049).
@@ -78,13 +145,14 @@ export function consolidateJunctions(
       )
     )
       continue;
+    // `viaNodes` (proposal, owner to decide): a restriction's via node may join a group, its
+    // restriction staying at that member, as it would not survive a merge.
     if (
-      restrictedNodes.has(road.from) ||
-      restrictedNodes.has(road.to) ||
+      (!viaNodes && (restrictedNodes.has(road.from) || restrictedNodes.has(road.to))) ||
       road.roadClass === 'motorway'
     )
       continue;
-    if (polylineLength(road.centerline) >= 30) continue;
+    if (polylineLength(road.centerline) > maxM) continue;
     const a = root(road.from),
       b = root(road.to);
     if (a === b) continue;
@@ -101,7 +169,7 @@ export function consolidateJunctions(
         ({ road }) =>
           union.includes(road.from) &&
           union.includes(road.to) &&
-          (polylineLength(road.centerline) >= 30 ||
+          (polylineLength(road.centerline) > maxM ||
             (vehicleClasses.some(
               (kind) =>
                 (road.access?.[kind] ?? road.access?.all ?? 'yes') !== 'yes' ||
@@ -115,115 +183,59 @@ export function consolidateJunctions(
     members.set(a, union);
     members.delete(b);
   }
-  const representatives = new Map<string, string>();
-  for (const group of members.values()) {
-    if (group.length === 1) continue;
+  const junction = (group: string[]) => {
+    if (group.length === 1) return false;
     const nodes = new Set(group);
-    const inside = new Set(
-      roads
-        .filter(({ road }) => nodes.has(road.from) && nodes.has(road.to))
-        .map(({ road }) => road.id),
-    );
-    const incoming = roads.filter(({ road }) => nodes.has(road.to) && !inside.has(road.id));
-    const outgoing = roads.filter(({ road }) => nodes.has(road.from) && !inside.has(road.id));
-    if (!incoming.length || !outgoing.length) continue;
-    const clipped = roads.find((r) => inside.has(r.road.id) && (r.cutStart || r.cutEnd));
-    const id = clipped ? (clipped.cutStart ? clipped.road.from : clipped.road.to) : group[0]!;
-    const node = city.nodes[id]!;
-    const positions = group.map((id) => city.nodes[id]!.pos);
-    if (!clipped)
-      node.pos = {
-        x: group.reduce((sum, id) => sum + city.nodes[id]!.pos.x, 0) / group.length,
-        y: group.reduce((sum, id) => sum + city.nodes[id]!.pos.y, 0) / group.length,
-      };
-    const radius = Math.max(...positions.map((pos) => distance(pos, node.pos))) + 5;
-    node.provenance = {
-      source: 'osm',
-      osmIds: [...new Set(group.flatMap((id) => city.nodes[id]!.provenance.osmIds!))].sort(
-        (a, b) => a - b,
-      ),
-      inferred: [
-        ...new Set([
-          ...group.flatMap((id) => city.nodes[id]!.provenance.inferred!),
-          ...roads
-            .filter(({ road }) => inside.has(road.id))
-            .flatMap(({ road }) => road.provenance.inferred!),
-          'junctionConsolidation',
-        ]),
-      ],
-    };
-    node.turnRules = [];
-    for (const { road: from } of incoming) {
-      const visited = new Set<number>();
-      const queue = [...compiled.roads[compiled.index.road.get(from.id)!]!.lanes];
-      for (const lane of queue) {
-        for (const index of compiled.lanes[lane]!.out) {
-          const toLane = compiled.movements[index]!.toLane;
-          if (visited.has(toLane)) continue;
-          visited.add(toLane);
-          if (inside.has(compiled.roads[compiled.lanes[toLane]!.road]!.id)) queue.push(toLane);
-        }
-      }
-      for (const { road: to } of outgoing) {
-        node.turnRules.push({
-          from: from.id,
-          to: to.id,
-          allowed: compiled.roads[compiled.index.road.get(to.id)!]!.lanes.some((l) =>
-            visited.has(l),
-          ),
-          provenance: { source: 'osm', inferred: ['junctionConsolidation'] },
-        });
-      }
-    }
-    for (const { road } of roads.filter(({ road }) => inside.has(road.id)))
-      delete city.roads[road.id];
-    for (const road of incoming) {
-      road.road.to = id;
-      while (
-        road.road.centerline.length > 2 &&
-        distance(road.road.centerline.at(-2)!, node.pos) < radius
-      )
-        road.road.centerline.splice(road.road.centerline.length - 2, 1);
-      road.road.centerline[road.road.centerline.length - 1] = node.pos;
-      if (clipped) road.cutEnd = true;
-    }
-    for (const road of outgoing) {
-      road.road.from = id;
-      while (
-        road.road.centerline.length > 2 &&
-        distance(road.road.centerline[1]!, node.pos) < radius
-      )
-        road.road.centerline.splice(1, 1);
-      road.road.centerline[0] = node.pos;
-      if (clipped) road.cutStart = true;
-    }
-    for (const old of group) {
-      representatives.set(old, id);
-      if (old !== id) delete city.nodes[old];
-    }
-  }
-  roads.splice(0, roads.length, ...roads.filter(({ road }) => city.roads[road.id]));
-  const signalIds = relocateControls(city, capturedControls, representatives);
-  mergeShortRoads(
-    city,
-    roads,
-    new Set([
-      ...signalIds,
-      ...Object.values(city.nodes)
-        .filter((n) =>
-          n.turnRules.some(
-            (rule) =>
-              !rule.provenance.inferred?.includes('junctionConsolidation') ||
-              rule.fromLane !== undefined ||
-              rule.toLane !== undefined ||
-              rule.allowed !== (city.roads[rule.from]!.from !== city.roads[rule.to]!.to),
-          ),
+    const arms = roads.filter(({ road }) => nodes.has(road.from) !== nodes.has(road.to));
+    if (
+      !arms.some(({ road }) => nodes.has(road.to)) ||
+      !arms.some(({ road }) => nodes.has(road.from))
+    )
+      return false;
+    // Three street arms at least: the arms of one street within 35 degrees are one.
+    const streets: { street: string; heading: number }[] = [];
+    for (const { road, wayId } of arms) {
+      const start = nodes.has(road.from);
+      const street = road.name ?? `way/${wayId}`;
+      const heading = roadHeading(road, !start) + (start ? 0 : Math.PI);
+      if (
+        !streets.some(
+          (s) =>
+            s.street === street &&
+            Math.abs(Math.atan2(Math.sin(s.heading - heading), Math.cos(s.heading - heading))) <
+              (35 * Math.PI) / 180,
         )
-        .map((n) => n.id),
-    ]),
-    new Set(capturedControls.sources.map(({ id }) => representatives.get(id) ?? id)),
-  );
-  return signalIds;
+      )
+        streets.push({ street, heading });
+    }
+    return streets.length >= 3;
+  };
+  const candidates = [...members.values()].filter(junction);
+  const signalIds = merged ?? relocateAndMerge();
+  // A member merged away joins two links into one road, which may now be longer than `maxM`:
+  // the members it does not join stay together only through shorter roads.
+  const survivors = candidates.flatMap((group) => {
+    const nodes = group.filter((id) => city.nodes[id]);
+    const link = new Map(nodes.map((id) => [id, id]));
+    const find = (id: string): string => (link.get(id) === id ? id : find(link.get(id)!));
+    for (const { road } of roads)
+      if (link.has(road.from) && link.has(road.to) && polylineLength(road.centerline) <= maxM)
+        link.set(find(road.from), find(road.to));
+    const parts = new Map<string, string[]>();
+    for (const id of nodes) parts.set(find(id), [...(parts.get(find(id)) ?? []), id]);
+    return [...parts.values()].filter(junction);
+  });
+  const groups = survivors.map((nodes) => {
+    const set = new Set(nodes);
+    return {
+      nodes: [...nodes].sort(),
+      innerRoads: roads
+        .filter(({ road }) => set.has(road.from) && set.has(road.to))
+        .map(({ road }) => road.id)
+        .sort(),
+    };
+  });
+  return { signalIds, groups };
 }
 
 // A surface-street feeder must reach the opposing carriageway across a narrow median.

@@ -1,4 +1,4 @@
-import { generateSignalProgram } from '../../importers/signal-program';
+import { generateGroupSignalProgram, generateSignalProgram } from '../../network/signal-program';
 import type { CNode, CompiledCity, Turn } from '../../network';
 import {
   crossingArms,
@@ -117,7 +117,9 @@ export function NodeInspector({
       movements: byPair.get(`${from.idx}>${to.idx}`) ?? [],
     })),
   );
-  const signal = source.signal;
+  // TASK-131: a member's control and program are its junction group's (read-only program).
+  const group = Object.values(city.junctionGroups ?? {}).find((g) => g.nodes.includes(nodeId));
+  const signal = group ? group.signal : source.signal;
 
   return (
     <>
@@ -136,13 +138,20 @@ export function NodeInspector({
                 nodeId,
                 control,
                 ...(control === 'signal' && {
-                  signal: generateSignalProgram(
-                    useAppStore.getState().session!.project.city,
-                    source,
-                    incoming.length,
-                    compiled,
-                    [],
-                  ),
+                  signal: group
+                    ? generateGroupSignalProgram(
+                        useAppStore.getState().session!.project.city,
+                        group.id,
+                        compiled,
+                        [],
+                      )
+                    : generateSignalProgram(
+                        useAppStore.getState().session!.project.city,
+                        source,
+                        incoming.length,
+                        compiled,
+                        [],
+                      ),
                 }),
               });
             }}
@@ -155,7 +164,21 @@ export function NodeInspector({
           </select>
         </label>
       </div>
-      {signal && <SignalInspector node={node} source={source} compiled={compiled} />}
+      {group && (
+        <p className="muted">
+          Junction {group.id}: {group.nodes.join(', ')}
+        </p>
+      )}
+      {group?.signal && (
+        <ol className="item-list" aria-label="Group signal phases">
+          {group.signal.phases.map((phase, i) => (
+            <li key={i}>
+              {phase.durationS} s · {phase.groups.map((g) => `${g.from} → ${g.to}`).join(', ')}
+            </li>
+          ))}
+        </ol>
+      )}
+      {!group && signal && <SignalInspector node={node} source={source} compiled={compiled} />}
       {node.outline.length > 0 && <Crossings node={node} compiled={compiled} city={city} />}
       <details className="disclosure">
         <summary>Turns</summary>

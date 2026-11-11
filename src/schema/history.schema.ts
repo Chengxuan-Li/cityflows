@@ -1,11 +1,18 @@
 import { z } from 'zod';
-import { citySchema, projectNodeSchema, placeSchema, roadSchema } from './city.schema';
+import {
+  citySchema,
+  junctionGroupSchema,
+  projectNodeSchema,
+  placeSchema,
+  roadSchema,
+} from './city.schema';
 import type { HistoryEntry } from './history';
 
 const nodeId = z.string().regex(/^n:\d+$/);
 const roadId = z.string().regex(/^r:\d+$/);
 const placeId = z.string().regex(/^p:\d+$/);
 const parkingId = z.string().regex(/^pk:\d+$/);
+const junctionGroupId = z.string().regex(/^jg:\d+$/);
 
 export const patchSchema = z.object({
   markingTheme: citySchema.shape.markingTheme.nullable(),
@@ -21,12 +28,14 @@ export const patchSchema = z.object({
     roads: z.record(roadId, roadSchema).optional(),
     places: z.record(placeId, placeSchema).optional(),
     parking: citySchema.shape.parking,
+    junctionGroups: z.record(junctionGroupId, junctionGroupSchema).optional(),
   }),
   remove: z.object({
     nodes: z.array(nodeId).optional(),
     roads: z.array(roadId).optional(),
     places: z.array(placeId).optional(),
     parking: z.array(parkingId).optional(),
+    junctionGroups: z.array(junctionGroupId).optional(),
   }),
   nextId: z.int().nonnegative().optional(),
 });

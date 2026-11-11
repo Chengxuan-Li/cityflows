@@ -1,4 +1,4 @@
-import type { City, SignalProgram } from '../schema';
+import type { SignalProgram } from '../schema';
 import { crossingArms } from './crossings';
 import type { CNode, CSignal, CompiledCity, Diagnostic } from './types';
 
@@ -90,7 +90,10 @@ export function compileSignal(
  * is green in every phase in which no movement from the arm is, and in none in a phase without
  * vehicle groups (an exclusive pedestrian phase is never derived).
  */
-export function compileSignalWalk(city: CompiledCity, source: City) {
+export function compileSignalWalk(
+  city: CompiledCity,
+  programs: Map<number, { program: SignalProgram; vehicles: boolean[] }>,
+) {
   const byNode = new Map<number, number[]>();
   for (const link of city.walk.links)
     if (link.crossing?.control === 'signal' && link.crossing.node >= 0) {
@@ -102,7 +105,7 @@ export function compileSignalWalk(city: CompiledCity, source: City) {
     const node = city.nodes[index]!;
     if (!node.signal) continue;
     const arms = crossingArms(city, node);
-    const program = source.nodes[node.id]!.signal!;
+    const { program, vehicles } = programs.get(index)!;
     node.signal.phases.forEach((phase, p) => {
       const explicit = program.phases[p]!.walk;
       let green: Set<number>;
@@ -118,7 +121,7 @@ export function compileSignalWalk(city: CompiledCity, source: City) {
         );
       } else {
         green = new Set();
-        if (program.phases[p]!.groups.length)
+        if (vehicles[p])
           arms.forEach((ends, arm) => {
             const served = phase.movements.some((m) =>
               ends.some(

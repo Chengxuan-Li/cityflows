@@ -1,7 +1,7 @@
 import { compileRail } from './rail';
 import { cumulativeLengths, headingAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { City, Place, RoadClass } from '../schema';
+import type { City, Place, RoadClass, SignalProgram } from '../schema';
 import { vehicleClasses } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
@@ -18,6 +18,7 @@ import {
 } from './junctions';
 import { generateMovements } from './movements';
 import { compileSignal, compileSignalWalk } from './signals';
+import { compileGroups, memberProgram } from './groups';
 import { buildLaneSpatial } from './spatial';
 import { compileWalk, emptyWalkGraph } from './walk';
 import { populateStops } from './stops';
@@ -518,10 +519,22 @@ export function compile(city: City): CompileResult {
   compileParking(city, compiled, diagnostics, centroid);
   for (const lane of lanes)
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
+  if (city.junctionGroups && Object.keys(city.junctionGroups).length) {
+    compiled.groups = compileGroups(city, compiled);
+    compiled.index.group = indices(compiled.groups);
+  }
+  const programs = new Map<number, { program: SignalProgram; vehicles: boolean[] }>();
   for (const node of nodes) {
-    if (node.control === 'signal') {
-      node.signal = compileSignal(node, sourceNodes[node.idx]!.signal!, compiled, diagnostics);
-    }
+    if (node.control !== 'signal') continue;
+    const group = node.group === undefined ? undefined : compiled.groups![node.group];
+    const entry = group
+      ? memberProgram(city, compiled, group, node.idx, diagnostics)
+      : {
+          program: sourceNodes[node.idx]!.signal!,
+          vehicles: sourceNodes[node.idx]!.signal!.phases.map((p) => p.groups.length > 0),
+        };
+    programs.set(node.idx, entry);
+    node.signal = compileSignal(node, entry.program, compiled, diagnostics);
   }
   if (diagnostics.some((item) => item.severity === 'error')) return { ok: false, diagnostics };
   for (const lane of lanes) {
@@ -545,7 +558,7 @@ export function compile(city: City): CompileResult {
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   warnAboutConnectivity(compiled, diagnostics);
   compiled.walk = compileWalk(city, compiled);
-  compileSignalWalk(compiled, city);
+  compileSignalWalk(compiled, programs);
   if (city.rail) compiled.rail = compileRail(city);
   return { ok: true, compiled, diagnostics };
 }

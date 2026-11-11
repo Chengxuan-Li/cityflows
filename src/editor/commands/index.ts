@@ -9,6 +9,7 @@ import { editRoundabout } from './roundabout';
 import { editTopology } from './topology';
 import type { CommandPatch } from './types';
 import { diffCity } from '../patch';
+import { dissolveTouched } from './groups';
 
 export function dispatch(city: City, command: Command): CommandPatch {
   switch (command.kind) {
@@ -22,15 +23,16 @@ export function dispatch(city: City, command: Command): CommandPatch {
       return diffCity(city, command.city);
     case 'addRoundabout':
     case 'removeRoundabout':
-      return editRoundabout(city, command);
+      return dissolveTouched(city, editRoundabout(city, command));
     case 'addRamp':
     case 'removeRamp':
-      return editRamp(city, command);
+      return dissolveTouched(city, editRamp(city, command));
+    case 'reverseRoad':
+    case 'setStreetDirection':
+      return dissolveTouched(city, editRoad(city, command));
     case 'setRoadLanes':
     case 'setRoadAttributes':
     case 'setRoadAccess':
-    case 'reverseRoad':
-    case 'setStreetDirection':
     case 'setCrossing':
       return editRoad(city, command);
     case 'setTurnRule':
@@ -45,11 +47,12 @@ export function dispatch(city: City, command: Command): CommandPatch {
       return editPlace(city, command);
     case 'batch':
       return batch(city, command.commands, dispatch);
+    case 'moveNode':
+      return editTopology(city, command);
     case 'addRoad':
     case 'deleteRoad':
     case 'splitRoad':
     case 'mergeRoads':
-    case 'moveNode':
-      return editTopology(city, command);
+      return dissolveTouched(city, editTopology(city, command));
   }
 }

@@ -17,6 +17,8 @@ import type {
   ParkingId,
   ParkingAccess,
   ParkingLayout,
+  JunctionGroup,
+  JunctionGroupId,
 } from './city';
 
 export type Command =
@@ -81,8 +83,15 @@ export interface Patch {
     roads?: Record<RoadId, Road>;
     places?: Record<PlaceId, Place>;
     parking?: Record<ParkingId, ParkingFacility>;
+    junctionGroups?: Record<JunctionGroupId, JunctionGroup>;
   };
-  remove: { nodes?: NodeId[]; roads?: RoadId[]; places?: PlaceId[]; parking?: ParkingId[] };
+  remove: {
+    nodes?: NodeId[];
+    roads?: RoadId[];
+    places?: PlaceId[];
+    parking?: ParkingId[];
+    junctionGroups?: JunctionGroupId[];
+  };
   nextId?: number;
 }
 

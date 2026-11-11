@@ -18,6 +18,7 @@ import type {
   PlaceEvent,
   ParkingFacility,
   ParkingLayout,
+  JunctionGroupId,
 } from '../schema';
 
 export type CompileResult =
@@ -46,6 +47,9 @@ export interface CompiledCity {
   lots?: CLot[]; // TASK-104: surface lots and their generated stalls, when any
   parkingSpaces?: CParkingSpace[];
   strips?: CStrip[];
+  /** TASK-131: the junction groups; absent (with `index.group`, `CNode.group` and `CRoad.group`)
+   * in a city without groups, whose compiled result is unchanged. */
+  groups?: CGroup[];
   index: {
     node: Map<NodeId, number>;
     road: Map<RoadId, number>;
@@ -54,6 +58,7 @@ export interface CompiledCity {
     place: Map<PlaceId, number>;
     connector: Map<ConnectorId, number>;
     parking: Map<string, number>;
+    group?: Map<JunctionGroupId, number>;
   };
   laneSpatial: Flatbush; // lane segments, for picking and snapping
 }
@@ -128,7 +133,25 @@ export interface CNode {
   outline: Vec2[];
   control: Control;
   movements: number[];
+  /** A member of a signalised group runs its derived program in lockstep with the others. */
   signal: CSignal | null;
+  group?: number; // TASK-131: its junction group's idx, when a member
+}
+/** TASK-131: one lane path through a junction group, entry road to exit road. */
+export interface CChain {
+  from: number; // entry road idx
+  to: number; // exit road idx
+  movements: number[]; // member-node movement idx in travel order
+}
+export interface CGroup {
+  idx: number;
+  id: JunctionGroupId;
+  nodes: number[];
+  innerRoads: number[];
+  entries: number[]; // road idx ending at a member, not inner
+  exits: number[]; // road idx starting at a member, not inner
+  chains: CChain[];
+  signalised: boolean;
 }
 export interface CRoad {
   access: AccessValue[]; // indexed by vehicleClasses
@@ -161,6 +184,7 @@ export interface CRoad {
    * beyond the last value, empty when none. */
   startShift: Float64Array;
   endShift: Float64Array;
+  group?: number; // TASK-131: the group it is an inner road of, if any
 }
 export interface CLane {
   idx: number;

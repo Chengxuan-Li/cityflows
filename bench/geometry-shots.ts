@@ -5,7 +5,8 @@ import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { chromium, type Page } from '@playwright/test';
 import { fixtureTerrain } from '../tests/e2e/terrain-fixture';
-import { pointAtDistance } from '../src/geo/polyline';
+import { cumulativeLengths, pointAtDistance, polylineLength } from '../src/geo/polyline';
+import type { City } from '../src/schema';
 import { lonLatToLocal, type GeoReference } from '../src/geo/projection';
 import type { Vec2 } from '../src/geo/vec2';
 import { drivableClass } from '../src/importers/osm/filter';
@@ -35,6 +36,35 @@ const v111Walkers = [
   perHour: 600,
 }));
 
+/** TASK-131 reference cases: shot id, main's node there, the camera centre (main's node
+ * position), label, extract. */
+const T131_CASES = [
+  ['n138', 'n:138', [-18.85, -540.61], 'reference: Arnulfstraße x Donnersbergerstraße'],
+  ['n638', 'n:638', [90.29, -526.03], 'reference: Arnulfstraße x Landshuter Allee'],
+  ['n247', 'n:247', [-19.28, 166.81], 'reference (n:967 before TASK-101): Landsberger Straße'],
+  ['n263', 'n:263', [-21.4, 106.86], 'reference: Landsberger ramps'],
+  ['n936', 'n:936', [37.81, 163.9], 'reference: Landsberger Straße'],
+  ['n570', 'n:570', [-571.33, -530.29], 'worst cluster 1, an arm turned 120 degrees'],
+  ['n894', 'n:894', [-5.8, -183.37], 'worst cluster 2, an arm turned 76 degrees'],
+  ['n446', 'n:446', [-464.79, -642.32], 'worst cluster 3, an arm turned 70 degrees'],
+  ['sindelfingen-n841', 'n:841', [312.7, -595.66], 'reference: B55', SINDELFINGEN],
+  ['sindelfingen-n68', 'n:68', [349.82, -487.76], 'reference: B55', SINDELFINGEN],
+  [
+    'sindelfingen-n139',
+    'n:139',
+    [-174.64, -599.95],
+    'worst cluster 4, an arm turned 60 degrees',
+    SINDELFINGEN,
+  ],
+  [
+    'sindelfingen-n911',
+    'n:911',
+    [-324.65, -667.96],
+    'worst cluster 5, an arm turned 58 degrees',
+    SINDELFINGEN,
+  ],
+] as [string, string, [number, number], string, string?][];
+
 /** World centre (m, the city's frame) and zoom (screen px per m) of each image; the case ids are
  * bench/geometry-audit.ts's. The map canvas is 1280 x 800 px. */
 export const shots: {
@@ -61,6 +91,8 @@ export const shots: {
    * this label; `node` is the city node the camera is centred on (checked against the import). */
   osmLines?: string;
   node?: string;
+  /** TASK-131 Phase 1: the junction groups on top of the OSM overlay. */
+  groups?: boolean;
 }[] = [
   ...(['2d', '3d'] as const).flatMap((view) => [
     {
@@ -535,37 +567,10 @@ export const shots: {
     zoom: 10,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
-  // TASK-131 Phase 0: today's import against the raw OSM ways, one scale (5 px/m), centred on
-  // the reference nodes (n:967 is n:247 since TASK-101) and the five clusters whose arms turn
-  // most (bench/task131-audit.ts).
-  ...(
-    [
-      ['n138', 'n:138', [-18.85, -540.61], 'reference: Arnulfstraße x Donnersbergerstraße'],
-      ['n638', 'n:638', [90.29, -526.03], 'reference: Arnulfstraße x Landshuter Allee'],
-      ['n247', 'n:247', [-19.28, 166.81], 'reference (n:967 before TASK-101): Landsberger Straße'],
-      ['n263', 'n:263', [-21.4, 106.86], 'reference: Landsberger ramps'],
-      ['n936', 'n:936', [37.81, 163.9], 'reference: Landsberger Straße'],
-      ['n570', 'n:570', [-571.33, -530.29], 'worst cluster 1, an arm turned 120 degrees'],
-      ['n894', 'n:894', [-5.8, -183.37], 'worst cluster 2, an arm turned 76 degrees'],
-      ['n446', 'n:446', [-464.79, -642.32], 'worst cluster 3, an arm turned 70 degrees'],
-      ['sindelfingen-n841', 'n:841', [312.7, -595.66], 'reference: B55', SINDELFINGEN],
-      ['sindelfingen-n68', 'n:68', [349.82, -487.76], 'reference: B55', SINDELFINGEN],
-      [
-        'sindelfingen-n139',
-        'n:139',
-        [-174.64, -599.95],
-        'worst cluster 4, an arm turned 60 degrees',
-        SINDELFINGEN,
-      ],
-      [
-        'sindelfingen-n911',
-        'n:911',
-        [-324.65, -667.96],
-        'worst cluster 5, an arm turned 58 degrees',
-        SINDELFINGEN,
-      ],
-    ] as [string, string, [number, number], string, string?][]
-  ).map(([id, node, centre, label, osm]) => ({
+  // TASK-131 Phase 0: the import against the raw OSM ways, one scale (5 px/m), centred on the
+  // reference nodes as main placed them (n:967 is n:247 since TASK-101) and the five clusters
+  // whose arms turn most (bench/task131-audit.ts).
+  ...T131_CASES.map(([id, node, centre, label, osm]) => ({
     id: `T131-${id}`,
     cases: [],
     centre,
@@ -574,6 +579,19 @@ export const shots: {
     osmLines: `${osm ? 'Sindelfingen' : 'Munich'} ${node}, ${label}`,
     ...(osm && { osm }),
   })),
+  // TASK-131 Phase 1: the same framing with the junction groups drawn on top; the members keep
+  // their OSM positions, so the camera no longer sits on a merged node.
+  ...T131_CASES.map(([id, node, centre, label, osm]) => ({
+    id: `T131-p1-${id}`,
+    cases: [],
+    centre,
+    zoom: 5,
+    osmLines: `${osm ? 'Sindelfingen' : 'Munich'} ${node} (main's), ${label}`,
+    groups: true,
+    ...(osm && { osm }),
+  })),
+  // The signalised group at n:247 closer: the signal heads and stop lines drawn now.
+  { id: 'T131-p1-n247-signals', cases: [], centre: [-19.28, 166.81], zoom: 10 },
 ];
 
 /** TASK-131: an extract's drivable OSM ways (the importer's filter) and the nodes where they
@@ -596,6 +614,42 @@ function osmWayLines(osm: string, geo: GeoReference) {
     lines: ways.map(({ nd }) => nd.flatMap(at)),
     junctions: [...uses].filter(([, count]) => count >= 2).flatMap(([id]) => at(id)),
   };
+}
+
+/** TASK-131 Phase 1: per junction group, its member positions, inner roads with their lengths
+ * and midpoints, and its entry and exit road ends 4 m out from the member, in a colour each. */
+function junctionGroupMarks(city: City) {
+  const result = compile(city);
+  if (!result.ok) throw new Error('Group overlay city must compile');
+  const net = result.compiled;
+  const colours = ['#0072b2', '#e69f00', '#009e73', '#cc79a7', '#d55e00', '#56b4e9', '#7a5c00'];
+  return (net.groups ?? []).map((group) => {
+    const atM = (line: Vec2[], m: number) => {
+      const lengths = cumulativeLengths(line);
+      return pointAtDistance(line, lengths, Math.min(m, lengths.at(-1)!));
+    };
+    return {
+      id: group.id,
+      colour: colours[group.idx % colours.length]!,
+      members: group.nodes.map((n) => net.nodes[n]!.pos),
+      inner: group.innerRoads
+        .map((r) => city.roads[net.roads[r]!.id]!.centerline)
+        .map((line) => {
+          const lengthM = polylineLength(line);
+          return { line, lengthM, middle: atM(line, lengthM / 2) };
+        }),
+      ends: [
+        ...group.entries.map((r) => ({
+          pos: atM([...city.roads[net.roads[r]!.id]!.centerline].reverse(), 4),
+          entry: true,
+        })),
+        ...group.exits.map((r) => ({
+          pos: atM(city.roads[net.roads[r]!.id]!.centerline, 4),
+          entry: false,
+        })),
+      ],
+    };
+  });
 }
 
 export const VIEWPORT = { width: 1280, height: 800 };
@@ -1023,14 +1077,21 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
         if (shot.osmLines) {
           const city = await page.evaluate(() => window.cityflows!.city!());
           const { lines, junctions } = osmWayLines(osm, city.geo!);
-          const pos = city.nodes[shot.node as never]?.pos;
-          nodeOffsetM = pos ? Math.hypot(pos.x - centre[0], pos.y - centre[1]) : null;
-          if (nodeOffsetM === null || nodeOffsetM > 0.05)
-            console.warn(`${shot.id}: ${shot.node} is not at the camera centre (${nodeOffsetM} m)`);
+          if (shot.node) {
+            const pos = city.nodes[shot.node as never]?.pos;
+            nodeOffsetM = pos ? Math.hypot(pos.x - centre[0], pos.y - centre[1]) : null;
+            if (nodeOffsetM === null || nodeOffsetM > 0.05)
+              console.warn(
+                `${shot.id}: ${shot.node} is not at the camera centre (${nodeOffsetM} m)`,
+              );
+          }
           const near = (p: Vec2) =>
             Math.abs(p.x - centre[0]) < 300 && Math.abs(p.y - centre[1]) < 200;
+          const groups = shot.groups
+            ? junctionGroupMarks(city).filter((g) => g.members.some(near))
+            : [];
           await page.evaluate(
-            ({ lines, junctions, label, zoom }) => {
+            ({ lines, junctions, label, zoom, groups }) => {
               const map = document.querySelector<HTMLCanvasElement>(
                 'canvas[aria-label="City map"]',
               )!;
@@ -1068,8 +1129,50 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
                 ctx.arc(q.x, q.y, 3.5, 0, 2 * Math.PI);
                 ctx.stroke();
               }
+              // TASK-131: inner roads (with lengths), entry ends (filled) and exit ends (hollow),
+              // members (circles), one colour per group, labelled with the group id.
+              ctx.font = '12px sans-serif';
+              ctx.lineCap = 'round';
+              for (const group of groups) {
+                ctx.strokeStyle = group.colour;
+                ctx.fillStyle = group.colour;
+                for (const road of group.inner) {
+                  ctx.globalAlpha = 0.45;
+                  ctx.lineWidth = 7;
+                  ctx.beginPath();
+                  road.line.forEach((p, i) => {
+                    const q = at(p);
+                    if (i) ctx.lineTo(q.x, q.y);
+                    else ctx.moveTo(q.x, q.y);
+                  });
+                  ctx.stroke();
+                  ctx.globalAlpha = 1;
+                  const m = at(road.middle);
+                  ctx.fillText(`${road.lengthM.toFixed(1)} m`, m.x + 5, m.y - 5);
+                }
+                ctx.lineWidth = 2;
+                for (const { pos, entry } of group.ends) {
+                  const q = at(pos);
+                  ctx.beginPath();
+                  ctx.rect(q.x - 3, q.y - 3, 6, 6);
+                  if (entry) ctx.fill();
+                  else ctx.stroke();
+                }
+                for (const p of group.members) {
+                  const q = at(p);
+                  ctx.beginPath();
+                  ctx.arc(q.x, q.y, 9, 0, 2 * Math.PI);
+                  ctx.stroke();
+                }
+                const top = group.members.map((p) => at(p)).reduce((a, b) => (b.y < a.y ? b : a));
+                ctx.font = 'bold 13px sans-serif';
+                ctx.fillText(group.id, top.x + 11, top.y - 11);
+                ctx.font = '12px sans-serif';
+              }
               ctx.font = '14px sans-serif';
-              const text = `${label}. Magenta: OSM ways and their junction nodes.`;
+              const text = groups.length
+                ? `${label}. Magenta: OSM ways. Colours: junction groups (members, inner roads, entries filled, exits hollow).`
+                : `${label}. Magenta: OSM ways and their junction nodes.`;
               ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
               ctx.fillRect(8, 8, ctx.measureText(text).width + 12, 24);
               ctx.fillRect(8, rect.height - 36, 20 * zoom + 70, 28);
@@ -1084,6 +1187,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-shots.ts')) {
               junctions: junctions.filter(near),
               label: shot.osmLines,
               zoom: shot.zoom,
+              groups,
             },
           );
         }

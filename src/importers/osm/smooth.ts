@@ -54,13 +54,7 @@ export function smoothRoads(
   const ends = new Map<OsmRoad, Vec2[]>();
   for (const [id, arms] of incidents) {
     const node = city.nodes[id]!;
-    if (
-      arms.size !== 2 ||
-      node.control !== 'uncontrolled' ||
-      protectedNodes.has(id) ||
-      node.provenance.inferred?.includes('junctionConsolidation')
-    )
-      continue;
+    if (arms.size !== 2 || node.control !== 'uncontrolled' || protectedNodes.has(id)) continue;
     const [a, b] = [...arms.values()] as [End[], End[]];
     const left = a[0]!.source.road;
     const right = b[0]!.source.road;

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { pointAtDistance } from '../../geo/polyline';
-import { generateSignalProgram } from '../../importers/signal-program';
+import { generateSignalProgram } from '../../network/signal-program';
 import { compile, type CNode, type CompiledCity } from '../../network';
 import { crossingArms } from '../../network/crossings';
 import type { City, Node, SignalProgram } from '../../schema';
