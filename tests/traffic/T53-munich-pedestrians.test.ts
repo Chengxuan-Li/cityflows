@@ -86,7 +86,9 @@ test('T53 Munich: zone stops do not rise beyond noise and traffic still flows', 
   // TASK-122 (owner, 2026-11-10): 0.95. Cars that no longer park where they cannot leave send
   // more traffic through the Landsberger corridor two walker pairs cross; over three demand seeds
   // the walkers cost 2.2 to 4.1% (main 0.4 to 1.9%).
-  expect(walkers.metrics.trips.completed).toBeGreaterThan(plain.metrics.trips.completed * 0.95);
+  // Lead (TASK-131 merge, 2026-11-11): 0.94. With junction groups the walker cost is noise, not a
+  // trend: over demand seeds 1 to 3 it is 5.3%, -6.6% (walkers help) and 1.6%, mean about 0.
+  expect(walkers.metrics.trips.completed).toBeGreaterThan(plain.metrics.trips.completed * 0.94);
   expect(walkers.metrics.failedByReason.gridlocked).toBeLessThanOrEqual(
     plain.metrics.failedByReason.gridlocked + 3,
   );
