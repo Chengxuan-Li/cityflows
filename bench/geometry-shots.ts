@@ -35,6 +35,24 @@ const v111Walkers = [
   toPlaceId: toPlaceId!,
   perHour: 600,
 }));
+/** TASK-140 (B59): pairs whose walks cross at n:34 (three arms), n:372, n:23 and the crossing of
+ * Landsberger Straße split at the median between n:251 and n:246. */
+const t140Walkers = [
+  ['p:1754', 'p:1786'],
+  ['p:1786', 'p:1754'],
+  ['p:1754', 'p:1788'],
+  ['p:1788', 'p:1754'],
+  ['p:1488', 'p:1794'],
+  ['p:1794', 'p:1488'],
+  ['p:1488', 'p:1664'],
+  ['p:1664', 'p:1488'],
+  ['p:1780', 'p:1836'],
+  ['p:1836', 'p:1780'],
+].map(([fromPlaceId, toPlaceId]) => ({
+  fromPlaceId: fromPlaceId!,
+  toPlaceId: toPlaceId!,
+  perHour: 1200,
+}));
 
 /** TASK-131 reference cases: shot id, main's node there, the camera centre (main's node
  * position), label, extract. */
@@ -129,6 +147,13 @@ export const shots: {
       ...(three ? { view: '3d' as const, pitch: 50, bearing: 30 } : {}),
     })),
   ),
+  // TASK-140 (B59): walk links, walk lights and walkers on the zebra stripes, at 10 px/m.
+  ...[
+    { id: 'T140-munich-n34', centre: [542.8, -701.1] as [number, number] },
+    { id: 'T140-munich-n372', centre: [-45.5, 545] as [number, number] },
+    { id: 'T140-munich-n23', centre: [-52, 594.6] as [number, number] },
+    { id: 'T140-munich-n251-median', centre: [-78, 162] as [number, number] },
+  ].map((shot) => ({ ...shot, cases: [], zoom: 10, walkers: t140Walkers, steps: 18000 })),
   ...(['de', 'us', 'uk'] as const).flatMap((theme) =>
     [false, true].map((three) => ({
       id: `V117-munich-signs${theme === 'de' ? '' : `-${theme}`}${three ? '-3d' : ''}`,
