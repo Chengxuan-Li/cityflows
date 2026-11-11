@@ -115,6 +115,33 @@ On main, for Munich and Sindelfingen as imported today (use `bench/geometry-audi
 Checkpoint 0: the lead reviews the report and the shots with the owner, and chooses the reference
 cases and the passes' fate.
 
+**Checkpoint 0 outcome (owner, 2026-11-10; audit `d4a5918`).** The owner approved the lead's
+recommendations.
+
+The passes:
+- `consolidateJunctions` is replaced by groups;
+- `realignRoads`, `attachCarriageways` and `relaxRoads` are turned off;
+- `separateCoincident` and `separateDual` act only where carriageways overlap or leave no space;
+- `smoothRoads` never moves a node and does not smooth within 30 m of a node; Gate 2's 0.5 m bound
+  stays;
+- `mergeShortRoads` and `sampleSameDirection` stay.
+
+The rest:
+1. **B54's Arnulfstraße corridors** (real medians 6 to 8 m at `n:138` and `n:638`) are drawn apart
+   at their OSM positions, without a divider. This undoes TASK-099's attachment there.
+2. **`joinDividedFeeders`' synthetic median crossings** (36 in Munich) stay, as inner links of
+   their groups that are not drawn. Whether they allow turns that do not exist is a later
+   question.
+3. **`convergingShifts`** (`src/network/continuity.ts`) applies decision 2 too: it brings
+   carriageways together only where they overlap or leave no space.
+4. **Dead ends** do not form groups.
+5. **Today's two cluster rules stay:** a group spans at most 60 m, and a road of 30 m or more
+   inside a candidate group splits it.
+6. **B55.** `n:841`'s id has moved since round 6; `n:68` is the known case. Phase 2 finds every
+   near-parallel overlap in both cities (different streets within 15 degrees of each other that
+   overlap near a node) and lists them for the owner.
+7. **The `n:967` reference** is `n:247` since TASK-101.
+
 ### Phase 1 — The model
 
 1. **Schema.** A junction group in the city model, set at import, saved, and editable later. A
