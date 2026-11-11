@@ -155,7 +155,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-127](tasks/TASK-127.md) | 10 | Decorative trains: S-Bahn trains stop at Donnersbergerbrücke, main-line trains pass through, by a deterministic timetable on the sim clock; drawn in 2D and 3D; no sim change | new routes/timetable/motion module, train layers, `src/network/rail.ts`, rail schema (preferred direction) | 126 | T64, traffic and sim hash unchanged, frame time, shots | done |
 | [TASK-128](tasks/TASK-128.md) | 10 | Stations as trip ends: S-Bahn riders walk out of Donnersbergerbrücke after each stop, walk to work or a visit nearby, and walk back to board; walk-only, timed by TASK-127's timetable | new rider module in `src/demand/`, `schedule.ts`, person inspector, rider census | 126, 127 | T65, Munich 0.15 gate with riders, Sindelfingen and synthetic trips unchanged, shots | open |
 | [TASK-129](tasks/TASK-129.md) | 10 | Car ownership: persons grouped into households that own their members' cars; a person drives only a free household car (owners first, borrowers for a whole free day), a car's trips chain by car, every car starts and parks near home | `src/demand` (households, drivers), `src/schema` (`householdId`, `carId`, `homeParkingRadiusM`), `src/sim/parking.ts`, `persons.ts`, person inspector, census | 112, 122, 125 | T67, Munich 0.15 seeds 1 to 3, no car parked beyond the home radius while room is near, baseline reset | open |
-| [TASK-130](tasks/TASK-130.md) | 7 | Break the Landsberger loop (B56 reopened): trace the cycle TASK-121's head detours do not clear, then the smallest general rule (box entry, zipper or wider detours) so the corridor drains | `src/sim/intersection.ts`, `engine.ts`, `reroute.ts`, `lane-change.ts`, `merge.ts`, `params.ts`, probe seeds | 121, 122, 077 | T66, 0 stalled heads over seeds 1 to 3, loop waits under 15 min, baseline reset | open |
+| [TASK-130](tasks/TASK-130.md) | 7 | Break the Landsberger loop (B56 reopened): trace the cycle TASK-121's head detours do not clear, then the smallest general rule (box entry, zipper or wider detours) so the corridor drains | `src/sim/intersection.ts`, `engine.ts`, `reroute.ts`, `lane-change.ts`, `merge.ts`, `params.ts`, probe seeds | 121, 122, 077 | T66, 0 stalled heads over seeds 1 to 3, loop waits under 15 min, baseline reset | checkpoint reviewed 2026-11-11, not merged (B56 open) |
 | [TASK-131](tasks/TASK-131.md) | 5 | Junction groups (B54 amended, B55): every OSM node keeps its position; nodes joined by links up to `junctionGroupMaxM` (30 m) form one junction group with inner links kept, one coordinated signal program and one drawn surface; the collision model off; cars never stop on inner links | `src/importers/osm/**`, `src/schema` (junction group), `src/network/**`, road and junction renderers, signal editor; Phase 3 `src/sim/intersection.ts`, `signals.ts`, `engine.ts` after 130 | 089, 092, 094, 099, 111; 130 for Phase 3 | T68, reference-case shots per checkpoint, geometry gates, traffic over seeds 1 to 3, baseline reset | Phases 0 to 2 merged 2026-11-11 (lead-driven subagents); Phase 3 (box rule across inner links) waits for TASK-130 |
 | [TASK-133](tasks/TASK-133.md) | 10 | Station furniture: name boards, shelters, benches, departure displays from the timetable, generic entrance signs; visual only | new `src/render/layers/stations.ts`, `src/render3d/stations.ts`, placement module, read-only helper in `src/network/trains.ts` | 126, 127 | T70, shots, no hash change | done 2026-11-11 |
 | [TASK-135](tasks/TASK-135.md) | 10 | Trams as their own kind of track: embedded, grass, paved or ballast form from OSM tags or inference, a distinct tram look in 2D and 3D | `src/schema/rail.ts`, `src/importers/osm/rail.ts`, rail drawing 2D and 3D, `style.ts` | 126, 127, 131 | T69, shots against the imagery, no hash change | done 2026-11-11 |
@@ -2988,6 +2988,25 @@ tactile strip and a track marking, in 2D and 3D; TASK-133's furniture output is 
 islands use the platforms' layer height, as station platforms still do after TASK-132. Only the
 Munich city hash pins moved. Lead merge: T44 and T49 re-pinned for TASK-132 and TASK-137 together.
 Lead runs: `check`, `test:city`, the light e2e (37), T70, T73.
+
+TASK-130 review (lead, 2026-11-11; Codex checkpoint `215afac`, not merged): the agent's own report
+calls it a checkpoint, incomplete; B56 stays open. Retained model: junction exit storage rechecked
+at entry with a bounded box forecast (a tail's forecast is capped by its immediate leader and by
+known stops), bounded yielding for ready origins, a non-progress head-detour filter, per-vehicle
+head-cost reuse and an unfinished-traversal cost floor in `link-costs.ts` (the last three with the
+owner's approvals recorded in the commit, architecture sections 7 and 8 amended). On its base
+(7868a5d) over seeds 1 to 3: completed 4 133 / 4 025 / 3 814 (main 3 665 / 3 465 / 3 084),
+gridlocked 4 / 3 / 4, route requests about halved, step time +38 to 51%; the loop's longest waits
+5 500 to 6 400 s against the 900 s gate in every seed; T53 fails (7.9% walker cost). It proposes a
+routing change (`avoidEntryLane` in `RouteRequest`) that needs approval. Lead re-measure on today's
+main (after TASK-131 and TASK-140), probe to 10:00: the loop persists on main (seed 1: `r:961` 24
+cars, longest wait 5 090 s; `r:364` 17, 5 525 s; `r:248` 17, 6 888 s; seeds 2 and 3 alike). Main
+completes 4 113 / 3 994 / 3 245; main with TASK-130 merged (only the baseline file conflicts)
+completes 3 704 / 4 185 / 3 977 (mean +4.5%, seed 1 -10%) with the loop's waits still 4 600 to
+6 200 s. Not merged: it meets none of B56's gates and costs step time. To be decided with the owner:
+salvage parts (the box forecast bound, the head-cost reuse) as their own measured changes, take the
+routing proposal, or combine with TASK-131 Phase 3's rule that a car enters a junction group only
+when it can get through.
 
 ## Owner decisions log
 
