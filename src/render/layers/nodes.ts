@@ -19,13 +19,31 @@ export function roadEndEdges(_city: CompiledCity, road: CRoad, atEnd: boolean) {
 
 export function nodeColor(city: CompiledCity, node: CNode, roadClasses = false): number {
   if (!roadClasses) return style.asphalt;
-  const highest = city.roads
-    .filter((r) => r.from === node.idx || r.to === node.idx)
+  const highest = highestRoad(city, node.group === undefined ? [node.idx] : groupNodes(city, node));
+  return highest ? roadStyle(highest, true).color : style.asphalt;
+}
+
+function groupNodes(city: CompiledCity, node: CNode): number[] {
+  return city.groups?.[node.group!]?.nodes ?? [node.idx];
+}
+
+function highestRoad(city: CompiledCity, nodes: readonly number[]): CRoad | undefined {
+  const at = new Set(nodes);
+  return city.roads
+    .filter((r) => at.has(r.from) || at.has(r.to))
     .reduce<CRoad | undefined>(
       (best, road) => (!best || road.classRank > best.classRank ? road : best),
       undefined,
     );
-  return highest ? roadStyle(highest, true).color : style.asphalt;
+}
+
+/** TASK-131: a junction group is one surface. Its inner roads take the tone its members take,
+ * that of the highest-ranked road at any member, so no seam shows between them with road classes
+ * on; elsewhere a road keeps its own. */
+export function roadFill(city: CompiledCity, road: CRoad, roadClasses = false): number {
+  if (!roadClasses || road.group === undefined) return roadStyle(road, roadClasses).color;
+  const highest = highestRoad(city, city.groups?.[road.group]?.nodes ?? [road.from, road.to]);
+  return roadStyle(highest ?? road, true).color;
 }
 
 /** The junction polygon, curbs included (TASK-083). */
@@ -40,7 +58,8 @@ export function drawRoadJoins(
   road: CRoad,
   roadClasses = false,
 ): void {
-  const { color, vergeM } = roadStyle(road, roadClasses);
+  const { vergeM } = roadStyle(road, roadClasses);
+  const color = roadFill(city, road, roadClasses);
   for (const atEnd of [false, true]) {
     const node = city.nodes[atEnd ? road.to : road.from]!;
     if (!node.outline.length) continue;

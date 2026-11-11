@@ -618,13 +618,30 @@ export const shots: {
     bearing: 0,
     buildings: false,
   })),
-  {
-    id: 'T131-p2-n138-curbs',
+  // Checkpoint 2 (lead): one surface per group, curbs only on its outside, rounded median noses;
+  // at 10 px/m without the group overlay so the curbs show, and n:138 in 3D at the same scale.
+  ...(
+    [
+      ['n247', [-19.28, 166.81], 'Landsberger Strasse x Donnersberger Bruecke'],
+      ['n638', [90.29, -526.03], 'Arnulfstrasse x Landshuter Allee'],
+      ['n138', [-18.85, -540.61], 'Arnulfstrasse x Donnersbergerstrasse'],
+    ] as [string, [number, number], string][]
+  ).map(([id, centre, label]) => ({
+    id: `T131-p2-curbs-${id}`,
     cases: [],
-    centre: [-18.85, -540.61],
+    centre,
     zoom: 10,
-    osmLines: 'Munich n:138 (main), the group at the synthetic median crossing',
-    groups: true,
+    osmLines: `Munich ${id.replace('n', 'n:')} (main), ${label}: one surface per group`,
+  })),
+  {
+    id: 'T131-p2-3d-curbs-n138',
+    cases: [],
+    centre: [-18.85, -540.61] as [number, number],
+    zoom: 10,
+    view: '3d' as const,
+    pitch: 50,
+    bearing: 0,
+    buildings: false,
   },
 ];
 

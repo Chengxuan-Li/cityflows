@@ -742,9 +742,16 @@ interface PolygonEnd {
   incoming: boolean;
   /** TASK-089: the end is shifted at this node (a split converging carriageway). */
   split: boolean;
+  /** TASK-131: an inner road of a junction group. */
+  inner: boolean;
 }
 
-function polygonEnd(node: CNode, road: CRoad, setback: number): PolygonEnd {
+function polygonEnd(
+  node: CNode,
+  road: CRoad,
+  setback: number,
+  inner: ReadonlySet<string> = new Set(),
+): PolygonEnd {
   const ring = road.surface;
   const half = ring.length / 2;
   const travelLeft = ring.slice(0, half),
@@ -762,6 +769,7 @@ function polygonEnd(node: CNode, road: CRoad, setback: number): PolygonEnd {
     setback,
     incoming,
     split: (incoming ? road.endShift : road.startShift).length > 0,
+    inner: inner.has(road.id),
   };
 }
 
@@ -1042,8 +1050,15 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
         ? [b.road]
         : [a.road, b.road];
   const classRadius = Math.min(...lower.map((r) => CURB_RADIUS_M[r.roadClass]));
+  // TASK-131: a curb between a junction group's inner road and a member's arm rounds the median
+  // between the group's carriageways, and the arm's far end, a node on along the carriageway, has
+  // no curb on that edge: the arc may use the arm's whole edge (n:138's east nose).
+  const median = a.inner !== b.inner;
   const room = (edge: Vec2[], end: PolygonEnd, s: number) =>
-    Math.min(CURB_REACH * end.road.lengthM - end.setback, cumulativeLengths(edge).at(-1)!) - s;
+    Math.min(
+      median && !end.inner ? Infinity : CURB_REACH * end.road.lengthM - end.setback,
+      cumulativeLengths(edge).at(-1)!,
+    ) - s;
   // The edges' lines meeting beyond a cut: a gore where the edges cross there (a capped acute
   // pair's overlap); else the meeting point lies behind the other cut and a curb fits as below
   // (TASK-092: these were left without a corner, the sharp corners at n:262, n:291 and n:967).
@@ -1305,8 +1320,9 @@ function cutRegion(
   hidden: number[],
   through: ThroughPair[],
   surface: Vec2[],
+  inner: ReadonlySet<string>,
 ) {
-  const ends = roads.map((road, i) => polygonEnd(node, road, node.setbacks[i]!));
+  const ends = roads.map((road, i) => polygonEnd(node, road, node.setbacks[i]!, inner));
   const groups = approaches.map((approach) => approach.map((i) => ends[i]!));
   const fan: PathD[] = [];
   const corners: JunctionCorner[] = [];
@@ -1414,6 +1430,7 @@ export function junctionPolygon(
   through: ThroughPair[],
   lanes: CLane[],
   movements: CMovement[],
+  inner: ReadonlySet<string> = new Set(),
 ): Vec2[] {
   if (node.setbacks.every((s) => s === 0)) return [];
   const surfaces: Vec2[][] = [];
@@ -1468,7 +1485,7 @@ export function junctionPolygon(
       }));
     }),
   );
-  const { fan, corners } = cutRegion(node, roads, approaches, hidden, through, samples);
+  const { fan, corners } = cutRegion(node, roads, approaches, hidden, through, samples, inner);
   cornersByNode.set(node, corners);
   // A curb or nose block is closed through the node's centre, as the fan is (TASK-092): closed by
   // the chord between its cut corners, an arc whose tangent points lie beyond the cuts crosses the

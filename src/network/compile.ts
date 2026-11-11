@@ -386,6 +386,9 @@ export function compile(city: City): CompileResult {
     lane.in = [];
     lane.out = [];
   }
+  const innerRoads = new Set<string>(
+    Object.values(city.junctionGroups ?? {}).flatMap((g) => g.innerRoads),
+  );
   const movements: CMovement[] = [];
   for (const node of nodes) {
     const pairs = new Set(through[node.idx]!.map((p) => `${p.from}>${p.to}`));
@@ -415,6 +418,7 @@ export function compile(city: City): CompileResult {
       through[node.idx]!,
       lanes,
       movements,
+      innerRoads,
     );
     populateConflicts(node, movements, lanes);
   }
