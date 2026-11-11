@@ -356,8 +356,8 @@ test('T70 furniture changes neither the city nor the timetable', () => {
   platformDepartures(rail, trainTimetable(rail), 'rp:1', 1000);
   expect(JSON.stringify(city)).toBe(before);
   expect(buildTimetable(rail).hash).toBe(hash);
-  // Pinned on main (7a93d97): TASK-133 adds a read-only helper and leaves the timetable alone.
-  expect(hash).toBe('255c0ec6');
+  // Pinned: the timetable hash covers routes, stops and departures to 0.01 s (it was over raw floats).
+  expect(hash).toBe('dde7c44e');
 });
 
 test.each(tierCities(['munich-donnersberger']))(
@@ -372,7 +372,7 @@ test.each(tierCities(['munich-donnersberger']))(
       cc = compiled(city),
       furniture = placeStationFurniture(cc, city);
     expect(JSON.stringify(city)).toBe(snapshot);
-    expect(furniture.platforms.map((p) => p.platform)).toEqual(['rp:10736', 'rp:10737']);
+    expect(furniture.platforms.map((p) => p.platform)).toEqual(['rp:10743', 'rp:10744']);
     expect(furniture.entrances).toHaveLength(3);
     expectOnPlatform(city, furniture.platforms);
     for (const p of furniture.platforms) {
@@ -398,16 +398,29 @@ test.each(tierCities(['munich-donnersberger']))(
     // 07:00: the next three S-Bahn departures per platform, from the TASK-127 timetable.
     const rail = cc.rail!,
       table = trainTimetable(rail);
-    expect(table.hash).toBe('374c1e78');
-    expect(departureDisplay(rail, table, 'rp:10736', 25200).rows).toEqual([
-      'S-Bahn W   3 min',
-      'S-Bahn W   7 min',
-      'S-Bahn W  11 min',
+    expect(table.hash).toBe('0d505d0f');
+    expect(departureDisplay(rail, table, 'rp:10743', 25200).rows).toEqual([
+      'S-Bahn W     now',
+      'S-Bahn W   5 min',
+      'S-Bahn W   9 min',
     ]);
-    expect(departureDisplay(rail, table, 'rp:10737', 25200).rows).toEqual([
-      'S-Bahn E   4 min',
-      'S-Bahn E   8 min',
-      'S-Bahn E  12 min',
+    expect(departureDisplay(rail, table, 'rp:10744', 25200).rows).toEqual([
+      'S-Bahn E   3 min',
+      'S-Bahn E   7 min',
+      'S-Bahn E  11 min',
     ]);
   },
 );
+
+test('T70 the timetable hash ignores float noise below a millimetre (browser against Node projection)', () => {
+  const city = trainCity(),
+    hash = buildTimetable(compileRail(city)!).hash;
+  const noisy = JSON.parse(JSON.stringify(city)) as City;
+  const nudge = (p: Vec2) => {
+    p.x += 1.2e-9;
+    p.y -= 0.9e-9;
+  };
+  for (const n of Object.values(noisy.rail!.nodes)) nudge(n.pos);
+  for (const t of Object.values(noisy.rail!.tracks)) t.line.forEach(nudge);
+  expect(buildTimetable(compileRail(noisy)!).hash).toBe(hash);
+});

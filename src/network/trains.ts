@@ -450,7 +450,24 @@ export function buildTimetable(rail: RailGraph): TrainTimetable {
     departures,
     unused: rail.tracks.filter((t) => !used.has(t.idx)).map((t) => t.id),
   };
-  return { ...table, hash: hash(JSON.stringify(table)) };
+  // The hash covers what the timetable decides (routes, stops, departures), with times to 0.01 s.
+  // Raw floats would not do: the same import in a browser and in Node differs by about 1e-9 m in
+  // projected coordinates, so hashing every float made one timetable look like two.
+  const cs = (v: number) => Math.round(v * 100) / 100;
+  const canonical = {
+    periodS,
+    routes: routes.map((r) => [
+      r.id,
+      r.kind,
+      r.terminal ?? null,
+      r.sections.map((s) => [s.track, s.forward]),
+      r.stops.map((s) => [s.platform, cs(s.arrivalS)]),
+      cs(r.durationS),
+    ]),
+    departures: departures.map((d) => [d.route, cs(d.timeS), d.requestedS]),
+    unused: table.unused,
+  };
+  return { ...table, hash: hash(JSON.stringify(canonical)) };
 }
 const cache = new WeakMap<RailGraph, TrainTimetable>();
 export function trainTimetable(rail: RailGraph) {
