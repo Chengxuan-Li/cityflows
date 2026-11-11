@@ -411,7 +411,11 @@ export function joinDividedFeeders(
         to: to!,
         centerline: [city.nodes[from!]!.pos, city.nodes[to!]!.pos],
         streetGroupId: group,
-        lateralOffsetM: city.drivingSide === 'right' ? 1.5 : -1.5,
+        // Half the feeder's lane block, as a two-way street's directions (Barthstrasse's 3.5 m lanes).
+        lateralOffsetM:
+          ((city.drivingSide === 'right' ? 1 : -1) *
+            feeder.road.lanes.reduce((w, lane) => w + lane.widthM, 0)) /
+          2,
         provenance: {
           source: 'osm',
           osmIds: [...feeder.road.provenance.osmIds!],
