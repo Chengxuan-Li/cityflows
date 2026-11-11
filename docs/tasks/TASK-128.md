@@ -1,10 +1,15 @@
 # TASK-128 — Stations as trip ends
 
-Owner: unassigned
+Owner: the lead, through a Claude Code subagent (owner's orchestration rule, 2026-11-11)
 Gate: 10 candidates (owner backlog, 2026-11-10): rail item, people leave arriving trains
 Branch: `task/128-station-trips` (created by the lead from main)
 Depends on: TASK-126 (stations, platforms, entrances) and TASK-127 (the train timetable).
-Runs alongside: the lead's re-measure of TASK-122 (parking egress), which changes
+Lead refresh (2026-11-11): the owner's Codex run never started; the lead runs this task through a
+Claude Code subagent alongside TASK-129 (car ownership), which changes `src/demand/population.ts`,
+`schedule.ts` (driver assignment), `src/sim/parking.ts` and `persons.ts`. Keep edits to
+`schedule.ts`, the person inspector and `bench/import-probe.ts` additive; the lead reconciles. Ids
+and gates below are refreshed for main after TASK-131 (junction groups) and TASK-140.
+Originally ran alongside: the lead's re-measure of TASK-122 (parking egress), which changes
 `src/sim/parking.ts`, `src/sim/connectors.ts` and `src/sim/persons.ts` and will most likely merge
 first. Stay out of `src/sim` where you can; the lead reconciles at merge.
 Followed by: TASK-129 (car ownership) and TASK-113 (mode choice), which may later send residents
@@ -26,9 +31,9 @@ choice. Their timing follows TASK-127's timetable, so the walkers appear right a
 stops.
 
 What exists today:
-- **Stations.** `Place.station { platforms, entrances }`. Donnersbergerbrücke is `p:1497`, with
-  rail platforms `rp:10736` and `rp:10737` and entrance walk nodes; each entrance node carries
-  `entrance.placeId = p:1497`, so `city.walk.places` already anchors walk trips at the station.
+- **Stations.** `Place.station { platforms, entrances }`. Donnersbergerbrücke is `p:1484`, with
+  rail platforms `rp:10743` and `rp:10744` and entrance walk nodes; each entrance node carries
+  `entrance.placeId = p:1484`, so `city.walk.places` already anchors walk trips at the station.
   Platforms are not on the walk network.
 - **Trains.** `trainTimetable(rail)` and `TrainRoute.stops` (`src/network/trains.ts`): each S-Bahn
   stop has its platform, its position and `arrivalS` within the route. A train arrives at
@@ -133,8 +138,9 @@ Pre-approved, no need to ask:
    count against main at your branch point:
    - rider trips spawned, completed and failed by reason; walk fallbacks (straight-line legs) under
      2% of rider legs; failed rider trips under 2%;
-   - cars: completed at least 3 520 (main 3 592), gridlocked at most 23 (17), parking failures at
-     most 13 (13), 0 stalled heads;
+   - cars against main's baseline (4 113 completed, 26 gridlocked, 0 parking failures, 0 stalled
+     heads): completed at least 98% of main's, gridlocked at most main's plus 10, parking failures
+     at most main's, 0 stalled heads;
    - the quick 09:30 tier with the same figures.
    The traffic baseline resets at merge (owner rule 7); the lead records it.
 3. **Sindelfingen.** Every count equal to main's.

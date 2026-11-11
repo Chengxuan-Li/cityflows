@@ -1089,8 +1089,8 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-125 | Codex | GPT-6.1-Sol | xhigh | 5327 (production 5427) |
 | TASK-126 | Codex | GPT-6.1-Sol | high | 5326 (production 5426) |
 | TASK-127 | Codex | GPT-6.1-Sol | high | 5328 (production 5428) |
-| TASK-128 | Codex | GPT-6.1-Sol | xhigh | 5329 (production 5429) |
-| TASK-129 | Codex | GPT-6.1-Sol | xhigh | 5331 (production 5431) |
+| TASK-128 | Claude Code, the lead's subagent (Codex run never started) | Opus 5.5 | high | 5329 (production 5429) |
+| TASK-129 | Claude Code, the lead's subagent (Codex run never started) | Opus 5.5 | high | 5331 (production 5431) |
 | TASK-130 | Codex | GPT-6.1-Sol | xhigh | 5330 (production 5430) |
 | TASK-131 | Claude Code, the lead's subagent | Opus 5.5 | high | 5332 (production 5432) |
 | TASK-133 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5333 (production 5433) |
@@ -2991,6 +2991,9 @@ Lead runs: `check`, `test:city`, the light e2e (37), T70, T73.
 
 ## Owner decisions log
 
+- 2026-11-11, lead (under the owner's orchestration rule): TASK-128 and TASK-129 had no Codex
+  activity (no commits, no worktree); the lead runs them as Claude Code subagents in parallel, with
+  their contracts refreshed for main after TASK-131 and TASK-140. TASK-130 stays on Codex.
 - 2026-11-11, TASK-131 merge (lead, under the owner's orchestration rule): Phases 0 to 2 merge
   with the baseline reset; T53's walker-cost limit goes from 5% to 6% because over three seeds
   the cost is noise around zero (5.3%, -6.6%, 1.6%); `planLane`'s cutoff is clamped at 0 (a sim

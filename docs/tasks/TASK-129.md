@@ -1,6 +1,8 @@
 # TASK-129 — Car ownership: household cars that park near home
 
-Owner: unassigned
+Owner: the lead, through a Claude Code subagent (owner's orchestration rule, 2026-11-11; the
+owner's Codex run never started). Runs alongside TASK-128 as described below; main now includes
+TASK-131 (junction groups) and TASK-140, so measure against main at your branch point.
 Gate: 10 candidates (owner backlog, 2026-11-10): car ownership, before mode choice
 Branch: `task/129-car-ownership` (created by the lead from main)
 Depends on: TASK-112 (person trips), TASK-122 (parking egress) and TASK-125 (parking claims), all
