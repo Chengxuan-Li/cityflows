@@ -19,11 +19,13 @@ import { test } from 'vitest';
 // TASK-119 removes parking-place connectors, changing the sampled pairs; routing itself is unchanged.
 // TASK-131 keeps OSM geometry (no node merges, junction groups): both networks, connectors and
 // samples move, so the routes no longer equal main's (Munich b7df6e01…, Sindelfingen 87e2a869…).
+// Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+// and e4654d8 (merging lanes kept on a group's inner roads).
 const hashes = {
   grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
   Sindelfingen: '1bc9a0138a6034667ee1993cb19bd39880fb095947ba44ac0aa7e701933ccb22',
-  Munich: '18bde1bbf4042a1255c3ce388d8edcb74463edd37a568dc6d0889e2dc5fed833',
+  Munich: 'd0de9ee89c84b4e3b6a43d8a89d791e10a058cc3dd0020dab7954c355241c251',
 };
 
 test.each(tierCities(throughputCities))(

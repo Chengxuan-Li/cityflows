@@ -347,11 +347,13 @@ test('T61 saved aisle entries and split exits retain the walk door; a moved arri
 // TASK-131 keeps OSM geometry (no node merges, junction groups): lanes and movements move, and
 // strips keep their rings but sit on other road ids and stations, so neither equals main's;
 // fewer roadside gaps remain (main: Munich 16 with 85 spaces, Sindelfingen 32 with 721).
+// Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+// and e4654d8 (merging lanes kept on a group's inner roads).
 test.each(
   tierCities([
     [
       'munich',
-      '5b99ec601997ecbc28c1432e2466911c39056185a061f9c5a44f652addca2072',
+      'b19de114903288218a59527cceef23ac96d6fef379dfd144e5da458d6ea480d2',
       '9e15a4d6ac0cd7d3254c2abb9d8e7e8ed88365a158a6ae2f596319a6d680cafe',
       14,
       79,

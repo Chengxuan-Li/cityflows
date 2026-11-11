@@ -97,10 +97,10 @@ cityTest(
     const count = (code: string) => diagnostics.filter((d) => d.code === code).length;
     expect(count('connector_unreachable')).toBe(0);
     // TASK-131 keeps OSM geometry: short roads between close nodes stay as roads (no longer
-    // merged into one node); inner roads of groups are not counted. Dead ends: lanes of a group's
-    // inner links or arms that end without a movement at the next member (r:252#2, r:966#2).
+    // merged into one node); inner roads of groups are not counted. Dead ends: the 9 named below;
+    // e4654d8 gives r:252#2 and r:966#2 (jg:10783's inner roads) their merges at the next member.
     expect(count('road_too_short')).toBeLessThanOrEqual(39);
-    expect(count('dead_end')).toBeLessThanOrEqual(11);
+    expect(count('dead_end')).toBeLessThanOrEqual(9);
     const roads = Object.values(city.roads);
     // TASK-131: a signalised junction group runs one program for its members (which have
     // `signal: null`), so controllers are counted: main's 14 signal nodes are 10, as main's n:247,

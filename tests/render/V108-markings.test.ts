@@ -39,6 +39,8 @@ import { tierCities, unitTest } from '../tier';
 // aisle lanes are renumbered. Arrows on the other 664 Sindelfingen lanes equal main's.
 // TASK-131 keeps OSM geometry (no node merges, junction groups): Munich and Sindelfingen roads,
 // lanes and arrows move, so their compile and arrow hashes no longer equal main's.
+// Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+// and e4654d8 (merging lanes kept on a group's inner roads).
 const baseline = {
   grid: {
     compile: '41664cabf1ab1d44115242181e2d531294b4cd516eb00209669329ad514b53f3',
@@ -54,8 +56,8 @@ const baseline = {
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
-    compile: '5ce9238887c7b0131c0d62f86be6bdcc4da3356541d98e0b4a8c7f37aba1e660',
-    arrows: 'a5229c381f355934fe6f063e89088889990ee99510009e24a34e68739542fa42',
+    compile: '3aa8d9936198210a826ad7263a1f8cfe8dc2ce19b8c43a7b8e7a7c28276bda8b',
+    arrows: 'a12173fa63481ccbe7329209de0e0fc6d173bae54d43d50556cd692deaacd476',
   },
 } as const;
 const hash = (value: unknown) =>

@@ -164,12 +164,14 @@ const pins = {
   },
   // TASK-131 keeps OSM geometry (no node merges, junction groups): the real cities' roads,
   // lamps, curbs and paint move, so they no longer equal main's.
+  // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+  // and e4654d8 (merging lanes kept on a group's inner roads).
   munich: {
-    compile: '6480c213a85c1aa6896a51edf82a1b95eb5f9e9590d37c276147169faf16d145',
+    compile: '83f4c9da15515c9c91b4f3dbc349bdd891dafe991dc1cccab271399fb1234955',
     lamps: 'a6367b276c0f7db6c9a4a9fe6e103d4f020b6bbf93bef7df2d2ec3fd5c2cfc00',
-    curbs: '73f74b492cd2e1accb3c9ca2a591d50a8732630cfb84e8d31a694fb410dd5b42',
-    de: '41a7adbc9340595b5e590e0a51d512041d03d282a4e4d8ce036848f767522b32',
-    us: 'cac736f53d5669cd0ac2f4a27567c56a626a6ebebfb4118687b46a896ffd224f',
+    curbs: '267633b7d3f72cdae1a1f44667174da632abc4c01175068d1230b62eff6de1ae',
+    de: '6e56a30b8f7d51efdc36cc46f8de2d9b6faf8b71166e1e543b37b872445e388c',
+    us: '696dc554575cfc17537e6a01c8ebbcbd0827d3bec4f47fe027bb0f59a6a62770',
   },
   sindelfingen: {
     compile: '31fa7806721c5cd4e926dfe0677029913343c9b16df7ba91791769fd9e58dc8e',

@@ -16,10 +16,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // geometry. No original entity is reconstructed by the aisle-stripping oracle.
 // TASK-131 keeps OSM geometry (no node merges, junction groups): the aisle-free networks no
 // longer equal main's (main: Munich 33bfd6b9…/3c6dfcc5…, Sindelfingen b72831fb…/c9e05f99…).
+// Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+// and e4654d8 (merging lanes kept on a group's inner roads).
 const baseline = {
   'munich-donnersberger': [
-    'ec85fdc1c23d96eb2271b32e9c63edf48179e545867e78aa811ddd744082cd94',
-    'dad38100870b54e0472fc1bbe9e87e3139da7e22654b6f5064bcfa983ce395d3',
+    'b965bd68ac47e63bd2d56fdefed096149f10156c4fa721992e71201319d10cf3',
+    '4cef4dafa35cecaa2135984bd9e2c66b0440ef46d84e3bf1ac13d79b09392a33',
   ],
   'sindelfingen-a81': [
     '5a966f46bb257988768af34b7171cf187663652a3c70fb1a73e6c65158877798',

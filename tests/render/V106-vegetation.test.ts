@@ -42,7 +42,9 @@ const baselines = {
   // TASK-119 updates parking data and removes obsolete places; T55 pins unchanged vehicle geometry.
   // TASK-131 keeps OSM geometry: no node merges, junction groups, so both real cities no longer
   // hash as on main.
-  'munich-donnersberger': '60c92802b26ecf30a6abb9857f0054c7a661ac5c016d18f4440bc84e1342657b',
+  // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+  // and e4654d8 (merging lanes kept on a group's inner roads).
+  'munich-donnersberger': '55728c9efe239234d6ebad321c0056ce408bf0c6c59e16e5062f03dadb7fd844',
   'sindelfingen-a81': '1d7e90fb387cf98321a94be8e98599984bf0edf9d14671997403190f39b12dc0',
 };
 

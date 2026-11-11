@@ -23,12 +23,14 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     // TASK-131 keeps OSM geometry (no node merges, junction groups): lanes, movements and
     // connectors move, and place/parking ids shift (main's p:1731, p:1379, pk:1453 and p:1407
     // are p:1724, p:1374, pk:1452 and p:1402, same OSM ways and capacity).
+    // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+    // and e4654d8 (merging lanes kept on a group's inner roads).
     const { lanes, movements, connectors } = result.compiled;
     expect(
       createHash('sha256').update(JSON.stringify({ lanes, movements, connectors })).digest('hex'),
     ).toBe(
       name.startsWith('munich')
-        ? 'f70353898eef24ea40b934078f9adf3163e1c912d0ed4df667ce8a7a6e00b10a'
+        ? '74638e4c4032ea7e80075a38b3360cdb4e32deb2315976d4ab56dbaee5323acd'
         : '80e2122adc6d1203bc4e56035f63f9870f823b7380e64c1a296d24ec510e827e',
     );
     const g = result.compiled.walk;

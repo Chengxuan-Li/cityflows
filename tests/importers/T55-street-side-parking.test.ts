@@ -389,9 +389,11 @@ test.each(
   console.info('T55 census', name, JSON.stringify(counts));
   // TASK-131 keeps OSM geometry (no node merges, junction groups): the vehicle network no longer
   // equals main's (main: Munich 51b6cf03…, Sindelfingen ac619150…).
+  // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+  // and e4654d8 (merging lanes kept on a group's inner roads).
   expect(vehicleHash(net)).toBe(
     name.startsWith('munich')
-      ? '4340d6433b3dc7e2c8523d1c1c0da6577afe30ca3676447ec1d936603a1c9344'
+      ? '9d44ceac29b2996ef020e1e51a98fb65eede4717c55bd9dcbee358f7fc32435d'
       : '53f8c865e9a8400f85d201c5d91d35260e7dd3877a57dea7abce5d64a81b5358',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));

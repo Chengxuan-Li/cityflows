@@ -37,8 +37,10 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // T49 retains the original main hashes with appended parking removed.
             // TASK-131 keeps OSM geometry (no node merges, junction groups): city and compile
             // hashes of both cities no longer equal main's.
-            'ba566bffa279e4abb0c1ddadd2637250cc774d48145afbe13162c6c472b38f68',
-            '60c92802b26ecf30a6abb9857f0054c7a661ac5c016d18f4440bc84e1342657b',
+            // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+            // and e4654d8 (merging lanes kept on a group's inner roads).
+            '7ae9628daac4611bb897621736fe7357484e0f6316289ebfd5e60721b825b10f',
+            '55728c9efe239234d6ebad321c0056ce408bf0c6c59e16e5062f03dadb7fd844',
           ]
         : [
             '54cb5a52b748dcd1df1717bbf5000321833917ca74c9a528756c9d26da9cbfbe',
