@@ -567,6 +567,31 @@ export const shots: {
     zoom: 10,
     osm: 'fixtures/osm/sindelfingen-a81.osm',
   },
+  // TASK-135: tram tracks by form. Arnulfstraße's median through the n:638 complex (n:640 to
+  // n:650), Landsberger at n:247 (main's positions before TASK-131), rt:10220 (79% inside road,
+  // the stretch closest to embedded), and a main line crossing Landsberger's tram on a bridge.
+  ...(
+    [
+      ['n638', [70, -530], 5],
+      ['n638-close', [62, -531], 10],
+      ['n247', [-19.28, 166.81], 5],
+      ['n247-close', [-60, 162], 10],
+      ['rt10220', [600, -365], 5],
+      ['rail-beside', [-470, 95], 3],
+    ] as [string, [number, number], number][]
+  ).flatMap(([id, centre, zoom]) => [
+    { id: `T135-${id}`, cases: [], centre, zoom },
+    {
+      id: `T135-${id}-3d`,
+      cases: [],
+      centre,
+      zoom,
+      view: '3d' as const,
+      pitch: 50,
+      bearing: 20,
+      buildings: false,
+    },
+  ]),
   // TASK-131 Phase 0: the import against the raw OSM ways, one scale (5 px/m), centred on the
   // reference nodes as main placed them (n:967 is n:247 since TASK-101) and the five clusters
   // whose arms turn most (bench/task131-audit.ts).

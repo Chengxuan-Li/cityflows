@@ -1,7 +1,12 @@
 import type { Vec2 } from '../geo/vec2';
+import type { Provenance } from './city';
 
 export const railKinds = ['rail', 'light_rail', 'subway', 'tram', 'narrow_gauge'] as const;
 export type RailKind = (typeof railKinds)[number];
+/** TASK-135: how a tram track is laid. `embedded` runs in the road surface; the others are an
+ * own bed of grass, paving or ballast. */
+export const trackForms = ['embedded', 'grass', 'paved', 'ballast'] as const;
+export type TrackForm = (typeof trackForms)[number];
 export interface RailNode {
   id: string;
   pos: Vec2;
@@ -25,6 +30,10 @@ export interface RailTrack {
   name?: string;
   maxSpeedMps?: number;
   osmId?: number;
+  /** Trams only; absent on other kinds and on trams of older projects (drawn as embedded). */
+  form?: TrackForm;
+  /** `inferred: ['form']` when no tag decided the form (TASK-135). */
+  provenance?: Provenance;
 }
 export interface RailPlatform {
   id: string;

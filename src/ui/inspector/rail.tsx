@@ -39,6 +39,12 @@ const names = {
   tram: 'Tram',
   narrow_gauge: 'Narrow gauge',
 };
+const forms = {
+  embedded: 'Embedded in the road',
+  grass: 'Grass bed',
+  paved: 'Paved bed',
+  ballast: 'Ballast bed',
+};
 export function RailInspector({ kind, index }: { kind: 'track' | 'platform'; index: number }) {
   const session = useAppStore((s) => s.session);
   if (!session?.compiled.rail) return null;
@@ -51,6 +57,15 @@ export function RailInspector({ kind, index }: { kind: 'track' | 'platform'; ind
         <dl>
           <dt>Kind</dt>
           <dd>{names[t.kind]}</dd>
+          {t.kind === 'tram' && (
+            <>
+              <dt>Track</dt>
+              <dd>
+                {forms[t.form ?? 'embedded']}
+                {t.provenance?.inferred?.includes('form') ? ' (inferred)' : ''}
+              </dd>
+            </>
+          )}
           <dt>Service</dt>
           <dd>{t.service ?? (t.kind === 'rail' ? 'Main line' : 'Running line')}</dd>
           <dt>Length</dt>

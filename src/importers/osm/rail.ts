@@ -1,8 +1,22 @@
-import { distance, nearestOnPolyline, polylineLength } from '../../geo/polyline';
+import Flatbush from 'flatbush';
+import {
+  cumulativeLengths,
+  distance,
+  nearestOnPolyline,
+  pointAtDistance,
+  pointInPolygon,
+  polylineLength,
+} from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import type { Diagnostic } from '../../network';
+import type { CompiledCity, Diagnostic } from '../../network';
 import { allocateId, type City, type Place } from '../../schema';
-import { railKinds, type RailKind, type RailNode, type RailPlatform } from '../../schema/rail';
+import {
+  railKinds,
+  type RailKind,
+  type RailNode,
+  type RailPlatform,
+  type TrackForm,
+} from '../../schema/rail';
 import { clip, polygonSources } from './buildings';
 import { clipPart, contains, type Bounds, type RoadPoint } from './clip';
 import type { OsmData, OsmTags } from './parse';
@@ -316,5 +330,95 @@ export function importRail(
         { x: x0, y: y0 },
       ],
     };
+  }
+}
+
+const pavedSurfaces = new Set(['asphalt', 'paving_stones', 'concrete', 'sett', 'paved']);
+/** Share of a tram track inside drivable road for an untagged track to count as embedded. */
+export const embeddedShare = 0.8;
+
+/**
+ * TASK-135: the form of each tram track. The way's own tags decide first (`embedded=yes|no`,
+ * `surface=grass` or `railway:track_ballast=no` for grass, a paved `surface` for a paved bed,
+ * `railway:track_ballast=yes` for ballast), then `embedded_rails=tram` on the highways it lies in
+ * (over half its length), and otherwise its geometry: a track inside same-grade road or junction
+ * surface over `embeddedShare` of its length is embedded, any other an own bed (ballast unless a
+ * paved surface is tagged), marked `inferred: ['form']`.
+ */
+export function assignTramForms(city: City, data: OsmData, compiled: CompiledCity) {
+  const trams = Object.values(city.rail?.tracks ?? {}).filter((t) => t.kind === 'tram');
+  if (!trams.length) return;
+  const ways = new Map(data.way.map((w) => [w.id, w.tag]));
+  const nodeLayer = (id: string) => city.nodes[id]!.layer;
+  const areas = [
+    ...compiled.roads.map((r) => {
+      const road = city.roads[r.id]!;
+      return {
+        ring: [...r.surface, r.surface[0]!],
+        layer: road.layer ?? Math.min(nodeLayer(road.from), nodeLayer(road.to)),
+        tramRails: road.provenance.osmIds?.some((id) =>
+          (ways.get(id)?.embedded_rails ?? '').split(';').includes('tram'),
+        ),
+      };
+    }),
+    ...compiled.nodes
+      .filter((n) => n.outline.length >= 3)
+      .map((n) => ({
+        ring: [...n.outline, n.outline[0]!],
+        layer: nodeLayer(n.id),
+        tramRails: false,
+      })),
+  ];
+  const spatial = new Flatbush(Math.max(1, areas.length));
+  for (const { ring } of areas)
+    spatial.add(
+      Math.min(...ring.map((p) => p.x)),
+      Math.min(...ring.map((p) => p.y)),
+      Math.max(...ring.map((p) => p.x)),
+      Math.max(...ring.map((p) => p.y)),
+    );
+  if (!areas.length) spatial.add(0, 0, 0, 0);
+  spatial.finish();
+  for (const t of trams) {
+    const tag = ways.get(t.osmId!)!;
+    const bed: TrackForm | undefined =
+      tag.surface === 'grass' || tag['railway:track_ballast'] === 'no'
+        ? 'grass'
+        : tag['railway:track_ballast'] === 'yes'
+          ? 'ballast'
+          : pavedSurfaces.has(tag.surface ?? '')
+            ? 'paved'
+            : undefined;
+    let form: TrackForm | undefined =
+      tag.embedded === 'yes'
+        ? 'embedded'
+        : tag.embedded === 'no'
+          ? (bed ?? 'ballast')
+          : bed === 'grass' || bed === 'ballast'
+            ? bed
+            : undefined;
+    if (!form) {
+      // Length-weighted samples at the middle of each metre along the centreline.
+      const lengths = cumulativeLengths(t.line),
+        length = lengths.at(-1)!,
+        steps = Math.max(1, Math.round(length));
+      let inRoad = 0,
+        inTramRoad = 0;
+      for (let i = 0; i < steps; i++) {
+        const p = pointAtDistance(t.line, lengths, ((i + 0.5) * length) / steps);
+        const hits = spatial
+          .search(p.x, p.y, p.x, p.y)
+          .map((j) => areas[j]!)
+          .filter((a) => a.layer === t.layer && pointInPolygon(p, a.ring));
+        if (hits.length) inRoad++;
+        if (hits.some((a) => a.tramRails)) inTramRoad++;
+      }
+      if (inTramRoad > steps / 2) form = 'embedded';
+      else {
+        form = inRoad >= embeddedShare * steps ? 'embedded' : (bed ?? 'ballast');
+        t.provenance = { source: 'osm', inferred: ['form'] };
+      }
+    }
+    t.form = form;
   }
 }

@@ -9,7 +9,7 @@ import {
 } from 'three';
 import type { CompiledCity } from '../network';
 import type { RailGraph } from '../network/rail';
-import { railGeometry } from '../render/rail-geometry';
+import { railGeometry, type RailShape } from '../render/rail-geometry';
 import type { CityGeometry, Pick } from '../render/types';
 import type { Vec2 } from '../geo/vec2';
 import { heightAt, type cityHeights } from './heights';
@@ -27,6 +27,20 @@ function trackHeight(graph: RailGraph, track: RailGraph['tracks'][number], point
   );
 }
 
+/** TASK-135: top and foot of each tram part above its grade; railway paint stays at 0.06 m. The
+ * bed stays below the 0.14 m kerbs so median islands cover it, as in 2D. */
+const tramHeights: Record<NonNullable<RailShape['tram']>, [number, number]> = {
+  bed: [0.12, 0],
+  sleepers: [0.13, 0.13],
+  rail: [0.17, 0.12],
+  street: [0.06, 0],
+};
+// A deterministic mottle in [-1, 1] from the position, the procedural grass tone.
+const mottle = (x: number, y: number) => {
+  const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return (v - Math.floor(v)) * 2 - 1;
+};
+
 export function buildRail(
   city: CompiledCity,
   source: CityGeometry,
@@ -37,14 +51,21 @@ export function buildRail(
     colors: number[] = [];
   const spans: { pick: Pick | undefined; from: number; to: number }[] = [];
   const color = new Color();
+  const side = new Color();
   for (const shape of railGeometry(city, source)) {
     const from = colors.length;
     color.setHex(shape.color).lerp(new Color(0xf5f2e9), 1 - shape.alpha);
+    side.copy(color).multiplyScalar(0.72);
+    const [top, foot] = shape.tram ? tramHeights[shape.tram] : [0.06, 0.06];
     const track = shape.pick?.kind === 'track' ? city.rail!.tracks[shape.pick.track] : undefined;
     const ramp =
       track &&
       (city.rail!.nodes[track.fromNode]!.layer !== track.layer ||
         city.rail!.nodes[track.toNode]!.layer !== track.layer);
+    const z = (p: Vec2, offset: number) =>
+      heights.terrain.groundAt(p.x, p.y) +
+      (track ? trackHeight(city.rail!, track, p) : shape.layer * 5) +
+      offset;
     const emit = (tri: Vec2[]) => {
       if (ramp) {
         const lengths = tri.map((p, i) => distance(p, tri[(i + 1) % 3]!));
@@ -60,12 +81,30 @@ export function buildRail(
         }
       }
       for (const p of [...tri].reverse()) {
-        const grade = track ? trackHeight(city.rail!, track, p) : shape.layer * 5;
-        positions.push(p.x, heights.terrain.groundAt(p.x, p.y) + grade + 0.06, p.y);
-        colors.push(color.r, color.g, color.b);
+        positions.push(p.x, z(p, top), p.y);
+        if (shape.grass) {
+          const k = 1 + 0.07 * mottle(p.x, p.y);
+          colors.push(color.r * k, color.g * k, color.b * k);
+        } else colors.push(color.r, color.g, color.b);
       }
     };
-    for (const tri of shape.polygons) emit(tri);
+    for (const polygon of shape.polygons)
+      if (polygon.length === 4) {
+        emit([polygon[0]!, polygon[1]!, polygon[2]!]);
+        emit([polygon[0]!, polygon[2]!, polygon[3]!]);
+      } else emit(polygon);
+    // Sides of raised tram parts, a shade darker than their tops.
+    if (top > foot)
+      for (const ring of shape.outline ?? [])
+        for (let i = 0; i < ring.length; i++) {
+          const a = ring[i]!,
+            b = ring[(i + 1) % ring.length]!;
+          positions.push(
+            ...[a.x, z(a, top), a.y, b.x, z(b, top), b.y, b.x, z(b, foot), b.y],
+            ...[a.x, z(a, top), a.y, b.x, z(b, foot), b.y, a.x, z(a, foot), a.y],
+          );
+          for (let k = 0; k < 6; k++) colors.push(side.r, side.g, side.b);
+        }
     spans.push({ pick: shape.pick, from, to: colors.length });
   }
   const geometry = new BufferGeometry()
