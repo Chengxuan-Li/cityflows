@@ -1,7 +1,7 @@
 import { polylineLength } from '../../geo/polyline';
-import type { CompiledCity, Diagnostic } from '../../network';
+import { intoInnerLane, type CompiledCity, type Diagnostic } from '../../network';
 import type { City, Node, Road } from '../../schema';
-import { generateSignalProgram } from '../signal-program';
+import { generateGroupSignalProgram, generateSignalProgram } from '../../network/signal-program';
 import type { OsmData } from './parse';
 
 export function isControlJunction(id: string, roads: Road[]): boolean {
@@ -129,10 +129,25 @@ export function assignSignalLanes(city: City, signals: string[], compiled: Compi
       groups.set(key, group);
     }
     for (const group of groups.values()) {
+      // TASK-131: a car on a group's inner road was cleared at the group's entry and is never
+      // stopped there, so its lanes merge as at an uncontrolled lane drop (Munich r:252#2 into
+      // r:482 at n:246 kept its only movement).
+      if (
+        compiled.roads[compiled.lanes[compiled.movements[group[0]!]!.fromLane]!.road]!.group !==
+        undefined
+      )
+        continue;
       const accepted: number[] = [];
-      for (const idx of group) {
+      // A lane with no other way out keeps the shared target (Munich r:301 at n:294: the right
+      // lane goes through and the left lane, which also turns left, gives it up).
+      const others = (idx: number) => compiled.lanes[compiled.movements[idx]!.fromLane]!.out.length;
+      for (const idx of [...group].sort((a, b) => others(a) - others(b) || a - b)) {
         const m = compiled.movements[idx]!;
-        if (!accepted.some((other) => m.conflicts.includes(other))) {
+        if (
+          !accepted.some(
+            (other) => m.conflicts.includes(other) && !intoInnerLane(compiled, m, other),
+          )
+        ) {
           accepted.push(idx);
           continue;
         }
@@ -163,6 +178,27 @@ export function addSignal(
 ): void {
   node.control = 'signal';
   node.signal = generateSignalProgram(city, node, approachCount, compiled, diagnostics);
+  node.signal.turnOnRed = turnOnRed(data);
+  if (node.signal.turnOnRed === undefined) delete node.signal.turnOnRed;
+  node.provenance.inferred!.push('signal');
+}
+
+/** TASK-131: a signalised junction group's one program, over its entry-to-exit chains. */
+export function addGroupSignal(
+  city: City,
+  groupId: string,
+  compiled: CompiledCity,
+  diagnostics: Diagnostic[],
+  data?: OsmData,
+): void {
+  const group = city.junctionGroups![groupId]!;
+  group.signal = generateGroupSignalProgram(city, groupId, compiled, diagnostics);
+  group.signal.turnOnRed = turnOnRed(data);
+  if (group.signal.turnOnRed === undefined) delete group.signal.turnOnRed;
+  group.provenance.inferred!.push('signal');
+}
+
+function turnOnRed(data?: OsmData): boolean | undefined {
   const countries = new Set(
     [...(data?.node ?? []), ...(data?.way ?? []), ...(data?.relation ?? [])].flatMap(({ tag }) => {
       const country =
@@ -174,11 +210,10 @@ export function addSignal(
       return country ? [country.trim().toUpperCase()] : [];
     }),
   );
-  if (countries.size)
-    node.signal.turnOnRed = [...countries].every((c) =>
-      ['US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA'].includes(c),
-    );
-  node.provenance.inferred!.push('signal');
+  if (!countries.size) return undefined;
+  return [...countries].every((c) =>
+    ['US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA'].includes(c),
+  );
 }
 
 /** Circulating OSM ways stay intact; only joining approaches give way. */

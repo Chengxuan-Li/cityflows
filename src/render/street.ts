@@ -1,4 +1,5 @@
 import Flatbush from 'flatbush';
+import { SIDE_BY_SIDE_EDGE_M, sideBySideEdges } from './side-by-side';
 import {
   cumulativeLengths,
   distance,
@@ -36,6 +37,8 @@ export interface AccessSign {
 export interface Curb {
   road: number;
   points: Vec2[];
+  /** Half the strip's width; 0.1 m when absent. */
+  halfWidthM?: number;
 }
 export const signLabels: Record<SignRule, string> = {
   no: 'Verbot der Einfahrt',
@@ -522,6 +525,10 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
       }
     }
   }
+  // TASK-131 (B55): a low curb along the edge line between two roads drawn side by side, as wide
+  // as the 2D strip.
+  for (const { roads, line } of sideBySideEdges(city, source))
+    curbs.push({ road: roads[0], points: line, halfWidthM: SIDE_BY_SIDE_EDGE_M / 2 });
   const resolved = resolveSigns(city, signs);
   for (const sign of resolved.signs) for (const rule of sign.rules) signCounts[rule]++;
   return {

@@ -15,6 +15,8 @@ import { throughputCities, throughputFixture, throughputRequests } from './throu
 // keys and access rules changed paths. T47 separately compares unrestricted routes exactly
 // against 56ffccd's router on the same canonical networks.
 // TASK-124 recaptures real-city samples because connector endpoints split or move; T61 pins the vehicle graph.
+// TASK-131 recaptures both real-city samples: keeping OSM geometry renumbers connectors (the keys)
+// and splits routes over the roads between nodes main merged.
 const recorded = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<
   string,
   Record<string, string[] | string>

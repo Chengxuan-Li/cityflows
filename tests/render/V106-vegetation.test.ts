@@ -40,8 +40,12 @@ const baselines = {
   grid: '296948629376e758231293088f0cdb136d7554c269b0d0880a92577177e913a6',
   town: '96bd0dd88f049e1589aac69b800a1fe25dfb976687b5b55c9874998b7c51b2a6',
   // TASK-119 updates parking data and removes obsolete places; T55 pins unchanged vehicle geometry.
-  'munich-donnersberger': 'f4fbae8e2a21a68e16235788dc7253a49aae164f64dd87301b13ae8bd3e7a101',
-  'sindelfingen-a81': '0737536af9f7de2f24a487564a7b615e7b8609dccb2731d9543486af9c04d4fa',
+  // TASK-131 keeps OSM geometry: no node merges, junction groups, so both real cities no longer
+  // hash as on main.
+  // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+  // and e4654d8 (merging lanes kept on a group's inner roads).
+  'munich-donnersberger': '9229a604c2216fdaac67b3f7d5c351cbcb4fbbfe42594c466ecfc63b0da56e66',
+  'sindelfingen-a81': 'a589e6ac91b11181ba2c7cf29252f47c8ee790e72c53825ebe4ab3cfa4bf5c5b',
 };
 
 unitTest(
@@ -163,13 +167,15 @@ test.each(tierCities(['grid', 'town', 'munich-donnersberger', 'sindelfingen-a81'
       city = imported.city;
     }
     expect(hash(compile(city))).toBe(baselines[name]);
+    // TASK-131 keeps every OSM node, each with its 15 m tree clearance: Munich main gives
+    // street 1410 and wood 45; 9 of the 10 wood trees lost stand by a node new to it.
     const expected =
       name === 'grid'
         ? { street: 559, wood: 0 }
         : name === 'town'
           ? { street: 7100, wood: 0 }
           : name === 'munich-donnersberger'
-            ? { street: 1463, wood: 50 }
+            ? { street: 1309, wood: 36 }
             : { street: 1844, wood: 32 };
     const start = performance.now();
     const result = placeTrees(compiled(city), treeContext(city));

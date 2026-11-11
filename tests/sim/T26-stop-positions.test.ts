@@ -169,7 +169,9 @@ citiesTest.each(tierCities(auditCities))(
     const counts = { lanes: 0, crossing: 0, fallback: 0 };
     for (const lane of city.lanes) {
       const road = city.roads[lane.road]!;
-      if (!servedSignal(city, road)) {
+      // TASK-131: a junction group's inner road carries no control, so its lanes stop at their
+      // end even where the next member is signalized (no stop line on an inner link).
+      if (road.group !== undefined || !servedSignal(city, road)) {
         expect(lane.stopM).toBe(lane.lengthM);
         continue;
       }

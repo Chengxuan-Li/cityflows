@@ -1,6 +1,6 @@
 import type { City, Patch } from '../schema';
 
-const collections = ['nodes', 'roads', 'places', 'parking'] as const;
+const collections = ['nodes', 'roads', 'places', 'parking', 'junctionGroups'] as const;
 
 function applyRecords<T>(
   records: Record<string, T>,
@@ -25,6 +25,15 @@ export function applyPatch(city: City, patch: Patch): City {
     places: applyRecords(city.places, patch.set.places, patch.remove.places),
     ...(city.parking || patch.set.parking || patch.remove.parking
       ? { parking: applyRecords(city.parking ?? {}, patch.set.parking, patch.remove.parking) }
+      : {}),
+    ...(city.junctionGroups || patch.set.junctionGroups || patch.remove.junctionGroups
+      ? {
+          junctionGroups: applyRecords(
+            city.junctionGroups ?? {},
+            patch.set.junctionGroups,
+            patch.remove.junctionGroups,
+          ),
+        }
       : {}),
     nextId: patch.nextId ?? city.nextId,
   };

@@ -35,12 +35,16 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           [
             // TASK-103: saved strips and inferred lot entries; compiled visible spaces.
             // T49 retains the original main hashes with appended parking removed.
-            '7355d23576e15cbf8d9250b2e46e8afec50dc906db7a8dcff541e65c40c943be',
-            'f4fbae8e2a21a68e16235788dc7253a49aae164f64dd87301b13ae8bd3e7a101',
+            // TASK-131 keeps OSM geometry (no node merges, junction groups): city and compile
+            // hashes of both cities no longer equal main's.
+            // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+            // and e4654d8 (merging lanes kept on a group's inner roads).
+            '8f1a246f0b8ebb52589fb83c7358de73d84c44b265c90034f9a85434b3016969',
+            '9229a604c2216fdaac67b3f7d5c351cbcb4fbbfe42594c466ecfc63b0da56e66',
           ]
         : [
-            'ac7fc230a198ef626d8dcae3ddd110d11afcd587120812537240bde21ce32ce0',
-            '0737536af9f7de2f24a487564a7b615e7b8609dccb2731d9543486af9c04d4fa',
+            '54cb5a52b748dcd1df1717bbf5000321833917ca74c9a528756c9d26da9cbfbe',
+            'a589e6ac91b11181ba2c7cf29252f47c8ee790e72c53825ebe4ab3cfa4bf5c5b',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

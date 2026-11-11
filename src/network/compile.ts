@@ -1,7 +1,7 @@
 import { compileRail } from './rail';
 import { cumulativeLengths, headingAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { City, Place, RoadClass } from '../schema';
+import type { City, Place, RoadClass, SignalProgram } from '../schema';
 import { vehicleClasses } from '../schema';
 import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
@@ -18,6 +18,7 @@ import {
 } from './junctions';
 import { generateMovements } from './movements';
 import { compileSignal, compileSignalWalk } from './signals';
+import { compileGroups, memberProgram } from './groups';
 import { buildLaneSpatial } from './spatial';
 import { compileWalk, emptyWalkGraph } from './walk';
 import { populateStops } from './stops';
@@ -220,6 +221,11 @@ export function compile(city: City): CompileResult {
     city.drivingSide,
     sourceNodes,
     converging,
+    new Set(
+      Object.values(city.junctionGroups ?? {}).flatMap((g) =>
+        g.nodes.map((n) => nodeIndex.get(n)!),
+      ),
+    ),
   ).shifts.forEach(({ start, end }, idx) => {
     roads[idx]!.startShift = start;
     roads[idx]!.endShift = end;
@@ -380,6 +386,9 @@ export function compile(city: City): CompileResult {
     lane.in = [];
     lane.out = [];
   }
+  const innerRoads = new Set<string>(
+    Object.values(city.junctionGroups ?? {}).flatMap((g) => g.innerRoads),
+  );
   const movements: CMovement[] = [];
   for (const node of nodes) {
     const pairs = new Set(through[node.idx]!.map((p) => `${p.from}>${p.to}`));
@@ -409,6 +418,7 @@ export function compile(city: City): CompileResult {
       through[node.idx]!,
       lanes,
       movements,
+      innerRoads,
     );
     populateConflicts(node, movements, lanes);
   }
@@ -518,10 +528,28 @@ export function compile(city: City): CompileResult {
   compileParking(city, compiled, diagnostics, centroid);
   for (const lane of lanes)
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
+  if (city.junctionGroups && Object.keys(city.junctionGroups).length) {
+    compiled.groups = compileGroups(city, compiled);
+    compiled.index.group = indices(compiled.groups);
+    // An inner road is the junction's interior: the members' polygons take most of it by design,
+    // so it is not too short for its setbacks (n:138's crossing keeps 4.5 m of lane).
+    for (let i = diagnostics.length - 1; i >= 0; i--)
+      if (diagnostics[i]!.code === 'road_too_short' && innerRoads.has(diagnostics[i]!.refs[0]!))
+        diagnostics.splice(i, 1);
+  }
+  const programs = new Map<number, { program: SignalProgram; vehicles: boolean[] }>();
   for (const node of nodes) {
-    if (node.control === 'signal') {
-      node.signal = compileSignal(node, sourceNodes[node.idx]!.signal!, compiled, diagnostics);
-    }
+    if (node.control !== 'signal') continue;
+    const group = node.group === undefined ? undefined : compiled.groups![node.group];
+    const entry = group
+      ? memberProgram(city, compiled, group, node.idx, diagnostics)
+      : {
+          program: sourceNodes[node.idx]!.signal!,
+          vehicles: sourceNodes[node.idx]!.signal!.phases.map((p) => p.groups.length > 0),
+          free: new Set<number>(),
+        };
+    programs.set(node.idx, entry);
+    node.signal = compileSignal(node, entry.program, compiled, diagnostics, entry.free);
   }
   if (diagnostics.some((item) => item.severity === 'error')) return { ok: false, diagnostics };
   for (const lane of lanes) {
@@ -545,7 +573,7 @@ export function compile(city: City): CompileResult {
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   warnAboutConnectivity(compiled, diagnostics);
   compiled.walk = compileWalk(city, compiled);
-  compileSignalWalk(compiled, city);
+  compileSignalWalk(compiled, programs);
   if (city.rail) compiled.rail = compileRail(city);
   return { ok: true, compiled, diagnostics };
 }

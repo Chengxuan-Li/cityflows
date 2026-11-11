@@ -344,21 +344,26 @@ test('T61 saved aisle entries and split exits retain the walk door; a moved arri
 });
 
 // 5438353 / 754c1fa: the original car geometry and every original strip remain exact.
+// TASK-131 keeps OSM geometry (no node merges, junction groups): lanes and movements move, and
+// strips keep their rings but sit on other road ids and stations, so neither equals main's;
+// fewer roadside gaps remain (main: Munich 16 with 85 spaces, Sindelfingen 32 with 721).
+// Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+// and e4654d8 (merging lanes kept on a group's inner roads).
 test.each(
   tierCities([
     [
       'munich',
-      'dadc57ef61863373edba8e88322c69a153b7e5deef2179b33f19cb6aa9e553ef',
-      '85632b4f280e3ed436c1ab48cb2cbd771b67e77364e244e25a993cde94421524',
-      16,
-      85,
+      'ffc26e516f5786e1d0b9cb79f1556d9b8561a18e8b84d2a49c5dbf788be2b234',
+      '9e15a4d6ac0cd7d3254c2abb9d8e7e8ed88365a158a6ae2f596319a6d680cafe',
+      14,
+      79,
     ],
     [
       'sindelfingen',
-      'e3533e832fa57ba407dc1ca2157c0bfb6f45d4772e31993228095a5c936b72be',
-      '9215eb19835444ae38be1b0bde78a840f776e69f77b281d0bd5f5e819f4e2ca4',
-      32,
-      721,
+      '3cc84f10067597e210d09a5ff08bfa2546334d4bd43bc044142a66082eb6e5c0',
+      'e386a323dff201af5378e7cee85444cf6d04a9fbe33db85d7ba0f61a794a8e68',
+      31,
+      703,
     ],
   ] as const),
 )(

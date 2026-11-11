@@ -14,4 +14,7 @@ export interface ImportOptions {
   /** OSM only: largest displacement of the relaxation of overlapping roads, m (TASK-084);
    * internal, not shown in the UI. 0 turns it off; `Infinity` leaves it unbounded. */
   relaxMaxM?: number;
+  /** OSM only (TASK-131): nodes joined by roads of at most this length form a junction group;
+   * default `DEFAULT_JUNCTION_GROUP_MAX_M` (30 m). */
+  junctionGroupMaxM?: number;
 }

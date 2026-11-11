@@ -4,8 +4,9 @@ import { SETBACK_CAP_M } from '../../network/junctions';
 import type { City, RoadClass } from '../../schema';
 import type { OsmRoad } from './roads';
 
-/** The import default of `ImportOptions.relaxMaxM`, chosen by the TASK-084 experiment. */
-export const DEFAULT_RELAX_MAX_M = 3;
+/** The import default of `ImportOptions.relaxMaxM`: off (owner, TASK-131 checkpoint 0; the
+ * TASK-084 experiment chose 3 m). */
+export const DEFAULT_RELAX_MAX_M = 0;
 /** Around a node, within the setback cap plus 5 m, roads meet by design (TASK-084). */
 export const JUNCTION_ZONE_M = SETBACK_CAP_M + 5;
 /** Each road's capsule reaches this far beyond its lane block. */

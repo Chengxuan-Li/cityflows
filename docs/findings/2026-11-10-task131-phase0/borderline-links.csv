@@ -1,0 +1,161 @@
+city,link,roads,name,class,length_m,grouped_at_30,blocked_at_30,osm_nodes,near_final_nodes
+munich,n:1289-n:1158,r:1290 r:1291,Hansastraße,tertiary,20.04,true,null,1421510630 6819866348,n:1190 n:1286
+munich,n:1010-n:507,r:1013 r:1014,null,service,20.16,true,null,5515855126 1089701236,n:1086 n:1086
+munich,n:1007-n:1010,r:1011 r:1012,null,service,20.41,true,null,5515854220 5515855126,n:1086 n:1086
+munich,n:1129-n:707,r:1130 r:1131,Astallerstraße,residential,21.2,true,null,21600368 6611887245,n:108 n:108
+munich,n:854-n:851,r:857 r:858 r:855 r:856,null,service,21.2,true,null,1485915905 201416999,n:854 n:854
+munich,n:1282-n:841,r:1283 r:1284,Westendstraße,tertiary,21.39,true,null,1421510626 13063201572,n:1282 n:1282
+munich,n:263-n:271,r:704,null,ramp,21.52,true,null,247032067 247035541,n:263 n:263
+munich,n:291-n:294,r:295 r:296,Westendstraße,tertiary,21.71,true,null,4523473175 1956135,n:291 n:291
+munich,n:954-n:366,r:956,Arnulfstraße,tertiary,21.72,true,null,3712297495 398692,n:949 n:949
+munich,n:262-n:268,r:269,null,ramp,21.84,true,null,247032064 4514225819,n:266 n:262
+munich,n:276-n:832,r:833 r:834,Richelstraße,service,22.28,true,null,1225622613 2161731483,n:276 n:276
+munich,n:1123-n:788,r:1124 r:1125,null,service,22.39,true,null,6556297509 6556297508,n:1117 n:1123
+munich,n:322-n:279,r:323,Landsberger Straße,secondary,22.43,true,null,33487057 267509123,n:322 n:322
+munich,n:197-n:1329,r:939,Landsberger Straße,secondary,22.47,true,null,295189 300081443,n:328 n:328
+munich,n:949-n:417,r:951,Arnulfstraße,secondary,22.56,true,null,398694 21632176,n:949 n:949
+munich,n:30-n:31,r:32,Trappentreustraße,residential,22.71,true,null,21600731 21632156,n:194 n:30
+munich,n:128-n:131,r:132 r:133,Luise-Ullrich-Straße,residential,22.71,true,null,21585829 11013520398,n:128 n:128
+munich,n:1077-n:1078,r:1079 r:1080,null,service,22.71,true,null,286511832 5290156585,n:1077 n:1077
+munich,n:640-n:649,r:656,Landshuter Allee,secondary,23.04,true,null,1475498667 245353,n:638 n:638
+munich,n:1086-n:1010,r:1087 r:1088,null,service,23.06,true,null,5515855127 5515855126,n:1086 n:1086
+munich,n:251-n:246,r:252,Trappentreustraße,primary,23.08,false,span 60.03 m,295156 286516174,n:262 n:963
+munich,n:249-n:362,r:966,Trappentreustraße,primary,23.5,true,null,295170 295157,n:247 n:247
+munich,n:1325-n:940,r:1326,Landsberger Straße,secondary,23.51,true,null,300081443 300081443,n:322 n:322
+munich,n:266-n:262,r:267,null,ramp,23.67,false,span 61.24 m,295155 247032064,n:266 n:266
+munich,n:1349-n:158,r:1350,Arnulfstraße,primary,23.71,false,long inner road or access,54200280 21040290,n:407 n:158
+munich,n:1321-n:407,r:1322,Arnulfstraße,primary,24.01,false,long inner road or access,54200286 21324384,n:158 n:407
+munich,n:898-n:901,r:902 r:903,null,service,24.05,true,null,3491807282 2727654145,n:898 n:898
+munich,n:1158-n:1285,r:1292 r:1293,Hansastraße,tertiary,24.09,true,null,6819866348 13063201573,n:1286 n:1286
+munich,n:31-n:204,r:610,Trappentreustraße,residential,24.66,true,null,21632156 1038158498,n:30 n:194
+munich,n:168-n:526,r:527 r:528,null,service,24.7,true,null,1084340227 1084340299,n:302 n:302
+munich,n:727-n:474,r:729,Landsberger Straße,tertiary,25.3,false,long inner road or access,1647556644 21164573,n:726 n:1181
+munich,n:492-n:495,r:496 r:497,Richelstraße,residential,25.49,true,null,2161436768 27479589,n:859 n:859
+munich,n:498-n:501,r:502 r:503,Richelstraße,residential,25.81,true,null,2161436769 27479590,n:498 n:498
+munich,n:1007-n:1083,r:1084 r:1085,null,service,25.93,true,null,5515854220 5515854219,n:1086 n:1086
+munich,n:570-n:560,r:604 r:605,null,service,26.17,true,null,1108041136 1108040924,n:570 n:570
+munich,n:513-n:797,r:798 r:799,Burghausener Straße,residential,26.26,true,null,27479611 1108041475,n:510 n:510
+munich,n:204-n:208,r:844,Trappentreustraße,residential,26.49,false,span 67.44 m,1038158498 20925344,n:194 n:208
+munich,n:576-n:554,r:584 r:583,null,service,26.76,false,span 82.38 m,1108040970 1108041405,n:510 n:536
+munich,n:33-n:463,r:464 r:465,Maillingerstraße,residential,27.09,true,null,1956113 818083308,n:33 n:33
+munich,n:478-n:479,r:480,Marsstraße,secondary,27.48,false,span 84.52 m,834709828 3787424792,n:823 n:949
+munich,n:1226-n:34,r:1227 r:1228,Klarastraße,residential,28.23,true,null,1105553656 21500001,n:1226 n:1226
+munich,n:478-n:932,r:933,Marsstraße,secondary,28.91,true,null,834709828 416975071,n:823 n:823
+munich,n:437-n:1089,r:1090,Josef-Obenhin-Straße,residential,28.97,true,null,27479599 8616966883,n:440 n:1091
+munich,n:348-n:358,r:1045 r:1046,null,service,28.98,true,null,531507660 13057992878,n:359 n:359
+munich,n:894-n:1003,r:1004 r:1005,Richelstraße,service,29.16,true,null,2727654149 257692776,n:308 n:894
+munich,n:1091-n:440,r:1093,Josef-Obenhin-Straße,residential,29.19,false,long inner road or access,2668950915 2668950937,n:1091 n:440
+munich,n:201-n:202,r:203,Trappentreustraße,ramp,29.38,true,null,20925341 3221809647,n:201 n:201
+munich,n:1037-n:1038,r:1039 r:1040,null,service,29.97,true,null,4112403560 4112403554,n:1037 n:1031
+munich,n:987-n:1375,r:988,Landsberger Straße,primary,30.71,false,null,316110482 316110482,n:987 n:1375
+munich,n:125-n:128,r:129 r:130,Luise-Ullrich-Straße,residential,31.05,false,null,21585828 21585829,n:125 n:128
+munich,n:1006-n:1007,r:1008 r:1009,null,service,31.22,false,null,2161436732 5515854220,n:1006 n:1086
+munich,n:150-n:1353,r:395,Arnulfstraße,primary,31.36,false,null,21653251 54200280,n:149 n:446
+munich,n:848-n:851,r:852 r:853,null,service,31.64,false,null,6071363246 201416999,n:848 n:854
+munich,n:507-n:510,r:511 r:512,Richelstraße,residential,31.66,false,null,1089701236 10201148575,n:1086 n:510
+munich,n:105-n:1255,r:1256 r:1257,null,service,31.91,false,null,11909131689 11909131687,n:105 n:1255
+munich,n:726-n:1357,r:984,Landsberger Straße,primary,32,false,null,21164575 316110478,n:726 n:1181
+munich,n:234-n:235,r:236 r:237,Schulstraße,residential,32.19,false,null,1475498718 30890057,n:661 n:235
+munich,n:983-n:985,r:986,Landsberger Straße,primary,32.24,false,null,15993418 316110480,n:1375 n:985
+munich,n:774-n:775,r:776 r:777,null,service,32.34,false,null,1717584313 1717584297,n:774 n:775
+munich,n:785-n:1117,r:1121 r:1122,null,service,32.59,false,null,6556297514 6556297519,n:1123 n:1117
+munich,n:326-n:328,r:329,Landsberger Straße,secondary,32.71,false,null,3498172776 267507679,n:328 n:328
+munich,n:695-n:696,r:697,Arnulfstraße,secondary,32.75,false,null,1460267199 1460267207,n:1303 n:696
+munich,n:458-n:238,r:459 r:460,Maillingerstraße,residential,33.12,false,null,62140745 19404291,n:458 n:238
+munich,n:208-n:185,r:255,Trappentreustraße,residential,33.4,false,null,20925344 21632155,n:208 n:185
+munich,n:1038-n:1041,r:1042 r:1043,null,service,33.4,false,null,4112403554 4112403549,n:1031 n:1041
+munich,n:207-n:30,r:256,Trappentreustraße,residential,33.66,false,null,20925343 21600731,n:320 n:194
+munich,n:440-n:443,r:444 r:445,Schäringerstraße,residential,34.95,false,null,2668950937 618154013,n:440 n:564
+munich,n:207-n:208,r:209,Trappentreustraße,residential,36.29,false,null,20925343 20925344,n:320 n:208
+munich,n:246-n:247,r:248,Landsberger Straße,primary,36.4,false,null,286516174 1465624682,n:963 n:247
+munich,n:362-n:263,r:703,null,ramp,36.4,false,null,295157 247032067,n:247 n:263
+munich,n:234-n:665,r:666,Landshuter Allee,secondary,36.9,false,null,1475498718 737218957,n:661 n:665
+munich,n:998-n:894,r:1001 r:1002,Richelstraße,service,37.15,false,null,7631633203 2727654149,n:998 n:308
+munich,n:362-n:363,r:364,Landsberger Straße,primary,37.16,false,null,295157 1465624692,n:247 n:927
+munich,n:428-n:431,r:432 r:433,Schäringerstraße,residential,37.19,false,null,1108041182 5877052679,n:425 n:431
+munich,n:34-n:37,r:38 r:39,Rupprechtstraße,residential,37.36,false,null,21500001 4060632,n:1226 n:37
+munich,n:105-n:108,r:109 r:110,Astallerstraße,residential,38.42,false,null,11909131689 6611887243,n:105 n:108
+munich,n:354-n:355,r:356 r:357,null,service,38.69,false,null,40480057 490566907,n:354 n:355
+munich,n:1098-n:434,r:1100,Franziska-Schmitz-Straße,residential,39.31,false,null,8616966881 5877052676,n:1098 n:431
+munich,n:1117-n:1118,r:1119 r:1120,null,service,39.45,false,null,6556297519 698114473,n:1117 n:1118
+munich,n:194-n:257,r:416,null,trunk,39.46,false,null,20925334 247032061,n:194 n:257
+munich,n:1341-n:391,r:1342,Arnulfstraße,primary,39.71,false,null,54200280 11438872539,n:400 n:149
+sindelfingen,n:771-n:612,r:802,null,residential,20.23,true,null,353406155 353406476,n:753 n:753
+sindelfingen,n:303-n:318,r:319 r:320,null,service,20.33,true,null,353403398 11509635155,n:303 n:303
+sindelfingen,n:342-n:345,r:346 r:347,null,residential,20.41,true,null,353403753 353403744,n:331 n:355
+sindelfingen,n:1157-n:1161,r:1172 r:1173,null,service,20.47,false,long inner road or access,11422468115 11422468114,n:1157 n:1161
+sindelfingen,n:938-n:54,r:939 r:940,null,service,20.87,false,span 74.68 m,5619431192 4280426150,n:54 n:54
+sindelfingen,n:768-n:778,r:832 r:833,null,residential,21.11,false,long inner road or access,4564962131 330926229,n:778 n:778
+sindelfingen,n:345-n:348,r:349 r:350,null,residential,21.28,true,null,353403744 353403749,n:355 n:331
+sindelfingen,n:270-n:1050,r:1051 r:1052,null,service,21.49,true,null,352953507 8767007673,n:270 n:270
+sindelfingen,n:119-n:404,r:405,null,service,21.8,true,null,282832398 450879967,n:118 n:449
+sindelfingen,n:342-n:351,r:352 r:353,null,residential,22.04,true,null,353403753 353403759,n:331 n:331
+sindelfingen,n:18-n:1182,r:1183 r:1184,null,service,22.19,true,null,11422480614 11422480613,n:18 n:18
+sindelfingen,n:282-n:290,r:291 r:292,null,service,22.24,false,long inner road or access,352953555 352953554,n:276 n:290
+sindelfingen,n:612-n:613,r:614 r:615,null,residential,22.39,true,null,353406476 4406667980,n:753 n:753
+sindelfingen,n:453-n:456,r:457 r:458,null,service,22.46,true,null,9533306656 1410350387,n:452 n:1548
+sindelfingen,n:129-n:130,r:131,Benzstraße,residential,22.72,true,null,26156109 286420792,n:129 n:129
+sindelfingen,n:371-n:372,r:373 r:374,Daimlerwerk Tor 10,residential,22.74,true,null,353406037 9535611968,n:371 n:371
+sindelfingen,n:696-n:27,r:697 r:698,null,service,22.88,true,null,8869619524 59630030,n:696 n:696
+sindelfingen,n:932-n:933,r:934 r:935,null,service,23.24,true,null,5619431189 5619431190,n:608 n:608
+sindelfingen,n:669-n:670,r:671 r:672,null,residential,23.27,true,null,443029546 4406757097,n:669 n:670
+sindelfingen,n:293-n:327,r:1205 r:1206,null,residential,23.3,true,null,353403150 353403685,n:1202 n:321
+sindelfingen,n:765-n:761,r:766 r:767,null,residential,23.41,true,null,4564962129 4564962130,n:765 n:765
+sindelfingen,n:183-n:522,r:523 r:524,null,residential,23.78,true,null,11418492012 4565770893,n:139 n:139
+sindelfingen,n:742-n:477,r:744,null,residential,23.86,true,null,330931927 1826168773,n:792 n:792
+sindelfingen,n:1188-n:1189,r:1190 r:1191,null,service,23.89,true,null,11422474812 11422474810,n:261 n:261
+sindelfingen,n:879-n:452,r:880,null,residential,24.37,false,long inner road or access,9535510156 1410350434,n:879 n:452
+sindelfingen,n:453-n:594,r:595,Daimlerwerk Tor 5,residential,24.63,false,long inner road or access,9533306656 9535510155,n:452 n:594
+sindelfingen,n:564-n:756,r:757 r:758,null,residential,24.67,false,long inner road or access,4564953099 330925302,n:756 n:756
+sindelfingen,n:522-n:145,r:863 r:864,null,residential,24.69,true,null,4565770893 330933285,n:139 n:139
+sindelfingen,n:438-n:440,r:441,null,residential,24.91,true,null,344711068 4406755953,n:434 n:434
+sindelfingen,n:90-n:944,r:947 r:948,null,service,25.77,true,null,5619431203 5619431197,n:89 n:89
+sindelfingen,n:1188-n:1194,r:1195 r:1196,null,service,25.91,true,null,11422474812 11422474811,n:261 n:261
+sindelfingen,n:331-n:334,r:335 r:336,null,residential,27,true,null,353403738 353403727,n:331 n:331
+sindelfingen,n:747-n:749,r:750,null,residential,27.15,false,span 74.71 m,4564953095 4564953096,n:753 n:749
+sindelfingen,n:752-n:753,r:754,null,residential,27.15,false,span 68.43 m,4564953097 4564953098,n:752 n:753
+sindelfingen,n:1-n:2,r:3,Benzstraße,residential,27.88,true,null,242703 1165433838,n:1568 n:129
+sindelfingen,n:337-n:331,r:340 r:341,null,residential,28.11,false,span 83.85 m,11422610531 353403738,n:322 n:331
+sindelfingen,n:68-n:244,r:245 r:246,null,service,28.39,true,null,352952327 352952330,n:68 n:68
+sindelfingen,n:501-n:81,r:665 r:664,null,residential,28.61,false,long inner road or access,330931716 4406755939,n:501 n:81
+sindelfingen,n:1-n:902,r:903 r:904,Benzstraße,residential,29.28,false,span 61.48 m,242703 353406606,n:1568 n:902
+sindelfingen,n:440-n:660,r:739 r:740,null,residential,29.56,true,null,4406755953 4406755957,n:434 n:434
+sindelfingen,n:733-n:736,r:737 r:738,null,residential,29.61,true,null,4450500985 803877761,n:449 n:449
+sindelfingen,n:300-n:1094,r:1095 r:1096,null,service,30.14,false,null,9556657835 9556657836,n:300 n:1094
+sindelfingen,n:51-n:54,r:55 r:56,Margret-Fusbahn-Straße,residential,30.23,false,null,5619431188 4280426150,n:51 n:54
+sindelfingen,n:890-n:894,r:1088 r:1080,null,residential,30.81,false,null,286420793 282880401,n:1075 n:894
+sindelfingen,n:26-n:27,r:28 r:29 r:30 r:31,null,service,30.86,false,null,59630028 59630030,n:26 n:696
+sindelfingen,n:327-n:321,r:1207 r:1208,null,residential,31.01,false,null,353403685 353403443,n:321 n:321
+sindelfingen,n:368-n:387,r:388 r:389,null,residential,31.24,false,null,330931926 4565516237,n:368 n:387
+sindelfingen,n:328-n:331,r:332 r:333,null,residential,31.37,false,null,11422610530 353403738,n:328 n:331
+sindelfingen,n:777-n:778,r:779 r:780,null,residential,31.49,false,null,4564962133 330926229,n:774 n:778
+sindelfingen,n:431-n:865,r:866,Benzstraße,residential,31.51,false,null,4916981961 500711359,n:867 n:865
+sindelfingen,n:1162-n:1167,r:1168 r:1169,null,service,31.82,false,null,11422468126 11422468112,n:1162 n:1161
+sindelfingen,n:223-n:209,r:225 r:224,null,residential,32.09,false,null,344711054 344711031,n:223 n:209
+sindelfingen,n:104-n:958,r:959 r:960,null,service,32.1,false,null,5619431431 5619431430,n:104 n:958
+sindelfingen,n:602-n:605,r:606 r:607,Erika-Naumann-Straße,residential,32.84,false,null,4413680925 77629002,n:602 n:605
+sindelfingen,n:83-n:501,r:505 r:504,null,residential,33.19,false,null,330931627 330931716,n:83 n:501
+sindelfingen,n:506-n:646,r:647,null,residential,33.41,false,null,4406755942 11420963754,n:506 n:646
+sindelfingen,n:452-n:875,r:876,null,residential,33.44,false,null,1410350434 9535510164,n:452 n:875
+sindelfingen,n:300-n:303,r:304 r:305,null,residential,33.52,false,null,9556657835 353403398,n:300 n:303
+sindelfingen,n:54-n:57,r:58 r:59,Margret-Fusbahn-Straße,residential,33.77,false,null,4280426150 77628071,n:54 n:110
+sindelfingen,n:580-n:584,r:585 r:586,null,residential,34,false,null,3393128399 7168509734,n:580 n:584
+sindelfingen,n:126-n:924,r:925,null,service,34.43,false,null,282832401 5015409409,n:126 n:924
+sindelfingen,n:817-n:818,r:819 r:820,null,residential,34.63,false,null,4565516249 196375518,n:823 n:818
+sindelfingen,n:164-n:167,r:168 r:169,null,residential,35.23,false,null,9973025953 330931485,n:161 n:167
+sindelfingen,n:897-n:899,r:1232,Benzstraße,residential,35.31,false,null,4851320585 283420760,n:897 n:899
+sindelfingen,n:309-n:306,r:310 r:311,null,residential,35.74,false,null,353403326 353403335,n:309 n:306
+sindelfingen,n:1161-n:1162,r:1163 r:1164,null,service,35.85,false,null,11422468114 11422468126,n:1161 n:1162
+sindelfingen,n:608-n:678,r:930 r:931,null,service,35.93,false,null,5619431193 5619431185,n:608 n:678
+sindelfingen,n:17-n:18,r:19 r:20,null,service,36.13,false,null,59629981 11422480614,n:17 n:18
+sindelfingen,n:372-n:493,r:596 r:597,null,residential,36.15,false,null,9535611968 353406045,n:371 n:493
+sindelfingen,n:1197-n:294,r:1198 r:1199,null,service,36.25,false,null,11422610529 353403166,n:1197 n:294
+sindelfingen,n:655-n:656,r:657,null,residential,36.36,false,null,4406755915 11422468129,n:1028 n:656
+sindelfingen,n:297-n:315,r:316 r:317,null,residential,36.71,false,null,353403389 353403393,n:297 n:315
+sindelfingen,n:18-n:21,r:22 r:23,null,service,37.06,false,null,11422480614 59629983,n:18 n:21
+sindelfingen,n:7-n:21,r:695,null,service,37.07,false,null,49836785 59629983,n:7 n:21
+sindelfingen,n:918-n:919,r:920,null,service,38.02,false,null,5015409400 9535480097,n:918 n:921
+sindelfingen,n:115-n:116,r:117,Flugfeld-Allee,secondary,38.68,false,null,11250506466 271373502,n:115 n:116
+sindelfingen,n:254-n:393,r:394 r:395,Entenseestraße,residential,39.15,false,null,35324899 352952813,n:254 n:393
+sindelfingen,n:497-n:498,r:499,null,residential,39.37,false,null,4407142322 4407142318,n:497 n:498
+sindelfingen,n:652-n:584,r:1027,null,residential,39.84,false,null,7168509703 7168509734,n:652 n:584

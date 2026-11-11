@@ -177,7 +177,28 @@ export function generateMovements(
       ),
       rules: source.turnRules.filter((rule) => rule.from === from.id && rule.to === to.id),
     }));
+    // TASK-131: a trunk splitting into two branches that would share more than one of its lanes
+    // takes TASK-071's slices instead of the curb-side pairs, which cross (Munich r:846 at n:478).
+    const diverging = targets.filter(({ turn }) => turn === 'diverge').map(({ to }) => to);
+    const sliced =
+      !continuation &&
+      diverging.length === 2 &&
+      diverging.reduce((sum, r) => sum + Math.min(r.lanes.length, from.lanes.length), 0) >
+        from.lanes.length + 1
+        ? orderBranches(diverging, headings, headings[from.idx]!.end, true)
+        : undefined;
+    const slice = (to: CRoad) =>
+      new Set(
+        defaultSlice(
+          from.lanes.length,
+          sliced!.map((r) => r.lanes.length),
+          sliced!.indexOf(to),
+          0,
+          side,
+        ).map(([a, b]) => `${a}:${b}`),
+      );
     for (const { to, turn, rules } of targets) {
+      const pairs = sliced?.includes(to) ? slice(to) : undefined;
       for (const fromIdx of from.lanes) {
         const a = lanes[fromIdx]!;
         for (const toIdx of to.lanes) {
@@ -189,7 +210,9 @@ export function generateMovements(
             !explicitLane &&
             !(continuation?.has(roadPair(from, to))
               ? continuation.get(roadPair(from, to))!.has(`${a.lane}:${b.lane}`)
-              : defaultPair(turn, a.lane, b.lane, from.lanes.length, to.lanes.length, side))
+              : pairs
+                ? pairs.has(`${a.lane}:${b.lane}`)
+                : defaultPair(turn, a.lane, b.lane, from.lanes.length, to.lanes.length, side))
           )
             continue;
           if (!shareClass(a, b)) continue;

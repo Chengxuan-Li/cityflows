@@ -141,6 +141,8 @@ const expressway = (road: CRoad) => road.roadClass === 'motorway' || road.roadCl
  * part of a roundabout ring. TASK-104: lot aisles get none and are not arms. */
 export function crossingDefault(city: CompiledCity, road: CRoad, atEnd: boolean): boolean {
   const node = city.nodes[atEnd ? road.to : road.from]!;
+  // TASK-131: no crossing on a junction group's inner road; crossings stand at its entries.
+  if (road.group !== undefined) return false;
   const aisles = aisleRoads(city);
   if (expressway(road) || aisles.has(road.idx) || cityTopology(city).ring.has(road.idx))
     return false;

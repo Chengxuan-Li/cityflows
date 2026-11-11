@@ -17,6 +17,8 @@ import type {
   ParkingId,
   ParkingAccess,
   ParkingLayout,
+  JunctionGroup,
+  JunctionGroupId,
 } from './city';
 
 export type Command =
@@ -58,6 +60,9 @@ export type Command =
       minorRoads?: RoadId[];
     }
   | { kind: 'setSignal'; nodeId: NodeId; signal: SignalProgram }
+  // TASK-131: the owner's case-by-case tools for junction groups.
+  | { kind: 'joinJunctions'; nodeIds: [NodeId, NodeId] }
+  | { kind: 'leaveJunctionGroup'; nodeId: NodeId }
   | { kind: 'addRoad'; road: Omit<Road, 'id'>; newNodes: Omit<Node, 'id'>[] } // Gate 2
   | { kind: 'deleteRoad'; roadId: RoadId } // Gate 2
   | { kind: 'splitRoad'; roadId: RoadId; atM: number } // Gate 2
@@ -81,8 +86,15 @@ export interface Patch {
     roads?: Record<RoadId, Road>;
     places?: Record<PlaceId, Place>;
     parking?: Record<ParkingId, ParkingFacility>;
+    junctionGroups?: Record<JunctionGroupId, JunctionGroup>;
   };
-  remove: { nodes?: NodeId[]; roads?: RoadId[]; places?: PlaceId[]; parking?: ParkingId[] };
+  remove: {
+    nodes?: NodeId[];
+    roads?: RoadId[];
+    places?: PlaceId[];
+    parking?: ParkingId[];
+    junctionGroups?: JunctionGroupId[];
+  };
   nextId?: number;
 }
 

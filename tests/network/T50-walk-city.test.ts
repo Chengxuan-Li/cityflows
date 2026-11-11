@@ -20,13 +20,18 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       compileMs = performance.now() - start;
     if (!result.ok) throw new Error('compile failed');
     // TASK-124 changes car connectors; T61 separately pins the unchanged lanes/movements.
+    // TASK-131 keeps OSM geometry (no node merges, junction groups): lanes, movements and
+    // connectors move, and place/parking ids shift (main's p:1731, p:1379, pk:1453 and p:1407
+    // are p:1724, p:1374, pk:1452 and p:1402, same OSM ways and capacity).
+    // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
+    // and e4654d8 (merging lanes kept on a group's inner roads).
     const { lanes, movements, connectors } = result.compiled;
     expect(
       createHash('sha256').update(JSON.stringify({ lanes, movements, connectors })).digest('hex'),
     ).toBe(
       name.startsWith('munich')
-        ? '7ae427770d90dfeb5d6af716b1f898b48fb2ec7c1319093f09c74c1fdeff21f3'
-        : 'fa151a5ebe6007e2d6fbddea44d2d4268a55907c66f3448e69ac84b3e7d81a38',
+        ? '70f8975adb9f3bdfebf1226287d381335964f3c41b05f4e885da517c8d0acaa7'
+        : '80e2122adc6d1203bc4e56035f63f9870f823b7380e64c1a296d24ec510e827e',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')
@@ -43,7 +48,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const doors = name.startsWith('munich') ? 348 : 5;
     expect(entrances).toBeGreaterThanOrEqual(doors * 0.9);
     expect(entrances).toBeLessThanOrEqual(doors * 1.1);
-    const central = name.startsWith('munich') ? 'p:1731' : 'p:1379';
+    const central = name.startsWith('munich') ? 'p:1724' : 'p:1374';
     const seen = new Set(g.places.get(central)),
       queue = [...seen];
     for (const i of queue)
@@ -62,10 +67,10 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const router = createWalkRouter(g),
       queryStart = performance.now();
     if (name.startsWith('sindelfingen')) {
-      const garage = result.compiled.parking.find((p) => p.id === 'pk:1453')!;
+      const garage = result.compiled.parking.find((p) => p.id === 'pk:1452')!;
       const connector = connectors.find((c) => c.parking === garage.idx)!;
       expect(
-        router.route({ from: { node: g.connectors.get(connector.id)! }, to: { placeId: 'p:1407' } })
+        router.route({ from: { node: g.connectors.get(connector.id)! }, to: { placeId: 'p:1402' } })
           .ok,
       ).toBe(true);
     }

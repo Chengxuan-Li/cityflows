@@ -7,7 +7,12 @@ import { style } from '../style';
  * (TASK-094: with the stop line and the crossing, not at the lane end in the junction). */
 export function signalHeads(city: CompiledCity, node: CNode) {
   const heads: { x: number; y: number; radius: number; lane: number; movement: number }[] = [];
-  const lanes = new Set(node.movements.map((movement) => city.movements[movement]!.fromLane));
+  // TASK-131: heads only where roads enter a junction group, none on its inner roads.
+  const lanes = new Set(
+    node.movements
+      .map((movement) => city.movements[movement]!.fromLane)
+      .filter((lane) => city.roads[city.lanes[lane]!.road]!.group === undefined),
+  );
   for (const index of lanes) {
     const lane = city.lanes[index]!;
     const point = pointAtDistance(lane.polyline, lane.cumulative, lane.stopM);

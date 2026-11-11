@@ -1,13 +1,15 @@
 import { useMemo, useRef, useState } from 'react';
 import { pointAtDistance } from '../../geo/polyline';
-import { generateSignalProgram } from '../../importers/signal-program';
+import { generateGroupSignalProgram, generateSignalProgram } from '../../network/signal-program';
 import { compile, type CNode, type CompiledCity } from '../../network';
 import { crossingArms } from '../../network/crossings';
-import type { City, Node, SignalProgram } from '../../schema';
+import type { City, JunctionGroup, Node, SignalProgram } from '../../schema';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
 
-type Props = { node: CNode; source: Node; compiled: CompiledCity };
+/** TASK-131: with `group`, the editor edits the junction group's program (its road pairs are
+ * the group's entry-to-exit chains; applying it sets every member's derived program). */
+type Props = { node: CNode; source: Node; compiled: CompiledCity; group?: JunctionGroup };
 type Group = SignalProgram['phases'][number]['groups'][number];
 type Walk = NonNullable<SignalProgram['phases'][number]['walk']>[number];
 const sameGroup = (a: Group, b: Group) => a.from === b.from && a.to === b.to;
@@ -52,23 +54,34 @@ export function SignalInspector(props: Props) {
   );
 }
 
-function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
-  const [draft, setDraft] = useState(source.signal!);
+function SignalDraft({ node, source, compiled, city, group }: Props & { city: City }) {
+  const program = group ? group.signal! : source.signal!;
+  const [draft, setDraft] = useState(program);
   const [active, setActive] = useState(0);
   const busy = useAppStore((state) => state.busy);
   const drag = useRef<{ x: number; duration: number; secondsPerPixel: number } | null>(null);
   const trial = useMemo(
-    () => compile({ ...city, nodes: { ...city.nodes, [node.id]: { ...source, signal: draft } } }),
-    [city, node.id, source, draft],
+    () =>
+      compile(
+        group
+          ? {
+              ...city,
+              junctionGroups: { ...city.junctionGroups, [group.id]: { ...group, signal: draft } },
+            }
+          : { ...city, nodes: { ...city.nodes, [node.id]: { ...source, signal: draft } } },
+      ),
+    [city, node.id, source, group, draft],
   );
+  const members = new Set<string>(group ? [group.id, ...group.nodes] : [node.id]);
   const diagnostics = trial.diagnostics.filter(
     (d) =>
-      d.severity === 'error' || (d.code === 'signal_unserved_movement' && d.refs.includes(node.id)),
+      d.severity === 'error' ||
+      (d.code === 'signal_unserved_movement' && d.refs.some((r) => members.has(r))),
   );
   const conflicts = new Set(
     diagnostics.filter((d) => d.code === 'signal_conflict').flatMap((d) => d.refs),
   );
-  const crossings = signalCrossings(compiled, node, city);
+  const crossings = group ? [] : signalCrossings(compiled, node, city);
   const trialSignal = trial.ok ? trial.compiled.nodes[node.idx]?.signal : undefined;
   /** Walk green per phase and crossing in the draft, derived or explicit (from the trial compile). */
   const walkGreen = (phase: number, crossing: (typeof crossings)[number]) => {
@@ -84,7 +97,15 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
     changePhase(index, { walk });
   }
   const groups = new Map<string, { roads: Group; movements: number[] }>();
-  for (const index of node.movements) {
+  const compiledGroup = group && compiled.groups?.[compiled.index.group!.get(group.id)!];
+  for (const chain of compiledGroup?.chains ?? []) {
+    const from = compiled.roads[chain.from]!.id;
+    const to = compiled.roads[chain.to]!.id;
+    const key = `${from}>${to}`;
+    if (!groups.has(key)) groups.set(key, { roads: { from, to }, movements: [] });
+    groups.get(key)!.movements.push(...chain.movements);
+  }
+  for (const index of group ? [] : node.movements) {
     const movement = compiled.movements[index]!;
     const from = compiled.roads[compiled.lanes[movement.fromLane]!.road]!.id;
     const to = compiled.roads[compiled.lanes[movement.toLane]!.road]!.id;
@@ -233,112 +254,116 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
           Remove phase
         </button>
       </div>
-      <svg
-        className="signal-schematic"
-        viewBox={`${-extent} ${-extent} ${extent * 2} ${extent * 2}`}
-        aria-label={`${phaseName} movement schematic`}
-      >
-        <defs>
-          <marker
-            id="signal-arrow"
-            viewBox="0 0 6 6"
-            refX="5"
-            refY="3"
-            markerWidth="5"
-            markerHeight="5"
-            orient="auto-start-reverse"
-          >
-            <path d="M0,0 L6,3 L0,6 Z" fill="context-stroke" />
-          </marker>
-        </defs>
-        {compiled.lanes
-          .filter((lane) => {
-            const road = compiled.roads[lane.road]!;
-            return road.from === node.idx || road.to === node.idx;
-          })
-          .map((lane) => {
-            const incoming = compiled.roads[lane.road]!.to === node.idx;
-            const distance = incoming ? lane.lengthM : 0;
-            const end = incoming ? Math.max(0, distance - extent) : Math.min(lane.lengthM, extent);
+      {!group && (
+        <svg
+          className="signal-schematic"
+          viewBox={`${-extent} ${-extent} ${extent * 2} ${extent * 2}`}
+          aria-label={`${phaseName} movement schematic`}
+        >
+          <defs>
+            <marker
+              id="signal-arrow"
+              viewBox="0 0 6 6"
+              refX="5"
+              refY="3"
+              markerWidth="5"
+              markerHeight="5"
+              orient="auto-start-reverse"
+            >
+              <path d="M0,0 L6,3 L0,6 Z" fill="context-stroke" />
+            </marker>
+          </defs>
+          {compiled.lanes
+            .filter((lane) => {
+              const road = compiled.roads[lane.road]!;
+              return road.from === node.idx || road.to === node.idx;
+            })
+            .map((lane) => {
+              const incoming = compiled.roads[lane.road]!.to === node.idx;
+              const distance = incoming ? lane.lengthM : 0;
+              const end = incoming
+                ? Math.max(0, distance - extent)
+                : Math.min(lane.lengthM, extent);
+              return (
+                <path
+                  key={lane.id}
+                  d={path([
+                    pointAtDistance(lane.polyline, lane.cumulative, distance),
+                    pointAtDistance(lane.polyline, lane.cumulative, end),
+                  ])}
+                  stroke="#dcded2"
+                  strokeWidth={lane.widthM}
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          <circle r={node.radiusM} fill="#e8e8dc" />
+          {crossings.map((crossing) => {
+            const checked = walkGreen(active, crossing);
             return (
-              <path
-                key={lane.id}
-                d={path([
-                  pointAtDistance(lane.polyline, lane.cumulative, distance),
-                  pointAtDistance(lane.polyline, lane.cumulative, end),
-                ])}
-                stroke="#dcded2"
-                strokeWidth={lane.widthM}
-                strokeLinecap="round"
-              />
+              <g
+                key={crossing.arm}
+                role="checkbox"
+                tabIndex={0}
+                aria-label={`${phaseName} crossing ${crossing.label}`}
+                aria-checked={checked}
+                className={`signal-crossing ${checked ? 'served' : ''}`}
+                onClick={() => toggleWalk(active, crossing)}
+                onKeyDown={(event) => {
+                  if (event.key === ' ' || event.key === 'Enter') {
+                    event.preventDefault();
+                    toggleWalk(active, crossing);
+                  }
+                }}
+              >
+                <title>Crossing {crossing.label}</title>
+                {crossing.links.map((i) => (
+                  <path
+                    key={i}
+                    d={path(compiled.walk.links[i]!.line)}
+                    fill="none"
+                    strokeWidth={1.2}
+                  />
+                ))}
+              </g>
             );
           })}
-        <circle r={node.radiusM} fill="#e8e8dc" />
-        {crossings.map((crossing) => {
-          const checked = walkGreen(active, crossing);
-          return (
-            <g
-              key={crossing.arm}
-              role="checkbox"
-              tabIndex={0}
-              aria-label={`${phaseName} crossing ${crossing.label}`}
-              aria-checked={checked}
-              className={`signal-crossing ${checked ? 'served' : ''}`}
-              onClick={() => toggleWalk(active, crossing)}
-              onKeyDown={(event) => {
-                if (event.key === ' ' || event.key === 'Enter') {
-                  event.preventDefault();
-                  toggleWalk(active, crossing);
-                }
-              }}
-            >
-              <title>Crossing {crossing.label}</title>
-              {crossing.links.map((i) => (
-                <path
-                  key={i}
-                  d={path(compiled.walk.links[i]!.line)}
-                  fill="none"
-                  strokeWidth={1.2}
-                />
-              ))}
-            </g>
-          );
-        })}
-        {[...groups.values()].map(({ roads, movements }) => {
-          const checked = draft.phases[active]!.groups.some((g) => sameGroup(g, roads));
-          const conflict = movements.some((i) => conflicts.has(compiled.movements[i]!.id));
-          return (
-            <g
-              key={`${roads.from}>${roads.to}`}
-              role="checkbox"
-              tabIndex={0}
-              aria-label={`${phaseName} arrow ${roads.from} → ${roads.to}`}
-              aria-checked={checked}
-              className={`signal-movement ${checked ? 'served' : ''} ${conflict ? 'conflict' : ''}`}
-              onClick={() => toggle(active, roads)}
-              onKeyDown={(event) => {
-                if (event.key === ' ' || event.key === 'Enter') {
-                  event.preventDefault();
-                  toggle(active, roads);
-                }
-              }}
-            >
-              <title>
-                {roads.from} → {roads.to}
-              </title>
-              {movements.map((i) => (
-                <path
-                  key={i}
-                  d={path(compiled.movements[i]!.polyline)}
-                  fill="none"
-                  strokeWidth={0.45}
-                  markerEnd="url(#signal-arrow)"
-                />
-              ))}
-            </g>
-          );
-        })}
-      </svg>
+          {[...groups.values()].map(({ roads, movements }) => {
+            const checked = draft.phases[active]!.groups.some((g) => sameGroup(g, roads));
+            const conflict = movements.some((i) => conflicts.has(compiled.movements[i]!.id));
+            return (
+              <g
+                key={`${roads.from}>${roads.to}`}
+                role="checkbox"
+                tabIndex={0}
+                aria-label={`${phaseName} arrow ${roads.from} → ${roads.to}`}
+                aria-checked={checked}
+                className={`signal-movement ${checked ? 'served' : ''} ${conflict ? 'conflict' : ''}`}
+                onClick={() => toggle(active, roads)}
+                onKeyDown={(event) => {
+                  if (event.key === ' ' || event.key === 'Enter') {
+                    event.preventDefault();
+                    toggle(active, roads);
+                  }
+                }}
+              >
+                <title>
+                  {roads.from} → {roads.to}
+                </title>
+                {movements.map((i) => (
+                  <path
+                    key={i}
+                    d={path(compiled.movements[i]!.polyline)}
+                    fill="none"
+                    strokeWidth={0.45}
+                    markerEnd="url(#signal-arrow)"
+                  />
+                ))}
+              </g>
+            );
+          })}
+        </svg>
+      )}
       <p className="muted">
         {phaseName} · select arrows to switch road pairs
         {crossings.length > 0 ? ' and crossings to switch walk green' : ''}
@@ -369,7 +394,7 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
       <div className="controls">
         <button
           type="button"
-          disabled={!trial.ok || busy || draft === source.signal}
+          disabled={!trial.ok || busy || draft === program}
           onClick={() =>
             void useAppStore
               .getState()
@@ -380,9 +405,9 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
         </button>
         <button
           type="button"
-          disabled={draft === source.signal}
+          disabled={draft === program}
           onClick={() => {
-            setDraft(source.signal!);
+            setDraft(program);
             setActive(0);
           }}
         >
@@ -481,13 +506,15 @@ function SignalDraft({ node, source, compiled, city }: Props & { city: City }) {
         type="button"
         onClick={() => {
           setDraft(
-            generateSignalProgram(
-              city,
-              source,
-              compiled.roads.filter((r) => r.to === node.idx).length,
-              compiled,
-              [],
-            ),
+            group
+              ? generateGroupSignalProgram(city, group.id, compiled, [])
+              : generateSignalProgram(
+                  city,
+                  source,
+                  compiled.roads.filter((r) => r.to === node.idx).length,
+                  compiled,
+                  [],
+                ),
           );
           setActive(0);
         }}

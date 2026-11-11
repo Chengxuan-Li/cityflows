@@ -15,11 +15,17 @@ function turnAngle(from: Road, to: Road): number {
   return Math.atan2(Math.sin(difference), Math.cos(difference));
 }
 
-function turn(from: Road, to: Road) {
-  const angle = turnAngle(from, to);
+function turn(from: Road, to: Road, angle = turnAngle(from, to)) {
   if (
     (from.streetGroupId && from.streetGroupId === to.streetGroupId) ||
-    Math.abs(angle) > (5 * Math.PI) / 6
+    Math.abs(angle) > (5 * Math.PI) / 6 ||
+    // TASK-131: the two one-way carriageways of a street where they meet at a node (Marsstraße at
+    // n:366), which the merge made one coincident pair.
+    (from.name !== null &&
+      from.name === to.name &&
+      from.streetGroupId === null &&
+      to.streetGroupId === null &&
+      Math.abs(angle) > Math.PI / 2)
   )
     return 'reverse';
   if (Math.abs(angle) < Math.PI / 6) return 'through';
@@ -137,33 +143,48 @@ const indication: Record<string, string> = {
   reverse: 'reverse',
 };
 
+/**
+ * TASK-131: at a junction group's member, `group` gives the group's exits along each road
+ * (`groupExits`) and the angles of the node the merge used to make (`groupAngle`). An entry's
+ * arrows are classified against those exits, and the lanes they allow enter the inner road.
+ */
 export function addLaneTurns(
   node: Node,
   incident: JunctionRoads,
   side: DrivingSide,
   diagnostics: Diagnostic[],
+  group?: {
+    entry: (road: Road) => boolean;
+    exitsVia: (road: Road) => Road[];
+    angle: (from: Road, to: Road) => number;
+  },
 ): void {
   const bans = new Set(
     node.turnRules.filter(({ allowed }) => !allowed).map(({ from, to }) => `${from}>${to}`),
   );
-  const shallow = (from: Road, to: Road) => Math.abs(turnAngle(from, to)) < Math.PI / 6;
-  const merge =
-    incident.outgoing.length === 1 &&
-    incident.incoming.filter(({ road }) => shallow(road, incident.outgoing[0]!.road)).length >= 2;
-  const diverge =
-    incident.incoming.length === 1 &&
-    incident.outgoing.filter(({ road }) => shallow(incident.incoming[0]!.road, road)).length >= 2;
-  const alignFromRight = merge || diverge ? side === 'right' : side === 'left';
   for (const { road: from, turnLanes, wayId, cutEnd } of incident.incoming) {
     if (turnLanes === undefined || cutEnd) continue;
+    const entry = group !== undefined && group.entry(from);
+    const angleOf = (a: Road, b: Road) => (entry ? group!.angle(a, b) : turnAngle(a, b));
+    const turnOf = (a: Road, b: Road) => turn(a, b, angleOf(a, b));
+    const shallow = (a: Road, b: Road) => Math.abs(angleOf(a, b)) < Math.PI / 6;
+    const targets = incident.outgoing.flatMap(({ road }) =>
+      (entry ? group.exitsVia(road) : [road]).map((exit) => ({ first: road, exit })),
+    );
+    const exits = targets.map(({ exit }) => exit);
+    const merge =
+      exits.length === 1 &&
+      incident.incoming.filter(({ road }) => shallow(road, exits[0]!)).length >= 2;
+    const diverge =
+      incident.incoming.length === 1 && exits.filter((road) => shallow(from, road)).length >= 2;
+    const alignFromRight = merge || diverge ? side === 'right' : side === 'left';
     // Arrows describe the next choice of direction, not intermediate way/tag boundaries.
-    const continuations = incident.outgoing.filter(({ road }) => turn(from, road) !== 'reverse');
-    if (continuations.length === 1 && turn(from, continuations[0]!.road) === 'through') continue;
+    const continuations = exits.filter((road) => turnOf(from, road) !== 'reverse');
+    if (continuations.length === 1 && turnOf(from, continuations[0]!) === 'through') continue;
+    const sameWay = (road: Road) => road.provenance.osmIds?.[0] === wayId;
     if (
-      incident.outgoing.some(
-        ({ road, wayId: nextWay }) => nextWay === wayId && turn(from, road) !== 'reverse',
-      ) &&
-      incident.outgoing.every(({ wayId: nextWay }) => nextWay === wayId)
+      exits.some((road) => sameWay(road) && turnOf(from, road) !== 'reverse') &&
+      exits.every(sameWay)
     )
       continue;
     const markings = turnLanes
@@ -187,22 +208,22 @@ export function addLaneTurns(
       lane.map((value) => indication[value]).filter(Boolean),
     );
     const direction = (to: Road) => {
-      const basic = turn(from, to);
+      const basic = turnOf(from, to);
       if (basic === 'reverse') return basic;
       // OSM splits a curved named street into staggered junctions; its continuation is
       // still the through arrow even when the short section crosses at an oblique angle.
-      if (from.name && from.name === to.name && Math.abs(turnAngle(from, to)) < Math.PI / 2)
+      if (from.name && from.name === to.name && Math.abs(angleOf(from, to)) < Math.PI / 2)
         return 'through';
       const shallowFork =
-        continuations.length > 1 && continuations.every(({ road }) => shallow(from, road));
+        continuations.length > 1 && continuations.every((road) => shallow(from, road));
       if (shallowFork && directions.some((lane) => lane.includes('left') || lane.includes('right')))
-        return turnAngle(from, to) < 0 ? 'left' : 'right';
+        return angleOf(from, to) < 0 ? 'left' : 'right';
       return basic;
     };
     for (let i = 0; i < directions.length; i++) {
       if (
         directions[i]!.length &&
-        !incident.outgoing.some(({ road }) => directions[i]!.includes(direction(road)))
+        !exits.some((road) => directions[i]!.includes(direction(road)))
       ) {
         directions[i] = [];
         from.provenance.inferred = [
@@ -210,23 +231,27 @@ export function addLaneTurns(
         ];
       }
     }
-    for (const { road: to } of incident.outgoing) {
-      // Lane rules have higher specificity in the compiler. A relation's ban must still win.
-      if (bans.has(`${from.id}>${to.id}`)) continue;
+    const kindOf = (to: Road) => {
       const basic = direction(to);
       const rampExit =
         basic === 'through' &&
         to.roadClass === 'ramp' &&
         from.roadClass !== 'ramp' &&
-        incident.outgoing.some(
-          ({ road }) => road.roadClass !== 'ramp' && turn(from, road) === 'through',
-        );
+        exits.some((road) => road.roadClass !== 'ramp' && turnOf(from, road) === 'through');
       // A shallow exit is a diverge in the compiler but takes the driver's turn arrow.
-      const kind = rampExit ? (turnAngle(from, to) < 0 ? 'left' : 'right') : basic;
+      return rampExit ? (angleOf(from, to) < 0 ? 'left' : 'right') : basic;
+    };
+    for (const { road: to } of incident.outgoing) {
+      // Lane rules have higher specificity in the compiler. A relation's ban must still win.
+      if (bans.has(`${from.id}>${to.id}`)) continue;
+      const kinds = new Set<string>(
+        targets.filter(({ first }) => first === to).map(({ exit }) => kindOf(exit)),
+      );
+      const kind = kinds.size === 1 ? [...kinds][0]! : undefined;
       const allowedLanes = directions.flatMap((lane, i) =>
-        lane.includes(kind) ||
+        lane.some((value) => kinds.has(value!)) ||
         (lane.length === 0 &&
-          ((kind === 'left' && i === 0) || (kind === 'right' && i === from.lanes.length - 1)))
+          ((kinds.has('left') && i === 0) || (kinds.has('right') && i === from.lanes.length - 1)))
           ? [i]
           : [],
       );
@@ -236,7 +261,7 @@ export function addLaneTurns(
           from: from.id,
           to: to.id,
           fromLane,
-          allowed: lane.includes(kind),
+          allowed: lane.some((value) => kinds.has(value!)),
           provenance: { source: 'osm', osmIds: [wayId] },
         };
         if (rule.allowed) {
@@ -244,7 +269,8 @@ export function addLaneTurns(
             node.turnRules.push(rule);
             continue;
           }
-          // Keep simultaneous lane movements ordered, using the rightmost target lanes on right turns.
+          // Keep simultaneous lane movements ordered, using the rightmost target lanes on right
+          // turns. An inner road toward several exits takes its lanes in order, from the left.
           const start = kind === 'right' ? Math.max(0, to.lanes.length - allowedLanes.length) : 0;
           const throughLanes = directions.flatMap((marks, index) =>
             marks.length === 0 || marks.includes('through') ? [index] : [],
