@@ -39,12 +39,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // hashes of both cities no longer equal main's.
             // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
             // and e4654d8 (merging lanes kept on a group's inner roads).
-            '7ae9628daac4611bb897621736fe7357484e0f6316289ebfd5e60721b825b10f',
-            '55728c9efe239234d6ebad321c0056ce408bf0c6c59e16e5062f03dadb7fd844',
+            '8f1a246f0b8ebb52589fb83c7358de73d84c44b265c90034f9a85434b3016969',
+            '9229a604c2216fdaac67b3f7d5c351cbcb4fbbfe42594c466ecfc63b0da56e66',
           ]
         : [
             '54cb5a52b748dcd1df1717bbf5000321833917ca74c9a528756c9d26da9cbfbe',
-            '1d7e90fb387cf98321a94be8e98599984bf0edf9d14671997403190f39b12dc0',
+            'a589e6ac91b11181ba2c7cf29252f47c8ee790e72c53825ebe4ab3cfa4bf5c5b',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

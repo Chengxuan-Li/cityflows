@@ -25,7 +25,7 @@ const hashes = {
   grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
   Sindelfingen: '1bc9a0138a6034667ee1993cb19bd39880fb095947ba44ac0aa7e701933ccb22',
-  Munich: 'd0de9ee89c84b4e3b6a43d8a89d791e10a058cc3dd0020dab7954c355241c251',
+  Munich: '7d06b10ac73d9393d3d93bd39c9f8ccbbc06bbb4b20c23612cd218ddfbd98114',
 };
 
 test.each(tierCities(throughputCities))(

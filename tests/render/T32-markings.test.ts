@@ -215,12 +215,17 @@ cityTest('T32.2: the owner’s X-marked arrows on Munich’s Marsstraße below n
   // TASK-084 the pair is a divided street, each block on its own side of a 0.5 m median, so each
   // lane carries its own direction's arrows (the u-turn is never drawn) and no lane of one road
   // lies under the other's.
+  // TASK-131 keeps the OSM nodes. r:368 now ends at member n:1369 of jg:10807, where Marsstraße
+  // runs on north (r:1370) from both lanes and lane 0 also turns left across the Weiglstraße
+  // crossing r:1372. r:480 enters jg n:366+n:417 at n:366, its "left|through" lanes both into the
+  // one-lane crossing r:713 (OSM way 151521566 has no lanes tag and no markings), which leads to
+  // the left (r:712) and the through exit (r:419): the lanes no longer differ, so no arrows.
   const city = net('munich');
   const expected: Record<string, string[]> = {
-    'r:368#0': ['left'],
-    'r:368#1': ['right'],
-    'r:480#0': ['left'],
-    'r:480#1': ['through'],
+    'r:368#0': ['through', 'left'],
+    'r:368#1': ['through'],
+    'r:480#0': [],
+    'r:480#1': [],
   };
   for (const id of ['r:368', 'r:480']) {
     const road = city.roads[city.index.road.get(id)!]!;
@@ -231,7 +236,7 @@ cityTest('T32.2: the owner’s X-marked arrows on Munich’s Marsstraße below n
       for (const p of lane.polyline)
         expect(pointInPolygon(p, [...other.surface, other.surface[0]!], 0)).toBe(false);
     }
-    expect(record(city, road).arrows.length).toBeGreaterThan(0);
+    if (id === 'r:368') expect(record(city, road).arrows.length).toBeGreaterThan(0);
   }
 });
 

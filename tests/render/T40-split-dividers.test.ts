@@ -186,10 +186,12 @@ test.each(tierCities(auditCities))(
     // named in T40.1; n:308 three). Sindelfingen's splits are single-lane; grid and town have none.
     // TASK-131 keeps OSM geometry: Munich adds n:478 (jg:10807, two) and n:726 (two: its branches
     // r:728 and r:984 now end at different members of jg:10798, main's n:1181), and n:201 has two
-    // (T40.1); Sindelfingen adds Benzstraße's split n:867 (merged on main), one.
+    // (T40.1); Sindelfingen adds Benzstraße's split n:867 (merged on main), one. Fix round:
+    // n:478's r:846 feeds r:480 from its left lane and r:933 from its right (no crossing), so
+    // one divider there, 19 -> 18.
     expect({ nodes, dividers }).toEqual(
       name === 'munich'
-        ? { nodes: 10, dividers: 19 }
+        ? { nodes: 10, dividers: 18 }
         : name === 'sindelfingen'
           ? { nodes: 1, dividers: 1 }
           : { nodes: 0, dividers: 0 },

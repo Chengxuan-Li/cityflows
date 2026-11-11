@@ -172,10 +172,10 @@ unitTest('T28.2: no guides without a major road or at a signal', () => {
   ).toEqual(['centre', 'divider', 'divider', 'edge', 'edge']);
 });
 
-// TASK-131 keeps OSM geometry: Marsstraße's 2-lane split at n:478 now follows jg:10807's 5.1 m
-// inner road r:846, and each lane turns both ways (r:480 and r:933); the two dividers start at
-// the same point and run 0.06 m apart for 0.5 m, which counts as one crossing.
-const sharedDividerStarts: Record<string, number> = { 'n:478': 1 };
+// TASK-131 keeps OSM geometry. Fix round: Marsstraße's split at n:478 no longer turns each lane
+// both ways (r:846's left lane feeds r:480, its right r:933), so its two dividers no longer start
+// at one point.
+const sharedDividerStarts: Record<string, number> = {};
 test('T28.3: dashes stay on the junction and its roads and guides never cross', () => {
   // TASK-090: the fixtures and the grid in `npm test`, Munich in the city tier.
   const cities = {

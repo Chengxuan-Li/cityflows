@@ -109,7 +109,7 @@ export function orderBranches(
 /** TASK-071's default slice: the [trunk lane, branch lane] pairs that line up for the branch at
  * `position` (left to right), `cursor` being the first trunk lane right of the slices before
  * it. Balanced branches take consecutive slices; when the lane counts differ the first branch
- * keeps the trunk's left lanes and the others its right lanes. */
+ * keeps the trunk's left lanes and the others its right lanes, without crossing. */
 export function defaultSlice(
   trunkLanes: number,
   branchLanes: number[],
@@ -120,6 +120,21 @@ export function defaultSlice(
   const lanes = branchLanes[position]!;
   const balanced = branchLanes.reduce((sum, n) => sum + n, 0) === trunkLanes;
   if (!balanced && branchLanes.length > 1) {
+    const [a, b] = branchLanes.map((n) => Math.min(n, trunkLanes)) as [number, number];
+    // TASK-131: two branches sharing more than one trunk lane would cross (Munich r:846 at n:478,
+    // two lanes into two two-lane branches): the trunk's lanes divide between them in proportion,
+    // left to right, and each trunk lane feeds the branch lanes beside it.
+    if (branchLanes.length === 2 && a + b > trunkLanes + 1) {
+      const left = Math.min(
+        trunkLanes - 1,
+        Math.max(
+          1,
+          Math.round((trunkLanes * branchLanes[0]!) / (branchLanes[0]! + branchLanes[1]!)),
+        ),
+      );
+      const [first, count] = position === 0 ? [0, left] : [left, trunkLanes - left];
+      return Array.from({ length: lanes }, (_, i) => [first + Math.floor((i * count) / lanes), i]);
+    }
     const shared = Math.min(lanes, trunkLanes);
     return Array.from({ length: shared }, (_, i) =>
       position === 0 ? [i, i] : [trunkLanes - shared + i, lanes - shared + i],

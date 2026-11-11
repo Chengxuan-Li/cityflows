@@ -710,6 +710,16 @@ export const shots: {
     osmLines: `Sindelfingen A 81 r:464 / r:543, ${label}`,
     osm: SINDELFINGEN,
   })),
+  // TASK-131 fix round (lead), 10 px/m: Marsstrasse's lanes and arrows at n:366/n:417, the split
+  // n:478, n:471's outline, the curbs at n:638's members.
+  ...(
+    [
+      ['mars', [479, -406]],
+      ['n478', [498, -451]],
+      ['n471', [26, -237]],
+      ['n638-members', [67, -531]],
+    ] as [string, [number, number]][]
+  ).map(([id, centre]) => ({ id: `T131-p2fix-${id}`, cases: [], centre, zoom: 10 })),
 ];
 
 /** TASK-131: an extract's drivable OSM ways (the importer's filter) and the nodes where they

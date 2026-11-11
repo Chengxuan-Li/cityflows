@@ -167,18 +167,18 @@ const pins = {
   // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
   // and e4654d8 (merging lanes kept on a group's inner roads).
   munich: {
-    compile: '83f4c9da15515c9c91b4f3dbc349bdd891dafe991dc1cccab271399fb1234955',
+    compile: '631ecdfee4077ce65b34b20e085afeada4914d5b9016ad776a8ac75703778088',
     lamps: 'a6367b276c0f7db6c9a4a9fe6e103d4f020b6bbf93bef7df2d2ec3fd5c2cfc00',
-    curbs: '267633b7d3f72cdae1a1f44667174da632abc4c01175068d1230b62eff6de1ae',
-    de: '6e56a30b8f7d51efdc36cc46f8de2d9b6faf8b71166e1e543b37b872445e388c',
-    us: '696dc554575cfc17537e6a01c8ebbcbd0827d3bec4f47fe027bb0f59a6a62770',
+    curbs: 'fc71fa74c90f8e5cc094edc6990c5325cda2afd4d585fe6d38f783ac0a8e0c73',
+    de: '1ed078929a1d637608b74c6a816a19c5c97d7b5ce290b3305bcdbca3cdf65e0d',
+    us: '57215568bce015e0ef08eb2cf31dcb676ad2352b354ac5cc13aac0c5c3254f5f',
   },
   sindelfingen: {
-    compile: '31fa7806721c5cd4e926dfe0677029913343c9b16df7ba91791769fd9e58dc8e',
+    compile: 'a851c7347f235b5fdc1e129dc23d3cd86dac9642a6c2ba7bc37c67141645f927',
     lamps: 'd132b1397f6687261fee0b42ab85450dc755962e9e0f71d04d61bc6c5f6396dc',
     curbs: '01ac870cb31f5ab4b49445e52c22fff08002ef267bc1164fa822d79ab8e3afd2',
-    de: '59b6827375c2593d77310a41329e893372a0c1778671260c6a65386ab977f6e8',
-    us: 'e6caf60c551f6c781c5f65ebb92a972fe221db9ae14016337ec9e86c73e3dbfd',
+    de: '877ba82e15fd54f8991c41eb4b7e6f3479e365c3fd825b7f31ea38dcf5117aa8',
+    us: '5123166085444642e41754bf48771f0abbb3bd18ebdc0b43c48d84a7d9745fb7',
   },
 } as const;
 const hash = (value: unknown) =>

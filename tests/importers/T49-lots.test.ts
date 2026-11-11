@@ -20,12 +20,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // and e4654d8 (merging lanes kept on a group's inner roads).
 const baseline = {
   'munich-donnersberger': [
-    'b965bd68ac47e63bd2d56fdefed096149f10156c4fa721992e71201319d10cf3',
-    '4cef4dafa35cecaa2135984bd9e2c66b0440ef46d84e3bf1ac13d79b09392a33',
+    'c0bb230b6e1da33b288c01b2a522a1b5b0746c2a9196b621fffd4f1115428e74',
+    '436fe0b0f79c0f6f55617eeefddd32de72763453d5b3d8689340d29eb390af42',
   ],
   'sindelfingen-a81': [
     '5a966f46bb257988768af34b7171cf187663652a3c70fb1a73e6c65158877798',
-    '5464790cf4d132e03eb07a3ae45cae4730ed4b85b74c7a7fc637b454c442dcad',
+    '8af4c67e354db7c26073363c0aaf96de68a73e9d8673014eed99e3164c0e23b9',
   ],
 };
 

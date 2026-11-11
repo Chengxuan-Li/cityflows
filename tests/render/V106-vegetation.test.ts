@@ -44,8 +44,8 @@ const baselines = {
   // hash as on main.
   // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
   // and e4654d8 (merging lanes kept on a group's inner roads).
-  'munich-donnersberger': '55728c9efe239234d6ebad321c0056ce408bf0c6c59e16e5062f03dadb7fd844',
-  'sindelfingen-a81': '1d7e90fb387cf98321a94be8e98599984bf0edf9d14671997403190f39b12dc0',
+  'munich-donnersberger': '9229a604c2216fdaac67b3f7d5c351cbcb4fbbfe42594c466ecfc63b0da56e66',
+  'sindelfingen-a81': 'a589e6ac91b11181ba2c7cf29252f47c8ee790e72c53825ebe4ab3cfa4bf5c5b',
 };
 
 unitTest(
