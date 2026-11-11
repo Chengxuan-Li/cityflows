@@ -6,7 +6,7 @@ import { importOsm } from '../../src/importers/osm';
 import { parseOsm } from '../../src/importers/osm/parse';
 import { compile, signalStateAt, type CompiledCity } from '../../src/network';
 import type { City } from '../../src/schema';
-import { dualSingle } from './junction-group-osm';
+import { dualSingle, dualTurnLanes } from './junction-group-osm';
 
 // TASK-131 Phase 1, Gate 1 on synthetic OSM: a dual carriageway crossed by a two-way street.
 
@@ -137,5 +137,35 @@ describe('T68 junction groups at import', () => {
         .update(JSON.stringify(load(dualSingle(20, true)).city))
         .digest('hex');
     expect(hash()).toBe(hash());
+  });
+
+  it("T68.6: an entry's turn lanes choose among the group's exits, as at the merged node", () => {
+    // Side arrives as two one-way carriageways at the westbound crossing (Munich's Marsstraße at
+    // n:366, checkpoint 2's T32.2): "left" is the left into the eastbound carriageway beyond the
+    // median crossing, not the U-turn into Side's northbound carriageway at the near member.
+    for (const signal of [false, true]) {
+      const { city, compiled: net } = load(dualTurnLanes(20, 'left|through;right', signal));
+      const road = (way: number, from?: string) =>
+        net.roads.find(
+          (r) =>
+            city.roads[r.id]!.provenance.osmIds![0] === way &&
+            r.group === undefined &&
+            (from === undefined || net.nodes[r.from]!.id === from),
+        )!;
+      const group = net.groups![0]!;
+      expect(group.signalised).toBe(signal);
+      const entry = road(4);
+      const near = net.nodes[entry.to]!.id;
+      const far = group.nodes.map((n) => net.nodes[n]!.id).find((id) => id !== near)!;
+      const inner = net.roads.find((r) => r.group === 0 && net.nodes[r.from]!.id === near)!;
+      const [west, east, south, north] = [road(2, near), road(1, far), road(3, far), road(5)];
+      const firstHops = entry.lanes.map((l) =>
+        net.lanes[l]!.out.map((m) => net.lanes[net.movements[m]!.toLane]!.road).sort(),
+      );
+      expect(firstHops).toEqual([[inner.idx], [west.idx, inner.idx].sort()]);
+      const exits = new Set(group.chains.filter((c) => c.from === entry.idx).map((c) => c.to));
+      expect([...exits].sort()).toEqual([west.idx, east.idx, south.idx].sort());
+      expect(exits.has(north.idx)).toBe(false);
+    }
   });
 });

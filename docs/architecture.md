@@ -871,7 +871,10 @@ the OSM `lanes` tags carry one.
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
 - State at simulation time `t`: `((t + offsetS) mod cycleS)` locates the phase and whether it
   is in green, amber or all-red. Amber means vehicles that can stop before the stop line do.
-- Error `signal_conflict`: two conflicting movements in the same phase (T13).
+- Error `signal_conflict`: two conflicting movements in the same phase (T13). TASK-131: two
+  movements into one lane of a group's inner road are not a conflict for the signal; they merge
+  inside the junction as at a lane drop, ordered by the grant rule (Munich r:480's two lanes into
+  the one-lane crossing r:713).
 - Warning `signal_unserved_movement`: a movement at a signalized node that is in no phase. It
   is compiled with `neverGreen: true` and routing excludes it.
 
@@ -2710,6 +2713,11 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    deferred at intermediate way boundaries; a same-name continuation bending less than 90
    degrees counts as through. An arrow with no matching exit is recorded as `turnLanesDeferred`
    instead of prohibiting every exit at an earlier junction. Relation bans still take priority.
+   TASK-131: at a junction group's member, an entry's arrows are matched against the group's
+   exits, reached along the inner roads (no member twice, no road-level ban), with the angle
+   between the roads' chords over 20 m from the junction, as at the node the merge made; a
+   marked lane may enter an inner road if an exit beyond it takes one of its arrows, in lane
+   order. Two one-way carriageways of one name meeting at more than 90 degrees are a U-turn.
 7. Control: `highway=traffic_signals` on the node gives `signal` with a generated program:
    two 30 s phases for the two opposing approach axes with amber 3 s and all-red 1 s; a
    road-pair group that conflicts with its phase, or a left turn at a node with four or more

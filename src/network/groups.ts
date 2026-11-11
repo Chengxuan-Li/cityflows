@@ -1,5 +1,54 @@
-import type { City, SignalProgram } from '../schema';
+import { cumulativeLengths, pointAtDistance } from '../geo/polyline';
+import type { Vec2 } from '../geo/vec2';
+import type { City, Road, SignalProgram } from '../schema';
 import type { CChain, CGroup, CompiledCity, Diagnostic } from './types';
+
+/**
+ * TASK-131: the exits of a junction group reached along a road: the road itself unless it is an
+ * inner road; along an inner road, every exit beyond it, by inner roads, visiting no member twice
+ * and taking no turn a road-level rule bans.
+ */
+export function groupExits(city: City): (road: Road) => Road[] {
+  const inner = new Set(Object.values(city.junctionGroups ?? {}).flatMap((g) => g.innerRoads));
+  const outgoing = new Map<string, Road[]>();
+  for (const road of Object.values(city.roads))
+    outgoing.set(road.from, [...(outgoing.get(road.from) ?? []), road]);
+  return (road) => {
+    if (!inner.has(road.id)) return [road];
+    const exits = new Set<Road>();
+    const visit = (at: Road, seen: Set<string>) => {
+      for (const next of outgoing.get(at.to) ?? []) {
+        const banned = city.nodes[at.to]!.turnRules.some(
+          (rule) =>
+            rule.from === at.id &&
+            rule.to === next.id &&
+            !rule.allowed &&
+            rule.fromLane === undefined &&
+            rule.toLane === undefined,
+        );
+        if (banned) continue;
+        if (!inner.has(next.id)) exits.add(next);
+        else if (!seen.has(next.to)) visit(next, new Set([...seen, next.to]));
+      }
+    };
+    visit(road, new Set([road.from, road.to]));
+    return [...exits];
+  };
+}
+
+function chord(line: Vec2[]): number {
+  const lengths = cumulativeLengths(line);
+  const p = pointAtDistance(line, lengths, Math.min(20, lengths.at(-1)!));
+  return Math.atan2(p.y - line[0]!.y, p.x - line[0]!.x);
+}
+
+/** TASK-131: the turn angle from an entry into an exit of a junction group (positive right), as
+ * at the node the merge made: along their chords over 20 m from the junction, since a road's last
+ * metres at a member bend toward the member (Munich r:480 at n:366). */
+export function groupAngle(from: Road, to: Road): number {
+  const turn = chord(to.centerline) - chord([...from.centerline].reverse()) - Math.PI;
+  return Math.atan2(Math.sin(turn), Math.cos(turn));
+}
 
 /**
  * TASK-131: the compiled junction groups. A group's entries are the road ends that enter it

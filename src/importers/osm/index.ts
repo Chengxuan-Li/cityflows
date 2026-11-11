@@ -1,6 +1,7 @@
 import { polylineLength } from '../../geo/polyline';
 import { lonLatToLocal } from '../../geo/projection';
 import { compile, type Diagnostic } from '../../network';
+import { groupAngle, groupExits } from '../../network/groups';
 import { addImplicitGarages } from '../../network/parking';
 import { geographicMarkingTheme } from '../../schema/marking-theme';
 import { osmMarkingTheme } from './controls';
@@ -322,8 +323,21 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     incidents.get(road.road.from)!.outgoing.push(road);
     incidents.get(road.road.to)!.incoming.push(road);
   }
+  // TASK-131: an entry's arrows choose among the group's exits, reached along the inner roads,
+  // with the angles of the node the merge used to make.
+  const inner = new Set(groups.flatMap(({ innerRoads }) => innerRoads));
+  const exitsVia = groupExits(city);
+  const members = new Set(groups.flatMap(({ nodes }) => nodes));
   for (const node of Object.values(city.nodes))
-    addLaneTurns(node, incidents.get(node.id)!, city.drivingSide, diagnostics);
+    addLaneTurns(
+      node,
+      incidents.get(node.id)!,
+      city.drivingSide,
+      diagnostics,
+      members.has(node.id)
+        ? { entry: (road) => !inner.has(road.id), exitsVia, angle: groupAngle }
+        : undefined,
+    );
   markRoundaboutEntries(city, data);
   // One signal anywhere in a group makes the group signalised, as the merged node was.
   const signalGroups = Object.values(city.junctionGroups ?? {}).filter((g) =>

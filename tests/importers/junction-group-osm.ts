@@ -74,3 +74,60 @@ export function dualSingle(gap: number, signal = false) {
     signal ? { [`0,${-h}`]: { highway: 'traffic_signals' } } : {},
   );
 }
+
+/** `dualSingle`'s Main crossed by a Side that arrives from the north as two one-way ways meeting
+ * at the westbound crossing, as Munich's Marsstraße at n:366: way 4 southbound with two lanes
+ * marked `turnLanes`, way 5 northbound; the two-way way 3 runs on south across the median. */
+export function dualTurnLanes(gap: number, turnLanes: string, signal = false) {
+  const main = { highway: 'secondary', oneway: 'yes', lanes: '2', name: 'Main' };
+  const side = { highway: 'secondary', oneway: 'yes', name: 'Side' };
+  const h = gap / 2;
+  return osm(
+    [
+      {
+        id: 1,
+        tags: main,
+        points: [
+          [-250, h],
+          [0, h],
+          [250, h],
+        ],
+      },
+      {
+        id: 2,
+        tags: main,
+        points: [
+          [250, -h],
+          [0, -h],
+          [-250, -h],
+        ],
+      },
+      {
+        id: 3,
+        tags: { highway: 'secondary', name: 'Side' },
+        points: [
+          [0, -h],
+          [0, h],
+          [0, 250],
+        ],
+      },
+      {
+        id: 4,
+        tags: { ...side, lanes: '2', 'turn:lanes': turnLanes },
+        points: [
+          [-6, -250],
+          [0, -h],
+        ],
+      },
+      {
+        id: 5,
+        tags: side,
+        points: [
+          [0, -h],
+          [6, -250],
+        ],
+      },
+    ],
+    signal ? { [`0,${-h}`]: { highway: 'traffic_signals' } } : {},
+  );
+}

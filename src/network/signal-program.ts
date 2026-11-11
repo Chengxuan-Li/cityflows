@@ -1,5 +1,6 @@
 import type { City, Node, Road, SignalProgram } from '../schema';
 import { memberPairs } from './groups';
+import { intoInnerLane } from './signals';
 import type { CompiledCity, Diagnostic } from './types';
 
 /** Travel heading of `road` at its end (`end`) or start. */
@@ -122,7 +123,11 @@ function phasesFor(
   for (const { from, to, members, left } of groups) {
     const own = new Set(members);
     if (
-      members.some((index) => compiled.movements[index]!.conflicts.some((other) => own.has(other)))
+      members.some((index) =>
+        compiled.movements[index]!.conflicts.some(
+          (other) => own.has(other) && !intoInnerLane(compiled, compiled.movements[index]!, other),
+        ),
+      )
     ) {
       // The canonical signal can only switch a whole road pair together.
       diagnostics.push({
@@ -136,7 +141,11 @@ function phasesFor(
 
     const fits = (phase: number) =>
       members.every((index) =>
-        compiled.movements[index]!.conflicts.every((other) => !assigned[phase]!.has(other)),
+        compiled.movements[index]!.conflicts.every(
+          (other) =>
+            !assigned[phase]!.has(other) ||
+            intoInnerLane(compiled, compiled.movements[index]!, other),
+        ),
       );
     const angle = roadHeading(city.roads[from]!, true) - axis;
     const preferred = Math.abs(Math.cos(angle)) >= Math.SQRT1_2 ? 0 : 1;

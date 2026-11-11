@@ -1,5 +1,5 @@
 import { polylineLength } from '../../geo/polyline';
-import type { CompiledCity, Diagnostic } from '../../network';
+import { intoInnerLane, type CompiledCity, type Diagnostic } from '../../network';
 import type { City, Node, Road } from '../../schema';
 import { generateGroupSignalProgram, generateSignalProgram } from '../../network/signal-program';
 import type { OsmData } from './parse';
@@ -138,9 +138,16 @@ export function assignSignalLanes(city: City, signals: string[], compiled: Compi
       )
         continue;
       const accepted: number[] = [];
-      for (const idx of group) {
+      // A lane with no other way out keeps the shared target (Munich r:301 at n:294: the right
+      // lane goes through and the left lane, which also turns left, gives it up).
+      const others = (idx: number) => compiled.lanes[compiled.movements[idx]!.fromLane]!.out.length;
+      for (const idx of [...group].sort((a, b) => others(a) - others(b) || a - b)) {
         const m = compiled.movements[idx]!;
-        if (!accepted.some((other) => m.conflicts.includes(other))) {
+        if (
+          !accepted.some(
+            (other) => m.conflicts.includes(other) && !intoInnerLane(compiled, m, other),
+          )
+        ) {
           accepted.push(idx);
           continue;
         }

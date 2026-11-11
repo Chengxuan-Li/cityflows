@@ -1,6 +1,14 @@
 import type { SignalProgram } from '../schema';
 import { crossingArms } from './crossings';
-import type { CNode, CSignal, CompiledCity, Diagnostic } from './types';
+import type { CMovement, CNode, CSignal, CompiledCity, Diagnostic } from './types';
+
+/** TASK-131: two movements into one lane of a group's inner road merge inside the junction, as
+ * at an uncontrolled lane drop: one green serves both and the grant rule orders them (Munich
+ * r:480's left and through lanes into the one-lane crossing r:713 at n:366). */
+export function intoInnerLane(city: CompiledCity, a: CMovement, b: number): boolean {
+  const lane = city.lanes[a.toLane]!;
+  return lane.idx === city.movements[b]!.toLane && city.roads[lane.road]!.group !== undefined;
+}
 
 export function compileSignal(
   node: CNode,
@@ -46,7 +54,13 @@ export function compileSignal(
     for (const idx of movements) {
       const movement = city.movements[idx]!;
       for (const conflict of movement.conflicts) {
-        if (conflict > idx && members.has(conflict) && !free.has(idx) && !free.has(conflict)) {
+        if (
+          conflict > idx &&
+          members.has(conflict) &&
+          !free.has(idx) &&
+          !free.has(conflict) &&
+          !intoInnerLane(city, movement, conflict)
+        ) {
           const other = city.movements[conflict]!;
           diagnostics.push({
             severity: 'error',
