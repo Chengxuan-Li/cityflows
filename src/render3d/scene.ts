@@ -49,6 +49,8 @@ import { ParkedCars3D } from './parked-cars';
 import { buildWalk } from './walk';
 import { buildRail, pickRail3D } from './rail';
 import { Trains3D } from './trains';
+import { Stations3D } from './stations';
+import { noFurniture, placeStationFurniture } from '../render/station-furniture';
 import { trainTimetable, trainsAt } from '../network/trains';
 
 export class Scene3D {
@@ -75,6 +77,7 @@ export class Scene3D {
   private rail: ReturnType<typeof buildRail> | undefined;
   private railVisible = true;
   private trains: Trains3D | undefined;
+  private stations: Stations3D | undefined;
   private trainTimeS = NaN;
   private selectedTrain: string | null = null;
   private railSelection: string | undefined;
@@ -195,7 +198,14 @@ export class Scene3D {
       const table = trainTimetable(city.rail);
       this.trains = new Trains3D(city.rail, geometry.heights, table);
       this.content.add(this.trains.group);
-    } else this.trains = undefined;
+      this.stations = new Stations3D(
+        placeStationFurniture(city, renderedSource),
+        city.rail,
+        table,
+        geometry.heights,
+      );
+      this.content.add(this.stations.group);
+    } else this.trains = this.stations = undefined;
     this.trainTimeS = NaN;
     this.railSelection = undefined;
     this.content.add(this.rail.group);
@@ -784,10 +794,12 @@ export class Scene3D {
     if (this.city?.rail && this.trains && this.railVisible && this.trainTimeS !== timeS) {
       const poses = trainsAt(this.city.rail, trainTimetable(this.city.rail), timeS);
       this.trains.update(poses, this.belowGround, this.selectedTrain);
+      this.stations?.update(timeS);
       this.canvas.dataset.trains = String(poses.length);
       this.trainTimeS = timeS;
       this.invalidate();
     }
+    if (import.meta.env.MODE === 'test') this.stations?.report(this.canvas, this.railVisible);
     if (this.vehicleAgeS !== elapsedS && this.vehicles.mesh.count) this.invalidate();
     this.vehicleAgeS = elapsedS;
     // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
@@ -930,9 +942,13 @@ export class Scene3D {
     this.railVisible = visible;
     if (this.rail) this.rail.group.visible = visible;
     if (this.trains) this.trains.group.visible = visible;
+    if (this.stations) this.stations.group.visible = visible;
     if (!visible) this.canvas.dataset.trains = '0';
 
     this.canvas.dataset.railTracks = String(visible ? (this.city?.rail?.tracks.length ?? 0) : 0);
+    this.canvas.dataset.stationFurniture = JSON.stringify(
+      visible && this.stations ? this.stations.furnitureCounts : noFurniture,
+    );
   }
 
   private disposeContent() {
