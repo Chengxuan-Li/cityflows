@@ -5,7 +5,7 @@ import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
 import { citySchema, migrateCity, type City } from '../../src/schema';
-import { dualSingle } from '../importers/junction-group-osm';
+import { dualSingle, osm } from '../importers/junction-group-osm';
 import { vehicleJson } from '../vehicle-json';
 
 // TASK-131 Phase 1: the junction group in the city model, its compile index and editing.
@@ -139,5 +139,92 @@ describe('T68 junction groups in the model', () => {
     ).toBe(true);
     expect(Object.values(editor.city.junctionGroups!)[0]!.signal).toEqual(program);
     for (const id of group.nodes) expect(editor.city.nodes[id]!.control).toBe('signal');
+  });
+});
+
+describe('T68 Phase 2: inner links, shifts and editing', () => {
+  it('T68.11: inner-road movements are green in every phase and stop at no line', () => {
+    const result = compile(imported(true));
+    if (!result.ok) throw new Error('must compile');
+    const net = result.compiled;
+    const group = net.groups![0]!;
+    const inner = new Set(group.innerRoads);
+    for (const n of group.nodes) {
+      const node = net.nodes[n]!;
+      const fromInner = node.movements.filter((m) =>
+        inner.has(net.lanes[net.movements[m]!.fromLane]!.road),
+      );
+      for (const phase of node.signal!.phases)
+        for (const m of fromInner) expect(phase.movements).toContain(m);
+    }
+    for (const r of group.innerRoads)
+      for (const l of net.roads[r]!.lanes) expect(net.lanes[l]!.stopM).toBe(net.lanes[l]!.lengthM);
+  });
+
+  it('T68.12: roads at group members take no lane-continuation shift', () => {
+    // Main's eastbound carriageway has three lanes west of the crossing and two east of it.
+    const main = { highway: 'secondary', oneway: 'yes', name: 'Main' };
+    const xml = osm([
+      {
+        id: 1,
+        tags: { ...main, lanes: '3' },
+        points: [
+          [-250, 10],
+          [0, 10],
+        ],
+      },
+      {
+        id: 4,
+        tags: { ...main, lanes: '2' },
+        points: [
+          [0, 10],
+          [250, 10],
+        ],
+      },
+      {
+        id: 2,
+        tags: { ...main, lanes: '2' },
+        points: [
+          [250, -10],
+          [0, -10],
+          [-250, -10],
+        ],
+      },
+      {
+        id: 3,
+        tags: { highway: 'residential', name: 'Side' },
+        points: [
+          [0, 250],
+          [0, 10],
+          [0, -10],
+          [0, -250],
+        ],
+      },
+    ]);
+    const result = importOsm(xml, { importerVersion: 'test' });
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 3)));
+    const compiled = compile(result.city);
+    if (!compiled.ok) throw new Error('must compile');
+    const net = compiled.compiled;
+    const members = new Set(net.groups![0]!.nodes);
+    for (const road of net.roads)
+      if (members.has(road.from) || members.has(road.to)) {
+        expect(road.startShift.length).toBe(0);
+        expect(road.endShift.length).toBe(0);
+      }
+  });
+
+  it('T68.13: join and leave groups as commands with undo', () => {
+    const editor = createEditor(imported(false));
+    const before = cityHash(editor.city);
+    expect(editor.apply({ kind: 'leaveJunctionGroup', nodeId: 'n:7' }).ok).toBe(true);
+    expect(Object.keys(editor.city.junctionGroups ?? {})).toEqual([]);
+    expect(editor.apply({ kind: 'joinJunctions', nodeIds: ['n:2', 'n:7'] }).ok).toBe(true);
+    const joined = Object.values(editor.city.junctionGroups!);
+    expect(joined.map((g) => g.nodes)).toEqual([['n:2', 'n:7']]);
+    expect(joined[0]!.innerRoads).toEqual(['r:14', 'r:15']);
+    expect(editor.undo()?.ok).toBe(true);
+    expect(editor.undo()?.ok).toBe(true);
+    expect(cityHash(editor.city)).toBe(before);
   });
 });

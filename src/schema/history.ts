@@ -60,6 +60,9 @@ export type Command =
       minorRoads?: RoadId[];
     }
   | { kind: 'setSignal'; nodeId: NodeId; signal: SignalProgram }
+  // TASK-131: the owner's case-by-case tools for junction groups.
+  | { kind: 'joinJunctions'; nodeIds: [NodeId, NodeId] }
+  | { kind: 'leaveJunctionGroup'; nodeId: NodeId }
   | { kind: 'addRoad'; road: Omit<Road, 'id'>; newNodes: Omit<Node, 'id'>[] } // Gate 2
   | { kind: 'deleteRoad'; roadId: RoadId } // Gate 2
   | { kind: 'splitRoad'; roadId: RoadId; atM: number } // Gate 2

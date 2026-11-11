@@ -9,7 +9,7 @@ import { editRoundabout } from './roundabout';
 import { editTopology } from './topology';
 import type { CommandPatch } from './types';
 import { diffCity } from '../patch';
-import { dissolveTouched } from './groups';
+import { dissolveTouched, joinJunctions, leaveJunctionGroup } from './groups';
 
 export function dispatch(city: City, command: Command): CommandPatch {
   switch (command.kind) {
@@ -40,6 +40,10 @@ export function dispatch(city: City, command: Command): CommandPatch {
     case 'setControl':
     case 'setSignal':
       return editNode(city, command);
+    case 'joinJunctions':
+      return joinJunctions(city, command.nodeIds);
+    case 'leaveJunctionGroup':
+      return leaveJunctionGroup(city, command.nodeId);
     case 'addPlace':
     case 'updatePlace':
     case 'setConnectors':

@@ -302,6 +302,13 @@ export function joinDividedFeeders(
     );
     if (!feeder) continue;
     const heading = roadHeading(main.road, main.road.to === node.id);
+    // TASK-131 (lead, checkpoint 1): the crossing runs on straight from the feeder's junction
+    // along the feeder's heading, to where that line meets the far carriageway.
+    const ahead =
+      feeder.road.to === node.id
+        ? roadHeading(feeder.road, true)
+        : roadHeading(feeder.road, false) + Math.PI;
+    const dir = { x: Math.cos(ahead), y: Math.sin(ahead) };
     const candidates = roads
       .flatMap((other) => {
         const { road } = other;
@@ -319,12 +326,15 @@ export function joinDividedFeeders(
           const dx = b.x - a.x,
             dy = b.y - a.y;
           if (Math.cos(Math.atan2(dy, dx) - heading) > -0.9) return [];
-          const t = Math.max(
-            0,
-            Math.min(1, ((node.pos.x - a.x) * dx + (node.pos.y - a.y) * dy) / (dx * dx + dy * dy)),
-          );
+          // The ray node.pos + gap * dir meets the segment a + t (b - a), t in [0, 1].
+          const det = dir.x * -dy + dir.y * dx;
+          if (Math.abs(det) < 1e-9) return [];
+          const ax = a.x - node.pos.x,
+            ay = a.y - node.pos.y;
+          const gap = (ax * -dy + ay * dx) / det;
+          const t = (dir.x * ay - dir.y * ax) / det;
+          if (t < 0 || t > 1) return [];
           const pos = { x: a.x + t * dx, y: a.y + t * dy };
-          const gap = distance(pos, node.pos);
           const width = ((main.road.lanes.length + road.lanes.length) * 3.5) / 2 + 12;
           return gap >= 3 && gap <= Math.min(30, width) ? [{ other, pos, i, gap }] : [];
         });
@@ -342,9 +352,21 @@ export function joinDividedFeeders(
       )
     )
       continue;
-    let target = [other.road.from, other.road.to].find(
-      (id) => distance(city.nodes[id]!.pos, pos) < 3,
-    );
+    // An existing node within 1 m, or a feeder junction of the far carriageway within 3 m (the
+    // street continuing across, n:138: one crossing joins the two feeders' junctions).
+    let target = [other.road.from, other.road.to].find((id) => {
+      const d = distance(city.nodes[id]!.pos, pos);
+      return (
+        d < 1 ||
+        (d < 3 &&
+          roads.some(
+            ({ road }) =>
+              (road.from === id || road.to === id) &&
+              road.name !== other.road.name &&
+              road.roadClass !== 'ramp',
+          ))
+      );
+    });
     if (!target) {
       target = allocateId(city, 'n');
       city.nodes[target] = {
