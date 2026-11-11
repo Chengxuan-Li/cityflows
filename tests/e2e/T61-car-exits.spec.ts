@@ -21,8 +21,10 @@ test('T61 Munich split garage keeps its arrival and a controlled driver leaves o
     surroundings: false,
     terrain: false,
   });
+  // TASK-131 re-rooted main's p:1733 and p:1831 to the places of the same OSM sources: p:1726
+  // (three of p:1733's five building ways; its garage has 1002 spaces, not 1071) and p:1836.
   const source = await city(page),
-    home = source.places['p:1733']!;
+    home = source.places['p:1726']!;
   const result = compile(source);
   if (!result.ok) throw new Error('Munich must compile');
   const net = result.compiled;
@@ -36,7 +38,7 @@ test('T61 Munich split garage keeps its arrival and a controlled driver leaves o
   await clickWorld(page, center);
   const inspector = page.getByRole('complementary', { name: 'Inspector' });
   await expect(inspector.getByRole('heading', { name: 'Workplaces', exact: true })).toBeVisible();
-  await button(page, 'Workplaces · 1071 spaces').click();
+  await button(page, 'Workplaces · 1002 spaces').click();
   await expect(inspector.getByText('garage', { exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('garage-1981.png') });
   const exit = home.connectors[1]!,
@@ -58,7 +60,7 @@ test('T61 Munich split garage keeps its arrival and a controlled driver leaves o
     through: { car: 1, van: 0, truck: 0, bus: 0 },
   };
   const population = [
-    { id: 'garage-driver', homePlaceId: home.id, workPlaceId: 'p:1831', hasCar: true, agenda: [] },
+    { id: 'garage-driver', homePlaceId: home.id, workPlaceId: 'p:1836', hasCar: true, agenda: [] },
   ];
   const project = { city: source, scenarios: [scenario], population };
   const { manifest } = JSON.parse(readFileSync('fixtures/projects/grid5x5.cityflows.json', 'utf8'));

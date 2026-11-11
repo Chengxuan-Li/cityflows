@@ -22,14 +22,14 @@ import { compile } from '../src/network';
 const MUNICH = 'fixtures/osm/munich-donnersberger.osm';
 const SINDELFINGEN = 'fixtures/osm/sindelfingen-a81.osm';
 /** Pairs across the zebras at n:180 and n:212 and the signals at n:963 and n:262 (among T53's
- * Munich pairs). */
+ * Munich pairs; TASK-131 re-rooted them to the places of the same OSM sources). */
 const v111Walkers = [
-  ['p:1677', 'p:1809'],
-  ['p:1809', 'p:1677'],
-  ['p:1579', 'p:1809'],
-  ['p:1677', 'p:1709'],
-  ['p:1571', 'p:1831'],
-  ['p:1831', 'p:1571'],
+  ['p:1664', 'p:1814'],
+  ['p:1814', 'p:1664'],
+  ['p:1566', 'p:1814'],
+  ['p:1664', 'p:1698'],
+  ['p:1558', 'p:1836'],
+  ['p:1836', 'p:1558'],
 ].map(([fromPlaceId, toPlaceId]) => ({
   fromPlaceId: fromPlaceId!,
   toPlaceId: toPlaceId!,
