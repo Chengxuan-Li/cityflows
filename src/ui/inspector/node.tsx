@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { generateGroupSignalProgram, generateSignalProgram } from '../../network/signal-program';
 import type { CNode, CompiledCity, Turn } from '../../network';
 import {
@@ -12,6 +13,7 @@ import {
   type City,
   type Command,
   type Control,
+  type JunctionGroup,
   type Node,
   type SignalProgram,
 } from '../../schema';
@@ -165,20 +167,19 @@ export function NodeInspector({
         </label>
       </div>
       {group && (
-        <p className="muted">
+        <p className="muted" aria-label="Junction group">
           Junction {group.id}: {group.nodes.join(', ')}
         </p>
       )}
-      {group?.signal && (
-        <ol className="item-list" aria-label="Group signal phases">
-          {group.signal.phases.map((phase, i) => (
-            <li key={i}>
-              {phase.durationS} s · {phase.groups.map((g) => `${g.from} → ${g.to}`).join(', ')}
-            </li>
-          ))}
-        </ol>
+      <JunctionGroupControls nodeId={nodeId} group={group} compiled={compiled} node={node} />
+      {signal && (
+        <SignalInspector
+          node={node}
+          source={source}
+          compiled={compiled}
+          {...(group && { group })}
+        />
       )}
-      {!group && signal && <SignalInspector node={node} source={source} compiled={compiled} />}
       {node.outline.length > 0 && <Crossings node={node} compiled={compiled} city={city} />}
       <details className="disclosure">
         <summary>Turns</summary>
@@ -250,6 +251,76 @@ export function NodeInspector({
           ))}
         </ul>
       </details>
+    </>
+  );
+}
+
+/** TASK-131: join this junction with a neighbouring one (a node one road away, or its group), or
+ * take it out of its group; both undo as one step. */
+function JunctionGroupControls({
+  nodeId,
+  group,
+  compiled,
+  node,
+}: {
+  nodeId: string;
+  group: JunctionGroup | undefined;
+  compiled: CompiledCity;
+  node: CNode;
+}) {
+  const busy = useAppStore((state) => state.busy);
+  const neighbours = [
+    ...new Set(
+      compiled.roads
+        .filter((r) => r.from === node.idx || r.to === node.idx)
+        .map((r) => compiled.nodes[r.from === node.idx ? r.to : r.from]!.id),
+    ),
+  ]
+    .filter((id) => id !== nodeId && !group?.nodes.includes(id))
+    .sort();
+  const [other, setOther] = useState('');
+  const target = neighbours.includes(other) ? other : (neighbours[0] ?? '');
+  const { commit } = useAppStore.getState();
+  return (
+    <>
+      {neighbours.length > 0 && (
+        <div className="edit-fields">
+          <label className="edit-field">
+            Join with
+            <select
+              aria-label="Junction to join"
+              value={target}
+              onChange={(event) => setOther(event.currentTarget.value)}
+            >
+              {neighbours.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      <div className="controls">
+        {neighbours.length > 0 && (
+          <button
+            type="button"
+            disabled={busy || !target}
+            onClick={() => void commit({ kind: 'joinJunctions', nodeIds: [nodeId, target] })}
+          >
+            Join junction
+          </button>
+        )}
+        {group && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void commit({ kind: 'leaveJunctionGroup', nodeId })}
+          >
+            Leave junction group
+          </button>
+        )}
+      </div>
     </>
   );
 }

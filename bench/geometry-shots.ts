@@ -659,6 +659,14 @@ export const shots: {
     osmLines: `Sindelfingen ${label}`,
     osm: SINDELFINGEN,
   })),
+  // Checkpoint 2 (owner): lane lines on a group's inner roads, n:247 under the bridge.
+  {
+    id: 'T131-p2-lanes-n247',
+    cases: [],
+    centre: [-45.6, 163.8] as [number, number],
+    zoom: 10,
+    osmLines: 'Munich n:247 (main), the group under Donnersberger Bruecke: inner road lane lines',
+  },
   // Checkpoint 2 (coordinator): the 30-degree limit, n:68 in 3D, and the doubtful new cases.
   {
     id: 'T131-p2-b55-3d-n68',

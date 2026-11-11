@@ -178,9 +178,6 @@ export function roadMarkingGeometry(
   const belowShapes: MarkingShape[] = [],
     aboveShapes: MarkingShape[] = [],
     pavement: Vec2[][] = [];
-  // TASK-131: an inner road of a junction group is part of the junction surface: no centre,
-  // lane or edge line on it (tram and rail crossings are the rail layer's, still drawn).
-  if (road.group !== undefined) return { below: belowShapes, above: aboveShapes, pavement };
   const medianOnRight = city.drivingSide === 'left';
   const tapered = road.lanes.some((i) => city.lanes[i]!.taperStartM || city.lanes[i]!.taperEndM);
   // TASK-079: a line runs to its lane's stop position. Where the junction surface covers the end
@@ -207,6 +204,24 @@ export function roadMarkingGeometry(
       ...above.map((points) => lineShape(road, 'lane', points, alpha, markingTheme)),
     );
   };
+  // TASK-131 (owner, checkpoint 2): an inner road of a junction group is part of the junction
+  // surface, but its lanes run on through the group: dashed lines between lanes of one direction,
+  // as on any road; no centre or edge line, and no stop, yield or crossing (`approachMarkings`).
+  if (road.group !== undefined) {
+    for (const index of road.lanes) {
+      const lane = city.lanes[index]!;
+      if (lane.right < 0) continue;
+      draw(
+        roadDashes(
+          parallelOffset(lane.polyline, lane.widthM / 2),
+          true,
+          markingTheme.classes[road.roadClass].lane.dash!,
+        ),
+        0.78,
+      );
+    }
+    return { below: belowShapes, above: aboveShapes, pavement };
+  }
   // B46 (TASK-091): a centre line ends at the junction mouth, also where the outline reaches back
   // over the end of the approach: no centre line inside a junction polygon, and no piece shorter
   // than a dash left between two (a stub road inside a junction, Munich r:1172 at n:182).

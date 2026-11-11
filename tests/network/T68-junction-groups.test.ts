@@ -4,6 +4,7 @@ import { createEditor } from '../../src/editor';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
+import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { citySchema, migrateCity, type City } from '../../src/schema';
 import { dualSingle, osm } from '../importers/junction-group-osm';
 import { vehicleJson } from '../vehicle-json';
@@ -159,6 +160,30 @@ describe('T68 Phase 2: inner links, shifts and editing', () => {
     }
     for (const r of group.innerRoads)
       for (const l of net.roads[r]!.lanes) expect(net.lanes[l]!.stopM).toBe(net.lanes[l]!.lengthM);
+  });
+
+  it('T68.14: an inner road draws its lane lines only (owner, checkpoint 2)', () => {
+    // The side street with two lanes each way: its inner roads carry a dashed lane line, no
+    // centre, edge, stop or yield line.
+    const xml = dualSingle(20).replace(
+      '<tag k="name" v="Side"/>',
+      '<tag k="name" v="Side"/><tag k="lanes" v="4"/>',
+    );
+    expect(xml).toContain('v="4"');
+    const city = importOsm(xml, { importerVersion: 'test' });
+    if (!city.ok) throw new Error('must import');
+    const result = compile(city.city);
+    if (!result.ok) throw new Error('must compile');
+    const net = result.compiled;
+    const inner = net.groups![0]!.innerRoads.map((r) => net.roads[r]!);
+    expect(inner.length).toBeGreaterThan(0);
+    for (const road of inner) {
+      expect(road.lanes.length).toBe(2);
+      const { below, above } = roadMarkingGeometry(net, road);
+      const shapes = [...below, ...above];
+      expect(shapes.length).toBeGreaterThan(0);
+      expect(new Set(shapes.map((s) => s.role))).toEqual(new Set(['lane']));
+    }
   });
 
   it('T68.12: roads at group members take no lane-continuation shift', () => {
