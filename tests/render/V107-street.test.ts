@@ -159,7 +159,9 @@ unitTest('V107 curbs leave driveway gaps on both sides and exclude elevated road
 const baselines = {
   grid: '9ab97a7cc8f1c8e0a01f469f56babc7828ba5a3f89ef75171c83523ae74cffdd',
   town: '8b07424297d91cd0910fa75a40359442258224b805faaed31449971693e7116f',
-  'munich-donnersberger': '631ecdfee4077ce65b34b20e085afeada4914d5b9016ad776a8ac75703778088',
+  // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
+  // import without assignTramForms) every pin equals c3a6ec2's.
+  'munich-donnersberger': 'be2ad6533f395351d68f51e43f3e614eb70ae03788a2e30e0df55c8e8a4f5fcb',
   'sindelfingen-a81': 'a851c7347f235b5fdc1e129dc23d3cd86dac9642a6c2ba7bc37c67141645f927',
 };
 const lampCounts = {

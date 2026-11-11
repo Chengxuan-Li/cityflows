@@ -415,6 +415,18 @@ TASK-127 adds optional track `preferredDirection: 'forward' | 'backward' | 'both
 to the stored polyline, from `railway:preferred_direction`. No schema-version bump: omitted
 values leave direction undecided and all existing migration/boundary schemas preserve it.
 
+TASK-135 adds optional tram-track `form: 'embedded' | 'grass' | 'paved' | 'ballast'` and
+`provenance` (`{ source: 'osm', inferred: ['form'] }` when no tag decided the form). The import
+sets `form` on every tram track and on no other kind. The way's tags decide first:
+`embedded=yes` is embedded; `embedded=no` is an own bed of the tagged surface or ballast;
+`surface=grass` or `railway:track_ballast=no` is grass, `railway:track_ballast=yes` ballast. A
+track lying over half its length inside highways tagged `embedded_rails=tram` is embedded. Any
+other track is inferred from the compiled geometry: inside same-grade road or junction surface
+over at least 80% of its length (sampled every metre) it is embedded, otherwise an own bed,
+paved under a paved `surface` (asphalt, paving_stones, concrete, sett, paved) and ballast
+otherwise. No schema-version bump: older projects omit both, and a tram without a form draws as
+embedded.
+
 ## 5. Compiled model: `CompiledCity`
 
 `compile(city: City): CompileResult` lives in `src/network` and is a pure, deterministic
@@ -2044,6 +2056,17 @@ lines permanently, so turning Rail off cannot restore the old lines. Tracks/plat
 station markers are pickable in both views; inspectors expose track kind/name/service/length,
 platform served tracks and station platform/entrance counts. Tracks have no editing tools.
 
+TASK-135 gives trams their own look from `style.tram`, railways unchanged. An embedded track is
+two dark grooved rails at the 1 435 mm gauge, flush with the road, in the tram-rail batch above
+road and junction surfaces and below crossing paint. An own bed is a 3.2 m bed (green grass,
+warm grey paving, stone grey ballast) clipped by same-grade asphalt like railway beds, drawn
+below roads; its rails lie on the bed, and where the bed gives way to asphalt they continue as
+grooved street rails. Ballast beds show sleepers every 0.9 m with the detail rails (from
+3 px/m); grass and paved beds show none. 3D raises each part: the bed to 0.12 m with darker
+sides (below the 0.14 m kerbs, so median islands cover it as in 2D), sleepers 0.13 m, rails
+0.17 m on the bed and 0.06 m in the street; grass beds take a per-vertex procedural tone in the
+same vertex-colour batch. The track inspector names a tram's form and whether it was inferred.
+
 TASK-127 draws articulated red/white S-Bahn and blue/grey main-line cars in grade-local 2D
 layers and two instanced 3D batches. Train poses use snapshot/simulation time only; paused
 trains request no frames. Bridges occlude lower trains; tunnels hide train bodies (3D reveals
@@ -2541,7 +2564,8 @@ clips to the metric bbox, breaks at missing nodes, and splits at shared/tagged r
 Platform polygons reuse the existing multipolygon assembler. Platforms serve same-grade,
 mode-compatible tracks within 5 m of their boundary. A mapped stop area's explicit station
 membership wins; otherwise rail platforms match the same normalized station name within 500 m.
-Bus/tram platforms do not inherit a rail station by proximity/name alone. The bundled extracts
+Bus/tram platforms do not inherit a rail station by proximity/name alone. Tram tracks then take
+their form (section 4) from their tags and the import's compiled road surfaces. The bundled extracts
 append only missing IDs at each original historical snapshot; ATTRIBUTION.txt records queries
 and original-file hashes. T62 proves original bytes and lane/movement hashes remain unchanged.
 
