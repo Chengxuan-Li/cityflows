@@ -49,10 +49,12 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
       net.nodes.map((n) => nodeMarkingGeometry(net, n)),
     ];
     // Main 62ca1c3's paint (TASK-104 aisles and TASK-107 `BUS` text moved the 806263a pins).
+    // TASK-131 keeps OSM geometry (no node merges, junction groups, lines on inner roads): the
+    // paint moves and no longer equals main's.
     expect(paintHash(shapes)).toBe(
       name === 'munich'
-        ? 'daa10aa317588784bde607254aeb399d8ecf32a5b0f671b98fc274a49c0daf7f'
-        : '463a324f84bdf969c6cef7f295fcc7b96fb10b6638e2e38a9f470b94556d16ae',
+        ? '84ce00a9ff4e45174e378a395f60514026218e0a6b07bbeeee4e0fad71740752'
+        : '2c107e283eecd6fae03e743822c2cb368be310db0ae7e490782d1912a224cc4b',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

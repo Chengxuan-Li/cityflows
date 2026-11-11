@@ -14,14 +14,16 @@ import { withoutLotAisles } from '../without-lot-aisles';
 const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value)).digest('hex');
 // TASK-119 re-pins parking-place removal and owner links; T55 separately pins main's vehicle
 // geometry. No original entity is reconstructed by the aisle-stripping oracle.
-const main = {
+// TASK-131 keeps OSM geometry (no node merges, junction groups): the aisle-free networks no
+// longer equal main's (main: Munich 33bfd6b9â€¦/3c6dfcc5â€¦, Sindelfingen b72831fbâ€¦/c9e05f99â€¦).
+const baseline = {
   'munich-donnersberger': [
-    '33bfd6b93ec94467a5a83412dfc64e93488da39a9015c53804685e200b77cdb9',
-    '3c6dfcc5fe1a94bb3aef87843ad53d47516e52058f26e95c148ecb5ce08157c7',
+    'ec85fdc1c23d96eb2271b32e9c63edf48179e545867e78aa811ddd744082cd94',
+    'dad38100870b54e0472fc1bbe9e87e3139da7e22654b6f5064bcfa983ce395d3',
   ],
   'sindelfingen-a81': [
-    'b72831fb3ea521315c6b5cc814e761c09e4d1f9375af6224bc9c355d713fedea',
-    'c9e05f99fb6b35fbbb28e5a954cc29f865ef26ca58c613b8cff1b79f90f99f30',
+    '5a966f46bb257988768af34b7171cf187663652a3c70fb1a73e6c65158877798',
+    '5464790cf4d132e03eb07a3ae45cae4730ed4b85b74c7a7fc637b454c442dcad',
   ],
 };
 
@@ -39,8 +41,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
     // TASK-114's display-only marking theme is not part of TASK-102's pins (as in T44).
     const { markingTheme, ...network } = stripped;
     expect(markingTheme).toBe('de');
-    expect(hash(network)).toBe(main[name][0]);
-    expect(hash(compile(stripped))).toBe(main[name][1]);
+    expect(hash(network)).toBe(baseline[name][0]);
+    expect(hash(compile(stripped))).toBe(baseline[name][1]);
     const start = performance.now();
     const compiled = compile(city);
     const compileMs = performance.now() - start;

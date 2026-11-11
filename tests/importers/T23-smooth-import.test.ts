@@ -245,8 +245,10 @@ test.each(
     expect(maxDeviation).toBeLessThanOrEqual(2 + 1e-8);
     expect(maxHeadingChange).toBeLessThanOrEqual(degree + 1e-6);
     expect(untouched).toBeGreaterThan(0);
+    // TASK-131 (owner, checkpoint 0): smoothing never moves a node, so no Munich node moves (on
+    // main, unstopped class seams and two-arm vertices were filleted away).
+    expect(moved).toBe(0);
     if (name === 'munich-donnersberger') {
-      expect(moved).toBeGreaterThan(0);
       console.info(
         'T23 Munich forced fillets (directed interiors, shared seams counted once)',
         forced,

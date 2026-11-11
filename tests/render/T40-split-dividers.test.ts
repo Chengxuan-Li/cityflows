@@ -67,9 +67,14 @@ function crosses(a: Vec2[], b: Vec2[]) {
 
 // The neighbouring lined-up pairs (TASK-085, T37) at the B39 junctions, left to right.
 const expected: Record<string, [string, string][]> = {
-  // r:968#1 lines up with no lane of r:730 or r:1275: between r:730#0>r:968#0 and
-  // r:1275#0>r:968#2 a lane opens (a gore), so only r:1275's divider continues.
-  'n:201': [['r:1275#0>r:968#2', 'r:1275#1>r:968#3']],
+  // On main r:968#1 lined up with no lane of r:730 or r:1275: between r:730#0>r:968#0 and
+  // r:1275#0>r:968#2 a lane opened (a gore), so only r:1275's divider continued. TASK-131 keeps
+  // OSM geometry: n:201 and n:202 (one node on main) stay apart, the branches merge into the
+  // 3-lane way 4513904 (r:203) with no lane opening, and every neighbouring pair lines up.
+  'n:201': [
+    ['r:730#0>r:203#0', 'r:1275#0>r:203#1'],
+    ['r:1275#0>r:203#1', 'r:1275#1>r:203#2'],
+  ],
   'n:312': [
     ['r:313#0>r:692#0', 'r:313#1>r:692#1'],
     ['r:313#1>r:692#1', 'r:313#2>r:706#0'],
@@ -167,8 +172,11 @@ test.each(tierCities(auditCities))(
           foreign.map((m) => m.id),
           `${node.id} ${a.id}`,
         ).toEqual([]);
+        // TASK-131: at n:478 (jg:10807) the two dividers of Marsstraße's split start at the same
+        // point and run 0.06 m apart for 0.5 m (T28.3); they cross nothing else.
         for (const other of guides)
-          if (other !== guide) expect(crosses(other.line, guide.line), node.id).toBe(false);
+          if (other !== guide && !(node.id === 'n:478' && other.between))
+            expect(crosses(other.line, guide.line), node.id).toBe(false);
         // And, as at the B39 junctions, it meets the lanes' lines at both cuts.
         expect(cutGap(city, node, [a.fromLane, b.fromLane], guide.line[0]!)).toBeLessThan(0.5);
         expect(cutGap(city, node, [a.toLane, b.toLane], guide.line.at(-1)!)).toBeLessThan(0.5);
@@ -176,8 +184,15 @@ test.each(tierCities(auditCities))(
     }
     // Munich: n:201, n:253, n:266, n:28, n:305, n:308, n:312, n:670 (one divider each where not
     // named in T40.1; n:308 three). Sindelfingen's splits are single-lane; grid and town have none.
+    // TASK-131 keeps OSM geometry: Munich adds n:478 (jg:10807, two) and n:726 (two: its branches
+    // r:728 and r:984 now end at different members of jg:10798, main's n:1181), and n:201 has two
+    // (T40.1); Sindelfingen adds Benzstraße's split n:867 (merged on main), one.
     expect({ nodes, dividers }).toEqual(
-      name === 'munich' ? { nodes: 8, dividers: 14 } : { nodes: 0, dividers: 0 },
+      name === 'munich'
+        ? { nodes: 10, dividers: 19 }
+        : name === 'sindelfingen'
+          ? { nodes: 1, dividers: 1 }
+          : { nodes: 0, dividers: 0 },
     );
   },
   60_000,
@@ -197,25 +212,27 @@ function crossingRoads(city: CompiledCity, node: CNode) {
 
 cityTest('T40.3: n:1181 draws the crossings of TASK-072’s rule, off the junction polygon', () => {
   const city = net('munich');
-  const node = nodeOf(city, 'n:1181');
-  // Every served approach and exit of the signal: Landsberger Straße west (r:981 in, r:1358 out),
-  // east (r:984 in, r:476 out) and Barthstraße (r:1182 in, r:1183 out). Before TASK-083 the old
-  // outline reached over the ends of r:981, r:1358 and r:476 and hid their stripes. r:729, laid
-  // beside r:984, ends inside the junction; since TASK-094 its signal-arm crossing moves out
-  // along the road like any other, clear of the junction.
-  expect(crossingRoads(city, node)).toEqual([
+  // TASK-131 keeps OSM geometry: main's merged signal n:1181 is junction group jg:10798, n:474
+  // and n:1353 joined by Barthstraße's inner links r:1355/r:1356, which carry no crossing.
+  const members = ['n:474', 'n:1353'].map((id) => nodeOf(city, id));
+  // Every served approach and exit of the signal: Landsberger Straße west (r:981 in, r:1354
+  // out), east (r:984 in, r:476 out) and Barthstraße (r:1182 in, r:1185 out). Before TASK-083
+  // the old outline reached over the ends of the Landsberger roads and hid their stripes. main's
+  // r:729, laid beside r:984, is r:728 to n:474 (T33.3): its 27.7 m lane leaves no room for a
+  // crossing outside its first half, so it keeps TASK-072's stop (TASK-094).
+  expect(members.flatMap((node) => crossingRoads(city, node)).sort()).toEqual([
     'r:1182',
-    'r:1183',
-    'r:1358',
+    'r:1185',
+    'r:1354',
     'r:476',
-    'r:729',
     'r:981',
     'r:984',
   ]);
-  for (const road of city.roads.filter((r) => r.from === node.idx || r.to === node.idx))
-    for (const stripe of crossingStripes(city, road, road.to === node.idx))
-      for (const p of stripe) {
-        expect(pointInPolygon(p, node.outline)).toBe(false);
-        expect(pointInPolygon(p, [...road.surface, road.surface[0]!])).toBe(true);
-      }
+  for (const node of members)
+    for (const road of city.roads.filter((r) => r.from === node.idx || r.to === node.idx))
+      for (const stripe of crossingStripes(city, road, road.to === node.idx))
+        for (const p of stripe) {
+          for (const member of members) expect(pointInPolygon(p, member.outline)).toBe(false);
+          expect(pointInPolygon(p, [...road.surface, road.surface[0]!])).toBe(true);
+        }
 });

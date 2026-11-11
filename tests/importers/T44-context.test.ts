@@ -35,12 +35,14 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           [
             // TASK-103: saved strips and inferred lot entries; compiled visible spaces.
             // T49 retains the original main hashes with appended parking removed.
-            '7355d23576e15cbf8d9250b2e46e8afec50dc906db7a8dcff541e65c40c943be',
-            'f4fbae8e2a21a68e16235788dc7253a49aae164f64dd87301b13ae8bd3e7a101',
+            // TASK-131 keeps OSM geometry (no node merges, junction groups): city and compile
+            // hashes of both cities no longer equal main's.
+            'ba566bffa279e4abb0c1ddadd2637250cc774d48145afbe13162c6c472b38f68',
+            '60c92802b26ecf30a6abb9857f0054c7a661ac5c016d18f4440bc84e1342657b',
           ]
         : [
-            '13c07f3b468122ac2a19412a0659cf070fba79af17607af924babf0c92839131',
-            '9fc0a12ed112559d18a44ffa31587f2159ebb1ed265aebfa7d1251b8dadec760',
+            '54cb5a52b748dcd1df1717bbf5000321833917ca74c9a528756c9d26da9cbfbe',
+            '1d7e90fb387cf98321a94be8e98599984bf0edf9d14671997403190f39b12dc0',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

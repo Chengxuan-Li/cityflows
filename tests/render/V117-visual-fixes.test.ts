@@ -162,19 +162,21 @@ const pins = {
     de: '84454e2c6b1b1eeac928e004cdab547b5884ab43d3f70b7e8f6c7d7fb89ba7da',
     us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
   },
+  // TASK-131 keeps OSM geometry (no node merges, junction groups): the real cities' roads,
+  // lamps, curbs and paint move, so they no longer equal main's.
   munich: {
-    compile: 'ba6c3c0c73b69f8bcf0e10ba90d6a0e6b23b40221de750135d916df0181ceb0b',
-    lamps: '27483774592d8fd96b6a5ab0a4126d9aeaa8ef05f184a2d6222cc7bad0d33f89',
-    curbs: 'fc216c4ce748916e00e0ae196aae0d9875f4dc1c0f9b47f53e61f30ded45a934',
-    de: 'a973da11dc6d6336e946ebf1100f67e3ec830d8d8ec22b1f5b24f0b5847daf1a',
-    us: '5ce0616a8c61c9ab622c57b16a14eb94091811feb935af8ef95d3ac961db2b8d',
+    compile: '6480c213a85c1aa6896a51edf82a1b95eb5f9e9590d37c276147169faf16d145',
+    lamps: 'a6367b276c0f7db6c9a4a9fe6e103d4f020b6bbf93bef7df2d2ec3fd5c2cfc00',
+    curbs: '73f74b492cd2e1accb3c9ca2a591d50a8732630cfb84e8d31a694fb410dd5b42',
+    de: '41a7adbc9340595b5e590e0a51d512041d03d282a4e4d8ce036848f767522b32',
+    us: 'cac736f53d5669cd0ac2f4a27567c56a626a6ebebfb4118687b46a896ffd224f',
   },
   sindelfingen: {
-    compile: '51b18d12df46cf933b0360e93559cdf6be0f01ae7df13dd8e8d48f2ce6227e38',
-    lamps: '0563d1323ef08a9cb2b3b71280f6ae9e1cf5208c3f7caebcfddfe55aa1d8a2ad',
-    curbs: '9fe71ec6feadfb41a3c86111638d13618b7731286d4ec4104c4d3832b20233ce',
-    de: 'ba5b9756f97538de3f62cec3d63df7dbebddb6e27336f946b1dabf3bcd4634f6',
-    us: 'c323dc2ff69850bb63f12141e3b2b00e81520238f7411e8e11ecf0c082b2d3d4',
+    compile: '31fa7806721c5cd4e926dfe0677029913343c9b16df7ba91791769fd9e58dc8e',
+    lamps: 'd132b1397f6687261fee0b42ab85450dc755962e9e0f71d04d61bc6c5f6396dc',
+    curbs: '01ac870cb31f5ab4b49445e52c22fff08002ef267bc1164fa822d79ab8e3afd2',
+    de: '59b6827375c2593d77310a41329e893372a0c1778671260c6a65386ab977f6e8',
+    us: 'e6caf60c551f6c781c5f65ebb92a972fe221db9ae14016337ec9e86c73e3dbfd',
   },
 } as const;
 const hash = (value: unknown) =>

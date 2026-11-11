@@ -17,11 +17,13 @@ import { test } from 'vitest';
 // now expose alternatives, with the chosen movement's lane first (T51). Sindelfingen and Munich
 // re-pinned at the merge after TASK-102/104 (lot aisles); equal to main fc5bf2f's routes.
 // TASK-119 removes parking-place connectors, changing the sampled pairs; routing itself is unchanged.
+// TASK-131 keeps OSM geometry (no node merges, junction groups): both networks, connectors and
+// samples move, so the routes no longer equal main's (Munich b7df6e01â€¦, Sindelfingen 87e2a869â€¦).
 const hashes = {
   grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
   Sindelfingen: '1bc9a0138a6034667ee1993cb19bd39880fb095947ba44ac0aa7e701933ccb22',
-  Munich: 'b7df6e0118cc9fe59c75b70e8c7bb24abc3ef1c79c58193cd92d0e9df2c9ba4c',
+  Munich: '18bde1bbf4042a1255c3ce388d8edcb74463edd37a568dc6d0889e2dc5fed833',
 };
 
 test.each(tierCities(throughputCities))(

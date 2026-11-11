@@ -17,11 +17,8 @@ const remainingShortRoads: Record<string, string> = {
   'r:1072':
     'TASK-101 retains the 17.57 m private approach; 5.90 m and 7.38 m setbacks leave under 5 m.',
   'r:1073': 'The reverse private approach; 5.18 m and 10 m setbacks leave under 5 m.',
-  'r:1316':
-    'TASK-101 retains the 9.87 m truck-delivery segment; its two junction cuts leave under 5 m.',
-  'r:1319':
-    'The inferred median crossing beside the retained segment is 9.87 m, under two floor setbacks plus 5 m.',
-  'r:1320': 'The reverse of the same 9.87 m median crossing.',
+  // TASK-131: main's r:1316, r:1319 and r:1320 (9.87 m links at its merged n:138) are gone; the
+  // ids name other roads, which are not short.
   'r:1172': 'Short Westendstraße remnant: 2.50 m and 3.41 m setbacks leave less than 5 m.',
   'r:1173': 'Reverse Westendstraße remnant: 3.69 m and 2.50 m setbacks leave less than 5 m.',
   'r:345': 'Philipp-Loewenfeld-Straße link: 4.09 m and 3.94 m setbacks exceed available length.',
@@ -31,14 +28,49 @@ const remainingShortRoads: Record<string, string> = {
   'r:976': 'Friedrich-von-Pauli-Straße short remnant cannot fit two floor setbacks plus 5 m.',
   'r:977':
     'Reverse Friedrich-von-Pauli-Straße short remnant cannot fit two floor setbacks plus 5 m.',
+  // TASK-131 keeps OSM geometry: links between OSM nodes main merged into one (at least one end
+  // is not a node on main) stay roads, too short for two setbacks plus 5 m.
+  'r:1027': 'Service way 19.6 m from n:898 to n:895.',
+  'r:899': 'Service way 14.6 m from n:895 to n:898.',
+  'r:900': 'Service way 14.6 m from n:898 to n:895.',
+  'r:1241': 'Bergmannstraße 6.2 m from n:1239 to n:1240.',
+  'r:1242': 'Bergmannstraße 6.2 m from n:1240 to n:1239.',
+  'r:1304': 'Arnulfstraße 11.8 m from n:1303 to n:124.',
+  'r:143': 'Donnersbergerstraße 10.4 m from n:139 to n:142.',
+  'r:144': 'Donnersbergerstraße 10.4 m from n:142 to n:139.',
+  'r:219': 'Kazmairstraße 4.1 m from n:215 to n:218.',
+  'r:220': 'Kazmairstraße 4.1 m from n:218 to n:215.',
+  'r:303': 'Service way 9.7 m from n:302 to n:171.',
+  'r:304': 'Service way 9.7 m from n:171 to n:302.',
+  'r:360': 'Service way 2.8 m from n:358 to n:359.',
+  'r:361': 'Service way 2.8 m from n:359 to n:358.',
+  'r:514': 'Richelstraße 11.2 m from n:510 to n:513.',
+  'r:515': 'Richelstraße 11.2 m from n:513 to n:510.',
+  'r:550': 'Service way 3.6 m from n:548 to n:549.',
+  'r:551': 'Service way 3.6 m from n:549 to n:548.',
+  'r:809': 'Gabrielenstraße 2.5 m from n:808 to n:616.',
+  'r:810': 'Gabrielenstraße 2.5 m from n:616 to n:808.',
+  'r:860': 'Service way 9.1 m from n:859 to n:492.',
+  'r:861': 'Service way 9.1 m from n:492 to n:859.',
+  'r:863': 'Service way 9.3 m from n:498 to n:862.',
+  'r:864': 'Service way 9.3 m from n:862 to n:498.',
+  'r:890': 'Service way 3.3 m from n:594 to n:887.',
+  'r:891': 'Service way 3.3 m from n:887 to n:594.',
+  'r:1063': 'Service way 3.1 m from n:908 to n:1003.',
+  'r:1064': 'Service way 3.1 m from n:1003 to n:908.',
 };
 
+// TASK-131 keeps OSM geometry: main's r:1095#0 (now from n:1089, not main's n:440) and r:1161#0
+// (the service way now meets Hansastraße at n:1158 inside the crop) have exits.
 const remainingDeadEnds: Record<string, string> = {
-  'r:1095#0':
-    'Service approach meets the reverse direction of Josef-Obenhin-Straße; all exits are U-turns.',
   'r:1103#0':
     'One-way Georg-Lindau-Straße fragment leaves the crop without a route from the main network.',
-  'r:1161#0': 'Cropped Hansastraße boundary; an artificial crop is not a physical cul-de-sac.',
+  'r:1287#0':
+    'TASK-131: cropped Hansastraße boundary at n:1286 (west edge), apart from n:1158; a crop, not a cul-de-sac.',
+  'r:1287#1': 'The second lane of the same cropped Hansastraße end.',
+  'r:1291#0': 'TASK-131: cropped Hansastraße boundary at n:1289 (north edge), as r:1287.',
+  'r:470#0':
+    'TASK-131: the 9.1 m two-way Gollierstraße link n:16 to n:452 (one node on main) faces the one-way r:453; its only exit is a U-turn.',
   'r:1173#0':
     'Westendstraße faces a one-way approach; the only outgoing road reverses its own street group.',
   'r:350#0':
@@ -67,18 +99,34 @@ cityTest(
     // TASK-131 keeps OSM geometry: short roads between close nodes stay as roads (no longer
     // merged into one node); inner roads of groups are not counted. Dead ends: lanes of a group's
     // inner links or arms that end without a movement at the next member (r:252#2, r:966#2).
-    expect(count('road_too_short')).toBeLessThanOrEqual(27);
+    expect(count('road_too_short')).toBeLessThanOrEqual(39);
     expect(count('dead_end')).toBeLessThanOrEqual(11);
     const roads = Object.values(city.roads);
-    const signals = Object.values(city.nodes).filter((n) => n.control === 'signal');
-    expect(signals).toHaveLength(14);
-    for (const node of signals) {
-      const ends = roads.filter((r) => r.from === node.id || r.to === node.id);
+    // TASK-131: a signalised junction group runs one program for its members (which have
+    // `signal: null`), so controllers are counted: main's 14 signal nodes are 10, as main's n:247,
+    // n:262 and n:963 are members of one group (jg:10783) and so are n:638, n:647 and n:665
+    // (jg:10802). Neighbours and names are those of the roads entering or leaving the group.
+    const groupOf = new Map(
+      Object.values(city.junctionGroups ?? {}).flatMap((g) => g.nodes.map((id) => [id, g])),
+    );
+    const controllers = new Map<string, { members: Set<string>; program: unknown }>();
+    for (const node of Object.values(city.nodes).filter((n) => n.control === 'signal')) {
+      const group = groupOf.get(node.id);
+      controllers.set(
+        group?.id ?? node.id,
+        group
+          ? { members: new Set(group.nodes), program: group.signal }
+          : { members: new Set([node.id]), program: node.signal },
+      );
+    }
+    expect(controllers.size).toBe(10);
+    for (const { members, program } of controllers.values()) {
+      const ends = roads.filter((r) => members.has(r.from) !== members.has(r.to));
       expect(
-        new Set(ends.map((r) => (r.from === node.id ? r.to : r.from))).size,
+        new Set(ends.map((r) => (members.has(r.from) ? r.to : r.from))).size,
       ).toBeGreaterThanOrEqual(3);
       expect(new Set(ends.map((r) => r.name)).size).toBeGreaterThanOrEqual(2);
-      expect(node.signal).not.toBeNull();
+      expect(program).not.toBeNull();
     }
     expect(
       diagnostics
@@ -196,11 +244,14 @@ cityTest(
             infeasible.push(`${origin.id}>${destination.id}: ${JSON.stringify(issue)}`);
       }
     }
-    expect(pairs).toBe(24_944); // TASK-119 removes 57 unused parking destinations from all pairs.
+    // TASK-119 removes 57 unused parking destinations from all pairs. TASK-131 keeps OSM
+    // geometry: place connectors sit on more, shorter roads (main 24 944 pairs).
+    expect(pairs).toBe(25_753);
     expect(unroutable).toEqual([]);
     // TASK-124 keeps arrivals on r:379/r:1060 and adds legal exits; the fixed-size
     // connector sample now includes 15 more destinations on still-restricted r:1059.
-    expect(forbidden).toEqual({ from379: 0, from1060: 0, to1059: 906 });
+    // TASK-131: r:379, r:1059 and r:1060 are the same roads; more origins reach r:1059 (main 906).
+    expect(forbidden).toEqual({ from379: 0, from1060: 0, to1059: 924 });
     expect(infeasible).toEqual([]);
   },
   600_000,
@@ -212,7 +263,9 @@ unitTest.each([
   ['downtown', 49],
   ['highway', 23], // TASK-101 short access boundaries; TASK-131 short roads kept.
   ['suburb', 7],
-  ['sindelfingen-a81', 77], // TASK-101 restricted segments; TASK-131 short roads kept.
+  // TASK-101 restricted segments; TASK-131 short roads kept, and BenzstraÃŸe r:1065 is short since
+  // its split n:867 (merged on main) is a junction with a 10 m setback.
+  ['sindelfingen-a81', 78],
 ] as const)('%s stays within its import warning baseline', (name, baseline) => {
   const { xml, options } = fixture(name);
   const result = importOsmCached(xml, options);

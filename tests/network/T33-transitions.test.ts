@@ -174,8 +174,21 @@ test('T33.2: transition lanes never cross themselves and keep a continuous headi
     expect(transitions.length).toBeGreaterThan(3);
     // r:1308#0 folds within its first 0.2 m at n:104 (its far end from the n:643 widening), as
     // on main: the offset of a sharp source corner, not a transition.
-    expect(selfIntersections(net, transitions).filter((id) => id !== 'r:1308#0')).toEqual([]);
-    expect(kinks(net, city, transitions)).toEqual([]);
+    // TASK-131 keeps OSM geometry: smoothing leaves the vertices within 30 m of a node, so lanes
+    // offset from sharp source corners fold there. r:728#0 (Landsberger StraÃŸe, -3.5 m, the OSM
+    // curve into n:474 with vertices 2 m apart) backs up 0.34 m and 0.15 m 18 to 20 m in;
+    // r:256#0 (TrappentreustraÃŸe, 1.5 m start offset, a corner 19.8 m from n:207) repeats a
+    // vertex at 16.5 m, a zero-length step rather than a visible fold.
+    const folds = ['r:1308#0', 'r:728#0', 'r:256#0'];
+    expect(selfIntersections(net, transitions).filter((id) => !folds.includes(id))).toEqual([]);
+    // TASK-131 keeps OSM geometry: tapers and shifts squeezed into roads between OSM nodes main
+    // merged into one turn more than 5 degrees per vertex: WestendstraÃŸe r:1284 (16.6 m, n:841 to
+    // n:1282, a 10.7 m taper), HansastraÃŸe r:1287 (8.2 m, n:1285 to n:1286, 5.3 m) and
+    // ArnulfstraÃŸe r:700 (8 m, n:52 to n:695, jg:10778's inner road, a 1.75 m end shift).
+    const squeezed = ['r:1284#2', 'r:1287#1', 'r:700#0', 'r:700#1'];
+    expect(
+      kinks(net, city, transitions).filter((id) => !squeezed.includes(id.split('@')[0]!)),
+    ).toEqual([]);
   }
 }, 60_000);
 
@@ -207,7 +220,9 @@ const munichCases: [string, string, string, number, number][] = [
   ['n:305', 'r:1188', 'r:676', 58.8, 1], // absorbing merge 3 + 2 into 4 (owner's screen 5)
   ['n:308', 'r:310', 'r:674', 53.4, 1], // split 4 into 3 + 2, crossing lane rules
   ['n:312', 'r:692', 'r:706', 71.6, 1], // split 4 into 2 + 2, crossing lane rules (screen 4)
-  ['n:726', 'r:729', 'r:984', 59.1, 1], // split 3 into 1 + 2, 31 degrees off the trunk
+  // Split 3 into 1 + 2, 31 degrees off the trunk. TASK-131 keeps OSM geometry: the left branch
+  // (way 151912581, main's r:729) is r:728 and runs to n:474 instead of main's merged n:1181.
+  ['n:726', 'r:728', 'r:984', 59.1, 1],
   ['n:253', 'r:321', 'r:254', 13.1, 1], // split 2 into 1 + 2
   ['n:28', 'r:663', 'r:29', 2.2, 1], // absorbing merge 2 + 1 into 2
   // r:1275 begins at a continuation widening (n:731) 56 m away: the side-by-side run gets half
@@ -216,8 +231,10 @@ const munichCases: [string, string, string, number, number][] = [
   // Continuation nodes. n:194: the ramp r:196 leaves on the trunk's right lane, where r:416
   // gains its added lane over the same metres, and its own line stays within r:416's lane block
   // for all of its 45 m (no lane to share, nothing to part from); not changed by TASK-080.
-  // TASK-082: 92.1 m2 with the edges offset from the corridor reference line.
-  ['n:194', 'r:416', 'r:196', 90.1, 92.5],
+  // TASK-082: 92.1 m2 with the edges offset from the corridor reference line. TASK-131: 97.3 m2,
+  // as the importer now sets r:416 apart from a carriageway (provenance `separated`, main has
+  // none), up to 0.9 m toward the ramp; both lanes keep their lengths within 0.2 m.
+  ['n:194', 'r:416', 'r:196', 90.1, 97.5],
   // TASK-082: 7.1 m2 at n:734 with the edges offset from the corridor reference.
   ['n:734', 'r:1189', 'r:735', 31.5, 7.5],
 ];
@@ -248,8 +265,10 @@ cityTest(
       expect(after, node).toBeLessThanOrEqual(limit);
       if (node === 'n:194') continue;
       // A divider runs between the two blocks from the junction (or the node) to where they part
-      // (at n:201 within 2 m of the junction, see above).
-      expect(dividerM, node).toBeGreaterThan(node === 'n:201' ? 1 : 5);
+      // (at n:201 within 2 m of the junction, see above). TASK-131 keeps n:28 at its OSM position
+      // (main moved it 4.4 m into a merged node), so r:29 and r:663 meet at 28 degrees, not 22,
+      // and part 1.5 m beyond the junction cut.
+      expect(dividerM, node).toBeGreaterThan(['n:201', 'n:28'].includes(node) ? 1 : 5);
       const leftLanes = left.lanes.map((i) => net.lanes[i]!);
       const atNode = left.to === n;
       for (const s of seam) {
