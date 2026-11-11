@@ -247,7 +247,13 @@ interface City {
 TASK-131 adds optional junction groups without a schema-version change: an old city has none
 and compiles to the same result. A group is nodes joined by short links that are controlled and
 drawn as one junction; each member keeps its position, the inner roads stay real roads with
-their true lengths. A group is signalised if and only if `signal` is not null: every member
+their true lengths. Drawing: the members and inner roads are one surface (one tone with road classes on;
+curbs only on the group's outside, a median between member arms rounded at both ends); an inner
+road draws its lane lines (dashed between lanes of one direction) but no centre, edge, stop or
+yield line, crossing, arrow or signal head; turn arrows stand at entries only. B55: two
+different streets (or a street and a service road) on their OSM lines within 30 degrees whose
+surfaces overlap or touch get a 0.5 m edge strip midway between the lines, in 2D and as a low
+curb in 3D (`render/side-by-side.ts`, once per compiled city). A group is signalised if and only if `signal` is not null: every member
 then has `control: 'signal'` and `signal: null`, and the program's green groups name an entry
 road (ending at a member, not inner) and an exit road (starting at one, not inner); walk entries
 name a road end at any member's crossing. Members of a group without signals keep their own
@@ -741,7 +747,8 @@ services include station visits on both legs.
   two-way street), the road with fewer lanes shifts so its lanes continue the matching travel
   direction's lanes (within 0.1 m at the node), eased over the TASK-080 taper; a direction of a
   two-way street is never shifted, and a shift steeper than 1 in 4 is not applied.
-- TASK-099 (attached carriageways, B54). After `separateDual`, `attachCarriageways` pulls one
+- TASK-099 (attached carriageways, B54; removed by TASK-131: nothing called it, and the
+  owner's TASK-131 decision keeps OSM geometry). After `separateDual`, `attachCarriageways` pulled one
   corridor's two carriageways together until their lane blocks meet at the 0.5 m median: the
   gap is measured between the blocks' median edges along rays, the pull is smoothed so it never
   undershoots and fades over 15 m from every chain end, and at a lane-count joint it follows
@@ -2665,17 +2672,17 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    nodes stay separate.
    External road-pair reachability through each cluster becomes explicit turn rules, and
    signals move to its representative. Canonical lane assignment then applies at the combined
-   junction. TASK-131 replaces this merge with junction groups: the same clusters (links of at
-   most `junctionGroupMaxM`, default 30 m; at most 60 m across; a longer road between members
-   splits a candidate) with an entry, an exit and three street arms become groups, every node
-   keeps its OSM position and its turn rules, and the inner roads stay. Controls on non-junction
-   nodes still move to the nearest junction and degree-two artefacts (a signal's stop position)
-   still join; one signal anywhere in a group makes the group signalised, with one program over
-   its entry-to-exit chains. Group ids are allocated last, so they move no other id. Two
-   proposals wait for the owner, off by default: `junctionGroupOrder: 'merge-first'` joins the
-   degree-two artefacts before grouping (`'pairs-first'` unites carriageway links first instead),
-   so the 60 m span cannot keep a carriageway pair apart; `junctionGroupViaNodes` lets
-   restriction via nodes join groups, their restrictions staying at the member. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
+   junction. TASK-131 replaces this merge with junction groups. First the controls on
+   non-junction nodes move to the nearest junction and degree-two artefacts (a signal's stop
+   position) join (`prepareJunctions`); corridors are assigned; then close nodes form groups:
+   (a) a median crossing of at most 30 m between the two carriageways of one corridor, (b) a
+   complex, two signalised crossings joined by opposite one-way carriageway links of at most
+   60 m, (c) any other link of at most `junctionGroupMaxM` (default 30 m) and at most 1.5 times
+   the widest road block at its ends; (a) and (c) span at most 60 m. A candidate needs an entry,
+   an exit and three street arms; restriction via nodes may join, their restrictions staying at
+   the member. Every node keeps its OSM position and its turn rules, and the inner roads stay.
+   One signal anywhere in a group makes the group signalised, with one program over its
+   entry-to-exit chains. Group ids are allocated last, so they move no other id. Residential/service cul-de-sacs get an inferred turnaround. All inferences appear
    in provenance; disconnected roads and remaining short-road/dead-end warnings stay visible.
 5. Roads: an integer `layer` tag takes precedence. With the tag absent, a bridge other
    than `bridge=no` uses +1, a tunnel other than `tunnel=no` or `covered=yes` uses −1,
@@ -2792,8 +2799,13 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
     the tangent length fits in half of each adjacent segment and the fillet strays at most
     2 m from the original vertex; arcs are sampled at most 2 m or 5 degrees apart. Roundabout
     rings and hand-drawn or GeoJSON roads are unchanged; provenance records
-    `smoothed:<count>` per road.
-12. Realign acute approaches (TASK-068, B31). After smoothing, at every junction node (three
+    `smoothed:<count>` per road. TASK-131: smoothing moves no node (a degree-two node stays on
+    its OSM position and only interior vertices are filleted), and no fillet lies within 30 m of
+    a road's end nodes (`SMOOTH_CLEAR_M`). Relaxation (`relaxRoads`) defaults to 0 m: the owner
+    asked for no collision model, so roads keep their OSM lines; `separateDual` only pushes a
+    corridor's carriageways apart where their lane blocks overlap.
+12. Realign acute approaches (TASK-068, B31; removed by TASK-131, which keeps OSM geometry:
+    `realignRoads` is deleted and acute approaches keep their lines). After smoothing, at every junction node (three
     or more road ends, or two that are not sections of one street), take each pair of
     angularly adjacent arms whose headings at the node differ by less than 45 degrees. Leave
     the pair alone when it is a merge or diverge by design: either arm is a motorway, trunk
@@ -2853,7 +2865,7 @@ Headless tests run in Vitest from fixtures in `src/fixtures` (generated) and `fi
 | T21 conflict zones: no two vehicles inside contacting zones at once; cleared zones free | network, sim | four-way signal, junction fixture, Munich | TASK-064, TASK-065 |
 | T22 zone timing and box: a far grant lets a crossing car through; no waiting in the box | sim | four-way signal, grid, Munich | TASK-065 |
 | T23 smooth imports: tangent continuity, bounded deviation, fixed junctions | importers | Munich, Sindelfingen, downtown | TASK-066 |
-| T24 acute approaches: realigned to 60 degrees, merges untouched, shorter setbacks | importers, network | Munich, Sindelfingen, an acute-Y OSM fixture | TASK-068 |
+| T24 acute approaches (retired by TASK-131: realignment removed) | importers, network | Munich, Sindelfingen, an acute-Y OSM fixture | TASK-068 |
 | T25 lane continuity: no pinch at splits and merges, tapers at drops | network, render | grid, a split-merge fixture, Munich | TASK-071 |
 | T26 stop positions: cars stop before the crossing, crossings on the road | network, sim, render | four-way signal, grid, Munich | TASK-072 |
 | T27 junction shapes: no overlap outside outlines, smooth curbs, markings clipped | network, render | grid, town, Sindelfingen, Munich | TASK-074 |
