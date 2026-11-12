@@ -1,3 +1,4 @@
+import { decode } from 'fast-png';
 import { importOsmCached } from './city-cache.ts';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -68,6 +69,15 @@ try {
   await page.evaluate(async () => { for (let i=0;i<30;i++) await new Promise(r => requestAnimationFrame(r)); });
   await page.addStyleTag({ content: 'body *{visibility:hidden!important}canvas[data-view="3d"],#audit-caption,#audit-caption *{visibility:visible!important}' });
   await caption(`TASK-146 · ${phase} · real CityFlows 3D view · north up · westbound ← · r:698 (3 lanes) → r:654 (5), OSM 146018786 → 134171421`);
+  const pixels = decode(await page.getByLabel('3D city view', { exact: true }).screenshot({ path: `${out}/${phase}-gain-close-3d-raw.png` }));
+  const colors = new Map<string, number>();
+  let samples = 0;
+  for (let y=100; y<pixels.height-100; y+=4) for (let x=100; x<pixels.width-100; x+=4) {
+    const i=(y*pixels.width+x)*pixels.channels;
+    const key=`${pixels.data[i]},${pixels.data[i+1]},${pixels.data[i+2]}`;
+    colors.set(key,(colors.get(key)??0)+1); samples++;
+  }
+  if (colors.size < 32 || Math.max(...colors.values()) / samples > 0.95) throw new Error(`Blank 3D canvas: ${colors.size} colors`);
   await page.screenshot({ path: `${out}/${phase}-gain-close-3d.png` });
   writeFileSync(`${out}/${phase}-browser.json`, JSON.stringify({ errors, phase, scenario: 'paused; zero demand; no simulation steps', cameras: { locator: [140, -410, 2.4], close2d: [174, -515, 9], close3d: [170, -516, 10, 35, 0] } }, null, 2));
   console.log(JSON.stringify({ phase, errors }));
