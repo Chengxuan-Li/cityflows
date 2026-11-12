@@ -278,3 +278,14 @@ test('T66 overlapping roadside requests have one deterministic lane winner', () 
   expect(f.courtesy.stats.started).toBe(1);
   expect(f.courtesy.hold(2)?.owner).toBe(0);
 });
+
+test('T66 courtesy expires on its exact ten-second tick across the 32768s boundary', () => {
+  const f = courtesyScene();
+  const start = 32761.2;
+  const tickAt = (offset: number) => Math.round((start + offset) * 10) / 10;
+  for (let i = -1800; i <= 0; i++) f.tick(tickAt(i * 0.1));
+  expect(f.courtesy.hold(1)?.startedS).toBe(start);
+  for (let i = 1; i <= 100; i++) f.tick(tickAt(i * 0.1));
+  expect(f.courtesy.hold(1)).toBeNull();
+  expect(f.courtesy.stats).toEqual({ started: 1, succeeded: 0, aborted: 1 });
+});

@@ -144,7 +144,7 @@ export function createOriginCourtesy(
           finish(hold, parking.motion(hold.owner)?.phase === 'leave');
         } else if (
           seen[hold.owner] !== timeS ||
-          timeS - hold.startedS >= params.intersection.boxWaitS ||
+          timeS - hold.startedS + 1e-9 >= params.intersection.boxWaitS ||
           !valid(hold)
         )
           finish(hold, false);
