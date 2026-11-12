@@ -338,7 +338,7 @@ test('T75 a vehicle on a real junction movement holds rail until its full rear e
   const before = road(west, center),
     after = road(center, east);
   before.provenance = after.provenance = { source: 'generated', osmIds: [10] };
-  road(center, node(0, -200));
+  road(center, node(100, -200));
   city.rail = operatingCrossing().rail;
   const compiled = setup(city);
   const from = compiled.index.lane.get(`${before.id}#0`)!,
