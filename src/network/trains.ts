@@ -613,8 +613,15 @@ export function trainPoseAt(
 
 export function trainPositionAt(route: TrainRoute, ageS: number) {
   const age = Math.max(0, Math.min(route.durationS, ageS));
-  const phase =
-    route.phases.find((p) => age >= p.timeS && age < p.timeS + p.durationS) ?? route.phases.at(-1)!;
+  let low = 0,
+    high = route.phases.length - 1;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    const p = route.phases[mid]!;
+    if (age >= p.timeS + p.durationS) low = mid + 1;
+    else high = mid;
+  }
+  const phase = route.phases[low]!;
   const dt = age - phase.timeS;
   return {
     positionM: phase.positionM + phase.speedMps * dt + 0.5 * phase.acceleration * dt * dt,
