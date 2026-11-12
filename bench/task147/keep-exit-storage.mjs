@@ -3,11 +3,11 @@ const p='src/sim/intersection.ts';let s=fs.readFileSync(p,'utf8');
 if(!s.includes("import {railTimetable}"))s="import {railTimetable} from '../network/trams';\n"+s;
 const marker='  function blockedExit(id: number, movement: CMovement)';
 const helper=`  const railLanes = new Set<number>();
-  const rail=compiled.rail;
-  if(rail){
-    const table=railTimetable(rail);
+  const clearanceNetwork=compiled.rail;
+  if(clearanceNetwork){
+    const table=railTimetable(clearanceNetwork);
     const served=new Set(table.departures.flatMap(d=>table.routes[d.route]!.sections.map(sec=>sec.track)));
-    for(const f of rail.facilities??[])if(f.railSpans?.some(span=>served.has(span.track))){
+    for(const f of clearanceNetwork.facilities??[])if(f.railSpans?.some(span=>served.has(span.track))){
       for(const span of f.spans??[]){
         if(span.segment<0)continue;
         const lane=compiled.lanes[span.segment]!;
