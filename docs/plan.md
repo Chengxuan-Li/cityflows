@@ -164,7 +164,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-134](tasks/TASK-134.md) | 10 | Overhead lines: wired by `electrified` (no tag draws it), close parallel tracks share masts and portals every 40 to 60 m clear of switches, crossings, roads and platforms, a contact and messenger wire over each track; 2D and 3D | new catenary modules, scene hooks, a small `electrified` read in the rail importer | 126, 132, 135 | T74, counts and shots, no hash change | done 2026-11-11 |
 | [TASK-137](tasks/TASK-137.md) | 10 | Tram stops: imported stops and platforms grouped per stop, generated islands for node-only stops, shelters, names, markings and a name-and-lines display; visual only | new tram-stop modules, `src/schema/rail.ts` (optional stops), scene hooks, rail inspector | 126, 133, 135 | T73, every Munich tram stop placed or listed, no sim hash change | done 2026-11-11 |
 | [TASK-136](tasks/TASK-136.md) | 10 | Level crossings | rail import, crossing placement and drawing | 127, 135; Phase 3 for the stop rule, 138 for trams | T75, shots | import and drawing active |
-| [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | active |
+| [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | verified on lead branch; lands with nightly repairs |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3060,6 +3060,15 @@ failed, 0 walk fallbacks; the inspector reads "By train at Donnersbergerbrücke"
 rider rule over seeds 1 to 3 gave 3 558 / 4 074 / 3 680 (main 4 113 / 3 971 / 3 669 in the same
 runs); with every rider kept but walking nowhere seed 1 still drops, so the loss is seed noise, not
 riders on crossings. Waits on the owner's gate method (three-seed mean or B56 first).
+
+TASK-141 (lead review, 2026-11-12, 343da1e): T54 selected a garage at pk:2042 instead of the
+original Munich lot (OSM way 160401431, now pk:2053). The city test could pass on garage
+arrivals without exercising lot circulation. Select the historical OSM ways for the two Munich
+lots and the Sindelfingen lot; observe a moving drive-in car. No engine change. Lead verified
+check, city (151 pass), light traffic, light e2e (37), both T52 arrival cameras and the T54
+Munich lot and strip in 2D and 3D. Both Munich lots received 16 arrivals. The agent's loaded
+Munich frame ratio failed once at 1.44; the independent lead run passed the unchanged bound.
+Integrates with the remaining nightly repairs (TASK-142).
 
 ## Owner decisions log
 
