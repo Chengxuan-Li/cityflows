@@ -3,12 +3,12 @@ on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  phase:
+  morning:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        variant: [reasons, wall-grace]
+        suite: [munich-morning, T53-munich-pedestrians]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -16,6 +16,4 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node bench/task147/held-reasons.mjs ${{ matrix.variant }}
-      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts ${{ matrix.variant }}
-
+      - run: npx vitest run --project traffic tests/traffic/${{ matrix.suite }}.test.ts

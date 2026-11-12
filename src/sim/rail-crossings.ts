@@ -29,8 +29,17 @@ type Service = {
   held: boolean;
   current: number[];
   proposed: number[];
+  /** -1 nominal age-based warning; -2 postponed; >=0 real seconds left before nose entry. */
+  warningLeft: Float64Array;
 };
-type Clock = { routeId: string; requestedS: number; cycle: number; ageS: number; held: boolean };
+type Clock = {
+  routeId: string;
+  requestedS: number;
+  cycle: number;
+  ageS: number;
+  held: boolean;
+  warningLeft: number[];
+};
 type RoadState = {
   histories: { id: number; segment: number; trail: number[]; position: number }[];
   admissions: { nodes: string[]; ids: number[] }[];
@@ -58,7 +67,6 @@ export function createRailCrossings(
   red: (movement: number) => boolean,
   clocks?: Clock[],
   roadState?: RoadState,
-  grants?: Int32Array,
 ) {
   const rail = city.rail;
   if (!rail) return undefined;
@@ -214,6 +222,7 @@ export function createRailCrossings(
             held: false,
             current: [],
             proposed: [],
+            warningLeft: new Float64Array(events[departure.route]!.length).fill(-1),
           });
       }
       nextSpawnS = Math.min(nextSpawnS, departure.timeS + nextCycle[i]! * table.periodS);
@@ -308,43 +317,6 @@ export function createRailCrossings(
     return frontier - end >= needed;
   }
 
-  /** A later marking may store a whole car beyond an upstream junction, before
-   * any rail conflict. Incoming bodies and granted entries already own that space. */
-  function receivingStop(id: number, facility: number, near: number, stop: number) {
-    if (!grants) return stop;
-    const gap = params.idm.minGapM;
-    let best = stop;
-    for (let s = 0; s < segments.length; s++) {
-      const field = segments[s]!,
-        offset = offsets[s]!;
-      if (field < 0 || offset > near) continue;
-      const lane = city.lanes[field]!;
-      if (!platoonLane[field] || lane.connectors.length) continue;
-      for (const marking of stopsBySegment[bucket(field)]!) {
-        const at = offset + marking.at;
-        if (marking.facility !== facility || at <= best || at > near) continue;
-        let frontier = marking.at;
-        for (const crossing of walkStops[field]!) frontier = Math.min(frontier, crossing);
-        for (let other = vehicles.first(field); other !== -1; other = vehicles.next[other]!)
-          if (other !== id)
-            frontier = Math.min(frontier, vehicles.position[other]! - length(other) - gap);
-        for (const movement of lane.in) {
-          for (
-            let other = vehicles.first(-movement - 1);
-            other !== -1;
-            other = vehicles.next[other]!
-          )
-            if (other !== id) frontier -= length(other) + gap;
-          const from = city.movements[movement]!.fromLane;
-          for (let other = vehicles.first(from); other !== -1; other = vehicles.next[other]!)
-            if (other !== id && grants[other] === movement) frontier -= length(other) + gap;
-        }
-        if (frontier >= length(id) + gap) best = at;
-      }
-    }
-    return best;
-  }
-
   function roadOccupancy() {
     occupied.fill(0);
     for (const b of vehicles.occupied) {
@@ -387,12 +359,7 @@ export function createRailCrossings(
         ranges(position);
         for (const marking of continuous ? stopsBySegment[bucket(previousSegment)]! : []) {
           const passed = field === previousSegment ? position > marking.at + 1e-6 : true;
-          if (
-            passed &&
-            previousPosition <= marking.at + 1e-6 &&
-            pathStops[marking.facility]! > pathStarts[marking.facility]!
-          )
-            committed[marking.facility]!.add(id);
+          if (passed && previousPosition <= marking.at + 1e-6) committed[marking.facility]!.add(id);
         }
         for (let f = 0; f < facilities.length; f++) {
           if (!served[f]) continue;
@@ -443,16 +410,31 @@ export function createRailCrossings(
       }
     }
   }
+  const clearTimes = new WeakMap<Service, Map<Event, number>>();
   function publish() {
     previousStates.set(states);
     states.fill(CROSSING_OPEN);
     for (const service of services) {
       const route = table.departures[service.departure]!.route;
-      for (const event of events[route]!) {
+      for (const [index, event] of events[route]!.entries()) {
+        const left = service.warningLeft[index]!;
+        if (left === -2) continue;
         if (service.ageS < event.enterS - event.warningS || service.ageS > event.exitS + 1)
           continue;
+        if (service.ageS > event.exitS) {
+          const times = clearTimes.get(service) ?? new Map<Event, number>();
+          clearTimes.set(service, times);
+          if (!times.has(event)) times.set(event, snapshotTimeS);
+          if (snapshotTimeS - times.get(event)! >= 1) continue;
+        }
         const state =
-          service.ageS >= event.enterS - event.warningS + 3 ? CROSSING_CLOSED : CROSSING_WARNING;
+          left >= 0
+            ? left <= event.warningS - 3
+              ? CROSSING_CLOSED
+              : CROSSING_WARNING
+            : service.ageS >= event.enterS - event.warningS + 3
+              ? CROSSING_CLOSED
+              : CROSSING_WARNING;
         states[event.facility] = Math.max(states[event.facility]!, state);
       }
     }
@@ -521,11 +503,16 @@ export function createRailCrossings(
           held: false,
           current: [],
           proposed: [],
+          warningLeft: new Float64Array(events[table.departures[departure]!.route]!.length).fill(
+            -1,
+          ),
         };
         services.push(service);
       }
       service.ageS = clock.ageS;
       service.held = clock.held;
+      if (clock.warningLeft.length === service.warningLeft.length)
+        service.warningLeft.set(clock.warningLeft);
     }
     roadOccupancy();
     for (const service of services)
@@ -595,12 +582,34 @@ export function createRailCrossings(
         const service = services[i]!;
         const route = table.departures[service.departure]!.route;
         const next = service.ageS + params.dtS;
-        service.held = events[route]!.some(
+        const roadHold = events[route]!.findIndex(
           (event) =>
             occupied[event.facility] &&
             service.ageS <= event.enterS &&
             next >= event.enterS - params.dtS,
         );
+        const blockedEvent = events[route]![roadHold];
+        for (let e = 0; e < events[route]!.length; e++) {
+          const event = events[route]![e]!;
+          if (blockedEvent && event.enterS > blockedEvent.enterS && service.ageS < event.enterS) {
+            service.warningLeft[e] = -2;
+          } else if (
+            service.warningLeft[e] === -2 &&
+            service.ageS >= event.enterS - event.warningS
+          ) {
+            service.warningLeft[e] = event.warningS;
+          } else if (service.warningLeft[e]! >= 0) {
+            service.warningLeft[e] = Math.max(0, service.warningLeft[e]! - params.dtS);
+          }
+        }
+        service.held =
+          roadHold !== -1 ||
+          events[route]!.some(
+            (event, e) =>
+              service.warningLeft[e]! > 0 &&
+              service.ageS <= event.enterS &&
+              next >= event.enterS - params.dtS,
+          );
         // A delayed train keeps its physical track reservation; following/opposing services
         // wait before their nose enters it. Other routes retain their own clocks.
         if (!service.held)
@@ -673,9 +682,7 @@ export function createRailCrossings(
             }
           }
         if (blocked) {
-          const at = states[f] === CROSSING_OPEN ? receivingStop(id, f, near, stop) : stop;
-          if (at >= best) continue;
-          best = at;
+          best = stop;
           protectedStop = states[f] !== CROSSING_OPEN;
         }
       }
@@ -698,6 +705,7 @@ export function createRailCrossings(
         cycle: s.cycle,
         ageS: s.ageS,
         held: s.held,
+        warningLeft: [...s.warningLeft],
       }));
     },
     roadState(mapping: { lanes: number[]; movements: number[] }): RoadState {

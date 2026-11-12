@@ -138,15 +138,8 @@ function createRun({
     onDecision: intersectionObserver,
     acceleration: (id) => reservationAcceleration[id]!,
   });
-  let railCrossings = createRailCrossings(
-    compiled,
-    vehicles,
-    params,
-    scenario.startS,
-    (m) => intersections.red(m),
-    undefined,
-    undefined,
-    intersections.grants,
+  let railCrossings = createRailCrossings(compiled, vehicles, params, scenario.startS, (m) =>
+    intersections.red(m),
   );
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
   let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
@@ -1362,7 +1355,6 @@ function createRun({
       (m) => intersections.red(m),
       railCrossings?.clocks(),
       railCrossings?.roadState(changes),
-      intersections.grants,
     );
     return result;
   }
