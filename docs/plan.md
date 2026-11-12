@@ -165,6 +165,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-137](tasks/TASK-137.md) | 10 | Tram stops: imported stops and platforms grouped per stop, generated islands for node-only stops, shelters, names, markings and a name-and-lines display; visual only | new tram-stop modules, `src/schema/rail.ts` (optional stops), scene hooks, rail inspector | 126, 133, 135 | T73, every Munich tram stop placed or listed, no sim hash change | done 2026-11-11 |
 | [TASK-136](tasks/TASK-136.md) | 10 | Level crossings | rail import, crossing placement and drawing | 127, 135; Phase 3 for the stop rule, 138 for trams | T75, shots | import and drawing active |
 | [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | active |
+| [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | active |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
