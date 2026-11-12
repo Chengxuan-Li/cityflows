@@ -1111,8 +1111,8 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-125 (done 2026-11-10) | Parking claims: cars heading for a strip space or a garage count against it, as cars heading for a lot already do (TASK-103 follow-up). A space claimed by another car is taken; a strip or garage whose free spaces are all spoken for drops out of the choice; a claim is released when the car chooses again, fails or parks. Overflow cars go straight to the next option instead of circling. | Only lots count cars en route. A strip space is reserved when the car starts its manoeuvre, so many cars chase one freed space (TASK-122 round 2: 44 searches over an hour). | TASK-124 |
 | TASK-126 (done 2026-11-10) | Railway tracks and stations (R1 and R2 merged, owner 2026-11-10): rail, light rail, subway and tram ways as their own track graph (nodes, switches, platforms), compiled, saved and drawn; stations tied to their platforms and to the walk network by their entrances, drawn as stations. Munich's Donnersbergerbrücke S-Bahn station is the example. Train routing comes later. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096); place kind `station` from `railway=station`; the synthetic Station fixture (T10). The bundled extracts hold no track ways yet. | none |
 | TASK-127 (done 2026-11-10; Codex) | Decorative trains: arrivals, departures and through trains that pass without stopping, on TASK-126's tracks by a simple timetable. Visual only. | none | TASK-126 |
-| TASK-128 (contract written; Codex) | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
-| TASK-129 (contract written; Codex) | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
+| TASK-128 (reviewed and held at `c9a0632`) | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
+| TASK-129 (reviewed and held at `496cfe6`) | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
 | TASK-132 (done 2026-11-11) | Rail heights: tunnels and elevated sections at their true height in 2D and 3D, with portals and supports; at least one Munich tunnel is not shown today. | TASK-126 imports `layer`, `bridge` and `tunnel` on tracks; heights are not applied everywhere. | TASK-126 |
 | TASK-133 (done 2026-11-11) | Station furniture: station signage, name boards, departure displays, shelters and benches at platforms. | Stations drawn as platforms and small discs. | TASK-126, TASK-127 (displays read the timetable) |
 | TASK-134 (done 2026-11-11) | Overhead lines: catenary masts shared by parallel tracks close together, with a portal or truss across them and a contact wire over each track. `electrified=contact_line` (or `yes`) draws it, `electrified=no` (or `rail`, third rail) does not, no tag draws it anyway (owner); mapped `power=catenary_mast` nodes place masts where present. | None. | TASK-126, TASK-132 (heights) |
@@ -3108,6 +3108,21 @@ from upstream portal waiting. For car 4048, the lead measured 96.8 s of access w
 50 cars ahead once ready, and 3226 s from walk completion to departure at c:1665. The road
 insertion gap on r:371 was occupied in all 620 sampled refusals. The implementation agent
 is testing detour history and short-exit storage with merge safety intact. No gate reset.
+
+TASK-131 Phase 3 / B56 (second lead checkpoint, 2026-11-12, unmerged). Short-exit storage
+with merge safety intact (`2543949`) gave 4246 completed, four gridlocked and a 5313 s
+peak loop wait on seed 1. Remembering an earlier blocked movement across head detours
+(`bc093c8`) gave 4172/4218/4061 completions over seeds 1/2/3 and 2/7/3 gridlocked, with
+peak cumulative waits of 6898/5862/6038 s. All three exceeded the 900 s limit.
+
+The focused group tests isolated two cases where the engine inspected the wrong downstream
+route: a missed turn that reached the intended road in a different lane, and a head detour
+proposed before its movement was installed. Fixing the first gave 3517 completions on seed 1.
+Fixing both (`2991222`) gave 3392 (main 4113), six gridlocked and zero stalled heads. No car stood on an
+inner link at 10:00. Car 2050 had 6248 s of cumulative wait, 6171 s of it before its latest
+entry to r:961. Across its visits it stood on r:961 for 966 s. Car 2610 first reached r:273
+at 10:00 carrying 5415 s of wait. The replay also found a 179 s stop on inner road r:966
+before car 4664 respawned. Phase 3 stays on its task branch while the lead traces its exit.
 
 ## Owner decisions log
 
