@@ -12,7 +12,12 @@ export const throughputCities = ['grid', 'town', 'Sindelfingen', 'Munich'] as co
 export type ThroughputCity = (typeof throughputCities)[number];
 
 /** Physical endpoints survive allocation changes after the public/place import. */
-export function sourceRequestKey(city: City, net: CompiledCity, key: string, request: RouteRequest) {
+export function sourceRequestKey(
+  city: City,
+  net: CompiledCity,
+  key: string,
+  request: RouteRequest,
+) {
   const endpoint = (connector: CConnector) => {
     const lane = net.lanes[connector.lane]!;
     const road = city.roads[net.roads[lane.road]!.id]!;

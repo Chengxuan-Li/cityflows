@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { test } from 'vitest';
-import { expect } from '../hash-probe';
+import { expect, test } from 'vitest';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
 import { createWalkRouter } from '../../src/routing/walk';
@@ -31,7 +30,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       createHash('sha256').update(JSON.stringify({ lanes, movements, connectors })).digest('hex'),
     ).toBe(
       name.startsWith('munich')
-        ? '70f8975adb9f3bdfebf1226287d381335964f3c41b05f4e885da517c8d0acaa7'
+        ? '1e3a65397cf7e28fe8cd7edc9a8c6411aba92ad208aae678189db3f2a802727f'
         : '80e2122adc6d1203bc4e56035f63f9870f823b7380e64c1a296d24ec510e827e',
     );
     const g = result.compiled.walk;

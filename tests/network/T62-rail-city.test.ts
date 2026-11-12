@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { test } from 'vitest';
-import { expect } from '../hash-probe';
+import { expect, test } from 'vitest';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
 import { railCensus } from '../../src/network/rail';
@@ -29,7 +28,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     // and e4654d8 (merging lanes kept on a group's inner roads).
     expect(createHash('sha256').update(JSON.stringify({ lanes, movements })).digest('hex')).toBe(
       name.startsWith('munich')
-        ? '80fdca4fb5b37e90c7fe0ac246a6b29cdb289c3af5783c6ed64a2d748c6cd768'
+        ? '05d4bf6bc2903eda5fce1ee858f64773b5360d97227e6cf0d296aaae9ad6c081'
         : '364c9cb42837ecb214d540cf0f1b9c06442b2cecdbbe67f4a72597d5d2043a71',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);

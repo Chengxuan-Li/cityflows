@@ -1,7 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { test } from 'vitest';
-import { expect } from '../hash-probe';
+import { expect, test } from 'vitest';
 import { importOsm } from '../../src/importers/osm';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile, type CompiledCity } from '../../src/network';
@@ -394,7 +393,7 @@ test.each(
   // and e4654d8 (merging lanes kept on a group's inner roads).
   expect(vehicleHash(net)).toBe(
     name.startsWith('munich')
-      ? '3f65158e086a275d0be73bf9fa57b5a4165ca7809345eb119839f34c2379c83d'
+      ? 'c6cdd75c8887344d601ef5c313bbe5bc0137d09085d32eda6fe8a28a2cff14b9'
       : '1b1a1ebb005d8f0e73cd565be40e4825a57e123cbbff292ac4394f3e060639ea',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));

@@ -1,24 +1,48 @@
-name: Parking parent control capture
+name: Parking candidate strict verification
 on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  control:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: |
-          git worktree add --detach ../task144-parent fa8c621ec4075d54eef52071c5aaf62cf5f2acbf
-          ln -s "$GITHUB_WORKSPACE/node_modules" "$GITHUB_WORKSPACE/../task144-parent/node_modules"
-          node --experimental-strip-types --import ./bench/register.ts bench/recapture-throughput.ts ../task144-parent node_modules/.cache/task144-throughput-parent.json
-      - uses: actions/upload-artifact@v7
+      - run: npm run check
+  city:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          name: task144-throughput-parent
-          path: node_modules/.cache/task144-throughput-parent.json
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:city -- --shard=${{ matrix.shard }}/2
+  station:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test tests/e2e/T70-station-furniture.spec.ts --project chromium
+        env:
+          CITYFLOWS_TEST_PORT: 5344
+          CITYFLOWS_PRODUCTION_TEST_PORT: 5444
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: parking-station-results
+          path: test-results
