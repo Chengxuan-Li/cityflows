@@ -459,7 +459,7 @@ export function connectCarExits(
   city: City,
   compiled: CompiledCity,
   garageFootprints?: Map<string, Vec2[][]>,
-  refreshLots = false,
+  refreshLots?: ReadonlySet<string>,
 ): boolean {
   const exits = parkingEgress(compiled, 30);
   // Reuse the finished car graph and the parking compiler, without compiling the walk graph
@@ -473,7 +473,15 @@ export function connectCarExits(
     strips: [],
     index: { ...compiled.index, connector: new Map(), parking: new Map() },
   };
-  compileVisibleParking(city, layout, (shape) =>
+  const parkingCity = refreshLots
+    ? {
+        ...city,
+        parking: Object.fromEntries(
+          Object.entries(city.parking ?? {}).filter(([id]) => refreshLots.has(id)),
+        ),
+      }
+    : city;
+  compileVisibleParking(parkingCity, layout, (shape) =>
     shape.kind === 'point' ? shape.pos : (polygonCenter(shape.ring) ?? null),
   );
   const ordinary: ReturnType<typeof placeConnector>[] = [];
@@ -528,6 +536,7 @@ export function connectCarExits(
     for (const entry of [...place.connectors]) repair(entry, place.connectors, [], false, anchor);
   }
   for (const source of Object.values(city.parking ?? {})) {
+    if (refreshLots && !refreshLots.has(source.id)) continue;
     if (source.kind === 'roadside' || source.provenance.inferred?.includes('implicitGarage'))
       continue;
     const facilityIndex = layout.index.parking.get(source.id);
