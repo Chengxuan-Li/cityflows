@@ -85,11 +85,11 @@ before the boundary/drain correction and passed afterward. The lead repeated the
 
 | GPU and camera | Rail on / off, ms | Difference |
 |---|---|---|
-| SwiftShader, T62 2D / 3D | 175.83 / 162.77; 237.49 / 207.21 | +8.02%; +14.61% |
-| SwiftShader, T64 moving 2D | 176.66 / 162.12; 173.93 / 159.54 | +8.97%; +9.02% |
-| SwiftShader, T64 moving 3D | 245.14 / 213.48; 244.84 / 215.14 | +14.83%; +13.80% |
+| SwiftShader, T62 2D / 3D | 175.83 / 162.77 and 237.49 / 207.21 | +8.02% and +14.61% |
+| SwiftShader, T64 moving 2D | 176.66 / 162.12 and 173.93 / 159.54 | +8.97% and +9.02% |
+| SwiftShader, T64 moving 3D | 245.14 / 213.48 and 244.84 / 215.14 | +14.83% and +13.80% |
 | RTX 4070 SUPER, T64 moving 2D | 31.25 / 31.25 in both runs | within 0.01% |
-| RTX 4070 SUPER, T64 moving 3D | 31.25 / 31.25; 31.25 / 31.82 | −0.01%; −1.80% |
+| RTX 4070 SUPER, T64 moving 3D | 31.25 / 31.25 and 31.25 / 31.82 | −0.01% and −1.80% |
 
 The two default-backend 3D frame assertions failed. The other three default tests passed,
 including the final-render regression and the Munich and Sindelfingen train interactions.

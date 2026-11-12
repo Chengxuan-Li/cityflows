@@ -39,6 +39,7 @@ import { drawPlaces } from './layers/places';
 import { drawParking } from './layers/parking';
 import { drawMovementArrow, drawRoad, drawCrossings, updateZoomFade } from './layers/roads';
 import { drawTransitions } from './layers/transitions';
+import { paintedCity } from './road-paint';
 import { drawSignal } from './layers/signals';
 import { drawWalkerRoute, drawWalkers, drawWalkSignals } from './layers/walkers';
 import { drawSigns } from './layers/signs';
@@ -539,6 +540,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (active) invalidate();
     },
     setCity(compiled, source) {
+      compiled = paintedCity(compiled);
       const markingTheme = markingThemes[cityMarkingTheme(source)];
       // Versions identify edits within a city. Different source cities can share a version.
       if (city?.version === compiled.version && sourceGeometry === source) return;

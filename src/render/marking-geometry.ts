@@ -41,7 +41,7 @@ import {
 } from './style';
 
 import { defaultSlice, orderBranches } from '../network/continuity';
-import { laneEdges } from '../network/lanes';
+import { paintedCity, paintedLaneEdges as laneEdges } from './road-paint';
 
 const LINE_CLEAR_M = 0.5;
 
@@ -176,6 +176,8 @@ export function roadMarkingGeometry(
   source?: CrossingSource,
   markingTheme: MarkingTheme = defaultTheme,
 ) {
+  city = paintedCity(city);
+  road = city.roads[road.idx]!;
   const belowShapes: MarkingShape[] = [],
     aboveShapes: MarkingShape[] = [],
     pavement: Vec2[][] = [];
@@ -1026,6 +1028,8 @@ function keepInside(dash: Vec2[], inside: (p: Vec2) => boolean, sampleSegments =
 }
 
 export function transitionGeometry(city: CompiledCity, road: CRoad) {
+  city = paintedCity(city);
+  road = city.roads[road.idx]!;
   const roadLanes = road.lanes.map((i) => city.lanes[i]!);
   const lanes = roadLanes.map((lane) => {
     const edges = laneEdges(lane, roadLanes);
@@ -1455,6 +1459,7 @@ export function nodeMarkingGeometry(
   node: CNode,
   markingTheme: MarkingTheme = defaultTheme,
 ): MarkingShape[] {
+  city = paintedCity(city);
   const guides = junctionGuides(city, node, markingTheme).flatMap((g) =>
     g.dashes.map((points) => ({
       kind: 'line' as const,
@@ -1481,6 +1486,8 @@ export function transitionMarkings(
   road: CRoad,
   markingTheme: MarkingTheme = defaultTheme,
 ): MarkingShape[] {
+  city = paintedCity(city);
+  road = city.roads[road.idx]!;
   const pattern = markingTheme.classes[road.roadClass].lane.dash!;
   const shapes = seams(city, road).flatMap((line) =>
     roadDashes(line, true, pattern).map((p) => lineShape(road, 'lane', p, 0.78, markingTheme)),
