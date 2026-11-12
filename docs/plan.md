@@ -3409,7 +3409,8 @@ completions, 40 gridlocks and zero stalled heads in a diagnostic replay. The ori
 gate requires at least 3702, at most 39 and zero. A separate experiment secured both
 junction movements and the receiving space before entering eligible compact links.
 It recorded 34 claims, zero deadline expirations and no mapped contacts, but completed
-only 2901 trips with 64 gridlocks. Combining the two finished at 3050/48/0.
+only 2901 trips with 64 gridlocks. Its official T53 pedestrian check found a car on
+a crossing span occupied by a walker on `r:184#0`. Combining the two finished at 3050/48/0.
 The lead rejected these experiments and kept the reviewed clock fix on draft PR #1.
 No qualifying repair for the remaining traffic failure was established. TASK-128 through
 TASK-130 remain held and B56 deferred.
