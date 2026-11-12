@@ -1,6 +1,5 @@
 import type { CompiledCity } from '../network';
 import {
-  trainTimetable,
   trainDefaults,
   trainPoseAt,
   trainsAt,
@@ -8,6 +7,7 @@ import {
   type TrainPose,
   type TrainRoute,
 } from '../network/trains';
+import { railTimetable } from '../network/trams';
 import type { SimParams } from '../schema';
 import { createVehicleProfiles, DRIVING, QUEUED_DESTINATION, type Vehicles } from './vehicle';
 
@@ -57,7 +57,7 @@ export function createRailCrossings(
 ) {
   const rail = city.rail;
   if (!rail) return undefined;
-  const table = trainTimetable(rail);
+  const table = railTimetable(rail);
   const facilities = rail.facilities ?? [];
   const profiles = createVehicleProfiles(params);
   const length = (id: number) => profiles[vehicles.vclass[id]!]!.lengthM;

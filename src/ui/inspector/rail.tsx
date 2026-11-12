@@ -14,7 +14,7 @@ export function TrainInspector({ id, route }: { id: string; route: number }) {
     if (!session) return;
     let active = true;
     void session.engine.snapshot().then((snapshot) => {
-      const rail = (snapshot as typeof snapshot & { rail?: { trains: TrainPose[] } }).rail;
+      const rail = snapshot.rail;
       if (active) setControlled(rail ? { timeS: snapshot.timeS, poses: rail.trains } : null);
     });
     return () => {

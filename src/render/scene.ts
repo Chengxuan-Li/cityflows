@@ -249,9 +249,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   const updateTrainPoses = () => {
     if (!layerVisibility.rail) return;
-    const controlled = (
-      vehicles.snapshot as typeof vehicles.snapshot & { rail?: { trains: TrainPose[] } }
-    )?.rail;
+    const controlled = vehicles.snapshot?.rail;
     trainPoses =
       controlled?.trains ??
       (city?.rail ? trainsAt(city.rail, railTimetable(city.rail), trainTimeS) : []);

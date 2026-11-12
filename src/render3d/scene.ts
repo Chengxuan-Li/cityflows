@@ -56,7 +56,7 @@ import { LevelCrossings3D } from './level-crossings';
 import { noLevelCrossings } from '../render/level-crossings';
 import { noFurniture, placeStationFurniture } from '../render/station-furniture';
 import { noTramStops, placeTramStops } from '../render/tram-stops';
-import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
+import { trainTimetable, trainsAt } from '../network/trains';
 import { railTimetable } from '../network/trams';
 
 export class Scene3D {
@@ -833,9 +833,7 @@ export class Scene3D {
     this.controls.update();
     this.setSignals(timeS);
     if (this.city?.rail && this.trains && this.railVisible && this.trainTimeS !== timeS) {
-      const snapshot = this.vehicles.poses.snapshot as typeof this.vehicles.poses.snapshot & {
-        rail?: { trains: TrainPose[] };
-      };
+      const snapshot = this.vehicles.poses.snapshot;
       const poses =
         snapshot?.rail?.trains ?? trainsAt(this.city.rail, railTimetable(this.city.rail), timeS);
       this.trains.update(poses, this.belowGround, this.selectedTrain);
