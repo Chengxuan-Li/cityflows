@@ -2184,14 +2184,19 @@ kind, route ends, station stops and next stop/exit; no train state enters car/wa
 traffic controls, routing, demand or simulation hashes.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
-dimensions. Every railway road approach gets an open striped gate, St Andrew's cross, lights
-and a stop marking; mapped `no` tags remain in saved data but do not suppress this sandbox
-equipment. Tram approaches get a horizontal white tram signal and a stop marking. Explicit
-bell tags add a bell housing. These are static visual facilities: gates stay upright and no
-train/car/tram protection state is implied. Rail hides all equipment in both views; 2D detail
-appears from 2 px/m. Mapped railway crossings expose twin railheads over the road in the same
-shared rail geometry, 0.085 m above grade in 3D; beds remain clipped below the road. Traffic
-interaction is deferred until after TASK-131 Phase 3 (trams: TASK-138).
+dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
+lights and stop marking. Explicit bell tags add a bell housing. Both views read the
+simulation snapshot in compiled facility order. Gates stand upright when open and during
+advance warning. Lamps alternate on simulation time during protection, and gates lie
+across the road while closed. Pausing freezes the displayed state.
+
+At a tram crossing the road approach indicates when drivers must stop. The white signal
+facing the track is horizontal while the tram must wait. Its vertical aspect requires
+the simulation to have closed the road and cleared the crossing for rail. Rail block
+reservations still govern the individual service. The Rail layer controls equipment
+visibility in both views. The 2D detail threshold is 2 px/m. Mapped railway crossings
+expose twin railheads over the road, 0.085 m above grade in 3D, with the bed clipped
+below the road.
 
 TASK-134 hangs overhead lines over wired track (section 4), computed once per rail graph by
 `catenary(compiled, roadGrades, nodeGrades)` in `network/catenary.ts` (cached like the heights;
