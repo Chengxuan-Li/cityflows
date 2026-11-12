@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'vitest';
+import { expect } from '../hash-probe';
 import { createEditor } from '../../src/editor';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { importOsm } from '../../src/importers/osm';

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { demandSummary, generatePopulation, scheduleTrips } from '../../src/demand';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { defaultScenario } from '../../src/fixtures/scenarios';

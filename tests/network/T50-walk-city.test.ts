@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
 import { createWalkRouter } from '../../src/routing/walk';

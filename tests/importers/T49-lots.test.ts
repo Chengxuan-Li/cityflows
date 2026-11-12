@@ -4,7 +4,8 @@
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
 import { tierCities } from '../tier';

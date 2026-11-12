@@ -1,7 +1,8 @@
 import { continuity } from '../../src/fixtures/continuity';
 import { pointInPolygon, nearestOnPolyline } from '../../src/geo/polyline';
 import { createHash } from 'node:crypto';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { compileAuditCity, loadAuditCity } from '../../bench/junction-audit';
 import {
   roadMarkingGeometry,

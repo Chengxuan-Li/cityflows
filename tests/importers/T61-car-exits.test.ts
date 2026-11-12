@@ -1,4 +1,5 @@
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { buildCity } from '../../src/fixtures/build-city';
 import { compile, type CompiledCity } from '../../src/network';
 import { parkingEgress } from '../../src/network/parking-egress';

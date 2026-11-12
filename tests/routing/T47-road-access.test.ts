@@ -1,7 +1,7 @@
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-104: appended lot aisles and their junction mouths; T49 proves main hashes with aisles removed.
 import { createHash } from 'node:crypto';
-import { expect } from 'vitest';
+import { expect } from '../hash-probe';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { buildCity } from '../../src/fixtures/build-city';
 import { compile } from '../../src/network';

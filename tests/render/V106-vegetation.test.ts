@@ -6,7 +6,8 @@
 import { vehicleJson } from '../vehicle-json';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { importOsmCached } from '../../bench/city-cache';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { buildCity } from '../../src/fixtures/build-city';
