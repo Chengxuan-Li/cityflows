@@ -150,8 +150,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const hash = (v: unknown) => createHash('sha256').update(vehicleJson(v)).digest('hex');
     const before = name.startsWith('munich')
       ? [
-          'f8810ffef5bb96daab5481253ab960b104faa27384155ff14728f2b6697a476f',
-          '652e6c1d2ec3002b23b36faf9697faf0ba67530f1ad7de8c9c68c5d2d9007b3f',
+          '4c1afba126cbabd57344d1f6e3be3ece9e7807fe8078032762d08084dde85566',
+          'd85475349a2e0ca6ccf83150dcf37c652ab9ddf537365708234f04341afee951',
         ]
       : [
           'd2376c18e9e572547b2ad37b391fb043177e24e649156a0d43ee976064cea243',

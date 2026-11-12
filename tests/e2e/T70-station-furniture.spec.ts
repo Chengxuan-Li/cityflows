@@ -131,7 +131,7 @@ test('T70 Donnersbergerbrücke furniture in 2D and 3D: displays follow the clock
   );
   const furniture = placeStationFurniture(compiled.compiled, source);
   const [west, east] = furniture.platforms;
-  expect(furniture.platforms.map((p) => p.platform)).toEqual(['rp:10743', 'rp:10744']);
+  expect(furniture.platforms.map((p) => p.platform)).toEqual(['rp:10748', 'rp:10749']);
   const both = {
     x: (west!.display!.x + east!.display!.x) / 2 + 10,
     y: (west!.display!.y + east!.display!.y) / 2,

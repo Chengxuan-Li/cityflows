@@ -3,11 +3,30 @@ import { importOsmCached } from '../../bench/city-cache';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { town } from '../../src/fixtures/town';
 import { compile } from '../../src/network';
-import type { CompiledCity } from '../../src/network';
+import type { CConnector, CompiledCity } from '../../src/network';
 import type { RouteRequest } from '../../src/routing';
+import type { City } from '../../src/schema';
+import { pointAtDistance } from '../../src/geo/polyline';
 
 export const throughputCities = ['grid', 'town', 'Sindelfingen', 'Munich'] as const;
 export type ThroughputCity = (typeof throughputCities)[number];
+
+/** Physical endpoints survive allocation changes after the public/place import. */
+export function sourceRequestKey(
+  city: City,
+  net: CompiledCity,
+  key: string,
+  request: RouteRequest,
+) {
+  const endpoint = (connector: CConnector) => {
+    const lane = net.lanes[connector.lane]!;
+    const road = city.roads[net.roads[lane.road]!.id]!;
+    const point = pointAtDistance(lane.polyline, lane.cumulative, connector.positionM);
+    return `${net.places[connector.place]!.id}/${connector.direction}/${road.layer ?? 0}/${point.x.toFixed(5)},${point.y.toFixed(5)}`;
+  };
+  const origin = net.connectors[net.index.connector.get(key.slice(0, key.indexOf('>')))!]!;
+  return `${endpoint(origin)}>${endpoint(net.connectors[request.toConnector]!)}#${key.slice(key.lastIndexOf('#') + 1)}`;
+}
 
 export function throughputFixture(name: ThroughputCity) {
   const imported =
