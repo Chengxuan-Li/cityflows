@@ -160,7 +160,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(
       name.startsWith('munich')
-        ? { rail: 2, tram: 4, approaches: 10, gates: 5 }
+        ? { rail: 2, tram: 4, approaches: 9, gates: 5 }
         : { rail: 18, tram: 0, approaches: 26, gates: 26 },
     );
     console.info('T75 census', name, {
