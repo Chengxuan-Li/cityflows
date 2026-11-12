@@ -2,6 +2,8 @@ import type { CLane, CompiledCity } from '../network';
 import { vehicleClasses, type SimParams } from '../schema';
 import { idmAcceleration } from './idm';
 import { isDroppedLane } from '../network/lane-drop';
+import { reachableLanes, type Route } from '../routing';
+import { createGraphCache } from '../routing/graph';
 import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
 
 interface Proposal {
@@ -34,6 +36,8 @@ export function createLaneChanges(
   const allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
+  const graphFor = createGraphCache();
+  const corridors = new WeakMap<Route, { times: Float64Array; costs: Map<number, number[]> }>();
   // Next roads before which each lane is dropped; survival is static per compiled city.
   const dropsBefore = compiled.lanes.map((lane) => {
     const dropped: number[] = [];
@@ -90,6 +94,101 @@ export function createLaneChanges(
       if (enters) distance = Math.min(distance, Math.abs(lane.lane - ordinal));
     }
     return distance;
+  }
+
+  function futureChanges(id: number, from: number, positionM: number) {
+    const route = vehicles.route[id]!,
+      step = vehicles.routeStep[id]!;
+    let cached = corridors.get(route);
+    if (!cached) {
+      const times = new Float64Array(route.roads.length + 1);
+      for (let i = 0; i < route.roads.length; i++) {
+        const road = compiled.roads[route.roads[i]!]!;
+        times[i + 1] = times[i]! + road.lengthM / road.speedLimitMps;
+      }
+      cached = { times, costs: new Map() };
+      corridors.set(route, cached);
+    }
+    const current = compiled.lanes[vehicles.lane[id]!]!;
+    // One normal mandatory-change window of posted-speed travel bounds positioning.
+    const deadline =
+      cached.times[step + 1]! -
+      Math.max(0, current.lengthM - positionM) / compiled.roads[current.road]!.speedLimitMps +
+      params.missedTurnAfterS;
+    let low = step,
+      high = route.roads.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (cached.times[middle + 1]! <= deadline) low = middle + 1;
+      else high = middle;
+    }
+    const end = low - 1;
+    if (end <= step)
+      return changesToTargets(
+        id,
+        compiled.lanes[from]!.lane,
+        step,
+        step === route.roads.length - 1,
+      );
+    const kind = vehicles.vclass[id]!;
+    const graph = graphFor(compiled, vehicleClasses[kind]!);
+    const key =
+      ((kind * route.roads.length + step) * route.roads.length + end) * compiled.connectors.length +
+      vehicles.destination[id]!;
+    let future = cached.costs.get(key);
+    if (!future) {
+      let next: number[] = [];
+      for (let i = end; i > step; i--) {
+        const road = compiled.roads[route.roads[i]!]!;
+        const final = i === route.roads.length - 1;
+        const cutoff = final
+          ? compiled.connectors[vehicles.destination[id]!]!.positionM
+          : Math.max(0, road.lengthM - 10);
+        const values: number[] = [];
+        for (const entry of road.lanes) {
+          let minimum = Infinity;
+          for (const reach of reachableLanes(
+            compiled,
+            graph.allowed,
+            entry,
+            cutoff,
+            laneChangeDistanceM,
+          )) {
+            if (i === end) {
+              if (
+                route.targetLanes[i]!.includes(reach.lane) &&
+                (final || survives(reach.lane, route.roads[i + 1]!))
+              )
+                minimum = Math.min(minimum, reach.changes);
+            } else
+              for (const m of graph.outgoing[reach.lane]!) {
+                const target = compiled.lanes[compiled.movements[m]!.toLane]!;
+                if (target.road === route.roads[i + 1])
+                  minimum = Math.min(minimum, reach.changes + next[target.lane]!);
+              }
+          }
+          values.push(minimum);
+        }
+        next = values;
+      }
+      future = next;
+      cached.costs.set(key, future);
+    }
+    let minimum = Infinity;
+    for (const reach of reachableLanes(
+      compiled,
+      graph.allowed,
+      from,
+      compiled.lanes[from]!.lengthM,
+      laneChangeDistanceM,
+      positionM,
+    ))
+      for (const m of graph.outgoing[reach.lane]!) {
+        const target = compiled.lanes[compiled.movements[m]!.toLane]!;
+        if (target.road === route.roads[step + 1])
+          minimum = Math.min(minimum, reach.changes + future[target.lane]!);
+      }
+    return minimum;
   }
 
   function acceleration(id: number, lane: CLane, leader: number) {
@@ -293,6 +392,8 @@ export function createLaneChanges(
         acceleration(id, source, oldLeader) +
         mobil.politeness * (oldFollowerGain + newFollowerGain);
       if (incentive > bestIncentive) {
+        if (futureChanges(id, target, positionM) > futureChanges(id, source.idx, positionM))
+          continue;
         bestIncentive = incentive;
         bestLane = target;
       }
@@ -322,6 +423,7 @@ export function createLaneChanges(
     propose,
     resolve,
     lateralM,
+    futureChanges,
     creeping,
     holding,
     gaveUp,
