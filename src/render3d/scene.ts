@@ -891,6 +891,9 @@ export class Scene3D {
     shadow.far = extent * 5;
     shadow.updateProjectionMatrix();
     this.vegetation?.update(distance);
+    this.catenary?.setZoom(
+      this.canvas.clientHeight / (2 * Math.tan((this.camera.fov * Math.PI) / 360) * distance),
+    );
     // Reuse an unchanged light map. Moving vehicles always refresh their shadows.
     const cacheShadows =
       Boolean(this.geometry?.heights.terrain.grid) &&

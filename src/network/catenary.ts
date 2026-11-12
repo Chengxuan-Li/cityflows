@@ -41,8 +41,8 @@ export const catenaryRule = {
   /** Radius kept free around a level-crossing node and a switch's frog. */
   levelCrossingM: 6,
   frogM: 5,
-  /** Distance kept from a line or point platform. */
-  platformM: 1,
+  /** Distance kept from a platform's edge. */
+  platformM: 2,
   /** A bundle of this many tracks gets a portal and two masts; fewer get one mast with an arm. */
   portalTracks: 3,
   /** A wider portal also stands on masts between its tracks, in the widest clear gaps. */
@@ -244,9 +244,9 @@ export function catenary(
   /** Whether a mast may stand at `p`, at height `h`. */
   const standable = (p: Vec2, h: number) => {
     if (nearFrogOrCrossing(p) || onRoad(p, h)) return false;
-    for (const i of near(platformIndex, p, rule.platformM + 2)) {
+    for (const i of near(platformIndex, p, rule.platformM)) {
       const q = platforms[i]!;
-      if (q.inside(p) || nearestOnPolyline(q.points, p).away < rule.platformM + 1) return false;
+      if (q.inside(p) || nearestOnPolyline(q.points, p).away < rule.platformM) return false;
     }
     for (const i of near(segmentIndex, p, rule.railClearM)) {
       const { track, i: k } = segments[i]!,
@@ -364,11 +364,8 @@ export function catenary(
     const reach = 400;
     const found = new Map<number, { o: number; s: number; pos: Vec2; dir: Vec2 }>();
     found.set(ref.idx, { o: 0, s: nearestOnPolyline(ref.line, p).along, pos: p, dir: u });
-    const ends = [
-      { x: p.x - n.x * reach, y: p.y - n.y * reach },
-      { x: p.x + n.x * reach, y: p.y + n.y * reach },
-    ];
-    for (const i of segmentIndex(...box(ends))) {
+    const visited = new Set<number>();
+    const visit = (i: number) => {
       const { track, i: k } = segments[i]!;
       const t = tracks[track]!;
       if (
@@ -378,21 +375,21 @@ export function catenary(
         chains[chainOf[track]!]!.grade !== 'open' ||
         (t.kind === 'tram') !== tram
       )
-        continue;
+        return;
       const a = t.line[k - 1]!,
         b = t.line[k]!,
         e = { x: b.x - a.x, y: b.y - a.y },
         w = { x: a.x - p.x, y: a.y - p.y };
       const den = cross(n, e),
         len = Math.hypot(e.x, e.y);
-      if (Math.abs(den) < 1e-12 || len === 0) continue;
+      if (Math.abs(den) < 1e-12 || len === 0) return;
       const o = cross(w, e) / den,
         f = cross(w, n) / den;
-      if (f < 0 || f > 1 || Math.abs(o) > reach) continue;
+      if (f < 0 || f > 1 || Math.abs(o) > reach) return;
       if (Math.abs(e.x * u.x + e.y * u.y) / len < Math.cos((rule.bundleAngleDeg * Math.PI) / 180))
-        continue;
+        return;
       const s = t.cumulative[k - 1]! + f * len;
-      if (Math.abs(heightOf(t, s) - level) > rule.levelM) continue;
+      if (Math.abs(heightOf(t, s) - level) > rule.levelM) return;
       const old = found.get(track);
       if (!old || Math.abs(o) < Math.abs(old.o))
         found.set(track, {
@@ -401,6 +398,26 @@ export function catenary(
           pos: { x: a.x + e.x * f, y: a.y + e.y * f },
           dir: { x: e.x / len, y: e.y / len },
         });
+    };
+    // Query the cross line in short pieces outward from the track, and stop on a side once a
+    // piece starts beyond the bundle gap from the last track chained there.
+    const piece = 30;
+    for (const side of [1, -1]) {
+      let last = 0;
+      for (let a = 0; a < reach && a - last <= rule.bundleGapM; a += piece) {
+        const q0 = { x: p.x + n.x * side * a, y: p.y + n.y * side * a },
+          q1 = { x: p.x + n.x * side * (a + piece), y: p.y + n.y * side * (a + piece) };
+        for (const i of segmentIndex(...box([q0, q1]))) {
+          if (visited.has(i)) continue;
+          visited.add(i);
+          visit(i);
+        }
+        const offsets = [...found.values()].map((v) => v.o * side).filter((o) => o > last);
+        for (const o of offsets.sort((x, y) => x - y)) {
+          if (o - last > rule.bundleGapM) break;
+          last = o;
+        }
+      }
     }
     const sorted = [...found.entries()]
       .map(([track, v]) => ({ track, ...v }))
@@ -414,7 +431,17 @@ export function catenary(
   };
   /** A cross line square to the mean direction of the tracks it spans, so a crossover or a
    * converging track does not skew a portal across a track field. */
+  const sections = new Map<string, ReturnType<typeof sweep>>();
   const crossSection = (ref: Track, p: Vec2, h: number, tram: boolean, level: number) => {
+    const key = `${ref.idx}/${p.x}/${p.y}/${h}/${tram}/${level}`;
+    const hit = sections.get(key);
+    if (hit) return hit;
+    if (sections.size > 256) sections.clear();
+    const result = crossSectionOf(ref, p, h, tram, level);
+    sections.set(key, result);
+    return result;
+  };
+  const crossSectionOf = (ref: Track, p: Vec2, h: number, tram: boolean, level: number) => {
     const first = sweep(ref, p, h, tram, level);
     const u = { x: Math.cos(h), y: Math.sin(h) },
       sum = { x: 0, y: 0 };

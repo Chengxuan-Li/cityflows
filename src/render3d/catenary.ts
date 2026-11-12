@@ -15,7 +15,7 @@ import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import { catenary, catenaryRule, type Catenary } from '../network/catenary';
 import { cityGrades } from '../render/grades';
-import { catenaryColors } from '../render/layers/catenary';
+import { catenaryColors, catenaryZooms } from '../render/layers/catenary';
 import type { CityGeometry } from '../render/types';
 import type { cityHeights } from './heights';
 
@@ -26,13 +26,12 @@ const size = {
   portalDepth: 0.5,
   portalWidth: 0.3,
   arm: 0.1,
-  dropper: 0.06,
   /** Portal beam underside and cantilever arm above the messenger wire. */
   beamGapM: 0.5,
   armGapM: 0.3,
 };
-/** The messenger's sag at the middle of a 60 m span; the contact wire is pre-sagged slightly. */
-const sag = { messengerM: 0.8, contactM: 0.05, spanM: 60 };
+/** The messenger's sag at the middle of a 60 m span; the contact wire runs straight. */
+const sag = { messengerM: 0.8, spanM: 60 };
 
 interface Box {
   x: number;
@@ -64,7 +63,8 @@ export function buildCatenary(
   const ground = (p: Vec2) => heights.terrain.groundAt(p.x, p.y);
   const { contactM, messengerM } = catenaryRule;
   const masts: Box[] = [],
-    beams: Box[] = [];
+    beams: Box[] = [],
+    hangers: number[] = [];
   const vertical = (p: Vec2, z0: number, z1: number, width: number): Box => ({
     x: p.x,
     y: p.y,
@@ -112,14 +112,16 @@ export function buildCatenary(
       const z = base + contactM + 0.15;
       beams.push(horizontal(s.beam[0], s.beam[1], z, z + size.arm, size.arm));
     }
+    // Hangers from the beam or arm to the wire at each drop, drawn with the wires as lines.
     for (const d of s.drops) {
-      const z = ground(d.pos) + d.h;
-      beams.push(
-        vertical(d.pos, portal ? z + contactM + messengerM : z + contactM, beamZ, size.dropper),
-      );
+      const z = ground(d.pos) + d.h + contactM + (portal ? messengerM : 0);
+      hangers.push(d.pos.x, z, d.pos.y, d.pos.x, beamZ, d.pos.y);
     }
   }
+  // A unit box standing on its base, without the base's two triangles (never seen).
   const box = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  const faces = box.getIndex()!.array;
+  box.setIndex([...faces.slice(0, 18), ...faces.slice(24)]);
   const matrix = new Matrix4(),
     rotation = new Quaternion(),
     up = new Vector3(0, 1, 0);
@@ -145,12 +147,14 @@ export function buildCatenary(
     group.add(mesh);
     return mesh;
   };
-  instanced(masts, catenaryColors.mast, 'catenary-masts');
-  instanced(beams, catenaryColors.beam, 'catenary-beams');
+  const supports = [
+    instanced(masts, catenaryColors.mast, 'catenary-masts'),
+    instanced(beams, catenaryColors.beam, 'catenary-beams'),
+  ];
   box.dispose();
-  // Wires: straight spans between their points, each sagging in 6 pieces at most every 10 m.
+  // Wires: the contact wire straight between its points, the messenger sagging in up to 4 pieces.
   const wires = (hidden: boolean, name: string) => {
-    const positions: number[] = [];
+    const positions: number[] = hidden ? [] : hangers;
     for (const w of lines?.wires ?? []) {
       if (w.hidden !== hidden) continue;
       for (let k = 1; k < w.points.length; k++) {
@@ -160,16 +164,16 @@ export function buildCatenary(
         const za = ground(a.pos) + a.h + contactM,
           zb = ground(b.pos) + b.h + contactM;
         const k2 = Math.min(1, (length / sag.spanM) ** 2);
-        const pieces = Math.max(1, Math.min(6, Math.ceil(length / 10)));
+        const pieces = Math.max(1, Math.min(4, Math.ceil(length / 15)));
         const point = (f: number, lift: number, drop: number) => [
           a.pos.x + (b.pos.x - a.pos.x) * f,
           za + (zb - za) * f + lift - drop * k2 * 4 * f * (1 - f),
           a.pos.y + (b.pos.y - a.pos.y) * f,
         ];
+        positions.push(...point(0, 0, 0), ...point(1, 0, 0));
         for (let j = 0; j < pieces; j++) {
           const f0 = j / pieces,
             f1 = (j + 1) / pieces;
-          positions.push(...point(f0, 0, sag.contactM), ...point(f1, 0, sag.contactM));
           positions.push(
             ...point(f0, messengerM, sag.messengerM),
             ...point(f1, messengerM, sag.messengerM),
@@ -185,15 +189,31 @@ export function buildCatenary(
     group.add(mesh);
     return mesh;
   };
-  wires(false, 'catenary-wires');
+  const open = wires(false, 'catenary-wires');
   const tunnel = wires(true, 'catenary-tunnel-wires');
-  const setBelowGround = (enabled: boolean) => {
-    tunnel.visible = enabled;
+  // As in 2D, supports show from `catenaryZooms.supports` px/m and wires from `.wires`: further
+  // out they are sub-pixel clutter that costs frame time.
+  let belowGround = false,
+    zoom = Infinity;
+  const update = () => {
+    for (const mesh of supports) mesh.visible = zoom >= catenaryZooms.supports;
+    open.visible = zoom >= catenaryZooms.wires;
+    tunnel.visible = belowGround && open.visible;
   };
-  setBelowGround(false);
+  const setBelowGround = (enabled: boolean) => {
+    belowGround = enabled;
+    update();
+  };
+  /** Pixels per metre at the camera's target. */
+  const setZoom = (next: number) => {
+    zoom = next;
+    update();
+  };
+  update();
   return {
     group,
     setBelowGround,
+    setZoom,
     counts: {
       supports: lines?.supports.length ?? 0,
       masts: masts.length,

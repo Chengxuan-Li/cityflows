@@ -2167,11 +2167,11 @@ masts are placed first as they stand (the nearest wired open track within 8 m; a
 mast across the same tracks makes a portal) or listed with a reason. Tunnel and covered chains
 carry the wire on fixings every 50 m, without masts. The contact wire hangs 5.5 m above the rail
 and the messenger 1.2 m above it, straight between drops (track-following every 10 m where a
-chord leaves the track by over 0.3 m), the messenger sagging 0.8 m and the contact 0.05 m over
-60 m. 2D draws masts as 0.7 m squares and portals and arms as thin lines from 1.5 px/m and the
+chord leaves the track by over 0.3 m), the messenger sagging 0.8 m over a 60 m span in 3D. 2D draws masts as 0.7 m squares and portals and arms as thin lines from 1.5 px/m and the
 contact wire as a 1 px hairline from 3 px/m, per grade above the trains, never tunnel wire. 3D
-draws masts and the beams, arms and drop posts as two instanced box meshes and both wires as
-line segments, open and tunnel (shown only with See below ground) apart: four draw calls. The
+draws masts and the beams and arms as two instanced box meshes, and both wires and the hangers
+at each drop as line segments, open and tunnel (shown only with See below ground) apart: four
+draw calls; supports show from 1.5 px/m and wires from 3 px/m at the camera's target, as in 2D. The
 Overhead lines layer, under Rail and disabled while Rail is off, hides them in both views.
 
 TASK-133 dresses stations (places with `station`, their rail platforms and entrances) in both
