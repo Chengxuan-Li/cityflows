@@ -1,0 +1,3 @@
+# TASK-145 — T62 and T64 rail frame times
+
+Measure rail layers and train drawing on current main using the named T62/T64 Playwright specs with local performance assertions active, one worker, consistent camera and browser backend, and repeated paired rail-on/off samples. Report per-view milliseconds, variability, and evidence distinguishing rendering cost from sampling noise. Fix a demonstrated measurement or rendering defect and repeat the comparison. Preserve the ten-percent limit, functional coverage and existing CI policy unless measurements support a reviewed change. Own the two specs, their timing helpers and any specifically implicated rendering code. Coordinate quiet sampling windows with the lead. Use ports 5345/5445.

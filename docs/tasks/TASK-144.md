@@ -1,0 +1,3 @@
+# TASK-144 — Munich parking-lot access
+
+Trace OSM way 159640404 in the bundled Munich extract. Identify both directed roads and their connectors from source provenance. Reproduce legal external approach, parking and return to a public road through the actual route and simulation workflow. Check whether the historical dead-end report describes a real access defect or a stale ID. Repair a demonstrated importer or parking-access fault at its source and cover it with a focused regression if necessary. Preserve real OSM one-way restrictions. Deliver location, road and connector IDs, reproducible trips, outcomes and close 2D/3D geometry shots. Use ports 5344/5444; keep browser work and broad tests out of the frame agent's timed windows.
