@@ -117,6 +117,193 @@ test.each([false, true])(
   },
 );
 
+test('T68: a fallback onto the same next road clears its actual legal group suffix', () => {
+  const { city, node, road, place } = buildCity('Same-next-road fallback', 1);
+  const start = node(0, 0),
+    a = node(100, 0),
+    b = node(120, 0),
+    far = node(270, 0),
+    corner = node(270, 150);
+  const entry = road(start, a, { lanes: 2 }),
+    inner = road(a, b, { lanes: 2 }),
+    goal = road(b, node(120, 200));
+  const bypass = road(b, far);
+  road(far, corner);
+  road(corner, b, {
+    via: [
+      { x: 60, y: 150 },
+      { x: 60, y: 0 },
+    ],
+  });
+  const provenance = { source: 'authored' } as const;
+  b.turnRules = [
+    { from: inner.id, to: goal.id, allowed: false, provenance },
+    { from: inner.id, to: goal.id, fromLane: 1, toLane: 0, allowed: true, provenance },
+    { from: inner.id, to: bypass.id, allowed: false, provenance },
+    { from: inner.id, to: bypass.id, fromLane: 0, toLane: 0, allowed: true, provenance },
+  ];
+  city.junctionGroups = {
+    'jg:100': {
+      id: 'jg:100',
+      nodes: [a.id, b.id],
+      innerRoads: [inner.id],
+      signal: null,
+      provenance,
+    },
+  };
+  const initial = setup(city),
+    stop = initial.lanes[initial.index.lane.get(`${entry.id}#1`)!]!.stopM;
+  const requests: TripRequest[] = [];
+  for (let i = 0; i < 4; i++) {
+    const pos = stop - 0.5 - i * 22;
+    place(`Blocker ${i}`, 'gateway', a.pos, [
+      { road: entry, lane: 1, direction: 'out', positionM: pos },
+    ]);
+    const origin = Object.values(city.places).at(-1)!;
+    place(`Closed ${i}`, 'work', a.pos, [
+      { road: entry, lane: 1, direction: 'in', positionM: pos },
+    ]);
+    const destination = Object.values(city.places).at(-1)!;
+    destination.capacity = 0;
+    requests.push({
+      id: `blocker:${i}`,
+      personId: null,
+      originPlaceId: origin.id,
+      destinationPlaceId: destination.id,
+      departS: 100,
+      mode: 'car',
+      vehicleClass: 'truck',
+      purpose: 'through',
+      legs: [],
+    });
+  }
+  place('Subject', 'gateway', start.pos, [
+    { road: entry, lane: 0, direction: 'out', positionM: 20 },
+  ]);
+  const origin = Object.values(city.places).at(-1)!;
+  place('Destination', 'gateway', b.pos, [{ road: goal, direction: 'in', positionM: 150 }]);
+  requests.push({
+    id: 'subject',
+    personId: null,
+    originPlaceId: origin.id,
+    destinationPlaceId: Object.values(city.places).at(-1)!.id,
+    departS: 101,
+    mode: 'car',
+    vehicleClass: 'car',
+    purpose: 'through',
+    legs: [],
+  });
+  const compiled = setup(city),
+    engine = createEngine();
+  engine.load({
+    compiled,
+    trips: requests,
+    scenario: scenario(),
+    params: {
+      spawnMinGapM: 2,
+      maxReplans: 0,
+      gridlock: { respawnS: 1e6, fadeS: 5, maxRespawns: 3 },
+      vehicleClasses: {
+        ...DEFAULT_SIM_PARAMS.vehicleClasses,
+        truck: { ...DEFAULT_SIM_PARAMS.vehicleClasses.truck, lengthM: 20 },
+      },
+    },
+  });
+  for (let i = 0; i < 2500; i++) {
+    engine.step();
+    sampleConflictZones(engine, compiled);
+  }
+  expect(engine.inspect(5)).toMatchObject({
+    state: 'completed',
+    routeReason: 'missed_turn',
+    respawns: 0,
+  });
+});
+
+test('T68: a proposed head alternative on the same next road uses its own suffix', () => {
+  const { city, node, road, place } = buildCity('Same-road head alternative', 1);
+  const a = node(100, 0),
+    b = node(120, 0),
+    far = node(270, 0),
+    corner = node(270, 150);
+  const entry = road(node(0, 0), a),
+    inner = road(a, b, { lanes: 2 }),
+    goal = road(b, node(120, 220), { lanes: 2 });
+  const bypass = road(b, far);
+  road(far, corner);
+  const returning = road(corner, b, {
+      via: [
+        { x: 60, y: 150 },
+        { x: 60, y: 0 },
+      ],
+    }),
+    provenance = { source: 'authored' } as const;
+  b.turnRules = [
+    { from: inner.id, to: goal.id, allowed: false, provenance },
+    { from: inner.id, to: goal.id, fromLane: 0, toLane: 0, allowed: true, provenance },
+    { from: inner.id, to: bypass.id, allowed: false, provenance },
+    { from: inner.id, to: bypass.id, fromLane: 1, toLane: 0, allowed: true, provenance },
+    { from: returning.id, to: goal.id, allowed: false, provenance },
+    { from: returning.id, to: goal.id, fromLane: 0, toLane: 1, allowed: true, provenance },
+  ];
+  city.junctionGroups = {
+    'jg:100': {
+      id: 'jg:100',
+      nodes: [a.id, b.id],
+      innerRoads: [inner.id],
+      signal: null,
+      provenance,
+    },
+  };
+  place('Blocker', 'gateway', b.pos, [{ road: goal, lane: 0, direction: 'out', positionM: 6.5 }]);
+  const blocker = Object.values(city.places).at(-1)!;
+  place('Closed', 'gateway', b.pos, [{ road: goal, lane: 0, direction: 'in', positionM: 6.5 }]);
+  const closed = Object.values(city.places).at(-1)!;
+  closed.capacity = 0;
+  place('Subject', 'gateway', a.pos, [{ road: entry, direction: 'out', positionM: 85 }]);
+  const origin = Object.values(city.places).at(-1)!;
+  place('Destination', 'gateway', b.pos, [
+    { road: goal, lane: 1, direction: 'in', positionM: 150 },
+  ]);
+  const destination = Object.values(city.places).at(-1)!;
+  const requests: TripRequest[] = [
+    [blocker.id, closed.id],
+    [origin.id, destination.id],
+  ].map(([from, to], i) => ({
+    id: `trip:${i}`,
+    personId: null,
+    originPlaceId: from!,
+    destinationPlaceId: to!,
+    departS: i === 0 ? 100 : 102,
+    mode: 'car',
+    vehicleClass: 'car',
+    purpose: 'through',
+    legs: [],
+  }));
+  const compiled = setup(city),
+    engine = createEngine();
+  let detoured = 0;
+  engine.load({
+    compiled,
+    trips: requests,
+    scenario: scenario(),
+    params: {
+      headDetourS: 3,
+      maxReplans: 0,
+      gridlock: { respawnS: 1e6, fadeS: 5, maxRespawns: 3 },
+    },
+    headDetourObserver(id) {
+      if (id === 1) detoured++;
+    },
+  });
+  for (let i = 0; i < 2500; i++) {
+    engine.step();
+    sampleConflictZones(engine, compiled);
+  }
+  expect(engine.inspect(2)).toMatchObject({ state: 'completed', respawns: 0 });
+  expect(detoured).toBe(1);
+});
+
 test('T68: a route may end at an accepting connector on an inner road', () => {
   const fixture = groupFixture(false);
   Object.values(fixture.city.places)[1]!.connectors[0]!.roadId = fixture.inner.id;

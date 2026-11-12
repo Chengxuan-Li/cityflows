@@ -1566,6 +1566,8 @@ Step sequence, in this order every step:
      controls do not stop a cleared car. Physical following, conflict-zone backstops and walker
      holds remain active. Required safe lane changes and destinations on inner roads remain
      reachable; discretionary lane changes and congestion/parking reroutes wait until group exit.
+     A fallback or proposed head diversion uses the suffix from its actual landing lane, even
+     when it enters the incumbent route's next road; replanning invalidates cached entry paths.
      Exit, gridlock recovery and live edits release the derived group reservations.
      A short external exit that cannot store the vehicle carries its clearance through any
      conflict-free uncontrolled continuations to downstream storage. A mainline merge keeps

@@ -30,9 +30,12 @@ const refusals: Record<string, number> = {};
 const history: unknown[] = [];
 const standing = new Map<number, { segment: number; sinceS: number }>();
 const roadVisits = new Map<number, { road: string; sinceS: number; waitingOnEntryS: number }>();
+const firstLoopEntry = new Map<string, { timeS: number; waitingS: number }>();
+const loopTime = new Map<string, { dwellS: number; standingS: number }>();
 const chainRefusals = new Map<string, unknown>();
 const stoppedSince = new Map<number, number>();
 const cycles: unknown[] = [];
+let cyclesAtEnd: unknown[] = [];
 const seenCycles = new Set<string>();
 const traceCycles = process.env.CITYFLOWS_TRACE_CYCLES === '1';
 const watchedIds = new Set(
@@ -199,6 +202,15 @@ const morning = probeMorning(city, compiled, 0.15, {
       const movement = segment < 0 ? compiled.movements[-segment - 1]! : null;
       const lane = compiled.lanes[movement?.fromLane ?? segment]!;
       const road = compiled.roads[lane.road]!;
+      if (watched.has(road.id)) {
+        const key = `${id}:${road.id}`;
+        if (!firstLoopEntry.has(key))
+          firstLoopEntry.set(key, { timeS: engine.timeS, waitingS: engine.inspect(id)!.waitingS });
+        const accumulated = loopTime.get(key) ?? { dwellS: 0, standingS: 0 };
+        accumulated.dwellS++;
+        if (snapshot.speed[i]! < 0.1) accumulated.standingS++;
+        loopTime.set(key, accumulated);
+      }
       if (snapshot.speed[i]! < 0.1) {
         if (!stoppedSince.has(id)) stoppedSince.set(id, engine.timeS);
       } else stoppedSince.delete(id);
@@ -258,6 +270,7 @@ const morning = probeMorning(city, compiled, 0.15, {
         heads.set(segment, detail);
     }
     if (traceCycles && engine.timeS >= 27000) {
+      const currentCycles = new Map<string, unknown>();
       const edges = new Map<number, number>();
       const records = new Map<number, unknown>();
       for (const [segment, head] of allHeads) {
@@ -307,12 +320,14 @@ const morning = probeMorning(city, compiled, 0.15, {
         if (ring.length < 2 || !ring.some((id) => watched.has(roadVisits.get(id)?.road ?? '')))
           continue;
         const key = [...ring].sort((a, b) => a - b).join(',');
+        const event = { timeS: engine.timeS, heads: ring.map((id) => records.get(id)) };
+        currentCycles.set(key, event);
         if (seenCycles.has(key)) continue;
         seenCycles.add(key);
-        const event = { timeS: engine.timeS, heads: ring.map((id) => records.get(id)) };
         cycles.push(event);
         console.info('cycle', JSON.stringify(event));
       }
+      cyclesAtEnd = [...currentCycles.values()];
     }
     if (tick % 600 === 0) {
       endInnerOverBox = innerOverBox;
@@ -352,6 +367,25 @@ const loopRoadDwell = Object.fromEntries(
       .slice(0, 3),
   ]),
 );
+const loopViolators = [...watched].map((road) => {
+  const id = morning.loopCensus[road]!.longestWaitingVehicle;
+  if (!id) return { road, vehicles: 0 };
+  const detail = activeEngine.inspect(id)!;
+  const currentEntry = roadVisits.get(id)!;
+  return {
+    road,
+    vehicles: morning.loopCensus[road]!.vehicles,
+    id,
+    waitingS: detail.waitingS,
+    firstEntry: firstLoopEntry.get(`${id}:${road}`),
+    currentEntry,
+    waitingAddedThisVisitS: detail.waitingS - currentEntry.waitingOnEntryS,
+    currentVisitDwellS: activeEngine.timeS - currentEntry.sinceS,
+    sampledTimeOnRoad: loopTime.get(`${id}:${road}`),
+    decision: decisions.get(id),
+    detail: { ...detail, route: detail.route?.roads.map((r) => compiled.roads[r]!.id) },
+  };
+});
 writeFileSync(
   out,
   JSON.stringify(
@@ -363,7 +397,9 @@ writeFileSync(
       endInnerOverBox,
       endInnerStanding,
       loopRoadDwell,
+      loopViolators,
       cycles,
+      cyclesAtEnd,
       journeys,
       headQueries,
       headExecuted,

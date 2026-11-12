@@ -179,7 +179,12 @@ function createRun({
   function groupRoute(id: number, movement: (typeof compiled.movements)[number]) {
     const route = vehicles.route[id]!;
     const step = vehicles.routeStep[id]!;
-    if (route.roads[step + 1] === compiled.lanes[movement.toLane]!.road) return { route, step };
+    if (
+      !fallback[id] &&
+      movement.idx === vehicles.movement[id] &&
+      route.roads[step + 1] === compiled.lanes[movement.toLane]!.road
+    )
+      return { route, step };
     const result = routeFrom(id, movement.toLane, 0);
     return result.ok ? { route: result.route, step: -1 } : null;
   }
@@ -236,6 +241,7 @@ function createRun({
   }
 
   function planLane(id: number, lane: number, positionM: number) {
+    intersections.invalidatePlan(id);
     vehicles.headDetourS[id] = 0;
     pendingHead[id] = -1;
     const destination = compiled.connectors[vehicles.destination[id]!]!;

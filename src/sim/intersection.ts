@@ -550,6 +550,9 @@ export function createIntersections(
     blockedExit,
     reservedSpace,
     groupPaths,
+    invalidatePlan(id: number) {
+      chainCache[id] = undefined;
+    },
     blocksEntry(id: number, requester: number, movement: CMovement) {
       const held = groupPaths[id];
       if (!held || grants[requester] !== -1 || inner(movement)) return false;
