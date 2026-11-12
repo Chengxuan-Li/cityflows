@@ -391,11 +391,10 @@ test.each(
   // equals main's (main: Munich 51b6cf03…, Sindelfingen ac619150…).
   // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
   // and e4654d8 (merging lanes kept on a group's inner roads).
-  // TASK-146: this snapshot includes painted surfaces; driving lanes/movements are unchanged.
   expect(vehicleHash(net)).toBe(
     name.startsWith('munich')
-      ? '695b35ff151511a80ee98dd192778935254a47698b6a80e5d79346c03252dafc'
-      : '88a7441dd56a55e63f9ff9fac97d82f57990f8129c2e9fcabe56764f5c12350e',
+      ? '3f65158e086a275d0be73bf9fa57b5a4165ca7809345eb119839f34c2379c83d'
+      : '1b1a1ebb005d8f0e73cd565be40e4825a57e123cbbff292ac4394f3e060639ea',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

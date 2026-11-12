@@ -57,6 +57,7 @@ import { noLevelCrossings } from '../render/level-crossings';
 import { noFurniture, placeStationFurniture } from '../render/station-furniture';
 import { noTramStops, placeTramStops } from '../render/tram-stops';
 import { trainTimetable, trainsAt } from '../network/trains';
+import { paintedCity } from '../render/road-paint';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -177,6 +178,7 @@ export class Scene3D {
   }
 
   setCity(city: CompiledCity, source: CityGeometry, terrainEnabled = this.terrainEnabled) {
+    city = paintedCity(city);
     this.terrainEnabled = terrainEnabled;
     if (
       this.city === city &&
