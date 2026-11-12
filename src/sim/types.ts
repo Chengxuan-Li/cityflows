@@ -11,6 +11,9 @@ import type {
 } from '../schema';
 import type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
 import type { PersonDetail, PersonMetrics } from './persons';
+import type { RailSnapshot } from './rail-crossings';
+export type { RailSnapshot } from './rail-crossings';
+export { CROSSING_OPEN, CROSSING_WARNING, CROSSING_CLOSED } from './rail-crossings';
 export type { PersonDetail, PersonMetrics, PersonLegDetail, PersonTripDetail } from './persons';
 
 export type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
@@ -71,6 +74,7 @@ export interface ParkingClaimsSnapshot {
 }
 
 export interface VehicleSnapshot {
+  rail?: RailSnapshot;
   /** >=0: authoritative parking pose; value is its reference lane for height/layer. */
   poseLane?: Int32Array;
   parkedCars?: ParkedCarsSnapshot;

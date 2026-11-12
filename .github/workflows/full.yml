@@ -1,19 +1,38 @@
-name: Parking final strict city gates
+name: Held PR integrated geometry audit
 on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  city:
+  city-pins:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run test:city -- --shard=${{ matrix.shard }}/2
+      - name: Compare independent geometry and reviewed PR controls
+        run: |
+          git worktree add --detach ../task147-geometry-control 6bd8614
+          git worktree add --detach ../task147-reviewed-control 68f55ac
+          ln -s "$PWD/node_modules" ../task147-geometry-control/node_modules
+          ln -s "$PWD/node_modules" ../task147-reviewed-control/node_modules
+          node --experimental-strip-types --import ./bench/register.ts bench/task147-merge-proof.mjs
+      - name: Collect actual integrated geometry pins with strict semantics
+        run: |
+          git show 3334568:tests/hash-probe.ts > tests/hash-probe.ts
+          python3 - <<'PY'
+          from pathlib import Path
+          for p in Path('tests').rglob('*.test.ts'):
+              s=p.read_text().replace("import { expect, test } from 'vitest';", "import { test } from 'vitest';\nimport { expect } from '../hash-probe';")
+              p.write_text(s)
+          PY
+          npm run test:city
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: held-pr-geometry-proof
+          path: task147-merge-proof.json

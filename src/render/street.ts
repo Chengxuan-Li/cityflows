@@ -18,6 +18,7 @@ import { cityGrades } from './grades';
 import { busLabels } from './marking-geometry';
 import type { CityGeometry } from './types';
 import type { Tree } from './vegetation';
+import { paintedCity } from './road-paint';
 
 export interface StreetLamp {
   road?: number;
@@ -243,6 +244,7 @@ export function parkingBandEdge(
 
 /** Immutable render data only: neither canonical entities nor compiled arrays are written. */
 export function placeStreet(city: CompiledCity, source: CityGeometry, trees: readonly Tree[]) {
+  city = paintedCity(city);
   const features = source.context?.features ?? [];
   const { roadGrades, nodeGrades } = cityGrades(city, source);
   const lamps: StreetLamp[] = features.flatMap((f) =>

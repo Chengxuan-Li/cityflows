@@ -3,7 +3,9 @@ import { continuity } from '../../src/fixtures/continuity';
 import { compile } from '../../src/network';
 import { transitionMarkings } from '../../src/render/marking-geometry';
 import { transitionGeometry } from '../../src/render/layers/transitions';
-import { distance } from '../../src/geo/polyline';
+import { distance, pointInPolygon } from '../../src/geo/polyline';
+import { buildCity } from '../../src/fixtures/build-city';
+import { paintedCity } from '../../src/render/road-paint';
 
 test('T25: drops shrink to zero with a standard merge arrow and hatched verge, additions grow, and boundaries meet', () => {
   const result = compile(continuity());
@@ -26,4 +28,34 @@ test('T25: drops shrink to zero with a standard merge arrow and hatched verge, a
     expect(marks.some((s) => s.role === 'hatch')).toBe(true);
     expect(geometry.dividers.length).toBe(2);
   }
+});
+
+test.each([
+  [3, 5],
+  [5, 3],
+])('T25: adjacent tapered lanes share one painted boundary (%i to %i)', (before, after) => {
+  const { city, node, road } = buildCity('Westbound lane transition', 1);
+  const seam = node(0, 0);
+  const incoming = road(node(100, 20), seam, { lanes: before });
+  const outgoing = road(seam, node(-100, -20), { lanes: after });
+  const result = compile(city);
+  if (!result.ok) throw new Error('lane transition fixture');
+  const net = result.compiled;
+  const physical = JSON.stringify(net);
+  const painted = paintedCity(net);
+  expect(paintedCity(net)).toBe(painted);
+  expect(paintedCity(painted)).toBe(painted);
+  const tapered = net.roads.find((r) => r.id === (after > before ? outgoing.id : incoming.id))!;
+  const geometry = transitionGeometry(net, tapered);
+  const a = geometry.lanes[3]!;
+  const b = geometry.lanes[4]!;
+  expect(a.right).toHaveLength(b.left.length);
+  expect(Math.max(...a.right.map((p, i) => distance(p, b.left[i]!)))).toBeLessThan(0.001);
+  if (after > before)
+    for (const item of [a, b]) {
+      const ring = [...item.left, ...[...item.right].reverse(), item.left[0]!];
+      for (const p of net.lanes[item.lane]!.polyline)
+        expect(pointInPolygon(p, ring, 0.001)).toBe(true);
+    }
+  expect(JSON.stringify(net)).toBe(physical);
 });
