@@ -73,7 +73,11 @@ test('T67 a saved population without households opens with the households a rege
   const scenario = defaultScenario('town');
   scenario.demand.personsPerResident = 0.2;
   const persons = generatePopulation(city, scenario.demand);
-  const saved = persons.map(({ householdId: _, ...person }) => person);
+  const saved = persons.map((person) => {
+    const copy: Partial<Person> = { ...person };
+    delete copy.householdId;
+    return copy as Omit<Person, 'householdId'>;
+  });
   expect(withHouseholds(city, saved, scenario.demand.seed)).toEqual(persons);
   const json = await saveProjectJson({
     city,

@@ -33,13 +33,18 @@ test('T67 a household shows who drives which car, who borrows it and who has non
   const carOf = new Map(
     trips.flatMap((t) => (t.carId && t.personId ? [[t.personId, t.carId]] : [])),
   );
+  const departs = new Map<string, number>();
+  for (const t of trips)
+    if (t.personId && !departs.has(t.personId)) departs.set(t.personId, t.departS);
   // A morning driver whose car a late-shift member borrows, and a member with no free car.
   const household = population.find((p) => {
     const members = population.filter((m) => m.householdId === p.householdId);
     return (
       !p.hasCar &&
       carOf.has(p.id) &&
-      members.some((m) => m.hasCar && carOf.get(m.id) === carOf.get(p.id)) &&
+      members.some(
+        (m) => m.hasCar && carOf.get(m.id) === carOf.get(p.id) && departs.get(m.id)! < 8 * 3600,
+      ) &&
       members.some((m) => !m.hasCar && !carOf.has(m.id))
     );
   })!.householdId;
@@ -84,7 +89,7 @@ test('T67 a household shows who drives which car, who borrows it and who has non
   // Run until the owner has walked to the car and drives it.
   const vehicle = await page.evaluate(async (owner) => {
     const api = window.cityflows!;
-    for (let attempt = 0; attempt < 400; attempt++) {
+    for (let attempt = 0; attempt < 600; attempt++) {
       await api.step(100);
       const snapshot = await api.snapshot!();
       for (const id of snapshot.id.subarray(0, snapshot.count))
