@@ -600,7 +600,8 @@ track index, position and metre station on both polylines. They are derived from
 geometry, so deleting a road drops only its crossing records. No car/walker control reads them.
 
 TASK-136 additionally derives `RailGraph.facilities` from mapped road crossings. Pedestrian
-nodes, unmapped geometric intersections and bridge/tunnel tracks produce no road equipment.
+nodes, unmapped geometric intersections and bridge/ordinary tunnel tracks produce no road equipment.
+Covered passages remain at grade, using the shared physical `trackGrade` classification.
 Ground tracks remain at grade even with `layer=-1` (TASK-132). Facilities associate only with
 roads matching known `roadOsmIds`; geometry cannot override contrary OSM topology. Older
 metadata without source-way IDs can associate geometrically. Adjacent track crossings group
