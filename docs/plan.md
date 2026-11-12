@@ -168,10 +168,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | done with TASK-142 (lead review below) |
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
-| [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | two public joins restored |
+| [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | merged in PR #4 |
 | [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
-| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | renderer-only paint repair verified |
-| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | in progress on PR branch |
+| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | merged in PR #3 |
+| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | clock repair on held PR, traffic and T63 under investigation |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3378,6 +3378,31 @@ the joins after ordinary import allocation and retains original road/lane indice
 cities. The full Munich timetable is byte-identical to the clean control. Lead review also
 found that late portal allocations advanced a temporary copy of the city counter. The
 correction now advances the canonical counter and tests the next allocation after reopening.
+
+### 2026-11-12 geometry merges and held tram-crossing CI
+
+The lead merged the westbound lane paint in `2a9b645` and the two parking access
+repairs in `89fc5d8`. The combined build preserves the original 96 unrestricted
+routes and S-Bahn departure rows. Four Munich drawing digests combine the intentional
+curb/paint and parking changes. The light PR checks passed on both integration branches.
+[Lane-gain checks](https://github.com/Chengxuan-Li/cityflows/actions/runs/43320837918)
+and [combined parking checks](https://github.com/Chengxuan-Li/cityflows/actions/runs/43322458878).
+
+The lead brought this geometry into held PR #1 at `7a8fb1f`. Its canonical cities,
+non-rail compiled graphs and all 96 road routes match the new main. Its crossing spans
+and entire train/tram timetables match the reviewed PR. Typecheck, unit, city fixtures,
+T70 browser and light e2e pass. Seed 1 still has 3319 completions, 52 gridlocks and zero
+stalled heads. T21 and T53 pass. The completion floors remain 3702 for traffic and 3571
+for T63. [PR CI](https://github.com/Chengxuan-Li/cityflows/actions/runs/43324312070).
+
+On the prior PR head, letting a stopped tram wait before warning removed about 1000
+seconds of protection at each Landsberger crossing. A road vehicle remained on the tracks
+through a complete 121-second road cycle with both crossings open. This trial reduced
+completions from 3201 to 3075. Following the actual feasible road lane instead of the
+representative route lane exposed a real missed red at `r:252`; the correction alone
+also held more drivers behind moving cars. That trial completed 2669 trips. Both
+experiments were rejected. The ongoing review concerns enough physical space and
+ordinary junction grants to clear the compact road links at the two served crossings.
 
 ## Owner decisions log
 
