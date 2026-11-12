@@ -2222,8 +2222,8 @@ TASK-127 draws articulated red/white S-Bahn and blue/grey main-line cars in grad
 layers and two instanced 3D batches. Train poses use snapshot/simulation time only; paused
 trains request no frames. Bridges occlude lower trains; tunnels hide train bodies (3D reveals
 them with See below ground). Rail hides tracks and trains together. Picking exposes train
-kind, route ends, station stops and next stop/exit; no train state enters car/walker counts,
-traffic controls, routing, demand or simulation hashes.
+kind, route ends, station stops and next stop/exit. Trains and trams have separate service
+counts. Their passage affects road traffic through the crossing controller in section 8.
 
 TASK-138 adds narrower teal articulated tram bodies to the same 2D layers and 3D batches,
 with identical picking, occlusion and Rail-layer visibility. Both scenes use authoritative

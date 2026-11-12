@@ -28,11 +28,11 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 const baseline = {
   'munich-donnersberger': [
     '8c2436d148f2dfa7d42f51d3acb4d1944df250da6f33f8795f357af5bcb9cbbe',
-    'b9cbd285e421863174e667e462878becc0f0aba93b41b6f53d25c89455c71b6f',
+    '6817883fbff05c6bc5bc74f1c13787ec739ef8e1945a1fcbd7ba607792ad970c',
   ],
   'sindelfingen-a81': [
     'eda6809b6682636376c1b9d6ee2333a2b88fc8776f6cd7340efabaf52888df0f',
-    '6681a051339b6734947c3a32efeb7faf6075fcfc393eb35fc5967dc14984707d',
+    'c6847e8cdd5557c228fc659e4bbb7fd67d8725625f39753e371c7f95e8117023',
   ],
 };
 
