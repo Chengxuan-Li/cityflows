@@ -11,9 +11,9 @@ export const expect: typeof baseExpect = new Proxy(baseExpect, {
             if (JSON.stringify(args[0]) !== JSON.stringify(expected)) console.error('TASK144_PIN', JSON.stringify({ actual: args[0], expected, location: new Error().stack?.split('\n').slice(2, 4) }));
             return;
           }
-          return matcher.call(matchers, expected);
+          return Reflect.apply(matcher, matchers, [expected]);
         };
-        return typeof matcher === 'function' ? matcher.bind(matchers) : matcher;
+        return typeof matcher === 'function' ? (...values: unknown[]) => Reflect.apply(matcher, matchers, values) : matcher;
       },
     });
   },
