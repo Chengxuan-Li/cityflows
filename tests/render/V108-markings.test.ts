@@ -67,7 +67,7 @@ const baseline = {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
     // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
     // import without assignTramForms) every pin equals c3a6ec2's.
-    compile: '821d4a4aa3fa3e034e4271f3e8a08a77b6c4dc6567febfe3cd0a084096822222',
+    compile: 'c412c6497e2b1dcae359ffaaa355b05c971bb45961384aacc5600762eea200e2',
     arrows: 'fc74b34d263cdc6c945bc4bdc85edf24e21476112116318b50a927271ede139e',
   },
 } as const;

@@ -175,7 +175,7 @@ const pins = {
     // TASK-135 and TASK-140 together.
     // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
     // stripped every pin equals 2df05a1's.
-    compile: '2b7452cd9e2efff499974a51fdce47d43b8dc9097be86c361a6f28cb05ef73bc',
+    compile: '8d8d889bafb802c89751ae65fbf26ea7cfef1bd4857618323c6b3d36027f3285',
     lamps: 'a6367b276c0f7db6c9a4a9fe6e103d4f020b6bbf93bef7df2d2ec3fd5c2cfc00',
     curbs: 'fc71fa74c90f8e5cc094edc6990c5325cda2afd4d585fe6d38f783ac0a8e0c73',
     de: '1ed078929a1d637608b74c6a816a19c5c97d7b5ce290b3305bcdbca3cdf65e0d',
