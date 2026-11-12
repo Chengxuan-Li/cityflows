@@ -1572,6 +1572,10 @@ Step sequence, in this order every step:
      occupant's projected rear would lie beyond the lane end.
      A required inner lane change targets the reserved movement's source lane, even when the
      road route also accepts the current lane through a different downstream lane-change plan.
+     Lead-approved Phase 3 experiment: at the first ordinary mandatory-change timeout, if the
+     original turn is still serviceable and the selected fallback returns to that turn through
+     a different usable entry lane, allow one further normal hold window. A second timeout
+     takes the ordinary fallback. Other fallbacks and active group clearances are unchanged.
      Exit, gridlock recovery and live edits release the derived group reservations.
      A short external exit that cannot store the vehicle carries its clearance through any
      conflict-free uncontrolled continuations to downstream storage. A mainline merge keeps

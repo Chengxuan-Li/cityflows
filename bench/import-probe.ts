@@ -250,6 +250,7 @@ export function probeMorning(
     engine = createEngine(),
     originObserver,
     headDetourObserver,
+    holdExtensionObserver,
   }: {
     untilS?: number;
     observe?: (engine: TrafficEngine) => void;
@@ -262,6 +263,9 @@ export function probeMorning(
     headDetourObserver?: Parameters<
       ReturnType<typeof createEngine>['load']
     >[0]['headDetourObserver'];
+    holdExtensionObserver?: Parameters<
+      ReturnType<typeof createEngine>['load']
+    >[0]['holdExtensionObserver'];
   } = {},
 ) {
   const scenario = defaultScenario('grid5x5', demandSeed);
@@ -294,6 +298,7 @@ export function probeMorning(
     scenario,
     intersectionObserver,
     originObserver,
+    holdExtensionObserver,
     headDetourObserver(id, lane, movement) {
       headDetours++;
       detoured.add(id);

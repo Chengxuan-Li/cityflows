@@ -15,6 +15,7 @@ export function createLaneChanges(
   vehicles: Vehicles,
   params: SimParams,
   hasGrant: (id: number) => boolean = () => false,
+  extendHold: (id: number) => boolean = () => false,
 ) {
   const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM } = params;
   const proposals: Proposal[] = [];
@@ -213,8 +214,9 @@ export function createLaneChanges(
     // Held: creeping for the change, or standing at the stop position (where `stopped` counts).
     heldS[id] = mandatory && (crept || vehicles.stopped[id]! > 0) ? heldS[id]! + params.dtS : 0;
     if (!finalRoad && heldS[id]! >= params.missedTurnAfterS) {
-      gaveUp[id] = 1;
       heldS[id] = 0;
+      if (extendHold(id)) return false;
+      gaveUp[id] = 1;
       return true;
     }
     if (positionM < profile(id).lengthM || remaining < 0) return false;
