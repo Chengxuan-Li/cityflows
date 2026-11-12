@@ -116,7 +116,41 @@ export function roadWidth(road: Road): number {
 /** Painted lane edges collapse onto the nearest surviving lane; driving polylines stay put. Both
  * edges are `normalOffset`s of the lane polyline, so vertex `i` of an edge, of the lane and of
  * every other lane of the road lie on one normal of the road's reference line (TASK-082). */
-export function laneEdges(lane: CLane, roadLanes: CLane[]): { left: Vec2[]; right: Vec2[] } {
+export function laneEdges(
+  lane: CLane,
+  roadLanes: CLane[],
+  paintAdjacentAdditions = false,
+): { left: Vec2[]; right: Vec2[] } {
+  if (!paintAdjacentAdditions) return paintedEdges(lane, roadLanes, false);
+  const adjacentAddition = (l: CLane) =>
+    Boolean(
+      l.taperStartM && (roadLanes[l.lane - 1]?.taperStartM || roadLanes[l.lane + 1]?.taperStartM),
+    );
+  const edges = paintedEdges(lane, roadLanes, adjacentAddition(lane));
+  if (!adjacentAddition(lane)) return edges;
+  const tapering = (l: CLane, i: number) => l.cumulative[i]! < l.taperStartM;
+  for (const side of [-1, 1]) {
+    const neighbor = roadLanes[lane.lane + side];
+    if (!neighbor) continue;
+    const key = side < 0 ? 'left' : 'right';
+    const other = paintedEdges(neighbor, roadLanes, adjacentAddition(neighbor))[
+      side < 0 ? 'right' : 'left'
+    ];
+    // Adjacent additions share a boundary, rather than painting overlapping lane strips.
+    edges[key] = edges[key].map((p, i) => {
+      if (!tapering(lane, i)) return p;
+      const q = other[i]!;
+      return tapering(neighbor, i) ? { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 } : q;
+    });
+  }
+  return edges;
+}
+
+function paintedEdges(
+  lane: CLane,
+  roadLanes: CLane[],
+  growAddedWidth: boolean,
+): { left: Vec2[]; right: Vec2[] } {
   const normals = laneNormals(lane, roadLanes);
   const tapers = [true, false].flatMap((start) => {
     const taper = start ? lane.taperStartM : lane.taperEndM;
@@ -140,7 +174,12 @@ export function laneEdges(lane: CLane, roadLanes: CLane[]): { left: Vec2[]; righ
         const away = start ? lane.cumulative[i]! : lane.lengthM - lane.cumulative[i]!;
         if (away > taper) continue;
         const f = smoothstep(away / taper);
-        p = { x: p.x * f + line[i]!.x * (1 - f), y: p.y * f + line[i]!.y * (1 - f) };
+        // Added lane centres already ease from the surviving edge in layoutRoad.
+        // Only their width still needs to grow; easing the centre twice folds the paint.
+        p =
+          start && growAddedWidth
+            ? { x: point.x + normals[i]!.x * half * f, y: point.y + normals[i]!.y * half * f }
+            : { x: p.x * f + line[i]!.x * (1 - f), y: p.y * f + line[i]!.y * (1 - f) };
       }
       return p;
     });

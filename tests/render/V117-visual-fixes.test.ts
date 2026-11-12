@@ -175,18 +175,19 @@ const pins = {
     // TASK-135 and TASK-140 together.
     // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
     // stripped every pin equals 2df05a1's.
-    compile: '866465da2ee8f13343c47731761ca5589143ea59970efd04302342d39636366a',
-    lamps: 'a6367b276c0f7db6c9a4a9fe6e103d4f020b6bbf93bef7df2d2ec3fd5c2cfc00',
-    curbs: 'fc71fa74c90f8e5cc094edc6990c5325cda2afd4d585fe6d38f783ac0a8e0c73',
-    de: '1ed078929a1d637608b74c6a816a19c5c97d7b5ce290b3305bcdbca3cdf65e0d',
-    us: '57215568bce015e0ef08eb2cf31dcb676ad2352b354ac5cc13aac0c5c3254f5f',
+    // TASK-144 physical compile/lamps stay fixed; TASK-146 changes drawing-only curbs/paint.
+    compile: '92abb913ef450eb7b966ddc227261659b5128b462b1f7ee3e2dabeb595011960',
+    lamps: 'ef2195f42ed64191cad256c473ffd122461713f80840b3f8f91d90743b25d70f',
+    curbs: '47a9af6f96968294ced805ad55c17a97277902d46376eb0b4378a76e0112065f',
+    de: '4e164c66620c2b8d248958ae2b0105194ff4ef6685892608c099b54ac5ce6a79',
+    us: 'fec7df4ef9897468231a91a5a536b304230275613daebd83224174c2e2ad2f8b',
   },
   sindelfingen: {
     compile: '50aaa82aa1b325b5c7158a311d6a5716fa34e19380f84d57c0d7d4310a8da950',
     lamps: 'd132b1397f6687261fee0b42ab85450dc755962e9e0f71d04d61bc6c5f6396dc',
-    curbs: '01ac870cb31f5ab4b49445e52c22fff08002ef267bc1164fa822d79ab8e3afd2',
-    de: '877ba82e15fd54f8991c41eb4b7e6f3479e365c3fd825b7f31ea38dcf5117aa8',
-    us: '5123166085444642e41754bf48771f0abbb3bd18ebdc0b43c48d84a7d9745fb7',
+    curbs: '929e220f6d0e886212b6638218b849e13cf8529dce3ac477e8b584e8ba4e9320',
+    de: '4dc2db3cc1fac855c5bd6f2e3865ff6061a4679c858f314fa5365634d5f758cb',
+    us: 'bde02c95dccf9451f7a61537dea57bcd977ad02d7da078d587ddb98805fdfe54',
   },
 } as const;
 const hash = (value: unknown) =>

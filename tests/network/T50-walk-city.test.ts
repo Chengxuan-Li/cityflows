@@ -30,7 +30,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       createHash('sha256').update(JSON.stringify({ lanes, movements, connectors })).digest('hex'),
     ).toBe(
       name.startsWith('munich')
-        ? '70f8975adb9f3bdfebf1226287d381335964f3c41b05f4e885da517c8d0acaa7'
+        ? 'b96054666b80acc5dc3fb4437a5e2b7265dc9f00ead08be35de7e3c760cd14a4'
         : '80e2122adc6d1203bc4e56035f63f9870f823b7380e64c1a296d24ec510e827e',
     );
     const g = result.compiled.walk;

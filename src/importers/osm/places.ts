@@ -459,6 +459,7 @@ export function connectCarExits(
   city: City,
   compiled: CompiledCity,
   garageFootprints?: Map<string, Vec2[][]>,
+  refreshLots?: ReadonlySet<string>,
 ): boolean {
   const exits = parkingEgress(compiled, 30);
   // Reuse the finished car graph and the parking compiler, without compiling the walk graph
@@ -472,7 +473,15 @@ export function connectCarExits(
     strips: [],
     index: { ...compiled.index, connector: new Map(), parking: new Map() },
   };
-  compileVisibleParking(city, layout, (shape) =>
+  const parkingCity = refreshLots
+    ? {
+        ...city,
+        parking: Object.fromEntries(
+          Object.entries(city.parking ?? {}).filter(([id]) => refreshLots.has(id)),
+        ),
+      }
+    : city;
+  compileVisibleParking(parkingCity, layout, (shape) =>
     shape.kind === 'point' ? shape.pos : (polygonCenter(shape.ring) ?? null),
   );
   const ordinary: ReturnType<typeof placeConnector>[] = [];
@@ -520,12 +529,14 @@ export function connectCarExits(
     return true;
   };
   for (const place of Object.values(city.places)) {
+    if (refreshLots) break;
     if (place.kind === 'gateway') continue;
     const anchor =
       place.shape.kind === 'point' ? place.shape.pos : polygonCenter(place.shape.ring)!;
     for (const entry of [...place.connectors]) repair(entry, place.connectors, [], false, anchor);
   }
   for (const source of Object.values(city.parking ?? {})) {
+    if (refreshLots && !refreshLots.has(source.id)) continue;
     if (source.kind === 'roadside' || source.provenance.inferred?.includes('implicitGarage'))
       continue;
     const facilityIndex = layout.index.parking.get(source.id);
@@ -553,8 +564,11 @@ export function connectCarExits(
     const anchor = source.shape?.kind === 'point' ? source.shape.pos : undefined;
     for (const entry of [...entries])
       moved = repair(entry, entries, footprints, true, anchor) || moved;
-    if (moved) {
-      if (!source.connectors.length)
+    if (moved || (refreshLots && source.kind === 'lot')) {
+      if (
+        !source.connectors.length &&
+        !source.provenance.inferred?.includes('materializedAisleEntries')
+      )
         (source.provenance.inferred ??= []).push('materializedAisleEntries');
       source.connectors = entries.map((entry) =>
         /^c:\d+$/.test(entry.id) ? entry : { ...entry, id: allocateId(city, 'c') },
