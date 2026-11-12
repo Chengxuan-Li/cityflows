@@ -1,6 +1,11 @@
 name: TASK-146 geometry probe
 on:
   workflow_dispatch:
+    inputs:
+      paint_patch:
+        description: Base64 paint-only patch for an ephemeral verification
+        required: false
+        type: string
 permissions:
   contents: read
 jobs:
@@ -22,9 +27,28 @@ jobs:
         run: |
           npm run dev -- --host 127.0.0.1 --port 5346 --mode test > test-results/task146/vite.log 2>&1 &
           node --experimental-strip-types --import ./bench/register.ts ./bench/task146-shots.ts before
+      - name: Apply ephemeral paint correction
+        if: inputs.paint_patch != ''
+        env:
+          PAINT_PATCH_B64: ${{ inputs.paint_patch }}
+        run: |
+          python - <<'PY'
+          import os,base64,subprocess
+          subprocess.run(['git','apply'],input=base64.b64decode(os.environ['PAINT_PATCH_B64']),check=True)
+          PY
+      - name: Verify corrected paint
+        if: inputs.paint_patch != ''
+        run: |
+          npx vitest run --project unit tests/render/T25-transition-markings.test.ts
+          npm run check > test-results/task146/check.log 2>&1
+          npm run test:city > test-results/task146/city.log 2>&1
+      - name: Corrected real CityFlows views
+        if: inputs.paint_patch != ''
+        run: |
+          node --experimental-strip-types --import ./bench/register.ts ./bench/task146-shots.ts after
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: task146-geometry-baseline
+          name: task146-geometry-${{ github.run_id }}
           path: test-results/task146
           retention-days: 7
