@@ -802,6 +802,7 @@ test('T75 a retained route without scheduled departures leaves road trajectories
 function divergingCrossing(blocked?:'leader'|'follower') {
   const {city,node,road}=buildCity('Crossing diverging exit',147);
   const junction=node(10,0),before=road(node(-400,0),junction),after=road(junction,node(400,0)),branch=road(junction,node(10,400));
+  after.crossings=branch.crossings={start:false,end:false};
   before.provenance={source:'generated',osmIds:[10]};city.rail=operatingCrossing().rail;
   const compiled=setup(city),facility=compiled.rail!.facilities![0]!,lane=compiled.index.lane.get(`${before.id}#0`)!,out=compiled.index.lane.get(`${after.id}#0`)!,side=compiled.index.lane.get(`${branch.id}#0`)!;
   const direct=compiled.movements.find(m=>m.fromLane===lane&&m.toLane===out)!,turn=compiled.movements.find(m=>m.fromLane===lane&&m.toLane===side)!;

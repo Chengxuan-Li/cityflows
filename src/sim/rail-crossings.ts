@@ -123,7 +123,7 @@ export function createRailCrossings(
     return result.sort((a, b) => a.enterS - b.enterS || a.facility - b.facility);
   });
   const served = Uint8Array.from(facilities, (_, f) =>
-    Number(events.some((e) => e.some((v) => v.facility === f))),
+    Number(table.departures.some((d) => events[d.route]!.some((v) => v.facility === f))),
   );
   const states = new Uint8Array(facilities.length);
   const previousStates = new Uint8Array(facilities.length);
@@ -269,6 +269,8 @@ export function createRailCrossings(
     Number(lane.left === -1 && lane.right === -1),
   );
   for (const space of city.parkingSpaces ?? []) platoonLane[space.lane] = 0;
+  const receivingLane = Uint8Array.from(city.lanes, (lane) => Number(!lane.connectors.length));
+  for (const space of city.parkingSpaces ?? []) receivingLane[space.lane] = 0;
   const walkStops = city.lanes.map(() => [] as number[]);
   for (const link of city.walk.links)
     for (const span of link.crossing?.spans ?? [])
@@ -343,6 +345,46 @@ export function createRailCrossings(
       }
     }
     return best;
+  }
+
+  function receivingRoadSpace(road: number, id: number) {
+    const gap = params.idm.minGapM, pending = new Set<number>();
+    let space = Infinity;
+    for (const field of city.roads[road]!.lanes) {
+      if (!receivingLane[field]) return -Infinity;
+      const lane = city.lanes[field]!;
+      let frontier = lane.stopM - maxLength - gap;
+      for (const at of walkStops[field]!) frontier = Math.min(frontier, at);
+      for (const marking of stopsBySegment[bucket(field)]!)
+        if (served[marking.facility]) frontier = Math.min(frontier, marking.at);
+      for (let other = vehicles.first(field); other !== -1; other = vehicles.next[other]!)
+        if (other !== id) frontier = Math.min(frontier, vehicles.position[other]! - length(other) - gap);
+      space = Math.min(space, frontier);
+      for (const movement of lane.in) {
+        for (let other = vehicles.first(-movement-1); other !== -1; other=vehicles.next[other]!)
+          if (other !== id) pending.add(other);
+        const from = city.movements[movement]!.fromLane;
+        for (let other = vehicles.first(from); other !== -1; other = vehicles.next[other]!)
+          if (other !== id && grants?.[other] === movement) pending.add(other);
+      }
+    }
+    for (const other of pending) space -= length(other) + gap;
+    return space;
+  }
+
+  /** A granted turn into a different road owns its own discharge, not a slot
+   * on the follower's exit. Keep both full receiving prefixes clear. */
+  function divergingLeader(leader: number, step: number, facility: number, id: number) {
+    const field = segments[step]!, next = segments[step+1], grant = grants?.[leader] ?? -1;
+    if (field < 0 || next === undefined || next >= 0 || grant < 0 || vehicles.speed[leader]! <= .1)
+      return false;
+    const own = city.movements[grant]!, following = city.movements[-next-1]!;
+    if (own.fromLane !== field || grant === following.idx || red(grant)) return false;
+    const ownRoad = city.lanes[own.toLane]!.road, followingRoad = city.lanes[following.toLane]!.road;
+    if (ownRoad === followingRoad || city.roads[ownRoad]!.lanes.some(lane =>
+      spansBySegment[bucket(lane)]!.some(span => span.facility === facility))) return false;
+    return receivingRoadSpace(ownRoad, leader) >= length(leader) + params.idm.minGapM &&
+      receivingRoadSpace(followingRoad, id) >= length(id) + params.idm.minGapM;
   }
 
   function roadOccupancy() {
@@ -657,7 +699,8 @@ export function createRailCrossings(
               tail !== id &&
               offset + vehicles.position[tail]! > position &&
               offset + vehicles.position[tail]! - length(tail) < clear &&
-              (segment !== field || !platoonFits(id, f, end))
+              (segment !== field || !platoonFits(id, f, end)) &&
+              !divergingLeader(tail, s, f, id)
             )
               blocked = true;
             if (segment >= 0) {
