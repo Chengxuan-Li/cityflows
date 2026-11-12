@@ -156,7 +156,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-128](tasks/TASK-128.md) | 10 | Stations as trip ends: S-Bahn riders walk out of Donnersbergerbrücke after each stop, walk to work or a visit nearby, and walk back to board; walk-only, timed by TASK-127's timetable | new rider module in `src/demand/`, `schedule.ts`, person inspector, rider census | 126, 127 | T65, Munich 0.15 gate with riders, Sindelfingen and synthetic trips unchanged, shots | reviewed 2026-11-12, held for the owner (`c9a0632`) |
 | [TASK-129](tasks/TASK-129.md) | 10 | Car ownership: persons grouped into households that own their members' cars; a person drives only a free household car (owners first, borrowers for a whole free day), a car's trips chain by car, every car starts and parks near home | `src/demand` (households, drivers), `src/schema` (`householdId`, `carId`, `homeParkingRadiusM`), `src/sim/parking.ts`, `persons.ts`, person inspector, census | 112, 122, 125 | T67, Munich 0.15 seeds 1 to 3, no car parked beyond the home radius while room is near, baseline reset | reviewed 2026-11-11, held for the owner (`496cfe6`) |
 | [TASK-130](tasks/TASK-130.md) | 7 | Break the Landsberger loop (B56 reopened): trace the cycle TASK-121's head detours do not clear, then the smallest general rule (box entry, zipper or wider detours) so the corridor drains | `src/sim/intersection.ts`, `engine.ts`, `reroute.ts`, `lane-change.ts`, `merge.ts`, `params.ts`, probe seeds | 121, 122, 077 | T66, 0 stalled heads over seeds 1 to 3, loop waits under 15 min, baseline reset | checkpoint reviewed 2026-11-11, not merged (B56 open) |
-| [TASK-131](tasks/TASK-131.md) | 5 | Junction groups (B54 amended, B55): every OSM node keeps its position; nodes joined by links up to `junctionGroupMaxM` (30 m) form one junction group with inner links kept, one coordinated signal program and one drawn surface; the collision model off; cars never stop on inner links | `src/importers/osm/**`, `src/schema` (junction group), `src/network/**`, road and junction renderers, signal editor; Phase 3 `src/sim/intersection.ts`, `signals.ts`, `engine.ts` with B56 | 089, 092, 094, 099, 111; B56 folded into Phase 3 | T68, reference-case shots per checkpoint, geometry gates, traffic over seeds 1 to 3, baseline reset | Phases 0 to 2 merged 2026-11-11 (lead-driven subagents); Phase 3 active with B56 on a new branch; TASK-130 held |
+| [TASK-131](tasks/TASK-131.md) | 5 | Junction groups (B54 amended, B55): every OSM node keeps its position; nodes joined by links up to `junctionGroupMaxM` (30 m) form one junction group with inner links kept, one coordinated signal program and one drawn surface; the collision model off; cars never stop on inner links | `src/importers/osm/**`, `src/schema` (junction group), `src/network/**`, road and junction renderers, signal editor; Phase 3 `src/sim/intersection.ts`, `signals.ts`, `engine.ts` with B56 | 089, 092, 094, 099, 111; B56 folded into Phase 3 | T68, reference-case shots per checkpoint, geometry gates, traffic over seeds 1 to 3, baseline reset | Phases 0 to 2 merged 2026-11-11 (lead-driven subagents); Phase 3 with B56 unmerged, cumulative wait gate red (see exit reservation review); TASK-130 held |
 | [TASK-133](tasks/TASK-133.md) | 10 | Station furniture: name boards, shelters, benches, departure displays from the timetable, generic entrance signs; visual only | new `src/render/layers/stations.ts`, `src/render3d/stations.ts`, placement module, read-only helper in `src/network/trains.ts` | 126, 127 | T70, shots, no hash change | done 2026-11-11 |
 | [TASK-135](tasks/TASK-135.md) | 10 | Trams as their own kind of track: embedded, grass, paved or ballast form from OSM tags or inference, a distinct tram look in 2D and 3D | `src/schema/rail.ts`, `src/importers/osm/rail.ts`, rail drawing 2D and 3D, `style.ts` | 126, 127, 131 | T69, shots against the imagery, no hash change | done 2026-11-11 |
 | [TASK-140](tasks/TASK-140.md) | 9 | Crossing walk links, pedestrian heads and walker conflict zones at the zebra stripes (B59) | `src/network/crossings.ts`, `walk.ts`, `walk-joins.ts`, `conflicts.ts`, head drawing | 091, 094, 110, 111, 131 | T71, every link within 0.5 m of its stripes, T53, baseline reset | done 2026-11-11 |
@@ -3123,6 +3123,41 @@ inner link at 10:00. Car 2050 had 6248 s of cumulative wait, 6171 s of it before
 entry to r:961. Across its visits it stood on r:961 for 966 s. Car 2610 first reached r:273
 at 10:00 carrying 5415 s of wait. The replay also found a 179 s stop on inner road r:966
 before car 4664 respawned. Phase 3 stays on its task branch while the lead traces its exit.
+
+TASK-131 Phase 3 / B56 (exit reservation review, 2026-11-12, `e2554a4`, unmerged). Four
+cars claimed 6.5 m each on a 23.15 m exit. A moving car already on the exit allowed its
+projected position to exceed the length of the lane. The branch caps outstanding claims at the
+physical length for both occupied and empty exits. Car 2050 then completed without respawning.
+In a separate case a reserved movement needed a specific lane on inner road r:364. The car's
+ordinary route allowed either lane, so it never requested the change. The branch now passes
+the reserved movement's lane to the mandatory lane-change logic (`2b4d275`). The lead
+independently measured seeds 2 and 3 on both versions. Their final simulation hashes matched.
+
+| Munich at 10:00, demand 0.15 | Seed 1 | Seed 2 | Seed 3 |
+| --- | ---: | ---: | ---: |
+| Main completions | 4113 | 3994 | 3245 |
+| Exit-capacity fix completions (`e2554a4`) | 3684 | 4153 | 4178 |
+| Both fixes, completions (`2b4d275`) | 3746 | 4153 | 4178 |
+| Both fixes, gridlocked | 8 | 2 | 1 |
+| Both fixes, peak cumulative wait on the six roads (seconds) | 6209 | 6794 | 7734 |
+
+All three runs had zero stalled heads and zero parking failures. Seed 1 missed the completion
+floor by 367 trips. All three failed the 900 s limit. The current traffic gate applies.
+The lead ran T66 and T68 together on `2b4d275` (28 passed). The branch has no merge clearance.
+
+The trace of car 1029 reached a driving-policy decision on r:671. All 420 evaluations of the
+requested lane change found an unsafe gap. After the existing 30 s of holding, the car took a
+legal fallback from lane 0 whose route returned through lane 1. The return passed the lane
+feasibility check. It accumulated over 900 s of wait before its first head detour. The lead
+authorized a simulation experiment: at the first ordinary timeout, allow one extra normal
+lane-change window if the fallback returns to the same road through a different usable lane.
+The experiment kept every safe-gap check and gave up normally at the second timeout.
+It fired 315 times on seed 1. Completions fell on all three seeds, to 3446/4126/4163.
+The peak waits were 5754/7163/6225 s. The experiment was reverted in `0981a0a`, the
+unmerged task branch tip. The existing 30 s give-up policy, routing contract and traffic
+gate apply. A further routing experiment
+would need to compare the current legal return with a lane-feasible detour that bypasses the
+blocked approach. The Phase 3 contract reserves routing changes for a separate decision.
 
 ## Owner decisions log
 
