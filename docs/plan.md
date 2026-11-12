@@ -161,7 +161,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-135](tasks/TASK-135.md) | 10 | Trams as their own kind of track: embedded, grass, paved or ballast form from OSM tags or inference, a distinct tram look in 2D and 3D | `src/schema/rail.ts`, `src/importers/osm/rail.ts`, rail drawing 2D and 3D, `style.ts` | 126, 127, 131 | T69, shots against the imagery, no hash change | done 2026-11-11 |
 | [TASK-140](tasks/TASK-140.md) | 9 | Crossing walk links, pedestrian heads and walker conflict zones at the zebra stripes (B59) | `src/network/crossings.ts`, `walk.ts`, `walk-joins.ts`, `conflicts.ts`, head drawing | 091, 094, 110, 111, 131 | T71, every link within 0.5 m of its stripes, T53, baseline reset | done 2026-11-11 |
 | [TASK-132](tasks/TASK-132.md) | 10 | Rail heights: tunnels below ground with portals, bridges and viaducts on piers, ramps within 4% (trams 6%); find and draw the Munich tunnel missing today | `src/network/rail.ts`, rail drawing 2D and 3D, `src/render3d/heights.ts` (rail), small importer functions | 126, 127, 135 | T72, the tunnel drawn, no sim hash change | done 2026-11-11 |
-| [TASK-134](tasks/TASK-134.md) | 10 | Overhead lines: wired by `electrified` (no tag draws it), close parallel tracks share masts and portals every 40 to 60 m clear of switches, crossings, roads and platforms, a contact and messenger wire over each track; 2D and 3D | new catenary modules, scene hooks, a small `electrified` read in the rail importer | 126, 132, 135 | T74, counts and shots, no hash change | open |
+| [TASK-134](tasks/TASK-134.md) | 10 | Overhead lines: wired by `electrified` (no tag draws it), close parallel tracks share masts and portals every 40 to 60 m clear of switches, crossings, roads and platforms, a contact and messenger wire over each track; 2D and 3D | new catenary modules, scene hooks, a small `electrified` read in the rail importer | 126, 132, 135 | T74, counts and shots, no hash change | done 2026-11-11 |
 | [TASK-137](tasks/TASK-137.md) | 10 | Tram stops: imported stops and platforms grouped per stop, generated islands for node-only stops, shelters, names, markings and a name-and-lines display; visual only | new tram-stop modules, `src/schema/rail.ts` (optional stops), scene hooks, rail inspector | 126, 133, 135 | T73, every Munich tram stop placed or listed, no sim hash change | done 2026-11-11 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -1109,7 +1109,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-129 (contract written; Codex) | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
 | TASK-132 (done 2026-11-11) | Rail heights: tunnels and elevated sections at their true height in 2D and 3D, with portals and supports; at least one Munich tunnel is not shown today. | TASK-126 imports `layer`, `bridge` and `tunnel` on tracks; heights are not applied everywhere. | TASK-126 |
 | TASK-133 (done 2026-11-11) | Station furniture: station signage, name boards, departure displays, shelters and benches at platforms. | Stations drawn as platforms and small discs. | TASK-126, TASK-127 (displays read the timetable) |
-| TASK-134 (contract written) | Overhead lines: catenary masts shared by parallel tracks close together, with a portal or truss across them and a contact wire over each track. `electrified=contact_line` (or `yes`) draws it, `electrified=no` (or `rail`, third rail) does not, no tag draws it anyway (owner); mapped `power=catenary_mast` nodes place masts where present. | None. | TASK-126, TASK-132 (heights) |
+| TASK-134 (done 2026-11-11) | Overhead lines: catenary masts shared by parallel tracks close together, with a portal or truss across them and a contact wire over each track. `electrified=contact_line` (or `yes`) draws it, `electrified=no` (or `rail`, third rail) does not, no tag draws it anyway (owner); mapped `power=catenary_mast` nodes place masts where present. | None. | TASK-126, TASK-132 (heights) |
 | TASK-135 (done 2026-11-11) | Trams as their own kind of track: a distinct track type with its own visual quality (rails, bed, sleepers or embedded track), in 2D and 3D, clearly unlike railway tracks. | Tram tracks drawn almost like railway tracks. | TASK-126 |
 | TASK-136 | Level crossings: railway crossings (`railway=level_crossing`, `crossing:barrier`, `crossing:light`, `crossing:bell`) always get gates, St Andrew's cross signs, lights and road markings; tram crossings (`railway=tram_level_crossing`) get tram signals, and trams may have priority. Road traffic stops for trains and trams in the simulation. | Tracks cross roads with no facility and no effect. | TASK-127, TASK-131, TASK-135; TASK-138 for trams |
 | TASK-137 (done 2026-11-11) | Tram stops: stops in the middle of the street (`railway=tram_stop`, `public_transport=platform`) with platforms, shelters, markings and displays. | None. | TASK-135 |
@@ -3007,6 +3007,33 @@ completes 3 704 / 4 185 / 3 977 (mean +4.5%, seed 1 -10%) with the loop's waits 
 salvage parts (the box forecast bound, the head-cost reuse) as their own measured changes, take the
 routing proposal, or combine with TASK-131 Phase 3's rule that a car enters a junction group only
 when it can get through.
+
+TASK-134 (Claude Code subagent, Opus 5.5 high, 2026-11-11; merged): overhead lines. Tracks are
+wired by `electrified` (`contact_line` or `yes`, or no tag; not `no`, `rail` or `4th_rail`), kept as
+an optional `contactLine`; mapped `power=catenary_mast` nodes become `RailNetwork.masts` (the
+Overpass query asks for them, `queryVersion` 9; neither extract has any). Wired sections within 30
+degrees and about 25 m bundle; supports every 60 m (50 m under 1 500 m radius, 40 m under 500 m),
+aligned across a bundle, moved up to 10 m along the track off switches, level crossings, roads and
+platforms: portals across three or more tracks, cantilevers for one or two, side or centre poles
+for trams; contact and messenger wires over each track, in tunnels only with "See below ground".
+Munich: 672 of 676 sections wired (623 tagged, 49 untagged), 32 bundles, 104 portals (the widest
+over 44 tracks west of Donnersbergerbrücke), 37 cantilevers, 58 tram supports; Sindelfingen is all
+`electrified=no`. No hash moved besides the city pins; load +2.5%, 3D frame over the track field
++0.7 to 4.2%. Lead merge with TASK-137: both schema additions, scene hooks and the rail e2e group
+kept; T44 and T49 Munich city pins re-pinned for both. Lead runs: `check` (route-audit timed out
+under load, passed alone), `test:city` (the city-cache test timed out, passed alone), the light e2e
+(37), T70, T73, T74.
+
+TASK-129 (Claude Code subagent, Opus 5.5 high, 2026-11-11; held for the owner, not merged):
+households (2023 microcensus sizes), cars owned per household, drivers per day from the planned
+agenda, cars chained by `carId`, per-car starting stock, home parking within 400 m (none beyond on
+the branch to 20:00; main had one at 417 m). The default scenario's `carShare` is 1, so in Munich
+every resident drives their own car and the trips equal main's; only the starting spaces move.
+Munich 0.15 to 10:00 over seeds 1 to 3: completed 4 113 to 3 344 (-18.7%), 3 994 to 4 001, 3 245 to
+3 668 (+13.0%), total -3.0%; reshuffling only the space draw spans main 3 595 to 4 155 and the
+branch 3 344 to 3 717 on seed 1, driven by how badly `r:666` jams. The agent lowered T63's
+completed floor from 3 571 to 3 300; the lead does not accept that without the owner. Also found:
+`T54-parking-motion`'s Munich case fails on main too (not in the light tier).
 
 ## Owner decisions log
 
