@@ -7,8 +7,8 @@ import { placeCamera } from './geometry-shots.ts';
 
 const phase = process.argv[2] ?? 'before';
 const out = 'test-results/task146';
-const result = importOsmCached(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {bbox:[11.525,48.135,11.545,48.148],drivingSide:'right'});
-if (!result.ok) throw new Error('Munich import');
+const result = importOsmCached(readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'), {bbox:[11.525,48.135,11.545,48.148],drivingSide:'right',importerVersion:'1'});
+if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
 const city = result.city;
 city.name = 'Munich westbound lane gain';
 const scenario = defaultScenario('grid5x5');
