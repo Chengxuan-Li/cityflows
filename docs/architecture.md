@@ -411,6 +411,13 @@ closed platform rings. No rail data is a road lane or a car connector. Station c
 connectors and parking retain their imported values. Stations without mapped buildings gain
 a platform-covering bounding polygon; mapped building shapes remain intact.
 
+TASK-136 adds optional `RailNode.crossing`: `kind: 'rail' | 'tram' | 'pedestrian'`, the
+original optional `crossing:barrier`, `crossing:light`, `crossing:bell` strings as `barrier`,
+`lights`, `bell`, and `roadOsmIds`, the imported drivable ways sharing the mapped node before
+road geometry processing. `railway=level_crossing`, `tram_level_crossing` and pedestrian
+`crossing` nodes retain their distinct kinds here; all remain `kind: 'level_crossing'` for
+height pins. No version bump: older projects omit the metadata, and JSON/ZIP boundaries retain it.
+
 TASK-127 adds optional track `preferredDirection: 'forward' | 'backward' | 'both'`, relative
 to the stored polyline, from `railway:preferred_direction`. No schema-version bump: omitted
 values leave direction undecided and all existing migration/boundary schemas preserve it.
@@ -590,6 +597,16 @@ may join grades at mapped abutments. Components report physical track connectivi
 branches that cannot be traversed directly. Same-grade road/track intersections carry road ID,
 track index, position and metre station on both polylines. They are derived from current road
 geometry, so deleting a road drops only its crossing records. No car/walker control reads them.
+
+TASK-136 additionally derives `RailGraph.facilities` from mapped road crossings. Pedestrian
+nodes, unmapped geometric intersections and bridge/tunnel tracks produce no road equipment.
+Ground tracks remain at grade even with `layer=-1` (TASK-132). Adjacent track crossings group
+only along a common source road, within 22 m and 2 m across its axis. Incoming directed road
+arms alone get equipment; placement follows straight predecessors up to 100 m to leave a wide
+junction. The full marking segment clears running tracks by 3 m; posts stand on the driving
+side, at least 0.8 m outside the carriageway and 0.4 m clear of compiled road/junction surfaces.
+No safe placement means no approach equipment. `compileRail(city, compiled)` uses those
+surfaces; standalone `compileRail(city)` derives approaches without the surface check.
 
 TASK-127 marks degree-one, non-buffer nodes within 0.1 m of the geographic bbox as boundary
 ends (synthetic cities use their rail extent). `network/trains.ts` builds oriented paths through
@@ -2154,6 +2171,16 @@ trains request no frames. Bridges occlude lower trains; tunnels hide train bodie
 them with See below ground). Rail hides tracks and trains together. Picking exposes train
 kind, route ends, station stops and next stop/exit; no train state enters car/walker counts,
 traffic controls, routing, demand or simulation hashes.
+
+TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
+dimensions. Every railway road approach gets an open striped gate, St Andrew's cross, lights
+and a stop marking; mapped `no` tags remain in saved data but do not suppress this sandbox
+equipment. Tram approaches get a horizontal white tram signal and a stop marking. Explicit
+bell tags add a bell housing. These are static visual facilities: gates stay upright and no
+train/car/tram protection state is implied. Rail hides all equipment in both views; 2D detail
+appears from 2 px/m. Mapped railway crossings expose twin railheads over the road in the same
+shared rail geometry, 0.085 m above grade in 3D; beds remain clipped below the road. Traffic
+interaction is deferred until after TASK-131 Phase 3 (trams: TASK-138).
 
 TASK-134 hangs overhead lines over wired track (section 4), computed once per rail graph by
 `catenary(compiled, roadGrades, nodeGrades)` in `network/catenary.ts` (cached like the heights;

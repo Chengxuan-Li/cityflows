@@ -19,6 +19,8 @@ import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawStations } from './layers/stations';
 import { drawTramStops } from './layers/tram-stops';
 import { noTramStops, placeTramStops } from './tram-stops';
+import { drawLevelCrossings } from './layers/level-crossings';
+import { noLevelCrossings } from './level-crossings';
 import { noFurniture, placeStationFurniture } from './station-furniture';
 import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
 import { railGeometry, pickRail } from './rail-geometry';
@@ -209,6 +211,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let trainsVisible = true;
   let stations: ReturnType<typeof drawStations> | undefined;
   let tramStops: ReturnType<typeof drawTramStops> | undefined;
+  let levelCrossings: ReturnType<typeof drawLevelCrossings> | undefined;
   let overhead: { grades: ReturnType<typeof drawCatenary>; counts: string } | undefined;
   /** TASK-134: overhead lines with Rail and Overhead lines on; supports and wires by zoom. */
   const updateCatenary = () => {
@@ -221,6 +224,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     canvas.dataset.catenary = visible && overhead ? overhead.counts : '';
   };
   const updateStations = () => {
+    levelCrossings?.update(camera.zoom, layerVisibility.rail);
+    canvas.dataset.levelCrossings = JSON.stringify(
+      layerVisibility.rail && levelCrossings ? levelCrossings.counts : noLevelCrossings,
+    );
     if (!stations) return;
     const a = camera.screenToWorld({ x: 0, y: 0 }),
       b = camera.screenToWorld({ x: app.screen.width, y: app.screen.height });
@@ -623,6 +630,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ? drawTramStops(placeTramStops(compiled, source ?? { nodes: {}, places: {} }))
         : undefined;
       for (const [layer, { container }] of tramStops?.grades ?? []) {
+        const grade = grades.get(layer) ?? grades.get(0)!;
+        grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
+      }
+      levelCrossings = drawLevelCrossings(compiled.rail?.facilities ?? []);
+      for (const [layer, { container }] of levelCrossings.grades) {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
       }

@@ -1,3 +1,4 @@
+// TASK-136: crossing metadata/facilities change whole-network pins; T75 strips them and retains the previous bytes.
 // TASK-127: compiled rail gains boundary flags; T62 still pins unchanged lanes/movements.
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
@@ -53,14 +54,14 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: 'a8048b78823b68ffda1462d0724e6813a7c0fc03d23dd7d0dc9b272219b34e5f',
+    compile: '3f0408ea67396c2efa7c9720d4b7c371543285dfb331b3f7bd67ff44c56e2295',
     arrows: '29bd956f1a3e4825fe96236f91eb9bfbd94b07e62f23f9eff2f7f0e51621ba0a',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
     // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
     // import without assignTramForms) every pin equals c3a6ec2's.
-    compile: '8db6843e2c2fe688a8ca917f89e9d5d845fc673526f6baa97f4ac26dbde44c3c',
+    compile: '40281557f4b271f705ab22edbe9cf29bb62505c882b6fbf25bfd232fb8174b02',
     arrows: 'fc74b34d263cdc6c945bc4bdc85edf24e21476112116318b50a927271ede139e',
   },
 } as const;

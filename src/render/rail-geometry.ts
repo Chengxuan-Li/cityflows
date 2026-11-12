@@ -46,6 +46,8 @@ export interface RailShape {
    * above road surfaces when `over`. */
   only2d?: boolean;
   over?: boolean;
+  /** TASK-136: exposed railheads through the road at a mapped level crossing. */
+  crossing?: boolean;
   /** The rail node a switch disc marks, for its 3D height. */
   node?: number;
 }
@@ -330,6 +332,34 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
     stroke(t.line, bedWidthM(t), t.layer, color, alpha, false, pick);
     for (const side of [-0.72, 0.72])
       stroke(offsetPolyline(t.line, side), 0.18, t.layer, 0x777b78, alpha, false, pick, true);
+    if (grade === 'ground') {
+      const mapped = city.rail.nodes.filter(
+        (n) => (n.id === t.from || n.id === t.to) && n.crossing?.kind === 'rail',
+      );
+      for (const n of mapped) {
+        const atStart = n.id === t.from;
+        const line = trimPolyline(
+          t.line,
+          atStart ? 0 : Math.max(0, t.lengthM - 30),
+          atStart ? Math.max(0, t.lengthM - 30) : 0,
+        );
+        const rails = [-0.72, 0.72].flatMap((side) =>
+          inflatePathsD([offsetPolyline(line, side)], 0.09, JoinType.Round, EndType.Butt, 2, 3),
+        );
+        const asphalt = obstacles.filter((o) => o.layer === 0).map((o) => o.ring);
+        if (asphalt.length)
+          add(
+            booleanOpD(ClipType.Intersection, rails, asphalt, FillRule.NonZero, 3),
+            0,
+            0x626b67,
+            1,
+            true,
+            pick,
+            true,
+            { over: true, crossing: true },
+          );
+      }
+    }
   }
   // A portal: a bar across the track at the tunnel's mouth, its ends turned out to the ground.
   for (const portal of heights.portals.filter((p) => p.kind === 'tunnel')) {
