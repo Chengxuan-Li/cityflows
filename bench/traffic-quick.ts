@@ -19,6 +19,14 @@ import { createRouteProvider, type RouteProvider } from '../src/routing';
 // Usage: npm run traffic:quick
 
 const untilS = 9.5 * 3600;
+const args = process.argv.slice(2);
+const demandSeed = args.length ? Number(args[1]) : 1;
+if (
+  (args.length && (args.length !== 2 || args[0] !== '--seed')) ||
+  !Number.isSafeInteger(demandSeed) ||
+  demandSeed < 1
+)
+  throw new Error('Usage: traffic:quick [--seed <positive integer>]');
 const { quick } = JSON.parse(readFileSync('bench/traffic-baseline.json', 'utf8')) as {
   quick: { completed: number; gridlocked: number };
 };
@@ -59,7 +67,7 @@ if (profiler) {
   await profiler.post('Profiler.enable');
   await profiler.post('Profiler.start');
 }
-const morning = probeMorning(city, result.compiled, 0.15, { untilS, routeProvider });
+const morning = probeMorning(city, result.compiled, 0.15, { untilS, routeProvider, demandSeed });
 if (profiler) {
   const { profile } = await profiler.post('Profiler.stop');
   writeFileSync(process.env.CITYFLOWS_CPU_PROFILE!, JSON.stringify(profile));
@@ -67,6 +75,7 @@ if (profiler) {
 }
 console.info('Aisle route audit', { checkedRoutes, lotRoutes, throughAisleRoutes: 0 });
 const totals = {
+  demandSeed,
   completed: morning.completed,
   failed: morning.failed,
   gridlocked: morning.failedByReason.gridlocked,
@@ -86,10 +95,11 @@ console.info(
   `Munich at 0.15, 07:00 to 09:30, ${((performance.now() - start) / 1000).toFixed(1)} s:`,
   totals,
 );
-console.info('against main', {
-  completed: totals.completed - quick.completed,
-  gridlocked: totals.gridlocked - quick.gridlocked,
-});
+if (demandSeed === 1)
+  console.info('against main', {
+    completed: totals.completed - quick.completed,
+    gridlocked: totals.gridlocked - quick.gridlocked,
+  });
 
 console.info('gridlocked by road', morning.gridlockedRoads);
 console.info('stalled heads', morning.stalledHeadDetails);
@@ -120,7 +130,7 @@ if (process.env.CITYFLOWS_BASELINE_ROOT) {
     const startStreet = performance.now();
     api.placeStreet(result.compiled, source, trees.trees);
     const streetMs = performance.now() - startStreet;
-    const scenario = api.defaultScenario('grid5x5');
+    const scenario = api.defaultScenario('grid5x5', demandSeed);
     scenario.startS = 7 * 3600;
     scenario.endS = untilS;
     scenario.demand.personsPerResident = 0.15;
