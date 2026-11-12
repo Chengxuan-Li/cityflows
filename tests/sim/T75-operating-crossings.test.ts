@@ -220,14 +220,12 @@ test('T75 a delayed service keeps following and opposing trains outside its occu
     id: `${route.id}:opposing`,
     from: route.to,
     to: route.from,
-    sections: [...route.sections]
-      .reverse()
-      .map((s) => ({
-        ...s,
-        forward: !s.forward,
-        startM: route.lengthM - s.endM,
-        endM: route.lengthM - s.startM,
-      })),
+    sections: [...route.sections].reverse().map((s) => ({
+      ...s,
+      forward: !s.forward,
+      startM: route.lengthM - s.endM,
+      endM: route.lengthM - s.startM,
+    })),
   });
   table.departures = [
     { route: 0, timeS: 77, requestedS: 77 },
