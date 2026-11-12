@@ -17,3 +17,4 @@ console.log(JSON.stringify({variant,counts,lostGreen,holdCounts,holdUnique:Objec
 
 console.log('PHASE147',JSON.stringify((globalThis as any).__phase147));
 console.log('REASON147',JSON.stringify(Object.fromEntries((globalThis as any).__protect147 ?? [])));
+if((globalThis as any).__roadWait147){const d=(globalThis as any).__roadWait147;console.log('ROAD147',JSON.stringify({counts:d.counts,examples:Object.fromEntries(d.examples)}));}

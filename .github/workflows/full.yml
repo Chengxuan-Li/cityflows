@@ -3,12 +3,8 @@ on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  morning:
+  occupants:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [munich-morning, T53-munich-pedestrians]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -16,4 +12,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx vitest run --project traffic tests/traffic/${{ matrix.suite }}.test.ts
+      - run: node bench/task147/road-occupants.mjs
+      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts occupants
