@@ -1,10 +1,10 @@
-name: TASK147 focused diagnostics
+name: TASK147 clock verification
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  unit:
+  focused:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -14,4 +14,48 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx vitest run --project unit tests/sim/T75-operating-crossings.test.ts tests/network/T76-trams.test.ts
-      - run: node --experimental-strip-types --import ./bench/register.ts ./test-results/147/static-probe.ts
+  traffic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/cityflows
+          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
+          restore-keys: city-imports-
+      - run: npm run test:traffic:light 2>&1 | tee traffic.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: clock-traffic
+          path: traffic.log
+  footprints:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/cityflows
+          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
+          restore-keys: city-imports-
+      - run: node --experimental-strip-types --import ./bench/register.ts ./test-results/physical-footprints/probe.ts clock-actual-time 36000 > footprints.log 2>&1
+      - run: node --input-type=module -e "import fs from 'node:fs';const r=JSON.parse(fs.readFileSync('test-results/physical-footprints/report.json','utf8'));if(r.collision)process.exit(1)"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: clock-footprints
+          path: |
+            footprints.log
+            test-results/physical-footprints/*.json
