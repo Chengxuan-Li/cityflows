@@ -8,9 +8,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [coordinated, pedestrians]
+        variant: [no-vehicle, no-red]
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 8
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -20,8 +22,5 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
         run: |
-          if [ "$VARIANT" = pedestrians ]; then
-            npx vitest run --project traffic tests/traffic/T53-munich-pedestrians.test.ts
-          else
-            node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts "$VARIANT"
-          fi
+          node bench/task147/admission-experiment.mjs "$VARIANT"
+          node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts "$VARIANT"
