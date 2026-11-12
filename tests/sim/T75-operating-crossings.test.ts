@@ -657,3 +657,177 @@ test('T75 an open three-car platoon keeps exact ordinary-road trajectories', () 
   }
   expect(protectedRoad.metrics().trips.completed).toBe(3);
 });
+
+function crossingQueue(prefix?: number, pedestrians = false) {
+  const { city, node, road } = buildCity('Crossing queue before tracks', 147);
+  const entry = node(-50, 0),
+    signal = node(10, 0);
+  const before = road(node(-400, 0), entry),
+    queue = road(entry, signal),
+    after = road(signal, node(400, 0));
+  const feeder = road(node(-50, 100), entry);
+  if (!pedestrians) queue.crossings = { start: false, end: false };
+  before.provenance = queue.provenance = after.provenance = { source: 'generated', osmIds: [10] };
+  city.rail = operatingCrossing().rail;
+  signal.control = 'signal';
+  signal.signal = {
+    offsetS: 0,
+    amberS: 3,
+    allRedS: 1,
+    phases: [
+      { durationS: 60, groups: [] },
+      { durationS: 30, groups: [{ from: queue.id, to: after.id }] },
+    ],
+  };
+  const compiled = setup(city),
+    facility = compiled.rail!.facilities![0]!;
+  const beforeLane = compiled.index.lane.get(`${before.id}#0`)!,
+    queueLane = compiled.index.lane.get(`${queue.id}#0`)!,
+    afterLane = compiled.index.lane.get(`${after.id}#0`)!,
+    feederLane = compiled.index.lane.get(`${feeder.id}#0`)!;
+  const first = compiled.movements.find(
+      (m) => m.fromLane === beforeLane && m.toLane === queueLane,
+    )!,
+    last = compiled.movements.find((m) => m.fromLane === queueLane && m.toLane === afterLane)!,
+    other = compiled.movements.find((m) => m.fromLane === feederLane && m.toLane === queueLane)!;
+  const near = facility.spans!.find((s) => s.segment === queueLane)!.fromM;
+  const upstream = compiled.lanes[beforeLane]!.lengthM - 0.25,
+    downstream = prefix ?? near - 0.5;
+  facility.stops = [
+    { lane: beforeLane, stopM: upstream },
+    { lane: queueLane, stopM: downstream },
+  ];
+  compiled.lanes[queueLane]!.stopM = near + 1;
+  const vehicles = createVehicles(2, compiled.lanes.length, compiled.movements.length),
+    grants = new Int32Array(2).fill(-1);
+  vehicles.state.fill(DRIVING);
+  vehicles.insert(0, beforeLane, upstream - 5);
+  vehicles.movement[0] = first.idx;
+  vehicles.route[0] = {
+    roads: [
+      compiled.lanes[beforeLane]!.road,
+      compiled.lanes[queueLane]!.road,
+      compiled.lanes[afterLane]!.road,
+    ],
+    movements: [first.idx, last.idx],
+    targetLanes: [[beforeLane], [queueLane], [afterLane]],
+    costS: 0,
+  };
+  const control = createRailCrossings(
+    compiled,
+    vehicles,
+    DEFAULT_SIM_PARAMS,
+    100,
+    (m) => m === last.idx,
+    undefined,
+    undefined,
+    grants,
+  )!;
+  const offset = compiled.lanes[beforeLane]!.lengthM + first.lengthM;
+  return {
+    compiled,
+    facility,
+    beforeLane,
+    queueLane,
+    feederLane,
+    first,
+    last,
+    other,
+    upstream,
+    downstream,
+    vehicles,
+    grants,
+    control,
+    offset,
+  };
+}
+
+test('T75 an open crossing uses a marked receiving queue wholly before the tracks', () => {
+  const { control, offset, downstream } = crossingQueue();
+  expect(control.hold(0)).toBeCloseTo(offset + downstream, 8);
+});
+
+test('T75 a pedestrian stop before the receiving mark keeps the car upstream', () => {
+  const { control, upstream } = crossingQueue(undefined, true);
+  expect(control.hold(0)).toBe(upstream);
+});
+
+test.each(['body', 'grant', 'movement'] as const)(
+  'T75 a receiving queue reserves a full body for each %s',
+  (kind) => {
+    const fixture = crossingQueue(8),
+      { queueLane, feederLane, other, vehicles, grants, control, upstream } = fixture;
+    if (kind === 'body') vehicles.insert(1, queueLane, 8);
+    else if (kind === 'movement') vehicles.insert(1, -other.idx - 1, 0);
+    else {
+      vehicles.insert(1, feederLane, fixture.compiled.lanes[feederLane]!.lengthM - 1);
+      grants[1] = other.idx;
+    }
+    expect(control.hold(0)).toBe(upstream);
+  },
+);
+
+test('T75 reaching the first marking does not admit rail entry past a later receiving mark', () => {
+  const { control, vehicles, upstream, offset, downstream } = crossingQueue();
+  control.step(100);
+  vehicles.speed[0] = 2;
+  vehicles.position[0] = upstream + 0.01;
+  control.step(100.1);
+  expect(control.hold(0)).toBeCloseTo(offset + downstream, 8);
+});
+
+test('T75 a closed crossing retains the upstream marking even with a receiving queue', () => {
+  const { control, upstream } = crossingQueue();
+  for (let i = 0; i < 1000 && control.snapshot().crossings[0] === CROSSING_OPEN; i++)
+    control.step(100 + i * 0.1);
+  expect(control.snapshot().crossings[0]).not.toBe(CROSSING_OPEN);
+  expect(control.hold(0)).toBe(upstream);
+});
+
+test('T75 a retained route without scheduled departures leaves road trajectories unchanged',()=>{
+  const source=operatingCrossing();
+  Object.values(source.roads)[0]!.lanes.push({...Object.values(source.roads)[0]!.lanes[0]!});
+  const compiled=setup(source),table=railTimetable(compiled.rail!);
+  expect(table.routes.length).toBeGreaterThan(0);
+  table.departures=[];
+  const ordinary=structuredClone(source);delete ordinary.rail;
+  const scenario={...defaultScenario('grid5x5',1),startS:0,endS:120,simParams:{streetParkingShare:0}};
+  const requests=trips(source,3,1).map((trip,i)=>({...trip,departS:i}));
+  const actual=createEngine(),reference=createEngine();
+  actual.load({compiled,trips:requests,scenario});
+  reference.load({compiled:setup(ordinary),trips:requests,scenario});
+  for(let i=0;i<1200;i++) {actual.step();reference.step();expect(actual.stateHash()).toBe(reference.stateHash());}
+});
+
+function divergingCrossing(blocked?:'leader'|'follower') {
+  const {city,node,road}=buildCity('Crossing diverging exit',147);
+  const junction=node(10,0),before=road(node(-400,0),junction),after=road(junction,node(400,0)),branch=road(junction,node(10,400));
+  before.provenance={source:'generated',osmIds:[10]};city.rail=operatingCrossing().rail;
+  const compiled=setup(city),facility=compiled.rail!.facilities![0]!,lane=compiled.index.lane.get(`${before.id}#0`)!,out=compiled.index.lane.get(`${after.id}#0`)!,side=compiled.index.lane.get(`${branch.id}#0`)!;
+  const direct=compiled.movements.find(m=>m.fromLane===lane&&m.toLane===out)!,turn=compiled.movements.find(m=>m.fromLane===lane&&m.toLane===side)!;
+  const stop=facility.stops!.find(s=>s.lane===lane)!.stopM,near=facility.spans!.find(s=>s.segment===lane)!.fromM;
+  const vehicles=createVehicles(3,compiled.lanes.length,compiled.movements.length),grants=new Int32Array(3).fill(-1);
+  vehicles.state.fill(DRIVING);vehicles.insert(0,lane,stop-1);vehicles.insert(1,lane,near+.1);vehicles.speed[1]=2;
+  vehicles.movement[0]=direct.idx;vehicles.movement[1]=turn.idx;grants[0]=direct.idx;grants[1]=turn.idx;
+  vehicles.route[0]={roads:[compiled.lanes[lane]!.road,compiled.lanes[out]!.road],movements:[direct.idx],targetLanes:[[lane],[out]],costS:0};
+  vehicles.route[1]={roads:[compiled.lanes[lane]!.road,compiled.lanes[side]!.road],movements:[turn.idx],targetLanes:[[lane],[side]],costS:0};
+  if(blocked)vehicles.insert(2,blocked==='leader'?side:out,5);
+  const control=createRailCrossings(compiled,vehicles,DEFAULT_SIM_PARAMS,100,()=>false,undefined,undefined,grants)!;
+  return{control,vehicles,stop,grants,turn};
+}
+
+test('T75 a granted diverging leader with its own discharge space does not take the follower exit slot',()=>{
+  const {control}=divergingCrossing();
+  expect(control.hold(0)).toBe(Infinity);
+});
+
+test.each(['leader','follower'] as const)('T75 a diverging leader cannot borrow a blocked %s discharge',blocked=>{
+  const {control,stop}=divergingCrossing(blocked);
+  expect(control.hold(0)).toBe(stop);
+});
+
+test.each(['stopped','ungranted'] as const)('T75 a %s diverging leader remains a clearance obstruction',kind=>{
+  const{control,vehicles,stop,grants}=divergingCrossing();
+  if(kind==='stopped')vehicles.speed[1]=0;else grants[1]=-1;
+  expect(control.hold(0)).toBe(stop);
+});
