@@ -23,6 +23,7 @@ jobs:
       - name: Baseline render regression (expected red)
         run: npx vitest run --project unit tests/render/T25-transition-markings.test.ts > test-results/task146/regression-before.log 2>&1
         continue-on-error: true
+      - run: node --experimental-strip-types --import ./bench/register.ts ./bench/task146-audit.ts before
       - name: Real CityFlows views
         run: |
           npm run dev -- --host 127.0.0.1 --port 5346 --mode test > test-results/task146/vite.log 2>&1 &
@@ -40,6 +41,7 @@ jobs:
         if: inputs.paint_patch != ''
         run: |
           npx vitest run --project unit tests/render/T25-transition-markings.test.ts
+          node --experimental-strip-types --import ./bench/register.ts ./bench/task146-audit.ts after
           npm run check > test-results/task146/check.log 2>&1
           npm run test:city > test-results/task146/city.log 2>&1
       - name: Corrected real CityFlows views
