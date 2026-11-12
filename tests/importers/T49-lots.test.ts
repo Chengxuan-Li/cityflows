@@ -26,12 +26,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // removed and `nextId` 14 lower, the city hash is dfd83d49…, and the compile hash is unchanged.
 const baseline = {
   'munich-donnersberger': [
-    '12c00211a406d16ea5c6827173ec62ced8b683997f5f1ff6187c0558a1f3c3fb',
-    '188fc25155395afd66f5bfd082cd9eed5a62cc6bfebc34d0655250bba92ce159',
+    '938a689f06b3971a56dcf0295d473688d78dbefca91ad787e3f1038e28d7eb9b',
+    'fd50eaa229f3d0dae7e5d9804a42ecac6f8937237e6218c344a6cd755ad3bbcd',
   ],
   'sindelfingen-a81': [
-    '15a7f2c2c6558ec3bb140ede002575f4120e79dfe8bb993f4a059c56794c4ad8',
-    '24799232e25ba8b7c3e1bb39a3d7625972046e41362759a451eff593710da38f',
+    '7e125a5d7795b42664912c038f092ab6a0c55205402e9c262f8c4ce4c776bb91',
+    '3825bc3b6d7fb9cec76ef7eaa692951871f7010df981e8e911c345b9af161318',
   ],
 };
 

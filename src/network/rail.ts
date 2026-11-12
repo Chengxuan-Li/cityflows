@@ -12,7 +12,7 @@ import {
 import type { Vec2 } from '../geo/vec2';
 import type { City } from '../schema';
 import type { CompiledCity } from './types';
-import type { RailNode, RailTrack, RailPlatform } from '../schema/rail';
+import type { CatenaryMast, RailNode, RailTrack, RailPlatform } from '../schema/rail';
 
 export interface RailGraph {
   nodes: (RailNode & { idx: number; tracks: number[]; boundary: boolean })[];
@@ -27,6 +27,8 @@ export interface RailGraph {
   connections: { node: number; from: number; to: number }[];
   components: number[][];
   crossings: { roadId: string; track: number; pos: Vec2; roadM: number; trackM: number }[];
+  /** TASK-134: mapped catenary masts, when the import found any. */
+  masts?: CatenaryMast[];
 }
 
 // Thirty degrees accommodates shallow turnout frogs, while excluding corners and reversals.
@@ -149,6 +151,7 @@ export function compileRail(city: City): RailGraph | undefined {
     connections,
     components,
     crossings,
+    ...(city.rail.masts ? { masts: city.rail.masts } : {}),
   };
 }
 

@@ -36,6 +36,8 @@ export interface RailTrack {
   form?: TrackForm;
   /** `inferred: ['form']` when no tag decided the form (TASK-135). */
   provenance?: Provenance;
+  /** TASK-134: an overhead contact line, from `electrified`; absent when untagged (drawn wired). */
+  contactLine?: boolean;
 }
 export interface RailPlatform {
   id: string;
@@ -77,10 +79,17 @@ export interface TramStop {
   osmIds: number[];
   provenance?: Provenance;
 }
+
+/** TASK-134: a mapped `power=catenary_mast` node. */
+export interface CatenaryMast {
+  pos: Vec2;
+  osmId: number;
+}
 export interface RailNetwork {
   nodes: Record<string, RailNode>;
   tracks: Record<string, RailTrack>;
   platforms: Record<string, RailPlatform>;
   /** TASK-137; absent on cities without tram stops and on older projects. */
   tramStops?: Record<string, TramStop>;
+  masts?: CatenaryMast[];
 }

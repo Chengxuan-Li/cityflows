@@ -580,6 +580,7 @@ export function MapView() {
           three!.setColourVehiclesByClass(layers.vehicleClasses);
           three!.setSurroundings(layers.context, getState().buildings);
           three!.setRail(layers.rail);
+          three!.setOverheadLines(layers.overheadLines);
           three!.setBuildingDetails(layers.buildingDetails);
           three!.setTrees(layers.trees, layers.streetTrees);
           three!.setWalkLayers(layers.sidewalks, layers.footways);

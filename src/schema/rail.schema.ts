@@ -49,6 +49,7 @@ export const railSchema = z
             inferred: z.array(z.string()).optional(),
           })
           .optional(),
+        contactLine: z.boolean().optional(),
       }),
     ),
     platforms: z.record(
@@ -103,6 +104,7 @@ export const railSchema = z
         }),
       )
       .optional(),
+    masts: z.array(z.object({ pos: point, osmId: z.int() })).optional(),
   })
   .superRefine((rail, ctx) => {
     const issue = (path: (string | number)[], message: string) =>
