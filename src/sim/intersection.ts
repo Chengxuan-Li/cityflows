@@ -547,6 +547,12 @@ export function createIntersections(
     signals,
     blockedExit,
     reservedSpace,
+    exitLane(id: number, movement: CMovement) {
+      if (compiled.nodes[movement.node]!.group === undefined || inner(movement))
+        return movement.toLane;
+      const chain = entryChain(id, movement);
+      return chain ? compiled.movements[chain.movements.at(-1)!]!.toLane : -1;
+    },
     groupPaths,
     invalidatePlan(id: number) {
       chainCache[id] = undefined;
