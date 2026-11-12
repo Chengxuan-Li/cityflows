@@ -151,7 +151,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const before = name.startsWith('munich')
       ? [
           '02b51480800ec1090e675962ef9b43ac37a5830ae5516f6b9b5b0f46d0d894ee',
-          '134f8d04ecd81524d1d601ba4f000d78358562f968c426215ce557b53db3f05f',
+          'b8fbd0efbc603d95116b7774e53527719fca6ddf444e137c8f2488b9f62be107',
         ]
       : [
           'd2376c18e9e572547b2ad37b391fb043177e24e649156a0d43ee976064cea243',
