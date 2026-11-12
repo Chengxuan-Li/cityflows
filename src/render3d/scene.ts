@@ -492,6 +492,7 @@ export class Scene3D {
   }
   setSnapshot(snapshot: PresentationSnapshot) {
     this.vehicles.setSnapshot(snapshot);
+    this.trainTimeS = NaN;
     if (this.geometry) this.walkers.setSnapshot(snapshot.walkers, this.geometry.heights);
     this.canvas.dataset.walkers = String(this.walkers.mesh.count);
     this.invalidate();
