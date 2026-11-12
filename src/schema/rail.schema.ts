@@ -21,6 +21,15 @@ export const railSchema = z
         kind: z.enum(['plain', 'switch', 'buffer_stop', 'stop', 'level_crossing']),
         osmId: z.int().optional(),
         signal: z.boolean().optional(),
+        crossing: z
+          .object({
+            kind: z.enum(['rail', 'tram', 'pedestrian']),
+            barrier: z.string().optional(),
+            lights: z.string().optional(),
+            bell: z.string().optional(),
+            roadOsmIds: z.array(z.int()).optional(),
+          })
+          .optional(),
       }),
     ),
     tracks: z.record(

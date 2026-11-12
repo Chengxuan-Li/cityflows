@@ -429,22 +429,28 @@ export function buildRail(
     const from = colors.length;
     color.setHex(shape.color);
     side.copy(color).multiplyScalar(0.72);
-    const [top, foot] = shape.tram ? tramHeights[shape.tram] : [0.06, 0.06];
+    const [top, foot] = shape.tram
+      ? tramHeights[shape.tram]
+      : shape.crossing
+        ? [0.085, 0.085]
+        : [0.06, 0.06];
     const ramp = track && rail!.profiles[track.idx]!.length > 1;
     const node = shape.node === undefined ? undefined : city.rail!.nodes[shape.node]!;
     const nodeTrack = node && city.rail!.tracks[node.tracks[0]!]!;
     const z = (p: Vec2, offset: number) =>
-      (track
-        ? railElevation(heights, rail!, track, trackAt(track, p), p)
-        : nodeTrack
-          ? railElevation(
-              heights,
-              rail!,
-              nodeTrack,
-              nodeTrack.fromNode === node.idx ? 0 : nodeTrack.lengthM,
-              p,
-            )
-          : heights.terrain.groundAt(p.x, p.y) + shape.layer * 5) + offset;
+      (shape.crossing
+        ? heights.terrain.surfaceAt(p.x, p.y)
+        : track
+          ? railElevation(heights, rail!, track, trackAt(track, p), p)
+          : nodeTrack
+            ? railElevation(
+                heights,
+                rail!,
+                nodeTrack,
+                nodeTrack.fromNode === node.idx ? 0 : nodeTrack.lengthM,
+                p,
+              )
+            : heights.terrain.groundAt(p.x, p.y) + shape.layer * 5) + offset;
     const emit = (tri: Vec2[]) => {
       if (ramp) {
         const lengths = tri.map((p, i) => distance(p, tri[(i + 1) % 3]!));

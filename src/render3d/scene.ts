@@ -52,6 +52,8 @@ import { buildCatenary } from './catenary';
 import { Trains3D } from './trains';
 import { Stations3D } from './stations';
 import { TramStops3D } from './tram-stops';
+import { LevelCrossings3D } from './level-crossings';
+import { noLevelCrossings } from '../render/level-crossings';
 import { noFurniture, placeStationFurniture } from '../render/station-furniture';
 import { noTramStops, placeTramStops } from '../render/tram-stops';
 import { trainTimetable, trainsAt } from '../network/trains';
@@ -84,6 +86,7 @@ export class Scene3D {
   private trains: Trains3D | undefined;
   private stations: Stations3D | undefined;
   private tramStops: TramStops3D | undefined;
+  private levelCrossings: LevelCrossings3D | undefined;
   private trainTimeS = NaN;
   private selectedTrain: string | null = null;
   private railSelection: string | undefined;
@@ -213,7 +216,9 @@ export class Scene3D {
       this.content.add(this.stations.group);
       this.tramStops = new TramStops3D(placeTramStops(city, renderedSource), geometry.heights);
       this.content.add(this.tramStops.group);
-    } else this.trains = this.stations = this.tramStops = undefined;
+      this.levelCrossings = new LevelCrossings3D(city.rail.facilities ?? [], geometry.heights);
+      this.content.add(this.levelCrossings.group);
+    } else this.trains = this.stations = this.tramStops = this.levelCrossings = undefined;
     this.trainTimeS = NaN;
     this.railSelection = undefined;
     this.content.add(this.rail.group);
@@ -966,6 +971,10 @@ export class Scene3D {
     if (this.trains) this.trains.group.visible = visible;
     if (this.stations) this.stations.group.visible = visible;
     if (this.tramStops) this.tramStops.group.visible = visible;
+    if (this.levelCrossings) this.levelCrossings.group.visible = visible;
+    this.canvas.dataset.levelCrossings = JSON.stringify(
+      visible && this.levelCrossings ? this.levelCrossings.counts : noLevelCrossings,
+    );
     if (!visible) this.canvas.dataset.trains = '0';
     this.setOverheadLines(this.overheadVisible);
 

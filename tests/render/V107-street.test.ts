@@ -1,3 +1,4 @@
+// TASK-136: crossing metadata/facilities change whole-network pins; T75 strips them and retains the previous bytes.
 // TASK-127: compiled rail gains boundary flags; T62 still pins unchanged lanes/movements.
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
@@ -167,8 +168,8 @@ const baselines = {
   town: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
-  'munich-donnersberger': 'f9fec3f4a3a26d06ccdb8b9288e2ce8e84f0bfc477587d2c55213b096e3079a6',
-  'sindelfingen-a81': 'ba32b71987cd571c65647ae8df5a5f795020061617757a71cc04ab80ae630c20',
+  'munich-donnersberger': '27748d9904098c1a222696af682bf1bbbd41c1423959e8fbcd566a470e397f85',
+  'sindelfingen-a81': '9a52ae5a71c982a7c43ffb7186e8a97555df671bd8e7f2df579b3b64414837d8',
 };
 const lampCounts = {
   grid: [0, 0],

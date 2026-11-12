@@ -574,6 +574,6 @@ export function compile(city: City): CompileResult {
   warnAboutConnectivity(compiled, diagnostics);
   compiled.walk = compileWalk(city, compiled);
   compileSignalWalk(compiled, programs);
-  if (city.rail) compiled.rail = compileRail(city);
+  if (city.rail) compiled.rail = compileRail(city, compiled);
   return { ok: true, compiled, diagnostics };
 }
