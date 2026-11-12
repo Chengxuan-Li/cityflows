@@ -399,14 +399,12 @@ function motion(
         from: route.terminal,
         to: route.from,
         lengthM: route.lengthM,
-        sections: [...route.sections]
-          .reverse()
-          .map((s) => ({
-            ...s,
-            forward: !s.forward,
-            startM: route.lengthM - s.endM,
-            endM: route.lengthM - s.startM,
-          })),
+        sections: [...route.sections].reverse().map((s) => ({
+          ...s,
+          forward: !s.forward,
+          startM: route.lengthM - s.endM,
+          endM: route.lengthM - s.startM,
+        })),
         stops: route.stops
           .map((s) => ({
             ...s,
