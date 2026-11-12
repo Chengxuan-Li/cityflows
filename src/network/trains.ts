@@ -502,56 +502,82 @@ export function trainPoint(rail: RailGraph, route: TrainRoute, positionM: number
 
 export function trainsAt(rail: RailGraph, table: TrainTimetable, timeS: number): TrainPose[] {
   const result: TrainPose[] = [];
-  for (const departure of table.departures) {
+  for (const [departureIndex, departure] of table.departures.entries()) {
     const route = table.routes[departure.route]!,
       cycle = Math.floor((timeS - departure.timeS) / table.periodS);
     for (let k = cycle; k >= cycle - Math.ceil(route.durationS / table.periodS); k--) {
       const age = timeS - departure.timeS - k * table.periodS;
       if (age < 0 || age >= route.durationS) continue;
-      const phase = route.phases.find((p) => age >= p.timeS && age < p.timeS + p.durationS)!;
-      const dt = age - phase.timeS,
-        positionM = phase.positionM + phase.speedMps * dt + 0.5 * phase.acceleration * dt * dt;
-      const length = trainDefaults[route.kind].lengthM,
-        count = Math.ceil(length / trainDefaults.carLengthM),
-        pitch = length / count;
-      const occupied = route.sections
-        .filter((s) => positionM + length / 2 > s.startM && positionM - length / 2 < s.endM)
-        .map((s) => s.track);
-      const reverse =
-        route.turnaroundS !== undefined && age >= route.turnaroundS + trainDefaults.dwellS;
-      const cars = Array.from({ length: count }, (_, i) => {
-        const at = positionM + (reverse ? -1 : 1) * (length / 2 - pitch * (i + 0.5));
-        const from = Math.max(0, at - pitch / 2),
-          to = Math.min(route.lengthM, at + pitch / 2);
-        if (to - from <= 0.7) return null;
-        const middle = (from + to) / 2;
-        const p = trainPoint(rail, route, middle),
-          front = trainPoint(rail, route, middle + (to - from) * 0.4),
-          rear = trainPoint(rail, route, middle - (to - from) * 0.4);
-        return {
-          ...p,
-          front,
-          rear,
-          heading: Math.atan2(front.y - rear.y, front.x - rear.x) + (reverse ? Math.PI : 0),
-          lengthM: to - from - 0.7,
-        };
-      }).filter((car): car is TrainCar => car !== null);
-      result.push({
-        id: `${route.id}/${departure.requestedS}/${k}`,
-        route: departure.route,
-        kind: route.kind,
-        positionM,
-        speedMps: Math.abs(phase.speedMps + phase.acceleration * dt),
-        centre: trainPoint(rail, route, positionM),
-        cars,
-        occupied,
-        next:
-          route.stops.find((s) => age < s.arrivalS + trainDefaults.dwellS)?.name ??
-          (route.terminal !== undefined && !reverse ? 'Terminal' : 'Exit'),
-      });
+      const pose = trainPoseAt(rail, table, departureIndex, k, age);
+      if (pose) result.push(pose);
     }
   }
   return result;
+}
+
+/** Samples one occurrence at its controlled service age, independently of wall-clock history. */
+export function trainPoseAt(
+  rail: RailGraph,
+  table: TrainTimetable,
+  departureIndex: number,
+  k: number,
+  age: number,
+): TrainPose | null {
+  const departure = table.departures[departureIndex]!,
+    route = table.routes[departure.route]!;
+  if (age < 0 || age >= route.durationS) return null;
+  const phase = route.phases.find((p) => age >= p.timeS && age < p.timeS + p.durationS)!;
+  const dt = age - phase.timeS,
+    positionM = phase.positionM + phase.speedMps * dt + 0.5 * phase.acceleration * dt * dt;
+  const length = trainDefaults[route.kind].lengthM,
+    count = Math.ceil(length / trainDefaults.carLengthM),
+    pitch = length / count;
+  const occupied = route.sections
+    .filter((s) => positionM + length / 2 > s.startM && positionM - length / 2 < s.endM)
+    .map((s) => s.track);
+  const reverse =
+    route.turnaroundS !== undefined && age >= route.turnaroundS + trainDefaults.dwellS;
+  const cars = Array.from({ length: count }, (_, i) => {
+    const at = positionM + (reverse ? -1 : 1) * (length / 2 - pitch * (i + 0.5));
+    const from = Math.max(0, at - pitch / 2),
+      to = Math.min(route.lengthM, at + pitch / 2);
+    if (to - from <= 0.7) return null;
+    const middle = (from + to) / 2;
+    const p = trainPoint(rail, route, middle),
+      front = trainPoint(rail, route, middle + (to - from) * 0.4),
+      rear = trainPoint(rail, route, middle - (to - from) * 0.4);
+    return {
+      ...p,
+      front,
+      rear,
+      heading: Math.atan2(front.y - rear.y, front.x - rear.x) + (reverse ? Math.PI : 0),
+      lengthM: to - from - 0.7,
+    };
+  }).filter((car): car is TrainCar => car !== null);
+  return {
+    id: `${route.id}/${departure.requestedS}/${k}`,
+    route: departure.route,
+    kind: route.kind,
+    positionM,
+    speedMps: Math.abs(phase.speedMps + phase.acceleration * dt),
+    centre: trainPoint(rail, route, positionM),
+    cars,
+    occupied,
+    next:
+      route.stops.find((s) => age < s.arrivalS + trainDefaults.dwellS)?.name ??
+      (route.terminal !== undefined && !reverse ? 'Terminal' : 'Exit'),
+  };
+}
+
+export function trainPositionAt(route: TrainRoute, ageS: number) {
+  const age = Math.max(0, Math.min(route.durationS, ageS));
+  const phase =
+    route.phases.find((p) => age >= p.timeS && age < p.timeS + p.durationS) ?? route.phases.at(-1)!;
+  const dt = age - phase.timeS;
+  return {
+    positionM: phase.positionM + phase.speedMps * dt + 0.5 * phase.acceleration * dt * dt,
+    speedMps: Math.abs(phase.speedMps + phase.acceleration * dt),
+  };
 }
 
 export interface PlatformDeparture {
