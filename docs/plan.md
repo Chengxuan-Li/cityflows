@@ -169,8 +169,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
 | [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | in progress |
-| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | in progress |
-| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | queued |
+| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
+| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | paint repair in review |
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | in progress on PR branch |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -3340,16 +3340,39 @@ backend in both the stationary and moving cameras. A delayed observer callback d
 one render measurement per window. The corrected sampler retains the raw animation
 intervals and all render entries. Isolating track paint identified the largest measured
 layer cost. Per-track and 256 m spatial batches both missed the ten-percent limit.
-The final named runs record the browser and GPU used.
+The final one-worker Playwright run at `2fabc13` measured +14.61% in stationary 3D and
++14.83% and +13.80% in moving 3D on SwiftShader. On the same host, full Chromium
+using the RTX 4070 SUPER measured +0.55% stationary and −0.01% and −1.80% moving.
+Both 2D cameras passed on both backends. [PR #2](https://github.com/Chengxuan-Li/cityflows/pull/2)
+merged as `9cca6a6` with the sampling correction. The default 3D budget remains open.
 
-TASK-147 reproduced PR #1's 2968 completions and 61 gridlocks. Retaining its timetable
-and removing the road-crossing controller in a diagnostic replay reproduced main's
-4113/26/0 exactly. Staging a whole car safely at a later rail mark passed T53 but
-produced 3012/70/1. Disabling only crossing 2's protection in an isolated diagnostic
-produced 4450/12/0. A trace found four distinct paths where a stopped follower waited
-at an open marking behind a moving leader. The PR branch retains protection and its
-original gates. [Staging run](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305272553)
-and [facility isolation](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305740807).
+TASK-147 reproduced PR #1's 2968 completions and 61 gridlocks. Running the same
+timetable without the crossing controller in a diagnostic reproduced main's 4113/26/0.
+An occupied crossing could stop another tram's motion clock after its tail had cleared a
+previous crossing, stretching a one-second release guard by minutes. The reviewed repair
+`dcdaa10` counts that second in simulation time. It is on the existing held PR at
+`68f55ac`. A three-hour physical replay recorded 260 road entries and exits across mapped
+facilities with zero inside-facility contacts. T21 and T53 pass. The original seed-1
+traffic gate remains red at 3201 completions, 68 gridlocks and zero stalled heads.
+The trace found stopped cars on conflicting turns blocking both exits from the two
+Landsberger tram crossings. [PR #1 CI](https://github.com/Chengxuan-Li/cityflows/actions/runs/43316340090).
+
+TASK-146 located the westbound lane gain at OSM node 297271363 on Arnulfstraße.
+Ways 146018788, 146018784/146018786 and 134171421 carry two, three and five westbound
+lanes respectively. Opposite way 134583817 carries two at this point. Eastbound traffic
+gains two lanes separately at `n:27`, west of the interchange. At `n:652`, the renderer
+eased the two added lane centres a second time when drawing their strips, separating their
+shared edge by 1.058 m. The first repair moved a pedestrian corner and left three stalled
+heads in the Munich gate. The replacement corrects the paint and corridor outlines only.
+The complete compiled vehicle and pedestrian graphs of both cities match the clean control.
+Four carriageways use the corrected display geometry.
+
+TASK-144's first candidate changed synthetic S-Bahn departure offsets by shifting rail
+node IDs. The unchanged T70 departure-row assertion exposed it. The replacement restores
+the joins after ordinary import allocation and retains original road/lane indices in both
+cities. The full Munich timetable is byte-identical to the clean control. Lead review also
+found that late portal allocations advanced a temporary copy of the city counter. The
+correction now advances the canonical counter and tests the next allocation after reopening.
 
 ## Owner decisions log
 
