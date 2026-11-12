@@ -3,7 +3,7 @@ on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  occupants:
+  check-capacity:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -12,7 +12,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node bench/task147/road-occupants.mjs
-      - run: node bench/task147/decisions.mjs
-      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts decisions 30600
-
+      - run: node bench/task147/exit-capacity.mjs
+      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts capacity
