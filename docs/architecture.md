@@ -1393,7 +1393,10 @@ service before the crossing; occupied rail sections and same-tick reservations h
 or opposing services, while unrelated routes keep advancing. Delayed services also retain
 admission priority over new occurrences sharing their tracks. Protection remains until the
 last carriage clears the entire road band plus one second; overlapping warnings and services
-combine by the most restrictive state. Pausing freezes these clocks; restart reconstructs
+combine by the most restrictive state. That final second uses simulation time from the actual
+tail clearance, so a later service hold at another crossing or rail section cannot extend it.
+Live edits retain that timestamp only for the same facility and motion interval.
+Pausing freezes these clocks; restart reconstructs
 them from the timetable. Live edits remap progress by route identity, requested departure and
 cycle, discard removed services, rebuild road spans, and hold a service upstream if the edit
 places a road vehicle in its crossing. Snapshot poses are allocated only on request, and road
