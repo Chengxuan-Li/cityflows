@@ -48,7 +48,6 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   linkCosts?: LinkCosts;
   intersectionObserver?: IntersectionObserver;
   headDetourObserver?: (id: number, lane: number, movement: number) => void;
-  holdExtensionObserver?: (id: number, lane: number, planned: number, alternative: number) => void;
   originObserver?: (id: number, connector: CConnector, hasGap: boolean) => void;
   walkRouter?: ReturnType<typeof createWalkRouter>;
   debugParkingClaims?: boolean;
@@ -72,7 +71,6 @@ function createRun({
   linkCosts,
   intersectionObserver,
   headDetourObserver,
-  holdExtensionObserver,
   originObserver,
   population,
   walkRouter,
@@ -144,8 +142,7 @@ function createRun({
     routeVersion: () => costs.version,
   });
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
-  const extraHoldUsed = new Uint8Array(trips.length);
-  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, extendChangeHold);
+  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -190,49 +187,6 @@ function createRun({
       return { route, step };
     const result = routeFrom(id, movement.toLane, 0);
     return result.ok ? { route: result.route, step: -1 } : null;
-  }
-
-  function extendChangeHold(id: number) {
-    if (extraHoldUsed[id] || intersections.groupPaths[id] || fallback[id] !== 1) return false;
-    const lane = compiled.lanes[vehicles.lane[id]!]!;
-    const route = vehicles.route[id]!,
-      step = vehicles.routeStep[id]!;
-    const planned = compiled.movements[route.movements[step] ?? -1];
-    const alternative = compiled.movements[vehicles.movement[id]!];
-    if (
-      !planned ||
-      !alternative ||
-      planned.neverGreen ||
-      compiled.lanes[planned.fromLane]!.road !== lane.road ||
-      !allowedLanes[vehicles.vclass[id]!]![planned.fromLane] ||
-      !allowedLanes[vehicles.vclass[id]!]![planned.toLane] ||
-      vehicles.position[id]! > compiled.lanes[planned.fromLane]!.stopM - idm.minGapM + 1e-8
-    )
-      return false;
-    const suffix = routeFrom(id, alternative.toLane, 0);
-    if (!suffix.ok) return false;
-    const returnsInUsableLane = suffix.route.movements.some((m, i) => {
-      if (m !== planned.idx) return false;
-      const entry =
-        i === 0 ? alternative.toLane : compiled.movements[suffix.route.movements[i - 1]!]!.toLane;
-      return (
-        entry !== lane.idx &&
-        [
-          ...reachableLanes(
-            compiled,
-            allowedLanes[vehicles.vclass[id]!]!,
-            entry,
-            Math.max(0, compiled.roads[lane.road]!.lengthM - 10),
-            params.laneChangeDistanceM,
-          ),
-        ].some((candidate) => candidate.lane === planned.fromLane)
-      );
-    });
-    if (returnsInUsableLane) {
-      extraHoldUsed[id] = 1;
-      holdExtensionObserver?.(id, lane.idx, planned.idx, alternative.idx);
-    }
-    return returnsInUsableLane;
   }
 
   function chooseParkingRoute(
@@ -474,7 +428,6 @@ function createRun({
     : hasSpawnGap;
 
   function releaseTrip(id: number, connector: CConnector, timeS: number) {
-    extraHoldUsed[id] = 0;
     const { lane, positionM } = connector;
     if (
       parking.required(id) &&
@@ -893,7 +846,6 @@ function createRun({
   }
 
   function enterLane(id: number, lane: number, position: number, timeS: number) {
-    extraHoldUsed[id] = 0;
     const road = compiled.lanes[lane]!.road;
     for (const movement of unresolvedHeads[id] ?? []) {
       if (compiled.lanes[compiled.movements[movement]!.toLane]!.road === road)
@@ -1282,8 +1234,7 @@ function createRun({
       groupRoute,
       routeVersion: () => costs.version,
     });
-    extraHoldUsed.fill(0);
-    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, extendChangeHold);
+    laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );

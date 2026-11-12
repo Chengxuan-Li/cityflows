@@ -42,7 +42,6 @@ const watchedIds = new Set(
   (process.env.CITYFLOWS_WATCH_IDS ?? '').split(',').map(Number).filter(Boolean),
 );
 const journeys: unknown[] = [];
-const holdExtensions: unknown[] = [];
 const selectedDecisions: unknown[] = [];
 const lastSelectedDecision = new Map<number, string>();
 const previousStates = new Map<number, { state: string; lane: number }>();
@@ -151,15 +150,6 @@ const morning = probeMorning(city, compiled, 0.15, {
         movement: compiled.movements[movement]!.id,
         current: activeEngine.inspect(id + 1),
       });
-  },
-  holdExtensionObserver(id, lane, planned, alternative) {
-    holdExtensions.push({
-      id: id + 1,
-      timeS: activeEngine.timeS,
-      lane: compiled.lanes[lane]!.id,
-      planned: compiled.movements[planned]!.id,
-      alternative: compiled.movements[alternative]!.id,
-    });
   },
   intersectionObserver(id, movement, reason, other) {
     decisions.set(id + 1, { reason, movement: movement.idx, other: other?.idx });
@@ -457,7 +447,6 @@ writeFileSync(
       cycles,
       cyclesAtEnd,
       journeys,
-      holdExtensions,
       selectedDecisions,
       headQueries,
       headExecuted,
