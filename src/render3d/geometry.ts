@@ -11,6 +11,7 @@ import { buildMarkings, goreTriangles, triangleHeight } from './markings';
 import { paintedGores } from '../render/marking-geometry';
 import { buildContext } from './context';
 import { drape, indexTerrain, terrainAreas } from './terrain';
+import { paintedCity } from '../render/road-paint';
 
 type Vertex = [number, number, number];
 const vertex = (p: Vec2, z: number): Vertex => [p.x, z, p.y];
@@ -97,6 +98,7 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
 }
 
 export function buildGeometry(city: CompiledCity, source: CityGeometry, omitContextGround = false) {
+  city = paintedCity(city);
   const heights = cityHeights(city, source);
   const surfaces: number[] = [],
     slabs: number[] = [],

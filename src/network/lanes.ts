@@ -116,7 +116,12 @@ export function roadWidth(road: Road): number {
 /** Painted lane edges collapse onto the nearest surviving lane; driving polylines stay put. Both
  * edges are `normalOffset`s of the lane polyline, so vertex `i` of an edge, of the lane and of
  * every other lane of the road lie on one normal of the road's reference line (TASK-082). */
-export function laneEdges(lane: CLane, roadLanes: CLane[]): { left: Vec2[]; right: Vec2[] } {
+export function laneEdges(
+  lane: CLane,
+  roadLanes: CLane[],
+  paintAdjacentAdditions = false,
+): { left: Vec2[]; right: Vec2[] } {
+  if (!paintAdjacentAdditions) return paintedEdges(lane, roadLanes, false);
   const adjacentAddition = (l: CLane) =>
     Boolean(
       l.taperStartM && (roadLanes[l.lane - 1]?.taperStartM || roadLanes[l.lane + 1]?.taperStartM),

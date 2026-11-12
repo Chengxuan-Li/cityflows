@@ -26,14 +26,13 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // TASK-137: Munich gains 14 `rail.tramStops` (ids ts:10812 to ts:10825 move `nextId`); with those
 // removed and `nextId` 14 lower, the city hash is dfd83d49…, and the compile hash is unchanged.
 const baseline = {
-  // TASK-146 repairs adjacent-addition paint; only compiled surface pins change.
   'munich-donnersberger': [
     '8c2436d148f2dfa7d42f51d3acb4d1944df250da6f33f8795f357af5bcb9cbbe',
-    '0b2941f63d0269ca36b2d8565fa1d0881f88770b420e7b90961e71c90f6bba72',
+    'e2ba49f664cf5536c78374fa960172ff7a98d861e3e1e5ebc24a3be91715d2fa',
   ],
   'sindelfingen-a81': [
     'eda6809b6682636376c1b9d6ee2333a2b88fc8776f6cd7340efabaf52888df0f',
-    '9472661a7ba7e982a1e88f72c48ab71efc9662826f90b544d7c8efdaeb55eb09',
+    '6681a051339b6734947c3a32efeb7faf6075fcfc393eb35fc5967dc14984707d',
   ],
 };
 

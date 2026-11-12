@@ -151,12 +151,11 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const before = name.startsWith('munich')
       ? [
           'f8810ffef5bb96daab5481253ab960b104faa27384155ff14728f2b6697a476f',
-          // TASK-146: painted surfaces change; the crossing-stripped canonical city stays pinned.
-          '22e7f052ba6f3f509865dd090b28d0bbfa1bee64990e1d32f76c5f2116c4ce13',
+          '652e6c1d2ec3002b23b36faf9697faf0ba67530f1ad7de8c9c68c5d2d9007b3f',
         ]
       : [
           'd2376c18e9e572547b2ad37b391fb043177e24e649156a0d43ee976064cea243',
-          '41cd4314a8798d0d6245468ae9e0d30e24346cfdbade7c37e4e062668b589582',
+          'f984571c1588469cd1f122f59e751656522545a536c6412586d643f656cd9bb9',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

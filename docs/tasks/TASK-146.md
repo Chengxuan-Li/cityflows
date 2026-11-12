@@ -36,32 +36,34 @@ group U-turn reachable from lane 0 is unchanged; this task does not revisit TASK
 The 3-to-5 count is mapped correctly. The defect was its painted geometry: both added lanes
 start at the surviving lane's edge, but `laneEdges` eased their centres a second time and
 generated overlapping strips. Their shared-edge mismatch in Munich was **1.05810549 m**.
-The shared paint utility now grows adjacent additions' widths once and gives them one common
-interior boundary; the mismatch is **1.17e-13 m**. Both renderers consume this geometry.
+The renderer's opt-in paint geometry now grows adjacent additions' widths once and gives them
+one common interior boundary; the mismatch is **1.17e-13 m**. Both renderers consume this geometry.
 The existing single-lane additions and lane drops keep exactly their previous paint.
 
 A before/after census finds paint changes only on Munich `r:654`, `r:958` (Arnulfstraße,
 way 316052825), `r:1284` (Westendstraße, way 1421510626), and Sindelfingen `r:1058`
-(way 983910197): the four roads with adjacent additions. Both cities' canonical roads,
-driving lane polylines/permissions and movement geometry hash identically before and after.
-Munich retains all 1,086 lanes and 1,715 movements. B56 and held branches are untouched.
+(way 983910197): the four roads with adjacent additions. A lazy cached drawing view replaces
+only their surfaces and affected corridor unions. Both scenes, shared markings, 3D surfaces/
+slabs and drawn curbs consume it. It never changes the input or rebuilds on each frame.
 
-The remaining compiled fields are identical except the derived curb-following walk geometry:
+**The entire physical compiled graph remains byte-identical**, including walk routes,
+crossings, parking, signals, movements, spatial-index buffers and typed arrays. Decoded deep
+comparison confirms this before and after constructing the drawing view. Munich retains
+1,086 lanes, 1,715 movements and 6,880/11,825 walk nodes/links; Sindelfingen retains 3,138/3,728
+walk nodes/links. B56, routing and walker timing are unchanged.
 
-- Munich retains 6,880 walk nodes, 11,825 links, every link ID and all attachments. Only six
-  `r:958:right` sidewalk segments and ten access joins change geometry/length; maximum endpoint
-  displacement is 1.025805 m. The sum of absolute link-length changes bounds any shortest-walk
-  distance change by **4.730810 m**.
-- Sindelfingen's `r:1058:right/1` sidewalk shortens by 0.334673 m. At `n:594`, one curb meeting
-  becomes two nodes joined by a **0.146139 m** corner link (`seam:n:594:1:3/1`): 3,138 to 3,139
-  nodes and 3,728 to 3,729 links. Contracting this seam recovers exactly the original graph
-  incidence and place/parking/connector/source-node attachments. The corresponding conservative
-  shortest-walk distance bound is **0.480811 m**.
+The visible outer-curb shifts peak at 1.182355 m (`r:654`), 1.238829 m (`r:958`), 1.099975 m
+(`r:1284`) and 1.338506 m (`r:1058`). Original physical walker endpoints remain fixed:
+`r:958`'s closest endpoint pair is 3.171 mm inside the corrected visible paving, rather than
+1 m outside the old curb; Sindelfingen endpoints stay at least 0.993800 m outside. Sidewalk
+drawing clips the unchanged walk ribbons against the corrected asphalt; crosswalk geometry
+is unchanged. All added-lane centre samples remain inside their rendered lane strips.
 
-Every legal crossing's geometry, control and lane spans are unchanged in both cities.
-`walk-equivalence.json` and the `*-walk.json` pairs record this comparison. The lead accepted
-these confined curb-following effects, conditional on the city and traffic/T53 gates; no walk
-code or walking policy changes.
+The initial core-surface trial is rejected: its curb-following walk changes (Munich route-
+distance bound 4.730810 m; Sindelfingen 0.480811 m including a 0.146139 m corner seam) gave
+3 stalled heads against main's 0. The final renderer-only view removes those physical changes;
+none of that trial's whole-network snapshot repins is retained. No simulation rule or gate is
+relaxed to accommodate the repair.
 
 ## Evidence and verification
 
@@ -72,18 +74,20 @@ The 3D harness waits for scene construction and rendered frames, rejects a blank
 canvas by pixel diversity, and records zero browser errors. Cameras and the saved city are
 identical across the pair; no simulation steps run.
 
-`source-and-compiled.json`, `before-identity.json`, `after-identity.json`, and the two
-`*-census.json` files retain the source, movement and geometry evidence. The red synthetic
-3-to-5 regression measured a 0.769742 m boundary mismatch; the repaired regression passes.
-The whole-network pins in T44/T49/T55/T75 and V106/V107/V108/V117, and V114/V117 paint/curb pins, include
-the four corrected envelopes and their derived curb geometry. Only those expected hashes are
-updated; canonical city and V108 arrow hashes remain pinned. Gore/paint safety checks report
-no invalid overlap.
+`source-and-compiled.json` retains the OSM and movement trace. `physical-proof.json` and the
+`before-`/`after-*-physical.json` pairs retain the complete decoded graph-equality proof and
+rendered strip/curb measurements. The red synthetic regression measured a 0.769742 m boundary
+mismatch; the repaired regression also checks centre containment, cache reuse and no physical
+mutation. Only V114/V117 paint/curb snapshots change. Every physical compilation, canonical
+city, lamp and arrow pin stays unchanged.
 
 Verification results are recorded with the final commit. No contract, dependency or source-data
-change is required. Additional files are the existing T25 regression and the test files named
-above, whose paint-dependent pins necessarily change with this repair.
+change is required. The additional renderer surfaces wire the same drawing view into 2D/3D
+entry points, standalone geometry/marking builders and curb placement.
 
-At candidate commit, `npm run check` passes: 1,150 tests pass, one is skipped; typecheck, lint,
-format and build pass. Strict city and light e2e gates are running in hosted probe 43315503410;
-the light traffic/T53 gate is running locally, alone. Their final results remain required.
+Renderer-only verification at candidate commit: typecheck/lint pass; 63 focused render tests
+pass; decoded physical-graph equality passes for both cities; matched final 2D/3D/locator
+captures have zero browser errors. The official light traffic/T53 command passes (two files,
+five ordinary tests, unchanged T29 expected failure, 171.43 s), including zero stalled heads.
+The passing log does not emit exact completed/gridlocked trip totals. Hosted light e2e passes
+all 37 scenarios (4.0 min). Strict hosted check/city results from run 43319239521 remain pending.
