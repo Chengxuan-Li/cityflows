@@ -11,6 +11,7 @@ const labels: [keyof LayerVisibility, string][] = [
   ['terrain', 'Terrain'],
   ['context', 'Surroundings'],
   ['rail', 'Rail'],
+  ['overheadLines', 'Overhead lines'],
   ['buildingDetails', 'Building details'],
   ['parkingStalls', 'Parking stalls'],
   ['parkedCars', 'Parked cars'],
@@ -103,6 +104,7 @@ export function Layers() {
             (key !== 'basemap' || hasGeo) &&
             (key !== 'context' || hasContext) &&
             (key !== 'rail' || Boolean(session?.project.city.rail)) &&
+            (key !== 'overheadLines' || Boolean(session?.project.city.rail)) &&
             (key !== 'buildingDetails' || showBuildingDetails) &&
             (key !== 'trees' || hasTrees) &&
             (key !== 'streetTrees' || hasStreetTrees) &&
@@ -112,7 +114,12 @@ export function Layers() {
         )
         .map(([key, label]) => (
           <label key={key}>
-            <input type="checkbox" checked={layers[key]} onChange={() => toggleLayer(key)} />
+            <input
+              type="checkbox"
+              checked={layers[key]}
+              disabled={key === 'overheadLines' && !layers.rail}
+              onChange={() => toggleLayer(key)}
+            />
             {label}
           </label>
         ))}

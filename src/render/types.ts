@@ -65,6 +65,7 @@ export interface RouteOverlay {
 
 export interface LayerVisibility {
   rail: boolean;
+  overheadLines: boolean;
   buildingDetails: boolean;
   parkingStalls: boolean;
   parkedCars: boolean;
@@ -96,6 +97,7 @@ export interface LayerVisibility {
 
 export const defaultLayers: LayerVisibility = {
   rail: true,
+  overheadLines: true,
   buildingDetails: true,
   parkingStalls: true,
   parkedCars: true,

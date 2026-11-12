@@ -444,6 +444,13 @@ the import laid beside the track, `null` when no room was left), the tags `shelt
 the ids match, tracks and platforms exist and generated rings are closed. Tram stops are not
 network: compile ignores them, and no lane, connector, route or simulation hash reads them.
 
+TASK-134 adds optional track `contactLine: boolean` from `electrified`: true for `contact_line`
+(also in a `;` list) or `yes` without `electrified:rail`; false for `no`, `rail`, `4th_rail` and
+any other value; absent when untagged, which draws wired. It adds optional `RailNetwork.masts:
+{ pos, osmId }[]`, the mapped `power=catenary_mast` nodes inside the bbox (omitted when there are
+none); compiled `RailGraph.masts` carries them. No schema-version bump: older projects omit both
+and draw every track wired with generated supports.
+
 ## 5. Compiled model: `CompiledCity`
 
 `compile(city: City): CompileResult` lives in `src/network` and is a pure, deterministic
@@ -2148,6 +2155,37 @@ them with See below ground). Rail hides tracks and trains together. Picking expo
 kind, route ends, station stops and next stop/exit; no train state enters car/walker counts,
 traffic controls, routing, demand or simulation hashes.
 
+TASK-134 hangs overhead lines over wired track (section 4), computed once per rail graph by
+`catenary(compiled, roadGrades, nodeGrades)` in `network/catenary.ts` (cached like the heights;
+display only: no simulation, timetable, routing or height change). Wired sections are chained
+through their continuations per grade (open, tunnel, covered), layer and system (railway or
+tram); open chains are walked longest first and, wherever a chain's supports lie further apart
+than its spacing (60 m straight, 50 m on curves under 1 500 m radius, 40 m under 500 m; the
+tightest of the tracks a support would span; a quarter more between supports already placed by
+tracks alongside), the chain first hangs from an existing support whose cross member crosses it
+there (a portal's mast moving out past it if it may), else gets a new support. A support's
+cross line runs square to the mean direction of the tracks it spans: every wired open track of
+its system within 30 degrees and 2.5 m of rail level that crosses it, chained outward while each
+next track lies within 25 m of the last. Three or more tracks take a portal with a mast on each
+side (up to 15 m beyond the 3 m offset) and masts in its widest clear gaps every 60 m; one or two
+take one mast with an arm (trams: a 2.2 m side pole, a centre pole between two tracks, or a pole
+up to 12 m out beyond the road); bridge masts stand on the deck 2.3 m off the track. Masts keep
+2.2 m from railway and 1.4 m from tram centrelines at their level, 6 m from level-crossing nodes,
+5 m from frogs (where two branches leaving a switch within 30 degrees are 1.5 m apart), 2 m from
+platforms, and off road and junction surfaces at or above them; a support moves up to 10 m along
+its track to find such spots, first also keeping its drops off frogs, crossings and roads, or is
+skipped. Tracks it spans get a drop unless one of theirs lies within 40% of the spacing. Mapped
+masts are placed first as they stand (the nearest wired open track within 8 m; a second mapped
+mast across the same tracks makes a portal) or listed with a reason. Tunnel and covered chains
+carry the wire on fixings every 50 m, without masts. The contact wire hangs 5.5 m above the rail
+and the messenger 1.2 m above it, straight between drops (track-following every 10 m where a
+chord leaves the track by over 0.3 m), the messenger sagging 0.8 m over a 60 m span in 3D. 2D draws masts as 0.7 m squares and portals and arms as thin lines from 1.5 px/m and the
+contact wire as a 1 px hairline from 3 px/m, per grade above the trains, never tunnel wire. 3D
+draws masts and the beams and arms as two instanced box meshes, and both wires and the hangers
+at each drop as line segments, open and tunnel (shown only with See below ground) apart: four
+draw calls; supports show from 1.5 px/m and wires from 3 px/m at the camera's target, as in 2D. The
+Overhead lines layer, under Rail and disabled while Rail is off, hides them in both views.
+
 TASK-133 dresses stations (places with `station`, their rail platforms and entrances) in both
 views from one pure placement, `render/station-furniture.ts`. It is display-only: no schema,
 simulation, routing, demand, walk or timetable change, and the Rail layer hides it with the
@@ -2676,6 +2714,8 @@ info). Stop positions outside the area, or over 25 m from a tram track, are left
 positions on the ways and the platforms, but no route relations, so `lines` come from
 `route_ref` or descriptions unless the data carries tram route relations.
  The bundled extracts
+their form (section 4) from their tags and the import's compiled road surfaces. TASK-134's
+queryVersion 9 also requests `power=catenary_mast` nodes (section 4). The bundled extracts
 append only missing IDs at each original historical snapshot; ATTRIBUTION.txt records queries
 and original-file hashes. T62 proves original bytes and lane/movement hashes remain unchanged.
 

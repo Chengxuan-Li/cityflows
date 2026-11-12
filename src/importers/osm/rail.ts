@@ -26,6 +26,16 @@ const isTrack = (t: OsmTags) => railKinds.includes(t.railway as RailKind);
 /** TASK-132: a building passage or covered way stays at grade under its roof; its `layer` (and
  * `tunnel`) still order it below the building, as before. */
 const covered = (t: OsmTags) => t.tunnel === 'building_passage' || t.covered === 'yes';
+/** TASK-134: whether a way carries an overhead contact line, from `electrified`; undefined when
+ * untagged. `yes` counts unless `electrified:rail` says the conductor is a rail. */
+const contactLine = (t: OsmTags) => {
+  if (t.electrified === undefined) return undefined;
+  const values = t.electrified.split(';').map((v) => v.trim());
+  return (
+    values.includes('contact_line') ||
+    (values.includes('yes') && t['electrified:rail'] === undefined)
+  );
+};
 const isPlatform = (t: OsmTags) => t.railway === 'platform' || t.public_transport === 'platform';
 const normalize = (name: string) => name.normalize('NFKC').toLocaleLowerCase('de').trim();
 const pointsOf = (p: RailPlatform) =>
@@ -156,6 +166,7 @@ export function importRail(
               : {}),
             ...(w.tag.name ? { name: w.tag.name } : {}),
             ...(maxSpeedMps > 0 ? { maxSpeedMps } : {}),
+            ...(contactLine(w.tag) === undefined ? {} : { contactLine: contactLine(w.tag) }),
           };
         }
       }
@@ -172,6 +183,10 @@ export function importRail(
       const layers = nodeLayers.get(n.id)!;
       n.layer = layers.includes(0) ? 0 : Math.min(...layers);
     }
+  const masts = data.node
+    .filter((n) => n.tag.power === 'catenary_mast' && contains(bounds, positions.get(n.id)!))
+    .map((n) => ({ pos: positions.get(n.id)!, osmId: n.id }));
+  if (masts.length) rail.masts = masts;
   const platformSources = new Map<string, string[]>();
   const addPlatform = (
     sourceKey: string,
