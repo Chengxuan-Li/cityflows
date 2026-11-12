@@ -71,15 +71,17 @@ export function compileLevelCrossings(
     if (!tracks.length) return [];
     const arms: Arm[] = [];
     for (const road of roads) {
+      const mappedRoad = road.provenance.osmIds?.some((id) =>
+        node.crossing!.roadOsmIds?.includes(id),
+      );
+      // Known OSM topology wins over proximity, even when its highway was excluded at import.
+      if (node.crossing.roadOsmIds !== undefined && !mappedRoad) continue;
       const layer =
         road.layer ?? Math.min(city.nodes[road.from]!.layer, city.nodes[road.to]!.layer);
       // Ground tracks may carry layer=-1 without being tunnels (TASK-132).
       if (layer !== node.layer && layer !== 0) continue;
       let hit = nearestOnPolyline(road.centerline, node.pos);
-      if (
-        hit.away > 1 &&
-        road.provenance.osmIds?.some((id) => node.crossing!.roadOsmIds?.includes(id))
-      ) {
+      if (hit.away > 1 && mappedRoad) {
         const crossing = tracks
           .flatMap((t) => polylineCrossings(road.centerline, t.line))
           .filter((h) => Math.hypot(h.point.x - node.pos.x, h.point.y - node.pos.y) < 20)
@@ -92,7 +94,7 @@ export function compileLevelCrossings(
       }
       if (hit.away > 1 || hit.along < 0.1) continue;
       if (
-        !road.provenance.osmIds?.some((id) => node.crossing!.roadOsmIds?.includes(id)) &&
+        !mappedRoad &&
         !tracks.some((t) => {
           const d = nearestOnPolyline(t.line, node.pos).direction;
           return Math.abs(d.x * hit.direction.y - d.y * hit.direction.x) > 0.35;
@@ -108,6 +110,7 @@ export function compileLevelCrossings(
     }
     return arms.length ? [{ node, arms }] : [];
   });
+  if (!candidates.length) return [];
   const seen = new Set<string>(),
     result: LevelCrossing[] = [];
   const surface = geometry
@@ -116,13 +119,19 @@ export function compileLevelCrossings(
         .map((r) => [...r, r[0]!])
     : [];
   const spatial = new Flatbush(Math.max(1, surface.length));
-  for (const ring of surface)
-    spatial.add(
-      Math.min(...ring.map((p) => p.x)),
-      Math.min(...ring.map((p) => p.y)),
-      Math.max(...ring.map((p) => p.x)),
-      Math.max(...ring.map((p) => p.y)),
-    );
+  for (const ring of surface) {
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const p of ring) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+    spatial.add(minX, minY, maxX, maxY);
+  }
   if (!surface.length) spatial.add(0, 0, 0, 0);
   spatial.finish();
   const onSurface = (p: Vec2) =>

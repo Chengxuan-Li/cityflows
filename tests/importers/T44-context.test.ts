@@ -48,12 +48,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // with those removed and `nextId` 14 lower, the city hash is c227f80f… (lead: re-pinned with
             // TASK-132's `covered` too), and the
             // compile hash is unchanged.
-            '159e384e00c01e589dbdf8177e6b76ff335586c330ec861456d9f020b03a890f',
-            'cc576df4c287c4a792deb2e45a5e918b7013d79d453335efdd87e4977b42f79d',
+            '5f46cd8a6c9c0e845ed164321888e772ddb56493a8e88d2da7c987fdd188571a',
+            '6b29fed0cc9c9ad2cd3f7a73ebc673aede2ee08b9d504fd55e0d2ed3b1363758',
           ]
         : [
-            'd51cf70db0a9f1a75deb7edc00c650b8a1653f220c559081852fee62c23777ed',
-            'dbd06176619a2183df50530c02f6362e31f090168fa810ae3c7a2cdbfd33412e',
+            'ae526beaf53de966d69a7d2e6b6efd61c87f38bf03ff9ff61f9e55f12911ec7c',
+            '7ebb6ac1b0894c1f371b109106fa4fc91b3169ad6761dc7a87ee6379645752c8',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

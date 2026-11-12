@@ -54,14 +54,14 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: '3f0408ea67396c2efa7c9720d4b7c371543285dfb331b3f7bd67ff44c56e2295',
+    compile: '14770c813381c93ee103d39734aa8c1d72e8321fd3b5ec3d5008adff838e478e',
     arrows: '29bd956f1a3e4825fe96236f91eb9bfbd94b07e62f23f9eff2f7f0e51621ba0a',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
     // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
     // import without assignTramForms) every pin equals c3a6ec2's.
-    compile: '40281557f4b271f705ab22edbe9cf29bb62505c882b6fbf25bfd232fb8174b02',
+    compile: '821d4a4aa3fa3e034e4271f3e8a08a77b6c4dc6567febfe3cd0a084096822222',
     arrows: 'fc74b34d263cdc6c945bc4bdc85edf24e21476112116318b50a927271ede139e',
   },
 } as const;

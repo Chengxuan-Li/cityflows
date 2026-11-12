@@ -413,8 +413,9 @@ a platform-covering bounding polygon; mapped building shapes remain intact.
 
 TASK-136 adds optional `RailNode.crossing`: `kind: 'rail' | 'tram' | 'pedestrian'`, the
 original optional `crossing:barrier`, `crossing:light`, `crossing:bell` strings as `barrier`,
-`lights`, `bell`, and `roadOsmIds`, the imported drivable ways sharing the mapped node before
-road geometry processing. `railway=level_crossing`, `tram_level_crossing` and pedestrian
+`lights`, `bell`, and `roadOsmIds`, all raw highway ways sharing the mapped node before
+road filtering or geometry processing (including excluded driveways and footpaths).
+`railway=level_crossing`, `tram_level_crossing` and pedestrian
 `crossing` nodes retain their distinct kinds here; all remain `kind: 'level_crossing'` for
 height pins. No version bump: older projects omit the metadata, and JSON/ZIP boundaries retain it.
 
@@ -600,7 +601,9 @@ geometry, so deleting a road drops only its crossing records. No car/walker cont
 
 TASK-136 additionally derives `RailGraph.facilities` from mapped road crossings. Pedestrian
 nodes, unmapped geometric intersections and bridge/tunnel tracks produce no road equipment.
-Ground tracks remain at grade even with `layer=-1` (TASK-132). Adjacent track crossings group
+Ground tracks remain at grade even with `layer=-1` (TASK-132). Facilities associate only with
+roads matching known `roadOsmIds`; geometry cannot override contrary OSM topology. Older
+metadata without source-way IDs can associate geometrically. Adjacent track crossings group
 only along a common source road, within 22 m and 2 m across its axis. Incoming directed road
 arms alone get equipment; placement follows straight predecessors up to 100 m to leave a wide
 junction. The full marking segment clears running tracks by 3 m; posts stand on the driving

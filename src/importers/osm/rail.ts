@@ -67,9 +67,8 @@ export function importRail(
   for (const w of ways)
     for (const ref of new Set(w.nd)) incidents.set(ref, (incidents.get(ref) ?? 0) + 1);
   const nodes = new Map<string, RailNode>();
-  const roadWayIds = new Set(Object.values(city.roads).flatMap((r) => r.provenance.osmIds ?? []));
   const crossingRoads = new Map<number, number[]>();
-  for (const way of data.way.filter((w) => roadWayIds.has(w.id)))
+  for (const way of data.way.filter((w) => w.tag.highway))
     for (const ref of way.nd) {
       const ids = crossingRoads.get(ref) ?? [];
       ids.push(way.id);
@@ -106,7 +105,7 @@ export function importRail(
                   : tag.railway === 'tram_level_crossing'
                     ? ('tram' as const)
                     : ('rail' as const),
-              ...(crossingRoads.has(p.osmId!) ? { roadOsmIds: crossingRoads.get(p.osmId!) } : {}),
+              roadOsmIds: crossingRoads.get(p.osmId!) ?? [],
               ...(tag['crossing:barrier'] ? { barrier: tag['crossing:barrier'] } : {}),
               ...(tag['crossing:light'] ? { lights: tag['crossing:light'] } : {}),
               ...(tag['crossing:bell'] ? { bell: tag['crossing:bell'] } : {}),

@@ -20,7 +20,7 @@ export interface RailNode {
     barrier?: string;
     lights?: string;
     bell?: string;
-    /** Source drivable ways sharing this OSM node, before road geometry processing. */
+    /** Raw highway ways sharing this OSM node, including excluded driveways and footpaths. */
     roadOsmIds?: number[];
   };
 }
