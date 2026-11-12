@@ -392,7 +392,9 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addBuildings(city, data, positions, bounds, base.compiled);
   const garageFootprints = addOsmGarages(city, data, positions, bounds, base.compiled);
   addImplicitGarages(city);
-  const parkingGraph = addLots(city, data, positions, bounds, diagnostics) ?? base.compiled;
+  const parkingGraph =
+    addLots(city, data, positions, bounds, diagnostics, undefined, true, base.compiled) ??
+    base.compiled;
   importWalk(city, data, positions, bounds);
   addStrips(city, data, positions, bounds, diagnostics);
   connectCarExits(city, parkingGraph, garageFootprints);
