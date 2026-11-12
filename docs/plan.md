@@ -171,7 +171,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | merged in PR #4 |
 | [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
 | [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | merged in PR #3 |
-| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | clock repair on held PR, traffic and T63 under investigation |
+| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | clock repair on held PR, traffic and T63 still red |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3401,8 +3401,21 @@ through a complete 121-second road cycle with both crossings open. This trial re
 completions from 3201 to 3075. Following the actual feasible road lane instead of the
 representative route lane exposed a real missed red at `r:252`; the correction alone
 also held more drivers behind moving cars. That trial completed 2669 trips. Both
-experiments were rejected. The ongoing review concerns enough physical space and
-ordinary junction grants to clear the compact road links at the two served crossings.
+experiments were rejected.
+
+On the updated PR, giving road vehicles already on the tracks priority within ordinary
+grants and accounting for physical storage at their conflicting exits reached 3588
+completions, 40 gridlocks and zero stalled heads in a diagnostic replay. The original
+gate requires at least 3702, at most 39 and zero. A separate experiment secured both
+junction movements and the receiving space before entering eligible compact links.
+It recorded 34 claims, zero deadline expirations and no mapped contacts, but completed
+only 2901 trips with 64 gridlocks. Combining the two finished at 3050/48/0.
+The lead rejected these experiments and kept the reviewed clock fix on draft PR #1.
+No qualifying repair for the remaining traffic failure was established. TASK-128 through
+TASK-130 remain held and B56 deferred.
+[Road storage replay](https://github.com/Chengxuan-Li/cityflows/actions/runs/43326354796),
+[compact-link replay](https://github.com/Chengxuan-Li/cityflows/actions/runs/43328451433)
+and [combined replay](https://github.com/Chengxuan-Li/cityflows/actions/runs/43328502397).
 
 ## Owner decisions log
 
