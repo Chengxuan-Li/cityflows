@@ -1,6 +1,5 @@
 import { headingAtDistance } from '../geo/polyline';
 import type { CMovement, CompiledCity } from '../network';
-import { railTimetable } from '../network/trams';
 import type { SimParams } from '../schema';
 import { AMBER, GREEN, RED, updateSignals } from './signals';
 import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
@@ -70,26 +69,6 @@ export function createIntersections(
   );
   const profiles = createVehicleProfiles(params);
   const profile = (id: number) => profiles[vehicles.vclass[id]!]!;
-  const keepClear = new Uint8Array(compiled.lanes.length);
-  if (compiled.rail?.facilities?.length) {
-    const table = railTimetable(compiled.rail);
-    const served = new Set(
-      table.departures.flatMap((d) => table.routes[d.route]!.sections.map((s) => s.track)),
-    );
-    const maxLength = Math.max(...profiles.map((p) => p.lengthM));
-    for (const facility of compiled.rail.facilities) {
-      if (!facility.railSpans?.some((span) => served.has(span.track))) continue;
-      for (const span of facility.spans ?? []) {
-        if (span.segment < 0) continue;
-        const lane = compiled.lanes[span.segment]!,
-          nose = lane.stopM - params.idm.minGapM;
-        if (span.fromM > nose || span.toM < nose - maxLength) continue;
-        for (const exit of lane.out)
-          for (const conflict of compiled.movements[exit]!.conflicts)
-            keepClear[compiled.movements[conflict]!.toLane] = 1;
-      }
-    }
-  }
 
   function signalAllows(id: number, movement: CMovement) {
     if (movement.neverGreen) return false;
@@ -158,27 +137,6 @@ export function createIntersections(
   function blockedExit(id: number, movement: CMovement): 'exit-full' | 'box' | null {
     const clearance = profile(id).lengthM + params.idm.minGapM;
     const exitTail = vehicles.last(movement.toLane);
-    if (keepClear[movement.toLane]) {
-      // Never place a stopped granted body across a served crossing's evacuation.
-      // Existing grants reserve their whole receiving length before any new grant.
-      const gap = params.idm.minGapM,
-        lane = compiled.lanes[movement.toLane]!;
-      let space = lane.stopM - gap;
-      if (exitTail !== -1)
-        space = Math.min(space, vehicles.position[exitTail]! - profile(exitTail).lengthM - gap);
-      for (const incoming of lane.in) {
-        for (let other = vehicles.first(-incoming - 1); other !== -1; other = vehicles.next[other]!)
-          if (other !== id) space -= profile(other).lengthM + gap;
-        const from = compiled.movements[incoming]!.fromLane;
-        for (let other = vehicles.first(from); other !== -1; other = vehicles.next[other]!)
-          if (other !== id && grants[other] === incoming) space -= profile(other).lengthM + gap;
-      }
-      return space < profile(id).lengthM
-        ? exitTail !== -1 && vehicles.position[exitTail]! < clearance
-          ? 'exit-full'
-          : 'box'
-        : null;
-    }
     if (exitTail !== -1) {
       const space =
         vehicles.stopped[id]! >= params.intersection.boxWaitS
