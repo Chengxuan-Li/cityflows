@@ -36,7 +36,8 @@ jobs:
           path: node_modules/.cache/cityflows
           key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
           restore-keys: city-imports-
-      - run: npm run test:traffic:light 2>&1 | tee traffic.log
+      - shell: bash
+        run: npm run test:traffic:light 2>&1 | tee traffic.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -77,7 +78,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run check 2>&1 | tee check.log
+      - shell: bash
+        run: npm run check 2>&1 | tee check.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -98,7 +100,8 @@ jobs:
           path: node_modules/.cache/cityflows
           key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
           restore-keys: city-imports-
-      - run: npm run test:city 2>&1 | tee city.log
+      - shell: bash
+        run: npm run test:city 2>&1 | tee city.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
