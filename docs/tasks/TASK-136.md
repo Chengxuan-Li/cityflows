@@ -26,3 +26,30 @@ shots of each kind, and identify the location or synthetic fixture for each. Sen
 first reviewable shots during implementation and the verified final paths. Run check, city,
 light traffic, light e2e and T75. Use ports 5336/5436. Report the commit, counts, checks,
 changed pins with explanations, and outstanding simulation work. Commit only on the task branch.
+
+## Second delivery — operating crossings on main
+
+B56 is deferred. Use the merged road geometry, timetable and compiled crossing facilities.
+Protect each mapped, at-grade road approach served by a scheduled train or tram. Start warning
+early enough for legal braking, hold approaching traffic at the painted stop line, let
+vehicles already committed clear, and release only after the last carriage clears every
+conflicting track. Consecutive or opposing services must keep protection continuous.
+Prevent entry into a crossing without space to clear the tracks. Account for stopped queues,
+vehicle length, lane and junction movements. A train or tram must never pass through a
+stranded road vehicle. Preserve normal signal right of way on release and handle restart
+and live edits deterministically. A facility without service stays open.
+
+The sim agent owns crossing control, any necessary per-lane compile data, sim/host state
+and focused safety tests. The render agent owns dynamic arms, lamps and tram signals in
+both views and browser tests. Both use the same authoritative simulation state for the
+facility, including during pause, stepping and switching views. Agree its representation
+with the lead before wiring it. TASK-138 supplies tram services independently. Keep the
+schema compatible and avoid touching the held worktrees.
+
+Prove a car stops and resumes, a long vehicle clears, overlapping rail services stay
+protected, a blocked crossing remains safe, and grade-separated, pedestrian-only and
+unserved crossings have no road effect. Check an actual vehicle interaction end to end,
+including a tram, and take open and protected 2D and 3D shots. Run T75, crossing safety
+tests, check, city, light traffic and light e2e. Sim port 5344/5444, drawing 5346/5446.
+Report fixture coverage, road traffic impact, measurements and any unsupported topology.
+The lead verifies the existing traffic gate and reviews the combined result before merge.
