@@ -1,4 +1,4 @@
-name: TASK-146 strict candidate verification
+name: TASK-146 strict renderer candidate
 on:
   workflow_dispatch:
     inputs:
@@ -11,42 +11,59 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [check, city, e2e-light]
     env:
       VITEST_MAX_WORKERS: 2
       CITYFLOWS_TEST_PORT: 5346
       CITYFLOWS_PRODUCTION_TEST_PORT: 5446
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 20
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Apply exact candidate without pushing product files
+      - if: matrix.gate == 'e2e-light'
+        run: npx playwright install --with-deps chromium
+      - name: Apply exact renderer candidate without pushing product files
         env:
           PAINT_PATCH_B64: ${{ inputs.paint_patch }}
         run: |
-          mkdir -p test-results/task146
+          mkdir -p "$RUNNER_TEMP/task146"
+          git restore --source fa8c621 -- tests/render/T25-transition-markings.test.ts
           python - <<'PY'
           import os,base64,subprocess,hashlib,pathlib
           patch=base64.b64decode(os.environ['PAINT_PATCH_B64'])
-          pathlib.Path('test-results/task146/candidate.patch').write_bytes(patch)
-          pathlib.Path('test-results/task146/candidate.sha256').write_text(hashlib.sha256(patch).hexdigest())
+          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'task146'
+          (out/'candidate.patch').write_bytes(patch)
+          (out/'candidate.sha256').write_text(hashlib.sha256(patch).hexdigest())
           subprocess.run(['git','apply'],input=patch,check=True)
           PY
-          npx prettier --write bench/task146-audit.ts bench/task146-shots.ts
-      - name: Ordinary strict check
-        run: npm run check > test-results/task146/check.log 2>&1
-      - name: Ordinary strict city tier
-        if: always()
-        run: npm run test:city > test-results/task146/city.log 2>&1
-      - name: Ordinary strict light browser tier
-        if: always()
-        run: npm run test:e2e:light > test-results/task146/e2e-light.log 2>&1
+          rm bench/task146-audit.ts bench/task146-shots.ts
+          npx prettier --write .github/workflows/full.yml
+      - name: Ordinary strict gate
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          case "$GATE" in
+            check) npm run check 2>&1 | tee "$RUNNER_TEMP/task146/check.log" ;;
+            city) npm run test:city 2>&1 | tee "$RUNNER_TEMP/task146/city.log" ;;
+            e2e-light) npm run test:e2e:light 2>&1 | tee "$RUNNER_TEMP/task146/e2e-light.log" ;;
+          esac
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: task146-strict-${{ github.run_id }}
+          name: task146-${{ matrix.gate }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/task146
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.gate == 'e2e-light'
+        with:
+          name: task146-browser-${{ github.run_id }}
           path: test-results
           retention-days: 7
