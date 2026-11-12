@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
 import type { TripRequest } from '../../src/schema';
-import { createRouteProvider } from '../../src/routing';
+import { createRouteProvider, freeFlowLinkCosts, type RouteRequest } from '../../src/routing';
 import { simParamsSchema } from '../../src/schema/demand.schema';
 import { createEngine } from '../../src/sim/engine';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
@@ -200,8 +200,47 @@ test('T58 a free but lane-infeasible alternative is never taken', () => {
     },
   });
   engine.step(120);
-  expect(checks).toBeGreaterThan(0);
+  expect(checks).toBe(1);
+  engine.step(120);
+  expect(checks).toBe(1);
   expect(engine.inspect(2)!.routeReason).toBe('initial');
+});
+
+test('T58 failed head searches refresh after a cost change and a live destination edit', () => {
+  const fixture = blockedExit();
+  const destination = Object.values(fixture.city.places)[3]!;
+  destination.connectors[0]!.positionM = 20;
+  fixture.compiled = setup(fixture.city);
+  const alternate = fixture.compiled.index.lane.get(`${fixture.exit.id}#1`)!;
+  const provider = createRouteProvider();
+  const costs = freeFlowLinkCosts(fixture.compiled);
+  const requests: RouteRequest[] = [];
+  const engine = createEngine();
+  engine.load({
+    ...fixture,
+    scenario: scenario(),
+    params: { headDetourS: 5, maxReplans: 0 },
+    linkCosts: costs,
+    routeProvider: {
+      route(network, weights, request) {
+        if (request.fromLane === alternate) requests.push(request);
+        return provider.route(network, weights, request);
+      },
+    },
+  });
+  engine.step(120);
+  expect(requests).toHaveLength(1);
+  costs.version++;
+  engine.step(120);
+  expect(requests).toHaveLength(2);
+  expect(engine.inspect(2)!.routeReason).toBe('initial');
+  destination.connectors[0]!.positionM = 120;
+  fixture.city.version++;
+  fixture.compiled = setup(fixture.city);
+  engine.patch(fixture.compiled);
+  engine.step(500);
+  expect(requests.length).toBeGreaterThan(2);
+  expect(engine.inspect(2)).toMatchObject({ state: 'completed', routeReason: 'missed_turn' });
 });
 
 test('T58 red time does not count toward the head detour delay', () => {

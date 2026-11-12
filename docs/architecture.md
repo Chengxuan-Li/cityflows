@@ -1625,6 +1625,13 @@ unsuccessful search does not restart the delay. Without an alternative it keeps 
 TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
 not contain the other per-vehicle timers).
 
+TASK-143 reuses each waiting head's landing-lane suffix results, including failures, within
+the current link-cost epoch. The engine drops these results on a lane-plan change or live
+patch, clears the epoch on a cost-version change, and replaces a head's entries when its
+destination, class, purpose, desired speed, noise or route seed changes. Every step still
+checks candidate permissions, attempted fallbacks, exit occupancy and intersection blocking;
+only the identical suffix search is reused. `RouteProvider` retains no route-result cache.
+
 Stop positions (TASK-072, TASK-094). `CLane.stopM` is where an ungranted vehicle stops. On a
 signalized approach with a served movement and a crossing, `stopM` is the crossing's far edge
 minus 0.5 m (`crossingSpan` in `src/network/crossings.ts`, shared with the renderer), so a
