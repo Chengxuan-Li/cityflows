@@ -6,8 +6,8 @@ each checkpoint; the lead shows the owner the checkpoint shots before the next p
 Gate: 5 (road geometry), B54 amended, B55 reopened (owner, 2026-11-10)
 Branch: `task/131-junction-groups` (created by the lead from main)
 Depends on: TASK-099 (lateral shift profiles), TASK-092 (curbs), TASK-094 (stop lines), TASK-111
-(pedestrian phases). Phase 3 also depends on TASK-130 (the Landsberger loop), which may add a
-box-entry rule.
+(pedestrian phases). Phases 0 to 2 are merged. The owner folded B56 into Phase 3 on 2026-11-12.
+Phase 3 starts from main on `task/131-phase3-b56` with a Codex subagent, GPT-6.1 Sol high.
 Runs alongside:
 - **TASK-128 and TASK-129** work in `src/demand`, `src/sim/parking.ts` and `persons.ts`.
 - **TASK-130** works in `src/sim/engine.ts`, `intersection.ts`, `reroute.ts`, `lane-change.ts`
@@ -228,7 +228,17 @@ Checkpoint 2: the lead and the owner review the shots. Geometry tests that pinne
 (T36, T39, T41, T42, T43, T45 and their named exceptions) are rewritten or retired, each named
 with its reason.
 
-### Phase 3 — Simulation (after TASK-130 merges)
+### Phase 3 — Simulation and the Landsberger loop
+
+Use the TASK-130 checkpoint as trace evidence. Keep its branch held. The agent owns the
+simulation work for the combined task, including TASK-130's in-scope sim files. Trace the
+first refusal that closes the loop on current main and after changing group admission.
+The routing contract, including the proposed `avoidEntryLane`, requires a separate decision.
+Preserve signal, walker, access and lane-change safety and the seed-1 traffic gate. Run the
+T66 cycle and T68 group cases, and the TASK-130 measurements and gates as well as those
+below. The live T53 limit is 6% (report the measured cost); the tighter B56 step-time
+limit is 5%. Report the six loop-road waits for each seed, the inner-link census, refusals,
+trip outcomes and warm side-by-side timings. The lead handles the baseline after acceptance.
 
 1. **The box rule.** A car enters a group only when every inner link on its path through the group
    and its exit lane beyond the group have room for it. Use TASK-130's box-entry rule if it
@@ -261,7 +271,7 @@ Pre-approved, no need to ask:
 - the renderers for roads, junctions and markings in 2D and 3D; the node inspector and the signal
   editor (show and edit the group's program);
 - in Phase 3 only: `src/sim/intersection.ts`, `src/sim/signals.ts` and `src/sim/engine.ts` (entry
-  checks), after TASK-130 merges;
+  checks), together with the B56 simulation surface specified above;
 - `docs/architecture.md` sections 4, 5, 8 and the importer section;
 - `bench/geometry-audit.ts`, `bench/geometry-shots.ts`, `bench/import-probe.ts`,
   `bench/traffic-baseline.json` (the lead re-records it), the city cache key;
@@ -273,8 +283,7 @@ Pre-approved, no need to ask:
 
 - `src/demand/**`, `src/sim/parking.ts`, `connectors.ts`, `persons.ts`, `walkers.ts` (TASK-128,
   TASK-129).
-- `src/sim/**` before Phase 3; `reroute.ts`, `lane-change.ts`, `merge.ts` at any time
-  (TASK-130).
+- `src/sim/**` before Phase 3.
 - The rail network and trains, walk network topology (walk links follow the drawn crossings only).
 - New lane-geometry features beyond decisions 2 and 5.
 
@@ -307,7 +316,7 @@ Pre-approved, no need to ask:
      - 0 stalled heads;
      - no car on an inner link longer than `boxWaitS` at 10:00.
    - **Sindelfingen 0.15 and the full-demand test:** report against main.
-   - **T53** passes at 5%.
+   - **T53** passes the current 6% limit.
    - The baseline resets at merge.
 4. **Performance.** Import time and compile time for Munich and Sindelfingen, and step time,
    within 10% of main; report each.
