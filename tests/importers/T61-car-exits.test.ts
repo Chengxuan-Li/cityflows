@@ -353,7 +353,7 @@ test.each(
   tierCities([
     [
       'munich',
-      'ffc26e516f5786e1d0b9cb79f1556d9b8561a18e8b84d2a49c5dbf788be2b234',
+      'db4871a709d6e10086e0a620aa160a889f1cff73dcafb31bc1fbe4991603979e',
       '9e15a4d6ac0cd7d3254c2abb9d8e7e8ed88365a158a6ae2f596319a6d680cafe',
       14,
       79,
