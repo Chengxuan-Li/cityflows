@@ -56,7 +56,8 @@ import { LevelCrossings3D } from './level-crossings';
 import { noLevelCrossings } from '../render/level-crossings';
 import { noFurniture, placeStationFurniture } from '../render/station-furniture';
 import { noTramStops, placeTramStops } from '../render/tram-stops';
-import { trainTimetable, trainsAt } from '../network/trains';
+import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
+import { railTimetable } from '../network/trams';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -205,7 +206,12 @@ export class Scene3D {
     this.rail = buildRail(city, renderedSource, geometry.heights);
     if (city.rail) {
       const table = trainTimetable(city.rail);
-      this.trains = new Trains3D(city.rail, geometry.heights, this.rail.heights!, table);
+      this.trains = new Trains3D(
+        city.rail,
+        geometry.heights,
+        this.rail.heights!,
+        railTimetable(city.rail),
+      );
       this.content.add(this.trains.group);
       this.stations = new Stations3D(
         placeStationFurniture(city, renderedSource),
@@ -816,10 +822,15 @@ export class Scene3D {
     this.controls.update();
     this.setSignals(timeS);
     if (this.city?.rail && this.trains && this.railVisible && this.trainTimeS !== timeS) {
-      const poses = trainsAt(this.city.rail, trainTimetable(this.city.rail), timeS);
+      const snapshot = this.vehicles.poses.snapshot as typeof this.vehicles.poses.snapshot & {
+        rail?: { trains: TrainPose[] };
+      };
+      const poses =
+        snapshot?.rail?.trains ?? trainsAt(this.city.rail, railTimetable(this.city.rail), timeS);
       this.trains.update(poses, this.belowGround, this.selectedTrain);
       this.stations?.update(timeS);
       this.canvas.dataset.trains = String(poses.length);
+      this.canvas.dataset.trams = String(poses.filter((p) => p.kind === 'tram').length);
       this.trainTimeS = timeS;
       this.invalidate();
     }
@@ -975,7 +986,7 @@ export class Scene3D {
     this.canvas.dataset.levelCrossings = JSON.stringify(
       visible && this.levelCrossings ? this.levelCrossings.counts : noLevelCrossings,
     );
-    if (!visible) this.canvas.dataset.trains = '0';
+    if (!visible) this.canvas.dataset.trains = this.canvas.dataset.trams = '0';
     this.setOverheadLines(this.overheadVisible);
 
     this.canvas.dataset.railTracks = String(visible ? (this.city?.rail?.tracks.length ?? 0) : 0);

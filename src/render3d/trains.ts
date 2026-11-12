@@ -11,6 +11,7 @@ import {
 import type { RailGraph, RailHeights } from '../network/rail';
 import {
   trainDefaults,
+  serviceCarLengthM,
   type TrainPose,
   type TrainTrackPose,
   type TrainTimetable,
@@ -42,7 +43,7 @@ export class Trains3D {
         return (
           sum +
           Math.ceil(r.durationS / timetable.periodS) *
-            Math.ceil(trainDefaults[r.kind].lengthM / trainDefaults.carLengthM)
+            Math.ceil(trainDefaults[r.kind].lengthM / serviceCarLengthM(r.kind))
         );
       }, 0),
     );
@@ -76,7 +77,7 @@ export class Trains3D {
         this.rotation.set(0, -car.heading, pitch, 'YXZ');
         this.matrix
           .makeRotationFromEuler(this.rotation)
-          .scale(this.scale.set(car.lengthM, 2.8, 3))
+          .scale(this.scale.set(car.lengthM, 2.8, train.kind === 'tram' ? 2.4 : 3))
           .setPosition(car.x, y, car.y);
         this.body.setMatrixAt(count, this.matrix);
         this.body.setColorAt(
@@ -85,7 +86,9 @@ export class Trains3D {
         );
         this.matrix
           .makeRotationFromEuler(this.rotation)
-          .scale(this.scale.set(Math.max(0, car.lengthM - 2), 0.15, 2.4))
+          .scale(
+            this.scale.set(Math.max(0, car.lengthM - 2), 0.15, train.kind === 'tram' ? 1.9 : 2.4),
+          )
           .setPosition(
             this.roofOffset
               .set(0, 1.45, 0)

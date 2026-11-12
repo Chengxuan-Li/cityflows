@@ -637,6 +637,21 @@ returns whole-train occupancy and articulated car poses without frame history. A
 the timetable departure plus each route stop's `arrivalS`, repeated by `periodS`; terminal
 services include station visits on both legs.
 
+TASK-138 reuses that motion, reservation and pose representation for an independent synthetic
+tram timetable (`network/trams.ts`). `RailGraph.tramStops` carries the canonical stop islands.
+Only tram sections with permitted continuations between extract boundary ends (or a lawful
+buffer return) receive service; disconnected fragments, service/depot tracks and closed loops
+without boundary entry remain excluded and reported by `tramCensus`. Stop attachment projects
+the mapped halt onto its named section; it never attaches by geographic track proximity or
+jumps between fragments. Defaults are a 36 m articulated tram (four 9 m sections), 50 km/h
+ceiling (lower mapped limits apply), 1 m/s² acceleration/braking, 25 s dwell and 360 s nominal
+headway. Synthetic direction labels name the final served stop toward the city edge; mapped
+line labels are not presented as mapped route destinations. The existing train-only timetable
+and its hash stay unchanged. `railTimetable` combines both services on their least common
+period, repeating departures at each original cadence and retaining train route indices.
+`trainPoseAt(rail, table, departureIndex, cycle, ageS)` and `trainPositionAt(route, ageS)` expose
+per-occurrence service-age sampling for the crossing controller without wall-clock state.
+
 TASK-132 derives each track's height profile, `railHeights(compiled, roadGrades, nodeGrades)`
 in `network/rail.ts`, cached by rail graph identity outside `CompiledCity` like the timetable.
 Tags decide the grade, not `layer`: `covered` track is at grade; a tunnel's rail top lies at
@@ -2182,6 +2197,13 @@ trains request no frames. Bridges occlude lower trains; tunnels hide train bodie
 them with See below ground). Rail hides tracks and trains together. Picking exposes train
 kind, route ends, station stops and next stop/exit; no train state enters car/walker counts,
 traffic controls, routing, demand or simulation hashes.
+
+TASK-138 adds narrower teal articulated tram bodies to the same 2D layers and 3D batches,
+with identical picking, occlusion and Rail-layer visibility. Both scenes use authoritative
+`snapshot.rail.trains` when supplied; the pure combined timetable is the standalone fallback.
+The inspector reads that same authoritative snapshot, identifies synthetic tram service,
+names its direction, served stops, next stop and stopped/running status. It does not replace
+a held controller pose with a raw timetable sample.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach gets an open striped gate, St Andrew's cross, lights

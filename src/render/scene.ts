@@ -23,6 +23,7 @@ import { drawLevelCrossings } from './layers/level-crossings';
 import { noLevelCrossings } from './level-crossings';
 import { noFurniture, placeStationFurniture } from './station-furniture';
 import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
+import { railTimetable } from '../network/trams';
 import { railGeometry, pickRail } from './rail-geometry';
 import { drawLots } from './layers/stalls';
 import { walkGeometry } from './walk-geometry';
@@ -244,7 +245,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   const updateTrainPoses = () => {
     if (!layerVisibility.rail) return;
-    trainPoses = city?.rail ? trainsAt(city.rail, trainTimetable(city.rail), trainTimeS) : [];
+    const controlled = (
+      vehicles.snapshot as typeof vehicles.snapshot & { rail?: { trains: TrainPose[] } }
+    )?.rail;
+    trainPoses =
+      controlled?.trains ??
+      (city?.rail ? trainsAt(city.rail, railTimetable(city.rail), trainTimeS) : []);
     redrawTrains();
   };
   const redrawTrains = () => {
@@ -256,6 +262,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       selection?.kind === 'train' ? selection.id : null,
     );
     canvas.dataset.trains = String(layerVisibility.rail ? trainPoses.length : 0);
+    canvas.dataset.trams = String(
+      layerVisibility.rail ? trainPoses.filter((p) => p.kind === 'tram').length : 0,
+    );
   };
   let parkingCounts: ArrayLike<number> | null = null;
   let tiles: Tiles | undefined;
@@ -325,6 +334,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     }
     for (const grade of visibleGrades) grade.trains.visible = layerVisibility.rail;
     canvas.dataset.trains = String(layerVisibility.rail ? trainPoses.length : 0);
+    canvas.dataset.trams = String(
+      layerVisibility.rail ? trainPoses.filter((p) => p.kind === 'tram').length : 0,
+    );
     updateStations();
     updateCatenary();
     canvas.dataset.stationFurniture = JSON.stringify(
@@ -879,9 +891,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       invalidate();
       if (!city) return;
       trainTimeS = snapshot.timeS;
+      vehicles.update(snapshot);
       updateTrainPoses();
       updateStations();
-      vehicles.update(snapshot);
       vehicleAgeS = 0;
       walkerSnapshot = snapshot.walkers;
       redrawWalkers();
