@@ -1,4 +1,4 @@
-name: TASK147 clock verification
+name: TASK147 crossing verification
 on:
   workflow_dispatch:
     inputs:
@@ -19,9 +19,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx vitest run --project unit tests/sim/T75-operating-crossings.test.ts tests/network/T76-trams.test.ts
+      - run: npx vitest run --project unit tests/sim/T75-operating-crossings.test.ts tests/network/T76-trams.test.ts tests/sim/T75-keep-clear.test.ts tests/sim/intersection.test.ts
+      - run: node --experimental-strip-types --import ./bench/register.ts --import ./test-results/147/keep-clear-hook.mjs ./test-results/147/keep-clear-static.ts
   traffic:
-    if: inputs.scope != 'validation'
+    if: inputs.scope == 'traffic' || inputs.scope == 'all'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -41,10 +42,10 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: clock-traffic
+          name: keep-clear-traffic
           path: traffic.log
   footprints:
-    if: inputs.scope != 'validation'
+    if: inputs.scope == 'traffic' || inputs.scope == 'all'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -59,12 +60,12 @@ jobs:
           path: node_modules/.cache/cityflows
           key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
           restore-keys: city-imports-
-      - run: node --experimental-strip-types --import ./bench/register.ts ./test-results/physical-footprints/probe.ts clock-actual-time 36000 > footprints.log 2>&1
+      - run: node --experimental-strip-types --import ./bench/register.ts ./test-results/physical-footprints/probe.ts keep-clear 36000 > footprints.log 2>&1
       - run: node --input-type=module -e "import fs from 'node:fs';const r=JSON.parse(fs.readFileSync('test-results/physical-footprints/report.json','utf8'));if(r.collision)process.exit(1)"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: clock-footprints
+          name: keep-clear-footprints
           path: |
             footprints.log
             test-results/physical-footprints/*.json
