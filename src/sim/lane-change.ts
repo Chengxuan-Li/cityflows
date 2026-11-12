@@ -15,6 +15,7 @@ export function createLaneChanges(
   vehicles: Vehicles,
   params: SimParams,
   hasGrant: (id: number) => boolean = () => false,
+  keepChanging: (id: number) => boolean = () => false,
 ) {
   const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM } = params;
   const proposals: Proposal[] = [];
@@ -90,6 +91,34 @@ export function createLaneChanges(
       if (enters) distance = Math.min(distance, Math.abs(lane.lane - ordinal));
     }
     return distance;
+  }
+
+  function stopM(id: number, source: CLane) {
+    const step = vehicles.routeStep[id]!;
+    const final = step === vehicles.route[id]!.roads.length - 1;
+    const needed = changesToTargets(id, source.lane, step, final);
+    let stop = source.stopM;
+    let best = Infinity;
+    for (const idx of compiled.roads[source.road]!.lanes) {
+      const target = compiled.lanes[idx]!;
+      if (
+        Math.abs(target.lane - source.lane) !== needed ||
+        changesToTargets(id, target.lane, step, final) !== 0
+      )
+        continue;
+      let boundary = source.stopM;
+      const lo = Math.min(source.lane, target.lane),
+        hi = Math.max(source.lane, target.lane);
+      for (const crossed of compiled.roads[source.road]!.lanes) {
+        const lane = compiled.lanes[crossed]!;
+        if (lane.lane >= lo && lane.lane <= hi) boundary = Math.min(boundary, lane.stopM);
+      }
+      if (boundary < best) {
+        best = boundary;
+        stop = boundary;
+      }
+    }
+    return stop;
   }
 
   function acceleration(id: number, lane: CLane, leader: number) {
@@ -197,12 +226,22 @@ export function createLaneChanges(
     const cutoff = finalRoad ? Math.min(source.lengthM, destination.positionM) : source.lengthM;
     const remaining = cutoff - positionM;
     const changesNeeded = changesToTargets(id, source.lane, step, finalRoad);
+    const boundary = keepChanging(id) ? stopM(id, source) : source.stopM;
+    const boundedHold =
+      keepChanging(id) && !finalRoad && changesNeeded > 0 && positionM <= boundary + 1e-8;
+    if (boundedHold) holding[id] = 1;
     const mandatory =
       remaining >= 0 &&
       changesNeeded > 0 &&
       remaining < changesNeeded * laneChangeDistanceM + mandatoryUrgencyM;
     // Held: creeping for the change, or standing at the stop position (where `stopped` counts).
-    heldS[id] = mandatory && (crept || vehicles.stopped[id]! > 0) ? heldS[id]! + params.dtS : 0;
+    heldS[id] =
+      mandatory &&
+      (crept ||
+        vehicles.stopped[id]! > 0 ||
+        (boundedHold && vehicles.speed[id]! < 0.1 && positionM >= boundary - idm.minGapM - 0.1))
+        ? heldS[id]! + params.dtS
+        : 0;
     if (!finalRoad && heldS[id]! >= params.missedTurnAfterS) {
       gaveUp[id] = 1;
       heldS[id] = 0;
@@ -314,6 +353,7 @@ export function createLaneChanges(
     holding,
     gaveUp,
     yieldingTo,
+    stopM,
     /** The vehicle leaves its lane for a movement. */
     leaveLane: (id: number) => {
       offsetM[id] = 0;
