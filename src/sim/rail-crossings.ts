@@ -30,7 +30,11 @@ type Service = {
   current: number[];
   proposed: number[];
 };
-type Clock = { routeId: string; requestedS: number; cycle: number; ageS: number };
+type Clock = { routeId: string; requestedS: number; cycle: number; ageS: number; held: boolean };
+type RoadState = {
+  histories: { id: number; segment: number; trail: number[]; position: number }[];
+  admissions: { nodes: string[]; ids: number[] }[];
+};
 
 /** Time at a coordinate within one monotonic motion phase. */
 function phaseTime(phase: TrainRoute['phases'][number], position: number) {
@@ -53,6 +57,7 @@ export function createRailCrossings(
   startS: number,
   red: (movement: number) => boolean,
   clocks?: Clock[],
+  roadState?: RoadState,
 ) {
   const rail = city.rail;
   if (!rail) return undefined;
@@ -399,6 +404,19 @@ export function createRailCrossings(
   }
   let snapshotTimeS = startS;
   const enabled = served.some(Boolean);
+  if (roadState) {
+    for (const history of roadState.histories)
+      if (history.segment === vehicles.lane[history.id])
+        histories.set(history.id, { ...history, position: vehicles.position[history.id]! });
+    for (let f = 0; f < facilities.length; f++) {
+      const previous = roadState.admissions.find(
+        (a) =>
+          a.nodes.length === facilities[f]!.nodes.length &&
+          a.nodes.every((n) => facilities[f]!.nodes.includes(n)),
+      );
+      if (previous) for (const id of previous.ids) if (histories.has(id)) committed[f]!.add(id);
+    }
+  }
   spawn(startS);
   if (clocks) {
     for (const clock of clocks) {
@@ -419,6 +437,7 @@ export function createRailCrossings(
         services.push(service);
       }
       service.ageS = clock.ageS;
+      service.held = clock.held;
     }
     roadOccupancy();
     for (const service of services)
@@ -574,7 +593,31 @@ export function createRailCrossings(
         requestedS: table.departures[s.departure]!.requestedS,
         cycle: s.cycle,
         ageS: s.ageS,
+        held: s.held,
       }));
+    },
+    roadState(mapping: { lanes: number[]; movements: number[] }): RoadState {
+      const remap = (segment: number) => {
+        if (segment >= 0) return mapping.lanes[segment] ?? -1;
+        const movement = mapping.movements[-segment - 1] ?? -1;
+        return movement < 0 ? undefined : -movement - 1;
+      };
+      const result: RoadState = {
+        histories: [],
+        admissions: facilities.map((f, i) => ({ nodes: f.nodes, ids: [...committed[i]!] })),
+      };
+      for (const [id, history] of histories) {
+        const segment = remap(history.segment);
+        if (segment === undefined || (history.segment >= 0 && segment === -1)) continue;
+        const trail: number[] = [];
+        for (const previous of history.trail) {
+          const mapped = remap(previous);
+          if (mapped === undefined || (previous >= 0 && mapped === -1)) break;
+          trail.push(mapped);
+        }
+        result.histories.push({ id, segment, trail, position: history.position });
+      }
+      return result;
     },
     snapshot(): RailSnapshot {
       return {
