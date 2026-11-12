@@ -681,6 +681,73 @@ test('T68: a reserved inner merge does not yield back to a ramp waiting outside 
   expect(engine.metrics().respawns).toBe(0);
 });
 
+test.each([
+  [25, 10, false],
+  [70, 10, true],
+  [70, 0, false],
+] as const)(
+  'T68: reserved exits have finite storage (length %sm, tail %sm/s)',
+  (exitLength, speed, admits) => {
+    const { city, node, road, place } = buildCity('Finite reserved exit', 1);
+    const a = node(100, 0),
+      b = node(200, 0);
+    const entry = road(node(0, 0), a),
+      inner = road(a, b),
+      exit = road(b, node(200 + exitLength, 0));
+    city.junctionGroups = {
+      'jg:100': {
+        id: 'jg:100',
+        nodes: [a.id, b.id],
+        innerRoads: [inner.id],
+        signal: null,
+        provenance: { source: 'authored' },
+      },
+    };
+    place('Destination', 'gateway', b.pos, [{ road: exit, direction: 'in', positionM: 10 }]);
+    const compiled = setup(city),
+      from = compiled.index.lane.get(`${entry.id}#0`)!,
+      innerLane = compiled.index.lane.get(`${inner.id}#0`)!,
+      exitLane = compiled.index.lane.get(`${exit.id}#0`)!;
+    const result = createRouteProvider().route(compiled, freeFlowLinkCosts(compiled), {
+      fromLane: from,
+      fromPosM: 80,
+      toConnector: 0,
+      vehicleClass: 'car',
+      desiredSpeedFactor: 1,
+      noise: 0,
+      seed: 1,
+    });
+    if (!result.ok) throw new Error(result.reason);
+    const vehicles = createVehicles(5, compiled.lanes.length, compiled.movements.length);
+    vehicles.state.fill(DRIVING);
+    vehicles.speedFactor.fill(1);
+    const movement = compiled.movements[result.route.movements[0]!]!;
+    const intersections = createIntersections(compiled, vehicles, DEFAULT_SIM_PARAMS);
+    for (let id = 0; id < 4; id++) {
+      vehicles.route[id] = result.route;
+      vehicles.destination[id] = 0;
+      vehicles.movement[id] = movement.idx;
+      vehicles.insert(id, from, 80 - id * 10);
+      if (id === 3) break;
+      intersections.request(id, movement);
+      intersections.resolve();
+      expect(intersections.grants[id]).toBe(movement.idx);
+      intersections.enterGroup(id, movement);
+      intersections.release(id);
+      vehicles.remove(id);
+      vehicles.insert(id, innerLane, 50 - id * 15);
+    }
+    expect(intersections.reservedSpace[exitLane]).toBe(19.5);
+    expect(compiled.lanes[exitLane]!.lengthM).toBeGreaterThanOrEqual(19.5);
+    expect(compiled.lanes[exitLane]!.lengthM > 26).toBe(exitLength > 26);
+    vehicles.insert(4, exitLane, 10);
+    vehicles.speed[4] = speed;
+    intersections.request(3, movement);
+    intersections.resolve();
+    expect(intersections.grants[3]).toBe(admits ? movement.idx : -1);
+  },
+);
+
 test.each(['rear', 'idm', 'follower'] as const)(
   'T68: an active clearance retains %s safety after entry',
   (kind) => {

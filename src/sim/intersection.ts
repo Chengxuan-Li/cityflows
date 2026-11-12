@@ -343,6 +343,8 @@ export function createIntersections(
         distance += part.lengthM;
         const tail = vehicles.last(part.toLane);
         const clearance = profile(id).lengthM + params.idm.minGapM + reservedSpace[part.toLane]!;
+        if (reservedSpace[part.toLane]! > 0 && compiled.lanes[part.toLane]!.lengthM < clearance)
+          return 'exit-full';
         if (tail !== -1) {
           const horizon = Math.min(
             params.intersection.boxWaitS,
@@ -350,11 +352,7 @@ export function createIntersections(
           );
           const space = exitRear(tail, horizon);
           if (space < clearance) return 'exit-full';
-        } else if (
-          reservedSpace[part.toLane]! > 0 &&
-          compiled.lanes[part.toLane]!.lengthM < clearance
-        )
-          return 'exit-full';
+        }
         distance += compiled.lanes[part.toLane]!.lengthM;
       }
       return null;

@@ -42,6 +42,8 @@ const watchedIds = new Set(
   (process.env.CITYFLOWS_WATCH_IDS ?? '').split(',').map(Number).filter(Boolean),
 );
 const journeys: unknown[] = [];
+const selectedDecisions: unknown[] = [];
+const lastSelectedDecision = new Map<number, string>();
 const previousStates = new Map<number, { state: string; lane: number }>();
 const originDecisions = new Map<
   number,
@@ -79,6 +81,29 @@ const activeEngine = process.env.CITYFLOWS_ENGINE_ROOT
     ).createEngine()
   : createEngine();
 const provider = createRouteProvider();
+function exitStorage(movement: (typeof compiled.movements)[number]) {
+  const group = compiled.nodes[movement.node]!.group;
+  const lanes = new Set([movement.toLane]);
+  if (group !== undefined)
+    for (const chain of compiled.groups![group]!.chains)
+      if (chain.movements[0] === movement.idx)
+        lanes.add(compiled.movements[chain.movements.at(-1)!]!.toLane);
+  const snapshot = activeEngine.snapshot();
+  return [...lanes].map((lane) => ({
+    lane: compiled.lanes[lane]!.id,
+    vehicles: [...snapshot.id]
+      .filter((_, i) => snapshot.lane[i] === lane)
+      .map((id) => activeEngine.inspect(id)!)
+      .sort((a, b) => a.positionM - b.positionM)
+      .slice(0, 3)
+      .map(({ id, positionM, speedMps, vehicleClass }) => ({
+        id,
+        positionM,
+        speedMps,
+        vehicleClass,
+      })),
+  }));
+}
 let endInnerOverBox = 0;
 let endInnerStanding = 0;
 let longestInnerStopS = 0;
@@ -130,6 +155,21 @@ const morning = probeMorning(city, compiled, 0.15, {
     decisions.set(id + 1, { reason, movement: movement.idx, other: other?.idx });
     const key = `${compiled.lanes[movement.fromLane]!.id}:${reason}`;
     refusals[key] = (refusals[key] ?? 0) + 1;
+    if (watchedIds.has(id + 1)) {
+      const decision = `${movement.idx}:${reason}:${other?.idx}`;
+      if (lastSelectedDecision.get(id) !== decision) {
+        lastSelectedDecision.set(id, decision);
+        selectedDecisions.push({
+          id: id + 1,
+          timeS: activeEngine.timeS,
+          movement: movement.id,
+          reason,
+          other: other?.id,
+          current: activeEngine.inspect(id + 1),
+          storage: exitStorage(movement),
+        });
+      }
+    }
   },
   originObserver(id, connector, hasGap) {
     if (!watchedIds.has(id + 1)) return;
@@ -181,6 +221,12 @@ const morning = probeMorning(city, compiled, 0.15, {
         ...detail,
         segment: compiled.lanes[detail.lane]?.id ?? movement?.id,
         exitRearM,
+        groupEntryStorage:
+          movement &&
+          compiled.nodes[movement.node]!.group !== undefined &&
+          compiled.roads[compiled.lanes[movement.fromLane]!.road]!.group === undefined
+            ? exitStorage(movement)
+            : undefined,
         route: detail.route?.roads.map((r) => compiled.roads[r]!.id),
       });
     }
@@ -401,6 +447,7 @@ writeFileSync(
       cycles,
       cyclesAtEnd,
       journeys,
+      selectedDecisions,
       headQueries,
       headExecuted,
       originDecisions: [...originDecisions],
