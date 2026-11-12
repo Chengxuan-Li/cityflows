@@ -8,19 +8,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [no-vehicle, no-red]
+        suite: [munich-morning, T53-munich-pedestrians]
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 8
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Measure the three-hour Munich morning
-        env:
-          VARIANT: ${{ matrix.variant }}
-        run: |
-          node bench/task147/admission-experiment.mjs "$VARIANT"
-          node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts "$VARIANT"
+      - run: npx vitest run --project traffic tests/traffic/${{ matrix.suite }}.test.ts
