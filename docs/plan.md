@@ -3325,7 +3325,35 @@ with 80 and 50 gridlocks and one and zero stalled heads respectively. The origin
 remains deferred. TASK-128, TASK-129 and TASK-130 retain their owner holds. TASK-113 awaits
 TASK-129, and TASK-139 remains dropped for now.
 
+### 2026-11-12 Munich access, rail frame times and held PR CI
+
+TASK-144 reproduced a missing southern entrance on aisle way 159640404. Its northern
+entrance already served the lot. The candidate joins the southern endpoint at OSM
+node 1717584268 to service way 159640408 and restores a second shared node, 1717561493,
+lost when two public ways were joined. Three fixed gateway round trips completed through
+parking, dwell and departure. The seed-1 light traffic run at `86db4f3` recorded 4138
+completions, 35 gridlocks and zero stalled heads. Review of the city geometry and routing
+oracles continues. [Traffic run](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305180358).
+
+TASK-145 reproduced excess 3D rail frame time on the default Playwright SwiftShader
+backend in both the stationary and moving cameras. A delayed observer callback dropped
+one render measurement per window. The corrected sampler retains the raw animation
+intervals and all render entries. Isolating track paint identified the largest measured
+layer cost. Per-track and 256 m spatial batches both missed the ten-percent limit.
+The final named runs record the browser and GPU used.
+
+TASK-147 reproduced PR #1's 2968 completions and 61 gridlocks. Retaining its timetable
+and removing the road-crossing controller in a diagnostic replay reproduced main's
+4113/26/0 exactly. Staging a whole car safely at a later rail mark passed T53 but
+produced 3012/70/1. Disabling only crossing 2's protection in an isolated diagnostic
+produced 4450/12/0. A trace found four distinct paths where a stopped follower waited
+at an open marking behind a moving leader. The PR branch retains protection and its
+original gates. [Staging run](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305272553)
+and [facility isolation](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305740807).
+
 ## Owner decisions log
+
+- 2026-11-12 (owner): run the parking and frame audits in parallel, then inspect the westbound lane gain. Repair CI on PR #1 in parallel and keep it held. TASK-128 through TASK-130 stay held and B56 stays deferred.
 
 - 2026-11-12 (owner): defer B56 and proceed with the remaining backlog. The lead is starting operating crossings and tram service against merged main. The traffic gate and holds on TASK-128, TASK-129 and TASK-130 still apply.
 
