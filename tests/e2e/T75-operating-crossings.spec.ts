@@ -98,7 +98,7 @@ for (const kind of ['rail', 'tram'] as const)
     scenario.startS = kind === 'rail' ? 120 : 60;
     scenario.endS = 720;
     scenario.simParams = { streetParkingShare: 0 };
-    scenario.demand.workStart = { meanS: scenario.startS + 5, sdS: 0 };
+    scenario.demand.workStart = { meanS: kind === 'rail' ? 125 : 70, sdS: 0 };
     scenario.demand.workDuration = { meanS: 3600, sdS: 0 };
     scenario.demand.chains = { schoolShare: 0, shopShare: 0, leisureShare: 0 };
     scenario.demand.classShares = {
