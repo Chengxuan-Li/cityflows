@@ -67,6 +67,13 @@ export function importRail(
   for (const w of ways)
     for (const ref of new Set(w.nd)) incidents.set(ref, (incidents.get(ref) ?? 0) + 1);
   const nodes = new Map<string, RailNode>();
+  const crossingRoads = new Map<number, number[]>();
+  for (const way of data.way.filter((w) => w.tag.highway))
+    for (const ref of way.nd) {
+      const ids = crossingRoads.get(ref) ?? [];
+      ids.push(way.id);
+      crossingRoads.set(ref, ids);
+    }
   const addNode = (p: RoadPoint, layer: number) => {
     const old = nodes.get(p.key);
     if (old) return old.id;
@@ -78,7 +85,7 @@ export function importRail(
           ? 'buffer_stop'
           : tag.railway === 'stop'
             ? 'stop'
-            : ['level_crossing', 'crossing'].includes(tag.railway ?? '')
+            : ['level_crossing', 'tram_level_crossing', 'crossing'].includes(tag.railway ?? '')
               ? 'level_crossing'
               : 'plain';
     const id = allocateId(city, 'rn');
@@ -89,6 +96,22 @@ export function importRail(
       layer: tag.layer === undefined ? layer : (osmLayer(tag) ?? layer),
       ...(p.osmId === undefined ? {} : { osmId: p.osmId }),
       ...(tag.railway === 'signal' ? { signal: true } : {}),
+      ...(['level_crossing', 'tram_level_crossing', 'crossing'].includes(tag.railway ?? '')
+        ? {
+            crossing: {
+              kind:
+                tag.railway === 'crossing'
+                  ? ('pedestrian' as const)
+                  : tag.railway === 'tram_level_crossing'
+                    ? ('tram' as const)
+                    : ('rail' as const),
+              roadOsmIds: crossingRoads.get(p.osmId!) ?? [],
+              ...(tag['crossing:barrier'] ? { barrier: tag['crossing:barrier'] } : {}),
+              ...(tag['crossing:light'] ? { lights: tag['crossing:light'] } : {}),
+              ...(tag['crossing:bell'] ? { bell: tag['crossing:bell'] } : {}),
+            },
+          }
+        : {}),
     };
     nodes.set(p.key, n);
     rail.nodes[id] = n;

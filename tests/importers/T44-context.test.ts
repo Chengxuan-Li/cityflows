@@ -1,3 +1,4 @@
+// TASK-136: crossing metadata/facilities change whole-network pins; T75 strips them and retains the previous bytes.
 // TASK-127: compiled rail gains boundary flags; T62 still pins unchanged lanes/movements.
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
@@ -47,12 +48,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // with those removed and `nextId` 14 lower, the city hash is c227f80f… (lead: re-pinned with
             // TASK-132's `covered` too), and the
             // compile hash is unchanged.
-            'f8810ffef5bb96daab5481253ab960b104faa27384155ff14728f2b6697a476f',
-            '652e6c1d2ec3002b23b36faf9697faf0ba67530f1ad7de8c9c68c5d2d9007b3f',
+            '5f46cd8a6c9c0e845ed164321888e772ddb56493a8e88d2da7c987fdd188571a',
+            '6b29fed0cc9c9ad2cd3f7a73ebc673aede2ee08b9d504fd55e0d2ed3b1363758',
           ]
         : [
-            'd2376c18e9e572547b2ad37b391fb043177e24e649156a0d43ee976064cea243',
-            'f984571c1588469cd1f122f59e751656522545a536c6412586d643f656cd9bb9',
+            'ae526beaf53de966d69a7d2e6b6efd61c87f38bf03ff9ff61f9e55f12911ec7c',
+            '7ebb6ac1b0894c1f371b109106fa4fc91b3169ad6761dc7a87ee6379645752c8',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

@@ -14,6 +14,15 @@ export interface RailNode {
   layer: number;
   osmId?: number;
   signal?: boolean;
+  /** TASK-136: mapped crossing tags; absent in older projects. Pedestrian crossings have no road equipment. */
+  crossing?: {
+    kind: 'rail' | 'tram' | 'pedestrian';
+    barrier?: string;
+    lights?: string;
+    bell?: string;
+    /** Raw highway ways sharing this OSM node, including excluded driveways and footpaths. */
+    roadOsmIds?: number[];
+  };
 }
 export interface RailTrack {
   id: string;

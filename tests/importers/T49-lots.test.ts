@@ -1,3 +1,4 @@
+// TASK-136: crossing metadata/facilities change whole-network pins; T75 strips them and retains the previous bytes.
 // TASK-127: compiled rail gains boundary flags; T62 still pins unchanged lanes/movements.
 // TASK-124: re-pin repaired/split connector data and exit warnings; T61 pins unchanged car geometry and strips.
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
@@ -26,12 +27,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // removed and `nextId` 14 lower, the city hash is dfd83d49…, and the compile hash is unchanged.
 const baseline = {
   'munich-donnersberger': [
-    '938a689f06b3971a56dcf0295d473688d78dbefca91ad787e3f1038e28d7eb9b',
-    'fd50eaa229f3d0dae7e5d9804a42ecac6f8937237e6218c344a6cd755ad3bbcd',
+    '8c2436d148f2dfa7d42f51d3acb4d1944df250da6f33f8795f357af5bcb9cbbe',
+    'e2ba49f664cf5536c78374fa960172ff7a98d861e3e1e5ebc24a3be91715d2fa',
   ],
   'sindelfingen-a81': [
-    '7e125a5d7795b42664912c038f092ab6a0c55205402e9c262f8c4ce4c776bb91',
-    '3825bc3b6d7fb9cec76ef7eaa692951871f7010df981e8e911c345b9af161318',
+    'eda6809b6682636376c1b9d6ee2333a2b88fc8776f6cd7340efabaf52888df0f',
+    '6681a051339b6734947c3a32efeb7faf6075fcfc393eb35fc5967dc14984707d',
   ],
 };
 
