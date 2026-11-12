@@ -197,6 +197,24 @@ export function createIntersections(
         if (compiled.roads[lane.road]!.group !== group.idx || lane.road === lastRoad)
           if (usableExit(movements)) chain = { movements, ...plan };
       }
+      if (chain) {
+        const movements = [...chain.movements];
+        let lane = compiled.lanes[compiled.movements[movements.at(-1)!]!.toLane]!;
+        while (lane.lengthM < profile(id).lengthM + params.idm.minGapM) {
+          const step = plan.step + movements.length;
+          if (step === plan.route.roads.length - 1) break;
+          const next = lane.out.find(
+            (m) =>
+              continuations[m] &&
+              compiled.lanes[compiled.movements[m]!.toLane]!.road === plan.route.roads[step + 1] &&
+              allowedLanes[vehicles.vclass[id]!]![compiled.movements[m]!.toLane],
+          );
+          if (next === undefined) break;
+          movements.push(next);
+          lane = compiled.lanes[compiled.movements[next]!.toLane]!;
+        }
+        chain = { ...chain, movements };
+      }
     }
     cache.chains.set(movement.idx, chain);
     return chain;
@@ -287,6 +305,22 @@ export function createIntersections(
     return space;
   }
 
+  function conflictsWithClearance(path: GroupPath, id: number) {
+    const held = groupPaths[id]!;
+    const field = vehicles.lane[id]!;
+    const at = held.movements.findIndex((m) =>
+      field < 0
+        ? m === -field - 1
+        : compiled.lanes[compiled.movements[m]!.toLane]!.road === compiled.lanes[field]!.road,
+    );
+    const cleared = at + Number(field >= 0 && vehicles.position[id]! >= profile(id).lengthM);
+    return path.movements.some((m) =>
+      compiled.movements[m]!.conflicts.some(
+        (other) => held.movements.indexOf(other) >= Math.max(0, cleared),
+      ),
+    );
+  }
+
   function blockedExit(id: number, movement: CMovement): 'exit-full' | 'box' | null {
     const groupIndex = compiled.nodes[movement.node]!.group;
     if (groupIndex !== undefined && !inner(movement)) {
@@ -294,22 +328,7 @@ export function createIntersections(
       if (!chain) return 'box';
       for (const car of groupOccupants[groupIndex]!) {
         if (car === id) continue;
-        const held = groupPaths[car]!;
-        const field = vehicles.lane[car]!;
-        const at = held.movements.findIndex((m) =>
-          field < 0
-            ? m === -field - 1
-            : compiled.lanes[compiled.movements[m]!.toLane]!.road === compiled.lanes[field]!.road,
-        );
-        const cleared = at + Number(field >= 0 && vehicles.position[car]! >= profile(car).lengthM);
-        if (
-          chain.movements.some((m) =>
-            compiled.movements[m]!.conflicts.some(
-              (other) => held.movements.indexOf(other) >= Math.max(0, cleared),
-            ),
-          )
-        )
-          return 'box';
+        if (conflictsWithClearance(chain, car)) return 'box';
       }
       let distance = 0;
       for (const idx of chain.movements) {
@@ -531,6 +550,18 @@ export function createIntersections(
     blockedExit,
     reservedSpace,
     groupPaths,
+    blocksEntry(id: number, requester: number, movement: CMovement) {
+      const held = groupPaths[id];
+      if (!held || grants[requester] !== -1 || inner(movement)) return false;
+      const group = compiled.nodes[movement.node]!.group;
+      if (
+        group === undefined ||
+        compiled.nodes[compiled.movements[held.movements[0]!]!.node]!.group !== group
+      )
+        return false;
+      const path = entryChain(requester, movement);
+      return !!path && conflictsWithClearance(path, id);
+    },
     enterGroup(id: number, movement: CMovement) {
       if (compiled.nodes[movement.node]!.group === undefined || inner(movement)) return;
       const chain = entryChain(id, movement)!;

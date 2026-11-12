@@ -3,7 +3,12 @@ import type { SimParams } from '../schema';
 import { idmAcceleration } from './idm';
 import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
 
-export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params: SimParams) {
+export function createMerges(
+  compiled: CompiledCity,
+  vehicles: Vehicles,
+  params: SimParams,
+  waitsForClearance: (id: number, ramp: number, movement: CMovement) => boolean = () => false,
+) {
   const { idm, mobil, dtS } = params;
   const profiles = createVehicleProfiles(params);
   const profile = (id: number) => profiles[vehicles.vclass[id]!]!;
@@ -19,7 +24,7 @@ export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params:
       speed * dtS + (speed * speed) / (2 * mobil.safeDecelMps2)
     );
   }
-  function waitingRamp(movement: CMovement) {
+  function waitingRamp(candidate: number, movement: CMovement) {
     for (const idx of compiled.lanes[movement.toLane]!.in) {
       const other = compiled.movements[idx]!;
       if (other.turn !== 'merge' || other.neverGreen || !isRamp(other)) continue;
@@ -33,7 +38,7 @@ export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params:
           (speed * speed) / (2 * profile(id).idm.bMps2) + idm.minGapM,
         )
       )
-        return true;
+        if (!waitsForClearance(candidate, id, other)) return true;
     }
     return false;
   }
@@ -58,7 +63,9 @@ export function createMerges(compiled: CompiledCity, vehicles: Vehicles, params:
     // Signals already allocate the right of way; a ramp on red must not hold a green mainline.
     if (!isRamp(movement))
       return (
-        !!compiled.nodes[movement.node]!.signal || !waitingRamp(movement) || !canStop(id, movement)
+        !!compiled.nodes[movement.node]!.signal ||
+        !waitingRamp(id, movement) ||
+        !canStop(id, movement)
       );
     for (const idx of target.in) {
       const other = compiled.movements[idx]!;

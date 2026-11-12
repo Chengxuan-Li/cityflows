@@ -6,6 +6,11 @@ import { probeMorning } from './import-probe';
 import { compile } from '../src/network';
 import type { IntersectionObserver } from '../src/sim/intersection';
 import { createEngine } from '../src/sim/engine';
+import { createRouteProvider } from '../src/routing';
+import { createRandom } from '../src/geo/random';
+import { DEFAULT_SIM_PARAMS } from '../src/sim/params';
+import { defaultScenario } from '../src/fixtures/scenarios';
+import { generatePopulation, scheduleTrips } from '../src/demand';
 
 // Phase 3 evidence: node admission decisions, continuous inner-link stops and B56 heads.
 const cityName = process.env.CITYFLOWS_CITY === 'sindelfingen' ? 'sindelfingen' : 'munich';
@@ -46,6 +51,31 @@ const originDecisions = new Map<
   }
 >();
 let clockS = 25200;
+const headQueries: unknown[] = [],
+  headExecuted: unknown[] = [];
+const seeds = new Map<number, number>();
+if (watchedIds.size) {
+  const scenario = defaultScenario('grid5x5', seed);
+  scenario.demand.personsPerResident = 0.15;
+  scenario.startS = 25200;
+  scenario.endS = 36000;
+  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
+  for (const id of watchedIds)
+    for (let picks = 0; picks <= 2; picks++) {
+      const rng = createRandom(scenario.seed).derive(trips[id - 1]!.id);
+      for (let i = 0; i < picks; i++) rng.next();
+      rng.normal(1, DEFAULT_SIM_PARAMS.idm.desiredSpeedSd);
+      seeds.set(Math.floor(rng.next() * 0x100000000), id);
+    }
+}
+const activeEngine = process.env.CITYFLOWS_ENGINE_ROOT
+  ? (
+      await import(
+        pathToFileURL(resolve(process.env.CITYFLOWS_ENGINE_ROOT, 'src/sim/engine.ts')).href
+      )
+    ).createEngine()
+  : createEngine();
+const provider = createRouteProvider();
 let endInnerOverBox = 0;
 let endInnerStanding = 0;
 let longestInnerStopS = 0;
@@ -54,13 +84,45 @@ let tick = 0;
 const morning = probeMorning(city, compiled, 0.15, {
   untilS,
   demandSeed: seed,
-  engine: process.env.CITYFLOWS_ENGINE_ROOT
-    ? (
-        await import(
-          pathToFileURL(resolve(process.env.CITYFLOWS_ENGINE_ROOT, 'src/sim/engine.ts')).href
-        )
-      ).createEngine()
-    : createEngine(),
+  engine: activeEngine,
+  routeProvider: {
+    route(net, costs, request) {
+      const result = provider.route(net, costs, request);
+      const id = seeds.get(request.seed);
+      if (id !== undefined) {
+        const stack = new Error().stack ?? '';
+        if (stack.includes('detourHeads'))
+          headQueries.push({
+            id,
+            timeS: activeEngine.timeS,
+            version: costs.version,
+            from: compiled.lanes[request.fromLane]!.id,
+            positionM: request.fromPosM,
+            to: compiled.connectors[request.toConnector]!.id,
+            current: activeEngine.inspect(id),
+            ok: result.ok,
+            route: result.ok
+              ? {
+                  ...result.route,
+                  roads: result.route.roads.map((r) => compiled.roads[r]!.id),
+                  movements: result.route.movements.map((m) => compiled.movements[m]!.id),
+                }
+              : result.reason,
+          });
+      }
+      return result;
+    },
+  },
+  headDetourObserver(id, lane, movement) {
+    if (watchedIds.has(id + 1))
+      headExecuted.push({
+        id: id + 1,
+        timeS: activeEngine.timeS,
+        from: compiled.lanes[lane]!.id,
+        movement: compiled.movements[movement]!.id,
+        current: activeEngine.inspect(id + 1),
+      });
+  },
   intersectionObserver(id, movement, reason, other) {
     decisions.set(id + 1, { reason, movement: movement.idx, other: other?.idx });
     const key = `${compiled.lanes[movement.fromLane]!.id}:${reason}`;
@@ -97,7 +159,7 @@ const morning = probeMorning(city, compiled, 0.15, {
       if (previous?.state === detail.state && previous.lane === detail.lane) continue;
       previousStates.set(id, { state: detail.state, lane: detail.lane });
       const movement =
-        detail.lane < 0 && detail.lane !== -2147483648
+        detail.state === 'driving' && detail.lane < 0 && detail.lane !== -2147483648
           ? compiled.movements[-detail.lane - 1]
           : null;
       let exitRearM: number | null = null;
@@ -303,6 +365,8 @@ writeFileSync(
       loopRoadDwell,
       cycles,
       journeys,
+      headQueries,
+      headExecuted,
       originDecisions: [...originDecisions],
       chainRefusals: [...chainRefusals.values()],
       refusals,

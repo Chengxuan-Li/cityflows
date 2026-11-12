@@ -132,7 +132,9 @@ function createRun({
     parking,
     persons,
   );
-  let merges = createMerges(compiled, vehicles, params);
+  let merges = createMerges(compiled, vehicles, params, (id, ramp, movement) =>
+    intersections.blocksEntry(id, ramp, movement),
+  );
   let intersections = createIntersections(compiled, vehicles, params, merges.canEnter, {
     onDecision: intersectionObserver,
     acceleration: (id) => reservationAcceleration[id]!,
@@ -1188,7 +1190,9 @@ function createRun({
     compiled = next;
     rerouter.patch(next);
     vehicles.resetSegments(next.lanes.length, next.movements.length);
-    merges = createMerges(next, vehicles, params);
+    merges = createMerges(next, vehicles, params, (id, ramp, movement) =>
+      intersections.blocksEntry(id, ramp, movement),
+    );
     const signalled = patchSignals(before, next, time(), signalEpochs);
     persons.patch(signalled);
     walkers?.patch(signalled, time());

@@ -2,7 +2,13 @@ import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
 import type { TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
+import { createIntersections } from '../../src/sim/intersection';
+import { createVehicles, DRIVING } from '../../src/sim/vehicle';
+import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
+import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
+import { createMerges } from '../../src/sim/merge';
 import { scenario, setup } from './fixtures';
+import { sampleConflictZones } from './conflict-zone-safety';
 
 function groupFixture(blocked: boolean) {
   const { city, node, road, place } = buildCity('Group clearance', 1);
@@ -48,6 +54,68 @@ function groupFixture(blocked: boolean) {
   if (!blocked) requests.shift();
   return { city, compiled: setup(city), trips: requests, entry, inner, exit };
 }
+
+test.each([false, true])(
+  'T68: a short external continuation uses downstream storage (full: %s)',
+  (full) => {
+    const { city, node, road, place } = buildCity('Short group exit', 1);
+    const a = node(100, 0),
+      b = node(120, 0),
+      c = node(125.5, 0);
+    const entry = road(node(0, 0), a),
+      inner = road(a, b),
+      short = road(b, c),
+      onward = road(c, node(300, 0));
+    city.junctionGroups = {
+      'jg:100': {
+        id: 'jg:100',
+        nodes: [a.id, b.id],
+        innerRoads: [inner.id],
+        signal: null,
+        provenance: { source: 'authored' },
+      },
+    };
+    place('Origin', 'gateway', a.pos, [{ road: entry, direction: 'out', positionM: 85 }]);
+    place('Destination', 'work', c.pos, [{ road: onward, direction: 'in', positionM: 120 }]);
+    place('Blocker origin', 'gateway', c.pos, [{ road: onward, direction: 'out', positionM: 6.5 }]);
+    place('Closed', 'work', c.pos, [{ road: onward, direction: 'in', positionM: 6.5 }]);
+    const places = Object.values(city.places);
+    places[3]!.capacity = 0;
+    const pairs = full
+      ? [
+          [2, 3],
+          [0, 1],
+        ]
+      : [[0, 1]];
+    const requests: TripRequest[] = pairs.map(([from, to], i) => ({
+      id: `trip:${i}`,
+      personId: null,
+      originPlaceId: places[from!]!.id,
+      destinationPlaceId: places[to!]!.id,
+      departS: i === 0 ? 100 : 102,
+      mode: 'car',
+      vehicleClass: 'car',
+      purpose: 'private',
+      legs: [],
+    }));
+    const compiled = setup(city),
+      engine = createEngine(),
+      subject = full ? 2 : 1;
+    expect(compiled.lanes[compiled.index.lane.get(`${short.id}#0`)!]!.lengthM).toBeLessThan(6.5);
+    engine.load({ compiled, trips: requests, scenario: scenario(), params: { maxReplans: 0 } });
+    const entryLane = compiled.index.lane.get(`${entry.id}#0`)!;
+    for (let i = 0; i < 600; i++) {
+      engine.step();
+      sampleConflictZones(engine, compiled);
+      const car = engine.inspect(subject);
+      if (full && car?.state === 'driving') expect(car.lane).toBe(entryLane);
+    }
+    expect(engine.inspect(subject)).toMatchObject({
+      state: full ? 'driving' : 'completed',
+      respawns: 0,
+    });
+  },
+);
 
 test('T68: a route may end at an accepting connector on an inner road', () => {
   const fixture = groupFixture(false);
@@ -145,7 +213,10 @@ test('T68: an internally required safe lane change remains reachable through a g
   ];
   const engine = createEngine();
   engine.load({ compiled, trips: requests, scenario: scenario(), params: { maxReplans: 0 } });
-  engine.step(600);
+  for (let i = 0; i < 600; i++) {
+    engine.step();
+    sampleConflictZones(engine, compiled);
+  }
   expect(engine.inspect(1)).toMatchObject({ state: 'completed', respawns: 0 });
 });
 
@@ -372,3 +443,129 @@ test('T68: a rear-cleared member conflict does not reserve the rest of a long gr
   expect(concurrent).toBe(true);
   expect(engine.metrics().trips.completed).toBe(2);
 });
+
+test('T68: a reserved inner merge does not yield back to a ramp waiting outside the group', () => {
+  const { city, node, road, place } = buildCity('Reserved group merge', 1);
+  const a = node(100, 0),
+    b = node(160, 0);
+  const entry = road(node(0, 0), a, { roadClass: 'primary', speedKmh: 18 }),
+    inner = road(a, b, { roadClass: 'primary', speedKmh: 18 });
+  const ramp = road(node(20, -25), b, { roadClass: 'ramp' }),
+    exit = road(b, node(300, 0), { roadClass: 'primary', speedKmh: 18 });
+  city.junctionGroups = {
+    'jg:100': {
+      id: 'jg:100',
+      nodes: [a.id, b.id],
+      innerRoads: [inner.id],
+      signal: null,
+      provenance: { source: 'authored' },
+    },
+  };
+  const initial = setup(city),
+    rampStop = initial.lanes[initial.index.lane.get(`${ramp.id}#0`)!]!.stopM;
+  place('Main origin', 'gateway', a.pos, [{ road: entry, direction: 'out', positionM: 85 }]);
+  place('Ramp origin', 'gateway', b.pos, [
+    { road: ramp, direction: 'out', positionM: rampStop - 2 },
+  ]);
+  place('Destination', 'work', b.pos, [{ road: exit, direction: 'in', positionM: 120 }]);
+  const places = Object.values(city.places);
+  const requests: TripRequest[] = [0, 1].map((p) => ({
+    id: `trip:${p}`,
+    personId: null,
+    originPlaceId: places[p]!.id,
+    destinationPlaceId: places[2]!.id,
+    departS: p === 0 ? 100 : 106,
+    mode: 'car',
+    vehicleClass: 'car',
+    purpose: 'private',
+    legs: [],
+  }));
+  const compiled = setup(city),
+    engine = createEngine();
+  expect(
+    compiled.movements.find((m) => m.fromLane === compiled.index.lane.get(`${inner.id}#0`))!.turn,
+  ).toBe('merge');
+  engine.load({ compiled, trips: requests, scenario: scenario(), params: { maxReplans: 0 } });
+  for (let i = 0; i < 600; i++) {
+    engine.step();
+    sampleConflictZones(engine, compiled);
+  }
+  expect(engine.metrics().trips.completed).toBe(2);
+  expect(engine.metrics().respawns).toBe(0);
+});
+
+test.each(['rear', 'idm', 'follower'] as const)(
+  'T68: an active clearance retains %s safety after entry',
+  (kind) => {
+    const { city, node, road, place } = buildCity('Changed merge gap', 1);
+    const a = node(100, 0),
+      b = node(160, 0);
+    const entry = road(node(0, 0), a, { roadClass: 'primary' });
+    const inner = road(a, b, { roadClass: kind === 'follower' ? 'ramp' : 'primary' });
+    const side = road(node(20, -25), b, { roadClass: kind === 'follower' ? 'primary' : 'ramp' });
+    const exit = road(b, node(300, 0), { roadClass: 'primary' });
+    city.junctionGroups = {
+      'jg:100': {
+        id: 'jg:100',
+        nodes: [a.id, b.id],
+        innerRoads: [inner.id],
+        signal: null,
+        provenance: { source: 'authored' },
+      },
+    };
+    place('Destination', 'gateway', b.pos, [{ road: exit, direction: 'in', positionM: 100 }]);
+    const compiled = setup(city),
+      from = compiled.index.lane.get(`${entry.id}#0`)!,
+      innerLane = compiled.index.lane.get(`${inner.id}#0`)!;
+    const exitLane = compiled.index.lane.get(`${exit.id}#0`)!,
+      sideLane = compiled.index.lane.get(`${side.id}#0`)!;
+    const destination = compiled.connectors[0]!.idx;
+    const result = createRouteProvider().route(compiled, freeFlowLinkCosts(compiled), {
+      fromLane: from,
+      fromPosM: 80,
+      toConnector: destination,
+      vehicleClass: 'car',
+      desiredSpeedFactor: 1,
+      noise: 0,
+      seed: 1,
+    });
+    if (!result.ok) throw new Error(result.reason);
+    const vehicles = createVehicles(2, compiled.lanes.length, compiled.movements.length);
+    vehicles.state.fill(DRIVING);
+    vehicles.speedFactor.fill(1);
+    vehicles.route[0] = result.route;
+    vehicles.destination[0] = destination;
+    const first = compiled.movements[result.route.movements[0]!]!,
+      merge = compiled.movements[result.route.movements[1]!]!;
+    vehicles.insert(0, from, 80);
+    vehicles.movement[0] = first.idx;
+    const merges = createMerges(compiled, vehicles, DEFAULT_SIM_PARAMS);
+    const intersections = createIntersections(
+      compiled,
+      vehicles,
+      DEFAULT_SIM_PARAMS,
+      merges.canEnter,
+    );
+    intersections.request(0, first);
+    intersections.resolve();
+    expect(intersections.grants[0]).toBe(first.idx);
+    intersections.enterGroup(0, first);
+    intersections.release(0);
+    vehicles.remove(0);
+    vehicles.insert(0, innerLane, compiled.lanes[innerLane]!.stopM - 2);
+    vehicles.movement[0] = merge.idx;
+    vehicles.routeStep[0] = 1;
+    vehicles.speed[0] = kind === 'idm' ? 15 : 5;
+    if (kind === 'follower') {
+      vehicles.insert(1, sideLane, compiled.lanes[sideLane]!.stopM - 1);
+      vehicles.speed[1] = 25;
+      vehicles.movement[1] = compiled.lanes[sideLane]!.out[0]!;
+    } else {
+      vehicles.insert(1, exitLane, kind === 'rear' ? 1 : 8.5);
+      vehicles.speed[1] = kind === 'rear' ? 0 : 3;
+    }
+    intersections.request(0, merge);
+    intersections.resolve();
+    expect(intersections.grants[0]).toBe(-1);
+  },
+);

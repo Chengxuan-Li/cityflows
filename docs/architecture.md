@@ -1567,6 +1567,10 @@ Step sequence, in this order every step:
      holds remain active. Required safe lane changes and destinations on inner roads remain
      reachable; discretionary lane changes and congestion/parking reroutes wait until group exit.
      Exit, gridlock recovery and live edits release the derived group reservations.
+     A short external exit that cannot store the vehicle carries its clearance through any
+     conflict-free uncontrolled continuations to downstream storage. A mainline merge keeps
+     its rear-gap, insertion-deceleration and approaching-follower safety checks; only an
+     ungranted outside ramp waiting on this car's existing reservation loses its priority claim.
 5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
    its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
