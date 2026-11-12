@@ -187,26 +187,29 @@ test('a restored lot junction leaves a real downstream restriction at its origin
   expect(join.turnRules.some((r) => r.provenance.osmIds?.includes(20))).toBe(false);
 });
 
-test('a shared source point inside a lot hole cannot join the public road', () => {
-  const xml = sharedInterior
-    .replaceAll('lon="0.0003"/>', 'lon="0.0002"/>')
-    .replace('<node id="2" lat="0.001" lon="0.0002"/>', '<node id="2" lat="0.001" lon="0.0003"/>')
-    .replace(
-      '<tag k="amenity" v="parking"/><tag k="parking" v="surface"/><tag k="capacity" v="99"/><tag k="access" v="customers"/>',
-      '',
-    )
-    .replace(
-      '</osm>',
-      `<node id="21" lat="0.00095" lon="0.00025"/><node id="22" lat="0.00095" lon="0.00035"/><node id="23" lat="0.00105" lon="0.00035"/><node id="24" lat="0.00105" lon="0.00025"/>
+test.each([true, false])(
+  'qualifies the actual shared point against lot holes (inside: %s)',
+  (inside) => {
+    const xml = sharedInterior
+      .replaceAll('lon="0.0003"/>', 'lon="0.0002"/>')
+      .replace('<node id="2" lat="0.001" lon="0.0002"/>', '<node id="2" lat="0.001" lon="0.0003"/>')
+      .replace(
+        '<tag k="amenity" v="parking"/><tag k="parking" v="surface"/><tag k="capacity" v="99"/><tag k="access" v="customers"/>',
+        '',
+      )
+      .replace(
+        '</osm>',
+        `<node id="21" lat="0.00095" lon="${inside ? 0.00025 : 0.00055}"/><node id="22" lat="0.00095" lon="${inside ? 0.00035 : 0.00065}"/><node id="23" lat="0.00105" lon="${inside ? 0.00035 : 0.00065}"/><node id="24" lat="0.00105" lon="${inside ? 0.00025 : 0.00055}"/>
       <way id="18"><nd ref="21"/><nd ref="22"/><nd ref="23"/><nd ref="24"/><nd ref="21"/></way>
       <relation id="30"><member type="way" ref="12" role="outer"/><member type="way" ref="18" role="inner"/><tag k="type" v="multipolygon"/><tag k="amenity" v="parking"/><tag k="parking" v="surface"/></relation></osm>`,
-    );
-  const result = importOsm(xml, { importerVersion: 'test', terrain: false });
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  expect(
-    Object.values(result.city.roads).filter((r) => r.provenance.osmIds?.includes(10)),
-  ).toHaveLength(2);
-});
+      );
+    const result = importOsm(xml, { importerVersion: 'test', terrain: false });
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(
+      Object.values(result.city.roads).filter((r) => r.provenance.osmIds?.includes(10)),
+    ).toHaveLength(inside ? 2 : 4);
+  },
+);
 
 test('late lot halves append to legacy ID order and survive save/open', async () => {
   const repaired = importOsm(sharedInterior, { importerVersion: 'test', terrain: false });
