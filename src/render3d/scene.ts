@@ -503,6 +503,7 @@ export class Scene3D {
       this.railVisible ? Array.from(this.crossingStates ?? []) : [],
     );
     this.vehicles.setSnapshot(snapshot);
+    this.trainTimeS = NaN;
     if (this.geometry) this.walkers.setSnapshot(snapshot.walkers, this.geometry.heights);
     this.canvas.dataset.walkers = String(this.walkers.mesh.count);
     this.invalidate();
