@@ -9,6 +9,7 @@ import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../s
 import { createWalkRouter, type WalkRequest, type WalkRoute } from '../src/routing/walk';
 import { distance, pointAtDistance } from '../src/geo/polyline';
 import { createEngine } from '../src/sim/engine';
+import type { IntersectionObserver } from '../src/sim/intersection';
 import type { TrafficEngine } from '../src/sim/types';
 import { walkComponents } from '../src/network/walk-joins';
 import { parkingEgress } from '../src/network/parking-egress';
@@ -238,14 +239,18 @@ export function probeMorning(
     observe,
     routeProvider,
     includeWalkLegs = false,
+    demandSeed = 1,
+    intersectionObserver,
   }: {
     untilS?: number;
     observe?: (engine: TrafficEngine) => void;
     routeProvider?: RouteProvider;
     includeWalkLegs?: boolean;
+    demandSeed?: number;
+    intersectionObserver?: IntersectionObserver;
   } = {},
 ) {
-  const scenario = defaultScenario('grid5x5');
+  const scenario = defaultScenario('grid5x5', demandSeed);
   scenario.demand.personsPerResident = scale;
   scenario.startS = 7 * 3600;
   scenario.endS = 10 * 3600;
@@ -274,6 +279,7 @@ export function probeMorning(
     compiled,
     trips,
     scenario,
+    intersectionObserver,
     headDetourObserver(id, lane) {
       headDetours++;
       detoured.add(id);
@@ -335,6 +341,7 @@ export function probeMorning(
     const cls = compiled.roads[road]!.roadClass;
     (sampledRoadTraffic[cls] ??= { entered: 0, left: 0 })[direction]++;
   };
+  const stepStart = performance.now();
   for (let step = 0; step < (untilS - scenario.startS) * 10; step += 600) {
     for (let i = 0; i < 600; i++) {
       engine.step();
@@ -370,11 +377,30 @@ export function probeMorning(
     }
   }
   const metrics = engine.metrics();
+  const stepTimeMs = performance.now() - stepStart;
   // Driving vehicles on a movement or first on their lane that have not moved for 300 s.
   const end = engine.snapshot();
   const front = new Map<number, number>();
+  const loopCensus = Object.fromEntries(
+    ['r:961', 'r:364', 'r:248', 'r:703', 'r:273', 'r:997'].map((road) => [
+      road,
+      { vehicles: 0, longestWaitS: 0, longestWaitingVehicle: 0 },
+    ]),
+  );
   for (const [index, id] of end.id.entries()) {
     const lane = end.lane[index]!;
+    if (lane !== -2147483648) {
+      const from = lane >= 0 ? lane : compiled.movements[-lane - 1]!.fromLane;
+      const census = loopCensus[compiled.roads[compiled.lanes[from]!.road]!.id];
+      if (census) {
+        census.vehicles++;
+        const detail = engine.inspect(id)!;
+        if (detail.waitingS > census.longestWaitS) {
+          census.longestWaitS = detail.waitingS;
+          census.longestWaitingVehicle = id;
+        }
+      }
+    }
     if (lane < 0) continue;
     const ahead = front.get(lane);
     if (ahead === undefined || engine.inspect(id)!.positionM > engine.inspect(ahead)!.positionM)
@@ -514,6 +540,9 @@ export function probeMorning(
     : undefined;
   return {
     scale,
+    demandSeed,
+    stepTimeMs,
+    loopCensus,
     stateHash: engine.stateHash(),
     persons: population.length,
     trips: trips.length,

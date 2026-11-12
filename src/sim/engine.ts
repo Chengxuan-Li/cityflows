@@ -134,6 +134,7 @@ function createRun({
   let intersections = createIntersections(compiled, vehicles, params, merges.canEnter, {
     onDecision: intersectionObserver,
     acceleration: (id) => reservationAcceleration[id]!,
+    groupRoute,
   });
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
   let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
@@ -165,6 +166,14 @@ function createRun({
       costs,
       vehicleRouteRequest(vehicles, params, id, lane, positionM),
     );
+  }
+
+  function groupRoute(id: number, movement: (typeof compiled.movements)[number]) {
+    const route = vehicles.route[id]!;
+    const step = vehicles.routeStep[id]!;
+    if (route.roads[step + 1] === compiled.lanes[movement.toLane]!.road) return { route, step };
+    const result = routeFrom(id, movement.toLane, 0);
+    return result.ok ? { route: result.route, step: -1 } : null;
   }
 
   function chooseParkingRoute(
@@ -228,6 +237,20 @@ function createRun({
     vehicles.movement[id] = -1;
     fallback[id] = 0;
     waitingForLane[id] = 0;
+    const cleared = intersections.groupPaths[id]?.movements.find(
+      (m) => compiled.movements[m]!.fromLane === lane,
+    );
+    if (cleared !== undefined) {
+      vehicles.movement[id] = cleared;
+      return;
+    }
+    if (
+      intersections.groupPaths[id] &&
+      compiled.roads[compiled.lanes[lane]!.road]!.group !== undefined
+    ) {
+      waitingForLane[id] = 1;
+      return;
+    }
     if (destination.lane === lane && destination.positionM >= positionM) {
       arrival[id] = destination.idx;
     } else if (planned?.fromLane === lane && allowedLanes[vehicles.vclass[id]!]![planned.toLane]) {
@@ -312,6 +335,11 @@ function createRun({
 
   function hasSpawnGap(connector: CConnector, vehicle: number) {
     const { lane, positionM } = connector;
+    if (
+      positionM < intersections.reservedSpace[lane]! + profile(vehicle).lengthM + idm.minGapM &&
+      intersections.reservedSpace[lane]! > 0
+    )
+      return false;
     const gap = Math.max(spawnMinGapM, idm.minGapM);
     const spacing = profile(vehicle).lengthM + gap;
     const maxSpacing = maxVehicleLength + gap;
@@ -430,8 +458,16 @@ function createRun({
       const lane = compiled.lanes[occupied[i]!]!;
       if (lane.left === -1 && lane.right === -1) continue;
       for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
-        if (vehicles.state[id] !== DRIVING || parking.motion(id)) continue;
+        if (
+          vehicles.state[id] !== DRIVING ||
+          parking.motion(id) ||
+          intersections.groupPaths[id]?.movements.some(
+            (m) => compiled.movements[m]!.fromLane === lane.idx,
+          )
+        )
+          continue;
         const discretionary =
+          !intersections.groupPaths[id] &&
           intersections.grants[id] === -1 &&
           lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM;
         if (!laneChanges.propose(id, lane, tick, discretionary)) continue;
@@ -474,6 +510,7 @@ function createRun({
         // once a second, before a one-way approach commits it to cruising past the target.
         if (
           lane &&
+          !intersections.groupPaths[id] &&
           (tick + id) % parkingCheckSteps === 0 &&
           intersections.grants[id] === -1 &&
           parking.needsChoice(id)
@@ -664,6 +701,7 @@ function createRun({
       const planned = compiled.movements[vehicles.movement[id]!];
       if (
         vehicles.state[id] !== DRIVING ||
+        intersections.groupPaths[id] ||
         !planned ||
         vehicles.speed[id]! >= 0.1 ||
         lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM ||
@@ -777,6 +815,7 @@ function createRun({
   }
 
   function enterLane(id: number, lane: number, position: number, timeS: number) {
+    intersections.leaveGroup(id, lane);
     roadEnteredS[id] = timeS;
     roadEnteredM[id] = 0;
     if (intersections.grants[id] !== -1) intersections.release(id);
@@ -858,7 +897,17 @@ function createRun({
       const lane = compiled.lanes[field]!;
       const remaining = lane.stopM - previousPosition;
       const movement = vehicles.movement[id]!;
-      const granted = intersections.continuations[movement] ? movement : intersections.grants[id]!;
+      let granted = intersections.continuations[movement] ? movement : intersections.grants[id]!;
+      if (
+        granted !== -1 &&
+        position >= lane.lengthM &&
+        compiled.nodes[compiled.movements[granted]!.node]!.group !== undefined &&
+        compiled.roads[lane.road]!.group === undefined &&
+        intersections.blockedExit(id, compiled.movements[granted]!)
+      ) {
+        intersections.release(id);
+        granted = -1;
+      }
       if ((movement !== -1 && granted === -1) || laneChanges.holding[id] || waitingForLane[id]) {
         position = Math.min(position, Math.max(previousPosition, lane.stopM - idm.minGapM));
         if (remaining <= params.intersection.decisionDistanceM) {
@@ -920,6 +969,7 @@ function createRun({
             accounting.zoneStop();
           }
           leaveRoad(id, timeS, lane.lengthM);
+          intersections.enterGroup(id, compiled.movements[granted]!);
           vehicles.remove(id);
           laneChanges.leaveLane(id);
           vehicles.insert(id, -granted - 1, Math.min(entry, compiled.movements[granted]!.lengthM));
@@ -962,6 +1012,7 @@ function createRun({
     respawning.sort((a, b) => a - b);
     for (const id of respawning) {
       if (intersections.grants[id] !== -1) intersections.release(id);
+      intersections.leaveGroup(id);
       intersections.exitedFrom[id] = -1;
       if (vehicles.lane[id]! >= 0) leaveRoad(id, timeS, vehicles.position[id]!);
       vehicles.remove(id);
@@ -1132,6 +1183,7 @@ function createRun({
     intersections = createIntersections(signalled, vehicles, params, merges.canEnter, {
       onDecision: intersectionObserver,
       acceleration: (id) => reservationAcceleration[id]!,
+      groupRoute,
     });
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
     allowedLanes = vehicleClasses.map((name) =>

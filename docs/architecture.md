@@ -1554,6 +1554,16 @@ Step sequence, in this order every step:
      rather than in the junction. After `boxWaitS` of waiting at the line it falls back to
      the older rule (the last vehicle's front at least `candidate.lengthM + minGapM` along), so a
      jammed junction still drains.
+   - TASK-131 Phase 3: group entries check the entire routed path through inner roads and the
+     final exit again when the front crosses the entry, including cars already admitted whose
+     exit space is reserved. Forecasts stop at a leader, destination connector or red stop line,
+     and never extend beyond `boxWaitS`; waiting never relaxes this group rear-clearance rule.
+     Conflicting group paths wait outside until the admitted path clears its final movement.
+     The chosen movements persist through inner roads, whose member stop, yield and signal
+     controls do not stop a cleared car. Physical following, conflict-zone backstops and walker
+     holds remain active. Required safe lane changes and destinations on inner roads remain
+     reachable; discretionary lane changes and congestion/parking reroutes wait until group exit.
+     Exit, gridlock recovery and live edits release the derived group reservations.
 5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
    its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
