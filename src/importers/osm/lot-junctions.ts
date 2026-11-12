@@ -18,7 +18,7 @@ export function joinLotAisles(
   aisles: { id: string; holes: Vec2[][] }[],
   diagnostics: Diagnostic[],
   publicGeometry?: CompiledCity,
-): void {
+): { compiled: CompiledCity; nodes: string[] } | undefined {
   const ways = new Map(data.way.map((way) => [way.id, way]));
   const grouped = new Set(Object.values(city.junctionGroups ?? {}).flatMap((g) => g.nodes));
   const eligible = aisles.filter(({ id, holes }) => {
@@ -40,7 +40,13 @@ export function joinLotAisles(
         ),
     );
   });
-  const nodes = new Set(eligible.flatMap(({ id }) => [city.roads[id]!.from, city.roads[id]!.to]));
+  const nodes = new Set(
+    eligible.flatMap(({ id, holes }) =>
+      [city.roads[id]!.from, city.roads[id]!.to].filter(
+        (node) => !holes.some((ring) => pointInPolygon(city.nodes[node]!.pos, ring)),
+      ),
+    ),
+  );
   const candidates = [...nodes].flatMap((id) => {
     const node = city.nodes[id]!;
     const source = node.provenance.osmIds?.[0];
@@ -135,6 +141,10 @@ export function joinLotAisles(
         from: node.id,
         centerline: road.centerline.slice(at),
         streetGroupId: direction === 0 ? splitGroup : group,
+        provenance: {
+          ...road.provenance,
+          inferred: [...new Set([...(road.provenance.inferred ?? []), 'lotJunction'])],
+        },
       };
       road.to = node.id;
       road.centerline = road.centerline.slice(0, at + 1);
@@ -170,8 +180,16 @@ export function joinLotAisles(
     ),
   });
   if (!geometry.ok) throw new Error('Mapped lot junction split produced invalid geometry');
+  const joined = new Set(candidates.map(({ node }) => node.id));
+  const affected = new Set(
+    Object.values(city.roads)
+      .filter((r) => joined.has(r.from) || joined.has(r.to))
+      .map((r) => r.id),
+  );
   const relocate = (connector: Connector) => {
-    const ids = replacements.get(connector.roadId);
+    const ids =
+      replacements.get(connector.roadId) ??
+      (affected.has(connector.roadId) ? [connector.roadId] : undefined);
     if (!ids) return;
     const old =
       before.compiled.lanes[
@@ -197,4 +215,5 @@ export function joinLotAisles(
         seen.add(connector);
         relocate(connector);
       }
+  return { compiled: geometry.compiled, nodes: candidates.map(({ node }) => node.id) };
 }

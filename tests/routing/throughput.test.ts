@@ -3,14 +3,7 @@ import { expect, test } from 'vitest';
 import { auditRoute } from '../../bench/route-audit';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import { tierCities } from '../tier';
-import {
-  throughputCities,
-  throughputFixture,
-  throughputRequests,
-  sourceRequestKey,
-} from './throughput-fixtures';
-import { withoutLotAisles } from '../without-lot-aisles';
-import { nearestOnPolyline } from '../../src/geo/polyline';
+import { throughputCities, throughputFixture, throughputRequests } from './throughput-fixtures';
 
 // The roads each request of the fixed sample takes on main 5568eed (a failure reason where it has
 // no route), keyed by its connectors and variant. TASK-090: compared within a budget instead of
@@ -24,9 +17,6 @@ import { nearestOnPolyline } from '../../src/geo/polyline';
 // TASK-124 recaptures real-city samples because connector endpoints split or move; T61 pins the vehicle graph.
 // TASK-131 recaptures both real-city samples: keeping OSM geometry renumbers connectors (the keys)
 // and splits routes over the roads between nodes main merged.
-// TASK-144 captures all 96 Munich control requests from clean parent fa8c621, using physical
-// endpoints instead of later allocator IDs. Split public sections compare as their original
-// directed road; the candidate's nine changed noisy routes retain the unchanged 10% budget.
 const recorded = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<
   string,
   Record<string, string[] | string>
@@ -39,19 +29,6 @@ test.each(tierCities(throughputCities))(
     const provider = createRouteProvider();
     const costs = freeFlowLinkCosts(net);
     const requests = throughputRequests(net);
-    const original = name === 'Munich' ? withoutLotAisles(city) : city;
-    const aliases = new Map<string, string>();
-    for (const road of Object.values(city.roads)) {
-      if (original.roads[road.id] || road.provenance.inferred?.includes('lotAccess')) continue;
-      const matches = Object.values(original.roads).filter((candidate) => {
-        if (JSON.stringify(candidate.provenance) !== JSON.stringify(road.provenance)) return false;
-        const from = nearestOnPolyline(candidate.centerline, road.centerline[0]!);
-        const to = nearestOnPolyline(candidate.centerline, road.centerline.at(-1)!);
-        return from.away < 1e-6 && to.away < 1e-6 && from.along < to.along;
-      });
-      expect(matches, `one original directed road for ${road.id}`).toHaveLength(1);
-      aliases.set(road.id, matches[0]!.id);
-    }
     const actual = requests.map(({ request }) => provider.route(net, costs, request));
     // Routed again by a fresh provider, and by this one after a cost-version change, reversed.
     const fresh = createRouteProvider();
@@ -69,15 +46,10 @@ test.each(tierCities(throughputCities))(
     );
     expect(undrivable).toEqual([]);
     const changed = requests
-      .filter(({ key, request }, i) => {
+      .filter(({ key }, i) => {
         const result = actual[i]!;
-        const now = result.ok
-          ? result.route.roads
-              .map((r) => aliases.get(net.roads[r]!.id) ?? net.roads[r]!.id)
-              .filter((id, at, all) => at === 0 || id !== all[at - 1])
-          : result.reason;
-        const sourceKey = name === 'Munich' ? sourceRequestKey(city, net, key, request) : key;
-        return JSON.stringify(now) !== JSON.stringify(recorded[name]![sourceKey]);
+        const now = result.ok ? result.route.roads.map((r) => net.roads[r]!.id) : result.reason;
+        return JSON.stringify(now) !== JSON.stringify(recorded[name]![key]);
       })
       .map(({ key }) => key);
     console.info(name, `${changed.length} of ${requests.length} routes on other roads`, changed);

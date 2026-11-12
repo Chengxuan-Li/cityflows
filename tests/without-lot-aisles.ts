@@ -30,7 +30,11 @@ export function withoutLotAisles(source: City): City {
       if (candidates.length !== 1)
         throw new Error('Aisle oracle expects a simple split service road');
       const next = candidates[0]!;
-      if (JSON.stringify(incoming.provenance) !== JSON.stringify(next.provenance))
+      const provenance = (road: typeof incoming) => ({
+        ...road.provenance,
+        inferred: road.provenance.inferred?.filter((value) => value !== 'lotJunction'),
+      });
+      if (JSON.stringify(provenance(incoming)) !== JSON.stringify(provenance(next)))
         throw new Error('Aisle oracle cannot join different source roads');
       changed.add(incoming.id);
       changed.add(next.id);

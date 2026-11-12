@@ -7,6 +7,7 @@ import { parseOsm } from '../../src/importers/osm/parse';
 import { createEngine } from '../../src/sim/engine';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import type { TripRequest } from '../../src/schema';
+import { trainTimetable } from '../../src/network/trains';
 
 test.each(['munich-donnersberger', 'sindelfingen-a81'])(
   '%s: restored lot joins are real same-grade source nodes with legal movements',
@@ -64,6 +65,7 @@ test.each(['munich-donnersberger', 'sindelfingen-a81'])(
       restored.map((n) => n.provenance.osmIds![0]),
     );
     if (name !== 'munich-donnersberger') return;
+    expect(trainTimetable(net.rail!).hash).toBe('0d505d0f');
 
     const lot = Object.values(city.parking!).find((f) => f.provenance.osmIds?.includes(159640410))!;
     const facility = net.parking[net.index.parking.get(lot.id)!]!;
