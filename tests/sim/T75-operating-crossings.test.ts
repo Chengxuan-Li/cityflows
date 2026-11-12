@@ -9,40 +9,43 @@ import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { railTimetable } from '../../src/network/trams';
 import { setup, trips } from './fixtures';
 
-test('T75 a car brakes at the painted line, waits for the last carriage, and resumes', () => {
-  const city = operatingCrossing();
-  const compiled = setup(city);
-  const engine = createEngine();
-  const trip = trips(city, 1)[0]!;
-  trip.departS = 145;
-  engine.load({
-    compiled,
-    trips: [trip],
-    scenario: { ...defaultScenario('grid5x5'), startS: 140, endS: 250 },
-  });
-  let stopped = 0,
-    largestDeceleration = 0;
-  let previousSpeed = 0;
-  const line = compiled.rail!.facilities![0]!.stops![0]!.stopM;
-  for (let i = 0; i < 1100; i++) {
-    engine.step();
-    const car = engine.inspect(1)!;
-    const rail = engine.snapshot().rail!;
-    if (car?.state === 'driving') {
-      largestDeceleration = Math.max(largestDeceleration, (previousSpeed - car.speedMps) / 0.1);
-      previousSpeed = car.speedMps;
-      if (car.speedMps < 0.1 && Math.abs(car.positionM - line) < 0.2) {
-        stopped++;
-        expect(rail.crossings[0]).toBe(CROSSING_CLOSED);
+test.each(['rail', 'tram'] as const)(
+  'T75 a car brakes at the painted line for %s, waits for the last carriage, and resumes',
+  (kind) => {
+    const city = operatingCrossing(kind);
+    const compiled = setup(city);
+    const engine = createEngine();
+    const trip = trips(city, 1)[0]!;
+    trip.departS = kind === 'rail' ? 145 : 82;
+    engine.load({
+      compiled,
+      trips: [trip],
+      scenario: { ...defaultScenario('grid5x5'), startS: kind === 'rail' ? 140 : 80, endS: 250 },
+    });
+    let stopped = 0,
+      largestDeceleration = 0;
+    let previousSpeed = 0;
+    const line = compiled.rail!.facilities![0]!.stops![0]!.stopM;
+    for (let i = 0; i < 1100; i++) {
+      engine.step();
+      const car = engine.inspect(1)!;
+      const rail = engine.snapshot().rail!;
+      if (car?.state === 'driving') {
+        largestDeceleration = Math.max(largestDeceleration, (previousSpeed - car.speedMps) / 0.1);
+        previousSpeed = car.speedMps;
+        if (car.speedMps < 0.1 && Math.abs(car.positionM - line) < 0.2) {
+          stopped++;
+          expect(rail.crossings[0]).toBe(CROSSING_CLOSED);
+        }
+        if (rail.crossings[0] !== CROSSING_OPEN && car.positionM < line + 1)
+          expect(car.positionM).toBeLessThanOrEqual(line + 1e-6);
       }
-      if (rail.crossings[0] !== CROSSING_OPEN && car.positionM < line + 1)
-        expect(car.positionM).toBeLessThanOrEqual(line + 1e-6);
     }
-  }
-  expect(stopped).toBeGreaterThan(100);
-  expect(engine.inspect(1)!.state).toBe('completed');
-  expect(largestDeceleration).toBeLessThan(3);
-});
+    expect(stopped).toBeGreaterThan(kind === 'rail' ? 100 : 20);
+    expect(engine.inspect(1)!.state).toBe('completed');
+    expect(largestDeceleration).toBeLessThan(3);
+  },
+);
 
 test('T75 a stranded long vehicle holds the service before its nose enters, then its rear clears', () => {
   const compiled = setup(operatingCrossing());
@@ -272,6 +275,126 @@ test('T75 pause snapshots and live edits preserve service clocks; restart repeat
   engine.step(1100);
   expect(engine.stateHash()).toBe(hash);
   expect(engine.snapshot().rail).toEqual(end);
+});
+
+test('T75 a long rear stays protected across a lane boundary after its route is reset', () => {
+  const { city, node, road } = buildCity('Crossing before lane boundary', 136);
+  const before = road(node(-400, 0), node(5, 0));
+  const after = road(city.nodes[before.to]!, node(400, 0));
+  before.provenance = { source: 'generated', osmIds: [10] };
+  city.rail = operatingCrossing().rail;
+  const compiled = setup(city),
+    facility = compiled.rail!.facilities![0]!;
+  const laneBefore = compiled.index.lane.get(`${before.id}#0`)!;
+  const laneAfter = compiled.index.lane.get(`${after.id}#0`)!;
+  const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
+  vehicles.state[0] = DRIVING;
+  vehicles.vclass[0] = 2;
+  vehicles.insert(0, laneBefore, compiled.lanes[laneBefore]!.lengthM - 1);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 175, () => false)!;
+  control.step(175);
+  vehicles.remove(0);
+  vehicles.insert(0, laneAfter, 2);
+  vehicles.route[0] = null;
+  vehicles.routeStep[0] = 0;
+  for (let i = 1; i < 400; i++) control.step(175 + i * 0.1);
+  const held = control.snapshot();
+  expect(held.crossings[0]).toBe(CROSSING_CLOSED);
+  expect(held.railReady[0]).toBe(0);
+  expect(held.trains[0]!.speedMps).toBe(0);
+  expect(facility.spans!.some((s) => s.segment === laneBefore)).toBe(true);
+  vehicles.position[0] = 25;
+  for (let i = 0; i < 400; i++) control.step(215 + i * 0.1);
+  expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
+});
+
+test('T75 a vehicle on a real junction movement holds rail until its full rear exits', () => {
+  const { city, node, road } = buildCity('Crossing inside junction', 136);
+  const west = node(-400, 0),
+    center = node(0, 0),
+    east = node(400, 0);
+  const before = road(west, center),
+    after = road(center, east);
+  before.provenance = after.provenance = { source: 'generated', osmIds: [10] };
+  road(center, node(0, -200));
+  city.rail = operatingCrossing().rail;
+  const compiled = setup(city);
+  const from = compiled.index.lane.get(`${before.id}#0`)!,
+    to = compiled.index.lane.get(`${after.id}#0`)!;
+  const movement = compiled.movements.find((m) => m.fromLane === from && m.toLane === to)!;
+  expect(movement.lengthM).toBeGreaterThan(0);
+  expect(compiled.rail!.facilities![0]!.spans!.some((s) => s.segment === -movement.idx - 1)).toBe(
+    true,
+  );
+  const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
+  vehicles.state[0] = DRIVING;
+  vehicles.vclass[0] = 2;
+  vehicles.insert(0, -movement.idx - 1, movement.lengthM / 2);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 175, () => false)!;
+  for (let i = 0; i < 400; i++) control.step(175 + i * 0.1);
+  expect(control.snapshot().railReady[0]).toBe(0);
+  expect(control.snapshot().trains[0]!.speedMps).toBe(0);
+  vehicles.remove(0);
+  vehicles.insert(0, to, 1);
+  control.step(215);
+  expect(control.snapshot().railReady[0]).toBe(0);
+  vehicles.position[0] = 30;
+  for (let i = 1; i < 400; i++) control.step(215 + i * 0.1);
+  expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
+});
+
+test('T75 a car waiting at one crossing does not falsely reserve a second unmetered crossing ahead', () => {
+  const city = operatingCrossing(),
+    rail = city.rail!;
+  rail.nodes['rn:3'] = {
+    id: 'rn:3',
+    pos: { x: 60, y: 0 },
+    kind: 'level_crossing',
+    layer: 0,
+    crossing: { kind: 'rail', roadOsmIds: [10] },
+  };
+  rail.nodes['rn:4'] = { id: 'rn:4', pos: { x: 60, y: -1000 }, kind: 'plain', layer: 0 };
+  rail.tracks['rt:2']!.to = 'rn:3';
+  rail.tracks['rt:2']!.line = [
+    { x: 0, y: 0 },
+    { x: 0, y: 50 },
+    { x: 60, y: 50 },
+    { x: 60, y: 0 },
+  ];
+  rail.tracks['rt:3'] = {
+    ...rail.tracks['rt:1']!,
+    id: 'rt:3',
+    from: 'rn:3',
+    to: 'rn:4',
+    line: [
+      { x: 60, y: 0 },
+      { x: 60, y: -1000 },
+    ],
+  };
+  const compiled = setup(city),
+    table = railTimetable(compiled.rail!);
+  expect(table.routes).toHaveLength(1);
+  table.departures = [{ route: 0, timeS: 0, requestedS: 0 }];
+  const facilities = compiled.rail!.facilities!;
+  expect(facilities).toHaveLength(2);
+  // Reproduce an older facility that omitted a legal incoming marking.
+  facilities[1]!.stops = [];
+  const stop = facilities[0]!.stops![0]!;
+  const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
+  vehicles.state[0] = DRIVING;
+  vehicles.insert(0, stop.lane, stop.stopM);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 60, () => false)!;
+  let protectedFirst = false,
+    reopenedFirst = false;
+  for (let i = 0; i < 1400; i++) {
+    control.step(60 + i * 0.1);
+    const snapshot = control.snapshot();
+    if (snapshot.crossings[0] === CROSSING_CLOSED) protectedFirst = true;
+    if (protectedFirst && snapshot.crossings[0] === CROSSING_OPEN) reopenedFirst = true;
+    expect(snapshot.trains.every((t) => t.speedMps > 0)).toBe(true);
+  }
+  expect(reopenedFirst).toBe(true);
+  expect([...control.snapshot().crossings]).toEqual([CROSSING_OPEN, CROSSING_OPEN]);
 });
 
 test.each(['pedestrian', 'bridge', 'unmapped'] as const)(

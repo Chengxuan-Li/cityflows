@@ -27,7 +27,6 @@ type Service = {
   cycle: number;
   ageS: number;
   held: boolean;
-  accepted: boolean;
   current: number[];
   proposed: number[];
 };
@@ -133,6 +132,24 @@ export function createRailCrossings(
   const influences = new Uint8Array(city.lanes.length + city.movements.length);
   const reach = new Float64Array(influences.length).fill(-Infinity);
   const bucket = (segment: number) => (segment >= 0 ? segment : city.lanes.length - segment - 1);
+  const stopsBySegment = Array.from(
+    { length: influences.length },
+    () => [] as { facility: number; at: number }[],
+  );
+  const spansBySegment = Array.from(
+    { length: influences.length },
+    () => [] as { facility: number; from: number; to: number }[],
+  );
+  facilities.forEach((f, facility) => {
+    for (const stop of f.stops ?? [])
+      stopsBySegment[bucket(stop.lane)]!.push({ facility, at: stop.stopM });
+    for (const span of f.spans ?? [])
+      spansBySegment[bucket(span.segment)]!.push({ facility, from: span.fromM, to: span.toM });
+  });
+  const pathStops = new Float64Array(facilities.length);
+  const pathStarts = new Float64Array(facilities.length);
+  const pathEnds = new Float64Array(facilities.length);
+  const histories = new Map<number, { segment: number; trail: number[]; position: number }>();
   const segmentLength = (segment: number) =>
     segment >= 0 ? city.lanes[segment]!.lengthM : city.movements[-segment - 1]!.lengthM;
   const influencing = (segment: number, left: number) => {
@@ -167,14 +184,17 @@ export function createRailCrossings(
     if (served[f])
       for (const span of facilities[f]!.spans ?? []) {
         const maxLength = Math.max(...profiles.map((p) => p.lengthM));
-        tailInfluence(span.segment, segmentLength(span.segment) - span.toM + maxLength);
+        tailInfluence(span.segment, span.toM + maxLength);
       }
   // Initial occurrences include trains already inside the imported network.
   table.departures.forEach((d, i) => {
     const route = table.routes[d.route]!;
     nextCycle[i] = Math.floor((startS - d.timeS - route.durationS) / table.periodS);
   });
+  let nextSpawnS = -Infinity;
   function spawn(timeS: number) {
+    if (timeS + warningMax < nextSpawnS) return;
+    nextSpawnS = Infinity;
     table.departures.forEach((departure, i) => {
       while (departure.timeS + nextCycle[i]! * table.periodS <= timeS + warningMax) {
         const cycle = nextCycle[i]!++;
@@ -185,11 +205,11 @@ export function createRailCrossings(
             cycle,
             ageS,
             held: false,
-            accepted: false,
             current: [],
             proposed: [],
           });
       }
+      nextSpawnS = Math.min(nextSpawnS, departure.timeS + nextCycle[i]! * table.periodS);
     });
   }
   function path(id: number) {
@@ -215,9 +235,28 @@ export function createRailCrossings(
     }
   }
   function overlaps(f: number, segment: number, front: number, rear: number) {
-    return facilities[f]!.spans?.some(
-      (s) => s.segment === segment && front >= s.fromM && rear <= s.toM,
+    return spansBySegment[bucket(segment)]!.some(
+      (s) => s.facility === f && front >= s.from && rear <= s.to,
     );
+  }
+  function ranges(position: number) {
+    pathStops.fill(Infinity);
+    pathStarts.fill(Infinity);
+    pathEnds.fill(-Infinity);
+    for (let s = 0; s < segments.length; s++) {
+      const b = bucket(segments[s]!),
+        offset = offsets[s]!;
+      for (const marking of stopsBySegment[b]!) {
+        const at = offset + marking.at;
+        if (at >= position - 1e-6)
+          pathStops[marking.facility] = Math.min(pathStops[marking.facility]!, at);
+      }
+      for (const span of spansBySegment[b]!) {
+        if (offset + span.to < position) continue;
+        pathStarts[span.facility] = Math.min(pathStarts[span.facility]!, offset + span.from);
+        pathEnds[span.facility] = Math.max(pathEnds[span.facility]!, offset + span.to);
+      }
+    }
   }
   function roadOccupancy() {
     occupied.fill(0);
@@ -226,23 +265,58 @@ export function createRailCrossings(
       const field = b < city.lanes.length ? b : city.lanes.length - b - 1;
       for (let id = vehicles.first(field); id !== -1; id = vehicles.next[id]!) {
         if (vehicles.state[id] !== DRIVING && vehicles.state[id] !== QUEUED_DESTINATION) continue;
+        const position = vehicles.position[id]!;
+        let history = histories.get(id);
+        const previousSegment = history?.segment ?? field;
+        const previousPosition = history?.position ?? -Infinity;
+        let continuous = true;
+        if (!history) {
+          history = { segment: field, trail: [], position };
+          histories.set(id, history);
+        } else if (history.segment !== field) {
+          continuous =
+            history.segment < 0
+              ? city.movements[-history.segment - 1]!.toLane === field
+              : field < 0
+                ? city.movements[-field - 1]!.fromLane === history.segment
+                : city.lanes[history.segment]!.out.some(
+                    (m) => city.movements[m]!.toLane === field && city.movements[m]!.lengthM === 0,
+                  );
+          if (continuous) history.trail.unshift(history.segment);
+          else history.trail.length = 0;
+          history.segment = field;
+        } else if (position < history.position - 1e-6) {
+          history.trail.length = 0;
+          continuous = false;
+        }
+        if (!continuous) for (const entries of committed) entries.delete(id);
+        history.position = position;
+        let remaining = length(id) - position,
+          keep = 0;
+        while (remaining > 0 && keep < history.trail.length)
+          remaining -= segmentLength(history.trail[keep++]!);
+        history.trail.length = keep;
         path(id);
+        ranges(position);
+        for (const marking of continuous ? stopsBySegment[bucket(previousSegment)]! : []) {
+          const passed = field === previousSegment ? position > marking.at + 1e-6 : true;
+          if (passed && previousPosition <= marking.at + 1e-6) committed[marking.facility]!.add(id);
+        }
         for (let f = 0; f < facilities.length; f++) {
           if (!served[f]) continue;
-          const facility = facilities[f]!;
-          const position = vehicles.position[id]!;
-          let stop = Infinity,
-            near = Infinity;
-          for (let s = 0; s < segments.length; s++) {
-            for (const marking of facility.stops ?? [])
-              if (marking.lane === segments[s] && offsets[s]! + marking.stopM >= position - 1e-6)
-                stop = Math.min(stop, offsets[s]! + marking.stopM);
-            for (const span of facility.spans ?? [])
-              if (span.segment === segments[s] && offsets[s]! + span.toM >= position)
-                near = Math.min(near, offsets[s]! + span.fromM);
-          }
-          // A vehicle past its marking is committed even before its nose reaches the rails.
-          if (near < Infinity && stop > near && near - position < 200) occupied[f] = 1;
+          const stop = pathStops[f]!,
+            near = pathStarts[f]!;
+          // An unmetered upstream vehicle can wait before the conflict if it can brake there.
+          // Only an actual marked entry, a braking dilemma, or its physical body reserves rail.
+          const speed = vehicles.speed[id]!;
+          const brake = profiles[vehicles.vclass[id]!]!.idm.bMps2;
+          if (
+            near < Infinity &&
+            stop > near &&
+            speed > 0.1 &&
+            near - position < (speed * speed) / (2 * brake) + params.idm.minGapM
+          )
+            committed[f]!.add(id);
           let bodyInside = false;
           let segment = field,
             front = position,
@@ -252,9 +326,14 @@ export function createRailCrossings(
             if (overlaps(f, segment, front, rear)) {
               occupied[f] = 1;
               bodyInside = true;
+              committed[f]!.add(id);
             }
             if (rear >= 0) break;
-            if (segment < 0) segment = city.movements[-segment - 1]!.fromLane;
+            const actual = history.trail[back];
+            if (actual !== undefined) {
+              if (segment >= 0) step--;
+              segment = actual;
+            } else if (segment < 0) segment = city.movements[-segment - 1]!.fromLane;
             else {
               const m = vehicles.route[id]?.movements[--step];
               if (m === undefined) break;
@@ -334,7 +413,6 @@ export function createRailCrossings(
           cycle: clock.cycle,
           ageS: clock.ageS,
           held: false,
-          accepted: false,
           current: [],
           proposed: [],
         };
@@ -361,9 +439,19 @@ export function createRailCrossings(
     if (age < 0 || age >= route.durationS) return;
     const at = trainPositionAt(route, age).positionM;
     const half = trainDefaults[route.kind].lengthM / 2;
-    for (const section of route.sections)
-      if (at + half > section.startM && at - half < section.endM) into.push(section.track);
+    let low = 0,
+      high = route.sections.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (route.sections[mid]!.endM <= at - half) low = mid + 1;
+      else high = mid;
+    }
+    for (let i = low; i < route.sections.length && route.sections[i]!.startM < at + half; i++)
+      into.push(route.sections[i]!.track);
   }
+  const trackOwners = new Int32Array(rail.tracks.length);
+  const nextOwners = new Int32Array(rail.tracks.length);
+  const delayedTracks = new Uint8Array(rail.tracks.length);
   return {
     canSpawn(lane: number, positionM: number, lengthM: number) {
       for (let f = 0; f < facilities.length; f++)
@@ -380,12 +468,24 @@ export function createRailCrossings(
       if (!enabled) return;
       spawn(timeS);
       roadOccupancy();
-      for (const service of services) {
+      trackOwners.fill(-1);
+      nextOwners.fill(-1);
+      delayedTracks.fill(0);
+      for (let i = 0; i < services.length; i++) {
+        const service = services[i]!;
         tracksAt(service, service.ageS, service.current);
         tracksAt(service, service.ageS + params.dtS, service.proposed);
-        service.accepted = false;
+        for (const track of service.current) trackOwners[track] = i;
+        const departure = table.departures[service.departure]!;
+        if (
+          service.current.length &&
+          timeS - departure.timeS - service.cycle * table.periodS - service.ageS > params.dtS
+        )
+          for (const section of table.routes[departure.route]!.sections)
+            delayedTracks[section.track] = 1;
       }
-      for (const service of services) {
+      for (let i = 0; i < services.length; i++) {
+        const service = services[i]!;
         const route = table.departures[service.departure]!.route;
         const next = service.ageS + params.dtS;
         service.held = events[route]!.some(
@@ -397,33 +497,16 @@ export function createRailCrossings(
         // A delayed train keeps its physical track reservation; following/opposing services
         // wait before their nose enters it. Other routes retain their own clocks.
         if (!service.held)
-          service.held = services.some(
-            (other) =>
-              other !== service &&
-              service.proposed.some(
-                (track) =>
-                  other.current.includes(track) ||
-                  (other.accepted && other.proposed.includes(track)),
-              ),
+          service.held = service.proposed.some(
+            (track) =>
+              (trackOwners[track] !== -1 && trackOwners[track] !== i) || nextOwners[track] !== -1,
           );
         if (!service.held && !service.current.length && service.proposed.length) {
-          const entering = table.routes[route]!;
-          service.held = services.some((other) => {
-            if (other === service || !other.current.length) return false;
-            const departure = table.departures[other.departure]!;
-            const delayed =
-              timeS - departure.timeS - other.cycle * table.periodS - other.ageS > params.dtS;
-            return (
-              delayed &&
-              table.routes[departure.route]!.sections.some((a) =>
-                entering.sections.some((b) => a.track === b.track),
-              )
-            );
-          });
+          service.held = table.routes[route]!.sections.some((s) => delayedTracks[s.track]);
         }
         if (!service.held) {
           service.ageS = next;
-          service.accepted = true;
+          for (const track of service.proposed) nextOwners[track] = i;
         } else service.proposed.length = 0;
       }
       for (let i = services.length - 1; i >= 0; i--)
@@ -439,22 +522,16 @@ export function createRailCrossings(
       const field = vehicles.lane[id]!;
       if (field < -city.movements.length || !influences[bucket(field)]) return Infinity;
       path(id);
+      ranges(vehicles.position[id]!);
       const position = vehicles.position[id]!;
       let best = Infinity;
       for (let f = 0; f < facilities.length; f++) {
         if (!served[f]) continue;
         if (committed[f]!.has(id)) continue;
-        const facility = facilities[f]!;
-        let stop = Infinity,
-          end = -Infinity;
-        for (let s = 0; s < segments.length; s++) {
-          for (const marking of facility.stops ?? [])
-            if (marking.lane === segments[s] && offsets[s]! + marking.stopM >= position - 1e-6)
-              stop = Math.min(stop, offsets[s]! + marking.stopM);
-          for (const span of facility.spans ?? [])
-            if (span.segment === segments[s] && offsets[s]! + span.toM >= position)
-              end = Math.max(end, offsets[s]! + span.toM);
-        }
+        const near = pathStarts[f]!,
+          end = pathEnds[f]!;
+        const stop =
+          pathStops[f]! <= near ? pathStops[f]! : Math.max(position, near - params.idm.minGapM);
         if (stop === Infinity || end < stop || stop >= best) continue;
         let blocked = states[f] !== CROSSING_OPEN;
         const clear = end + length(id) + params.idm.minGapM;
