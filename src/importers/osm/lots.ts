@@ -21,6 +21,7 @@ import type { OsmData, OsmTags } from './parse';
 import { createRoads, roadSpecs } from './roads';
 import { junctions, splitWay } from './split';
 import { joinLotAisles } from './lot-junctions';
+import { connectCarExits } from './places';
 
 export const surfaceLot = (tag: OsmTags) =>
   tag.amenity === 'parking' &&
@@ -208,18 +209,6 @@ export function addLots(
       }
     }
   }
-  joinLotAisles(
-    city,
-    data,
-    publicRoads,
-    lots.flatMap((lot, i) => lot.aisles!.map((id) => ({ id, holes: shapes[i]!.holes }))),
-    diagnostics,
-    compiled,
-  );
-  for (const road of publicRoads) {
-    publicNodes.add(road.from);
-    publicNodes.add(road.to);
-  }
   const aisleIds = new Set(lots.flatMap((lot) => lot.aisles!));
   // A new mouth can consume a short road's existing connector. Keep that mapped access
   // disconnected and diagnose it rather than moving an unrelated place or its demand.
@@ -346,4 +335,87 @@ export function addLots(
     }
   }
   return withAisles.compiled;
+}
+
+/** Apply source-proven joins last, so parking access cannot renumber unrelated walk/rail data. */
+export function restoreLotJunctions(
+  city: City,
+  data: OsmData,
+  positions: Map<number, Vec2>,
+  bounds: Bounds,
+  diagnostics: Diagnostic[],
+  compiled: CompiledCity,
+): void {
+  const lots = Object.values(city.parking ?? {}).filter((lot) => lot.kind === 'lot');
+  const aisleIds = new Set(lots.flatMap((lot) => lot.aisles ?? []));
+  const holes = new Map(
+    polygonSources(data, surfaceLot).map((source) => [
+      source.id,
+      source.rings.flatMap(({ role, ids }) => {
+        if (role !== 'inner') return [];
+        const points = ids.slice(0, -1).map((id) => positions.get(id));
+        if (!points.every((p): p is Vec2 => p !== undefined)) return [];
+        const ring = clip(points, bounds);
+        return ring.length >= 3 ? [ring] : [];
+      }),
+    ]),
+  );
+  const result = joinLotAisles(
+    city,
+    data,
+    Object.values(city.roads).filter((r) => !aisleIds.has(r.id)),
+    lots.flatMap((lot) =>
+      (lot.aisles ?? []).map((id) => ({
+        id,
+        holes: holes.get(lot.provenance.osmIds?.[0] ?? -1) ?? [],
+      })),
+    ),
+    diagnostics,
+    compiled,
+  );
+  if (!result) return;
+  const joined = new Set(result.nodes);
+  const affected: ParkingFacility[] = [];
+  const previous = new Map<string, ParkingFacility['connectors']>();
+  for (const lot of lots) {
+    const roads = (lot.aisles ?? [])
+      .map((id) => city.roads[id]!)
+      .filter((road) => joined.has(road.from) || joined.has(road.to));
+    if (!roads.length) continue;
+    affected.push(lot);
+    previous.set(lot.id, lot.connectors);
+    lot.entries = [
+      ...new Set([
+        ...(lot.entries ?? []),
+        ...roads.flatMap((r) => [r.from, r.to].filter((id) => joined.has(id))),
+      ]),
+    ].sort();
+    lot.connectors = [];
+    lot.provenance.inferred = lot.provenance.inferred?.filter((value) => value !== 'driveway');
+  }
+  connectCarExits(
+    { ...city, parking: Object.fromEntries(affected.map((lot) => [lot.id, lot])) },
+    result.compiled,
+    undefined,
+    true,
+  );
+  for (const lot of affected) {
+    const retained = previous.get(lot.id)!;
+    const used = new Set<string>();
+    for (const connector of lot.connectors) {
+      const old = retained.find(
+        (c) =>
+          !used.has(c.id) &&
+          c.roadId === connector.roadId &&
+          c.lane === connector.lane &&
+          Math.abs(c.positionM - connector.positionM) < 1e-6,
+      );
+      if (!old) continue;
+      connector.id = old.id;
+      connector.direction = old.direction === connector.direction ? old.direction : 'both';
+      connector.throughputPerMin = old.throughputPerMin;
+      used.add(old.id);
+    }
+    lot.connectors.push(...retained.filter((c) => !used.has(c.id)));
+  }
 }

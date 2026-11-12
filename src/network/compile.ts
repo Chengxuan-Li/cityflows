@@ -85,6 +85,12 @@ export function compile(city: City): CompileResult {
   const diagnostics: Diagnostic[] = [];
   const sourceNodes = sortedValues(city.nodes);
   const sourceRoads = sortedValues(city.roads);
+  // Late imported split halves preserve the original dense indices and seeded road noise.
+  sourceRoads.sort(
+    (a, b) =>
+      Number(a.provenance.inferred?.includes('lotJunction') ?? false) -
+      Number(b.provenance.inferred?.includes('lotJunction') ?? false),
+  );
   const sourcePlaces = sortedValues(city.places);
   validateCity(city, sourceNodes, sourceRoads, sourcePlaces, diagnostics);
   if (diagnostics.length) return { ok: false, diagnostics };
