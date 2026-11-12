@@ -37,7 +37,7 @@ const baseline = {
 };
 
 test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
-  'T49 %s: aisles are the only network change; city counts and capacity estimates',
+  'T49 %s: aisles and mapped public joins preserve the contracted network; counts and capacity',
   (name) => {
     const imported = importOsmCached(readFileSync('fixtures/osm/' + name + '.osm', 'utf8'), {
       importerVersion: '1',

@@ -121,6 +121,35 @@ test('a grade-separated aisle does not gain an interior service-road join', () =
   ).toHaveLength(2);
 });
 
+test('a same-grade aisle cannot attach an overpass sibling through their shared node', () => {
+  const xml = sharedInterior.replace(
+    '</osm>',
+    '<way id="16"><nd ref="2"/><nd ref="5"/><tag k="highway" v="service"/><tag k="service" v="parking_aisle"/><tag k="layer" v="1"/></way></osm>',
+  );
+  const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+  expect(
+    Object.values(imported.city.roads).filter((r) => r.provenance.osmIds?.includes(10)),
+  ).toHaveLength(2);
+});
+
+test('a bus-only public lane cannot supply a car lot junction', () => {
+  const xml = sharedInterior
+    .replace(
+      '<tag k="highway" v="service"/></way>',
+      '<tag k="highway" v="service"/><tag k="bus:lanes:forward" v="designated"/><tag k="bus:lanes:backward" v="designated"/></way>',
+    )
+    .replace(
+      '</osm>',
+      '<way id="17"><nd ref="8"/><nd ref="9"/><tag k="highway" v="service"/></way></osm>',
+    );
+  const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+  const roads = Object.values(imported.city.roads).filter((r) => r.provenance.osmIds?.includes(10));
+  expect(roads.every((r) => !r.lanes[0]!.allowed.includes('car'))).toBe(true);
+  expect(roads).toHaveLength(2);
+});
+
 test('splitting a one-way service street does not create a reverse direction', () => {
   const xml = sharedInterior.replace(
     '<tag k="highway" v="service"/></way>',
