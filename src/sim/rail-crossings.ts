@@ -29,8 +29,16 @@ type Service = {
   held: boolean;
   current: number[];
   proposed: number[];
+  tailClearedS: number[];
 };
-type Clock = { routeId: string; requestedS: number; cycle: number; ageS: number; held: boolean };
+type Clock = {
+  routeId: string;
+  requestedS: number;
+  cycle: number;
+  ageS: number;
+  held: boolean;
+  tailCleared?: { nodes: string[]; enterS: number; exitS: number; timeS: number }[];
+};
 type RoadState = {
   histories: { id: number; segment: number; trail: number[]; position: number }[];
   admissions: { nodes: string[]; ids: number[] }[];
@@ -205,7 +213,7 @@ export function createRailCrossings(
       while (departure.timeS + nextCycle[i]! * table.periodS <= timeS + warningMax) {
         const cycle = nextCycle[i]!++;
         const ageS = timeS - departure.timeS - cycle * table.periodS;
-        if (ageS < table.routes[departure.route]!.durationS)
+        if (ageS < table.routes[departure.route]!.durationS + 1)
           services.push({
             departure: i,
             cycle,
@@ -213,6 +221,9 @@ export function createRailCrossings(
             held: false,
             current: [],
             proposed: [],
+            tailClearedS: events[departure.route]!.map((event) =>
+              ageS > event.exitS ? timeS - (ageS - event.exitS) : Infinity,
+            ),
           });
       }
       nextSpawnS = Math.min(nextSpawnS, departure.timeS + nextCycle[i]! * table.periodS);
@@ -405,8 +416,11 @@ export function createRailCrossings(
     states.fill(CROSSING_OPEN);
     for (const service of services) {
       const route = table.departures[service.departure]!.route;
-      for (const event of events[route]!) {
-        if (service.ageS < event.enterS - event.warningS || service.ageS > event.exitS + 1)
+      for (const [index, event] of events[route]!.entries()) {
+        if (
+          service.ageS < event.enterS - event.warningS ||
+          (service.ageS > event.exitS && snapshotTimeS > service.tailClearedS[index]! + 1)
+        )
           continue;
         const state =
           service.ageS >= event.enterS - event.warningS + 3 ? CROSSING_CLOSED : CROSSING_WARNING;
@@ -478,11 +492,24 @@ export function createRailCrossings(
           held: false,
           current: [],
           proposed: [],
+          tailClearedS: [],
         };
         services.push(service);
       }
       service.ageS = clock.ageS;
       service.held = clock.held;
+      service.tailClearedS = events[table.departures[departure]!.route]!.map((event) => {
+        if (clock.ageS <= event.exitS) return Infinity;
+        const nodes = facilities[event.facility]!.nodes;
+        const previous = clock.tailCleared?.find(
+          (clear) =>
+            clear.enterS === event.enterS &&
+            clear.exitS === event.exitS &&
+            clear.nodes.length === nodes.length &&
+            clear.nodes.every((node) => nodes.includes(node)),
+        );
+        return previous?.timeS ?? startS - (clock.ageS - event.exitS);
+      });
     }
     roadOccupancy();
     for (const service of services)
@@ -495,6 +522,10 @@ export function createRailCrossings(
           service.ageS = event.enterS - params.dtS;
           service.held = true;
         }
+    for (const service of services)
+      events[table.departures[service.departure]!.route]!.forEach((event, index) => {
+        if (service.ageS <= event.exitS) service.tailClearedS[index] = Infinity;
+      });
   }
   publish();
   function tracksAt(service: Service, age: number, into: number[]) {
@@ -569,6 +600,10 @@ export function createRailCrossings(
           service.held = table.routes[route]!.sections.some((s) => delayedTracks[s.track]);
         }
         if (!service.held) {
+          events[route]!.forEach((event, index) => {
+            if (service.ageS <= event.exitS && next > event.exitS)
+              service.tailClearedS[index] = timeS + event.exitS - service.ageS;
+          });
           service.ageS = next;
           for (const track of service.proposed) nextOwners[track] = i;
         } else service.proposed.length = 0;
@@ -576,7 +611,8 @@ export function createRailCrossings(
       for (let i = services.length - 1; i >= 0; i--)
         if (
           services[i]!.ageS >=
-          table.routes[table.departures[services[i]!.departure]!.route]!.durationS
+            table.routes[table.departures[services[i]!.departure]!.route]!.durationS &&
+          services[i]!.tailClearedS.every((cleared) => snapshotTimeS > cleared + 1)
         )
           services.splice(i, 1);
       publish();
@@ -653,6 +689,18 @@ export function createRailCrossings(
         cycle: s.cycle,
         ageS: s.ageS,
         held: s.held,
+        tailCleared: events[table.departures[s.departure]!.route]!.flatMap((event, index) =>
+          Number.isFinite(s.tailClearedS[index])
+            ? [
+                {
+                  nodes: facilities[event.facility]!.nodes,
+                  enterS: event.enterS,
+                  exitS: event.exitS,
+                  timeS: s.tailClearedS[index]!,
+                },
+              ]
+            : [],
+        ),
       }));
     },
     roadState(mapping: { lanes: number[]; movements: number[] }): RoadState {
