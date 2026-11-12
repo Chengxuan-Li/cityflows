@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [clear-first-pr, clear-first-parking]
+        variant: [actual-box-pr, actual-box-parking]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -17,14 +17,14 @@ jobs:
           cache: npm
       - run: npm ci
 
-      - if: matrix.variant == 'clear-first-pr'
+      - if: matrix.variant == 'actual-box-pr'
         uses: actions/checkout@v7
         with:
           ref: dcdaa10de43c3f94fe870cb475d52b40c6f472df
           path: old-crossing
-      - if: matrix.variant == 'clear-first-pr'
+      - if: matrix.variant == 'actual-box-pr'
         run: |
           cp old-crossing/src/importers/osm/{index,lots,places}.ts src/importers/osm/
           cp old-crossing/src/network/compile.ts src/network/
-      - run: node bench/task147/egress-priority.mjs
+      - run: node bench/task147/keep-exit-storage.mjs
       - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts ${{ matrix.variant }}
