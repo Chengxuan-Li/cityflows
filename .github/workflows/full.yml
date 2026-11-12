@@ -3,8 +3,12 @@ on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  trace:
+  morning:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [2-no-warning, 2-no-tail, 2-no-red]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -12,4 +16,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node --experimental-strip-types --import ./bench/register.ts --import ./bench/task147/binding-hook.mjs bench/task147/counter.ts trace
+      - run: node bench/task147/facility-experiment.mjs ${{ matrix.variant }}
+      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts ${{ matrix.variant }}
