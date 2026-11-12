@@ -3172,8 +3172,8 @@ timeouts, 78 suffixes returned to the approach and 12 of those had a feasible by
 The first was on r:968. The bypass cost 320.2 s against 290.7 s for the returning route.
 
 At n:251, 564 of 780 green lane-seconds for right-turn lanes r:269#3/#4 found the lane
-empty over 13 cycles. At 08:02 car 1495 was waiting for space on a left return. Car
-1609, immediately behind it in the shared lane, wanted the open right exit. The 45 s
+empty over 13 cycles. At 08:02 car 1496 was waiting for space on a left return. Car
+1610, immediately behind it in the shared lane, wanted the open right exit. The 45 s
 head-detour rule eventually cleared 1495 after the receiving green had ended. The upstream
 group is unsignalised. Physical queues propagated back to r:703 by 07:59.
 
@@ -3182,6 +3182,21 @@ regressed against the retained fix, and the longest wait exceeded 900 s on all t
 Two isolated lead probes also failed the gate. Using unfinished travel times when a road
 had no exits during a cost update gave 4153/3956/4256 completions. Pricing the complete
 suffix of each ordinary fallback gave 3929/4619/4052. Neither policy was adopted.
+
+TASK-131 Phase 3 / B56 (shared-lane discharge, 2026-11-12, `ae398f3`, unmerged).
+A stopped head can look for a safe detour earlier when its immediate follower needs a
+different, available exit. Right turns at n:251 increased from 88 to 102 over 13 cycles.
+Munich completions rose to 4601/4788/3999 versus main's 4113/3994/3245, with 4/3/7
+gridlocks, zero parking failures and zero stalled heads. The longest cumulative waits
+were 6170/5496/7081 s. All three still exceed the 900 s gate.
+
+On seed 1 the six roads held 43 cars at 10:00, down from 59. Every one had exceeded 900 s
+before its latest entry onto its current road. Across the city 613 of 617 cars still on the
+road were over 900 s. The 43 loop cars' median wait was 4620 s; about 70% of their combined
+wait was spent on the road. Some experienced a single road queue over 900 s. Others carried
+delay through several junctions or from their origin. On the preceding build, 94 road cars
+passed car 3887's parking exit while it waited to leave. Physical clearance was occupied
+at all 2452 one-second samples. Existing safety checks correctly prevented an overlap.
 
 ## Owner decisions log
 
