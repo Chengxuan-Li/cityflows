@@ -59,6 +59,18 @@ async function bothViews(page: Page, info: TestInfo, name: string, state: number
     const frozen = await canvas.screenshot();
     await page.waitForTimeout(250);
     expect(await canvas.screenshot()).toEqual(frozen);
+    if (view === '3d' && state === 2) {
+      const screen = await page.evaluate(async () => {
+        const trains = (await window.cityflows!.snapshot!()).rail!.trains;
+        const car = trains.flatMap((t) => t.cars).sort((a, b) => Math.abs(a.y) - Math.abs(b.y))[0]!;
+        return window.cityflows!.worldToScreen!(car);
+      });
+      await canvas.click({ position: screen });
+      const inspector = page.getByRole('region', { name: 'Train inspector' });
+      await expect(inspector).toContainText(name.includes('tram') ? 'Tram' : 'Main-line train');
+      await expect(inspector).toContainText('Running');
+      await button(page, 'Close inspector').click();
+    }
     await button(page, 'Layers').click();
     const rail = page
       .getByRole('region', { name: 'Map layers' })
