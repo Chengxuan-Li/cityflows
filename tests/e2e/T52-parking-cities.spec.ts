@@ -196,20 +196,17 @@ async function frameTiming(page: Page) {
 for (const cameraTarget of [
   {
     city: 'munich-donnersberger',
-    lots: ['pk:2042', 'pk:2041'],
+    osmWayIds: [160401431, 159640410],
     access: 'customers',
-    osmId: 160401431,
     centre: { x: 135.7, y: 305.3 },
     zoom: 7,
     camera: 'V103-munich-lot',
   },
   {
     city: 'sindelfingen-a81',
-    // TASK-118: private admission at pk:1474. Courtyard pk:1475 is reached through a
-    // building passage; T54's city inventory covers it.
-    lots: ['pk:1474'],
+    // Private admission; T54's city inventory covers the separate courtyard lot.
+    osmWayIds: [220072450],
     access: 'private',
-    osmId: 220072450,
     centre: { x: -344, y: -626 },
     zoom: 7,
     camera: 'V103-sindelfingen-lot',
@@ -229,7 +226,12 @@ for (const cameraTarget of [
     await expect(button(page, 'Play')).toBeEnabled();
     await importOsm(page, osm, { terrain: true });
     const original = await city(page);
-    const lotIds = cameraTarget.lots;
+    const lotIds = cameraTarget.osmWayIds.map(
+      (osmWayId) =>
+        Object.values(original.parking!).find(
+          (f) => f.kind === 'lot' && f.provenance.osmIds?.includes(osmWayId),
+        )!.id,
+    );
     const events = lotIds.map((lotId) => {
       const lot = original.parking![lotId]!;
       expect(lot.kind).toBe('lot');
@@ -248,7 +250,8 @@ for (const cameraTarget of [
       };
       return { lotId, placeId, event };
     });
-    expect(original.parking![lotIds[0]!]!.provenance.osmIds).toContain(cameraTarget.osmId);
+    for (const [i, lotId] of lotIds.entries())
+      expect(original.parking![lotId]!.provenance.osmIds).toContain(cameraTarget.osmWayIds[i]);
     for (const { placeId, event } of events)
       await page.evaluate(
         ({ placeId, event }) =>

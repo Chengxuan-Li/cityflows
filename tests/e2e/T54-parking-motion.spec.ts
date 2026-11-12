@@ -155,7 +155,10 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
     result = compile(source);
   if (!result.ok) throw new Error('compile');
   const net = result.compiled,
-    lot = net.parking[net.index.parking.get('pk:2042')!]!;
+    lot = net.parking.find(
+      (f) => f.kind === 'lot' && f.source.provenance.osmIds?.includes(160401431),
+    )!;
+  expect(lot.kind).toBe('lot');
   expect(lot.capacity).toBeGreaterThan(1);
   const provider = createRouteProvider(),
     costs = freeFlowLinkCosts(net);

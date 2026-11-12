@@ -15,9 +15,9 @@ import { eventTrips } from '../../src/demand/events';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 
 test.each([
-  ['munich-donnersberger', 'pk:2042'],
-  ['sindelfingen-a81', 'pk:1474'],
-])('T54 %s %s event arrivals reach their lot through the street and local graphs', (name, id) => {
+  ['munich-donnersberger', 160401431],
+  ['sindelfingen-a81', 220072450],
+])('T54 %s way %s event arrivals use street and local graphs', (name, osmWayId) => {
   const imported = importOsmCached(readFileSync(`fixtures/osm/${name}.osm`, 'utf8'), {
     importerVersion: '1',
     context: false,
@@ -25,9 +25,20 @@ test.each([
   });
   if (!imported.ok) throw new Error('import');
   const source = imported.city,
-    lot = source.parking![id]!;
+    lot = Object.values(source.parking!).find(
+      (f) => f.kind === 'lot' && f.provenance.osmIds?.includes(osmWayId),
+    )!,
+    id = lot.id;
+  expect(lot.kind).toBe('lot');
   source.places[lot.placeId!]!.events = [
-    { id: 'arrival', name: 'Arrival', startS: 25200, durationS: 1800, arrivals: 16, departures: 0 },
+    {
+      id: 'arrival',
+      name: 'Arrival',
+      startS: 25200,
+      durationS: 1800,
+      arrivals: 16,
+      departures: 0,
+    },
   ];
   const result = compile(source);
   if (!result.ok) throw new Error('compile');
@@ -42,7 +53,19 @@ test.each([
   const trips = eventTrips(source, scenario),
     engine = createEngine();
   engine.load({ compiled: result.compiled, trips, scenario });
-  engine.step(36000);
+  let droveIn = false;
+  for (let second = 0; second < 3600; second++) {
+    engine.step(10);
+    droveIn ||= trips.some((_, i) => {
+      const detail = engine.inspect(i + 1);
+      return (
+        detail?.parkingFacility === id &&
+        detail.state === 'in_lot' &&
+        detail.parkingPhase === 'drive_in' &&
+        detail.speedMps > 0
+      );
+    });
+  }
   const details = trips.map((_, i) => engine.inspect(i + 1));
   writeFileSync(
     `node_modules/.cache/task118-arrivals-${name}-${id.replace(':', '-')}.json`,
@@ -51,6 +74,7 @@ test.each([
   expect(
     details.filter((d) => d?.parkingFacility === id && d.arrivedS !== null).length,
   ).toBeGreaterThan(0);
+  expect(droveIn, 'an event arrival drove inside the intended lot').toBe(true);
 });
 
 // Opt-in comparison with the lead's clean checkout, through the authorized city gate.
