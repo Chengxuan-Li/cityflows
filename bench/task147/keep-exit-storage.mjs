@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 const p='src/sim/intersection.ts';let s=fs.readFileSync(p,'utf8');
-s="import {railTimetable} from '../network/trams';\n"+s;
+if(!s.includes("import {railTimetable}"))s="import {railTimetable} from '../network/trams';\n"+s;
 const marker='  function blockedExit(id: number, movement: CMovement)';
 const helper=`  const railLanes = new Set<number>();
   const rail=compiled.rail;
