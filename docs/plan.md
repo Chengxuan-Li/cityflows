@@ -155,8 +155,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-127](tasks/TASK-127.md) | 10 | Decorative trains: S-Bahn trains stop at Donnersbergerbrücke, main-line trains pass through, by a deterministic timetable on the sim clock; drawn in 2D and 3D; no sim change | new routes/timetable/motion module, train layers, `src/network/rail.ts`, rail schema (preferred direction) | 126 | T64, traffic and sim hash unchanged, frame time, shots | done |
 | [TASK-128](tasks/TASK-128.md) | 10 | Stations as trip ends: S-Bahn riders walk out of Donnersbergerbrücke after each stop, walk to work or a visit nearby, and walk back to board; walk-only, timed by TASK-127's timetable | new rider module in `src/demand/`, `schedule.ts`, person inspector, rider census | 126, 127 | T65, Munich 0.15 gate with riders, Sindelfingen and synthetic trips unchanged, shots | reviewed 2026-11-12, held for the owner (`c9a0632`) |
 | [TASK-129](tasks/TASK-129.md) | 10 | Car ownership: persons grouped into households that own their members' cars; a person drives only a free household car (owners first, borrowers for a whole free day), a car's trips chain by car, every car starts and parks near home | `src/demand` (households, drivers), `src/schema` (`householdId`, `carId`, `homeParkingRadiusM`), `src/sim/parking.ts`, `persons.ts`, person inspector, census | 112, 122, 125 | T67, Munich 0.15 seeds 1 to 3, no car parked beyond the home radius while room is near, baseline reset | reviewed 2026-11-11, held for the owner (`496cfe6`) |
-| [TASK-130](tasks/TASK-130.md) | 7 | Break the Landsberger loop (B56 reopened): trace the cycle TASK-121's head detours do not clear, then the smallest general rule (box entry, zipper or wider detours) so the corridor drains | `src/sim/intersection.ts`, `engine.ts`, `reroute.ts`, `lane-change.ts`, `merge.ts`, `params.ts`, probe seeds | 121, 122, 077 | T66, 0 stalled heads over seeds 1 to 3, loop waits under 15 min, baseline reset | checkpoint reviewed 2026-11-11, not merged (B56 open) |
-| [TASK-131](tasks/TASK-131.md) | 5 | Junction groups (B54 amended, B55): every OSM node keeps its position; nodes joined by links up to `junctionGroupMaxM` (30 m) form one junction group with inner links kept, one coordinated signal program and one drawn surface; the collision model off; cars never stop on inner links | `src/importers/osm/**`, `src/schema` (junction group), `src/network/**`, road and junction renderers, signal editor; Phase 3 `src/sim/intersection.ts`, `signals.ts`, `engine.ts` with B56 | 089, 092, 094, 099, 111; B56 folded into Phase 3 | T68, reference-case shots per checkpoint, geometry gates, traffic over seeds 1 to 3, baseline reset | Phases 0 to 2 merged 2026-11-11 (lead-driven subagents); Phase 3 with B56 unmerged, cumulative wait gate red (see exit reservation review); TASK-130 held |
+| [TASK-130](tasks/TASK-130.md) | 7 | Break the Landsberger loop (B56 reopened): trace the cycle TASK-121's head detours do not clear, then the smallest general rule (box entry, zipper or wider detours) so the corridor drains | `src/sim/intersection.ts`, `engine.ts`, `reroute.ts`, `lane-change.ts`, `merge.ts`, `params.ts`, probe seeds | 121, 122, 077 | T66, 0 stalled heads over seeds 1 to 3, loop waits under 15 min, baseline reset | reviewed and held at `215afac`; B56 is part of TASK-131 Phase 3 |
+| [TASK-131](tasks/TASK-131.md) | 5 | Junction groups (B54 amended, B55): every OSM node keeps its position; nodes joined by links up to `junctionGroupMaxM` (30 m) form one junction group with inner links kept, one coordinated signal program and one drawn surface; the collision model off; cars never stop on inner links | `src/importers/osm/**`, `src/schema` (junction group), `src/network/**`, road and junction renderers, signal editor; Phase 3 `src/sim/intersection.ts`, `signals.ts`, `engine.ts` with B56 | 089, 092, 094, 099, 111; B56 folded into Phase 3 | T68, reference-case shots per checkpoint, geometry gates, traffic over seeds 1 to 3, baseline reset | Phases 0 to 2 merged 2026-11-11 (lead-driven subagents); Phase 3 with B56 unmerged, all three seeds exceed 900 s and step timing exceeds the limits (see integration review); TASK-130 held |
 | [TASK-133](tasks/TASK-133.md) | 10 | Station furniture: name boards, shelters, benches, departure displays from the timetable, generic entrance signs; visual only | new `src/render/layers/stations.ts`, `src/render3d/stations.ts`, placement module, read-only helper in `src/network/trains.ts` | 126, 127 | T70, shots, no hash change | done 2026-11-11 |
 | [TASK-135](tasks/TASK-135.md) | 10 | Trams as their own kind of track: embedded, grass, paved or ballast form from OSM tags or inference, a distinct tram look in 2D and 3D | `src/schema/rail.ts`, `src/importers/osm/rail.ts`, rail drawing 2D and 3D, `style.ts` | 126, 127, 131 | T69, shots against the imagery, no hash change | done 2026-11-11 |
 | [TASK-140](tasks/TASK-140.md) | 9 | Crossing walk links, pedestrian heads and walker conflict zones at the zebra stripes (B59) | `src/network/crossings.ts`, `walk.ts`, `walk-joins.ts`, `conflicts.ts`, head drawing | 091, 094, 110, 111, 131 | T71, every link within 0.5 m of its stripes, T53, baseline reset | done 2026-11-11 |
@@ -3209,6 +3209,66 @@ runs took 65.96 and 70.43 s on main, 66.44 and 66.15 s with reuse. The mean was 
 lower; the ranges overlap. Lead check passed 1148 unit tests, city 162, light traffic
 and all 37 light browser tests. Full run 43216929096 passed on the integrated code.
 The traffic baseline is unchanged.
+
+TASK-131 Phase 3 / B56 (integration review, 2026-11-12). At r:1258 a discretionary pass
+added a mandatory change on the downstream approach. Over the next roads the car found no
+safe gap. Comparing the mandatory changes within one normal change window kept that car on
+its original route. It completed with 308 s waiting and no respawn. At a separate roadside
+exit, a safely stopped follower made a gap for car 3887, which left 1265 s earlier in the
+first courtesy trial. The corrected policy bounds pre-admission holds at 10 s even across
+the floating-point boundary at simulation time 32768 s.
+
+| Munich at 10:00, demand 0.15 | Completions (seeds 1/2/3) | Gridlocked | Peak cumulative waits on the six roads (s) |
+| --- | --- | --- | --- |
+| Main | 4113/3994/3245 | 26/41/59 | 6888/5807/7089 |
+| Downstream lane choice on the exit-reservation candidate (`5b1d223`) | 4474/4782/4627 | 3/9/2 | 6965/5872/7058 |
+| Shared-lane release + downstream lane choice (`b2ef07b`) | 4560/4827/4580 | 4/5/5 | 6868/6612/5731 |
+| Shared-lane release + corrected roadside courtesy (`7d60fd0`) | 4708/5003/4462 | 6/2/2 | 6012/6352/5181 |
+| All three integrated locally with TASK-143 (`62cd578`) | 4720/4879/4443 | 4/2/5 | 6073/6882/5762 |
+
+The integrated candidate on `task/lead-131-candidate` had zero parking failures and zero
+stalled heads on all seeds. A second seed-1 run matched hash 3673406659. On all three
+seeds the six-road dependency probe detected no sustained cycle and no car stood on an
+inner link at 10:00. The longest inner-link stops earlier were 152/179/179 s.
+The car carrying 6073 s on r:364 had added zero seconds during that visit. The standalone
+lane-choice trial had one stalled head on seed 1.
+The roadside trial improved direct roadside releases but moved some waiting to other
+vehicles and garages. Combining the policies did not clear the 900 s whole-trip limit.
+The candidate remains unmerged. Its T46 town pin accounts for an independently reproduced
+0.5 vehicle-seconds saved across the same 207 completed trips. Explicit cars and legacy
+trips with default classes still produced identical metrics and hashes.
+
+At garage p:1664 the independent seed-1 replay matched the integrated hash. All 409
+first departures and 65 respawns eventually left through c:1665. With an always-clear
+road, the existing 30/min meter could have served that same arrival sequence with at
+most 6 s waiting. In the real run 106 first departures waited over 900 s after becoming
+eligible. Every rejected attempt also failed the road-entry clearance check. Six of the
+48 cars on the watched roads came from this garage, and four of the six had exceeded
+900 s before first leaving it. This connector explains a subset of the carried delay.
+
+The 09:30 Munich probe completed 4082 trips with 4 gridlocks against main's 3777 and
+12. On Sindelfingen at 0.15 both builds completed 155 of 445 released trips with zero
+stalled heads or gridlocks, 49 route failures and 241 parking failures. The equal totals
+had different state hashes (main 2991941029, candidate 3414305433).
+The named full-demand Munich test passed with 3063 completed trips, 95 gridlocks and
+zero stalled heads. Main's Full run 43216929096 recorded 1765, 315 and one respectively.
+Both had zero parking failures.
+T53 completed 1669 trips without walkers and 1652 with walkers (1.02% cost). No
+pedestrian was dropped, no hard stop occurred, and the crossing clearance test passed.
+The candidate passed 1200 unit tests, 162 city tests, the light traffic tier and all 37
+light browser tests. The stop-control browser test now selects the junction before
+stepping the baseline morning. Selecting it after 1500 steps picked vehicle 32 over
+the junction center. The queue-growth assertion and both traffic runs are unchanged.
+T16's three browser cases, T54, T57 and demo C passed.
+
+Two warm seed-1 runs per build, with the order reversed for the second pair,
+gave mean Munich step times of 70.82 s on main and 77.01 s on the candidate
+(+8.73%, above the 5% B56 limit). Route requests fell from 117896 to 104441.
+Sindelfingen step time rose from 2.42 to 2.71 s (+12.07%, above 10%).
+Mean uncached import/compile times in ms were 6567/1026 to 6514/936 in Munich
+and 5584/878 to 5438/842 in Sindelfingen. The retained local checkpoint is
+`4ab4d71`; its simulation is identical to `62cd578`. The traffic baseline stays
+at main's values. TASK-128, TASK-129 and TASK-130 remain held.
 
 ## Owner decisions log
 
