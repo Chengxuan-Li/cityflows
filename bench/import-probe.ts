@@ -358,7 +358,7 @@ export function probeMorning(
   };
   const stepStart = performance.now();
   for (let step = 0; step < (untilS - scenario.startS) * 10; step += 600) {
-    for (let i = 0; i < 600; i++) {
+    for (let i = 0; i < Math.min(600, (untilS - scenario.startS) * 10 - step); i++) {
       engine.step();
       observe?.(engine);
     }
