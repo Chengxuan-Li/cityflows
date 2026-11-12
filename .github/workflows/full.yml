@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [base, open, none]
+        variant: [coordinated, pedestrians]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -19,4 +19,9 @@ jobs:
       - name: Measure the three-hour Munich morning
         env:
           VARIANT: ${{ matrix.variant }}
-        run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts "$VARIANT"
+        run: |
+          if [ "$VARIANT" = pedestrians ]; then
+            npx vitest run --project traffic tests/traffic/T53-munich-pedestrians.test.ts
+          else
+            node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts "$VARIANT"
+          fi
