@@ -278,6 +278,7 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
             continue;
           route.terminal = node;
           route.to = origin.idx;
+          if (kind === 'tram') route.destination = 'Buffer terminal and return to city edge';
           if (!terminalRoute) {
             motion(rail, route);
             terminalRoute = route;

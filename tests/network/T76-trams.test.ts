@@ -180,6 +180,7 @@ test('T76 tram buffer returns put the reversed nose at the same halt without mov
     table = buildTramTimetable(rail),
     route = table.routes[0]!;
   expect(route.stops).toHaveLength(2);
+  expect(route.destination).toBe('Buffer terminal and return to city edge');
   const d = table.departures.findIndex((d) => d.route === 0);
   const outward = trainPoseAt(rail, table, d, 0, route.stops[0]!.arrivalS + 1)!,
     back = trainPoseAt(rail, table, d, 0, route.stops[1]!.arrivalS + 1)!;
