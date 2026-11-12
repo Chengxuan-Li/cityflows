@@ -29,7 +29,7 @@ async function bothViews(page: Page, info: TestInfo, name: string, state: number
     await expect(canvas).toHaveAttribute('data-level-crossing-states', JSON.stringify([state]));
     if (view === '3d') {
       const frames = Number(await canvas.getAttribute('data-frames'));
-      await page.evaluate(() => window.cityflows!.setView3D!({ x: 0, y: 0 }, 20, 48, 25));
+      await page.evaluate(() => window.cityflows!.setView3D!({ x: 0, y: 0 }, 20, 48, 155));
       await expect
         .poll(async () => Number(await canvas.getAttribute('data-frames')))
         .toBeGreaterThan(frames);
@@ -50,6 +50,10 @@ async function bothViews(page: Page, info: TestInfo, name: string, state: number
         );
       });
     }
+    const trainCount = await page.evaluate(
+      async () => (await window.cityflows!.snapshot!()).rail!.trains.length,
+    );
+    await expect(canvas).toHaveAttribute('data-trains', String(trainCount));
     await capture(page, info, name, view);
     await page.waitForTimeout(500);
     const frozen = await canvas.screenshot();
