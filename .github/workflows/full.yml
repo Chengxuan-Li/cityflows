@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [egress-combined-pr, egress-combined-parking]
+        variant: [band-clearance, direct]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -28,4 +28,5 @@ jobs:
           cp old-crossing/src/network/compile.ts src/network/
       - run: node bench/task147/egress-priority.mjs
       - run: node bench/task147/keep-exit-storage.mjs
+      - run: node bench/task147/egress-rank.mjs ${{ matrix.variant }}
       - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts ${{ matrix.variant }}
