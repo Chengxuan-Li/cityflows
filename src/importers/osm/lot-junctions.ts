@@ -1,10 +1,4 @@
-import {
-  cumulativeLengths,
-  nearestOnPolyline,
-  pointAtDistance,
-  pointInPolygon,
-  polylineCrossings,
-} from '../../geo/polyline';
+import { nearestOnPolyline, pointAtDistance, pointInPolygon } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import { compile, type CompiledCity, type Diagnostic } from '../../network';
 import { allocateId, type City, type Connector, type Road } from '../../schema';
@@ -17,33 +11,14 @@ export function joinLotAisles(
   publicRoads: Road[],
   aisles: { id: string; holes: Vec2[][] }[],
   diagnostics: Diagnostic[],
-  publicGeometry?: CompiledCity,
+  publicGeometry: CompiledCity,
 ): { compiled: CompiledCity; nodes: string[] } | undefined {
   const ways = new Map(data.way.map((way) => [way.id, way]));
   const grouped = new Set(Object.values(city.junctionGroups ?? {}).flatMap((g) => g.nodes));
-  const eligible = aisles.filter(({ id, holes }) => {
-    if (!holes.length) return true;
-    const line = city.roads[id]!.centerline;
-    const rings = holes.map((ring) => [...ring, ring[0]!]);
-    const cumulative = cumulativeLengths(line);
-    const cuts = [
-      0,
-      cumulative.at(-1)!,
-      ...rings.flatMap((ring) => polylineCrossings(line, ring).map((hit) => hit.alongA)),
-    ].sort((a, b) => a - b);
-    return cuts.some(
-      (at, i) =>
-        i > 0 &&
-        at > cuts[i - 1]! &&
-        !rings.some((ring) =>
-          pointInPolygon(pointAtDistance(line, cumulative, (at + cuts[i - 1]!) / 2), ring),
-        ),
-    );
-  });
   const nodes = new Set(
-    eligible.flatMap(({ id, holes }) =>
+    aisles.flatMap(({ id, holes }) =>
       [city.roads[id]!.from, city.roads[id]!.to].filter(
-        (node) => !holes.some((ring) => pointInPolygon(city.nodes[node]!.pos, ring)),
+        (node) => !holes.some((ring) => pointInPolygon(city.nodes[node]!.pos, [...ring, ring[0]!])),
       ),
     ),
   );
@@ -109,17 +84,6 @@ export function joinLotAisles(
     return [{ node, source }];
   });
   if (!candidates.length) return;
-  const before = publicGeometry ? { ok: true as const, compiled: publicGeometry } : compile(city);
-  if (!before.ok) {
-    diagnostics.push({
-      severity: 'warning',
-      code: 'parking_entry_unreachable',
-      refs: candidates.map(({ node }) => node.id),
-      message:
-        'Mapped interior aisle joins cannot be split while the existing public geometry is invalid',
-    });
-    return;
-  }
   const replacements = new Map<string, string[]>();
   for (const { node, source } of candidates) {
     const roads = publicRoads.filter(
@@ -192,8 +156,8 @@ export function joinLotAisles(
       (affected.has(connector.roadId) ? [connector.roadId] : undefined);
     if (!ids) return;
     const old =
-      before.compiled.lanes[
-        before.compiled.index.lane.get(`${connector.roadId}#${connector.lane}`)!
+      publicGeometry.lanes[
+        publicGeometry.index.lane.get(`${connector.roadId}#${connector.lane}`)!
       ]!;
     const point = pointAtDistance(old.polyline, old.cumulative, connector.positionM);
     const best = ids

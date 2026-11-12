@@ -3,7 +3,6 @@ import type { CConnector, CompiledCity } from '../network';
 import {
   createRouteProvider,
   movementPenaltyS,
-  reachableLanes,
   roadAccessFilter,
   type LinkCosts,
   type RouteProvider,
@@ -26,6 +25,7 @@ import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
+import { routeMovement } from './route-movement';
 import { createPersons, hasPerson } from './persons';
 import type { createWalkRouter } from '../routing/walk';
 import type {
@@ -137,12 +137,22 @@ function createRun({
   let intersections = createIntersections(compiled, vehicles, params, merges.canEnter, {
     onDecision: intersectionObserver,
     acceleration: (id) => reservationAcceleration[id]!,
+    compact: {
+      nextMovement: nextRouteMovement,
+      available: (id) => railCrossings?.clearForClaim(id) ?? false,
+    },
   });
   let railCrossings = createRailCrossings(compiled, vehicles, params, scenario.startS, (m) =>
     intersections.red(m),
   );
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
-  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
+  let laneChanges = createLaneChanges(
+    compiled,
+    vehicles,
+    params,
+    (id) => hasGrant(id) || intersections.hasClearance(id),
+    (id, lane, positionM) => intersections.canReceive(id, lane, positionM, profile(id).lengthM),
+  );
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -251,6 +261,21 @@ function createRun({
     );
   }
 
+  function nextRouteMovement(id: number, lane: number, step: number, positionM = 0) {
+    const route = vehicles.route[id];
+    if (!route) return -1;
+    return routeMovement(
+      compiled,
+      route,
+      step,
+      lane,
+      allowedLanes[vehicles.vclass[id]!]!,
+      compiled.connectors[vehicles.destination[id]!]!,
+      params.laneChangeDistanceM,
+      roadAccessFilter(compiled, vehicleRouteRequest(vehicles, params, id, lane, positionM)),
+    );
+  }
+
   function planLane(id: number, lane: number, positionM: number) {
     headRoutes.delete(id);
     vehicles.headDetourS[id] = 0;
@@ -272,8 +297,7 @@ function createRun({
         vehicleRouteRequest(vehicles, params, id, lane, positionM),
       );
       let penalty = Infinity;
-      let routePenalty = Infinity;
-      let alternate = -1;
+      const alternate = nextRouteMovement(id, lane, step, positionM);
       for (const idx of compiled.lanes[lane]!.out) {
         const movement = compiled.movements[idx]!;
         if (
@@ -290,34 +314,6 @@ function createRun({
         ) {
           penalty = cost;
           vehicles.movement[id] = idx;
-        }
-        const next = compiled.lanes[movement.toLane]!;
-        if (
-          next.road !== route.roads[step + 1] ||
-          !route.targetLanes[step]?.includes(lane) ||
-          cost > routePenalty ||
-          (cost === routePenalty && idx > alternate)
-        )
-          continue;
-        const finalRoad = step + 1 === route.roads.length - 1;
-        const targets = finalRoad ? [destination.lane] : route.targetLanes[step + 1]!;
-        // Lead (TASK-131 merge): an inner road of a junction group can be shorter than 10 m; a
-        // negative cutoff found no lane at all and sent a car already in its target lane to the
-        // fallback, which stranded it when the new route looped back (Munich r:663 > r:275).
-        const cutoff = finalRoad
-          ? destination.positionM
-          : Math.max(0, compiled.roads[next.road]!.lengthM - 10);
-        for (const candidate of reachableLanes(
-          compiled,
-          allowedLanes[vehicles.vclass[id]!]!,
-          next.idx,
-          cutoff,
-          params.laneChangeDistanceM,
-        )) {
-          if (!targets.includes(candidate.lane)) continue;
-          routePenalty = cost;
-          alternate = idx;
-          break;
         }
       }
       // TASK-076: a car that gave its held change up takes the fallback and reroutes.
@@ -346,6 +342,7 @@ function createRun({
 
   function hasSpawnGap(connector: CConnector, vehicle: number) {
     const { lane, positionM } = connector;
+    if (!intersections.canReceive(vehicle, lane, positionM, profile(vehicle).lengthM)) return false;
     if (railCrossings && !railCrossings.canSpawn(lane, positionM, profile(vehicle).lengthM))
       return false;
     const gap = Math.max(spawnMinGapM, idm.minGapM);
@@ -466,7 +463,8 @@ function createRun({
       const lane = compiled.lanes[occupied[i]!]!;
       if (lane.left === -1 && lane.right === -1) continue;
       for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
-        if (vehicles.state[id] !== DRIVING || parking.motion(id)) continue;
+        if (vehicles.state[id] !== DRIVING || parking.motion(id) || intersections.hasClearance(id))
+          continue;
         const discretionary =
           intersections.grants[id] === -1 &&
           lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM;
@@ -829,7 +827,7 @@ function createRun({
   function enterLane(id: number, lane: number, position: number, timeS: number) {
     roadEnteredS[id] = timeS;
     roadEnteredM[id] = 0;
-    if (intersections.grants[id] !== -1) intersections.release(id);
+    if (intersections.grants[id] !== -1) intersections.release(id, true);
     vehicles.remove(id);
     if (parkingEdit[id]) {
       if (!chooseParkingRoute(id, lane, 0, timeS)) {
@@ -1189,8 +1187,18 @@ function createRun({
     intersections = createIntersections(signalled, vehicles, params, merges.canEnter, {
       onDecision: intersectionObserver,
       acceleration: (id) => reservationAcceleration[id]!,
+      compact: {
+        nextMovement: nextRouteMovement,
+        available: (id) => railCrossings?.clearForClaim(id) ?? false,
+      },
     });
-    laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
+    laneChanges = createLaneChanges(
+      next,
+      vehicles,
+      params,
+      (id) => hasGrant(id) || intersections.hasClearance(id),
+      (id, lane, positionM) => intersections.canReceive(id, lane, positionM, profile(id).lengthM),
+    );
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );
@@ -1387,6 +1395,7 @@ function createRun({
         const timeS = time();
         intersections.signals(timeS);
         railCrossings?.step(timeS);
+        intersections.updateClearance(timeS);
         persons.step(timeS);
         walkers?.step(timeS);
         connectors.spawn(timeS, hasSpawnGap, releaseTrip);

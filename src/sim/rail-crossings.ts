@@ -677,6 +677,7 @@ export function createRailCrossings(
     binding(id: number, binding: boolean) {
       if (!binding) holds[id] = 0;
     },
+    clearForClaim: (id: number) => holdPositions[id] === Infinity,
     blocksExit: (id: number, lengthM: number) => holdPositions[id]! <= lengthM + 1e-6,
     held: (id: number) =>
       !!holds[id] &&

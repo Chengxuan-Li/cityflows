@@ -3,6 +3,7 @@ import type { CMovement, CompiledCity } from '../network';
 import type { SimParams } from '../schema';
 import { AMBER, GREEN, RED, updateSignals } from './signals';
 import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
+import { createCompactClaims } from './compact-claims';
 
 /** Constant current acceleration, then the speed cap; a stop short of the target is unreachable. */
 function travelTime(distance: number, speed: number, cap: number, acceleration: number) {
@@ -32,7 +33,14 @@ export function createIntersections(
   vehicles: Vehicles,
   params: SimParams,
   mergeAllows: (id: number, movement: CMovement) => boolean = () => true,
-  options: { onDecision?: IntersectionObserver; acceleration?: (id: number) => number } = {},
+  options: {
+    onDecision?: IntersectionObserver;
+    acceleration?: (id: number) => number;
+    compact?: {
+      nextMovement: (id: number, lane: number, step: number) => number;
+      available: (id: number) => boolean;
+    };
+  } = {},
 ) {
   const continuations = compiled.movements.map((movement) => {
     const node = compiled.nodes[movement.node]!;
@@ -56,6 +64,9 @@ export function createIntersections(
   const occupancy = new Uint16Array(compiled.movements.length);
   const grants = new Int32Array(vehicles.count).fill(-1);
   const redGrants = new Uint8Array(vehicles.count);
+  const clearance =
+    options.compact &&
+    createCompactClaims(compiled, vehicles, params, { grants, continuations, ...options.compact });
   // Retain provenance until the rear clears the exit, without treating same-path leaders as conflicts.
   const exitedFrom = new Int32Array(vehicles.count).fill(-1);
   const onRed = (movement: CMovement) => !!movement.turnOnRed && colors[movement.idx] === RED;
@@ -81,7 +92,8 @@ export function createIntersections(
     );
   }
 
-  function release(id: number) {
+  function release(id: number, handoff = false) {
+    if (!handoff) clearance?.cancel(id);
     if (vehicles.lane[id]! < 0) exitedFrom[id] = grants[id]!;
     occupancy[grants[id]!] = occupancy[grants[id]!]! - 1;
     grants[id] = -1;
@@ -150,6 +162,7 @@ export function createIntersections(
   }
 
   function canGrant(id: number, movement: CMovement) {
+    if (clearance && !clearance.allowsMovement(id, movement)) return refuse(id, movement, 'box');
     if (!signalAllows(id, movement)) return refuse(id, movement, 'signal');
     const blocked = blockedExit(id, movement);
     if (blocked) return refuse(id, movement, blocked);
@@ -301,6 +314,7 @@ export function createIntersections(
           queue[winner] = -1;
           const movement = movementOf(id);
           if (!canGrant(id, movement)) continue;
+          clearance?.secure(id, movement);
           options.onDecision?.(id, movement, 'granted');
           grants[id] = movement.idx;
           redGrants[id] = Number(onRed(movement));
@@ -315,6 +329,11 @@ export function createIntersections(
 
   return {
     signals,
+    updateClearance: (timeS: number) => clearance?.update(timeS),
+    cancelClearance: (id: number) => clearance?.cancel(id),
+    hasClearance: (id: number) => clearance?.held(id) ?? false,
+    canReceive: (id: number, lane: number, positionM: number, lengthM: number) =>
+      clearance?.allowsLane(id, lane, positionM, lengthM) ?? true,
     blockedExit,
     /** TASK-077: the movement's signal does not show green (no movement, or no signal: false). */
     red: (movement: number) =>
