@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import { button, city, importOsm, pageErrors } from './helpers';
+import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 import { compileRail } from '../../src/network/rail';
 import { trainTimetable, trainsAt, trainCensus, trainPoint } from '../../src/network/trains';
 import { nearestOnPolyline, polylineCrossings } from '../../src/geo/polyline';
@@ -73,33 +74,7 @@ async function seek(page: Page, target: number) {
 // Lead (TASK-127 merge): CI skips the frame gate, and 150-frame samples on its software GPU would
 // take minutes per sample (T62's checkpoint-2026-11-10 timeout), so CI takes short samples.
 const sample = process.env.CI ? { frames: 12, warm: 2 } : { frames: 150, warm: 40 };
-async function frameTiming(page: Page, measure: string) {
-  return page.evaluate(
-    async ({ measure, sample }) => {
-      window.cityflowsRenderContinuously = true;
-      const frames: number[] = [],
-        renders: number[] = [];
-      let capture = false,
-        last = 0;
-      const observer = new PerformanceObserver((list) => {
-        if (capture)
-          for (const e of list.getEntries()) if (e.name === measure) renders.push(e.duration);
-      });
-      observer.observe({ entryTypes: ['measure'] });
-      for (let i = 0; i < sample.frames; i++) {
-        const now = await new Promise<number>((resolve) => requestAnimationFrame(resolve));
-        capture = i >= sample.warm;
-        if (capture && last) frames.push(now - last);
-        last = now;
-      }
-      observer.disconnect();
-      window.cityflowsRenderContinuously = false;
-      const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
-      return { frameMs: mean(frames), renderMs: mean(renders), drawn: renders.length };
-    },
-    { measure, sample },
-  );
-}
+const frameTiming = (page: Page, measure: string) => railFrameTiming(page, measure, sample);
 
 test('T64 Munich trains stop at both platforms, pass below bridge, select, pause and hide', async ({
   page,
@@ -300,6 +275,10 @@ test('T64 Munich moving-train frame budget in both views, two runs', async ({ pa
     await layers.getByLabel(label, { exact: true }).uncheck();
   await page.keyboard.press('Escape');
   await page.getByRole('combobox', { name: 'Speed', exact: true }).selectOption('5');
+  await writeFile(
+    info.outputPath('train-environment.json'),
+    JSON.stringify(await railTimingEnvironment(page), null, 2),
+  );
   const reports = [];
   for (const view of ['2d', '3d'] as const) {
     if (view === '3d') await button(page, '3D').click();

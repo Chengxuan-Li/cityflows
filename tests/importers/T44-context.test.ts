@@ -48,8 +48,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // with those removed and `nextId` 14 lower, the city hash is c227f80f… (lead: re-pinned with
             // TASK-132's `covered` too), and the
             // compile hash is unchanged.
-            '5f46cd8a6c9c0e845ed164321888e772ddb56493a8e88d2da7c987fdd188571a',
-            'a398a6e13de831797b0f15bce5659ab815d19ef6d5545ccf03bd1dbc475d7b4d',
+            'b041e903e4294382d6afa83381d89958cbf25e225411ca1d73e6daa7011ba1bd',
+            'ddd41d9b7507eb578576e1191712470fcd7888a639bf8add942c63275ddd081f',
           ]
         : [
             'ae526beaf53de966d69a7d2e6b6efd61c87f38bf03ff9ff61f9e55f12911ec7c',

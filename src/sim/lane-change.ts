@@ -15,6 +15,7 @@ export function createLaneChanges(
   vehicles: Vehicles,
   params: SimParams,
   hasGrant: (id: number) => boolean = () => false,
+  canReceive: (id: number, lane: number, positionM: number) => boolean = () => true,
 ) {
   const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM } = params;
   const proposals: Proposal[] = [];
@@ -292,6 +293,7 @@ export function createLaneChanges(
   function resolve(tick: number, apply: (id: number, lane: number, positionM: number) => void) {
     for (const { id, lane, positionM } of proposals) {
       const target = compiled.lanes[lane]!;
+      if (!canReceive(id, lane, positionM)) continue;
       findNeighbors(lane, positionM);
       if (!safeGap(id, target, positionM, nearLeader, nearFollower)) continue;
       const source = compiled.lanes[vehicles.lane[id]!]!;
