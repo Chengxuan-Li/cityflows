@@ -79,10 +79,10 @@ for (const kind of ['rail', 'tram'] as const)
     const home = Object.values(source.places).find((p) => p.kind === 'residential')!,
       work = Object.values(source.places).find((p) => p.kind === 'work')!;
     home.population = work.jobs = 1;
-    scenario.startS = 140;
+    scenario.startS = kind === 'rail' ? 120 : 60;
     scenario.endS = 720;
     scenario.simParams = { streetParkingShare: 0 };
-    scenario.demand.workStart = { meanS: 145, sdS: 0 };
+    scenario.demand.workStart = { meanS: scenario.startS + 5, sdS: 0 };
     scenario.demand.workDuration = { meanS: 3600, sdS: 0 };
     scenario.demand.chains = { schoolShare: 0, shopShare: 0, leisureShare: 0 };
     scenario.demand.classShares = {
@@ -117,6 +117,11 @@ for (const kind of ['rail', 'tram'] as const)
       buffer: Buffer.from(JSON.stringify({ manifest, ...project })),
     });
     await expect.poll(async () => (await metrics(page)).timeS).toBe(scenario.startS);
+    await button(page, 'Layers').click();
+    const layers = page.getByRole('region', { name: 'Map layers' });
+    for (const label of ['Street trees', 'Overhead lines'])
+      await layers.getByLabel(label, { exact: true }).uncheck();
+    await page.keyboard.press('Escape');
     await synced(page);
     await bothViews(page, info, `operating-${kind}-open`, 0);
     await page.evaluate(async () => {
@@ -140,6 +145,19 @@ for (const kind of ['rail', 'tram'] as const)
       }
       throw new Error('The served crossing never held the approaching car');
     });
+    const passage = await page.evaluate(async () => {
+      const api = window.cityflows!;
+      for (let i = 0; i < 120; i++) {
+        const s = await api.snapshot!();
+        if (
+          s.rail?.crossings[0] === 2 &&
+          s.rail.trains.some((t) => Math.abs(t.centre.y) < 8 && Math.abs(t.centre.x) < 1)
+        )
+          return s.timeS;
+        await api.step(10);
+      }
+      throw new Error('No rail vehicle passed the crossing while the car waited');
+    });
     await synced(page);
     await bothViews(page, info, `operating-${kind}-protected`, 2);
     const released = await page.evaluate(async (id) => {
@@ -157,7 +175,7 @@ for (const kind of ['rail', 'tram'] as const)
     await synced(page);
     await bothViews(page, info, `operating-${kind}-released`, 0);
     await info.attach('car-interaction', {
-      body: JSON.stringify({ kind, stopped, released }),
+      body: JSON.stringify({ kind, stopped, passage, released }),
       contentType: 'application/json',
     });
     await button(page, 'Restart').click();
