@@ -163,8 +163,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-132](tasks/TASK-132.md) | 10 | Rail heights: tunnels below ground with portals, bridges and viaducts on piers, ramps within 4% (trams 6%); find and draw the Munich tunnel missing today | `src/network/rail.ts`, rail drawing 2D and 3D, `src/render3d/heights.ts` (rail), small importer functions | 126, 127, 135 | T72, the tunnel drawn, no sim hash change | done 2026-11-11 |
 | [TASK-134](tasks/TASK-134.md) | 10 | Overhead lines: wired by `electrified` (no tag draws it), close parallel tracks share masts and portals every 40 to 60 m clear of switches, crossings, roads and platforms, a contact and messenger wire over each track; 2D and 3D | new catenary modules, scene hooks, a small `electrified` read in the rail importer | 126, 132, 135 | T74, counts and shots, no hash change | done 2026-11-11 |
 | [TASK-137](tasks/TASK-137.md) | 10 | Tram stops: imported stops and platforms grouped per stop, generated islands for node-only stops, shelters, names, markings and a name-and-lines display; visual only | new tram-stop modules, `src/schema/rail.ts` (optional stops), scene hooks, rail inspector | 126, 133, 135 | T73, every Munich tram stop placed or listed, no sim hash change | done 2026-11-11 |
-| [TASK-136](tasks/TASK-136.md) | 10 | Level crossings | rail import, crossing placement and drawing | 127, 135, 138 for tram service | T75, shots | import and drawing merged; crossing control and active equipment in progress |
-| [TASK-138](tasks/TASK-138.md) | 10 | Scheduled trams serving stops and crossing road traffic | timetable, tram poses, vehicle drawing and inspection | 135, 137, 136 for crossing priority | service tests, Munich shots and live car interaction | in progress |
+| [TASK-136](tasks/TASK-136.md) | 10 | Level crossings | rail import, crossing placement and drawing | 127, 135, 138 for tram service | T75, shots | import and drawing merged; operating equipment reviewed in PR #1, blocked by the seed-1 traffic gate |
+| [TASK-138](tasks/TASK-138.md) | 10 | Scheduled trams serving stops and crossing road traffic | timetable, tram poses, vehicle drawing and inspection | 135, 137, 136 for crossing priority | service tests, Munich shots and live car interaction | reviewed in PR #1, blocked by the seed-1 traffic gate |
 | [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | done with TASK-142 (lead review below) |
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
@@ -1122,9 +1122,9 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-133 (done 2026-11-11) | Station furniture: station signage, name boards, departure displays, shelters and benches at platforms. | Stations drawn as platforms and small discs. | TASK-126, TASK-127 (displays read the timetable) |
 | TASK-134 (done 2026-11-11) | Overhead lines: catenary masts shared by parallel tracks close together, with a portal or truss across them and a contact wire over each track. `electrified=contact_line` (or `yes`) draws it, `electrified=no` (or `rail`, third rail) does not, no tag draws it anyway (owner); mapped `power=catenary_mast` nodes place masts where present. | None. | TASK-126, TASK-132 (heights) |
 | TASK-135 (done 2026-11-11) | Trams as their own kind of track: a distinct track type with its own visual quality (rails, bed, sleepers or embedded track), in 2D and 3D, clearly unlike railway tracks. | Tram tracks drawn almost like railway tracks. | TASK-126 |
-| TASK-136 (operating crossings in progress) | Level crossings: railway crossings (`railway=level_crossing`, `crossing:barrier`, `crossing:light`, `crossing:bell`) always get gates, St Andrew's cross signs, lights and road markings; tram crossings (`railway=tram_level_crossing`) get tram signals, and trams may have priority. Road traffic stops for trains and trams in the simulation. | Crossing equipment is drawn. Protection uses the merged geometry; tram interaction uses TASK-138. | TASK-127, TASK-135; TASK-138 for trams |
+| TASK-136 (static equipment merged, operating crossings held by the traffic gate) | Level crossings: railway crossings (`railway=level_crossing`, `crossing:barrier`, `crossing:light`, `crossing:bell`) always get gates, St Andrew's cross signs, lights and road markings; tram crossings (`railway=tram_level_crossing`) get tram signals, and trams may have priority. Road traffic stops for trains and trams in the simulation. | Crossing equipment is drawn. Operating protection and tram interaction are on the reviewed branch in PR #1. | TASK-127, TASK-135; TASK-138 for trams |
 | TASK-137 (done 2026-11-11) | Tram stops: stops in the middle of the street (`railway=tram_stop`, `public_transport=platform`) with platforms, shelters, markings and displays. | None. | TASK-135 |
-| [TASK-138](tasks/TASK-138.md) | Tram vehicles: timetabled trams on the tram tracks that interact with cars, signals and level crossings (not only decorative). | TASK-127 trains are decorative and run on rail only. | TASK-135, TASK-137, TASK-136 crossing control |
+| [TASK-138](tasks/TASK-138.md) | Tram vehicles: timetabled trams on the tram tracks that interact with cars, signals and level crossings (not only decorative). | Main has TASK-127 railway service. The synthetic tram timetable and interacting trams are on the reviewed branch in PR #1. | TASK-135, TASK-137, TASK-136 crossing control |
 | TASK-139 (dropped for now, owner 2026-11-11) | Trams beside and in streets: tracks in a median keep their own space beside parallel carriageways without overlapping them; street-running trams (`embedded=yes`, `embedded_rails=*`) run in a road lane shared with cars. Reconcile with TASK-131's keep-the-geometry rule (overlaps come from lane widths, not OSM lines). | Tram tracks drawn over road surfaces; no shared lanes. | TASK-131, TASK-135, TASK-138 |
 
 ## Lead handover
@@ -3274,38 +3274,49 @@ and 5584/878 to 5438/842 in Sindelfingen. The retained local checkpoint is
 `4ab4d71`; its simulation is identical to `62cd578`. The traffic baseline stays
 at main's values. TASK-128, TASK-129 and TASK-130 remain held.
 
-### 2026-11-12 rail operating review (TASK-136 and TASK-138)
+### 2026-11-12 operating crossings and tram service (TASK-136 and TASK-138)
 
-The lead reviewed the combined operating railway and tram branch
-`task/lead-rail-service-merge`. The browser showed a car waiting for a train and for a
-tram, then driving on after the last carriage, in both views. Munich's four synthetic tram
-routes cover all 54 mapped tram sections and all 14 stops. At Trappentreustraße the leading
-cab stops at the halt mark for 25 seconds. The train-only timetable hashes on both imports
-still match main.
+The lead reviewed `38340cc` on `task/lead-rail-service-merge`. The seed-1 Munich gate
+blocked both the combined service and a separate railway-only release. The floor is 3702
+completed trips, the gridlock ceiling is 39, and the baseline allows zero stalled heads.
 
-The first integrated morning left two Munich crossings closed for almost the entire run.
-A car waiting 72 m before a crossing was counted as occupying it. The lead also traced a
-car creeping through a closed stop exactly at the end of a lane. The combined branch now
-uses the actual crossing sweeps, admits turning paths separately, checks full vehicle
-clearance and prevents transfer at a closed segment end. All four served tram facilities
-reopen during the loaded three-hour run. A separate heavy-rail-only trial recorded 3683
-completed trips, 29 gridlocks and zero stalled heads. It misses the existing 3702 floor.
+| Munich at 10:00, demand 0.15 | Completed | Gridlocked | Stalled heads |
+| --- | ---: | ---: | ---: |
+| Main | 4113 | 26 | 0 |
+| Operating railway crossings only | 3683 | 29 | 0 |
+| Operating railway and tram crossings | 2968 | 61 | 0 |
 
-At `518e419`, the unchanged Munich seed-1 gate recorded 2968 trips complete, 61 gridlocks
-and zero stalled heads. T21 passed its road movement overlap check and T53 passed its walker
-comparison. The completion floor is 3702 and the gridlock ceiling is 39. No traffic threshold
-or baseline was changed. On seeds 2 and 3 this candidate completed 2801 and 2738 trips,
-against 3994 and 3245 on main. From 07:00 to 08:36 an independent footprint check sampled each
-0.1-second step, examined 499 near encounters and saw no car touch a rail vehicle inside
-a mapped crossing. The four tram sites each completed 32 passages. It did find car 785
-touching the side of a tram on parallel road `r:981`, 31 m outside the mapped crossing,
-with up to 0.162 m overlap. Parallel track and road alignment belongs to deferred TASK-139.
+The combined branch serves all 54 Munich tram sections and 14 stops with four synthetic
+services. The train-only timetable hashes on both extracts match main. In the browser a car
+waited for the last carriage and then drove on, for both rail modes and in both views.
+The tram at Trappentreustraße stopped with its leading cab at the mark and departed after
+25 seconds. Verification passed 1190 unit tests, 164 city tests, 37 light browser cases
+and three named operating-crossing and tram browser cases. Unit and city each have one
+existing skip. T21 road safety and T53 pedestrian checks passed. [PR CI](https://github.com/Chengxuan-Li/cityflows/actions/runs/43295800165)
+reproduced 2968 completions, 61 gridlocks and zero stalled heads. Code and browser CI passed.
+The earlier full checkpoint
+at `5cac0d8` passed all six browser groups and city geometry. Its traffic job missed the
+morning floors and timed out on full demand.
 
-The independent full workflow on the earlier `5cac0d8` checkpoint passed all six browser
-groups, unit checks and city geometry. Its traffic job failed the Munich morning floors and
-timed out on full demand. Main's last code CI is green. The combined product branch stays
-outside main pending a passing capture. The lead is checking whether open crossings admit
-a same-lane platoon when the exit can store every vehicle.
+The first combined prototype counted a stopped car 72 m upstream as occupying the tracks.
+Another car crossed a closed facility when the marking coincided with the exact end of its
+lane. After both repairs, all four served Munich tram crossings reopened during the loaded
+three-hour run. On an open isolated lane with enough space for the entire three-car platoon,
+the last car now clears at 41.5 s, matching the road without rail (previously 42.6 s).
+The 96-minute Munich footprint replay sampled all 57600 steps and 499 near encounters.
+It found no road/rail contact inside a mapped crossing. Car 785 touched a tram on parallel
+road `r:981`, 31 m outside the protected crossing, with up to 0.162 m overlap. Parallel
+track and road alignment belongs to deferred TASK-139.
+
+At 08:30 queued exits into `r:248` and `r:364` blocked occupied junction movements.
+The waiting cars at upstream crossing marks held no conflicting junction grant in that
+sample. Reissuing the full warning at the next crossing after an upstream train hold was
+tested separately (3090 completions, 55 gridlocks) and left out of the branch. On seeds 2
+and 3 the final candidate completed 2801 and 2738 trips against 3994 and 3245 on main,
+with 80 and 50 gridlocks and one and zero stalled heads respectively. The original traffic gate is intact. The reviewed work is preserved in
+[draft PR #1](https://github.com/Chengxuan-Li/cityflows/pull/1). TASK-131 Phase 3 / B56
+remains deferred. TASK-128, TASK-129 and TASK-130 retain their owner holds. TASK-113 awaits
+TASK-129, and TASK-139 remains dropped for now.
 
 ## Owner decisions log
 
