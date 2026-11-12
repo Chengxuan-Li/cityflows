@@ -262,3 +262,55 @@ test('T75 exposed railheads continue through road surfaces in the shared 2D/3D g
     ),
   ).toBe(true);
 });
+
+test.each(['level_crossing', 'tram_level_crossing'] as const)(
+  'T75 %s on an excluded driveway never attaches to an unrelated nearby road',
+  (kind) => {
+    const { city, cc } = load(
+      osm(
+        [
+          {
+            id: 1,
+            tags: { highway: 'service', service: 'driveway' },
+            points: [
+              [-100, 0],
+              [0, 0],
+              [100, 0],
+            ],
+          },
+          {
+            id: 2,
+            tags: { highway: 'residential' },
+            points: [
+              [-100, 0.5],
+              [0, 0.5],
+              [100, 0.5],
+            ],
+          },
+          {
+            id: 3,
+            tags: { railway: kind === 'level_crossing' ? 'rail' : 'tram' },
+            points: [
+              [0, -100],
+              [0, 0],
+              [0, 100],
+            ],
+          },
+          {
+            id: 4,
+            tags: { highway: 'residential', bridge: 'yes', layer: '1' },
+            points: [
+              [-100, 0.8],
+              [0, 0.8],
+              [100, 0.8],
+            ],
+          },
+        ],
+        { '0,0': { railway: kind } },
+      ),
+    );
+    const crossing = Object.values(city.rail!.nodes).find((n) => n.crossing)!;
+    expect(crossing.crossing!.roadOsmIds).toEqual([1]);
+    expect(cc.rail!.facilities).toEqual([]);
+  },
+);
