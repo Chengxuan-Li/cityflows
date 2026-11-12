@@ -1944,8 +1944,10 @@ brings riders who get off: commuters by the train's arrival hour (05:00 10, 06:0
 seeded draw per stop (`riders` stream keyed by the stop). Main-line trains have no stops and
 bring none. A rider is `rider:<station>:<platform>@<arrival second>:<i>`. The walk out, station to
 destination, departs at the arrival plus the platform-to-door delay: straight line from the
-train's middle to the nearest entrance x 1.3 at the scenario's walking speed (default 1.4 m/s);
-the walk itself leaves from the station's walk anchors (its entrances) by the cheapest route. The
+rider's point along the standing train (a seeded uniform draw over its length, so a stop's riders
+leave over a minute or two; the stop reports the delay from the train's middle) to the nearest
+entrance x 1.3 at the scenario's walking speed (default 1.4 m/s); the walk itself leaves from the
+station's walk anchors (its entrances) by the cheapest route. The
 destination is a place within 1 500 m straight line of the station, never a gateway, parking
 place or the station, by `jobs x exp(-d / 600 m)` for commuters and `attraction x exp(-d / 600 m)`
 for visitors; a stop with no eligible place or no entrance brings nobody. The walk back departs at
