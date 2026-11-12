@@ -244,6 +244,20 @@ tests for this experiment. Preserve unconstrained callers and measure actual use
 route requests, completed trips and all six waits. Revert an ineffective policy.
 Independent diagnostics trace queues before first departure and physical blockers
 beyond the grouped exit. Report the first reproducible cause before changing a rule.
+
+**Measured follow-ups.** Test the shared-lane early detour only when a stopped follower
+has a different usable group exit. Measure actual discharges at n:251. For discretionary
+lane changes compare the mandatory changes remaining on the near route from each lane.
+Keep ordinary overtaking when the alternatives impose equal subsequent lane changes.
+Test these rules independently before combining them.
+
+The lead also authorizes a separate trial on the shared-lane checkpoint for street parking
+departure starvation. This trial may use the connector and parking integration points that
+expose the ready departure and its swept envelope. A road follower must be safely able to
+yield outside that envelope. The leader must be moving with room to clear. Bound any
+pre-admission hold by the existing box wait, and release it if the opportunity closes.
+Keep all admission, movement and pedestrian safety checks. Report actual courtesy holds,
+successful admissions, wasted holds, traffic outcomes and representative vehicles.
 Preserve signal, walker, access and lane-change safety and the seed-1 traffic gate. Run the
 T66 cycle and T68 group cases, and the TASK-130 measurements and gates as well as those
 below. The live T53 limit is 6% (report the measured cost); the tighter B56 step-time
