@@ -20,6 +20,11 @@ export interface LevelCrossing {
   nodes: string[];
   kind: 'rail' | 'tram';
   layer: number;
+  /** Sim segment encoding: lane >= 0, movement = -index - 1. */
+  spans?: { segment: number; fromM: number; toM: number }[];
+  stops?: { lane: number; stopM: number }[];
+  /** Track metres occupied by the road surface, including a clearance margin. */
+  railSpans?: { track: number; fromM: number; toM: number }[];
   approaches: {
     roadId: string;
     /** Stop marking centre; heading points toward the tracks. */
@@ -278,7 +283,95 @@ export function compileLevelCrossings(
         along = polylineLength(road.centerline);
       }
     }
-    if (facility.approaches.length) result.push(facility);
+    if (facility.approaches.length) {
+      if (geometry) compileProtection(facility, graph, geometry, city);
+      result.push(facility);
+    }
   }
   return result;
+}
+
+function compileProtection(
+  facility: LevelCrossing,
+  rail: Pick<RailGraph, 'nodes' | 'tracks'>,
+  city: CompiledCity,
+  source: City,
+) {
+  const nodes = rail.nodes.filter((n) => facility.nodes.includes(n.id));
+  const tracks = rail.tracks.filter(
+    (t) => atGrade(t) && nodes.some((n) => t.from === n.id || t.to === n.id),
+  );
+  facility.stops = facility.approaches.flatMap((a) => {
+    const road = city.roads.find((r) => r.id === a.roadId)!;
+    return road.lanes.map((lane) => ({
+      lane,
+      stopM: nearestOnPolyline(city.lanes[lane]!.polyline, a.pos).along,
+    }));
+  });
+  facility.spans = [];
+  facility.railSpans = [];
+  const segments = [
+    ...city.lanes.map((l) => ({ ...l, segment: l.idx })),
+    ...city.movements.map((m) => ({ ...m, segment: -m.idx - 1 })),
+  ];
+  for (const t of tracks) {
+    const centres = nodes.filter((n) => t.from === n.id || t.to === n.id);
+    let low = Infinity,
+      high = -Infinity;
+    for (const n of centres) {
+      const at = nearestOnPolyline(t.line, n.pos).along;
+      const heading = headingAtDistance(t.line, t.cumulative, at);
+      const half = Math.max(
+        ...facility.approaches.map(
+          (a) =>
+            (a.halfWidthM +
+              1 +
+              Math.abs(
+                (a.pos.x - n.pos.x) * Math.cos(heading) + (a.pos.y - n.pos.y) * Math.sin(heading),
+              )) /
+            Math.max(0.15, Math.abs(Math.sin(a.heading - heading))),
+        ),
+      );
+      low = Math.min(low, at - half);
+      high = Math.max(high, at + half);
+    }
+    facility.railSpans.push({
+      track: t.idx,
+      fromM: Math.max(0, low),
+      toM: Math.min(t.lengthM, high),
+    });
+    for (const s of segments) {
+      if (!s.polyline.length) continue;
+      const road = 'road' in s ? city.roads[s.road]! : city.roads[city.lanes[s.fromLane]!.road]!;
+      // A facility does not control an unrelated overpass at the same map position.
+      const canonical = source.roads[road.id]!;
+      const layer = canonical.layer ?? source.nodes[canonical.from]!.layer;
+      if (layer !== facility.layer) continue;
+      const near = Math.min(...centres.map((n) => nearestOnPolyline(s.polyline, n.pos).away));
+      if (near > 30) continue;
+      let lo = Infinity,
+        hi = -Infinity;
+      // Sample the actual lane/movement curve, including ends of short junction segments.
+      const count = Math.max(1, Math.ceil(s.lengthM / 0.5));
+      for (let i = 0; i <= count; i++) {
+        const at = (i * s.lengthM) / count;
+        const p = pointAtDistance(s.polyline, s.cumulative, at);
+        const hit = nearestOnPolyline(t.line, p);
+        if (hit.away > 2.5 || hit.along < low - 1 || hit.along > high + 1) continue;
+        lo = Math.min(lo, at - 0.5);
+        hi = Math.max(hi, at + 0.5);
+      }
+      if (lo > hi) continue;
+      const existing = facility.spans.find((v) => v.segment === s.segment);
+      if (existing) {
+        existing.fromM = Math.min(existing.fromM, Math.max(0, lo));
+        existing.toM = Math.max(existing.toM, Math.min(s.lengthM, hi));
+      } else
+        facility.spans.push({
+          segment: s.segment,
+          fromM: Math.max(0, lo),
+          toM: Math.min(s.lengthM, hi),
+        });
+    }
+  }
 }

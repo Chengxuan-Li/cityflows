@@ -1,0 +1,489 @@
+import type { CompiledCity } from '../network';
+import {
+  trainTimetable,
+  trainDefaults,
+  trainPoseAt,
+  trainsAt,
+  trainPositionAt,
+  type TrainPose,
+  type TrainRoute,
+} from '../network/trains';
+import type { SimParams } from '../schema';
+import { createVehicleProfiles, DRIVING, QUEUED_DESTINATION, type Vehicles } from './vehicle';
+
+export const CROSSING_OPEN = 0;
+export const CROSSING_WARNING = 1;
+export const CROSSING_CLOSED = 2;
+export interface RailSnapshot {
+  /** Dense compiled rail.facilities order; open=0, warning=1, closed=2. */
+  crossings: Uint8Array;
+  railReady: Uint8Array;
+  /** Controlled positions, including services waiting for a committed road vehicle. */
+  trains: TrainPose[];
+}
+type Event = { facility: number; enterS: number; exitS: number; warningS: number };
+type Service = {
+  departure: number;
+  cycle: number;
+  ageS: number;
+  held: boolean;
+  accepted: boolean;
+  current: number[];
+  proposed: number[];
+};
+type Clock = { routeId: string; requestedS: number; cycle: number; ageS: number };
+
+/** Time at a coordinate within one monotonic motion phase. */
+function phaseTime(phase: TrainRoute['phases'][number], position: number) {
+  let low = 0,
+    high = phase.durationS;
+  const forward = phase.speedMps + (phase.acceleration * phase.durationS) / 2 >= 0;
+  for (let i = 0; i < 40; i++) {
+    const mid = (low + high) / 2;
+    const at = phase.positionM + phase.speedMps * mid + (phase.acceleration * mid * mid) / 2;
+    if (at < position === forward) low = mid;
+    else high = mid;
+  }
+  return phase.timeS + (low + high) / 2;
+}
+
+export function createRailCrossings(
+  city: CompiledCity,
+  vehicles: Vehicles,
+  params: SimParams,
+  startS: number,
+  red: (movement: number) => boolean,
+  clocks?: Clock[],
+) {
+  const rail = city.rail;
+  if (!rail) return undefined;
+  const table = trainTimetable(rail);
+  const facilities = rail.facilities ?? [];
+  const profiles = createVehicleProfiles(params);
+  const length = (id: number) => profiles[vehicles.vclass[id]!]!.lengthM;
+  const events = table.routes.map((route) => {
+    const result: Event[] = [];
+    facilities.forEach((facility, index) => {
+      let lo = Infinity,
+        hi = -Infinity;
+      for (const span of facility.railSpans ?? [])
+        for (const section of route.sections) {
+          if (section.track !== span.track) continue;
+          const track = rail.tracks[span.track]!;
+          lo = Math.min(
+            lo,
+            section.startM + (section.forward ? span.fromM : track.lengthM - span.toM),
+          );
+          hi = Math.max(
+            hi,
+            section.startM + (section.forward ? span.toM : track.lengthM - span.fromM),
+          );
+        }
+      if (lo > hi) return;
+      const half = trainDefaults[route.kind].lengthM / 2;
+      lo -= half;
+      hi += half;
+      // Enough warning for the fastest legal road approach, including long-vehicle clearance.
+      const speed = Math.max(
+        0,
+        ...city.lanes
+          .filter((l) => facility.stops?.some((s) => s.lane === l.idx))
+          .map((l) => l.speedLimitMps),
+      );
+      const warningS = Math.max(12, speed / Math.min(...profiles.map((p) => p.idm.bMps2)) + 6);
+      for (const phase of route.phases) {
+        const end =
+          phase.positionM +
+          phase.speedMps * phase.durationS +
+          (phase.acceleration * phase.durationS ** 2) / 2;
+        const low = Math.max(lo, Math.min(phase.positionM, end));
+        const high = Math.min(hi, Math.max(phase.positionM, end));
+        if (low > high) continue;
+        const forward = end >= phase.positionM;
+        const enterS =
+          Math.abs(end - phase.positionM) < 1e-9
+            ? phase.timeS
+            : phaseTime(phase, forward ? low : high);
+        const exitS =
+          Math.abs(end - phase.positionM) < 1e-9
+            ? phase.timeS + phase.durationS
+            : phaseTime(phase, forward ? high : low);
+        const previous = result.at(-1);
+        if (previous?.facility === index && enterS <= previous.exitS + 1e-6)
+          previous.exitS = Math.max(previous.exitS, exitS);
+        else result.push({ facility: index, enterS, exitS, warningS });
+      }
+    });
+    return result.sort((a, b) => a.enterS - b.enterS || a.facility - b.facility);
+  });
+  const served = Uint8Array.from(facilities, (_, f) =>
+    Number(events.some((e) => e.some((v) => v.facility === f))),
+  );
+  const states = new Uint8Array(facilities.length);
+  const previousStates = new Uint8Array(facilities.length);
+  const committed = facilities.map(() => new Set<number>());
+  const railReady = new Uint8Array(facilities.length);
+  const occupied = new Uint8Array(facilities.length);
+  const holds = new Uint8Array(vehicles.count);
+  const services: Service[] = [];
+  const nextCycle = new Int32Array(table.departures.length);
+  const warningMax = Math.max(0, ...events.flatMap((e) => e.map((v) => v.warningS)));
+  const segments: number[] = [];
+  const offsets: number[] = [];
+  const influences = new Uint8Array(city.lanes.length + city.movements.length);
+  const reach = new Float64Array(influences.length).fill(-Infinity);
+  const bucket = (segment: number) => (segment >= 0 ? segment : city.lanes.length - segment - 1);
+  const segmentLength = (segment: number) =>
+    segment >= 0 ? city.lanes[segment]!.lengthM : city.movements[-segment - 1]!.lengthM;
+  const influencing = (segment: number, left: number) => {
+    const b = bucket(segment);
+    if (left <= reach[b]!) return;
+    reach[b] = left;
+    influences[b] = 1;
+    if (left <= 0) return;
+    if (segment >= 0) {
+      for (const m of city.lanes[segment]!.in) influencing(-m - 1, left - segmentLength(-m - 1));
+    } else {
+      const lane = city.movements[-segment - 1]!.fromLane;
+      influencing(lane, left - segmentLength(lane));
+    }
+  };
+  for (let f = 0; f < facilities.length; f++)
+    if (served[f]) {
+      for (const stop of facilities[f]!.stops ?? []) influencing(stop.lane, 300);
+      for (const span of facilities[f]!.spans ?? []) influencing(span.segment, 300);
+    }
+  function tailInfluence(segment: number, left: number, visited = new Set<number>()) {
+    if (left < 0 || visited.has(segment)) return;
+    visited.add(segment);
+    influences[bucket(segment)] = 1;
+    if (segment >= 0)
+      for (const m of city.lanes[segment]!.out)
+        tailInfluence(-m - 1, left - segmentLength(segment), visited);
+    else
+      tailInfluence(city.movements[-segment - 1]!.toLane, left - segmentLength(segment), visited);
+  }
+  for (let f = 0; f < facilities.length; f++)
+    if (served[f])
+      for (const span of facilities[f]!.spans ?? []) {
+        const maxLength = Math.max(...profiles.map((p) => p.lengthM));
+        tailInfluence(span.segment, segmentLength(span.segment) - span.toM + maxLength);
+      }
+  // Initial occurrences include trains already inside the imported network.
+  table.departures.forEach((d, i) => {
+    const route = table.routes[d.route]!;
+    nextCycle[i] = Math.floor((startS - d.timeS - route.durationS) / table.periodS);
+  });
+  function spawn(timeS: number) {
+    table.departures.forEach((departure, i) => {
+      while (departure.timeS + nextCycle[i]! * table.periodS <= timeS + warningMax) {
+        const cycle = nextCycle[i]!++;
+        const ageS = timeS - departure.timeS - cycle * table.periodS;
+        if (ageS < table.routes[departure.route]!.durationS)
+          services.push({
+            departure: i,
+            cycle,
+            ageS,
+            held: false,
+            accepted: false,
+            current: [],
+            proposed: [],
+          });
+      }
+    });
+  }
+  function path(id: number) {
+    segments.length = offsets.length = 0;
+    let segment = vehicles.lane[id]!,
+      offset = 0,
+      step = vehicles.routeStep[id]!;
+    const route = vehicles.route[id];
+    for (let count = 0; count < 128; count++) {
+      segments.push(segment);
+      offsets.push(offset);
+      offset += segmentLength(segment);
+      if (offset - vehicles.position[id]! > 600) break;
+      if (segment >= 0) {
+        const movement =
+          segments.length === 1 ? vehicles.movement[id]! : (route?.movements[step] ?? -1);
+        if (movement === -1 || city.movements[movement]!.fromLane !== segment) break;
+        segment = -movement - 1;
+      } else {
+        segment = city.movements[-segment - 1]!.toLane;
+        step++;
+      }
+    }
+  }
+  function overlaps(f: number, segment: number, front: number, rear: number) {
+    return facilities[f]!.spans?.some(
+      (s) => s.segment === segment && front >= s.fromM && rear <= s.toM,
+    );
+  }
+  function roadOccupancy() {
+    occupied.fill(0);
+    for (const b of vehicles.occupied) {
+      if (!influences[b]) continue;
+      const field = b < city.lanes.length ? b : city.lanes.length - b - 1;
+      for (let id = vehicles.first(field); id !== -1; id = vehicles.next[id]!) {
+        if (vehicles.state[id] !== DRIVING && vehicles.state[id] !== QUEUED_DESTINATION) continue;
+        path(id);
+        for (let f = 0; f < facilities.length; f++) {
+          if (!served[f]) continue;
+          const facility = facilities[f]!;
+          const position = vehicles.position[id]!;
+          let stop = Infinity,
+            near = Infinity;
+          for (let s = 0; s < segments.length; s++) {
+            for (const marking of facility.stops ?? [])
+              if (marking.lane === segments[s] && offsets[s]! + marking.stopM >= position - 1e-6)
+                stop = Math.min(stop, offsets[s]! + marking.stopM);
+            for (const span of facility.spans ?? [])
+              if (span.segment === segments[s] && offsets[s]! + span.toM >= position)
+                near = Math.min(near, offsets[s]! + span.fromM);
+          }
+          // A vehicle past its marking is committed even before its nose reaches the rails.
+          if (near < Infinity && stop > near && near - position < 200) occupied[f] = 1;
+          let bodyInside = false;
+          let segment = field,
+            front = position,
+            rear = front - length(id),
+            step = vehicles.routeStep[id]!;
+          for (let back = 0; back < 32; back++) {
+            if (overlaps(f, segment, front, rear)) {
+              occupied[f] = 1;
+              bodyInside = true;
+            }
+            if (rear >= 0) break;
+            if (segment < 0) segment = city.movements[-segment - 1]!.fromLane;
+            else {
+              const m = vehicles.route[id]?.movements[--step];
+              if (m === undefined) break;
+              segment = -m - 1;
+            }
+            front = segmentLength(segment);
+            rear += front;
+          }
+          if (committed[f]!.has(id)) {
+            if (near < Infinity || bodyInside) occupied[f] = 1;
+            else committed[f]!.delete(id);
+          }
+        }
+      }
+    }
+  }
+  function publish() {
+    previousStates.set(states);
+    states.fill(CROSSING_OPEN);
+    for (const service of services) {
+      const route = table.departures[service.departure]!.route;
+      for (const event of events[route]!) {
+        if (service.ageS < event.enterS - event.warningS || service.ageS > event.exitS + 1)
+          continue;
+        const state =
+          service.ageS >= event.enterS - event.warningS + 3 ? CROSSING_CLOSED : CROSSING_WARNING;
+        states[event.facility] = Math.max(states[event.facility]!, state);
+      }
+    }
+    for (let f = 0; f < states.length; f++)
+      railReady[f] = Number(states[f] === CROSSING_CLOSED && !occupied[f]);
+    for (let f = 0; f < states.length; f++) {
+      if (previousStates[f] !== CROSSING_OPEN || states[f] === CROSSING_OPEN) continue;
+      // A driver in the dilemma zone clears instead of receiving a physically impossible stop.
+      for (const marking of facilities[f]!.stops ?? [])
+        for (let id = vehicles.first(marking.lane); id !== -1; id = vehicles.next[id]!) {
+          const distance = marking.stopM - vehicles.position[id]!;
+          const speed = vehicles.speed[id]!;
+          const brake = profiles[vehicles.vclass[id]!]!.idm.bMps2;
+          if (
+            distance >= 0 &&
+            speed > 0.1 &&
+            distance < (speed * speed) / (2 * brake) + params.idm.minGapM
+          ) {
+            committed[f]!.add(id);
+            occupied[f] = 1;
+            railReady[f] = 0;
+          }
+        }
+    }
+  }
+  let snapshotTimeS = startS;
+  const enabled = served.some(Boolean);
+  spawn(startS);
+  if (clocks) {
+    for (const clock of clocks) {
+      const departure = table.departures.findIndex(
+        (d) => d.requestedS === clock.requestedS && table.routes[d.route]!.id === clock.routeId,
+      );
+      if (departure < 0) continue;
+      let service = services.find((s) => s.departure === departure && s.cycle === clock.cycle);
+      if (!service) {
+        service = {
+          departure,
+          cycle: clock.cycle,
+          ageS: clock.ageS,
+          held: false,
+          accepted: false,
+          current: [],
+          proposed: [],
+        };
+        services.push(service);
+      }
+      service.ageS = clock.ageS;
+    }
+    roadOccupancy();
+    for (const service of services)
+      for (const event of events[table.departures[service.departure]!.route]!)
+        if (
+          occupied[event.facility] &&
+          service.ageS >= event.enterS &&
+          service.ageS <= event.exitS
+        ) {
+          service.ageS = event.enterS - params.dtS;
+          service.held = true;
+        }
+  }
+  publish();
+  function tracksAt(service: Service, age: number, into: number[]) {
+    into.length = 0;
+    const route = table.routes[table.departures[service.departure]!.route]!;
+    if (age < 0 || age >= route.durationS) return;
+    const at = trainPositionAt(route, age).positionM;
+    const half = trainDefaults[route.kind].lengthM / 2;
+    for (const section of route.sections)
+      if (at + half > section.startM && at - half < section.endM) into.push(section.track);
+  }
+  return {
+    canSpawn(lane: number, positionM: number, lengthM: number) {
+      for (let f = 0; f < facilities.length; f++)
+        if (states[f] !== CROSSING_OPEN) {
+          if (overlaps(f, lane, positionM, positionM - lengthM)) return false;
+          const stop = facilities[f]!.stops?.find((s) => s.lane === lane && s.stopM < positionM);
+          if (stop && facilities[f]!.spans?.some((s) => s.segment === lane && s.toM >= positionM))
+            return false;
+        }
+      return true;
+    },
+    step(timeS: number) {
+      snapshotTimeS = timeS + params.dtS;
+      if (!enabled) return;
+      spawn(timeS);
+      roadOccupancy();
+      for (const service of services) {
+        tracksAt(service, service.ageS, service.current);
+        tracksAt(service, service.ageS + params.dtS, service.proposed);
+        service.accepted = false;
+      }
+      for (const service of services) {
+        const route = table.departures[service.departure]!.route;
+        const next = service.ageS + params.dtS;
+        service.held = events[route]!.some(
+          (event) =>
+            occupied[event.facility] &&
+            service.ageS <= event.enterS &&
+            next >= event.enterS - params.dtS,
+        );
+        // A delayed train keeps its physical track reservation; following/opposing services
+        // wait before their nose enters it. Other routes retain their own clocks.
+        if (!service.held)
+          service.held = services.some(
+            (other) =>
+              other !== service &&
+              service.proposed.some(
+                (track) =>
+                  other.current.includes(track) ||
+                  (other.accepted && other.proposed.includes(track)),
+              ),
+          );
+        if (!service.held) {
+          service.ageS = next;
+          service.accepted = true;
+        } else service.proposed.length = 0;
+      }
+      for (let i = services.length - 1; i >= 0; i--)
+        if (
+          services[i]!.ageS >=
+          table.routes[table.departures[services[i]!.departure]!.route]!.durationS
+        )
+          services.splice(i, 1);
+      publish();
+    },
+    hold(id: number) {
+      holds[id] = 0;
+      const field = vehicles.lane[id]!;
+      if (field < -city.movements.length || !influences[bucket(field)]) return Infinity;
+      path(id);
+      const position = vehicles.position[id]!;
+      let best = Infinity;
+      for (let f = 0; f < facilities.length; f++) {
+        if (!served[f]) continue;
+        if (committed[f]!.has(id)) continue;
+        const facility = facilities[f]!;
+        let stop = Infinity,
+          end = -Infinity;
+        for (let s = 0; s < segments.length; s++) {
+          for (const marking of facility.stops ?? [])
+            if (marking.lane === segments[s] && offsets[s]! + marking.stopM >= position - 1e-6)
+              stop = Math.min(stop, offsets[s]! + marking.stopM);
+          for (const span of facility.spans ?? [])
+            if (span.segment === segments[s] && offsets[s]! + span.toM >= position)
+              end = Math.max(end, offsets[s]! + span.toM);
+        }
+        if (stop === Infinity || end < stop || stop >= best) continue;
+        let blocked = states[f] !== CROSSING_OPEN;
+        const clear = end + length(id) + params.idm.minGapM;
+        if (!blocked)
+          for (let s = 0; s < segments.length; s++) {
+            const segment = segments[s]!,
+              offset = offsets[s]!;
+            if (offset > clear) break;
+            let tail = vehicles.last(segment);
+            while (tail !== -1 && (tail === id || offset + vehicles.position[tail]! <= position))
+              tail = vehicles.previous[tail]!;
+            if (
+              tail !== -1 &&
+              tail !== id &&
+              offset + vehicles.position[tail]! > position &&
+              offset + vehicles.position[tail]! - length(tail) < clear
+            )
+              blocked = true;
+            if (segment >= 0) {
+              const next = segments[s + 1];
+              if (
+                next !== undefined &&
+                next < 0 &&
+                red(-next - 1) &&
+                offset + city.lanes[segment]!.stopM > stop &&
+                offset + city.lanes[segment]!.stopM < clear
+              )
+                blocked = true;
+            }
+          }
+        if (blocked) best = stop;
+      }
+      holds[id] = Number(best < Infinity);
+      return best;
+    },
+    held: (id: number) => !!holds[id],
+    clocks(): Clock[] {
+      return services.map((s) => ({
+        routeId: table.routes[table.departures[s.departure]!.route]!.id,
+        requestedS: table.departures[s.departure]!.requestedS,
+        cycle: s.cycle,
+        ageS: s.ageS,
+      }));
+    },
+    snapshot(): RailSnapshot {
+      return {
+        crossings: states.slice(),
+        railReady: railReady.slice(),
+        trains: !enabled
+          ? trainsAt(rail, table, snapshotTimeS)
+          : services.flatMap((s) => {
+              const pose = trainPoseAt(rail, table, s.departure, s.cycle, s.ageS);
+              if (pose && s.held) pose.speedMps = 0;
+              return pose ? [pose] : [];
+            }),
+      };
+    },
+  };
+}

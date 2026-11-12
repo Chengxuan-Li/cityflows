@@ -25,6 +25,7 @@ import { createProjector, patchChanges, remapRoute } from './patch';
 import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
+import { createRailCrossings } from './rail-crossings';
 import { createPersons, hasPerson } from './persons';
 import type { createWalkRouter } from '../routing/walk';
 import type {
@@ -137,6 +138,9 @@ function createRun({
     onDecision: intersectionObserver,
     acceleration: (id) => reservationAcceleration[id]!,
   });
+  let railCrossings = createRailCrossings(compiled, vehicles, params, scenario.startS, (m) =>
+    intersections.red(m),
+  );
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
   let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
   let allowedLanes = vehicleClasses.map((name) =>
@@ -342,6 +346,8 @@ function createRun({
 
   function hasSpawnGap(connector: CConnector, vehicle: number) {
     const { lane, positionM } = connector;
+    if (railCrossings && !railCrossings.canSpawn(lane, positionM, profile(vehicle).lengthM))
+      return false;
     const gap = Math.max(spawnMinGapM, idm.minGapM);
     const spacing = profile(vehicle).lengthM + gap;
     const maxSpacing = maxVehicleLength + gap;
@@ -576,6 +582,14 @@ function createRun({
             leaderSpeed = 0;
           }
           limit[id] = Math.min(limit[id]!, Math.max(position, walkerStop - idm.minGapM));
+        }
+        const railStop = railCrossings?.hold(id) ?? Infinity;
+        if (railStop < Infinity) {
+          if (railStop + idm.minGapM < obstacle) {
+            obstacle = railStop + idm.minGapM;
+            leaderSpeed = 0;
+          }
+          limit[id] = Math.min(limit[id]!, Math.max(position, railStop));
         }
         const driving = profile(id);
         const desiredSpeed = Math.min(speedLimit * vehicles.speedFactor[id]!, driving.maxSpeedMps);
@@ -985,6 +999,10 @@ function createRun({
       const id = order[i]!;
       if (vehicles.state[id] !== DRIVING) continue;
       const field = vehicles.lane[id]!;
+      if (railCrossings?.held(id)) {
+        vehicles.jamS[id] = 0;
+        continue;
+      }
       if ((field >= 0 && vehicles.first(field) !== id) || vehicles.speed[id]! >= 0.1) {
         vehicles.jamS[id] = 0;
         continue;
@@ -1041,6 +1059,7 @@ function createRun({
       fade: new Float32Array(count),
       poseLane: new Int32Array(count).fill(-1),
       ...(walkers && { walkers: walkers.snapshot() }),
+      ...(railCrossings && { rail: railCrossings.snapshot() }),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
@@ -1326,6 +1345,14 @@ function createRun({
     }
     rerouter.updateEdits(time(), editChecked);
     intersections.signals(time());
+    railCrossings = createRailCrossings(
+      compiled,
+      vehicles,
+      params,
+      time(),
+      (m) => intersections.red(m),
+      railCrossings?.clocks(),
+    );
     return result;
   }
 
@@ -1356,6 +1383,7 @@ function createRun({
       for (let i = 0; i < n; i++) {
         const timeS = time();
         intersections.signals(timeS);
+        railCrossings?.step(timeS);
         persons.step(timeS);
         walkers?.step(timeS);
         connectors.spawn(timeS, hasSpawnGap, releaseTrip);
