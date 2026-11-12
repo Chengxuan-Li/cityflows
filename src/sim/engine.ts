@@ -901,7 +901,8 @@ function createRun({
           accounting.zoneStop();
         }
         vehicles.speed[id] = (position - previousPosition) / dtS;
-        if (position >= path.lengthM) enterLane(id, path.toLane, position - path.lengthM, timeS);
+        if (position >= path.lengthM && !railCrossings?.blocksExit(id, path.lengthM))
+          enterLane(id, path.toLane, position - path.lengthM, timeS);
         else vehicles.position[id] = position;
         continue;
       }
@@ -950,7 +951,7 @@ function createRun({
             limit[id]! >= destination.positionM))
       ) {
         reachDestination(id, destination, timeS);
-      } else if (position >= lane.lengthM) {
+      } else if (position >= lane.lengthM && !railCrossings?.blocksExit(id, lane.lengthM)) {
         if (granted !== -1) {
           if (fallback[id]) {
             if (fallback[id] === 2) headDetourObserver?.(id, lane.idx, granted);

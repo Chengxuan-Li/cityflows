@@ -540,6 +540,7 @@ export function createRailCrossings(
     },
     hold(id: number) {
       holds[id] = 0;
+      holdPositions[id] = Infinity;
       const field = vehicles.lane[id]!;
       if (field < -city.movements.length || !influences[bucket(field)]) return Infinity;
       path(id);
@@ -596,6 +597,7 @@ export function createRailCrossings(
     binding(id: number, binding: boolean) {
       if (!binding) holds[id] = 0;
     },
+    blocksExit: (id: number, lengthM: number) => holdPositions[id]! <= lengthM + 1e-6,
     held: (id: number) =>
       !!holds[id] &&
       vehicles.speed[id]! < 0.1 &&
