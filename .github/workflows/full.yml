@@ -1,15 +1,24 @@
-name: Parking pin diagnostics
+name: Parking parent control capture
 on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  city-pins:
+  control:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run test:city
+      - run: |
+          git worktree add --detach ../task144-parent fa8c621ec4075d54eef52071c5aaf62cf5f2acbf
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$GITHUB_WORKSPACE/../task144-parent/node_modules"
+          node --experimental-strip-types --import ./bench/register.ts bench/recapture-throughput.ts ../task144-parent node_modules/.cache/task144-throughput-parent.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: task144-throughput-parent
+          path: node_modules/.cache/task144-throughput-parent.json
