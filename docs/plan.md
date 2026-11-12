@@ -153,8 +153,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-125](tasks/TASK-125.md) | 9 | Parking claims: a car that chooses a strip space, garage or lot claims it; claimed spaces are taken for others and full-by-claims facilities drop out; every exit path releases the claim | `src/sim/parking.ts`, release calls in `src/sim/engine.ts`, metrics | 102, 103, 118, 124 | T63, Munich 0.15 gate with lower search time, T53, baseline reset | done |
 | [TASK-126](tasks/TASK-126.md) | 10 | Railway tracks and stations: a track graph imported, compiled, saved and drawn; stations tied to platforms and walk entrances | new `src/importers/osm/rail.ts`, `src/network/rail.ts`, rail layers, `src/schema` (rail network), fixtures (railway ways appended) | 096, 110, 123 | T62, census, traffic unchanged, shots | done |
 | [TASK-127](tasks/TASK-127.md) | 10 | Decorative trains: S-Bahn trains stop at Donnersbergerbrücke, main-line trains pass through, by a deterministic timetable on the sim clock; drawn in 2D and 3D; no sim change | new routes/timetable/motion module, train layers, `src/network/rail.ts`, rail schema (preferred direction) | 126 | T64, traffic and sim hash unchanged, frame time, shots | done |
-| [TASK-128](tasks/TASK-128.md) | 10 | Stations as trip ends: S-Bahn riders walk out of Donnersbergerbrücke after each stop, walk to work or a visit nearby, and walk back to board; walk-only, timed by TASK-127's timetable | new rider module in `src/demand/`, `schedule.ts`, person inspector, rider census | 126, 127 | T65, Munich 0.15 gate with riders, Sindelfingen and synthetic trips unchanged, shots | open |
-| [TASK-129](tasks/TASK-129.md) | 10 | Car ownership: persons grouped into households that own their members' cars; a person drives only a free household car (owners first, borrowers for a whole free day), a car's trips chain by car, every car starts and parks near home | `src/demand` (households, drivers), `src/schema` (`householdId`, `carId`, `homeParkingRadiusM`), `src/sim/parking.ts`, `persons.ts`, person inspector, census | 112, 122, 125 | T67, Munich 0.15 seeds 1 to 3, no car parked beyond the home radius while room is near, baseline reset | open |
+| [TASK-128](tasks/TASK-128.md) | 10 | Stations as trip ends: S-Bahn riders walk out of Donnersbergerbrücke after each stop, walk to work or a visit nearby, and walk back to board; walk-only, timed by TASK-127's timetable | new rider module in `src/demand/`, `schedule.ts`, person inspector, rider census | 126, 127 | T65, Munich 0.15 gate with riders, Sindelfingen and synthetic trips unchanged, shots | reviewed 2026-11-12, held for the owner (`c9a0632`) |
+| [TASK-129](tasks/TASK-129.md) | 10 | Car ownership: persons grouped into households that own their members' cars; a person drives only a free household car (owners first, borrowers for a whole free day), a car's trips chain by car, every car starts and parks near home | `src/demand` (households, drivers), `src/schema` (`householdId`, `carId`, `homeParkingRadiusM`), `src/sim/parking.ts`, `persons.ts`, person inspector, census | 112, 122, 125 | T67, Munich 0.15 seeds 1 to 3, no car parked beyond the home radius while room is near, baseline reset | reviewed 2026-11-11, held for the owner (`496cfe6`) |
 | [TASK-130](tasks/TASK-130.md) | 7 | Break the Landsberger loop (B56 reopened): trace the cycle TASK-121's head detours do not clear, then the smallest general rule (box entry, zipper or wider detours) so the corridor drains | `src/sim/intersection.ts`, `engine.ts`, `reroute.ts`, `lane-change.ts`, `merge.ts`, `params.ts`, probe seeds | 121, 122, 077 | T66, 0 stalled heads over seeds 1 to 3, loop waits under 15 min, baseline reset | checkpoint reviewed 2026-11-11, not merged (B56 open) |
 | [TASK-131](tasks/TASK-131.md) | 5 | Junction groups (B54 amended, B55): every OSM node keeps its position; nodes joined by links up to `junctionGroupMaxM` (30 m) form one junction group with inner links kept, one coordinated signal program and one drawn surface; the collision model off; cars never stop on inner links | `src/importers/osm/**`, `src/schema` (junction group), `src/network/**`, road and junction renderers, signal editor; Phase 3 `src/sim/intersection.ts`, `signals.ts`, `engine.ts` after 130 | 089, 092, 094, 099, 111; 130 for Phase 3 | T68, reference-case shots per checkpoint, geometry gates, traffic over seeds 1 to 3, baseline reset | Phases 0 to 2 merged 2026-11-11 (lead-driven subagents); Phase 3 (box rule across inner links) waits for TASK-130 |
 | [TASK-133](tasks/TASK-133.md) | 10 | Station furniture: name boards, shelters, benches, departure displays from the timetable, generic entrance signs; visual only | new `src/render/layers/stations.ts`, `src/render3d/stations.ts`, placement module, read-only helper in `src/network/trains.ts` | 126, 127 | T70, shots, no hash change | done 2026-11-11 |
@@ -1120,6 +1120,9 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 
 How the lead runs this project, for whoever takes the role on another machine. Everything
 else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
+
+The state at the 2026-11-12 handover (held branches, open decisions, how agents are run) is in
+`docs/lead-handoff-2026-11-12.md`.
 
 - A wave is a set of tasks on disjoint file surfaces. For each task: write the contract in
   `docs/tasks/TASK-<id>.md`, add its row to the task table, note the wave under "Waves",
@@ -3035,8 +3038,24 @@ branch 3 344 to 3 717 on seed 1, driven by how badly `r:666` jams. The agent low
 completed floor from 3 571 to 3 300; the lead does not accept that without the owner. Also found:
 `T54-parking-motion`'s Munich case fails on main too (not in the light tier).
 
+TASK-128 (Claude Code subagent, Opus 5.5 high, 2026-11-12; held for the owner, not merged): S-Bahn
+riders at Donnersbergerbrücke as walk-only persons outside the population (`src/demand/stations.ts`,
+`rider-profile.ts`, a read-only `stationArrivals` in `src/network/trains.ts`; no `src/sim` change).
+Every S-Bahn stop at a station platform brings commuters by arrival hour (05:00 to 10:59) and visitors
+(11:00 to 21:59), scaled by `personsPerResident`; each walks out from its own point along the train
+to a place within 1 500 m (jobs or attraction times exp(-d/600 m)) and walks back after its stay.
+Munich 0.15: 720 stops, 1 339 riders, 2 501 trips a day; to 10:00 586 spawned, 568 completed, 0
+failed, 0 walk fallbacks; the inspector reads "By train at Donnersbergerbrücke". Cars on seed 1:
+3 679 completed (gate floor 3 702, 89.4% of main), 37 gridlocked (+11, gate +10): fails. An earlier
+rider rule over seeds 1 to 3 gave 3 558 / 4 074 / 3 680 (main 4 113 / 3 971 / 3 669 in the same
+runs); with every rider kept but walking nowhere seed 1 still drops, so the loss is seed noise, not
+riders on crossings. Waits on the owner's gate method (three-seed mean or B56 first).
+
 ## Owner decisions log
 
+- 2026-11-12 (owner): TASK-130 is complete on Codex; the lead stops after the ongoing tasks and
+  the TASK-130 review, and job allocation is discussed before any new agent starts. A temporary
+  lead takes the main thread; the handover is `docs/lead-handoff-2026-11-12.md`.
 - 2026-11-11, lead (under the owner's orchestration rule): TASK-128 and TASK-129 had no Codex
   activity (no commits, no worktree); the lead runs them as Claude Code subagents in parallel, with
   their contracts refreshed for main after TASK-131 and TASK-140. TASK-130 stays on Codex.
