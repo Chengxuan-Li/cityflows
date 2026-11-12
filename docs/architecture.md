@@ -1736,6 +1736,12 @@ the change up: it takes the TASK-048 fallback from its current lane (the cheapes
 movement whose landing lane routes to its destination), which now also applies when the
 route still needs another lane on this road and to a required diverge, and reroutes with
 `missed_turn`. With no such movement it keeps waiting, and gridlock recovery below applies.
+Phase 3 additionally checks the near downstream route before a discretionary change. Over
+one `missedTurnAfterS` window of posted-speed travel, it compares how many mandatory changes
+remain from each lane, including legal alternatives through the intervening junctions.
+A move that increases that count is suppressed. The usual MOBIL and gap checks apply to
+moves with equal or lower counts.
+
 TASK-076, second round (lead, after the first round's Munich trace): a discretionary (MOBIL)
 change is never proposed to a lane from which the car needs more changes to reach its route's
 target lanes than from its current lane, on any road of the route, not only the last (on
