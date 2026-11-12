@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [munich-morning, T53-munich-pedestrians]
+        omit: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -16,4 +16,4 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx vitest run --project traffic tests/traffic/${{ matrix.suite }}.test.ts
+      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts omit-${{ matrix.omit }}
