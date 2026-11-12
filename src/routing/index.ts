@@ -18,7 +18,6 @@ export interface RouteRequest {
   desiredSpeedFactor: number;
   noise: number;
   seed: number;
-  avoidApproachRoad?: number;
 }
 
 export interface Route {
@@ -82,7 +81,6 @@ export function createRouteProvider({
       const to = compiled.lanes[destination.lane]!.road;
       const permits = roadAccessFilter(compiled, request);
       if (!permits(from) || !permits(to)) return { ok: false, reason: 'class_forbidden' };
-      const visits = (road: number) => road !== request.avoidApproachRoad && permits(road);
       const weights = routeCosts(compiled, costsFor(costs), request);
       const path = shortestPath(
         compiled.roads.length,
@@ -91,14 +89,13 @@ export function createRouteProvider({
         weights.originCost,
         (road, relax) => {
           for (const edge of graph.roads[road]!)
-            if (visits(edge.to)) relax(edge.to, weights.transition(edge.to, edge.penaltyS));
+            if (permits(edge.to)) relax(edge.to, weights.transition(edge.to, edge.penaltyS));
         },
       );
       if (!path) {
         const unrestricted = graphFor(compiled, null);
         const connected = shortestPath(compiled.roads.length, from, to, 0, (road, relax) => {
-          for (const edge of unrestricted.roads[road]!)
-            if (edge.to !== request.avoidApproachRoad) relax(edge.to, 1);
+          for (const edge of unrestricted.roads[road]!) relax(edge.to, 1);
         });
         return { ok: false, reason: connected ? 'class_forbidden' : 'no_path' };
       }
@@ -122,7 +119,7 @@ export function createRouteProvider({
           return { ok: true, route: { roads, ...lanes, costS: path.costS } };
       }
 
-      const route = searchLanes(compiled, graph, weights, request, destination, visits);
+      const route = searchLanes(compiled, graph, weights, request, destination, permits);
       if (route) return { ok: true, route };
       const withoutAccess = searchLanes(
         compiled,
@@ -130,7 +127,7 @@ export function createRouteProvider({
         weights,
         request,
         destination,
-        (road) => road !== request.avoidApproachRoad,
+        () => true,
       );
       return { ok: false, reason: withoutAccess ? 'class_forbidden' : 'lane_infeasible' };
     },

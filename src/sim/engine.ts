@@ -7,7 +7,6 @@ import {
   roadAccessFilter,
   type LinkCosts,
   type RouteProvider,
-  type Route,
 } from '../routing';
 import { vehicleClasses, vehiclePurposes, type SimParams, type TripRequest } from '../schema';
 import { createConnectors } from './connectors';
@@ -49,14 +48,6 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   linkCosts?: LinkCosts;
   intersectionObserver?: IntersectionObserver;
   headDetourObserver?: (id: number, lane: number, movement: number) => void;
-  approachBypassObserver?: (
-    id: number,
-    road: number,
-    movement: number,
-    normalCostS: number,
-    bypassCostS: number | null,
-    executed: boolean,
-  ) => void;
   originObserver?: (id: number, connector: CConnector, hasGap: boolean) => void;
   walkRouter?: ReturnType<typeof createWalkRouter>;
   debugParkingClaims?: boolean;
@@ -80,7 +71,6 @@ function createRun({
   linkCosts,
   intersectionObserver,
   headDetourObserver,
-  approachBypassObserver,
   originObserver,
   population,
   walkRouter,
@@ -166,9 +156,6 @@ function createRun({
   const roadEnteredM = new Float64Array(trips.length);
   const routeReasons: VehicleDetail['routeReason'][] = Array(trips.length).fill('initial');
   const fallback = new Uint8Array(trips.length);
-  const bypassPlans: (
-    { movement: number; road: number; route: Route; normalCostS: number } | undefined
-  )[] = [];
   const waitingForLane = new Uint8Array(trips.length);
   const unresolvedHeads: (Set<number> | undefined)[] = Array(trips.length);
   const headDestination = new Int32Array(trips.length).fill(-1);
@@ -190,8 +177,6 @@ function createRun({
   }
 
   function groupRoute(id: number, movement: (typeof compiled.movements)[number]) {
-    const bypass = bypassPlans[id];
-    if (bypass?.movement === movement.idx) return { route: bypass.route, step: -1 };
     const route = vehicles.route[id]!;
     const step = vehicles.routeStep[id]!;
     if (
@@ -202,33 +187,6 @@ function createRun({
       return { route, step };
     const result = routeFrom(id, movement.toLane, 0);
     return result.ok ? { route: result.route, step: -1 } : null;
-  }
-
-  function compareApproachBypass(id: number, road: number) {
-    if (fallback[id] !== 1 || intersections.groupPaths[id]) return;
-    const movement = compiled.movements[vehicles.movement[id]!]!;
-    const original = routeFrom(id, movement.toLane, 0);
-    if (!original.ok || !original.route.roads.includes(road)) return;
-    const bypass = provider.route(compiled, costs, {
-      ...vehicleRouteRequest(vehicles, params, id, movement.toLane, 0),
-      avoidApproachRoad: road,
-    });
-    approachBypassObserver?.(
-      id,
-      road,
-      movement.idx,
-      original.route.costS,
-      bypass.ok ? bypass.route.costS : null,
-      false,
-    );
-    if (!bypass.ok) return;
-    bypassPlans[id] = {
-      movement: movement.idx,
-      road,
-      route: bypass.route,
-      normalCostS: original.route.costS,
-    };
-    intersections.invalidatePlan(id);
   }
 
   function chooseParkingRoute(
@@ -283,7 +241,6 @@ function createRun({
   }
 
   function planLane(id: number, lane: number, positionM: number) {
-    bypassPlans[id] = undefined;
     intersections.invalidatePlan(id);
     vehicles.headDetourS[id] = 0;
     pendingHead[id] = -1;
@@ -543,7 +500,6 @@ function createRun({
         if (!laneChanges.propose(id, lane, tick, discretionary, requiredLane)) continue;
         // Gave the change up: take the TASK-048 fallback from this lane, if there is one.
         planLane(id, lane.idx, vehicles.position[id]!);
-        compareApproachBypass(id, lane.road);
         if (!fallback[id]) laneChanges.gaveUp[id] = 0;
       }
     }
@@ -818,8 +774,6 @@ function createRun({
         }
       }
       if (best === -1) continue;
-      bypassPlans[id] = undefined;
-      intersections.invalidatePlan(id);
       if (hasGrant(id)) intersections.release(id);
       if (pendingHead[id] === -1) pendingHead[id] = planned.idx;
       vehicles.movement[id] = best;
@@ -911,13 +865,8 @@ function createRun({
         return;
       }
     } else if (fallback[id]) {
-      const bypass = bypassPlans[id];
       const result =
-        cleared?.step === -1
-          ? { ok: true as const, route: cleared.route }
-          : bypass && bypass.movement === vehicles.movement[id]
-            ? { ok: true as const, route: bypass.route }
-            : routeFrom(id, lane, 0);
+        cleared?.step === -1 ? { ok: true as const, route: cleared.route } : routeFrom(id, lane, 0);
       if (!result.ok) {
         vehicles.lane[id] = lane;
         vehicles.position[id] = 0;
@@ -1041,16 +990,6 @@ function createRun({
       } else if (position >= lane.lengthM) {
         if (granted !== -1) {
           if (fallback[id]) {
-            const bypass = bypassPlans[id];
-            if (bypass?.movement === granted)
-              approachBypassObserver?.(
-                id,
-                bypass.road,
-                granted,
-                bypass.normalCostS,
-                bypass.route.costS,
-                true,
-              );
             if (fallback[id] === 2) {
               if (pendingHead[id] !== -1) (unresolvedHeads[id] ??= new Set()).add(pendingHead[id]!);
               headDestination[id] = vehicles.destination[id]!;
@@ -1114,7 +1053,6 @@ function createRun({
     }
     respawning.sort((a, b) => a - b);
     for (const id of respawning) {
-      bypassPlans[id] = undefined;
       if (intersections.grants[id] !== -1) intersections.release(id);
       intersections.leaveGroup(id);
       unresolvedHeads[id] = undefined;
@@ -1253,7 +1191,6 @@ function createRun({
   }
 
   function patch(next: CompiledCity): PatchResult {
-    bypassPlans.fill(undefined);
     if (
       next.places.length !== compiled.places.length ||
       compiled.places.some((place) => !next.index.place.has(place.id))
