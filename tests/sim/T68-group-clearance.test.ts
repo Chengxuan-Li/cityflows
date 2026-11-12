@@ -60,6 +60,47 @@ test('T68: a route may end at an accepting connector on an inner road', () => {
   expect(engine.inspect(1)).toMatchObject({ state: 'completed', respawns: 0 });
 });
 
+test('T68: a short group exit lands in the lane that actually reaches the destination', () => {
+  const fixture = groupFixture(false);
+  const exit = fixture.city.roads[fixture.exit.id]!;
+  exit.lanes.push({ ...exit.lanes[0]! });
+  const end = fixture.city.nodes[fixture.inner.to]!;
+  const provenance = { source: 'authored' } as const;
+  end.turnRules = [
+    { from: fixture.inner.id, to: exit.id, allowed: false, provenance },
+    ...[0, 1].map((toLane) => ({
+      from: fixture.inner.id,
+      to: exit.id,
+      fromLane: 0,
+      toLane,
+      allowed: true,
+      provenance,
+    })),
+  ];
+  const destination = Object.values(fixture.city.places)[1]!.connectors[0]!;
+  destination.lane = 1;
+  destination.positionM = 15;
+  const compiled = setup(fixture.city),
+    engine = createEngine();
+  engine.load({ compiled, trips: fixture.trips, scenario: scenario(), params: { maxReplans: 0 } });
+  const exitLane = compiled.index.lane.get(`${fixture.exit.id}#1`)!;
+  let entered = false;
+  for (let i = 0; i < 600; i++) {
+    engine.step();
+    const car = engine.inspect(1);
+    if (
+      !entered &&
+      car &&
+      compiled.lanes[car.lane]?.road === compiled.index.road.get(fixture.exit.id)
+    ) {
+      expect(car.lane).toBe(exitLane);
+      entered = true;
+    }
+  }
+  expect(entered).toBe(true);
+  expect(engine.inspect(1)).toMatchObject({ state: 'completed', respawns: 0 });
+});
+
 test('T68: an internally required safe lane change remains reachable through a group', () => {
   const { city, node, road, place } = buildCity('Group lane change', 1);
   const a = node(100, 0),
@@ -276,5 +317,58 @@ test('T68: a group clears a crossing path before admitting a conflicting entry',
     );
     expect(inside.length).toBeLessThanOrEqual(1);
   }
+  expect(engine.metrics().trips.completed).toBe(2);
+});
+
+test('T68: a rear-cleared member conflict does not reserve the rest of a long group', () => {
+  const { city, node, road, place } = buildCity('Cleared group member', 1);
+  const a = node(0, 0),
+    b = node(60, 0),
+    c = node(0, 60);
+  const west = road(node(-100, 0), a),
+    north = road(node(0, -100), a);
+  const innerEast = road(a, b, { speedKmh: 18 }),
+    innerSouth = road(a, c, { speedKmh: 18 });
+  const east = road(b, node(180, 0)),
+    south = road(c, node(0, 180));
+  city.junctionGroups = {
+    'jg:100': {
+      id: 'jg:100',
+      nodes: [a.id, b.id, c.id],
+      innerRoads: [innerEast.id, innerSouth.id],
+      signal: null,
+      provenance: { source: 'authored' },
+    },
+  };
+  place('Origin west', 'gateway', a.pos, [{ road: west, direction: 'out', positionM: 85 }]);
+  place('Destination east', 'work', b.pos, [{ road: east, direction: 'in', positionM: 100 }]);
+  place('Origin north', 'gateway', a.pos, [{ road: north, direction: 'out', positionM: 85 }]);
+  place('Destination south', 'work', c.pos, [{ road: south, direction: 'in', positionM: 100 }]);
+  const places = Object.values(city.places);
+  const requests: TripRequest[] = [
+    [0, 1],
+    [2, 3],
+  ].map(([from, to], i) => ({
+    id: `trip:${i}`,
+    personId: null,
+    originPlaceId: places[from!]!.id,
+    destinationPlaceId: places[to!]!.id,
+    departS: 100,
+    mode: 'car',
+    vehicleClass: 'car',
+    purpose: 'private',
+    legs: [],
+  }));
+  const compiled = setup(city),
+    engine = createEngine();
+  const inner = new Set([innerEast, innerSouth].map((r) => compiled.index.lane.get(`${r.id}#0`)!));
+  engine.load({ compiled, trips: requests, scenario: scenario(), params: { maxReplans: 0 } });
+  let concurrent = false;
+  for (let i = 0; i < 900; i++) {
+    engine.step();
+    if (inner.has(engine.inspect(1)?.lane ?? -1) && inner.has(engine.inspect(2)?.lane ?? -1))
+      concurrent = true;
+  }
+  expect(concurrent).toBe(true);
   expect(engine.metrics().trips.completed).toBe(2);
 });

@@ -43,18 +43,23 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const [file, ...args] = process.argv.slice(2);
   if (!file || args.length < 4 || (args.length - 4) % 2)
     throw new Error(
-      'Usage: import-probe <file.osm> w s e n [--scale n] [--walk-legs file.json] [--parking-report file.json]',
+      'Usage: import-probe <file.osm> w s e n [--scale n] [--seed n] [--walk-legs file.json] [--parking-report file.json]',
     );
   let scaleArg = '1',
+    seedArg = '1',
     walkLegsFile: string | undefined,
     parkingReportFile: string | undefined;
   for (let i = 4; i < args.length; i += 2) {
     if (args[i] === '--scale') scaleArg = args[i + 1]!;
+    else if (args[i] === '--seed') seedArg = args[i + 1]!;
     else if (args[i] === '--walk-legs') walkLegsFile = args[i + 1]!;
     else if (args[i] === '--parking-report') parkingReportFile = args[i + 1]!;
     else throw new Error(`Unknown option: ${args[i]}`);
   }
   const scale = Number(scaleArg);
+  const demandSeed = Number(seedArg);
+  if (!Number.isSafeInteger(demandSeed) || demandSeed < 1)
+    throw new Error('--seed must be a positive integer');
   if (!scaleArg.trim() || !Number.isFinite(scale) || scale < 0)
     throw new Error('--scale must be a finite, nonnegative number');
   const bbox = args.slice(0, 4).map(Number) as [number, number, number, number];
@@ -124,6 +129,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   console.info({ connectorPairs: total, routable: ok });
   const { walkLegs, ...morning } = probeMorning(city, compiled, scale, {
     includeWalkLegs: !!walkLegsFile,
+    demandSeed,
   });
   if (walkLegsFile) writeFileSync(walkLegsFile, JSON.stringify(walkLegs, null, 2));
   if (parkingReportFile)
@@ -241,6 +247,8 @@ export function probeMorning(
     includeWalkLegs = false,
     demandSeed = 1,
     intersectionObserver,
+    engine = createEngine(),
+    originObserver,
   }: {
     untilS?: number;
     observe?: (engine: TrafficEngine) => void;
@@ -248,6 +256,8 @@ export function probeMorning(
     includeWalkLegs?: boolean;
     demandSeed?: number;
     intersectionObserver?: IntersectionObserver;
+    engine?: ReturnType<typeof createEngine>;
+    originObserver?: Parameters<ReturnType<typeof createEngine>['load']>[0]['originObserver'];
   } = {},
 ) {
   const scenario = defaultScenario('grid5x5', demandSeed);
@@ -256,7 +266,6 @@ export function probeMorning(
   scenario.endS = 10 * 3600;
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, population, scenario);
-  const engine = createEngine();
   const provider = routeProvider ?? createRouteProvider();
   const walkRouter = createWalkRouter(compiled.walk);
   let routeRequests = 0;
@@ -280,6 +289,7 @@ export function probeMorning(
     trips,
     scenario,
     intersectionObserver,
+    originObserver,
     headDetourObserver(id, lane) {
       headDetours++;
       detoured.add(id);

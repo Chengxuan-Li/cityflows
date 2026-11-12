@@ -37,6 +37,7 @@ export function createIntersections(
     onDecision?: IntersectionObserver;
     acceleration?: (id: number) => number;
     groupRoute?: (id: number, movement: CMovement) => { route: Route; step: number } | null;
+    routeVersion?: () => number;
   } = {},
 ) {
   const inner = (movement: CMovement) =>
@@ -82,7 +83,7 @@ export function createIntersections(
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const reservedSpace = new Float64Array(compiled.lanes.length);
-  type GroupPath = { movements: number[] };
+  type GroupPath = { movements: number[]; route: Route; step: number };
   const groupPaths: (GroupPath | undefined)[] = [];
   const groupOccupants = compiled.groups?.map(() => new Set<number>()) ?? [];
 
@@ -100,15 +101,25 @@ export function createIntersections(
     groupPaths[id] = undefined;
   }
   const chainCache: (
-    { route: Route | null; step: number; movement: number; chain?: GroupPath } | undefined
+    | {
+        route: Route | null;
+        step: number;
+        version: number;
+        chains: Map<number, GroupPath | undefined>;
+      }
+    | undefined
   )[] = [];
 
   function entryChain(id: number, movement: CMovement) {
     const route = vehicles.route[id]!;
     const step = vehicles.routeStep[id]!;
-    const previous = chainCache[id];
-    if (previous?.route === route && previous.step === step && previous.movement === movement.idx)
-      return previous.chain;
+    const version = options.routeVersion?.() ?? 0;
+    let cache = chainCache[id];
+    if (cache?.route !== route || cache.step !== step || cache.version !== version) {
+      cache = { route, step, version, chains: new Map() };
+      chainCache[id] = cache;
+    }
+    if (cache.chains.has(movement.idx)) return cache.chains.get(movement.idx);
     const group = compiled.groups![compiled.nodes[movement.node]!.group!]!;
     const plan = options.groupRoute ? options.groupRoute(id, movement) : { route, step };
     let chain: GroupPath | undefined;
@@ -116,6 +127,26 @@ export function createIntersections(
       const lastRoad = plan.route.roads.at(-1)!;
       const endsInside = compiled.roads[lastRoad]!.group === group.idx;
       const remaining = plan.route.roads.length - 1 - plan.step;
+      const usableExit = (movements: number[]) => {
+        const exit = compiled.lanes[compiled.movements[movements.at(-1)!]!.toLane]!;
+        const exitStep = plan.step + movements.length;
+        const final = exitStep === plan.route.roads.length - 1;
+        const cutoff = final
+          ? compiled.connectors[vehicles.destination[id]!]!.positionM
+          : Math.max(0, compiled.roads[exit.road]!.lengthM - 10);
+        const targets = final
+          ? [compiled.connectors[vehicles.destination[id]!]!.lane]
+          : plan.route.targetLanes[exitStep]!;
+        return [
+          ...reachableLanes(
+            compiled,
+            allowedLanes[vehicles.vclass[id]!]!,
+            exit.idx,
+            cutoff,
+            params.laneChangeDistanceM,
+          ),
+        ].some((candidate) => targets.includes(candidate.lane));
+      };
       for (const candidate of group.chains) {
         if (candidate.movements[0] !== movement.idx) continue;
         const movements = endsInside
@@ -131,8 +162,10 @@ export function createIntersections(
             );
           })
         ) {
-          chain = { movements };
-          break;
+          if (usableExit(movements)) {
+            chain = { movements, ...plan };
+            break;
+          }
         }
       }
       // The road router also permits a lane change on a sufficiently long inner road.
@@ -147,23 +180,25 @@ export function createIntersections(
             next.neverGreen ||
             compiled.lanes[next.fromLane]!.road !== lane.road ||
             !allowedLanes[vehicles.vclass[id]!]![next.toLane] ||
-            !reachableLanes(
-              compiled,
-              allowedLanes[vehicles.vclass[id]!]!,
-              lane.idx,
-              Math.max(0, compiled.roads[lane.road]!.lengthM - 10),
-              params.laneChangeDistanceM,
-            ).some((candidate) => candidate.lane === next.fromLane)
+            ![
+              ...reachableLanes(
+                compiled,
+                allowedLanes[vehicles.vclass[id]!]!,
+                lane.idx,
+                Math.max(0, compiled.roads[lane.road]!.lengthM - 10),
+                params.laneChangeDistanceM,
+              ),
+            ].some((candidate) => candidate.lane === next.fromLane)
           )
             break;
           movements.push(next.idx);
           lane = compiled.lanes[next.toLane]!;
         }
         if (compiled.roads[lane.road]!.group !== group.idx || lane.road === lastRoad)
-          chain = { movements };
+          if (usableExit(movements)) chain = { movements, ...plan };
       }
     }
-    chainCache[id] = { route, step, movement: movement.idx, chain: chain ?? undefined };
+    cache.chains.set(movement.idx, chain);
     return chain;
   }
 
@@ -260,9 +295,18 @@ export function createIntersections(
       for (const car of groupOccupants[groupIndex]!) {
         if (car === id) continue;
         const held = groupPaths[car]!;
+        const field = vehicles.lane[car]!;
+        const at = held.movements.findIndex((m) =>
+          field < 0
+            ? m === -field - 1
+            : compiled.lanes[compiled.movements[m]!.toLane]!.road === compiled.lanes[field]!.road,
+        );
+        const cleared = at + Number(field >= 0 && vehicles.position[car]! >= profile(car).lengthM);
         if (
           chain.movements.some((m) =>
-            compiled.movements[m]!.conflicts.some((other) => held.movements.includes(other)),
+            compiled.movements[m]!.conflicts.some(
+              (other) => held.movements.indexOf(other) >= Math.max(0, cleared),
+            ),
           )
         )
           return 'box';
@@ -297,15 +341,22 @@ export function createIntersections(
       return null;
     }
     const clearance = profile(id).lengthM + params.idm.minGapM;
+    const horizon =
+      vehicles.stopped[id]! >= params.intersection.boxWaitS
+        ? 0
+        : Math.min(params.intersection.boxWaitS, candidateTime(id, movement, movement.lengthM));
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1) {
-      const space =
-        vehicles.stopped[id]! >= params.intersection.boxWaitS
-          ? vehicles.position[exitTail]!
-          : vehicles.position[exitTail]! -
-            profile(exitTail).lengthM +
-            vehicles.speed[exitTail]! * candidateTime(id, movement, movement.lengthM);
+      const space = exitRear(exitTail, horizon);
       if (space < clearance) return vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box';
+    }
+    for (const idx of compiled.lanes[movement.toLane]!.in) {
+      const incoming = compiled.movements[idx]!;
+      for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!) {
+        const front = vehicles.position[car]! - incoming.lengthM + vehicles.speed[car]! * horizon;
+        if (idx !== movement.idx && front < 0) continue;
+        if (front - profile(car).lengthM < clearance) return 'box';
+      }
     }
     return null;
   }

@@ -48,6 +48,7 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   linkCosts?: LinkCosts;
   intersectionObserver?: IntersectionObserver;
   headDetourObserver?: (id: number, lane: number, movement: number) => void;
+  originObserver?: (id: number, connector: CConnector, hasGap: boolean) => void;
   walkRouter?: ReturnType<typeof createWalkRouter>;
   debugParkingClaims?: boolean;
 };
@@ -70,6 +71,7 @@ function createRun({
   linkCosts,
   intersectionObserver,
   headDetourObserver,
+  originObserver,
   population,
   walkRouter,
   debugParkingClaims = false,
@@ -135,6 +137,7 @@ function createRun({
     onDecision: intersectionObserver,
     acceleration: (id) => reservationAcceleration[id]!,
     groupRoute,
+    routeVersion: () => costs.version,
   });
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
   let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
@@ -404,6 +407,13 @@ function createRun({
     }
     return true;
   }
+  const spawnGap = originObserver
+    ? (connector: CConnector, id: number) => {
+        const gap = hasSpawnGap(connector, id);
+        originObserver(id, connector, gap);
+        return gap;
+      }
+    : hasSpawnGap;
 
   function releaseTrip(id: number, connector: CConnector, timeS: number) {
     const { lane, positionM } = connector;
@@ -815,6 +825,7 @@ function createRun({
   }
 
   function enterLane(id: number, lane: number, position: number, timeS: number) {
+    const cleared = intersections.groupPaths[id];
     intersections.leaveGroup(id, lane);
     roadEnteredS[id] = timeS;
     roadEnteredM[id] = 0;
@@ -828,7 +839,8 @@ function createRun({
         return;
       }
     } else if (fallback[id]) {
-      const result = routeFrom(id, lane, 0);
+      const result =
+        cleared?.step === -1 ? { ok: true as const, route: cleared.route } : routeFrom(id, lane, 0);
       if (!result.ok) {
         vehicles.lane[id] = lane;
         vehicles.position[id] = 0;
@@ -901,7 +913,7 @@ function createRun({
       if (
         granted !== -1 &&
         position >= lane.lengthM &&
-        compiled.nodes[compiled.movements[granted]!.node]!.group !== undefined &&
+        !intersections.continuations[granted] &&
         compiled.roads[lane.road]!.group === undefined &&
         intersections.blockedExit(id, compiled.movements[granted]!)
       ) {
@@ -1184,6 +1196,7 @@ function createRun({
       onDecision: intersectionObserver,
       acceleration: (id) => reservationAcceleration[id]!,
       groupRoute,
+      routeVersion: () => costs.version,
     });
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
     allowedLanes = vehicleClasses.map((name) =>
@@ -1374,7 +1387,7 @@ function createRun({
         intersections.signals(timeS);
         persons.step(timeS);
         walkers?.step(timeS);
-        connectors.spawn(timeS, hasSpawnGap, releaseTrip);
+        connectors.spawn(timeS, spawnGap, releaseTrip);
         rerouter.updateEdits(timeS, editChecked);
         rerouter.update(timeS, (id) => {
           if (intersections.grants[id] !== -1) intersections.release(id);

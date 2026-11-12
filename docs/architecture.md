@@ -1551,14 +1551,17 @@ Step sequence, in this order every step:
      its whole length past the movement (the rear of the exit lane's last vehicle, projected
      forward by that vehicle's speed over the candidate's time to cross, at least
      `candidate.lengthM + minGapM` along the lane) is not granted, so it waits at the stop line
-     rather than in the junction. After `boxWaitS` of waiting at the line it falls back to
-     the older rule (the last vehicle's front at least `candidate.lengthM + minGapM` along), so a
-     jammed junction still drains.
+     rather than in the junction. TASK-131 Phase 3 / B56 bounds that forecast by leaders,
+     destination connectors and red stop lines, and by `boxWaitS`. Cars already crossing toward
+     the exit also consume its space. After `boxWaitS` standing, admission needs actual rear
+     clearance; waiting never replaces it with front clearance. Controlled movements recheck
+     this storage when the front actually enters, since an approach grant can become stale.
    - TASK-131 Phase 3: group entries check the entire routed path through inner roads and the
      final exit again when the front crosses the entry, including cars already admitted whose
      exit space is reserved. Forecasts stop at a leader, destination connector or red stop line,
      and never extend beyond `boxWaitS`; waiting never relaxes this group rear-clearance rule.
-     Conflicting group paths wait outside until the admitted path clears its final movement.
+     Conflicting group paths wait outside until the admitted car's rear clears the relevant
+     member movements; already-cleared members do not reserve the rest of a long group.
      The chosen movements persist through inner roads, whose member stop, yield and signal
      controls do not stop a cleared car. Physical following, conflict-zone backstops and walker
      holds remain active. Required safe lane changes and destinations on inner roads remain
