@@ -213,6 +213,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let stations: ReturnType<typeof drawStations> | undefined;
   let tramStops: ReturnType<typeof drawTramStops> | undefined;
   let levelCrossings: ReturnType<typeof drawLevelCrossings> | undefined;
+  let crossingStates: Uint8Array | undefined;
   let overhead: { grades: ReturnType<typeof drawCatenary>; counts: string } | undefined;
   /** TASK-134: overhead lines with Rail and Overhead lines on; supports and wires by zoom. */
   const updateCatenary = () => {
@@ -228,6 +229,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     levelCrossings?.update(camera.zoom, layerVisibility.rail);
     canvas.dataset.levelCrossings = JSON.stringify(
       layerVisibility.rail && levelCrossings ? levelCrossings.counts : noLevelCrossings,
+    );
+    canvas.dataset.levelCrossingStates = JSON.stringify(
+      layerVisibility.rail ? Array.from(crossingStates ?? []) : [],
     );
     if (!stations) return;
     const a = camera.screenToWorld({ x: 0, y: 0 }),
@@ -645,7 +649,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
       }
-      levelCrossings = drawLevelCrossings(compiled.rail?.facilities ?? []);
+      levelCrossings = drawLevelCrossings(compiled.rail?.facilities ?? [], compiled.rail);
+      crossingStates = undefined;
       for (const [layer, { container }] of levelCrossings.grades) {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
@@ -892,6 +897,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (!city) return;
       trainTimeS = snapshot.timeS;
       vehicles.update(snapshot);
+      crossingStates = snapshot.rail?.crossings;
+      levelCrossings?.setSnapshot(crossingStates, snapshot.timeS, snapshot.rail?.railReady);
       updateTrainPoses();
       updateStations();
       vehicleAgeS = 0;
