@@ -3346,29 +3346,33 @@ using the RTX 4070 SUPER measured +0.55% stationary and −0.01% and −1.80% mo
 Both 2D cameras passed on both backends. [PR #2](https://github.com/Chengxuan-Li/cityflows/pull/2)
 merged as `9cca6a6` with the sampling correction. The default 3D budget remains open.
 
-TASK-147 reproduced PR #1's 2968 completions and 61 gridlocks. Retaining its timetable
-and removing the road-crossing controller in a diagnostic replay reproduced main's
-4113/26/0 exactly. Staging a whole car safely at a later rail mark passed T53 but
-produced 3012/70/1. Disabling only crossing 2's protection in an isolated diagnostic
-produced 4450/12/0. A trace found four distinct paths where a stopped follower waited
-at an open marking behind a moving leader. The PR branch retains protection and its
-original gates. [Staging run](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305272553)
-and [facility isolation](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305740807).
+TASK-147 reproduced PR #1's 2968 completions and 61 gridlocks. Running the same
+timetable without the crossing controller in a diagnostic reproduced main's 4113/26/0.
+An occupied crossing could stop another tram's motion clock after its tail had cleared a
+previous crossing, stretching a one-second release guard by minutes. The reviewed repair
+`dcdaa10` counts that second in simulation time. It is on the existing held PR at
+`68f55ac`. A three-hour physical replay recorded 260 road entries and exits across mapped
+facilities with zero inside-facility contacts. T21 and T53 pass. The original seed-1
+traffic gate remains red at 3201 completions, 68 gridlocks and zero stalled heads.
+The trace found stopped cars on conflicting turns blocking both exits from the two
+Landsberger tram crossings. [PR #1 CI](https://github.com/Chengxuan-Li/cityflows/actions/runs/43316340090).
 
 TASK-146 located the westbound lane gain at OSM node 297271363 on Arnulfstraße.
 Ways 146018788, 146018784/146018786 and 134171421 carry two, three and five westbound
-lanes respectively. Eastbound way 134583817 carries two. At `n:652`, the renderer
-collapsed the two new lane strips twice, creating a 1.058 m disagreement between their
-supposedly shared edges. The repair draws one common edge. Inspection of both city
-fixtures found four affected carriageways. Canonical roads, driving polylines and legal
-movements match the control. The curb-following walk geometry changes at one site in
-each city. The Sindelfingen change includes a 0.146 m corner link. All crossing spans,
-controls and access connections persist.
+lanes respectively. Opposite way 134583817 carries two at this point. Eastbound traffic
+gains two lanes separately at `n:27`, west of the interchange. At `n:652`, the renderer
+eased the two added lane centres a second time when drawing their strips, separating their
+shared edge by 1.058 m. The first repair moved a pedestrian corner and left three stalled
+heads in the Munich gate. The replacement corrects the paint and corridor outlines only.
+The complete compiled vehicle and pedestrian graphs of both cities match the clean control.
+Four carriageways use the corrected display geometry.
 
-The first TASK-144 candidate also changed synthetic S-Bahn departure offsets because rail
-node allocation moved before the timetable hash was calculated. The unchanged T70
-departure-row test exposed it. That candidate stays outside main while its split is moved
-after rail allocation.
+TASK-144's first candidate changed synthetic S-Bahn departure offsets by shifting rail
+node IDs. The unchanged T70 departure-row assertion exposed it. The replacement restores
+the joins after ordinary import allocation and retains original road/lane indices in both
+cities. The full Munich timetable is byte-identical to the clean control. Lead review also
+found that late portal allocations advanced a temporary copy of the city counter. The
+correction now advances the canonical counter and tests the next allocation after reopening.
 
 ## Owner decisions log
 
