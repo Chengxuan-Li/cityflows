@@ -14,6 +14,7 @@ import {
   distance,
   headingAtDistance,
   parallelOffset,
+  offsetPolyline,
   pointAtDistance,
   pointInPolygon,
   segmentDistance,
@@ -463,8 +464,9 @@ export function movementMarkings(
 /** World-space paint footprints, shared by the 3D mesh and containment audits. */
 export function markingPolygons(shape: MarkingShape): Vec2[][] {
   if (shape.kind === 'polygon') return [shape.points];
-  const left = parallelOffset(shape.points, -shape.widthM / 2),
-    right = parallelOffset(shape.points, shape.widthM / 2);
+  // Keep matching corners: parallelOffset trims the two sides independently.
+  const left = offsetPolyline(shape.points, -shape.widthM / 2),
+    right = offsetPolyline(shape.points, shape.widthM / 2);
   return left.slice(1).map((p, i) => [left[i]!, p, right[i + 1]!, right[i]!]);
 }
 /** The runs of `line` whose points lie within 1.5 m of one of the closed `rings`. */

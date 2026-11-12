@@ -17,7 +17,9 @@ const provenance = (source: City) =>
   Object.fromEntries(
     Object.values(source.roads)
       .filter((road) =>
-        road.provenance.inferred?.some((note) => /^(smoothed|realigned):/.test(note)),
+        road.provenance.inferred?.some(
+          (note) => note.startsWith('smoothed:') || note === 'separated',
+        ),
       )
       .map((road) => [road.id, road.provenance]),
   );
@@ -37,7 +39,7 @@ test('QA Munich live edit survives save and fresh-context replay with version, h
   const geometryNotes = provenance(imported);
   const notes = Object.values(geometryNotes).flatMap((value) => value.inferred ?? []);
   expect(notes.some((note) => note.startsWith('smoothed:'))).toBe(true);
-  expect(notes.some((note) => note.startsWith('realigned:'))).toBe(true);
+  expect(notes).toContain('separated');
   // Select a visible road through the renderer, then change its speed while playing.
   const inspector = page.getByRole('complementary', { name: 'Inspector' });
   let selected: string | undefined;

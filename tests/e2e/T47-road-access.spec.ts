@@ -97,14 +97,19 @@ test('T47 Munich local access diverts through traffic and permits a local depart
     });
     for (const vehicle of vehicles) {
       if (!vehicle?.route || vehicle.state !== 'driving') continue;
-      const current = net.lanes[vehicle.lane]!.road;
+      const fromLane = vehicle.lane >= 0 ? vehicle.lane : net.movements[-vehicle.lane - 1]!.toLane;
+      const fromPosM = vehicle.lane >= 0 ? vehicle.positionM : 0;
+      const current = net.lanes[fromLane]!.road;
       const last = vehicle.route.roads.at(-1)!;
-      const destination = net.connectors.find(
-        (c) =>
-          c.direction !== 'out' &&
-          net.places[c.place]!.id === vehicle.destinationPlace &&
-          net.lanes[c.lane]!.road === last,
-      );
+      const facility = vehicle.parkingFacility
+        ? net.parking[net.index.parking.get(vehicle.parkingFacility)!]
+        : null;
+      const destination = (
+        facility?.connectorsIn ??
+        net.places[net.index.place.get(vehicle.destinationPlace)!]!.connectorsIn
+      )
+        .map((i) => net.connectors[i]!)
+        .find((c) => net.lanes[c.lane]!.road === last);
       if (!destination) continue;
       for (const idx of vehicle.route.roads.slice(vehicle.route.roads.indexOf(current) + 1, -1)) {
         const road = net.roads[idx]!;
@@ -122,8 +127,8 @@ test('T47 Munich local access diverts through traffic and permits a local depart
         const provider = createRouteProvider(),
           costs = freeFlowLinkCosts(changed.compiled);
         const request = {
-          fromLane: vehicle.lane,
-          fromPosM: vehicle.positionM,
+          fromLane,
+          fromPosM,
           toConnector: destination.idx,
           vehicleClass: 'car' as const,
           desiredSpeedFactor: 1,
