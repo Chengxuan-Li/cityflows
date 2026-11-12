@@ -8,3 +8,9 @@ a product defect using a focused countercheck. Report the command, assertion, ev
 source locations and smallest corrective change. Keep experimental instrumentation local and
 leave production code and expectations intact. The lead records the diagnosis and allocates
 any follow-up once its file surface is known.
+
+Follow-up after diagnosis (lead, 2026-11-12): the test's Munich lot ID points to a garage.
+Correct the test fixture selection using the original OSM way identity. Check the companion T54
+city arrival test and T52 parking-cities camera for the same mismatch. Preserve the scenarios,
+timing and behavioral assertions. Verify both extracts, run the affected city and browser tests,
+and keep the parking simulation unchanged.
