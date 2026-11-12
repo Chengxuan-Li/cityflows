@@ -584,6 +584,7 @@ function createRun({
           limit[id] = Math.min(limit[id]!, Math.max(position, walkerStop - idm.minGapM));
         }
         const railStop = railCrossings?.hold(id) ?? Infinity;
+        railCrossings?.binding(id, railStop + idm.minGapM <= obstacle + 1e-6);
         if (railStop < Infinity) {
           if (railStop + idm.minGapM < obstacle) {
             obstacle = railStop + idm.minGapM;
