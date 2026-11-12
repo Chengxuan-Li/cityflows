@@ -771,3 +771,30 @@ test.each([false, true])(
     expect(control.snapshot().crossings[0]).toBe(overlap ? CROSSING_CLOSED : CROSSING_OPEN);
   },
 );
+
+test('T75 a crossing near an extract exit keeps its full tail guard after the service ends', () => {
+  const city = operatingCrossing('tram');
+  city.rail!.nodes['rn:3']!.pos = { x: 0, y: 5 };
+  city.rail!.tracks['rt:2']!.line = [
+    { x: 0, y: 0 },
+    { x: 0, y: 5 },
+  ];
+  const compiled = setup(city),
+    table = railTimetable(compiled.rail!);
+  table.departures = [{ route: 0, timeS: 0, requestedS: 0 }];
+  const route = table.routes[0]!,
+    start = route.durationS + 0.2;
+  const control = createRailCrossings(
+    compiled,
+    createVehicles(0, compiled.lanes.length, compiled.movements.length),
+    DEFAULT_SIM_PARAMS,
+    start,
+    () => false,
+  )!;
+  expect(control.snapshot().trains).toHaveLength(0);
+  expect(control.snapshot().crossings[0]).toBe(CROSSING_CLOSED);
+  control.step(start);
+  expect(control.snapshot().crossings[0]).toBe(CROSSING_CLOSED);
+  for (let i = 1; i < 20; i++) control.step(start + i * 0.1);
+  expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
+});

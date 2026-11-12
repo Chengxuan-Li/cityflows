@@ -4,13 +4,13 @@ on:
     inputs:
       scope:
         type: choice
-        options: [validation, traffic, all]
+        options: [check, validation, traffic, all]
         default: validation
 permissions:
   contents: read
 jobs:
   focused:
-    if: inputs.scope != 'validation'
+    if: inputs.scope == 'traffic' || inputs.scope == 'all'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -86,7 +86,7 @@ jobs:
           name: clock-check
           path: check.log
   city:
-    if: inputs.scope != 'traffic'
+    if: inputs.scope == 'validation' || inputs.scope == 'all'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

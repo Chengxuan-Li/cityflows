@@ -213,7 +213,7 @@ export function createRailCrossings(
       while (departure.timeS + nextCycle[i]! * table.periodS <= timeS + warningMax) {
         const cycle = nextCycle[i]!++;
         const ageS = timeS - departure.timeS - cycle * table.periodS;
-        if (ageS < table.routes[departure.route]!.durationS)
+        if (ageS < table.routes[departure.route]!.durationS + 1)
           services.push({
             departure: i,
             cycle,
@@ -611,7 +611,8 @@ export function createRailCrossings(
       for (let i = services.length - 1; i >= 0; i--)
         if (
           services[i]!.ageS >=
-          table.routes[table.departures[services[i]!.departure]!.route]!.durationS
+            table.routes[table.departures[services[i]!.departure]!.route]!.durationS &&
+          services[i]!.tailClearedS.every((cleared) => snapshotTimeS > cleared + 1)
         )
           services.splice(i, 1);
       publish();
