@@ -82,8 +82,52 @@ test('T75 an open crossing refuses a car without storage beyond all tracks', () 
   const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 140, () => false)!;
   expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
   expect(control.hold(0)).toBe(stop.stopM);
+  expect(control.held(0)).toBe(false);
   vehicles.position[1] = vehicles.position[1]! + 30;
   expect(control.hold(0)).toBe(Infinity);
+});
+
+test('T75 a car stopped safely beyond a marking yields to rail without an empty-band wait cycle', () => {
+  const compiled = setup(operatingCrossing()),
+    facility = compiled.rail!.facilities![0]!;
+  const stop = facility.stops![0]!,
+    span = facility.spans!.find((s) => s.segment === stop.lane)!;
+  const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
+  vehicles.state[0] = DRIVING;
+  vehicles.insert(0, stop.lane, stop.stopM + 1);
+  expect(vehicles.position[0]!).toBeLessThan(span.fromM);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 140, () => false)!;
+  let protectedOnce = false;
+  for (let i = 0; i < 900; i++) {
+    control.step(140 + i * 0.1);
+    const snapshot = control.snapshot();
+    if (snapshot.crossings[0] !== CROSSING_OPEN) {
+      protectedOnce = true;
+      expect(control.hold(0)).toBeGreaterThanOrEqual(vehicles.position[0]!);
+      expect(control.hold(0)).toBeLessThan(span.fromM);
+    }
+    expect(snapshot.trains.every((t) => t.speedMps > 0)).toBe(true);
+  }
+  expect(protectedOnce).toBe(true);
+  expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
+});
+
+test('T75 recovery exemption requires the protected crossing stop to bind at the vehicle nose', () => {
+  const compiled = setup(operatingCrossing()),
+    stop = compiled.rail!.facilities![0]!.stops![0]!;
+  const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
+  vehicles.state[0] = DRIVING;
+  vehicles.insert(0, stop.lane, stop.stopM - 100);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 180, () => false)!;
+  expect(control.hold(0)).toBe(stop.stopM);
+  control.binding(0, true);
+  expect(control.held(0)).toBe(false);
+  vehicles.position[0] = stop.stopM;
+  expect(control.hold(0)).toBe(stop.stopM);
+  control.binding(0, true);
+  expect(control.held(0)).toBe(true);
+  control.binding(0, false);
+  expect(control.held(0)).toBe(false);
 });
 
 test('T75 a fast car in the warning dilemma zone clears with bounded braking', () => {

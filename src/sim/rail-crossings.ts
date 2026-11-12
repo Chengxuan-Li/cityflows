@@ -129,6 +129,7 @@ export function createRailCrossings(
   const railReady = new Uint8Array(facilities.length);
   const occupied = new Uint8Array(facilities.length);
   const holds = new Uint8Array(vehicles.count);
+  const holdPositions = new Float64Array(vehicles.count);
   const services: Service[] = [];
   const nextCycle = new Int32Array(table.departures.length);
   const warningMax = Math.max(0, ...events.flatMap((e) => e.map((v) => v.warningS)));
@@ -347,6 +348,7 @@ export function createRailCrossings(
             front = segmentLength(segment);
             rear += front;
           }
+          if (speed < 0.1 && !bodyInside && near > position + 1e-6) committed[f]!.delete(id);
           if (committed[f]!.has(id)) {
             if (near < Infinity || bodyInside) occupied[f] = 1;
             else committed[f]!.delete(id);
@@ -544,6 +546,7 @@ export function createRailCrossings(
       ranges(vehicles.position[id]!);
       const position = vehicles.position[id]!;
       let best = Infinity;
+      let protectedStop = false;
       for (let f = 0; f < facilities.length; f++) {
         if (!served[f]) continue;
         if (committed[f]!.has(id)) continue;
@@ -581,12 +584,22 @@ export function createRailCrossings(
                 blocked = true;
             }
           }
-        if (blocked) best = stop;
+        if (blocked) {
+          best = stop;
+          protectedStop = states[f] !== CROSSING_OPEN;
+        }
       }
-      holds[id] = Number(best < Infinity);
+      holds[id] = Number(protectedStop);
+      holdPositions[id] = best;
       return best;
     },
-    held: (id: number) => !!holds[id],
+    binding(id: number, binding: boolean) {
+      if (!binding) holds[id] = 0;
+    },
+    held: (id: number) =>
+      !!holds[id] &&
+      vehicles.speed[id]! < 0.1 &&
+      Math.abs(vehicles.position[id]! - holdPositions[id]!) < 0.5,
     clocks(): Clock[] {
       return services.map((s) => ({
         routeId: table.routes[table.departures[s.departure]!.route]!.id,

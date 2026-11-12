@@ -1378,6 +1378,10 @@ lane or movement, clears. Road entry also requires downstream storage for the fu
 past every conflicting track and any intervening junction movement. A road red inside that
 clearance holds entry; release removes only the crossing obstacle and never grants a road
 signal. Unserved, pedestrian and grade-separated crossings impose no road restriction.
+An admitted vehicle that stops wholly upstream of the physical conflict yields to rail and
+holds there before resuming. Gridlock recovery is exempt only while a protected rail stop is
+the binding obstacle at the stopped vehicle's nose; an open crossing's downstream queue
+remains subject to ordinary recovery.
 
 Each scheduled occurrence has its own progress clock. Exceptional road blockage pauses that
 service before the crossing; occupied rail sections and same-tick reservations hold following
