@@ -10,9 +10,12 @@ export function withoutLotAisles(source: City): City {
   if (!lots.length) return city;
   const firstId = Math.min(...lots.map((lot) => Number(lot.id.slice(3))));
   const aisles = new Set(lots.flatMap((lot) => lot.aisles ?? []));
-  const joins = Object.values(city.nodes).filter((node) =>
-    Number(node.id.slice(2)) >= firstId &&
-    Object.values(city.roads).some((r) => !aisles.has(r.id) && (r.from === node.id || r.to === node.id)),
+  const joins = Object.values(city.nodes).filter(
+    (node) =>
+      Number(node.id.slice(2)) >= firstId &&
+      Object.values(city.roads).some(
+        (r) => !aisles.has(r.id) && (r.from === node.id || r.to === node.id),
+      ),
   );
   const before = joins.length ? compile(source) : undefined;
   if (before && !before.ok) throw new Error('Aisle oracle needs a valid imported city');
@@ -21,8 +24,11 @@ export function withoutLotAisles(source: City): City {
   const changed = new Set<string>();
   for (const node of joins) {
     for (const incoming of Object.values(city.roads).filter((r) => r.to === node.id)) {
-      const candidates = Object.values(city.roads).filter((r) => r.from === node.id && r.to !== incoming.from);
-      if (candidates.length !== 1) throw new Error('Aisle oracle expects a simple split service road');
+      const candidates = Object.values(city.roads).filter(
+        (r) => r.from === node.id && r.to !== incoming.from,
+      );
+      if (candidates.length !== 1)
+        throw new Error('Aisle oracle expects a simple split service road');
       const next = candidates[0]!;
       if (JSON.stringify(incoming.provenance) !== JSON.stringify(next.provenance))
         throw new Error('Aisle oracle cannot join different source roads');
@@ -35,8 +41,12 @@ export function withoutLotAisles(source: City): City {
       if (next.crossings?.end !== undefined)
         incoming.crossings = { ...incoming.crossings, end: next.crossings.end };
       const end = city.nodes[next.to]!;
-      end.minorRoads = end.minorRoads.map((id) => id === next.id ? incoming.id : id);
-      end.turnRules = end.turnRules.map((rule) => ({ ...rule, from: rule.from === next.id ? incoming.id : rule.from, to: rule.to === next.id ? incoming.id : rule.to }));
+      end.minorRoads = end.minorRoads.map((id) => (id === next.id ? incoming.id : id));
+      end.turnRules = end.turnRules.map((rule) => ({
+        ...rule,
+        from: rule.from === next.id ? incoming.id : rule.from,
+        to: rule.to === next.id ? incoming.id : rule.to,
+      }));
       delete city.roads[next.id];
     }
   }
@@ -51,8 +61,12 @@ export function withoutLotAisles(source: City): City {
   if (before?.ok) {
     const geometry = compile({
       ...city,
-      places: Object.fromEntries(Object.entries(city.places).map(([id, p]) => [id, { ...p, connectors: [] }])),
-      parking: Object.fromEntries(Object.entries(city.parking ?? {}).map(([id, p]) => [id, { ...p, connectors: [] }])),
+      places: Object.fromEntries(
+        Object.entries(city.places).map(([id, p]) => [id, { ...p, connectors: [] }]),
+      ),
+      parking: Object.fromEntries(
+        Object.entries(city.parking ?? {}).map(([id, p]) => [id, { ...p, connectors: [] }]),
+      ),
     });
     if (!geometry.ok) throw new Error('Aisle oracle produced invalid contracted geometry');
     const seen = new Set<Connector>();
@@ -60,11 +74,16 @@ export function withoutLotAisles(source: City): City {
       for (const connector of owner.connectors) {
         if (!changed.has(connector.roadId) || seen.has(connector)) continue;
         seen.add(connector);
-        const original = before.compiled.connectors[before.compiled.index.connector.get(connector.id)!]!;
+        const original =
+          before.compiled.connectors[before.compiled.index.connector.get(connector.id)!]!;
         const lane = before.compiled.lanes[original.lane]!;
         const point = pointAtDistance(lane.polyline, lane.cumulative, original.positionM);
-        while (replacements.has(connector.roadId)) connector.roadId = replacements.get(connector.roadId)!;
-        const target = geometry.compiled.lanes[geometry.compiled.index.lane.get(`${connector.roadId}#${connector.lane}`)!]!;
+        while (replacements.has(connector.roadId))
+          connector.roadId = replacements.get(connector.roadId)!;
+        const target =
+          geometry.compiled.lanes[
+            geometry.compiled.index.lane.get(`${connector.roadId}#${connector.lane}`)!
+          ]!;
         connector.positionM = nearestOnPolyline(target.polyline, point).along;
       }
   }

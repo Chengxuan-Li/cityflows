@@ -4,7 +4,8 @@
 // TASK-126: whole-city/compile pins include rail and station metadata; T62 keeps main lane/movement hashes.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
 import { tierCities } from '../tier';
@@ -37,7 +38,7 @@ const baseline = {
 };
 
 test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
-  'T49 %s: aisles are the only network change; city counts and capacity estimates',
+  'T49 %s: aisles and mapped public joins preserve the contracted network; counts and capacity',
   (name) => {
     const imported = importOsmCached(readFileSync('fixtures/osm/' + name + '.osm', 'utf8'), {
       importerVersion: '1',

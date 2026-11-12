@@ -14,7 +14,8 @@ import { drawRoad, drawMovementArrow } from '../../src/render/layers/roads';
 import { drawTransitions } from '../../src/render/layers/transitions';
 import { drawJunctionMarkings } from '../../src/render/layers/junction-markings';
 import { createHash } from 'node:crypto';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { auditCities, compileAuditCity, loadAuditCity } from '../../bench/junction-audit';
 import {
   approachMarkings,

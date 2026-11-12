@@ -6,7 +6,8 @@
 import { vehicleJson } from '../vehicle-json';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { importOsmCached } from '../../bench/city-cache';
 import { importContext } from '../../src/importers/osm/context';
 import type { OsmData, OsmTags } from '../../src/importers/osm/parse';

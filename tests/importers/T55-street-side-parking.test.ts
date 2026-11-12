@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { importOsm } from '../../src/importers/osm';
 import { importOsmCached } from '../../bench/city-cache';
 import { compile, type CompiledCity } from '../../src/network';

@@ -3,7 +3,7 @@ on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  city:
+  city-pins:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -13,4 +13,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:city
-
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: parking-audit-cache
+          path: node_modules/.cache/task144*
+  traffic-light:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:traffic:light

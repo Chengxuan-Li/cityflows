@@ -1,7 +1,8 @@
 // TASK-133: station furniture is visual only. T70 pins its placement rules, the departure
 // displays against the TASK-127 timetable, and that none of it moves the timetable or the city.
 import { readFileSync } from 'node:fs';
-import { expect, test } from 'vitest';
+import { test } from 'vitest';
+import { expect } from '../hash-probe';
 import { importOsmCached } from '../../bench/city-cache';
 import { deepInside, pointInPolygon } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';

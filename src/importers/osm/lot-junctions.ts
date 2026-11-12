@@ -66,7 +66,7 @@ export function joinLotAisles(
       });
       return [];
     }
-    const aisleLayers = eligible
+    const aisleLayers = aisles
       .filter(({ id: aisle }) => city.roads[aisle]!.from === id || city.roads[aisle]!.to === id)
       .map(({ id: aisle }) => city.roads[aisle]!.layer ?? 0);
     if (!aisleLayers.length) return [];
@@ -83,8 +83,9 @@ export function joinLotAisles(
         (road) =>
           road.roadClass === 'service' &&
           road.lanes.length === 1 &&
+          road.lanes[0]!.allowed.includes('car') &&
           !['no', 'private', 'delivery'].includes(road.access?.car ?? road.access?.all ?? 'yes') &&
-          aisleLayers.includes(road.layer ?? 0) &&
+          aisleLayers.every((layer) => layer === (road.layer ?? 0)) &&
           [road.from, road.to].every(
             (end) => city.nodes[end]!.control === 'uncontrolled' && !grouped.has(end),
           ),
