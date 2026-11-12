@@ -8,6 +8,7 @@ import { goreTriangles, triangleHeight, buildMarkings } from '../../src/render3d
 import { laneEdges } from '../../src/network/lanes';
 import { booleanOpD, ClipType, FillRule, areaD } from 'clipper2-ts';
 import type { Graphics } from 'pixi.js';
+import { buildLine, GraphicsContext } from 'pixi.js';
 import { drawRoad, drawMovementArrow } from '../../src/render/layers/roads';
 import { drawTransitions } from '../../src/render/layers/transitions';
 import { drawJunctionMarkings } from '../../src/render/layers/junction-markings';
@@ -26,7 +27,12 @@ import {
 } from '../../src/render/marking-geometry';
 import { markingTheme } from '../../src/render/style';
 import { buildGeometry } from '../../src/render3d/geometry';
-import { pointInPolygon, segmentsIntersect, segmentDistance } from '../../src/geo/polyline';
+import {
+  pointInPolygon,
+  segmentsIntersect,
+  segmentDistance,
+  trimPolyline,
+} from '../../src/geo/polyline';
 import { tierCities, unitTest } from '../tier';
 
 // Compile hashes captured at 56ffccd (main) before the renderer changes, then updated at the
@@ -82,6 +88,61 @@ unitTest('V108: German widths and dash patterns are theme data', () => {
   expect(markingTheme.classes.trunk.lane.dash).toEqual([6, 12]);
   expect(markingTheme.classes.motorway.edge.widthM).toBe(0.3);
   expect(new Set(Object.values(markingTheme.colors)).size).toBe(1);
+});
+
+unitTest('V108: a tight clipped stroke has finite paired corners', () => {
+  const rings = markingPolygons({
+    kind: 'line',
+    role: 'edge',
+    alpha: 1,
+    widthM: 0.15,
+    // Reduced from Downtown's Market Street (OSM way 32165052).
+    points: [
+      { x: 217.01445948918044, y: -295.0255402355604 },
+      { x: 216.3528646641673, y: -297.66921844465253 },
+      { x: 218.3956667846515, y: -297.02831925009207 },
+    ],
+  });
+  expect(rings.length).toBeGreaterThan(0);
+  for (const p of rings.flat()) {
+    expect(p).toBeDefined();
+    expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
+  }
+});
+
+unitTest.each([false, true])('V108: clipped=%s stroke footprint matches Pixi', (clipped) => {
+  const curve = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 2, y: 0.5 },
+    { x: 2.5, y: 1.5 },
+    { x: 2.5, y: 3 },
+  ];
+  const points = clipped ? trimPolyline(curve, 0.25, 0.5) : curve;
+  const width = 0.15;
+  const polygons = markingPolygons({ kind: 'line', role: 'edge', alpha: 1, widthM: width, points });
+  const vertices: number[] = [],
+    indices: number[] = [];
+  buildLine(
+    points.flatMap((p) => [p.x, p.y]),
+    { ...GraphicsContext.defaultStrokeStyle, width, cap: 'butt', join: 'miter' },
+    false,
+    false,
+    vertices,
+    indices,
+  );
+  let pixiArea = 0;
+  for (let i = 0; i < indices.length; i += 3)
+    pixiArea += Math.abs(
+      areaD(indices.slice(i, i + 3).map((v) => ({ x: vertices[v * 2]!, y: vertices[v * 2 + 1]! }))),
+    );
+  expect(polygons.reduce((sum, ring) => sum + Math.abs(areaD(ring)), 0)).toBeCloseTo(pixiArea, 6);
+  for (const axis of ['x', 'y'] as const) {
+    const actual = polygons.flat().map((p) => p[axis]);
+    const expected = vertices.filter((_, i) => i % 2 === (axis === 'x' ? 0 : 1));
+    expect(Math.min(...actual)).toBeCloseTo(Math.min(...expected), 6);
+    expect(Math.max(...actual)).toBeCloseTo(Math.max(...expected), 6);
+  }
 });
 
 unitTest.each(['grid', 'sindelfingen'] as const)(

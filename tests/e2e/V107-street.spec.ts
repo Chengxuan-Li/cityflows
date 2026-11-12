@@ -48,7 +48,8 @@ test('@smoke V107 street furniture shares counts, responds to edits and meets fr
   const parsed = JSON.parse(counts!);
   expect(parsed.lamps.osm).toBe(113);
   expect(parsed.lamps.generated).toBeGreaterThan(0);
-  expect(parsed.busLabels).toBe(7);
+  // TASK-131's preserved geometry ends r:968#3 before the former BUS label at 62 m.
+  expect(parsed.busLabels).toBe(6);
   await button(page, 'Layers').click();
   const layers = page.getByRole('region', { name: 'Map layers' });
   for (const label of ['Basemap', 'Places', 'Entrances and exits'])
