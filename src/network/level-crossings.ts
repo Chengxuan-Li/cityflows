@@ -12,8 +12,8 @@ import {
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, Road } from '../schema';
-import type { RailNode } from '../schema/rail';
-import type { RailGraph } from './rail';
+import type { RailNode, RailTrack } from '../schema/rail';
+import { trackGrade, type RailGraph } from './rail';
 import type { CompiledCity } from './types';
 
 export interface LevelCrossing {
@@ -54,6 +54,10 @@ export function crossingSegmentClear(a: Vec2, b: Vec2, line: readonly Vec2[], cl
 }
 const sameRoad = (a: Road, b: Road) =>
   a.id === b.id || a.provenance.osmIds?.some((id) => b.provenance.osmIds?.includes(id));
+const atGrade = (track: RailTrack) => {
+  const grade = trackGrade(track);
+  return grade === 'ground' || grade === 'covered';
+};
 
 /** Mapped facilities only. Geometric intersections alone never invent crossing equipment. */
 export function compileLevelCrossings(
@@ -66,7 +70,7 @@ export function compileLevelCrossings(
   const candidates = graph.nodes.flatMap((node) => {
     if (!node.crossing || node.crossing.kind === 'pedestrian') return [];
     const tracks = graph.tracks.filter(
-      (t) => (t.from === node.id || t.to === node.id) && !t.bridge && !t.tunnel,
+      (t) => (t.from === node.id || t.to === node.id) && atGrade(t),
     );
     if (!tracks.length) return [];
     const arms: Arm[] = [];
@@ -185,7 +189,7 @@ export function compileLevelCrossings(
         Math.min(city.nodes[firstRoad.from]!.layer, city.nodes[firstRoad.to]!.layer),
       approaches: [],
     };
-    const tracks = graph.tracks.filter((t) => !t.bridge && !t.tunnel);
+    const tracks = graph.tracks.filter(atGrade);
     for (const options of arms) {
       options.sort(
         (a, b) =>

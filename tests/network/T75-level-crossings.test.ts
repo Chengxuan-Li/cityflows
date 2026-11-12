@@ -160,7 +160,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(
       name.startsWith('munich')
-        ? { rail: 2, tram: 4, approaches: 10, gates: 5 }
+        ? { rail: 2, tram: 4, approaches: 9, gates: 5 }
         : { rail: 18, tram: 0, approaches: 26, gates: 26 },
     );
     console.info('T75 census', name, {
@@ -314,3 +314,23 @@ test.each(['level_crossing', 'tram_level_crossing'] as const)(
     expect(cc.rail!.facilities).toEqual([]);
   },
 );
+
+test('T75 covered building passages remain at grade; ordinary tunnels and bridges are separated', () => {
+  for (const [key, value, visible] of [
+    ['tunnel', 'building_passage', true],
+    ['tunnel', 'yes', false],
+    ['bridge', 'yes', false],
+  ] as const) {
+    const { cc } = load(
+      crossingOsm().replace(
+        '<tag k="railway" v="rail"/>',
+        `<tag k="railway" v="rail"/><tag k="${key}" v="${value}"/>`,
+      ),
+    );
+    expect(
+      cc.rail!.facilities!.some((f) => f.kind === 'rail'),
+      `${key}=${value}`,
+    ).toBe(visible);
+    expect(cc.rail!.facilities!.some((f) => f.kind === 'tram')).toBe(true);
+  }
+});
