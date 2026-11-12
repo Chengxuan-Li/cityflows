@@ -4,13 +4,13 @@ on:
     inputs:
       scope:
         type: choice
-        options: [check, validation, traffic, all]
+        options: [check, validation, traffic, candidate, all]
         default: validation
 permissions:
   contents: read
 jobs:
   focused:
-    if: inputs.scope == 'traffic' || inputs.scope == 'all'
+    if: inputs.scope == 'traffic' || inputs.scope == 'all' || inputs.scope == 'candidate'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -22,7 +22,7 @@ jobs:
       - run: npx vitest run --project unit tests/sim/T75-operating-crossings.test.ts tests/network/T76-trams.test.ts tests/sim/T75-keep-clear.test.ts tests/sim/intersection.test.ts
       - run: node --experimental-strip-types --import ./bench/register.ts --import ./test-results/147/keep-clear-hook.mjs ./test-results/147/keep-clear-static.ts
   traffic:
-    if: inputs.scope == 'traffic' || inputs.scope == 'all'
+    if: inputs.scope == 'traffic' || inputs.scope == 'all' || inputs.scope == 'candidate'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -45,7 +45,7 @@ jobs:
           name: keep-clear-traffic
           path: traffic.log
   footprints:
-    if: inputs.scope == 'traffic' || inputs.scope == 'all'
+    if: inputs.scope == 'traffic' || inputs.scope == 'all' || inputs.scope == 'candidate'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

@@ -15,6 +15,9 @@ function keepClear(signal = false, service = true) {
   const north = road(node(-10, -100), junction),
     second = road(node(10, -100), junction),
     south = road(junction, node(0, 100));
+  const remoteNode = node(1000, 1000),
+    remoteFrom = road(node(900, 1000), remoteNode),
+    remoteTo = road(remoteNode, node(1100, 1000));
   west.provenance = { source: 'generated', osmIds: [10] };
   west.crossings = { end: false };
   city.rail = operatingCrossing('tram').rail;
@@ -39,7 +42,8 @@ function keepClear(signal = false, service = true) {
     compiled.movements.find((m) => m.fromLane === lane(from).idx && m.toLane === lane(to).idx)!;
   const through = movement(west.id, east.id),
     enter = movement(north.id, south.id),
-    other = movement(second.id, south.id);
+    other = movement(second.id, south.id),
+    remote = movement(remoteFrom.id, remoteTo.id);
   const table = railTimetable(compiled.rail!);
   expect(table.departures.length).toBeGreaterThan(0);
   if (!service) table.departures = [];
@@ -59,6 +63,7 @@ function keepClear(signal = false, service = true) {
     through,
     enter,
     other,
+    remote,
     receiver: lane(south.id),
     west: lane(west.id),
   };
@@ -119,5 +124,47 @@ test('T75 keep-clear preserves actual red and unserved road behavior', () => {
     intersections.request(0, enter);
     intersections.resolve();
     expect(intersections.grants[0]).toBe(service ? -1 : enter.idx);
+  }
+});
+
+test('T75 a draining turn cannot take storage already reserved by a conflicting entry', () => {
+  const { compiled, vehicles, intersections, receiver, enter, west } = keepClear();
+  const drain = compiled.movements.find(
+    (m) => m.fromLane === west.idx && m.toLane === receiver.idx,
+  )!;
+  vehicles.insert(2, receiver.idx, 11);
+  intersections.signals(0);
+  intersections.request(0, enter);
+  intersections.resolve();
+  expect(intersections.grants[0]).toBe(enter.idx);
+  expect(intersections.blockedExit(3, drain)).not.toBeNull();
+});
+
+test('T75 cancelled grants release the reserved receiving space', () => {
+  const { vehicles, intersections, receiver, enter, other } = keepClear();
+  vehicles.insert(2, receiver.idx, 11);
+  intersections.signals(0);
+  intersections.request(0, enter);
+  intersections.resolve();
+  expect(intersections.grants[0]).toBe(enter.idx);
+  intersections.release(0);
+  intersections.request(1, other);
+  intersections.resolve();
+  expect(intersections.grants[1]).toBe(other.idx);
+});
+
+test('T75 served crossings leave unrelated receiving movement forecasts unchanged', () => {
+  for (const service of [true, false]) {
+    const { compiled, vehicles, intersections, remote } = keepClear(false, service);
+    vehicles.remove(3);
+    vehicles.insert(3, remote.fromLane, compiled.lanes[remote.fromLane]!.stopM - 20);
+    vehicles.movement[3] = remote.idx;
+    vehicles.insert(2, remote.toLane, 7);
+    vehicles.speed[2] = 10;
+    vehicles.speed[3] = 5;
+    intersections.signals(0);
+    intersections.request(3, remote);
+    intersections.resolve();
+    expect(intersections.grants[3]).toBe(remote.idx);
   }
 });

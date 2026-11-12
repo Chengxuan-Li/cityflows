@@ -70,7 +70,7 @@ export function createIntersections(
   );
   const profiles = createVehicleProfiles(params);
   const profile = (id: number) => profiles[vehicles.vclass[id]!]!;
-  const keepClear = new Uint8Array(compiled.movements.length);
+  const keepClear = new Uint8Array(compiled.lanes.length);
   if (compiled.rail?.facilities?.length) {
     const table = railTimetable(compiled.rail);
     const served = new Set(
@@ -85,7 +85,8 @@ export function createIntersections(
           nose = lane.stopM - params.idm.minGapM;
         if (span.fromM > nose || span.toM < nose - maxLength) continue;
         for (const exit of lane.out)
-          for (const conflict of compiled.movements[exit]!.conflicts) keepClear[conflict] = 1;
+          for (const conflict of compiled.movements[exit]!.conflicts)
+            keepClear[compiled.movements[conflict]!.toLane] = 1;
       }
     }
   }
@@ -157,7 +158,7 @@ export function createIntersections(
   function blockedExit(id: number, movement: CMovement): 'exit-full' | 'box' | null {
     const clearance = profile(id).lengthM + params.idm.minGapM;
     const exitTail = vehicles.last(movement.toLane);
-    if (keepClear[movement.idx]) {
+    if (keepClear[movement.toLane]) {
       // Never place a stopped granted body across a served crossing's evacuation.
       // Existing grants reserve their whole receiving length before any new grant.
       const gap = params.idm.minGapM,
