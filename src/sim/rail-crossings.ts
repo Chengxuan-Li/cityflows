@@ -1,4 +1,4 @@
-import type { CSignal, CompiledCity } from '../network';
+import type { CompiledCity } from '../network';
 import {
   trainDefaults,
   trainPoseAt,
@@ -29,18 +29,8 @@ type Service = {
   held: boolean;
   current: number[];
   proposed: number[];
-  waitAgeS: number;
-  waitUntilS: number;
 };
-type Clock = {
-  routeId: string;
-  requestedS: number;
-  cycle: number;
-  ageS: number;
-  held: boolean;
-  waitAgeS?: number;
-  waitUntilS?: number;
-};
+type Clock = { routeId: string; requestedS: number; cycle: number; ageS: number; held: boolean };
 type RoadState = {
   histories: { id: number; segment: number; trail: number[]; position: number }[];
   admissions: { nodes: string[]; ids: number[] }[];
@@ -132,93 +122,6 @@ export function createRailCrossings(
     });
     return result.sort((a, b) => a.enterS - b.enterS || a.facility - b.facility);
   });
-  // Inner junction links have a permanently green clearance signal. Coordinate with
-  // the phase that actually admits the car into that junction, rather than those links.
-  const roadSignals = facilities.map((facility) => {
-    const entries = new Map<number, { signal: CSignal; movements: Set<number> }>();
-    const seen = new Set<number>();
-    const visit = (index: number, left = 100) => {
-      if (seen.has(index) || left < 0) return;
-      seen.add(index);
-      const movement = city.movements[index]!,
-        signal = city.nodes[movement.node]!.signal;
-      if (signal && signal.phases.some((phase) => !phase.movements.includes(index))) {
-        let entry = entries.get(movement.fromLane);
-        if (!entry) {
-          entry = { signal, movements: new Set() };
-          entries.set(movement.fromLane, entry);
-        }
-        entry.movements.add(index);
-        return;
-      }
-      const lane = city.lanes[movement.fromLane]!;
-      for (const incoming of lane.in) visit(incoming, left - lane.lengthM - movement.lengthM);
-    };
-    for (const span of facility.spans ?? []) {
-      if (span.segment < 0) visit(-span.segment - 1);
-      else for (const index of city.lanes[span.segment]!.in) visit(index);
-    }
-    return [...entries.values()];
-  });
-
-  /** Earliest minimum loss of road green/amber within one road cycle. A tram waits
-   * before warning, never with its tail occupying an earlier protected road band. */
-  function signalSlot(routeIndex: number, ageS: number, timeS: number, first: Event) {
-    if (table.routes[routeIndex]!.kind !== 'tram') return timeS;
-    const routeEvents = events[routeIndex]!;
-    if (routeEvents.some((e) => ageS >= e.enterS - e.warningS && ageS <= e.exitS + 1)) return timeS;
-    let end = first.exitS + 1;
-    const windows: { signal: CSignal; movements: Set<number>; from: number; to: number }[] = [];
-    for (const event of routeEvents) {
-      const from = event.enterS - event.warningS;
-      if (from < first.enterS - first.warningS || from > end) continue;
-      end = Math.max(end, event.exitS + 1);
-      for (const entry of roadSignals[event.facility]!)
-        windows.push({ ...entry, from: from - ageS, to: event.exitS + 1 - ageS });
-    }
-    if (!windows.length) return timeS;
-    const horizon = Math.max(...windows.map((w) => w.signal.cycleS));
-    const candidates = new Set([0]);
-    const costs: { from: number; to: number; active: [number, number][] }[] = [];
-    for (const window of windows) {
-      const { signal } = window,
-        active: [number, number][] = [];
-      const firstCycle = Math.floor((timeS + window.from + signal.offsetS) / signal.cycleS) - 1;
-      const lastCycle = Math.ceil((timeS + horizon + window.to + signal.offsetS) / signal.cycleS);
-      for (let cycle = firstCycle; cycle <= lastCycle; cycle++) {
-        let start = cycle * signal.cycleS - signal.offsetS;
-        for (const phase of signal.phases) {
-          const end = start + phase.durationS + signal.amberS;
-          if (phase.movements.some((m) => window.movements.has(m))) {
-            active.push([start, end]);
-            for (const edge of [start, end])
-              for (const shift of [window.from, window.to]) {
-                const delay = edge - timeS - shift;
-                if (delay >= 0 && delay <= horizon) candidates.add(delay);
-              }
-          }
-          start = end + signal.allRedS;
-        }
-      }
-      costs.push({ ...window, active });
-    }
-    let best = 0,
-      bestCost = Infinity;
-    for (const delay of [...candidates].sort((a, b) => a - b)) {
-      let cost = 0;
-      for (const window of costs)
-        for (const [from, to] of window.active)
-          cost += Math.max(
-            0,
-            Math.min(timeS + delay + window.to, to) - Math.max(timeS + delay + window.from, from),
-          );
-      if (cost < bestCost - 1e-6) {
-        bestCost = cost;
-        best = delay;
-      }
-    }
-    return timeS + best;
-  }
   const served = Uint8Array.from(facilities, (_, f) =>
     Number(events.some((e) => e.some((v) => v.facility === f))),
   );
@@ -311,8 +214,6 @@ export function createRailCrossings(
             held: false,
             current: [],
             proposed: [],
-            waitAgeS: -Infinity,
-            waitUntilS: -Infinity,
           });
       }
       nextSpawnS = Math.min(nextSpawnS, departure.timeS + nextCycle[i]! * table.periodS);
@@ -620,15 +521,11 @@ export function createRailCrossings(
           held: false,
           current: [],
           proposed: [],
-          waitAgeS: -Infinity,
-          waitUntilS: -Infinity,
         };
         services.push(service);
       }
       service.ageS = clock.ageS;
       service.held = clock.held;
-      service.waitAgeS = clock.waitAgeS ?? -Infinity;
-      service.waitUntilS = clock.waitUntilS ?? -Infinity;
     }
     roadOccupancy();
     for (const service of services)
@@ -698,15 +595,7 @@ export function createRailCrossings(
         const service = services[i]!;
         const route = table.departures[service.departure]!.route;
         const next = service.ageS + params.dtS;
-        const warning = events[route]!.find(
-          (e) => service.ageS < e.enterS - e.warningS && next >= e.enterS - e.warningS,
-        );
-        if (warning && service.waitAgeS !== warning.enterS - warning.warningS) {
-          service.waitAgeS = warning.enterS - warning.warningS;
-          service.waitUntilS = signalSlot(route, service.ageS, timeS, warning);
-        }
-        service.held = !!warning && timeS + 1e-6 < service.waitUntilS;
-        service.held ||= events[route]!.some(
+        service.held = events[route]!.some(
           (event) =>
             occupied[event.facility] &&
             service.ageS <= event.enterS &&
@@ -809,8 +698,6 @@ export function createRailCrossings(
         cycle: s.cycle,
         ageS: s.ageS,
         held: s.held,
-        waitAgeS: s.waitAgeS,
-        waitUntilS: s.waitUntilS,
       }));
     },
     roadState(mapping: { lanes: number[]; movements: number[] }): RoadState {
