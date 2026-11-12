@@ -3,14 +3,21 @@ on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  check-capacity:
+  morning:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [timing, timing-storage]
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node bench/task147/exit-capacity.mjs
-      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts capacity
+      - if: matrix.variant == 'timing'
+        run: git restore --source=38340cc -- src/sim/intersection.ts
+      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts ${{ matrix.variant }}
