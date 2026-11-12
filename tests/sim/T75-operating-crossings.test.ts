@@ -6,7 +6,7 @@ import { createEngine } from '../../src/sim/engine';
 import { createRailCrossings, CROSSING_OPEN, CROSSING_CLOSED } from '../../src/sim/rail-crossings';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { createVehicles, DRIVING } from '../../src/sim/vehicle';
-import { trainTimetable } from '../../src/network/trains';
+import { railTimetable } from '../../src/network/trams';
 import { setup, trips } from './fixtures';
 
 test('T75 a car brakes at the painted line, waits for the last carriage, and resumes', () => {
@@ -194,7 +194,7 @@ test('T75 opposing services on adjacent tracks keep one continuous protected int
     preferredDirection: 'backward',
   };
   const compiled = setup(city),
-    table = trainTimetable(compiled.rail!);
+    table = railTimetable(compiled.rail!);
   expect(compiled.rail!.facilities).toHaveLength(1);
   expect(table.routes).toHaveLength(2);
   table.departures = [
@@ -213,7 +213,7 @@ test('T75 opposing services on adjacent tracks keep one continuous protected int
 
 test('T75 a delayed service keeps following and opposing trains outside its occupied sections', () => {
   const compiled = setup(operatingCrossing()),
-    table = trainTimetable(compiled.rail!);
+    table = railTimetable(compiled.rail!);
   const route = table.routes[0]!;
   table.routes.push({
     ...route,
@@ -309,7 +309,7 @@ test('T75 restart is deterministic and an unserved facility has exact road-state
   // No boundary-to-boundary service after the mapped exit becomes a buffer with a binding direction.
   city.rail!.nodes['rn:3']!.kind = 'buffer_stop';
   const compiled = setup(city);
-  expect(trainTimetable(compiled.rail!).routes).toHaveLength(0);
+  expect(railTimetable(compiled.rail!).routes).toHaveLength(0);
   const ordinary = structuredClone(city);
   delete ordinary.rail;
   const a = createEngine(),
