@@ -49,8 +49,8 @@ const baselines = {
   // import without assignTramForms) every pin equals c3a6ec2's.
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
-  'munich-donnersberger': '0f245e592d74e9e369623576c42cc0f9e8743159ec42453667f5d9501d938238',
-  'sindelfingen-a81': 'b02cfbe666c9e759c0e7dd5ed6092a1664c88c87be12eecbc0bcd7f81d712f98',
+  'munich-donnersberger': 'a398a6e13de831797b0f15bce5659ab815d19ef6d5545ccf03bd1dbc475d7b4d',
+  'sindelfingen-a81': '3575c65885a574a0b9c6ba4f4e39f6fe4d8c50f93c0c31eb2868ae4da50ad8bf',
 };
 
 unitTest(

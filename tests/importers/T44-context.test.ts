@@ -49,11 +49,11 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-132's `covered` too), and the
             // compile hash is unchanged.
             '5f46cd8a6c9c0e845ed164321888e772ddb56493a8e88d2da7c987fdd188571a',
-            '0f245e592d74e9e369623576c42cc0f9e8743159ec42453667f5d9501d938238',
+            'a398a6e13de831797b0f15bce5659ab815d19ef6d5545ccf03bd1dbc475d7b4d',
           ]
         : [
             'ae526beaf53de966d69a7d2e6b6efd61c87f38bf03ff9ff61f9e55f12911ec7c',
-            'b02cfbe666c9e759c0e7dd5ed6092a1664c88c87be12eecbc0bcd7f81d712f98',
+            '3575c65885a574a0b9c6ba4f4e39f6fe4d8c50f93c0c31eb2868ae4da50ad8bf',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

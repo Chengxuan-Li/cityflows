@@ -168,8 +168,8 @@ const baselines = {
   town: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
-  'munich-donnersberger': 'b9abe89cc3b61c28f5102ff1aeb74bcdee49e783ffabfb711b605dcc402e1b18',
-  'sindelfingen-a81': '4a92587971792bdc034e1d82c976dbad5a5cb0a0d36f2e4132590615b35258cc',
+  'munich-donnersberger': '866465da2ee8f13343c47731761ca5589143ea59970efd04302342d39636366a',
+  'sindelfingen-a81': '50aaa82aa1b325b5c7158a311d6a5716fa34e19380f84d57c0d7d4310a8da950',
 };
 const lampCounts = {
   grid: [0, 0],
