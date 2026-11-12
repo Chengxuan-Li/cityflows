@@ -101,7 +101,7 @@ function sharedQueue({
     params: { headDetourS: 45, maxReplans: 0, spawnMinGapM: 2 },
     routeProvider: {
       route(network, costs, request) {
-        if (request.fromLane === alternate && engine.timeS > 100.1) searches.push(engine.timeS);
+        if (request.fromLane === alternate && request.fromPosM === 0) searches.push(engine.timeS);
         return provider.route(network, costs, request);
       },
     },
@@ -147,11 +147,14 @@ test('T66 a red follower exit waits for green before an early release', () => {
   expect(f.detours[0]).toBeGreaterThanOrEqual(120);
 });
 
-test('T66 an infeasible head detour is searched once for the stopped pair and preserves the ordinary delay', () => {
+test('T66 an infeasible early detour is reused after the ordinary delay and retried on a cost update', () => {
   const f = sharedQueue({ infeasible: true });
   f.run(25);
   expect(f.detours).toEqual([]);
   expect(f.searches).toHaveLength(1);
   f.run(25);
-  expect(f.searches.length).toBeGreaterThan(1);
+  expect(f.searches).toHaveLength(1);
+  f.run(15);
+  expect(f.searches).toHaveLength(2);
+  expect(f.detours).toEqual([]);
 });
