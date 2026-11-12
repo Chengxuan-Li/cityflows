@@ -3274,6 +3274,39 @@ and 5584/878 to 5438/842 in Sindelfingen. The retained local checkpoint is
 `4ab4d71`; its simulation is identical to `62cd578`. The traffic baseline stays
 at main's values. TASK-128, TASK-129 and TASK-130 remain held.
 
+### 2026-11-12 rail operating review (TASK-136 and TASK-138)
+
+The lead reviewed the combined operating railway and tram branch
+`task/lead-rail-service-merge`. The browser showed a car waiting for a train and for a
+tram, then driving on after the last carriage, in both views. Munich's four synthetic tram
+routes cover all 54 mapped tram sections and all 14 stops. At Trappentreustraße the leading
+cab stops at the halt mark for 25 seconds. The train-only timetable hashes on both imports
+still match main.
+
+The first integrated morning left two Munich crossings closed for almost the entire run.
+A car waiting 72 m before a crossing was counted as occupying it. The lead also traced a
+car creeping through a closed stop exactly at the end of a lane. The combined branch now
+uses the actual crossing sweeps, admits turning paths separately, checks full vehicle
+clearance and prevents transfer at a closed segment end. All four served tram facilities
+reopen during the loaded three-hour run. A separate heavy-rail-only trial recorded 3683
+completed trips, 29 gridlocks and zero stalled heads. It misses the existing 3702 floor.
+
+At `518e419`, the unchanged Munich seed-1 gate recorded 2968 trips complete, 61 gridlocks
+and zero stalled heads. T21 passed its road movement overlap check and T53 passed its walker
+comparison. The completion floor is 3702 and the gridlock ceiling is 39. No traffic threshold
+or baseline was changed. On seeds 2 and 3 this candidate completed 2801 and 2738 trips,
+against 3994 and 3245 on main. From 07:00 to 08:36 an independent footprint check sampled each
+0.1-second step, examined 499 near encounters and saw no car touch a rail vehicle inside
+a mapped crossing. The four tram sites each completed 32 passages. It did find car 785
+touching the side of a tram on parallel road `r:981`, 31 m outside the mapped crossing,
+with up to 0.162 m overlap. Parallel track and road alignment belongs to deferred TASK-139.
+
+The independent full workflow on the earlier `5cac0d8` checkpoint passed all six browser
+groups, unit checks and city geometry. Its traffic job failed the Munich morning floors and
+timed out on full demand. Main's last code CI is green. The combined product branch stays
+outside main pending a passing capture. The lead is checking whether open crossings admit
+a same-lane platoon when the exit can store every vehicle.
+
 ## Owner decisions log
 
 - 2026-11-12 (owner): defer B56 and proceed with the remaining backlog. The lead is starting operating crossings and tram service against merged main. The traffic gate and holds on TASK-128, TASK-129 and TASK-130 still apply.
