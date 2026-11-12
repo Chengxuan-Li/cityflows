@@ -659,72 +659,115 @@ test('T75 an open three-car platoon keeps exact ordinary-road trajectories', () 
   expect(protectedRoad.metrics().trips.completed).toBe(3);
 });
 
-test('T75 a downstream track hold cannot stretch the one-second road release after the tail clears', () => {
-  const city = operatingCrossing('tram'),
-    rail = city.rail!;
-  rail.nodes['rn:4'] = { id: 'rn:4', pos: { x: 0, y: 40 }, kind: 'plain', layer: 0 };
-  rail.tracks['rt:2']!.to = 'rn:4';
-  rail.tracks['rt:2']!.line = [
-    { x: 0, y: 0 },
-    { x: 0, y: 40 },
-  ];
-  rail.tracks['rt:3'] = {
-    ...rail.tracks['rt:2']!,
-    id: 'rt:3',
-    from: 'rn:4',
-    to: 'rn:3',
-    line: [
+test.each([false, true])(
+  'T75 downstream holds keep actual tail release and overlapping patch state (overlap=%s)',
+  (overlap) => {
+    const city = operatingCrossing('tram'),
+      rail = city.rail!;
+    rail.nodes['rn:4'] = { id: 'rn:4', pos: { x: 0, y: 40 }, kind: 'plain', layer: 0 };
+    rail.tracks['rt:2']!.to = 'rn:4';
+    rail.tracks['rt:2']!.line = [
+      { x: 0, y: 0 },
       { x: 0, y: 40 },
-      { x: 0, y: 1000 },
-    ],
-  };
-  const compiled = setup(city),
-    table = railTimetable(compiled.rail!);
-  table.departures = [
-    { route: 0, timeS: 30, requestedS: 30 },
-    { route: 0, timeS: 0, requestedS: 0 },
-  ];
-  const route = table.routes[0]!,
-    fac = compiled.rail!.facilities![0]!;
-  const far = Math.max(
-    ...fac.railSpans!.flatMap((span) =>
-      route.sections
-        .filter((s) => s.track === span.track)
-        .map(
-          (s) =>
-            s.startM +
-            (s.forward ? span.toM : compiled.rail!.tracks[s.track]!.lengthM - span.fromM),
-        ),
-    ),
-  );
-  let low = 0,
-    high = route.durationS;
-  for (let i = 0; i < 40; i++) {
-    const mid = (low + high) / 2;
-    if (trainPositionAt(route, mid).positionM - 18 <= far) low = mid;
-    else high = mid;
-  }
-  const vehicles = createVehicles(0, compiled.lanes.length, compiled.movements.length);
-  const clocks = [
-    { routeId: route.id, requestedS: 30, cycle: 0, ageS: high + 0.02, held: false },
-    { routeId: route.id, requestedS: 0, cycle: 0, ageS: 150, held: false },
-  ];
-  const control = createRailCrossings(
-    compiled,
-    vehicles,
-    DEFAULT_SIM_PARAMS,
-    150,
-    () => false,
-    clocks,
-  )!;
-  expect(control.snapshot().crossings[0]).toBe(CROSSING_CLOSED);
-  let held = 0;
-  for (let i = 0; i < 50; i++) {
-    control.step(150 + i * 0.1);
-    const follower = control.snapshot().trains.find((t) => t.id.includes('/30/'))!;
-    if (follower.speedMps === 0) held++;
-    expect(follower.positionM - 18).toBeGreaterThan(far);
-  }
-  expect(held).toBeGreaterThan(30);
-  expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
-});
+    ];
+    rail.tracks['rt:3'] = {
+      ...rail.tracks['rt:2']!,
+      id: 'rt:3',
+      from: 'rn:4',
+      to: 'rn:3',
+      line: [
+        { x: 0, y: 40 },
+        { x: 0, y: 1000 },
+      ],
+    };
+    const compiled = setup(city),
+      table = railTimetable(compiled.rail!);
+    table.departures = [
+      { route: 0, timeS: 30, requestedS: 30 },
+      { route: 0, timeS: 0, requestedS: 0 },
+    ];
+    const route = table.routes[0]!,
+      fac = compiled.rail!.facilities![0]!;
+    const far = Math.max(
+      ...fac.railSpans!.flatMap((span) =>
+        route.sections
+          .filter((s) => s.track === span.track)
+          .map(
+            (s) =>
+              s.startM +
+              (s.forward ? span.toM : compiled.rail!.tracks[s.track]!.lengthM - span.fromM),
+          ),
+      ),
+    );
+    let low = 0,
+      high = route.durationS;
+    for (let i = 0; i < 40; i++) {
+      const mid = (low + high) / 2;
+      if (trainPositionAt(route, mid).positionM - 18 <= far) low = mid;
+      else high = mid;
+    }
+    const vehicles = createVehicles(0, compiled.lanes.length, compiled.movements.length);
+    const clocks = [
+      { routeId: route.id, requestedS: 30, cycle: 0, ageS: high + 0.02, held: false },
+      { routeId: route.id, requestedS: 0, cycle: 0, ageS: 150, held: false },
+    ];
+    if (overlap) {
+      table.departures.push({ route: 0, timeS: 40, requestedS: 40 });
+      clocks.push({ routeId: route.id, requestedS: 40, cycle: 0, ageS: high - 10, held: false });
+    }
+    const control = createRailCrossings(
+      compiled,
+      vehicles,
+      DEFAULT_SIM_PARAMS,
+      150,
+      () => false,
+      clocks,
+    )!;
+    expect(control.snapshot().crossings[0]).toBe(CROSSING_CLOSED);
+    let held = 0;
+    let patched: ReturnType<typeof createRailCrossings>;
+    for (let i = 0; i < 50; i++) {
+      const timeS = 150 + i * 0.1;
+      control.step(timeS);
+      if (patched) {
+        patched.step(timeS);
+        expect(patched.snapshot()).toEqual(control.snapshot());
+      }
+      if (i === 5) {
+        const node = Object.values(city.nodes)[0]!,
+          road = Object.values(city.roads)[0]!;
+        city.nodes['n:100'] = { ...node, id: 'n:100', pos: { x: 1000, y: 1000 } };
+        city.nodes['n:101'] = { ...node, id: 'n:101', pos: { x: 1100, y: 1000 } };
+        city.roads['r:1'] = {
+          ...road,
+          id: 'r:1',
+          from: 'n:100',
+          to: 'n:101',
+          centerline: [
+            { x: 1000, y: 1000 },
+            { x: 1100, y: 1000 },
+          ],
+          provenance: { source: 'generated', osmIds: [999] },
+        };
+        const next = setup(city);
+        railTimetable(next.rail!).departures = table.departures.map((d) => ({ ...d }));
+        patched = createRailCrossings(
+          next,
+          createVehicles(0, next.lanes.length, next.movements.length),
+          DEFAULT_SIM_PARAMS,
+          timeS + 0.1,
+          () => false,
+          control.clocks(),
+        )!;
+        expect(patched.snapshot()).toEqual(control.snapshot());
+      }
+      const follower = control.snapshot().trains.find((t) => t.id.includes('/30/'))!;
+      if (follower.speedMps === 0) held++;
+      expect(follower.positionM - 18).toBeGreaterThan(far);
+      if (i < 9 || overlap) expect(control.snapshot().crossings[0]).toBe(CROSSING_CLOSED);
+      if (i >= 10 && !overlap) expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
+    }
+    expect(held).toBeGreaterThan(30);
+    expect(control.snapshot().crossings[0]).toBe(overlap ? CROSSING_CLOSED : CROSSING_OPEN);
+  },
+);

@@ -1,10 +1,16 @@
 name: TASK147 clock verification
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        type: choice
+        options: [validation, traffic, all]
+        default: validation
 permissions:
   contents: read
 jobs:
   focused:
+    if: inputs.scope != 'validation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -15,6 +21,7 @@ jobs:
       - run: npm ci
       - run: npx vitest run --project unit tests/sim/T75-operating-crossings.test.ts tests/network/T76-trams.test.ts
   traffic:
+    if: inputs.scope != 'validation'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -36,6 +43,7 @@ jobs:
           name: clock-traffic
           path: traffic.log
   footprints:
+    if: inputs.scope != 'validation'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -59,3 +67,40 @@ jobs:
           path: |
             footprints.log
             test-results/physical-footprints/*.json
+  check:
+    if: inputs.scope != 'traffic'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check 2>&1 | tee check.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: clock-check
+          path: check.log
+  city:
+    if: inputs.scope != 'traffic'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/cityflows
+          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
+          restore-keys: city-imports-
+      - run: npm run test:city 2>&1 | tee city.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: clock-city
+          path: city.log
