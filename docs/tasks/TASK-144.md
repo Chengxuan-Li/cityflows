@@ -9,6 +9,7 @@ On the parent import, `c:9404` belongs to `r:2103`, `c:9405` to `r:2104`; the hi
 and returns visitors through its northern entrance, but its actual southern shared OSM
 node 1717584268 (`n:2102`) was left disconnected from way 159640408. A second join at
 1717561493 (`n:2109`, adjacent lot) was lost when public ways 159638178/159638179 merged.
+The final southern portal is `c:10831` on `r:2103`; original `c:9404` and `c:9405` survive.
 
 The repair splits only public, single-lane service roads at retained, same-grade source
 vertices, after all original road, place, parking, walk, rail and tram IDs are allocated.
@@ -38,4 +39,13 @@ request. Both fail the same three requests. Complete timetable JSON is identical
 `0d505d0f`. Evidence scripts and JSON are in `D:/cityflows-task144-evidence`:
 `late-probe.mjs` and `late-compatibility.mjs`, run from this worktree with Node's type stripping
 and `--import ./bench/register.ts` (the persistence probe also imports `json-hook.mjs` to load
-the bundler's package-version export). Superseded early-split route recaptures are not shipped.
+the bundler's package-version export).
+
+Verified final source: `npm run check` passes 192 files and 1160 tests (one skipped); strict
+city shards pass all 46 files and 164 tests (one skipped), Actions run `43321592437`.
+Run `43320639940` passes the unchanged traffic-light gate (3964 completed, 32 gridlocked),
+T53 and original T70 browser departure rows. Its only city failure was a whole-City allocator
+pin, independently corrected and covered by the subsequent strict city run. No threshold or
+historic route fixture changes. Matched actual-geometry captures are `baseline-*` and
+`final-*` in the evidence directory: `lot-close-2d.png`, `lot-close-3d.png`,
+`south-junction-2d.png`, and `locator-2d.png`.
