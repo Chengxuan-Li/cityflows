@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { importOsmCached } from '../../bench/city-cache';
+import { nearestOnPolyline } from '../../src/geo/polyline';
 import { compileRail } from '../../src/network/rail';
-import { trainTimetable, trainsAt } from '../../src/network/trains';
+import { trainTimetable, trainsAt, trainPoint } from '../../src/network/trains';
 import { railTimetable, tramTimetable, tramCensus } from '../../src/network/trams';
 
 test('T76 Munich synthetic service serves every mapped halt on connected tram tracks and preserves train timetable', () => {
@@ -25,6 +26,16 @@ test('T76 Munich synthetic service serves every mapped halt on connected tram tr
     expect(rail.nodes[route.from]!.boundary).toBe(true);
     expect(rail.nodes[route.to]!.boundary).toBe(true);
     expect(route.sections.every((s) => rail.tracks[s.track]!.kind === 'tram')).toBe(true);
+    for (const stop of route.stops) {
+      const halt = rail
+        .tramStops!.find((s) => s.id === stop.platform)!
+        .halts.find((h) => route.sections.some((s) => rail.tracks[s.track]!.id === h.track))!;
+      const track = rail.tracks.find((t) => t.id === halt.track)!;
+      const expected = nearestOnPolyline(track.line, halt.pos).point,
+        front = trainPoint(rail, route, stop.positionM + 18);
+      expect(Math.hypot(front.x - expected.x, front.y - expected.y)).toBeLessThan(1e-6);
+    }
+
     for (let i = 1; i < route.sections.length; i++) {
       const a = route.sections[i - 1]!,
         b = route.sections[i]!;

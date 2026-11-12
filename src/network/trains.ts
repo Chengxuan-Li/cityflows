@@ -33,7 +33,7 @@ export interface TrainRoute {
   kind: TrainKind;
   sections: Section[];
   lengthM: number;
-  stops: { platform: string; name: string; positionM: number; arrivalS: number }[];
+  stops: { platform: string; name: string; positionM: number; arrivalS: number; haltM?: number }[];
   phases: Phase[];
   durationS: number;
   occupancy: { track: number; enterS: number; exitS: number }[];
@@ -185,7 +185,7 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
           lengthM += rail.tracks[s.track]!.lengthM;
           return { ...s, startM, endM: lengthM };
         });
-        const stops = rail.platforms
+        const stops: TrainRoute['stops'] = rail.platforms
           .filter(
             (p) =>
               p.mode === 'rail' &&
@@ -243,7 +243,8 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
               stops.push({
                 platform: stop.id,
                 name: stop.name,
-                positionM: candidates[0].positionM,
+                positionM: candidates[0].positionM - trainDefaults.tram.lengthM / 2,
+                haltM: candidates[0].positionM,
                 arrivalS: 0,
               });
           }
@@ -310,27 +311,34 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
     });
 }
 
-function motion(rail: RailGraph, route: TrainRoute) {
+function motion(
+  rail: RailGraph,
+  route: TrainRoute,
+  options: { startM?: number; startStopped?: boolean; skipOccupancy?: boolean } = {},
+) {
   const defaults = trainDefaults[route.kind],
     half = defaults.lengthM / 2,
     a = route.kind === 'tram' ? 1 : trainDefaults.accelerationMps2;
+  const startM = options.startM ?? -half;
   const endM = route.terminal === undefined ? route.lengthM + half : route.lengthM - half;
   const marks = [
     ...new Set([
-      -half,
+      startM,
       endM,
       ...route.sections.flatMap((s) => [s.startM, s.endM]),
       ...route.stops.map((s) => s.positionM),
     ]),
   ]
-    .filter((p) => p <= endM)
+    .filter((p) => p >= startM && p <= endM)
     .sort((a, b) => a - b);
   const limit = (s: Section) =>
     route.kind === 'tram'
       ? Math.min(rail.tracks[s.track]!.maxSpeedMps ?? defaults.speedMps, defaults.speedMps)
       : (rail.tracks[s.track]!.maxSpeedMps ?? defaults.speedMps);
   const speeds = marks.map((p) =>
-    (route.terminal !== undefined && p === endM) || route.stops.some((s) => s.positionM === p)
+    (options.startStopped && p === startM) ||
+    (route.terminal !== undefined && p === endM) ||
+    route.stops.some((s) => s.positionM === p)
       ? 0
       : Math.min(
           ...route.sections.filter((s) => p >= s.startM && p <= s.endM).map(limit),
@@ -382,13 +390,57 @@ function motion(rail: RailGraph, route: TrainRoute) {
     const outward = [...route.phases];
     route.turnaroundS = timeS;
     add(endM, 0, 0, serviceDwellS(route.kind));
-    for (const p of outward.reverse()) {
-      const at = p.positionM + p.speedMps * p.durationS + 0.5 * p.acceleration * p.durationS ** 2;
-      add(at, -(p.speedMps + p.acceleration * p.durationS), p.acceleration, p.durationS);
+    if (route.kind === 'tram') {
+      const terminalStop = route.stops.find((s) => s.positionM === endM);
+      if (terminalStop) terminalStop.arrivalS = route.turnaroundS;
+      const returning: TrainRoute = {
+        id: route.id,
+        kind: route.kind,
+        from: route.terminal,
+        to: route.from,
+        lengthM: route.lengthM,
+        sections: [...route.sections]
+          .reverse()
+          .map((s) => ({
+            ...s,
+            forward: !s.forward,
+            startM: route.lengthM - s.endM,
+            endM: route.lengthM - s.startM,
+          })),
+        stops: route.stops
+          .map((s) => ({
+            ...s,
+            positionM: route.lengthM - s.haltM! - half,
+            haltM: route.lengthM - s.haltM!,
+            arrivalS: 0,
+          }))
+          .filter((s) => s.positionM >= half)
+          .sort((a, b) => a.positionM - b.positionM),
+        phases: [],
+        durationS: 0,
+        occupancy: [],
+      };
+      motion(rail, returning, { startM: half, startStopped: true, skipOccupancy: true });
+      const returnStartS = timeS;
+      for (const p of returning.phases)
+        add(route.lengthM - p.positionM, -p.speedMps, -p.acceleration, p.durationS);
+      route.stops.push(
+        ...returning.stops.map((s) => ({
+          ...s,
+          positionM: route.lengthM - s.positionM,
+          haltM: route.lengthM - s.haltM!,
+          arrivalS: returnStartS + s.arrivalS,
+        })),
+      );
+    } else {
+      for (const p of outward.reverse()) {
+        const at = p.positionM + p.speedMps * p.durationS + 0.5 * p.acceleration * p.durationS ** 2;
+        add(at, -(p.speedMps + p.acceleration * p.durationS), p.acceleration, p.durationS);
+      }
     }
   }
   route.durationS = timeS;
-  if (route.terminal !== undefined)
+  if (route.terminal !== undefined && route.kind !== 'tram')
     route.stops.push(
       ...route.stops.map((s) => ({
         ...s,
@@ -396,14 +448,40 @@ function motion(rail: RailGraph, route: TrainRoute) {
       })),
     );
   route.stops.sort((a, b) => a.arrivalS - b.arrivalS);
+  if (options.skipOccupancy) return;
   route.occupancy = route.sections.map((s) => ({
     track: s.track,
     enterS: timeAt(route, s.startM - half),
     exitS:
       route.terminal !== undefined
-        ? timeS - timeAt(route, s.startM - half)
+        ? route.kind === 'tram'
+          ? timeOnReturn(route, s.startM - half)
+          : timeS - timeAt(route, s.startM - half)
         : timeAt(route, s.endM + half, true),
   }));
+}
+
+function timeOnReturn(route: TrainRoute, positionM: number) {
+  for (const p of [...route.phases].reverse()) {
+    if (p.timeS < route.turnaroundS! + serviceDwellS(route.kind)) continue;
+    const end = p.positionM + p.speedMps * p.durationS + 0.5 * p.acceleration * p.durationS ** 2;
+    if (
+      positionM < Math.min(p.positionM, end) - 1e-7 ||
+      positionM > Math.max(p.positionM, end) + 1e-7
+    )
+      continue;
+    if (p.speedMps === 0 && p.acceleration === 0) return p.timeS + p.durationS;
+    const velocity = -Math.sqrt(
+      Math.max(0, p.speedMps ** 2 + 2 * p.acceleration * (positionM - p.positionM)),
+    );
+    return (
+      p.timeS +
+      (p.acceleration
+        ? (velocity - p.speedMps) / p.acceleration
+        : (positionM - p.positionM) / p.speedMps)
+    );
+  }
+  throw Error(`Position outside returning tram motion: ${positionM}`);
 }
 
 function timeAt(route: TrainRoute, positionM: number, last = false) {
