@@ -130,6 +130,48 @@ test('T75 recovery exemption requires the protected crossing stop to bind at the
   expect(control.held(0)).toBe(false);
 });
 
+test.each([false, true])(
+  'T75 an exact lane-end crossing stop prevents boundary transfer (junction=%s)',
+  (junction) => {
+    const { city, node, road, place } = buildCity('Crossing stop on segment boundary', 136);
+    const start = node(-400, 0),
+      center = node(-3, 0),
+      end = node(400, 0);
+    const before = road(start, center),
+      after = road(center, end);
+    before.provenance = after.provenance = { source: 'generated', osmIds: [10] };
+    if (junction) road(center, node(80, -200));
+    place('Homes', 'residential', { x: -380, y: 15 }, [
+      { road: before, direction: 'out', positionM: 20 },
+    ]);
+    place('Work', 'work', { x: 380, y: 15 }, [{ road: after, direction: 'in', positionM: 370 }]);
+    city.rail = operatingCrossing().rail;
+    const compiled = setup(city),
+      lane = compiled.index.lane.get(`${before.id}#0`)!;
+    compiled.rail!.facilities![0]!.stops = [{ lane, stopM: compiled.lanes[lane]!.lengthM }];
+    const engine = createEngine(),
+      trip = trips(city, 1)[0]!;
+    trip.departS = 145;
+    engine.load({
+      compiled,
+      trips: [trip],
+      scenario: { ...defaultScenario('grid5x5'), startS: 140, endS: 280 },
+    });
+    let atBoundary = 0;
+    for (let i = 0; i < 1400; i++) {
+      engine.step();
+      const car = engine.inspect(1),
+        rail = engine.snapshot().rail!;
+      if (car?.state === 'driving' && rail.crossings[0] === CROSSING_CLOSED) {
+        expect(car.lane).toBe(lane);
+        if (Math.abs(car.positionM - compiled.lanes[lane]!.lengthM) < 1e-6) atBoundary++;
+      }
+    }
+    expect(atBoundary).toBeGreaterThan(10);
+    expect(engine.inspect(1)!.state).toBe('completed');
+  },
+);
+
 test('T75 a fast car in the warning dilemma zone clears with bounded braking', () => {
   const city = operatingCrossing(),
     compiled = setup(city),
