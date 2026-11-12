@@ -1360,6 +1360,33 @@ TASK-111's test walkers use it once per source (place to place, `walkSpeedMps`,
 
 ## 8. Simulation
 
+TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
+adds per-lane painted stops, lane/movement conflict spans and rail-coordinate road spans to
+each facility; movement segments use `-movementIndex-1`. The controller advances on fixed
+simulation ticks, independently of drawing. Its snapshot `rail` contains facility-ordered
+`crossings` (0 open, 1 warning, 2 closed), `railReady` (1 only while closed and clear of road
+traffic), and authoritative articulated `trains`, including trams. Warning lasts three seconds
+before closure and begins at least twelve seconds before nose entry, increased for the fastest
+approach's braking time. A driver already beyond the marking, or unable to stop within its
+class's comfortable braking distance at warning onset, clears; the service waits before its
+nose enters the road band until the whole road vehicle, including a rear on the preceding
+lane or movement, clears. Road entry also requires downstream storage for the full vehicle
+past every conflicting track and any intervening junction movement. A road red inside that
+clearance holds entry; release removes only the crossing obstacle and never grants a road
+signal. Unserved, pedestrian and grade-separated crossings impose no road restriction.
+
+Each scheduled occurrence has its own progress clock. Exceptional road blockage pauses that
+service before the crossing; occupied rail sections and same-tick reservations hold following
+or opposing services, while unrelated routes keep advancing. Delayed services also retain
+admission priority over new occurrences sharing their tracks. Protection remains until the
+last carriage clears the entire road band plus one second; overlapping warnings and services
+combine by the most restrictive state. Pausing freezes these clocks; restart reconstructs
+them from the timetable. Live edits remap progress by route identity, requested departure and
+cycle, discard removed services, rebuild road spans, and hold a service upstream if the edit
+places a road vehicle in its crossing. Snapshot poses are allocated only on request, and road
+occupancy scans only occupied influenced segments. Crossing-held road vehicles do not enter
+gridlock recovery. No rail field enters canonical project data.
+
 TASK-102 keeps garage stock and person car chains in `sim/parking.ts`, separate from place
 event admission. Initial residential stock uses residents times scenario car share, bounded
 by slots and distributed across facilities; explicit `occupancyAtStart` wins. Otherwise work

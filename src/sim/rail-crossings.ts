@@ -289,9 +289,20 @@ export function createRailCrossings(
     for (let f = 0; f < states.length; f++) {
       if (previousStates[f] !== CROSSING_OPEN || states[f] === CROSSING_OPEN) continue;
       // A driver in the dilemma zone clears instead of receiving a physically impossible stop.
-      for (const marking of facilities[f]!.stops ?? [])
-        for (let id = vehicles.first(marking.lane); id !== -1; id = vehicles.next[id]!) {
-          const distance = marking.stopM - vehicles.position[id]!;
+      for (const b of vehicles.occupied) {
+        if (!influences[b]) continue;
+        const field = b < city.lanes.length ? b : city.lanes.length - b - 1;
+        for (let id = vehicles.first(field); id !== -1; id = vehicles.next[id]!) {
+          path(id);
+          let stop = Infinity;
+          for (let s = 0; s < segments.length; s++)
+            for (const marking of facilities[f]!.stops ?? [])
+              if (
+                marking.lane === segments[s] &&
+                offsets[s]! + marking.stopM >= vehicles.position[id]!
+              )
+                stop = Math.min(stop, offsets[s]! + marking.stopM);
+          const distance = stop - vehicles.position[id]!;
           const speed = vehicles.speed[id]!;
           const brake = profiles[vehicles.vclass[id]!]!.idm.bMps2;
           if (
@@ -304,6 +315,7 @@ export function createRailCrossings(
             railReady[f] = 0;
           }
         }
+      }
     }
   }
   let snapshotTimeS = startS;
@@ -394,6 +406,21 @@ export function createRailCrossings(
                   (other.accepted && other.proposed.includes(track)),
               ),
           );
+        if (!service.held && !service.current.length && service.proposed.length) {
+          const entering = table.routes[route]!;
+          service.held = services.some((other) => {
+            if (other === service || !other.current.length) return false;
+            const departure = table.departures[other.departure]!;
+            const delayed =
+              timeS - departure.timeS - other.cycle * table.periodS - other.ageS > params.dtS;
+            return (
+              delayed &&
+              table.routes[departure.route]!.sections.some((a) =>
+                entering.sections.some((b) => a.track === b.track),
+              )
+            );
+          });
+        }
         if (!service.held) {
           service.ageS = next;
           service.accepted = true;

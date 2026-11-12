@@ -156,6 +156,154 @@ test('T75 release retains a downstream road red, including clearance over a junc
   expect(engine.inspect(1)!.state).toBe('completed');
 });
 
+test('T75 opposing services on adjacent tracks keep one continuous protected interval', () => {
+  const city = operatingCrossing();
+  const rail = city.rail!;
+  for (const [id, y] of [
+    ['rn:4', -1000],
+    ['rn:5', 0],
+    ['rn:6', 1000],
+  ] as const)
+    rail.nodes[id] = {
+      id,
+      pos: { x: 6, y },
+      kind: y === 0 ? 'level_crossing' : 'plain',
+      layer: 0,
+      ...(y === 0 ? { crossing: { kind: 'rail', roadOsmIds: [10] } } : {}),
+    };
+  rail.tracks['rt:3'] = {
+    ...rail.tracks['rt:1']!,
+    id: 'rt:3',
+    from: 'rn:4',
+    to: 'rn:5',
+    line: [
+      { x: 6, y: -1000 },
+      { x: 6, y: 0 },
+    ],
+    preferredDirection: 'backward',
+  };
+  rail.tracks['rt:4'] = {
+    ...rail.tracks['rt:2']!,
+    id: 'rt:4',
+    from: 'rn:5',
+    to: 'rn:6',
+    line: [
+      { x: 6, y: 0 },
+      { x: 6, y: 1000 },
+    ],
+    preferredDirection: 'backward',
+  };
+  const compiled = setup(city),
+    table = trainTimetable(compiled.rail!);
+  expect(compiled.rail!.facilities).toHaveLength(1);
+  expect(table.routes).toHaveLength(2);
+  table.departures = [
+    { route: 0, timeS: 77, requestedS: 77 },
+    { route: 1, timeS: 87, requestedS: 87 },
+  ];
+  const vehicles = createVehicles(0, compiled.lanes.length, compiled.movements.length);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 140, () => false)!;
+  for (let i = 0; i < 850; i++) {
+    const timeS = 140 + i * 0.1;
+    control.step(timeS);
+    if (timeS > 166 && timeS < 208) expect(control.snapshot().crossings[0]).toBe(CROSSING_CLOSED);
+  }
+  expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
+});
+
+test('T75 a delayed service keeps following and opposing trains outside its occupied sections', () => {
+  const compiled = setup(operatingCrossing()),
+    table = trainTimetable(compiled.rail!);
+  const route = table.routes[0]!;
+  table.routes.push({
+    ...route,
+    id: `${route.id}:opposing`,
+    from: route.to,
+    to: route.from,
+    sections: [...route.sections]
+      .reverse()
+      .map((s) => ({
+        ...s,
+        forward: !s.forward,
+        startM: route.lengthM - s.endM,
+        endM: route.lengthM - s.startM,
+      })),
+  });
+  table.departures = [
+    { route: 0, timeS: 77, requestedS: 77 },
+    { route: 0, timeS: 237, requestedS: 237 },
+    { route: 1, timeS: 300, requestedS: 300 },
+  ];
+  const facility = compiled.rail!.facilities![0]!,
+    span = facility.spans![0]!;
+  const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
+  vehicles.state[0] = DRIVING;
+  vehicles.insert(0, span.segment, (span.fromM + span.toM) / 2);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 140, () => false)!;
+  let anyFollowing = false;
+  for (let i = 0; i < 4500; i++) {
+    if (i === 2400) vehicles.position[0] = span.toM + 20;
+    control.step(140 + i * 0.1);
+    const snapshot = control.snapshot();
+    const tracks = snapshot.trains.flatMap((t) => t.occupied);
+    expect(new Set(tracks).size).toBe(tracks.length);
+    if (i > 260 && i < 2400) expect(snapshot.crossings[0]).toBe(CROSSING_CLOSED);
+    if (snapshot.trains.some((t) => t.id.includes('/237/') && t.cars.length)) anyFollowing = true;
+  }
+  expect(anyFollowing).toBe(true);
+});
+
+test('T75 pause snapshots and live edits preserve service clocks; restart repeats the interaction', () => {
+  const city = operatingCrossing(),
+    compiled = setup(city),
+    engine = createEngine();
+  const trip = trips(city, 1)[0]!;
+  trip.departS = 145;
+  const scenario = { ...defaultScenario('grid5x5'), startS: 140, endS: 250 };
+  engine.load({ compiled, trips: [trip], scenario });
+  engine.step(350);
+  const paused = engine.snapshot().rail!;
+  expect(engine.snapshot().rail).toEqual(paused);
+  city.version++;
+  engine.patch(setup(city));
+  expect(engine.snapshot().rail).toEqual(paused);
+  engine.step(750);
+  const end = engine.snapshot().rail!;
+  const hash = engine.stateHash();
+  engine.load({ compiled, trips: [trip], scenario });
+  engine.step(1100);
+  expect(engine.stateHash()).toBe(hash);
+  expect(engine.snapshot().rail).toEqual(end);
+});
+
+test.each(['pedestrian', 'bridge', 'unmapped'] as const)(
+  'T75 %s crossings have exact road-state parity',
+  (kind) => {
+    const city = operatingCrossing();
+    if (kind === 'pedestrian') city.rail!.nodes['rn:2']!.crossing!.kind = 'pedestrian';
+    if (kind === 'bridge')
+      for (const t of Object.values(city.rail!.tracks)) {
+        t.bridge = true;
+        t.layer = 1;
+      }
+    if (kind === 'unmapped') delete city.rail!.nodes['rn:2']!.crossing;
+    const ordinary = structuredClone(city);
+    delete ordinary.rail;
+    const a = createEngine(),
+      b = createEngine();
+    const input = {
+      trips: trips(city, 10, 1),
+      scenario: { ...defaultScenario('grid5x5'), startS: 100, endS: 250 },
+    };
+    a.load({ ...input, compiled: setup(city) });
+    b.load({ ...input, compiled: setup(ordinary) });
+    a.step(1500);
+    b.step(1500);
+    expect(a.stateHash()).toBe(b.stateHash());
+    expect(a.snapshot().rail!.crossings).toHaveLength(0);
+  },
+);
+
 test('T75 restart is deterministic and an unserved facility has exact road-state parity', () => {
   const city = operatingCrossing();
   // No boundary-to-boundary service after the mapped exit becomes a buffer with a binding direction.
