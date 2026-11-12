@@ -81,5 +81,18 @@ and output paths, and uses the existing test-mode preview on 5345.
 
 Verification of the final measurement-only change: `npm run check` passed (1,148 passed;
 one skipped; typecheck, lint, formatting and build passed). The observer regression failed
-before the boundary/drain correction and passed afterward. The lead monitors the final
-default named rerun and records its results; it must not be represented as a passing 3D gate.
+before the boundary/drain correction and passed afterward. The lead repeated the named tests with one worker and local assertions enabled.
+
+| GPU and camera | Rail on / off, ms | Difference |
+|---|---|---|
+| SwiftShader, T62 2D / 3D | 175.83 / 162.77; 237.49 / 207.21 | +8.02%; +14.61% |
+| SwiftShader, T64 moving 2D | 176.66 / 162.12; 173.93 / 159.54 | +8.97%; +9.02% |
+| SwiftShader, T64 moving 3D | 245.14 / 213.48; 244.84 / 215.14 | +14.83%; +13.80% |
+| RTX 4070 SUPER, T64 moving 2D | 31.25 / 31.25 in both runs | within 0.01% |
+| RTX 4070 SUPER, T64 moving 3D | 31.25 / 31.25; 31.25 / 31.82 | −0.01%; −1.80% |
+
+The two default-backend 3D frame assertions failed. The other three default tests passed,
+including the final-render regression and the Munich and Sindelfingen train interactions.
+All three T64 hardware tests passed. The full-Chromium verification used the same test
+build, timings, camera and thresholds. Artifacts on the audit workstation are under
+`test-results/task145/lead-final-results` and `test-results/task145/hardware-moving-results`.

@@ -169,8 +169,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
 | [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | in progress |
-| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | in progress |
-| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | queued |
+| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged; SwiftShader 3D remains over budget |
+| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | paint repair in review |
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | in progress on PR branch |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -3340,7 +3340,11 @@ backend in both the stationary and moving cameras. A delayed observer callback d
 one render measurement per window. The corrected sampler retains the raw animation
 intervals and all render entries. Isolating track paint identified the largest measured
 layer cost. Per-track and 256 m spatial batches both missed the ten-percent limit.
-The final named runs record the browser and GPU used.
+The final one-worker Playwright run at `2fabc13` measured +14.61% in stationary 3D and
++14.83% and +13.80% in moving 3D on SwiftShader. On the same host, full Chromium
+using the RTX 4070 SUPER measured +0.55% stationary and −0.01% and −1.80% moving.
+Both 2D cameras passed on both backends. [PR #2](https://github.com/Chengxuan-Li/cityflows/pull/2)
+merged as `9cca6a6` with the sampling correction. The default 3D budget remains open.
 
 TASK-147 reproduced PR #1's 2968 completions and 61 gridlocks. Retaining its timetable
 and removing the road-crossing controller in a diagnostic replay reproduced main's
