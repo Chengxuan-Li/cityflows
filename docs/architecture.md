@@ -1639,6 +1639,17 @@ the engine's head choices without changing route search or its request/result co
 TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
 not contain the other per-vehicle timers).
 
+Roadside origin courtesy (TASK-131 trial). A roadside departure continuously checked as the
+eligible FIFO candidate for `gridlock.respawnS` may request one bounded gap. Access walking
+and intervals without head eligibility do not age that request. A safely stoppable road
+follower, fully on an external lane and without a movement grant, group clearance or parking
+motion, may hold outside both the full swept body envelope and the normal spawn spacing.
+The leader must already move and project clear within `boxWaitS`; the pre-clear hold lasts
+at most that window, with one request per owner/leader pair and one active hold per lane.
+Ordinary spawn, departure-room and insertion IDM checks alone authorize departure; the
+existing parking manoeuvre then proceeds normally. Loss of eligibility, a follower commitment
+or lane change, and live edits cancel the hold. A slowed leader cannot extend it indefinitely.
+
 Stop positions (TASK-072, TASK-094). `CLane.stopM` is where an ungranted vehicle stops. On a
 signalized approach with a served movement and a crossing, `stopM` is the crossing's far edge
 minus 0.5 m (`crossingSpan` in `src/network/crossings.ts`, shared with the renderer), so a
