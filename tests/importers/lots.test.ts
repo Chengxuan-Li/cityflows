@@ -2,9 +2,9 @@ import { expect, test } from 'vitest';
 import { compile } from '../../src/network';
 import { importOsm } from '../../src/importers/osm';
 import { openProject } from '../../src/project/open';
-import { saveProject } from '../../src/project/save';
+import { saveProject, saveProjectJson } from '../../src/project/save';
 import { defaultScenario } from '../../src/fixtures/scenarios';
-import { scenarioSchema } from '../../src/schema';
+import { allocateId, scenarioSchema } from '../../src/schema';
 
 export const lotXml = `<osm version="0.6">
   <bounds minlat="0" minlon="0" maxlat="0.002" maxlon="0.002"/>
@@ -239,6 +239,14 @@ test('late lot halves append to legacy ID order and survive save/open', async ()
   if (!reopened.ok) throw new Error('Reopened fixture invalid');
   expect(reopened.compiled.roads.map((r) => r.id)).toEqual(compiled.roads.map((r) => r.id));
   expect(reopened.compiled.lanes.map((l) => l.id)).toEqual(compiled.lanes.map((l) => l.id));
+  const json = await openProject(await saveProjectJson(opened.project));
+  if (!json.ok) throw new Error(json.error);
+  for (const city of [repaired.city, json.project.city]) {
+    const ids = [...Object.values(city.places), ...Object.values(city.parking ?? {})].flatMap(
+      (owner) => owner.connectors.map((c) => Number(c.id.slice(2))),
+    );
+    expect(Number(allocateId(city, 'c').slice(2))).toBeGreaterThan(Math.max(...ids));
+  }
 });
 test('refreshed directional aisle portals use car lanes without duplicate anchors', () => {
   const xml = sharedInterior.replace(
@@ -255,4 +263,33 @@ test('refreshed directional aisle portals use car lanes without duplicate anchor
   expect(lot.connectors.some((c) => c.lane === 1)).toBe(true);
   expect(lot.connectors.some((c) => c.direction !== 'out')).toBe(true);
   expect(lot.connectors.some((c) => c.direction !== 'in')).toBe(true);
+});
+
+test('multiple mapped joins keep a downstream turn restriction at the real end', () => {
+  const xml = sharedInterior
+    .replaceAll('lat="0.0012"', 'lat="0.0014"')
+    .replace(
+      '<nd ref="1"/><nd ref="2"/><nd ref="9"/>',
+      '<nd ref="1"/><nd ref="2"/><nd ref="25"/><nd ref="9"/>',
+    )
+    .replace(
+      '</osm>',
+      `<node id="25" lat="0.00125" lon="0.0003"/><node id="26" lat="0.00125" lon="0.0017"/>
+      <way id="16"><nd ref="25"/><nd ref="26"/><tag k="highway" v="service"/><tag k="service" v="parking_aisle"/></way>
+      <way id="15"><nd ref="9"/><nd ref="8"/><tag k="highway" v="service"/></way>
+      <relation id="20"><member type="way" ref="10" role="from"/><member type="node" ref="9" role="via"/><member type="way" ref="15" role="to"/><tag k="type" v="restriction"/><tag k="restriction" v="no_left_turn"/></relation></osm>`,
+    );
+  const result = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  expect(
+    Object.values(result.city.roads).filter((r) => r.provenance.osmIds?.includes(10)),
+  ).toHaveLength(6);
+  const end = Object.values(result.city.nodes).find((n) => n.provenance.osmIds?.includes(9))!;
+  const rule = end.turnRules.find((r) => r.provenance.osmIds?.includes(20))!;
+  expect(result.city.roads[rule.from]!.to).toBe(end.id);
+  expect(rule.allowed).toBe(false);
+  for (const node of Object.values(result.city.nodes).filter((n) =>
+    n.provenance.osmIds?.some((id) => [2, 25].includes(id)),
+  ))
+    expect(node.turnRules.some((r) => r.provenance.osmIds?.includes(20))).toBe(false);
 });

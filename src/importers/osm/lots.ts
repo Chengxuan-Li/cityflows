@@ -393,12 +393,7 @@ export function restoreLotJunctions(
     lot.connectors = [];
     lot.provenance.inferred = lot.provenance.inferred?.filter((value) => value !== 'driveway');
   }
-  connectCarExits(
-    { ...city, parking: Object.fromEntries(affected.map((lot) => [lot.id, lot])) },
-    result.compiled,
-    undefined,
-    true,
-  );
+  connectCarExits(city, result.compiled, undefined, new Set(affected.map((lot) => lot.id)));
   for (const lot of affected) {
     const retained = previous.get(lot.id)!;
     const used = new Set<string>();
