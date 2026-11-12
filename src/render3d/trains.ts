@@ -22,8 +22,8 @@ import { railElevation } from './rail';
 
 export class Trains3D {
   readonly group = new Group();
-  readonly body: InstancedMesh;
-  readonly roof: InstancedMesh;
+  body: InstancedMesh;
+  roof: InstancedMesh;
   private readonly matrix = new Matrix4();
   private readonly scale = new Vector3();
   private readonly rotation = new Euler(0, 0, 0, 'YXZ');
@@ -58,6 +58,25 @@ export class Trains3D {
     this.group.add(this.body, this.roof);
   }
   update(trains: TrainPose[], below: boolean, selected: string | null) {
+    const required = trains.reduce(
+      (sum, train) =>
+        sum +
+        train.cars.filter((car) => below || this.railHeights.grades[car.track] !== 'tunnel').length,
+      0,
+    );
+    if (required > this.body.instanceMatrix.count) {
+      const capacity = Math.max(required, this.body.instanceMatrix.count * 2);
+      const grow = (old: InstancedMesh) => {
+        const mesh = new InstancedMesh(old.geometry, old.material, capacity);
+        mesh.frustumCulled = false;
+        this.group.remove(old);
+        old.dispose();
+        return mesh;
+      };
+      this.body = grow(this.body);
+      this.roof = grow(this.roof);
+      this.group.add(this.body, this.roof);
+    }
     let count = 0;
     this.ids = [];
     for (const train of trains)

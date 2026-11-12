@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { button, city, importOsm, pageErrors } from './helpers';
 import { compileRail } from '../../src/network/rail';
 import { railTimetable, tramCensus } from '../../src/network/trams';
-import { trainsAt, trainPoint } from '../../src/network/trains';
+import { trainsAt, trainPoint, type TrainPose } from '../../src/network/trains';
 import type { Vec2 } from '../../src/geo/vec2';
 async function centre(page: Page, point: Vec2, view: '2d' | '3d', zoom = 2.3) {
   if (view === '3d') {
@@ -96,11 +96,23 @@ test('T76 Munich synthetic tram stops and inspector agree in 2D and 3D, then dep
     route = table.routes[event.d.route]!,
     focus = trainPoint(rail, route, event.s.positionM);
   await seek(page, event.time);
-  const time = (await page.evaluate(() => window.cityflows!.metrics())).timeS;
-  const pose = trainsAt(rail, table, time).find(
-    (p) => p.route === event.d.route && p.speedMps === 0,
-  )!;
+  const currentPose = async () => {
+    const snapshot = await page.evaluate(async () => window.cityflows!.snapshot!());
+    const controlled = (snapshot as typeof snapshot & { rail?: { trains: TrainPose[] } }).rail;
+    return (controlled?.trains ?? trainsAt(rail, table, snapshot.timeS)).find(
+      (p) =>
+        p.route === event.d.route &&
+        Math.abs(p.positionM - event.s.positionM) < 0.05 &&
+        p.speedMps < 0.01,
+    );
+  };
+  let pose = await currentPose();
+  for (let i = 0; !pose && i < 120; i++) {
+    await page.evaluate(() => window.cityflows!.step(50));
+    pose = await currentPose();
+  }
   expect(pose).toBeTruthy();
+  const time = (await page.evaluate(() => window.cityflows!.metrics())).timeS;
   await writeFile(
     info.outputPath('T76-munich-tram-census.json'),
     JSON.stringify(tramCensus(rail), null, 2),
@@ -108,11 +120,11 @@ test('T76 Munich synthetic tram stops and inspector agree in 2D and 3D, then dep
   for (const view of ['2d', '3d'] as const) {
     if (view === '3d') await button(page, '3D').click();
     const canvas = page.getByLabel(view === '2d' ? 'City map' : '3D city view', { exact: true });
-    await centre(page, focus, view, view === '2d' ? 8 : 35);
+    await centre(page, focus, view, view === '2d' ? 8 : 22);
     await expect
       .poll(async () => Number(await canvas.getAttribute('data-trams')))
       .toBeGreaterThan(0);
-    const screen = await page.evaluate((p) => window.cityflows!.worldToScreen!(p), pose.cars[1]!);
+    const screen = await page.evaluate((p) => window.cityflows!.worldToScreen!(p), pose!.cars[1]!);
     await canvas.click({ position: screen });
     const inspector = page.getByRole('region', { name: 'Train inspector' });
     await expect(inspector).toContainText('Synthetic service');

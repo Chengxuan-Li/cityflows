@@ -119,3 +119,33 @@ test('T64 instance capacity includes trains still in the city from earlier timet
   expect(layer.body.count).toBeGreaterThan(32);
   expect(layer.body.count).toBeLessThanOrEqual(layer.body.instanceMatrix.count);
 });
+
+test('T76 controlled service clocks grow both 3D batches without dropping actors and reset empty poses', () => {
+  const { city, compiled, rail } = fixture(),
+    table = trainTimetable(rail);
+  const layer = new Trains3D(rail, cityHeights(compiled, city), heightsOf(compiled, city), table);
+  const pose = trainsAt(rail, table, table.departures[0]!.timeS + 20)[0]!;
+  const oldBody = layer.body,
+    oldRoof = layer.roof;
+  let disposed = 0;
+  oldBody.addEventListener('dispose', () => disposed++);
+  oldRoof.addEventListener('dispose', () => disposed++);
+  const actors = Array.from({ length: 20 }, (_, i) => ({ ...pose, id: `controlled:${i}` }));
+  layer.update(actors, false, null);
+  const count = actors.length * pose.cars.length;
+  expect(layer.body.count).toBe(count);
+  expect(layer.roof.count).toBe(count);
+  expect(layer.body.instanceMatrix.count).toBeGreaterThanOrEqual(count);
+  expect(layer.roof.instanceMatrix.count).toBeGreaterThanOrEqual(count);
+  expect(layer.pick(count - 1).id).toBe('controlled:19');
+  expect(disposed).toBe(2);
+  expect(layer.group.children).toEqual([layer.body, layer.roof]);
+  expect(layer.body.geometry).toBe(oldBody.geometry);
+  expect(layer.roof.material).toBe(oldRoof.material);
+  layer.update([], false, null);
+  expect(layer.body.count).toBe(0);
+  expect(layer.roof.count).toBe(0);
+  layer.update([pose], false, null);
+  expect(layer.body.count).toBe(pose.cars.length);
+  expect(layer.pick(0).id).toBe(pose.id);
+});
