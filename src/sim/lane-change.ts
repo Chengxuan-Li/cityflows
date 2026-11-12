@@ -183,7 +183,13 @@ export function createLaneChanges(
   }
 
   /** Returns true when the vehicle gives its mandatory change up in this step. */
-  function propose(id: number, source: CLane, tick: number, discretionary: boolean) {
+  function propose(
+    id: number,
+    source: CLane,
+    tick: number,
+    discretionary: boolean,
+    requiredLane?: number,
+  ) {
     const crept = creeping[id]!;
     creeping[id] = 0;
     holding[id] = 0;
@@ -196,7 +202,10 @@ export function createLaneChanges(
     const positionM = vehicles.position[id]!;
     const cutoff = finalRoad ? Math.min(source.lengthM, destination.positionM) : source.lengthM;
     const remaining = cutoff - positionM;
-    const changesNeeded = changesToTargets(id, source.lane, step, finalRoad);
+    const changesNeeded =
+      requiredLane === undefined
+        ? changesToTargets(id, source.lane, step, finalRoad)
+        : Math.abs(compiled.lanes[requiredLane]!.lane - source.lane);
     const mandatory =
       remaining >= 0 &&
       changesNeeded > 0 &&
@@ -236,7 +245,10 @@ export function createLaneChanges(
         (standing ? positionM > lane.stopM + 1e-8 : lane.lengthM - positionM < idm.minGapM - 1e-8)
       )
         continue;
-      const changesAfter = changesToTargets(id, lane.lane, step, finalRoad);
+      const changesAfter =
+        requiredLane === undefined
+          ? changesToTargets(id, lane.lane, step, finalRoad)
+          : Math.abs(compiled.lanes[requiredLane]!.lane - lane.lane);
       // A discretionary change never adds a needed change, on any road (TASK-076).
       if (
         mandatory

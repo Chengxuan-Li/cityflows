@@ -1570,6 +1570,8 @@ Step sequence, in this order every step:
      when it enters the incumbent route's next road; replanning invalidates cached entry paths.
      Outstanding exit slots cannot exceed the lane's finite storage, including when a moving
      occupant's projected rear would lie beyond the lane end.
+     A required inner lane change targets the reserved movement's source lane, even when the
+     road route also accepts the current lane through a different downstream lane-change plan.
      Exit, gridlock recovery and live edits release the derived group reservations.
      A short external exit that cannot store the vehicle carries its clearance through any
      conflict-free uncontrolled continuations to downstream storage. A mainline merge keeps

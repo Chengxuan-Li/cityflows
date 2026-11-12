@@ -407,6 +407,103 @@ test('T68: an internally required safe lane change remains reachable through a g
   expect(engine.inspect(1)).toMatchObject({ state: 'completed', respawns: 0 });
 });
 
+test.each([0, 1])(
+  'T68: reserved inner lane %s overrides broader feasible road targets',
+  (chosen) => {
+    const { city, node, road, place } = buildCity('Specific clearance lane', 1);
+    const a = node(100, 0),
+      b = node(160, 0),
+      c = node(160, 60);
+    const entry = road(node(0, 0), a),
+      first = road(a, b, { lanes: 2 }),
+      second = road(b, c, { lanes: 2 }),
+      exit = road(c, node(160, 90), { lanes: 2 });
+    const provenance = { source: 'authored' } as const;
+    a.turnRules = [
+      { from: entry.id, to: first.id, allowed: false, provenance },
+      { from: entry.id, to: first.id, fromLane: 0, toLane: 0, allowed: true, provenance },
+    ];
+    for (const [at, from, to] of [
+      [b, first, second],
+      [c, second, exit],
+    ] as const)
+      at.turnRules = [
+        { from: from.id, to: to.id, allowed: false, provenance },
+        { from: from.id, to: to.id, fromLane: 0, toLane: 0, allowed: true, provenance },
+        { from: from.id, to: to.id, fromLane: 1, toLane: 1, allowed: true, provenance },
+      ];
+    city.junctionGroups = {
+      'jg:100': {
+        id: 'jg:100',
+        nodes: [a.id, b.id, c.id],
+        innerRoads: [first.id, second.id],
+        signal: null,
+        provenance,
+      },
+    };
+    place('Origin', 'gateway', a.pos, [{ road: entry, direction: 'out', positionM: 85 }]);
+    place('Destination', 'work', c.pos, [{ road: exit, lane: 1, direction: 'in', positionM: 15 }]);
+    const places = Object.values(city.places),
+      compiled = setup(city);
+    const provider = createRouteProvider();
+    const route = provider.route(compiled, freeFlowLinkCosts(compiled), {
+      fromLane: compiled.index.lane.get(`${entry.id}#0`)!,
+      fromPosM: 85,
+      toConnector: 1,
+      vehicleClass: 'car',
+      desiredSpeedFactor: 1,
+      noise: 0,
+      seed: 1,
+    });
+    if (!route.ok) throw new Error(route.reason);
+    expect(route.route.targetLanes[1]).toContain(compiled.index.lane.get(`${first.id}#0`));
+    expect(route.route.targetLanes[1]).toContain(compiled.index.lane.get(`${first.id}#1`));
+    const representative = compiled.movements.find(
+      (m) => m.id === `${first.id}#${chosen}>${second.id}#${chosen}`,
+    )!.idx;
+    const engine = createEngine();
+    engine.load({
+      compiled,
+      trips: [
+        {
+          id: 'trip:0',
+          personId: null,
+          originPlaceId: places[0]!.id,
+          destinationPlaceId: places[1]!.id,
+          departS: 100,
+          mode: 'car',
+          vehicleClass: 'car',
+          purpose: 'private',
+          legs: [],
+        },
+      ],
+      scenario: scenario(),
+      params: { maxReplans: 0 },
+      routeProvider: {
+        route(net, costs, request) {
+          const result = provider.route(net, costs, request);
+          // Both representatives are legal: lane 0 changes on the second inner road,
+          // while lane 1 changes on the first. Keep the broader feasible targets.
+          return result.ok && request.fromLane === compiled.index.lane.get(`${entry.id}#0`)
+            ? {
+                ...result,
+                route: {
+                  ...result.route,
+                  movements: result.route.movements.with(1, representative),
+                },
+              }
+            : result;
+        },
+      },
+    });
+    for (let i = 0; i < 1200; i++) {
+      engine.step();
+      sampleConflictZones(engine, compiled);
+    }
+    expect(engine.inspect(1)).toMatchObject({ state: 'completed', respawns: 0 });
+  },
+);
+
 test('T68: a group entry waits outside while its final exit is full, beyond boxWaitS', () => {
   const fixture = groupFixture(true);
   const engine = createEngine();

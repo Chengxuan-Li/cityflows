@@ -492,7 +492,12 @@ function createRun({
           !intersections.groupPaths[id] &&
           intersections.grants[id] === -1 &&
           lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM;
-        if (!laneChanges.propose(id, lane, tick, discretionary)) continue;
+        const cleared = intersections.groupPaths[id]?.movements.find(
+          (m) => compiled.lanes[compiled.movements[m]!.fromLane]!.road === lane.road,
+        );
+        const requiredLane =
+          cleared === undefined ? undefined : compiled.movements[cleared]!.fromLane;
+        if (!laneChanges.propose(id, lane, tick, discretionary, requiredLane)) continue;
         // Gave the change up: take the TASK-048 fallback from this lane, if there is one.
         planLane(id, lane.idx, vehicles.position[id]!);
         if (!fallback[id]) laneChanges.gaveUp[id] = 0;
