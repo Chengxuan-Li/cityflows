@@ -3,7 +3,7 @@ on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  traffic:
+  city:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -12,4 +12,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run test:traffic:light
+      - run: npm run test:city
+
