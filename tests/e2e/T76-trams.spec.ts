@@ -118,9 +118,12 @@ test('T76 Munich synthetic tram stops and inspector agree in 2D and 3D, then dep
     JSON.stringify(tramCensus(rail), null, 2),
   );
   for (const view of ['2d', '3d'] as const) {
-    if (view === '3d') await button(page, '3D').click();
+    if (view === '3d') {
+      await button(page, '3D').click();
+      await page.getByLabel('Buildings', { exact: true }).uncheck();
+    }
     const canvas = page.getByLabel(view === '2d' ? 'City map' : '3D city view', { exact: true });
-    await centre(page, focus, view, view === '2d' ? 8 : 22);
+    await centre(page, focus, view, view === '2d' ? 8 : 26);
     await expect
       .poll(async () => Number(await canvas.getAttribute('data-trams')))
       .toBeGreaterThan(0);

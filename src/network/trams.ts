@@ -1,5 +1,5 @@
 import type { RailGraph } from './rail';
-import { buildTimetable, trainTimetable, type TrainTimetable } from './trains';
+import { buildTimetable, trainTimetable, trainDefaults, type TrainTimetable } from './trains';
 
 export const buildTramTimetable = (rail: RailGraph) => buildTimetable(rail, 'tram');
 const trams = new WeakMap<RailGraph, TrainTimetable>();
@@ -57,6 +57,22 @@ export function tramCensus(rail: RailGraph, table = tramTimetable(rail)) {
       stops: r.stops.map((s) => ({ id: s.platform, name: s.name, arrivalS: s.arrivalS })),
       perHour: (table.departures.filter((d) => d.route === i).length * 3600) / table.periodS,
     })),
+    excludedReturnStops: table.routes.flatMap((r) =>
+      r.terminal === undefined
+        ? []
+        : r.stops
+            .filter(
+              (s) =>
+                s.haltM !== undefined &&
+                s.arrivalS <= r.turnaroundS! &&
+                s.haltM > r.lengthM - trainDefaults.tram.lengthM,
+            )
+            .map((s) => ({
+              route: r.id,
+              stop: s.platform,
+              reason: 'Halt is behind the leading cab after buffer turnaround',
+            })),
+    ),
     servedStops: [...served],
     unservedStops: (rail.tramStops ?? [])
       .filter((s) => !served.has(s.id))

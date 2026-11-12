@@ -642,8 +642,12 @@ tram timetable (`network/trams.ts`). `RailGraph.tramStops` carries the canonical
 Only tram sections with permitted continuations between extract boundary ends (or a lawful
 buffer return) receive service; disconnected fragments, service/depot tracks and closed loops
 without boundary entry remain excluded and reported by `tramCensus`. Stop attachment projects
-the mapped halt onto its named section; it never attaches by geographic track proximity or
-jumps between fragments. Defaults are a 36 m articulated tram (four 9 m sections), 50 km/h
+the mapped halt onto its named section and places the tram centre half a body length before
+it along the connected route, so its nose meets the halt marking in either travel direction.
+The centre may lie on a preceding section or outside the bounded extract; canonical halts stay
+unchanged. Buffer returns generate a separate reverse motion leg so the new leading cab meets
+each reachable halt, excluding return visits already behind that cab at turnaround. Attachment
+never uses geographic track proximity or jumps between fragments. Defaults are a 36 m articulated tram (four 9 m sections), 50 km/h
 ceiling (lower mapped limits apply), 1 m/s² acceleration/braking, 25 s dwell and 360 s nominal
 headway. Synthetic direction labels name the final served stop toward the city edge; mapped
 line labels are not presented as mapped route destinations. The existing train-only timetable
