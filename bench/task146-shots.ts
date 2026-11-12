@@ -52,7 +52,7 @@ try {
       document.body.append(overlay);
     }, { text, labels });
   };
-  const hide = await page.addStyleTag({ content: 'body *{visibility:hidden!important}canvas.map[aria-hidden="false"],canvas.map3d,#audit-caption,#audit-caption *{visibility:visible!important}' });
+  const hide = await page.addStyleTag({ content: 'body *{visibility:hidden!important}canvas.map[aria-hidden="false"],canvas[data-view="3d"],#audit-caption,#audit-caption *{visibility:visible!important}' });
   for (const shot of [
     { id: 'locator-2d', center: [140, -410] as [number, number], zoom: 2.4, labels: [{ text: 'Donnersbergerbrücke / Landshuter Allee', x: 15, y: -220 }, { text: 'Arnulfstraße westbound ← · 2→3→5 lanes', x: 270, y: -535 }, { text: 'Historical n:638 complex', x: 85, y: -568 }, { text: 'Eastbound → · 2 lanes', x: 220, y: -455 }] },
     { id: 'gain-close-2d', center: [174, -515] as [number, number], zoom: 9, labels: [{ text: '5 lanes · r:654 · way 134171421 · ← WEST', x: 112, y: -554 }, { text: '3 lanes · r:698 · way 146018786 · ← WEST', x: 215, y: -520 }, { text: 'n:652 · 3→5', x: 165, y: -544 }, { text: 'Eastbound → · r:680 · way 134583817 · 2 lanes', x: 178, y: -483 }] },
@@ -63,10 +63,10 @@ try {
   }
   await hide.evaluate(el => el.remove());
   await page.getByRole('button', { name: '3D', exact: true }).click();
-  await page.waitForFunction(() => !!window.cityflows?.view3D?.(), {}, { timeout: 120000 });
-  await page.evaluate(() => window.cityflows!.setView3D!({ x: 170, y: -516 }, 10, 35, 0));
-  await frames();
-  await page.addStyleTag({ content: 'body *{visibility:hidden!important}canvas.map3d,#audit-caption,#audit-caption *{visibility:visible!important}' });
+  await page.waitForFunction(() => !!window.cityflows?.view3D?.() && !!document.querySelector('canvas[data-view="3d"]')?.getAttribute('data-build-ms'), {}, { timeout: 120000 });
+  await page.evaluate(() => window.cityflows!.setView3D!({ x: 170, y: -516 }, 15, 35, 0));
+  await page.evaluate(async () => { for (let i=0;i<30;i++) await new Promise(r => requestAnimationFrame(r)); });
+  await page.addStyleTag({ content: 'body *{visibility:hidden!important}canvas[data-view="3d"],#audit-caption,#audit-caption *{visibility:visible!important}' });
   await caption(`TASK-146 · ${phase} · real CityFlows 3D view · north up · westbound ← · r:698 (3 lanes) → r:654 (5), OSM 146018786 → 134171421`);
   await page.screenshot({ path: `${out}/${phase}-gain-close-3d.png` });
   writeFileSync(`${out}/${phase}-browser.json`, JSON.stringify({ errors, phase, scenario: 'paused; zero demand; no simulation steps', cameras: { locator: [140, -410, 2.4], close2d: [174, -515, 9], close3d: [170, -516, 10, 35, 0] } }, null, 2));
