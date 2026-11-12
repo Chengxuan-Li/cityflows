@@ -7,6 +7,7 @@ import { createRailCrossings, CROSSING_OPEN, CROSSING_CLOSED } from '../../src/s
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { railTimetable } from '../../src/network/trams';
+import { patchChanges } from '../../src/sim/patch';
 import { setup, trips } from './fixtures';
 
 test.each(['rail', 'tram'] as const)(
@@ -291,7 +292,7 @@ test('T75 a long rear stays protected across a lane boundary after its route is 
   vehicles.state[0] = DRIVING;
   vehicles.vclass[0] = 2;
   vehicles.insert(0, laneBefore, compiled.lanes[laneBefore]!.lengthM - 1);
-  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 175, () => false)!;
+  let control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 175, () => false)!;
   control.step(175);
   vehicles.remove(0);
   vehicles.insert(0, laneAfter, 2);
@@ -303,6 +304,27 @@ test('T75 a long rear stays protected across a lane boundary after its route is 
   expect(held.railReady[0]).toBe(0);
   expect(held.trains[0]!.speedMps).toBe(0);
   expect(facility.spans!.some((s) => s.segment === laneBefore)).toBe(true);
+  // A new unrelated road shifts dense indices; a paused edit must retain the actual rear.
+  const added = road(node(1000, 1000), node(1100, 1000));
+  delete city.roads[added.id];
+  city.roads['r:1'] = { ...added, id: 'r:1' };
+  city.version++;
+  const next = setup(city),
+    mapping = patchChanges(compiled, next);
+  const clocks = control.clocks(),
+    roadState = control.roadState(mapping);
+  vehicles.resetSegments(next.lanes.length, next.movements.length);
+  vehicles.insert(0, mapping.lanes[laneAfter]!, 2);
+  control = createRailCrossings(
+    next,
+    vehicles,
+    DEFAULT_SIM_PARAMS,
+    215,
+    () => false,
+    clocks,
+    roadState,
+  )!;
+  expect(control.snapshot()).toEqual(held);
   vehicles.position[0] = 25;
   for (let i = 0; i < 400; i++) control.step(215 + i * 0.1);
   expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);

@@ -1352,6 +1352,7 @@ function createRun({
       time(),
       (m) => intersections.red(m),
       railCrossings?.clocks(),
+      railCrossings?.roadState(changes),
     );
     return result;
   }
