@@ -20,6 +20,7 @@ import { clipPart, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
 import { createRoads, roadSpecs } from './roads';
 import { junctions, splitWay } from './split';
+import { joinLotAisles } from './lot-junctions';
 
 export const surfaceLot = (tag: OsmTags) =>
   tag.amenity === 'parking' &&
@@ -207,10 +208,22 @@ export function addLots(
       }
     }
   }
+  joinLotAisles(
+    city,
+    data,
+    publicRoads,
+    lots.flatMap((lot, i) => lot.aisles!.map((id) => ({ id, holes: shapes[i]!.holes }))),
+    diagnostics,
+    compiled,
+  );
+  for (const road of publicRoads) {
+    publicNodes.add(road.from);
+    publicNodes.add(road.to);
+  }
   const aisleIds = new Set(lots.flatMap((lot) => lot.aisles!));
   // A new mouth can consume a short road's existing connector. Keep that mapped access
   // disconnected and diagnose it rather than moving an unrelated place or its demand.
-  const attached = compiled ? { ok: true as const, compiled } : compile(city);
+  const attached = compiled && !includeAisles ? { ok: true as const, compiled } : compile(city);
   if (!attached.ok) {
     const blocked = new Set(
       attached.diagnostics
@@ -253,7 +266,7 @@ export function addLots(
     }
   }
   // Entry reachability propagates through the mapped aisle network, including one-way direction.
-  const withAisles = compiled ? { ok: true as const, compiled } : compile(city);
+  const withAisles = attached.ok ? attached : compile(city);
   if (!withAisles.ok) return;
   for (const lot of lots) {
     const aisleNodes = new Set(

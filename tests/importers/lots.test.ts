@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { compile } from '../../src/network';
 import { importOsm } from '../../src/importers/osm';
 
 export const lotXml = `<osm version="0.6">
@@ -60,3 +61,124 @@ test.each(['<tag k="oneway" v="-1"/>', '<tag k="access" v="no"/>'])(
     expect(lot.connectors).toHaveLength(1);
   },
 );
+
+// The public service road passes through the aisle's endpoint, rather than ending there.
+const sharedInterior = lotXml
+  .replace('<tag k="highway" v="residential"/>', '<tag k="highway" v="service"/>')
+  .replace('<node id="1" lat="0.001" lon="0.0001"/>', '<node id="1" lat="0.0009" lon="0.0003"/>')
+  .replace('<node id="9" lat="0.0018" lon="0.0018"/>', '<node id="9" lat="0.0015" lon="0.0003"/>')
+  .replace(
+    '<way id="10"><nd ref="1"/><nd ref="2"/>',
+    '<way id="10"><nd ref="1"/><nd ref="2"/><nd ref="9"/>',
+  );
+
+test.each([false, true])(
+  'a mapped interior lot join connects the real service road (one-way aisle: %s)',
+  (oneway) => {
+    const xml = sharedInterior.replace(
+      '<tag k="access" v="customers"/></way>',
+      `${oneway ? '<tag k="oneway" v="yes"/>' : ''}<tag k="access" v="customers"/></way>`,
+    );
+    const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+    if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+    const { city } = imported;
+    const join = Object.values(city.nodes).find((n) => n.provenance.osmIds?.includes(2))!;
+    const publicRoads = Object.values(city.roads).filter((r) => r.provenance.osmIds?.includes(10));
+    const aisles = Object.values(city.roads).filter((r) => r.provenance.osmIds?.includes(11));
+    expect(publicRoads).toHaveLength(4);
+    expect(publicRoads.every((r) => r.from === join.id || r.to === join.id)).toBe(true);
+    expect(aisles).toHaveLength(oneway ? 1 : 2);
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const { compiled } = result;
+    const pairs = compiled.movements.map((m) => [
+      compiled.roads[compiled.lanes[m.fromLane]!.road]!.id,
+      compiled.roads[compiled.lanes[m.toLane]!.road]!.id,
+    ]);
+    expect(
+      pairs.some(
+        ([from, to]) => publicRoads.some((r) => r.id === from) && aisles.some((r) => r.id === to),
+      ),
+    ).toBe(true);
+    if (!oneway)
+      expect(
+        pairs.some(
+          ([from, to]) => aisles.some((r) => r.id === from) && publicRoads.some((r) => r.id === to),
+        ),
+      ).toBe(true);
+  },
+);
+
+test('a grade-separated aisle does not gain an interior service-road join', () => {
+  const xml = sharedInterior.replace(
+    '<tag k="access" v="customers"/></way>',
+    '<tag k="layer" v="1"/><tag k="access" v="customers"/></way>',
+  );
+  const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+  expect(
+    Object.values(imported.city.roads).filter((r) => r.provenance.osmIds?.includes(10)),
+  ).toHaveLength(2);
+});
+
+test('a same-grade aisle cannot attach an overpass sibling through their shared node', () => {
+  const xml = sharedInterior.replace(
+    '</osm>',
+    '<way id="16"><nd ref="2"/><nd ref="5"/><tag k="highway" v="service"/><tag k="service" v="parking_aisle"/><tag k="layer" v="1"/></way></osm>',
+  );
+  const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+  expect(
+    Object.values(imported.city.roads).filter((r) => r.provenance.osmIds?.includes(10)),
+  ).toHaveLength(2);
+});
+
+test('a bus-only public lane cannot supply a car lot junction', () => {
+  const xml = sharedInterior
+    .replace(
+      '<tag k="highway" v="service"/></way>',
+      '<tag k="highway" v="service"/><tag k="bus:lanes:forward" v="designated"/><tag k="bus:lanes:backward" v="designated"/></way>',
+    )
+    .replace(
+      '</osm>',
+      '<way id="17"><nd ref="8"/><nd ref="9"/><tag k="highway" v="service"/></way></osm>',
+    );
+  const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+  const roads = Object.values(imported.city.roads).filter((r) => r.provenance.osmIds?.includes(10));
+  expect(roads.every((r) => !r.lanes[0]!.allowed.includes('car'))).toBe(true);
+  expect(roads).toHaveLength(2);
+});
+
+test('splitting a one-way service street does not create a reverse direction', () => {
+  const xml = sharedInterior.replace(
+    '<tag k="highway" v="service"/></way>',
+    '<tag k="highway" v="service"/><tag k="oneway" v="yes"/></way>',
+  );
+  const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+  const publicRoads = Object.values(imported.city.roads).filter((r) =>
+    r.provenance.osmIds?.includes(10),
+  );
+  expect(publicRoads).toHaveLength(2);
+  const end = Object.values(imported.city.nodes).find((n) => n.provenance.osmIds?.includes(9))!;
+  expect(publicRoads.some((r) => r.from === end.id)).toBe(false);
+});
+
+test('a restored lot junction leaves a real downstream restriction at its original endpoint', () => {
+  const xml = sharedInterior.replace(
+    '</osm>',
+    `<way id="15"><nd ref="9"/><nd ref="8"/><tag k="highway" v="service"/></way>
+    <relation id="20"><member type="way" ref="10" role="from"/><member type="node" ref="9" role="via"/><member type="way" ref="15" role="to"/><tag k="type" v="restriction"/><tag k="restriction" v="no_left_turn"/></relation></osm>`,
+  );
+  const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+  const node = Object.values(imported.city.nodes).find((n) => n.provenance.osmIds?.includes(9))!;
+  const rule = node.turnRules.find((r) => r.provenance.osmIds?.includes(20))!;
+  expect(rule).toBeDefined();
+  expect(imported.city.roads[rule.from]!.to).toBe(node.id);
+  expect(imported.city.roads[rule.to]!.from).toBe(node.id);
+  expect(rule.allowed).toBe(false);
+  const join = Object.values(imported.city.nodes).find((n) => n.provenance.osmIds?.includes(2))!;
+  expect(join.turnRules.some((r) => r.provenance.osmIds?.includes(20))).toBe(false);
+});

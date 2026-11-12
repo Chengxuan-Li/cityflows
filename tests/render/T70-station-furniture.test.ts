@@ -372,7 +372,7 @@ test.each(tierCities(['munich-donnersberger']))(
       cc = compiled(city),
       furniture = placeStationFurniture(cc, city);
     expect(JSON.stringify(city)).toBe(snapshot);
-    expect(furniture.platforms.map((p) => p.platform)).toEqual(['rp:10743', 'rp:10744']);
+    expect(furniture.platforms.map((p) => p.platform)).toEqual(['rp:10748', 'rp:10749']);
     expect(furniture.entrances).toHaveLength(3);
     expectOnPlatform(city, furniture.platforms);
     for (const p of furniture.platforms) {
@@ -398,13 +398,13 @@ test.each(tierCities(['munich-donnersberger']))(
     // 07:00: the next three S-Bahn departures per platform, from the TASK-127 timetable.
     const rail = cc.rail!,
       table = trainTimetable(rail);
-    expect(table.hash).toBe('0d505d0f');
-    expect(departureDisplay(rail, table, 'rp:10743', 25200).rows).toEqual([
+    expect(table.hash).toBe('03dea95c');
+    expect(departureDisplay(rail, table, 'rp:10748', 25200).rows).toEqual([
       'S-Bahn W     now',
       'S-Bahn W   5 min',
       'S-Bahn W   9 min',
     ]);
-    expect(departureDisplay(rail, table, 'rp:10744', 25200).rows).toEqual([
+    expect(departureDisplay(rail, table, 'rp:10749', 25200).rows).toEqual([
       'S-Bahn E   3 min',
       'S-Bahn E   7 min',
       'S-Bahn E  11 min',
