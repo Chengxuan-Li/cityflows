@@ -55,9 +55,16 @@ test('T63 Munich at 08:30 shows a searching car’s claimed strip space', async 
   );
   await page.screenshot({ path: info.outputPath('claim-inspector.png') });
   await button(page, 'Close inspector').click();
-  // Main's most rejected strip space: ten rejections before claims.
-  const chased = result.compiled.parkingSpaces![1115]!;
-  expect(result.compiled.parking[chased.parking]!.id).toBe('pk:9184');
+  // The pre-claims run rejected this bay ten times. The way spans several parking strips.
+  const chased = result.compiled.parkingSpaces!.find((space) => {
+    const facility = result.compiled.parking[space.parking]!;
+    return (
+      facility.kind === 'roadside' &&
+      facility.source.provenance.osmIds?.includes(704167778) &&
+      Math.hypot(space.position.x + 365.42, space.position.y - 418.36) < 0.1
+    );
+  });
+  if (!chased) throw new Error('Missing reference bay on OSM way 704167778');
   await placeCamera(page, [chased.position.x, chased.position.y], 12);
   await clickWorld(page, chased.position);
   await expect(inspector.locator('dt', { hasText: /^Kind$/ }).locator('+ dd')).toHaveText(
