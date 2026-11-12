@@ -53,10 +53,10 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
     // paint moves and no longer equals main's.
     // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
     // and e4654d8 (merging lanes kept on a group's inner roads).
-    // TASK-146 fixes overlapping adjacent-addition paint, shared by all three themes.
+    // TASK-144 lot geometry plus TASK-146 renderer-only addition paint; physical pins stay fixed.
     expect(paintHash(shapes)).toBe(
       name === 'munich'
-        ? '15293ac8347ee4983676e133b311b7292702d30cc7b9c6bad73fafb69b262091'
+        ? '50eedcfb4d77e413aef53060f248952f88c60fa95f50635d47f724789ba7da35'
         : 'ec9a6401eb2184d37e39094c177a6c01582c44cf83477b887c25fa6a67b2554f',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');

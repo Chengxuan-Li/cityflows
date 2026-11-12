@@ -168,9 +168,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | done with TASK-142 (lead review below) |
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
-| [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | in progress |
+| [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | two public joins restored |
 | [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
-| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | paint repair in review |
+| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | renderer-only paint repair verified |
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | in progress on PR branch |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -3331,9 +3331,12 @@ TASK-144 reproduced a missing southern entrance on aisle way 159640404. Its nort
 entrance already served the lot. The candidate joins the southern endpoint at OSM
 node 1717584268 to service way 159640408 and restores a second shared node, 1717561493,
 lost when two public ways were joined. Three fixed gateway round trips completed through
-parking, dwell and departure. The seed-1 light traffic run at `86db4f3` recorded 4138
-completions, 35 gridlocks and zero stalled heads. Review of the city geometry and routing
-oracles continues. [Traffic run](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305180358).
+parking, dwell (457, 487 and 491 seconds) and departure. The reviewed late split recorded
+3964 completions, 32 gridlocks and zero stalled heads in the original gate. Every original
+road and lane index, all four sampled seeds' road-noise values, the 96 unrestricted route
+paths and costs and the complete train timetable match the parent. Ten more complex
+Munich joins and sixteen Sindelfingen candidates remain diagnosed.
+[Parking audit](https://github.com/Chengxuan-Li/cityflows/pull/4).
 
 TASK-145 reproduced excess 3D rail frame time on the default Playwright SwiftShader
 backend in both the stationary and moving cameras. A delayed observer callback dropped
@@ -3365,7 +3368,9 @@ eased the two added lane centres a second time when drawing their strips, separa
 shared edge by 1.058 m. The first repair moved a pedestrian corner and left three stalled
 heads in the Munich gate. The replacement corrects the paint and corridor outlines only.
 The complete compiled vehicle and pedestrian graphs of both cities match the clean control.
-Four carriageways use the corrected display geometry.
+Four carriageways use the corrected display geometry. The final original traffic tier meets
+its zero-stalled-head gate. Check, city and all 37 light browser cases passed.
+[Lane-gain audit](https://github.com/Chengxuan-Li/cityflows/pull/3).
 
 TASK-144's first candidate changed synthetic S-Bahn departure offsets by shifting rail
 node IDs. The unchanged T70 departure-row assertion exposed it. The replacement restores

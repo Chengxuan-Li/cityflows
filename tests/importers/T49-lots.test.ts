@@ -27,8 +27,8 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // removed and `nextId` 14 lower, the city hash is dfd83d49…, and the compile hash is unchanged.
 const baseline = {
   'munich-donnersberger': [
-    '8c2436d148f2dfa7d42f51d3acb4d1944df250da6f33f8795f357af5bcb9cbbe',
-    'e2ba49f664cf5536c78374fa960172ff7a98d861e3e1e5ebc24a3be91715d2fa',
+    'e19120f7fe0bfd0234347915a5e7e57b3c999831aef84017e16e88ed14a09258',
+    '4dd70640b0655f6de9e829aa01970db20cc1fd8e117da9ace4c83e46fb35c43f',
   ],
   'sindelfingen-a81': [
     'eda6809b6682636376c1b9d6ee2333a2b88fc8776f6cd7340efabaf52888df0f',
@@ -37,7 +37,7 @@ const baseline = {
 };
 
 test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
-  'T49 %s: aisles are the only network change; city counts and capacity estimates',
+  'T49 %s: aisles and mapped public joins preserve the contracted network; counts and capacity',
   (name) => {
     const imported = importOsmCached(readFileSync('fixtures/osm/' + name + '.osm', 'utf8'), {
       importerVersion: '1',
