@@ -1,0 +1,3 @@
+# TASK-146 — Westbound lane gain near Donnersbergerbrücke
+
+After TASK-144 and TASK-145, locate the historical westbound approach east of n:638 by coordinates, mapped ways and direction. The old node identifier is absent from today's compiled Munich map. Trace OSM directional lane counts, turn markings, compiled lanes and legal movements against both browser views. Distinguish a mapped lane gain, faulty import or drawing error; repair a demonstrated defect within this surface and prove the result. Supply location, way IDs, direction of travel and clear 2D/3D shots including a wider locator view. Keep B56 simulation and held branches separate. Use ports 5346/5446.

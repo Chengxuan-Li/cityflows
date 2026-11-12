@@ -1,0 +1,3 @@
+# TASK-147 — Repair the traffic failures on PR 1
+
+Work from the reviewed head of PR #1. Inspect its failed CI assertions and reproduce a crossing-specific cause under real Munich load. Fix the underlying behavior while preserving the crossing and scheduled-tram contract, all warning and physical-clearance guarantees, and the unchanged seed-1 traffic gate and T63. Validate T75/T76 and the official traffic tests, including T21/T53 and a physical replay if admission changes. Report causal evidence, counts, timings and limitations. Submit reviewed changes to the PR branch through the lead. PR #1 stays held from main; TASK-128 through TASK-130 and B56 remain untouched. Coordinate substantial local runs around TASK-145's quiet measurements.

@@ -168,9 +168,15 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | done with TASK-142 (lead review below) |
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
+| [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | in progress |
+| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | in progress |
+| [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | queued |
+| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | in progress on PR branch |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
+
+The November 12 audit wave runs TASK-144 and TASK-145 in parallel. TASK-147 investigates the held PR independently. Reserve local hardware for the timed rendering runs. TASK-146 follows the first two audits.
 
 Tasks in the same wave run in parallel on disjoint file surfaces. A wave starts when every
 dependency of its tasks is merged to `main`.
@@ -1092,6 +1098,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 
 | Task | Harness | Model | Effort | e2e port |
 | --- | --- | --- | --- | --- |
+| TASK-144 / TASK-145 / TASK-146 / TASK-147 | Codex | GPT-6.1 Sol | high | 5344 / 5345 / 5346 / 5347 (production +100) |
 | TASK-136 crossing control and equipment | Codex | GPT-6.1 Sol | high | 5344/5444 and 5346/5446 |
 | TASK-138 tram service | Codex | GPT-6.1 Sol | high | 5348/5448 |
 | TASK-131 Phase 3 / B56 | Codex | GPT-6.1 Sol | high | 5332 (production 5432) |
