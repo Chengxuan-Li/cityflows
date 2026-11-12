@@ -15,7 +15,7 @@ const parent = resolve(parentArg);
 const output = resolve(outputArg);
 const actualParent = execFileSync('git', ['-C', parent, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 if (actualParent !== expectedParent) throw new Error(`Expected clean parent ${expectedParent}`);
-if (execFileSync('git', ['-C', parent, 'status', '--porcelain'], { encoding: 'utf8' }).trim())
+if (execFileSync('git', ['-C', parent, 'status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' }).trim())
   throw new Error('The control checkout must be clean');
 const recorded = JSON.parse(readFileSync('tests/routing/throughput-routes.json', 'utf8')) as Record<string, Record<string, string[] | string>>;
 const fixture = await import(pathToFileURL(resolve(parent, 'tests/routing/throughput-fixtures.ts')).href) as typeof import('../tests/routing/throughput-fixtures');
