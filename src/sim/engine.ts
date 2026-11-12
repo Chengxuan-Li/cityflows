@@ -14,6 +14,7 @@ import { vehicleClasses, vehiclePurposes, type SimParams, type TripRequest } fro
 import { createConnectors } from './connectors';
 import { stateHash } from './hash';
 import { idmAcceleration } from './idm';
+import { createOriginCourtesy } from './origin-courtesy';
 import { createIntersections, type IntersectionObserver } from './intersection';
 import { createLaneChanges } from './lane-change';
 import { createLinkCosts } from './link-costs';
@@ -144,6 +145,13 @@ function createRun({
     routeVersion: () => costs.version,
   });
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
+  const originCourtesy = createOriginCourtesy(
+    compiled,
+    vehicles,
+    params,
+    parking,
+    (id) => hasGrant(id) || !!intersections.groupPaths[id],
+  );
   let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
@@ -451,13 +459,12 @@ function createRun({
     }
     return true;
   }
-  const spawnGap = originObserver
-    ? (connector: CConnector, id: number) => {
-        const gap = hasSpawnGap(connector, id);
-        originObserver(id, connector, gap);
-        return gap;
-      }
-    : hasSpawnGap;
+  const spawnGap = (connector: CConnector, id: number) => {
+    const gap = hasSpawnGap(connector, id);
+    originCourtesy.consider(id, connector, gap, time());
+    originObserver?.(id, connector, gap);
+    return gap;
+  };
 
   function releaseTrip(id: number, connector: CConnector, timeS: number) {
     const { lane, positionM } = connector;
@@ -680,6 +687,23 @@ function createRun({
             ),
           );
         }
+        const courtesy = lane ? originCourtesy.hold(id) : null;
+        if (courtesy) {
+          limit[id] = Math.min(limit[id]!, courtesy.frontM);
+          acceleration[id] = Math.min(
+            acceleration[id]!,
+            Math.max(
+              -params.mobil.safeDecelMps2,
+              idmAcceleration(
+                driving.idm,
+                vehicles.speed[id]!,
+                desiredSpeed,
+                0,
+                courtesy.frontM + idm.minGapM - position,
+              ),
+            ),
+          );
+        }
         // A grant removes the virtual stop line on the next step. Predict its motion
         // from physical following, including for grants awarded later in this resolve.
         // Evaluate at the capped speed: free-flow braking toward a lower limit is not a stop.
@@ -723,6 +747,7 @@ function createRun({
           movement &&
           !laneChanges.holding[id] &&
           requester === -1 &&
+          !courtesy &&
           !granted &&
           (ahead === -1 ||
             intersections.grants[ahead] !== -1 ||
@@ -1287,6 +1312,7 @@ function createRun({
     connectors.patch(next);
     accounting.patch(next);
     compiled = next;
+    originCourtesy.patch(next);
     rerouter.patch(next);
     vehicles.resetSegments(next.lanes.length, next.movements.length);
     merges = createMerges(next, vehicles, params, (id, ramp, movement) =>
@@ -1491,6 +1517,7 @@ function createRun({
         persons.step(timeS);
         walkers?.step(timeS);
         connectors.spawn(timeS, spawnGap, releaseTrip);
+        originCourtesy.refresh(timeS);
         rerouter.updateEdits(timeS, editChecked);
         rerouter.update(timeS, (id) => {
           if (intersections.grants[id] !== -1) intersections.release(id);
