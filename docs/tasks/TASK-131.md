@@ -233,7 +233,17 @@ with its reason.
 Use the TASK-130 checkpoint as trace evidence. Keep its branch held. The agent owns the
 simulation work for the combined task, including TASK-130's in-scope sim files. Trace the
 first refusal that closes the loop on current main and after changing group admission.
-The routing contract, including the proposed `avoidEntryLane`, requires a separate decision.
+**Routing follow-up (2026-11-12).** The owner delegated the next decision to the lead.
+At a timed-out ordinary turn whose legal fallback route returns to the same blocked
+approach road, compare it with a legal suffix from the same landing lane that bypasses
+that road. Start with the observed r:671 case. Establish whether a bypass exists under
+the actual access rules, destination and live costs. Retain the existing fallback if
+the constrained search fails. Keep the 30 s timeout and all safe-gap checks.
+The agent may change `src/routing`, its request type, §7, §8 and focused routing/sim
+tests for this experiment. Preserve unconstrained callers and measure actual uses,
+route requests, completed trips and all six waits. Revert an ineffective policy.
+Independent diagnostics trace queues before first departure and physical blockers
+beyond the grouped exit. Report the first reproducible cause before changing a rule.
 Preserve signal, walker, access and lane-change safety and the seed-1 traffic gate. Run the
 T66 cycle and T68 group cases, and the TASK-130 measurements and gates as well as those
 below. The live T53 limit is 6% (report the measured cost); the tighter B56 step-time
