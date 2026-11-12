@@ -118,40 +118,50 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
   expect(station.name).toBe('Donnersbergerbrücke');
   const doors = station.station!.entrances.map((id) => source.walk!.nodes[id]!.pos);
   const rail = compileRail(source)!;
-  const { stops } = stationRiders(source, defaultScenario('grid5x5'));
-  const doorS = new Map(stops.map((s) => [`${s.platform}@${Math.round(s.arrivalS)}`, s.doorS]));
+  // The import wizard's scenario: the grid default at a 0.15 demand scale.
+  const scenario = defaultScenario('grid5x5');
+  scenario.demand.personsPerResident = 0.15;
+  const { trips } = stationRiders(source, scenario);
   await button(page, 'Layers').click();
   const layers = page.getByRole('region', { name: 'Map layers' });
   for (const label of ['Basemap', 'Entrances and exits'])
     await layers.getByLabel(label, { exact: true }).uncheck();
   await page.keyboard.press('Escape');
 
-  // The first S-Bahn stop at the station after 07:15, and its riders 20 s after they leave.
+  // The first S-Bahn stop at the station after 07:15, while its riders stream out: they get off
+  // along the whole train, so they reach the entrances over about two minutes.
   const arrival = stationArrivals(rail, trainTimetable(rail), 7.25 * 3600, 8 * 3600).find(
     (a) => a.kind === 'sbahn' && station.station!.platforms.includes(a.platform),
   )!;
-  const key = `${arrival.platform}@${Math.round(arrival.arrivalS)}`;
-  await seek(page, arrival.arrivalS + doorS.get(key)! + 20);
-  const fresh = (await riderWalkers(page)).filter(
-    (w) => riderOf(w.personId)!.arrivalS === Math.round(arrival.arrivalS),
+  const out = trips.filter(
+    (t) => t.id.endsWith(':out') && riderOf(t.personId!)!.arrivalS === Math.round(arrival.arrivalS),
   );
-  expect(fresh.length).toBeGreaterThan(0);
+  expect(out.length).toBeGreaterThan(1);
+  const leftS = new Map(out.map((t) => [t.personId!, t.departS]));
+  const order = [...leftS.values()].sort((a, b) => a - b);
+  const timeS = order[Math.floor(order.length / 2)]! + 15;
+  await seek(page, timeS);
+  const fresh = (await riderWalkers(page)).filter((w) => leftS.has(w.personId));
+  expect(fresh.length).toBe(order.filter((s) => s <= timeS).length);
   for (const w of fresh) {
-    // At an entrance, not on the tracks or in the station's middle.
-    expect(Math.min(...doors.map((d) => distance(d, w)))).toBeLessThan(35);
-    expect(distance(arrival.middle, w)).toBeGreaterThan(100);
+    // Each started at an entrance, not on the tracks or in the station's middle: no farther from
+    // the nearest entrance than it has walked since.
+    const walked = (timeS - leftS.get(w.personId)!) * 1.4;
+    expect(Math.min(...doors.map((d) => distance(d, w)))).toBeLessThanOrEqual(walked + 5);
+    expect(distance(arrival.middle, w)).toBeGreaterThan(20);
   }
-  const door = doors.reduce((best, d) =>
-    fresh.filter((w) => distance(d, w) < 35).length >
-    fresh.filter((w) => distance(best, w) < 35).length
-      ? d
-      : best,
-  );
+  const near = (d: Vec2) => fresh.filter((w) => distance(d, w) < 60).length;
+  const door = doors.reduce((best, d) => (near(d) > near(best) ? d : best));
+  const group = fresh.filter((w) => distance(door, w) < 60);
+  const focus = {
+    x: (door.x + group.reduce((n, w) => n + w.x, 0) / group.length) / 2,
+    y: (door.y + group.reduce((n, w) => n + w.y, 0) / group.length) / 2,
+  };
   const map = page.getByLabel('City map', { exact: true });
-  await centre2D(page, door, 7);
+  await centre2D(page, focus, 20);
   await shot(map, info, 'riders-leaving-2d.png');
 
-  const rider = fresh.find((w) => distance(door, w) < 35)!;
+  const rider = fresh.sort((a, b) => distance(door, a) - distance(door, b))[0]!;
   const at = await page.evaluate((p) => window.cityflows!.worldToScreen!(p), {
     x: rider.x,
     y: rider.y,
@@ -173,7 +183,7 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
   await expect(canvas).toHaveAttribute('data-view', '3d');
   await expect(canvas).not.toHaveAttribute('data-walkers', '0');
   const frames = Number(await canvas.getAttribute('data-frames'));
-  await page.evaluate((point) => window.cityflows!.setView3D!(point, 9, 45, 300), door);
+  await page.evaluate((point) => window.cityflows!.setView3D!(point, 16, 50, 0), focus);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-frames')))
     .toBeGreaterThan(frames);

@@ -44,13 +44,16 @@ unitTest('T65 riders leave the station only after an S-Bahn stop, by the stated 
   const sbahn = table.routes.findIndex((r) => r.kind === 'sbahn');
   const route = table.routes[sbahn]!,
     stop = route.stops[0]!;
-  const middle = trainPoint(rail, route, stop.positionM);
-  const doorS =
-    (Math.min(
-      ...station.station!.entrances.map((id) => distance(middle, city.walk!.nodes[id]!.pos)),
-    ) *
+  // The platform-to-door walk: straight line x 1.3 at walking speed to the nearest entrance,
+  // from the train's middle (the stop's figure) or from each rider's own point along the train.
+  const doorS = (p: Vec2) =>
+    (Math.min(...station.station!.entrances.map((id) => distance(p, city.walk!.nodes[id]!.pos))) *
       riderProfile.detour) /
     riderProfile.walkSpeedMps;
+  const along = Array.from({ length: 136 }, (_, i) =>
+    doorS(trainPoint(rail, route, stop.positionM - 67.5 + i)),
+  );
+  const [nearS, farS] = [Math.min(...along), Math.max(...along)];
   const arrivals = new Set<number>();
   for (const d of table.departures.filter((d) => d.route === sbahn))
     for (let t = d.timeS + stop.arrivalS; t < 86400; t += table.periodS)
@@ -68,10 +71,16 @@ unitTest('T65 riders leave the station only after an S-Bahn stop, by the stated 
     expect(arrivals.has(rider.arrivalS)).toBe(true);
     expect(t.originPlaceId).toBe(station.id);
     expect(t.mode).toBe('walk');
-    expect(t.departS - rider.arrivalS).toBeCloseTo(doorS, 0);
+    expect(t.departS - rider.arrivalS).toBeGreaterThanOrEqual(nearS - 0.6);
+    expect(t.departS - rider.arrivalS).toBeLessThanOrEqual(farS + 0.6);
   }
+  // Riders leave over about a minute, not all at once.
+  const first = out.filter(
+    (t) => riderOf(t.personId!)!.arrivalS === riderOf(out[0]!.personId!)!.arrivalS,
+  );
+  expect(new Set(first.map((t) => Math.round(t.departS))).size).toBeGreaterThan(first.length / 2);
   const s = stops.find((s) => s.riders)!;
-  expect(s.doorS).toBeCloseTo(doorS, 9);
+  expect(s.doorS).toBeCloseTo(doorS(trainPoint(rail, route, stop.positionM)), 9);
 });
 
 unitTest(

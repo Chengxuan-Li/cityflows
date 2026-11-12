@@ -602,6 +602,8 @@ export interface StationArrival {
   arrivalS: number;
   /** The train's middle while it stands there. */
   middle: Vec2;
+  /** The standing train's body from end to end, sampled every 5 m. */
+  body: Vec2[];
 }
 
 /** Every platform stop with its arrival in `[fromS, toS)`, by time then platform. Read-only. */
@@ -616,7 +618,13 @@ export function stationArrivals(
     const route = table.routes[departure.route]!;
     for (const stop of route.stops) {
       const base = departure.timeS + stop.arrivalS,
-        middle = trainPoint(rail, route, stop.positionM);
+        middle = trainPoint(rail, route, stop.positionM),
+        half = trainDefaults[route.kind].lengthM / 2,
+        steps = Math.ceil((2 * half) / 5);
+      const body = Array.from({ length: steps + 1 }, (_, i) => {
+        const p = trainPoint(rail, route, stop.positionM - half + (2 * half * i) / steps);
+        return { x: p.x, y: p.y };
+      });
       for (let k = Math.ceil((fromS - base) / table.periodS); base + k * table.periodS < toS; k++)
         found.push({
           platform: stop.platform,
@@ -624,6 +632,7 @@ export function stationArrivals(
           kind: route.kind,
           arrivalS: base + k * table.periodS,
           middle: { x: middle.x, y: middle.y },
+          body,
         });
     }
   }

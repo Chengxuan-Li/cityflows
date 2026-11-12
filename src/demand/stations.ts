@@ -1,4 +1,4 @@
-import { distance } from '../geo/polyline';
+import { cumulativeLengths, distance, pointAtDistance } from '../geo/polyline';
 import { createRandom } from '../geo/random';
 import type { Vec2 } from '../geo/vec2';
 import { centroid } from '../network/compile';
@@ -15,7 +15,8 @@ export interface RiderStop {
   stationId: string;
   platform: string;
   arrivalS: number;
-  /** Straight line x detour from the train's middle to the nearest entrance, at walking speed. */
+  /** Straight line x detour from the train's middle to the nearest entrance, at walking speed;
+   * each rider walks from their own point along the train. */
   doorS: number;
   kind: RiderKind | null;
   /** Riders at this stop before rounding. */
@@ -107,7 +108,10 @@ export function stationRiders(
     const weight = (c: { place: Place; decay: number }) =>
       (kind === 'commuter' ? c.place.jobs : c.place.attraction) * c.decay;
     const eligible = candidates.get(station.id)!.filter((c) => weight(c) > 0);
-    const doorS = doors.length ? Math.min(...doors.map((d) => walkS(arrival.middle, d))) : 0;
+    const toDoorS = (p: Vec2) => Math.min(...doors.map((d) => walkS(p, d)));
+    const doorS = doors.length ? toDoorS(arrival.middle) : 0;
+    const body = cumulativeLengths(arrival.body),
+      lengthM = body[body.length - 1]!;
     const riders = eligible.length && doors.length ? count : 0;
     stops.push({
       stationId: station.id,
@@ -130,12 +134,14 @@ export function stationRiders(
     for (let i = 0; i < riders; i++) {
       const personId = riderId(station.id, arrival.platform, arrival.arrivalS, i);
       const draw = root.derive(personId);
+      // Riders get off along the whole train, so they leave the station over about a minute.
+      const exit = pointAtDistance(arrival.body, body, draw.uniform(0, lengthM));
       const destination = weightedChoice(eligible, weight, draw)!;
       const stayS =
         kind === 'commuter'
           ? Math.max(0, draw.normal(demand.workDuration.meanS, demand.workDuration.sdS))
           : draw.uniform(riderProfile.visitStayS.min, riderProfile.visitStayS.max);
-      const outS = arrival.arrivalS + doorS;
+      const outS = arrival.arrivalS + toDoorS(exit);
       const backS = outS + walkS(centres.get(station.id)!, destination.at) + stayS;
       const emit = (suffix: 'out' | 'back', from: string, to: string, departS: number) => {
         const id = `${personId}:${suffix}`;

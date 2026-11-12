@@ -426,7 +426,8 @@ export function probeMorning(
       (gatewayTraffic[cls] ??= { entered: 0, left: 0 }).left++;
     }
   }
-  const releasedTrips = trips.length - metrics.trips.pending;
+  // Vehicle trips only: walk trips (TASK-128 riders) are not vehicle trips and never pending.
+  const releasedTrips = trips.filter((t) => t.mode !== 'walk').length - metrics.trips.pending;
   const parkingNodes = new Map<number, Set<string>>();
   const parkingAt = (node: number, id: string) => {
     const list = parkingNodes.get(node) ?? new Set<string>();
@@ -547,6 +548,7 @@ export function probeMorning(
     parkingSearchTimeS: (metrics.tripOutcomes ?? []).reduce((n, t) => n + t.parkingSearchTimeS, 0),
     localArrivals: trips.filter(
       (trip, id) =>
+        trip.mode !== 'walk' &&
         city.places[trip.destinationPlaceId]!.kind !== 'gateway' &&
         (engine.inspect(id + 1)?.state === 'completed' ||
           engine.inspect(id + 1)?.failReason === 'no_parking'),
