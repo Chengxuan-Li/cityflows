@@ -1,6 +1,10 @@
 import { expect, test } from 'vitest';
 import { compile } from '../../src/network';
 import { importOsm } from '../../src/importers/osm';
+import { openProject } from '../../src/project/open';
+import { saveProject } from '../../src/project/save';
+import { defaultScenario } from '../../src/fixtures/scenarios';
+import { scenarioSchema } from '../../src/schema';
 
 export const lotXml = `<osm version="0.6">
   <bounds minlat="0" minlon="0" maxlat="0.002" maxlon="0.002"/>
@@ -181,4 +185,74 @@ test('a restored lot junction leaves a real downstream restriction at its origin
   expect(rule.allowed).toBe(false);
   const join = Object.values(imported.city.nodes).find((n) => n.provenance.osmIds?.includes(2))!;
   expect(join.turnRules.some((r) => r.provenance.osmIds?.includes(20))).toBe(false);
+});
+
+test('a shared source point inside a lot hole cannot join the public road', () => {
+  const xml = sharedInterior
+    .replaceAll('lon="0.0003"/>', 'lon="0.0002"/>')
+    .replace('<node id="2" lat="0.001" lon="0.0002"/>', '<node id="2" lat="0.001" lon="0.0003"/>')
+    .replace(
+      '<tag k="amenity" v="parking"/><tag k="parking" v="surface"/><tag k="capacity" v="99"/><tag k="access" v="customers"/>',
+      '',
+    )
+    .replace(
+      '</osm>',
+      `<node id="21" lat="0.00095" lon="0.00025"/><node id="22" lat="0.00095" lon="0.00035"/><node id="23" lat="0.00105" lon="0.00035"/><node id="24" lat="0.00105" lon="0.00025"/>
+      <way id="18"><nd ref="21"/><nd ref="22"/><nd ref="23"/><nd ref="24"/><nd ref="21"/></way>
+      <relation id="30"><member type="way" ref="12" role="outer"/><member type="way" ref="18" role="inner"/><tag k="type" v="multipolygon"/><tag k="amenity" v="parking"/><tag k="parking" v="surface"/></relation></osm>`,
+    );
+  const result = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  expect(
+    Object.values(result.city.roads).filter((r) => r.provenance.osmIds?.includes(10)),
+  ).toHaveLength(2);
+});
+
+test('late lot halves append to legacy ID order and survive save/open', async () => {
+  const repaired = importOsm(sharedInterior, { importerVersion: 'test', terrain: false });
+  const ordinary = importOsm(lotXml, { importerVersion: 'test', terrain: false });
+  if (!repaired.ok || !ordinary.ok) throw new Error('Fixture import failed');
+  const result = compile(repaired.city),
+    legacy = compile(ordinary.city);
+  if (!result.ok || !legacy.ok) throw new Error('Fixture compile failed');
+  const { compiled } = result;
+  expect(legacy.compiled.roads.map((r) => r.id)).toEqual(Object.keys(ordinary.city.roads).sort());
+  const roads = Object.values(repaired.city.roads);
+  const originalIds = roads
+    .filter((r) => !r.provenance.inferred?.includes('lotJunction'))
+    .map((r) => r.id)
+    .sort();
+  const addedIds = roads
+    .filter((r) => r.provenance.inferred?.includes('lotJunction'))
+    .map((r) => r.id)
+    .sort();
+  expect(addedIds).toHaveLength(2);
+  expect(compiled.roads.map((r) => r.id)).toEqual([...originalIds, ...addedIds]);
+  const opened = await openProject(
+    await saveProject({
+      city: repaired.city,
+      scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))],
+    }),
+  );
+  if (!opened.ok) throw new Error(opened.error);
+  const reopened = compile(opened.project.city);
+  if (!reopened.ok) throw new Error('Reopened fixture invalid');
+  expect(reopened.compiled.roads.map((r) => r.id)).toEqual(compiled.roads.map((r) => r.id));
+  expect(reopened.compiled.lanes.map((l) => l.id)).toEqual(compiled.lanes.map((l) => l.id));
+});
+test('refreshed directional aisle portals use car lanes without duplicate anchors', () => {
+  const xml = sharedInterior.replace(
+    '<tag k="service" v="parking_aisle"/><tag k="access" v="customers"/>',
+    '<tag k="service" v="parking_aisle"/><tag k="lanes" v="3"/><tag k="lanes:forward" v="2"/><tag k="lanes:backward" v="1"/><tag k="bus:lanes:forward" v="designated|no"/><tag k="access" v="customers"/>',
+  );
+  const result = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const lot = Object.values(result.city.parking!).find((f) => f.kind === 'lot')!;
+  const anchors = lot.connectors.map((c) => `${c.roadId}#${c.lane}@${c.positionM.toFixed(6)}`);
+  expect(new Set(anchors).size).toBe(anchors.length);
+  for (const c of lot.connectors)
+    expect(result.city.roads[c.roadId]!.lanes[c.lane]!.allowed).toContain('car');
+  expect(lot.connectors.some((c) => c.lane === 1)).toBe(true);
+  expect(lot.connectors.some((c) => c.direction !== 'out')).toBe(true);
+  expect(lot.connectors.some((c) => c.direction !== 'in')).toBe(true);
 });

@@ -55,7 +55,7 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
     // and e4654d8 (merging lanes kept on a group's inner roads).
     expect(paintHash(shapes)).toBe(
       name === 'munich'
-        ? 'e563a95c66910a6565bd53d39b74f147c11860d42426956c9f7ceb8fea4f00aa'
+        ? '009259442ce258984ac7532bbc1163936f1a77e958a0040fbcc2ae0f309a3c74'
         : '0a9bcee1ea6eb3fe92151ea5d8f962857387e167ba9a9cfbc2bacefe132e39f6',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');

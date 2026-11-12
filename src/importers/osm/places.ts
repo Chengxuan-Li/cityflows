@@ -459,6 +459,7 @@ export function connectCarExits(
   city: City,
   compiled: CompiledCity,
   garageFootprints?: Map<string, Vec2[][]>,
+  refreshLots = false,
 ): boolean {
   const exits = parkingEgress(compiled, 30);
   // Reuse the finished car graph and the parking compiler, without compiling the walk graph
@@ -520,6 +521,7 @@ export function connectCarExits(
     return true;
   };
   for (const place of Object.values(city.places)) {
+    if (refreshLots) break;
     if (place.kind === 'gateway') continue;
     const anchor =
       place.shape.kind === 'point' ? place.shape.pos : polygonCenter(place.shape.ring)!;
@@ -553,8 +555,11 @@ export function connectCarExits(
     const anchor = source.shape?.kind === 'point' ? source.shape.pos : undefined;
     for (const entry of [...entries])
       moved = repair(entry, entries, footprints, true, anchor) || moved;
-    if (moved) {
-      if (!source.connectors.length)
+    if (moved || (refreshLots && source.kind === 'lot')) {
+      if (
+        !source.connectors.length &&
+        !source.provenance.inferred?.includes('materializedAisleEntries')
+      )
         (source.provenance.inferred ??= []).push('materializedAisleEntries');
       source.connectors = entries.map((entry) =>
         /^c:\d+$/.test(entry.id) ? entry : { ...entry, id: allocateId(city, 'c') },

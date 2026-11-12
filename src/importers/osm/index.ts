@@ -9,7 +9,7 @@ import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
 import { importContext } from './context';
-import { addLots } from './lots';
+import { addLots, restoreLotJunctions } from './lots';
 import { importWalk } from './walk';
 import { assignTramForms, importRail } from './rail';
 import { importTramStops } from './tram-stops';
@@ -392,9 +392,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addBuildings(city, data, positions, bounds, base.compiled);
   const garageFootprints = addOsmGarages(city, data, positions, bounds, base.compiled);
   addImplicitGarages(city);
-  const parkingGraph =
-    addLots(city, data, positions, bounds, diagnostics, undefined, true, base.compiled) ??
-    base.compiled;
+  const parkingGraph = addLots(city, data, positions, bounds, diagnostics) ?? base.compiled;
   importWalk(city, data, positions, bounds);
   addStrips(city, data, positions, bounds, diagnostics);
   connectCarExits(city, parkingGraph, garageFootprints);
@@ -416,6 +414,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     );
 
   importTramStops(city, data, positions, bounds, parkingGraph, diagnostics);
+  restoreLotJunctions(city, data, positions, bounds, diagnostics, parkingGraph);
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)

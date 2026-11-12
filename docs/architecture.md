@@ -2880,9 +2880,14 @@ exact canonical vertex on a public, single-lane service road. Its public lane mu
 every incident imported aisle arm must share its grade. Controlled/grouped endpoints, private
 spines and smoothed-away vertices remain diagnosed rather than guessed. Road splitting keeps
 original public/aisle/place IDs, direction, access and geometry, and preserves downstream turn
-rules and crossing overrides at their original ends. Affected connector world positions are
-projected onto the corresponding split lane. New road halves and changed lot portals use the
-shared allocator, so later derived IDs can change without changing their source identity.
+rules and crossing overrides at their original ends. The repair runs after walk, rail and
+tram-stop import, retaining every pre-existing ID and the complete rail timetable. Affected
+connector world positions are projected onto the corresponding split lane; the existing lot
+entry and car-egress inference refreshes only affected facilities and retains prior portals.
+Only newly allocated public halves carry the `lotJunction` inference marker. Compilation
+keeps ordinary ID order for unmarked roads, then appends marked halves in ID order. Thus
+original road/lane dense indices and their seeded road-noise streams survive the repair and
+save/open. Legacy cities without marked halves retain their existing compilation order.
 T49 contracts these scoped public sections before removing appended aisles, nodes and
 facilities and normalizing allocator/provenance counts; unrelated public geometry and legal
 endpoint restrictions retain their previous values. Overpass query version 4 appends a separate
