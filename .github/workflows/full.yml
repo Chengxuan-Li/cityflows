@@ -3,12 +3,8 @@ on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  morning:
+  trace:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [munich-morning, T53-munich-pedestrians]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -16,4 +12,4 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx vitest run --project traffic tests/traffic/${{ matrix.suite }}.test.ts
+      - run: node --experimental-strip-types --import ./bench/register.ts --import ./bench/task147/binding-hook.mjs bench/task147/counter.ts trace

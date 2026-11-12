@@ -58,6 +58,7 @@ export function createRailCrossings(
   red: (movement: number) => boolean,
   clocks?: Clock[],
   roadState?: RoadState,
+  grants?: Int32Array,
 ) {
   const rail = city.rail;
   if (!rail) return undefined;
@@ -307,6 +308,43 @@ export function createRailCrossings(
     return frontier - end >= needed;
   }
 
+  /** A later marking may store a whole car beyond an upstream junction, before
+   * any rail conflict. Incoming bodies and granted entries already own that space. */
+  function receivingStop(id: number, facility: number, near: number, stop: number) {
+    if (!grants) return stop;
+    const gap = params.idm.minGapM;
+    let best = stop;
+    for (let s = 0; s < segments.length; s++) {
+      const field = segments[s]!,
+        offset = offsets[s]!;
+      if (field < 0 || offset > near) continue;
+      const lane = city.lanes[field]!;
+      if (!platoonLane[field] || lane.connectors.length) continue;
+      for (const marking of stopsBySegment[bucket(field)]!) {
+        const at = offset + marking.at;
+        if (marking.facility !== facility || at <= best || at > near) continue;
+        let frontier = marking.at;
+        for (const crossing of walkStops[field]!) frontier = Math.min(frontier, crossing);
+        for (let other = vehicles.first(field); other !== -1; other = vehicles.next[other]!)
+          if (other !== id)
+            frontier = Math.min(frontier, vehicles.position[other]! - length(other) - gap);
+        for (const movement of lane.in) {
+          for (
+            let other = vehicles.first(-movement - 1);
+            other !== -1;
+            other = vehicles.next[other]!
+          )
+            if (other !== id) frontier -= length(other) + gap;
+          const from = city.movements[movement]!.fromLane;
+          for (let other = vehicles.first(from); other !== -1; other = vehicles.next[other]!)
+            if (other !== id && grants[other] === movement) frontier -= length(other) + gap;
+        }
+        if (frontier >= length(id) + gap) best = at;
+      }
+    }
+    return best;
+  }
+
   function roadOccupancy() {
     occupied.fill(0);
     for (const b of vehicles.occupied) {
@@ -349,7 +387,12 @@ export function createRailCrossings(
         ranges(position);
         for (const marking of continuous ? stopsBySegment[bucket(previousSegment)]! : []) {
           const passed = field === previousSegment ? position > marking.at + 1e-6 : true;
-          if (passed && previousPosition <= marking.at + 1e-6) committed[marking.facility]!.add(id);
+          if (
+            passed &&
+            previousPosition <= marking.at + 1e-6 &&
+            pathStops[marking.facility]! > pathStarts[marking.facility]!
+          )
+            committed[marking.facility]!.add(id);
         }
         for (let f = 0; f < facilities.length; f++) {
           if (!served[f]) continue;
@@ -630,7 +673,9 @@ export function createRailCrossings(
             }
           }
         if (blocked) {
-          best = stop;
+          const at = states[f] === CROSSING_OPEN ? receivingStop(id, f, near, stop) : stop;
+          if (at >= best) continue;
+          best = at;
           protectedStop = states[f] !== CROSSING_OPEN;
         }
       }
