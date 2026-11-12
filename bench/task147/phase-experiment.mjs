@@ -19,4 +19,5 @@ s=s.replace(marker2,`    if(states[2]!==CROSSING_OPEN){
      }
     for (let f = 0; f < states.length; f++)
       railReady`);
-fs.writeFileSync(p,s);
+if(process.argv[2]==='exit-unchecked') s=s.replace('        if (!blocked)','        if (!blocked && f !== 2)'); fs.writeFileSync(p,s);
+

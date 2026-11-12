@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [scheduled, exit-unchecked]
+        variant: [exit-unchecked]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -16,7 +16,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node bench/task147/phase-experiment.mjs
-      - if: matrix.variant == 'exit-unchecked'
-        run: sed -i 's/if (!blocked)$/if (!blocked && f !== 2)/' src/sim/rail-crossings.ts
+      - run: node bench/task147/phase-experiment.mjs ${{ matrix.variant }}
       - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts ${{ matrix.variant }}
