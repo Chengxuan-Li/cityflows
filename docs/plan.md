@@ -166,6 +166,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-136](tasks/TASK-136.md) | 10 | Level crossings | rail import, crossing placement and drawing | 127, 135; Phase 3 for the stop rule, 138 for trams | T75, shots | import and drawing merged; train protection and tram interaction pending |
 | [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | done with TASK-142 (lead review below) |
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
+| [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | active |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3158,6 +3159,29 @@ unmerged task branch tip. The existing 30 s give-up policy, routing contract and
 gate apply. A further routing experiment
 would need to compare the current legal return with a lane-feasible detour that bypasses the
 blocked approach. The Phase 3 contract reserves routing changes for a separate decision.
+
+TASK-131 Phase 3 / B56 (routing and discharge review, 2026-11-12). On the retained branch,
+59 cars occupied the six roads at 10:00 on seed 1. All exceeded 900 s of cumulative wait.
+Six had exceeded it before their first release, with zero respawns at 10:00. Car 3887 walked
+56.6 s to its car, then spent 2451.3 s waiting to enter r:188. The five longest-waiting
+cars on occupied loop roads had each spent less than 102 s awaiting their first release.
+
+A replay reproduced car 1029's route cost to within floating-point precision. No legal suffix
+from r:267#0 to its destination avoided r:671. In a wider sample of 125 ordinary turn
+timeouts, 78 suffixes returned to the approach and 12 of those had a feasible bypass.
+The first was on r:968. The bypass cost 320.2 s against 290.7 s for the returning route.
+
+At n:251, 564 of 780 green lane-seconds for right-turn lanes r:269#3/#4 found the lane
+empty over 13 cycles. At 08:02 car 1495 was waiting for space on a left return. Car
+1609, immediately behind it in the shared lane, wanted the open right exit. The 45 s
+head-detour rule eventually cleared 1495 after the receiving green had ended. The upstream
+group is unsignalised. Physical queues propagated back to r:703 by 07:59.
+
+The constrained-route experiment (`5bdc4e8`) completed 3722/4265/3782 trips. Seed 1
+regressed against the retained fix, and the longest wait exceeded 900 s on all three seeds.
+Two isolated lead probes also failed the gate. Using unfinished travel times when a road
+had no exits during a cost update gave 4153/3956/4256 completions. Pricing the complete
+suffix of each ordinary fallback gave 3929/4619/4052. Neither policy was adopted.
 
 ## Owner decisions log
 
