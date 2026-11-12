@@ -7,6 +7,8 @@ import {
   roadAccessFilter,
   type LinkCosts,
   type RouteProvider,
+  type RouteRequest,
+  type RouteResult,
 } from '../routing';
 import { vehicleClasses, vehiclePurposes, type SimParams, type TripRequest } from '../schema';
 import { createConnectors } from './connectors';
@@ -145,6 +147,11 @@ function createRun({
     routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
   const observedCosts = createLinkCosts(compiled, params, scenario.startS);
   const costs = linkCosts ?? observedCosts.costs;
+  const headRoutes = new Map<
+    number,
+    { request: RouteRequest; results: Map<number, RouteResult> }
+  >();
+  let headRouteVersion = costs.version;
   const rerouter = createRerouter(compiled, vehicles, params, provider, costs);
   const roadEnteredS = new Float64Array(trips.length);
   const roadEnteredM = new Float64Array(trips.length);
@@ -165,6 +172,28 @@ function createRun({
       costs,
       vehicleRouteRequest(vehicles, params, id, lane, positionM),
     );
+  }
+
+  function headRouteFrom(id: number, lane: number) {
+    const request = vehicleRouteRequest(vehicles, params, id, lane, 0);
+    let cached = headRoutes.get(id);
+    if (
+      !cached ||
+      cached.request.toConnector !== request.toConnector ||
+      cached.request.vehicleClass !== request.vehicleClass ||
+      cached.request.purpose !== request.purpose ||
+      cached.request.desiredSpeedFactor !== request.desiredSpeedFactor ||
+      cached.request.noise !== request.noise ||
+      cached.request.seed !== request.seed
+    ) {
+      cached = { request, results: new Map() };
+      headRoutes.set(id, cached);
+    }
+    const previous = cached.results.get(lane);
+    if (previous) return previous;
+    const result = provider.route(compiled, costs, request);
+    cached.results.set(lane, result);
+    return result;
   }
 
   function chooseParkingRoute(
@@ -219,6 +248,7 @@ function createRun({
   }
 
   function planLane(id: number, lane: number, positionM: number) {
+    headRoutes.delete(id);
     vehicles.headDetourS[id] = 0;
     const destination = compiled.connectors[vehicles.destination[id]!]!;
     const route = vehicles.route[id]!;
@@ -657,6 +687,11 @@ function createRun({
   }
 
   function detourHeads() {
+    // Retain only this cost epoch's suffixes; physical eligibility below is never cached.
+    if (headRouteVersion !== costs.version) {
+      headRoutes.clear();
+      headRouteVersion = costs.version;
+    }
     for (const segment of vehicles.occupied) {
       const lane = compiled.lanes[segment];
       if (!lane) break;
@@ -696,7 +731,7 @@ function createRun({
           intersections.blockedExit(id, movement)
         )
           continue;
-        const result = routeFrom(id, movement.toLane, 0);
+        const result = headRouteFrom(id, movement.toLane);
         if (
           result.ok &&
           (result.route.costS < cost || (result.route.costS === cost && idx < best))
@@ -1102,6 +1137,7 @@ function createRun({
     )
       throw new Error('Place additions and removals require a restart');
     const before = compiled;
+    headRoutes.clear();
     parking.patch(next);
     vehicles.headDetourS.fill(0);
     const changes = patchChanges(before, next);
