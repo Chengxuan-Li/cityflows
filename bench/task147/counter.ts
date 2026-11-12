@@ -16,3 +16,4 @@ console.log(JSON.stringify({variant,counts,lostGreen,holdCounts,holdUnique:Objec
 
 
 console.log('PHASE147',JSON.stringify((globalThis as any).__phase147));
+console.log('REASON147',JSON.stringify(Object.fromEntries((globalThis as any).__protect147 ?? [])));
