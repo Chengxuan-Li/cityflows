@@ -516,6 +516,7 @@ export function createRailCrossings(
   const trackOwners = new Int32Array(rail.tracks.length);
   const nextOwners = new Int32Array(rail.tracks.length);
   const delayedTracks = new Uint8Array(rail.tracks.length);
+  let debugHold: {facility:number; cause:string; state:number; stop:number}|undefined;
   return {
     canSpawn(lane: number, positionM: number, lengthM: number) {
       for (let f = 0; f < facilities.length; f++)
@@ -582,6 +583,7 @@ export function createRailCrossings(
       publish();
     },
     hold(id: number) {
+      debugHold=undefined;
       holds[id] = 0;
       holdPositions[id] = Infinity;
       const field = vehicles.lane[id]!;
@@ -599,7 +601,7 @@ export function createRailCrossings(
         const stop =
           pathStops[f]! <= near ? pathStops[f]! : Math.max(position, near - params.idm.minGapM);
         if (stop === Infinity || end < stop || stop >= best) continue;
-        let blocked = states[f] !== CROSSING_OPEN;
+        let blocked = states[f] !== CROSSING_OPEN; let cause=blocked?'closed':'none';
         const clear = end + length(id) + params.idm.minGapM;
         if (!blocked)
           for (let s = 0; s < segments.length; s++) {
@@ -616,7 +618,7 @@ export function createRailCrossings(
               offset + vehicles.position[tail]! - length(tail) < clear &&
               (segment !== field || !platoonFits(id, f, end))
             )
-              blocked = true;
+              { blocked = true; cause='vehicle'; }
             if (segment >= 0) {
               const next = segments[s + 1];
               if (
@@ -626,11 +628,11 @@ export function createRailCrossings(
                 offset + city.lanes[segment]!.stopM > stop &&
                 offset + city.lanes[segment]!.stopM < clear
               )
-                blocked = true;
+                { blocked = true; cause='red'; }
             }
           }
         if (blocked) {
-          best = stop;
+          best = stop; debugHold={facility:f,cause,state:states[f]!,stop};
           protectedStop = states[f] !== CROSSING_OPEN;
         }
       }
@@ -639,6 +641,7 @@ export function createRailCrossings(
       return best;
     },
     binding(id: number, binding: boolean) {
+      if(binding && debugHold && vehicles.speed[id]!<0.1 && Math.abs(vehicles.position[id]!-debugHold.stop)<0.5)(globalThis as any).__rail147?.(debugHold,id);
       if (!binding) holds[id] = 0;
     },
     blocksExit: (id: number, lengthM: number) => holdPositions[id]! <= lengthM + 1e-6,
