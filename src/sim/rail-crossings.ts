@@ -66,6 +66,7 @@ export function createRailCrossings(
   red: (movement: number) => boolean,
   clocks?: Clock[],
   roadState?: RoadState,
+  nextMovement?: (id: number, lane: number, step: number) => number,
 ) {
   const rail = city.rail;
   if (!rail) return undefined;
@@ -242,7 +243,9 @@ export function createRailCrossings(
       if (offset - vehicles.position[id]! > 600) break;
       if (segment >= 0) {
         const movement =
-          segments.length === 1 ? vehicles.movement[id]! : (route?.movements[step] ?? -1);
+          segments.length === 1
+            ? vehicles.movement[id]!
+            : (nextMovement?.(id, segment, step) ?? route?.movements[step] ?? -1);
         if (movement === -1 || city.movements[movement]!.fromLane !== segment) break;
         segment = -movement - 1;
       } else {
@@ -637,6 +640,8 @@ export function createRailCrossings(
         if (stop === Infinity || end < stop || stop >= best) continue;
         let blocked = states[f] !== CROSSING_OPEN;
         const clear = end + length(id) + params.idm.minGapM;
+        const last = segments.length - 1;
+        if (offsets[last]! + segmentLength(segments[last]!) < clear) blocked = true;
         if (!blocked)
           for (let s = 0; s < segments.length; s++) {
             const segment = segments[s]!,

@@ -1633,15 +1633,6 @@ Step sequence, in this order every step:
      rather than in the junction. After `boxWaitS` of waiting at the line it falls back to
      the older rule (the last vehicle's front at least `candidate.lengthM + minGapM` along), so a
      jammed junction still drains.
-   - TASK-147: a served rail crossing's evacuation keeps its competing receiving lanes clear.
-     Compilation's physical spans identify lanes where a supported vehicle stopped at the
-     ordinary line can still cover rail. Physical conflicts of movements leaving those lanes
-     identify the competing receivers. Every incoming movement to those receivers shares one
-     actual-space budget: the receiving stop and current tail rear, less each body in an incoming
-     movement and each outstanding approach grant, including their gaps. It reserves the whole
-     applicant body without forecasting tail movement or applying the `boxWaitS` fallback.
-     Normal signals, priorities and conflict checks still apply; unserved crossings and other
-     receiving lanes retain the ordinary rule.
 5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
    its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at

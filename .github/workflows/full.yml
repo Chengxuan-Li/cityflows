@@ -1,51 +1,14 @@
-name: TASK147 crossing verification
+name: TASK147 actual-lane differential
 on:
   workflow_dispatch:
-    inputs:
-      scope:
-        type: choice
-        options: [check, validation, traffic, candidate, all]
-        default: validation
 permissions:
   contents: read
 jobs:
-  focused:
-    if: inputs.scope == 'traffic' || inputs.scope == 'all' || inputs.scope == 'candidate'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx vitest run --project unit tests/sim/T75-operating-crossings.test.ts tests/network/T76-trams.test.ts tests/sim/T75-keep-clear.test.ts tests/sim/intersection.test.ts
-      - run: node --experimental-strip-types --import ./bench/register.ts --import ./test-results/147/keep-clear-hook.mjs ./test-results/147/keep-clear-static.ts
   traffic:
-    if: inputs.scope == 'traffic' || inputs.scope == 'all' || inputs.scope == 'candidate'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - uses: actions/cache@v4
-        with:
-          path: node_modules/.cache/cityflows
-          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
-          restore-keys: city-imports-
-      - shell: bash
-        run: npm run test:traffic:light 2>&1 | tee traffic.log
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: keep-clear-traffic
-          path: traffic.log
-  footprints:
-    if: inputs.scope == 'traffic' || inputs.scope == 'all' || inputs.scope == 'candidate'
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [selector, known-clearance]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -60,17 +23,46 @@ jobs:
           path: node_modules/.cache/cityflows
           key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
           restore-keys: city-imports-
-      - run: node --experimental-strip-types --import ./bench/register.ts ./test-results/physical-footprints/probe.ts keep-clear 36000 > footprints.log 2>&1
+      - if: matrix.variant == 'selector'
+        run: python -c "from pathlib import Path;p=Path('src/sim/rail-crossings.ts');s=p.read_text();s=s.replace('        if (offsets[last]! + segmentLength(segments[last]!) < clear) blocked = true;', '');p.write_text(s)"
+      - shell: bash
+        run: npm run test:traffic:light 2>&1 | tee traffic.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lane-${{ matrix.variant }}-traffic
+          path: traffic.log
+  physical:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [selector, known-clearance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/cityflows
+          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
+          restore-keys: city-imports-
+      - if: matrix.variant == 'selector'
+        run: python -c "from pathlib import Path;p=Path('src/sim/rail-crossings.ts');s=p.read_text();s=s.replace('        if (offsets[last]! + segmentLength(segments[last]!) < clear) blocked = true;', '');p.write_text(s)"
+      - run: node --experimental-strip-types --import ./bench/register.ts --import ./test-results/147/actual-lane-hook.mjs ./test-results/physical-footprints/probe.ts actual-lane 36000 > footprints.log 2>&1
       - run: node --input-type=module -e "import fs from 'node:fs';const r=JSON.parse(fs.readFileSync('test-results/physical-footprints/report.json','utf8'));if(r.collision)process.exit(1)"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: keep-clear-footprints
+          name: lane-${{ matrix.variant }}-physical
           path: |
             footprints.log
             test-results/physical-footprints/*.json
   check:
-    if: inputs.scope != 'traffic'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -84,27 +76,5 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: clock-check
+          name: lane-check
           path: check.log
-  city:
-    if: inputs.scope == 'validation' || inputs.scope == 'all'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - uses: actions/cache@v4
-        with:
-          path: node_modules/.cache/cityflows
-          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
-          restore-keys: city-imports-
-      - shell: bash
-        run: npm run test:city 2>&1 | tee city.log
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: clock-city
-          path: city.log

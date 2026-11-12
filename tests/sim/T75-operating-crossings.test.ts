@@ -6,6 +6,8 @@ import { defaultScenario } from '../../src/fixtures/scenarios';
 import { createEngine } from '../../src/sim/engine';
 import { createRailCrossings, CROSSING_OPEN, CROSSING_CLOSED } from '../../src/sim/rail-crossings';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
+import { routeMovement } from '../../src/sim/route-movement';
+import type { Route } from '../../src/routing';
 import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { railTimetable } from '../../src/network/trams';
 import { patchChanges } from '../../src/sim/patch';
@@ -797,4 +799,103 @@ test('T75 a crossing near an extract exit keeps its full tail guard after the se
   expect(control.snapshot().crossings[0]).toBe(CROSSING_CLOSED);
   for (let i = 1; i < 20; i++) control.step(start + i * 0.1);
   expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
+});
+
+function compactLaneExit() {
+  const { city, node, road, place } = buildCity('Actual crossing exit lane', 147);
+  const a = node(-100, 0),
+    b = node(0, 0),
+    c = node(8, 0),
+    d = node(150, 0);
+  const before = road(a, b, { lanes: 2 }),
+    middle = road(b, c, { lanes: 2 }),
+    after = road(c, d, { lanes: 2 });
+  place('Work', 'work', { x: 140, y: 15 }, [{ road: after, direction: 'in', positionM: 100 }]);
+  city.rail = operatingCrossing().rail;
+  const compiled = setup(city);
+  const lane = (road: string, index: number) => compiled.index.lane.get(`${road}#${index}`)!;
+  const before1 = lane(before.id, 1),
+    middle0 = lane(middle.id, 0),
+    middle1 = lane(middle.id, 1),
+    after0 = lane(after.id, 0),
+    after1 = lane(after.id, 1);
+  const move = (from: number, to: number) =>
+    compiled.lanes[from]!.out.find((idx) => compiled.movements[idx]!.toLane === to)!;
+  const enter = move(before1, middle1),
+    representative = move(middle0, after0),
+    actual = move(middle1, after1);
+  expect(actual).toBeTypeOf('number');
+  const stop = compiled.lanes[before1]!.lengthM - 10;
+  compiled.rail!.facilities = setup(operatingCrossing()).rail!.facilities;
+  compiled.rail!.facilities![0]!.stops = [{ lane: before1, stopM: stop }];
+  compiled.rail!.facilities![0]!.spans = [
+    {
+      segment: middle1,
+      fromM: 0,
+      toM: compiled.lanes[middle1]!.lengthM - 1,
+    },
+  ];
+  const route: Route = {
+    roads: [
+      compiled.lanes[before1]!.road,
+      compiled.lanes[middle1]!.road,
+      compiled.lanes[after1]!.road,
+    ],
+    movements: [enter, representative],
+    targetLanes: [[before1], [middle0, middle1], [after0, after1]],
+    costS: 1,
+  };
+  const vehicles = createVehicles(2, compiled.lanes.length, compiled.movements.length);
+  vehicles.state.fill(DRIVING);
+  vehicles.route[0] = route;
+  vehicles.insert(0, before1, stop - 1);
+  vehicles.movement[0] = enter;
+  const select = (id: number, lane: number, step: number) =>
+    routeMovement(
+      compiled,
+      vehicles.route[id]!,
+      step,
+      lane,
+      compiled.lanes.map(() => true),
+      compiled.connectors[0]!,
+      DEFAULT_SIM_PARAMS.laneChangeDistanceM,
+      () => true,
+    );
+  return { compiled, vehicles, select, middle1, after1, actual, route, stop };
+}
+
+test('T75 a compact crossing checks the legal actual-lane exit rather than the representative route lane', () => {
+  const { compiled, vehicles, select, middle1, after1, actual, stop } = compactLaneExit();
+  expect(select(0, middle1, 1)).toBe(actual);
+  vehicles.insert(1, after1, 2);
+  const control = createRailCrossings(
+    compiled,
+    vehicles,
+    DEFAULT_SIM_PARAMS,
+    140,
+    () => false,
+    undefined,
+    undefined,
+    select,
+  )!;
+  expect(control.hold(0)).toBe(stop);
+  vehicles.position[1] = 40;
+  expect(control.hold(0)).toBe(Infinity);
+});
+
+test('T75 a compact crossing requires a known usable exit through its full body clearance', () => {
+  const { compiled, vehicles, select, middle1, route, stop } = compactLaneExit();
+  route.targetLanes[1] = route.targetLanes[1]!.filter((lane) => lane !== middle1);
+  expect(select(0, middle1, 1)).toBe(-1);
+  const control = createRailCrossings(
+    compiled,
+    vehicles,
+    DEFAULT_SIM_PARAMS,
+    140,
+    () => false,
+    undefined,
+    undefined,
+    select,
+  )!;
+  expect(control.hold(0)).toBe(stop);
 });
