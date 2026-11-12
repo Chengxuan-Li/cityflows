@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [2-no-warning, 2-no-tail, 2-no-red]
+        suite: [munich-morning, T53-munich-pedestrians]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -16,5 +16,4 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node bench/task147/facility-experiment.mjs ${{ matrix.variant }}
-      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts ${{ matrix.variant }}
+      - run: npx vitest run --project traffic tests/traffic/${{ matrix.suite }}.test.ts
