@@ -15,3 +15,4 @@ const out=probeMorning(city,c,.15,{untilS,observe(e){if(Math.round(e.timeS*10)%1
 console.log(JSON.stringify({variant,counts,lostGreen,holdCounts,holdUnique:Object.fromEntries([...holdIds].map(([k,v])=>[k,v.size])),wallS:(performance.now()-start)/1000,...out}));
 
 
+console.log('PHASE147',JSON.stringify((globalThis as any).__phase147));
