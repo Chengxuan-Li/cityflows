@@ -140,14 +140,7 @@ function createRun({
     routeVersion: () => costs.version,
   });
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
-  const holdRequired = new Uint8Array(trips.length);
-  let laneChanges = createLaneChanges(
-    compiled,
-    vehicles,
-    params,
-    hasGrant,
-    (id) => !!holdRequired[id],
-  );
+  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -247,7 +240,6 @@ function createRun({
     vehicles.movement[id] = -1;
     fallback[id] = 0;
     waitingForLane[id] = 0;
-    holdRequired[id] = 0;
     const cleared = intersections.groupPaths[id]?.movements.find(
       (m) => compiled.movements[m]!.fromLane === lane,
     );
@@ -274,10 +266,6 @@ function createRun({
       let penalty = Infinity;
       let routePenalty = Infinity;
       let alternate = -1;
-      let repeats = false;
-      const canKeepChanging =
-        !route.targetLanes[step]?.includes(lane) &&
-        positionM <= laneChanges.stopM(id, compiled.lanes[lane]!) + 1e-8;
       for (const idx of compiled.lanes[lane]!.out) {
         const movement = compiled.movements[idx]!;
         if (
@@ -289,27 +277,11 @@ function createRun({
         const cost = movementPenaltyS(compiled, movement);
         if (
           !vehicles.attemptedFallbacks[id]?.has(idx) &&
-          (cost < penalty || (cost === penalty && idx < vehicles.movement[id]!))
+          (cost < penalty || (cost === penalty && idx < vehicles.movement[id]!)) &&
+          routeFrom(id, movement.toLane, 0).ok
         ) {
-          const result = routeFrom(id, movement.toLane, 0);
-          if (result.ok) {
-            const repeating =
-              canKeepChanging &&
-              result.route.movements.some((m, i) => {
-                const entry =
-                  i === 0
-                    ? movement.toLane
-                    : compiled.movements[result.route.movements[i - 1]!]!.toLane;
-                return (
-                  entry === lane && m === planned?.idx && compiled.movements[m]!.fromLane !== lane
-                );
-              });
-            if (!repeating || !laneChanges.gaveUp[id]) {
-              penalty = cost;
-              vehicles.movement[id] = idx;
-              repeats = repeating;
-            }
-          }
+          penalty = cost;
+          vehicles.movement[id] = idx;
         }
         const next = compiled.lanes[movement.toLane]!;
         if (
@@ -344,7 +316,6 @@ function createRun({
       if (alternate !== -1 && !laneChanges.gaveUp[id]) vehicles.movement[id] = alternate;
       else if (vehicles.movement[id] !== -1) fallback[id] = 1;
       else waitingForLane[id] = Number(!route.targetLanes[step]?.includes(lane));
-      holdRequired[id] = Number(canKeepChanging && (repeats || vehicles.movement[id] === -1));
     }
   }
 
@@ -509,8 +480,6 @@ function createRun({
           !intersections.groupPaths[id] &&
           intersections.grants[id] === -1 &&
           lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM;
-        if (holdRequired[id] && vehicles.position[id]! > laneChanges.stopM(id, lane) + 1e-8)
-          planLane(id, lane.idx, vehicles.position[id]!);
         if (!laneChanges.propose(id, lane, tick, discretionary)) continue;
         // Gave the change up: take the TASK-048 fallback from this lane, if there is one.
         planLane(id, lane.idx, vehicles.position[id]!);
@@ -609,10 +578,7 @@ function createRun({
           lane &&
           ((movement && !granted) || laneChanges.holding[id] || waitingForLane[id])
         ) {
-          stopAt =
-            holdRequired[id] && position <= laneChanges.stopM(id, lane) + 1e-8
-              ? laneChanges.stopM(id, lane)
-              : lane.stopM;
+          stopAt = lane.stopM;
         }
         if (path) stopAt = intersections.zoneStop(path, position) + idm.minGapM;
         if (stopAt < obstacle) {
@@ -955,11 +921,7 @@ function createRun({
         granted = -1;
       }
       if ((movement !== -1 && granted === -1) || laneChanges.holding[id] || waitingForLane[id]) {
-        const stop =
-          holdRequired[id] && previousPosition <= laneChanges.stopM(id, lane) + 1e-8
-            ? laneChanges.stopM(id, lane)
-            : lane.stopM;
-        position = Math.min(position, Math.max(previousPosition, stop - idm.minGapM));
+        position = Math.min(position, Math.max(previousPosition, lane.stopM - idm.minGapM));
         if (remaining <= params.intersection.decisionDistanceM) {
           vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;
         }
@@ -1236,7 +1198,7 @@ function createRun({
       groupRoute,
       routeVersion: () => costs.version,
     });
-    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, (id) => !!holdRequired[id]);
+    laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );
