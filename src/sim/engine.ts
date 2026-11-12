@@ -157,6 +157,9 @@ function createRun({
   const routeReasons: VehicleDetail['routeReason'][] = Array(trips.length).fill('initial');
   const fallback = new Uint8Array(trips.length);
   const waitingForLane = new Uint8Array(trips.length);
+  const unresolvedHeads: (Set<number> | undefined)[] = Array(trips.length);
+  const headDestination = new Int32Array(trips.length).fill(-1);
+  const pendingHead = new Int32Array(trips.length).fill(-1);
   const arrival = new Int32Array(trips.length).fill(-1);
   const parkingEdit = new Uint8Array(trips.length);
   const order = new Uint32Array(trips.length);
@@ -234,6 +237,7 @@ function createRun({
 
   function planLane(id: number, lane: number, positionM: number) {
     vehicles.headDetourS[id] = 0;
+    pendingHead[id] = -1;
     const destination = compiled.connectors[vehicles.destination[id]!]!;
     const route = vehicles.route[id]!;
     const step = vehicles.routeStep[id]!;
@@ -733,6 +737,7 @@ function createRun({
       );
       let best = -1;
       let cost = Infinity;
+      if (headDestination[id] !== vehicles.destination[id]) unresolvedHeads[id] = undefined;
       for (const idx of lane.out) {
         const movement = compiled.movements[idx]!;
         const tail = vehicles.last(movement.toLane);
@@ -749,6 +754,8 @@ function createRun({
         const result = routeFrom(id, movement.toLane, 0);
         if (
           result.ok &&
+          !result.route.movements.includes(planned.idx) &&
+          !result.route.movements.some((m) => unresolvedHeads[id]?.has(m)) &&
           (result.route.costS < cost || (result.route.costS === cost && idx < best))
         ) {
           best = idx;
@@ -757,6 +764,7 @@ function createRun({
       }
       if (best === -1) continue;
       if (hasGrant(id)) intersections.release(id);
+      if (pendingHead[id] === -1) pendingHead[id] = planned.idx;
       vehicles.movement[id] = best;
       fallback[id] = 2;
       vehicles.headDetourS[id] = 0;
@@ -827,6 +835,11 @@ function createRun({
   }
 
   function enterLane(id: number, lane: number, position: number, timeS: number) {
+    const road = compiled.lanes[lane]!.road;
+    for (const movement of unresolvedHeads[id] ?? []) {
+      if (compiled.lanes[compiled.movements[movement]!.toLane]!.road === road)
+        unresolvedHeads[id]!.delete(movement);
+    }
     const cleared = intersections.groupPaths[id];
     intersections.leaveGroup(id, lane);
     roadEnteredS[id] = timeS;
@@ -966,7 +979,11 @@ function createRun({
       } else if (position >= lane.lengthM) {
         if (granted !== -1) {
           if (fallback[id]) {
-            if (fallback[id] === 2) headDetourObserver?.(id, lane.idx, granted);
+            if (fallback[id] === 2) {
+              if (pendingHead[id] !== -1) (unresolvedHeads[id] ??= new Set()).add(pendingHead[id]!);
+              headDestination[id] = vehicles.destination[id]!;
+              headDetourObserver?.(id, lane.idx, granted);
+            }
             vehicles.missedTurn[id] = 1;
             routeReasons[id] = 'missed_turn';
             (vehicles.attemptedFallbacks[id] ??= new Set()).add(granted);
@@ -1027,6 +1044,8 @@ function createRun({
     for (const id of respawning) {
       if (intersections.grants[id] !== -1) intersections.release(id);
       intersections.leaveGroup(id);
+      unresolvedHeads[id] = undefined;
+      pendingHead[id] = -1;
       intersections.exitedFrom[id] = -1;
       if (vehicles.lane[id]! >= 0) leaveRoad(id, timeS, vehicles.position[id]!);
       vehicles.remove(id);
@@ -1169,6 +1188,8 @@ function createRun({
     const before = compiled;
     parking.patch(next);
     vehicles.headDetourS.fill(0);
+    unresolvedHeads.fill(undefined);
+    pendingHead.fill(-1);
     const changes = patchChanges(before, next);
     const project = createProjector(next);
     const oldGrants = intersections.grants.slice();

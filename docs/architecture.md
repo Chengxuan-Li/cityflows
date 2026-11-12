@@ -1618,6 +1618,13 @@ requests the chosen movement through ordinary signal, gap and conflict arbitrati
 Taking it uses the existing `missed_turn` fallback and reroutes on the next lane, without
 spending a congestion replan. After the delay it remains eligible as room opens; an
 unsuccessful search does not restart the delay. Without an alternative it keeps waiting;
+TASK-131 Phase 3 / B56 rejects a head alternative whose suffix repeats the current blocked
+movement or an earlier unresolved blockage in that vehicle's executed head diversions. Two
+individually nonreturning head choices therefore cannot send the vehicle back to an earlier
+blocked movement. A record is made only when the diversion actually executes and is released
+when the vehicle reaches the blocked movement's target road; another usable entry lane remains
+available. Recovery, edits and a changed parking destination reset this history. This constrains
+the engine's head choices without changing route search or its request/result contract.
 TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
 not contain the other per-vehicle timers).
 
