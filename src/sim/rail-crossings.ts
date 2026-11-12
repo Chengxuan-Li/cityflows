@@ -64,6 +64,7 @@ export function createRailCrossings(
   const table = railTimetable(rail);
   const facilities = rail.facilities ?? [];
   const profiles = createVehicleProfiles(params);
+  const maxLength = Math.max(...profiles.map((p) => p.lengthM));
   const length = (id: number) => profiles[vehicles.vclass[id]!]!.lengthM;
   const events = table.routes.map((route) => {
     const result: Event[] = [];
@@ -189,7 +190,6 @@ export function createRailCrossings(
   for (let f = 0; f < facilities.length; f++)
     if (served[f])
       for (const span of facilities[f]!.spans ?? []) {
-        const maxLength = Math.max(...profiles.map((p) => p.lengthM));
         tailInfluence(span.segment, span.toM + maxLength);
       }
   // Initial occurrences include trains already inside the imported network.
@@ -264,6 +264,49 @@ export function createRailCrossings(
       }
     }
   }
+  const platoonLane = Uint8Array.from(city.lanes, (lane) =>
+    Number(lane.left === -1 && lane.right === -1),
+  );
+  for (const space of city.parkingSpaces ?? []) platoonLane[space.lane] = 0;
+  const walkStops = city.lanes.map(() => [] as number[]);
+  for (const link of city.walk.links)
+    for (const span of link.crossing?.spans ?? [])
+      walkStops[span.lane]!.push(span.atM - span.halfM - params.idm.minGapM);
+
+  /** An exclusive lane prefix can store the whole platoon even if every vehicle stops.
+   * Never borrow space across a junction, parking manoeuvre, lateral entry or access point. */
+  function platoonFits(id: number, facility: number, end: number) {
+    const field = vehicles.lane[id]!;
+    if (field < 0 || !platoonLane[field]) return false;
+    const lane = city.lanes[field]!,
+      position = vehicles.position[id]!,
+      gap = params.idm.minGapM;
+    if (end > lane.lengthM) return false;
+    // A downstream vehicle's rear can extend back from the next segment or a new access spawn.
+    let frontier = lane.stopM - maxLength - gap;
+    for (const index of lane.connectors) {
+      const at = city.connectors[index]!.positionM;
+      if (at > position) frontier = Math.min(frontier, at - maxLength - gap);
+    }
+    for (const at of walkStops[field]!) if (at > position) frontier = Math.min(frontier, at);
+    for (const marking of stopsBySegment[bucket(field)]!)
+      if (marking.facility !== facility && served[marking.facility] && marking.at > position)
+        frontier = Math.min(frontier, marking.at);
+    let needed = length(id) + gap;
+    if (frontier - end < needed) return false;
+    for (let ahead = vehicles.previous[id]!; ahead !== -1; ahead = vehicles.previous[ahead]!) {
+      const front = vehicles.position[ahead]!,
+        rear = front - length(ahead);
+      if (front >= frontier || vehicles.speed[ahead]! < 0.1 || vehicles.state[ahead] !== DRIVING) {
+        frontier = Math.min(frontier, rear - gap);
+        break;
+      }
+      needed += length(ahead) + gap;
+      if (frontier - end < needed) return false;
+    }
+    return frontier - end >= needed;
+  }
+
   function roadOccupancy() {
     occupied.fill(0);
     for (const b of vehicles.occupied) {
@@ -570,7 +613,8 @@ export function createRailCrossings(
               tail !== -1 &&
               tail !== id &&
               offset + vehicles.position[tail]! > position &&
-              offset + vehicles.position[tail]! - length(tail) < clear
+              offset + vehicles.position[tail]! - length(tail) < clear &&
+              (segment !== field || !platoonFits(id, f, end))
             )
               blocked = true;
             if (segment >= 0) {

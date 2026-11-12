@@ -1375,7 +1375,12 @@ approach's braking time. A driver already beyond the marking, or unable to stop 
 class's comfortable braking distance at warning onset, clears; the service waits before its
 nose enters the road band until the whole road vehicle, including a rear on the preceding
 lane or movement, clears. Road entry also requires downstream storage for the full vehicle
-past every conflicting track and any intervening junction movement. A road red inside that
+past every conflicting track and any intervening junction movement. An open, isolated single
+lane may admit a moving platoon when its exclusive downstream prefix fits every intervening
+vehicle's full length plus gap, without moving any stopped or queued body. That prefix ends
+before road or pedestrian stops, access points, another served crossing, and the lane end
+(with a maximum-body rear guard). Lateral lanes, parking manoeuvres and clearance across a
+junction retain strict admission. A road red inside that
 clearance holds entry; release removes only the crossing obstacle and never grants a road
 signal. Unserved, pedestrian and grade-separated crossings impose no road restriction.
 An admitted vehicle that stops wholly upstream of the physical conflict yields to rail and

@@ -560,3 +560,100 @@ test('T75 restart is deterministic and an unserved facility has exact road-state
   a.step(1500);
   expect(a.stateHash()).toBe(hash);
 });
+
+test('T75 an open single-lane crossing admits a moving platoon with free downstream storage', () => {
+  const compiled = setup(operatingCrossing()),
+    facility = compiled.rail!.facilities![0]!,
+    stop = facility.stops![0]!,
+    end = facility.spans!.find((s) => s.segment === stop.lane)!.toM;
+  const vehicles = createVehicles(3, compiled.lanes.length, compiled.movements.length);
+  vehicles.state.fill(DRIVING);
+  vehicles.speed.fill(10);
+  for (const [id, front] of [end + 0.5, stop.stopM - 15, stop.stopM - 34].entries())
+    vehicles.insert(id, stop.lane, front);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 100, () => false)!;
+  expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
+  expect(control.hold(1)).toBe(Infinity);
+  expect(control.hold(2)).toBe(Infinity);
+});
+
+test.each([0, 2])(
+  'T75 open platoon storage counts the full intervening vehicle body (%s)',
+  (kind) => {
+    const compiled = setup(operatingCrossing()),
+      facility = compiled.rail!.facilities![0]!,
+      stop = facility.stops![0]!,
+      end = facility.spans!.find((s) => s.segment === stop.lane)!.toM;
+    const vehicles = createVehicles(3, compiled.lanes.length, compiled.movements.length);
+    vehicles.state.fill(DRIVING);
+    vehicles.speed.fill(2);
+    vehicles.speed[2] = 0;
+    vehicles.vclass[0] = kind;
+    const full = kind === 2 ? 20.5 : 13;
+    vehicles.insert(0, stop.lane, end + 0.5);
+    vehicles.insert(1, stop.lane, stop.stopM - 20);
+    vehicles.insert(2, stop.lane, end + full + 4.5);
+    const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 100, () => false)!;
+    expect(control.hold(1)).toBe(stop.stopM);
+    vehicles.position[2] = vehicles.position[2]! + 3;
+    expect(control.hold(1)).toBe(Infinity);
+  },
+);
+
+test('T75 open platoons cannot borrow a downstream access slot', () => {
+  const source = operatingCrossing();
+  const work = Object.values(source.places).find((p) => p.kind === 'work')!;
+  work.connectors[0]!.positionM = 430;
+  const compiled = setup(source),
+    facility = compiled.rail!.facilities![0]!,
+    stop = facility.stops![0]!,
+    end = facility.spans!.find((s) => s.segment === stop.lane)!.toM;
+  const vehicles = createVehicles(3, compiled.lanes.length, compiled.movements.length);
+  vehicles.state.fill(DRIVING);
+  vehicles.speed.fill(10);
+  for (const [id, front] of [end + 0.5, stop.stopM - 15, stop.stopM - 34].entries())
+    vehicles.insert(id, stop.lane, front);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 100, () => false)!;
+  expect(control.hold(1)).toBe(Infinity);
+  expect(control.hold(2)).toBe(stop.stopM);
+});
+
+test('T75 an open multilane crossing retains conservative storage admission', () => {
+  const source = operatingCrossing();
+  Object.values(source.roads)[0]!.lanes.push({ ...Object.values(source.roads)[0]!.lanes[0]! });
+  const compiled = setup(source),
+    facility = compiled.rail!.facilities![0]!,
+    stop = facility.stops![0]!,
+    end = facility.spans!.find((s) => s.segment === stop.lane)!.toM;
+  const vehicles = createVehicles(2, compiled.lanes.length, compiled.movements.length);
+  vehicles.state.fill(DRIVING);
+  vehicles.speed.fill(10);
+  vehicles.insert(0, stop.lane, end + 0.5);
+  vehicles.insert(1, stop.lane, stop.stopM - 15);
+  const control = createRailCrossings(compiled, vehicles, DEFAULT_SIM_PARAMS, 100, () => false)!;
+  expect(control.hold(1)).toBe(stop.stopM);
+});
+
+test('T75 an open three-car platoon keeps exact ordinary-road trajectories', () => {
+  const source = operatingCrossing(),
+    ordinary = structuredClone(source);
+  delete ordinary.rail;
+  const requests = trips(source, 3, 1).map((trip, i) => ({ ...trip, departS: i }));
+  const scenario = {
+    ...defaultScenario('grid5x5', 1),
+    startS: 0,
+    endS: 120,
+    simParams: { streetParkingShare: 0 },
+  };
+  const protectedRoad = createEngine(),
+    reference = createEngine();
+  protectedRoad.load({ compiled: setup(source), trips: requests, scenario });
+  reference.load({ compiled: setup(ordinary), trips: requests, scenario });
+  for (let i = 0; i < 1200; i++) {
+    protectedRoad.step();
+    reference.step();
+    expect(protectedRoad.snapshot().rail!.crossings[0]).toBe(CROSSING_OPEN);
+    expect(protectedRoad.stateHash()).toBe(reference.stateHash());
+  }
+  expect(protectedRoad.metrics().trips.completed).toBe(3);
+});
