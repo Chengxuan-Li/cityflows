@@ -166,6 +166,7 @@ function createRun({
   const waitingForLane = new Uint8Array(trips.length);
   const unresolvedHeads: (Set<number> | undefined)[] = Array(trips.length);
   const headDestination = new Int32Array(trips.length).fill(-1);
+  const sharedFollower = new Int32Array(trips.length).fill(-1);
   const pendingHead = new Int32Array(trips.length).fill(-1);
   const arrival = new Int32Array(trips.length).fill(-1);
   const parkingEdit = new Uint8Array(trips.length);
@@ -273,6 +274,7 @@ function createRun({
     headRoutes.delete(id);
     intersections.invalidatePlan(id);
     vehicles.headDetourS[id] = 0;
+    sharedFollower[id] = -1;
     pendingHead[id] = -1;
     const destination = compiled.connectors[vehicles.destination[id]!]!;
     const route = vehicles.route[id]!;
@@ -771,11 +773,37 @@ function createRun({
         !intersections.blockedExit(id, planned)
       ) {
         vehicles.headDetourS[id] = 0;
+        sharedFollower[id] = -1;
         continue;
       }
       if (intersections.red(planned.idx)) continue;
       vehicles.headDetourS[id] = vehicles.headDetourS[id]! + dtS;
-      if (vehicles.headDetourS[id]! + 1e-9 < params.headDetourS) continue;
+      const early = vehicles.headDetourS[id]! + 1e-9 < params.headDetourS;
+      if (early) {
+        const follower = vehicles.next[id]!;
+        const next = compiled.movements[vehicles.movement[follower] ?? -1];
+        const exit = intersections.exitLane(id, planned);
+        const sharedQueue =
+          follower !== -1 &&
+          vehicles.state[follower] === DRIVING &&
+          vehicles.speed[id] === 0 &&
+          vehicles.speed[follower] === 0 &&
+          vehicles.position[id]! - vehicles.position[follower]! <=
+            profile(id).lengthM + idm.minGapM + 0.1 &&
+          intersections.blockedExit(id, planned) === 'exit-full' &&
+          next !== undefined &&
+          !intersections.red(next.idx) &&
+          exit !== -1 &&
+          intersections.exitLane(follower, next) !== -1 &&
+          intersections.exitLane(follower, next) !== exit &&
+          !intersections.blockedExit(follower, next);
+        if (!sharedQueue) {
+          sharedFollower[id] = -1;
+          continue;
+        }
+        if (sharedFollower[id] === follower) continue;
+        sharedFollower[id] = follower;
+      }
       if (lane.out.length < 2) continue;
       const permits = roadAccessFilter(
         compiled,
@@ -790,6 +818,7 @@ function createRun({
         if (
           idx === planned.idx ||
           movement.neverGreen ||
+          (early && intersections.red(idx)) ||
           vehicles.attemptedFallbacks[id]?.has(idx) ||
           !allowedLanes[vehicles.vclass[id]!]![movement.toLane] ||
           !permits(compiled.lanes[movement.toLane]!.road) ||
@@ -1100,6 +1129,7 @@ function createRun({
       vehicles.speed[id] = 0;
       vehicles.jamS[id] = 0;
       vehicles.headDetourS[id] = 0;
+      sharedFollower[id] = -1;
       vehicles.stopped[id] = 0;
       vehicles.junctionWaiting[id] = 0;
       if (vehicles.respawns[id]! >= maxRespawns) {
@@ -1235,6 +1265,7 @@ function createRun({
     headRoutes.clear();
     parking.patch(next);
     vehicles.headDetourS.fill(0);
+    sharedFollower.fill(-1);
     unresolvedHeads.fill(undefined);
     pendingHead.fill(-1);
     const changes = patchChanges(before, next);

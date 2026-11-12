@@ -1638,8 +1638,13 @@ for `exit-full` or `box`. A red signal pauses the timer; movement, becoming a fo
 changing the lane plan or a live patch resets it. This also checks an approach grant or
 an automatic continuation whose exit has filled since admission. After 45 s by default,
 it tries other movements from its current lane, excluding `neverGreen`, class/access bans
-and movements in its trip's `attemptedFallbacks`. A candidate needs room on its exit now
-and a route from that exit to the current destination connector. The lowest remaining
+and movements in its trip's `attemptedFallbacks`. TASK-131's shared-lane trial permits one
+search before that delay when the head and its immediate follower are stopped at normal
+queue spacing, the head's outlet is full, and the follower has a distinct green outlet with
+storage. Outlets are the actual exits beyond a junction group. An early candidate must also
+be green. The pair is tried once while eligible; an unsuccessful search leaves the ordinary
+timer running. A changed lane plan, live patch or recovery resets the pair. A candidate needs
+room on its exit now and a route from that exit to the current destination connector. The lowest remaining
 route cost wins, with movement index breaking ties. It releases any approach grant and
 requests the chosen movement through ordinary signal, gap and conflict arbitration.
 Taking it uses the existing `missed_turn` fallback and reroutes on the next lane, without
