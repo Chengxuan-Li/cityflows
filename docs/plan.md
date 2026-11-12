@@ -1124,6 +1124,11 @@ else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 The state at the 2026-11-12 handover (held branches, open decisions, how agents are run) is in
 `docs/lead-handoff-2026-11-12.md`.
 
+The owner subsequently assigned orchestration to the temporary lead. Unless the owner reserves a
+task, the lead starts Codex subagents in the lead chat and they report to the lead. Use up to
+GPT-6.1 Sol at high effort. If a task would benefit from GPT-6 Astra, explain why and obtain
+the owner's approval before assigning it.
+
 - A wave is a set of tasks on disjoint file surfaces. For each task: write the contract in
   `docs/tasks/TASK-<id>.md`, add its row to the task table, note the wave under "Waves",
   commit, cut `task/<id>-<name>` from `main`, and give the agent a brief that names the
@@ -3052,6 +3057,11 @@ runs); with every rider kept but walking nowhere seed 1 still drops, so the loss
 riders on crossings. Waits on the owner's gate method (three-seed mean or B56 first).
 
 ## Owner decisions log
+
+- 2026-11-12 (owner, after handover): the lead starts and orchestrates tasks here unless the
+  owner specifies otherwise. Use Codex subagents up to GPT-6.1 Sol high. GPT-6 Astra requires
+  the owner's prior approval. The traffic gate method, B56 direction and three held merges
+  still await decisions.
 
 - 2026-11-12 (owner): TASK-130 is complete on Codex; the lead stops after the ongoing tasks and
   the TASK-130 review, and job allocation is discussed before any new agent starts. A temporary
