@@ -166,7 +166,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-136](tasks/TASK-136.md) | 10 | Level crossings | rail import, crossing placement and drawing | 127, 135; Phase 3 for the stop rule, 138 for trams | T75, shots | import and drawing merged; train protection and tram interaction pending |
 | [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | done with TASK-142 (lead review below) |
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
-| [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | active |
+| [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3197,6 +3197,18 @@ wait was spent on the road. Some experienced a single road queue over 900 s. Oth
 delay through several junctions or from their origin. On the preceding build, 94 road cars
 passed car 3887's parking exit while it waited to leave. Physical clearance was occupied
 at all 2452 one-second samples. Existing safety checks correctly prevented an overlap.
+
+TASK-143 (lead review, 2026-11-12, `254ed12`). While a head waits, the engine can reuse
+its landing-lane route result within the current cost version. It checks exit space and
+movement eligibility every step. Destination, trip routing inputs, lane replans and live
+city edits invalidate old answers. A failed search refreshes when the costs change.
+State hashes matched main for seeds 1/2/3 (507565795, 2362085700, 473190784), with the
+same completions, mean delays, gridlocks and respawns. Requests fell from 246735/260075/353296
+to 117896/120760/133529. After a warm-up on each build, alternating full-morning seed-1
+runs took 65.96 and 70.43 s on main, 66.44 and 66.15 s with reuse. The mean was 2.8%
+lower; the ranges overlap. Lead check passed 1148 unit tests, city 162, light traffic
+and all 37 light browser tests. Full run 43216929096 passed on the integrated code.
+The traffic baseline is unchanged.
 
 ## Owner decisions log
 
