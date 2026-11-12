@@ -169,7 +169,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
 | [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | in progress |
-| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged; SwiftShader 3D remains over budget |
+| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
 | [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | paint repair in review |
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | in progress on PR branch |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -3354,6 +3354,21 @@ produced 4450/12/0. A trace found four distinct paths where a stopped follower w
 at an open marking behind a moving leader. The PR branch retains protection and its
 original gates. [Staging run](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305272553)
 and [facility isolation](https://github.com/Chengxuan-Li/cityflows/actions/runs/43305740807).
+
+TASK-146 located the westbound lane gain at OSM node 297271363 on Arnulfstraße.
+Ways 146018788, 146018784/146018786 and 134171421 carry two, three and five westbound
+lanes respectively. Eastbound way 134583817 carries two. At `n:652`, the renderer
+collapsed the two new lane strips twice, creating a 1.058 m disagreement between their
+supposedly shared edges. The repair draws one common edge. Inspection of both city
+fixtures found four affected carriageways. Canonical roads, driving polylines and legal
+movements match the control. The curb-following walk geometry changes at one site in
+each city. The Sindelfingen change includes a 0.146 m corner link. All crossing spans,
+controls and access connections persist.
+
+The first TASK-144 candidate also changed synthetic S-Bahn departure offsets because rail
+node allocation moved before the timetable hash was calculated. The unchanged T70
+departure-row test exposed it. That candidate stays outside main while its split is moved
+after rail allocation.
 
 ## Owner decisions log
 
