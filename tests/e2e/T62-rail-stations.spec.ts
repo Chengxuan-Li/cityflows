@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import { button, city, importOsm, pageErrors } from './helpers';
+import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 import type { Vec2 } from '../../src/geo/vec2';
 import { cumulativeLengths, pointAtDistance, polylineLength } from '../../src/geo/polyline';
 
@@ -16,33 +17,7 @@ test.use({
 // Lead, 2026-11-10: CI skips the frame gate, and 120-frame samples on its software GPU pushed the
 // spec past 420 s (checkpoint-2026-11-10), so CI takes short samples for the report only.
 const sample = process.env.CI ? { frames: 12, warm: 2 } : { frames: 120, warm: 30 };
-async function timing(page: Page, measure: string) {
-  return page.evaluate(
-    async ({ measure, sample }) => {
-      window.cityflowsRenderContinuously = true;
-      const frames: number[] = [],
-        renders: number[] = [];
-      let capture = false,
-        last = 0;
-      const observer = new PerformanceObserver((list) => {
-        if (capture)
-          for (const e of list.getEntries()) if (e.name === measure) renders.push(e.duration);
-      });
-      observer.observe({ entryTypes: ['measure'] });
-      for (let i = 0; i < sample.frames; i++) {
-        const now = await new Promise<number>((resolve) => requestAnimationFrame(resolve));
-        capture = i >= sample.warm;
-        if (capture && last) frames.push(now - last);
-        last = now;
-      }
-      observer.disconnect();
-      window.cityflowsRenderContinuously = false;
-      const mean = (samples: number[]) => samples.reduce((s, v) => s + v, 0) / samples.length;
-      return { frameMs: mean(frames), renderMs: mean(renders), drawn: renders.length };
-    },
-    { measure, sample },
-  );
-}
+const timing = (page: Page, measure: string) => railFrameTiming(page, measure, sample);
 async function click(page: Page, point: Vec2, view: '2d' | '3d') {
   const position = await page.evaluate((p) => window.cityflows!.worldToScreen!(p), point);
   await page
@@ -103,6 +78,10 @@ test('T62 Munich rail layers, station/platform/track inspection, pictures and fr
   for (const label of ['Basemap', 'Entrances and exits'])
     await layers.getByLabel(label, { exact: true }).uncheck();
   await page.keyboard.press('Escape');
+  await writeFile(
+    info.outputPath('rail-environment.json'),
+    JSON.stringify(await railTimingEnvironment(page), null, 2),
+  );
   const reports = [];
   for (const view of ['2d', '3d'] as const) {
     if (view === '3d') {
@@ -153,8 +132,6 @@ test('T62 Munich rail layers, station/platform/track inspection, pictures and fr
       offFrameMs = (off.frameMs + offAgain.frameMs) / 2;
     reports.push({ view, on, off, onAgain, offAgain, onFrameMs, offFrameMs });
     await writeFile(info.outputPath('rail-frames.json'), JSON.stringify(reports, null, 2));
-    // Lead (TASK-126 merge): as T44, the 10% gate holds locally; CI's software GPU is too noisy.
-    if (!process.env.CI) expect(onFrameMs).toBeLessThanOrEqual(offFrameMs * 1.1);
     await button(page, 'Layers').click();
     await toggle.check();
     await page.keyboard.press('Escape');
@@ -181,5 +158,30 @@ test('T62 Munich rail layers, station/platform/track inspection, pictures and fr
     (await city(page)).context!.features.some((f) => f.class === 'rail' || f.class === 'tram'),
   ).toBe(false);
   expect(await city(page)).toEqual(source);
+  // Preserve all inspection and screenshot coverage even if a view exceeds its budget.
+  // Lead (TASK-126 merge): as T44, CI's software GPU skips this local ten-percent gate.
+  if (!process.env.CI)
+    for (const report of reports)
+      expect(report.onFrameMs, `${report.view}: rail frame cost`).toBeLessThanOrEqual(
+        report.offFrameMs * 1.1,
+      );
   expect(errors).toEqual([]);
+});
+
+test('T62 frame samples include the final render and exclude warmup entries', async ({ page }) => {
+  await page.goto('about:blank');
+  await page.evaluate(() => {
+    const raf = window.requestAnimationFrame.bind(window);
+    let frame = 0;
+    window.requestAnimationFrame = (callback) =>
+      raf((now) => {
+        performance.measure('rail-timing-regression', {
+          start: performance.now(),
+          duration: ++frame,
+        });
+        callback(now);
+      });
+  });
+  const result = await railFrameTiming(page, 'rail-timing-regression', { frames: 12, warm: 2 });
+  expect(result.renders).toEqual(Array.from({ length: 10 }, (_, i) => i + 3));
 });

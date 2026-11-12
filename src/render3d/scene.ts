@@ -935,6 +935,7 @@ export class Scene3D {
     if (import.meta.env.MODE === 'test') {
       this.canvas.dataset.frames = String(Number(this.canvas.dataset.frames) + 1);
       this.canvas.dataset.triangles = String(this.renderer.info.render.triangles);
+      this.canvas.dataset.drawCalls = String(this.renderer.info.render.calls);
     }
     if (import.meta.env.MODE === 'test') {
       performance.measure('cityflows:render3d', { start: renderStart, end: performance.now() });
