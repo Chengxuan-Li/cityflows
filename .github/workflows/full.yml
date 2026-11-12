@@ -13,4 +13,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node bench/task147/road-occupants.mjs
-      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts occupants
+      - run: node bench/task147/decisions.mjs
+      - run: node --experimental-strip-types --import ./bench/register.ts bench/task147/counter.ts decisions 30600
+
