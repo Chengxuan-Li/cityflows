@@ -6,6 +6,7 @@ import {
   prepareRing,
   nearestOnPolyline,
   pointInPolygon,
+  polylineCrossings,
   type PreparedRing,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
@@ -33,13 +34,21 @@ function overlaps(a: PreparedRing, b: PreparedRing): boolean {
 
 /** Derived bays; lots without mapped aisles use a regular layout without inventing roads. */
 export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
-  const occupied: PreparedRing[] = [];
+  const occupied: { ring: PreparedRing; layer: number | undefined }[] = [];
   const obstacles = [
-    ...compiled.roads.map((road) => road.surface),
-    ...compiled.nodes.map((node) => node.outline),
+    ...compiled.roads.map((road) => ({
+      ring: road.surface,
+      layer:
+        city.roads[road.id]!.layer ??
+        Math.min(
+          city.nodes[city.roads[road.id]!.from]!.layer,
+          city.nodes[city.roads[road.id]!.to]!.layer,
+        ),
+    })),
+    ...compiled.nodes.map((node) => ({ ring: node.outline, layer: city.nodes[node.id]!.layer })),
   ]
-    .filter((ring) => ring.length >= 3)
-    .map((ring) => prepareRing(closed(ring)));
+    .filter(({ ring }) => ring.length >= 3)
+    .map(({ ring, layer }) => ({ ring: prepareRing(closed(ring)), layer }));
   return Object.values(city.parking ?? {})
     .filter((lot) => lot.kind === 'lot')
     .sort((a, b) => a.id.localeCompare(b.id))
@@ -55,8 +64,14 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
       if (lot.shape?.kind !== 'polygon') return result;
       const shape = lot.shape.ring;
       const boundary = prepareRing(closed(shape));
+      const layers = new Set((lot.aisles ?? []).map((id) => city.roads[id]?.layer));
+      // An aisle establishes the lot's grade. Without a single known grade, retain
+      // every obstruction; no deck/ground separation is guessed for old files.
+      const layer = layers.size === 1 ? [...layers][0] : undefined;
+      const sameGrade = (other: number | undefined) =>
+        layer === undefined || other === undefined || layer === other;
       const local = [
-        ...obstacles,
+        ...obstacles.filter((o) => sameGrade(o.layer)).map((o) => o.ring),
         ...(lot.exclusions ?? []).map((ring) => prepareRing(closed(ring))),
       ].filter(
         ({ box }) =>
@@ -133,7 +148,7 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
             const candidate = prepareRing(closed(corners));
             if (
               local.some((obstacle) => overlaps(candidate, obstacle)) ||
-              occupied.some((other) => overlaps(candidate, other))
+              occupied.some((other) => sameGrade(other.layer) && overlaps(candidate, other.ring))
             )
               continue;
             // Keep the entire bay, rather than just its centre, six metres from junctions.
@@ -145,7 +160,7 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
               )
             )
               continue;
-            occupied.push(candidate);
+            occupied.push({ ring: candidate, layer });
             stalls.push({
               layout: angle < Math.PI / 2 ? 'angled' : 'perpendicular',
               access: p,
@@ -160,7 +175,47 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
           }
         }
       }
-      if (!lot.aisles?.length) {
+      const throatsOnly =
+        (lot.aisles ?? []).length > 0 &&
+        lot.aisles!.every((id) => {
+          const road = city.roads[id];
+          if (!road) return false;
+          const lengths = cumulativeLengths(road.centerline);
+          const cuts = [
+            ...lengths,
+            ...polylineCrossings(road.centerline, closed(shape)).map((c) => c.alongA),
+          ].sort((a, b) => a - b);
+          return cuts
+            .slice(1)
+            .every(
+              (end, i) =>
+                end - cuts[i]! < 1e-6 ||
+                !pointInPolygon(
+                  pointAtDistance(road.centerline, lengths, (end + cuts[i]!) / 2),
+                  closed(shape),
+                  0,
+                ),
+            );
+        });
+      if (!lot.aisles?.length || (!stalls.length && throatsOnly)) {
+        const throats = (lot.mappedPortals ?? []).map((portal) => {
+          const road = city.roads[portal.aisleRoadId]!;
+          const line = portal.direction === 'in' ? road.centerline : road.centerline.toReversed();
+          const end = line.at(-1)!,
+            previous = line.at(-2)!;
+          const length = Math.hypot(end.x - previous.x, end.y - previous.y);
+          const dx = (end.x - previous.x) / length,
+            dy = (end.y - previous.y) / length;
+          const width = road.lanes.reduce((sum, lane) => sum + lane.widthM, 0) / 2 + 0.5;
+          return prepareRing(
+            closed([
+              { x: end.x - dy * width, y: end.y + dx * width },
+              { x: end.x + dx * 12 - dy * width, y: end.y + dy * 12 + dx * width },
+              { x: end.x + dx * 12 + dy * width, y: end.y + dy * 12 - dx * width },
+              { x: end.x + dy * width, y: end.y - dx * width },
+            ]),
+          );
+        });
         const edges = shape.map((a, i) => ({ a, b: shape[(i + 1) % shape.length]! }));
         edges.sort(
           (a, b) =>
@@ -217,7 +272,8 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
               const candidate = prepareRing(closed(corners));
               if (
                 local.some((o) => overlaps(candidate, o)) ||
-                occupied.some((o) => overlaps(candidate, o))
+                throats.some((o) => overlaps(candidate, o)) ||
+                occupied.some((o) => sameGrade(o.layer) && overlaps(candidate, o.ring))
               )
                 continue;
               attempt.push({
@@ -244,7 +300,7 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
         }
         for (const stall of best) {
           stalls.push(stall);
-          occupied.push(prepareRing(closed(stall.corners)));
+          occupied.push({ ring: prepareRing(closed(stall.corners)), layer });
         }
         result.aislePaths = bestPaths;
       }

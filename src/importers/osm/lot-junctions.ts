@@ -19,6 +19,7 @@ export function addMappedLotPortals(
   const restored = new Set<string>();
   for (const lot of lots) {
     const portals: Connector[] = [];
+    const mappedPortals: NonNullable<typeof lot.mappedPortals> = [];
     const nodes = [
       ...new Set((lot.aisles ?? []).flatMap((id) => [city.roads[id]!.from, city.roads[id]!.to])),
     ];
@@ -58,23 +59,21 @@ export function addMappedLotPortals(
           const lane = net.lanes[net.index.lane.get(`${road.id}#${laneIndex}`)!]!;
           const hit = nearestOnPolyline(lane.polyline, node.pos);
           const direction = incoming ? 'in' : 'out';
-          const previous = portals.find(
-            (c) =>
-              c.roadId === road.id &&
-              c.lane === laneIndex &&
-              Math.abs(c.positionM - hit.along) < 1e-6,
-          );
-          if (previous) {
-            if (previous.direction !== direction) previous.direction = 'both';
-          } else
-            portals.push({
-              id: allocateId(city, 'c'),
-              roadId: road.id,
-              lane: laneIndex,
-              positionM: hit.along,
-              direction,
-              throughputPerMin: 30,
-            });
+          const portal: Connector = {
+            id: allocateId(city, 'c'),
+            roadId: road.id,
+            lane: laneIndex,
+            positionM: hit.along,
+            direction,
+            throughputPerMin: 30,
+          };
+          portals.push(portal);
+          mappedPortals.push({
+            connectorId: portal.id,
+            nodeId: id,
+            aisleRoadId: mouth.id,
+            direction,
+          });
           restored.add(id);
         }
       }
@@ -85,11 +84,16 @@ export function addMappedLotPortals(
       // Move its IDs to the real accesses rather than leaving a second shortcut.
       for (const [index, old] of lot.connectors.entries()) {
         const portal = portals[index];
-        if (portal) Object.assign(portal, { id: old.id, throughputPerMin: old.throughputPerMin });
+        if (portal) {
+          for (const mapped of mappedPortals)
+            if (mapped.connectorId === portal.id) mapped.connectorId = old.id;
+          Object.assign(portal, { id: old.id, throughputPerMin: old.throughputPerMin });
+        }
       }
       lot.connectors = portals;
       lot.provenance.inferred = lot.provenance.inferred.filter((value) => value !== 'driveway');
     } else lot.connectors.push(...portals);
+    lot.mappedPortals = mappedPortals;
     (lot.provenance.inferred ??= []).push('mappedLotPortals');
   }
   for (let i = diagnostics.length - 1; i >= 0; i--)
