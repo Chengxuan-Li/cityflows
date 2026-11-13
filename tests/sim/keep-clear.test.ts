@@ -24,9 +24,7 @@ function mouthWorld(far = false) {
   place('West start', 'gateway', { x: -10, y: 10 }, [
     { road: east!, positionM: 5, direction: 'out' },
   ]);
-  place('Stop', 'gateway', { x: 175, y: 10 }, [
-    { road: east!, positionM: 175, direction: 'in' },
-  ]);
+  place('Stop', 'gateway', { x: 175, y: 10 }, [{ road: east!, positionM: 175, direction: 'in' }]);
   place('East end', 'gateway', { x: 410, y: 10 }, [
     { road: east!, positionM: 390, direction: 'in' },
   ]);
@@ -118,8 +116,7 @@ test('TASK-169 a lot exit has a mouth zone on its lane and on the lanes it cross
       expect(
         farZones[span.lane]!.some(
           (z) =>
-            z.kind === 'crosswalk' &&
-            Math.abs(z.fromM - Math.max(0, span.atM - span.halfM)) < 1e-9,
+            z.kind === 'crosswalk' && Math.abs(z.fromM - Math.max(0, span.atM - span.halfM)) < 1e-9,
         ),
       ).toBe(true);
 });
