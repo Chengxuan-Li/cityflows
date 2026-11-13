@@ -174,7 +174,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
 | [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | done (PR #6) |
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
-| [TASK-150](tasks/TASK-150.md) | 7 | A car leaving a lot waits clear of the public lane and merges continuously once granted | `src/sim/parking.ts`, `manoeuvre.ts`, `engine.ts` (exit), T77 | 118, 122, 149 | T77, witness 0 overlaps, T54/T59/T63, Munich gate, shots | in progress (Claude Code subagent) |
+| [TASK-150](tasks/TASK-150.md) | 7 | A car leaving a lot waits clear of the public lane and merges continuously once granted | `src/sim/parking.ts`, `manoeuvre.ts`, `engine.ts` (exit), T77 | 118, 122, 149 | T77, witness 0 overlaps, T54/T59/T63, Munich gate, shots | done 2026-11-13 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3501,6 +3501,37 @@ a passing car leaves enough room for it to merge. On the same authored lot, main
 before TASK-149 and the integrated build produced the same 1,476 overlapping
 footprint samples. The first occurred at 152.4 s. Track the physical merge
 separately from the repaired mapped entrances.
+
+### 2026-11-13 TASK-150 merge and PR #1 integration attempt
+
+TASK-150 (Claude Code subagent, Opus 5.5 high; merged): a car leaving a lot stops at the farthest
+drive-out pose whose whole body is clear of the exit lane and is granted from there, by the same
+spawn-gap and lot-release tests, checked at its join station (the hold's nearest lane station plus
+its distance from the lane centre, capped at the later of connector and stop line). The grant
+inserts it into the lane at speed 0, so followers see it before its body crosses the lane edge; a
+new `merge` phase draws it turning in at lot speed (0.25 m a step) and hands over without a jump.
+A destination between the connector and the join station (its own lot again) is where it joins.
+TASK-149's witness: 1,476 overlap samples before, 0 after. T77 (3 tests, all failing on main): no
+overlap or lane intrusion while refused, through cars' poses and speeds identical with and without
+the lot car, merge steps within 0.30 m, a second lot car queues without overlap. T54, T59, T63
+unchanged. Lead run of the merge `871951f`: `check`, `test:city` (166), the light traffic tier at
+seed 1: 3,903 completed, 36 gridlocked, 0 stalled heads, 0 parking failures (main 3,928 / 36 / 0 /
+0); agent's light e2e 37 passed. Seeds 2 and 3 (diagnostic): 3,909 / 30 and 3,169 / 50 (main
+4,068 / 36 and 3,322 / 50). No pinned simulation, route or timetable hash moved. Open: five lots
+whose aisles are mapped on roads (Munich pk:2052, 2053, 2054, 2057; Sindelfingen pk:1487) have no
+clear pose and still hold in the lane band; pk:2049's admission wait falls only from 2,503 s to
+2,173 s, so it stays a separate item; the mean lot leave time rose from 229.5 s to 433.9 s with
+those waits. Shots under `D:\cityflows-wth	est-results	ask150\`.
+
+PR #1 integration (lead, owner's instruction to merge if GitHub CI passed): the PR's CI was green
+at `eb7c089`, and its merge onto main (`6c8361c`, branch `task/lead-pr1-merge`) conflicts only in
+test hash pins. City hashes equal main's; compiled roads, lanes, movements and parking equal main
+byte for byte; compile pins move for TASK-136's crossing facilities and TASK-138's compiled
+`rail.tramStops` (Munich only). `check` (route-audit passes alone) and `test:city` (168) pass. The
+unchanged Munich gate fails on the combination: 3,300 completed, 49 gridlocked, 1 stalled head, 1
+parking failure (PR #1 on its old base 3,719 / 37 / 0; main 3,928 / 36 / 0). Not pushed: main's CI
+runs this gate. The likely interaction is TASK-149's restored lot access with PR #1's crossing
+control; diagnosis waits for the owner.
 
 ## Owner decisions log
 
