@@ -197,7 +197,22 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
           candidate.hit.along,
         );
       }
-      graph.stallNodes.push(attach(stall.access ?? stall.position, false));
+      const access = stall.access ?? stall.position;
+      const at = attach(access, false);
+      graph.stallNodes.push(at);
+      const group = city.roads[stall.aisleRoad]?.streetGroupId;
+      if (directed && at !== -1 && group && !lot.aislePaths?.length) {
+        // A bay on a two-way aisle can be entered or left from either travel
+        // direction. This short manoeuvre is not a reverse edge on a one-way lane.
+        for (const lane of mappedLanes.filter(
+          (l) => city.roads[compiled.roads[l.road]!.id]!.streetGroupId === group,
+        )) {
+          const hit = nearestOnPolyline(lane.polyline, access);
+          if (hit.away > STALL_LINK_M || !clear(access, hit.point)) continue;
+          const other = attach(hit.point, false);
+          if (other !== -1) link(at, other);
+        }
+      }
     }
     for (const idx of [
       ...new Set([...(facility?.connectorsIn ?? []), ...(facility?.connectorsOut ?? [])]),

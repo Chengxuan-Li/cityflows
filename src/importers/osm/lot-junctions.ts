@@ -23,8 +23,44 @@ export function addMappedLotPortals(
     const nodes = [
       ...new Set((lot.aisles ?? []).flatMap((id) => [city.roads[id]!.from, city.roads[id]!.to])),
     ];
+    // Only facilities with a demonstrated lost/shared source mouth belong to this
+    // repair. Existing complete imports retain their normal access selection.
+    if (
+      !nodes.some((id) => {
+        if (publicRoads.some((r) => r.from === id || r.to === id)) return false;
+        const node = city.nodes[id]!,
+          source = node.provenance.osmIds?.[0];
+        return (
+          source !== undefined &&
+          publicRoads.some(
+            (r) =>
+              r.provenance.osmIds?.some((osm) => ways.get(osm)?.nd.includes(source)) &&
+              nearestOnPolyline(r.centerline, node.pos).away <= 1,
+          )
+        );
+      })
+    )
+      continue;
+    const fallback = lot.provenance.inferred?.includes('driveway')
+      ? lot.connectors
+      : lot.connectors.filter((c) => {
+          if (aisles.has(c.roadId)) return false;
+          const road = city.roads[c.roadId]!;
+          const lane = net.lanes[net.index.lane.get(`${c.roadId}#${c.lane}`)!]!;
+          return !nodes.some((id) => {
+            const node = city.nodes[id]!,
+              source = node.provenance.osmIds?.[0];
+            return (
+              source !== undefined &&
+              road.provenance.osmIds?.some((osm) => ways.get(osm)?.nd.includes(source)) &&
+              nearestOnPolyline(road.centerline, node.pos).away <= 1 &&
+              Math.abs(nearestOnPolyline(lane.polyline, node.pos).along - c.positionM) < 1
+            );
+          });
+        });
     for (const id of nodes) {
-      if (publicRoads.some((r) => r.from === id || r.to === id)) continue;
+      const connected = publicRoads.some((r) => r.from === id || r.to === id);
+      if (connected && !fallback.length) continue;
       const node = city.nodes[id]!,
         source = node.provenance.osmIds?.[0];
       if (
@@ -41,6 +77,7 @@ export function addMappedLotPortals(
           nearestOnPolyline(r.centerline, node.pos).away <= 1,
       );
       for (const road of mapped) {
+        if (connected && road !== mapped[0]) continue;
         if (!mouths.every((r) => (r.layer ?? 0) === (road.layer ?? 0))) continue;
         if (['no', 'delivery'].includes(road.access?.car ?? road.access?.all ?? 'yes')) continue;
         const roadDirection = nearestOnPolyline(road.centerline, node.pos).direction;
@@ -54,14 +91,19 @@ export function addMappedLotPortals(
           const side = roadDirection.x * dy - roadDirection.y * dx;
           // Use the edge lane facing the source mouth, including left-side accesses
           // on one-way roads. Provenance selects this carriageway, never its neighbour.
-          const laneIndex = side > 0 ? road.lanes.length - 1 : 0;
-          if (!road.lanes[laneIndex]!.allowed.includes('car')) continue;
-          const lane = net.lanes[net.index.lane.get(`${road.id}#${laneIndex}`)!]!;
+          const target = connected ? mouth : road;
+          const laneIndex = connected
+            ? mouth.lanes.findIndex((l) => l.allowed.includes('car'))
+            : side > 0
+              ? road.lanes.length - 1
+              : 0;
+          if (laneIndex < 0 || !target.lanes[laneIndex]!.allowed.includes('car')) continue;
+          const lane = net.lanes[net.index.lane.get(`${target.id}#${laneIndex}`)!]!;
           const hit = nearestOnPolyline(lane.polyline, node.pos);
           const direction = incoming ? 'in' : 'out';
           const portal: Connector = {
             id: allocateId(city, 'c'),
-            roadId: road.id,
+            roadId: target.id,
             lane: laneIndex,
             positionM: hit.along,
             direction,
@@ -79,10 +121,10 @@ export function addMappedLotPortals(
       }
     }
     if (!portals.length) continue;
-    if (lot.provenance.inferred?.includes('driveway')) {
+    if (fallback.length) {
       // A nearest-road driveway was only a fallback for the missing mapped mouth.
       // Move its IDs to the real accesses rather than leaving a second shortcut.
-      for (const [index, old] of lot.connectors.entries()) {
+      for (const [index, old] of fallback.entries()) {
         const portal = portals[index];
         if (portal) {
           for (const mapped of mappedPortals)
@@ -90,8 +132,8 @@ export function addMappedLotPortals(
           Object.assign(portal, { id: old.id, throughputPerMin: old.throughputPerMin });
         }
       }
-      lot.connectors = portals;
-      lot.provenance.inferred = lot.provenance.inferred.filter((value) => value !== 'driveway');
+      lot.connectors = [...lot.connectors.filter((c) => !fallback.includes(c)), ...portals];
+      lot.provenance.inferred = lot.provenance.inferred?.filter((value) => value !== 'driveway');
     } else lot.connectors.push(...portals);
     lot.mappedPortals = mappedPortals;
     (lot.provenance.inferred ??= []).push('mappedLotPortals');
