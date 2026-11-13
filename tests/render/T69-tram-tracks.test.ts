@@ -97,9 +97,10 @@ test('T69 railways keep their bed and rails; trams differ from them in both view
   const shapes = railGeometry(compiled, city);
   const rail = shapes.filter((s) => s.pick?.kind === 'track' && s.pick.track === 0);
   expect(rail.map((s) => [s.color, s.detail ?? false, s.tram])).toEqual([
-    [0xb5ae9e, false, undefined],
-    [0x777b78, true, undefined],
-    [0x777b78, true, undefined],
+    // TASK-162: the neutral gray bed and rails of the Mac-style palette.
+    [0xc2c1bd, false, undefined],
+    [0x7c7c80, true, undefined],
+    [0x7c7c80, true, undefined],
   ]);
   const mesh = buildRail(compiled, city, cityHeights(compiled, city)).group.children[0] as Mesh;
   const p = mesh.geometry.getAttribute('position');

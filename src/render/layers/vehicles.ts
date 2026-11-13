@@ -17,11 +17,11 @@ export function vehicleTextures() {
     const width = Math.round((lengthM / widthM) * 48);
     const y = index * 64 + 8;
     frames[vehicleClass] = new Rectangle(8, y, width, 48);
-    // TASK-162: a rim at 70 % under the tint, so light system colours (yellow, green) keep an
-    // edge on white streets.
+    // TASK-162: a rim at half the tint's brightness, so every system colour keeps an edge of at
+    // least 4.5:1 on white and pale yellow streets.
     for (const [fill, d] of [
-      ['#b3b3b3', 0],
-      ['#ffffff', 3],
+      ['#808080', 0],
+      ['#ffffff', 4],
     ] as const) {
       const box = (x: number, top: number, w: number, h: number, r: number) =>
         context.roundRect(x + d, top + d, w - 2 * d, h - 2 * d, Math.max(0, r - d));
@@ -48,8 +48,8 @@ export function vehicleTextures() {
     context.fill();
   }
   for (const [fill, r] of [
-    ['#b3b3b3', 16],
-    ['#ffffff', 12],
+    ['#808080', 16],
+    ['#ffffff', 11],
   ] as const) {
     context.fillStyle = fill;
     context.beginPath();

@@ -60,7 +60,8 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   await expect(map3D).toHaveAttribute('data-view', '3d');
   await expect.poll(() => map3D.getAttribute('data-meshes').then(Number)).toBeGreaterThan(0);
   await expect(map).toHaveAttribute('data-active', 'false');
-  await expect.poll(() => map3D.getAttribute('data-tiles').then(Number)).toBeGreaterThan(0);
+  // TASK-162: the OSM tiles are off by default.
+  await expect(map3D).toHaveAttribute('data-tiles', '0');
   await expect.poll(() => map3D.getAttribute('data-crossings').then(Number)).toBeGreaterThan(0);
   const buildings = page.getByLabel('Buildings', { exact: true });
   await expect(buildings).toBeChecked();
@@ -77,10 +78,10 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   await expect(map3D).toHaveAttribute('data-build-ms', buildMs!);
   await button(page, 'Layers').click();
   const layers = page.getByRole('region', { name: 'Map layers' });
-  await layers.getByLabel('Basemap', { exact: true }).uncheck();
-  await expect(map3D).toHaveAttribute('data-tiles', '0');
   await layers.getByLabel('Basemap', { exact: true }).check();
   await expect.poll(() => map3D.getAttribute('data-tiles').then(Number)).toBeGreaterThan(0);
+  await layers.getByLabel('Basemap', { exact: true }).uncheck();
+  await expect(map3D).toHaveAttribute('data-tiles', '0');
   await layers.getByLabel('Surroundings', { exact: true }).uncheck();
   await expect(map3D).toHaveAttribute('data-context-features', '0');
   await expect(map3D).toHaveAttribute('data-buildings', '0');

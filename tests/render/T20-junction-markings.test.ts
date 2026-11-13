@@ -153,7 +153,9 @@ test('T20: signal crossings lie on the road between stop position and junction',
   }
 });
 
-test('T20: one asphalt by default, optional class tones include the highest-class junction', () => {
+// TASK-162: by default streets are white and motorways and trunks pale yellow; the junction takes
+// its highest road's tone in both modes, and the Road classes tones differ from the default ones.
+test('T20: white streets by default, tones include the highest-class junction', () => {
   const result = compile(signalApproach());
   if (!result.ok) throw new Error('fixture');
   const net = result.compiled;
@@ -162,10 +164,11 @@ test('T20: one asphalt by default, optional class tones include the highest-clas
   incident[0]!.roadClass = 'motorway';
   incident[0]!.classRank = 100;
   expect(defaultLayers.roadClasses).toBe(false);
-  for (const road of net.roads) expect(roadStyle(road).color).toBe(style.asphalt);
-  expect(nodeColor(net, node)).toBe(style.asphalt);
+  for (const road of net.roads)
+    expect(roadStyle(road).color).toBe(road === incident[0] ? 0xfde8b4 : style.asphalt);
+  expect(nodeColor(net, node)).toBe(roadStyle(incident[0]!).color);
   expect(nodeColor(net, node, true)).toBe(roadStyle(incident[0]!, true).color);
-  expect(nodeColor(net, node, true)).not.toBe(style.asphalt);
+  expect(nodeColor(net, node, true)).not.toBe(nodeColor(net, node));
 });
 
 test('T20: an actual red-light queue stops behind both the stop line and zebra', () => {

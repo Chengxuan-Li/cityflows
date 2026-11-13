@@ -312,8 +312,9 @@ export function placeColors(kind: PlaceKind) {
   return { fill: mixColor(0xffffff, hue, 0.3), edge: mixColor(0xffffff, hue, 0.62) };
 }
 
-/** Vehicles take their destination's hue from the macOS system colours, blue left out for
- * selection: spread per destination, so neighbouring destinations of one type still differ. */
+/** Vehicles take their destination's hue from the macOS system colours, spread per destination
+ * so neighbouring destinations of one type still differ. Blue is left out for selection, yellow
+ * because it vanishes on white and pale yellow streets. */
 const vehicleHues = [
   0x34c759, // green
   0xff9500, // orange
@@ -322,7 +323,6 @@ const vehicleHues = [
   0x30b0c7, // teal
   0x5856d6, // indigo
   0xff2d55, // pink
-  0xffcc00, // yellow
   0xa2845e, // brown
 ] as const;
 
