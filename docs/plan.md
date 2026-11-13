@@ -3521,7 +3521,7 @@ seed 1: 3,903 completed, 36 gridlocked, 0 stalled heads, 0 parking failures (mai
 whose aisles are mapped on roads (Munich pk:2052, 2053, 2054, 2057; Sindelfingen pk:1487) have no
 clear pose and still hold in the lane band; pk:2049's admission wait falls only from 2,503 s to
 2,173 s, so it stays a separate item; the mean lot leave time rose from 229.5 s to 433.9 s with
-those waits. Shots under `D:\cityflows-wth	est-results	ask150\`.
+those waits. Shots under `D:\cityflows-wt\150\test-results\task150\`.
 
 PR #1 integration (lead, owner's instruction to merge if GitHub CI passed): the PR's CI was green
 at `eb7c089`, and its merge onto main (`6c8361c`, branch `task/lead-pr1-merge`) conflicts only in
