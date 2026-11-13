@@ -1403,6 +1403,13 @@ places a road vehicle in its crossing. Snapshot poses are allocated only on requ
 occupancy scans only occupied influenced segments. Crossing-held road vehicles do not enter
 gridlock recovery. No rail field enters canonical project data.
 
+A service positively held before one facility by road occupancy may release its own warning
+at a separate, not-yet-entered downstream facility to let that road discharge. Other services'
+protection, occupied rail bands and tail guards still apply. Once the upstream hold clears,
+the downstream facility starts a full fresh braking-aware warning; the service may approach
+but waits before nose entry until that warning completes. These per-occurrence warning
+clocks pause with simulation time and survive live edits only for the same facility interval.
+
 TASK-102 keeps garage stock and person car chains in `sim/parking.ts`, separate from place
 event admission. Initial residential stock uses residents times scenario car share, bounded
 by slots and distributed across facilities; explicit `occupancyAtStart` wins. Otherwise work

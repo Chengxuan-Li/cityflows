@@ -30,6 +30,8 @@ type Service = {
   current: number[];
   proposed: number[];
   tailClearedS: number[];
+  /** NaN: ordinary motion warning; Infinity: upstream interlock; finite: fresh warning. */
+  warningStartedS: number[];
 };
 type Clock = {
   routeId: string;
@@ -38,6 +40,7 @@ type Clock = {
   ageS: number;
   held: boolean;
   tailCleared?: { nodes: string[]; enterS: number; exitS: number; timeS: number }[];
+  warningRestarts?: { nodes: string[]; enterS: number; exitS: number; startedS: number | null }[];
 };
 type RoadState = {
   histories: { id: number; segment: number; trail: number[]; position: number }[];
@@ -224,6 +227,7 @@ export function createRailCrossings(
             tailClearedS: events[departure.route]!.map((event) =>
               ageS > event.exitS ? timeS - (ageS - event.exitS) : Infinity,
             ),
+            warningStartedS: events[departure.route]!.map(() => NaN),
           });
       }
       nextSpawnS = Math.min(nextSpawnS, departure.timeS + nextCycle[i]! * table.periodS);
@@ -422,8 +426,15 @@ export function createRailCrossings(
           (service.ageS > event.exitS && snapshotTimeS > service.tailClearedS[index]! + 1)
         )
           continue;
-        const state =
-          service.ageS >= event.enterS - event.warningS + 3 ? CROSSING_CLOSED : CROSSING_WARNING;
+        const warningStart = service.warningStartedS[index]!;
+        if (warningStart === Infinity) continue;
+        const state = (
+          Number.isNaN(warningStart)
+            ? service.ageS >= event.enterS - event.warningS + 3
+            : snapshotTimeS >= warningStart + 3
+        )
+          ? CROSSING_CLOSED
+          : CROSSING_WARNING;
         states[event.facility] = Math.max(states[event.facility]!, state);
       }
     }
@@ -493,6 +504,7 @@ export function createRailCrossings(
           current: [],
           proposed: [],
           tailClearedS: [],
+          warningStartedS: [],
         };
         services.push(service);
       }
@@ -509,6 +521,17 @@ export function createRailCrossings(
             clear.nodes.every((node) => nodes.includes(node)),
         );
         return previous?.timeS ?? startS - (clock.ageS - event.exitS);
+      });
+      service.warningStartedS = events[table.departures[departure]!.route]!.map((event) => {
+        const nodes = facilities[event.facility]!.nodes;
+        const previous = clock.warningRestarts?.find(
+          (warning) =>
+            warning.enterS === event.enterS &&
+            warning.exitS === event.exitS &&
+            warning.nodes.length === nodes.length &&
+            warning.nodes.every((n) => nodes.includes(n)),
+        );
+        return previous ? (previous.startedS ?? Infinity) : NaN;
       });
     }
     roadOccupancy();
@@ -583,12 +606,35 @@ export function createRailCrossings(
         const service = services[i]!;
         const route = table.departures[service.departure]!.route;
         const next = service.ageS + params.dtS;
-        service.held = events[route]!.some(
+        const blocked = events[route]!.find(
           (event) =>
             occupied[event.facility] &&
             service.ageS <= event.enterS &&
             next >= event.enterS - params.dtS,
         );
+        service.held = blocked !== undefined;
+        events[route]!.forEach((event, index) => {
+          if (
+            blocked &&
+            event.facility !== blocked.facility &&
+            event.enterS > blocked.enterS &&
+            service.ageS < event.enterS &&
+            service.ageS >= event.enterS - event.warningS
+          )
+            service.warningStartedS[index] = Infinity;
+          else if (service.warningStartedS[index] === Infinity)
+            service.warningStartedS[index] = timeS;
+        });
+        // A downstream discharge may reopen while the train is positively held at a
+        // different crossing. Its nose cannot enter until a full new warning completes.
+        if (!service.held)
+          service.held = events[route]!.some(
+            (event, index) =>
+              Number.isFinite(service.warningStartedS[index]) &&
+              timeS < service.warningStartedS[index]! + event.warningS &&
+              service.ageS <= event.enterS &&
+              next >= event.enterS - params.dtS,
+          );
         // A delayed train keeps its physical track reservation; following/opposing services
         // wait before their nose enters it. Other routes retain their own clocks.
         if (!service.held)
@@ -603,6 +649,7 @@ export function createRailCrossings(
           events[route]!.forEach((event, index) => {
             if (service.ageS <= event.exitS && next > event.exitS)
               service.tailClearedS[index] = timeS + event.exitS - service.ageS;
+            if (next > event.enterS) service.warningStartedS[index] = NaN;
           });
           service.ageS = next;
           for (const track of service.proposed) nextOwners[track] = i;
@@ -689,6 +736,20 @@ export function createRailCrossings(
         cycle: s.cycle,
         ageS: s.ageS,
         held: s.held,
+        warningRestarts: events[table.departures[s.departure]!.route]!.flatMap((event, index) =>
+          Number.isNaN(s.warningStartedS[index])
+            ? []
+            : [
+                {
+                  nodes: facilities[event.facility]!.nodes,
+                  enterS: event.enterS,
+                  exitS: event.exitS,
+                  startedS: Number.isFinite(s.warningStartedS[index])
+                    ? s.warningStartedS[index]!
+                    : null,
+                },
+              ],
+        ),
         tailCleared: events[table.departures[s.departure]!.route]!.flatMap((event, index) =>
           Number.isFinite(s.tailClearedS[index])
             ? [
