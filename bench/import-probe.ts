@@ -159,9 +159,10 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   console.info('Mode census', JSON.stringify(morning.modes));
 }
 
-/** TASK-113: the day's person trips by mode (as the mode choice left them) and straight-line
- * distance band, each mode's distance profile, and the person metrics' shares by hour and
- * completions by mode. Local trips have no gateway end; trips with one always drive. */
+/** TASK-113: the person trips by mode (as the mode choice left them; TASK-173: the caller passes
+ * the trips whose tours have chosen) and straight-line distance band, each mode's distance
+ * profile, and the person metrics' shares by hour and completions by mode. Local trips have no
+ * gateway end; trips with one always drive. */
 export function modeCensus(
   compiled: CompiledCity,
   trips: readonly TripRequest[],
@@ -540,8 +541,10 @@ export function probeMorning(
       (gatewayTraffic[cls] ??= { entered: 0, left: 0 }).left++;
     }
   }
-  // Vehicle trips only: walk trips (TASK-128 riders) are not vehicle trips and never pending.
-  const releasedTrips = trips.filter((t) => t.mode !== 'walk').length - metrics.trips.pending;
+  // Vehicle trips only: walk trips (TASK-128 riders, tours that chose to walk) are not vehicle
+  // trips and never pending.
+  const releasedTrips =
+    metrics.tripOutcomes!.filter((t) => t.mode !== 'walk').length - metrics.trips.pending;
   const parkingNodes = new Map<number, Set<string>>();
   const parkingAt = (node: number, id: string) => {
     const list = parkingNodes.get(node) ?? new Set<string>();
@@ -636,6 +639,27 @@ export function probeMorning(
     delete walked.carId;
     return walked;
   });
+  // TASK-173: a tour chooses its mode as it departs, so the census counts the trips of home-based
+  // tours (each person's day split at departures from where it began) that had started by the
+  // end of the run.
+  const personTrips = new Map<string, number[]>();
+  for (const [id, trip] of trips.entries())
+    if (trip.personId !== null)
+      personTrips.set(trip.personId, [...(personTrips.get(trip.personId) ?? []), id]);
+  const decided = new Set<number>();
+  for (const [personId, ids] of personTrips) {
+    const states = new Map(
+      engine.inspectPerson(personId)?.trips.map((record) => [record.tripId, record.state]) ?? [],
+    );
+    ids.sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
+    const home = trips[ids[0]!]!.originPlaceId;
+    let started = false;
+    for (const id of ids) {
+      if (trips[id]!.originPlaceId === home)
+        started = (states.get(trips[id]!.id) ?? 'pending') !== 'pending';
+      if (started) decided.add(id);
+    }
+  }
   // TASK-129: households, cars and drivers, and the stock against the formula it replaces.
   const homes = Object.values(city.places).filter((p) => p.kind === 'residential');
   const households = {
@@ -658,7 +682,11 @@ export function probeMorning(
     stateHash: engine.stateHash(),
     persons: population.length,
     households,
-    modes: modeCensus(compiled, travelled, metrics.persons),
+    modes: modeCensus(
+      compiled,
+      travelled.filter((_, id) => decided.has(id)),
+      metrics.persons,
+    ),
     trips: trips.length,
     releasedTrips,
     completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,

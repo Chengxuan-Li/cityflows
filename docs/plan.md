@@ -198,7 +198,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | queued (after TASK-113; in sequence with TASK-169) |
 | [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | done 2026-11-13 |
 | [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | done 2026-11-13 |
-| [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | in progress (Claude Code subagent) |
+| [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | done 2026-11-13 |
 | [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | queued (after TASK-173) |
 | [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | in progress (Claude Code subagent) |
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | queued (near the end) |
@@ -3916,6 +3916,22 @@ went from 21 timeouts (27 workers) to 0; an uncontended `npm test` is slower wit
 against 120 s), restorable with `CITYFLOWS_TEST_WORKERS=27`. Pass and fail sets identical, no pinned
 value changed; documented in AGENTS.md "Commands". Lead merge: type-check, lint and format pass; CI
 runs the rest.
+
+TASK-173 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): each tour in the mode choice now
+chooses when its first trip departs, with that minute's link costs, the walk from where its car is
+actually parked and the destination's parking room; random draws unchanged. Every household car of
+a driver's day is parked at home from 07:00 and leaves only if a tour drives it (with the choice
+off this is TASK-129's stock exactly); a walked tour's car stays put. Claims and forecasts needed no
+new rule. With the choice off the state hash equals main's at all 19 ten-minute samples on seeds 1
+to 3. With the choice on: walk share of started tours 78.5 / 79.2 / 78.9% (main counted the same way
+73.6 / 74.2 / 73.8%; seed 1's +4.9 points: hour's link costs +3.7, walking from the actual space
++1.1); the guard's band moves to 74 to 84% with at least 2,270 completions and counts only tours
+started by 10:00; 2,755 all-walk days keep their cars parked at home. Step time unchanged (+0.4% off,
++0.1% on, side by side). `T63-parking-claims.spec` steps to the first claimed-strip search between
+08:30 and 09:00. Lead merge onto main with TASK-165 and the Mac UI: gate (choice off) 5,310 / 0 / 0,
+guard (choice on) 2,561 / 0 / 0, T53, sim and demand unit (467), lint, format, build, T63 and T79
+specs pass. Open: the full-suite T54 Munich case fails as on main (its commuters walk);
+`src/host/headless.ts` counts car trips by scheduled mode; a walker's inspector shows no car.
 
 ## Owner decisions log
 
