@@ -11,6 +11,7 @@ import {
 import type { CompiledCity, CRoad, Diagnostic } from './types';
 import { isLaneDrop } from './lane-drop';
 import { parkingEgress } from './parking-egress';
+import { carService } from './car-service';
 
 export function validateCity(
   city: City,
@@ -249,6 +250,27 @@ export function warnAboutConnectivity(city: CompiledCity, diagnostics: Diagnosti
           `${owner.id} has no car exit${refs.length ? ` through ${refs.join(', ')}` : ' (no out connector)'}`,
         );
       }
+  }
+  // TASK-155: demand generates no trip with a gateway end that no car can serve; say why.
+  const gateways = city.places.filter((p) => p.kind === 'gateway');
+  const locals = city.places.filter((p) => p.kind !== 'gateway');
+  const served = gateways.length ? carService(city).served : () => true;
+  for (const gateway of gateways) {
+    const enters = locals.some((p) => served(gateway.idx, p.idx));
+    const leaves = locals.some((p) => served(p.idx, gateway.idx));
+    if (enters && leaves) continue;
+    const others = gateways
+      .filter((g) => g !== gateway && (served(gateway.idx, g.idx) || served(g.idx, gateway.idx)))
+      .map((g) => g.id);
+    info(
+      'gateway_unserved',
+      [gateway.id, ...others],
+      !enters && !leaves
+        ? `Gateway ${gateway.id} reaches no local place or parking; ${others.length ? `it only serves trips with ${others.join(', ')}` : 'it generates no trips'}`
+        : enters
+          ? `No local place reaches gateway ${gateway.id}; no trips leave the city through it`
+          : `Cars entering at gateway ${gateway.id} reach no local parking; no trips into the city start there`,
+    );
   }
   const out = lanes.map((): number[] => []);
   const incoming = lanes.map((): number[] => []);
