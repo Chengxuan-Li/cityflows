@@ -1949,7 +1949,8 @@ interface Scenario { id: string; name: string; seed: number; startS: number; end
   demand: DemandConfig; simParams: Partial<SimParams> }   // SimParams type lives in src/schema/sim.ts; defaults in src/sim/params.ts
 
 function generatePopulation(city: City, config: DemandConfig): Person[];
-function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[];  // sorted by departS
+function scheduleTrips(city: City, persons: Person[], scenario: Scenario,
+  compiled?: CompiledCity): TripRequest[];  // sorted by departS; `compiled` is `city` compiled (TASK-155)
 ```
 
 TASK-100 assigns class after mode choice, using a separate demand-seeded stream keyed by
@@ -2005,7 +2006,11 @@ variant. Saving a baseline captures current editor state, including unapplied li
   that leg and the rest of the agenda generate no trips. Through destinations are drawn among
   the gateways the origin serves. Event visitors are drawn among gateways that serve their
   inbound and outbound legs, falling back to residential places when none does. Served trips
-  are unchanged: the Sindelfingen 0.15 morning keeps exactly its 155 departures. Integer hourly rates are exact; fractional rates
+  are unchanged: the Sindelfingen 0.15 morning keeps exactly its 155 departures.
+  `scheduleTrips` takes the caller's compiled city as an optional last argument (lead,
+  TASK-155 review); without it, it compiles the city itself when the city has a gateway. The
+  app's load, restart, regeneration and comparison and the import probe pass theirs; trip
+  lists are identical either way. Integer hourly rates are exact; fractional rates
   use seeded stochastic rounding. Times are uniform in each hour of the scenario day.
 - Each place event creates `max(arrivals, departures)` nonresident visitor identities on
   separate streams keyed by place, event and visitor index. The first `min` visitors have

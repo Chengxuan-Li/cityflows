@@ -1,4 +1,5 @@
 import { createRandom } from '../geo/random';
+import type { CompiledCity } from '../network';
 import type { City, Person, Scenario, TripRequest } from '../schema';
 import { buildAgenda } from './agenda';
 import { eventTrips } from './events';
@@ -6,10 +7,16 @@ import { servedTrips } from './served';
 import { throughTrips } from './through';
 import { tripVehicle } from './vehicle';
 
-/** Rebuild each person's daily agenda from their persistent assignments. */
-export function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[] {
+/** Rebuild each person's daily agenda from their persistent assignments. Pass `compiled`, the
+ * city already compiled, to spare compiling it again for gateway service (TASK-155). */
+export function scheduleTrips(
+  city: City,
+  persons: Person[],
+  scenario: Scenario,
+  compiled?: CompiledCity,
+): TripRequest[] {
   const random = createRandom(scenario.seed).derive('schedule');
-  const served = servedTrips(city);
+  const served = servedTrips(city, compiled);
   const trips: TripRequest[] = [];
 
   for (const person of persons) {

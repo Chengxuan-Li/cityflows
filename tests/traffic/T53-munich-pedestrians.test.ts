@@ -38,7 +38,7 @@ beforeAll(() => {
   compiled = result.compiled;
   const scenario: Scenario = { ...defaultScenario('grid5x5'), startS: 7 * 3600, endS: 10 * 3600 };
   scenario.demand.personsPerResident = 0.15;
-  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
+  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario, compiled);
   const walkers = munichWalkerPairs.map(([fromPlaceId, toPlaceId]) => ({
     fromPlaceId,
     toPlaceId,

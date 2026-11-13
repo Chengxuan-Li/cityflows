@@ -125,7 +125,7 @@ if (process.env.CITYFLOWS_BASELINE_ROOT) {
     scenario.endS = untilS;
     scenario.demand.personsPerResident = 0.15;
     const persons = api.generatePopulation(source, scenario.demand);
-    const trips = api.scheduleTrips(source, persons, scenario);
+    const trips = api.scheduleTrips(source, persons, scenario, result.compiled);
     const engine = api.createEngine();
     const startLoad = performance.now();
     engine.load({ compiled: result.compiled, trips, scenario });

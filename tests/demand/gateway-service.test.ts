@@ -90,6 +90,8 @@ test('TASK-155 a cut-off gateway component generates no unservable trips and say
     ),
   ).toBe(true);
   const trips = scheduleTrips(city, persons, scenario);
+  // The caller's compiled city gives the same trips without compiling again.
+  expect(scheduleTrips(city, persons, scenario, result.compiled)).toEqual(trips);
   const legs = ends(city, trips);
   const servable = new Set([
     'Homes>Offices',
