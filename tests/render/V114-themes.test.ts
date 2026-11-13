@@ -23,6 +23,7 @@ import { markingThemes } from '../../src/render/style';
 import { buildMarkings } from '../../src/render3d/markings';
 import { cityHeights } from '../../src/render3d/heights';
 import { tierCities, unitTest, cityTest } from '../tier';
+import { limit } from '../timeouts';
 
 // Hash shared gore metadata once, rather than duplicating whole roads for every stripe.
 function paintHash(shapes: unknown): string {
@@ -256,7 +257,7 @@ cityTest(
     }
     console.info('V114 Munich marking build ms:', JSON.stringify(timings));
   },
-  120_000,
+  limit(120_000),
 );
 
 unitTest.each([0, 1.4])(

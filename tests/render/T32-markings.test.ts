@@ -24,6 +24,7 @@ import {
 import { markingTheme } from '../../src/render/style';
 import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { cityTest, tierCities, unitTest } from '../tier';
+import { limit } from '../timeouts';
 
 const nets = new Map<string, CompiledCity>();
 const net = (name: AuditCity) => {
@@ -147,7 +148,7 @@ test.each(tierCities(['grid', 'munich'] as const))(
     console.info('T32.1', name, 'lines checked', checked);
     expect(short).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 /** The turns an arrow may show, recomputed from the movements: no u-turns, no merges or
@@ -204,7 +205,7 @@ test.each(tierCities(['grid', 'munich'] as const))(
     expect(wrong).toEqual([]);
     expect(drawn).toBeGreaterThan(0);
   },
-  120_000,
+  limit(120_000),
 );
 
 cityTest('T32.2: the owner’s X-marked arrows on Munich’s Marsstraße below n:823 are gone', () => {
@@ -310,7 +311,7 @@ cityTest(
     }
     expect(off).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 // TASK-108: the new dash/gap ratio reduces painted length; audit by role.
@@ -337,5 +338,5 @@ test.each(tierCities(auditCities))(
     console.info('T32.4', name, lengths, 'main', main[name]);
     expect(lengths.lineOutsideM).toBeGreaterThanOrEqual(0.98 * main[name].lineOutsideM);
   },
-  120_000,
+  limit(120_000),
 );

@@ -196,7 +196,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | queued (after the UI merge) |
 | [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | queued (after TASK-113; in sequence with TASK-169) |
-| [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | in progress (Claude Code subagent) |
+| [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | done 2026-11-13 |
 | [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | done 2026-11-13 |
 | [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | in progress (Claude Code subagent) |
 | [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | queued (after TASK-173) |
@@ -3905,6 +3905,17 @@ file and a previous report. The Full workflow gains an advisory `seed-report` jo
 uploads the artifact. On main 6ea2994: choice off 5,312 / 0, 5,302 / 1, 5,312 / 0; choice on 2,730,
 2,701, 2,719 with 0 gridlocked; every drain criterion met; worst single visit on `r:961` 512 to 612 s
 (choice off). Seed 1 matches the gate. The workflow job is validated by a manual Full run after merge.
+
+TASK-171 (Claude Code subagent, Sonnet 5.5 high, 2026-11-13; merged): `CITYFLOWS_TEST_TIMEOUT_MS`
+(default 60,000) now sets the per-test and hook limits and scales every limit written in a test file
+(`tests/timeouts.ts` `limit(ms)`, 58 literals in 24 files); `CITYFLOWS_TEST_WORKERS` caps workers (8,
+4 for the city tier, or cores minus one; 1 is serial); `tests/warm-cache.ts` warms the audit-city
+import cache before workers start (cold 23 s and 33 s, warm 0.13 s and 0.21 s). Unset, every limit
+equals today's, and a 4-vCPU CI runner already uses 3 workers. On the loaded workstation `test:city`
+went from 21 timeouts (27 workers) to 0; an uncontended `npm test` is slower with the cap (172 s
+against 120 s), restorable with `CITYFLOWS_TEST_WORKERS=27`. Pass and fail sets identical, no pinned
+value changed; documented in AGENTS.md "Commands". Lead merge: type-check, lint and format pass; CI
+runs the rest.
 
 ## Owner decisions log
 

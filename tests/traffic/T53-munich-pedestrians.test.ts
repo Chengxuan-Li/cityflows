@@ -7,6 +7,7 @@ import type { Scenario } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
 import type { Metrics } from '../../src/sim/types';
 import { sampleCrossings } from '../sim/crossing-safety';
+import { limit } from '../timeouts';
 
 // TASK-111 gates 4 and 5 on Munich: the traffic gate's morning at 0.15, 07:00 to 08:00, with the
 // test source at 2 000 walkers per hour over ten crossing pairs (four over signals, among them
@@ -60,7 +61,7 @@ beforeAll(() => {
     }
     runs[kind] = { metrics: engine.metrics(), overlap };
   }
-}, 900_000);
+}, limit(900_000));
 
 test('T53 Munich: no vehicle body over a crossing span a walker is inside', () => {
   expect(runs.walkers.overlap).toBeNull();

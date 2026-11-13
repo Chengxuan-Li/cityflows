@@ -9,6 +9,7 @@ import { buildCity } from '../../src/fixtures/build-city';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import { routingFixture } from './fixtures';
 import { createGeoReference, localToLonLat } from '../../src/geo/projection';
+import { limit } from '../timeouts';
 
 test.each(['grid', 'town', 'Sindelfingen'])(
   '%s returns no statically undrivable connector routes',
@@ -29,7 +30,7 @@ test.each(['grid', 'town', 'Sindelfingen'])(
     if (name === 'Sindelfingen') expect(report.routable).toBeGreaterThan(5000);
     else expect(report.routable).toBe(report.pairs);
   },
-  60_000,
+  limit(60_000),
 );
 
 test('audit catches a clamped lane drop even though its compiled movement exists', () => {

@@ -176,7 +176,11 @@ npm run format         # Prettier
 ```
 
 Real-city imports are cached in `node_modules/.cache/cityflows` (`bench/city-cache.ts`, keyed by
-the importer's sources); `CITYFLOWS_NO_CACHE=1` imports fresh.
+the importer's sources); `CITYFLOWS_NO_CACHE=1` imports fresh. `tests/warm-cache.ts` fills it
+before the workers start. On a loaded machine: `CITYFLOWS_TEST_TIMEOUT_MS` (default 60000) is the
+per-test limit and scales every limit written in a test file (`limit()`, `tests/timeouts.ts`), so
+240000 quadruples them all; `CITYFLOWS_TEST_WORKERS` caps the test files running at once (default:
+8, or 4 for the Munich tier, or the cores minus one if fewer; 1 runs them one at a time).
 
 ## Delivering a task
 

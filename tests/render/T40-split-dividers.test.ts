@@ -13,6 +13,7 @@ import type { CMovement, CNode, CompiledCity, CRoad } from '../../src/network';
 import { junctionGuides, splitLinedUp } from '../../src/render/marking-geometry';
 import { crossingStripes, markingClips } from '../../src/render/layers/roads';
 import { cityTest, tierCities } from '../tier';
+import { limit } from '../timeouts';
 
 const nets = new Map<string, CompiledCity>();
 const net = (name: AuditCity) => {
@@ -115,7 +116,7 @@ cityTest(
       }
     }
   },
-  60_000,
+  limit(60_000),
 );
 
 cityTest(
@@ -197,7 +198,7 @@ test.each(tierCities(auditCities))(
           : { nodes: 0, dividers: 0 },
     );
   },
-  60_000,
+  limit(60_000),
 );
 
 /** Roads at `node` that draw a crossing at their end there. */

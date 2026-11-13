@@ -6,6 +6,7 @@ import { defaultScenario } from '../../src/fixtures/scenarios';
 import { compile, type CompiledCity } from '../../src/network';
 import type { City } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
+import { limit } from '../timeouts';
 
 // TASK-113 guard (owner, 2026-11-13): the traffic gate measures car traffic with mode choice off;
 // this Munich morning at 0.15, seed 1, runs the default scenario with it on. Not in
@@ -34,7 +35,7 @@ beforeAll(() => {
     stalledHeads: morning.stalledHeads,
     modes: JSON.stringify(morning.modes),
   });
-}, 1_200_000);
+}, limit(1_200_000));
 
 test('mode share: about 70% of local person trips walk, fewer the farther they go', () => {
   const { walkShareLocal, byBand, localPersonTrips } = morning.modes;
