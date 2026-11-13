@@ -114,12 +114,9 @@ export function StreetInspector({ road, city, lane }: { road: Road; city: City; 
         <summary>Lanes and street settings</summary>
         <div className="edit-fields">
           {accessControl('all')}
-          <div className="edit-field">
-            <span>By vehicle class</span>
-            <PopoverButton label="Vehicle classes" title="Access by vehicle class">
-              <div className="edit-fields">{vehicleClasses.map(accessControl)}</div>
-            </PopoverButton>
-          </div>
+          <PopoverButton label="Vehicle classes" title="Access by vehicle class">
+            <div className="edit-fields">{vehicleClasses.map(accessControl)}</div>
+          </PopoverButton>
           <label className="edit-field">
             Road class
             <select

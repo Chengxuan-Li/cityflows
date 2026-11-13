@@ -1637,9 +1637,10 @@ input[type='file']::file-selector-button {
 }
 
 .parking-fields {
-  border: 0;
-  padding: 0;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .edit-field {
@@ -1792,6 +1793,17 @@ input[type='file']::file-selector-button {
 
 .panel .muted,
 .tool-help {
+  font-size: var(--text-small);
+}
+
+.panel .item-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panel .item-list li {
+  margin: 0;
   font-size: var(--text-small);
 }
 
