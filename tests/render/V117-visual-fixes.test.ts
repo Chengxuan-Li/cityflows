@@ -177,7 +177,9 @@ const pins = {
     // stripped every pin equals 2df05a1's.
     // TASK-149 opens curbs at mapped parking mouths and bays in both extracts.
     // TASK-144 physical compile/lamps stay fixed; TASK-146 changes drawing-only curbs/paint.
-    compile: 'd1f7117b107d7b0bb88a349d90cb6e5080ff19481d73cbb003a7fa1d9cd6f18f',
+    // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
+    // removed every pin equals 3e9951a's.
+    compile: '583765cc42e1f4207b33ca1d1aee9b830b591b32757bf77c8c81e3a80d72606c',
     lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
     curbs: '780f62342c39389d2fabd42f81e444fdc4c03c3070f91fce4489a3c671894919',
     de: '4e164c66620c2b8d248958ae2b0105194ff4ef6685892608c099b54ac5ce6a79',

@@ -176,9 +176,16 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
 | [TASK-150](tasks/TASK-150.md) | 7 | A car leaving a lot waits clear of the public lane and merges continuously once granted | `src/sim/parking.ts`, `manoeuvre.ts`, `engine.ts` (exit), T77 | 118, 122, 149 | T77, witness 0 overlaps, T54/T59/T63, Munich gate, shots | done 2026-11-13 |
 | [TASK-151](tasks/TASK-151.md) | 7 | PR #1 on today's main: find why crossings and tram service plus main's parking changes fail the gate (3,300 / 49 / 1) and repair the cause | `src/sim/**` (crossing control, rail service, parking, engine), tests | 136, 138, 147, 149, 150 | Munich gate, T75/T76, parking tests, 0.1 s replay | stopped 2026-11-13: loss is inside B56 (owner decision) |
-| [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | in progress (Claude Code subagent) |
-| [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | in progress (Claude Code subagent) |
+| [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | done 2026-11-13 |
+| [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | delivered 2026-11-13; held until TASK-154 (one B56 stalled head) |
 | [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | batch 3 (after TASK-129 merges) |
+| [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | in progress (Claude Code subagent) |
+| [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | in progress (Claude Code subagent) |
+| [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
+| [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
+| [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | conditional (after TASK-154) |
+| [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | queued (after TASK-154) |
+| [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1133,6 +1140,13 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-152 | Claude Code, the lead's subagent | Opus 5.5 | high | 5352 (production 5452) |
 | TASK-153 | Claude Code, the lead's subagent | Opus 5.5 | high | 5353 (production 5453) |
 | TASK-113 | Claude Code, the lead's subagent | Opus 5.5 | high | 5313 (production 5413) |
+| TASK-154 | Claude Code, the lead's subagent | Opus 5.5 | high | 5354 (production 5454) |
+| TASK-155 | Claude Code, the lead's subagent | Opus 5.5 | high | 5355 (production 5455) |
+| TASK-156 | Claude Code, the lead's subagent | Opus 5.5 | high | 5356 (production 5456) |
+| TASK-157 | Claude Code, the lead's subagent | Opus 5.5 | high | 5357 (production 5457) |
+| TASK-158 | Claude Code, the lead's subagent | Opus 5.5 | high | 5358 (production 5458) |
+| TASK-159 | Claude Code, the lead's subagent | Opus 5.5 | high | 5359 (production 5459) |
+| TASK-160 | Claude Code, the lead's subagent | Opus 5.5 | high | 5360 (production 5460) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3574,7 +3588,64 @@ TASK-129 on main with TASK-150 (lead, `task/lead-129-merge`): 4,091 completed, 4
 stalled heads, 0 parking failures: fails the gridlock limit (39). Not merged; re-measured at the next
 main change.
 
+TASK-152 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): at five lots each bay's access
+point lies on a car lane that also carries its exit, so TASK-150 found no hold pose and the car
+waited in the lane band (pk:2054 and pk:2057 also turned on the spot). `compileBayDepartures` in
+`src/network/parking.ts` gives such a bay a departure connector at its own station on that lane
+(or the opposite lane of the same two-way aisle; never against a one-way), only where the public
+network is legally reachable from there. The connectors are appended after all others, with no walk
+anchor and no entry listing, so admission and claims are unchanged. The car leaves strip-like:
+gap, followers' braking and reversing room checked while parked, then inserted at its station.
+Bays switched: pk:2052 39, pk:2053 14, pk:2054 33, pk:2057 1. Sindelfingen pk:1487's aisle exit is
+illegal (private plant street), so an exit with no clear hold is offered only when no other exists.
+Census: Munich no-clear-pose pairs 136 to 0, in-place U-turns 34 to 0; Sindelfingen 6 to 0. A
+wider first rule (126 Munich bays) failed the gate (3,675 / 50, seed 2 a stalled head) by sending
+pk:2056 cars through n:661 onto r:666, and was narrowed. T78 (3 cases, all failing on main). The
+192 route records are byte-identical. Munich to 10:00 equals main's state hash every minute on
+seeds 1 to 3 (no departures from these lots before 10:00). Eight Munich compile pins moved, all
+from the 87 new connectors (each passes on main's pin with the step disabled). Lead run of the
+merge: `check` (1,195), seed-1 gate 3,903 / 36 / 0 / 0. Open: TASK-150's hold is checked against
+the exit lane only, so a car bound for the far lane of a two-way street waits inside the near lane
+(Munich 333 pairs, Sindelfingen 1,749), and its grant checks only the far lane's gap; holds inside
+aisle lanes no lane vehicle reaches (Munich 68, Sindelfingen 232).
+
+TASK-153 (Claude Code subagent, Opus 5.5 high, 2026-11-13; held until TASK-154): at pk:2049, car
+3599 waited 2,173 s at entry `c:2155` because `lotBusy` closed the lot to every arrival while any
+car was leaving, at either mouth (3796 held 2,111 s at exit `c:10844` for a gap on `r:663#0`).
+Relaxing that exposed a deadlock: TASK-149's shared-mouth yield measured from the connector, while
+TASK-150 checks the departing car's gap at its join station short of it. The branch blocks an
+arrival only where its path to its bay comes within body clearance of a departing car's stand or
+remaining drive (otherwise it takes the next free clear bay, moving its claim), measures the yield
+from the earlier of connector and join station, and lets a car leaving a full lot for a place the
+lot serves claim the bay it frees (van 2796's refusal at pk:2056 on PR #1 plus main; no case on
+main seeds 1 to 3). pk:2049 longest admission wait 2,173 s to 6.8 s (343 s counting a stop just
+upstream at a genuinely shared mouth); its exit waits worsen at seed 1 (2,111 to 3,152 s, car 3544
+held while through traffic stands across its join point on `r:639#0`), mixed on seeds 2 and 3.
+`tests/sim/lot-admission.test.ts` (4 cases, all failing on main); T48, T52, T54, T59, T63, T77 and
+the lot-access city test pass; `check`, `test:city`, light e2e 37. Seed 1: 4,327 completed, 32
+gridlocked, 1 stalled head (car 4622 at the head of `r:961#0`, waiting for `r:364#0`: the B56 loop),
+0 parking failures; seeds 2 and 3: 3,981 / 29 and 3,314 / 53 (main 3,909 / 30 and 3,169 / 50). No
+pinned hash moved. Held: it is re-measured on top of TASK-154. Open: pk:2049 exit waits need a
+keep-clear rule for through traffic; pk:2052's second entry starved by a stream of arrivals; trips
+starting and ending at one lot drive out and back. `5de8b78` on `task/153-lot-admission`.
+
 ## Owner decisions log
+
+- 2026-11-13 (owner): restyle CityFlows as a clean Mac app in the Sonoma / Ventura flat manner
+  (not Liquid Glass): Arimo throughout, macOS system blue accent, a docked window (unified
+  toolbar, left sidebar, right inspector, status bar), and both the interface and the map palette.
+  This replaces the Mini Motorways design direction (2026-11-03). TASK-160 runs in its own branch
+  with screenshots to the owner at each phase.
+
+- 2026-11-13 (owner): queue the follow-up plan, unsupervised. TASK-155 now; TASK-156 and TASK-157
+  after TASK-153; after TASK-154: PR #1, TASK-129 (TASK-158 if it still fails), TASK-113 once
+  TASK-129 merges, TASK-159. A macOS-style UI restyle is to be discussed for a separate branch.
+
+- 2026-11-13 (owner): B56 released. TASK-154 lands TASK-131 Phase 3 from candidate `4ab4d71` and
+  drains the loop; PR #1 follows once the combination passes the gate. Lead's drain criterion for
+  B56 (replacing the whole-trip 900 s figure, which counted delay carried from origins): no
+  sustained cycle, no single loop-road visit over 900 s, no inner-link stand over `boxWaitS`, zero
+  stalled heads, on seeds 1 to 3.
 
 - 2026-11-13 (owner): batches agreed and to run unsupervised, without stopping for review (shots
   may be sent along the way). Now: TASK-152 beside TASK-151 and the TASK-128/129 re-measures.

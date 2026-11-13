@@ -22,7 +22,7 @@ import { compileGroups, memberProgram } from './groups';
 import { buildLaneSpatial } from './spatial';
 import { compileWalk, emptyWalkGraph } from './walk';
 import { populateStops } from './stops';
-import { compileParking, compileVisibleParking } from './parking';
+import { compileBayDepartures, compileParking, compileVisibleParking } from './parking';
 import { generateStalls } from './stalls';
 import { compileLotPaths } from './lot-paths';
 import type {
@@ -575,6 +575,7 @@ export function compile(city: City): CompileResult {
   populateStops(compiled, city);
   compileVisibleParking(city, compiled, centroid);
   compileLotPaths(city, compiled, diagnostics);
+  compileBayDepartures(compiled);
   for (const lane of lanes)
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   warnAboutConnectivity(compiled, diagnostics);

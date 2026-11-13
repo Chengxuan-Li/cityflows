@@ -148,10 +148,14 @@ test.each(['munich-donnersberger', 'sindelfingen-a81'])(
       let space: number | null = null;
       for (let second = 0; second < 1800; second++) {
         // TASK-150: a lot aisle mapped on a road is a public lane, so a drive-out can hold
-        // before it within a second of leaving the bay (pk:2052) and join it there.
+        // before it within a second of leaving the bay (pk:2052) and join it there. TASK-152: a
+        // bay on its own exit lane leaves into the aisle lane instead, as a kerbside space does.
         for (let step = 0; step < 10; step++) {
           engine.step();
-          droveOut ||= engine.inspect(2)?.parkingPhase === 'drive_out';
+          const leaving = engine.inspect(2);
+          droveOut ||=
+            leaving?.parkingPhase === 'drive_out' ||
+            (leaving?.parkingPhase === 'leave' && leaving.state === 'driving');
         }
         const arrival = engine.inspect(1),
           departure = engine.inspect(2);
@@ -167,6 +171,7 @@ test.each(['munich-donnersberger', 'sindelfingen-a81'])(
           droveOut ||= departure.parkingPhase === 'drive_out';
           expect(departure.parkingSpace).toBe(space);
         }
+        if (departure?.parkingPhase === 'leave') expect(departure.parkingSpace).toBe(space);
         if (departure?.state === 'driving' && departure.lane >= 0)
           reachedPublic ||= !aisles.has(net.roads[net.lanes[departure.lane]!.road]!.id);
         if (departure?.state === 'completed' || departure?.state === 'failed') break;

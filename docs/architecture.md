@@ -581,6 +581,14 @@ exclusion, a courtyard reached through a building passage (Munich `pk:2037`, Sin
 A bay retains its physical lane/station separately from its admission connector; curb
 openings and lamps continue to use physical bay access. No circulation edge enters the
 vehicle router.
+TASK-152: a reachable bay whose access point lies in the band of a car lane that carries one
+of the bay's own exits (a mapped aisle road, or a street its generated row adjoins), so that its
+drive-out would run inside the exit lane, gets an optional `departure`: an `out`
+connector `c:<lot>:depart:<stall>` at its own station on that lane, when a car can legally
+reach the public network from there (parking egress, access zones included). On a two-way
+aisle whose near lane cannot, the opposite lane of the same physical aisle within 5 m is used;
+a one-way lane is never reversed. Departure connectors are appended after every other
+connector, have no walk anchor and belong to no entry list, so admission is unchanged.
 
 TASK-149 adds optional `ParkingFacility.mappedPortals` for source-proven accesses on an
 unsplit approach street. `entries` retains its meaning of nodes actually shared by the
@@ -1448,7 +1456,11 @@ front-bumper curve at `lotSpeedMps` and drives on. A lot aisle mapped on a road 
 lane: the car joins it where its path first meets it. A car turning into the same mouth on the
 exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
 the join station, whichever is earlier (TASK-153), so it never stands in the gap the grant
-checks. Gridlock recovery
+checks. TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
+departure's spawn gap (with the reversing room ahead) while parked, is inserted there at speed 0,
+reverses out over `leaveManoeuvreS` and drives the aisle as a lane vehicle; it never starts in the
+lot. A lot exit whose drive-out has no pose clear of its lane is offered only when no other exit
+is. Gridlock recovery
 never applies inside a lot. Trucks and buses use garages only; garage admission and stock
 rules are unchanged.
 

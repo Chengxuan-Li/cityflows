@@ -14,7 +14,7 @@ import type { CompiledCity, Diagnostic, LotCirculation } from './types';
 const closed = (ring: Vec2[]) => [...ring, ring[0]!];
 // A stall's access point joins the nearest aisle point over a clear link up to one stall
 // length away (a single row whose aisle runs beside it, not through its access points).
-const STALL_LINK_M = 5;
+export const STALL_LINK_M = 5;
 const mix = (a: Vec2, b: Vec2, t: number) => ({
   x: a.x + (b.x - a.x) * t,
   y: a.y + (b.y - a.y) * t,
