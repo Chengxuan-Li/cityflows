@@ -174,6 +174,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
+| [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | in progress |
+| [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | in progress |
+
 ### Waves
 
 The November 12 audit wave runs TASK-144 and TASK-145 in parallel. TASK-147 investigates the held PR independently. Reserve local hardware for the timed rendering runs. TASK-146 follows the first two audits.
@@ -1098,6 +1101,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 
 | Task | Harness | Model | Effort | e2e port |
 | --- | --- | --- | --- | --- |
+| TASK-148 / TASK-149 | Codex | GPT-6.1 Sol | high | 5348 / 5349 (production +100) |
 | TASK-144 / TASK-145 / TASK-146 / TASK-147 | Codex | GPT-6.1 Sol | high | 5344 / 5345 / 5346 / 5347 (production +100) |
 | TASK-136 crossing control and equipment | Codex | GPT-6.1 Sol | high | 5344/5444 and 5346/5446 |
 | TASK-138 tram service | Codex | GPT-6.1 Sol | high | 5348/5448 |
@@ -3443,6 +3447,8 @@ through TASK-130 remain held and B56 remains deferred.
 [PR #1 checks](https://github.com/Chengxuan-Li/cityflows/actions/runs/43338527308).
 
 ## Owner decisions log
+
+- 2026-11-12 (owner): run the SwiftShader rendering fix and remaining parking access checks in parallel with GPT-6.1 Sol high. Supply geometry shots for parking fixes. PR #1 and TASK-128 through TASK-130 stay held, and B56 stays deferred.
 
 - 2026-11-12 (owner): run the parking and frame audits in parallel, then inspect the westbound lane gain. Repair CI on PR #1 in parallel and keep it held. TASK-128 through TASK-130 stay held and B56 stays deferred.
 
