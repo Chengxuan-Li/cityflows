@@ -92,6 +92,9 @@ interface Run {
 }
 
 type RunCommand = 'play' | 'pause' | 'step' | 'restart';
+export const speeds = [1, 2, 5, 10, 20];
+/** The modal sheet that is open, if any: one at a time. */
+export type SheetName = 'new' | 'import' | 'export' | 'commands' | 'shortcuts';
 export type ExportFormat = 'geojson' | 'trips' | 'road-metrics' | 'trajectories';
 
 interface AppState {
@@ -121,6 +124,8 @@ interface AppState {
   inspectorOpen: boolean;
   toggleSidebar: () => void;
   toggleInspector: () => void;
+  sheet: SheetName | null;
+  showSheet: (sheet: SheetName | null) => void;
   /** Options of the drawing tools, shown in the sidebar while the tool is active. */
   roadOptions: DrawRoadOptions;
   placeKind: PaintKind;
@@ -560,6 +565,8 @@ export const useAppStore = create<AppState>((set, get) => {
     inspectorOpen: true,
     toggleSidebar: () => set(({ sidebarOpen }) => ({ sidebarOpen: !sidebarOpen })),
     toggleInspector: () => set(({ inspectorOpen }) => ({ inspectorOpen: !inspectorOpen })),
+    sheet: null,
+    showSheet: (sheet) => set({ sheet }),
     roadOptions: { twoWay: true, lanes: 1, roadClass: 'residential', speedKph: 30 },
     placeKind: 'residential',
     placeHint: '',

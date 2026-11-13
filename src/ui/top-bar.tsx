@@ -1,6 +1,7 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense } from 'react';
 import { scenarios } from '../fixtures/scenarios';
 import { MenuItem, PopoverButton, Sheet, ToolbarButton, type ToolbarAction } from './controls';
+import { byId, closeSheet, useEnabled } from './commands';
 import { ExportMenu } from './export-menu';
 import { RunControls } from './run-bar';
 import { useAppStore } from './store';
@@ -10,59 +11,59 @@ const ImportWizard = lazy(() => import('./import/wizard'));
 
 /** The unified toolbar: file actions, history, tools, run controls and the sidebar toggles. */
 export function TopBar() {
-  const [importing, setImporting] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [picking, setPicking] = useState(false);
+  const sheet = useAppStore((state) => state.sheet);
   const session = useAppStore((state) => state.session);
-  const in3D = useAppStore((state) => state.viewMode === '3d');
-  const busy = useAppStore((state) => state.busy);
+  const can = useEnabled();
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const inspectorOpen = useAppStore((state) => state.inspectorOpen);
   // A selection made while the inspector is hidden marks its toggle instead of reopening it.
   const waiting = useAppStore((state) => !state.inspectorOpen && state.selection !== null);
-  const { open, save, undo, redo, toggleSidebar, toggleInspector } = useAppStore.getState();
+  const { open, toggleSidebar, toggleInspector } = useAppStore.getState();
   const city = session?.project.city;
-  // The file input is looked up when clicked rather than held in a ref: the actions are plain
-  // objects shared by the toolbar and its overflow menu.
-  const pickFile = () => document.querySelector<HTMLInputElement>('#open-project')!.click();
+  // The actions are plain objects shared by the toolbar and its overflow menu.
+  const run = (id: keyof typeof byId) => () => void byId[id].run();
   const fileActions: ToolbarAction[] = [
     {
       icon: 'new',
       label: 'New',
       tooltip: 'Start from a bundled city',
+      command: 'new',
       'aria-haspopup': 'dialog',
-      disabled: busy,
-      onClick: () => setPicking(true),
+      disabled: !can.new,
+      onClick: run('new'),
     },
     {
       icon: 'import',
       label: 'Import',
       tooltip: 'Import a city from OpenStreetMap',
       'aria-haspopup': 'dialog',
-      disabled: busy,
-      onClick: () => setImporting(true),
+      disabled: !can.import,
+      onClick: run('import'),
     },
     {
       icon: 'open',
       label: 'Open',
       tooltip: 'Open a saved project',
-      disabled: busy,
-      onClick: pickFile,
+      command: 'open',
+      disabled: !can.open,
+      onClick: run('open'),
     },
     {
       icon: 'save',
       label: 'Save',
       tooltip: 'Save the project file',
-      disabled: busy || !session,
-      onClick: () => void save(),
+      command: 'save',
+      disabled: !can.save,
+      onClick: run('save'),
     },
     {
       icon: 'export',
       label: 'Export',
       tooltip: 'Export data files',
+      command: 'export',
       'aria-haspopup': 'dialog',
-      disabled: busy || !session,
-      onClick: () => setExporting(true),
+      disabled: !can.export,
+      onClick: run('export'),
     },
   ];
   const historyActions: ToolbarAction[] = [
@@ -70,21 +71,17 @@ export function TopBar() {
       icon: 'undo',
       label: 'Undo',
       tooltip: 'Undo the last edit',
-      disabled:
-        busy ||
-        !session?.undoStack.length ||
-        (in3D && session.undoStack.at(-1)!.kind === 'city' && !session.editor.canUndoDisplayOnly),
-      onClick: () => void undo(),
+      command: 'undo',
+      disabled: !can.undo,
+      onClick: run('undo'),
     },
     {
       icon: 'redo',
       label: 'Redo',
       tooltip: 'Redo the edit',
-      disabled:
-        busy ||
-        !session?.redoStack.length ||
-        (in3D && session.redoStack.at(-1)!.kind === 'city' && !session.editor.canRedoDisplayOnly),
-      onClick: () => void redo(),
+      command: 'redo',
+      disabled: !can.redo,
+      onClick: run('redo'),
     },
   ];
 
@@ -94,6 +91,7 @@ export function TopBar() {
         icon="sidebarLeft"
         className="sidebar-toggle"
         label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+        command="sidebar"
         aria-expanded={sidebarOpen}
         aria-controls="sidebar"
         onClick={toggleSidebar}
@@ -121,6 +119,7 @@ export function TopBar() {
           inspectorOpen ? 'Hide inspector' : `Show inspector${waiting ? ', item selected' : ''}`
         }
         tooltip={waiting ? 'An item is selected' : undefined}
+        command="inspector"
         aria-expanded={inspectorOpen}
         aria-controls="inspector-column"
         onClick={toggleInspector}
@@ -157,18 +156,18 @@ export function TopBar() {
           if (file) void open(file);
         }}
       />
-      {importing && (
+      {sheet === 'import' && (
         <Suspense fallback={<p role="status">Loading import…</p>}>
-          <ImportWizard onClose={() => setImporting(false)} />
+          <ImportWizard onClose={() => closeSheet('import')} />
         </Suspense>
       )}
-      <Sheet title="Export" open={exporting} onClose={() => setExporting(false)}>
-        {exporting && <ExportMenu />}
+      <Sheet title="Export" open={sheet === 'export'} onClose={() => closeSheet('export')}>
+        {sheet === 'export' && <ExportMenu />}
       </Sheet>
       <Sheet
         title="New city"
-        open={picking}
-        onClose={() => setPicking(false)}
+        open={sheet === 'new'}
+        onClose={() => closeSheet('new')}
         className="new-picker"
       >
         <ul className="scenario-list">
@@ -176,7 +175,7 @@ export function TopBar() {
             <li key={id}>
               <button
                 onClick={() => {
-                  setPicking(false);
+                  closeSheet('new');
                   void open(id);
                 }}
               >

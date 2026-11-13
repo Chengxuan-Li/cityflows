@@ -1,7 +1,14 @@
 import { SegmentedControl } from './controls';
+import { labels } from './shortcuts';
 import { useAppStore } from './store';
 
 type Tool = ReturnType<typeof useAppStore.getState>['tool'];
+
+/** The key follows the tool's name: "Draw a street · 2 · Enter finishes · Escape cancels". */
+const tip = (id: Tool, text: string) => {
+  const [name, ...notes] = text.split(' · ');
+  return [name, labels(id)[0], ...notes].join(' · ');
+};
 
 const tools: { value: Tool; label: string; tooltip: string }[] = [
   { value: 'select', label: 'Select', tooltip: 'Select map items · Escape clears selection' },
@@ -49,7 +56,7 @@ export function Toolbox() {
         options={
           in3D
             ? tools.map((option) => ({ ...option, tooltip: 'Editing is available in 2D' }))
-            : tools
+            : tools.map((option) => ({ ...option, tooltip: tip(option.value, option.tooltip) }))
         }
         value={tool}
         disabled={disabled}
