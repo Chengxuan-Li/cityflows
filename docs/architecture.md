@@ -1428,8 +1428,17 @@ and becomes `in_lot` (counted among driving trips). It follows its local shortes
 `lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
 across it; tied approaches use distance, then id. Narrow local paths admit one entry/direction
 cohort at a time to prevent opposing cars deadlocking. Reversing departures take an aisle
-gap, leave their stall, follow the local path to an outbound entry, wait for the existing
-spawn/insertion gap and connector budget, and enter the street at speed 0. Gridlock recovery
+gap, leave their stall and follow the local path toward an outbound entry. TASK-150: they hold
+at the path's farthest pose whose whole body is clear of the exit lane (a path with no clear
+pose holds where it starts), keeping their claim; lot followers queue behind them. From the
+hold they wait for the existing spawn/insertion gap and connector budget, the gap checked at
+the join station: past the hold's nearest lane station by its distance from the lane centre,
+capped at the stop line or the connector, whichever is later. Their route starts at the
+connector; a destination between the two (their own lot, chosen again) is where they join
+instead. The grant inserts the car there at speed 0, so following traffic treats it as a lane
+occupant before its body crosses the lane edge; the body then merges (`merge` phase) along a
+front-bumper curve at `lotSpeedMps` and drives on. A lot aisle mapped on a road is such a
+lane: the car joins it where its path first meets it. Gridlock recovery
 never applies inside a lot. Trucks and buses use garages only; garage admission and stock
 rules are unchanged.
 

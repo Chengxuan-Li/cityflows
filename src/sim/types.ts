@@ -165,7 +165,7 @@ export interface TripOutcome {
 }
 
 export interface VehicleDetail {
-  parkingPhase?: 'drive_in' | 'park' | 'leave' | 'drive_out' | 'exit' | null;
+  parkingPhase?: 'drive_in' | 'park' | 'leave' | 'drive_out' | 'exit' | 'merge' | null;
   parkingSpace?: number | null;
   stallChoice?: { rank: number; scoreM: number; bestScoreM: number } | null;
   parkingFacility: string | null;
