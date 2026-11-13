@@ -101,7 +101,10 @@ export function manoeuvrePath(
   return motionPath(points, headings);
 }
 
-export function bodyClearLane(pose: ParkingPose, lane: CLane, lengthM: number, widthM: number) {
+/** A band a body stands clear of: a lane, or a movement given its lane width (TASK-164). */
+export type LaneBand = Pick<CLane, 'polyline' | 'cumulative' | 'lengthM' | 'widthM'>;
+
+export function bodyClearLane(pose: ParkingPose, lane: LaneBand, lengthM: number, widthM: number) {
   const offsets = [];
   for (const along of [0, -lengthM]) {
     const p = {
@@ -130,7 +133,7 @@ const corners = (pose: ParkingPose, lengthM: number, widthM: number) =>
 
 /** TASK-157: `bodyClearLane`, also clear where the whole body lies beyond either end of the
  * lane, which `bodyClearLane` extends without limit. */
-export function bodyClearOf(pose: ParkingPose, lane: CLane, lengthM: number, widthM: number) {
+export function bodyClearOf(pose: ParkingPose, lane: LaneBand, lengthM: number, widthM: number) {
   const beyond = (at: number, sign: number) => {
     const end = pointAtDistance(lane.polyline, lane.cumulative, at),
       heading = headingAtDistance(lane.polyline, lane.cumulative, at);

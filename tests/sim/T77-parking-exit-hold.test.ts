@@ -88,7 +88,7 @@ test('T77 a refused exit holds clear of the lane beside a through car, then merg
     ...pointAtDistance(w.lane.polyline, w.lane.cumulative, w.exit.positionM),
     heading: headingAtDistance(w.lane.polyline, w.lane.cumulative, w.exit.positionM),
   };
-  expect(parking.startsInLot(1)).toBe(true);
+  expect(parking.startsInLot(1, w.exit.idx)).toBe(true);
   parking.depart(1, 100, w.exit.idx);
   let granted = false,
     asked = 0,

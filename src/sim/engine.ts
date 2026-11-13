@@ -516,7 +516,7 @@ function createRun({
     roadEnteredS[id] = timeS;
     roadEnteredM[id] = positionM;
     planLane(id, lane, positionM);
-    if (parking.startsInLot(id)) {
+    if (parking.startsInLot(id, connector.idx)) {
       vehicles.lane[id] = OFF_LANE;
       vehicles.position[id] = 0;
       vehicles.speed[id] = 0;

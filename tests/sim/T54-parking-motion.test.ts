@@ -61,7 +61,7 @@ test('T149 a lot departure waits in its bay when an arrival is already occupying
   const c = w.net.connectors[w.net.parking[w.net.index.parking.get(w.id)!]!.connectorsOut[0]!]!;
   vehicles.destination[0] = c.idx;
   vehicles.insert(0, c.lane, c.positionM);
-  expect(parking.startsInLot(1)).toBe(true);
+  expect(parking.startsInLot(1, c.idx)).toBe(true);
   expect(parking.canStartLot(1, c.idx)).toBe(false);
 });
 
