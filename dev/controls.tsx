@@ -70,13 +70,13 @@ export function Gallery() {
           <ToolbarButton icon="play" label="Play disabled" disabled />
         </div>
         <div className="toolbar">
+          <span className="muted">Tooltip (shown after a pause on hover, at once on focus)</span>
           <span className="tooltip-anchor demo-open">
             <ToolbarButton icon="save" label="Save" />
             <span role="tooltip" className="tooltip">
               Save the project file
             </span>
           </span>
-          <span className="muted">Tooltip (shown after a pause on hover, at once on focus)</span>
         </div>
       </section>
 
