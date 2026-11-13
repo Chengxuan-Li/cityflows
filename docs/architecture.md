@@ -3154,8 +3154,8 @@ other ground paint. The default-on “Parking stalls” layer controls paint in 
 leaving the lot surface visible. No parked vehicles or parking simulation are introduced.
 
 TASK-174: riders on platforms are drawn and picked with the walkers (waiting in the walkers'
-waiting colour); picking one opens a transit rider view (stop, waiting or walking on the platform,
-the trip, a link to the person). The train inspector shows a run's riders against its places and
+waiting colour); picking one opens the person inspector, whose current leg names the stop waited
+at or ridden to. The train inspector shows a run's riders against its places and
 lists them as links to the person inspector, whose journey shows wait legs at their stop and ride
 legs with the line and the stop where the rider gets off. The Chart section's mode shares add
 transit (system purple) to the caption, the counts and the hourly bars, the mean wait, riders left

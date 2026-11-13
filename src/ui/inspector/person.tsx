@@ -59,7 +59,7 @@ export function PersonInspector({
             <dt>Current leg</dt>
             <dd>
               {detail.currentLeg
-                ? `${legNames[detail.currentLeg.kind]} · ${detail.currentLeg.state}`
+                ? `${legNames[detail.currentLeg.kind]}${detail.currentLeg.kind === 'wait' ? ` at ${stopName(city, detail.currentLeg.stop)}` : detail.currentLeg.kind === 'ride' ? ` to ${stopName(city, detail.currentLeg.toStop)}` : ''} · ${detail.currentLeg.state}`
                 : 'None'}
             </dd>
             {detail.household && (

@@ -207,10 +207,15 @@ export function createTransit(
     rider.from = door.length
       ? door[Math.floor(draw.next() * door.length)]!
       : stops[rider.toStop]!.centre;
+    // Off the door onto the platform, then to where the rider leaves it.
+    rider.spot = spotOn(rider.toStop, rider.personId);
     rider.to = rider.exit;
     rider.startS = timeS;
     if (!rider.background || rider.endS <= timeS)
-      rider.endS = timeS + (distance(rider.from, rider.exit) * PLATFORM_DETOUR) / speed;
+      rider.endS =
+        timeS +
+        ((distance(rider.from, rider.spot) + distance(rider.spot, rider.exit)) * PLATFORM_DETOUR) /
+          speed;
     rider.vehicle = null;
     arrived.push(index);
     counts.stops[rider.toStop]!.alightings++;
@@ -460,13 +465,20 @@ export function createTransit(
           rider.endS > rider.startS
             ? Math.min(1, Math.max(0, (timeS - rider.startS) / (rider.endS - rider.startS)))
             : 1;
-        const at = moving ? lerp(rider.from, rider.to, f) : rider.spot;
+        // Getting off walks door, spot on the platform, exit; the others walk straight.
+        const path =
+          rider.phase === 'alighting' ? [rider.from, rider.spot, rider.to] : [rider.from, rider.to];
+        const legs = path.slice(1).map((p, k) => distance(path[k]!, p));
+        let along = f * legs.reduce((a, b) => a + b, 0),
+          k = 0;
+        while (k < legs.length - 1 && along > legs[k]!) along -= legs[k++]!;
+        const a = path[k]!,
+          b = path[k + 1]!;
+        const at = moving ? lerp(a, b, legs[k]! ? Math.min(1, along / legs[k]!) : 1) : rider.spot;
         snapshot.id[i] = TRANSIT_RIDER_ID + index;
         snapshot.x[i] = at.x;
         snapshot.y[i] = at.y;
-        snapshot.heading[i] = moving
-          ? Math.atan2(rider.to.y - rider.from.y, rider.to.x - rider.from.x)
-          : 0;
+        snapshot.heading[i] = moving ? Math.atan2(b.y - a.y, b.x - a.x) : 0;
         // The walkers' states: 1 walking, 2 waiting.
         snapshot.state[i] = moving ? 1 : 2;
         snapshot.layer[i] = stops[rider.phase === 'alighting' ? rider.toStop : rider.stop]!.layer;
@@ -482,7 +494,6 @@ export function createTransit(
         tripId: rider.tripId,
         phase: rider.phase,
         stop: stops[rider.phase === 'alighting' ? rider.toStop : rider.stop]!.id,
-        stopName: stops[rider.phase === 'alighting' ? rider.toStop : rider.stop]!.name,
         sinceS: rider.phase === 'waiting' ? rider.waitSinceS : rider.startS,
       };
     },

@@ -74,3 +74,39 @@ Write it as the commit body.
   stays main's run) and seated in the S-Bahn: they ride in on the train that brings them, alight at
   its doors and walk to the entrance, and after their walk back they wait on the platform and board
   the next S-Bahn with room.
+
+### Census (milestone 4, 2026-11-13)
+
+Munich at 0.15, 07:00 to 10:00, mode choice on (fare 0.5 EUR, in-vehicle x 1.1, 5 min per
+transfer), trips of tours started by 10:00:
+
+| Seed | Local trips | Walk | Car | Transit | Transit < 0.5 km | < 1 km | < 2 km | Vehicle trips completed |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 7,021 | 77.6% | 21.6% | 0.80% | 0.2% | 0.6% | 1.9% | 2,560 |
+| 2 | 7,035 | 78.5% | 20.2% | 1.28% | 0.2% | 1.5% | 2.1% | 2,505 |
+| 3 | 7,035 | 78.6% | 20.9% | 0.54% | 0.2% | 0.4% | 1.3% | 2,531 |
+
+Transit trips started by 10:00: 28 / 45 / 19 (seeds 1 / 2 / 3); none gave up, none was left by a
+full tram (32 places at 0.15). Gridlock 0, stalled heads 0 on every seed. Seed 1 riders per line
+(residents boarded; TASK-128 riders off / on; most aboard of the places): tram westbound to
+Barthstraße 20 (most aboard 3 of 32), eastbound to Schrenkstraße 2, eastbound to Deroystraße 4,
+westbound to Burghausener Straße 2; S-Bahn northeastbound 0, 296 off, 0 on (8 of 163); westbound
+0, 292 off, 0 on (8 of 163). TASK-128's commuters stay a working day, so none boards before 10:00.
+Busiest tram stops: Schrenkstraße 14 boardings, Barthstraße 16 alightings. Mean wait 80 s (max
+298 s). The mean offered plan walks 12 min, waits 3 and rides 1 against a 15 min walk: inside a
+1.5 km district a tram ride saves little walking, which keeps transit near one trip in a hundred.
+
+Step time, seed 1 to 10:00, side by side with main 96d6a34 on the same loaded machine: choice off
+226.9 s against 229.7 s (state hash 2045295651 on both, 5,310 / 0 / 0); choice on 32.9 s against
+33.7 s. The transit network builds in about 130 ms per load; a transit query takes well under a
+millisecond.
+
+### UI and previews (milestone 5)
+
+`tests/e2e/T80-transit.spec.ts` (rail group e, Munich) imports Munich, checks that an S-Bahn run
+carries its riders in and that they stand on the platform after it stops, opens one in the person
+inspector, finds a tram standing with a rider at its door and opens the train inspector (riders
+against places), and reads transit and riders per line in the Chart section's mode shares at 09:30.
+With `CITYFLOWS_SHOT_DIR` it saves the five previews. Checked by eye: S-Bahn riders step off the
+doors onto the platform, not onto the tracks or the far side; the tram rider stands at the leading
+car beside the island; the purple transit share is a sliver at 1%.

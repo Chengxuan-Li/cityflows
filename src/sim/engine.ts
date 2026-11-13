@@ -1645,7 +1645,6 @@ function createRun({
         route: null,
         link: -1,
         positionM: 0,
-        platform: { stop: rider.stopName, waiting: rider.phase === 'waiting' },
       };
     },
     inspectPerson: (id: string) => persons.inspect(id),
