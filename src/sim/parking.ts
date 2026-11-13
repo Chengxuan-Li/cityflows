@@ -621,6 +621,44 @@ export function createParking(
         ((m.phase === 'leave' || m.phase === 'drive_out' || m.phase === 'exit') !== leaving ||
           m.connector !== connector),
     );
+  function sharedMouthStop(arriving: number, leaving: number, exit: number) {
+    const into = compiled.connectors[vehicles.destination[arriving]!],
+      out = compiled.connectors[exit]!;
+    if (!into || into.parking !== out.parking || into.lane !== out.lane) return Infinity;
+    const gap = Math.max(params.spawnMinGapM, params.idm.minGapM);
+    const stop = out.positionM - length(leaving) - gap - 0.1;
+    return into.positionM >= stop && into.positionM < out.positionM + length(arriving) + gap
+      ? stop
+      : Infinity;
+  }
+  function arrivalBlocksDeparture(leaving: number, exit: number) {
+    const c = compiled.connectors[exit]!,
+      lane = compiled.lanes[c.lane]!;
+    const approaches = [
+      { segment: lane.idx, offset: 0 },
+      ...lane.in.flatMap((i) => {
+        const movement = compiled.movements[i]!,
+          from = compiled.lanes[movement.fromLane]!;
+        return [
+          { segment: -i - 1, offset: movement.lengthM },
+          { segment: from.idx, offset: from.lengthM + movement.lengthM },
+        ];
+      }),
+    ];
+    for (const { segment, offset } of approaches)
+      for (let id = vehicles.first(segment); id !== -1; id = vehicles.next[id]!) {
+        const stop = sharedMouthStop(id, leaving, exit);
+        if (!Number.isFinite(stop)) continue;
+        const speed = vehicles.speed[id]!,
+          profile = params.vehicleClasses[vehicleClasses[vehicles.vclass[id]!]!];
+        const braking =
+          (speed * speed) / (2 * params.idm.bMps2 * profile.decelFactor) +
+          speed * params.dtS +
+          params.idm.minGapM;
+        if (vehicles.position[id]! - offset + braking >= stop) return true;
+      }
+    return false;
+  }
   function startArrival(id: number, connector: number, timeS: number) {
     const facility = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
     if (facility?.kind === 'lot' && lotBusy(facility.idx, false, connector)) return false;
@@ -922,10 +960,20 @@ export function createParking(
     startArrival,
     lotArrival: (connector: number) =>
       compiled.parking[compiled.connectors[connector]!.parking ?? -1]?.kind === 'lot',
+    arrivalStop(id: number) {
+      const destination = compiled.connectors[vehicles.destination[id]!];
+      if (compiled.parking[destination?.parking ?? -1]?.kind !== 'lot') return undefined;
+      let positionM = Infinity;
+      for (const [other, m] of motions)
+        if (m.lot && (m.phase === 'leave' || m.phase === 'drive_out' || m.phase === 'exit'))
+          positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector));
+      return Number.isFinite(positionM) ? { lane: destination!.lane, positionM } : undefined;
+    },
     startsInLot: isLotSpace,
     canStartLot(id: number, connector: number) {
       const slot = spaces[originSpace(id)]!;
       if (lotBusy(slot.parking, true, connector)) return false;
+      if (arrivalBlocksDeparture(id, connector)) return false;
       const out = pathPose(localPath(slot.idx, connector, true), 0);
       return ![...motions].some(
         ([otherId, m]) =>
