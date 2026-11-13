@@ -18,7 +18,9 @@ export const baselineSchema = z.object({
   population: z.array(personSchema).optional(),
 });
 
-export type Baseline = z.infer<typeof baselineSchema>;
+export type Baseline = Omit<z.infer<typeof baselineSchema>, 'population'> & {
+  population?: Person[];
+};
 export interface Variant {
   cityVersion: number;
   scenario: Scenario;

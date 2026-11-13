@@ -28,6 +28,7 @@ test('@smoke T57 a walker and a vehicle occupant open the person journey', async
   const population: Person[] = ['driver', 'walker'].map((id) => ({
     id,
     homePlaceId: home.id,
+    householdId: `hh:${home.id}:${id}`,
     workPlaceId: work.id,
     hasCar: id === 'driver',
     agenda: [],

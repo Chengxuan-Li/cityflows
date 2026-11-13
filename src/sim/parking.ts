@@ -65,6 +65,47 @@ export function createParking(
       f.source.provenance.inferred.includes('capacity')) ??
     false;
   const hasRoom = (f: CompiledCity['parking'][number]) => soft(f) || occupied[f.idx]! < f.capacity;
+  // TASK-129: a car's trips chain by its `carId` (by person for trips without one), so a second
+  // driver leaves from where the first parked, waits for the car, and never takes another.
+  const previous = new Int32Array(trips.length).fill(-1);
+  const nextTrip = new Int32Array(trips.length).fill(-1);
+  const chronology = trips
+    .map((_, id) => id)
+    .sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
+  const lastOfCar = new Map<string, number>();
+  for (const id of chronology) {
+    const trip = trips[id]!,
+      key = trip.carId ?? trip.personId;
+    if (trip.mode !== 'car' || key === null) continue;
+    const before = lastOfCar.get(key);
+    if (before !== undefined && trips[before]!.destinationPlaceId === trip.originPlaceId) {
+      previous[id] = before;
+      nextTrip[before] = id;
+    }
+    lastOfCar.set(key, id);
+  }
+  /** Trip lists scheduled from a population carry household cars; hand-built ones keep the stock
+   * of `ceil(round(residents x personsPerResident) x carShare)` cars per home. */
+  const households = trips.some((trip) => trip.carId !== undefined);
+  /** The first trip of each household car's day, by the home the car leaves from. */
+  const homeCars = new Map<string, number[]>();
+  /** A car trip that ends at its household's home, where the car's day began. */
+  const goingHome = new Uint8Array(trips.length);
+  const carHome: (string | undefined)[] = [];
+  for (const id of chronology) {
+    const trip = trips[id]!;
+    if (trip.mode !== 'car' || trip.carId === undefined) continue;
+    carHome[id] = previous[id] === -1 ? trip.originPlaceId : carHome[previous[id]!];
+    goingHome[id] = Number(carHome[id] === trip.destinationPlaceId);
+    if (previous[id] !== -1) continue;
+    const place = compiled.places[compiled.index.place.get(trip.originPlaceId) ?? -1];
+    if (!place || place.kind === 'gateway') continue;
+    const cars = homeCars.get(place.id);
+    if (cars) cars.push(id);
+    else homeCars.set(place.id, [id]);
+  }
+  const homeCarCount = (city: CompiledCity, place: number) =>
+    homeCars.get(city.places[place]?.id ?? '')?.length ?? 0;
   function initialOccupancy(city: CompiledCity) {
     const remaining = new Map<number, number>();
     const hour = (scenario.startS / 3600) % 24;
@@ -75,9 +116,12 @@ export function createParking(
       if (!remaining.has(f.place))
         remaining.set(
           f.place,
-          Math.ceil(
-            Math.round(f.residents * scenario.demand.personsPerResident) * scenario.demand.carShare,
-          ),
+          households
+            ? homeCarCount(city, f.place)
+            : Math.ceil(
+                Math.round(f.residents * scenario.demand.personsPerResident) *
+                  scenario.demand.carShare,
+              ),
         );
       const kind = city.places[f.place]?.kind;
       const fraction =
@@ -190,9 +234,16 @@ export function createParking(
       .sort((a, b) => a.d - b.d || a.f.idx - b.f.idx)
       .map(({ f }) => f);
   };
+  /** The place whose cars start in each stocked space: its facility's, or the home that moved a
+   * garage car there. */
+  const slotHome = new Int32Array(spaces.length).fill(-1);
+  /** The first trip of the household car parked in a space, for display only (not hashed). */
+  const stockCar = new Int32Array(spaces.length).fill(-1);
   for (const f of compiled.parking) {
-    for (const slot of shuffled(usableSpaces(f), `stock:${f.id}`).slice(0, occupied[f.idx]))
+    for (const slot of shuffled(usableSpaces(f), `stock:${f.id}`).slice(0, occupied[f.idx])) {
       stock[slot] = -2;
+      slotHome[slot] = f.place;
+    }
   }
   const stockDepartures = parkingEgress(compiled, params.laneChangeDistanceM);
   const homeDepartures = new Map<string, Set<ReturnType<typeof parkingEgress>>>();
@@ -220,6 +271,7 @@ export function createParking(
         const garage = garages.find((g) => occupied[g.idx]! > 0);
         if (!garage) break;
         stock[slot] = -2;
+        slotHome[slot] = p.idx;
         occupied[f.idx]!++;
         occupied[garage.idx]!--;
         count--;
@@ -227,8 +279,6 @@ export function createParking(
     }
   }
   let cachedHash: number | undefined;
-  const previous = new Int32Array(trips.length).fill(-1);
-  const nextTrip = new Int32Array(trips.length).fill(-1);
   const allowWithoutExit = new Uint32Array(trips.length);
   let origins = new Int32Array(trips.length).fill(-1);
   let chosen = new Int32Array(trips.length).fill(-1);
@@ -304,70 +354,72 @@ export function createParking(
   const searchTime = new Float64Array(trips.length);
   const walking = new Float64Array(trips.length);
   const rejected = new Map<number, Set<number>>();
+  const homeBeyond: string[] = [];
+  const homeDistances: number[] = [];
+  const beyondRadius: NonNullable<Metrics['parking']['home']>['beyondRadius'] = [];
   let arrivals = 0;
   let parkedWithoutExit = 0;
   let totalSearch = 0;
-  const last = new Map<string, number>();
-  const chronology = trips
-    .map((_, id) => id)
-    .sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
   const available = occupied.slice();
   const availableSpaces = stock.slice();
-  const homeCars = new Map<number, number>();
-  const carsAt = (own: CompiledCity['parking']) =>
-    Math.ceil(
-      Math.round(Math.max(0, ...own.map((f) => f.residents)) * scenario.demand.personsPerResident) *
-        scenario.demand.carShare,
-    );
-  for (const id of chronology) {
-    const trip = trips[id]!;
-    if (trip.mode !== 'car') continue;
-    if (trip.personId !== null) {
-      const before = last.get(trip.personId);
-      if (before !== undefined && trips[before]!.destinationPlaceId === trip.originPlaceId) {
-        previous[id] = before;
-        nextTrip[before] = id;
-      }
-      last.set(trip.personId, id);
-    }
-    if (previous[id] === -1) {
-      const place = compiled.index.place.get(trip.originPlaceId);
-      if (place !== undefined && compiled.places[place]!.kind === 'gateway') continue;
-      const own = compiled.parking.filter((f) => f.place === place);
-      const street =
-        small(id) && prefersStreet(id) ? nearHome(place!).filter((f) => f.kind !== 'garage') : [];
-      if (!homeCars.has(place!)) homeCars.set(place!, carsAt(own));
-      const facility =
-        [...street, ...own, ...(small(id) ? nearHome(place!) : [])].find(
-          (f) =>
-            departure(id).facilities[f.idx] &&
-            available[f.idx]! > 0 &&
-            (small(id) || f.kind === 'garage') &&
-            (f.kind === 'garage' ||
-              usableSpaces(f).some((s) => departure(id).spaces[s] && availableSpaces[s] !== -1)),
-        ) ??
-        // Neighbours may have taken the street cars moved out of this home's garage; an
-        // inferred home garage stands in for parking OSM does not map and admits every car,
-        // so a resident's car starts there while the home has residents' cars left (lead,
-        // TASK-103 follow-up).
-        ((homeCars.get(place!) ?? 0) > 0
-          ? own.find((f) => f.kind === 'garage' && soft(f) && departure(id).facilities[f.idx])
-          : undefined);
-      homeCars.set(place!, homeCars.get(place!)! - 1);
-      origins[id] = facility?.idx ?? -1;
-      if (facility) {
-        available[facility.idx]!--;
-        const eligible = usableSpaces(facility).filter(
-          (s) => departure(id).spaces[s] && availableSpaces[s] !== -1,
+  const carsLeft = new Map<number, number>();
+  const carsAt = (place: number, own: CompiledCity['parking']) =>
+    households
+      ? homeCarCount(compiled, place)
+      : Math.ceil(
+          Math.round(
+            Math.max(0, ...own.map((f) => f.residents)) * scenario.demand.personsPerResident,
+          ) * scenario.demand.carShare,
         );
-        const slot = eligible.length ? rng.derive(`origin:${trip.id}`).pick(eligible) : undefined;
-        if (slot !== undefined) {
-          originSpaces[id] = slot;
-          availableSpaces[slot] = -1;
-          classes[slot] = vehicles.vclass[id]!;
-        }
-      } else if (own.length) noOriginCar[id] = 1;
-    }
+  // TASK-129: each household car takes a space of its own home's stock, in an order seeded per
+  // car rather than by who leaves first. Hand-built trip lists keep first come, first served.
+  const firsts = households
+    ? [...homeCars.values()]
+        .flat()
+        .map((id) => ({ id, key: rng.derive(`car:${trips[id]!.carId}`).next() }))
+        .sort((a, b) => a.key - b.key || a.id - b.id)
+        .map(({ id }) => id)
+    : chronology.filter((id) => trips[id]!.mode === 'car' && previous[id] === -1);
+  for (const id of firsts) {
+    const trip = trips[id]!;
+    const place = compiled.index.place.get(trip.originPlaceId);
+    if (place !== undefined && compiled.places[place]!.kind === 'gateway') continue;
+    const own = compiled.parking.filter((f) => f.place === place);
+    const ours = (s: number) =>
+      departure(id).spaces[s] &&
+      availableSpaces[s] !== -1 &&
+      (!households || slotHome[s] === place);
+    const street =
+      small(id) && prefersStreet(id) ? nearHome(place!).filter((f) => f.kind !== 'garage') : [];
+    if (!carsLeft.has(place!)) carsLeft.set(place!, carsAt(place!, own));
+    const facility =
+      [...street, ...own, ...(small(id) ? nearHome(place!) : [])].find(
+        (f) =>
+          departure(id).facilities[f.idx] &&
+          available[f.idx]! > 0 &&
+          (small(id) || f.kind === 'garage') &&
+          (f.kind === 'garage' || usableSpaces(f).some(ours)),
+      ) ??
+      // Neighbours may have taken the street cars moved out of this home's garage; an
+      // inferred home garage stands in for parking OSM does not map and admits every car,
+      // so a resident's car starts there while the home has residents' cars left (lead,
+      // TASK-103 follow-up).
+      ((carsLeft.get(place!) ?? 0) > 0
+        ? own.find((f) => f.kind === 'garage' && soft(f) && departure(id).facilities[f.idx])
+        : undefined);
+    carsLeft.set(place!, carsLeft.get(place!)! - 1);
+    origins[id] = facility?.idx ?? -1;
+    if (facility) {
+      available[facility.idx]!--;
+      const eligible = usableSpaces(facility).filter(ours);
+      const slot = eligible.length ? rng.derive(`origin:${trip.id}`).pick(eligible) : undefined;
+      if (slot !== undefined) {
+        originSpaces[id] = slot;
+        availableSpaces[slot] = -1;
+        classes[slot] = vehicles.vclass[id]!;
+        stockCar[slot] = id;
+      }
+    } else if (own.length) noOriginCar[id] = 1;
   }
   const destinationPlace = (id: number) =>
     compiled.places[compiled.index.place.get(trips[id]!.destinationPlaceId)!]!;
@@ -433,96 +485,121 @@ export function createParking(
   ) {
     clockS = timeS;
     release(id, timeS);
-    // TASK-122: prefer an available, reachable space with an exit nearby. Otherwise retain the
-    // legacy choice, rather than forecasting an occupied safe strip and cruising until it
-    // empties. TASK-125: a choice with room claims its space (strip) or one place (garage, lot).
-    for (const checkExit of requiresExit(id) ? [true, false] : [false])
-      for (const needRoom of checkExit || !atDeparture ? [true] : [true, false])
-        for (const f of facilitiesFor(id)) {
-          if (checkExit && distance(id, f.idx) > params.parkingSearchRadiusM) continue;
-          if (
-            (needRoom ? !hasRoom(f) : f.capacity === 0) ||
-            (!checkExit && rejected.get(id)?.has(f.idx))
-          )
-            continue;
-          if (
-            needRoom &&
-            !soft(f) &&
-            occupied[f.idx]! + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) >= f.capacity
-          )
-            continue;
-          if (checkExit && !departure(nextTrip[id]!).facilities[f.idx]) continue;
-          let selected = -1;
-          let bestCostS = Infinity;
-          for (const connector of f.kind === 'roadside'
-            ? shuffled(f.connectorsIn, `arrival:${trips[id]!.id}`)
-            : f.connectorsIn) {
+    const home = id >= 0 && goingHome[id] === 1;
+    const withinHome = (f: CompiledCity['parking'][number]) =>
+      distance(id, f.idx) <= params.homeParkingRadiusM ||
+      (soft(f) && f.place === destinationPlace(id).idx);
+    // TASK-129: a car going home chooses only within the home radius, where it also heads for a
+    // full facility and searches on from there, as at departure. It looks beyond the radius only
+    // when nothing within admits it any more.
+    for (const within of home ? [true, false] : [null]) {
+      if (within === false) homeBeyond[id] = beyondReason(id, withinHome);
+      // TASK-122: prefer an available, reachable space with an exit nearby. Otherwise retain the
+      // legacy choice, rather than forecasting an occupied safe strip and cruising until it
+      // empties. TASK-125: a choice with room claims its space (strip) or one place (garage, lot).
+      for (const checkExit of requiresExit(id) ? [true, false] : [false])
+        for (const needRoom of checkExit || !(atDeparture || within) ? [true] : [true, false])
+          for (const f of facilitiesFor(id)) {
+            if (within !== null && withinHome(f) !== within) continue;
+            if (checkExit && distance(id, f.idx) > params.parkingSearchRadiusM) continue;
             if (
-              !parkingConnectorPermitted(
-                compiled,
-                connector,
-                trips[id]!.vehicleClass,
-                trips[id]!.purpose,
-                'in',
+              (needRoom ? !hasRoom(f) : f.capacity === 0) ||
+              (!checkExit && !(within && needRoom) && rejected.get(id)?.has(f.idx))
+            )
+              continue;
+            if (
+              needRoom &&
+              !soft(f) &&
+              occupied[f.idx]! + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) >= f.capacity
+            )
+              continue;
+            if (checkExit && !departure(nextTrip[id]!).facilities[f.idx]) continue;
+            let selected = -1;
+            let bestCostS = Infinity;
+            for (const connector of f.kind === 'roadside'
+              ? shuffled(f.connectorsIn, `arrival:${trips[id]!.id}`)
+              : f.connectorsIn) {
+              if (
+                !parkingConnectorPermitted(
+                  compiled,
+                  connector,
+                  trips[id]!.vehicleClass,
+                  trips[id]!.purpose,
+                  'in',
+                )
               )
-            )
-              continue;
-            if (
-              f.kind !== 'garage' &&
-              (needRoom || checkExit) &&
-              !hasFreeSpace(connector, id, needRoom, checkExit)
-            )
-              continue;
-            const accepted = accept(connector);
-            if (accepted === false) continue;
-            if (
-              f.kind === 'lot' &&
-              f.source.mappedPortals?.length &&
-              typeof accepted === 'number'
-            ) {
-              if (accepted < bestCostS) {
+                continue;
+              if (
+                f.kind !== 'garage' &&
+                (needRoom || checkExit) &&
+                !hasFreeSpace(connector, id, needRoom, checkExit)
+              )
+                continue;
+              const accepted = accept(connector);
+              if (accepted === false) continue;
+              if (
+                f.kind === 'lot' &&
+                f.source.mappedPortals?.length &&
+                typeof accepted === 'number'
+              ) {
+                if (accepted < bestCostS) {
+                  selected = connector;
+                  bestCostS = accepted;
+                }
+              } else {
                 selected = connector;
-                bestCostS = accepted;
+                break;
               }
-            } else {
-              selected = connector;
-              break;
             }
-          }
-          if (selected === -1) continue;
-          vehicles.destination[id] = selected;
-          chosen[id] = f.idx;
-          allowWithoutExit[id] = Number(requiresExit(id) && !checkExit);
-          // TASK-153: the forecast for the full facility a car is leaving claims the place its
-          // own car frees, so a later choice cannot take it (TASK-151's van 2796 at pk:2056).
-          const exact = f.kind === 'roadside' || !!f.source.mappedPortals?.length;
-          const vacated =
-            !needRoom &&
-            !soft(f) &&
-            !left[id] &&
-            originFacility(id) === f.idx &&
-            occupied[f.idx]! - 1 + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) < f.capacity
-              ? originSpace(id)
-              : undefined;
-          const slot =
-            exact && (needRoom || vacated !== undefined)
-              ? freeSpace(selected, id, vacated)
-              : undefined;
-          if (!soft(f) && (needRoom || (vacated !== undefined && (!exact || slot)))) {
-            head(id, f.idx);
-            claimSince[id] = timeS;
-            if (slot) {
-              claimedSpaces[id] = slot.idx;
-              claimedBy[slot.idx] = id;
+            if (selected === -1) continue;
+            vehicles.destination[id] = selected;
+            chosen[id] = f.idx;
+            allowWithoutExit[id] = Number(requiresExit(id) && !checkExit);
+            // TASK-153: the forecast for the full facility a car is leaving claims the place its
+            // own car frees, so a later choice cannot take it (TASK-151's van 2796 at pk:2056).
+            const exact = f.kind === 'roadside' || !!f.source.mappedPortals?.length;
+            const vacated =
+              !needRoom &&
+              !soft(f) &&
+              !left[id] &&
+              originFacility(id) === f.idx &&
+              occupied[f.idx]! - 1 + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) < f.capacity
+                ? originSpace(id)
+                : undefined;
+            const slot =
+              exact && (needRoom || vacated !== undefined)
+                ? freeSpace(selected, id, vacated)
+                : undefined;
+            if (!soft(f) && (needRoom || (vacated !== undefined && (!exact || slot)))) {
+              head(id, f.idx);
+              claimSince[id] = timeS;
+              if (slot) {
+                claimedSpaces[id] = slot.idx;
+                claimedBy[slot.idx] = id;
+              }
             }
+            cachedHash = undefined;
+            walking[id] = distance(id, f.idx);
+            if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
+            return true;
           }
-          cachedHash = undefined;
-          walking[id] = distance(id, f.idx);
-          if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
-          return true;
-        }
+    }
     if (searching[id] && !Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
     return false;
+  }
+  /** Why a car going home looks beyond the radius: nothing there admits it at all, or each
+   * facility there is full or claimed, or has room the car cannot reach. */
+  function beyondReason(id: number, within: (f: CompiledCity['parking'][number]) => boolean) {
+    const near = facilitiesFor(id).filter(within);
+    if (!near.length) return 'no facility within the radius';
+    const room = near.some(
+      (f) =>
+        hasRoom(f) &&
+        (soft(f) ||
+          occupied[f.idx]! + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) < f.capacity) &&
+        (f.kind === 'garage' || f.connectorsIn.some((c) => hasFreeSpace(c, id, true, false))),
+    );
+    return room ? 'free space within the radius unreachable' : 'within the radius full or claimed';
   }
   function originFacility(id: number) {
     const before = previous[id]!;
@@ -972,6 +1049,17 @@ export function createParking(
     )
       parkedWithoutExit++;
     if (!Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
+    if (goingHome[id]) {
+      const distanceM = distance(id, f);
+      homeDistances.push(distanceM);
+      if (distanceM > params.homeParkingRadiusM && !soft(compiled.parking[f]!))
+        beyondRadius.push({
+          tripId: trips[id]!.id,
+          facility: compiled.parking[f]!.id,
+          distanceM,
+          reason: homeBeyond[id] ?? 'unknown',
+        });
+    }
     arrivals++;
     totalSearch += searchTime[id]!;
   }
@@ -1250,6 +1338,8 @@ export function createParking(
     },
     choose,
     noOriginCar: (id: number) => !!noOriginCar[id],
+    /** The car's previous trip, whoever drove it (TASK-129), or -1. */
+    carBefore: (id: number) => previous[id]!,
     ready(id: number) {
       const before = previous[id]!;
       return (
@@ -1468,7 +1558,7 @@ export function createParking(
       for (let i = 0; i < stock.length; i++)
         if (stock[i] !== -1) {
           occupiedBits[i >> 3]! |= 1 << (i & 7);
-          ids[i] = stock[i]! >= 0 ? stock[i]! + 1 : 0;
+          ids[i] = (stock[i]! >= 0 ? stock[i]! : stockCar[i]!) + 1;
         }
       return {
         revision,
@@ -1530,6 +1620,9 @@ export function createParking(
       held.sort((a, b) => a - b);
       longest.sort((a, b) => b.heldS - a.heldS || a.vehicleId - b.vehicleId);
       const percentile = (p: number) => (held.length ? held[Math.ceil(p * held.length) - 1]! : 0);
+      const home = homeDistances.slice().sort((a, b) => a - b);
+      const homePercentile = (p: number) =>
+        home.length ? home[Math.ceil(p * home.length) - 1]! : 0;
       return {
         facilities: compiled.parking.map((f) => ({
           id: f.id,
@@ -1566,6 +1659,17 @@ export function createParking(
             (stripManoeuvres * 3600) / Math.max(params.dtS, timeS - scenario.startS),
           meanStallChoiceRank: lotChoices ? totalRank / lotChoices : 0,
         },
+        ...(households
+          ? {
+              home: {
+                arrivals: home.length,
+                medianM: homePercentile(0.5),
+                p90M: homePercentile(0.9),
+                maxM: home.at(-1) ?? 0,
+                beyondRadius: beyondRadius.map((entry) => ({ ...entry })),
+              },
+            }
+          : {}),
       };
     },
     patch(next: CompiledCity) {

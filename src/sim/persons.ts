@@ -7,7 +7,7 @@ import type { Person, PlaceId, Scenario, SimParams, TripRequest } from '../schem
 import type { createAccounting } from './metrics';
 import type { createParking } from './parking';
 import type { FailReason } from './types';
-import { FAILED, type Vehicles } from './vehicle';
+import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import type { Walkers } from './walkers';
 
 type State = 'pending' | 'active' | 'completed' | 'failed';
@@ -36,6 +36,11 @@ export interface PersonDetail {
   state: State;
   currentLeg: PersonLegDetail | null;
   car: { facility: string | null; space: number | null };
+  /** TASK-129: null for persons outside the population (riders, visitors). */
+  household: { id: string; members: string[] } | null;
+  /** The household car the person drives today, and its owner when borrowed. */
+  carId: string | null;
+  carOwner: string | null;
   trips: PersonTripDetail[];
 }
 export interface PersonMetrics {
@@ -47,6 +52,8 @@ export interface PersonMetrics {
   access: { count: number; meanTimeS: number; meanDistanceM: number };
   egress: { count: number; meanTimeS: number; meanDistanceM: number };
   walkFallbacks: number;
+  /** TASK-129: trips that waited for a household car another member had not brought back. */
+  carWaits: { count: number; medianS: number; maxS: number };
   fallbacks: {
     leg: 'access' | 'egress';
     placeId: PlaceId;
@@ -110,8 +117,23 @@ export function createPersons(
     if (trips[id]!.mode === 'walk') accounting.excludeWalk(id);
   }
   const populationById = new Map(population.map((person) => [person.id, person]));
+  const households = new Map<string, Person[]>();
+  for (const person of population) {
+    const members = households.get(person.householdId);
+    if (members) members.push(person);
+    else households.set(person.householdId, [person]);
+  }
+  // Person index order, as demand numbers the household's cars (src/demand/households.ts).
+  const index = (person: Person) => Number(person.id.slice(person.id.lastIndexOf(':') + 1));
+  for (const members of households.values())
+    members.sort((a, b) => index(a) - index(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const ready = new Uint8Array(trips.length);
   const waiting = new Map<number, number[]>();
+  /** TASK-129: trips waiting for their household car, keyed by the car's previous trip (another
+   * member's), and when each began to wait. */
+  const carWaiting = new Map<number, number[]>();
+  const carWaitSince = new Map<number, number>();
+  const carWaits: number[] = [];
   const activeDrives = new Set<number>();
   const fallbackWalks = new Map<
     number,
@@ -345,6 +367,11 @@ export function createPersons(
       fallbackCounts.set(key, { leg: kind, placeId, facilityId: car.facilityId, reason, count: 1 });
     fallbackWalks.set(id, { endS: timeS + item.distanceM / params.walkSpeedMps, leg: item, done });
   }
+  /** The car's previous trip when another member drove it; a person's own chain covers theirs. */
+  function sharedCarBefore(id: number) {
+    const car = trips[id]!.mode === 'car' ? parking.carBefore(id) : -1;
+    return car !== -1 && trips[car]!.personId !== trips[id]!.personId ? car : -1;
+  }
   function start(id: number, timeS: number) {
     const record = records[id]!;
     if (record.state !== 'pending') return;
@@ -355,8 +382,22 @@ export function createPersons(
       waiting.set(previous[id]!, list);
       return;
     }
+    const car = sharedCarBefore(id);
+    if (car !== -1 && vehicles.state[car] !== COMPLETED && vehicles.state[car] !== FAILED) {
+      if (!carWaitSince.has(id)) {
+        carWaitSince.set(id, timeS);
+        carWaiting.set(car, [...(carWaiting.get(car) ?? []), id]);
+      }
+      return;
+    }
+    if (carWaitSince.has(id)) {
+      carWaits.push(timeS - carWaitSince.get(id)!);
+      carWaitSince.delete(id);
+    }
     record.state = 'active';
     started++;
+    if (car !== -1 && vehicles.state[car] === FAILED && vehicles.state[id] !== FAILED)
+      accounting.fail(id, 'stranded');
     if (before?.state === 'failed' || vehicles.state[id] === FAILED) {
       if (trips[id]!.mode === 'car' && vehicles.state[id] !== FAILED)
         accounting.fail(id, 'stranded');
@@ -370,7 +411,14 @@ export function createPersons(
       });
     else ready[id] = 1;
   }
+  /** The household car is back: the next member's trip may start. */
+  function carBack(id: number, timeS: number) {
+    const dependents = carWaiting.get(id);
+    carWaiting.delete(id);
+    for (const dependent of dependents ?? []) start(dependent, timeS);
+  }
   function driveCompleted(id: number, timeS: number) {
+    carBack(id, timeS);
     const record = records[id];
     if (!record || record.state !== 'active') return;
     const drive = record.legs.find((l) => l.kind === 'drive')!;
@@ -382,6 +430,7 @@ export function createPersons(
   }
   accounting.observe(driveCompleted, (id, reason) => {
     if (records[id]?.state === 'active') finish(id, nowS, reason);
+    carBack(id, nowS);
   });
   return {
     enabled: ids.length > 0,
@@ -422,6 +471,14 @@ export function createPersons(
         access: mean('access'),
         egress: mean('egress'),
         walkFallbacks,
+        carWaits: (() => {
+          const waits = carWaits.slice().sort((a, b) => a - b);
+          return {
+            count: waits.length,
+            medianS: waits.length ? waits[Math.ceil(waits.length / 2) - 1]! : 0,
+            maxS: waits.at(-1) ?? 0,
+          };
+        })(),
         fallbacks: [...fallbackCounts.values()].map((entry) => ({ ...entry })),
       };
     },
@@ -438,6 +495,13 @@ export function createPersons(
       const atOrigin =
         !record.legs.some((l) => l.kind === 'drive') || record.legs.at(-1)?.kind === 'access';
       const car = trips[current]!.mode === 'car' ? parking.location(current, atOrigin) : null;
+      const members = owner ? households.get(owner.householdId)! : [];
+      const carId = chain.map((id) => trips[id]!.carId).find((id) => id !== undefined) ?? null;
+      // Car `car:<householdId>:<k>` belongs to the household's k-th member with a car.
+      const carOwner = carId
+        ? (members.filter((m) => m.hasCar)[Number(carId.slice(carId.lastIndexOf(':') + 1))]?.id ??
+          null)
+        : null;
       return {
         id: personId,
         homePlaceId: owner?.homePlaceId ?? first.originPlaceId,
@@ -456,6 +520,9 @@ export function createPersons(
           facility: car ? (city.parking[car.facility]?.id ?? null) : null,
           space: car && car.space !== -1 ? car.space : null,
         },
+        household: owner ? { id: owner.householdId, members: members.map((m) => m.id) } : null,
+        carId,
+        carOwner,
         trips: chain.map((id) => ({
           ...records[id]!,
           legs: records[id]!.legs.map((l) => ({ ...l })),

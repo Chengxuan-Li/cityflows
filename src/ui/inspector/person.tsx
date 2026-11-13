@@ -1,6 +1,7 @@
 import type { CompiledCity } from '../../network';
 import type { City } from '../../schema';
 import type { PersonDetail, PersonLegDetail } from '../../sim/types';
+import { useAppStore } from '../store';
 
 const legNames: Record<PersonLegDetail['kind'], string> = {
   access: 'Access walk',
@@ -51,12 +52,40 @@ export function PersonInspector({
                 ? `${legNames[detail.currentLeg.kind]} · ${detail.currentLeg.state}`
                 : 'None'}
             </dd>
-            <dt>Car</dt>
-            <dd>
-              {detail.car.facility
-                ? `${facility?.name ?? detail.car.facility}${detail.car.space === null ? '' : ` · space ${detail.car.space}`}`
-                : 'Not parked'}
-            </dd>
+            {detail.household && (
+              <>
+                <dt>Household</dt>
+                <dd>
+                  {detail.household.id}
+                  {detail.household.members
+                    .filter((member) => member !== id)
+                    .map((member) => (
+                      <div key={member}>
+                        <button onClick={() => useAppStore.getState().selectPerson(member)}>
+                          {member}
+                        </button>
+                      </div>
+                    ))}
+                </dd>
+                <dt>Car today</dt>
+                <dd>
+                  {detail.carId ?? 'No free household car today'}
+                  {detail.carOwner && detail.carOwner !== id && (
+                    <div className="muted">Borrowed from {detail.carOwner}</div>
+                  )}
+                </dd>
+              </>
+            )}
+            {(detail.carId || !detail.household) && (
+              <>
+                <dt>Car</dt>
+                <dd>
+                  {detail.car.facility
+                    ? `${facility?.name ?? detail.car.facility}${detail.car.space === null ? '' : ` · space ${detail.car.space}`}`
+                    : 'Not parked'}
+                </dd>
+              </>
+            )}
           </dl>
           <table aria-label="Agenda">
             <thead>
