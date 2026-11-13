@@ -3456,8 +3456,19 @@ TASK-149 traced ten Munich and sixteen Sindelfingen mouths to shared OSM nodes.
 The first candidate split the through roads at all 26 mouths. It changed 43 of the
 96 reference routes against a limit of nine and was rejected. The next candidate
 keeps the through road and attaches parking circulation at the source entrance.
-The original route and TASK-144 round-trip tests pass. Physical entrance paths,
-one-way movement and lots with zero generated stalls still need verification.
+The independent route comparison preserved all 192 full route records across the
+two cities. The directed-path audit covered all 26 mouths and 94 direction records.
+Richelstraﬂe gains 86 usable bays. Three other Munich lots gain 17, 10 and 6.
+Sindelfingen's largest audited lot has 149 reachable bays out of 150 generated.
+
+The unchanged Munich 10:00 gate rejected revision `e99c03c` with 3,323 completed
+trips, 49 gridlock failures and one stalled head. At lot pk:2053, 16 drivers
+failed after choosing a mouth that reaches only 26 of the 75 bays. Claiming a
+reachable bay on approach removed all 16 parking failures in `5475921`, with
+3,498 completed trips, 43 gridlock failures and zero stalled heads. A separate
+trace shows a van waiting 5,595 simulated seconds at lot pk:2049 on r:639.
+An outbound car required the same lane gap where the van waited for admission.
+PR #5 is in review while the team tests entrance choice and shared-mouth yielding.
 
 ## Owner decisions log
 
