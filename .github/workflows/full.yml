@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        revision: [aa4006c, e99c03c, 5475921]
+        revision: [aa4006c50fc0097a26755cc6144e3ac8c3f53594, e99c03c1ba7c4513b2b8289c1c15ab08b35ed4f5, 5475921ba343db2f248c193eb31b2356bcce1f00]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -20,6 +20,8 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
+        working-directory: source
+      - run: python ../harness/bench/parking-inspect.py
         working-directory: source
       - run: cp ../harness/bench/*parking-passive.mjs bench/ && node --experimental-strip-types --import ./bench/register.ts bench/run-parking-passive.mjs
         working-directory: source
