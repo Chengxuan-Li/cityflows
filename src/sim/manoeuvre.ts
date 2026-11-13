@@ -138,9 +138,7 @@ export function bodyClearOf(pose: ParkingPose, lane: CLane, lengthM: number, wid
       (p) => sign * ((p.x - end.x) * Math.cos(heading) + (p.y - end.y) * Math.sin(heading)) > 0,
     );
   };
-  return (
-    bodyClearLane(pose, lane, lengthM, widthM) || beyond(lane.lengthM, 1) || beyond(0, -1)
-  );
+  return bodyClearLane(pose, lane, lengthM, widthM) || beyond(lane.lengthM, 1) || beyond(0, -1);
 }
 
 /** The farthest progress along a path whose pose passes `clear`; -1 if none does. */
