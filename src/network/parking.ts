@@ -12,6 +12,7 @@ import type { CompiledCity, CParking, Diagnostic } from './types';
 import { compileStrip } from './strips';
 import { parkingEgress } from './parking-egress';
 import { STALL_LINK_M } from './lot-paths';
+import { isLaneDrop } from './lane-drop';
 
 /** Source aisle permissions also apply to the fitted off-street leg at a mapped mouth. */
 export function parkingConnectorPermitted(
@@ -408,6 +409,11 @@ export function compileBayDepartures(compiled: CompiledCity): void {
         ...[...f.connectorsIn, ...f.connectorsOut].map((c) => compiled.connectors[c]!.lane),
       ]),
     ].filter((lane) => compiled.lanes[lane]!.allowed.includes('car'));
+    const aisleLanes = new Set(
+      lot.aisles
+        .flatMap((id) => compiled.roads[compiled.index.road.get(id) ?? -1]?.lanes ?? [])
+        .filter((lane) => compiled.lanes[lane]!.allowed.includes('car')),
+    );
     for (const idx of f.spaces ?? []) {
       const space = compiled.parkingSpaces![idx]!,
         stall = lot.stalls[space.lotStall!]!;
@@ -430,15 +436,30 @@ export function compileBayDepartures(compiled: CompiledCity): void {
           .map((e) => compiled.connectors[e.connector]!.lane),
       );
       const near = hits.find(({ lane }) => exitLanes.has(lane));
-      if (!near || near.hit.away > compiled.lanes[near.lane]!.widthM / 2) continue;
-      const group = compiled.roads[compiled.lanes[near.lane]!.road]!.streetGroupId;
+      const inBand = (h: (typeof hits)[number] | undefined) =>
+        !!h && h.hit.away <= compiled.lanes[h.lane]!.widthM / 2;
+      // TASK-156: a bay on an aisle lane that does not carry its exits (Munich pk:2050, on the
+      // dead-end half of its two-way aisle) leaves into the lane beside it only when that
+      // lane passes every one of its exits, so no car loses a mapped way out.
+      const own = inBand(near) ? near : hits.find(({ lane }) => aisleLanes.has(lane));
+      if (!own || !inBand(own)) continue;
+      const exits = graph.entries
+        .filter(
+          (e) =>
+            e.direction !== 'in' &&
+            f.connectorsOut.includes(e.connector) &&
+            Number.isFinite(e.distances[node]),
+        )
+        .map((e) => compiled.connectors[e.connector]!);
+      const group = compiled.roads[compiled.lanes[own.lane]!.road]!.streetGroupId;
       const choice = hits.find(
         ({ lane, hit }) =>
-          (lane === near.lane ||
+          (lane === own.lane ||
             (group !== null &&
               compiled.roads[compiled.lanes[lane]!.road]!.streetGroupId === group &&
               hit.away <= STALL_LINK_M)) &&
-          latestDeparture(lane) + 1e-9 >= hit.along,
+          latestDeparture(lane) + 1e-9 >= hit.along &&
+          (own === near || exits.every((exit) => passes(lane, hit.along, exit, aisleLanes))),
       );
       if (choice)
         added.push({
@@ -448,6 +469,42 @@ export function compileBayDepartures(compiled: CompiledCity): void {
           id: `c:${f.id}:depart:${space.lotStall}`,
         });
     }
+  }
+  /** A lane vehicle leaving `lane` at `positionM` drives past `exit` by legal movements and lane
+   * changes on the lot's aisle lanes and the exit's own lane (the same way out, not a detour),
+   * so every route from the exit is open to it. */
+  function passes(
+    lane: number,
+    positionM: number,
+    exit: CompiledCity['connectors'][number],
+    within: Set<number>,
+  ) {
+    const changeM = 30;
+    const entry = new Map([[lane, positionM]]);
+    const queue = [lane];
+    for (let head = 0; head < queue.length; head++) {
+      const at = queue[head]!,
+        from = compiled.lanes[at]!,
+        station = entry.get(at)!;
+      if (at === exit.lane)
+        return station <= exit.positionM + 1e-9 || (from.left === -1 && from.right === -1);
+      const next: [number, number][] = from.out
+        .map((i) => compiled.movements[i]!)
+        .filter((m) => !m.neverGreen && !isLaneDrop(compiled, m))
+        .map((m) => [m.toLane, 0]);
+      for (const side of [from.left, from.right])
+        if (
+          side !== -1 &&
+          station + changeM <= Math.min(from.lengthM, compiled.lanes[side]!.lengthM)
+        )
+          next.push([side, station + changeM]);
+      for (const [to, enterM] of next)
+        if ((within.has(to) || to === exit.lane) && enterM < (entry.get(to) ?? Infinity)) {
+          entry.set(to, enterM);
+          queue.push(to);
+        }
+    }
+    return false;
   }
   for (const { space, lane, positionM, id } of added) {
     const idx = compiled.connectors.length,

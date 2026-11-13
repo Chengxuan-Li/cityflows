@@ -133,6 +133,21 @@ export function createParking(
     (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
   );
   const lotGraph = (facility: number) => lotGraphs[facility];
+  /** TASK-156: each lot's aisle-road car lanes, and the movements joining them. A lot arrival
+   * whose body is inside such a lane's band is that lane's occupant (lane vehicles there treat
+   * it as a leader, and a departure's gap checks see it), and it keeps clear of their cars. */
+  const aisleSegmentsOf = (city: CompiledCity) =>
+    city.parking.map((f) => {
+      const lot = f.kind === 'lot' ? city.lots?.find((l) => l.id === f.id) : undefined;
+      const lanes = (lot?.aisles ?? [])
+        .flatMap((id) => city.roads[city.index.road.get(id) ?? -1]?.lanes ?? [])
+        .filter((lane) => city.lanes[lane]!.allowed.includes('car'));
+      const movements = city.movements
+        .filter((m) => lanes.includes(m.fromLane) || lanes.includes(m.toLane))
+        .map((m) => -m.idx - 1);
+      return { lanes, segments: [...lanes, ...movements] };
+    });
+  let aisleSegments = aisleSegmentsOf(compiled);
   const eligibleSpaces = () =>
     compiled.parking.map((f) =>
       (f.spaces ?? []).filter(
@@ -792,6 +807,82 @@ export function createParking(
     { x: pose.x - Math.cos(pose.heading) * lengthM, y: pose.y - Math.sin(pose.heading) * lengthM },
     pose,
   ];
+  /** Corners of a body from its front bumper, `aheadM` longer at the front. */
+  const corners = (pose: ParkingPose, lengthM: number, widthM: number, aheadM = 0) => {
+    const c = Math.cos(pose.heading),
+      s = Math.sin(pose.heading);
+    return [
+      [aheadM, -widthM / 2],
+      [aheadM, widthM / 2],
+      [-lengthM, widthM / 2],
+      [-lengthM, -widthM / 2],
+    ].map(([a, b]) => ({ x: pose.x + a! * c - b! * s, y: pose.y + a! * s + b! * c }));
+  };
+  const overlaps = (a: { x: number; y: number }[], b: { x: number; y: number }[]) =>
+    [a, b].every((poly) =>
+      poly.every((p, i) => {
+        const q = poly[(i + 1) % poly.length]!,
+          nx = q.y - p.y,
+          ny = p.x - q.x;
+        const pa = a.map((v) => v.x * nx + v.y * ny),
+          pb = b.map((v) => v.x * nx + v.y * ny);
+        return Math.max(...pa) > Math.min(...pb) && Math.max(...pb) > Math.min(...pa);
+      }),
+    );
+  /** TASK-156: a lot arrival at `pose` would come within `minGapM` ahead of, or touch, a lane
+   * vehicle on its lot's aisle lanes (a kerbside-style departure counts where it is drawn). */
+  function aisleTraffic(id: number, m: ParkingMotion, pose: ParkingPose) {
+    const mine = corners(pose, length(id), width(id), params.idm.minGapM);
+    for (const segment of aisleSegments[spaces[m.slot]!.parking]!.segments)
+      for (let other = vehicles.first(segment); other !== -1; other = vehicles.next[other]!) {
+        const om = motionById[other];
+        if (other === id || om?.lot) continue;
+        const path = segment >= 0 ? compiled.lanes[segment]! : compiled.movements[-segment - 1]!;
+        const at = vehicles.position[other]!;
+        const theirs = om?.pose ?? {
+          ...pointAtDistance(path.polyline, path.cumulative, at),
+          heading: headingAtDistance(path.polyline, path.cumulative, at),
+        };
+        if (overlaps(mine, corners(theirs, length(other), width(other)))) return true;
+      }
+    return false;
+  }
+  /** TASK-156: the aisle lane whose band an arriving body is inside (the lane it holds while it
+   * still is), and the farthest station its body reaches there. */
+  function aisleBand(id: number, m: ParkingMotion, pose: ParkingPose) {
+    const rear = body(pose, length(id))[0]!;
+    let band: { lane: number; positionM: number; away: number } | undefined;
+    for (const lane of aisleSegments[spaces[m.slot]!.parking]!.lanes) {
+      const l = compiled.lanes[lane]!;
+      if (bodyClearLane(pose, l, length(id), width(id))) continue;
+      // bodyClearLane extends a band past the lane's ends; only the lane itself counts here.
+      const front = nearestOnPolyline(l.polyline, pose),
+        back = nearestOnPolyline(l.polyline, rear),
+        inside = (along: number) => along > 1e-6 && along < l.lengthM - 1e-6;
+      if (!inside(front.along) && !inside(back.along)) continue;
+      const found = { lane, positionM: Math.max(front.along, back.along), away: front.away };
+      if (m.laneHeld && lane === m.lane) return found;
+      if (!band || found.away < band.away) band = found;
+    }
+    return band;
+  }
+  /** TASK-156: room for an arriving body to become a lane's occupant at `positionM`: clear of
+   * the car ahead by the following gap, and ahead of the car behind by its braking distance. */
+  function laneRoom(id: number, lane: number, positionM: number) {
+    for (let other = vehicles.first(lane); other !== -1; other = vehicles.next[other]!) {
+      if (other === id) continue;
+      const at = vehicles.position[other]!,
+        speed = vehicles.speed[other]!;
+      if (
+        at >= positionM
+          ? at - length(other) - params.idm.minGapM < positionM
+          : positionM - length(id) - params.idm.minGapM <
+            at + (speed * speed) / (2 * params.idm.bMps2) + speed * params.dtS
+      )
+        return false;
+    }
+    return true;
+  }
   /** The bay and path an arriving car takes if it enters now, or undefined while it waits. */
   function admission(id: number, connector: number) {
     const facility = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
@@ -943,6 +1034,9 @@ export function createParking(
       pose: from,
       speed: 0,
     });
+    // TASK-156: an entry on one of the lot's aisle lanes keeps the car that lane's occupant.
+    const m = motionById[id]!;
+    if (lot && aisleBand(id, m, from)?.lane === m.lane) m.laneHeld = true;
     return true;
   }
   function arrive(id: number, connector: number, timeS: number) {
@@ -1012,6 +1106,8 @@ export function createParking(
       park: (id: number, connector: number) => void;
       exit: (id: number, connector: number, joinM: number) => boolean;
       resume: (id: number, connector: number) => void;
+      /** TASK-156: make a lot arrival `lane`'s occupant at `positionM`, or none (-1). */
+      occupy?: (id: number, lane: number, positionM: number, speed: number) => void;
     },
   ) {
     clockS = timeS;
@@ -1105,9 +1201,42 @@ export function createParking(
         }
         m.driveS += params.dtS;
       }
+      let pose = pathPose(m.path, target);
+      const arriving = m.lot && (m.phase === 'drive_in' || m.phase === 'park');
+      if (arriving && m.phase === 'drive_in' && target > m.progressM) {
+        // TASK-156: an arrival waits clear of aisle traffic, and enters an aisle lane's band
+        // only where it has room to be that lane's occupant.
+        const band = aisleBand(id, m, pose);
+        if (
+          aisleTraffic(id, m, pose) ||
+          (band &&
+            !(m.laneHeld && band.lane === m.lane) &&
+            !laneRoom(id, band.lane, band.positionM))
+        ) {
+          target = m.progressM;
+          pose = m.pose;
+        }
+      }
       m.progressM = target;
-      m.pose = pathPose(m.path, target);
+      m.pose = pose;
       m.speed = pointDistance(before, m.pose) / params.dtS;
+      if (arriving) {
+        const band = aisleBand(id, m, pose);
+        if (band) {
+          const held = m.laneHeld && band.lane === m.lane;
+          callbacks.occupy?.(
+            id,
+            band.lane,
+            held ? Math.max(vehicles.position[id]!, band.positionM) : band.positionM,
+            m.speed,
+          );
+          m.lane = band.lane;
+          m.laneHeld = true;
+        } else if (m.laneHeld) {
+          callbacks.occupy?.(id, -1, 0, 0);
+          m.laneHeld = false;
+        }
+      }
       if (
         !m.lot &&
         m.phase === 'park' &&
@@ -1126,7 +1255,8 @@ export function createParking(
       if (m.phase === 'drive_in') {
         nextPath(m, manoeuvrePath(m.pose, parkedPose(space, length(id)), false), 'park', timeS);
       } else if (m.phase === 'park') {
-        if (m.laneHeld) callbacks.clearLane(id);
+        if (m.laneHeld && m.lot) callbacks.occupy?.(id, -1, 0, 0);
+        else if (m.laneHeld) callbacks.clearLane(id);
         arrive(id, m.connector, timeS);
         if (m.lot) {
           lotArrivals++;
@@ -1684,7 +1814,12 @@ export function createParking(
       for (const m of motions.values()) {
         m.slot = remapSpace(m.slot);
         m.connector = next.index.connector.get(compiled.connectors[m.connector]!.id)!;
-        m.lane = next.connectors[m.connector]!.lane;
+        // TASK-156: an arrival holds an aisle lane, which need not be its entry's.
+        const held =
+          m.lot && m.laneHeld && (m.phase === 'drive_in' || m.phase === 'park')
+            ? next.index.lane.get(compiled.lanes[m.lane]!.id)
+            : undefined;
+        m.lane = held ?? next.connectors[m.connector]!.lane;
       }
       stock = new Int32Array(spaces.length).fill(-1);
       classes = new Uint8Array(spaces.length);
@@ -1703,6 +1838,7 @@ export function createParking(
         (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
       );
       usable = eligibleSpaces();
+      aisleSegments = aisleSegmentsOf(compiled);
       prepareDepartures();
       approachReach = new Float64Array(spaces.length * 2).fill(NaN);
       clearHolds.clear();
