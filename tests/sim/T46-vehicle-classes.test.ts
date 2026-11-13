@@ -20,21 +20,23 @@ const allCars = { car: 1, van: 0, truck: 0, bus: 0 };
 // TASK-116: re-pinned after feasible lane targets enabled queue passing for every car. Lead,
 // TASK-112: access walks shift departure/traffic timing; person legs also enter the hash.
 // TASK-125: claim arrays enter the parking hash; completions and travel times are unchanged.
+// TASK-169: keep clear (cars waiting at a give-way move up past a zebra just behind the line,
+// garage mouths) saves 0.75 s per trip on the grid and 0.83 s on the town.
 const before = {
   grid5x5: {
     completed: 28,
-    meanTravelTimeS: 87.4571428571427,
-    meanDelayS: 27.280803928948625,
-    hash: 1210534642,
+    meanTravelTimeS: 86.70714285714295,
+    meanDelayS: 26.54135777919262,
+    hash: 3966440085,
     trips: 56,
   },
   town: {
     // Phase 3's downstream lane choice saves 0.5 vehicle-seconds across the same 207 trips.
     // TASK-165: exit storage beyond the exit crosswalk costs 0.06 s per trip on the town.
     completed: 207,
-    meanTravelTimeS: 139.18212560386476,
-    meanDelayS: 46.22746887124475,
-    hash: 2901093485,
+    meanTravelTimeS: 138.35314009661843,
+    meanDelayS: 45.33288956755263,
+    hash: 2690743176,
     trips: 414,
   },
 };

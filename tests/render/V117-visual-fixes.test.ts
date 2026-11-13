@@ -150,20 +150,22 @@ unitTest('V117 UK kerb lines leave out parking strip runs (lead, TASK-103 merge)
 // TASK-123: only the walk graph and derived signal walk indices move.
 // TASK-140 (B59): compile pins follow V107 (walk links at the stripes; only the walk graph and
 // the signal walk lists move).
+// TASK-169: DE and US paint add keep-clear markings at lot and garage mouths; without
+// `keepClearMarkings` every paint pin equals f3b96b0's.
 const pins = {
   grid: {
     compile: '6c1e86734dfc688415bd805d175bc5d173385a0a83fb18da32136aa1018fb3e7',
     lamps: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
     curbs: 'e45b9bee6d047cf3354bb3e6f57e86ae929db7210a24bf866f44e2e46892736d',
-    de: 'e2a4f545e1d33189b550c6ab045eaef2ed5305a3f8def23d48d86f6d990c4852',
-    us: '15ec3e5bd9c9bae2e76e2aede004db70fa1f18dc6f9a7af2197f22138009f570',
+    de: '822b5cf8111f54a40468c2a59f1bf1b48d4acbc602a8c78be8daf1bc70cf86d8',
+    us: '619044a5c6f76eb0ae11811514404d30215ceebf4246e71469b1bed6f144e52f',
   },
   town: {
     compile: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
     lamps: 'bd56acb9b3028f1d5a884f0926a86e19405a839f16185957cb0479a89ee99d7f',
     curbs: 'e5b1df98b54b260c89c37bf096c4aa51ba309b50ed7b6dfdb318d0487fe170ca',
-    de: '84454e2c6b1b1eeac928e004cdab547b5884ab43d3f70b7e8f6c7d7fb89ba7da',
-    us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
+    de: '7f515227bf45fa456c539a3ec5b25cb9c98e2c45790f34d5fd89b62fc0b459a6',
+    us: '832e7626f8885cb77334373a6a9c8ce57f9f73f9c828e11f4bffb80504d033da',
   },
   // TASK-131 keeps OSM geometry (no node merges, junction groups): the real cities' roads,
   // lamps, curbs and paint move, so they no longer equal main's.
@@ -182,16 +184,16 @@ const pins = {
     compile: '0275a7bda61c539894f0b6dd1d066571a070d4425908b1f382159632ceebc02e',
     lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
     curbs: '780f62342c39389d2fabd42f81e444fdc4c03c3070f91fce4489a3c671894919',
-    de: '4e164c66620c2b8d248958ae2b0105194ff4ef6685892608c099b54ac5ce6a79',
-    us: 'fec7df4ef9897468231a91a5a536b304230275613daebd83224174c2e2ad2f8b',
+    de: '719b775f35a8a9ed53b80fa790402c50c8bf903441b39e6874b7b5d4e470ac66',
+    us: 'b7f7094bf3323126b9379f9aa0abc6257057084f7c3a2eebf432325787b95765',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
     compile: '52ff58a0d7eb61eff5f22d557083fc28e7f5f59e16ad3f1956d9105950a2b2ad',
     lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
     curbs: '24a6696b232568ba7bc93e4d1259eba28798648161c28e560d477bcd71496bd4',
-    de: '4dc2db3cc1fac855c5bd6f2e3865ff6061a4679c858f314fa5365634d5f758cb',
-    us: 'bde02c95dccf9451f7a61537dea57bcd977ad02d7da078d587ddb98805fdfe54',
+    de: '8891c855226ffc1fcae8cf0ad59449e67d85b8c30aa5179e10527748fcaf7dc6',
+    us: '259eb05881ce198780374e21b990436e71781ff73fcc2b07bf470b256ce3e7d5',
   },
 } as const;
 const hash = (value: unknown) =>

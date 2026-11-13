@@ -1720,6 +1720,22 @@ Step sequence, in this order every step:
      take, else on the lane after it. A red or ungranted movement is a standing obstacle at
      the lane end (TASK-072: at the lane's `stopM`, see below); an arrival connector is a
      standing obstacle at its position when the place cannot accept the vehicle.
+   - TASK-169, keep clear. `keepClearZones` (`src/network/keep-clear.ts`) gives each lane's
+     zones: the span of every marked crossing over it, and the mouths of lots and garages with
+     spaces (implicit garages included) on public lanes, 8 m before to 6.5 m past each exit
+     connector on its lane and 7 m either side of it on each lane of its street between the
+     facility and that lane. A car whose front would stand (behind its leader, projected by the
+     leader's braking distance but no farther than behind the leader's own stand, or at a stop)
+     with its body on a zone stands 0.5 m short of the zone instead, and short of any zone that
+     stand covers: from 1.5 times its comfortable braking distance short of that stand (at
+     least `decisionDistanceM`), if it can stop there at `bMps2`, until it stands there. A zone
+     its body covers at its destination connector does not count, nor does one that would put
+     its rear on the movement it came by. A head at its stop line first moves up, as far as
+     0.5 m short of the line, when its body then clears the zone (a zebra within a car length
+     of the line); one held short counts that stand as its stop line (stop signs, turn on red,
+     entry requests). A spawn or lot exit whose body joins inside a mouth zone needs only
+     `minGapM` to cars standing beside it; moving traffic keeps the spawn gap and the
+     follower's insertion check.
    - Acceleration from IDM.
    - Lane change proposal: mandatory toward `targetLanes` when the distance to the lane end is
      below `changesNeeded * laneChangeDistanceM + mandatoryUrgencyM` (accepts gaps down to
@@ -2769,6 +2785,11 @@ the city, and roads retain the strongest tone.
   lines. Crossings retain their layout.
   Style switches redraw both views even when compiled identity/version stays unchanged;
   the animation loop and simulation remain unchanged.
+- TASK-169: each mouth zone (section 8, keep clear) of 3 m or more draws a keep-clear marking
+  on its lane, in the shared paint shapes (`keepClearMarkings`, hatch role): the `de` theme a
+  box with a 0.12 m border and 0.3 m diagonal stripes every 1.5 m, the `us` and `uk` themes
+  KEEP CLEAR in stencil letters across the lane, KEEP nearer the driver. Crosswalk zones draw
+  nothing of their own: their stripes are the marking.
 - TASK-117: access signs resolve in compiled road order, merging entries with the same street
   group, effective class access and entry rules when they stand within 15 m of each other (the
   far end of a long restricted street keeps its own sign). A later sign advances in 0.5 m steps along its
