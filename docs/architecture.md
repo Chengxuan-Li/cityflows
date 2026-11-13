@@ -618,6 +618,12 @@ when those stubs provide no bays, retaining the actual throat paths. An interior
 aisle, a tiny lot, or a full/obstructed lot does not trigger this fallback. No public vehicle
 road is invented or split by these portals.
 
+TASK-149 shared-mouth admission: an arrival targeting a lot mouth leaves the existing spawn
+clearance upstream while a departure from that same lot is committed to an overlapping
+street station. A departure waits in its bay when that arrival is already too close to yield
+with normal braking. Ordinary through vehicles retain their road priority; the rule changes
+neither the street graph nor public junction arbitration.
+
 `strips` carries pavement polygons and space indices outside the unchanged carriageway:
 bands are 2/4.5/5 m wide. Sidewalks offset outward beside these bands. Vehicle roads, lanes,
 nodes, movements, conflict geometry and existing connectors retain their original data.

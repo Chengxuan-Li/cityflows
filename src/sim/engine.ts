@@ -569,6 +569,20 @@ function createRun({
           stopAt = lane.stopM;
         }
         if (path) stopAt = intersections.zoneStop(path, position) + idm.minGapM;
+        // A driver turning into this same mouth leaves the committed departure its
+        // insertion gap. Ordinary through traffic keeps its normal priority.
+        const parkingStop = parking.arrivalStop(id);
+        if (parkingStop) {
+          const at =
+            lane?.idx === parkingStop.lane
+              ? parkingStop.positionM
+              : path?.toLane === parkingStop.lane
+                ? path.lengthM + parkingStop.positionM
+                : movement?.toLane === parkingStop.lane && lane
+                  ? lane.lengthM + movement.lengthM + parkingStop.positionM
+                  : Infinity;
+          stopAt = Math.min(stopAt, at + idm.minGapM);
+        }
         if (stopAt < obstacle) {
           obstacle = stopAt;
           leaderSpeed = 0;
