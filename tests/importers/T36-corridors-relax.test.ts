@@ -9,6 +9,7 @@ import { compile } from '../../src/network';
 import type { City, Road } from '../../src/schema';
 import { cityTest, unitTest } from '../tier';
 import { fixture } from './fixtures';
+import { limit } from '../timeouts';
 
 const observed = vi.hoisted(() => ({ beforeSeparation: undefined as City | undefined }));
 vi.mock(import('../../src/importers/osm/corridors'), async (load) => {
@@ -151,7 +152,7 @@ cityTest(
     // continue their pair's carriageway.
     expect(kinds.thirdWay).toBe(5);
   },
-  120_000,
+  limit(120_000),
 );
 
 // TASK-131 rewrote T36.2: it pinned separateCoincident on Marsstraße r:368/r:480, a pair the merge
@@ -187,7 +188,7 @@ cityTest(
       unrelatedOverlaps(city, result.compiled).filter((o) => /r:(368|480)\b/.test(o.roads)),
     ).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 unitTest(

@@ -86,7 +86,7 @@ test('T67 a household shows who drives which car, who borrows it and who has non
   await expect(page.getByRole('region', { name: 'Demand', exact: true })).toContainText(
     `${new Set(population.map((p) => p.householdId)).size.toLocaleString('en')} households`,
   );
-  await page.keyboard.press('Escape');
+  await button(page, 'Demand').click();
 
   // Run until the owner has walked to the car and drives it.
   const vehicle = await page.evaluate(async (owner) => {

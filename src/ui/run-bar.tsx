@@ -1,10 +1,5 @@
-import { useLayoutEffect, useRef } from 'react';
 import { useAppStore } from './store';
-import { Layers } from './layers';
-import { MetricsPanel } from './panels/metrics';
-import { ComparePanel } from './panels/compare';
-import { DemandPanel } from './panels/demand';
-import { groupDiagnostics } from './diagnostics';
+import { MenuItem, ToolbarButton, type ToolbarAction } from './controls';
 
 const speeds = [1, 2, 5, 10, 20];
 
@@ -14,193 +9,119 @@ function clock(timeS: number) {
   return `${pad(tenths / 36000)}:${pad((tenths / 600) % 60)}:${pad((tenths / 10) % 60)}.${tenths % 10}`;
 }
 
-export function RunBar() {
+/** Play, pause, step, restart, speed and the 2D / 3D switch. In the toolbar, Play and Pause
+ *  always show; with `inMenu`, the items the toolbar overflows (Step and Restart, speed, 3D)
+ *  render as overflow-menu entries, each hidden by CSS while the toolbar still has room for it. */
+export function RunControls({ inMenu = false }: { inMenu?: boolean }) {
   const mode = useAppStore((state) => state.viewMode);
-  const belowGround = useAppStore((state) => state.belowGround);
-  const buildings = useAppStore((state) => state.buildings);
-  const surroundings = useAppStore((state) => state.layers.context);
-  const hasBuildings = useAppStore((state) =>
-    state.session?.project.city.context?.features.some((f) => f.class === 'building'),
-  );
   const run = useAppStore((state) => state.run);
   const busy = useAppStore((state) => state.busy);
-  const diagnostics = useAppStore((state) =>
-    state.session ? groupDiagnostics(state.session.diagnostics).issues.length : undefined,
-  );
-  const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
-  const layersOpen = useAppStore((state) => state.layersOpen);
-  const metricsOpen = useAppStore((state) => state.metricsOpen);
-  const demandOpen = useAppStore((state) => state.demandOpen);
-  const compareOpen = useAppStore((state) => state.compareOpen);
-  const showCompare = compareOpen && !layersOpen && !metricsOpen && !demandOpen;
-  const sheetOpen = showCompare || layersOpen || metricsOpen || demandOpen;
-  const barRef = useRef<HTMLElement>(null);
-  const sheetRef = useRef<HTMLDivElement>(null);
-  const { toggleCompare } = useAppStore.getState();
-  const { toggleLayers, toggleMetrics, toggleDemand } = useAppStore.getState();
-  const { control, setSpeed, toggleDiagnostics } = useAppStore.getState();
+  const { control, setSpeed } = useAppStore.getState();
   const disabled = !run || busy;
-  const counts = run?.counts;
-
-  useLayoutEffect(() => {
-    if (!sheetOpen) return;
-    const bar = barRef.current!;
-    const app = bar.parentElement!;
-    const sheet = sheetRef.current!;
-
-    function reserveSheetSpace() {
-      const bottom = app.getBoundingClientRect().bottom;
-      app.style.setProperty(
-        '--run-sheet-bottom',
-        `${bottom - sheet.getBoundingClientRect().bottom}px`,
-      );
-      // The wrapper stays still while the sheet animates inside it.
-      app.style.setProperty('--run-sheet-space', `${bottom - sheet.getBoundingClientRect().top}px`);
-    }
-
-    reserveSheetSpace();
-    const observer = new ResizeObserver(reserveSheetSpace);
-    observer.observe(app);
-    observer.observe(bar);
-    observer.observe(sheet.parentElement!);
-    observer.observe(sheet);
-    return () => {
-      observer.disconnect();
-      app.style.removeProperty('--run-sheet-bottom');
-      app.style.removeProperty('--run-sheet-space');
-    };
-  }, [sheetOpen]);
-
-  return (
-    <footer ref={barRef} className="run-bar" aria-label="Simulation">
-      <div className="run-controls">
-        <output className="clock" aria-label="Simulation clock">
-          {run ? clock(run.timeS) : '—'}
-        </output>
-        <div className="controls" role="group" aria-label="Run controls">
-          <button
-            className="play"
-            disabled={disabled || run.stale || run.status !== 'paused'}
-            onClick={() => void control('play')}
-          >
-            Play
-          </button>
-          <button
-            disabled={disabled || run.status !== 'playing'}
-            onClick={() => void control('pause')}
-          >
-            Pause
-          </button>
-          <button
-            disabled={disabled || run.stale || run.status !== 'paused'}
-            onClick={() => void control('step')}
-          >
-            Step
-          </button>
-          <button disabled={disabled} onClick={() => void control('restart')}>
-            Restart
+  const steps: ToolbarAction[] = [
+    {
+      icon: 'step',
+      label: 'Step',
+      tooltip: 'Advance one step',
+      disabled: disabled || run.stale || run.status !== 'paused',
+      onClick: () => void control('step'),
+    },
+    {
+      icon: 'restart',
+      label: 'Restart',
+      tooltip: 'Restart the day',
+      disabled,
+      onClick: () => void control('restart'),
+    },
+  ];
+  const speed = (
+    <label className={`speed ov-speed${inMenu ? ' menu-row' : ''}`}>
+      <span className={inMenu ? undefined : 'visually-hidden'}>Speed</span>
+      <select
+        disabled={disabled}
+        value={run?.speed ?? 1}
+        onChange={(event) => void setSpeed(Number(event.currentTarget.value))}
+      >
+        {speeds.map((speed) => (
+          <option key={speed} value={speed}>
+            ×{speed}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  const view = {
+    label: '3D',
+    disabled,
+    'aria-pressed': mode === '3d',
+    onClick: () => useAppStore.getState().toggleView(),
+  };
+  if (inMenu)
+    return (
+      <>
+        <div className="menu-group ov-steps">
+          {steps.map((action) => (
+            <MenuItem key={action.label} {...action} />
+          ))}
+        </div>
+        <div className="menu-group ov-speed">
+          {speed}
+          <button {...view} className="menu-item view-toggle">
+            3D
           </button>
         </div>
-        {run?.stale && (
-          <span className="restart-notice" role="status">
-            Restart to apply changes
-          </span>
-        )}
-        {!run?.stale && run?.patch && (
-          <span key={run.patch.version} className="live-edit-notice" role="status">
-            Edit applied · {run.patch.rerouted} cars rerouted · {run.patch.stranded} removed
-          </span>
-        )}
-        <label className="speed">
-          Speed
-          <select
-            disabled={disabled}
-            value={run?.speed ?? 1}
-            onChange={(event) => void setSpeed(Number(event.currentTarget.value))}
-          >
-            {speeds.map((speed) => (
-              <option key={speed} value={speed}>
-                ×{speed}
-              </option>
-            ))}
-          </select>
-        </label>
-        {run?.status === 'finished' && <span>Finished</span>}
+      </>
+    );
+  return (
+    <div className="run-controls">
+      <div className="toolbar-group" role="group" aria-label="Run controls">
+        <ToolbarButton
+          icon="play"
+          label="Play"
+          tooltip="Run the simulation"
+          className="play"
+          disabled={disabled || run.stale || run.status !== 'paused'}
+          onClick={() => void control('play')}
+        />
+        <ToolbarButton
+          icon="pause"
+          label="Pause"
+          tooltip="Pause the simulation"
+          disabled={disabled || run.status !== 'playing'}
+          onClick={() => void control('pause')}
+        />
+        {steps.map((action) => (
+          <ToolbarButton key={action.label} {...action} className="ov-steps" />
+        ))}
       </div>
-      <div className="run-summary">
-        <button
-          disabled={disabled}
-          aria-pressed={mode === '3d'}
-          title="Toggle 2D / 3D � V"
-          onClick={() => useAppStore.getState().toggleView()}
-        >
-          3D
-        </button>
-        {mode === '3d' && (
-          <label>
-            <input
-              type="checkbox"
-              checked={belowGround}
-              onChange={() => useAppStore.getState().toggleBelowGround()}
-            />{' '}
-            See below ground
-          </label>
-        )}
-        {mode === '3d' && hasBuildings && (
-          <label>
-            <input
-              type="checkbox"
-              checked={buildings}
-              disabled={!surroundings}
-              onChange={() => useAppStore.getState().toggleBuildings()}
-            />{' '}
-            Buildings
-          </label>
-        )}
-        <button
-          disabled={!run}
-          aria-expanded={showCompare}
-          aria-controls="compare"
-          onClick={toggleCompare}
-        >
-          Compare
-        </button>
-        <button
-          disabled={!run}
-          aria-expanded={layersOpen}
-          aria-controls="layers"
-          onClick={toggleLayers}
-        >
-          Layers
-        </button>
-        <button
-          disabled={disabled}
-          aria-expanded={metricsOpen}
-          aria-controls="metrics-chart"
-          onClick={toggleMetrics}
-        >
-          Chart
-        </button>
-        <button
-          disabled={disabled}
-          aria-expanded={demandOpen}
-          aria-controls="demand"
-          onClick={toggleDemand}
-        >
-          Demand
-        </button>
-        {sheetOpen && (
-          <div className="run-sheet" ref={sheetRef}>
-            {showCompare && <ComparePanel />}
-            {layersOpen && <Layers />}
-            {metricsOpen && <MetricsPanel />}
-            {demandOpen && <DemandPanel />}
-          </div>
-        )}
-        {counts && (
+      {speed}
+      <ToolbarButton
+        {...view}
+        tooltip="Switch between 2D and 3D · V"
+        className="view-toggle ov-speed"
+      />
+    </div>
+  );
+}
+
+/** Clock, trip counts, run notices, the synthetic-traffic notice and map attribution. */
+export function StatusBar() {
+  const run = useAppStore((state) => state.run);
+  const attribution = useAppStore((state) => state.session?.project.city.geo?.source.attribution);
+  const counts = run?.counts;
+  return (
+    <footer className="status-bar" aria-label="Simulation">
+      <output className="clock" aria-label="Simulation clock">
+        {run ? clock(run.timeS) : '—'}
+      </output>
+      {counts && (
+        <>
+          <span className="status-counts">
+            {counts.driving} driving · {counts.completed} completed
+          </span>
           <details className="metrics">
             <summary>Trip counts</summary>
-            <div className="metrics-sheet">
+            <div className="metrics-sheet popover" data-placement="above" data-align="start">
               <dl className="trip-counts" aria-label="Trip counts">
                 <div>
                   <dt>Pending</dt>
@@ -231,17 +152,21 @@ export function RunBar() {
               <p className="muted">Synthetic traffic, not observed traffic</p>
             </div>
           </details>
-        )}
-        <button
-          disabled={diagnostics === undefined}
-          aria-expanded={diagnosticsOpen}
-          aria-controls={diagnosticsOpen ? 'diagnostics' : undefined}
-          onClick={toggleDiagnostics}
-        >
-          Validation ({diagnostics ?? 0})
-        </button>
-        <small className="traffic-notice">Synthetic traffic, not observed traffic</small>
-      </div>
+        </>
+      )}
+      {run?.stale && (
+        <span className="restart-notice" role="status">
+          Restart to apply changes
+        </span>
+      )}
+      {!run?.stale && run?.patch && (
+        <span key={run.patch.version} className="live-edit-notice" role="status">
+          Edit applied · {run.patch.rerouted} cars rerouted · {run.patch.stranded} removed
+        </span>
+      )}
+      {run?.status === 'finished' && <span>Finished</span>}
+      <small className="traffic-notice">Synthetic traffic, not observed traffic</small>
+      {attribution && <small className="attribution">{attribution}</small>}
     </footer>
   );
 }

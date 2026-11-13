@@ -10,10 +10,14 @@ export function PlaceOptions({
   hint: string;
 }) {
   return (
-    <div className="road-options" aria-label="Place options">
-      <label>
-        Kind{' '}
-        <select value={value} onChange={(e) => onChange(e.target.value as PaintKind)}>
+    <div className="tool-options edit-fields" aria-label="Place options">
+      <label className="edit-field">
+        Kind
+        <select
+          className="capitalize"
+          value={value}
+          onChange={(e) => onChange(e.target.value as PaintKind)}
+        >
           {(['residential', 'work', 'retail', 'school'] as const).map((kind) => (
             <option key={kind} value={kind}>
               {kind}
@@ -21,7 +25,9 @@ export function PlaceOptions({
           ))}
         </select>
       </label>
-      <p className="muted">Drag to paint · Paint over the same kind to extend · Esc to cancel</p>
+      <p className="muted tool-help">
+        Drag to paint · Paint over the same kind to extend · Esc to cancel
+      </p>
       {hint && <p role="status">{hint}</p>}
     </div>
   );

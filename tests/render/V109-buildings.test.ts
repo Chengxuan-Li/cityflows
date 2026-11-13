@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { Color, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
+import { style } from '../../src/render/style';
 import { createTerrain, groundMesh } from '../../src/render3d/terrain';
 import { buildContext, buildTerrainGround } from '../../src/render3d/context';
 import type { ContextFeature } from '../../src/schema';
@@ -104,7 +105,8 @@ test('V109 details have tagged facade colours, level bands and clear canopy unde
   expect(facade).toBeDefined();
   const band = detailed.getAttribute('windowInfo');
   expect(band.getZ(facade.face!.a)).toBeCloseTo(2.5); // 10 m facade / 4 levels
-  const colour = new Color('#e5e1d7').lerp(new Color('#ad806e'), 0.28),
+  // TASK-162: the building tone is the palette's (style.context.building).
+  const colour = new Color(style.context.building).lerp(new Color('#ad806e'), 0.28),
     colors = detailed.getAttribute('color');
   expect(colors.getX(facade.face!.a)).toBeCloseTo(colour.r);
   expect(colors.getY(facade.face!.a)).toBeCloseTo(colour.g);

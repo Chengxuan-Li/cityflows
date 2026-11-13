@@ -4,7 +4,9 @@ import { compile } from '../../src/network';
 import { placeCamera } from '../../bench/geometry-shots';
 import { button, city, clickVehicle, clickWorld, importOsm, metrics, pageErrors } from './helpers';
 
-test('T63 Munich at 08:30 shows a searching car’s claimed strip space', async ({ page }, info) => {
+test('T63 Munich from 08:30 shows a searching car’s claimed strip space', async ({
+  page,
+}, info) => {
   test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -30,21 +32,34 @@ test('T63 Munich at 08:30 shows a searching car’s claimed strip space', async 
     .getByLabel('Parking occupancy', { exact: true })
     .check();
   await button(page, 'Layers').click();
-  const car = await page.evaluate(async () => {
-    const api = window.cityflows!,
-      snapshot = api.drawnSnapshot!()!;
-    const details = await Promise.all([...snapshot.id].map((id) => api.inspect(id)));
-    const detail = details.find(
-      (d) =>
-        d?.state === 'driving' &&
-        d.parkingPhase === null &&
-        d.parkingSpace !== null &&
-        d.parkingSearchTimeS > 0,
-    );
-    if (!detail) throw new Error('No searching strip claimant at 08:30');
-    const index = snapshot.id.indexOf(detail.id);
-    return { ...detail, x: snapshot.x[index]!, y: snapshot.y[index]! };
-  });
+  const claimant = () =>
+    page.evaluate(async () => {
+      const api = window.cityflows!,
+        snapshot = api.drawnSnapshot!()!;
+      const details = await Promise.all([...snapshot.id].map((id) => api.inspect(id)));
+      const detail = details.find(
+        (d) =>
+          d?.state === 'driving' &&
+          d.parkingPhase === null &&
+          d.parkingSpace !== null &&
+          d.parkingSearchTimeS > 0,
+      );
+      if (!detail) return null;
+      const index = snapshot.id.indexOf(detail.id);
+      return { ...detail, x: snapshot.x[index]!, y: snapshot.y[index]! };
+    });
+  // TASK-173: tours choose their mode as they depart, so the searching car of the moment varies;
+  // take the first one from 08:30 on, in 10 s steps.
+  let car = await claimant();
+  for (let i = 0; !car && i < 180; i++) {
+    const timeS = targetS + (i + 1) * 10;
+    await page.evaluate(() => window.cityflows!.step(100));
+    await expect
+      .poll(() => page.evaluate(() => window.cityflows!.drawnSnapshot!()?.timeS))
+      .toBe(timeS);
+    car = await claimant();
+  }
+  if (!car) throw new Error('No searching strip claimant from 08:30 to 09:00');
   const slot = result.compiled.parkingSpaces![car.parkingSpace!]!;
   expect(result.compiled.parking[slot.parking]!.kind).toBe('roadside');
   await placeCamera(page, [car.x, car.y], 9);

@@ -13,6 +13,7 @@ import { junctionGuides, majorThroughs } from '../../src/render/marking-geometry
 import type { City, Node } from '../../src/schema';
 import { insideOutline } from '../network/junction-audit';
 import { tierCities, unitTest } from '../tier';
+import { limit } from '../timeouts';
 
 function compiled(city: City) {
   const result = compile(city);
@@ -176,43 +177,47 @@ unitTest('T28.2: no guides without a major road or at a signal', () => {
 // both ways (r:846's left lane feeds r:480, its right r:933), so its two dividers no longer start
 // at one point.
 const sharedDividerStarts: Record<string, number> = {};
-test('T28.3: dashes stay on the junction and its roads and guides never cross', () => {
-  // TASK-090: the fixtures and the grid in `npm test`, Munich in the city tier.
-  const cities = {
-    tJunction: () => tJunction().city,
-    oneWayBend: () => oneWayBend().city,
-    grid: grid5x5,
-    munich: () => {
-      const munich = importOsmCached(
-        readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'),
-        {
-          importerVersion: 'test',
-          bbox: [11.525, 48.135, 11.545, 48.148],
-        },
-      );
-      if (!munich.ok) throw new Error(JSON.stringify(munich.diagnostics));
-      return munich.city;
-    },
-  };
-  for (const name of tierCities(Object.keys(cities) as (keyof typeof cities)[])) {
-    const net = compiled(cities[name]());
-    let nodes = 0;
-    for (const node of net.nodes) {
-      const guides = junctionGuides(net, node);
-      if (!guides.length) continue;
-      nodes++;
-      expect(crossings(guides), node.id).toBe(
-        name === 'munich' ? (sharedDividerStarts[node.id] ?? 0) : 0,
-      );
-      for (const guide of guides)
-        for (const dash of guide.dashes)
-          for (const point of dash) expect(contained(net, node, point), node.id).toBe(true);
+test(
+  'T28.3: dashes stay on the junction and its roads and guides never cross',
+  () => {
+    // TASK-090: the fixtures and the grid in `npm test`, Munich in the city tier.
+    const cities = {
+      tJunction: () => tJunction().city,
+      oneWayBend: () => oneWayBend().city,
+      grid: grid5x5,
+      munich: () => {
+        const munich = importOsmCached(
+          readFileSync('fixtures/osm/munich-donnersberger.osm', 'utf8'),
+          {
+            importerVersion: 'test',
+            bbox: [11.525, 48.135, 11.545, 48.148],
+          },
+        );
+        if (!munich.ok) throw new Error(JSON.stringify(munich.diagnostics));
+        return munich.city;
+      },
+    };
+    for (const name of tierCities(Object.keys(cities) as (keyof typeof cities)[])) {
+      const net = compiled(cities[name]());
+      let nodes = 0;
+      for (const node of net.nodes) {
+        const guides = junctionGuides(net, node);
+        if (!guides.length) continue;
+        nodes++;
+        expect(crossings(guides), node.id).toBe(
+          name === 'munich' ? (sharedDividerStarts[node.id] ?? 0) : 0,
+        );
+        for (const guide of guides)
+          for (const dash of guide.dashes)
+            for (const point of dash) expect(contained(net, node, point), node.id).toBe(true);
+      }
+      // Every grid junction is an equal-priority residential crossing or the signal.
+      if (name === 'munich') expect(nodes).toBeGreaterThanOrEqual(15);
+      else expect(nodes, name).toBe(name === 'grid' ? 0 : 1);
     }
-    // Every grid junction is an equal-priority residential crossing or the signal.
-    if (name === 'munich') expect(nodes).toBeGreaterThanOrEqual(15);
-    else expect(nodes, name).toBe(name === 'grid' ? 0 : 1);
-  }
-}, 60_000);
+  },
+  limit(60_000),
+);
 
 unitTest('T28.4: a two-lane one-way priority road gets one divider following its curve', () => {
   const { city, centre } = oneWayBend();

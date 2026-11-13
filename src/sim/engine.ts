@@ -29,7 +29,7 @@ import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
 import { inMouth, keepClearStand } from './keep-clear';
 import { keepClearZones } from '../network/keep-clear';
-import { chooseTripModes, createPersons, hasPerson } from './persons';
+import { createPersons, hasPerson } from './persons';
 import { createWalkRouter } from '../routing/walk';
 import type {
   PatchResult,
@@ -98,9 +98,9 @@ function createRun({
   const observedCosts = createLinkCosts(compiled, params, scenario.startS);
   const costs = linkCosts ?? observedCosts.costs;
   const walkRouter = injectedWalkRouter ?? createWalkRouter(compiled.walk);
-  // TASK-113: modes are chosen before parking chains the car trips and stocks their cars.
-  const modes = chooseTripModes(compiled, requested, scenario, params, provider, costs, walkRouter);
-  const trips = modes.trips;
+  // TASK-173: the trips as scheduled; each tour in the mode choice turns its car trips into walks
+  // in this copy when it chooses to walk as it departs (`createPersons`).
+  const trips = requested.slice();
   const parkingCheckSteps = Math.max(1, Math.round(1 / dtS));
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
   const profiles = createVehicleProfiles(params);
@@ -116,13 +116,7 @@ function createRun({
   let tick = 0;
   const time = () => scenario.startS + tick * dtS;
   const parking = createParking(compiled, trips, scenario, params, vehicles);
-  const accounting = createAccounting(
-    compiled,
-    vehicles,
-    parking,
-    time,
-    trips.map((trip) => trip.mode),
-  );
+  const accounting = createAccounting(compiled, vehicles, parking, time, trips);
   const walkers = createWalkers(
     compiled,
     scenario,
@@ -141,7 +135,7 @@ function createRun({
     walkers,
     population,
     walkRouter,
-    modes.walkRoutes,
+    { provider, costs },
   );
   const connectors = createConnectors(
     compiled,

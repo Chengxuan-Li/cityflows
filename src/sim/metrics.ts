@@ -1,5 +1,5 @@
 import type { CompiledCity } from '../network';
-import { vehicleClasses, type TripMode, type VehicleClass } from '../schema';
+import { vehicleClasses, type TripRequest, type VehicleClass } from '../schema';
 import type { FailReason, Metrics } from './types';
 import type { createParking } from './parking';
 import {
@@ -16,8 +16,9 @@ export function createAccounting(
   vehicles: Vehicles,
   parking: ReturnType<typeof createParking>,
   time?: () => number,
-  /** TASK-113: each trip's mode after the mode choice, for the trip outcomes. */
-  modes?: readonly TripMode[],
+  /** TASK-113: the engine's trips, whose modes the mode choice sets as tours depart (TASK-173),
+   * for the trip outcomes. */
+  requests?: readonly TripRequest[],
 ) {
   const trips = {
     pending: vehicles.count,
@@ -86,7 +87,7 @@ export function createAccounting(
           freeFlowS: Number.isNaN(vehicles.departed[id]) ? null : vehicles.freeFlow[id]!,
           failReason: vehicles.failReason[id]!,
           respawns: vehicles.respawns[id]!,
-          mode: modes?.[id] ?? 'car',
+          mode: requests?.[id]?.mode ?? 'car',
         }));
       },
     };
@@ -97,9 +98,10 @@ export function createAccounting(
       onComplete = complete;
       onFail = fail;
     },
-    // Foot trips have outcomes, but do not count as vehicle trips or class completions.
+    // Foot trips have outcomes, but do not count as vehicle trips or class completions. TASK-173:
+    // a tour that walks leaves its trips' vehicle states as late as its departure.
     excludeWalk(id: number) {
-      trips.pending--;
+      trips[tripStates[vehicles.state[id] as TripState]]--;
       vehicles.state[id] = COMPLETED;
     },
     finishWalk(id: number, startedS: number, arrivedS: number | null, reason: FailReason | null) {

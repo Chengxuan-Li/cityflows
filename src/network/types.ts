@@ -136,6 +136,7 @@ export interface CNode {
   idx: number;
   id: NodeId;
   pos: Vec2;
+  grade: number; // TASK-175: vertical level, the canonical `layer` (architecture section 5)
   radiusM: number;
   setbacks: number[]; // incident roads in compiled index order
   /** Closed junction polygon (TASK-083): the region between the road ends' cuts, the curb arcs
@@ -171,6 +172,9 @@ export interface CRoad {
   from: number;
   to: number;
   lanes: number[];
+  /** TASK-175: the road's vertical level (its deck), the canonical `layer`, else the lower of
+   * its end nodes' grades; its ends meet their nodes' grades (`network/heights.ts`). */
+  grade: number;
   roadClass: RoadClass;
   classRank: number;
   speedLimitMps: number;
@@ -201,6 +205,7 @@ export interface CLane {
   id: LaneId;
   road: number;
   lane: number;
+  grade: number; // TASK-175: its road's grade
   polyline: Vec2[];
   /** The road's reference normal at each polyline vertex: the lanes and edges of a road are
    * offsets along it (TASK-082), also where a converging shift curves them (TASK-089). */

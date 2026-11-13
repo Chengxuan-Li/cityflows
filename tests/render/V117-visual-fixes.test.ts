@@ -151,17 +151,19 @@ unitTest('V117 UK kerb lines leave out parking strip runs (lead, TASK-103 merge)
 // TASK-140 (B59): compile pins follow V107 (walk links at the stripes; only the walk graph and
 // the signal walk lists move).
 // TASK-169: DE and US paint add keep-clear markings at lot and garage mouths; without
-// `keepClearMarkings` every paint pin equals f3b96b0's.
+// `keepClearMarkings` every paint pin equals ddd8a78's (main with TASK-175).
 const pins = {
   grid: {
-    compile: '6c1e86734dfc688415bd805d175bc5d173385a0a83fb18da32136aa1018fb3e7',
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+    compile: '94f4c0a0c54c607f58d079b290976c3b5429903d55353ac5f66bee1948e9aa5e',
     lamps: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
     curbs: 'e45b9bee6d047cf3354bb3e6f57e86ae929db7210a24bf866f44e2e46892736d',
     de: '822b5cf8111f54a40468c2a59f1bf1b48d4acbc602a8c78be8daf1bc70cf86d8',
     us: '619044a5c6f76eb0ae11811514404d30215ceebf4246e71469b1bed6f144e52f',
   },
   town: {
-    compile: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+    compile: '3595116920f094559c7d78b9cc1cfde9fa1b0773419b31a7df233ea8a4909e79',
     lamps: 'bd56acb9b3028f1d5a884f0926a86e19405a839f16185957cb0479a89ee99d7f',
     curbs: 'e5b1df98b54b260c89c37bf096c4aa51ba309b50ed7b6dfdb318d0487fe170ca',
     de: '7f515227bf45fa456c539a3ec5b25cb9c98e2c45790f34d5fd89b62fc0b459a6',
@@ -181,19 +183,21 @@ const pins = {
     // TASK-144 physical compile/lamps stay fixed; TASK-146 changes drawing-only curbs/paint.
     // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
     // removed every pin equals 3e9951a's.
-    compile: '0275a7bda61c539894f0b6dd1d066571a070d4425908b1f382159632ceebc02e',
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+    compile: 'a328c8d02049121e11097c2933fa4cd3ef296455fae5e9d18db6ca5ef1a25353',
     lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
     curbs: '780f62342c39389d2fabd42f81e444fdc4c03c3070f91fce4489a3c671894919',
-    de: '719b775f35a8a9ed53b80fa790402c50c8bf903441b39e6874b7b5d4e470ac66',
-    us: 'b7f7094bf3323126b9379f9aa0abc6257057084f7c3a2eebf432325787b95765',
+    de: '8b7938b03e68ee58a8aa0c86f5d0fbe3aac265f9d4f6fce9e61aa6980827dc79',
+    us: '33c25b1c73892664627deb6c326fa7ead07815db265325ff3a67c567226946ac',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
-    compile: '52ff58a0d7eb61eff5f22d557083fc28e7f5f59e16ad3f1956d9105950a2b2ad',
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+    compile: '401dae542529c2aa46c21d8af35d9168e84fbeb8d7450aef54cc0b89da47ab6b',
     lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
     curbs: '24a6696b232568ba7bc93e4d1259eba28798648161c28e560d477bcd71496bd4',
-    de: '8891c855226ffc1fcae8cf0ad59449e67d85b8c30aa5179e10527748fcaf7dc6',
-    us: '259eb05881ce198780374e21b990436e71781ff73fcc2b07bf470b256ce3e7d5',
+    de: '008af8c2eb93c84032b0ca14492f91914ede12b4fce5b1c2572e540f3f1a292b',
+    us: 'b54c8a1d4baaf30d9b48409e2b73b04a33c6b1f0e4d64fdbd273d14a5b8606a6',
   },
 } as const;
 const hash = (value: unknown) =>

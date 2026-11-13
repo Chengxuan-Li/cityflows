@@ -1,7 +1,7 @@
 import { nearestPointOnLine } from '../../editor/commands/topology';
 import type { Vec2 } from '../../geo/vec2';
 import type { Scene } from '../../render/types';
-import { placeHue } from '../../render/style';
+import { placeColors } from '../../render/style';
 import type { City, Place } from '../../schema';
 import { useAppStore } from '../store';
 import {
@@ -52,7 +52,8 @@ export function createPlacePaintTool(
     }
     ring = brush.ring();
     scene.setEditOverlay({
-      polygon: { ring, color: placeHue(extending?.id ?? `p:${source.nextId}`) },
+      // The place type's tint, as the painted place will look (TASK-162 palette).
+      polygon: { ring, color: placeColors(paintKind).edge },
     });
   }
   return {

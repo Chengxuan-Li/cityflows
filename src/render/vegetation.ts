@@ -214,7 +214,7 @@ export function placeTrees(city: CompiledCity, source: CityGeometry) {
     }
   // Street trees stand on the ground: none along bridges, tunnels or the ramps onto them, where
   // a ground-level tree would grow through a deck (seen in 3D at the TASK-105 merge).
-  const { nodeGrades, roadGrades } = cityGrades(city, source);
+  const { nodeGrades, roadGrades } = cityGrades(city);
   for (const road of [...city.roads].sort((a, b) => a.id.localeCompare(b.id))) {
     if (!['residential', 'tertiary', 'secondary', 'primary'].includes(road.roadClass)) continue;
     if (roadGrades[road.idx] || nodeGrades[road.from] || nodeGrades[road.to]) continue;

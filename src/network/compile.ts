@@ -95,10 +95,11 @@ export function compile(city: City): CompileResult {
   validateCity(city, sourceNodes, sourceRoads, sourcePlaces, diagnostics);
   if (diagnostics.length) return { ok: false, diagnostics };
 
-  const nodes: CNode[] = sourceNodes.map(({ id, pos, control }, idx) => ({
+  const nodes: CNode[] = sourceNodes.map(({ id, pos, layer, control }, idx) => ({
     idx,
     id,
     pos: { ...pos },
+    grade: layer,
     radiusM: 0,
     setbacks: [],
     outline: [],
@@ -127,6 +128,7 @@ export function compile(city: City): CompileResult {
       from,
       to,
       lanes: [],
+      grade: road.layer ?? Math.min(nodes[from]!.grade, nodes[to]!.grade),
       surface: [],
       corridorSurface: [],
       reference: [],

@@ -126,7 +126,7 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
   const layers = page.getByRole('region', { name: 'Map layers' });
   for (const label of ['Basemap', 'Entrances and exits'])
     await layers.getByLabel(label, { exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
 
   // The first S-Bahn stop at the station after 07:15, while its riders stream out: they get off
   // along the whole train, so they reach the entrances over about two minutes.

@@ -26,6 +26,7 @@ import { compile, type CompiledCity, type CRoad, type Diagnostic } from '../../s
 import { offsetLine, referenceLine, type Reference } from '../../src/network/corridor';
 import { roadWidth } from '../../src/network/lanes';
 import type { City } from '../../src/schema';
+import { limit } from '../timeouts';
 
 // T35 (TASK-082, docs/plan.md "Geometry rework" stage 2): every lane, edge and taper is a
 // parallel offset of its corridor's reference line by arc length.
@@ -227,7 +228,7 @@ test.each(tierCities(auditCities))(
       `${pairs.length - shared.length} pairs without one centerline left out`,
     );
   },
-  300_000,
+  limit(300_000),
 );
 
 cityTest(
@@ -247,7 +248,7 @@ cityTest(
       expect(gap.maxM, `${a}/${b}`).toBeLessThan(0.02);
     }
   },
-  120_000,
+  limit(120_000),
 );
 
 cityTest(
@@ -277,7 +278,7 @@ cityTest(
     }
     expect(joinAudit(net, node)!.maxM).toBeLessThanOrEqual(0.05);
   },
-  120_000,
+  limit(120_000),
 );
 
 test.each(tierCities(auditCities))(
@@ -305,7 +306,7 @@ test.each(tierCities(auditCities))(
       );
     }
   },
-  120_000,
+  limit(120_000),
 );
 
 /** TASK-089: reference ends that move farther than 2 m, each with the tolerance it had. Through
@@ -427,7 +428,7 @@ test.each(tierCities(auditCities))(
       notRecorded: movedFar.filter((end) => !recorded.includes(end)),
     });
   },
-  120_000,
+  limit(120_000),
 );
 
 /** TASK-131 keeps OSM geometry: a lane station beside a sharp OSM vertex within 30 m of a node
@@ -495,7 +496,7 @@ test.each(tierCities(auditCities))(
     expect(failures).toEqual([]);
     console.info(name, `${checked} lane stations checked, ${inTransition} inside transitions`);
   },
-  120_000,
+  limit(120_000),
 );
 
 /** Lane-offset folds of a reference: offsets up to `need` on either side step backwards. */

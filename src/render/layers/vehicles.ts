@@ -4,6 +4,7 @@ import type { CompiledCity } from '../../network';
 import { vehicleClasses, type VehicleClass } from '../../schema/city';
 import { style } from '../style';
 import { VehiclePoses, type PresentationSnapshot } from '../vehicle-pose';
+import { vehicleLightSprite } from './night';
 export { advanceAlong, distanceAlong, laneChangePose } from '../vehicle-pose';
 
 export function vehicleTextures() {
@@ -17,17 +18,26 @@ export function vehicleTextures() {
     const width = Math.round((lengthM / widthM) * 48);
     const y = index * 64 + 8;
     frames[vehicleClass] = new Rectangle(8, y, width, 48);
-    context.fillStyle = '#ffffff';
-    context.beginPath();
-    if (vehicleClass === 'truck') {
-      context.roundRect(8, y + 1, width * 0.73, 46, 3);
-      context.roundRect(8 + width * 0.76, y + 3, width * 0.24, 42, 7);
-    } else if (vehicleClass === 'van') {
-      context.roundRect(8, y, width * 0.79, 48, 5);
-      context.roundRect(8 + width * 0.74, y + 5, width * 0.26, 38, 8);
-    } else context.roundRect(8, y, width, 48, vehicleClass === 'car' ? 24 : 9);
-    context.fill();
-    context.fillStyle = '#c1c9c8';
+    // TASK-162: a rim at half the tint's brightness, so every system colour keeps an edge of at
+    // least 4.5:1 on white and pale yellow streets.
+    for (const [fill, d] of [
+      ['#808080', 0],
+      ['#ffffff', 4],
+    ] as const) {
+      const box = (x: number, top: number, w: number, h: number, r: number) =>
+        context.roundRect(x + d, top + d, w - 2 * d, h - 2 * d, Math.max(0, r - d));
+      context.fillStyle = fill;
+      context.beginPath();
+      if (vehicleClass === 'truck') {
+        box(8, y + 1, width * 0.73, 46, 3);
+        box(8 + width * 0.76, y + 3, width * 0.24, 42, 7);
+      } else if (vehicleClass === 'van') {
+        box(8, y, width * 0.79, 48, 5);
+        box(8 + width * 0.74, y + 5, width * 0.26, 38, 8);
+      } else box(8, y, width, 48, vehicleClass === 'car' ? 24 : 9);
+      context.fill();
+    }
+    context.fillStyle = '#c7c7cc';
     context.beginPath();
     context.roundRect(8 + width * 0.79, y + 9, width * 0.08, 30, 3);
     if (vehicleClass === 'bus') {
@@ -38,10 +48,15 @@ export function vehicleTextures() {
     }
     context.fill();
   }
-  context.fillStyle = '#ffffff';
-  context.beginPath();
-  context.arc(24, 288, 16, 0, Math.PI * 2);
-  context.fill();
+  for (const [fill, r] of [
+    ['#808080', 16],
+    ['#ffffff', 11],
+  ] as const) {
+    context.fillStyle = fill;
+    context.beginPath();
+    context.arc(24, 288, r, 0, Math.PI * 2);
+    context.fill();
+  }
   frames.dot = new Rectangle(8, 272, 32, 32);
   const atlas = Texture.from(canvas);
   const textures = Object.fromEntries(
@@ -77,6 +92,9 @@ export class Vehicles {
   private zoom = 1;
   private readonly poses = new VehiclePoses();
   private particles: Particle[] = [];
+  /** TASK-163: head- and tail-light sprites, one per vehicle, while the night layer draws. */
+  private lights: { container: ParticleContainer; vehicle: Texture; glow: Texture } | null = null;
+  private lightParticles: Particle[] = [];
   get snapshot() {
     return this.poses.snapshot;
   }
@@ -108,6 +126,56 @@ export class Vehicles {
       for (const particle of pool) this.size(particle);
       container.texture = this.dot ? this.textures.dot : this.textures.car;
       container.update();
+    }
+    if (this.lights && this.snapshot) this.updateLights(this.snapshot);
+  }
+
+  /** Draw vehicle lights into `lights.container`, or stop with null. */
+  setLights(lights: { container: ParticleContainer; vehicle: Texture; glow: Texture } | null) {
+    if (lights === this.lights) return;
+    if (this.lights) {
+      this.lights.container.particleChildren = [];
+      this.lights.container.update();
+    }
+    this.lights = lights;
+    if (lights && this.snapshot) this.updateLights(this.snapshot);
+  }
+
+  private updateLights(snapshot: PresentationSnapshot) {
+    const lights = this.lights!;
+    const { length, front, across } = vehicleLightSprite;
+    for (let i = 0; i < snapshot.count; i++) {
+      const particle = (this.lightParticles[i] ??= new Particle({ texture: lights.vehicle }));
+      const dimensions = style.vehicleClasses[vehicleClasses[snapshot.vclass[i]!]!];
+      if (this.dot) {
+        // Overview dots: a soft glow around each.
+        const size = (2.4 * 2 * style.vehicleDotRadiusPx) / this.zoom / lights.glow.width;
+        particle.texture = lights.glow;
+        particle.anchorX = particle.anchorY = 0.5;
+        particle.scaleX = particle.scaleY = size;
+      } else {
+        particle.texture = lights.vehicle;
+        particle.anchorX = front / length;
+        particle.anchorY = 0.5;
+        particle.scaleX = (dimensions.lengthM * length) / lights.vehicle.width;
+        particle.scaleY = (dimensions.widthM * across) / lights.vehicle.height;
+      }
+      particle.alpha = snapshot.fade[i]!;
+    }
+    lights.container.particleChildren = this.lightParticles.slice(0, snapshot.count);
+    lights.container.texture = this.dot ? lights.glow : lights.vehicle;
+    this.animateLights();
+    lights.container.update();
+  }
+
+  private animateLights() {
+    const count = this.lights ? (this.snapshot?.count ?? 0) : 0;
+    for (let i = 0; i < count; i++) {
+      const particle = this.lightParticles[i]!,
+        body = this.particles[i]!;
+      particle.x = body.x;
+      particle.y = body.y;
+      particle.rotation = body.rotation;
     }
   }
 
@@ -153,6 +221,7 @@ export class Vehicles {
     }
     this.particles.length = count;
     this.animate(0);
+    if (this.lights) this.updateLights(snapshot);
     for (const { count, container, pool } of this.layers) {
       const children = container.particleChildren;
       if (children.length === count) continue;
@@ -172,6 +241,7 @@ export class Vehicles {
       particle.y = this.y[i] = pose.y;
       particle.rotation = pose.heading;
     }
+    this.animateLights();
   }
 
   pickBody(point: Vec2): number | null {

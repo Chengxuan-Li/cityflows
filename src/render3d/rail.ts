@@ -16,6 +16,7 @@ import { railHeightAt, railHeights, type RailGraph, type RailHeights } from '../
 import { cityGrades } from '../render/grades';
 import { bedWidthM, railGeometry, type RailShape } from '../render/rail-geometry';
 import type { CityGeometry, Pick } from '../render/types';
+import { style } from '../render/style';
 import type { Vec2 } from '../geo/vec2';
 import type { cityHeights } from './heights';
 import { RailPaintCache } from './rail-paint-cache';
@@ -412,7 +413,7 @@ export function buildRail(
   heights: ReturnType<typeof cityHeights>,
 ) {
   const group = new Group();
-  const { roadGrades, nodeGrades } = cityGrades(city, source);
+  const { roadGrades, nodeGrades } = cityGrades(city);
   const rail = city.rail ? railHeights(city, roadGrades, nodeGrades) : undefined;
   // Tracks above ground in one batch; tunnel track in another shown with "See below ground".
   const batches = [0, 1].map(() => ({
@@ -524,7 +525,7 @@ export function buildRail(
   };
   setBelowGround(false);
   const select = (pick: Pick | null) => {
-    const accent = new Color(0x4dafa6);
+    const accent = new Color(style.selection);
     batches.forEach(({ colors, spans }, i) => {
       const attribute = meshes[i]!.geometry.getAttribute('color');
       (attribute.array as Float32Array).set(colors);

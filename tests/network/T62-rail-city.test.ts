@@ -30,8 +30,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       name.startsWith('munich')
         ? // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
-          'e125a475c73fd392ecda444924c7dc9f7e2d96114a6c0a28f1459f813a38d8e1'
-        : 'ec6f0fa77ebc23d1b1c04344c6eca38dea08cc5cfbe793fd9a02f909cc65d775',
+          // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+          'ed597a2042d40a872328694dd22c426af724e048baa6a269b260ed3990c33f7e'
+        : 'ff8f01ceb37b198ea8b84541c288b05c594316e3354b59379edd55ec17520c13',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);
     expect(

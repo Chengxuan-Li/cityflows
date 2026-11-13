@@ -7,6 +7,8 @@ import {
   departVehicle,
   metrics,
   pageErrors,
+  sidebarSection,
+  toolbarAction,
 } from './helpers';
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -71,12 +73,14 @@ for (const [label, content] of [
   ['Chart', 'metrics-chart'],
   ['Demand', 'demand'],
 ] as const) {
-  test(`QA phone ${label} run-bar sheet is reachable`, async ({ page }) => {
+  test(`QA phone ${label} sidebar section is reachable`, async ({ page }) => {
     const errors = pageErrors(page);
-    await reachable(button(page, label));
+    // The sidebar floats over the map on a phone and starts closed (TASK-160).
+    await reachable(await sidebarSection(page, label));
     await button(page, label).click();
     const sheet = page.locator(`#${content}`);
-    await reachable(sheet);
+    // The section is taller than a phone; the sidebar scrolls to each control below.
+    await expect(sheet).toBeVisible();
     for (const control of await sheet
       .locator('button:enabled, input:enabled, select:enabled, summary')
       .all()) {
@@ -85,7 +89,8 @@ for (const [label, content] of [
       await control.scrollIntoViewIfNeeded();
       await reachable(control);
     }
-    await page.keyboard.press('Escape');
+    await button(page, label).scrollIntoViewIfNeeded();
+    await button(page, label).click();
     await expect(sheet).toBeHidden();
     expect(errors).toEqual([]);
   });
@@ -99,15 +104,17 @@ test('QA phone trip counts sheet is reachable', async ({ page }) => {
 });
 
 test('QA phone validation is reachable', async ({ page }) => {
+  await sidebarSection(page, 'Layers');
   const validation = page.getByRole('button', { name: /^Validation/ });
   await reachable(validation);
   await validation.click();
-  await reachable(page.getByRole('heading', { name: 'Diagnostics', exact: true }));
+  await reachable(page.getByText('No network issues found.', { exact: true }));
 });
 
 test('QA phone imports a small OSM file through diagnostics and acceptance', async ({ page }) => {
   const errors = pageErrors(page);
-  await reachable(button(page, 'Import'));
+  // A phone's toolbar keeps Import in its » overflow menu.
+  await reachable(await toolbarAction(page, 'Import'));
   await button(page, 'Import').click();
   const dialog = page.getByRole('dialog', { name: 'Import city' });
   await reachable(dialog.getByLabel('OSM file'));
@@ -136,7 +143,8 @@ test('QA phone play, pause and step controls are reachable', async ({ page }) =>
   await reachable(button(page, 'Pause'));
   await button(page, 'Pause').click();
   const paused = (await metrics(page)).timeS;
-  await reachable(button(page, 'Step'));
+  // A phone's toolbar keeps Step in its » overflow menu.
+  await reachable(await toolbarAction(page, 'Step'));
   await button(page, 'Step').click();
   await expect.poll(async () => (await metrics(page)).timeS).toBeCloseTo(paused + 0.1, 6);
 });

@@ -1,10 +1,43 @@
-import { expect, type Page, type TestInfo } from '@playwright/test';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import type { Vec2 } from '../../src/geo/vec2';
 import type { CompiledCity } from '../../src/network';
 import type { City } from '../../src/schema';
 
 export const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
+
+/** A sidebar section's header. Under 900 px the sidebar floats over the map and starts closed,
+ *  so it is opened first (TASK-160). */
+export async function sidebarSection(page: Page, name: string) {
+  const show = button(page, 'Show sidebar');
+  if (await show.isVisible()) await show.click();
+  return button(page, name);
+}
+
+/** Closes the sidebar where it floats over the map (under 900 px), leaving the map clear. */
+export async function closeSidebarOverlay(page: Page) {
+  if (page.viewportSize()!.width <= 900 && (await button(page, 'Hide sidebar').isVisible()))
+    await button(page, 'Hide sidebar').click();
+}
+
+/** A toolbar action; a narrow window keeps it in the » overflow menu, opened first. */
+export async function toolbarAction(page: Page, name: string) {
+  if (!(await button(page, name).isVisible())) await button(page, 'More toolbar items').click();
+  return button(page, name);
+}
+
+/** The canvas's backing store matches the map area it fills, at the device pixel ratio. */
+export async function fillsMap(canvas: Locator) {
+  await expect
+    .poll(() =>
+      canvas.evaluate(
+        (element: HTMLCanvasElement) =>
+          element.width ===
+          Math.round(element.closest('main')!.clientWidth * window.devicePixelRatio),
+      ),
+    )
+    .toBe(true);
+}
 export const metrics = (page: Page) => page.evaluate(() => window.cityflows!.metrics());
 
 // Read playback progress without cloning every trip's metrics through the busy worker.
@@ -89,16 +122,17 @@ export async function departVehicle(page: Page, id: number) {
 }
 
 /** TASK-113: every person with a free household car drives, as before mode choice, for specs
- * about car traffic on the default city. Turns the demand sheet's mode choice off and restarts. */
+ * about car traffic on the default city. Turns the Demand section's mode choice off, closes the
+ * section again if it opened it (TASK-160 sidebar), and restarts. */
 export async function driveEveryone(page: Page) {
-  await button(page, 'Demand').click();
-  const toggle = page
-    .getByRole('region', { name: 'Demand', exact: true })
-    .getByRole('checkbox', { name: 'Choose walk or car per trip', exact: true });
+  const demand = page.getByRole('region', { name: 'Demand', exact: true });
+  const opened = !(await demand.isVisible());
+  if (opened) await (await sidebarSection(page, 'Demand')).click();
+  const toggle = demand.getByRole('switch', { name: 'Choose walk or car per trip', exact: true });
   await toggle.click();
   await expect(toggle).not.toBeChecked();
-  await page.keyboard.press('Escape');
-  await button(page, 'Restart').click();
+  if (opened) await button(page, 'Demand').click();
+  await (await toolbarAction(page, 'Restart')).click();
   await expect(button(page, 'Play')).toBeEnabled();
 }
 
@@ -136,7 +170,8 @@ export async function clickClearMapPoint(page: Page, points: Vec2[]) {
 /** Picks from the paused renderer snapshot through the map's real pointer path. */
 export async function clickVehicle(page: Page, id: number) {
   if (await button(page, 'Pause').isEnabled()) await button(page, 'Pause').click();
-  await expect(button(page, 'Step')).toBeEnabled();
+  // Play is enabled exactly when Step is (paused, not stale) and stays in a phone's toolbar.
+  await expect(button(page, 'Play')).toBeEnabled();
   const timeS = (await metrics(page)).timeS;
   await expect
     .poll(() => page.evaluate(() => window.cityflows!.drawnSnapshot!()?.timeS))
@@ -245,7 +280,7 @@ export async function importOsm(
   path: string,
   options: { surroundings?: boolean; terrain?: boolean } = {},
 ) {
-  await button(page, 'Import').click();
+  await (await toolbarAction(page, 'Import')).click();
   const dialog = page.getByRole('dialog', { name: 'Import city' });
   await dialog.getByLabel('OSM file').setInputFiles(path);
   if (options.surroundings !== undefined)

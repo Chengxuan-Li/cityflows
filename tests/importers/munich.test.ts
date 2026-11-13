@@ -8,6 +8,7 @@ import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import { cityTest, unitTest } from '../tier';
 import { fixture } from './fixtures';
 import { movementsOutside, roadBodyCrossings } from '../network/junction-audit';
+import { limit } from '../timeouts';
 
 // Short roads on main 5568eed. TASK-090: a budget of the recorded count plus two, not the exact
 // list: setbacks move with every junction geometry change.
@@ -254,7 +255,7 @@ cityTest(
     expect(forbidden).toEqual({ from379: 0, from1060: 0, to1059: 924 });
     expect(infeasible).toEqual([]);
   },
-  600_000,
+  limit(600_000),
 );
 
 unitTest.each([

@@ -1,11 +1,6 @@
 import type { CompiledCity } from '../network';
-import type { CityGeometry } from './types';
 
-export function cityGrades(city: CompiledCity, source?: CityGeometry) {
-  const nodeGrades = city.nodes.map(({ id }) => source?.nodes[id]?.layer ?? 0);
-  const roadGrades = city.roads.map(
-    ({ id, from, to }) =>
-      source?.roads?.[id]?.layer ?? Math.min(nodeGrades[from]!, nodeGrades[to]!),
-  );
-  return { nodeGrades, roadGrades };
+/** TASK-175: the compiled grades, by node and road index. */
+export function cityGrades(city: CompiledCity) {
+  return { nodeGrades: city.nodes.map((n) => n.grade), roadGrades: city.roads.map((r) => r.grade) };
 }

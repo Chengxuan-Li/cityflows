@@ -144,11 +144,11 @@ test('T76 Munich synthetic tram stops and inspector agree in 2D and 3D, then dep
       .getByRole('region', { name: 'Map layers' })
       .getByLabel('Rail', { exact: true });
     await toggle.uncheck();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     await expect(canvas).toHaveAttribute('data-trams', '0');
     await button(page, 'Layers').click();
     await toggle.check();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     await canvas.click({ position: screen });
   }
   await seek(page, time + 10);

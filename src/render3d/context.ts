@@ -22,18 +22,22 @@ import type { Vec2 } from '../geo/vec2';
 import type { ContextFeature } from '../schema';
 import { groundSurface, surfaceGrain, type Surface } from '../render/vegetation';
 import { style } from '../render/style';
+import { buildingRingHash, buildingSeed, lampColors, windowLitGlsl } from '../render/lighting';
 import { drape, lowestGround, triangulate, type Terrain } from './terrain';
 import { buildRoof } from './roofs';
 
 type Building = Extract<ContextFeature, { kind: 'area' }>;
 
-function windowInfo(geometry: BufferGeometry, values?: number[]) {
+function windowInfo(geometry: BufferGeometry, values?: number[], seed = 0) {
+  const count = geometry.getAttribute('position').count;
   geometry.setAttribute(
     'windowInfo',
-    new Float32BufferAttribute(
-      values ?? new Float32Array(geometry.getAttribute('position').count * 3),
-      3,
-    ),
+    new Float32BufferAttribute(values ?? new Float32Array(count * 3), 3),
+  );
+  // TASK-163: the building's window seed, for its lit-window pattern after dark.
+  geometry.setAttribute(
+    'windowSeed',
+    new Float32BufferAttribute(new Float32Array(count).fill(seed), 1),
   );
   return geometry;
 }
@@ -77,7 +81,7 @@ function facade(feature: Building, low: number, high: number) {
     'uv',
     new Float32BufferAttribute(new Float32Array((positions.length / 3) * 2), 2),
   );
-  return windowInfo(geometry, bands);
+  return windowInfo(geometry, bands, buildingSeed(feature.rings[0]!));
 }
 
 function buildingColour(feature: Building) {
@@ -86,32 +90,67 @@ function buildingColour(feature: Building) {
     ? style.buildings.walls[feature.material!]
     : undefined;
   if (material !== undefined) return material;
-  let hash = 2166136261;
-  for (const p of feature.rings[0]!)
-    for (const n of [p.x, p.y]) hash = Math.imul(hash ^ Math.round(n * 10), 16777619);
-  return new Color(style.context.building).multiplyScalar(0.96 + ((hash >>> 0) % 9) / 100).getHex();
+  const hash = buildingRingHash(feature.rings[0]!);
+  return new Color(style.context.building).multiplyScalar(0.96 + (hash % 9) / 100).getHex();
 }
 
 function mutedColour(colour: string, base: number) {
   return new Color(base).lerp(new Color(colour), style.buildings.taggedColourStrength).getHex();
 }
 
-/** One facade shader for the whole batch; roof and canopy vertices carry a zero pitch. */
+/** One facade shader for the whole batch; roof and canopy vertices carry a zero pitch. After
+ * dark (`setBuildingLights`) the same window grid lights up cell by cell from each building's
+ * seed, by the pattern of `windowLit` in `render/lighting.ts`. */
 export function buildingMaterial() {
   const material = new MeshLambertMaterial({ vertexColors: true });
+  material.userData.lights = {
+    windowShare: { value: 0 },
+    windowGlow: { value: 0 },
+    litColour: { value: new Color(lampColors.window) },
+  };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.windowColour = { value: new Color(style.buildings.window) };
+    Object.assign(shader.uniforms, material.userData.lights);
     shader.vertexShader =
       'attribute vec3 windowInfo; varying vec3 vWindowInfo;\n' +
+      '#ifdef LIT_WINDOWS\nattribute float windowSeed; flat varying float vWindowSeed;\n#endif\n' +
       shader.vertexShader.replace(
         '#include <begin_vertex>',
-        '#include <begin_vertex>\nvWindowInfo = windowInfo;',
+        '#include <begin_vertex>\nvWindowInfo = windowInfo;\n' +
+          '#ifdef LIT_WINDOWS\nvWindowSeed = windowSeed;\n#endif',
       );
     shader.fragmentShader =
       'uniform vec3 windowColour; varying vec3 vWindowInfo;\n' +
-      shader.fragmentShader.replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
+      '#ifdef LIT_WINDOWS\nflat varying float vWindowSeed;\n' +
+      'uniform float windowShare; uniform float windowGlow; uniform vec3 litColour;\n' +
+      windowLitGlsl +
+      '\n#endif\n' +
+      shader.fragmentShader
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+        #ifdef LIT_WINDOWS
+        if (vWindowInfo.z > 0.0) {
+          float litLevel = fract(vWindowInfo.y / vWindowInfo.z);
+          float litAlong = fract(vWindowInfo.x / 2.8);
+          float pane = smoothstep(0.28, 0.33, litLevel) * (1.0 - smoothstep(0.72, 0.77, litLevel));
+          pane *= smoothstep(0.16, 0.21, litAlong) * (1.0 - smoothstep(0.74, 0.79, litAlong));
+          uint cell = cfWindowHash(
+            uint(vWindowSeed + 0.5),
+            uint(floor(vWindowInfo.y / vWindowInfo.z)),
+            uint(floor(vWindowInfo.x / 2.8)));
+          float lit = float(cell & 0xffffu) / 65536.0 < windowShare ? 1.0 : 0.0;
+          float tone = float((cell >> 16u) & 0xffu) / 255.0;
+          vec3 light = mix(litColour, vec3(0.62, 0.72, 1.0), step(0.82, tone)) * (0.65 + 0.35 * tone);
+          // Far off, cells shrink below a pixel: their average glow, without shimmer.
+          float far = smoothstep(${style.buildings.litWindowFadeM[0]}.0, ${style.buildings.litWindowFadeM[1]}.0, length(vViewPosition));
+          totalEmissiveRadiance += windowGlow * light * mix(pane * lit, 0.27 * windowShare, far);
+        }
+        #endif`,
+        )
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
         if (vWindowInfo.z > 0.0) {
           float level = fract(vWindowInfo.y / vWindowInfo.z);
           float along = fract(vWindowInfo.x / 2.8);
@@ -120,9 +159,21 @@ export function buildingMaterial() {
           band *= 1.0 - smoothstep(${style.buildings.windowFadeM[0]}.0, ${style.buildings.windowFadeM[1]}.0, length(vViewPosition));
           diffuseColor.rgb = mix(diffuseColor.rgb, windowColour, band * ${style.buildings.windowStrength});
         }`,
-      );
+        );
   };
   return material;
+}
+
+/** TASK-163: `share` of the windows lit with `glow`; a zero glow restores the Day shader. */
+export function setBuildingLights(material: MeshLambertMaterial, share: number, glow: number) {
+  const on = glow > 0;
+  if (on !== (material.defines?.LIT_WINDOWS !== undefined)) {
+    material.defines = on ? { LIT_WINDOWS: '' } : {};
+    material.needsUpdate = true;
+  }
+  const lights = material.userData.lights as Record<string, { value: number }>;
+  lights.windowShare!.value = share;
+  lights.windowGlow!.value = glow;
 }
 
 function shape(rings: Vec2[][]) {

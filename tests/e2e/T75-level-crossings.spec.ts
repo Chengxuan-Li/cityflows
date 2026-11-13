@@ -89,7 +89,7 @@ for (const place of [
       toggle = layers.getByLabel('Rail', { exact: true });
     for (const label of ['Basemap', 'Entrances and exits', 'Overhead lines'])
       await layers.getByLabel(label, { exact: true }).uncheck();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     for (const view of ['2d', '3d'] as const) {
       if (view === '3d') await button(page, '3D').click();
       const canvas = page.getByLabel(view === '2d' ? 'City map' : '3D city view', { exact: true });
@@ -113,7 +113,7 @@ for (const place of [
       );
       await toggle.check();
       await expect(canvas).toHaveAttribute('data-level-crossings', expected);
-      await page.keyboard.press('Escape');
+      await button(page, 'Layers').click();
     }
     expect(errors).toEqual([]);
   });

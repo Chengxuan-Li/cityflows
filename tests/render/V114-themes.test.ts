@@ -23,6 +23,7 @@ import { markingThemes } from '../../src/render/style';
 import { buildMarkings } from '../../src/render3d/markings';
 import { cityHeights } from '../../src/render3d/heights';
 import { tierCities, unitTest, cityTest } from '../tier';
+import { limit } from '../timeouts';
 
 // Hash shared gore metadata once, rather than duplicating whole roads for every stripe.
 function paintHash(shapes: unknown): string {
@@ -54,11 +55,13 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
     // Munich re-pinned for 06dae00 (median crossings offset by half their lane block)
     // and e4654d8 (merging lanes kept on a group's inner roads).
     // TASK-144 lot geometry plus TASK-146 renderer-only addition paint; physical pins stay fixed.
-    // TASK-169 keep-clear boxes at lot and garage mouths; without them it equals f3b96b0's.
+    // TASK-169 keep-clear boxes at lot and garage mouths; without them it equals ddd8a78's.
     expect(paintHash(shapes)).toBe(
       name === 'munich'
-        ? '967efc67056bc4a7d02fff89e424af388e8c999b798c5d823867528cfee16bd7'
-        : '22e2732e7a649008b89c269de46635fbf3278e94a676c47f32f44e4c7bc3a038',
+        ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+          '4f1b746a02eb39de8dd14e2527726c9cac277c28545159aab9f7612963faf9d9'
+        : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+          '05f8f1f9520513386bb8615a114edc62ccaa1a54bd6c28b58f0303424c025e87',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },
@@ -257,7 +260,7 @@ cityTest(
     }
     console.info('V114 Munich marking build ms:', JSON.stringify(timings));
   },
-  120_000,
+  limit(120_000),
 );
 
 unitTest.each([0, 1.4])(

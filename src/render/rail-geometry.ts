@@ -92,7 +92,7 @@ const box = (points: Vec2[]) =>
 /** Both views consume the same triangles, clipped clear of same-grade roads except trams. */
 export function railGeometry(city: CompiledCity, source?: CityGeometry): RailShape[] {
   if (!city.rail) return [];
-  const { roadGrades, nodeGrades } = cityGrades(city, source);
+  const { roadGrades, nodeGrades } = cityGrades(city);
   const obstacles = [
     ...city.roads.map((r) => ({ ring: positive(r.surface), layer: roadGrades[r.idx]! })),
     ...city.nodes

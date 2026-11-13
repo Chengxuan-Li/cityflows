@@ -393,8 +393,10 @@ test.each(
   // and e4654d8 (merging lanes kept on a group's inner roads).
   expect(vehicleHash(net)).toBe(
     name.startsWith('munich')
-      ? '498cd35151969382501dec99b186ad1d5a56a0819e872cff6c0795e85bc85526'
-      : '1b1a1ebb005d8f0e73cd565be40e4825a57e123cbbff292ac4394f3e060639ea',
+      ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+        '30aa60b0237d64707ba1ac84ab322a4f19292c3161ac130cc5076f547b807f89'
+      : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+        '78b744f53785049104371187acfc9e77c6c26e3597485d13a74ca8b50dde6d81',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

@@ -36,10 +36,12 @@ export function signalHeads(city: CompiledCity, node: CNode) {
   return heads;
 }
 
+/** `night` (TASK-163) receives a copy of each head, drawn above the evening tint. */
 export function drawSignal(
   city: CompiledCity,
   node: CNode,
   container: Container,
+  night?: Container,
 ): (timeS: number) => void {
   const signal = node.signal!;
   const phases = signal.phases.map(({ movements }) => new Set(movements));
@@ -55,6 +57,9 @@ export function drawSignal(
     ),
     movement,
   }));
+  const copies = night
+    ? heads.map(({ graphic, movement }) => ({ graphic: night.addChild(graphic.clone()), movement }))
+    : [];
 
   let previousPhase = -1;
   let previousState: string | undefined;
@@ -63,7 +68,7 @@ export function drawSignal(
     if (phase === previousPhase && state === previousState) return;
     previousPhase = phase;
     previousState = state;
-    for (const { graphic, movement } of heads) {
+    for (const { graphic, movement } of [...heads, ...copies]) {
       graphic.tint =
         state === 'all-red' || !phases[phase]!.has(movement)
           ? style.signalRed

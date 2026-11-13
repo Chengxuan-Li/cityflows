@@ -109,7 +109,7 @@ interface Provenance {
 interface Node {
   id: NodeId;
   pos: Vec2;
-  layer: number;           // from OSM `layer`; informational, connectivity is by shared ids
+  layer: number;           // grade, from OSM `layer` (TASK-175: compiled as CNode.grade); connectivity is by shared ids
   control: Control;
   minorRoads: RoadId[];    // for yield/stop: incoming roads that must yield. Empty = by class.
   turnRules: TurnRule[];
@@ -163,7 +163,7 @@ interface Road {
   id: RoadId;
   from: NodeId;
   to: NodeId;
-  layer?: number;          // visual grade; omitted uses the lower endpoint grade
+  layer?: number;          // grade (TASK-175: CRoad.grade); omitted uses the lower endpoint grade
   centerline: Vec2[];      // >= 2 points; first equals nodes[from].pos, last equals nodes[to].pos
   lateralOffsetM: number;  // lane block center relative to centerline; positive = right of travel
   lanes: Lane[];           // index 0 = leftmost in travel direction
@@ -500,12 +500,12 @@ interface CompiledCity {
   laneSpatial: Flatbush;   // lane segments, for picking and snapping
 }
 
-interface CNode { idx: number; id: NodeId; pos: Vec2; radiusM: number; control: Control;
+interface CNode { idx: number; id: NodeId; pos: Vec2; grade: number; radiusM: number; control: Control;
   movements: number[]; signal: CSignal | null; group?: number; }
 interface CGroup { idx: number; id: JunctionGroupId; nodes: number[]; innerRoads: number[];
   entries: number[]; exits: number[];          // road idx entering / leaving the group
   chains: { from: number; to: number; movements: number[] }[]; signalised: boolean; }
-interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[];
+interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[]; grade: number;
   access: AccessValue[]; zone: Int32Array; // indexed by vehicleClasses
   roadClass: RoadClass; classRank: number; speedLimitMps: number; lengthM: number;
   streetGroupId: string | null; corridorId: string | null;   // corridorId ?? streetGroupId
@@ -514,7 +514,7 @@ interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: numb
 A group's chains (TASK-131) are its lane paths: from a lane of an entry road, the member-node
 movements along inner-road lanes to a lane of an exit road, no lane twice in a chain. The road
 pairs with a chain are the group's turn permissions, those the merged node of TASK-049 allowed.
-interface CLane { idx: number; id: LaneId; road: number; lane: number; polyline: Vec2[];
+interface CLane { idx: number; id: LaneId; road: number; lane: number; grade: number; polyline: Vec2[];
   cumulative: Float64Array; lengthM: number; widthM: number; allowed: VehicleClass[];
   speedLimitMps: number; left: number; right: number;   // adjacent lane idx or -1
   out: number[]; in: number[];                          // movement idx
@@ -530,6 +530,21 @@ interface CConnector { idx: number; id: ConnectorId; place: number; parking?: nu
 interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   connectorsIn: number[]; connectorsOut: number[]; capacity: number | null; events: PlaceEvent[]; }
 ```
+
+TASK-175 (contract change, owner-approved 2026-11-13): compiled nodes, roads and lanes carry their
+vertical level, `grade`. A node's is its canonical `layer` (the importer's OSM `layer`, else 1 on a
+`bridge`, -1 in a `tunnel` or `covered` way, else 0, with a bridge end that has no deck continuation
+on the ground); a road's is its `layer`, else the lower of its nodes' grades; a lane's is its
+road's. `network/heights.ts` turns grades into surface heights above the ground, TASK-132's road
+model that the 3D view draws (with terrain added there): 5 m per grade; a road's ends at its nodes'
+heights and its deck at its own, a deck outside the end heights reached by cubic ramps over at most
+60 m at each end, otherwise one cubic over the whole road; through continuations without a junction
+surface share PCHIP tangents. `laneHeightAt(city, lane, point)` gives a lane's surface height
+abreast of a point. Two surfaces 4.5 m or more apart (`levelClearanceM`: a 3.5 m truck under a
+0.8 m deck, with margin, less than one grade) are at different levels; a ramp within 4.5 m of the
+ground is at ground level there. 2D grade groups, picking and shadows (`render/grades.ts`) and
+3D heights read these compiled grades, so the views and the simulation agree. The simulation
+uses levels only in lot exits (section 8); routing, demand and conflicts are unchanged.
 
 `CParking` carries canonical identity/kind/access/capacity, owner place index (`-1` when
 unowned), centroid, entry/exit connector indices, initial occupancy fraction, resident count
@@ -1555,13 +1570,14 @@ instead. The grant inserts the car there at speed 0, so following traffic treats
 occupant before its body crosses the lane edge; the body then merges (`merge` phase) along a
 front-bumper curve at `lotSpeedMps` and drives on. A lot aisle mapped on a road is such a
 lane: the car joins it where its path first meets it. TASK-157: the hold is also clear of every
-other lane of the exit's street that the body would stand in (its road's other lanes, the other
-carriageway of a two-way street, the roads meeting it at either end; not the lot's own aisles,
-and not roads drawn across the lot at another grade, which the compiled model cannot tell
-apart): such a lane joins the set until a pose is clear of all, or the car keeps the exit-only
-hold if none is. The lanes the merge curve then crosses before the exit lane each need the same
-spawn gap, with followers' braking, around the station span the body covers there, checked with
-the join gap at the grant. From the grant until its body has left a crossed lane, that span is a
+other lane the body would stand in (TASK-175: any lane within a body length and width of the
+drive-out, not the lot's own aisles, kept only where its surface abreast of the body's middle is
+within 4.5 m of the exit lane's surface at its connector, section 5; so a bridge overhead never
+holds the car, while a road at grade that is not part of the exit's street, or a ramp still near
+the ground, does): such a lane joins the set until a pose is clear of all, or the car keeps the
+exit-only hold if none is. The lanes the merge curve then crosses before the exit lane (at the
+lot's level, by the same rule) each need the same spawn gap, with followers' braking, around the
+station span the body covers there, checked with the join gap at the grant. From the grant until its body has left a crossed lane, that span is a
 standing obstacle for the lane's traffic (and for traffic about to enter it), clamped like a stop
 line, and no spawn or lane change lands in it. A car turning into the same mouth on the
 exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
@@ -1573,7 +1589,7 @@ lot. A lot exit whose drive-out has no pose clear of its lane is offered only wh
 is. TASK-164: nor is one whose hold stands, lane ends respected, in the stretch of a lot aisle lane
 a lane car can stand in (from where one enters it, by a movement or else its first spawning
 connector, to its end if it leads on, else its last connector) or in a drivable movement joining
-the aisle lanes. A bay on an aisle lane that carries none of its exits gets a departure when that
+the aisle lanes (TASK-175: an aisle lane at another level than the exit lane does not count). A bay on an aisle lane that carries none of its exits gets a departure when that
 lane passes at least one of them; the bay keeps every exit its departure does not pass
 (`departureMisses`) as a lot exit where that exit's hold is clear, and the departure carries the
 draw share of the exits it passes, so each exit keeps its share. Gridlock recovery
@@ -2394,39 +2410,54 @@ claimed or has refused it, or a free space is unreachable). `Metrics.parking.hom
 car parked beyond the radius with its reason, and the distances from home of the others.
 Other destinations keep their choice.
 
-TASK-113 mode choice (`src/demand/mode-choice.ts`, run by `chooseTripModes` in
-`src/sim/persons.ts`). Each home-based tour of a person who has today's household car (a trip
-list's `carId`, TASK-129) chooses walk or car at its first departure; the car is at home then.
-Afterwards the car stays with its driver until it is back home, so every trip of the tour takes
-the tour's mode: a person who walked out walks home and never drives a car still parked at home,
-and one who drove out drives home. Persons without a free household car walk, as TASK-129 left
-them. A tour is in the choice only if each of its trips is a private car trip with no gateway end;
-tours with a van trip (TASK-100 classes), gateway commuters, through and event traffic keep their
-vehicles, and TASK-128's station riders stay walk-only, outside the choice and the mode shares. The choice is a multinomial logit over generalized minutes: walk is the walk-graph
-time minus the person's walk preference; car is the walk to the parked car, the drive on the
-run's current link costs, the expected parking search and the walk from the space, plus the
-running cost (`carCostPerKm` times the drive's length) over the person's value of time. Parking
-is estimated from the nearest facility of the place itself, else the nearest public facility
-within `parkingSearchRadiusM` with a 120 s search, else the place's connector; walks to and from
-it are straight lines times 1.3. Each person draws a walk preference (normal, sd 6 min) and a value
-of time (log-normal, sigma 0.5) from their own stream of the demand seed; each tour draws its choice
-from its first trip's stream of the scenario seed (`mode-choice`). The draws are standard and
-the configuration only rescales them, so a slider moves no draw, and raising the walk preference
-only turns car tours into walk tours. Transit is a third entry of the alternatives with no cost
-until stations carry riders (TASK-128).
+TASK-113 mode choice (`src/demand/mode-choice.ts`, run by `createPersons` in `src/sim/persons.ts` at
+each tour's departure, TASK-173). Each home-based tour of a person who has today's household car (a
+trip list's `carId`, TASK-129) chooses walk or car at its first departure; the car is at home then.
+Afterwards the car stays with its driver until it is back home, so every trip of the tour takes the
+tour's mode: a person who walked out walks home and never drives a car still parked at home, and one
+who drove out drives home. Persons without a free household car walk, as TASK-129 left them. A tour
+is in the choice only if each of its trips is a private car trip with no gateway end; tours with a
+van trip (TASK-100 classes), gateway commuters, through and event traffic keep their vehicles, and
+TASK-128's station riders stay walk-only, outside the choice and the mode shares. The choice is a
+multinomial logit over generalized minutes: walk is the walk-graph time minus the person's walk
+preference; car is the walk to the parked car, the drive on the run's current link costs, the
+expected parking search and the walk from the space, plus the running cost (`carCostPerKm` times the
+drive's length) over the person's value of time. The walk to the car starts at the car's actual
+space (or facility). Parking at the destination is the nearest facility of the place itself with
+room at that moment (no search), else the nearest public facility within `parkingSearchRadiusM` with
+room (a 120 s search), else, when all of those are full, the nearest of them with a 240 s search,
+else the place's connector; walks to and from parking are straight lines times 1.3. Room is
+TASK-125's: occupied plus claimed below capacity (inferred soft garages always have room). Each
+person draws a walk preference (normal, sd 6 min) and a value of time (log-normal, sigma 0.5) from
+their own stream of the demand seed; each tour draws its choice from its first trip's stream of the
+scenario seed (`mode-choice`). The draws are standard and the configuration only rescales them, so a
+slider moves no draw, and raising the walk preference only turns car tours into walk tours. Transit
+is a third entry of the alternatives with no cost until stations carry riders (TASK-128).
 
-The choice runs when the engine loads, before parking chains the car trips and stocks their cars
-(parking's chains and stock are built once from the car trips), so "current link costs" are the
-costs the run starts with (free flow unless the host passes others), and a walked tour's car trips
-become walk trips without a `carId`. The walk routes it computes are the person walkers' later
-routes. A trip whose places have no walk route cannot walk, so a city without a walk network runs
-exactly as without the choice. `TripOutcome.mode` (and the trips CSV's `mode` column) gives
-each trip's mode after the choice, and `PersonMetrics.modes` counts person trips by mode when they
-start, in total and by hour of departure, and those completed: a car trip is `drive` when it
+TASK-173: the choice runs when the tour's first trip starts, that is when the person leaves home
+(after their previous trip and, for a shared car, after the car is back), so "current link costs"
+are that minute's costs and parking room is that moment's. The car is offered only if it is there:
+no trip of the tour has failed, the car's previous trip did not fail, and the stock found it a
+starting place. Parking builds its chains and starting stock from the trip list as scheduled, so
+every household car of a driver's day is parked at home from the start, whether its tours later
+drive or walk; with the choice off this is TASK-129's stock exactly. A tour that walks turns each of
+its trips into a walk without a `carId` in the engine's trip list: the accounting moves each from
+its vehicle state to the excluded walks, the connectors drop it from their origin queues, and
+parking splices it out of the car's chain, linking the car's trips before and after the tour (both
+meet at home); when the tour began the car's day, its starting space passes to the car's next trip.
+A car arriving with a later trip of an undecided tour keeps TASK-122's exit preference, since that
+tour may still drive. Claims (TASK-125, TASK-153) are made only by cars on their way, so a car whose
+tour walks never claims and never frees a space; the departure forecast is unchanged. The draws are
+TASK-113's: a person's preferences from the demand seed, a tour's draw from its first trip's stream.
+The walk routes the choice computes are the walkers' later routes. A trip whose places have no walk
+route cannot walk, so a city without a walk network runs exactly as without the choice.
+`TripOutcome.mode` (and the trips CSV's `mode` column) gives each trip's mode after the choice (the
+scheduled mode until its tour departs), and `PersonMetrics.modes` counts person trips by mode when
+they start, in total and by hour of departure, and those completed: a car trip is `drive` when it
 parked at its destination's own facility (or the destination is a gateway), `driveWalk` when it
 parked elsewhere and walked on. Where the car parks stays the parking choice's decision, so drive
-and drive-and-walk are outcomes of one car alternative, not separate choices. A household car
-whose every tour walks is not in the starting stock, as TASK-129 leaves cars nobody drives.
+and drive-and-walk are outcomes of one car alternative, not separate choices. A household car whose
+every tour walks stays parked at home all day.
 The default scenario and the app run with mode choice on. The Munich traffic gate (the gate, T63,
 T21, T29), T53 on Munich, the full-demand morning and `traffic:quick` measure car traffic with it
 off (owner, 2026-11-13); `tests/traffic/munich-mode-share.test.ts` (full traffic tier, not the
@@ -2748,6 +2779,33 @@ the city, and roads retain the strongest tone.
   and 3D Curbs default on; BUS uses the Lane markings switch. Counts and placement timings
   are exposed on the map canvas in test mode. Neither canonical network nor compile changes.
 
+- TASK-163: scene lighting is view-only state. `render/lighting.ts` turns `{ mode, exposure }`
+  (`day`, `evening`, `night` or `clock`; exposure 0.5 to 1.5) and the simulation clock into one
+  `SceneLight` for both views: sun direction, colour and intensity, whether it casts shadows,
+  hemisphere sky and ground colours, background, an `ambient` factor (light on a flat surface
+  relative to Day, per linear channel), the artificial-light level and the share of windows
+  lit. Day reproduces TASK-162's lights exactly (ambient 1, no artificial light). "Follow
+  clock" uses a fixed day (sunrise 06:00, sunset 20:00, 52° at 13:00), blends Day, Evening and
+  Night by sun elevation and moves once per simulated minute. The UI keeps the setting in its
+  own store (`ui/lighting-store.ts`), per viewer in `localStorage` (`cityflows.lighting`,
+  parsed and clamped on read, Day when missing, broken or blocked), never in the project; it
+  cannot change simulation, project or render-geometry hashes. The Shadows layer also turns
+  the 3D sun's shadows on and off. Colours are never changed, only lit: 3D lit materials take
+  the lights; unlit materials (rail paint, wires, sign faces, pedestrians) are multiplied by
+  `ambient`; light sources (signal lamps, illuminated station boards and screens, overlays)
+  are flagged `userData.lit` and keep their colour. After dark 3D adds instanced additive
+  decals and sprites, no real lights: a pool on the road and a halo at each lamp head (lamp
+  heads emissive), pools along railway platforms (about every 12 m) and at tram shelters,
+  halos on signal heads, level-crossing lamps brighter. Facade windows light up in the
+  building shader by cell, from a 24-bit seed hashed from the building's outer ring
+  (`windowLit`; context buildings have no id), blending to their average glow far off.
+  Vehicles paint head- and tail-lamps in their shader and draw headlight beams as a second
+  instanced mesh sharing the bodies' instance matrices; train cars light their side windows.
+  Each effect is a shader define, so Day runs the unchanged programs. 2D draws a night layer
+  over the map and under overlays: a multiply tint by `ambient` (an additive lift above
+  exposure 1), additive lamp and platform glows, vehicle light sprites and bright copies of
+  the signal heads. Both canvases publish the resolved mode as `data-lighting`.
+
 - TASK-108: `render/marking-geometry.ts` owns world-metre paint shapes (role-coloured
   polylines with widths and dash metadata, and filled polygons). Road clipping, dash phase,
   approach controls and arrows, continuation seams/tapers, junction guides and crossing
@@ -2906,9 +2964,9 @@ the city, and roads retain the strongest tone.
   "Road classes" (off by default) turns on the per-class tones of `roadStyle`; then a
   junction takes the tone of its incident road with the highest `classRank`. Presentation
   only, like every Layers entry.
-- `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes and
-  road and node layers are not in the compiled model. Grade groups draw from lowest to
-  highest, with roads in compiled index order inside each grade.
+- `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes are not
+  in the compiled model. Grade groups draw from lowest to highest, by the compiled grades
+  (TASK-175), with roads in compiled index order inside each grade.
   TASK-097 (owner revision): the default-on "Shadows" layer affects non-ground streets only.
   Raised grades use 5 m per grade and cast a south-east shadow at 0.6 m per metre above the
   next lower grade. Three unioned fills (16%, 7%, 4%, the latter two offset another 0.75 m
@@ -2955,7 +3013,10 @@ Raised decks have 0.8 m slabs and piers every 30 m. The 3D camera starts at the 
 hands its ground target and scale back on
 return; the hidden 2D scene stops drawing while 3D is active. Vehicle raycasting opens the existing
 inspector, with the same eight-pixel picking tolerance as 2D; playback stays live and a
-ground-opacity toggle reveals tunnels. Pedestrian stripes reuse the 2D crossing polygons.
+ground-opacity toggle reveals tunnels. TASK-175: after vehicles, walkers, parking and rail, a
+click picks a lane: each centreline is projected at its compiled surface height (every 5 m on a
+ramp) and hit within half its projected width (at least 3 px), the highest grade winning where
+lanes overlap on screen, as in 2D; lanes below ground only with See below ground. Pedestrian stripes reuse the 2D crossing polygons.
 Signal heads face the approaching lane and hang at 5.5 m from 6 m curbside cantilevers.
 A ground-mesh adapter reuses the 2D tile loader, projection, cache, retry and URL settings;
 the Basemap layer also works in 3D and follows the ground-opacity toggle. Surface normals

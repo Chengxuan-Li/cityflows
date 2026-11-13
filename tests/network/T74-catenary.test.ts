@@ -63,7 +63,7 @@ function wire(city: City) {
   const result = compile(city);
   if (!result.ok) throw Error(JSON.stringify(result.diagnostics));
   const compiled = result.compiled;
-  const { roadGrades, nodeGrades } = cityGrades(compiled, city);
+  const { roadGrades, nodeGrades } = cityGrades(compiled);
   return { compiled, lines: catenary(compiled, roadGrades, nodeGrades) };
 }
 const trackIdx = (compiled: CompiledCity, id: string) =>
@@ -72,8 +72,8 @@ const wiredTracks = (lines: Catenary) =>
   new Set(lines.wires.filter((w) => w.points.length > 1).flatMap((w) => w.tracks));
 
 /** Every mast clear of tracks, frogs, level crossings, road surfaces at its level and platforms. */
-function expectClear(compiled: CompiledCity, city: City, lines: Catenary) {
-  const { roadGrades, nodeGrades } = cityGrades(compiled, city);
+function expectClear(compiled: CompiledCity, lines: Catenary) {
+  const { roadGrades, nodeGrades } = cityGrades(compiled);
   const heights = railHeights(compiled, roadGrades, nodeGrades);
   const rail = compiled.rail!;
   const roads = [
@@ -293,7 +293,7 @@ test('T74 no mast stands on a switch frog, a level crossing, a road or a platfor
   );
   expect(lines.frogs.length).toBeGreaterThanOrEqual(1);
   expect(lines.supports.length).toBeGreaterThan(20);
-  expectClear(compiled, city, lines);
+  expectClear(compiled, lines);
   expect(lines.skipped).toEqual([]);
   // The track along the platform keeps its supports, masts on the far side; no drop hangs over
   // the level crossing or the road (supports moved along the track instead).
@@ -344,12 +344,12 @@ test('T74 tunnels carry the wire on fixings, bridges their masts on the deck; bo
     expect(s.layer).toBe(1);
     expect(s.masts[0]!.h).toBeGreaterThan(5);
   }
-  expectClear(compiled, city, lines);
+  expectClear(compiled, lines);
   // 2D: supports and wires per grade, without the tunnel's wire.
   const drawn = drawCatenary(lines);
   expect([...drawn.keys()].sort()).toEqual([0, 1]);
   // 3D: one mesh per kind; the tunnel wire only with "See below ground".
-  const view = buildCatenary(compiled, city, cityHeights(compiled, city));
+  const view = buildCatenary(compiled, cityHeights(compiled, city));
   const names = view.group.children.map((c) => c.name).sort();
   expect(names).toEqual([
     'catenary-beams',
@@ -380,7 +380,7 @@ test('T74 street trams get side or centre poles off the road', () => {
     expect(s.kind).toBe('cantilever');
     expect(s.drops).toHaveLength(2);
   }
-  expectClear(compiled, city, lines);
+  expectClear(compiled, lines);
 });
 
 test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
@@ -418,6 +418,6 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       expect(counts.unwired).toBe(counts.sections);
       expect(counts.supports).toBe(0);
     }
-    expectClear(compiled, imported.city, lines);
+    expectClear(compiled, lines);
   },
 );

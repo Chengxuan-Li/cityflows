@@ -185,24 +185,25 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | done 2026-11-13 |
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | not needed: TASK-129 passed after TASK-154 |
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | done 2026-11-13: no repair needed; TASK-128 merged |
-| [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
+| [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | done 2026-11-13 (merged together) |
 | [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | done 2026-11-13 |
-| [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
-| [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
+| [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | done 2026-11-13 (merged together) |
+| [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | done 2026-11-13 (2D Evening cost to TASK-176) |
 | [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | done 2026-11-13 (pk:1475 left) |
 | [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | done 2026-11-13 |
 | [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | queued (after the UI merge) |
-| [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | queued (after the UI merge) |
+| [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | in progress (Claude Code subagent) |
 | [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | queued (after the UI merge) |
-| [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | queued (after TASK-164, TASK-165) |
+| [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | queued (after TASK-113; in sequence with TASK-169) |
-| [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | in progress (Claude Code subagent) |
-| [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | queued (after the baseline reset) |
-| [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | in progress (Claude Code subagent) |
+| [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | done 2026-11-13 |
+| [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | done 2026-11-13 |
+| [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | done 2026-11-13 |
 | [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | queued (after TASK-173) |
-| [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | in progress (Claude Code subagent) |
+| [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | done 2026-11-13 |
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | queued (near the end) |
 | [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after the UI merge and TASK-168) |
+| [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | in progress (Claude Code subagent; merges held until green) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1181,6 +1182,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-175 | Claude Code, the lead's subagent | Opus 5.5 | high | 5375 (production 5475) |
 | TASK-176 | Claude Code, the lead's subagent | Opus 5.5 | high | 5376 (production 5476) |
 | TASK-177 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5377 (production 5477) |
+| TASK-178 | Claude Code, the lead's subagent | Opus 5.5 | high | 5378 (production 5478) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3872,6 +3874,108 @@ baseline reset 2: gate (choice off) 5,310 / 0 / 0, mode-share guard 2,730 / 0 / 
 and demand unit tests (466), lint, format and build pass. Open: cars stopping across approach-side
 crosswalks (about 2,400 events at seed 1, zebras within a car length of the stop position), taken
 up by TASK-169.
+
+TASK-160 and TASK-162 (Claude Code subagents, Opus 5.5 high, 2026-11-13; merged): the Mac-style
+interface and map. TASK-160 (four phases with owner previews): Arimo bundled (OFL 1.1, 400 and 700,
+latin and latin-ext), Sonoma/Ventura flat tokens, the Mac control set (`src/ui/controls.tsx`, glyphs
+in `icons.tsx`), a docked window (toolbar with the tool segmented control and run controls, left
+sidebar with collapsible sections for tool options, Layers, Chart, Demand, Compare, Validation and
+3D view, right inspector, status bar), sheets for New, Import and Export, popovers for vehicle-class
+access and signal phase road pairs, resizable sidebars (220 to 440 px, remembered per viewer), a
+toolbar that never wraps (a "»" overflow, the tool control a pop-up under 660 px), narrow and phone
+layouts, focus rings, `AGENTS.md` "Design direction" rewritten for the Mac style, TASK-113's mode
+choice moved into the Demand and Chart sections. 1,914 of 1,916 rendered glyphs come from bundled
+Arimo, so CI's Linux layout no longer depends on system fonts; every text pair meets WCAG AA.
+TASK-162 (map, in parallel, merged into TASK-160's branch): a plain warm-gray canvas with OSM tiles
+off by default, softer buildings and land use, quiet place tints, vehicles in eight system colours
+by destination with darker rims, Arimo labels, softer 3D shadows; roads, markings, rail and street
+furniture keep real-world colours (owner rollback), with the neutral asphalt `#ACB0B3` (owner).
+Lead merge onto main with TASK-165: type-check, lint, format, build, unit (1,356) and light e2e (39)
+pass. The full e2e on the branch: 105 pass, one fixed, the rest load timeouts or failing as on main.
+Frame gates could not be measured on a quiet machine (both trees failed alike under load, with no
+per-frame work added); the lead merged under the owner's merge-when-green decision and defers the
+quiet-machine frame check to the first quiet window, at the latest TASK-176, logged for the owner.
+Follow-up: a half-height inspector sheet on phones.
+
+TASK-172 (Claude Code subagent, Sonnet 5.5 high, 2026-11-13; merged): `bench/seed-report.ts` (`npm run
+seed-report -- --out <dir> [--previous <file>] [--jobs n]`) runs Munich at 0.15 to 10:00 on seeds 1
+to 3 with mode choice off and on and writes JSON and markdown: completed, gridlocked, stalled heads,
+parking failures, mean delay, TASK-154's drain criteria with the six loop-road per-visit waits (a
+"sustained cycle" taken as 300 s, `SUSTAINED_RING_S`), and mode shares, compared with the baseline
+file and a previous report. The Full workflow gains an advisory `seed-report` job
+(`continue-on-error`, 90 min) that fetches the previous main artifact, writes the job summary and
+uploads the artifact. On main 6ea2994: choice off 5,312 / 0, 5,302 / 1, 5,312 / 0; choice on 2,730,
+2,701, 2,719 with 0 gridlocked; every drain criterion met; worst single visit on `r:961` 512 to 612 s
+(choice off). Seed 1 matches the gate. The workflow job is validated by a manual Full run after merge.
+
+TASK-171 (Claude Code subagent, Sonnet 5.5 high, 2026-11-13; merged): `CITYFLOWS_TEST_TIMEOUT_MS`
+(default 60,000) now sets the per-test and hook limits and scales every limit written in a test file
+(`tests/timeouts.ts` `limit(ms)`, 58 literals in 24 files); `CITYFLOWS_TEST_WORKERS` caps workers (8,
+4 for the city tier, or cores minus one; 1 is serial); `tests/warm-cache.ts` warms the audit-city
+import cache before workers start (cold 23 s and 33 s, warm 0.13 s and 0.21 s). Unset, every limit
+equals today's, and a 4-vCPU CI runner already uses 3 workers. On the loaded workstation `test:city`
+went from 21 timeouts (27 workers) to 0; an uncontended `npm test` is slower with the cap (172 s
+against 120 s), restorable with `CITYFLOWS_TEST_WORKERS=27`. Pass and fail sets identical, no pinned
+value changed; documented in AGENTS.md "Commands". Lead merge: type-check, lint and format pass; CI
+runs the rest.
+
+TASK-173 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): each tour in the mode choice now
+chooses when its first trip departs, with that minute's link costs, the walk from where its car is
+actually parked and the destination's parking room; random draws unchanged. Every household car of
+a driver's day is parked at home from 07:00 and leaves only if a tour drives it (with the choice
+off this is TASK-129's stock exactly); a walked tour's car stays put. Claims and forecasts needed no
+new rule. With the choice off the state hash equals main's at all 19 ten-minute samples on seeds 1
+to 3. With the choice on: walk share of started tours 78.5 / 79.2 / 78.9% (main counted the same way
+73.6 / 74.2 / 73.8%; seed 1's +4.9 points: hour's link costs +3.7, walking from the actual space
++1.1); the guard's band moves to 74 to 84% with at least 2,270 completions and counts only tours
+started by 10:00; 2,755 all-walk days keep their cars parked at home. Step time unchanged (+0.4% off,
++0.1% on, side by side). `T63-parking-claims.spec` steps to the first claimed-strip search between
+08:30 and 09:00. Lead merge onto main with TASK-165 and the Mac UI: gate (choice off) 5,310 / 0 / 0,
+guard (choice on) 2,561 / 0 / 0, T53, sim and demand unit (467), lint, format, build, T63 and T79
+specs pass. Open: the full-suite T54 Munich case fails as on main (its commuters walk);
+`src/host/headless.ts` counts car trips by scheduled mode; a walker's inspector shows no car.
+
+TASK-175 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): compiled nodes, roads and lanes
+carry `grade` (a road's `layer`, else the lower of its end nodes'; equal to what the renderers
+derived before), and the terrain-free road height profile moved from `src/render3d/heights.ts` to
+`src/network/heights.ts` (`laneHeightAt`), shared by 3D and the simulation; two surfaces 4.5 m or
+more apart are at different levels (architecture 4, 5, 8, 11; a pre-approved contract change). The
+lot hold, crossing checks and TASK-164's exit-clear test consider nearby lanes at the lot's level,
+so roads overhead never hold or block a lot car and at-grade roads beyond the exit street need a
+crossing gap; 3D picking selects the upper road. Census changes only at pk:2050 (the r:1298 ramp's
+ground end, 20 pairs), pk:2056 (ramps 2.3 to 4.4 m up; bays 412 to 414 hold under 4.5 m clearance)
+and pk:2060 (r:2133 crossed); pk:2049 unchanged. Thirteen pin files moved for the field only (proved
+by hiding `grade`). On its base, seeds 1 and 3 equal main and seed 2 goes from 5,302 / 1 to 5,310 / 0
+(a pk:2056 departure). Lead merge onto main with TASK-165, 160, 171, 172 and 173: type-check, lint,
+format, build, unit (1,361) and city (173) with no timeouts, gate (choice off) 5,310 / 0 / 0, guard
+2,561 / 0 / 0, T53, light e2e (39) pass. Open: bays under the low part of ramps (stall generation
+compares whole-number grades), and smoothed rather than surveyed ramp heights.
+
+TASK-163 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): one lighting model for 2D and 3D
+(`src/render/lighting.ts`): Day (TASK-162's lighting exactly; every new effect behind a shader flag),
+Evening (a low warm sun, long shadows, dim blue sky, lamps on, 45% of windows lit), Night (moonlight,
+no shadows, lamps on, 22% of windows), Follow clock (sunrise 06:00, sunset 20:00, blended by sun
+height, updated per simulated minute), and exposure 0.5 to 1.5. Colours are lit or darkened, never
+recoloured; light sources keep their colour. Lit after dark: 543 street lamps (head, pool, halo,
+instanced), 48 platform lights, 117 signal heads, windows in 1,406 buildings (seeded by an outline
+hash), head- and tail-lamps and a road beam on moving vehicles, lit train and tram windows; 3D adds
+5 draw calls and no real lights; 2D adds one night layer. The setting is a view preference in
+localStorage (`cityflows.lighting`), never in the project; the Shadows layer now also switches the 3D
+sun's shadows. Controls: a Day / Evening / Night / Clock segmented control and an Exposure slider in
+the sidebar's Layers section. Frame cost against Day: Day level or faster; 3D Evening +0.1 to +5%,
+3D Night -16 to -24%; 2D Night +1.6 to +9.1%; 2D Evening +4.9 to +9.4% over seven rounds and +17.4%
+in one loaded sample on the T64 workload, which is handed to TASK-176. V163 unit (10) and e2e tests;
+no hash or render pin moved. Lead merge onto main with TASK-173 and TASK-175: type-check, lint, format,
+build, unit (1,371), city (173), light e2e (39) and V163 pass. Open: the bundled scenarios end at
+18:00, so Follow clock never reaches evening in a normal run; in 2D, vehicle lights under a bridge
+deck show through it; the evening hue (mauve) awaits the owner.
+
+Full run 43479489386 (lead, manual, on 738af8c): the new seed-report job passed (TASK-172 validated);
+the full tier failed (traffic: munich-full-demand timed out at 900 s; e2e a, b, c and rest: T19, T47,
+V100, gate4-layers, qa-mobile, T16 grid5x5-stress, T63, T54 Munich and others), mostly specs that
+expect car traffic now that mode choice is on by default, plus layout leftovers. Per AGENTS.md new
+merges are held until TASK-178 makes the full tier green; TASK-163 had been pushed before the result
+arrived.
 
 ## Owner decisions log
 

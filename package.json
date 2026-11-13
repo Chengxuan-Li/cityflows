@@ -30,9 +30,11 @@
     "route-audit": "node --experimental-strip-types --import ./bench/register.ts ./bench/route-audit.ts",
     "geometry-audit": "node --experimental-strip-types --import ./bench/register.ts ./bench/geometry-audit.ts",
     "geometry-shots": "node --experimental-strip-types --import ./bench/register.ts ./bench/geometry-shots.ts",
-    "traffic:quick": "node --experimental-strip-types --import ./bench/register.ts ./bench/traffic-quick.ts"
+    "traffic:quick": "node --experimental-strip-types --import ./bench/register.ts ./bench/traffic-quick.ts",
+    "seed-report": "node --experimental-strip-types --import ./bench/register.ts ./bench/seed-report.ts"
   },
   "dependencies": {
+    "@fontsource/arimo": "5.3.0",
     "@types/three": "0.187.0",
     "clipper2-ts": "2.0.1-18",
     "fast-png": "8.0.0",

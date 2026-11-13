@@ -52,6 +52,14 @@ import { stripTicks } from './strip-geometry';
 import { createPicker, pickParking, pickVehicle } from './picking';
 import { style } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
+import { NightLayer } from './layers/night';
+import {
+  defaultLighting,
+  lightKey,
+  platformLights,
+  sceneLight,
+  type LightingSettings,
+} from './lighting';
 import type { Pick, CityGeometry, Scene, WalkerSnapshot } from './types';
 import { defaultLayers, type LayerVisibility } from './types';
 
@@ -160,6 +168,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
   animateVehicles(elapsedS: number, playing?: boolean): void;
   setWalkerRoute(links: readonly number[] | null): void;
+  setLighting(settings: LightingSettings, timeS: number): void;
 } {
   const app = new Application();
   const demand = new FrameDemand();
@@ -189,7 +198,21 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   const disconnectedOverlay = new Graphics();
   const signalPreview = new Graphics();
   const parking = new Graphics();
-  world.addChild(map, routeOverlay, walkerRoute, selectionOverlay, vehicleRing, heatOverlay);
+  // TASK-163: the evening tint and lights sit over the map, under selection and overlays.
+  const night = new NightLayer();
+  let lighting = defaultLighting;
+  let lightMinute = 0;
+  let light = sceneLight(defaultLighting, 0);
+  let drawnLight = '';
+  world.addChild(
+    map,
+    night.container,
+    routeOverlay,
+    walkerRoute,
+    selectionOverlay,
+    vehicleRing,
+    heatOverlay,
+  );
   world.addChild(multiSelectionOverlay);
   world.addChild(disconnectedOverlay, signalPreview, parking);
   const editOverlay = new Graphics();
@@ -271,7 +294,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   let parkingCounts: ArrayLike<number> | null = null;
   let tiles: Tiles | undefined;
-  let tilesEnabled = true;
+  let tilesEnabled = defaultLayers.basemap;
   let sourceGeometry: CityGeometry | undefined;
   let shapes: Place['shape'][] = [];
   let staticPick: ReturnType<typeof createPicker> | undefined;
@@ -327,7 +350,31 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (next) grade.terrain.cacheAsTexture({ resolution: next, antialias: true });
       grade.cacheResolution = next;
     }
+    for (const child of night.signals.children)
+      if (child instanceof Graphics) updateZoomFade(child, camera.zoom);
     for (const ghost of ghosts) ghost.sync();
+  }
+
+  /** TASK-163: draw the current light; a no-op while nothing it depends on changed. */
+  function applyLight() {
+    const key = `${lightKey(light)},${layerVisibility.streetLights},${layerVisibility.signals},${layerVisibility.rail}`;
+    if (key === drawnLight) return;
+    drawnLight = key;
+    invalidate();
+    const on = night.setLight(light, layerVisibility);
+    vehicles.setLights(
+      on
+        ? {
+            container: night.vehicles,
+            vehicle: night.textures.vehicle,
+            glow: night.textures.glow,
+          }
+        : null,
+    );
+    canvas.dataset.lighting = JSON.stringify({
+      mode: lighting.mode,
+      artificial: Number(light.artificial.toFixed(3)),
+    });
   }
 
   function applyVisibility() {
@@ -610,6 +657,22 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       canvas.dataset.treeCap = String(placed.capped);
       const streetStart = performance.now();
       const street = placeStreet(compiled, source ?? { nodes: {}, places: {} }, placed.trees);
+      const tramPlacements = compiled.rail
+        ? placeTramStops(compiled, source ?? { nodes: {}, places: {} })
+        : [];
+      night.setPoints(
+        street.lamps.map(({ pos, heading, source }) => {
+          // Generated heads reach over the road; mapped lamps centre on the post (as in 3D).
+          const reach = source === 'generated' ? 2.5 : 0;
+          return {
+            x: pos.x + reach * Math.cos(heading),
+            y: pos.y + reach * Math.sin(heading),
+            radiusM: 8,
+          };
+        }),
+        platformLights(compiled, tramPlacements),
+      );
+      for (const child of night.signals.removeChildren()) child.destroy();
       furnitureCounts = street.counts;
       canvas.dataset.streetCounts = JSON.stringify(street.counts);
       canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
@@ -622,7 +685,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       map.addChild(surroundings.container);
       if (import.meta.env.MODE === 'test')
         canvas.dataset.contextRebuildMs = String(performance.now() - started);
-      const { nodeGrades, roadGrades } = cityGrades(city, source);
+      const { nodeGrades, roadGrades } = cityGrades(city);
       visibleGrades = orderedLayers([
         ...nodeGrades,
         ...roadGrades,
@@ -642,9 +705,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
       }
-      tramStops = compiled.rail
-        ? drawTramStops(placeTramStops(compiled, source ?? { nodes: {}, places: {} }))
-        : undefined;
+      tramStops = compiled.rail ? drawTramStops(tramPlacements) : undefined;
       for (const [layer, { container }] of tramStops?.grades ?? []) {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
@@ -800,7 +861,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         const grade = grades.get(nodeGrades[node.idx]!)!;
         drawSigns(city, node, grade.signals);
         if (node.signal) {
-          updateSignals.push(drawSignal(city, node, grade.signals));
+          updateSignals.push(drawSignal(city, node, grade.signals, night.signals));
           updateSignals.push(drawWalkSignals(city, node, grade.signals));
         }
       }
@@ -1016,6 +1077,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (recolor) redrawTerrain();
       if (reshade) rebuildShadows();
       applyVisibility();
+      applyLight();
+    },
+    setLighting(settings, timeS) {
+      // Following the clock, the light moves once a simulated minute.
+      const minute = settings.mode === 'clock' ? Math.floor(timeS / 60) : 0;
+      if (settings === lighting && minute === lightMinute) return;
+      lighting = settings;
+      lightMinute = minute;
+      light = sceneLight(settings, minute * 60);
+      applyLight();
     },
     setDisconnected(lanes) {
       invalidate();
@@ -1055,7 +1126,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       const staticHit = staticPick?.(point, camera.zoom);
       const roadGrade =
         city && staticHit?.kind === 'lane'
-          ? cityGrades(city, sourceGeometry).roadGrades[staticHit.road]!
+          ? cityGrades(city).roadGrades[staticHit.road]!
           : -Infinity;
       const train =
         city?.rail && layerVisibility.rail
@@ -1064,9 +1135,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
               point,
               camera.zoom,
               city.rail,
-              staticHit?.kind === 'node'
-                ? cityGrades(city, sourceGeometry).nodeGrades[staticHit.node]!
-                : roadGrade,
+              staticHit?.kind === 'node' ? cityGrades(city).nodeGrades[staticHit.node]! : roadGrade,
             )
           : null;
       return (
@@ -1086,6 +1155,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       cancelAnimationFrame(animation);
       for (const ghost of ghosts) ghost.destroy();
       vehicles.destroy();
+      night.destroy();
       parkedCars.destroy();
       hillshade?.destroy({ texture: true, textureSource: true });
       tiles?.destroy();

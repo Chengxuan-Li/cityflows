@@ -89,7 +89,7 @@ test('T74 Munich overhead lines in 2D and 3D: counts, the layer toggle, shots', 
   const source = await city(page),
     compiled = compile(source);
   if (!compiled.ok) throw Error('compile');
-  const { roadGrades, nodeGrades } = cityGrades(compiled.compiled, source);
+  const { roadGrades, nodeGrades } = cityGrades(compiled.compiled);
   const lines = catenary(compiled.compiled, roadGrades, nodeGrades);
   const expected = JSON.stringify({
     supports: lines.supports.length,
@@ -104,7 +104,7 @@ test('T74 Munich overhead lines in 2D and 3D: counts, the layer toggle, shots', 
   for (const label of ['Basemap', 'Entrances and exits'])
     await layers.getByLabel(label, { exact: true }).uncheck();
   await expect(overhead).toBeChecked();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   for (const view of ['2d', '3d'] as const) {
     if (view === '3d') await button(page, '3D').click();
     const canvas = page.getByLabel(view === '2d' ? 'City map' : '3D city view', { exact: true });
@@ -121,7 +121,7 @@ test('T74 Munich overhead lines in 2D and 3D: counts, the layer toggle, shots', 
     await expect(canvas).toHaveAttribute('data-catenary', '');
     await rail.check();
     await expect(canvas).toHaveAttribute('data-catenary', expected);
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     for (const p of places) {
       await centre(page, p.point, view, view === '2d' ? p.zoom2d : p.zoom3d, p.pitch);
       await shot(canvas, info, `${p.name}-${view}.png`);

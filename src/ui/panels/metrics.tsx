@@ -18,7 +18,7 @@ const plots = [
 export function MetricsPanel() {
   const session = useAppStore((state) => state.session);
   const selection = useAppStore((state) => state.selection);
-  const { toggleMetrics, reportError } = useAppStore.getState();
+  const { reportError } = useAppStore.getState();
   const [result, setResult] = useState<{
     engine: NonNullable<typeof session>['engine'];
     samples: MetricsSample[];
@@ -56,13 +56,6 @@ export function MetricsPanel() {
       active = false;
     };
   }, [session, revision, reportError]);
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') toggleMetrics();
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [toggleMetrics]);
 
   const samples = result?.engine === session?.engine ? (result?.samples ?? []) : [];
   const first = samples[0];
@@ -93,7 +86,7 @@ export function MetricsPanel() {
       maximum: chosen.capacity,
     });
   return (
-    <section id="metrics-chart" className="chart-sheet" aria-label="Traffic over time">
+    <section id="metrics-chart" className="panel chart-panel" aria-label="Traffic over time">
       <div className="chart-heading">
         <span>
           {last ? `Through ${clock(last.timeS)} · every simulated minute` : 'Loading history…'}
@@ -107,9 +100,6 @@ export function MetricsPanel() {
             }}
           >
             Refresh
-          </button>
-          <button aria-label="Close chart" onClick={toggleMetrics}>
-            ×
           </button>
         </div>
       </div>

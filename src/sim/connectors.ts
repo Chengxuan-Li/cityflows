@@ -176,7 +176,13 @@ export function createConnectors(
       if (!queue.length) continue;
       let available = ready[idx]!;
       while (available < queue.length && queuedSince(queue[available]!) <= timeS + 1e-9) {
-        const id = queue[available++]!;
+        const id = queue[available]!;
+        // TASK-173: a trip whose tour chose to walk as it departed leaves its queue.
+        if (trips[id]!.mode !== 'car') {
+          queue.splice(available, 1);
+          continue;
+        }
+        available++;
         if (vehicles.state[id] !== FAILED && vehicles.state[id] !== COMPLETED)
           accounting.transition(id, QUEUED_ORIGIN);
       }
@@ -186,6 +192,11 @@ export function createConnectors(
         // Cars still approaching a car park do not hold up already parked departures.
         let candidate = i;
         while (candidate < available) {
+          if (trips[queue[candidate]!]!.mode !== 'car') {
+            queue.splice(candidate, 1);
+            ready[idx] = --available;
+            continue;
+          }
           if (vehicles.state[queue[candidate]!] === FAILED) break;
           const previous = previousArrival[queue[candidate]!]!;
           if (
@@ -370,7 +381,8 @@ export function createConnectors(
     disconnected = [];
     for (const id of orphaned) assign(id);
     for (const connector of origins)
-      for (const id of queues[connector.idx]!.slice(head[connector.idx])) assign(id, connector);
+      for (const id of queues[connector.idx]!.slice(head[connector.idx]))
+        if (trips[id]!.mode === 'car') assign(id, connector);
     for (const queue of nextQueues)
       queue.sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
     const budgets = new Float64Array(next.connectors.length).fill(-Infinity);

@@ -15,6 +15,7 @@ import { opposing, movementTrips } from './zone-fixtures';
 import { sampleConflictZones } from './conflict-zone-safety';
 import { signalApproach } from '../../src/fixtures/signal-approach';
 import { vehicleClasses } from '../../src/schema';
+import { limit } from '../timeouts';
 
 const allCars = { car: 1, van: 0, truck: 0, bus: 0 };
 // TASK-116: re-pinned after feasible lane targets enabled queue passing for every car. Lead,
@@ -82,7 +83,7 @@ test.each([
     expect(legacy.stateHash()).toBe(observed.hash);
     expect(observed).toEqual(before[name]);
   },
-  30000,
+  limit(30000),
 );
 
 function straight(lengthM = 250, lanes = 1) {

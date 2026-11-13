@@ -1,7 +1,16 @@
 import { decode } from 'fast-png';
 import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
-import { button, city, importOsm, pageErrors } from './helpers';
+import {
+  button,
+  city,
+  closeSidebarOverlay,
+  fillsMap,
+  importOsm,
+  pageErrors,
+  sidebarSection,
+  toolbarAction,
+} from './helpers';
 import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 import { fixtureTerrain } from './terrain-fixture';
 import { compileRail } from '../../src/network/rail';
@@ -81,7 +90,7 @@ test('T62 Munich rail layers, station/platform/track inspection, pictures and fr
   await expect(toggle).toBeChecked();
   for (const label of ['Basemap', 'Entrances and exits'])
     await layers.getByLabel(label, { exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   await writeFile(
     info.outputPath('rail-environment.json'),
     JSON.stringify(await railTimingEnvironment(page), null, 2),
@@ -117,7 +126,7 @@ test('T62 Munich rail layers, station/platform/track inspection, pictures and fr
     });
     await button(page, 'Layers').click();
     await toggle.uncheck();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     await expect(canvas).toHaveAttribute('data-rail-tracks', '0');
     const off = await timing(page, view === '2d' ? 'cityflows:render' : 'cityflows:render3d');
     const offImage = await canvas.screenshot({
@@ -126,11 +135,11 @@ test('T62 Munich rail layers, station/platform/track inspection, pictures and fr
     expect(onImage.equals(offImage)).toBe(false);
     await button(page, 'Layers').click();
     await toggle.check();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     const onAgain = await timing(page, view === '2d' ? 'cityflows:render' : 'cityflows:render3d');
     await button(page, 'Layers').click();
     await toggle.uncheck();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     const offAgain = await timing(page, view === '2d' ? 'cityflows:render' : 'cityflows:render3d');
     const onFrameMs = (on.frameMs + onAgain.frameMs) / 2,
       offFrameMs = (off.frameMs + offAgain.frameMs) / 2;
@@ -138,11 +147,11 @@ test('T62 Munich rail layers, station/platform/track inspection, pictures and fr
     await writeFile(info.outputPath('rail-frames.json'), JSON.stringify(reports, null, 2));
     await button(page, 'Layers').click();
     await toggle.check();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
   }
   await button(page, 'Layers').click();
   await layers.getByLabel('Places', { exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   const tram = Object.values(rail.tracks)
     .filter((t) => t.kind === 'tram')
     .sort((a, b) => polylineLength(b.line) - polylineLength(a.line))[0]!;
@@ -205,12 +214,13 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
     await next.goto('/');
     await expect(button(next, 'Play')).toBeEnabled();
     await importOsm(next, 'fixtures/osm/munich-donnersberger.osm');
-    await button(next, 'Layers').click();
+    await (await sidebarSection(next, 'Layers')).click();
     const layers = next.getByRole('region', { name: 'Map layers' });
     for (const label of ['Basemap', 'Entrances and exits', 'Terrain'])
       await layers.getByLabel(label, { exact: true }).uncheck();
-    await next.keyboard.press('Escape');
-    await button(next, '3D').click();
+    await button(next, 'Layers').click();
+    await closeSidebarOverlay(next);
+    await (await toolbarAction(next, '3D')).click();
     const canvas = next.getByLabel('3D city view', { exact: true });
     await expect(canvas).toHaveAttribute('data-terrain', 'false');
     await expect
@@ -261,7 +271,8 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
     if (name === 'rotated') await page.keyboard.press('Escape');
     if (name === 'resized') {
       await page.setViewportSize({ width: 1100, height: 720 });
-      await expect(canvas).toHaveJSProperty('width', 1100);
+      // The map area is the window less the docked sidebar and inspector (TASK-160).
+      await fillsMap(canvas);
     }
     if (name === 'dpr') {
       await page.close();
@@ -271,6 +282,8 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
         reducedMotion: 'reduce',
       });
       canvas = await openMap(page);
+      // Under 900 px the sidebars float, so the map spans the window: 720 px at two pixels each.
+      await fillsMap(canvas);
       await expect(canvas).toHaveJSProperty('width', 1440);
     }
     if (name === 'pan') {
@@ -296,6 +309,7 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
     }
     if (name === 'large') {
       await page.setViewportSize({ width: 800, height: 600 });
+      await fillsMap(canvas);
       await expect(canvas).toHaveJSProperty('width', 1600);
     }
     const images = await page.evaluate(
@@ -368,25 +382,27 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
     if (name === 'selected') {
       let accent = 0;
       for (let i = 0; i < b.data.length; i += b.channels)
-        if (b.data[i] === 77 && b.data[i + 1] === 175 && b.data[i + 2] === 166) accent++;
+        // The selection colour, system blue #007AFF since TASK-162 (was #4DAFA6).
+        if (b.data[i] === 0 && b.data[i + 1] === 122 && b.data[i + 2] === 255) accent++;
       expect(accent, 'selected track is recolored in the cache').toBeGreaterThan(5);
     }
     expect(alphaChanged, `${name}: opaque framebuffer alpha`).toBe(0);
     expect(changed / pixels, `${name}: silhouettes and depth`).toBeLessThan(0.01);
     expect(totalDelta / pixels, `${name}: palette and coverage`).toBeLessThan(0.3);
   }
-  await button(page, 'Layers').click();
+  // The window is 800 px wide here, where the sidebar floats and starts closed.
+  await (await sidebarSection(page, 'Layers')).click();
   const terrain = page
     .getByRole('region', { name: 'Map layers' })
     .getByLabel('Terrain', { exact: true });
   await terrain.check();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   await expect(canvas).toHaveAttribute('data-terrain', 'true');
   await page.evaluate(() => window.cityflows!.capture3D!());
   await expect(canvas).toHaveAttribute('data-rail-paint', 'mesh');
   await button(page, 'Layers').click();
   await terrain.uncheck();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   await page.getByLabel('See below ground', { exact: true }).check();
   await page.evaluate(() => window.cityflows!.capture3D!());
   await expect(canvas).toHaveAttribute('data-rail-paint', 'mesh');

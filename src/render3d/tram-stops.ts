@@ -53,7 +53,7 @@ function boardTexture(create: CreateCanvas, name: string) {
   ctx.fillStyle = hex(0xf7f4e8);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  fitText(ctx, name, 'bold {}px Arial, sans-serif', 150, 920);
+  fitText(ctx, name, 'bold {}px Arimo, Arial, sans-serif', 150, 920);
   ctx.fillText(name, 512, 144);
   return canvasTexture(canvas);
 }
@@ -80,7 +80,7 @@ function displayTexture(create: CreateCanvas, name: string, lines: readonly stri
     ctx.roundRect(x, 210, chip, 100, 22);
     ctx.fill();
     ctx.fillStyle = hex(0xf7f4e8);
-    fitText(ctx, line, 'bold {}px Arial, sans-serif', 60, chip - 16);
+    fitText(ctx, line, 'bold {}px Arimo, Arial, sans-serif', 60, chip - 16);
     ctx.fillText(line, x + chip / 2, 262);
   });
   return canvasTexture(canvas);

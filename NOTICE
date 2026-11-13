@@ -40,3 +40,10 @@ Source: https://github.com/countertype/clipper2-ts
 License: Boost Software License 1.0 (see node_modules/clipper2-ts/LICENSE).
 Used as a dependency in src/network for road corridor and junction polygon operations
 (geometry rework). No upstream source was copied.
+
+Arimo font (Google Fonts v36, via @fontsource/arimo 5.3.0)
+Source: https://github.com/googlefonts/arimo, packaged by https://github.com/fontsource/font-files
+License: SIL Open Font License 1.1 (see node_modules/@fontsource/arimo/LICENSE). Earlier Arimo
+releases were Apache-2.0; the files bundled here are OFL-1.1.
+Used as a dependency: src/ui/app.css loads its Latin and Latin Extended woff2 files, regular and
+bold, and the build ships them with the app. The font files are unmodified.

@@ -110,7 +110,7 @@ export const defaultLayers: LayerVisibility = {
   shadows: true,
   roadClasses: false,
   vehicleClasses: false,
-  basemap: true,
+  basemap: false,
   context: true,
   trees: true,
   streetTrees: true,

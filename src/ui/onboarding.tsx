@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAppStore } from './store';
 
 type State = ReturnType<typeof useAppStore.getState>;
-type Side = 'right' | 'left' | 'above' | 'map';
+type Side = 'right' | 'left' | 'below' | 'map';
 
 interface Spot {
   /** The card sits beside this element. */
@@ -20,8 +20,11 @@ interface Hint {
 }
 
 const key = 'cityflows.hints';
+// Icon buttons carry their name in aria-label; text buttons in their content.
 const find = (selector: string, text: string) =>
-  [...document.querySelectorAll(selector)].find((element) => element.textContent === text) ?? null;
+  [...document.querySelectorAll(selector)].find(
+    (element) => (element.getAttribute('aria-label') ?? element.textContent) === text,
+  ) ?? null;
 const map = () => document.querySelector('[aria-label="City map"]');
 const streetSettings = () => find('.inspector summary', 'Lanes and street settings');
 const onMap = (): Spot | null => {
@@ -36,15 +39,12 @@ const beside = (selector: string, text: string, side: Side): Spot | null => {
 const hints: Hint[] = [
   {
     text: 'Choose a city to start from.',
-    locate: () => {
-      const ring = find('.top-bar button', 'New');
-      return ring && { anchor: ring.closest('.top-bar')!, side: 'right', ring };
-    },
+    locate: () => beside('.toolbar button', 'New', 'below'),
     done: (state, start) => state.session?.engine !== start.session?.engine,
   },
   {
     text: 'Press Play to start the day.',
-    locate: () => beside('.run-controls button', 'Play', 'above'),
+    locate: () => beside('.run-controls button', 'Play', 'below'),
     done: (state) => state.run?.status === 'playing',
   },
   {
@@ -62,13 +62,13 @@ const hints: Hint[] = [
   },
   {
     text: 'Restart to replay the day with your edits.',
-    locate: () => beside('.run-controls button', 'Restart', 'above'),
+    locate: () => beside('.run-controls button', 'Restart', 'below'),
     done: (_state, _start, clicked) =>
       clicked !== null && clicked.closest('button') === find('.run-controls button', 'Restart'),
   },
   {
     text: 'Compare runs before and after an edit.',
-    locate: () => beside('.run-summary button', 'Compare', 'above'),
+    locate: () => beside('.sidebar button', 'Compare', 'right'),
     done: (state) => state.compareOpen,
   },
 ];
@@ -112,16 +112,27 @@ function place(card: HTMLElement, ring: HTMLElement, { anchor, side, ring: targe
   if (side === 'right' && rect.right + gap + width <= innerWidth - inset) left = rect.right + gap;
   else if (side === 'right') top = rect.bottom + gap;
   else if (side === 'left') left = rect.left - gap - width;
-  else if (side === 'above') {
-    // Keep clear of the "Restart to apply changes" notice above the run controls.
-    const notice = anchor.closest('.run-controls')?.querySelector('.restart-notice');
-    top = Math.min(rect.top, notice?.getBoundingClientRect().top ?? Infinity) - gap - height;
+  else if (side === 'below') {
+    left = rect.left + (rect.width - width) / 2;
+    // Clear of the ring, which stands 3 px off the control.
+    top = rect.bottom + gap + 4;
   } else {
     left = rect.left + (rect.width - width) / 2;
     top = rect.top + 72;
   }
-  card.style.left = `${Math.max(inset, Math.min(left, innerWidth - inset - width))}px`;
-  card.style.top = `${Math.max(inset, Math.min(top, innerHeight - inset - height))}px`;
+  left = Math.max(inset, Math.min(left, innerWidth - inset - width));
+  top = Math.max(inset, Math.min(top, innerHeight - inset - height));
+  card.style.left = `${left}px`;
+  card.style.top = `${top}px`;
+  // The card's arrow points at the middle of the control it is about.
+  const placed = side === 'right' && left < rect.right ? 'below' : side;
+  card.dataset.side = placed;
+  card.style.setProperty(
+    '--arrow',
+    placed === 'below'
+      ? `${rect.left + rect.width / 2 - left}px`
+      : `${rect.top + rect.height / 2 - top}px`,
+  );
   const marked = target?.getBoundingClientRect();
   ring.hidden = !marked;
   if (marked) {
@@ -132,21 +143,29 @@ function place(card: HTMLElement, ring: HTMLElement, { anchor, side, ring: targe
   }
 }
 
+function go(next: number | null) {
+  const finished = next === null || next >= hints.length;
+  write(finished ? 'done' : String(next));
+  useAppStore.setState({ hintStep: finished ? null : next });
+}
+
+/** Reopens the hints; it sits in the empty inspector, so a selection hides it. */
+export function ShowHints() {
+  const step = useAppStore((state) => state.hintStep);
+  return step === null ? (
+    <button className="show-hints" onClick={() => go(0)}>
+      Show hints
+    </button>
+  ) : null;
+}
+
 export function Onboarding() {
-  const [step, setStep] = useState(initialStep);
+  const step = useAppStore((state) => state.hintStep);
   const card = useRef<HTMLElement>(null);
   const ring = useRef<HTMLDivElement>(null);
-  const sheetOpen = useAppStore(
-    (state) => !!state.selection || state.selectedRoads.length > 0 || state.diagnosticsOpen,
-  );
-
-  function go(next: number | null) {
-    const finished = next === null || next >= hints.length;
-    write(finished ? 'done' : String(next));
-    setStep(finished ? null : next);
-  }
 
   useEffect(() => {
+    useAppStore.setState({ hintStep: initialStep() });
     if (window.cityflows) window.cityflows.resetHints = () => go(0);
   }, []);
 
@@ -181,13 +200,7 @@ export function Onboarding() {
     };
   }, [step]);
 
-  if (step === null) {
-    return sheetOpen ? null : (
-      <button className="show-hints" onClick={() => go(0)}>
-        Show hints
-      </button>
-    );
-  }
+  if (step === null) return null;
   const last = step === hints.length - 1;
   return (
     <>
@@ -199,7 +212,9 @@ export function Onboarding() {
             {step + 1} of {hints.length}
           </small>
           <button onClick={() => go(null)}>Skip</button>
-          <button onClick={() => go(step + 1)}>{last ? 'Done' : 'Next'}</button>
+          <button className="primary" onClick={() => go(step + 1)}>
+            {last ? 'Done' : 'Next'}
+          </button>
         </div>
       </section>
     </>

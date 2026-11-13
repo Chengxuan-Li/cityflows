@@ -4,7 +4,7 @@ import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
 import { crossingStripes } from '../render/layers/roads';
 import { signalLayout } from './signals';
-import { placeHue } from '../render/style';
+import { placeColors } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
 import { buildMarkings, goreTriangles, triangleHeight } from './markings';
@@ -172,7 +172,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
           }));
     const start = places.length;
     polygon(places, ring, () => -0.02);
-    const color = placeHue(place.id);
+    const color = placeColors(place.kind).fill;
     for (let i = start; i < places.length; i += 3)
       colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
   }
