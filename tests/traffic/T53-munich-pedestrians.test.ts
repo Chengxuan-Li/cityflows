@@ -38,6 +38,8 @@ beforeAll(() => {
   compiled = result.compiled;
   const scenario: Scenario = { ...defaultScenario('grid5x5'), startS: 7 * 3600, endS: 10 * 3600 };
   scenario.demand.personsPerResident = 0.15;
+  // Owner, 2026-11-13: the gate tests car traffic with mode choice off; munich-mode-share guards the choice.
+  scenario.demand.modeChoice = { enabled: false };
   const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario, compiled);
   const walkers = munichWalkerPairs.map(([fromPlaceId, toPlaceId]) => ({
     fromPlaceId,

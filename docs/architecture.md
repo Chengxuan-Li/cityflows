@@ -2378,6 +2378,11 @@ parked at its destination's own facility (or the destination is a gateway), `dri
 parked elsewhere and walked on. Where the car parks stays the parking choice's decision, so drive
 and drive-and-walk are outcomes of one car alternative, not separate choices. A household car
 whose every tour walks is not in the starting stock, as TASK-129 leaves cars nobody drives.
+The default scenario and the app run with mode choice on. The Munich traffic gate (the gate, T63,
+T21, T29), T53 on Munich, the full-demand morning and `traffic:quick` measure car traffic with it
+off (owner, 2026-11-13); `tests/traffic/munich-mode-share.test.ts` (full traffic tier, not the
+light one) guards the choice on: the local walk share, its fall with distance, and the car trips'
+gridlock and stalled heads.
 
 ## 10. Engine host
 

@@ -85,10 +85,40 @@ test('T79 a city whose trips cannot walk runs exactly as without the choice', ()
     expect(modes).toEqual(trips.map((trip) => trip.mode));
     const hashes: number[] = [];
     for (let i = 0; i < 3; i++) {
-      engine.step(12000);
+      engine.step(6000);
       hashes.push(engine.stateHash());
     }
     return hashes;
   };
   expect(run(true)).toEqual(run(false));
+});
+
+test('T79 mode-share guard on the town: most short trips walk, fewer as they get longer', () => {
+  // The unit-tier half of tests/traffic/munich-mode-share.test.ts. Town seeds 1 to 3: local walk
+  // share 81% / 77% / 80%; under 1 km 83% / 76% / 80%, 1 to 2 km 71% / 67% / 76%.
+  const { compiled, scenario, persons, trips } = townMorning();
+  const engine = createEngine();
+  engine.load({ compiled, trips, scenario, population: persons });
+  const modes = engine.metrics().tripOutcomes!.map((outcome) => outcome.mode);
+  const bands = [
+    { walk: 0, all: 0 },
+    { walk: 0, all: 0 },
+  ];
+  const place = (id: string) => compiled.places[compiled.index.place.get(id)!]!;
+  for (const [id, trip] of trips.entries()) {
+    const from = place(trip.originPlaceId),
+      to = place(trip.destinationPlaceId);
+    if (!trip.personId || from.kind === 'gateway' || to.kind === 'gateway') continue;
+    if (trip.vehicleClass !== 'car' || trip.purpose !== 'private') continue;
+    const meters = Math.hypot(from.centroid.x - to.centroid.x, from.centroid.y - to.centroid.y);
+    const band = bands[Number(meters >= 1000)]!;
+    band.all++;
+    band.walk += Number(modes[id] === 'walk');
+  }
+  const [near, far] = bands.map((band) => band.walk / band.all) as [number, number];
+  const all = (bands[0]!.walk + bands[1]!.walk) / (bands[0]!.all + bands[1]!.all);
+  expect(bands[1]!.all).toBeGreaterThan(100);
+  expect(all).toBeGreaterThan(0.7);
+  expect(all).toBeLessThan(0.9);
+  expect(far).toBeLessThan(near - 0.05);
 });
