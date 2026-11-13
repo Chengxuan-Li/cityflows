@@ -131,6 +131,12 @@ export class Scene3D {
   private lastRenderMs = performance.now();
   private readonly vehicleMatrix = new Matrix4();
   private shadowView = '';
+  private readonly restoreContext = () => {
+    this.renderer.setClearColor(style.background);
+    this.rail?.paintCache.reset();
+    this.shadowView = '';
+    this.invalidate();
+  };
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const renderer = (this.renderer = new WebGLRenderer({ canvas, antialias: true }));
@@ -164,6 +170,7 @@ export class Scene3D {
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas);
     this.resize();
+    canvas.addEventListener('webglcontextrestored', this.restoreContext);
     canvas.dataset.view = '3d';
     if (import.meta.env.MODE === 'test') canvas.dataset.frames = '0';
   }
@@ -933,8 +940,14 @@ export class Scene3D {
     this.renderer.shadowMap.autoUpdate = !cacheShadows;
     if (shadowView !== this.shadowView) this.renderer.shadowMap.needsUpdate = true;
     this.shadowView = shadowView;
+    const cachedRail = this.rail?.paintCache.update(
+      this.renderer,
+      this.camera,
+      this.railVisible && !this.belowGround && !this.geometry?.heights.terrain.grid,
+    );
     this.renderer.render(this.scene, this.camera);
     if (import.meta.env.MODE === 'test') {
+      this.canvas.dataset.railPaint = cachedRail ? 'cached' : 'mesh';
       this.canvas.dataset.frames = String(Number(this.canvas.dataset.frames) + 1);
       this.canvas.dataset.triangles = String(this.renderer.info.render.triangles);
       this.canvas.dataset.drawCalls = String(this.renderer.info.render.calls);
@@ -1001,6 +1014,7 @@ export class Scene3D {
   }
 
   private disposeContent() {
+    this.rail?.paintCache.dispose();
     if (this.geometry && this.buildings) {
       const context = this.geometry.context;
       (this.buildings.geometry === context.buildings
@@ -1029,6 +1043,7 @@ export class Scene3D {
     this.content.clear();
   }
   destroy() {
+    this.canvas.removeEventListener('webglcontextrestored', this.restoreContext);
     this.observer.disconnect();
     this.controls.dispose();
     this.basemap?.destroy();
