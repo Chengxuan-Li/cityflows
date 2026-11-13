@@ -3450,7 +3450,12 @@ through TASK-130 remain held and B56 remains deferred.
 TASK-148 reproduced the rail overhead with the original stationary camera. Culling
 35,453 off-screen triangles within one draw left the frame interval at 236.66 ms
 in both cases. Single-sided paint and vertex colour conversion also missed the
-10% target. The renderer agent is testing reuse of settled-camera rail paint.
+10% target. The reviewed fix reuses settled-camera rail paint only on SwiftShader.
+A hardware RTX 4070 SUPER kept the original mesh and passed all six named tests.
+The combined build passed the stationary 3D gate at 221.66 ms with rail on and
+208.14 ms off (+6.50%). Its moving 3D pairs were +7.23% and +8.95%. One unchanged
+moving 2D pair exceeded the 10% budget at +12.98%. The full first combined run
+therefore recorded five passes and one failure.
 
 TASK-149 traced ten Munich and sixteen Sindelfingen mouths to shared OSM nodes.
 The first candidate split the through roads at all 26 mouths. It changed 43 of the
