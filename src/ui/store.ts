@@ -16,7 +16,7 @@ import type { Project } from '../project/types';
 import type { Pick as MapPick, VehicleSnapshot } from '../render/types';
 import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
-import type { Command, Person, Scenario } from '../schema';
+import type { Command, ModeChoiceConfig, Person, Scenario } from '../schema';
 import type { DrawRoadOptions } from '../editor/commands/topology';
 import type { PaintKind } from './tools/place-paint';
 import type { RoadId } from '../schema';
@@ -73,6 +73,8 @@ export interface Session {
   diagnostics: Diagnostic[];
   engine: EngineClient;
   vehicleHues: Uint32Array;
+  /** TASK-129: the household car of each loaded trip, by one-based vehicle id less one. */
+  vehicleCars: (string | null)[];
   /** Place demographics the population was generated from; restart regenerates when they change. */
   populationKey: string;
   demandSummary: DemandSummary;
@@ -157,6 +159,8 @@ interface AppState {
   redo: () => Promise<void>;
   setSpeed: (speed: number) => Promise<void>;
   regenerateDemand: (seed: number) => Promise<void>;
+  /** TASK-113: change the mode choice's parameters (restart to apply). */
+  setModeChoice: (change: Partial<ModeChoiceConfig>) => Promise<void>;
   /** TASK-111: replace the scenario's test pedestrians (undoable; restart to apply). */
   setTestWalkers: (walkers: TestWalkers) => Promise<void>;
 }
@@ -332,7 +336,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const editor = createEditor(project.city);
     const scenario = project.scenarios[0]!;
     const population = project.population ?? generatePopulation(editor.city, scenario.demand);
-    const trips = scheduleTrips(editor.city, population, scenario);
+    const trips = scheduleTrips(editor.city, population, scenario, editor.compiled);
     const engine = createEngineClient(
       new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' }),
     );
@@ -360,6 +364,7 @@ export const useAppStore = create<AppState>((set, get) => {
           vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
             placeHue(destinationPlaceId),
           ),
+          vehicleCars: trips.map(({ carId }) => carId ?? null),
         },
         run: {
           status: 'paused',
@@ -463,7 +468,12 @@ export const useAppStore = create<AppState>((set, get) => {
         const population = structuredClone(
           baseline.population ?? generatePopulation(baseline.city, baseline.scenario.demand),
         );
-        const trips = scheduleTrips(baseline.city, population, baseline.scenario);
+        const trips = scheduleTrips(
+          baseline.city,
+          population,
+          baseline.scenario,
+          original.compiled,
+        );
         for (const trip of trips) {
           if (
             !session.editor.city.places[trip.originPlaceId] ||
@@ -668,7 +678,7 @@ export const useAppStore = create<AppState>((set, get) => {
         const current = project.scenarios[0]!;
         const scenario = { ...current, seed, demand: { ...current.demand, seed } };
         const population = generatePopulation(project.city, scenario.demand);
-        const trips = scheduleTrips(project.city, population, scenario);
+        const trips = scheduleTrips(project.city, population, scenario, session.compiled);
         await engine.pause();
         const { timeS, trips: counts } = await engine.metrics();
         set({
@@ -681,6 +691,26 @@ export const useAppStore = create<AppState>((set, get) => {
             },
             populationKey: demandKey(project.city),
             demandSummary: demandSummary(trips, project.city),
+          },
+          run: { ...run, status: 'paused', stale: true, achieved: 0, timeS, counts },
+        });
+      }),
+    setModeChoice: (change) =>
+      perform(async () => {
+        const { session, run } = get();
+        if (!session || !run) return;
+        const { project, engine } = session;
+        const current = project.scenarios[0]!;
+        const scenario: Scenario = {
+          ...current,
+          demand: { ...current.demand, modeChoice: { ...current.demand.modeChoice, ...change } },
+        };
+        await engine.pause();
+        const { timeS, trips: counts } = await engine.metrics();
+        set({
+          session: {
+            ...session,
+            project: { ...project, scenarios: [scenario, ...project.scenarios.slice(1)] },
           },
           run: { ...run, status: 'paused', stale: true, achieved: 0, timeS, counts },
         });
@@ -768,7 +798,7 @@ export const useAppStore = create<AppState>((set, get) => {
             session.populationKey === demandKey(editor.city)
               ? project.population
               : generatePopulation(editor.city, scenario.demand);
-          const trips = scheduleTrips(editor.city, population, scenario);
+          const trips = scheduleTrips(editor.city, population, scenario, compiled);
           await engine.load({ compiled, trips, scenario, population });
           signalEpochs.clear();
           const { timeS, trips: counts } = await engine.metrics();
@@ -782,6 +812,7 @@ export const useAppStore = create<AppState>((set, get) => {
               vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
                 placeHue(destinationPlaceId),
               ),
+              vehicleCars: trips.map(({ carId }) => carId ?? null),
             },
             run: {
               ...run,

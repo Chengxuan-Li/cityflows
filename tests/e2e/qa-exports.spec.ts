@@ -73,6 +73,8 @@ test('QA every export downloads parseable data with columns, feature counts and 
         'parking facility',
         'walking distance',
         'parking search time',
+        // TASK-113: the mode the trip travelled in.
+        'mode',
       ],
     ],
     [
@@ -102,7 +104,11 @@ test('QA every export downloads parseable data with columns, feature counts and 
         expect(source.places[row[2]!]).toBeDefined();
         expect(source.places[row[3]!]).toBeDefined();
       }
-      expect(rows.length).toBe(Object.values(run.trips).reduce((sum, value) => sum + value, 0));
+      // TASK-113: walked trips have rows but are not vehicle trips.
+      expect(rows.every((row) => ['car', 'walk'].includes(row.at(-1)!))).toBe(true);
+      expect(rows.filter((row) => row.at(-1) !== 'walk').length).toBe(
+        Object.values(run.trips).reduce((sum, value) => sum + value, 0),
+      );
     } else if (label === 'Road metrics CSV') {
       expect(rows.map((row) => row[0]).sort()).toEqual(Object.keys(source.roads).sort());
       for (const row of rows) expect(Number(row[3])).toBeGreaterThan(0);

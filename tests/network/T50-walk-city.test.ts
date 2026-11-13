@@ -30,9 +30,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       createHash('sha256').update(JSON.stringify({ lanes, movements, connectors })).digest('hex'),
     ).toBe(
       name.startsWith('munich')
-        ? // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
+        ? // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
-          '7fc943b20f5105e8943b8d515df07db3a263392f0949d00b4c3d3a1b573be450'
+          '086cf4c97e287de55dcfb109f71650c0478a137c793ab79b14aa16ca8c59d292'
         : 'f6cd69f8b5c1c244b521e06a29b012a470171de28f8e7706ff0fa17e3afbb617',
     );
     const g = result.compiled.walk;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { MetricsSample } from '../../host/protocol';
 import type { Metrics } from '../../sim/types';
 import { useAppStore } from '../store';
+import { ModeShares } from './mode-shares';
 
 function clock(timeS: number) {
   return `${String(Math.floor(timeS / 3600)).padStart(2, '0')}:${String(Math.floor(timeS / 60) % 60).padStart(2, '0')}`;
@@ -23,6 +24,7 @@ export function MetricsPanel() {
     samples: MetricsSample[];
     parking: Metrics['parking'];
     walkers: Metrics['walkers'];
+    persons: Metrics['persons'];
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -39,6 +41,7 @@ export function MetricsPanel() {
             samples,
             parking: metrics.parking,
             walkers: metrics.walkers,
+            persons: metrics.persons,
           });
           setLoading(false);
         }
@@ -65,6 +68,7 @@ export function MetricsPanel() {
     facilities[0];
   const parking = result?.engine === session?.engine ? result?.parking : undefined;
   const walkers = result?.engine === session?.engine ? result?.walkers : undefined;
+  const persons = result?.engine === session?.engine ? result?.persons : undefined;
   const charts: { key: string; label: string; color: string; values: number[]; maximum: number }[] =
     plots.map(([key, label, color]) => ({
       key,
@@ -150,6 +154,7 @@ export function MetricsPanel() {
           </dd>
         </dl>
       )}
+      {persons && <ModeShares modes={persons.modes} />}
       {chosen && (
         <label className="edit-field">
           Occupancy by facility

@@ -5,6 +5,7 @@ import type {
   Person,
   Scenario,
   SimParams,
+  TripMode,
   TripRequest,
   VehicleClass,
   VehiclePurpose,
@@ -130,6 +131,15 @@ export interface Metrics {
       stripManoeuvresPerHour: number;
       meanStallChoiceRank: number;
     };
+    /** TASK-129: household cars parking at their home, how far from it, and every car that
+     * parked beyond `homeParkingRadiusM` with its reason. */
+    home?: {
+      arrivals: number;
+      medianM: number;
+      p90M: number;
+      maxM: number;
+      beyondRadius: { tripId: string; facility: string; distanceM: number; reason: string }[];
+    };
   };
   completedByClass: Record<VehicleClass, number>;
   timeS: number;
@@ -166,6 +176,8 @@ export interface TripOutcome {
   freeFlowS: number | null;
   failReason: FailReason | null;
   respawns: number;
+  /** TASK-113: the mode the trip travelled in, after the mode choice. */
+  mode: TripMode;
 }
 
 export interface VehicleDetail {

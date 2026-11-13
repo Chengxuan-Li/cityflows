@@ -1,16 +1,18 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation, scheduleTrips } from '../src/demand';
+import { householdCensus } from '../src/demand/households';
+import { riderOf, stationRiders } from '../src/demand/stations';
 import { defaultScenario } from '../src/fixtures/scenarios';
 import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
-import type { City } from '../src/schema';
+import type { City, Scenario, TripRequest } from '../src/schema';
 import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../src/routing';
 import { createWalkRouter, type WalkRequest, type WalkRoute } from '../src/routing/walk';
 import { distance, pointAtDistance } from '../src/geo/polyline';
 import { createEngine } from '../src/sim/engine';
 import type { IntersectionObserver } from '../src/sim/intersection';
-import type { TrafficEngine } from '../src/sim/types';
+import type { Metrics, TrafficEngine } from '../src/sim/types';
 import { walkComponents } from '../src/network/walk-joins';
 import { parkingEgress } from '../src/network/parking-egress';
 
@@ -43,15 +45,17 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const [file, ...args] = process.argv.slice(2);
   if (!file || args.length < 4 || (args.length - 4) % 2)
     throw new Error(
-      'Usage: import-probe <file.osm> w s e n [--scale n] [--seed n] [--walk-legs file.json] [--parking-report file.json]',
+      'Usage: import-probe <file.osm> w s e n [--scale n] [--seed n] [--mode-choice on|off] [--walk-legs file.json] [--parking-report file.json]',
     );
   let scaleArg = '1',
     seedArg = '1',
+    modeChoiceArg = 'on',
     walkLegsFile: string | undefined,
     parkingReportFile: string | undefined;
   for (let i = 4; i < args.length; i += 2) {
     if (args[i] === '--scale') scaleArg = args[i + 1]!;
     else if (args[i] === '--seed') seedArg = args[i + 1]!;
+    else if (args[i] === '--mode-choice') modeChoiceArg = args[i + 1]!;
     else if (args[i] === '--walk-legs') walkLegsFile = args[i + 1]!;
     else if (args[i] === '--parking-report') parkingReportFile = args[i + 1]!;
     else throw new Error(`Unknown option: ${args[i]}`);
@@ -60,6 +64,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const demandSeed = Number(seedArg);
   if (!Number.isSafeInteger(demandSeed) || demandSeed < 1)
     throw new Error('--seed must be a positive integer');
+  if (modeChoiceArg !== 'on' && modeChoiceArg !== 'off')
+    throw new Error('--mode-choice must be on or off');
   if (!scaleArg.trim() || !Number.isFinite(scale) || scale < 0)
     throw new Error('--scale must be a finite, nonnegative number');
   const bbox = args.slice(0, 4).map(Number) as [number, number, number, number];
@@ -130,6 +136,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const { walkLegs, ...morning } = probeMorning(city, compiled, scale, {
     includeWalkLegs: !!walkLegsFile,
     demandSeed,
+    modeChoice: modeChoiceArg === 'on',
   });
   if (walkLegsFile) writeFileSync(walkLegsFile, JSON.stringify(walkLegs, null, 2));
   if (parkingReportFile)
@@ -149,6 +156,66 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
       ),
     );
   console.info(morning);
+  console.info('Mode census', JSON.stringify(morning.modes));
+}
+
+/** TASK-113: the day's person trips by mode (as the mode choice left them) and straight-line
+ * distance band, each mode's distance profile, and the person metrics' shares by hour and
+ * completions by mode. Local trips have no gateway end; trips with one always drive. */
+export function modeCensus(
+  compiled: CompiledCity,
+  trips: readonly TripRequest[],
+  persons: Metrics['persons'],
+) {
+  const bands = [500, 1000, 2000, 3000, Infinity];
+  const label = (m: number) => (m === Infinity ? '3 km+' : `<${m / 1000} km`);
+  const byBand = Object.fromEntries(
+    bands.map((m) => [label(m), { walk: 0, car: 0, walkShare: 0 }]),
+  );
+  const distances: Record<'walk' | 'car', number[]> = { walk: [], car: [] };
+  let gatewayCar = 0;
+  for (const trip of trips) {
+    if (trip.personId === null || trip.purpose !== 'private' || trip.vehicleClass !== 'car')
+      continue;
+    // TASK-128's station riders came by train: outside the choice and the shares.
+    if (riderOf(trip.personId)) continue;
+    const place = (id: string) => compiled.places[compiled.index.place.get(id)!]!;
+    const from = place(trip.originPlaceId),
+      to = place(trip.destinationPlaceId);
+    if (from.kind === 'gateway' || to.kind === 'gateway') {
+      gatewayCar++;
+      continue;
+    }
+    const meters = distance(from.centroid, to.centroid);
+    const mode = trip.mode === 'walk' ? 'walk' : 'car';
+    byBand[label(bands.find((m) => meters < m)!)]![mode]++;
+    distances[mode].push(meters);
+  }
+  for (const band of Object.values(byBand))
+    band.walkShare = band.walk + band.car ? band.walk / (band.walk + band.car) : 0;
+  const profile = (values: number[]) => {
+    const sorted = values.slice().sort((a, b) => a - b);
+    const at = (q: number) =>
+      Math.round(sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)] ?? 0);
+    return { trips: sorted.length, p10M: at(0.1), medianM: at(0.5), p90M: at(0.9) };
+  };
+  const local = distances.walk.length + distances.car.length;
+  const byHour = persons
+    ? persons.modes.byHour.walk.flatMap((walk, hour) => {
+        const car = persons.modes.byHour.car[hour]!;
+        return walk + car ? [{ hour, walk, car, walkShare: walk / (walk + car) }] : [];
+      })
+    : [];
+  return {
+    localPersonTrips: local,
+    walkShareLocal: local ? distances.walk.length / local : 0,
+    gatewayPersonTrips: gatewayCar,
+    byBand,
+    profile: { walk: profile(distances.walk), car: profile(distances.car) },
+    startedByHour: byHour,
+    started: persons?.modes.started,
+    completed: persons?.modes.completed,
+  };
 }
 
 /** Compare the actual routed endpoints, including direction and partial first/last links. */
@@ -235,7 +302,8 @@ export function probeWalk(city: City, compiled: CompiledCity) {
 }
 
 /** `untilS` stops the run early (the same demand, a prefix of the morning: `traffic:quick`);
- * `observe` sees the engine after every step (the traffic tier's observers, TASK-090). */
+ * `observe` sees the engine after every step (the traffic tier's observers, TASK-090). `seed`
+ * and `endS` give the other demand seeds and a longer day (TASK-129). */
 export function probeMorning(
   city: City,
   compiled: CompiledCity,
@@ -246,11 +314,16 @@ export function probeMorning(
     routeProvider,
     includeWalkLegs = false,
     demandSeed = 1,
+    endS = 10 * 3600,
     intersectionObserver,
     engine = createEngine(),
     originObserver,
     headDetourObserver,
+    modeChoice = true,
   }: {
+    /** TASK-113: false turns the mode choice off (every driver drives, as before). */
+    modeChoice?: boolean;
+    endS?: number;
     untilS?: number;
     observe?: (engine: TrafficEngine) => void;
     routeProvider?: RouteProvider;
@@ -267,9 +340,10 @@ export function probeMorning(
   const scenario = defaultScenario('grid5x5', demandSeed);
   scenario.demand.personsPerResident = scale;
   scenario.startS = 7 * 3600;
-  scenario.endS = 10 * 3600;
+  scenario.endS = endS;
+  if (!modeChoice) scenario.demand.modeChoice = { enabled: false };
   const population = generatePopulation(city, scenario.demand);
-  const trips = scheduleTrips(city, population, scenario);
+  const trips = scheduleTrips(city, population, scenario, compiled);
   const provider = routeProvider ?? createRouteProvider();
   const walkRouter = createWalkRouter(compiled.walk);
   let routeRequests = 0;
@@ -466,7 +540,8 @@ export function probeMorning(
       (gatewayTraffic[cls] ??= { entered: 0, left: 0 }).left++;
     }
   }
-  const releasedTrips = trips.length - metrics.trips.pending;
+  // Vehicle trips only: walk trips (TASK-128 riders) are not vehicle trips and never pending.
+  const releasedTrips = trips.filter((t) => t.mode !== 'walk').length - metrics.trips.pending;
   const parkingNodes = new Map<number, Set<string>>();
   const parkingAt = (node: number, id: string) => {
     const list = parkingNodes.get(node) ?? new Set<string>();
@@ -553,6 +628,28 @@ export function probeMorning(
         );
       })
     : undefined;
+  const outcomes = metrics.tripOutcomes!;
+  // TASK-113: the trips as the run took them, walked tours without their car.
+  const travelled = trips.map((trip, id) => {
+    if (outcomes[id]!.mode === trip.mode) return trip;
+    const walked: typeof trip = { ...trip, mode: outcomes[id]!.mode };
+    delete walked.carId;
+    return walked;
+  });
+  // TASK-129: households, cars and drivers, and the stock against the formula it replaces.
+  const homes = Object.values(city.places).filter((p) => p.kind === 'residential');
+  const households = {
+    ...householdCensus(city, population, travelled),
+    homeCars: population.filter(
+      (p) => p.hasCar && city.places[p.homePlaceId]!.kind === 'residential',
+    ).length,
+    formulaStock: homes.reduce(
+      (n, p) => n + Math.ceil(Math.round(p.population * scale) * scenario.demand.carShare),
+      0,
+    ),
+    carWaits: metrics.persons?.carWaits,
+    home: metrics.parking.home,
+  };
   return {
     scale,
     demandSeed,
@@ -560,6 +657,8 @@ export function probeMorning(
     loopCensus,
     stateHash: engine.stateHash(),
     persons: population.length,
+    households,
+    modes: modeCensus(compiled, travelled, metrics.persons),
     trips: trips.length,
     releasedTrips,
     completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,
@@ -588,8 +687,10 @@ export function probeMorning(
     failedByReason: metrics.failedByReason,
     parking: metrics.parking,
     parkingSearchTimeS: (metrics.tripOutcomes ?? []).reduce((n, t) => n + t.parkingSearchTimeS, 0),
-    localArrivals: trips.filter(
+    // Vehicle arrivals only: a walked trip's outcome reads as completed from the start.
+    localArrivals: travelled.filter(
       (trip, id) =>
+        trip.mode !== 'walk' &&
         city.places[trip.destinationPlaceId]!.kind !== 'gateway' &&
         (engine.inspect(id + 1)?.state === 'completed' ||
           engine.inspect(id + 1)?.failReason === 'no_parking'),
@@ -597,5 +698,82 @@ export function probeMorning(
     gatewayTraffic,
     sampledRoadTraffic,
     failures: Object.fromEntries(failures),
+    riders: riderCensus(city, scenario, trips, engine, untilS),
+  };
+}
+
+/** TASK-128: S-Bahn riders, generated over the day and run to `untilS`. */
+export function riderCensus(
+  city: City,
+  scenario: Scenario,
+  trips: TripRequest[],
+  engine: TrafficEngine,
+  untilS: number,
+) {
+  const { stops } = stationRiders(city, scenario);
+  if (!stops.length) return null;
+  const perHour: Record<number, { commuter: number; visitor: number }> = {};
+  const perPlatform: Record<string, number> = {};
+  const emptyStops: Record<string, number> = {};
+  for (const s of stops) {
+    const hour = Math.floor(s.arrivalS / 3600);
+    if (s.kind) (perHour[hour] ??= { commuter: 0, visitor: 0 })[s.kind] += s.riders;
+    perPlatform[s.platform] = (perPlatform[s.platform] ?? 0) + s.riders;
+    if (s.empty) emptyStops[s.empty] = (emptyStops[s.empty] ?? 0) + 1;
+  }
+  const doors = stops.map((s) => s.doorS).sort((a, b) => a - b);
+  const riderTrips = trips.filter((t) => t.personId && riderOf(t.personId));
+  const destinations: Record<string, number> = {};
+  for (const t of riderTrips)
+    if (t.id.endsWith(':back'))
+      destinations[t.originPlaceId] = (destinations[t.originPlaceId] ?? 0) + 1;
+  const outcome = { released: 0, started: 0, completed: 0, active: 0, failed: 0, walkFallbacks: 0 };
+  const failedByReason: Record<string, number> = {};
+  const distances: number[] = [];
+  const delays: number[] = [];
+  for (const id of new Set(riderTrips.map((t) => t.personId!))) {
+    const person = engine.inspectPerson(id)!;
+    for (const trip of person.trips) {
+      if (trip.departS <= untilS) outcome.released++;
+      if (trip.state === 'pending') continue;
+      outcome.started++;
+      if (trip.state === 'completed') outcome.completed++;
+      if (trip.state === 'active') outcome.active++;
+      if (trip.state === 'failed') {
+        outcome.failed++;
+        failedByReason[trip.failReason!] = (failedByReason[trip.failReason!] ?? 0) + 1;
+      }
+      const leg = trip.legs[0];
+      if (leg?.walkerId !== null && leg?.walkerId !== undefined) distances.push(leg.distanceM);
+      else if (leg && trip.state !== 'failed') outcome.walkFallbacks++;
+      if (trip.tripId.endsWith(':out') && leg?.startedS !== null && leg?.startedS !== undefined)
+        delays.push(leg.startedS - riderOf(id)!.arrivalS);
+    }
+  }
+  distances.sort((a, b) => a - b);
+  delays.sort((a, b) => a - b);
+  const at = (list: number[], q: number) =>
+    list[Math.min(list.length - 1, Math.floor(q * list.length))] ?? null;
+  return {
+    riders: stops.reduce((n, s) => n + s.riders, 0),
+    stops: stops.length,
+    perHour,
+    perPlatform,
+    emptyStops,
+    doorDelayS: { median: at(doors, 0.5), max: doors.at(-1) ?? null },
+    startDelayS: { median: at(delays, 0.5), max: delays.at(-1) ?? null },
+    topDestinations: Object.entries(destinations)
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, 10)
+      .map(([id, count]) => ({
+        id,
+        name: city.places[id]!.name,
+        kind: city.places[id]!.kind,
+        count,
+      })),
+    walkM: { median: at(distances, 0.5), p90: at(distances, 0.9), legs: distances.length },
+    trips: riderTrips.length,
+    ...outcome,
+    failedByReason,
   };
 }

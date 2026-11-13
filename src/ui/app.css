@@ -2475,3 +2475,58 @@ input[type='file']::file-selector-button {
     transition: none;
   }
 }
+
+/* TASK-113: mode shares in the Chart section and the mode choice in the Demand section. */
+.mode-shares {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.mode-shares figcaption {
+  color: var(--label);
+}
+
+.mode-shares svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.mode-shares text {
+  fill: var(--label-secondary);
+  font-size: 13px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.mode-choice {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 4px 0 0;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid var(--separator);
+}
+
+.mode-choice .edit-field {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.mode-choice .edit-field output {
+  float: right;
+  color: var(--label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.mode-choice + .test-pedestrians {
+  margin-top: 12px;
+}

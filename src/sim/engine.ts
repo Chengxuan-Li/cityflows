@@ -27,8 +27,8 @@ import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
-import { createPersons, hasPerson } from './persons';
-import type { createWalkRouter } from '../routing/walk';
+import { chooseTripModes, createPersons, hasPerson } from './persons';
+import { createWalkRouter } from '../routing/walk';
 import type {
   PatchResult,
   TrafficEngine,
@@ -68,7 +68,7 @@ const detailStates: (VehicleState | null)[] = [
 
 function createRun({
   compiled,
-  trips,
+  trips: requested,
   scenario,
   params: overrides,
   routeProvider,
@@ -77,7 +77,7 @@ function createRun({
   headDetourObserver,
   originObserver,
   population,
-  walkRouter,
+  walkRouter: injectedWalkRouter,
   debugParkingClaims = false,
 }: LoadInput) {
   const params: SimParams = {
@@ -91,6 +91,14 @@ function createRun({
     },
   };
   const { dtS, idm, spawnMinGapM } = params;
+  const provider =
+    routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
+  const observedCosts = createLinkCosts(compiled, params, scenario.startS);
+  const costs = linkCosts ?? observedCosts.costs;
+  const walkRouter = injectedWalkRouter ?? createWalkRouter(compiled.walk);
+  // TASK-113: modes are chosen before parking chains the car trips and stocks their cars.
+  const modes = chooseTripModes(compiled, requested, scenario, params, provider, costs, walkRouter);
+  const trips = modes.trips;
   const parkingCheckSteps = Math.max(1, Math.round(1 / dtS));
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
   const profiles = createVehicleProfiles(params);
@@ -106,7 +114,13 @@ function createRun({
   let tick = 0;
   const time = () => scenario.startS + tick * dtS;
   const parking = createParking(compiled, trips, scenario, params, vehicles);
-  const accounting = createAccounting(compiled, vehicles, parking, time);
+  const accounting = createAccounting(
+    compiled,
+    vehicles,
+    parking,
+    time,
+    trips.map((trip) => trip.mode),
+  );
   const walkers = createWalkers(
     compiled,
     scenario,
@@ -125,6 +139,7 @@ function createRun({
     walkers,
     population,
     walkRouter,
+    modes.walkRoutes,
   );
   const connectors = createConnectors(
     compiled,
@@ -156,15 +171,11 @@ function createRun({
     parking,
     (id) => hasGrant(id) || !!intersections.groupPaths[id],
   );
-  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
+  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, parking.crossingBlocks);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const signalEpochs = new Map<string, number>();
-  const provider =
-    routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
-  const observedCosts = createLinkCosts(compiled, params, scenario.startS);
-  const costs = linkCosts ?? observedCosts.costs;
   const headRoutes = new Map<
     number,
     { request: RouteRequest; results: Map<number, RouteResult> }
@@ -411,17 +422,23 @@ function createRun({
     );
   }
 
-  function hasSpawnGap(connector: CConnector, vehicle: number) {
+  /** `lengthM`: the span behind `positionM` to keep clear, the vehicle's length by default
+   * (TASK-157: a lot car's crossing span on a lane its merge crosses). */
+  function hasSpawnGap(
+    connector: Pick<CConnector, 'lane' | 'positionM'>,
+    vehicle: number,
+    lengthM = profile(vehicle).lengthM,
+  ) {
     const { lane, positionM } = connector;
     if (
-      positionM < intersections.reservedSpace[lane]! + profile(vehicle).lengthM + idm.minGapM &&
+      positionM < intersections.reservedSpace[lane]! + lengthM + idm.minGapM &&
       intersections.reservedSpace[lane]! > 0
     )
       return false;
-    if (railCrossings && !railCrossings.canSpawn(lane, positionM, profile(vehicle).lengthM))
-      return false;
+    if (railCrossings && !railCrossings.canSpawn(lane, positionM, lengthM)) return false;
     const gap = Math.max(spawnMinGapM, idm.minGapM);
-    const spacing = profile(vehicle).lengthM + gap;
+    const spacing = lengthM + gap;
+    if (parking.crossingBlocks(lane, positionM - spacing, positionM + gap)) return false;
     const maxSpacing = maxVehicleLength + gap;
     if (positionM < spacing) {
       for (const idx of compiled.lanes[lane]!.in) {
@@ -460,7 +477,7 @@ function createRun({
       if (!parking.departureRoom(vehicle)) return false;
       for (let id = vehicles.last(lane); id !== -1; id = vehicles.previous[id]!) {
         if (vehicles.position[id]! >= positionM) break;
-        const gapM = positionM - profile(vehicle).lengthM - vehicles.position[id]!;
+        const gapM = positionM - lengthM - vehicles.position[id]!;
         const follower = profile(id);
         const insertion = idmAcceleration(
           follower.idm,
@@ -510,7 +527,7 @@ function createRun({
     roadEnteredS[id] = timeS;
     roadEnteredM[id] = positionM;
     planLane(id, lane, positionM);
-    if (parking.startsInLot(id)) {
+    if (parking.startsInLot(id, connector.idx)) {
       vehicles.lane[id] = OFF_LANE;
       vehicles.position[id] = 0;
       vehicles.speed[id] = 0;
@@ -665,6 +682,22 @@ function createRun({
         if (stopAt < obstacle) {
           obstacle = stopAt;
           leaderSpeed = 0;
+        }
+        // TASK-157: so is the span a merging lot car crosses, on its lane or the next one.
+        const crossingStop = lane
+          ? Math.min(
+              parking.crossingStop(lane.idx, position),
+              movement
+                ? lane.lengthM + movement.lengthM + parking.crossingStop(movement.toLane, 0)
+                : Infinity,
+            )
+          : path!.lengthM + parking.crossingStop(path!.toLane, 0);
+        if (crossingStop < Infinity) {
+          if (crossingStop < obstacle) {
+            obstacle = crossingStop;
+            leaderSpeed = 0;
+          }
+          limit[id] = Math.min(limit[id]!, Math.max(position, crossingStop - idm.minGapM));
         }
         // TASK-111: a held crossing's near edge is a standing obstacle, clamped like a stop line.
         const walkerStop = walkers?.blocking ? walkers.hold(id, lane, path) : Infinity;
@@ -938,11 +971,15 @@ function createRun({
           throw new Error('Parking entry admission changed within a step');
         if (parking.lotArrival(connector.idx)) {
           leaveRoad(id, timeS, connector.positionM);
-          vehicles.remove(id);
+          // TASK-156: an entry on a public aisle lane keeps the arriving car in it.
+          const held = parking.motion(id)!.laneHeld;
+          if (!held) vehicles.remove(id);
           intersections.release(id);
           laneChanges.leaveLane(id);
-          vehicles.lane[id] = OFF_LANE;
-          vehicles.position[id] = 0;
+          if (!held) {
+            vehicles.lane[id] = OFF_LANE;
+            vehicles.position[id] = 0;
+          }
           accounting.transition(id, IN_LOT);
         } else accounting.transition(id, QUEUED_DESTINATION);
       } else {
@@ -1362,7 +1399,7 @@ function createRun({
       groupRoute,
       routeVersion: () => costs.version,
     });
-    laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
+    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, parking.crossingBlocks);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );
@@ -1586,6 +1623,16 @@ function createRun({
               vehicles.lane[id] = OFF_LANE;
             }
           },
+          occupy(id, lane, positionM, speed) {
+            if (vehicles.lane[id] !== OFF_LANE && vehicles.lane[id] !== lane) {
+              vehicles.remove(id);
+              vehicles.lane[id] = OFF_LANE;
+            }
+            if (lane === -1) return;
+            if (vehicles.lane[id] === lane) vehicles.position[id] = positionM;
+            else vehicles.insert(id, lane, positionM);
+            vehicles.speed[id] = speed;
+          },
           park(id, connector) {
             const c = compiled.connectors[connector]!;
             vehicles.lane[id] = c.lane;
@@ -1593,13 +1640,21 @@ function createRun({
             vehicles.speed[id] = 0;
             accounting.complete(id, time());
           },
-          exit(id, connector, joinM) {
+          exit(id, connector, joinM, crossings) {
             // TASK-150: granted from the hold, with the gap checked where the merge joins the
             // lane. The car stands there at speed 0, a lane occupant, while its body merges. Its
             // route starts at the connector, and a destination between the two (its own lot,
             // entered again) is where it joins instead: it has no way back from past it.
+            // TASK-157: each lane the merge crosses first needs the same gap around the span
+            // the body covers there, which then stands as an obstacle for that lane's traffic.
             const c = compiled.connectors[connector]!;
-            if (!hasSpawnGap({ ...c, positionM: joinM }, id) || !connectors.releaseLot(c, time()))
+            if (
+              !hasSpawnGap({ ...c, positionM: joinM }, id) ||
+              crossings.some(
+                (x) => !hasSpawnGap({ lane: x.lane, positionM: x.toM }, id, x.toM - x.fromM),
+              ) ||
+              !connectors.releaseLot(c, time())
+            )
               return false;
             if (!resumeParkingRoute(id, c, time())) {
               vehicles.lane[id] = c.lane;

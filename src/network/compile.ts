@@ -58,7 +58,7 @@ const classRank: Record<RoadClass, number> = {
   ramp: 1,
 };
 
-function centroid(shape: Place['shape']): Vec2 | null {
+export function centroid(shape: Place['shape']): Vec2 | null {
   if (shape.kind === 'point') return { ...shape.pos };
   const ring = shape.ring;
   const origin = ring[0]!;

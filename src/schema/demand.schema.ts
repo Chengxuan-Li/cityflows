@@ -14,9 +14,12 @@ const placeId = z.string().regex(/^p:\d+$/);
 const seconds = z.number().nonnegative();
 const mode = z.enum(['car', 'walk', 'bus', 'rail']);
 
+/** TASK-129: files saved before households have no `householdId`; opening a project assigns it
+ * (`withHouseholds`), so the parsed person is not yet a `Person`. */
 export const personSchema = z.object({
   id: z.string(),
   homePlaceId: placeId,
+  householdId: z.string().optional(),
   workPlaceId: placeId.nullable(),
   hasCar: z.boolean(),
   agenda: z.array(
@@ -27,7 +30,7 @@ export const personSchema = z.object({
       durationS: seconds,
     }),
   ),
-}) satisfies z.ZodType<Person>;
+}) satisfies z.ZodType<Omit<Person, 'householdId'> & { householdId?: string }>;
 
 export const tripRequestSchema = z
   .object({
@@ -38,6 +41,7 @@ export const tripRequestSchema = z
     departS: seconds,
     mode,
     legs: z.array(z.object({ mode, fromPlaceId: placeId, toPlaceId: placeId })),
+    carId: z.string().optional(),
     vehicleClass: z.enum(vehicleClasses).default('car'),
     purpose: z.enum(vehiclePurposes).optional(),
   })
@@ -73,6 +77,15 @@ export const demandConfigSchema = z.object({
       leisureShare: z.number().min(0).max(1).optional(),
     })
     .optional(),
+  modeChoice: z
+    .object({
+      enabled: z.boolean().optional(),
+      walkPreferenceMin: z.number().optional(),
+      valueOfTimePerH: z.number().positive().optional(),
+      carCostPerKm: z.number().nonnegative().optional(),
+      sensitivityPerMin: z.number().nonnegative().optional(),
+    })
+    .optional(),
 }) satisfies z.ZodType<DemandConfig>;
 
 export const simParamsSchema = z
@@ -87,6 +100,7 @@ export const simParamsSchema = z
     }),
     leaveManoeuvreS: z.number().nonnegative(),
     parkingSearchRadiusM: z.number().nonnegative(),
+    homeParkingRadiusM: z.number().nonnegative(),
     dtS: z.number(),
     vehicleClasses: z.record(
       z.enum(vehicleClasses),

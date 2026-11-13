@@ -503,7 +503,7 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
         onClick={() => {
           setDraft(
             group
-              ? generateGroupSignalProgram(city, group.id, compiled, [])
+              ? generateGroupSignalProgram(group.id, compiled, [])
               : generateSignalProgram(
                   city,
                   source,

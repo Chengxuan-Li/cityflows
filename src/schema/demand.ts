@@ -10,6 +10,8 @@ export interface Activity {
 export interface Person {
   id: string;
   homePlaceId: PlaceId;
+  /** TASK-129: `hh:<homePlaceId>:<k>`; a gateway person is a household of one. */
+  householdId: string;
   workPlaceId: PlaceId | null;
   hasCar: boolean;
   agenda: Activity[];
@@ -34,6 +36,9 @@ export interface TripRequest {
   departS: number;
   mode: TripMode;
   legs: Leg[];
+  /** TASK-129: the household car a car trip uses, `car:<householdId>:<k>`; walk, through and
+   * event trips have none. */
+  carId?: string;
   vehicleClass: VehicleClass;
   purpose: VehiclePurpose;
 }
@@ -48,7 +53,30 @@ export interface DemandConfig {
   throughTripsPerHour: number[]; // 24 values, gateway to gateway (Gate 3)
   classShares?: { local: Record<VehicleClass, number>; through: Record<VehicleClass, number> };
   chains?: { schoolShare?: number; shopShare?: number; leisureShare?: number };
+  /** TASK-113: the per-trip mode choice; omitted fields take `DEFAULT_MODE_CHOICE`. */
+  modeChoice?: Partial<ModeChoiceConfig>;
 }
+
+/** TASK-113: a logit over walk and car per home-based tour of a person with a free household
+ * car (src/demand/mode-choice.ts). `enabled: false` gives every driver a car all day, as before. */
+export interface ModeChoiceConfig {
+  enabled: boolean;
+  /** Mean minutes a person would rather walk than drive; each person draws around it. */
+  walkPreferenceMin: number;
+  /** Median value of time, euros per hour; each person draws around it. */
+  valueOfTimePerH: number;
+  /** Running cost of a car, euros per kilometre driven. */
+  carCostPerKm: number;
+  /** Logit scale per generalized minute: higher picks the cheaper mode more surely. */
+  sensitivityPerMin: number;
+}
+export const DEFAULT_MODE_CHOICE: ModeChoiceConfig = {
+  enabled: true,
+  walkPreferenceMin: 12,
+  valueOfTimePerH: 12,
+  carCostPerKm: 0.3,
+  sensitivityPerMin: 0.3,
+};
 
 export interface Scenario {
   id: string;

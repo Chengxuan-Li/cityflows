@@ -1,13 +1,15 @@
 import Flatbush from 'flatbush';
 import { distance, nearestOnPolyline, pointAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
+import { chooseModes, type ModeInputs } from '../demand/mode-choice';
 import type { CompiledCity } from '../network';
+import type { LinkCosts, RouteProvider } from '../routing';
 import { createWalkRouter, type WalkPosition, type WalkResult } from '../routing/walk';
 import type { Person, PlaceId, Scenario, SimParams, TripRequest } from '../schema';
 import type { createAccounting } from './metrics';
 import type { createParking } from './parking';
 import type { FailReason } from './types';
-import { FAILED, type Vehicles } from './vehicle';
+import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import type { Walkers } from './walkers';
 
 type State = 'pending' | 'active' | 'completed' | 'failed';
@@ -36,6 +38,11 @@ export interface PersonDetail {
   state: State;
   currentLeg: PersonLegDetail | null;
   car: { facility: string | null; space: number | null };
+  /** TASK-129: null for persons outside the population (riders, visitors). */
+  household: { id: string; members: string[] } | null;
+  /** The household car the person drives today, and its owner when borrowed. */
+  carId: string | null;
+  carOwner: string | null;
   trips: PersonTripDetail[];
 }
 export interface PersonMetrics {
@@ -47,6 +54,16 @@ export interface PersonMetrics {
   access: { count: number; meanTimeS: number; meanDistanceM: number };
   egress: { count: number; meanTimeS: number; meanDistanceM: number };
   walkFallbacks: number;
+  /** TASK-129: trips that waited for a household car another member had not brought back. */
+  carWaits: { count: number; medianS: number; maxS: number };
+  /** TASK-113: person trips by mode when they started, in total and by hour of departure, and
+   * those completed (station riders excluded). A completed car trip is `drive` when the car parked at its destination's
+   * own facility (or the destination is a gateway), `driveWalk` when it parked elsewhere. */
+  modes: {
+    started: { walk: number; car: number };
+    byHour: { walk: number[]; car: number[] };
+    completed: { walk: number; drive: number; driveWalk: number };
+  };
   fallbacks: {
     leg: 'access' | 'egress';
     placeId: PlaceId;
@@ -61,6 +78,132 @@ export const hasPerson = (trip: TripRequest) =>
   (trip.purpose ?? 'private') === 'private' &&
   (trip.vehicleClass ?? 'car') === 'car';
 
+/** Straight line to walk graph for the parking walks the mode choice estimates. */
+const PARKING_WALK_DETOUR = 1.3;
+/** Expected search for a space when the destination has no parking of its own. */
+const PUBLIC_PARKING_SEARCH_S = 120;
+/** A drive with no route: straight line times this detour at this speed. */
+const DRIVE_DETOUR = 1.3;
+const DRIVE_FALLBACK_MPS = 30 / 3.6;
+
+/** TASK-113: the mode of every person trip, chosen when the run loads, before parking builds its
+ * car chains and starting stock from the car trips. Walks use the walk graph (the routes are
+ * kept for the walkers), drives the run's current link costs, and parking the nearest facility:
+ * the place's own, else a public one within the search radius (with a search), else none. */
+export function chooseTripModes(
+  city: CompiledCity,
+  trips: TripRequest[],
+  scenario: Scenario,
+  params: SimParams,
+  provider: RouteProvider,
+  costs: LinkCosts,
+  router: ReturnType<typeof createWalkRouter>,
+) {
+  const walkRoutes = new Map<string, WalkResult>();
+  const place = (id: PlaceId) => city.places[city.index.place.get(id)!]!;
+  const terminals = new Map<
+    number,
+    { facility: CompiledCity['parking'][number] | null; walkS: number; searchS: number }
+  >();
+  function terminal(idx: number) {
+    let cached = terminals.get(idx);
+    if (cached) return cached;
+    const at = city.places[idx]!.centroid;
+    const away = (f: CompiledCity['parking'][number]) =>
+      Math.hypot(f.centroid.x - at.x, f.centroid.y - at.y);
+    const nearest = (list: CompiledCity['parking']) =>
+      list.reduce<CompiledCity['parking'][number] | null>(
+        (best, f) => (!best || away(f) < away(best) ? f : best),
+        null,
+      );
+    const own = nearest(city.parking.filter((f) => f.place === idx && f.connectorsOut.length));
+    const facility =
+      own ??
+      nearest(
+        city.parking.filter((f) => f.access === 'public' && away(f) <= params.parkingSearchRadiusM),
+      );
+    cached = {
+      facility,
+      walkS: facility ? (away(facility) * PARKING_WALK_DETOUR) / params.walkSpeedMps : 0,
+      searchS: facility && !own ? PUBLIC_PARKING_SEARCH_S : 0,
+    };
+    terminals.set(idx, cached);
+    return cached;
+  }
+  const drives = new Map<string, { driveS: number; distanceM: number }>();
+  function drive(from: number, to: number) {
+    const origin = city.places[from]!,
+      destination = city.places[to]!;
+    const out = terminal(from).facility?.connectorsOut[0] ?? origin.connectorsOut[0];
+    const into = terminal(to).facility?.connectorsIn[0] ?? destination.connectorsIn[0];
+    const key = `${out}>${into}`;
+    let cached = drives.get(key);
+    if (cached) return cached;
+    const connector = out === undefined ? undefined : city.connectors[out];
+    const result =
+      connector && into !== undefined
+        ? provider.route(city, costs, {
+            fromLane: connector.lane,
+            fromPosM: connector.positionM,
+            toConnector: into,
+            vehicleClass: 'car',
+            purpose: 'private',
+            desiredSpeedFactor: 1,
+            noise: 0,
+            seed: 1,
+          })
+        : null;
+    if (result?.ok)
+      cached = {
+        driveS: result.route.costS,
+        distanceM: result.route.roads.reduce((sum, road) => sum + city.roads[road]!.lengthM, 0),
+      };
+    else {
+      const distanceM = distance(origin.centroid, destination.centroid) * DRIVE_DETOUR;
+      cached = { driveS: distanceM / DRIVE_FALLBACK_MPS, distanceM };
+    }
+    drives.set(key, cached);
+    return cached;
+  }
+  const local = (trip: TripRequest) =>
+    place(trip.originPlaceId).kind !== 'gateway' &&
+    place(trip.destinationPlaceId).kind !== 'gateway';
+  const choice = chooseModes(
+    trips,
+    scenario,
+    (trip) => hasPerson(trip) && local(trip),
+    (id): ModeInputs => {
+      const trip = trips[id]!;
+      // The key a whole walk of this trip routes under in `createPersons`.
+      const key = `walk:${trip.originPlaceId}:${trip.destinationPlaceId}`;
+      let walk = walkRoutes.get(key);
+      if (!walk) {
+        walk = router.route({
+          from: { placeId: trip.originPlaceId },
+          to: { placeId: trip.destinationPlaceId },
+          speedMps: params.walkSpeedMps,
+          stepsFactor: params.walkStepsFactor,
+        });
+        walkRoutes.set(key, walk);
+      }
+      const from = place(trip.originPlaceId).idx,
+        to = place(trip.destinationPlaceId).idx;
+      return {
+        ...(walk.ok ? { walkS: walk.route.costS } : {}),
+        car: {
+          accessS: terminal(from).walkS,
+          ...drive(from, to),
+          searchS: terminal(to).searchS,
+          egressS: terminal(to).walkS,
+        },
+      };
+    },
+  );
+  // Failed walks are left out: `createPersons` keeps its own reason for them.
+  for (const [key, result] of walkRoutes) if (!result.ok) walkRoutes.delete(key);
+  return { ...choice, walkRoutes };
+}
+
 /** Person journeys own walk legs; parking still owns the car and all parking decisions. */
 export function createPersons(
   initial: CompiledCity,
@@ -73,6 +216,7 @@ export function createPersons(
   walkers: Walkers | null,
   population: Person[] = [],
   injectedRouter?: ReturnType<typeof createWalkRouter>,
+  walkRoutes = new Map<string, WalkResult>(),
 ) {
   let city = initial;
   const localWalk = (trip: TripRequest) =>
@@ -110,8 +254,31 @@ export function createPersons(
     if (trips[id]!.mode === 'walk') accounting.excludeWalk(id);
   }
   const populationById = new Map(population.map((person) => [person.id, person]));
+  const households = new Map<string, Person[]>();
+  for (const person of population) {
+    const members = households.get(person.householdId);
+    if (members) members.push(person);
+    else households.set(person.householdId, [person]);
+  }
+  // Person index order, as demand numbers the household's cars (src/demand/households.ts).
+  const index = (person: Person) => Number(person.id.slice(person.id.lastIndexOf(':') + 1));
+  for (const members of households.values())
+    members.sort((a, b) => index(a) - index(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const ready = new Uint8Array(trips.length);
   const waiting = new Map<number, number[]>();
+  /** TASK-129: trips waiting for their household car, keyed by the car's previous trip (another
+   * member's), and when each began to wait. */
+  const carWaiting = new Map<number, number[]>();
+  const carWaitSince = new Map<number, number>();
+  const carWaits: number[] = [];
+  const modes: PersonMetrics['modes'] = {
+    started: { walk: 0, car: 0 },
+    byHour: { walk: Array<number>(24).fill(0), car: Array<number>(24).fill(0) },
+    completed: { walk: 0, drive: 0, driveWalk: 0 },
+  };
+  const parkedAway = new Uint8Array(trips.length);
+  /** TASK-128's station riders came by train and walk on: outside the mode shares. */
+  const rider = (id: number) => trips[id]!.personId?.startsWith('rider:') ?? false;
   const activeDrives = new Set<number>();
   const fallbackWalks = new Map<
     number,
@@ -131,7 +298,7 @@ export function createPersons(
   let next = 0;
   let nowS = scenario.startS;
   let router = injectedRouter ?? createWalkRouter(city.walk);
-  let routeCache = new Map<string, WalkResult>();
+  let routeCache = walkRoutes;
   let accessCache = new Map<string, WalkPosition[]>();
   const buildSpatial = () => {
     const tree = new Flatbush(Math.max(1, city.walk.links.length));
@@ -242,7 +409,13 @@ export function createPersons(
     record.state = reason ? 'failed' : 'completed';
     record.failReason = reason;
     if (reason) failed++;
-    else completed++;
+    else {
+      completed++;
+      if (!rider(id))
+        modes.completed[
+          trips[id]!.mode === 'walk' ? 'walk' : parkedAway[id] ? 'driveWalk' : 'drive'
+        ]++;
+    }
     for (const item of record.legs)
       if (item.state === 'active') {
         item.state = reason ? 'failed' : 'completed';
@@ -345,6 +518,11 @@ export function createPersons(
       fallbackCounts.set(key, { leg: kind, placeId, facilityId: car.facilityId, reason, count: 1 });
     fallbackWalks.set(id, { endS: timeS + item.distanceM / params.walkSpeedMps, leg: item, done });
   }
+  /** The car's previous trip when another member drove it; a person's own chain covers theirs. */
+  function sharedCarBefore(id: number) {
+    const car = trips[id]!.mode === 'car' ? parking.carBefore(id) : -1;
+    return car !== -1 && trips[car]!.personId !== trips[id]!.personId ? car : -1;
+  }
   function start(id: number, timeS: number) {
     const record = records[id]!;
     if (record.state !== 'pending') return;
@@ -355,8 +533,27 @@ export function createPersons(
       waiting.set(previous[id]!, list);
       return;
     }
+    const car = sharedCarBefore(id);
+    if (car !== -1 && vehicles.state[car] !== COMPLETED && vehicles.state[car] !== FAILED) {
+      if (!carWaitSince.has(id)) {
+        carWaitSince.set(id, timeS);
+        carWaiting.set(car, [...(carWaiting.get(car) ?? []), id]);
+      }
+      return;
+    }
+    if (carWaitSince.has(id)) {
+      carWaits.push(timeS - carWaitSince.get(id)!);
+      carWaitSince.delete(id);
+    }
     record.state = 'active';
     started++;
+    const mode = trips[id]!.mode === 'walk' ? 'walk' : 'car';
+    if (!rider(id)) {
+      modes.started[mode]++;
+      modes.byHour[mode][Math.floor(trips[id]!.departS / 3600) % 24]!++;
+    }
+    if (car !== -1 && vehicles.state[car] === FAILED && vehicles.state[id] !== FAILED)
+      accounting.fail(id, 'stranded');
     if (before?.state === 'failed' || vehicles.state[id] === FAILED) {
       if (trips[id]!.mode === 'car' && vehicles.state[id] !== FAILED)
         accounting.fail(id, 'stranded');
@@ -370,18 +567,31 @@ export function createPersons(
       });
     else ready[id] = 1;
   }
+  /** The household car is back: the next member's trip may start. */
+  function carBack(id: number, timeS: number) {
+    const dependents = carWaiting.get(id);
+    carWaiting.delete(id);
+    for (const dependent of dependents ?? []) start(dependent, timeS);
+  }
   function driveCompleted(id: number, timeS: number) {
+    carBack(id, timeS);
     const record = records[id];
     if (!record || record.state !== 'active') return;
     const drive = record.legs.find((l) => l.kind === 'drive')!;
     drive.state = 'completed';
     drive.arrivedS = timeS;
     activeDrives.delete(id);
+    const destination = city.index.place.get(trips[id]!.destinationPlaceId)!;
+    const facility = city.parking[parking.location(id).facility];
+    parkedAway[id] = Number(
+      !!facility && facility.place !== destination && !gateway(trips[id]!.destinationPlaceId),
+    );
     if (!gateway(trips[id]!.destinationPlaceId)) walk(id, 'egress', timeS, (at) => finish(id, at));
     else finish(id, timeS);
   }
   accounting.observe(driveCompleted, (id, reason) => {
     if (records[id]?.state === 'active') finish(id, nowS, reason);
+    carBack(id, nowS);
   });
   return {
     enabled: ids.length > 0,
@@ -422,6 +632,19 @@ export function createPersons(
         access: mean('access'),
         egress: mean('egress'),
         walkFallbacks,
+        carWaits: (() => {
+          const waits = carWaits.slice().sort((a, b) => a - b);
+          return {
+            count: waits.length,
+            medianS: waits.length ? waits[Math.ceil(waits.length / 2) - 1]! : 0,
+            maxS: waits.at(-1) ?? 0,
+          };
+        })(),
+        modes: {
+          started: { ...modes.started },
+          byHour: { walk: modes.byHour.walk.slice(), car: modes.byHour.car.slice() },
+          completed: { ...modes.completed },
+        },
         fallbacks: [...fallbackCounts.values()].map((entry) => ({ ...entry })),
       };
     },
@@ -438,6 +661,13 @@ export function createPersons(
       const atOrigin =
         !record.legs.some((l) => l.kind === 'drive') || record.legs.at(-1)?.kind === 'access';
       const car = trips[current]!.mode === 'car' ? parking.location(current, atOrigin) : null;
+      const members = owner ? households.get(owner.householdId)! : [];
+      const carId = chain.map((id) => trips[id]!.carId).find((id) => id !== undefined) ?? null;
+      // Car `car:<householdId>:<k>` belongs to the household's k-th member with a car.
+      const carOwner = carId
+        ? (members.filter((m) => m.hasCar)[Number(carId.slice(carId.lastIndexOf(':') + 1))]?.id ??
+          null)
+        : null;
       return {
         id: personId,
         homePlaceId: owner?.homePlaceId ?? first.originPlaceId,
@@ -456,6 +686,9 @@ export function createPersons(
           facility: car ? (city.parking[car.facility]?.id ?? null) : null,
           space: car && car.space !== -1 ? car.space : null,
         },
+        household: owner ? { id: owner.householdId, members: members.map((m) => m.id) } : null,
+        carId,
+        carOwner,
         trips: chain.map((id) => ({
           ...records[id]!,
           legs: records[id]!.legs.map((l) => ({ ...l })),

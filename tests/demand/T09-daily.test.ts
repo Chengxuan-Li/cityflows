@@ -7,14 +7,16 @@ import { scenarioSchema } from '../../src/schema/demand.schema';
 
 function addPlace(city: ReturnType<typeof grid5x5>, kind: Place['kind'], weight = 1) {
   const id = `p:${city.nextId++}`;
+  const base = Object.values(city.places)[0]!;
   const place: Place = {
-    ...Object.values(city.places)[0]!,
+    ...base,
     id,
     kind,
     population: 0,
     jobs: 0,
     attraction: weight,
-    connectors: [],
+    // TASK-155: a gateway without connectors serves no trip.
+    connectors: base.connectors.map((c) => ({ ...c, id: `c:${city.nextId++}` })),
     events: [],
   };
   city.places[id] = place;

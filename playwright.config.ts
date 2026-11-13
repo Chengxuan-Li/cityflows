@@ -41,14 +41,15 @@ const groups: Record<string, string[]> = {
   ],
   // Lead, 2026-11-10: T52 alone took 14 min on checkpoint-2026-11-10 (8 min before TASK-124/126).
   d: ['T52-parking-cities'],
-  // Rail (TASK-126, TASK-127, TASK-133, TASK-134, TASK-137): Munich imports with long frame-time
-  // samples.
+  // Rail (TASK-126, TASK-127, TASK-128, TASK-133, TASK-134, TASK-137): Munich imports with long
+  // frame-time samples or 3D shots.
   e: [
     'T62-rail-stations',
     'T64-trains',
     'T70-station-furniture',
     'T73-tram-stops',
     'T74-overhead-lines',
+    'T65-station-riders',
   ],
 };
 // The light set (lead, 2026-11-10): editor, run and person flows on the small synthetic cities,
@@ -72,6 +73,8 @@ const light = [
   'T52-visible-parking',
   'T53-pedestrians',
   'T57-person-trips',
+  'T67-car-ownership',
+  'T79-mode-choice',
 ];
 const group =
   process.env.CITYFLOWS_E2E_GROUP ??

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { unzipSync, strFromU8 } from 'fflate';
 import type { City } from '../../src/schema';
-import { clickVehicle, departVehicle } from './helpers';
+import { clickVehicle, departVehicle, driveEveryone } from './helpers';
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 
@@ -35,6 +35,8 @@ test('T12 draws a snapped two-way bypass and an inspected vehicle uses it after 
 }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  // TASK-113: car traffic as before mode choice (every driver drives).
+  await driveEveryone(page);
   const original = await savedCity(page);
   await button(page, 'Road').click();
   await expect(button(page, 'Road')).toHaveAttribute('aria-pressed', 'true');

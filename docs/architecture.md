@@ -589,6 +589,12 @@ reach the public network from there (parking egress, access zones included). On 
 aisle whose near lane cannot, the opposite lane of the same physical aisle within 5 m is used;
 a one-way lane is never reversed. Departure connectors are appended after every other
 connector, have no walk anchor and belong to no entry list, so admission is unchanged.
+TASK-156: a bay whose access point lies in the band of one of its lot's aisle lanes that carries
+none of its exits (Munich pk:2050, beside the dead-end half of a two-way aisle) gets the same
+departure on that lane or the same aisle's opposite lane, only where a lane car from there
+passes every one of the bay's exits by legal movements on the lot's aisle lanes and the exit's
+own lane. A bay with an exit no lane car reaches (pk:2056's mapped portal onto r:669) keeps its
+lot drive-out.
 
 TASK-149 adds optional `ParkingFacility.mappedPortals` for source-proven accesses on an
 unsplit approach street. `entries` retains its meaning of nodes actually shared by the
@@ -1020,6 +1026,19 @@ the OSM `lanes` tags carry one.
   entry to the exit. Its walk entries are those at the member; derived walk green stays per
   crossing. A green group that does not name an entry and an exit is `signal_phase_invalid`.
   Until Phase 3 there is no box rule: a car can stop on an inner road at the next member.
+- TASK-161: a generated group program (import, grouping in the editor, the signal editor's
+  Generate default program) keeps every green group's whole path clear. Its green groups are the
+  entry-to-exit pairs of the chains. Two share a phase only if no movement on one's chains or
+  switched road pairs conflicts with one on the other's, movements from inner roads included (two lanes merging into one inner lane
+  excepted), so a stream released into an inner road stops whenever a green group it crosses is
+  green. A chain that passes a member twice (circling the group beside a direct way) counts only
+  for a pair with no direct chain. The phases are the fewest that separate every crossing pair
+  (an exact colouring, from a first-fit bound, kept after 100,000 search steps); each green group
+  then also joins every other phase it fits. With no demand known, every entry lane is taken to
+  carry the same flow, so the phases share the green evenly (Webster's split with equal flow
+  ratios): 30 s a phase, at most a 120 s cycle (`GROUP_CYCLE_MAX_S`), amber 3 s, all-red 1 s.
+  Every green group is green for at least an even split of the green time. Single-node programs
+  are unchanged.
 - Each phase's `groups` expand to every movement between the named road pair. A movement may
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
 - State at simulation time `t`: `((t + offsetS) mod cycleS)` locates the phase and whether it
@@ -1505,7 +1524,18 @@ reach their access point during the leave duration.
 Curve progress is eased, and snapshots carry the moving body throughout the handover.
 
 A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
-and becomes `in_lot` (counted among driving trips). It follows its local shortest path at
+and becomes `in_lot` (counted among driving trips). TASK-164: from a street it holds the lane,
+as a kerbside arrival does, until its body has left the lane's band (lane ends respected).
+TASK-156: it keeps `minGapM` clear of lane cars ahead on its lot's aisle lanes and their joining
+movements, other than cars bound for the lot (their admission orders them). On a public aisle, which
+through traffic drives, it is a lane's occupant while its body is inside that lane's band, at the
+farthest station its body reaches there, so lane cars follow it and departures' gap checks see
+it; it enters such a band only with the following gap ahead and the braking distance of the car
+behind, and an entry on such a lane keeps it in the lane. A private aisle's lane cars are
+departures from its bays; TASK-164: such a departure keeps its reversing room (its swept lane
+stations and `minGapM`) from every arriving lot car whose body is in its lane's band without
+being the lane's occupant, now or anywhere along its path at `lotSpeedMps` during
+`leaveManoeuvreS`. It follows its local shortest path at
 `lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
 across it; tied approaches use distance, then id. Narrow local paths admit one entry cohort of
 arrivals at a time to prevent opposing cars deadlocking. TASK-153: departures, including one
@@ -1524,14 +1554,29 @@ connector; a destination between the two (their own lot, chosen again) is where 
 instead. The grant inserts the car there at speed 0, so following traffic treats it as a lane
 occupant before its body crosses the lane edge; the body then merges (`merge` phase) along a
 front-bumper curve at `lotSpeedMps` and drives on. A lot aisle mapped on a road is such a
-lane: the car joins it where its path first meets it. A car turning into the same mouth on the
+lane: the car joins it where its path first meets it. TASK-157: the hold is also clear of every
+other lane of the exit's street that the body would stand in (its road's other lanes, the other
+carriageway of a two-way street, the roads meeting it at either end; not the lot's own aisles,
+and not roads drawn across the lot at another grade, which the compiled model cannot tell
+apart): such a lane joins the set until a pose is clear of all, or the car keeps the exit-only
+hold if none is. The lanes the merge curve then crosses before the exit lane each need the same
+spawn gap, with followers' braking, around the station span the body covers there, checked with
+the join gap at the grant. From the grant until its body has left a crossed lane, that span is a
+standing obstacle for the lane's traffic (and for traffic about to enter it), clamped like a stop
+line, and no spawn or lane change lands in it. A car turning into the same mouth on the
 exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
 the join station, whichever is earlier (TASK-153), so it never stands in the gap the grant
-checks. TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
+checks; one turning in from a crossed lane stops the spawn gap short of its span. TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
 departure's spawn gap (with the reversing room ahead) while parked, is inserted there at speed 0,
 reverses out over `leaveManoeuvreS` and drives the aisle as a lane vehicle; it never starts in the
 lot. A lot exit whose drive-out has no pose clear of its lane is offered only when no other exit
-is. Gridlock recovery
+is. TASK-164: nor is one whose hold stands, lane ends respected, in the stretch of a lot aisle lane
+a lane car can stand in (from where one enters it, by a movement or else its first spawning
+connector, to its end if it leads on, else its last connector) or in a drivable movement joining
+the aisle lanes. A bay on an aisle lane that carries none of its exits gets a departure when that
+lane passes at least one of them; the bay keeps every exit its departure does not pass
+(`departureMisses`) as a lot exit where that exit's hold is clear, and the departure carries the
+draw share of the exits it passes, so each exit keeps its share. Gridlock recovery
 never applies inside a lot. Trucks and buses use garages only; garage admission and stock
 rules are unchanged.
 
@@ -1663,7 +1708,10 @@ Step sequence, in this order every step:
 2. Spawn: for each `out` or `both` connector in index order, release queued trips whose
    departure time has passed while the lane has a free gap of `spawnMinGapM` at the connector
    and the connector's per-minute budget allows. A released trip gets a route request from the
-   connector lane; `no_route` fails the trip without spawning. TASK-112 holds person car trips
+   connector lane; `no_route` fails the trip without spawning. A trip that needs parking fails
+   as `no_parking` only when a car from its departure lanes could reach one of its facilities
+   (movements and lane changes on legal car lanes, `src/network/car-service.ts`); reaching none
+   is `no_route` (TASK-155). A car leaving a parked space keeps `no_parking`. TASK-112 holds person car trips
    until their access walk arrives. Local walk trips use the walker path; bus, rail and walks
    with a gateway end fail with `unsupported_mode` (T15).
 3. Proposals, for every driving vehicle in (lane idx, position descending) order, from the
@@ -1997,6 +2045,14 @@ trip counters; their outcomes and `no_walk_route` failure reasons remain availab
 `walkTripsFailed`, access/egress `{ count, meanTimeS, meanDistanceM }`, `walkFallbacks` and
 grouped `fallbacks`. Person state and leg progress participate in the deterministic hash.
 
+TASK-129: `sim/parking.ts` chains a car's trips by `carId` (by `personId` for trips without
+one), so a second household driver leaves from where the first parked, and TASK-122's exit
+mask follows the car's next trip, whoever drives it. In `sim/persons.ts` a trip whose car
+another member drove before waits until that drive completes (the car is parked), then starts
+its access walk; if that drive failed, the trip fails as stranded. A trip never takes another
+car. `Metrics.persons.carWaits` reports the waits (count, median, maximum). The person detail
+adds the household and its members, today's car (or none) and, for a borrowed car, its owner.
+
 TASK-030 admission windows: compiled places retain a copy of their events. Each event opens
 `arrivals` admission slots uniformly over its window (floor of the elapsed fraction times
 the count). Quotas add across events, are shared by all arrival connectors, and unused slots
@@ -2060,12 +2116,13 @@ regenerated deterministically from it.
 ```ts
 interface Activity { kind: 'home' | 'work' | 'school' | 'shop' | 'leisure' | 'other';
   placeId: PlaceId; startS: number; durationS: number }
-interface Person { id: string; homePlaceId: PlaceId; workPlaceId: PlaceId | null;
-  hasCar: boolean; agenda: Activity[] }
+interface Person { id: string; homePlaceId: PlaceId; householdId: string;   // TASK-129
+  workPlaceId: PlaceId | null; hasCar: boolean; agenda: Activity[] }
 type TripMode = 'car' | 'walk' | 'bus' | 'rail';
 interface Leg { mode: TripMode; fromPlaceId: PlaceId; toPlaceId: PlaceId }
 interface TripRequest { id: string; personId: string | null; originPlaceId: PlaceId;
   destinationPlaceId: PlaceId; departS: number; mode: TripMode; legs: Leg[];
+  carId?: string;                                // TASK-129: the household car of a car trip
   vehicleClass: VehicleClass; purpose: VehiclePurpose }
 type VehiclePurpose = 'private' | 'delivery' | 'service' | 'taxi' | 'through';
 
@@ -2079,13 +2136,20 @@ interface DemandConfig {
   throughTripsPerHour: number[];  // 24 values, gateway to gateway (Gate 3)
   classShares?: { local: Record<VehicleClass, number>; through: Record<VehicleClass, number> };
   chains?: { schoolShare?: number; shopShare?: number; leisureShare?: number }; // 0..1, omitted = 0
+  modeChoice?: Partial<ModeChoiceConfig>;          // TASK-113, omitted fields = DEFAULT_MODE_CHOICE
 }
+interface ModeChoiceConfig { enabled: boolean;    // default true; false = every driver drives
+  walkPreferenceMin: number;  // default 12: mean minutes a person would rather walk than drive
+  valueOfTimePerH: number;    // default 12: median euros per hour
+  carCostPerKm: number;       // default 0.30 euros
+  sensitivityPerMin: number } // default 0.3: logit scale per generalized minute
 
 interface Scenario { id: string; name: string; seed: number; startS: number; endS: number;
   demand: DemandConfig; simParams: Partial<SimParams> }   // SimParams type lives in src/schema/sim.ts; defaults in src/sim/params.ts
 
 function generatePopulation(city: City, config: DemandConfig): Person[];
-function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[];  // sorted by departS
+function scheduleTrips(city: City, persons: Person[], scenario: Scenario,
+  compiled?: CompiledCity): TripRequest[];  // sorted by departS; `compiled` is `city` compiled (TASK-155)
 ```
 
 TASK-100 assigns class after mode choice, using a separate demand-seeded stream keyed by
@@ -2127,7 +2191,25 @@ variant. Saving a baseline captures current editor state, including unapplied li
   road arrivals; travel time is not subtracted. A profile overrides the default dwell duration.
 - Through demand draws origins by gateway population and distinct destinations by gateway
   jobs. Gateways without a feasible positive-weight counterpart are excluded; without any
-  eligible pair there are no through trips. Integer hourly rates are exact; fractional rates
+  eligible pair there are no through trips.
+- TASK-155: demand generates no car trip with a gateway end that no car can serve. A gateway
+  serves a place when its departure lanes reach one of the place's arrival connectors or
+  facilities it could park at (own, public, or an unowned lot, without the distance limit),
+  and a place serves a gateway when one of its departure connectors or such facilities reaches
+  the gateway's arrival lanes; between gateways, departure lanes must reach arrival lanes.
+  Reach follows movements (not `neverGreen` or lane-drop fallbacks) and adjacent-lane changes
+  on car-legal lanes: public roads and the trip end's own private/destination zone, entering
+  another zone only to end in it; lane-change distances and stations are ignored, so only
+  trips no route can serve are removed. Population and its draws are unchanged: a person
+  whose next leg is unserved stays at the activity before it for the rest of the day, and
+  that leg and the rest of the agenda generate no trips. Through destinations are drawn among
+  the gateways the origin serves. Event visitors are drawn among gateways that serve their
+  inbound and outbound legs, falling back to residential places when none does. Served trips
+  are unchanged: the Sindelfingen 0.15 morning keeps exactly its 155 departures.
+  `scheduleTrips` takes the caller's compiled city as an optional last argument (lead,
+  TASK-155 review); without it, it compiles the city itself when the city has a gateway. The
+  app's load, restart, regeneration and comparison and the import probe pass theirs; trip
+  lists are identical either way. Integer hourly rates are exact; fractional rates
   use seeded stochastic rounding. Times are uniform in each hour of the scenario day.
 - Each place event creates `max(arrivals, departures)` nonresident visitor identities on
   separate streams keyed by place, event and visitor index. The first `min` visitors have
@@ -2171,6 +2253,29 @@ variant. Saving a baseline captures current editor state, including unapplied li
   facilities retain legacy connector admission, including zero-demand event portals.
 - Validation summary (Gate 3 UI): trips by place and hour, total trips, mean length, queued
   unspawned, completed, failed by reason.
+
+TASK-128 station riders (`demand/stations.ts`, constants in `demand/rider-profile.ts`). After
+through and event trips, `scheduleTrips` appends S-Bahn riders: walk-only persons outside the
+population, with no household, car or parking. Every S-Bahn stop over the day (TASK-127's
+timetable, `stationArrivals` in `network/trains.ts`) at a platform listed by a station place
+brings riders who get off: commuters by the train's arrival hour (05:00 10, 06:00 30, 07:00 50,
+08:00 50, 09:00 30, 10:00 15 per stop), visitors 10 per stop from 11:00 to 21:59, none from
+22:00 to 04:59; at full population, scaled by `personsPerResident`, fractional counts rounded by a
+seeded draw per stop (`riders` stream keyed by the stop). Main-line trains have no stops and
+bring none. A rider is `rider:<station>:<platform>@<arrival second>:<i>`. The walk out, station to
+destination, departs at the arrival plus the platform-to-door delay: straight line from the
+rider's point along the standing train (a seeded uniform draw over its length, so a stop's riders
+leave over a minute or two; the stop reports the delay from the train's middle) to the nearest
+entrance x 1.3 at the scenario's walking speed (default 1.4 m/s); the walk itself leaves from the
+station's walk anchors (its entrances) by the cheapest route. The
+destination is a place within 1 500 m straight line of the station, never a gateway, parking
+place or the station, by `jobs x exp(-d / 600 m)` for commuters and `attraction x exp(-d / 600 m)`
+for visitors; a stop with no eligible place or no entrance brings nobody. The walk back departs at
+the walk out's departure + the straight-line walk (x 1.3) + the stay (commuters the scenario's
+work duration, visitors a uniform 1 to 3 h) and ends at the station, where the rider boards and
+is done. A rider whose walk out would leave before the scenario starts is at the destination
+already: only the walk back is emitted. Riders run through TASK-112's person walks unchanged; the
+person inspector reads a rider's day from the id and the trips.
 
 TASK-103 extends parking choice: work and school keep own garages first; a seeded person
 share `streetParkingShare` (default 0.3) seeks visible parking before their home garage.
@@ -2226,11 +2331,81 @@ Lead follow-up (2026-11-08). Starting stock holds the cars of the persons demand
 generation makes: `ceil(round(residents × personsPerResident) × carShare)` per home, not the
 full population, so every visible parked car belongs to someone; a resident whose moved
 street car a neighbour took starts from the home's inferred garage while the home has cars
-left. A lot whose own place has no demand (an OSM lot imports as its own `parking` place)
+left. TASK-129 replaces this with household cars for trip lists scheduled from a population
+(below); hand-built trip lists without `carId` keep this formula and first come, first served. A lot whose own place has no demand (an OSM lot imports as its own `parking` place)
 serves the places within 200 m as their car park: a customers lot the visitors of
 non-residential places, a private lot also their workers and residents (and their share of
 starting stock). It ranks first for those destinations, and a lot whose free stalls are all
 spoken for by cars on their way drops out of the choice.
+
+TASK-129 households and cars (`src/demand/households.ts`). Each home's persons form
+households in person order, with sizes drawn from Germany's 2023 microcensus (1 person 41%,
+2 34%, 3 12%, 4 9%, 5 or more 4%; constants, no settings) on a sub-stream of the demand seed
+per home; the last household takes the persons left over. Households group the sampled
+persons, so at `personsPerResident` 0.15 a home with 7 sampled persons has two or three
+households, and the shares describe the sampled population. A gateway person is a household of
+one. `householdId` is `hh:<homePlaceId>:<k>`. The population stays the persisted source: a
+saved population without `householdId` opens with the households the same grouping gives
+(a pure function of the persons, the places' kinds and the demand seed), so it equals a
+regenerated one. A household owns car `car:<householdId>:<k>` for its k-th member with
+`hasCar` (person index order), so the fleet is the car owners and no draw moves.
+`scheduleTrips` decides drivers per day from the planned agendas: a member's day away runs
+from the first departure to the planned return home plus 30 minutes; owners drive their own
+car on any day away; then the other members, by first departure, each take the first car
+free for their whole day away; everyone else walks all day (no mode choice, TASK-113). A
+car trip carries its `carId`; walk, rider, through and event trips have none. A car no one
+drives stays parked at home all day.
+
+The household cars are the starting stock: per home, the number of cars whose day begins
+there (from the trips' `carId`), under the TASK-103 rules (home garage, the
+`streetParkingShare` moved to strips and lots within the radius, the inferred home garage as
+the fallback). A car takes a space of its own home's stock only, in an order seeded per car,
+never another home's moved car. A car trip that ends at its household's home chooses within
+`SimParams.homeParkingRadiusM` (default 400 m) first, the home's inferred garage counting as
+within: it heads for a full facility there and searches on from it, as at departure, and looks
+beyond the radius only once nothing within admits it (none exists, every one is full or
+claimed or has refused it, or a free space is unreachable). `Metrics.parking.home` lists every
+car parked beyond the radius with its reason, and the distances from home of the others.
+Other destinations keep their choice.
+
+TASK-113 mode choice (`src/demand/mode-choice.ts`, run by `chooseTripModes` in
+`src/sim/persons.ts`). Each home-based tour of a person who has today's household car (a trip
+list's `carId`, TASK-129) chooses walk or car at its first departure; the car is at home then.
+Afterwards the car stays with its driver until it is back home, so every trip of the tour takes
+the tour's mode: a person who walked out walks home and never drives a car still parked at home,
+and one who drove out drives home. Persons without a free household car walk, as TASK-129 left
+them. A tour is in the choice only if each of its trips is a private car trip with no gateway end;
+tours with a van trip (TASK-100 classes), gateway commuters, through and event traffic keep their
+vehicles, and TASK-128's station riders stay walk-only, outside the choice and the mode shares. The choice is a multinomial logit over generalized minutes: walk is the walk-graph
+time minus the person's walk preference; car is the walk to the parked car, the drive on the
+run's current link costs, the expected parking search and the walk from the space, plus the
+running cost (`carCostPerKm` times the drive's length) over the person's value of time. Parking
+is estimated from the nearest facility of the place itself, else the nearest public facility
+within `parkingSearchRadiusM` with a 120 s search, else the place's connector; walks to and from
+it are straight lines times 1.3. Each person draws a walk preference (normal, sd 6 min) and a value
+of time (log-normal, sigma 0.5) from their own stream of the demand seed; each tour draws its choice
+from its first trip's stream of the scenario seed (`mode-choice`). The draws are standard and
+the configuration only rescales them, so a slider moves no draw, and raising the walk preference
+only turns car tours into walk tours. Transit is a third entry of the alternatives with no cost
+until stations carry riders (TASK-128).
+
+The choice runs when the engine loads, before parking chains the car trips and stocks their cars
+(parking's chains and stock are built once from the car trips), so "current link costs" are the
+costs the run starts with (free flow unless the host passes others), and a walked tour's car trips
+become walk trips without a `carId`. The walk routes it computes are the person walkers' later
+routes. A trip whose places have no walk route cannot walk, so a city without a walk network runs
+exactly as without the choice. `TripOutcome.mode` (and the trips CSV's `mode` column) gives
+each trip's mode after the choice, and `PersonMetrics.modes` counts person trips by mode when they
+start, in total and by hour of departure, and those completed: a car trip is `drive` when it
+parked at its destination's own facility (or the destination is a gateway), `driveWalk` when it
+parked elsewhere and walked on. Where the car parks stays the parking choice's decision, so drive
+and drive-and-walk are outcomes of one car alternative, not separate choices. A household car
+whose every tour walks is not in the starting stock, as TASK-129 leaves cars nobody drives.
+The default scenario and the app run with mode choice on. The Munich traffic gate (the gate, T63,
+T21, T29), T53 on Munich, the full-demand morning and `traffic:quick` measure car traffic with it
+off (owner, 2026-11-13); `tests/traffic/munich-mode-share.test.ts` (full traffic tier, not the
+light one) guards the choice on: the local walk share, its fall with distance, and the car trips'
+gridlock and stalled heads.
 
 ## 10. Engine host
 
@@ -2910,6 +3085,9 @@ view.json         { camera, layers, selection }                    optional
 baseline.json     { city: City, scenario: Scenario, population?: Person[] } optional
 ```
 
+- TASK-129: `Person.householdId` is optional in saved files. `openProject` gives a population
+  (and a baseline population) saved without it the households a regenerated population would
+  have, from the first scenario's (or the baseline's) demand seed. Schema version remains 1.
 - Single JSON: `{ manifest, city, population?, scenarios, history?, view?, baseline? }`. Each member's
   hash is computed over its compact JSON serialization, which is embedded verbatim, so the
   same manifest verifies both forms. `manifest.schemaVersion` is the city's schema version at
@@ -3193,7 +3371,8 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    within a road-pair group before generating the program: keep the first nonconflicting
    movement in deterministic compiler order, explicitly ban conflicting pairs and record
    `signalLaneAssignment`. Drivers must merge on the approach; unresolved groups still get
-   `osm_signal_group_conflict`. `highway=stop` gives `stop`;
+   `osm_signal_group_conflict`. A signalised junction group's one program follows section 5.4
+   (TASK-161). `highway=stop` gives `stop`;
    `highway=give_way` gives `yield`; else `uncontrolled`.
 8. Clip to the bbox: a road crossing the edge is cut there; the cut end becomes a node and a
    `gateway` place with an `out` connector (5 m into entering roads) or an `in` connector (5 m
@@ -3208,7 +3387,10 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    change plus 10 m clearance. A corridor without a multi-road cycle retains its directional
    portals. Every clipped motorway, trunk, primary and secondary end retains a portal even
    when disconnected, with diagnostics exposing its lack of access. Isolated minor-road
-   fragments retain their roads and diagnostics but generate no gateway demand.
+   fragments retain their roads and diagnostics but generate no gateway demand. TASK-155: the
+   import reports an info `gateway_unserved` for a gateway that reaches no local place or
+   parking, or that none reaches, naming the gateways it still serves (or that it generates
+   no trips); compile diagnostics are unchanged.
    Local two-way residential/service boundary ends have inferred turnarounds, allowing
    a driver who misses a turn to return instead of stranding at the crop boundary.
 9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
@@ -3414,5 +3596,5 @@ Benchmark the sim step, worker transfer, and render time separately (TASK-044).
 
 Transit vehicles and GTFS, PBF import and bulk extracts, permissive and actuated signals,
 adaptive routing beyond EWMA, editing in 3D, desktop packaging, bicycles, mode choice and
-households sharing a car. R7's multimodal readiness is covered by `TripRequest.legs` and
+car sharing between households (TASK-129 shares a car only within a household). R7's multimodal readiness is covered by `TripRequest.legs` and
 `TripMode` in section 9; nothing in the sim assumes a person equals a car.

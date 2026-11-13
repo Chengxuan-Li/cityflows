@@ -3,6 +3,7 @@ import type { Place } from '../../schema';
 import { vehicleClasses } from '../../schema/city';
 import type { FailReason, Metrics } from '../../sim/types';
 import { useAppStore, type TestWalkers } from '../store';
+import { ModeChoiceControls } from './mode-choice';
 
 const failReasons: Record<FailReason, string> = {
   no_parking: 'No parking available',
@@ -172,7 +173,8 @@ export function DemandPanel() {
   }, [engine, pausedTime, reportError]);
 
   const persons = project.population.length;
-  const withCar = project.population.filter((person) => person.hasCar).length;
+  const cars = project.population.filter((person) => person.hasCar).length;
+  const households = new Set(project.population.map((person) => person.householdId)).size;
   const max = Math.max(1, ...summary.byHour);
   const places = Object.values(city.places).sort((a, b) => a.name.localeCompare(b.name));
   const reasons = (Object.keys(failReasons) as FailReason[]).filter(
@@ -184,8 +186,9 @@ export function DemandPanel() {
     <section id="demand" className="panel demand-panel" aria-label="Demand">
       <div className="chart-heading">
         <span>
-          {persons.toLocaleString()} persons, {withCar.toLocaleString()} with a car ·{' '}
-          {summary.totalTrips.toLocaleString()} trips over the day
+          {persons.toLocaleString()} persons, {cars.toLocaleString()} with a car ·{' '}
+          {summary.totalTrips.toLocaleString()} trips over the day · {households.toLocaleString()}{' '}
+          households
         </span>
       </div>
       <div className="demand-columns">
@@ -375,6 +378,7 @@ export function DemandPanel() {
             Regenerating draws new homes, workplaces and departure times from the seed; restart to
             run them.
           </p>
+          <ModeChoiceControls />
           <TestPedestrians
             places={places}
             walkers={project.scenarios[0]!.walkers ?? []}

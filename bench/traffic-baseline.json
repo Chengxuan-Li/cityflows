@@ -1,12 +1,12 @@
 {
-  "tree": "main at the PR #1 merge (cd0b994: TASK-136 operating level crossings and TASK-138 scheduled trams), on top of TASK-154 (TASK-131 Phase 3, the Landsberger loop's deadlock cycles drained), TASK-153 (lot admission), TASK-152 and TASK-150; reset by the owner's decision of 2026-11-13. 0 parking failures, 0 stranded; every failure is gridlock. 0 stalled heads at 10:00 and at the 09:30 quick sample.",
+  "tree": "main at the TASK-113 merge (21b161e: mode choice; the gate measures it off, per the owner's decision of 2026-11-13), on top of TASK-161 (junction-group signal programs), TASK-157, TASK-156, TASK-128, TASK-155 and TASK-129; reset under the owner's decision of 2026-11-13 (reset as needed). 0 parking failures, 0 stranded, 0 gridlocked. 0 stalled heads at 10:00 and at the 09:30 quick sample.",
   "scale": 0.15,
-  "completed": 4373,
-  "gridlocked": 5,
+  "completed": 5298,
+  "gridlocked": 0,
   "stalledHeads": 0,
   "quick": {
     "until": "09:30",
-    "completed": 3737,
-    "gridlocked": 4
+    "completed": 4852,
+    "gridlocked": 0
   }
 }

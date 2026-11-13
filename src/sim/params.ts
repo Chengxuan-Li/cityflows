@@ -7,6 +7,7 @@ export const DEFAULT_SIM_PARAMS: SimParams = {
   parkManoeuvreS: { parallel: 8, angled: 4, perpendicular: 4 },
   leaveManoeuvreS: 4,
   parkingSearchRadiusM: 400,
+  homeParkingRadiusM: 400,
   dtS: 0.1,
   vehicleClasses: {
     car: { lengthM: 4.5, widthM: 1.8, maxSpeedMps: Infinity, accelFactor: 1, decelFactor: 1 },
