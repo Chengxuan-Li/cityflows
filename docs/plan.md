@@ -191,19 +191,19 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | done 2026-11-13 (2D Evening cost to TASK-176) |
 | [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | done 2026-11-13 (pk:1475 left) |
 | [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | done 2026-11-13 |
-| [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | in progress (Claude Code subagent) |
-| [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | delivered 2026-11-13 (2D only); merge queued |
-| [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | delivered 2026-11-13; merge held (full tier red) |
-| [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | delivered 2026-11-13; merge held (full tier red), integrating via TASK-170 |
-| [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | delivered 2026-11-13 with TASK-169 (actuated default, split opt-in); merge queued |
+| [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | done 2026-11-13 (frame check to TASK-176) |
+| [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | done 2026-11-13 (2D only; T64 2D frame check to TASK-176) |
+| [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | done 2026-11-13 (T80 key-drop fix fc82ace) |
+| [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | done 2026-11-13 (with TASK-170) |
+| [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | done 2026-11-13 (actuated default, split opt-in; owner review) |
 | [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | done 2026-11-13 |
 | [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | done 2026-11-13 |
 | [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | done 2026-11-13 |
-| [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | delivered 2026-11-13; merge held (full tier red) |
+| [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | done 2026-11-13 |
 | [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | done 2026-11-13 |
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | queued (near the end) |
 | [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after the UI merge and TASK-168) |
-| [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13; Full run pending |
+| [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13 (Full run 43516520585 green) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4013,6 +4013,52 @@ the base's 5,301, 1.8 and 854 s. The gate sits at its limit (seed 1: 5,307 / 5 /
 0 or 1. Actuated runs step about 14.6% slower (the traffic, not the controllers; to TASK-176). Open: a
 split that does not hurt the loop; actuated walk lights show red in amber and all-red even when the
 next phase keeps walk green.
+
+TASK-168 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): keyboard shortcuts (`src/ui/shortcuts.ts`;
+mod is Cmd on a Mac, Ctrl elsewhere), one command table (`src/ui/commands.ts`) read by the toolbar, overflow
+menu, command menu (mod+K) and shortcut sheet (mod+/ or ?). Nothing fires in a text field or behind a sheet;
+hold-Space still pans. Keys show in tooltips and overflow items. 13 unit and 5 e2e cases (T80, in the light
+set). At the queue merge T80 failed in most runs under load, also on main plus TASK-168 alone: a follow-up
+(`task/168-t80-fix`, fc82ace, lead's subagent) found the app dropping keys. A `<dialog>`'s late `close`
+event shut a sheet reopened by a quick key, and tool keys leaked past a sheet still opening. Sheets now
+report Escape through `cancel`, open in the same React commit as the store change, and the dispatcher asks
+the store which sheet is open; T80 passed 150 of 150 repeats. Open: browsers reserve Ctrl/Cmd+N and may
+reserve mod+1 to 3 in a normal tab (the command menu covers them).
+
+TASK-169 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged with TASK-170): keep-clear zones over
+marked crosswalks and lot and garage mouths (`src/network/keep-clear.ts`, cached per compiled city, no schema
+change); a queued car stands 0.5 m short of a zone its body would cover, heads move up to the stop line
+when the zebra is clear, and a lot exit joining inside a kept-clear mouth needs only the minimum gap to
+standing cars. de themes draw a hatched box, us/uk a KEEP CLEAR stencil (2D and 3D). Hashes re-pinned; the
+V114/V117 pins were recomputed at TASK-170's step-0 merge (db08f1a).
+
+TASK-174 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): transit as a mode. Routing over a
+time-expanded graph of the combined rail timetable (16 Munich stops, built in about 130 ms); riders walk to
+the platform, wait, board the first run with room (tram 210, S-Bahn 1,088 places, scaled), ride and walk
+on, giving up after 30 min. Mode choice draws over walk, car and transit; transit tours ride as mode `rail`
+and leave the car parked. TASK-128's station riders now ride their S-Bahn. Metrics and the Chart section
+gain transit. Census, choice on, seeds 1 to 3: walk 77.6 to 78.6%, transit 0.5 to 1.3% (each S-Bahn route
+calls once inside the extract, so residents' transit is the tram), 0 denied boardings. Choice off: gate
+unchanged against main (same seed-1 state hash).
+
+TASK-166 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): dark appearance. Every window colour is
+a token in `src/ui/app.css` with a Sonoma-style dark set (accent `#0a84ff`); light is unchanged apart from
+three AA fixes (pressed 3D toggle text `#0058b8`, comparison key `#8f5a3a`, load background). Appearance
+pop-up (System / Light / Dark) and "Match lighting" (window dark at Evening, Night or after dusk) in Layers,
+stored per viewer. The dark map: near-black canvas, dark land use and place tints mixed from the dark
+ground, shaded sidewalks; roads, markings, rail, vehicles and furniture keep real colours. TASK-167's
+labels get dark inks on a dark halo, at least 4.5:1 against every place tint (tested). A colour-space fix
+makes Light 3D place tints a shade deeper, matching 2D (one line in `src/render3d/geometry.ts` to revert;
+for the owner). WCAG contrast test (42 checks) and V166. Open: an appearance switch in 3D rebuilds the scene
+(3.6 to 7.3 s on Munich under load); the appearance is not yet in `docs/architecture.md` or AGENTS.md
+"Design direction" (lead to add).
+
+Queue merge (lead, 2026-11-13): main a183a0b + TASK-168, 174, 170 (with 169), 167, the T80 fix and 166,
+assembled on `task/lead-queue-trial`. Conflicts: 170 against 174 in engine.ts and worker.ts (both
+snapshot fields kept, transit rider inspection plus signal timing), 167 against 163 in scene.ts (labels
+above the night layer, `cityGrades(city)` after TASK-175), and 166 against the stack (resolved by its
+agent). Verified on the final tree: type-check, lint, format, build, unit (1,460), city (175), light e2e (45), gate and guard and T53 (9 and 1 expected fail) pass; the Full run 43516520585 on a183a0b (TASK-178) was green in every job, which released the merge hold. Probe, Munich seed 1, choice off: 5,449 completed
+(+2.8% against the baseline's 5,298, no reset), 0 stalled heads.
 
 ## Owner decisions log
 
