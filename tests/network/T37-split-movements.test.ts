@@ -10,6 +10,7 @@ import type { CMovement, CRoad } from '../../src/network/types';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import type { City, TurnRule } from '../../src/schema';
 import { cityTest, tierCities } from '../tier';
+import { limit } from '../timeouts';
 
 const extracts = {
   Munich: ['munich-donnersberger', [11.525, 48.135, 11.545, 48.148]],
@@ -187,7 +188,7 @@ cityTest(
       ['r:687#2>r:196#0', 'diverge'],
     ]);
   },
-  60_000,
+  limit(60_000),
 );
 
 // Before TASK-085 (571cce5): Munich 152 of the 161 lined-up pairs had a movement, 1 banned, 8
@@ -228,7 +229,7 @@ test.each(
     expect(pairs.filter((p) => !p.movement && !p.banned).map((p) => p.id)).toEqual([]);
     expect(pairs.filter((p) => p.movement && !continuing(p.movement))).toEqual([]);
   },
-  60_000,
+  limit(60_000),
 );
 
 /** TASK-131 keeps OSM geometry (realignRoads deleted, the merge gone): a two-way street forking
@@ -265,7 +266,7 @@ test.each(tierCities(['Munich', 'Sindelfingen'] as const))(
         }
     expect(crossings.filter((c) => !acuteForks.includes(c))).toEqual([]);
   },
-  60_000,
+  limit(60_000),
 );
 
 cityTest(
@@ -293,5 +294,5 @@ cityTest(
     expect(result.route.roads.slice(0, 2).map((i) => net.roads[i]!.id)).toEqual(['r:313', 'r:692']);
     expect(auditRoute(city, net, request, result.route)).toEqual([]);
   },
-  60_000,
+  limit(60_000),
 );

@@ -29,6 +29,7 @@ import { signalHeads } from '../../src/render/layers/signals';
 import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { tierCities, unitTest } from '../tier';
 import type { City } from '../../src/schema';
+import { limit } from '../timeouts';
 
 const nets = new Map<AuditCity, CompiledCity>();
 const net = (name: AuditCity) => {
@@ -118,7 +119,7 @@ test.each(tierCities(['town', 'sindelfingen', 'munich'] as const))(
     expect(wrong).toEqual([]);
     expect(missing).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 test.each(tierCities(auditCities))(
@@ -157,7 +158,7 @@ test.each(tierCities(auditCities))(
     console.info('T41.2', name, { stripes, signalStripes, bad: bad.length });
     expect(bad).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 /** Centre lines by role, regardless of their theme's width. */
@@ -218,7 +219,7 @@ test.each(tierCities(auditCities))(
     console.info('T41.4', name, { segments, inside: inside.length, under: [...under] });
     expect([...new Set(inside)]).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 // TASK-094: a signal's lights stand with their lane's stop line (behind the set-back crossing, or
@@ -243,7 +244,7 @@ test.each(tierCities(auditCities))(
     expect(heads).toBeGreaterThan(0);
     expect(far).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 unitTest(
