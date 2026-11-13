@@ -49,6 +49,8 @@ test.each([
     scenario.endS = 9.5 * 3600;
     scenario.demand.personsPerResident = 0.03;
     Object.assign(scenario.demand, { classShares: { local: allCars, through: allCars } });
+    // The legacy trips all drive: TASK-113's mode choice off.
+    scenario.demand.modeChoice = { enabled: false };
     const requests = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
     const engine = createEngine();
     engine.load({ compiled: setup(city), scenario, trips: requests });

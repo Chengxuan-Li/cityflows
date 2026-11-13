@@ -5,6 +5,7 @@ import type {
   Person,
   Scenario,
   SimParams,
+  TripMode,
   TripRequest,
   VehicleClass,
   VehiclePurpose,
@@ -175,6 +176,8 @@ export interface TripOutcome {
   freeFlowS: number | null;
   failReason: FailReason | null;
   respawns: number;
+  /** TASK-113: the mode the trip travelled in, after the mode choice. */
+  mode: TripMode;
 }
 
 export interface VehicleDetail {

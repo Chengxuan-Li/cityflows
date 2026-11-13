@@ -71,6 +71,8 @@ test('QA every export downloads parseable data with columns, feature counts and 
         'parking facility',
         'walking distance',
         'parking search time',
+        // TASK-113: the mode the trip travelled in.
+        'mode',
       ],
     ],
     [

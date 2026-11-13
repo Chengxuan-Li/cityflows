@@ -1122,3 +1122,34 @@ dd {
   pointer-events: none;
   animation: live-edit-fade 6s forwards;
 }
+
+/* TASK-113: mode shares in the metrics sheet and the mode choice in the demand sheet. */
+.mode-shares {
+  margin: 8px 0;
+}
+
+.mode-shares svg {
+  display: block;
+  width: min(100%, 420px);
+  margin-top: 4px;
+  overflow: visible;
+}
+
+.mode-shares text {
+  fill: var(--muted);
+  font-size: 13px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.mode-choice {
+  margin: 12px 0 0;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
