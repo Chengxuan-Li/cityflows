@@ -1684,9 +1684,12 @@ input[type='file']::file-selector-button {
   touch-action: none;
 }
 
-.resize-handle:hover,
-.resize-handle:focus-visible {
+.resize-handle:hover {
   background: linear-gradient(to right, transparent 3px, var(--accent) 3px 4px, transparent 4px);
+}
+
+.resize-handle:focus-visible {
+  background: linear-gradient(to right, transparent 2px, var(--accent) 2px 5px, transparent 5px);
   outline: none;
 }
 
