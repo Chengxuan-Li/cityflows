@@ -63,12 +63,13 @@ function farLaneWorld(traffic: Traffic) {
   place('East end', 'gateway', { x: 410, y: 10 }, [
     { road: east!, positionM: 390, direction: 'in' },
   ]);
-  // Just past the mouth (x = 150) on each carriageway: x = 165 eastbound, x = 135 westbound.
-  place('Near stop', 'gateway', { x: 165, y: 10 }, [
-    { road: east!, positionM: 165, direction: 'in' },
+  // Just past the mouth (x = 150) on each carriageway: x = 155 eastbound, x = 145 westbound,
+  // inside its keep-clear zone, so the queue for them stands across the mouth (TASK-169).
+  place('Near stop', 'gateway', { x: 155, y: 10 }, [
+    { road: east!, positionM: 155, direction: 'in' },
   ]);
-  place('Far stop', 'gateway', { x: 135, y: -10 }, [
-    { road: west!, positionM: 265, direction: 'in' },
+  place('Far stop', 'gateway', { x: 145, y: -10 }, [
+    { road: west!, positionM: 255, direction: 'in' },
   ]);
   place('Mouth', 'gateway', { x: 146, y: 10 }, [{ road: east!, positionM: 146, direction: 'out' }]);
   place('Inner start', 'gateway', { x: 120, y: 10 }, [
@@ -174,7 +175,7 @@ test.each(['near', 'far', 'stream', 'spawn', 'lanes', 'none'] as const)(
       w.through.flatMap((_, i) => {
         const o = engine.inspect(i + 1);
         return o?.state === 'driving' && o.lane === lane
-          ? [[o.positionM - lengthM, o.positionM]]
+          ? [[o.positionM - lengthM, o.positionM, o.speedMps]]
           : [];
       });
     // Lane bodies while it holds and when it is granted, judged after the run against the span
@@ -241,8 +242,13 @@ test.each(['near', 'far', 'stream', 'spawn', 'lanes', 'none'] as const)(
       return [fromM, toM] as const;
     });
     for (const [fromM, toM] of spans) expect(toM - fromM).toBeGreaterThan(widthM);
+    // TASK-169: the near lane keeps the mouth clear, and a car standing beside it there needs
+    // only the following gap; moving cars the spawn gap.
     const inside = (on: number[][], from: number, to: number) =>
-      on.some(([rear, front]) => front! > from - GAP && rear! < to + GAP);
+      on.some(([rear, front, speed]) => {
+        const gap = speed! < 0.1 ? DEFAULT_SIM_PARAMS.idm.minGapM : GAP;
+        return front! > from - gap && rear! < to + gap;
+      });
     const nearBusy = (h: Lanes) => spans.some(([from, to], i) => inside(h.near[i]!, from, to)),
       farBusy = (h: Lanes) => inside(h.far, joinM - lengthM, joinM);
     // Granted only with both gaps: nobody within the gap of a near-lane span or the join.

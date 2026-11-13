@@ -9,7 +9,13 @@ const legNames: Record<PersonLegDetail['kind'], string> = {
   drive: 'Drive',
   egress: 'Egress walk',
   walk: 'Walk',
+  wait: 'Wait',
+  ride: 'Ride',
 };
+
+/** TASK-174: a tram stop's or platform's name. */
+const stopName = (city: City, id: string | undefined) =>
+  (id && (city.rail?.tramStops?.[id]?.name ?? city.rail?.platforms[id]?.name)) || 'stop';
 
 function clock(timeS: number | null) {
   if (timeS === null) return '—';
@@ -53,7 +59,7 @@ export function PersonInspector({
             <dt>Current leg</dt>
             <dd>
               {detail.currentLeg
-                ? `${legNames[detail.currentLeg.kind]} · ${detail.currentLeg.state}`
+                ? `${legNames[detail.currentLeg.kind]}${detail.currentLeg.kind === 'wait' ? ` at ${stopName(city, detail.currentLeg.stop)}` : detail.currentLeg.kind === 'ride' ? ` to ${stopName(city, detail.currentLeg.toStop)}` : ''} · ${detail.currentLeg.state}`
                 : 'None'}
             </dd>
             {detail.household && (
@@ -147,13 +153,17 @@ function Journey({ trips, city }: { trips: PersonDetail['trips']; city: City }) 
           </thead>
           <tbody>
             {trips.flatMap((trip, index) =>
-              trip.legs.map((leg) => (
-                <tr key={`${trip.tripId}:${leg.kind}`}>
+              trip.legs.map((leg, legIndex) => (
+                <tr key={`${trip.tripId}:${legIndex}`}>
                   <th scope="row">
                     {index + 1}. {legNames[leg.kind]}
                     <div className="muted">
                       {leg.state}
-                      {leg.kind !== 'drive' && ` · ${Math.round(leg.distanceM)} m`}
+                      {leg.kind === 'wait' && ` · ${stopName(city, leg.stop)}`}
+                      {leg.kind === 'ride' &&
+                        ` · ${leg.line ?? 'Tram'} to ${stopName(city, leg.toStop)}`}
+                      {(leg.kind === 'walk' || leg.kind === 'access' || leg.kind === 'egress') &&
+                        ` · ${Math.round(leg.distanceM)} m`}
                     </div>
                   </th>
                   <td style={{ whiteSpace: 'nowrap' }}>{clock(leg.startedS)}</td>

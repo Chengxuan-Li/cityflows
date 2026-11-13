@@ -173,10 +173,12 @@ const baselines = {
   // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
   // removed every pin equals 3e9951a's.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-  'munich-donnersberger': 'a328c8d02049121e11097c2933fa4cd3ef296455fae5e9d18db6ca5ef1a25353',
+  // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
+  'munich-donnersberger': '730a7b22bb8300cf95b83da79f09250112eb3f3425cb3e07972ba8ee8fdacdb5',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-  'sindelfingen-a81': '401dae542529c2aa46c21d8af35d9168e84fbeb8d7450aef54cc0b89da47ab6b',
+  // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
+  'sindelfingen-a81': '543e8039b249d3b3b7d59dcf5fc78dc54796b4e28b911af176a995bf39dd8679',
 };
 const lampCounts = {
   grid: [0, 0],

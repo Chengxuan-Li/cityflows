@@ -64,10 +64,9 @@ const graphics: [string, string[]][] = [
   ['--signal-served', ['--surface']],
   ['--signal-conflict', ['--surface']],
   // The walk share fills the foot of a 100% bar whose top (car) and the axis outline it.
-  ...['driving', 'queued', 'completed', 'delay', 'car'].map((series): [string, string[]] => [
-    `--chart-${series}`,
-    ['--sidebar'],
-  ]),
+  ...['driving', 'queued', 'completed', 'delay', 'car', 'transit'].map(
+    (series): [string, string[]] => [`--chart-${series}`, ['--sidebar']],
+  ),
   ['--heat', ['--sidebar']],
 ];
 

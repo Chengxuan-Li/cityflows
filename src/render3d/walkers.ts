@@ -12,7 +12,7 @@ import {
 import { walkGreenS, type CompiledCity, type CSignal } from '../network';
 import { walkSignalMarks } from '../render/layers/walkers';
 import { style } from '../render/style';
-import type { WalkerSnapshot } from '../render/types';
+import type { SignalStates, WalkerSnapshot } from '../render/types';
 import type { cityHeights } from './heights';
 
 /** TASK-111: a walker's height above its ground point: the walk surface's curb height, plus 5 m
@@ -108,7 +108,7 @@ export function buildWalkSignals(city: CompiledCity, heights: ReturnType<typeof 
   let loaded: CompiledCity | null | undefined;
   let lights: ({ signal: CSignal; link: number } | null)[] = [];
   /** Recolours the heads for `timeS` on the loaded signals; true when anything changed. */
-  const update = (timeS: number, signals: CompiledCity | null) => {
+  const update = (timeS: number, signals: CompiledCity | null, states?: SignalStates) => {
     if (signals !== loaded) {
       loaded = signals;
       const links = new Map(signals?.walk.links.map((l) => [l.id, l.idx]));
@@ -120,7 +120,15 @@ export function buildWalkSignals(city: CompiledCity, heights: ReturnType<typeof 
       });
     }
     const key = lights
-      .map((light) => (light && walkGreenS(light.signal, light.link, timeS) > 0 ? 1 : 0))
+      .map((light, i) =>
+        !light
+          ? 0
+          : states
+            ? states.walk[marks[i]!.link]!
+            : walkGreenS(light.signal, light.link, timeS) > 0
+              ? 1
+              : 0,
+      )
       .join('');
     if (key === previous) return false;
     previous = key;

@@ -57,6 +57,8 @@ export function workload(name: WorkloadName) {
     }
     scenario.demand.workStart = { meanS: 8 * 3600, sdS: 1 };
     scenario.demand.gravityScaleM = 50000;
+    // Owner, 2026-11-13: mode choice is on by default; the stress case measures road vehicles.
+    scenario.demand.modeChoice = { enabled: false };
   }
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, population, scenario);

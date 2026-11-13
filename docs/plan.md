@@ -191,19 +191,19 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | done 2026-11-13 (2D Evening cost to TASK-176) |
 | [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | done 2026-11-13 (pk:1475 left) |
 | [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | done 2026-11-13 |
-| [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | queued (after the UI merge) |
-| [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | in progress (Claude Code subagent) |
-| [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | queued (after the UI merge) |
-| [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | in progress (Claude Code subagent) |
-| [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | queued (after TASK-113; in sequence with TASK-169) |
+| [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | in progress (Claude Code subagent) |
+| [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | delivered 2026-11-13 (2D only); merge queued |
+| [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | delivered 2026-11-13; merge held (full tier red) |
+| [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | delivered 2026-11-13; merge held (full tier red), integrating via TASK-170 |
+| [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | delivered 2026-11-13 with TASK-169 (actuated default, split opt-in); merge queued |
 | [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | done 2026-11-13 |
 | [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | done 2026-11-13 |
 | [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | done 2026-11-13 |
-| [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | queued (after TASK-173) |
+| [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | delivered 2026-11-13; merge held (full tier red) |
 | [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | done 2026-11-13 |
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | queued (near the end) |
 | [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after the UI merge and TASK-168) |
-| [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | in progress (Claude Code subagent; merges held until green) |
+| [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13; Full run pending |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3976,6 +3976,43 @@ V100, gate4-layers, qa-mobile, T16 grid5x5-stress, T63, T54 Munich and others), 
 expect car traffic now that mode choice is on by default, plus layout leftovers. Per AGENTS.md new
 merges are held until TASK-178 makes the full tier green; TASK-163 had been pushed before the result
 arrived.
+
+TASK-178 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): one real bug, fixed in
+`src/sim/walkers.ts`. After a live edit removed a link a walker had already walked past, the next
+edit threw and the run went stale (T19). Legs already walked that lost their link are now dropped
+(regression case in `walker-spawn.test.ts`). The rest were specs written before mode choice, station
+riders and household parking: T47 town and qa-mobile drive everyone; T47 Munich's street click
+avoids parked cars; the T16 stress workload in `bench/workloads.ts` turns mode choice off (2,746
+active, floor 2,700); T54 and T61 find their driver by person, with mode choice off for the
+controlled drivers, and T54's strip owner is the nearest home with a garage. V100, gate4-layers and
+T63 were already fixed by TASK-173. munich-full-demand did not hang: CI took 808 s on 706eaa0 and
+2,563 s on 738af8c, so its setup limit is now `limit(3_600_000)`, a time limit, not a gate. Locally,
+every group passed, with failures under 100% CPU passing when rerun alone; T62's local-only rail
+frame check missed by 1.2 ms (to TASK-176). The full traffic tier passed at
+`CITYFLOWS_TEST_TIMEOUT_MS=240000` (3,581 s). `npm run check` passed (1,372). Open: full-demand step
+time roughly tripled between 706eaa0 and 738af8c at a similar peak, with routing requests down from
+5.0M to 0.38M, so routing is not the cause (to TASK-176 for profiling); T54's second project load in
+3D can exceed its 20 s Play wait under heavy load.
+
+TASK-167 (Claude Code subagent, Opus 5.5 high, 2026-11-13; delivered at 2fc1d6e, merge queued): 2D
+labels for streets (OSM `name`, along the road, upright, shown where the street is about as wide as
+the text on screen, one per divided street), stations, tram stops and places, placed collision-free
+per zoom step for the whole city, with a Labels layer toggle. The owner's notes: street names grow
+from 2 px/m (11 to 16 px minor, 12 to 17 px major); place fills now sit under rail, paving and roads
+(a Places look change on the owner's instruction). Frame cost: T62 2D level; T64 2D +3.6% and +12.6%
+in two loaded pairs, within the machine's noise but not shown under the 5% gate (to TASK-176). Open:
+3D labels, landmark names (context features carry none), thin rotated 11 px text.
+
+TASK-170 (Claude Code subagent, Opus 5.5 high, 2026-11-13; delivered at 8d0e237 with TASK-169 via the
+step-0 merge db08f1a, merge queued): signal programs gain `actuated` and `demandSplit` flags (the
+contract's per-program flag). Lead decision, for owner review: generated programs are actuated by
+default and the demand split is opt-in per program, since every split variant pushed a single
+Landsberger-loop visit past TASK-154's 900 s on some seed (872 to 1,062 s mean delay), while
+actuation alone gave 5,311 completed, 1.2 gridlocked and 828 s mean delay over seeds 1 to 6 against
+the base's 5,301, 1.8 and 854 s. The gate sits at its limit (seed 1: 5,307 / 5 / 0); seeds 2 to 6 have
+0 or 1. Actuated runs step about 14.6% slower (the traffic, not the controllers; to TASK-176). Open: a
+split that does not hurt the loop; actuated walk lights show red in amber and all-red even when the
+next phase keeps walk green.
 
 ## Owner decisions log
 

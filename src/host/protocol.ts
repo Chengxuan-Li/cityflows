@@ -67,6 +67,7 @@ export type HostRequest =
   | { id: number; type: 'inspect'; vehicleId: number }
   | { id: number; type: 'inspectWalker'; walkerId: number }
   | { id: number; type: 'inspectPerson'; personId: string }
+  | { id: number; type: 'signalTiming' }
   | { id: number; type: 'hash' };
 
 export type HostReply =

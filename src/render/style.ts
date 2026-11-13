@@ -408,6 +408,16 @@ export const style = {
     VehicleClass,
     { lengthM: number; widthM: number; heightM: number; color: number }
   >,
+  /** TASK-167: map label inks, each at least 4.5:1 on the canvas and the place tints (street
+   * names 5.2:1 on asphalt), with a canvas-coloured halo `haloPx` wide. */
+  label: {
+    street: 0x3a3a3c,
+    place: 0x48484a,
+    area: 0x5c5c60,
+    station: 0x0b5f6b,
+    halo: 0xf2f1ee,
+    haloPx: 2,
+  },
   vehicleDotRadiusPx: 1.65,
   vehiclePickRadiusPx: 8,
   detailZoom: 1.45,

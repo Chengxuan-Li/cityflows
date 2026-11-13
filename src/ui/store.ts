@@ -78,6 +78,8 @@ export interface Session {
   /** Place demographics the population was generated from; restart regenerates when they change. */
   populationKey: string;
   demandSummary: DemandSummary;
+  /** TASK-170: the loaded run's demand-split phase greens, by junction group or node id. */
+  signalTiming: Record<string, number[]>;
 }
 
 interface Run {
@@ -92,6 +94,9 @@ interface Run {
 }
 
 type RunCommand = 'play' | 'pause' | 'step' | 'restart';
+export const speeds = [1, 2, 5, 10, 20];
+/** The modal sheet that is open, if any: one at a time. */
+export type SheetName = 'new' | 'import' | 'export' | 'commands' | 'shortcuts';
 export type ExportFormat = 'geojson' | 'trips' | 'road-metrics' | 'trajectories';
 
 interface AppState {
@@ -121,6 +126,8 @@ interface AppState {
   inspectorOpen: boolean;
   toggleSidebar: () => void;
   toggleInspector: () => void;
+  sheet: SheetName | null;
+  showSheet: (sheet: SheetName | null) => void;
   /** Options of the drawing tools, shown in the sidebar while the tool is active. */
   roadOptions: DrawRoadOptions;
   placeKind: PaintKind;
@@ -273,8 +280,9 @@ export const useAppStore = create<AppState>((set, get) => {
             signalEpochs,
           );
           const { timeS, trips: counts } = await engine.metrics();
+          const signalTiming = await engine.signalTiming();
           set(({ session, run, selection }) => ({
-            session: { ...session!, loadedCompiled },
+            session: { ...session!, loadedCompiled, signalTiming },
             run: { ...run!, cityVersion: patch.version, timeS, counts, patch },
             vehicle: null,
             walker: null,
@@ -343,6 +351,7 @@ export const useAppStore = create<AppState>((set, get) => {
     try {
       await engine.load({ compiled: editor.compiled, trips, scenario, population });
       const { timeS, trips: counts } = await engine.metrics();
+      const signalTiming = await engine.signalTiming();
       engine.onEvent((event) => onEvent(engine, event));
       get().session?.engine.terminate();
       signalEpochs.clear();
@@ -358,6 +367,7 @@ export const useAppStore = create<AppState>((set, get) => {
           editor,
           compiled: editor.compiled,
           loadedCompiled: editor.compiled,
+          signalTiming,
           diagnostics: validation.diagnostics,
           engine,
           // Snapshot vehicle IDs are one-based indices into the loaded trip list.
@@ -560,6 +570,8 @@ export const useAppStore = create<AppState>((set, get) => {
     inspectorOpen: true,
     toggleSidebar: () => set(({ sidebarOpen }) => ({ sidebarOpen: !sidebarOpen })),
     toggleInspector: () => set(({ inspectorOpen }) => ({ inspectorOpen: !inspectorOpen })),
+    sheet: null,
+    showSheet: (sheet) => set({ sheet }),
     roadOptions: { twoWay: true, lanes: 1, roadClass: 'residential', speedKph: 30 },
     placeKind: 'residential',
     placeHint: '',
@@ -779,8 +791,9 @@ export const useAppStore = create<AppState>((set, get) => {
             await engine.restart();
             signalEpochs.clear();
             const { timeS, trips: counts } = await engine.metrics();
+            const signalTiming = await engine.signalTiming();
             set({
-              session: { ...session, loadedCompiled: session.compiled },
+              session: { ...session, loadedCompiled: session.compiled, signalTiming },
               run: { ...run, status: 'paused', achieved: 0, timeS, counts, patch: undefined },
               ...(['vehicle', 'walker'].includes(get().selection?.kind ?? '') && {
                 selection: null,
@@ -802,10 +815,12 @@ export const useAppStore = create<AppState>((set, get) => {
           await engine.load({ compiled, trips, scenario, population });
           signalEpochs.clear();
           const { timeS, trips: counts } = await engine.metrics();
+          const signalTiming = await engine.signalTiming();
           set({
             session: {
               ...session,
               loadedCompiled: compiled,
+              signalTiming,
               project: { ...project, population },
               populationKey: demandKey(editor.city),
               demandSummary: demandSummary(trips, editor.city),

@@ -89,6 +89,8 @@ export function compileSignal(
     });
   }
   return {
+    ...(program.demandSplit && { demandSplit: true as const }),
+    ...(program.actuated && { actuated: true as const }),
     offsetS,
     amberS,
     allRedS,

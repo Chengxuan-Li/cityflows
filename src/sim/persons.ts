@@ -1,25 +1,41 @@
 import Flatbush from 'flatbush';
 import { distance, nearestOnPolyline, pointAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import { chooseTour, modeTours, walkTrip, type ModeInputs } from '../demand/mode-choice';
+import {
+  chooseTour,
+  modeTours,
+  transitTrip,
+  transitWeights,
+  walkTrip,
+  type ModeInputs,
+} from '../demand/mode-choice';
+import { riderOf } from '../demand/stations';
 import type { CompiledCity } from '../network';
 import type { LinkCosts, RouteProvider } from '../routing';
+import { transitNetwork, type TransitNetwork, type TransitPlan } from '../routing/transit';
 import { createWalkRouter, type WalkPosition, type WalkResult } from '../routing/walk';
 import type { Person, PlaceId, Scenario, SimParams, TripRequest } from '../schema';
 import type { createAccounting } from './metrics';
 import type { createParking } from './parking';
+import type { Transit } from './transit';
 import type { FailReason } from './types';
 import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import type { Walkers } from './walkers';
 
 type State = 'pending' | 'active' | 'completed' | 'failed';
 export interface PersonLegDetail {
-  kind: 'access' | 'drive' | 'egress' | 'walk';
+  /** TASK-174: a transit trip walks, waits at a stop and rides, once per vehicle taken. */
+  kind: 'access' | 'drive' | 'egress' | 'walk' | 'wait' | 'ride';
   state: State;
   startedS: number | null;
   arrivedS: number | null;
   distanceM: number;
   walkerId: number | null;
+  /** TASK-174: where a wait or ride starts and a ride ends, the line, and the vehicle's id. */
+  stop?: string;
+  toStop?: string;
+  line?: string;
+  vehicle?: string;
 }
 export interface PersonTripDetail {
   tripId: string;
@@ -60,9 +76,9 @@ export interface PersonMetrics {
    * those completed (station riders excluded). A completed car trip is `drive` when the car parked at its destination's
    * own facility (or the destination is a gateway), `driveWalk` when it parked elsewhere. */
   modes: {
-    started: { walk: number; car: number };
-    byHour: { walk: number[]; car: number[] };
-    completed: { walk: number; drive: number; driveWalk: number };
+    started: { walk: number; car: number; transit: number };
+    byHour: { walk: number[]; car: number[]; transit: number[] };
+    completed: { walk: number; drive: number; driveWalk: number; transit: number };
   };
   fallbacks: {
     leg: 'access' | 'egress';
@@ -103,6 +119,8 @@ export function createPersons(
   injectedRouter?: ReturnType<typeof createWalkRouter>,
   /** TASK-173: the drive of the mode choice at each tour's departure, on the run's link costs. */
   drive?: { provider: RouteProvider; costs: LinkCosts },
+  /** TASK-174: riders on platforms and in vehicles; null without a timetabled stop. */
+  transit: Transit | null = null,
 ) {
   let city = initial;
   const localWalk = (trip: TripRequest) =>
@@ -158,9 +176,13 @@ export function createPersons(
   const carWaitSince = new Map<number, number>();
   const carWaits: number[] = [];
   const modes: PersonMetrics['modes'] = {
-    started: { walk: 0, car: 0 },
-    byHour: { walk: Array<number>(24).fill(0), car: Array<number>(24).fill(0) },
-    completed: { walk: 0, drive: 0, driveWalk: 0 },
+    started: { walk: 0, car: 0, transit: 0 },
+    byHour: {
+      walk: Array<number>(24).fill(0),
+      car: Array<number>(24).fill(0),
+      transit: Array<number>(24).fill(0),
+    },
+    completed: { walk: 0, drive: 0, driveWalk: 0, transit: 0 },
   };
   const parkedAway = new Uint8Array(trips.length);
   /** TASK-128's station riders came by train and walk on: outside the mode shares. */
@@ -203,12 +225,30 @@ export function createPersons(
   /** TASK-113: the tours in the mode choice, by their first trip. TASK-173: each chooses when its
    * first trip starts, from that moment's link costs, parking room and car. */
   const tours = new Map<number, number[]>();
+  // TASK-174: with transit on offer the tours of persons walking all day choose too (walk or
+  // transit); TASK-128's riders stay outside.
+  let network: TransitNetwork | null = transit
+    ? transitNetwork(city, params.walkSpeedMps, params.walkStepsFactor)
+    : null;
   for (const tour of modeTours(
     trips,
     scenario,
-    (trip) => hasPerson(trip) && !gateway(trip.originPlaceId) && !gateway(trip.destinationPlaceId),
+    (trip) =>
+      hasPerson(trip) &&
+      !trip.personId!.startsWith('rider:') &&
+      !gateway(trip.originPlaceId) &&
+      !gateway(trip.destinationPlaceId),
+    !!network,
   ))
     tours.set(tour[0]!, tour);
+  /** TASK-174: the plan a transit tour's first trip chose with, used as it leaves. */
+  const plans = new Map<number, TransitPlan>();
+  // TASK-128's riders come in on the S-Bahn that brings them.
+  if (transit)
+    for (const trip of trips) {
+      const station = trip.id.endsWith(':out') && trip.personId ? riderOf(trip.personId) : null;
+      if (station) transit.expect(trip.personId!, station.platform, station.arrivalS, trip.departS);
+    }
   let parkingNear = new Map<
     number,
     { own: CompiledCity['parking']; near: CompiledCity['parking'] }
@@ -297,28 +337,186 @@ export function createPersons(
   /** The tour's mode, chosen as its first trip starts. The car is on offer only if it is there:
    * no trip of the tour failed, nor the car's previous trip, and the stock placed it. A tour that
    * walks turns its trips into walks; its car stays where it is. */
-  function chooseMode(tour: number[]) {
+  function chooseMode(tour: number[], timeS: number) {
     const first = trips[tour[0]!]!;
+    const carTour = first.mode === 'car';
     const walk = walkRoute(
       [{ placeId: first.originPlaceId }],
       [{ placeId: first.destinationPlaceId }],
       `walk:${first.originPlaceId}:${first.destinationPlaceId}`,
     );
-    const carBefore = parking.carBefore(tour[0]!);
+    const carBefore = carTour ? parking.carBefore(tour[0]!) : -1;
     const car =
+      carTour &&
       !parking.noOriginCar(tour[0]!) &&
       (carBefore === -1 || vehicles.state[carBefore] !== FAILED) &&
       tour.every((id) => vehicles.state[id] !== FAILED);
+    // TASK-174: transit is on offer when its plan walks less than walking the whole way.
+    const plan = transitPlan(first, timeS);
+    const planWalkS = plan
+      ? plan.accessS + plan.egressS + plan.transferWalksS.reduce((a, b) => a + b, 0)
+      : Infinity;
+    const offered = plan !== null && planWalkS < (walk.ok ? walk.route.costS : Infinity);
     const inputs: ModeInputs = {
       ...(walk.ok ? { walkS: walk.route.costS } : {}),
       ...(car ? { car: carInputs(tour[0]!) } : {}),
+      ...(offered
+        ? {
+            transit: {
+              walkS: planWalkS,
+              waitS: plan.waitS,
+              rideS: plan.rideS,
+              transfers: plan.rides.length - 1,
+            },
+          }
+        : {}),
     };
-    if (!chooseTour(scenario, first, inputs).walk) return;
+    const { mode } = chooseTour(scenario, first, inputs);
+    if (mode === 'car' || (mode === 'walk' && !carTour)) return;
     for (const id of tour) {
-      trips[id] = walkTrip(trips[id]!);
-      accounting.excludeWalk(id);
+      trips[id] = mode === 'walk' ? walkTrip(trips[id]!) : transitTrip(trips[id]!);
+      if (carTour) accounting.excludeWalk(id);
     }
-    parking.walked(tour);
+    if (carTour) parking.walked(tour);
+    if (mode === 'transit') plans.set(tour[0]!, plan!);
+  }
+  function transitPlan(trip: TripRequest, timeS: number) {
+    if (!network) return null;
+    return network.route(
+      {
+        departS: timeS,
+        accessS: network.placeAccess(trip.originPlaceId).walkS,
+        egressS: network.placeAccess(trip.destinationPlaceId).walkS,
+      },
+      transitWeights,
+    );
+  }
+  /** A walk leg between walk positions; arriving calls `done`, no route fails the trip. */
+  function walkBetween(
+    id: number,
+    from: WalkPosition[],
+    to: WalkPosition[],
+    key: string,
+    timeS: number,
+    done: (at: number) => void,
+  ) {
+    const trip = trips[id]!,
+      item = leg(id, 'walk', timeS);
+    const result = walkRoute(from, to, key);
+    if (!result.ok) {
+      finish(id, timeS, 'no_walk_route');
+      return;
+    }
+    item.distanceM = result.route.lengthM;
+    item.walkerId = walkers!.spawn(
+      {
+        route: result.route,
+        timeS,
+        fromPlaceId: trip.originPlaceId,
+        toPlaceId: trip.destinationPlaceId,
+        personId: trip.personId ?? trip.id,
+        tripId: trip.id,
+        tripLeg: 'walk',
+      },
+      (at, dropped) => {
+        if (records[id]!.state !== 'active') return;
+        if (dropped) return finish(id, at, 'no_walk_route');
+        item.state = 'completed';
+        item.arrivedS = at;
+        done(at);
+      },
+    );
+  }
+  const nearest = <T extends { point: Vec2 }>(list: readonly T[], to: Vec2) =>
+    list.reduce((a, b) => (distance(a.point, to) <= distance(b.point, to) ? a : b));
+  /** TASK-174: a transit trip: walk to the first stop, then per vehicle wait, ride and alight, walk
+   * or wait for the next one, and walk on from the last stop. */
+  function ride(id: number, plan: TransitPlan, timeS: number) {
+    const net = network!;
+    const trip = trips[id]!;
+    const stops = net.stops;
+    const first =
+      stops[plan.accessStop]!.access[net.placeAccess(trip.originPlaceId).via[plan.accessStop]!]!;
+    const last =
+      stops[plan.egressStop]!.access[
+        net.placeAccess(trip.destinationPlaceId).via[plan.egressStop]!
+      ]!;
+    const walkOn = (from: WalkPosition, stop: number, t: number) =>
+      walkBetween(
+        id,
+        [from],
+        [{ placeId: trip.destinationPlaceId }],
+        `egress:${stops[stop]!.id}:${trip.destinationPlaceId}`,
+        t,
+        (at) => finish(id, at),
+      );
+    const board = (k: number, from: Vec2, at: number) => {
+      const step = plan.rides[k]!,
+        next = plan.rides[k + 1];
+      const waitLeg = leg(id, 'wait', at);
+      waitLeg.stop = stops[step.fromStop]!.id;
+      // Off the platform toward the next stop, or out by the access the plan walks on from.
+      const exit = next ? nearest(stops[step.toStop]!.access, stops[next.fromStop]!.centre) : last;
+      let rideLeg: PersonLegDetail | null = null;
+      const routes = net.lines
+        .filter((line) => {
+          const i = line.visits.findIndex((v) => v.stop === step.fromStop);
+          return i !== -1 && line.visits.slice(i + 1).some((v) => v.stop === step.toStop);
+        })
+        .map((line) => line.route);
+      transit!.wait({
+        personId: trip.personId ?? trip.id,
+        tripId: trip.id,
+        from,
+        stop: step.fromStop,
+        routes,
+        toStop: step.toStop,
+        exit: exit.point,
+        timeS: at,
+        onBoard(t, vehicle) {
+          if (records[id]!.state !== 'active') return;
+          waitLeg.state = 'completed';
+          waitLeg.arrivedS = t;
+          rideLeg = leg(id, 'ride', t);
+          rideLeg.stop = waitLeg.stop;
+          rideLeg.toStop = stops[step.toStop]!.id;
+          rideLeg.vehicle = vehicle;
+          rideLeg.line = net.lines.find((l) =>
+            vehicle.startsWith(`${net.table.routes[l.route]!.id}/`),
+          )?.name;
+        },
+        onAlight(t) {
+          if (records[id]!.state !== 'active') return;
+          rideLeg!.state = 'completed';
+          rideLeg!.arrivedS = t;
+          if (!next) return walkOn(exit.position, step.toStop, t);
+          if (next.fromStop === step.toStop) return board(k + 1, exit.point, t);
+          const into = nearest(stops[next.fromStop]!.access, exit.point);
+          walkBetween(
+            id,
+            [exit.position],
+            [into.position],
+            `transfer:${stops[step.toStop]!.id}:${stops[next.fromStop]!.id}`,
+            t,
+            (a) => board(k + 1, into.point, a),
+          );
+        },
+        onGiveUp(t) {
+          if (records[id]!.state !== 'active') return;
+          waitLeg.state = 'completed';
+          waitLeg.arrivedS = t;
+          walkOn(nearest(stops[step.fromStop]!.access, from).position, step.fromStop, t);
+        },
+      });
+    };
+    walkBetween(
+      id,
+      [{ placeId: trip.originPlaceId }],
+      [first.position],
+      `access:${trip.originPlaceId}:${stops[plan.accessStop]!.id}`,
+      timeS,
+      (at) => board(0, first.point, at),
+    );
   }
   const connectorPoint = (idx: number) => {
     const c = city.connectors[idx]!,
@@ -417,10 +615,19 @@ export function createPersons(
     if (reason) failed++;
     else {
       completed++;
+      const mode = trips[id]!.mode;
       if (!rider(id))
         modes.completed[
-          trips[id]!.mode === 'walk' ? 'walk' : parkedAway[id] ? 'driveWalk' : 'drive'
+          mode === 'walk'
+            ? 'walk'
+            : mode === 'rail'
+              ? 'transit'
+              : parkedAway[id]
+                ? 'driveWalk'
+                : 'drive'
         ]++;
+      // TASK-128's rider back at the station boards the next S-Bahn there.
+      if (rider(id) && transit && trips[id]!.id.endsWith(':back')) leaveByTrain(id, timeS);
     }
     for (const item of record.legs)
       if (item.state === 'active') {
@@ -429,9 +636,11 @@ export function createPersons(
       }
     activeDrives.delete(id);
     fallbackWalks.delete(id);
-    if (trips[id]!.mode === 'walk') {
-      if (reason) walkTripsFailed++;
-      else walkTripsCompleted++;
+    if (trips[id]!.mode !== 'car') {
+      if (trips[id]!.mode === 'walk') {
+        if (reason) walkTripsFailed++;
+        else walkTripsCompleted++;
+      }
       accounting.finishWalk(id, record.legs[0]?.startedS ?? timeS, reason ? null : timeS, reason);
     }
     const dependents = waiting.get(id);
@@ -552,10 +761,20 @@ export function createPersons(
       carWaitSince.delete(id);
     }
     const tour = tours.get(id);
-    if (tour && before?.state !== 'failed' && vehicles.state[id] !== FAILED) chooseMode(tour);
+    if (tour && before?.state !== 'failed' && vehicles.state[id] !== FAILED)
+      chooseMode(tour, timeS);
+    // TASK-174: a transit trip plans as it leaves (its tour's first trip uses the chosen plan);
+    // with no plan it walks.
+    let plan: TransitPlan | null = null;
+    if (trips[id]!.mode === 'rail') {
+      plan = plans.get(id) ?? transitPlan(trips[id]!, timeS);
+      plans.delete(id);
+      if (!plan) trips[id] = walkTrip(trips[id]!);
+    }
     record.state = 'active';
     started++;
-    const mode = trips[id]!.mode === 'walk' ? 'walk' : 'car';
+    const mode =
+      trips[id]!.mode === 'walk' ? 'walk' : trips[id]!.mode === 'rail' ? 'transit' : 'car';
     if (!rider(id)) {
       modes.started[mode]++;
       modes.byHour[mode][Math.floor(trips[id]!.departS / 3600) % 24]!++;
@@ -573,12 +792,26 @@ export function createPersons(
       finish(id, timeS, vehicles.failReason[id] ?? 'stranded');
       return;
     }
-    if (trips[id]!.mode === 'walk') walk(id, 'walk', timeS, (at) => finish(id, at));
+    if (plan) ride(id, plan, timeS);
+    else if (trips[id]!.mode === 'walk') walk(id, 'walk', timeS, (at) => finish(id, at));
     else if (!gateway(trips[id]!.originPlaceId))
       walk(id, 'access', timeS, () => {
         ready[id] = 1;
       });
     else ready[id] = 1;
+  }
+  /** TASK-128: a rider back at the station walks in by the entrance nearest where they came from
+   * and boards from the other platform, the way back, if the station has one. */
+  function leaveByTrain(id: number, timeS: number) {
+    const station = riderOf(trips[id]!.personId!)!;
+    const net = network!;
+    const platforms = net.stops.flatMap((s, i) =>
+      s.station === station.stationId && s.access.length ? [i] : [],
+    );
+    const stop = platforms.find((i) => net.stops[i]!.id !== station.platform) ?? platforms[0];
+    if (stop === undefined) return;
+    const entrance = nearest(net.stops[stop]!.access, place(trips[id]!.originPlaceId).centroid);
+    transit!.leave(trips[id]!.personId!, stop, entrance.point, timeS);
   }
   /** The household car is back: the next member's trip may start. */
   function carBack(id: number, timeS: number) {
@@ -620,6 +853,7 @@ export function createPersons(
           fallbackWalks.delete(id);
           fallback.done(timeS);
         }
+      transit?.step(timeS);
     },
     departed(id: number, timeS: number) {
       if (!records[id] || activeDrives.has(id)) return;
@@ -655,7 +889,11 @@ export function createPersons(
         })(),
         modes: {
           started: { ...modes.started },
-          byHour: { walk: modes.byHour.walk.slice(), car: modes.byHour.car.slice() },
+          byHour: {
+            walk: modes.byHour.walk.slice(),
+            car: modes.byHour.car.slice(),
+            transit: modes.byHour.transit.slice(),
+          },
           completed: { ...modes.completed },
         },
         fallbacks: [...fallbackCounts.values()].map((entry) => ({ ...entry })),
@@ -716,12 +954,15 @@ export function createPersons(
           hash = word(hash, id + 1);
           hash = word(hash, ['pending', 'active', 'completed', 'failed'].indexOf(record.state));
           for (const item of record.legs) {
-            hash = word(hash, ['access', 'drive', 'egress', 'walk'].indexOf(item.kind));
+            hash = word(
+              hash,
+              ['access', 'drive', 'egress', 'walk', 'wait', 'ride'].indexOf(item.kind),
+            );
             hash = word(hash, Math.round((item.startedS ?? -1) * 10));
             hash = word(hash, Math.round((item.arrivedS ?? -1) * 10));
           }
         }
-      return hash;
+      return transit ? transit.hash(word, hash) : hash;
     },
     patch(nextCity: CompiledCity) {
       city = nextCity;
@@ -731,6 +972,7 @@ export function createPersons(
       parkingNear = new Map();
       drives = new Map();
       spatial = buildSpatial();
+      if (network) network = transitNetwork(city, params.walkSpeedMps, params.walkStepsFactor);
     },
   };
 }

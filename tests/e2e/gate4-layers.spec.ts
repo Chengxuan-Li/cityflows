@@ -116,3 +116,30 @@ test('layer toggles leave the simulation unchanged; minute charts show the morni
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('TASK-167 map labels show by default and follow their Layers toggle', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
+  const map = page.getByLabel('City map', { exact: true });
+  const labels = async () =>
+    JSON.parse((await map.getAttribute('data-labels')) ?? '{}') as Record<string, number>;
+  // The grid's two places, Homes and Offices, under their markers.
+  await expect.poll(async () => (await labels()).place).toBe(2);
+  const shown = await map.screenshot();
+  await page.getByRole('button', { name: 'Layers', exact: true }).click();
+  const toggle = page
+    .getByRole('region', { name: 'Map layers' })
+    .getByLabel('Labels', { exact: true });
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await page.getByRole('button', { name: 'Layers', exact: true }).click();
+  await expect.poll(async () => (await labels()).glyphs).toBe(0);
+  expect((await map.screenshot()).equals(shown)).toBe(false);
+  await page.getByRole('button', { name: 'Layers', exact: true }).click();
+  await toggle.check();
+  await expect.poll(async () => (await labels()).place).toBe(2);
+  expect(errors).toEqual([]);
+});

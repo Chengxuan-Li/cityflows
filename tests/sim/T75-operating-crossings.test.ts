@@ -141,6 +141,9 @@ test.each([false, true])(
     const before = road(start, center),
       after = road(center, end);
     before.provenance = after.provenance = { source: 'generated', osmIds: [10] };
+    // The car stands at the lane end; a pedestrian crossing there would hold it short of the
+    // stripes (TASK-169's keep clear).
+    before.crossings = { end: false };
     if (junction) road(center, node(80, -200));
     place('Homes', 'residential', { x: -380, y: 15 }, [
       { road: before, direction: 'out', positionM: 20 },

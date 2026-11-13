@@ -139,6 +139,8 @@ interface TurnRule {
 
 interface SignalProgram {
   turnOnRed?: boolean;     // omitted = false, curb-side turn after stopping
+  demandSplit?: boolean;   // TASK-170: omitted = false; the run splits the green by demand
+  actuated?: boolean;      // TASK-170: omitted = false; greens end early without demand
   offsetS: number;
   amberS: number;          // follows every phase
   allRedS: number;         // follows amber
@@ -524,6 +526,7 @@ interface CMovement { idx: number; id: MovementId; fromLane: number; toLane: num
   node: number; turn: Turn; polyline: Vec2[]; cumulative: Float64Array; lengthM: number;
   conflicts: number[]; priority: number; neverGreen: boolean; turnOnRed?: boolean; }
 interface CSignal { offsetS: number; amberS: number; allRedS: number; cycleS: number;
+  demandSplit?: true; actuated?: true;                  // TASK-170, present only when true
   phases: { durationS: number; movements: number[] }[]; }
 interface CConnector { idx: number; id: ConnectorId; place: number; parking?: number; lane: number;
   positionM: number; direction: 'in' | 'out' | 'both'; throughputPerMin: number; }
@@ -1054,10 +1057,52 @@ the OSM `lanes` tags carry one.
   ratios): 30 s a phase, at most a 120 s cycle (`GROUP_CYCLE_MAX_S`), amber 3 s, all-red 1 s.
   Every green group is green for at least an even split of the green time. Single-node programs
   are unchanged.
+- TASK-170 (demand split and actuation). Generated programs (import, grouping, Generate default
+  program) set `actuated` (`GENERATED_TIMING`); `demandSplit` is a per-program choice in the
+  signal editor, off by default: on Munich seeds 1 to 6 every split tried lengthened single visits
+  to the Landsberger loop's roads past TASK-154's 900 s on some seed, while actuation alone
+  completed more trips with less delay. Hand-written and saved programs without the flags run as
+  before. A controller is a signalised junction group (its members in lockstep) or a single
+  signal node.
+  - Demand split. At load the engine routes every car trip of the scenario from the connector it
+    was queued at to its destination connector on free-flow costs (no noise; one route per
+    connector pair, class and purpose) and counts the trips on each movement, by movement id so
+    that the counts survive live edits (`signalDemand`). For a controller with `demandSplit`, a
+    green group is a road pair at a member that is not from an inner road; its load is its
+    movements' trips per approach lane, and it is served by the phases whose movements include
+    it. `demandSplit` (Webster's rule, equal degrees of saturation, for phases that share green
+    groups) starts every phase at its minimum green, but at least `SPLIT_FLOOR_SHARE` (half) of
+    its own green, since free-flow routes miss the traffic congestion moves onto other
+    approaches, and hands out the rest of the program's green
+    time a second at a time to the green group with the least green per unit of load, in its
+    phase with the least green; a green group green in every phase is left out. The cycle and the
+    phases' movements and walk green are unchanged, so TASK-161's conflict separation holds; the
+    phases' `durationS` are the split's total and the fallback (no load at all, or minimums over
+    the green time). Every member of a group gets the same split. The result is the run's view of
+    the compiled signals (`timedSignals`), never written back to the city; `signalTiming` reports
+    it per group or node id for the signal editor.
+  - Minimum green: `MIN_GREEN_S` (5 s), and in a phase with walk green the time to cross its
+    longest arm (the summed lengths of the arm's crossing links in the phase) at `walkSpeedMps`
+    plus `walkClearanceS`, rounded up; never more than the phase's own green.
+  - Actuation. An actuated controller keeps its own phase and stage instead of
+    `(t + offsetS) mod cycleS`; at load it starts green in the phase the program shows then. A
+    vehicle on an approach lane within `DETECT_M` (40 m) of the stop line whose planned movement
+    the green phase serves extends the green to `PASSAGE_S` (3 s) from now; a walker waiting at a
+    walk-green crossing of the phase whose run's green is short extends it by the time the run
+    needs (TASK-111's step-out rule). A vehicle in that range planning a movement of another
+    phase, or a walker waiting at a crossing that is red, calls the phases that serve it. With a
+    call the green ends once its minimum has passed and no extension holds it, or at the phase's
+    timed green (the split's), and amber and all-red lead to the first later phase with a call;
+    unused phases are skipped. Without a call the green rests. Walkers see an actuated green's
+    walk green only to its current end, and none in amber or all-red. After a live edit a
+    controller with the same id and enough phases keeps its state.
+  - The engine owns the signal state (`createSignalControl`): intersections, walkers and rail
+    crossings read it, and each snapshot carries it (`VehicleSnapshot.signals`) for the 2D and 3D
+    lights, walk lights and the signal preview.
 - Each phase's `groups` expand to every movement between the named road pair. A movement may
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
-- State at simulation time `t`: `((t + offsetS) mod cycleS)` locates the phase and whether it
-  is in green, amber or all-red. Amber means vehicles that can stop before the stop line do.
+- State at simulation time `t` (a fixed controller): `((t + offsetS) mod cycleS)` locates the
+  phase and whether it is in green, amber or all-red. Amber means vehicles that can stop before the stop line do.
 - Error `signal_conflict`: two conflicting movements in the same phase (T13). TASK-131: two
   movements into one lane of a group's inner road are not a conflict for the signal; they merge
   inside the junction as at a lane drop, ordered by the grant rule (Munich r:480's two lanes into
@@ -1448,6 +1493,23 @@ request-dependent route is cached. The simulation consumes these routes for test
 TASK-111's test walkers use it once per source (place to place, `walkSpeedMps`,
 `walkStepsFactor`), sharing the route among the source's walkers; live edits route again.
 
+TASK-174 adds `transitNetwork(compiled, walkSpeedMps, stepsFactor)` (`routing/transit.ts`, cached
+by compiled city and speed). Stops are the platforms `railTimetable` calls at: TASK-138's tram
+stops and the S-Bahn platforms of station places; lines are its routes with stops (main-line
+trains have none). A tram stop is reached from the nearest non-crossing walk link within 60 m on
+its grade, an S-Bahn platform from its station's walk anchors; the last metres to the platform's
+middle are a straight line x 1.3 (`PLATFORM_DETOUR`). One one-to-all walk search per stop gives
+walking seconds from every walk node (`placeAccess(placeId)` takes the place's anchors); stops
+within a 10 min walk of each other are transfers. The graph is time-expanded over two days of
+runs: per run and stop an arrival, a departure on board and a departure from the platform. Arcs:
+ride, dwell (on board), wait (a stop's platform departures in time order), and alighting to board
+again at the same stop after 60 s or at a transfer stop after the walk; boarding the same run
+again is excluded. Every arc goes forward in time, so `route({ departS, accessS, egressS },
+weights)` scans the events in time order once (within two hours of the departure, walks at most
+15 min) for the least generalized cost: walking and waiting seconds, riding seconds times
+`weights.ride`, `weights.transferS` per transfer. The plan lists its rides (route, run, stops,
+times), transfer walks, access and egress stops, and walking, waiting and riding seconds.
+
 ## 8. Simulation
 
 TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
@@ -1652,6 +1714,7 @@ interface TrafficEngine {
   inspect(vehicleId: number): VehicleDetail | null;
   inspectWalker(walkerId: number): WalkerDetail | null;
   inspectPerson(personId: string): PersonDetail | null;
+  signalTiming(): Record<string, number[]>; // TASK-170: demand-split greens by group or node id
   stateHash(): number;           // 32-bit FNV-1a, see below
 }
 
@@ -1664,6 +1727,8 @@ interface VehicleSnapshot {
   state: Uint8Array;                                  // 1 driving, 2 queued_destination, 6 in_lot
   vclass: Uint8Array;                                 // car 0, van 1, truck 2, bus 3
   fade: Float32Array;                                 // TASK-077: 1, or falling to 0 before a respawn
+  signals?: { phase: Int16Array; state: Uint8Array; walk: Uint8Array }; // TASK-170: per node
+                     // phase (-1 no signal) and stage (0 green, 1 amber, 2 all-red); per walk link 1 = walk green
 }
 
 interface PatchResult {
@@ -1720,7 +1785,8 @@ TASK-116 re-pins these outcomes because feasible target sets let cars pass queue
 
 Step sequence, in this order every step:
 
-1. Signals: compute each signalized node's phase state at `timeS`.
+1. Signals: compute each signalized node's phase state at `timeS` (TASK-170: advance actuated
+   controllers on the previous step's vehicles and waiting walkers).
 2. Spawn: for each `out` or `both` connector in index order, release queued trips whose
    departure time has passed while the lane has a free gap of `spawnMinGapM` at the connector
    and the connector's per-minute budget allows. A released trip gets a route request from the
@@ -1736,6 +1802,22 @@ Step sequence, in this order every step:
      take, else on the lane after it. A red or ungranted movement is a standing obstacle at
      the lane end (TASK-072: at the lane's `stopM`, see below); an arrival connector is a
      standing obstacle at its position when the place cannot accept the vehicle.
+   - TASK-169, keep clear. `keepClearZones` (`src/network/keep-clear.ts`) gives each lane's
+     zones: the span of every marked crossing over it, and the mouths of lots and garages with
+     spaces (implicit garages included) on public lanes, 8 m before to 6.5 m past each exit
+     connector on its lane and 7 m either side of it on each lane of its street between the
+     facility and that lane. A car whose front would stand (behind its leader, projected by the
+     leader's braking distance but no farther than behind the leader's own stand, or at a stop)
+     with its body on a zone stands 0.5 m short of the zone instead, and short of any zone that
+     stand covers: from 1.5 times its comfortable braking distance short of that stand (at
+     least `decisionDistanceM`), if it can stop there at `bMps2`, until it stands there. A zone
+     its body covers at its destination connector does not count, nor does one that would put
+     its rear on the movement it came by. A head at its stop line first moves up, as far as
+     0.5 m short of the line, when its body then clears the zone (a zebra within a car length
+     of the line); one held short counts that stand as its stop line (stop signs, turn on red,
+     entry requests). A spawn or lot exit whose body joins inside a mouth zone needs only
+     `minGapM` to cars standing beside it; moving traffic keeps the spawn gap and the
+     follower's insertion check.
    - Acceleration from IDM.
    - Lane change proposal: mandatory toward `targetLanes` when the distance to the lane end is
      below `changesNeeded * laneChangeDistanceM + mandatoryUrgencyM` (accepts gaps down to
@@ -2129,6 +2211,25 @@ road id, connectors by connector id, signals by node id. Order of the patch:
    before, so a place that lost its connectors fails its trips at release with the existing
    reasons.
 
+TASK-174 transit (`sim/transit.ts`). Where `transitNetwork` has stops and walkers exist, the
+engine follows the runs the simulation runs: the crossing controller's service ages
+(`createRailCrossings().services()`), or the timetable's where it serves no crossing. Capacity per
+vehicle at full population, scaled by `personsPerResident` (at least 1): tram 210 (a 36 m
+four-section car), S-Bahn 1 088 (two ET 423 units). A rider walks from the walk network to a spot
+drawn on the platform and waits; a run of one of the rider's routes (those that reach the planned
+stop from this one) standing at the stop takes waiting riders in order of arrival while it has
+room, and a full one leaves them for the next (`deniedBoardings`, once per rider and run). A
+boarding rider walks to the nearest point of the body, done before the run leaves. When the run
+reaches the rider's stop they get off at a door drawn along the body and walk off the platform to
+the planned access. After 30 min of waiting a rider walks on from the stop. `persons.ts` runs a
+transit trip (mode `rail`) as legs `walk` (to the stop), then per vehicle `wait` and `ride`,
+a transfer `walk` or a wait at the same stop, and `walk` on; a missing walk route fails it as
+`no_walk_route`. Riders on platforms join the walker snapshot (ids from `TRANSIT_RIDER_ID`,
+states walking and waiting) and are inspected through `inspectWalker`; `snapshot.transit.vehicles`
+lists each run's riders by train pose id; `Metrics.transit` counts boardings and alightings per
+line and stop, TASK-128's riders apart, the most aboard per line, waits, denied boardings and riders
+who gave up. The transit state enters the state hash only once a rider of the mode choice has come.
+
 A patch is deterministic: the same patches at the same steps give the same state hash (T19).
 The engine never applies a patch mid-step; the host handles the request between loop ticks
 and pauses nothing. `restart` after a patch reloads the latest patched compiled city with the
@@ -2415,8 +2516,8 @@ TASK-125's: occupied plus claimed below capacity (inferred soft garages always h
 person draws a walk preference (normal, sd 6 min) and a value of time (log-normal, sigma 0.5) from
 their own stream of the demand seed; each tour draws its choice from its first trip's stream of the
 scenario seed (`mode-choice`). The draws are standard and the configuration only rescales them, so a
-slider moves no draw, and raising the walk preference only turns car tours into walk tours. Transit
-is a third entry of the alternatives with no cost until stations carry riders (TASK-128).
+slider moves no draw, and raising the walk preference only turns car tours into walk tours.
+TASK-174 fills the third alternative, transit (below).
 
 TASK-173: the choice runs when the tour's first trip starts, that is when the person leaves home
 (after their previous trip and, for a shared car, after the car is back), so "current link costs"
@@ -2448,6 +2549,29 @@ off (owner, 2026-11-13); `tests/traffic/munich-mode-share.test.ts` (full traffic
 light one) guards the choice on: the local walk share, its fall with distance, and the car trips'
 gridlock and stalled heads.
 
+TASK-174 transit as a mode. At a tour's first departure the choice asks the transit router
+(section 7) for a plan from that moment (`transitWeights`: ride x 1.1, wait x 1, 5 min per
+transfer). Transit is on offer when a plan exists and walks less (access, transfers and egress,
+platforms included) than walking the whole way. Its generalized minutes are walk + wait + 1.1 x
+ride + 5 per transfer + 60 x fare / value of time, with a flat expected fare of 0.5 EUR
+(`TRANSIT_CHOICE` in `demand/mode-choice.ts`: about a 2 EUR short-trip ticket for one trip in
+four, nothing for pass holders; constants, no settings). The tour's own draw picks by cumulative
+probability in the order walk, car, transit, so a choice without transit on offer is TASK-113's
+exactly. With transit on offer, tours of persons who walk all day (no free household car) also
+choose, between walk and transit; car tours choose among all three. A tour that takes transit
+turns its trips into mode `rail` without a `carId` (`transitTrip`), and a car tour's car stays
+parked as for a walked tour. Its first trip rides the plan the choice saw; each later trip plans
+as it leaves and walks when no plan exists. In Munich every S-Bahn route calls at one stop inside
+the extract, so residents' transit there is the tram. `PersonMetrics.modes` counts `transit`
+started, by hour and completed, and the census in `bench/import-probe.ts` gives transit shares by
+distance band and riders per line. Choice off: no tours, no plans, main's run.
+
+TASK-128's station riders stay background demand, outside the choice and the mode shares, with
+their trips and walks unchanged; they also ride the S-Bahn (`sim/transit.ts`): each comes in
+aboard the run that stops at their platform at their arrival second, gets off at a door and walks
+to the platform's nearest entrance until their walk out departs, and after the walk back walks onto
+the station's other platform (the way back) and leaves on the next S-Bahn with room.
+
 ## 10. Engine host
 
 Lives in `src/host`. The worker owns the engine, the route provider and link costs. The main
@@ -2471,6 +2595,7 @@ type HostRequest =
   | { id: number; type: 'inspect'; vehicleId: number }
   | { id: number; type: 'inspectWalker'; walkerId: number }
   | { id: number; type: 'inspectPerson'; personId: string }
+  | { id: number; type: 'signalTiming' }                         // TASK-170
   | { id: number; type: 'hash' };
 type HostReply = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 type HostEvent =
@@ -2709,7 +2834,12 @@ add, remove and rate edits; they are scenario inputs, so the run waits for a res
 Undo/Redo step through them and city edits in one order. The signal inspector lists each
 phase's walk groups (derived or set by hand, with Derive to clear), toggles them from checkboxes
 or the schematic's crossing lines, and adds an exclusive pedestrian phase.
-`window.cityflows.setWalkers` sets the source and restarts (test mode).
+`window.cityflows.setWalkers` sets the source and restarts (test mode). TASK-170: the signal
+inspector switches a program's demand split and actuation. While the draft splits by demand and
+has the loaded program's phases, the timeline, the cycle and the phase green fields show the
+loaded run's split (`signalTiming`); editing a green (drag, arrow keys or the field) overrides it:
+the phases keep the greens shown and the split turns off. Walk lights follow `walk` in the
+snapshot while a run reports signals, and `walkGreenS` before.
 
 TASK-112 opens a person's view when their walker is selected or their occupant line is clicked
 in the vehicle inspector. It shows home/work, agenda times, current leg/state, parked car and
@@ -2827,6 +2957,11 @@ the city, and roads retain the strongest tone.
   lines. Crossings retain their layout.
   Style switches redraw both views even when compiled identity/version stays unchanged;
   the animation loop and simulation remain unchanged.
+- TASK-169: each mouth zone (section 8, keep clear) of 3 m or more draws a keep-clear marking
+  on its lane, in the shared paint shapes (`keepClearMarkings`, hatch role): the `de` theme a
+  box with a 0.12 m border and 0.3 m diagonal stripes every 1.5 m, the `us` and `uk` themes
+  KEEP CLEAR in stencil letters across the lane, KEEP nearer the driver. Crosswalk zones draw
+  nothing of their own: their stripes are the marking.
 - TASK-117: access signs resolve in compiled road order, merging entries with the same street
   group, effective class access and entry rules when they stand within 15 m of each other (the
   far end of a long restricted street keeps its own sign). A later sign advances in 0.5 m steps along its
@@ -3139,6 +3274,15 @@ compiled bay corners draw three thin warm-white edges, open toward the aisle. Th
 paint fades at overview zoom; 3D paint is split and draped over the terrain triangles like
 other ground paint. The default-on “Parking stalls” layer controls paint in both views,
 leaving the lot surface visible. No parked vehicles or parking simulation are introduced.
+
+TASK-174: riders on platforms are drawn and picked with the walkers (waiting in the walkers'
+waiting colour); picking one opens the person inspector, whose current leg names the stop waited
+at or ridden to. The train inspector shows a run's riders against its places and
+lists them as links to the person inspector, whose journey shows wait legs at their stop and ride
+legs with the line and the stop where the rider gets off. The Chart section's mode shares add
+transit (system purple) to the caption, the counts and the hourly bars, the mean wait, riders left
+by a full vehicle, and a table of riders per line (residents boarded, TASK-128's riders off and on,
+the most aboard of the places).
 
 ## 12. Project format and migrations
 

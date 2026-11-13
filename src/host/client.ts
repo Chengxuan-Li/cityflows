@@ -36,6 +36,8 @@ export interface EngineClient {
   inspect(id: number): Promise<VehicleDetail | null>;
   inspectWalker(id: number): Promise<WalkerDetail | null>;
   inspectPerson(id: string): Promise<PersonDetail | null>;
+  /** TASK-170: the run's demand-split phase greens, by junction group or node id. */
+  signalTiming(): Promise<Record<string, number[]>>;
   hash(): Promise<number>;
   onEvent(listener: (event: HostEvent) => void): () => void;
   terminate(): void;
@@ -138,6 +140,7 @@ export function createEngineClient(worker: Worker): EngineClient {
     inspect: (vehicleId) => send({ type: 'inspect', vehicleId }),
     inspectWalker: (walkerId) => send({ type: 'inspectWalker', walkerId }),
     inspectPerson: (personId) => send({ type: 'inspectPerson', personId }),
+    signalTiming: () => send({ type: 'signalTiming' }),
     hash: () => send({ type: 'hash' }),
     onEvent(listener) {
       listeners.add(listener);

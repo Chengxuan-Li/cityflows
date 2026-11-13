@@ -13,6 +13,8 @@ import type {
 import type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
 import type { PersonDetail, PersonMetrics } from './persons';
 import type { RailSnapshot } from './rail-crossings';
+import type { TransitMetrics, TransitSnapshot } from './transit';
+export type { TransitMetrics, TransitSnapshot } from './transit';
 export type { RailSnapshot } from './rail-crossings';
 export { CROSSING_OPEN, CROSSING_WARNING, CROSSING_CLOSED } from './rail-crossings';
 export type { PersonDetail, PersonMetrics, PersonLegDetail, PersonTripDetail } from './persons';
@@ -49,6 +51,9 @@ export interface TrafficEngine {
   /** TASK-111: a test pedestrian, by its snapshot id. */
   inspectWalker(walkerId: number): WalkerDetail | null;
   inspectPerson(personId: string): PersonDetail | null;
+  /** TASK-170: the phase greens of each demand-split signal program as the run times it, by
+   * junction group or node id. */
+  signalTiming(): Record<string, number[]>;
   stateHash(): number;
 }
 
@@ -76,6 +81,8 @@ export interface ParkingClaimsSnapshot {
 
 export interface VehicleSnapshot {
   rail?: RailSnapshot;
+  /** TASK-174: vehicles in service with the person ids aboard, by train pose id. */
+  transit?: { vehicles: TransitSnapshot['vehicles'] };
   /** >=0: authoritative parking pose; value is its reference lane for height/layer. */
   poseLane?: Int32Array;
   parkedCars?: ParkedCarsSnapshot;
@@ -96,6 +103,16 @@ export interface VehicleSnapshot {
   fade: Float32Array;
   /** TASK-111: walkers on the way, present when the scenario has test pedestrians. */
   walkers?: WalkerSnapshot;
+  /** TASK-170: the signals as the run drives them, present when the city has signals: each
+   * node's phase (-1 without a signal) and stage (0 green, 1 amber, 2 all-red), and each walk
+   * link's walk light (1 green). */
+  signals?: SignalSnapshot;
+}
+
+export interface SignalSnapshot {
+  phase: Int16Array;
+  state: Uint8Array;
+  walk: Uint8Array;
 }
 
 export interface Metrics {
@@ -163,6 +180,8 @@ export interface Metrics {
   /** TASK-111: present when the scenario has test pedestrians. */
   walkers?: WalkerMetrics;
   persons?: PersonMetrics;
+  /** TASK-174: boardings and loads per line, waits, denied boardings; where stops are served. */
+  transit?: TransitMetrics;
   /** Per loaded trip, in input order; materialized only when requested. */
   readonly tripOutcomes?: TripOutcome[];
 }

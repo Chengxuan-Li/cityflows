@@ -14,6 +14,13 @@ type Props = { node: CNode; source: Node; compiled: CompiledCity; group?: Juncti
 type Group = SignalProgram['phases'][number]['groups'][number];
 type Walk = NonNullable<SignalProgram['phases'][number]['walk']>[number];
 const sameGroup = (a: Group, b: Group) => a.from === b.from && a.to === b.to;
+/** TASK-170: a program with `key` set, or left out when off. */
+function withFlag(program: SignalProgram, key: 'demandSplit' | 'actuated', on: boolean) {
+  const next = { ...program, [key]: true };
+  if (!on) delete next[key];
+  return next;
+}
+const seconds = (s: number) => Math.round(s * 10) / 10;
 const compass = [
   'east',
   'south-east',
@@ -60,6 +67,11 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
   const [draft, setDraft] = useState(program);
   const [active, setActive] = useState(0);
   const busy = useAppStore((state) => state.busy);
+  // TASK-170: the loaded run's demand split of this program, shown while the draft splits by
+  // demand and has the same phases; editing a green overrides it with fixed greens.
+  const timing = useAppStore((state) => state.session?.signalTiming[group?.id ?? node.id]);
+  const split = draft.demandSplit && timing?.length === draft.phases.length ? timing : undefined;
+  const greenOf = (index: number) => split?.[index] ?? draft.phases[index]!.durationS;
   const drag = useRef<{ x: number; duration: number; secondsPerPixel: number } | null>(null);
   const trial = useMemo(
     () =>
@@ -114,11 +126,22 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
     if (!groups.has(key)) groups.set(key, { roads: { from, to }, movements: [] });
     groups.get(key)!.movements.push(index);
   }
-  const cycle = draft.phases.reduce((s, p) => s + p.durationS + draft.amberS + draft.allRedS, 0);
+  const cycle = seconds(
+    draft.phases.reduce((s, _, i) => s + greenOf(i) + draft.amberS + draft.allRedS, 0),
+  );
   const changePhase = (index: number, patch: Partial<SignalProgram['phases'][number]>) =>
     setDraft((current) => ({
       ...current,
       phases: current.phases.map((p, i) => (i === index ? { ...p, ...patch } : p)),
+    }));
+  /** A green set by hand: every phase keeps the green shown and the split turns fixed. */
+  const changeGreen = (index: number, durationS: number) =>
+    setDraft((current) => ({
+      ...withFlag(current, 'demandSplit', false),
+      phases: current.phases.map((p, i) => ({
+        ...p,
+        durationS: i === index ? durationS : greenOf(i),
+      })),
     }));
   function toggle(index: number, roads: Group) {
     const phase = draft.phases[index]!;
@@ -134,7 +157,29 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
   const phaseName = `Phase ${active + 1}`;
   return (
     <div className="signal-editor">
-      <p className="muted">Cycle {cycle} s</p>
+      <p className="muted">
+        Cycle {cycle} s
+        {draft.demandSplit &&
+          (split ? ', split by demand' : ', split by demand when the run loads')}
+      </p>
+      <label className="phase-pair">
+        <input
+          type="checkbox"
+          checked={draft.demandSplit ?? false}
+          onChange={(event) =>
+            setDraft(withFlag(draft, 'demandSplit', event.currentTarget.checked))
+          }
+        />
+        Split green by demand
+      </label>
+      <label className="phase-pair">
+        <input
+          type="checkbox"
+          checked={draft.actuated ?? false}
+          onChange={(event) => setDraft(withFlag(draft, 'actuated', event.currentTarget.checked))}
+        />
+        Actuated: end a green early when no one waits
+      </label>
       <label className="phase-pair">
         <input
           type="checkbox"
@@ -144,21 +189,21 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
         {city.drivingSide === 'right' ? 'Right' : 'Left'} turn on red
       </label>
       <div className="signal-timeline" aria-label="Signal timeline">
-        {draft.phases.map((phase, index) => (
+        {draft.phases.map((_, index) => (
           <div
             className="signal-segment"
             key={index}
-            style={{ flexGrow: phase.durationS + draft.amberS + draft.allRedS }}
+            style={{ flexGrow: greenOf(index) + draft.amberS + draft.allRedS }}
           >
             <button
               type="button"
               aria-label={`Select phase ${index + 1}`}
               aria-pressed={active === index}
-              style={{ flexGrow: phase.durationS }}
+              style={{ flexGrow: greenOf(index) }}
               onClick={() => setActive(index)}
             >
               {index + 1}
-              <small>{phase.durationS}s</small>
+              <small>{seconds(greenOf(index))}s</small>
             </button>
             <button
               type="button"
@@ -166,15 +211,15 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
               role="slider"
               aria-label={`Phase ${index + 1} duration`}
               aria-valuemin={0.1}
-              aria-valuenow={phase.durationS}
-              aria-valuetext={`${phase.durationS} seconds`}
+              aria-valuenow={greenOf(index)}
+              aria-valuetext={`${seconds(greenOf(index))} seconds`}
               onPointerDown={(event) => {
                 const width = event.currentTarget
                   .closest('.signal-timeline')!
                   .getBoundingClientRect().width;
                 drag.current = {
                   x: event.clientX,
-                  duration: phase.durationS,
+                  duration: greenOf(index),
                   secondsPerPixel: cycle / width,
                 };
                 event.currentTarget.setPointerCapture(event.pointerId);
@@ -182,15 +227,14 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
               }}
               onPointerMove={(event) => {
                 if (!drag.current) return;
-                changePhase(index, {
-                  durationS: Math.max(
-                    0.1,
-                    Math.round(
-                      drag.current.duration +
-                        (event.clientX - drag.current.x) * drag.current.secondsPerPixel,
-                    ),
+                const durationS = Math.max(
+                  0.1,
+                  Math.round(
+                    drag.current.duration +
+                      (event.clientX - drag.current.x) * drag.current.secondsPerPixel,
                   ),
-                });
+                );
+                if (durationS !== greenOf(index)) changeGreen(index, durationS);
               }}
               onLostPointerCapture={() => {
                 drag.current = null;
@@ -199,9 +243,10 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
                 event.preventDefault();
-                changePhase(index, {
-                  durationS: Math.max(0.1, phase.durationS + (event.key === 'ArrowRight' ? 1 : -1)),
-                });
+                changeGreen(
+                  index,
+                  Math.max(0.1, greenOf(index) + (event.key === 'ArrowRight' ? 1 : -1)),
+                );
               }}
             />
             <span
@@ -420,9 +465,9 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
           <li key={index}>
             <NumberField
               label={`Phase ${index + 1} green (s)`}
-              value={phase.durationS}
+              value={seconds(greenOf(index))}
               min={0.1}
-              onCommit={(durationS) => changePhase(index, { durationS: durationS! })}
+              onCommit={(durationS) => changeGreen(index, durationS!)}
             />
             <PopoverButton label={`Phase ${index + 1} road pairs`} onOpen={() => setActive(index)}>
               {crossings.length > 0 && (

@@ -17,6 +17,8 @@ import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawStations } from './layers/stations';
+import { createLabelLayer } from './layers/labels';
+import { labelCandidates } from './labels';
 import { drawTramStops } from './layers/tram-stops';
 import { noTramStops, placeTramStops } from './tram-stops';
 import { drawLevelCrossings } from './layers/level-crossings';
@@ -60,7 +62,7 @@ import {
   sceneLight,
   type LightingSettings,
 } from './lighting';
-import type { Pick, CityGeometry, Scene, WalkerSnapshot } from './types';
+import type { Pick, CityGeometry, Scene, SignalStates, WalkerSnapshot } from './types';
 import { defaultLayers, type LayerVisibility } from './types';
 
 export function orderedLayers(layers: readonly number[]): number[] {
@@ -103,6 +105,9 @@ export function createGrade(layer: number) {
   const arrows = new Graphics();
   const crossings = new Graphics();
   const places = new Graphics();
+  // TASK-167: place tints sit under the road surfaces at every zoom; outlines of lots and point
+  // markers stay in `places` above.
+  const placeFills = new Graphics();
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
@@ -111,6 +116,7 @@ export function createGrade(layer: number) {
   const bands = new Graphics();
   const slotTicks = new Graphics();
   terrain.addChild(
+    placeFills,
     rail,
     railDetail,
     footways,
@@ -152,6 +158,7 @@ export function createGrade(layer: number) {
     arrows,
     crossings,
     places,
+    placeFills,
     connectors,
     signals,
     vehicles,
@@ -200,6 +207,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   const signalPreview = new Graphics();
   const parking = new Graphics();
   // TASK-163: the evening tint and lights sit over the map, under selection and overlays.
+  const labels = createLabelLayer();
   const night = new NightLayer();
   let lighting = defaultLighting;
   let lightMinute = 0;
@@ -208,6 +216,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   world.addChild(
     map,
     night.container,
+    labels.container,
     routeOverlay,
     walkerRoute,
     selectionOverlay,
@@ -275,6 +284,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       );
     }
   };
+  const updateLabels = () => {
+    const a = camera.screenToWorld({ x: 0, y: 0 }),
+      b = camera.screenToWorld({ x: app.screen.width, y: app.screen.height });
+    labels.update(
+      camera.zoom,
+      { minX: a.x, minY: a.y, maxX: b.x, maxY: b.y },
+      layerVisibility.labels,
+    );
+    if (import.meta.env.MODE === 'test') canvas.dataset.labels = JSON.stringify(labels.counts);
+  };
   const updateTrainPoses = () => {
     if (!layerVisibility.rail) return;
     const controlled = vehicles.snapshot?.rail;
@@ -302,7 +321,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let sourceGeometry: CityGeometry | undefined;
   let shapes: Place['shape'][] = [];
   let staticPick: ReturnType<typeof createPicker> | undefined;
-  let updateSignals: ((timeS: number) => void)[] = [];
+  let updateSignals: ((timeS: number, states?: SignalStates) => void)[] = [];
   let updatePlaces: ((zoom: number) => void) | undefined;
   let redrawPlaces = () => {};
   let redrawWalk = () => {};
@@ -395,6 +414,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     );
     updateStations();
     updateCatenary();
+    updateLabels();
     canvas.dataset.stationFurniture = JSON.stringify(
       layerVisibility.rail && stations ? stations.counts : noFurniture,
     );
@@ -501,6 +521,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     for (const graphics of walkerLayers.values()) graphics.visible = layerVisibility.pedestrians;
     disconnectedOverlay.visible = layerVisibility.disconnected;
     for (const grade of visibleGrades) {
+      if (grade.placeFills.visible !== layerVisibility.places) {
+        grade.placeFills.visible = layerVisibility.places;
+        grade.terrain.updateCacheTexture();
+      }
       grade.places.visible = layerVisibility.places;
       grade.connectors.visible = layerVisibility.connectors;
       grade.signals.visible = layerVisibility.signals;
@@ -572,6 +596,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       animation = requestAnimationFrame(frame);
     });
 
+  void Promise.all([ready, labels.fontsReady]).then(() => {
+    if (destroyed) return;
+    updateLabels();
+    invalidate();
+  });
+
   function updateVehicleRing(): void {
     vehicleRing.visible = selectedVehicle >= 0;
     if (selectedVehicle >= 0)
@@ -593,6 +623,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     updatePlaces?.(camera.zoom);
     updateStations();
     if (city) drawParking(parking, city, parkingCounts, camera.zoom);
+    updateLabels();
     if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
     redrawWalkers();
   });
@@ -693,6 +724,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (import.meta.env.MODE === 'test')
         canvas.dataset.contextRebuildMs = String(performance.now() - started);
       const { nodeGrades, roadGrades } = cityGrades(city);
+      labels.setCandidates(labelCandidates(compiled, source ?? { nodes: {}, places: {} }));
       visibleGrades = orderedLayers([
         ...nodeGrades,
         ...roadGrades,
@@ -881,11 +913,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         }
       }
       redrawPlaces = () => {
-        const { places, connectors } = grades.get(0)!;
+        const { places, connectors, placeFills } = grades.get(0)!;
         for (const child of places.removeChildren()) child.destroy();
         places.clear();
+        placeFills.clear();
         connectors.clear();
-        updatePlaces = drawPlaces(places, city!, shapes, connectors, palette.placeBase);
+        updatePlaces = drawPlaces(places, city!, shapes, connectors, placeFills, palette.placeBase);
         updatePlaces(camera.zoom);
       };
       redrawPlaces();
@@ -989,7 +1022,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       redrawWalkers();
       if (import.meta.env.MODE === 'test')
         canvas.dataset.walkers = String(walkerSnapshot?.count ?? 0);
-      for (const update of updateSignals) update(snapshot.timeS);
+      for (const update of updateSignals) update(snapshot.timeS, snapshot.signals);
       for (const ghost of ghosts) ghost.sync();
       if (selection?.kind === 'vehicle') {
         selectedVehicle = snapshot.id.subarray(0, snapshot.count).indexOf(selection.id);
@@ -1030,14 +1063,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       invalidate();
       if (city) drawMultiSelection(multiSelectionOverlay, city, roads);
     },
-    setSignalPreview(loaded, timeS) {
+    setSignalPreview(loaded, timeS, states) {
       const nodeId = selection?.kind === 'node' ? city!.nodes[selection.node]!.id : null;
       if (loaded === previewLoaded && timeS === previewTimeS && nodeId === previewNode) return;
       previewLoaded = loaded;
       previewTimeS = timeS;
       previewNode = nodeId;
       invalidate();
-      const preview = drawSignalPreview(signalPreview, loaded, nodeId, timeS);
+      const preview = drawSignalPreview(signalPreview, loaded, nodeId, timeS, states);
       canvas.setAttribute(
         'aria-description',
         preview ? `Signal ${nodeId}: phase ${preview.phase + 1}, ${preview.state}` : '',
@@ -1208,6 +1241,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       night.destroy();
       parkedCars.destroy();
       hillshade?.destroy({ texture: true, textureSource: true });
+      labels.destroy();
       tiles?.destroy();
       if (resizeObserver) {
         resizeObserver.disconnect();

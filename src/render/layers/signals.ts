@@ -1,7 +1,19 @@
 import { Container, Graphics } from 'pixi.js';
 import { headingAtDistance, pointAtDistance } from '../../geo/polyline';
-import { signalStateAt, type CNode, type CompiledCity } from '../../network';
+import { signalStateAt, type CNode, type CSignal, type CompiledCity } from '../../network';
 import { style } from '../style';
+import type { SignalStates } from '../types';
+
+const stages = ['green', 'amber', 'all-red'] as const;
+
+/** TASK-170: a node's signal phase and stage as the run drives it (`states`, from the
+ * snapshot), or from its program at `timeS` before a run reports one. */
+export function signalLight(signal: CSignal, node: number, timeS: number, states?: SignalStates) {
+  const phase = states?.phase[node] ?? -1;
+  return phase >= 0 && phase < signal.phases.length
+    ? { phase, state: stages[states!.state[node]!]! }
+    : signalStateAt(signal, timeS);
+}
 
 /** One light per movement of each approach lane, across the lane just before its stop line
  * (TASK-094: with the stop line and the crossing, not at the lane end in the junction). */
@@ -42,7 +54,7 @@ export function drawSignal(
   node: CNode,
   container: Container,
   night?: Container,
-): (timeS: number) => void {
+): (timeS: number, states?: SignalStates) => void {
   const signal = node.signal!;
   const phases = signal.phases.map(({ movements }) => new Set(movements));
   const heads = signalHeads(city, node).map(({ x, y, radius, movement }) => ({
@@ -63,8 +75,8 @@ export function drawSignal(
 
   let previousPhase = -1;
   let previousState: string | undefined;
-  return (timeS) => {
-    const { phase, state } = signalStateAt(signal, timeS);
+  return (timeS, states) => {
+    const { phase, state } = signalLight(signal, node.idx, timeS, states);
     if (phase === previousPhase && state === previousState) return;
     previousPhase = phase;
     previousState = state;

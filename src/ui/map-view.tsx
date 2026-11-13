@@ -26,6 +26,19 @@ function snapshotForMap(
   const presentation = { ...snapshot, vehicleHues, motionLane: snapshot.lane };
   if (compiled === loadedCompiled) return presentation;
 
+  // TASK-170: signal states by node and walk link id.
+  let signals = snapshot.signals;
+  if (signals) {
+    const { phase, state, walk } = signals;
+    const links = new Map(loadedCompiled.walk.links.map((l) => [l.id, l.idx]));
+    const node = (id: string) => loadedCompiled.index.node.get(id) ?? -1;
+    signals = {
+      phase: Int16Array.from(compiled.nodes, (n) => (node(n.id) < 0 ? -1 : phase[node(n.id)]!)),
+      state: Uint8Array.from(compiled.nodes, (n) => (node(n.id) < 0 ? 0 : state[node(n.id)]!)),
+      walk: Uint8Array.from(compiled.walk.links, (l) => walk[links.get(l.id) ?? -1] ?? 0),
+    };
+  }
+
   // Positions stay in world coordinates. The renderer only needs the remapped index for layering.
   const poseLane = snapshot.poseLane?.map((index) =>
     index < 0 ? -1 : (compiled.index.lane.get(loadedCompiled.lanes[index]!.id) ?? 0),
@@ -39,7 +52,7 @@ function snapshotForMap(
       ? (compiled.index.lane.get(loadedCompiled.lanes[movement.toLane]!.id) ?? 0)
       : -current - 1;
   });
-  return { ...presentation, lane, poseLane };
+  return { ...presentation, lane, poseLane, signals };
 }
 
 function routeForMap(route: Route, { compiled, loadedCompiled }: Session) {
@@ -424,7 +437,11 @@ export function MapView() {
           );
           view.setQueues(snapshotForMap(snapshot, session));
         }
-        view.setSignalPreview(current.run?.stale ? null : session.loadedCompiled, snapshot.timeS);
+        view.setSignalPreview(
+          current.run?.stale ? null : session.loadedCompiled,
+          snapshot.timeS,
+          snapshot.signals,
+        );
         if (snapshot.timeS !== snapshotTime) {
           const presentation = snapshotForMap(snapshot, session);
           if (active3D) three!.setSnapshot(presentation);
@@ -698,26 +715,6 @@ export function MapView() {
           tools[state.tool].refresh();
       });
       signal.addEventListener('abort', unsubscribe, { once: true });
-      window.addEventListener(
-        'keydown',
-        (event) => {
-          if (
-            event.repeat ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.altKey ||
-            document.querySelector('dialog[open]') ||
-            (event.target instanceof HTMLElement &&
-              event.target.closest('input, textarea, select, [contenteditable="true"]'))
-          )
-            return;
-          if (event.key.toLowerCase() === 'v') {
-            event.preventDefault();
-            getState().toggleView();
-          }
-        },
-        { signal },
-      );
       let down: Vec2 | null = null;
       canvas3D.addEventListener(
         'pointerdown',

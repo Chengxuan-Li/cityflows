@@ -10,6 +10,7 @@ import {
   clickWorld,
   clockTimeS,
   departVehicle,
+  driveEveryone,
   importOsm,
   metrics,
   pageErrors,
@@ -21,6 +22,8 @@ test('T47 local traffic only reroutes a live through trip and undo restores acce
   const errors = pageErrors(page);
   await page.goto('/');
   await expect(button(page, 'Step')).toBeEnabled();
+  // TASK-113: vehicle 1's driver may walk with mode choice on; this case follows a car.
+  await driveEveryone(page);
   // TASK-112: wait for the first driver's access walk before inspecting their route.
   await departVehicle(page, 1);
   const before = await page.evaluate(async () => {
@@ -144,14 +147,26 @@ test('T47 Munich local access diverts through traffic and permits a local depart
         if (!through.ok || through.route.roads.includes(idx) || !local.ok) continue;
         expect(local.route.roads[0]).toBe(idx);
         const lane = net.lanes[road.lanes[0]!]!;
+        // TASK-173: a driver's household car is parked at home from 07:00, so parked cars line
+        // the streets; a click on one selects the car, not the street.
+        const occupied = await page.evaluate(() =>
+          Array.from(window.cityflows!.parkedCars!()?.occupied ?? []),
+        );
+        const parked = net
+          .parkingSpaces!.filter((space) => occupied[space.idx >> 3]! & (1 << (space.idx & 7)))
+          .map((space) => space.position);
         const point = await page.evaluate(
-          async (points) => {
+          async ({ points, parked }) => {
             const api = window.cityflows!,
               snapshot = await api.snapshot!();
             return points.find((point) => {
               const screen = api.worldToScreen!(point);
               for (let i = 0; i < snapshot.count; i++) {
                 const car = api.worldToScreen!({ x: snapshot.x[i]!, y: snapshot.y[i]! });
+                if (Math.hypot(car.x - screen.x, car.y - screen.y) < 16) return false;
+              }
+              for (const space of parked) {
+                const car = api.worldToScreen!(space);
                 if (Math.hypot(car.x - screen.x, car.y - screen.y) < 16) return false;
               }
               const walkers = snapshot.walkers;
@@ -162,9 +177,12 @@ test('T47 Munich local access diverts through traffic and permits a local depart
               return true;
             });
           },
-          [0.25, 0.5, 0.75].map((part) =>
-            pointAtDistance(lane.polyline, lane.cumulative, lane.lengthM * part),
-          ),
+          {
+            points: [0.25, 0.5, 0.75].map((part) =>
+              pointAtDistance(lane.polyline, lane.cumulative, lane.lengthM * part),
+            ),
+            parked,
+          },
         );
         if (!point) continue;
         chosen = {

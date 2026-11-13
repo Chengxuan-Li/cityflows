@@ -8,14 +8,29 @@ export function TrainInspector({ id, route }: { id: string; route: number }) {
   const session = useAppStore((s) => s.session);
   const timeS = useAppStore((s) => s.run?.timeS ?? 0);
   const [controlled, setControlled] = useState<
-    { timeS: number; poses: TrainPose[] } | null | undefined
+    | {
+        timeS: number;
+        poses: TrainPose[];
+        loads: { id: string; capacity: number; riders: string[] }[];
+      }
+    | null
+    | undefined
   >(undefined);
   useEffect(() => {
     if (!session) return;
     let active = true;
     void session.engine.snapshot().then((snapshot) => {
       const rail = snapshot.rail;
-      if (active) setControlled(rail ? { timeS: snapshot.timeS, poses: rail.trains } : null);
+      if (active)
+        setControlled(
+          rail
+            ? {
+                timeS: snapshot.timeS,
+                poses: rail.trains,
+                loads: snapshot.transit?.vehicles ?? [],
+              }
+            : null,
+        );
     });
     return () => {
       active = false;
@@ -29,6 +44,8 @@ export function TrainInspector({ id, route }: { id: string; route: number }) {
   const train = (
     controlled?.poses ?? (controlled === null ? trainsAt(rail, table, timeS) : [])
   ).find((t) => t.id === id);
+  // TASK-174: who rides in it; the places scale with the scenario's sampled population.
+  const load = controlled?.loads.find((v) => v.id === id);
   return (
     <section aria-label="Train inspector">
       <h2>
@@ -54,7 +71,24 @@ export function TrainInspector({ id, route }: { id: string; route: number }) {
         <dd>{train?.next ?? 'Exited'}</dd>
         <dt>Status</dt>
         <dd>{!train ? 'Outside city' : train.speedMps < 0.01 ? 'Stopped' : 'Running'}</dd>
+        {load && (
+          <>
+            <dt>Riders</dt>
+            <dd>
+              {load.riders.length} of {load.capacity}
+            </dd>
+          </>
+        )}
       </dl>
+      {load?.riders.map((person) => (
+        <button
+          key={person}
+          className="nav-row"
+          onClick={() => useAppStore.getState().selectPerson(person)}
+        >
+          {person}
+        </button>
+      ))}
     </section>
   );
 }

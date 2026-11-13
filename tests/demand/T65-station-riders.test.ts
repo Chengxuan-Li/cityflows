@@ -15,6 +15,7 @@ import { compileRail } from '../../src/network/rail';
 import { trainPoint, trainTimetable } from '../../src/network/trains';
 import type { City, Scenario, TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
+import { TRANSIT_RIDER_ID } from '../../src/sim/transit';
 import { cityTest, unitTest } from '../tier';
 import { railStation } from './rail-station';
 
@@ -209,6 +210,9 @@ unitTest(
         const snapshot = engine.snapshot().walkers;
         const now = new Set<number>();
         for (let i = 0; i < (snapshot?.count ?? 0); i++) {
+          // TASK-174: riders getting off the train are drawn from its doors to the entrance
+          // before their walk; the walkers are the ids below theirs.
+          if (snapshot!.id[i]! >= TRANSIT_RIDER_ID) continue;
           now.add(snapshot!.id[i]!);
           if (!walkers.has(snapshot!.id[i]!))
             starts.push({ x: snapshot!.x[i]!, y: snapshot!.y[i]! });
