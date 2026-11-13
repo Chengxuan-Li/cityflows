@@ -132,7 +132,15 @@ function entryWorld(mapped: boolean, nearClosed: boolean) {
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   const scenario = { ...defaultScenario('grid5x5', 149), startS: 100, endS: 500 };
-  return { compiled: result.compiled, scenario, trip, id, direct: direct.id, detour: detour.id };
+  return {
+    city,
+    compiled: result.compiled,
+    scenario,
+    trip,
+    id,
+    direct: direct.id,
+    detour: detour.id,
+  };
 }
 
 test.each([
@@ -154,3 +162,33 @@ test.each([
     else expect(roads).toContain(w.detour);
   },
 );
+
+test('T63 a live edit releases a stable bay claim when its selected throat is cut', () => {
+  const w = entryWorld(true, false),
+    engine = createEngine();
+  engine.load({ compiled: w.compiled, trips: [w.trip], scenario: w.scenario });
+  engine.step();
+  const claimed = engine.snapshot().parkingClaims!.space[0]!;
+  expect(claimed).toBeGreaterThanOrEqual(0);
+  const edited = structuredClone(w.city);
+  edited.version++;
+  edited.parking![w.id]!.exclusions = [
+    [
+      { x: 80, y: 8.5 },
+      { x: 365, y: 8.5 },
+      { x: 365, y: 9 },
+      { x: 80, y: 9 },
+    ],
+  ];
+  const next = compile(edited);
+  if (!next.ok) throw new Error(JSON.stringify(next.diagnostics));
+  expect(next.compiled.parkingSpaces![claimed]!.lotStall).toBe(
+    w.compiled.parkingSpaces![claimed]!.lotStall,
+  );
+  engine.patch(next.compiled);
+  expect(engine.snapshot().parkingClaims!.space[0]).toBe(-1);
+  expect(engine.snapshot().parkingClaims!.facility[0]).toBe(-1);
+  expect(() => engine.step(4000)).not.toThrow();
+  expect(engine.inspect(1)!.state).toBe('completed');
+  expect(engine.inspect(1)!.parkingFacility).toBe(w.id);
+});
