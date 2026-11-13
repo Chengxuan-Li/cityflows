@@ -1272,6 +1272,10 @@ export function createParking(
     // TASK-156: an entry on a public aisle lane keeps the arriving car that lane's occupant.
     const m = motionById[id]!;
     if (lot && aisleBand(id, m, from)?.lane === m.lane) m.laneHeld = true;
+    // TASK-164: an entry on a street holds the street lane until the body has left its band,
+    // as a kerbside space does.
+    if (lot && !m.laneHeld && !aisleSegments[slot.parking]!.segments.includes(m.lane))
+      m.laneHeld = true;
     return true;
   }
   function arrive(id: number, connector: number, timeS: number) {
@@ -1467,7 +1471,12 @@ export function createParking(
       m.progressM = target;
       m.pose = pose;
       m.speed = pointDistance(before, m.pose) / params.dtS;
-      if (arriving) {
+      if (arriving && m.laneHeld && !aisleSegments[space.parking]!.segments.includes(m.lane)) {
+        if (bodyClearOf(pose, compiled.lanes[m.lane]!, length(id), width(id))) {
+          callbacks.occupy?.(id, -1, 0, 0);
+          m.laneHeld = false;
+        }
+      } else if (arriving) {
         const band = aisleBand(id, m, pose);
         if (band) {
           const held = m.laneHeld && band.lane === m.lane;

@@ -28,9 +28,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     // and e4654d8 (merging lanes kept on a group's inner roads).
     expect(createHash('sha256').update(JSON.stringify({ lanes, movements })).digest('hex')).toBe(
       name.startsWith('munich')
-        ? // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
+        ? // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
-          'bc434ecdcd4500f083a5db0a1978dcff14a0eff322bf695f6cc2dcf07a62ed7c'
+          'e125a475c73fd392ecda444924c7dc9f7e2d96114a6c0a28f1459f813a38d8e1'
         : 'ec6f0fa77ebc23d1b1c04344c6eca38dea08cc5cfbe793fd9a02f909cc65d775',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);

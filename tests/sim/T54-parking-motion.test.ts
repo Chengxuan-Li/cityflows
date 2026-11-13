@@ -148,7 +148,8 @@ test.each([118, 2, 7, 31, 52])(
           ).toBeLessThanOrEqual(s.speed[i]! * 0.1 + 0.05);
         poses.set(id, p);
         if (engine.inspect(id)?.state === 'in_lot') {
-          expect(s.lane[i]).toBe(OFF_LANE);
+          // TASK-164: an arrival holds the street lane until its body has left the band.
+          if (engine.inspect(id)?.parkingPhase !== 'drive_in') expect(s.lane[i]).toBe(OFF_LANE);
           if (id > 2) leaving++;
         }
       }

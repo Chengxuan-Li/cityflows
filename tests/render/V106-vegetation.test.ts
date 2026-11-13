@@ -49,9 +49,9 @@ const baselines = {
   // import without assignTramForms) every pin equals c3a6ec2's.
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
-  // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
+  // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
   // removed every pin equals 3e9951a's.
-  'munich-donnersberger': '2dbd280cc885cbe6a93b3fe1cbd3fd17d13e7a0c58aeee51ec582e1176c35bde',
+  'munich-donnersberger': '4f2b7f99d409eee554240ffc28dfe050f8b20143ad5da17794cdf872c34d998c',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   'sindelfingen-a81': '986083590a892c4c6abcd6438f65e446421cbc9933cd6df5b6d3c7e5c40ca12d',
 };
