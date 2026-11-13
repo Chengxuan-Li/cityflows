@@ -11,6 +11,60 @@ import { createExportRecorder } from '../../src/host/export-data';
 import { buildCity } from '../../src/fixtures/build-city';
 import { allocateId } from '../../src/schema';
 
+function sharedMouthWorld() {
+  const w = parkingWorld();
+  w.home.kind = 'gateway';
+  w.home.population = 0;
+  w.shop.jobs = 0;
+  w.city.parking![w.id]!.placeId = w.shop.id;
+  w.city.parking![w.id]!.occupancyAtStart = 0.25;
+  const arrival = { ...w.trip('arrival'), personId: null };
+  const departure = {
+    ...w.trip('departure'),
+    personId: null,
+    originPlaceId: w.shop.id,
+    destinationPlaceId: w.home.id,
+  };
+  const result = compile(w.city);
+  if (!result.ok) throw new Error('Shared mouth compile');
+  return { ...w, net: result.compiled, trips: [arrival, departure] };
+}
+
+test('T149 an arrival yields clear of its shared mouth while a committed lot departure joins the street', () => {
+  const w = sharedMouthWorld(),
+    engine = createEngine();
+  engine.load({ compiled: w.net, trips: w.trips, scenario: w.scenario });
+  let arrived = false,
+    departed = false,
+    upstreamWait = false;
+  for (let step = 0; step < 8000; step++) {
+    engine.step();
+    const a = engine.inspect(1),
+      b = engine.inspect(2);
+    arrived ||= a?.state === 'completed';
+    departed ||= b?.state === 'completed';
+    if (a?.state === 'driving' && b?.state === 'in_lot') {
+      const snap = engine.snapshot(),
+        i = [...snap.id].indexOf(1);
+      upstreamWait ||= i >= 0 && snap.speed[i]! < 0.2 && snap.x[i]! < 140;
+    }
+    if (arrived && departed) break;
+  }
+  expect([arrived, departed]).toEqual([true, true]);
+  expect(upstreamWait).toBe(true);
+});
+
+test('T149 a lot departure waits in its bay when an arrival is already occupying the street mouth', () => {
+  const w = sharedMouthWorld(),
+    vehicles = createVehicles(2, w.net.lanes.length, w.net.movements.length);
+  const parking = createParking(w.net, w.trips, w.scenario, DEFAULT_SIM_PARAMS, vehicles);
+  const c = w.net.connectors[w.net.parking[w.net.index.parking.get(w.id)!]!.connectorsOut[0]!]!;
+  vehicles.destination[0] = c.idx;
+  vehicles.insert(0, c.lane, c.positionM);
+  expect(parking.startsInLot(1)).toBe(true);
+  expect(parking.canStartLot(1, c.idx)).toBe(false);
+});
+
 test('T54 a driveway arrival drives inside its lot before parking, deterministically', () => {
   const w = parkingWorld();
   const result = compile(w.city);

@@ -185,6 +185,13 @@ export interface ParkingFacility {
   };
   aisles?: RoadId[]; // a lot's `parking_aisle` service roads
   entries?: NodeId[]; // lot nodes shared with a non-aisle road
+  /** Source-proven street portals whose local path follows a particular directed aisle. */
+  mappedPortals?: {
+    connectorId: ConnectorId;
+    nodeId: NodeId;
+    aisleRoadId: RoadId;
+    direction: 'in' | 'out';
+  }[];
   exclusions?: Vec2[][]; // courtyards and building footprints beside bands/stalls, including with context off
   occupancyAtStart?: number; // share 0..1 of slots taken at the start of the day; absent = derived
   provenance: Provenance; // `inferred` marks facilities generated where OSM has none

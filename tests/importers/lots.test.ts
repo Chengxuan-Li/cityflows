@@ -296,3 +296,23 @@ test('multiple mapped joins keep a downstream turn restriction at the real end',
   ))
     expect(node.turnRules.some((r) => r.provenance.osmIds?.includes(20))).toBe(false);
 });
+
+test('mapped private-spine portals preserve source mouths without splitting through roads', () => {
+  const xml = sharedInterior.replace(
+    '<tag k="highway" v="service"/></way>',
+    '<tag k="highway" v="residential"/><tag k="access" v="private"/></way>',
+  );
+  const imported = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+  const { city } = imported;
+  const lot = Object.values(city.parking!).find((p) => p.kind === 'lot')!;
+  const publicRoads = Object.values(city.roads).filter((r) => r.provenance.osmIds?.includes(10));
+  expect(publicRoads).toHaveLength(2);
+  expect(publicRoads.every((r) => r.access?.all === 'private')).toBe(true);
+  expect(lot.provenance.inferred).toContain('mappedLotPortals');
+  const portals = lot.connectors.filter((c) => publicRoads.some((r) => r.id === c.roadId));
+  expect(portals.filter((c) => c.direction !== 'out')).toHaveLength(2);
+  expect(portals.filter((c) => c.direction !== 'in')).toHaveLength(2);
+  const join = Object.values(city.nodes).find((n) => n.provenance.osmIds?.includes(2))!;
+  expect(lot.entries).not.toContain(join.id);
+});

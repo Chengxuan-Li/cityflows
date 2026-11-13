@@ -112,13 +112,21 @@ export interface CLot {
   stallCount: number;
 }
 
-/** Facility-local, bidirectional paths; never edges of the vehicle routing graph. */
+/** Facility-local paths; mapped source aisles may be directed, inferred circulation is not.
+ * These are never edges of the vehicle routing graph. */
 export interface LotCirculation {
   nodes: Vec2[];
-  edges: { from: number; to: number; lengthM: number }[];
+  edges: { from: number; to: number; lengthM: number; directed?: boolean }[];
   adjacency: number[][];
   stallNodes: number[];
-  entries: { connector: number; node: number; distances: Float64Array; previous: Int32Array }[];
+  entries: {
+    connector: number;
+    direction?: 'in' | 'out';
+    approach?: number[];
+    node: number;
+    distances: Float64Array;
+    previous: Int32Array;
+  }[];
   unreachable: number[];
 }
 

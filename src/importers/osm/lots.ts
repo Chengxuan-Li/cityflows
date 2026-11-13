@@ -345,7 +345,7 @@ export function restoreLotJunctions(
   bounds: Bounds,
   diagnostics: Diagnostic[],
   compiled: CompiledCity,
-): void {
+): CompiledCity | undefined {
   const lots = Object.values(city.parking ?? {}).filter((lot) => lot.kind === 'lot');
   const aisleIds = new Set(lots.flatMap((lot) => lot.aisles ?? []));
   const holes = new Map(
@@ -413,4 +413,5 @@ export function restoreLotJunctions(
     }
     lot.connectors.push(...retained.filter((c) => !used.has(c.id)));
   }
+  return result.compiled;
 }

@@ -5,6 +5,7 @@ import { createGraphCache } from './graph';
 import { createLaneSearch } from './lane-search';
 import { resolveLanes } from './lanes';
 import { createPathSearch } from './search';
+import { parkingConnectorPermitted } from '../network/parking';
 
 export { freeFlowLinkCosts, movementPenaltyS } from './costs';
 export { reachableLanes } from './lanes';
@@ -73,6 +74,16 @@ export function createRouteProvider({
       if (!destination || destination.direction === 'out') {
         return { ok: false, reason: 'destination_unreachable' };
       }
+      if (
+        !parkingConnectorPermitted(
+          compiled,
+          destination.idx,
+          request.vehicleClass,
+          request.purpose,
+          'in',
+        )
+      )
+        return { ok: false, reason: 'class_forbidden' };
       const graph = graphFor(compiled, request.vehicleClass);
       if (!graph.allowed[request.fromLane] || !graph.allowed[destination.lane]) {
         return { ok: false, reason: 'class_forbidden' };
