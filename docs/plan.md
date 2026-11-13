@@ -174,6 +174,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
 | [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | done (PR #6) |
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
+| [TASK-150](tasks/TASK-150.md) | 7 | A car leaving a lot waits clear of the public lane and merges continuously once granted | `src/sim/parking.ts`, `manoeuvre.ts`, `engine.ts` (exit), T77 | 118, 122, 149 | T77, witness 0 overlaps, T54/T59/T63, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -365,13 +366,16 @@ exists.
 - `npm audit` reports moderate advisories in dev tooling only (minimatch under
   typescript-eslint); nothing ships to the browser. Revisit when upgrading tooling.
 - B54 east (`n:138`) and B55 (owner, 2026-11-07): outstanding, deferred while Gates 7 to 9
-  proceed; TASK-099's attachment stays limited to its two named Munich corridors. B56 closed by
-  TASK-121 (2026-11-09): the traffic gate allows no stalled head again.
+  proceed; TASK-099's attachment stays limited to its two named Munich corridors. B54 and B55
+  were then done by TASK-131 (2026-11-11). B56 reopened (TASK-130) and is deferred inside
+  TASK-131 Phase 3 (owner, 2026-11-12).
 - B57 (lead, 2026-11-09): Sindelfingen's walk graph has places and garage connectors in
   separate components, so 70% of its egress walks fall back to a straight line (TASK-112).
   TASK-123 joins them (round 2).
 - B58 (lead, 2026-11-09): garages `pk:1981` and `pk:2035` in Munich have no car exit (TASK-122
-  review); their exits reach only one direction of a two-way road.
+  review); their exits reach only one direction of a two-way road. Done by TASK-124 (2026-11-10).
+- Parking exit overlap (TASK-149 review, 2026-11-12): an exiting car waits on the public lane;
+  TASK-150.
 
 ## Owner findings from real OSM testing (2026-11-04)
 
@@ -1120,6 +1124,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-132 | Claude Code, the lead's subagent | Opus 5.5 | high | 5332 (production 5432) |
 | TASK-137 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5337 (production 5437) |
 | TASK-134 | Claude Code, the lead's subagent | Opus 5.5 | high | 5334 (production 5434) |
+| TASK-150 | Claude Code, the lead's subagent | Opus 5.5 | high | 5350 (production 5450) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3498,6 +3503,11 @@ footprint samples. The first occurred at 152.4 s. Track the physical merge
 separately from the repaired mapped entrances.
 
 ## Owner decisions log
+
+- 2026-11-13 (owner): the lead (Claude Code) orchestrates every agent from its own chat with
+  Claude subagents; no Codex models unless the owner names one. PR #1 and TASK-128 to TASK-130
+  stay held, B56 stays deferred, and the current traffic gate stays. TASK-150 (parking exit
+  hold) starts; it is the only unblocked task in this batch.
 
 - 2026-11-12 (owner): run the SwiftShader rendering fix and remaining parking access checks in parallel with GPT-6.1 Sol high. Supply geometry shots for parking fixes. PR #1 and TASK-128 through TASK-130 stay held, and B56 stays deferred.
 
