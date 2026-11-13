@@ -30,7 +30,8 @@
     "route-audit": "node --experimental-strip-types --import ./bench/register.ts ./bench/route-audit.ts",
     "geometry-audit": "node --experimental-strip-types --import ./bench/register.ts ./bench/geometry-audit.ts",
     "geometry-shots": "node --experimental-strip-types --import ./bench/register.ts ./bench/geometry-shots.ts",
-    "traffic:quick": "node --experimental-strip-types --import ./bench/register.ts ./bench/traffic-quick.ts"
+    "traffic:quick": "node --experimental-strip-types --import ./bench/register.ts ./bench/traffic-quick.ts",
+    "seed-report": "node --experimental-strip-types --import ./bench/register.ts ./bench/seed-report.ts"
   },
   "dependencies": {
     "@types/three": "0.187.0",
