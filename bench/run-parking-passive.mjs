@@ -1,0 +1,12 @@
+import {writeFileSync} from 'node:fs';
+import {createParkingTrafficProbe} from './parking-passive.mjs';
+import {loadAuditCity} from './junction-audit.ts';
+import {compile} from '../src/network/index.ts';
+import {createRouteProvider} from '../src/routing/index.ts';
+import {probeMorning} from './import-probe.ts';
+const city=loadAuditCity('munich'), result=compile(city);
+if(!result.ok)throw Error('compile failed');
+const p=createParkingTrafficProbe(result.compiled,createRouteProvider());
+const m=probeMorning(city,result.compiled,.15,{routeProvider:p.routeProvider,observe:p.observe});
+console.info(JSON.stringify({completed:m.completed,failed:m.failedByReason,stalled:m.stalledHeads}));
+writeFileSync('parking-trace.json',JSON.stringify(p.finish()));
