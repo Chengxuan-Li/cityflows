@@ -2920,6 +2920,21 @@ the city, and roads retain the strongest tone.
   exposure 1), additive lamp and platform glows, vehicle light sprites and bright copies of
   the signal heads. Both canvases publish the resolved mode as `data-lighting`.
 
+- TASK-166: the appearance is view-only state as well. `ui/appearance-store.ts` keeps
+  `{ appearance, matchLighting }` (`system`, `light` or `dark`; System by default, following the
+  OS's `prefers-color-scheme` live) per viewer in `localStorage` (`cityflows.appearance`, parsed
+  on read, the default when missing, broken or blocked), never in the project. `resolveAppearance`
+  gives two answers: whether the window is dark (the chosen appearance, or Match lighting while the
+  street lamps are on, i.e. Evening, Night or the clock after dusk) and whether the map takes its
+  dark variant (the chosen appearance only, so a lighting change never rebuilds the map). The
+  window sets `data-appearance` on the root element and every colour it draws is a token in
+  `ui/app.css` with a dark set under `:root[data-appearance='dark']`. The map's dark variant is a
+  second palette in `render/style.ts` (2D, labels included) and `render3d` (3D): a near-black
+  canvas, dark land use and place tints mixed from the dark ground, shaded sidewalks; roads,
+  markings, rail, vehicles and street furniture keep their real colours, and the lighting presets
+  light or darken whichever palette is active. It cannot change simulation, project or
+  render-geometry hashes; switching it in 3D rebuilds the scene.
+
 - TASK-108: `render/marking-geometry.ts` owns world-metre paint shapes (role-coloured
   polylines with widths and dash metadata, and filled polygons). Road clipping, dash phase,
   approach controls and arrows, continuation seams/tapers, junction guides and crossing
