@@ -1388,6 +1388,12 @@ holds there before resuming. Gridlock recovery is exempt only while a protected 
 the binding obstacle at the stopped vehicle's nose; an open crossing's downstream queue
 remains subject to ordinary recovery.
 
+At a junction beside a served crossing, a competing turn must have room for its full
+vehicle and gap beyond the last shared conflict zone. Storage accounts for cars already
+entering or granted that exit. A car whose body is on the tracks can receive the first
+legal grant to clear them. Signal, yield-gap, stop, occupied-zone and merge checks still
+apply, and turns on red wait for green candidates.
+
 Each scheduled occurrence has its own progress clock. Exceptional road blockage pauses that
 service before the crossing; occupied rail sections and same-tick reservations hold following
 or opposing services, while unrelated routes keep advancing. Delayed services also retain
@@ -1402,6 +1408,13 @@ cycle, discard removed services, rebuild road spans, and hold a service upstream
 places a road vehicle in its crossing. Snapshot poses are allocated only on request, and road
 occupancy scans only occupied influenced segments. Crossing-held road vehicles do not enter
 gridlock recovery. No rail field enters canonical project data.
+
+A service positively held before one facility by road occupancy may release its own warning
+at a separate, not-yet-entered downstream facility to let that road discharge. Other services'
+protection, occupied rail bands and tail guards still apply. Once the upstream hold clears,
+the downstream facility starts a full fresh braking-aware warning; the service may approach
+but waits before nose entry until that warning completes. These per-occurrence warning
+clocks pause with simulation time and survive live edits only for the same facility interval.
 
 TASK-102 keeps garage stock and person car chains in `sim/parking.ts`, separate from place
 event admission. Initial residential stock uses residents times scenario car share, bounded
