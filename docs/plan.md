@@ -180,6 +180,11 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | batch 3 (after TASK-129 merges) |
 | [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | in progress (Claude Code subagent) |
+| [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | in progress (Claude Code subagent) |
+| [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | queued (after TASK-153) |
+| [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | queued (after TASK-153, beside TASK-156) |
+| [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | conditional (after TASK-154) |
+| [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | queued (after TASK-154) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1135,6 +1140,11 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-153 | Claude Code, the lead's subagent | Opus 5.5 | high | 5353 (production 5453) |
 | TASK-113 | Claude Code, the lead's subagent | Opus 5.5 | high | 5313 (production 5413) |
 | TASK-154 | Claude Code, the lead's subagent | Opus 5.5 | high | 5354 (production 5454) |
+| TASK-155 | Claude Code, the lead's subagent | Opus 5.5 | high | 5355 (production 5455) |
+| TASK-156 | Claude Code, the lead's subagent | Opus 5.5 | high | 5356 (production 5456) |
+| TASK-157 | Claude Code, the lead's subagent | Opus 5.5 | high | 5357 (production 5457) |
+| TASK-158 | Claude Code, the lead's subagent | Opus 5.5 | high | 5358 (production 5458) |
+| TASK-159 | Claude Code, the lead's subagent | Opus 5.5 | high | 5359 (production 5459) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3598,6 +3608,10 @@ the exit lane only, so a car bound for the far lane of a two-way street waits in
 aisle lanes no lane vehicle reaches (Munich 68, Sindelfingen 232).
 
 ## Owner decisions log
+
+- 2026-11-13 (owner): queue the follow-up plan, unsupervised. TASK-155 now; TASK-156 and TASK-157
+  after TASK-153; after TASK-154: PR #1, TASK-129 (TASK-158 if it still fails), TASK-113 once
+  TASK-129 merges, TASK-159. A macOS-style UI restyle is to be discussed for a separate branch.
 
 - 2026-11-13 (owner): B56 released. TASK-154 lands TASK-131 Phase 3 from candidate `4ab4d71` and
   drains the loop; PR #1 follows once the combination passes the gate. Lead's drain criterion for
