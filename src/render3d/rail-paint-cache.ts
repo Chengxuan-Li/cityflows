@@ -210,9 +210,21 @@ export class RailPaintCache {
     return true;
   }
 
+  reset() {
+    this.target?.dispose();
+    this.target = undefined;
+    this.samples = undefined;
+    this.initialized = false;
+    this.cached = false;
+    this.mesh.visible = false;
+    this.source.visible = true;
+    this.mesh.material.uniforms.colorMap!.value = null;
+    this.mesh.material.uniforms.depthMap!.value = null;
+  }
+
   /** The scene owns the visible proxy's geometry/material and the original rail mesh. */
   dispose() {
-    this.target?.dispose();
+    this.reset();
     this.copy.material.dispose();
   }
 }
