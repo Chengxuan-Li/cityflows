@@ -168,6 +168,7 @@ npm run test:city      # Munich's import and geometry tests
 npm run test:traffic:light # the 10:00 traffic gate at 0.15 and T53 (about 5 min)
 npm run test:traffic   # the whole traffic tier, with full demand (checkpoints; 10 min or more)
 npm run traffic:quick  # advisory: Munich at 0.15 to 09:30 against main, phase timings
+npm run seed-report -- --out <dir> # advisory: Munich 0.15 to 10:00, seeds 1-3, choice off and on, drain criteria (the nightly Full report)
 npm run test:e2e:light # the light Playwright set: synthetic-city flows (about 5 min)
 npm run test:e2e       # the whole Playwright suite (checkpoints; first run: npx playwright install chromium)
 npm run test:e2e:smoke # the @smoke Playwright tests, including heavy Munich cases
