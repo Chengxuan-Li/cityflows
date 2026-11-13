@@ -290,6 +290,8 @@ interface ParkingFacility {
   access: ParkingAccess;          // private and customers belong to placeId
   placeId: PlaceId | null;        // the place it serves
   connectors: Connector[];        // garage and lot entries/exits; a roadside strip has none
+  mappedPortals?: { connectorId: ConnectorId; nodeId: NodeId; aisleRoadId: RoadId;
+    direction: 'in' | 'out' }[];   // source-proven directed mouth followed by the local parking path
   shape: { kind: 'point'; pos: Vec2 } | { kind: 'polygon'; ring: Vec2[] } | null;
   strip?: { roadId: RoadId; side: 'left' | 'right'; fromM: number; toM: number;
             layout: 'parallel' | 'angled' | 'perpendicular'; ring?: Vec2[] }; // roadside only
@@ -562,7 +564,7 @@ route at a canonical entry or the end of a mapped aisle lane; stalls share these
 Lot simulation capacity equals the reachable generated stall count. A lot without mapped
 aisles gets a derived grid of stalls clipped to its polygon and saved exclusions, without
 inventing vehicle roads.
-TASK-118 adds `CLot.circulation`: local nodes, bidirectional edges and adjacency, one access
+TASK-118 adds `CLot.circulation`: local nodes, edges and adjacency, one access
 node per stall, and entry connector nodes with precomputed shortest-path distances and
 predecessors. Mapped aisle lane centrelines and their existing joining curves are read-only
 geometry inputs, retaining every split section. Generated row gaps and short visible bridges
@@ -579,6 +581,48 @@ exclusion, a courtyard reached through a building passage (Munich `pk:2037`, Sin
 A bay retains its physical lane/station separately from its admission connector; curb
 openings and lamps continue to use physical bay access. No circulation edge enters the
 vehicle router.
+
+TASK-149 adds optional `ParkingFacility.mappedPortals` for source-proven accesses on an
+unsplit approach street. `entries` retains its meaning of nodes actually shared by the
+vehicle graph. A mapped record names the facility's own connector, its directed aisle and
+that aisle's matching start (`in`) or end (`out`) node. There is at most one record per
+connector/direction; a bidirectional connector may name different inbound and outbound
+aisles. Invalid, deleted or cross-facility references produce `parking_invalid`, not a
+compile exception. Legacy projects omit the field and keep their existing circulation.
+Road split/merge remaps aisle membership and downstream exit records; deleting an aisle or
+street removes dependent portal references. Merging across an actual mapped mouth is
+rejected until that access is removed, since silently removing its source node would detach it.
+The street connector begins a fitted, direction-specific approach along the mapped throat;
+the approach is kept separate from the internal graph, preventing a path from
+borrowing an adjacent exit throat. Source aisle edges are directed for typed lots; departure
+distances search their reverse graph. Generated circulation and legacy lots retain
+bidirectional edges. Clear bay manoeuvres can reach either direction of the same physical
+two-way aisle, without adding a reverse edge to any one-way aisle. Source aisle vehicle classes and access restrictions also
+apply to route arrival, parking choice, initial stock and departure. Typed records persist
+through ZIP/JSON; inference markers are not used to recover site identity.
+
+Within a selected lot with mapped portals, arrival choice compares the existing deterministic
+street-route costs of its eligible entries and uses the cheapest, retaining canonical entry
+order on ties. Facility ranking, class/purpose permissions, reachable-space and departure
+checks, and seeded stall choice retain their existing rules. The chosen route is reused;
+legacy lots, garages and roadside strips retain their entry ordering.
+An exact bay claim survives a live edit only while its current entry still permits the
+vehicle and reaches that bay, and the required departure remains usable. A stable bay ordinal
+alone does not retain a claim; changed access releases it through ordinary claim accounting
+before the car makes its next parking choice.
+
+A lot with one known aisle grade excludes only road/node obstacles at that grade; unknown
+or mixed grades retain all obstacles. Source building exclusions remain obstacles. A mapped
+lot whose aisles are entrance stubs entirely outside its polygon may infer interior rows
+when those stubs provide no bays, retaining the actual throat paths. An interior mapped
+aisle, a tiny lot, or a full/obstructed lot does not trigger this fallback. No public vehicle
+road is invented or split by these portals.
+
+TASK-149 shared-mouth admission: an arrival targeting a lot mouth leaves the existing spawn
+clearance upstream while a departure from that same lot is committed to an overlapping
+street station. A departure waits in its bay when that arrival is already too close to yield
+with normal braking. Ordinary through vehicles retain their road priority; the rule changes
+neither the street graph nor public junction arbitration.
 
 `strips` carries pavement polygons and space indices outside the unchanged carriageway:
 bands are 2/4.5/5 m wide. Sidewalks offset outward beside these bands. Vehicle roads, lanes,

@@ -150,12 +150,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const hash = (v: unknown) => createHash('sha256').update(vehicleJson(v)).digest('hex');
     const before = name.startsWith('munich')
       ? [
-          '02b51480800ec1090e675962ef9b43ac37a5830ae5516f6b9b5b0f46d0d894ee',
-          '134f8d04ecd81524d1d601ba4f000d78358562f968c426215ce557b53db3f05f',
+          '7be026f2964c879ee0767a1fa6b700ad818352f63fc4a36991a82aa699ec3df4',
+          '3bd3ec3fa091da28bb786e01228b133d9715bcdbcee8fbf848dbd3f018e99a0b',
         ]
       : [
-          'd2376c18e9e572547b2ad37b391fb043177e24e649156a0d43ee976064cea243',
-          'f984571c1588469cd1f122f59e751656522545a536c6412586d643f656cd9bb9',
+          '36ead1d461cbee968be497791dcc660e529b81aba385ac33701c57b730a9e1ba',
+          'f27bfb37d71fd86db87c963c9797d048a9606617bea9ecfbc369fe316a550cea',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

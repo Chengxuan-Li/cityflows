@@ -7,6 +7,7 @@ import {
 import { createRandom } from '../geo/random';
 import type { CompiledCity } from '../network';
 import { lotPath } from '../network/lot-paths';
+import { parkingConnectorPermitted } from '../network/parking';
 import { vehicleClasses, type Scenario, type SimParams, type TripRequest } from '../schema';
 import { parkingEgress } from './parking-egress';
 import type { Metrics, ParkedCarsSnapshot, ParkingClaimsSnapshot } from './types';
@@ -242,15 +243,17 @@ export function createParking(
     const slot = claimedSpaces[id]!;
     if (slot !== -1) {
       const heldS = Math.max(0, timeS - claimSince[id]!);
-      heldTimes.push(heldS);
-      longestClaims.push({
-        vehicleId: id + 1,
-        facility: compiled.parking[heading[id]!]!.id,
-        space: slot,
-        heldS,
-      });
-      longestClaims.sort((a, b) => b.heldS - a.heldS || a.vehicleId - b.vehicleId);
-      longestClaims.length = Math.min(10, longestClaims.length);
+      if (compiled.parking[heading[id]!]!.kind === 'roadside') {
+        heldTimes.push(heldS);
+        longestClaims.push({
+          vehicleId: id + 1,
+          facility: compiled.parking[heading[id]!]!.id,
+          space: slot,
+          heldS,
+        });
+        longestClaims.sort((a, b) => b.heldS - a.heldS || a.vehicleId - b.vehicleId);
+        longestClaims.length = Math.min(10, longestClaims.length);
+      }
       claimedBy[slot] = -1;
       claimedSpaces[id] = -1;
     }
@@ -419,7 +422,7 @@ export function createParking(
   function choose(
     id: number,
     timeS: number,
-    accept: (connector: number) => boolean,
+    accept: (connector: number) => boolean | number,
     atDeparture = false,
   ) {
     clockS = timeS;
@@ -443,32 +446,60 @@ export function createParking(
           )
             continue;
           if (checkExit && !departure(nextTrip[id]!).facilities[f.idx]) continue;
+          let selected = -1;
+          let bestCostS = Infinity;
           for (const connector of f.kind === 'roadside'
             ? shuffled(f.connectorsIn, `arrival:${trips[id]!.id}`)
             : f.connectorsIn) {
+            if (
+              !parkingConnectorPermitted(
+                compiled,
+                connector,
+                trips[id]!.vehicleClass,
+                trips[id]!.purpose,
+                'in',
+              )
+            )
+              continue;
             if (
               f.kind !== 'garage' &&
               (needRoom || checkExit) &&
               !hasFreeSpace(connector, id, needRoom, checkExit)
             )
               continue;
-            if (!accept(connector)) continue;
-            chosen[id] = f.idx;
-            allowWithoutExit[id] = Number(requiresExit(id) && !checkExit);
-            if (needRoom && !soft(f)) {
-              head(id, f.idx);
-              claimSince[id] = timeS;
-              if (f.kind === 'roadside') {
-                const slot = freeSpace(connector, id)!.idx;
-                claimedSpaces[id] = slot;
-                claimedBy[slot] = id;
+            const accepted = accept(connector);
+            if (accepted === false) continue;
+            if (
+              f.kind === 'lot' &&
+              f.source.mappedPortals?.length &&
+              typeof accepted === 'number'
+            ) {
+              if (accepted < bestCostS) {
+                selected = connector;
+                bestCostS = accepted;
               }
+            } else {
+              selected = connector;
+              break;
             }
-            cachedHash = undefined;
-            walking[id] = distance(id, f.idx);
-            if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
-            return true;
           }
+          if (selected === -1) continue;
+          vehicles.destination[id] = selected;
+          chosen[id] = f.idx;
+          allowWithoutExit[id] = Number(requiresExit(id) && !checkExit);
+          if (needRoom && !soft(f)) {
+            head(id, f.idx);
+            claimSince[id] = timeS;
+            if (f.kind === 'roadside' || f.source.mappedPortals?.length) {
+              const slot = freeSpace(selected, id)!.idx;
+              claimedSpaces[id] = slot;
+              claimedBy[slot] = id;
+            }
+          }
+          cachedHash = undefined;
+          walking[id] = distance(id, f.idx);
+          if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
+          return true;
         }
     if (searching[id] && !Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
     return false;
@@ -480,10 +511,48 @@ export function createParking(
   function originSpace(id: number) {
     return previous[id] === -1 ? originSpaces[id]! : parkedSpaces[previous[id]!]!;
   }
+  function claimReachable(city: CompiledCity, connector: number, slot: number, id: number) {
+    const c = city.connectors[connector],
+      space = city.parkingSpaces?.[slot];
+    if (!c || c.direction === 'out' || !space || c.parking !== space.parking) return false;
+    if (
+      !parkingConnectorPermitted(city, connector, trips[id]!.vehicleClass, trips[id]!.purpose, 'in')
+    )
+      return false;
+    const f = city.parking[space.parking]!;
+    if (f.kind === 'roadside') {
+      if (space.connector !== connector) return false;
+    } else {
+      const graph =
+        city === compiled ? lotGraph(f.idx) : city.lots?.find((l) => l.id === f.id)?.circulation;
+      const entry = graph?.entries.find((e) => e.connector === connector && e.direction !== 'out');
+      if (
+        graph?.unreachable.includes(space.lotStall!) ||
+        !Number.isFinite(entry?.distances[graph?.stallNodes[space.lotStall!] ?? -1])
+      )
+        return false;
+    }
+    if (!requiresExit(id) || allowWithoutExit[id]) return true;
+    const later = nextTrip[id]!,
+      trip = trips[later]!;
+    const exits =
+      city === compiled
+        ? departure(later)
+        : parkingEgress(
+            city,
+            params.laneChangeDistanceM,
+            trip.vehicleClass,
+            trip.purpose === 'delivery',
+          );
+    return !!exits.spaces[slot];
+  }
   function freeSpace(connector: number, id: number) {
     const c = compiled.connectors[connector]!,
       f = compiled.parking[c.parking ?? -1];
     if (!f || f.kind === 'garage') return undefined;
+    const claim = claimedSpaces[id]!;
+    if (claim >= 0)
+      return claimReachable(compiled, connector, claim, id) ? spaces[claim] : undefined;
     const point = pointAtDistance(
       compiled.lanes[c.lane]!.polyline,
       compiled.lanes[c.lane]!.cumulative,
@@ -492,7 +561,7 @@ export function createParking(
     const scores: { slot: (typeof spaces)[number]; score: number }[] = [];
     const checkExit = requiresExit(id) && !allowWithoutExit[id];
     const graph = lotGraph(f.idx),
-      entry = graph?.entries.find((e) => e.connector === connector);
+      entry = graph?.entries.find((e) => e.connector === connector && e.direction !== 'out');
     for (const i of usableSpaces(f)) {
       const s = spaces[i]!;
       if (
@@ -537,7 +606,7 @@ export function createParking(
       f = compiled.parking[c.parking ?? -1];
     if (!f || f.kind === 'garage') return false;
     const graph = lotGraph(f.idx),
-      entry = graph?.entries.find((e) => e.connector === connector);
+      entry = graph?.entries.find((e) => e.connector === connector && e.direction !== 'out');
     return usableSpaces(f).some(
       (i) =>
         (!needRoom ||
@@ -591,7 +660,7 @@ export function createParking(
   const localPath = (slot: number, connector: number, reverse = false) => {
     const space = spaces[slot]!,
       graph = lotGraph(space.parking)!;
-    const nodes = lotPath(graph, connector, space.lotStall!);
+    const nodes = lotPath(graph, connector, space.lotStall!, reverse ? 'out' : 'in');
     if (!nodes) throw new Error('Reserved stall has no circulation path');
     if (reverse) nodes.reverse();
     const points = nodes.map((i) => graph.nodes[i]!);
@@ -610,6 +679,44 @@ export function createParking(
         ((m.phase === 'leave' || m.phase === 'drive_out' || m.phase === 'exit') !== leaving ||
           m.connector !== connector),
     );
+  function sharedMouthStop(arriving: number, leaving: number, exit: number) {
+    const into = compiled.connectors[vehicles.destination[arriving]!],
+      out = compiled.connectors[exit]!;
+    if (!into || into.parking !== out.parking || into.lane !== out.lane) return Infinity;
+    const gap = Math.max(params.spawnMinGapM, params.idm.minGapM);
+    const stop = out.positionM - length(leaving) - gap - 0.1;
+    return into.positionM >= stop && into.positionM < out.positionM + length(arriving) + gap
+      ? stop
+      : Infinity;
+  }
+  function arrivalBlocksDeparture(leaving: number, exit: number) {
+    const c = compiled.connectors[exit]!,
+      lane = compiled.lanes[c.lane]!;
+    const approaches = [
+      { segment: lane.idx, offset: 0 },
+      ...lane.in.flatMap((i) => {
+        const movement = compiled.movements[i]!,
+          from = compiled.lanes[movement.fromLane]!;
+        return [
+          { segment: -i - 1, offset: movement.lengthM },
+          { segment: from.idx, offset: from.lengthM + movement.lengthM },
+        ];
+      }),
+    ];
+    for (const { segment, offset } of approaches)
+      for (let id = vehicles.first(segment); id !== -1; id = vehicles.next[id]!) {
+        const stop = sharedMouthStop(id, leaving, exit);
+        if (!Number.isFinite(stop)) continue;
+        const speed = vehicles.speed[id]!,
+          profile = params.vehicleClasses[vehicleClasses[vehicles.vclass[id]!]!];
+        const braking =
+          (speed * speed) / (2 * params.idm.bMps2 * profile.decelFactor) +
+          speed * params.dtS +
+          params.idm.minGapM;
+        if (vehicles.position[id]! - offset + braking >= stop) return true;
+      }
+    return false;
+  }
   function startArrival(id: number, connector: number, timeS: number) {
     const facility = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
     if (facility?.kind === 'lot' && lotBusy(facility.idx, false, connector)) return false;
@@ -651,7 +758,7 @@ export function createParking(
     cachedHash = undefined;
     if (lot) {
       const graph = lotGraph(slot.parking)!,
-        entry = graph.entries.find((e) => e.connector === connector)!;
+        entry = graph.entries.find((e) => e.connector === connector && e.direction !== 'out')!;
       const scores = usableSpaces(compiled.parking[slot.parking]!)
         .filter((i) => stock[i] === -1 && (reserved[i] === -1 || reserved[i] === id))
         .map((i) => ({
@@ -911,10 +1018,20 @@ export function createParking(
     startArrival,
     lotArrival: (connector: number) =>
       compiled.parking[compiled.connectors[connector]!.parking ?? -1]?.kind === 'lot',
+    arrivalStop(id: number) {
+      const destination = compiled.connectors[vehicles.destination[id]!];
+      if (compiled.parking[destination?.parking ?? -1]?.kind !== 'lot') return undefined;
+      let positionM = Infinity;
+      for (const [other, m] of motions)
+        if (m.lot && (m.phase === 'leave' || m.phase === 'drive_out' || m.phase === 'exit'))
+          positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector));
+      return Number.isFinite(positionM) ? { lane: destination!.lane, positionM } : undefined;
+    },
     startsInLot: isLotSpace,
     canStartLot(id: number, connector: number) {
       const slot = spaces[originSpace(id)]!;
       if (lotBusy(slot.parking, true, connector)) return false;
+      if (arrivalBlocksDeparture(id, connector)) return false;
       const out = pathPose(localPath(slot.idx, connector, true), 0);
       return ![...motions].some(
         ([otherId, m]) =>
@@ -967,13 +1084,22 @@ export function createParking(
         if (facility.kind === 'lot') {
           const graph = lotGraph(slot.parking)!;
           return facility.connectorsOut
-            .filter((c) => !!lotPath(graph, c, slot.lotStall!))
+            .filter(
+              (c) =>
+                parkingConnectorPermitted(
+                  compiled,
+                  c,
+                  trips[id]!.vehicleClass,
+                  trips[id]!.purpose,
+                  'out',
+                ) && !!lotPath(graph, c, slot.lotStall!, 'out'),
+            )
             .sort(
               (a, b) =>
-                graph.entries.find((e) => e.connector === a)!.distances[
+                graph.entries.find((e) => e.connector === a && e.direction !== 'in')!.distances[
                   graph.stallNodes[slot.lotStall!]!
                 ]! -
-                  graph.entries.find((e) => e.connector === b)!.distances[
+                  graph.entries.find((e) => e.connector === b && e.direction !== 'in')!.distances[
                     graph.stallNodes[slot.lotStall!]!
                   ]! || a - b,
             );
@@ -1184,7 +1310,7 @@ export function createParking(
       const held = heldTimes.slice();
       const longest = longestClaims.slice();
       for (let id = 0; id < trips.length; id++)
-        if (claimedSpaces[id] !== -1) {
+        if (claimedSpaces[id] !== -1 && compiled.parking[heading[id]!]!.kind === 'roadside') {
           const heldS = Math.max(0, timeS - claimSince[id]!);
           held.push(heldS);
           longest.push({
@@ -1322,15 +1448,16 @@ export function createParking(
           ? -1
           : (next.parking[facility]!.spaces?.[ordinal[old]!] ?? -1);
       };
-      // A vanished slot or entry releases its claim while old indices still identify it.
+      // Recheck the claimed bay's actual access before remapping stable slot ordinals.
       for (let id = 0; id < trips.length; id++) {
         const facility = heading[id]!;
         if (facility === -1) continue;
         const slot = claimedSpaces[id]!;
         const connector = compiled.connectors[vehicles.destination[id]!];
+        const mappedConnector = connector ? next.index.connector.get(connector.id) : undefined;
         if (
           !next.index.parking.has(compiled.parking[facility]!.id) ||
-          (slot !== -1 && remapSpace(slot) === -1) ||
+          (slot !== -1 && !claimReachable(next, mappedConnector ?? -1, remapSpace(slot), id)) ||
           (connector && !next.index.connector.has(connector.id))
         )
           release(id);

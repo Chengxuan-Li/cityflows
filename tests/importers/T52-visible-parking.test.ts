@@ -126,6 +126,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
         // Retain TASK-104's aisle metadata: it suppresses generated aisle crossings.
         facility.shape = null;
         facility.connectors = [];
+        delete facility.mappedPortals;
       }
     }
     const before = compile(baseline),

@@ -175,17 +175,18 @@ const pins = {
     // TASK-135 and TASK-140 together.
     // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
     // stripped every pin equals 2df05a1's.
+    // TASK-149 opens curbs at mapped parking mouths and bays in both extracts.
     // TASK-144 physical compile/lamps stay fixed; TASK-146 changes drawing-only curbs/paint.
-    compile: 'd27c45d12c847f69710ffdebac81e7327732397a6ec00a63a7a07c6fd7850d1e',
-    lamps: 'ef2195f42ed64191cad256c473ffd122461713f80840b3f8f91d90743b25d70f',
-    curbs: '47a9af6f96968294ced805ad55c17a97277902d46376eb0b4378a76e0112065f',
+    compile: 'd1f7117b107d7b0bb88a349d90cb6e5080ff19481d73cbb003a7fa1d9cd6f18f',
+    lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
+    curbs: '780f62342c39389d2fabd42f81e444fdc4c03c3070f91fce4489a3c671894919',
     de: '4e164c66620c2b8d248958ae2b0105194ff4ef6685892608c099b54ac5ce6a79',
     us: 'fec7df4ef9897468231a91a5a536b304230275613daebd83224174c2e2ad2f8b',
   },
   sindelfingen: {
-    compile: 'ffcd5e0396b91b3e03958b16a16651c8850e9dac58a693b49d62a0072453f916',
-    lamps: 'd132b1397f6687261fee0b42ab85450dc755962e9e0f71d04d61bc6c5f6396dc',
-    curbs: '929e220f6d0e886212b6638218b849e13cf8529dce3ac477e8b584e8ba4e9320',
+    compile: '3fcde22aefd60258dbc441d5b6618fe92cbf64c1506acc26321a72cd6bf2cc7a',
+    lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
+    curbs: '24a6696b232568ba7bc93e4d1259eba28798648161c28e560d477bcd71496bd4',
     de: '4dc2db3cc1fac855c5bd6f2e3865ff6061a4679c858f314fa5365634d5f758cb',
     us: 'bde02c95dccf9451f7a61537dea57bcd977ad02d7da078d587ddb98805fdfe54',
   },

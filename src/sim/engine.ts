@@ -196,6 +196,32 @@ function createRun({
     return result;
   }
 
+  function chooseParkingFrom(
+    id: number,
+    lane: number,
+    positionM: number,
+    timeS: number,
+    atDeparture = false,
+  ) {
+    const routes = new Map<number, RouteResult>();
+    if (
+      !parking.choose(
+        id,
+        timeS,
+        (into) => {
+          vehicles.destination[id] = into;
+          const result = routeFrom(id, lane, positionM);
+          if (!result.ok) return false;
+          routes.set(into, result);
+          return result.route.costS;
+        },
+        atDeparture,
+      )
+    )
+      return undefined;
+    return routes.get(vehicles.destination[id]!)!;
+  }
+
   function chooseParkingRoute(
     id: number,
     lane: number,
@@ -204,16 +230,9 @@ function createRun({
     keepCurrent = false,
   ) {
     const previousDestination = vehicles.destination[id]!;
-    if (
-      !parking.choose(id, timeS, (into) => {
-        vehicles.destination[id] = into;
-        return routeFrom(id, lane, positionM).ok;
-      })
-    )
-      return false;
+    const result = chooseParkingFrom(id, lane, positionM, timeS);
+    if (!result?.ok) return false;
     if (keepCurrent && vehicles.destination[id] === previousDestination) return true;
-    const result = routeFrom(id, lane, positionM);
-    if (!result.ok) throw new Error('Chosen parking route disappeared');
     vehicles.route[id] = result.route;
     vehicles.routeStep[id] = 0;
     routeReasons[id] = 'parking';
@@ -409,24 +428,10 @@ function createRun({
 
   function releaseTrip(id: number, connector: CConnector, timeS: number) {
     const { lane, positionM } = connector;
-    if (
-      parking.required(id) &&
-      !parking.choose(
-        id,
-        timeS,
-        (into) => {
-          vehicles.destination[id] = into;
-          return routeFrom(id, lane, positionM).ok;
-        },
-        true,
-      )
-    ) {
-      return false;
-    }
-    const result = routeFrom(id, lane, positionM);
-    if (!result.ok) {
-      return false;
-    }
+    const result = parking.required(id)
+      ? chooseParkingFrom(id, lane, positionM, timeS, true)
+      : routeFrom(id, lane, positionM);
+    if (!result?.ok) return false;
     vehicles.route[id] = result.route;
     vehicles.routeStep[id] = 0;
     if (vehicles.respawns[id]) {
@@ -564,6 +569,20 @@ function createRun({
           stopAt = lane.stopM;
         }
         if (path) stopAt = intersections.zoneStop(path, position) + idm.minGapM;
+        // A driver turning into this same mouth leaves the committed departure its
+        // insertion gap. Ordinary through traffic keeps its normal priority.
+        const parkingStop = parking.arrivalStop(id);
+        if (parkingStop) {
+          const at =
+            lane?.idx === parkingStop.lane
+              ? parkingStop.positionM
+              : path?.toLane === parkingStop.lane
+                ? path.lengthM + parkingStop.positionM
+                : movement?.toLane === parkingStop.lane && lane
+                  ? lane.lengthM + movement.lengthM + parkingStop.positionM
+                  : Infinity;
+          stopAt = Math.min(stopAt, at + idm.minGapM);
+        }
         if (stopAt < obstacle) {
           obstacle = stopAt;
           leaderSpeed = 0;
@@ -757,19 +776,13 @@ function createRun({
     ) {
       parking.reject(id, timeS);
       const lane = vehicles.lane[id]!;
-      if (
-        !parking.choose(id, timeS, (into) => {
-          vehicles.destination[id] = into;
-          return routeFrom(id, lane, connector.positionM).ok;
-        })
-      ) {
+      const result = chooseParkingFrom(id, lane, connector.positionM, timeS);
+      if (!result?.ok) {
         leaveRoad(id, timeS, connector.positionM);
         vehicles.remove(id);
         accounting.fail(id, 'no_parking');
         return;
       }
-      const result = routeFrom(id, lane, connector.positionM);
-      if (!result.ok) throw new Error('Chosen parking route disappeared');
       vehicles.route[id] = result.route;
       vehicles.routeStep[id] = 0;
       routeReasons[id] = 'parking';

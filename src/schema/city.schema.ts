@@ -314,6 +314,16 @@ const parkingFacility = z.object({
     .refine((strip) => strip.toM > strip.fromM, 'A parking strip must have positive length')
     .optional(),
   aisles: z.array(roadId).optional(),
+  mappedPortals: z
+    .array(
+      z.object({
+        connectorId,
+        nodeId,
+        aisleRoadId: roadId,
+        direction: z.enum(['in', 'out']),
+      }),
+    )
+    .optional(),
   entries: z.array(nodeId).optional(),
   exclusions: z.array(z.array(vec2).min(3)).optional(),
   occupancyAtStart: z.number().min(0).max(1).optional(),
