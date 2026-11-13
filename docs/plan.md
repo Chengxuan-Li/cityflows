@@ -176,6 +176,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
 | [TASK-150](tasks/TASK-150.md) | 7 | A car leaving a lot waits clear of the public lane and merges continuously once granted | `src/sim/parking.ts`, `manoeuvre.ts`, `engine.ts` (exit), T77 | 118, 122, 149 | T77, witness 0 overlaps, T54/T59/T63, Munich gate, shots | done 2026-11-13 |
 | [TASK-151](tasks/TASK-151.md) | 7 | PR #1 on today's main: find why crossings and tram service plus main's parking changes fail the gate (3,300 / 49 / 1) and repair the cause | `src/sim/**` (crossing control, rail service, parking, engine), tests | 136, 138, 147, 149, 150 | Munich gate, T75/T76, parking tests, 0.1 s replay | in progress (Claude Code subagent) |
+| [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | in progress (Claude Code subagent) |
+| [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | batch 2 (after TASK-151 and the TASK-129 decision) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1127,6 +1129,9 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-134 | Claude Code, the lead's subagent | Opus 5.5 | high | 5334 (production 5434) |
 | TASK-150 | Claude Code, the lead's subagent | Opus 5.5 | high | 5350 (production 5450) |
 | TASK-151 | Claude Code, the lead's subagent | Opus 5.5 | high | 5351 (production 5451) |
+| TASK-152 | Claude Code, the lead's subagent | Opus 5.5 | high | 5352 (production 5452) |
+| TASK-153 | Claude Code, the lead's subagent | Opus 5.5 | high | 5353 (production 5453) |
+| TASK-113 | Claude Code, the lead's subagent | Opus 5.5 | high | 5313 (production 5413) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3546,6 +3551,12 @@ completes 3,481, 3,405 and 3,191 (-11.4%, -16.3%, -3.9%), with gridlock 33, 45 a
 now consistent across seeds, not seed noise, so the owner's merge condition is not met.
 
 ## Owner decisions log
+
+- 2026-11-13 (owner): batches agreed and to run unsupervised, without stopping for review (shots
+  may be sent along the way). Now: TASK-152 beside TASK-151 and the TASK-128/129 re-measures.
+  Batch 2, once TASK-151 lands and PR #1 merges: merge TASK-128 and TASK-129 one at a time if they
+  pass, and run TASK-153. Batch 3, once TASK-129 merges: TASK-113 mode choice, beside TASK-153 if
+  it is still running.
 
 - 2026-11-13 (owner): an agent finds and repairs why PR #1 merged onto today's main fails the
   unchanged traffic gate (TASK-151); PR #1 merges once the combination passes.
