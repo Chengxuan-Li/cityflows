@@ -179,6 +179,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | batch 3 (after TASK-129 merges) |
+| [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | in progress (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1133,6 +1134,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-152 | Claude Code, the lead's subagent | Opus 5.5 | high | 5352 (production 5452) |
 | TASK-153 | Claude Code, the lead's subagent | Opus 5.5 | high | 5353 (production 5453) |
 | TASK-113 | Claude Code, the lead's subagent | Opus 5.5 | high | 5313 (production 5413) |
+| TASK-154 | Claude Code, the lead's subagent | Opus 5.5 | high | 5354 (production 5454) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3575,6 +3577,12 @@ stalled heads, 0 parking failures: fails the gridlock limit (39). Not merged; re
 main change.
 
 ## Owner decisions log
+
+- 2026-11-13 (owner): B56 released. TASK-154 lands TASK-131 Phase 3 from candidate `4ab4d71` and
+  drains the loop; PR #1 follows once the combination passes the gate. Lead's drain criterion for
+  B56 (replacing the whole-trip 900 s figure, which counted delay carried from origins): no
+  sustained cycle, no single loop-road visit over 900 s, no inner-link stand over `boxWaitS`, zero
+  stalled heads, on seeds 1 to 3.
 
 - 2026-11-13 (owner): batches agreed and to run unsupervised, without stopping for review (shots
   may be sent along the way). Now: TASK-152 beside TASK-151 and the TASK-128/129 re-measures.
