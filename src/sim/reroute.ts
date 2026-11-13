@@ -172,7 +172,11 @@ export function createRerouter(
         push(id);
         if (edits.has(id)) continue;
         const lane = compiled.lanes[vehicles.lane[id]!];
-        if (!lane || lane.lengthM - vehicles.position[id]! <= params.intersection.decisionDistanceM)
+        if (
+          !lane ||
+          compiled.roads[lane.road]!.group !== undefined ||
+          lane.lengthM - vehicles.position[id]! <= params.intersection.decisionDistanceM
+        )
           continue;
         const route = vehicles.route[id]!;
         const step = vehicles.routeStep[id]!;

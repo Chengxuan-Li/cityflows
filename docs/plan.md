@@ -179,7 +179,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | done 2026-11-13 |
 | [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | delivered 2026-11-13; held until TASK-154 (one B56 stalled head) |
 | [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | batch 3 (after TASK-129 merges) |
-| [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | in progress (Claude Code subagent) |
+| [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | done 2026-11-13 (drain (b) and (c) open: TASK-161, TASK-153) |
 | [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | in progress (Claude Code subagent) |
 | [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
 | [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
@@ -3630,6 +3630,28 @@ gridlocked, 1 stalled head (car 4622 at the head of `r:961#0`, waiting for `r:36
 pinned hash moved. Held: it is re-measured on top of TASK-154. Open: pk:2049 exit waits need a
 keep-clear rule for through traffic; pk:2052's second entry starved by a stream of arrivals; trips
 starting and ending at one lot drive out and back. `5de8b78` on `task/153-lot-admission`.
+
+TASK-154 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): TASK-131 Phase 3 lands from
+candidate `4ab4d71` (exit reservation capped at physical length, reserved-lane passing, downstream
+lane choice, shared-lane early head release, bounded roadside courtesy) with one new rule: a car
+already admitted to a junction group blocks a shared movement only if it could reach it before the
+entering car clears, on the timing single junctions use (`r:961`'s right turn was refused through
+every green by cars admitted at `r:968` and `r:964` 70 m or more upstream; new T68 case). Four exact
+rewrites (seed-1 hash unchanged after each) brought Munich step time to +4.0% over eight warm
+alternating pairs (median pair +5.0%, range -0.3% to +9.4%; route requests 114,989 against
+124,583); Sindelfingen -0.8%. Drain criterion over seeds 1 to 3: (a) no sustained cycle (main 38 /
+72 / 58); (d) zero stalled heads; (b) not met, worst single visits `r:961` 1,803 / 1,785 / 1,544 s
+(group 10 gives its right turn 15 s per 120 s while the `r:966 > r:703` stream never stops inside
+the group: TASK-161) and `r:997` / `r:273` up to 1,299 s (the pk:2049 jam, TASK-153); (c) not met
+on seeds 2 and 3 (one to three cars on inner links at 10:00 for 13 to 111 s). Cars on the six loop
+roads at 10:00: 31 / 67 / 67 (main 85 / 54 / 107); longest inner-link stop all morning 179 s (main
+about 360). Seeds 1 to 3: 4,224 / 4,134 / 3,825 completed, 6 / 11 / 8 gridlocked, 0 stalled heads.
+PR #1 on top passes the seed-1 gate (3,818 / 8 / 0 / 0); cars stopped on the tracks 667 s at
+facility 1 and 4 s at facility 2 (TASK-151: 8,509 and 5,790), tram holds of 30 s or more 8 (32).
+Lead run of the merge onto main (`task/lead-154-merge`): `check` (1,248), seed-1 gate 4,224 / 6 / 0
+with one parking failure on `r:669#0` (within the test's 2% rule). Only the candidate's own pins
+moved (T46, T22, T53). The traffic baseline is unchanged pending the owner (main now completes far
+above it).
 
 ## Owner decisions log
 

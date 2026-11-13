@@ -339,8 +339,18 @@ describe('T53 signals', () => {
         const snapshot = engine.snapshot();
         for (let i = 0; i < snapshot.count; i++) {
           const field = snapshot.lane[i]!;
-          if (field >= 0 || snapshot.speed[i]! >= 0.1) continue;
-          const movement = compiled.movements[-field - 1]!;
+          if (snapshot.speed[i]! >= 0.1) continue;
+          const car = engine.inspect(snapshot.id[i]!)!;
+          const step =
+            field >= 0 ? (car.route?.roads.indexOf(compiled.lanes[field]!.road) ?? -1) : -1;
+          const movement =
+            compiled.movements[field < 0 ? -field - 1 : (car.route?.movements[step - 1] ?? -1)];
+          if (
+            !movement ||
+            (field >= 0 &&
+              car.positionM >= DEFAULT_SIM_PARAMS.vehicleClasses[car.vehicleClass].lengthM)
+          )
+            continue;
           const span = exitSpans.find((s) => s.lane === movement.toLane);
           if (span && movement.turn === 'right') turningHeld++;
         }
