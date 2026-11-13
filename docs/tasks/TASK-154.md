@@ -104,3 +104,18 @@ Write it as the commit body:
 - hashes moved and why;
 - files touched;
 - anything left open.
+
+## Findings (2026-11-13)
+
+- Merged `4ab4d71` onto main `cca7dc3`; two add/add conflicts (TASK-149 `chooseParkingFrom`,
+  TASK-150 `holdProgress`/`joinStation`), both sides kept. On main the candidate alone gave
+  4,071 / 3,972 / 4,122 completed, 1 / 2 / 0 stalled heads (gate failed on seed 1).
+- Group entries now time a distant member conflict like `canGrant` (section 8). Seeds 1 to 3:
+  4,224 / 4,134 / 3,825 completed, 6 / 11 / 8 gridlocked, 0 stalled heads, no inferred cycle.
+- Drain criterion: (a) and (d) hold on all seeds. (b) fails: r:961 per-visit peaks 1,803 /
+  1,785 / 1,544 s (group 10 gives r:961's right turn 15 s per 120 s cycle while the always-clear
+  inner stream from r:964/r:968 crosses r:961's through movements); r:997 and r:273 exceed 900 s
+  on seeds 1 and 2 behind the pk:2049 lot standoff on r:663/r:639 (TASK-153). (c) fails on seeds 2
+  and 3 (3 and 1 inner cars over `boxWaitS` at 10:00).
+- Seed 1 has one parking failure on `r:669#0` (TASK-153's van 2796 mechanism).
+- PR #1 on top passes the seed-1 gate: 3,818 / 8 / 0 / 0.
