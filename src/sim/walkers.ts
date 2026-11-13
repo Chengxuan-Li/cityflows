@@ -583,6 +583,15 @@ export function createWalkers(
     hold(id: number, lane: CLane | undefined, path: CMovement | null) {
       return blocking ? hold(id, lane, path) : Infinity;
     },
+    /** TASK-165: whether a span a walker holds this step overlaps [fromM, toM] of `lane`. A lane
+     * change must not land a body there: `clear` checked the lane, not its neighbours. */
+    holds(lane: number, fromM: number, toM: number) {
+      const list = blocking ? blocks[lane] : undefined;
+      if (!list) return false;
+      for (let i = 0; i < list.length; i += 4)
+        if (list[i]! < toM && list[i + 1]! > fromM) return true;
+      return false;
+    },
     /** A vehicle's yield this step: binding when its walker stop was its nearest obstacle. */
     account(id: number, binding: boolean, speed: number, desiredSpeed: number, gapM: number) {
       if (!binding) {
