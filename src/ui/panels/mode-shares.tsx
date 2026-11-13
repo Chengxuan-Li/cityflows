@@ -10,12 +10,6 @@ const percent = (part: number, total: number) =>
 export function ModeShares({ modes }: { modes: PersonMetrics['modes'] }) {
   const { started, byHour, completed } = modes;
   const total = started.walk + started.car;
-  const hours = byHour.walk.map((walk, hour) => ({ hour, walk, car: byHour.car[hour]! }));
-  const shown = hours.filter(({ walk, car }) => walk + car > 0);
-  const first = shown[0]?.hour ?? 0;
-  const last = shown.at(-1)?.hour ?? 0;
-  const span = hours.slice(first, last + 1);
-  const width = 250 / Math.max(1, span.length);
   return (
     <figure className="mode-shares" aria-label="Mode shares">
       <figcaption>
@@ -36,29 +30,31 @@ export function ModeShares({ modes }: { modes: PersonMetrics['modes'] }) {
       </dl>
       {total > 0 && (
         <svg viewBox="0 0 300 124" role="img" aria-label="Walk share by hour">
-          <path d="M36 24V100H286" fill="none" stroke="#dcded2" />
-          <text x="30" y="28" textAnchor="end">
+          <path d="M44 24V100H294" fill="none" stroke="#dcded2" />
+          <text x="38" y="28" textAnchor="end">
             100%
           </text>
-          <text x="30" y="100" textAnchor="end">
+          <text x="38" y="100" textAnchor="end">
             0
           </text>
-          {span.map(({ hour, walk, car }, i) => {
+          {byHour.walk.map((walk, hour) => {
+            const car = byHour.car[hour]!;
             const n = walk + car;
-            const walkHeight = n ? (76 * walk) / n : 0;
+            if (!n) return null;
+            const walkHeight = (76 * walk) / n;
             return (
               <g key={hour} data-hour={hour} data-walk={walk} data-car={car}>
                 <rect
-                  x={37 + i * width}
+                  x={45 + hour * 10.4}
                   y={24}
-                  width={width - 2}
-                  height={n ? 76 - walkHeight : 0}
+                  width={8.4}
+                  height={76 - walkHeight}
                   fill={carColor}
                 />
                 <rect
-                  x={37 + i * width}
+                  x={45 + hour * 10.4}
                   y={100 - walkHeight}
-                  width={width - 2}
+                  width={8.4}
                   height={walkHeight}
                   fill={walkColor}
                 />
@@ -66,12 +62,11 @@ export function ModeShares({ modes }: { modes: PersonMetrics['modes'] }) {
               </g>
             );
           })}
-          <text x="36" y="118">
-            {String(first).padStart(2, '0')}:00
-          </text>
-          <text x="286" y="118" textAnchor="end">
-            {String(last + 1).padStart(2, '0')}:00
-          </text>
+          {[0, 6, 12, 18, 24].map((hour) => (
+            <text key={hour} x={45 + hour * 10.4} y="118" textAnchor="middle">
+              {String(hour % 24).padStart(2, '0')}
+            </text>
+          ))}
         </svg>
       )}
       <p className="muted">
