@@ -23,6 +23,7 @@ import { drawLevelCrossings } from './layers/level-crossings';
 import { noLevelCrossings } from './level-crossings';
 import { noFurniture, placeStationFurniture } from './station-furniture';
 import { trainTimetable, trainsAt, type TrainPose } from '../network/trains';
+import { railTimetable } from '../network/trams';
 import { railGeometry, pickRail } from './rail-geometry';
 import { drawLots } from './layers/stalls';
 import { walkGeometry } from './walk-geometry';
@@ -213,6 +214,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let stations: ReturnType<typeof drawStations> | undefined;
   let tramStops: ReturnType<typeof drawTramStops> | undefined;
   let levelCrossings: ReturnType<typeof drawLevelCrossings> | undefined;
+  let crossingStates: Uint8Array | undefined;
   let overhead: { grades: ReturnType<typeof drawCatenary>; counts: string } | undefined;
   /** TASK-134: overhead lines with Rail and Overhead lines on; supports and wires by zoom. */
   const updateCatenary = () => {
@@ -228,6 +230,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     levelCrossings?.update(camera.zoom, layerVisibility.rail);
     canvas.dataset.levelCrossings = JSON.stringify(
       layerVisibility.rail && levelCrossings ? levelCrossings.counts : noLevelCrossings,
+    );
+    canvas.dataset.levelCrossingStates = JSON.stringify(
+      layerVisibility.rail ? Array.from(crossingStates ?? []) : [],
     );
     if (!stations) return;
     const a = camera.screenToWorld({ x: 0, y: 0 }),
@@ -245,7 +250,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   const updateTrainPoses = () => {
     if (!layerVisibility.rail) return;
-    trainPoses = city?.rail ? trainsAt(city.rail, trainTimetable(city.rail), trainTimeS) : [];
+    const controlled = vehicles.snapshot?.rail;
+    trainPoses =
+      controlled?.trains ??
+      (city?.rail ? trainsAt(city.rail, railTimetable(city.rail), trainTimeS) : []);
     redrawTrains();
   };
   const redrawTrains = () => {
@@ -257,6 +265,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       selection?.kind === 'train' ? selection.id : null,
     );
     canvas.dataset.trains = String(layerVisibility.rail ? trainPoses.length : 0);
+    canvas.dataset.trams = String(
+      layerVisibility.rail ? trainPoses.filter((p) => p.kind === 'tram').length : 0,
+    );
   };
   let parkingCounts: ArrayLike<number> | null = null;
   let tiles: Tiles | undefined;
@@ -326,6 +337,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     }
     for (const grade of visibleGrades) grade.trains.visible = layerVisibility.rail;
     canvas.dataset.trains = String(layerVisibility.rail ? trainPoses.length : 0);
+    canvas.dataset.trams = String(
+      layerVisibility.rail ? trainPoses.filter((p) => p.kind === 'tram').length : 0,
+    );
     updateStations();
     updateCatenary();
     canvas.dataset.stationFurniture = JSON.stringify(
@@ -635,7 +649,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
       }
-      levelCrossings = drawLevelCrossings(compiled.rail?.facilities ?? []);
+      levelCrossings = drawLevelCrossings(compiled.rail?.facilities ?? [], compiled.rail);
+      crossingStates = undefined;
       for (const [layer, { container }] of levelCrossings.grades) {
         const grade = grades.get(layer) ?? grades.get(0)!;
         grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
@@ -881,9 +896,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       invalidate();
       if (!city) return;
       trainTimeS = snapshot.timeS;
+      vehicles.update(snapshot);
+      crossingStates = snapshot.rail?.crossings;
+      levelCrossings?.setSnapshot(crossingStates, snapshot.timeS, snapshot.rail?.railReady);
       updateTrainPoses();
       updateStations();
-      vehicles.update(snapshot);
       vehicleAgeS = 0;
       walkerSnapshot = snapshot.walkers;
       redrawWalkers();

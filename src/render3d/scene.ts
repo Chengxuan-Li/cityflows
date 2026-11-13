@@ -57,6 +57,7 @@ import { noLevelCrossings } from '../render/level-crossings';
 import { noFurniture, placeStationFurniture } from '../render/station-furniture';
 import { noTramStops, placeTramStops } from '../render/tram-stops';
 import { trainTimetable, trainsAt } from '../network/trains';
+import { railTimetable } from '../network/trams';
 import { paintedCity } from '../render/road-paint';
 
 export class Scene3D {
@@ -88,6 +89,7 @@ export class Scene3D {
   private stations: Stations3D | undefined;
   private tramStops: TramStops3D | undefined;
   private levelCrossings: LevelCrossings3D | undefined;
+  private crossingStates: Uint8Array | undefined;
   private trainTimeS = NaN;
   private selectedTrain: string | null = null;
   private railSelection: string | undefined;
@@ -212,9 +214,15 @@ export class Scene3D {
     ));
     const terrain = geometry.heights.terrain;
     this.rail = buildRail(city, renderedSource, geometry.heights);
+    this.crossingStates = undefined;
     if (city.rail) {
       const table = trainTimetable(city.rail);
-      this.trains = new Trains3D(city.rail, geometry.heights, this.rail.heights!, table);
+      this.trains = new Trains3D(
+        city.rail,
+        geometry.heights,
+        this.rail.heights!,
+        railTimetable(city.rail),
+      );
       this.content.add(this.trains.group);
       this.stations = new Stations3D(
         placeStationFurniture(city, renderedSource),
@@ -225,7 +233,11 @@ export class Scene3D {
       this.content.add(this.stations.group);
       this.tramStops = new TramStops3D(placeTramStops(city, renderedSource), geometry.heights);
       this.content.add(this.tramStops.group);
-      this.levelCrossings = new LevelCrossings3D(city.rail.facilities ?? [], geometry.heights);
+      this.levelCrossings = new LevelCrossings3D(
+        city.rail.facilities ?? [],
+        geometry.heights,
+        city.rail,
+      );
       this.content.add(this.levelCrossings.group);
     } else this.trains = this.stations = this.tramStops = this.levelCrossings = undefined;
     this.trainTimeS = NaN;
@@ -494,7 +506,13 @@ export class Scene3D {
     this.invalidate();
   }
   setSnapshot(snapshot: PresentationSnapshot) {
+    this.crossingStates = snapshot.rail?.crossings;
+    this.levelCrossings?.setSnapshot(this.crossingStates, snapshot.timeS, snapshot.rail?.railReady);
+    this.canvas.dataset.levelCrossingStates = JSON.stringify(
+      this.railVisible ? Array.from(this.crossingStates ?? []) : [],
+    );
     this.vehicles.setSnapshot(snapshot);
+    this.trainTimeS = NaN;
     if (this.geometry) this.walkers.setSnapshot(snapshot.walkers, this.geometry.heights);
     this.canvas.dataset.walkers = String(this.walkers.mesh.count);
     this.invalidate();
@@ -825,10 +843,13 @@ export class Scene3D {
     this.controls.update();
     this.setSignals(timeS);
     if (this.city?.rail && this.trains && this.railVisible && this.trainTimeS !== timeS) {
-      const poses = trainsAt(this.city.rail, trainTimetable(this.city.rail), timeS);
+      const snapshot = this.vehicles.poses.snapshot;
+      const poses =
+        snapshot?.rail?.trains ?? trainsAt(this.city.rail, railTimetable(this.city.rail), timeS);
       this.trains.update(poses, this.belowGround, this.selectedTrain);
       this.stations?.update(timeS);
       this.canvas.dataset.trains = String(poses.length);
+      this.canvas.dataset.trams = String(poses.filter((p) => p.kind === 'tram').length);
       this.trainTimeS = timeS;
       this.invalidate();
     }
@@ -991,7 +1012,10 @@ export class Scene3D {
     this.canvas.dataset.levelCrossings = JSON.stringify(
       visible && this.levelCrossings ? this.levelCrossings.counts : noLevelCrossings,
     );
-    if (!visible) this.canvas.dataset.trains = '0';
+    this.canvas.dataset.levelCrossingStates = JSON.stringify(
+      visible ? Array.from(this.crossingStates ?? []) : [],
+    );
+    if (!visible) this.canvas.dataset.trains = this.canvas.dataset.trams = '0';
     this.setOverheadLines(this.overheadVisible);
 
     this.canvas.dataset.railTracks = String(visible ? (this.city?.rail?.tracks.length ?? 0) : 0);

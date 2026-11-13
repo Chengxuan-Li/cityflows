@@ -91,9 +91,10 @@ test.beforeEach(async ({ page }) => {
 test('stop control and restart grow the side-street queue @smoke', async ({ page }, info) => {
   const errors = pageErrors(page);
   const source = await openTraffic(page, 'stop');
+  // Select the junction while its center is clear of passing vehicles.
+  await clickGrid(page, 240, 240);
   await step(page, 1500);
   const baseline = await queue(page, source);
-  await clickGrid(page, 240, 240);
   await page.getByRole('combobox', { name: 'Control', exact: true }).selectOption('stop');
   await expect(page.getByText(/^Edit applied ·/)).toBeVisible();
   await button(page, 'Restart').click();

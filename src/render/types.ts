@@ -3,6 +3,7 @@ import type { City } from '../schema';
 import type { Camera } from './camera';
 import type { EditOverlay } from './layers/edit-overlay';
 import type { Vec2 } from '../geo/vec2';
+import type { TrainPose } from '../network/trains';
 
 export interface RoadDifference {
   id: string;
@@ -25,6 +26,7 @@ export interface VehicleSnapshot {
   vclass: Uint8Array; // schema vehicleClasses index: car, van, truck, bus
   fade: Float32Array; // sprite alpha: 1, falling to 0 before a gridlock respawn (TASK-077)
   walkers?: WalkerSnapshot;
+  rail?: { crossings: Uint8Array; railReady: Uint8Array; trains: TrainPose[] };
 }
 
 export interface WalkerSnapshot {

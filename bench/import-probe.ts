@@ -10,6 +10,7 @@ import { createRouteProvider, freeFlowLinkCosts, type RouteProvider } from '../s
 import { createWalkRouter, type WalkRequest, type WalkRoute } from '../src/routing/walk';
 import { distance, pointAtDistance } from '../src/geo/polyline';
 import { createEngine } from '../src/sim/engine';
+import type { IntersectionObserver } from '../src/sim/intersection';
 import type { TrafficEngine } from '../src/sim/types';
 import { walkComponents } from '../src/network/walk-joins';
 import { parkingEgress } from '../src/network/parking-egress';
@@ -43,18 +44,23 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const [file, ...args] = process.argv.slice(2);
   if (!file || args.length < 4 || (args.length - 4) % 2)
     throw new Error(
-      'Usage: import-probe <file.osm> w s e n [--scale n] [--walk-legs file.json] [--parking-report file.json]',
+      'Usage: import-probe <file.osm> w s e n [--scale n] [--seed n] [--walk-legs file.json] [--parking-report file.json]',
     );
   let scaleArg = '1',
+    seedArg = '1',
     walkLegsFile: string | undefined,
     parkingReportFile: string | undefined;
   for (let i = 4; i < args.length; i += 2) {
     if (args[i] === '--scale') scaleArg = args[i + 1]!;
+    else if (args[i] === '--seed') seedArg = args[i + 1]!;
     else if (args[i] === '--walk-legs') walkLegsFile = args[i + 1]!;
     else if (args[i] === '--parking-report') parkingReportFile = args[i + 1]!;
     else throw new Error(`Unknown option: ${args[i]}`);
   }
   const scale = Number(scaleArg);
+  const demandSeed = Number(seedArg);
+  if (!Number.isSafeInteger(demandSeed) || demandSeed < 1)
+    throw new Error('--seed must be a positive integer');
   if (!scaleArg.trim() || !Number.isFinite(scale) || scale < 0)
     throw new Error('--scale must be a finite, nonnegative number');
   const bbox = args.slice(0, 4).map(Number) as [number, number, number, number];
@@ -124,6 +130,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   console.info({ connectorPairs: total, routable: ok });
   const { walkLegs, ...morning } = probeMorning(city, compiled, scale, {
     includeWalkLegs: !!walkLegsFile,
+    demandSeed,
   });
   if (walkLegsFile) writeFileSync(walkLegsFile, JSON.stringify(walkLegs, null, 2));
   if (parkingReportFile)
@@ -240,24 +247,33 @@ export function probeMorning(
     observe,
     routeProvider,
     includeWalkLegs = false,
-    seed = 1,
+    demandSeed = 1,
     endS = 10 * 3600,
+    intersectionObserver,
+    engine = createEngine(),
+    originObserver,
+    headDetourObserver,
   }: {
-    seed?: number;
     endS?: number;
     untilS?: number;
     observe?: (engine: TrafficEngine) => void;
     routeProvider?: RouteProvider;
     includeWalkLegs?: boolean;
+    demandSeed?: number;
+    intersectionObserver?: IntersectionObserver;
+    engine?: ReturnType<typeof createEngine>;
+    originObserver?: Parameters<ReturnType<typeof createEngine>['load']>[0]['originObserver'];
+    headDetourObserver?: Parameters<
+      ReturnType<typeof createEngine>['load']
+    >[0]['headDetourObserver'];
   } = {},
 ) {
-  const scenario = defaultScenario('grid5x5', seed);
+  const scenario = defaultScenario('grid5x5', demandSeed);
   scenario.demand.personsPerResident = scale;
   scenario.startS = 7 * 3600;
   scenario.endS = endS;
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, population, scenario);
-  const engine = createEngine();
   const provider = routeProvider ?? createRouteProvider();
   const walkRouter = createWalkRouter(compiled.walk);
   let routeRequests = 0;
@@ -280,11 +296,14 @@ export function probeMorning(
     compiled,
     trips,
     scenario,
-    headDetourObserver(id, lane) {
+    intersectionObserver,
+    originObserver,
+    headDetourObserver(id, lane, movement) {
       headDetours++;
       detoured.add(id);
       const road = compiled.roads[compiled.lanes[lane]!.road]!.id;
       headDetourRoads[road] = (headDetourRoads[road] ?? 0) + 1;
+      headDetourObserver?.(id, lane, movement);
     },
     population,
     walkRouter: {
@@ -341,8 +360,9 @@ export function probeMorning(
     const cls = compiled.roads[road]!.roadClass;
     (sampledRoadTraffic[cls] ??= { entered: 0, left: 0 })[direction]++;
   };
+  const stepStart = performance.now();
   for (let step = 0; step < (untilS - scenario.startS) * 10; step += 600) {
-    for (let i = 0; i < 600; i++) {
+    for (let i = 0; i < Math.min(600, (untilS - scenario.startS) * 10 - step); i++) {
       engine.step();
       observe?.(engine);
     }
@@ -376,11 +396,30 @@ export function probeMorning(
     }
   }
   const metrics = engine.metrics();
+  const stepTimeMs = performance.now() - stepStart;
   // Driving vehicles on a movement or first on their lane that have not moved for 300 s.
   const end = engine.snapshot();
   const front = new Map<number, number>();
+  const loopCensus = Object.fromEntries(
+    ['r:961', 'r:364', 'r:248', 'r:703', 'r:273', 'r:997'].map((road) => [
+      road,
+      { vehicles: 0, longestWaitS: 0, longestWaitingVehicle: 0 },
+    ]),
+  );
   for (const [index, id] of end.id.entries()) {
     const lane = end.lane[index]!;
+    if (lane !== -2147483648) {
+      const from = lane >= 0 ? lane : compiled.movements[-lane - 1]!.fromLane;
+      const census = loopCensus[compiled.roads[compiled.lanes[from]!.road]!.id];
+      if (census) {
+        census.vehicles++;
+        const detail = engine.inspect(id)!;
+        if (detail.waitingS > census.longestWaitS) {
+          census.longestWaitS = detail.waitingS;
+          census.longestWaitingVehicle = id;
+        }
+      }
+    }
     if (lane < 0) continue;
     const ahead = front.get(lane);
     if (ahead === undefined || engine.inspect(id)!.positionM > engine.inspect(ahead)!.positionM)
@@ -534,6 +573,9 @@ export function probeMorning(
   };
   return {
     scale,
+    demandSeed,
+    stepTimeMs,
+    loopCensus,
     stateHash: engine.stateHash(),
     persons: population.length,
     households,

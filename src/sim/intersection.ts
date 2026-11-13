@@ -1,6 +1,8 @@
 import { headingAtDistance } from '../geo/polyline';
 import type { CMovement, CompiledCity } from '../network';
-import type { SimParams } from '../schema';
+import { railTimetable } from '../network/trams';
+import { vehicleClasses, type SimParams } from '../schema';
+import { reachableLanes, type Route } from '../routing';
 import { AMBER, GREEN, RED, updateSignals } from './signals';
 import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
 
@@ -32,8 +34,15 @@ export function createIntersections(
   vehicles: Vehicles,
   params: SimParams,
   mergeAllows: (id: number, movement: CMovement) => boolean = () => true,
-  options: { onDecision?: IntersectionObserver; acceleration?: (id: number) => number } = {},
+  options: {
+    onDecision?: IntersectionObserver;
+    acceleration?: (id: number) => number;
+    groupRoute?: (id: number, movement: CMovement) => { route: Route; step: number } | null;
+    routeVersion?: () => number;
+  } = {},
 ) {
+  const inner = (movement: CMovement) =>
+    compiled.roads[compiled.lanes[movement.fromLane]!.road]!.group !== undefined;
   const continuations = compiled.movements.map((movement) => {
     const node = compiled.nodes[movement.node]!;
     return (
@@ -42,7 +51,8 @@ export function createIntersections(
       movement.conflicts.length === 0 &&
       movement.turn !== 'merge' &&
       !movement.neverGreen &&
-      !movement.turnOnRed
+      !movement.turnOnRed &&
+      compiled.nodes[movement.node]!.group === undefined
     );
   });
   const colors = new Uint8Array(compiled.movements.length);
@@ -60,8 +70,9 @@ export function createIntersections(
   const exitedFrom = new Int32Array(vehicles.count).fill(-1);
   const onRed = (movement: CMovement) => !!movement.turnOnRed && colors[movement.idx] === RED;
   const needsStop = (movement: CMovement) =>
-    onRed(movement) ||
-    (compiled.nodes[movement.node]!.control === 'stop' && movement.priority < 10);
+    !inner(movement) &&
+    (onRed(movement) ||
+      (compiled.nodes[movement.node]!.control === 'stop' && movement.priority < 10));
   const candidates = compiled.nodes.map((): number[] => []);
   const activeNodes: number[] = [];
   const headings = compiled.lanes.map((lane) =>
@@ -69,9 +80,150 @@ export function createIntersections(
   );
   const profiles = createVehicleProfiles(params);
   const profile = (id: number) => profiles[vehicles.vclass[id]!]!;
+  const allowedLanes = vehicleClasses.map((name) =>
+    compiled.lanes.map((lane) => lane.allowed.includes(name)),
+  );
+  const reservedSpace = new Float64Array(compiled.lanes.length);
+  type GroupPath = { movements: number[]; route: Route; step: number };
+  const groupPaths: (GroupPath | undefined)[] = [];
+  const groupOccupants = compiled.groups?.map(() => new Set<number>()) ?? [];
+
+  function leaveGroup(id: number, lane?: number) {
+    const chain = groupPaths[id];
+    if (!chain) return;
+    const exit = compiled.movements[chain.movements.at(-1)!]!.toLane;
+    if (lane !== undefined && lane !== exit) return;
+    reservedSpace[exit] = Math.max(
+      0,
+      reservedSpace[exit]! - profile(id).lengthM - params.idm.minGapM,
+    );
+    const first = compiled.movements[chain.movements[0]!]!;
+    groupOccupants[compiled.nodes[first.node]!.group!]!.delete(id);
+    groupPaths[id] = undefined;
+  }
+  const chainCache: (
+    | {
+        route: Route | null;
+        step: number;
+        version: number;
+        chains: Map<number, GroupPath | undefined>;
+      }
+    | undefined
+  )[] = [];
+
+  function entryChain(id: number, movement: CMovement) {
+    const route = vehicles.route[id]!;
+    const step = vehicles.routeStep[id]!;
+    const version = options.routeVersion?.() ?? 0;
+    let cache = chainCache[id];
+    if (cache?.route !== route || cache.step !== step || cache.version !== version) {
+      cache = { route, step, version, chains: new Map() };
+      chainCache[id] = cache;
+    }
+    if (cache.chains.has(movement.idx)) return cache.chains.get(movement.idx);
+    const group = compiled.groups![compiled.nodes[movement.node]!.group!]!;
+    const plan = options.groupRoute ? options.groupRoute(id, movement) : { route, step };
+    let chain: GroupPath | undefined;
+    if (plan) {
+      const lastRoad = plan.route.roads.at(-1)!;
+      const endsInside = compiled.roads[lastRoad]!.group === group.idx;
+      const remaining = plan.route.roads.length - 1 - plan.step;
+      const usableExit = (movements: number[]) => {
+        const exit = compiled.lanes[compiled.movements[movements.at(-1)!]!.toLane]!;
+        const exitStep = plan.step + movements.length;
+        const final = exitStep === plan.route.roads.length - 1;
+        const cutoff = final
+          ? compiled.connectors[vehicles.destination[id]!]!.positionM
+          : Math.max(0, compiled.roads[exit.road]!.lengthM - 10);
+        const targets = final
+          ? [compiled.connectors[vehicles.destination[id]!]!.lane]
+          : plan.route.targetLanes[exitStep]!;
+        return [
+          ...reachableLanes(
+            compiled,
+            allowedLanes[vehicles.vclass[id]!]!,
+            exit.idx,
+            cutoff,
+            params.laneChangeDistanceM,
+          ),
+        ].some((candidate) => targets.includes(candidate.lane));
+      };
+      for (const candidate of group.chains) {
+        if (candidate.movements[0] !== movement.idx) continue;
+        const movements = endsInside
+          ? candidate.movements.slice(0, remaining)
+          : candidate.movements;
+        if (
+          movements.every((m, i) => {
+            const lane = compiled.lanes[compiled.movements[m]!.toLane]!;
+            return (
+              lane.road === plan.route.roads[plan.step + i + 1] &&
+              lane.allowed.includes(vehicleClasses[vehicles.vclass[id]!]!) &&
+              !compiled.movements[m]!.neverGreen
+            );
+          })
+        ) {
+          if (usableExit(movements)) {
+            chain = { movements, ...plan };
+            break;
+          }
+        }
+      }
+      // The road router also permits a lane change on a sufficiently long inner road.
+      // Such a route need not have a lane-contiguous compiled chain.
+      if (!chain) {
+        const movements = [movement.idx];
+        let lane = compiled.lanes[movement.toLane]!;
+        while (compiled.roads[lane.road]!.group === group.idx) {
+          const next = compiled.movements[plan.route.movements[plan.step + movements.length] ?? -1];
+          if (!next) break;
+          if (
+            next.neverGreen ||
+            compiled.lanes[next.fromLane]!.road !== lane.road ||
+            !allowedLanes[vehicles.vclass[id]!]![next.toLane] ||
+            ![
+              ...reachableLanes(
+                compiled,
+                allowedLanes[vehicles.vclass[id]!]!,
+                lane.idx,
+                Math.max(0, compiled.roads[lane.road]!.lengthM - 10),
+                params.laneChangeDistanceM,
+              ),
+            ].some((candidate) => candidate.lane === next.fromLane)
+          )
+            break;
+          movements.push(next.idx);
+          lane = compiled.lanes[next.toLane]!;
+        }
+        if (compiled.roads[lane.road]!.group !== group.idx || lane.road === lastRoad)
+          if (usableExit(movements)) chain = { movements, ...plan };
+      }
+      if (chain) {
+        const movements = [...chain.movements];
+        let lane = compiled.lanes[compiled.movements[movements.at(-1)!]!.toLane]!;
+        while (lane.lengthM < profile(id).lengthM + params.idm.minGapM) {
+          const step = plan.step + movements.length;
+          if (step === plan.route.roads.length - 1) break;
+          const next = lane.out.find(
+            (m) =>
+              continuations[m] &&
+              compiled.lanes[compiled.movements[m]!.toLane]!.road === plan.route.roads[step + 1] &&
+              allowedLanes[vehicles.vclass[id]!]![compiled.movements[m]!.toLane],
+          );
+          if (next === undefined) break;
+          movements.push(next);
+          lane = compiled.lanes[compiled.movements[next]!.toLane]!;
+        }
+        chain = { ...chain, movements };
+      }
+    }
+    cache.chains.set(movement.idx, chain);
+    return chain;
+  }
 
   function signalAllows(id: number, movement: CMovement) {
     if (movement.neverGreen) return false;
+    if (inner(movement)) return true;
     if (!compiled.nodes[movement.node]!.signal || colors[movement.idx] === GREEN) return true;
     if (onRed(movement)) return !!redGrants[id] || vehicles.stopped[id]! >= 1 - 1e-9;
     const distance = compiled.lanes[movement.fromLane]!.stopM - vehicles.position[id]!;
@@ -134,24 +286,212 @@ export function createIntersections(
     return false;
   }
 
+  function exitRear(tail: number, horizon: number) {
+    const lane = compiled.lanes[vehicles.lane[tail]!]!;
+    let space = Infinity;
+    let behind = profile(tail).lengthM;
+    for (let car = tail; car !== -1; car = vehicles.previous[car]!) {
+      let front = vehicles.position[car]! + vehicles.speed[car]! * horizon;
+      const destination = compiled.connectors[vehicles.destination[car]!];
+      if (destination?.lane === lane.idx && destination.positionM >= vehicles.position[car]!)
+        front = Math.min(front, destination.positionM);
+      const next = compiled.movements[vehicles.movement[car]!];
+      if (next && !signalAllows(car, next))
+        front = Math.min(front, Math.max(vehicles.position[car]!, lane.stopM - params.idm.minGapM));
+      space = Math.min(space, front - behind);
+      if (vehicles.position[car]! - behind >= space) break;
+      const ahead = vehicles.previous[car]!;
+      if (ahead !== -1) behind += profile(ahead).lengthM + params.idm.minGapM;
+    }
+    return space;
+  }
+
+  /** Whether admitted car `id` still holds a member movement that conflicts with `path`. With a
+   * `requester` entering by `entry`, a conflict the holder has not yet reached is held only if
+   * the holder could arrive there before the requester's rear clears it (canGrant's timing). */
+  function conflictsWithClearance(
+    path: GroupPath,
+    id: number,
+    requester?: number,
+    entry?: CMovement,
+  ) {
+    const held = groupPaths[id]!;
+    const field = vehicles.lane[id]!;
+    const at = held.movements.findIndex((m) =>
+      field < 0
+        ? m === -field - 1
+        : compiled.lanes[compiled.movements[m]!.toLane]!.road === compiled.lanes[field]!.road,
+    );
+    const cleared = at + Number(field >= 0 && vehicles.position[id]! >= profile(id).lengthM);
+    let ahead = 0;
+    for (const m of path.movements) {
+      const movement = compiled.movements[m]!;
+      for (let i = 0; i < movement.conflicts.length; i++) {
+        const k = held.movements.indexOf(movement.conflicts[i]!);
+        if (k < Math.max(0, cleared)) continue;
+        if (requester === undefined || at === -1 || k <= at) return true;
+        // The holder's front to the start of member k, then into the conflict zone.
+        let distance =
+          (field < 0
+            ? compiled.movements[held.movements[at]!]!.lengthM +
+              compiled.lanes[compiled.movements[held.movements[at]!]!.toLane]!.lengthM
+            : compiled.lanes[field]!.lengthM) - vehicles.position[id]!;
+        for (let j = at + 1; j < k; j++) {
+          const member = compiled.movements[held.movements[j]!]!;
+          distance += member.lengthM + compiled.lanes[member.toLane]!.lengthM;
+        }
+        const [start] = opposingZones[movement.idx]![i]!;
+        const arrival = travelTime(
+          distance + start,
+          vehicles.speed[id]!,
+          profile(id).maxSpeedMps,
+          profile(id).idm.aMps2,
+        );
+        const exit = candidateTime(
+          requester,
+          entry!,
+          ahead + movement.conflictZones[i]![1] + profile(requester).lengthM,
+        );
+        if (arrival < exit + params.intersection.zoneMarginS) return true;
+      }
+      ahead += movement.lengthM + compiled.lanes[movement.toLane]!.lengthM;
+    }
+    return false;
+  }
+
+  const railBands = compiled.lanes.map(() => [] as { fromM: number; toM: number }[]);
+  const rail = compiled.rail;
+  if (rail?.facilities?.length) {
+    const table = railTimetable(rail);
+    const tracks = new Set(
+      table.departures.flatMap((d) => table.routes[d.route]!.sections.map((s) => s.track)),
+    );
+    for (const facility of rail.facilities) {
+      if (facility.railSpans?.some((span) => tracks.has(span.track)))
+        for (const span of facility.spans ?? [])
+          if (span.segment >= 0) railBands[span.segment]!.push(span);
+    }
+  }
+  const maxLength = Math.max(...profiles.map((p) => p.lengthM));
+  const exitBands = railBands.map((spans, lane) =>
+    spans.some((s) => s.toM >= compiled.lanes[lane]!.stopM - maxLength - params.idm.minGapM),
+  );
+  const railExits = compiled.movements.map((m) =>
+    m.conflicts.flatMap((rival, i) => {
+      const exit = compiled.movements[rival]!;
+      return exitBands[exit.fromLane] ? [{ exit, end: m.conflictZones[i]![1] }] : [];
+    }),
+  );
+  function onRail(id: number) {
+    const front = vehicles.position[id]!;
+    return railBands[vehicles.lane[id]!]!.some(
+      (span) => front >= span.fromM && front - profile(id).lengthM <= span.toM,
+    );
+  }
+  function usesRailExit(exit: CMovement) {
+    const lane = compiled.lanes[exit.fromLane]!;
+    const front = vehicles.first(lane.idx);
+    if (front !== -1 && vehicles.movement[front] === exit.idx && onRail(front)) return true;
+    for (const m of lane.in) {
+      const entering = vehicles.first(-m - 1);
+      if (entering === -1) continue;
+      const step = vehicles.routeStep[entering]! + 1;
+      const route = vehicles.route[entering];
+      if (
+        route?.movements[step] === exit.idx &&
+        route.roads[step + 1] === compiled.lanes[exit.toLane]!.road &&
+        railBands[lane.idx]!.some(
+          (span) => span.fromM <= profile(entering).lengthM + params.idm.minGapM,
+        )
+      )
+        return true;
+    }
+    return false;
+  }
+  function obstructsRailExit(id: number, movement: CMovement) {
+    let end = -Infinity;
+    for (const rival of railExits[movement.idx]!)
+      if (usesRailExit(rival.exit)) end = Math.max(end, rival.end);
+    if (end === -Infinity) return false;
+    // A stopped candidate and vehicles already promised this exit must fit beyond its last shared zone.
+    const lane = compiled.lanes[movement.toLane]!,
+      tail = vehicles.last(lane.idx);
+    const gap = params.idm.minGapM;
+    let storage =
+      movement.lengthM +
+      Math.min(
+        lane.stopM,
+        tail === -1 ? Infinity : vehicles.position[tail]! - profile(tail).lengthM,
+      ) -
+      end;
+    for (const m of lane.in) {
+      for (let v = vehicles.first(-m - 1); v !== -1; v = vehicles.next[v]!)
+        if (v !== id) storage -= profile(v).lengthM + gap;
+      for (let v = vehicles.first(compiled.movements[m]!.fromLane); v !== -1; v = vehicles.next[v]!)
+        if (v !== id && grants[v] === m) storage -= profile(v).lengthM + gap;
+    }
+    return storage < profile(id).lengthM + gap;
+  }
   function blockedExit(id: number, movement: CMovement): 'exit-full' | 'box' | null {
+    const groupIndex = compiled.nodes[movement.node]!.group;
+    if (groupIndex !== undefined && !inner(movement)) {
+      const chain = entryChain(id, movement);
+      if (!chain) return 'box';
+      for (const car of groupOccupants[groupIndex]!) {
+        if (car === id) continue;
+        if (conflictsWithClearance(chain, car, id, movement)) return 'box';
+      }
+      let distance = 0;
+      for (const idx of chain.movements) {
+        const part = compiled.movements[idx]!;
+        if (
+          idx !== movement.idx &&
+          compiled.movements[chain.movements[chain.movements.indexOf(idx) - 1]!]!.toLane !==
+            part.fromLane &&
+          vehicles.last(part.fromLane) !== -1
+        )
+          return 'box';
+        distance += part.lengthM;
+        const tail = vehicles.last(part.toLane);
+        const clearance = profile(id).lengthM + params.idm.minGapM + reservedSpace[part.toLane]!;
+        if (reservedSpace[part.toLane]! > 0 && compiled.lanes[part.toLane]!.lengthM < clearance)
+          return 'exit-full';
+        if (tail !== -1) {
+          const horizon = Math.min(
+            params.intersection.boxWaitS,
+            candidateTime(id, movement, distance),
+          );
+          const space = exitRear(tail, horizon);
+          if (space < clearance) return 'exit-full';
+        }
+        distance += compiled.lanes[part.toLane]!.lengthM;
+      }
+      return null;
+    }
     const clearance = profile(id).lengthM + params.idm.minGapM;
+    const horizon =
+      vehicles.stopped[id]! >= params.intersection.boxWaitS
+        ? 0
+        : Math.min(params.intersection.boxWaitS, candidateTime(id, movement, movement.lengthM));
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1) {
-      const space =
-        vehicles.stopped[id]! >= params.intersection.boxWaitS
-          ? vehicles.position[exitTail]!
-          : vehicles.position[exitTail]! -
-            profile(exitTail).lengthM +
-            vehicles.speed[exitTail]! * candidateTime(id, movement, movement.lengthM);
+      const space = exitRear(exitTail, horizon);
       if (space < clearance) return vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box';
+    }
+    for (const idx of compiled.lanes[movement.toLane]!.in) {
+      const incoming = compiled.movements[idx]!;
+      for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!) {
+        const front = vehicles.position[car]! - incoming.lengthM + vehicles.speed[car]! * horizon;
+        if (idx !== movement.idx && front < 0) continue;
+        if (front - profile(car).lengthM < clearance) return 'box';
+      }
     }
     return null;
   }
 
   function canGrant(id: number, movement: CMovement) {
     if (!signalAllows(id, movement)) return refuse(id, movement, 'signal');
-    const blocked = blockedExit(id, movement);
+    const blocked = blockedExit(id, movement) ?? (obstructsRailExit(id, movement) ? 'box' : null);
     if (blocked) return refuse(id, movement, blocked);
     const control = compiled.nodes[movement.node]!.control;
     for (let i = 0; i < movement.conflicts.length; i++) {
@@ -194,7 +534,8 @@ export function createIntersections(
             return refuse(id, movement, 'approach', other);
         }
       }
-      if (control !== 'yield' && control !== 'stop' && !onRed(movement)) continue;
+      if (inner(movement) || (control !== 'yield' && control !== 'stop' && !onRed(movement)))
+        continue;
       const higher = compiled.movements[idx]!;
       if (onRed(movement)) {
         if (colors[idx] === RED && !higher.turnOnRed) continue;
@@ -255,7 +596,18 @@ export function createIntersections(
 
   const movementOf = (id: number) => compiled.movements[vehicles.movement[id]!]!;
   const priority = (id: number) => (onRed(movementOf(id)) ? -1 : movementOf(id).priority);
+  const clearingRails = (id: number) => {
+    const movement = movementOf(id);
+    return (
+      onRail(id) &&
+      signalAllows(id, movement) &&
+      !blockedExit(id, movement) &&
+      !obstructsRailExit(id, movement)
+    );
+  };
   const compare = (a: number, b: number) =>
+    Number(onRed(movementOf(a))) - Number(onRed(movementOf(b))) ||
+    Number(clearingRails(b)) - Number(clearingRails(a)) ||
     priority(b) - priority(a) ||
     vehicles.junctionWaiting[b]! - vehicles.junctionWaiting[a]! ||
     a - b;
@@ -316,6 +668,38 @@ export function createIntersections(
   return {
     signals,
     blockedExit,
+    reservedSpace,
+    exitLane(id: number, movement: CMovement) {
+      if (compiled.nodes[movement.node]!.group === undefined || inner(movement))
+        return movement.toLane;
+      const chain = entryChain(id, movement);
+      return chain ? compiled.movements[chain.movements.at(-1)!]!.toLane : -1;
+    },
+    groupPaths,
+    invalidatePlan(id: number) {
+      chainCache[id] = undefined;
+    },
+    blocksEntry(id: number, requester: number, movement: CMovement) {
+      const held = groupPaths[id];
+      if (!held || grants[requester] !== -1 || inner(movement)) return false;
+      const group = compiled.nodes[movement.node]!.group;
+      if (
+        group === undefined ||
+        compiled.nodes[compiled.movements[held.movements[0]!]!.node]!.group !== group
+      )
+        return false;
+      const path = entryChain(requester, movement);
+      return !!path && conflictsWithClearance(path, id);
+    },
+    enterGroup(id: number, movement: CMovement) {
+      if (compiled.nodes[movement.node]!.group === undefined || inner(movement)) return;
+      const chain = entryChain(id, movement)!;
+      const exit = compiled.movements[chain.movements.at(-1)!]!.toLane;
+      groupPaths[id] = chain;
+      groupOccupants[compiled.nodes[movement.node]!.group!]!.add(id);
+      reservedSpace[exit] = reservedSpace[exit]! + profile(id).lengthM + params.idm.minGapM;
+    },
+    leaveGroup,
     /** TASK-077: the movement's signal does not show green (no movement, or no signal: false). */
     red: (movement: number) =>
       movement !== -1 &&

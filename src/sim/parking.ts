@@ -5,7 +5,7 @@ import {
   pointAtDistance,
 } from '../geo/polyline';
 import { createRandom } from '../geo/random';
-import type { CompiledCity } from '../network';
+import type { CParkingSpace, CompiledCity } from '../network';
 import { lotPath } from '../network/lot-paths';
 import { parkingConnectorPermitted } from '../network/parking';
 import { vehicleClasses, type Scenario, type SimParams, type TripRequest } from '../schema';
@@ -36,6 +36,8 @@ interface ParkingMotion {
   progressM: number;
   /** Drive-out progress of the hold pose, clear of the exit lane (TASK-150). */
   holdM: number;
+  /** Lane station where the car joins from its hold (TASK-150). */
+  joinM: number;
   startedS: number;
   entryS: number;
   driveS: number;
@@ -553,13 +555,27 @@ export function createParking(
             vehicles.destination[id] = selected;
             chosen[id] = f.idx;
             allowWithoutExit[id] = Number(requiresExit(id) && !checkExit);
-            if (needRoom && !soft(f)) {
+            // TASK-153: the forecast for the full facility a car is leaving claims the place its
+            // own car frees, so a later choice cannot take it (TASK-151's van 2796 at pk:2056).
+            const exact = f.kind === 'roadside' || !!f.source.mappedPortals?.length;
+            const vacated =
+              !needRoom &&
+              !soft(f) &&
+              !left[id] &&
+              originFacility(id) === f.idx &&
+              occupied[f.idx]! - 1 + enRoute[f.idx]! - (heading[id] === f.idx ? 1 : 0) < f.capacity
+                ? originSpace(id)
+                : undefined;
+            const slot =
+              exact && (needRoom || vacated !== undefined)
+                ? freeSpace(selected, id, vacated)
+                : undefined;
+            if (!soft(f) && (needRoom || (vacated !== undefined && (!exact || slot)))) {
               head(id, f.idx);
               claimSince[id] = timeS;
-              if (f.kind === 'roadside' || f.source.mappedPortals?.length) {
-                const slot = freeSpace(selected, id)!.idx;
-                claimedSpaces[id] = slot;
-                claimedBy[slot] = id;
+              if (slot) {
+                claimedSpaces[id] = slot.idx;
+                claimedBy[slot.idx] = id;
               }
             }
             cachedHash = undefined;
@@ -627,13 +643,25 @@ export function createParking(
           );
     return !!exits.spaces[slot];
   }
-  function freeSpace(connector: number, id: number) {
-    const c = compiled.connectors[connector]!,
-      f = compiled.parking[c.parking ?? -1];
+  /** `vacated`: the space a car choosing as it leaves frees (TASK-153). */
+  function freeSpace(connector: number, id: number, vacated = -1) {
+    const f = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
     if (!f || f.kind === 'garage') return undefined;
     const claim = claimedSpaces[id]!;
     if (claim >= 0)
       return claimReachable(compiled, connector, claim, id) ? spaces[claim] : undefined;
+    const scores = spaceScores(connector, id, vacated);
+    if (!scores.length) return undefined;
+    if (f.kind !== 'lot' || id < 0) return scores[0]!.slot;
+    const good = scores.filter(
+      (s) => s.score <= scores[0]!.score + params.stallChoiceSlackM + 1e-9,
+    );
+    return rng.derive(`stall:${trips[id]!.id}`).pick(good).slot;
+  }
+  /** The free spaces this car may take from `connector`, best first. */
+  function spaceScores(connector: number, id: number, vacated = -1) {
+    const c = compiled.connectors[connector]!,
+      f = compiled.parking[c.parking!]!;
     const point = pointAtDistance(
       compiled.lanes[c.lane]!.polyline,
       compiled.lanes[c.lane]!.cumulative,
@@ -646,7 +674,7 @@ export function createParking(
     for (const i of usableSpaces(f)) {
       const s = spaces[i]!;
       if (
-        stock[i] !== -1 ||
+        (stock[i] !== -1 && i !== vacated) ||
         (reserved[i] !== -1 && reserved[i] !== id) ||
         (claimedBy[i] !== -1 && claimedBy[i] !== id)
       )
@@ -669,13 +697,7 @@ export function createParking(
             : 0),
       });
     }
-    scores.sort((a, b) => a.score - b.score || a.slot.idx - b.slot.idx);
-    if (!scores.length) return undefined;
-    if (f.kind !== 'lot' || id < 0) return scores[0]!.slot;
-    const good = scores.filter(
-      (s) => s.score <= scores[0]!.score + params.stallChoiceSlackM + 1e-9,
-    );
-    return rng.derive(`stall:${trips[id]!.id}`).pick(good).slot;
+    return scores.sort((a, b) => a.score - b.score || a.slot.idx - b.slot.idx);
   }
   function hasFreeSpace(
     connector: number,
@@ -769,17 +791,29 @@ export function createParking(
         spaces[m.slot]!.parking === facility &&
         (leavingLot(m) !== leaving || m.connector !== connector),
     );
-  function sharedMouthStop(arriving: number, leaving: number, exit: number) {
+  /** TASK-150: a lot departure's drive-out path, its hold clear of the exit lane, and the lane
+   * station where it joins from the hold. */
+  function driveOut(id: number, slot: number, connector: number) {
+    const path = localPath(slot, connector, true),
+      c = compiled.connectors[connector]!,
+      lane = compiled.lanes[c.lane]!;
+    const holdM = Math.max(0, holdProgress(path, lane, length(id), width(id)));
+    return { path, holdM, joinM: joinStation(pathPose(path, holdM), lane, c.positionM) };
+  }
+  /** TASK-153: the departure's spawn gap is checked at its join station, which can lie short
+   * of its connector, so the yield keeps the arriving car clear of both. */
+  function sharedMouthStop(arriving: number, leaving: number, exit: number, joinM: number) {
     const into = compiled.connectors[vehicles.destination[arriving]!],
       out = compiled.connectors[exit]!;
     if (!into || into.parking !== out.parking || into.lane !== out.lane) return Infinity;
     const gap = Math.max(params.spawnMinGapM, params.idm.minGapM);
-    const stop = out.positionM - length(leaving) - gap - 0.1;
-    return into.positionM >= stop && into.positionM < out.positionM + length(arriving) + gap
+    const stop = Math.min(out.positionM, joinM) - length(leaving) - gap - 0.1;
+    return into.positionM >= stop &&
+      into.positionM < Math.max(out.positionM, joinM) + length(arriving) + gap
       ? stop
       : Infinity;
   }
-  function arrivalBlocksDeparture(leaving: number, exit: number) {
+  function arrivalBlocksDeparture(leaving: number, exit: number, joinM: number) {
     const c = compiled.connectors[exit]!,
       lane = compiled.lanes[c.lane]!;
     const approaches = [
@@ -795,7 +829,7 @@ export function createParking(
     ];
     for (const { segment, offset } of approaches)
       for (let id = vehicles.first(segment); id !== -1; id = vehicles.next[id]!) {
-        const stop = sharedMouthStop(id, leaving, exit);
+        const stop = sharedMouthStop(id, leaving, exit, joinM);
         if (!Number.isFinite(stop)) continue;
         const speed = vehicles.speed[id]!,
           profile = params.vehicleClasses[vehicleClasses[vehicles.vclass[id]!]!];
@@ -807,21 +841,62 @@ export function createParking(
       }
     return false;
   }
-  function startArrival(id: number, connector: number, timeS: number) {
+  /** TASK-153: where a departing car stands and will drive until it has joined the lane: body
+   * segments along the rest of its leave manoeuvre, drive-out to the hold, and merge. */
+  function departureBodies(other: number, m: ParkingMotion) {
+    const routes: [MotionPath, number, number][] = [];
+    let hold = m.pose;
+    if (m.phase !== 'exit')
+      routes.push([m.path, m.progressM, m.phase === 'drive_out' ? m.holdM : m.path.lengthM]);
+    if (m.phase === 'leave') {
+      const out = localPath(m.slot, m.connector, true);
+      routes.push([out, 0, m.holdM]);
+      hold = pathPose(out, m.holdM);
+    } else if (m.phase === 'drive_out') hold = pathPose(m.path, m.holdM);
+    if (m.phase !== 'merge') {
+      const merge = manoeuvrePath(hold, lanePose(m.connector, m.joinM), false);
+      routes.push([merge, 0, merge.lengthM]);
+    }
+    const bodies = [body(m.pose, length(other))];
+    for (const [path, from, to] of routes)
+      for (let at = from; ; at = Math.min(to, at + 0.5)) {
+        bodies.push(body(pathPose(path, at), length(other)));
+        if (at >= to) break;
+      }
+    return bodies;
+  }
+  const body = (pose: ParkingPose, lengthM: number) => [
+    { x: pose.x - Math.cos(pose.heading) * lengthM, y: pose.y - Math.sin(pose.heading) * lengthM },
+    pose,
+  ];
+  /** The bay and path an arriving car takes if it enters now, or undefined while it waits. */
+  function admission(id: number, connector: number) {
     const facility = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
-    if (facility?.kind === 'lot' && lotBusy(facility.idx, false, connector)) return false;
-    const slot = freeSpace(connector, id);
-    if (!slot) return false;
+    // One entry cohort at a time; departures are checked against the arrival's own path below.
+    if (
+      facility?.kind === 'lot' &&
+      [...motions.values()].some(
+        (m) =>
+          m.lot &&
+          spaces[m.slot]!.parking === facility.idx &&
+          !leavingLot(m) &&
+          m.connector !== connector,
+      )
+    )
+      return undefined;
+    const free = freeSpace(connector, id);
+    if (!free) return undefined;
+    let slot = free;
     const lot = compiled.parking[slot.parking]!.kind === 'lot';
     const leader = vehicles.previous[id]!,
       key = slot.idx * 2 + vehicles.vclass[id]!;
     const available =
       leader === -1 ? Infinity : vehicles.position[leader]! - length(leader) - params.idm.minGapM;
-    if (!lot && available < approachReach[key]!) return false;
-    const from = lanePose(connector),
-      path = lot
-        ? localPath(slot.idx, connector)
-        : manoeuvrePath(from, parkedPose(slot, length(id)), slot.layout === 'parallel');
+    if (!lot && available < approachReach[key]!) return undefined;
+    const from = lanePose(connector);
+    let path = lot
+      ? localPath(slot.idx, connector)
+      : manoeuvrePath(from, parkedPose(slot, length(id)), slot.layout === 'parallel');
     if (!lot && leader !== -1) {
       const lane = compiled.lanes[compiled.connectors[connector]!.lane]!;
       const reach = Number.isNaN(approachReach[key])
@@ -832,17 +907,80 @@ export function createParking(
             params.vehicleClasses[vehicles.vclass[id] === 0 ? 'car' : 'van'].widthM,
           ))
         : approachReach[key]!;
-      if (available < reach) return false;
+      if (available < reach) return undefined;
     }
-    if (
-      lot &&
-      [...motions].some(([otherId, m]) => {
-        if (spaces[m.slot]!.parking !== slot.parking) return false;
-        const hit = nearestOnPolyline(path.points, m.pose);
-        return hit.away < 0.6 && hit.along < length(otherId) + params.idm.minGapM;
-      })
-    )
-      return false;
+    if (lot) {
+      // TASK-153: an arrival enters beside departures, including one holding for a street gap,
+      // unless its way to the bay comes within body clearance of where they stand or will go.
+      // A bay that is blocked so gives way to the next free one whose way is clear; a claim
+      // moves with it.
+      const departing = [...motions]
+        .filter(([, m]) => leavingLot(m) && spaces[m.slot]!.parking === slot.parking)
+        .map(([otherId, m]) => {
+          const bodies = departureBodies(otherId, m),
+            clearance = (width(id) + width(otherId)) / 2 + 0.3,
+            xs = bodies.flat().map((p) => p.x),
+            ys = bodies.flat().map((p) => p.y);
+          return {
+            bodies,
+            clearance,
+            box: [
+              Math.min(...xs) - clearance,
+              Math.min(...ys) - clearance,
+              Math.max(...xs) + clearance,
+              Math.max(...ys) + clearance,
+            ],
+          };
+        });
+      const clear = (s: CParkingSpace, p: MotionPath) => {
+        const parked = parkedPose(s, length(id)),
+          points = [body(parked, length(id))[0]!];
+        for (const part of [p, manoeuvrePath(pathPose(p, p.lengthM), parked, false)])
+          for (let at = 0; ; at = Math.min(part.lengthM, at + 0.5)) {
+            points.push(pathPose(part, at));
+            if (at >= part.lengthM) break;
+          }
+        return !departing.some(({ bodies, clearance, box }) =>
+          points.some(
+            (q) =>
+              q.x >= box[0]! &&
+              q.y >= box[1]! &&
+              q.x <= box[2]! &&
+              q.y <= box[3]! &&
+              bodies.some((b) => nearestOnPolyline(b, q).away < clearance),
+          ),
+        );
+      };
+      if (departing.length && !clear(slot, path)) {
+        const other = spaceScores(connector, id)
+          .map((s) => s.slot)
+          .find((s) => s !== slot && clear(s, localPath(s.idx, connector)));
+        if (!other) return undefined;
+        slot = other;
+        path = localPath(other.idx, connector);
+      }
+      if (
+        [...motions].some(([otherId, m]) => {
+          if (spaces[m.slot]!.parking !== slot.parking) return false;
+          const hit = nearestOnPolyline(path.points, m.pose);
+          return hit.away < 0.6 && hit.along < length(otherId) + params.idm.minGapM;
+        })
+      )
+        return undefined;
+    }
+    return { slot, path, from, lot };
+  }
+  function startArrival(id: number, connector: number, timeS: number) {
+    const admitted = admission(id, connector);
+    if (!admitted) return false;
+    const { slot, path, from, lot } = admitted;
+    // TASK-153: a claim moves to the bay the admission gave way to.
+    const claim = claimedSpaces[id]!;
+    if (lot && claim !== -1 && claim !== slot.idx) {
+      claimedBy[claim] = -1;
+      claimedSpaces[id] = slot.idx;
+      claimedBy[slot.idx] = id;
+    }
     reserved[slot.idx] = id;
     manoeuvreSpaces[id] = slot.idx;
     cachedHash = undefined;
@@ -874,6 +1012,7 @@ export function createParking(
       path,
       progressM: 0,
       holdM: 0,
+      joinM: NaN,
       startedS: timeS,
       entryS: timeS,
       driveS: 0,
@@ -980,12 +1119,7 @@ export function createParking(
         // stop short at a destination), which reserves its gap for following traffic before
         // its body crosses the lane edge.
         m.speed = 0;
-        const joinM = joinStation(
-          m.pose,
-          compiled.lanes[m.lane]!,
-          compiled.connectors[m.connector]!.positionM,
-        );
-        if (callbacks.exit(id, m.connector, joinM)) {
+        if (callbacks.exit(id, m.connector, m.joinM)) {
           lotLeaves++;
           totalLeave += timeS - m.entryS;
           totalDrive += m.driveS;
@@ -1093,12 +1227,8 @@ export function createParking(
         reserved[m.slot] = -1;
         cachedHash = undefined;
         if (m.lot) {
+          // Its hold and join station were fixed when it left its bay.
           nextPath(m, localPath(m.slot, m.connector, true), 'drive_out', timeS);
-          // No clear pose (a stall beside the lane) holds where the drive-out starts.
-          m.holdM = Math.max(
-            0,
-            holdProgress(m.path, compiled.lanes[m.lane]!, length(id), width(id)),
-          );
         } else {
           if (space.departure === undefined) stripManoeuvres++;
           else {
@@ -1155,15 +1285,20 @@ export function createParking(
       if (compiled.parking[destination?.parking ?? -1]?.kind !== 'lot') return undefined;
       let positionM = Infinity;
       for (const [other, m] of motions)
-        if (leavingLot(m)) positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector));
-      return Number.isFinite(positionM) ? { lane: destination!.lane, positionM } : undefined;
+        if (leavingLot(m))
+          positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector, m.joinM));
+      // TASK-153: a car that would enter at once does not wait for the departure.
+      return Number.isFinite(positionM) && !admission(id, destination!.idx)
+        ? { lane: destination!.lane, positionM }
+        : undefined;
     },
     startsInLot: isLotSpace,
     canStartLot(id: number, connector: number) {
       const slot = spaces[originSpace(id)]!;
       if (lotBusy(slot.parking, true, connector)) return false;
-      if (arrivalBlocksDeparture(id, connector)) return false;
-      const out = pathPose(localPath(slot.idx, connector, true), 0);
+      const way = driveOut(id, slot.idx, connector);
+      if (arrivalBlocksDeparture(id, connector, way.joinM)) return false;
+      const out = pathPose(way.path, 0);
       return ![...motions].some(
         ([otherId, m]) =>
           spaces[m.slot]!.parking === slot.parking &&
@@ -1290,8 +1425,9 @@ export function createParking(
         if (space.manoeuvre && connector !== undefined) {
           const lot =
             compiled.parking[space.parking]!.kind === 'lot' && connector !== space.departure;
-          const out = lot ? localPath(slot, connector, true) : null;
-          const to = out ? pathPose(out, 0) : lanePose(connector);
+          // No clear pose (a stall beside the lane) holds where the drive-out starts.
+          const out = lot ? driveOut(id, slot, connector) : null;
+          const to = out ? pathPose(out.path, 0) : lanePose(connector);
           const pose = parkedPose(space, length(id));
           const path = manoeuvrePath(pose, to, space.layout === 'parallel', true);
           reserved[slot] = id;
@@ -1303,7 +1439,8 @@ export function createParking(
             lane: compiled.connectors[connector]!.lane,
             path,
             progressM: 0,
-            holdM: 0,
+            holdM: out?.holdM ?? 0,
+            joinM: out?.joinM ?? NaN,
             startedS: timeS,
             entryS: timeS,
             driveS: 0,

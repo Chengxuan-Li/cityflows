@@ -151,6 +151,32 @@ export function joinStation(hold: ParkingPose, lane: CLane, connectorM: number) 
   return Math.min(hit.along + hit.away, Math.max(connectorM, lane.stopM));
 }
 
+/** Longitudinal envelope of every body corner while a manoeuvre intersects the lane. */
+export function manoeuvreLaneBounds(
+  path: MotionPath,
+  lane: CLane,
+  lengthM: number,
+  widthM: number,
+) {
+  let low = Infinity,
+    high = -Infinity;
+  for (let i = 0; i < path.points.length; i++) {
+    const pose = { ...path.points[i]!, heading: path.headings![i]! };
+    if (bodyClearLane(pose, lane, lengthM, widthM)) continue;
+    for (const along of [0, -lengthM])
+      for (const across of [-widthM / 2, widthM / 2]) {
+        const p = {
+          x: pose.x + Math.cos(pose.heading) * along - Math.sin(pose.heading) * across,
+          y: pose.y + Math.sin(pose.heading) * along + Math.cos(pose.heading) * across,
+        };
+        const at = nearestOnPolyline(lane.polyline, p).along;
+        low = Math.min(low, at);
+        high = Math.max(high, at);
+      }
+  }
+  return low === Infinity ? null : { low, high };
+}
+
 /** Farthest occupied lane station during a pull-in, including its forward setup. */
 export function manoeuvreLaneReach(path: MotionPath, lane: CLane, lengthM: number, widthM: number) {
   let reach = 0;
