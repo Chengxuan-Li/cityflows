@@ -394,6 +394,9 @@ export class Scene3D {
       ),
     };
     this.content.add(...Object.values(this.night));
+    this.canvas.dataset.nightLights = JSON.stringify(
+      Object.fromEntries(Object.entries(this.night).map(([key, mesh]) => [key, mesh.count])),
+    );
     add(geometry.slabs, 0x899b99);
     const paint = add(geometry.markings, 0xffffff, false);
     paint.material.vertexColors = true;
