@@ -3458,7 +3458,7 @@ The first candidate split the through roads at all 26 mouths. It changed 43 of t
 keeps the through road and attaches parking circulation at the source entrance.
 The independent route comparison preserved all 192 full route records across the
 two cities. The directed-path audit covered all 26 mouths and 94 direction records.
-Richelstraﬂe gains 86 usable bays. Three other Munich lots gain 17, 10 and 6.
+Richelstra√üe gains 86 usable bays. Three other Munich lots gain 17, 10 and 6.
 Sindelfingen's largest audited lot has 149 reachable bays out of 150 generated.
 
 The unchanged Munich 10:00 gate rejected revision `e99c03c` with 3,323 completed
