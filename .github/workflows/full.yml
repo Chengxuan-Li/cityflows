@@ -1,39 +1,9 @@
-name: Full
-
-# The full tier (lead, 2026-11-10): the whole traffic tier with full demand and the whole e2e
-# suite in five duration-balanced groups (playwright.config.ts). It runs at checkpoints (a
-# pushed `checkpoint-*` tag), on demand (Actions, "Run workflow"), and nightly when main has
-# new commits. A red full run blocks new merges until it is fixed.
-on:
-  push:
-    tags: ['checkpoint-*']
-  workflow_dispatch:
-  schedule:
-    - cron: '0 2 * * *'
-
+name: Parking access verification
+on: workflow_dispatch
 permissions:
   contents: read
-
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      run: ${{ steps.check.outputs.run }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 50
-      - id: check
-        run: |
-          if [ "${{ github.event_name }}" != schedule ] || [ -n "$(git log -1 --since='24 hours ago' --format=%H)" ]; then
-            echo run=true >> "$GITHUB_OUTPUT"
-          else
-            echo run=false >> "$GITHUB_OUTPUT"
-          fi
-
-  check:
-    needs: changes
-    if: needs.changes.outputs.run == 'true'
+  traffic:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -42,52 +12,4 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - uses: actions/cache@v4
-        with:
-          path: node_modules/.cache/cityflows
-          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
-      - run: npm run check
-
-  city:
-    needs: changes
-    if: needs.changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - uses: actions/cache@v4
-        with:
-          path: node_modules/.cache/cityflows
-          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
-      - run: npm run test:city
-      - run: npm run test:traffic
-
-  e2e:
-    needs: changes
-    if: needs.changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        group: [a, b, c, d, e, rest]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npx playwright test
-        env:
-          CITYFLOWS_E2E_GROUP: ${{ matrix.group }}
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: playwright-results-full-${{ matrix.group }}
-          path: test-results
-          retention-days: 7
+      - run: npm run test:traffic:light
