@@ -398,8 +398,9 @@ export const style = {
   },
   /** The surface tone everywhere a road class does not set one (junctions, transitions). */
   asphalt: 0xffffff,
-  /** TASK-162: the multiplier `roadTint` reaches at `roadDetailZoom[1]`, a light asphalt gray. */
-  roadDetail: 0xc9cdd3,
+  /** TASK-162: the multiplier `roadTint` reaches at `roadDetailZoom[1]`, a light neutral asphalt
+   * gray: white markings keep 1.8:1 on it (1.9:1 on the old asphalt). */
+  roadDetail: 0xbfc1c4,
   roadDetailZoom: [1.2, 4] as const,
   /** 3D zooms are divided by this before `roadTint`: the perspective view stays white longer. */
   roadDetailScale3d: 2.5,
