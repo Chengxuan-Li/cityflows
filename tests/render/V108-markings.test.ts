@@ -35,6 +35,7 @@ import {
   trimPolyline,
 } from '../../src/geo/polyline';
 import { tierCities, unitTest } from '../tier';
+import { limit } from '../timeouts';
 
 // Compile hashes captured at 56ffccd (main) before the renderer changes, then updated at the
 // TASK-100 merge: its lanes also allow `van`; with `van` removed they hash as at 56ffccd.
@@ -494,7 +495,7 @@ test.each(tierCities(['sindelfingen', 'munich'] as const))(
       }
     expect(samples).toBeGreaterThan(0);
   },
-  120_000,
+  limit(120_000),
 );
 
 unitTest('V108: a lane tapering at both ends keeps its ending arrow', () => {

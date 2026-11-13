@@ -15,6 +15,7 @@ import { crossingStripes } from '../../src/render/layers/roads';
 import type { City, Road } from '../../src/schema';
 import { importedRoadBodyOverlaps, junctionOverlaps } from '../network/junction-audit';
 import { cityTest, tierCities, unitTest } from '../tier';
+import { limit } from '../timeouts';
 
 // T39 (TASK-087, B41, B42): carriageways of one street must not overlap outside the junction
 // polygons. The importer pushes apart the two carriageways of a dual-carriageway corridor that
@@ -168,7 +169,7 @@ unitTest(
     for (const road of Object.values(centred.roads).filter((r) => r.name === 'Dual'))
       expect(road.lateralOffsetM).toBe(0);
   },
-  60_000,
+  limit(60_000),
 );
 
 // Measure 9 on main dc01ed4 (m2) for every pair that still overlaps, and the corridor pairs left.
@@ -294,7 +295,7 @@ test.each(tierCities(auditCities))(
       1.1 * recorded.reduce((sum, a) => sum + a, 0) + 0.01,
     );
   },
-  120_000,
+  limit(120_000),
 );
 
 /** B43: divided pairs (an incoming and an outgoing carriageway of one corridor at a node) whose
@@ -349,7 +350,7 @@ test.each(tierCities(auditCities))(
     const remaining = changes.filter((c) => c !== 'n:247 r:961/r:1276 0.51 vs 0.64');
     expect(remaining.length).toBeLessThanOrEqual(name === 'sindelfingen' ? 1 : 4);
   },
-  120_000,
+  limit(120_000),
 );
 
 /** TASK-089: how often each lane edge of a road split at a node (shifted at that end) changes
@@ -458,7 +459,7 @@ test.each(tierCities(auditCities))(
     );
     expect(found.length).toBeLessThanOrEqual(Math.floor(1.15 * Object.keys(wobbling[name]).length));
   },
-  120_000,
+  limit(120_000),
 );
 
 /** Lane pairs of the node's roads crossing within `reach` of the node. */
@@ -543,7 +544,7 @@ cityTest(
         'realigned',
       );
   },
-  120_000,
+  limit(120_000),
 );
 
 /** The median-side edge of a road's surface (its left edge under right-hand traffic), from the
@@ -597,7 +598,7 @@ cityTest(
     ] as const)
       expect(nearestOnPolyline(b, pointAtDistance(a, lengths, start + d)).away).toBeCloseTo(gap, 1);
   },
-  120_000,
+  limit(120_000),
 );
 
 cityTest(
@@ -616,7 +617,7 @@ cityTest(
     expect(Math.max(...gaps)).toBeLessThan(9);
     for (const id of ['r:724', 'r:1279'] as const) expect(city.roads[id]!.lateralOffsetM).toBe(0);
   },
-  120_000,
+  limit(120_000),
 );
 
 cityTest(
@@ -654,5 +655,5 @@ cityTest(
       expect(Math.abs(profile[0]!), id).toBeCloseTo(1.5, 1);
     }
   },
-  120_000,
+  limit(120_000),
 );

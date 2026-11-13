@@ -5,6 +5,7 @@ import { compile } from '../../src/network';
 import { polylineSelfCrossings } from '../../bench/geometry-audit';
 import { tierCities } from '../tier';
 import { junctionOverlaps, movementsOutside, roadBodyCrossings } from './junction-audit';
+import { limit } from '../timeouts';
 
 test.each(
   tierCities([
@@ -74,5 +75,5 @@ test.each(
       ).toBeLessThanOrEqual(limit + 1e-6);
     }
   },
-  120_000,
+  limit(120_000),
 );
