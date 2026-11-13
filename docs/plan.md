@@ -191,6 +191,18 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
 | [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | in progress (Claude Code subagent) |
+| [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | queued (after the UI merge) |
+| [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | queued (after the UI merge) |
+| [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | queued (after the UI merge) |
+| [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | queued (after TASK-164, TASK-165) |
+| [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | queued (after TASK-113; in sequence with TASK-169) |
+| [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | queued (when few sim branches are open) |
+| [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | queued (after the baseline reset) |
+| [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | queued (after TASK-113, TASK-164) |
+| [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | queued (after TASK-173) |
+| [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | in progress (Claude Code subagent) |
+| [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | queued (near the end) |
+| [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after the UI merge and TASK-168) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1157,6 +1169,18 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-163 | Claude Code, the lead's subagent | Opus 5.5 | high | 5363 (production 5463) |
 | TASK-164 | Claude Code, the lead's subagent | Opus 5.5 | high | 5364 (production 5464) |
 | TASK-165 | Claude Code, the lead's subagent | Opus 5.5 | high | 5365 (production 5465) |
+| TASK-166 | Claude Code, the lead's subagent | Opus 5.5 | high | 5366 (production 5466) |
+| TASK-167 | Claude Code, the lead's subagent | Opus 5.5 | high | 5367 (production 5467) |
+| TASK-168 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5368 (production 5468) |
+| TASK-169 | Claude Code, the lead's subagent | Opus 5.5 | high | 5369 (production 5469) |
+| TASK-170 | Claude Code, the lead's subagent | Opus 5.5 | high | 5370 (production 5470) |
+| TASK-171 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5371 (production 5471) |
+| TASK-172 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5372 (production 5472) |
+| TASK-173 | Claude Code, the lead's subagent | Opus 5.5 | high | 5373 (production 5473) |
+| TASK-174 | Claude Code, the lead's subagent | Opus 5.5 | high | 5374 (production 5474) |
+| TASK-175 | Claude Code, the lead's subagent | Opus 5.5 | high | 5375 (production 5475) |
+| TASK-176 | Claude Code, the lead's subagent | Opus 5.5 | high | 5376 (production 5476) |
+| TASK-177 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5377 (production 5477) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -1215,6 +1239,18 @@ the owner's approval before assigning it.
   root font in `src/ui/app.css` to Verdana for the run and revert it afterwards.
 - Local-only state: `bench/latest.log` and the CPU profiles, `test-results`, the worktrees
   under `.claude/worktrees` and the owner's Codex worktrees. None of it is needed.
+
+## 24-hour plan (lead, 2026-11-13)
+
+Wave A, finishing: TASK-113 (gate with choice off, mode-share guard), TASK-160 with 162 (UI and
+map), TASK-163 (lighting), TASK-164 (aisle departures), TASK-165 (crosswalk safety); the lead
+resets the baseline after TASK-161 and TASK-113 and runs a quiet-machine frame check before the UI
+merge. Wave B, mostly parallel: TASK-166, 167 and 168 (UI, once TASK-160 to 163 merge), TASK-169
+then TASK-170 (intersection behaviour, in sequence), TASK-171 (test infrastructure, when few sim
+branches are open), TASK-172 (after the baseline reset). Wave C: TASK-175 (independent, starts
+now), TASK-173 then TASK-174 (mode choice at departure, then transit), TASK-176 and 177 near the
+end. At most five agents at once; sim tasks sharing `parking.ts` or `intersection.ts` run in
+sequence; every merge goes through the unchanged gate and CI, and anything failing is held.
 
 ## Review log
 
@@ -3776,6 +3812,14 @@ connectors only; `lot-aisle-lanes.test.ts` (3 cases), tests/sim (416), `test:cit
 `check` pass (timeouts under load passed alone).
 
 ## Owner decisions log
+
+- 2026-11-13 (owner, before a 24-hour absence): the lead keeps developing and testing
+  unsupervised and plans Waves A to C (TASK-166 to TASK-177, scope approved in full). The traffic
+  baseline is reset as needed (after TASK-161 and TASK-113, measured with mode choice off, and
+  again when a merge moves completions by more than 10%), each reset logged. The Mac UI, map
+  palette and lighting (TASK-160, 162, 163) merge to main when green, with a quiet-machine frame
+  check; the owner reviews on main. Map asphalt: the neutral gray `#ACB0B3`. Road grade in the
+  compiled network (TASK-175) is a pre-approved contract change.
 
 - 2026-11-13 (owner): mode choice (TASK-113) ships on by default; the Munich traffic gate keeps
   testing car traffic with mode choice off, and a separate mode-share test guards the choice. The
