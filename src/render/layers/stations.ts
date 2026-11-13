@@ -15,11 +15,11 @@ export const stationColors = {
   ink: 0xf8f6ef,
   screen: 0x26343a,
   screenInk: 0xf3e7bf,
-  roof: 0x6f8b86,
+  roof: 0x8e8e93,
   bench: 0xb59a76,
   bin: 0x6b8579,
   /** Lettering on the map itself. */
-  map: 0x344843,
+  map: 0x3a3a3c,
 };
 const zooms = { base: 1.5, small: 4, board: 10, display: 12, entrance: 6 };
 const maxLabels = 24;
@@ -208,7 +208,10 @@ export function drawStations(furniture: StationFurniture, rail: RailGraph, table
       near.forEach((label, i) => {
         let entry = pool[i];
         if (!entry) {
-          const text = new Text({ text: '', style: { fontFamily: 'Arial', fontSize: 48 } });
+          const text = new Text({
+            text: '',
+            style: { fontFamily: ['Arimo', 'Arial'], fontSize: 48 },
+          });
           pool.push((entry = { text, layer: NaN, shown: '' }));
         }
         const { text } = entry;
@@ -222,7 +225,7 @@ export function drawStations(furniture: StationFurniture, rail: RailGraph, table
         text.anchor.set(0.5, label.anchorTop ? 0 : 0.5);
         if (entry.shown !== key) {
           const screen = label.style === 'screen';
-          text.style.fontFamily = screen ? 'monospace' : 'Arial';
+          text.style.fontFamily = screen ? 'monospace' : ['Arimo', 'Arial'];
           text.style.fontWeight = screen ? 'normal' : 'bold';
           text.style.fontSize = screen ? 40 : 48;
           text.style.fill = screen

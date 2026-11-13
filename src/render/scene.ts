@@ -32,13 +32,19 @@ import { drawWalk } from './layers/walk';
 import { drawHillshade } from './layers/hillshade';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
-import { drawNode, drawRoadJoins, nodeColor } from './layers/nodes';
+import { drawNode, drawNodeCasing, drawRoadJoins, nodeColor } from './layers/nodes';
 import { drawRoute, drawSelection } from './layers/overlay';
 import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
 import { drawPlaces } from './layers/places';
 import { drawParking } from './layers/parking';
-import { drawMovementArrow, drawRoad, drawCrossings, updateZoomFade } from './layers/roads';
+import {
+  drawCasing,
+  drawMovementArrow,
+  drawRoad,
+  drawCrossings,
+  updateZoomFade,
+} from './layers/roads';
 import { drawTransitions } from './layers/transitions';
 import { paintedCity } from './road-paint';
 import { drawSignal } from './layers/signals';
@@ -50,7 +56,7 @@ import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { ParkedCars } from './layers/parked-cars';
 import { stripTicks } from './strip-geometry';
 import { createPicker, pickParking, pickVehicle } from './picking';
-import { style } from './style';
+import { roadTint, style } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
 import type { Pick, CityGeometry, Scene, WalkerSnapshot } from './types';
 import { defaultLayers, type LayerVisibility } from './types';
@@ -89,6 +95,7 @@ export function createGrade(layer: number) {
   const tram = new Graphics();
   const sidewalks = new Graphics();
   const footways = new Graphics();
+  const casings = new Graphics();
   const markings = new Graphics();
   const nodes = new Graphics();
   const guides = new Graphics();
@@ -107,6 +114,7 @@ export function createGrade(layer: number) {
     railDetail,
     footways,
     sidewalks,
+    casings,
     bands,
     surfaces,
     slotTicks,
@@ -132,6 +140,7 @@ export function createGrade(layer: number) {
     group,
     terrain,
     surfaces,
+    casings,
     sidewalks,
     rail,
     railDetail,
@@ -271,7 +280,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   let parkingCounts: ArrayLike<number> | null = null;
   let tiles: Tiles | undefined;
-  let tilesEnabled = true;
+  let tilesEnabled = defaultLayers.basemap;
   let sourceGeometry: CityGeometry | undefined;
   let shapes: Place['shape'][] = [];
   let staticPick: ReturnType<typeof createPicker> | undefined;
@@ -321,6 +330,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       grade.guides.visible = !overview && layerVisibility.markings;
       grade.arrows.visible = !overview && layerVisibility.markings;
       grade.crossings.visible = !overview && layerVisibility.markings;
+      const tint = roadTint(camera.zoom);
+      if (grade.surfaces.tint !== tint) grade.surfaces.tint = grade.nodes.tint = tint;
       const next = overview && grade.terrainSize * resolution <= 2048 ? resolution : 0;
       if (next === grade.cacheResolution) continue;
       grade.terrain.cacheAsTexture(false);
@@ -737,6 +748,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           grade.cacheResolution = 0;
           for (const graphics of [
             grade.surfaces,
+            grade.casings,
             grade.markings,
             grade.arrows,
             grade.nodes,
@@ -765,9 +777,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             markingTheme,
           );
           drawRoadJoins(grade.surfaces, compiled, road, layerVisibility.roadClasses);
+          drawCasing(grade.casings, road, layerVisibility.roadClasses);
           drawCrossings(grade.crossings, compiled, road, sourceGeometry, markingTheme);
         }
         for (const node of compiled.nodes) {
+          drawNodeCasing(
+            grades.get(nodeGrades[node.idx]!)!.casings,
+            compiled,
+            node,
+            layerVisibility.roadClasses,
+          );
           drawNode(
             grades.get(nodeGrades[node.idx]!)!.nodes,
             node,

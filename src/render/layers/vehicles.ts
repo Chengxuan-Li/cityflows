@@ -17,17 +17,26 @@ export function vehicleTextures() {
     const width = Math.round((lengthM / widthM) * 48);
     const y = index * 64 + 8;
     frames[vehicleClass] = new Rectangle(8, y, width, 48);
-    context.fillStyle = '#ffffff';
-    context.beginPath();
-    if (vehicleClass === 'truck') {
-      context.roundRect(8, y + 1, width * 0.73, 46, 3);
-      context.roundRect(8 + width * 0.76, y + 3, width * 0.24, 42, 7);
-    } else if (vehicleClass === 'van') {
-      context.roundRect(8, y, width * 0.79, 48, 5);
-      context.roundRect(8 + width * 0.74, y + 5, width * 0.26, 38, 8);
-    } else context.roundRect(8, y, width, 48, vehicleClass === 'car' ? 24 : 9);
-    context.fill();
-    context.fillStyle = '#c1c9c8';
+    // TASK-162: a rim at 70 % under the tint, so light system colours (yellow, green) keep an
+    // edge on white streets.
+    for (const [fill, d] of [
+      ['#b3b3b3', 0],
+      ['#ffffff', 3],
+    ] as const) {
+      const box = (x: number, top: number, w: number, h: number, r: number) =>
+        context.roundRect(x + d, top + d, w - 2 * d, h - 2 * d, Math.max(0, r - d));
+      context.fillStyle = fill;
+      context.beginPath();
+      if (vehicleClass === 'truck') {
+        box(8, y + 1, width * 0.73, 46, 3);
+        box(8 + width * 0.76, y + 3, width * 0.24, 42, 7);
+      } else if (vehicleClass === 'van') {
+        box(8, y, width * 0.79, 48, 5);
+        box(8 + width * 0.74, y + 5, width * 0.26, 38, 8);
+      } else box(8, y, width, 48, vehicleClass === 'car' ? 24 : 9);
+      context.fill();
+    }
+    context.fillStyle = '#c7c7cc';
     context.beginPath();
     context.roundRect(8 + width * 0.79, y + 9, width * 0.08, 30, 3);
     if (vehicleClass === 'bus') {
@@ -38,10 +47,15 @@ export function vehicleTextures() {
     }
     context.fill();
   }
-  context.fillStyle = '#ffffff';
-  context.beginPath();
-  context.arc(24, 288, 16, 0, Math.PI * 2);
-  context.fill();
+  for (const [fill, r] of [
+    ['#b3b3b3', 16],
+    ['#ffffff', 12],
+  ] as const) {
+    context.fillStyle = fill;
+    context.beginPath();
+    context.arc(24, 288, r, 0, Math.PI * 2);
+    context.fill();
+  }
   frames.dot = new Rectangle(8, 272, 32, 32);
   const atlas = Texture.from(canvas);
   const textures = Object.fromEntries(

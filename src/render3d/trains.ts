@@ -17,6 +17,7 @@ import {
   type TrainTimetable,
 } from '../network/trains';
 import { trainColors } from '../render/layers/trains';
+import { style } from '../render/style';
 import type { cityHeights } from './heights';
 import { railElevation } from './rail';
 
@@ -101,7 +102,7 @@ export class Trains3D {
         this.body.setMatrixAt(count, this.matrix);
         this.body.setColorAt(
           count,
-          this.color.setHex(selected === train.id ? 0x4dafa6 : trainColors[train.kind]),
+          this.color.setHex(selected === train.id ? style.selection : trainColors[train.kind]),
         );
         this.matrix
           .makeRotationFromEuler(this.rotation)

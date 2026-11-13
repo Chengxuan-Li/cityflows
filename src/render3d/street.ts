@@ -150,7 +150,7 @@ function signTexture(rules: readonly SignRule[], theme: ReturnType<typeof placeS
     ctx.fill();
   }
   if (theme === 'us' && no) {
-    ctx.font = 'bold 30px Arial';
+    ctx.font = 'bold 30px Arimo, Arial';
     ctx.textAlign = 'center';
     ctx.fillText('DO NOT', 128, 66);
     ctx.fillText('ENTER', 128, 154);
@@ -188,7 +188,7 @@ function signTexture(rules: readonly SignRule[], theme: ReturnType<typeof placeS
     );
     const size = Math.min(40, 120 / words.length),
       line = size * 1.15;
-    ctx.font = `bold ${size}px Arial`;
+    ctx.font = `bold ${size}px Arimo, Arial`;
     const first = 297 - ((words.length - 1) * line) / 2 + size * 0.35;
     words.forEach((label, i) => ctx.fillText(label, 128, first + i * line, 235));
   }

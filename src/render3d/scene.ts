@@ -24,9 +24,14 @@ import {
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
-import { markingThemes, style } from '../render/style';
+import { markingThemes, roadTint, style } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
-import type { CityGeometry, Pick, ParkedCarsSnapshot } from '../render/types';
+import {
+  defaultLayers,
+  type CityGeometry,
+  type Pick,
+  type ParkedCarsSnapshot,
+} from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
 import { Basemap3D } from './basemap';
 import { buildGeometry } from './geometry';
@@ -70,7 +75,7 @@ export class Scene3D {
   private readonly camera = new PerspectiveCamera(45, 1, 0.2, 50000);
   private readonly controls: MapControls;
   private readonly observer: ResizeObserver;
-  private readonly sun = new DirectionalLight(0xfff8ec, 1.4);
+  private readonly sun = new DirectionalLight(0xffffff, 0.95);
   private readonly vehicles = new Vehicles3D();
   private readonly walkers = new Walkers3D();
   private walkSignals: ReturnType<typeof buildWalkSignals> | undefined;
@@ -99,6 +104,7 @@ export class Scene3D {
   private streetCounts: ReturnType<typeof placeStreet>['counts'] | undefined;
   private street: ReturnType<typeof buildStreet> | undefined;
   private paint: Mesh[] = [];
+  private asphalt: Mesh<BufferGeometry, MeshLambertMaterial>[] = [];
   private treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   private ground: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private terrainEnabled = true;
@@ -129,7 +135,7 @@ export class Scene3D {
   private walk: { sidewalks: Mesh; footways: Mesh; steps: Mesh } | undefined;
   private walkVisibility = { sidewalks: true, footways: true };
   private basemap: Basemap3D | undefined;
-  private tilesEnabled = true;
+  private tilesEnabled = defaultLayers.basemap;
   private lastRenderMs = performance.now();
   private readonly vehicleMatrix = new Matrix4();
   private shadowView = '';
@@ -147,7 +153,8 @@ export class Scene3D {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFShadowMap;
     this.scene.add(
-      new HemisphereLight(0xffffff, 0x9eaa99, 1.4),
+      // TASK-162: more sky, less sun: lighter, softer shadows for the flat Sonoma look.
+      new HemisphereLight(0xffffff, 0xd9dad6, 2),
       this.sun,
       this.sun.target,
       this.content,
@@ -274,7 +281,7 @@ export class Scene3D {
       this.content.add(mesh);
       return mesh;
     };
-    add(geometry.surfaces, style.asphalt, !terrain.grid);
+    const ground = add(geometry.surfaces, style.asphalt, !terrain.grid);
     if (terrain.grid) {
       // Ground asphalt cannot cast a useful shadow onto itself. Only decks and
       // raised approaches enter the shadow pass; their visible mesh is unchanged.
@@ -301,6 +308,8 @@ export class Scene3D {
       this.content.add(caster);
     }
     const asphalt = add(geometry.surfaces, style.asphalt, !terrain.grid);
+    this.asphalt = [ground, asphalt];
+    for (const mesh of this.asphalt) mesh.material.vertexColors = true;
     const walk = buildWalk(city, renderedSource, geometry.heights);
     this.walk = {
       sidewalks: add(walk.sidewalks, style.walk.sidewalk, false),
@@ -324,7 +333,7 @@ export class Scene3D {
     this.canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
     this.street = buildStreet(furniture, city, geometry.heights);
     this.content.add(this.street.group);
-    add(geometry.slabs, 0x899b99);
+    add(geometry.slabs, 0xb4b4b8);
     const paint = add(geometry.markings, 0xffffff, false);
     paint.material.vertexColors = true;
     this.paint = [
@@ -372,7 +381,7 @@ export class Scene3D {
     const transform = new Object3D();
     const piers = new InstancedMesh(
       new BoxGeometry(1.2, 1, 1.2),
-      new MeshLambertMaterial({ color: 0x95a29c }),
+      new MeshLambertMaterial({ color: 0xb4b4b8 }),
       geometry.piers.length,
     );
     geometry.piers.forEach((pier, i) => {
@@ -385,17 +394,17 @@ export class Scene3D {
     this.content.add(piers);
     const poles = new InstancedMesh(
       new BoxGeometry(0.15, 6, 0.15),
-      new MeshLambertMaterial({ color: 0x637773 }),
+      new MeshLambertMaterial({ color: 0x6e6e73 }),
       geometry.supports.length,
     );
     const arms = new InstancedMesh(
       new BoxGeometry(1, 1, 1),
-      new MeshLambertMaterial({ color: 0x637773 }),
+      new MeshLambertMaterial({ color: 0x6e6e73 }),
       geometry.supports.length,
     );
     const boxes = new InstancedMesh(
       new BoxGeometry(0.55, 0.95, 0.4),
-      new MeshLambertMaterial({ color: 0x344843 }),
+      new MeshLambertMaterial({ color: 0x3a3a3c }),
       geometry.heads.length,
     );
     this.lamps = new InstancedMesh(
@@ -881,6 +890,9 @@ export class Scene3D {
       this.geometry?.crossings.getAttribute('position').count ?? 0,
     );
     if (!this.demand.consume(renderContinuously())) return;
+    // TASK-162: white streets at overview, a light asphalt gray close up (`roadTint`).
+    const tint = roadTint(this.getView().zoom / style.roadDetailScale3d);
+    for (const mesh of this.asphalt) mesh.material.color.setHex(tint);
     this.parking?.update(this.getView().zoom, this.selectedParking);
     this.parkedCars?.setStyle(this.getView().zoom, this.colourByClass);
     if (this.city && this.geometry)

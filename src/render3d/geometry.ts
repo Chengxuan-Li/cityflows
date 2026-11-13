@@ -1,10 +1,13 @@
-import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
+import Flatbush from 'flatbush';
+import { BufferGeometry, Color, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
 import { crossingStripes } from '../render/layers/roads';
+import { nodeColor, roadFill } from '../render/layers/nodes';
+import { pointInPolygon } from '../geo/polyline';
 import { signalLayout } from './signals';
-import { placeHue } from '../render/style';
+import { placeColors } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
 import { buildMarkings, goreTriangles, triangleHeight } from './markings';
@@ -97,6 +100,43 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
     }
 }
 
+/** TASK-162: the 2D surface tones (white, pale yellow motorways and trunks, their junctions) as
+ * vertex colours, one per triangle by its centroid, so the 3D streets match the 2D map. */
+function roadTones(city: CompiledCity, geometry: BufferGeometry) {
+  const shapes = [
+    ...city.roads.map((road) => ({ ring: road.surface, color: roadFill(city, road) })),
+    ...city.nodes.map((node) => ({ ring: node.outline, color: nodeColor(city, node) })),
+  ].filter(({ ring, color }) => ring.length >= 3 && color !== 0xffffff);
+  const flat = geometry.index ? geometry.toNonIndexed() : geometry;
+  if (flat !== geometry) geometry.dispose();
+  const position = flat.getAttribute('position');
+  const colors = new Float32Array(position.count * 3).fill(1);
+  if (shapes.length) {
+    const index = new Flatbush(shapes.length);
+    for (const { ring } of shapes) {
+      const xs = ring.map((p) => p.x),
+        ys = ring.map((p) => p.y);
+      index.add(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+    }
+    index.finish();
+    const color = new Color();
+    for (let i = 0; i < position.count; i += 3) {
+      const centroid = {
+        x: (position.getX(i) + position.getX(i + 1) + position.getX(i + 2)) / 3,
+        y: (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3,
+      };
+      const hit = index
+        .search(centroid.x, centroid.y, centroid.x, centroid.y)
+        .find((j) => pointInPolygon(centroid, shapes[j]!.ring));
+      if (hit === undefined) continue;
+      color.setHex(shapes[hit]!.color);
+      for (let k = 0; k < 3; k++) colors.set([color.r, color.g, color.b], (i + k) * 3);
+    }
+  }
+  flat.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  return indexTerrain(flat);
+}
+
 export function buildGeometry(city: CompiledCity, source: CityGeometry, omitContextGround = false) {
   city = paintedCity(city);
   const heights = cityHeights(city, source);
@@ -172,7 +212,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
           }));
     const start = places.length;
     polygon(places, ring, () => -0.02);
-    const color = placeHue(place.id);
+    const color = placeColors(place.kind).fill;
     for (let i = start; i < places.length; i += 3)
       colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
   }
@@ -212,7 +252,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
     !omitContextGround,
   );
   if (source.terrain) context.ground = indexTerrain(context.ground);
-  const surfaceGeometry = terrainBuffer(surfaces, landSurfaces, true, flatAreas);
+  const surfaceGeometry = roadTones(city, terrainBuffer(surfaces, landSurfaces, true, flatAreas));
   const positions = surfaceGeometry.getAttribute('position');
   const uv = new Float32BufferAttribute(new Float32Array(positions.count * 2), 2);
   for (let i = 0; i < positions.count; i++)

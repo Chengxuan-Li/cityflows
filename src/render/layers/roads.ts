@@ -2,7 +2,7 @@ import type { Graphics } from 'pixi.js';
 import type { CompiledCity, CRoad, CMovement } from '../../network';
 import type { CrossingSource } from '../../network/crossings';
 import { roadFill } from './nodes';
-import { roadStyle, markingTheme as defaultTheme, type MarkingTheme } from '../style';
+import { roadStyle, style, markingTheme as defaultTheme, type MarkingTheme } from '../style';
 import {
   roadMarkingGeometry,
   gorePavement,
@@ -75,6 +75,19 @@ export function drawRoad(
   fadeAtZoom(markings, 0.7, 2.2);
   drawMarkings(markings, geometry.below, markingTheme);
   drawMarkings(controls, geometry.above, markingTheme);
+}
+/** TASK-162: the soft gray casing, a stroke under every paved surface of the grade; only the band
+ * beyond the verge shows. */
+export function drawCasing(
+  graphics: Graphics,
+  road: CRoad,
+  roadClasses = false,
+  casingM = style.casingM,
+): void {
+  const { vergeM, casing } = roadStyle(road, roadClasses);
+  graphics
+    .poly(road.surface)
+    .stroke({ color: casing, width: 2 * (vergeM + casingM), join: 'round' });
 }
 export function drawMovementArrow(
   graphics: Graphics,
