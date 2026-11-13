@@ -816,7 +816,7 @@ function createRun({
         !laneChanges.holding[id]
           ? intersections.blockedExit(id, planned)
           : null;
-      if (!blocked) {
+      if (!blocked || !planned) {
         vehicles.headDetourS[id] = 0;
         sharedFollower[id] = -1;
         continue;
