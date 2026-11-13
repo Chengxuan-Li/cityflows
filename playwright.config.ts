@@ -75,6 +75,7 @@ const light = [
   'T57-person-trips',
   'T67-car-ownership',
   'T79-mode-choice',
+  'T80-shortcuts',
 ];
 const group =
   process.env.CITYFLOWS_E2E_GROUP ??

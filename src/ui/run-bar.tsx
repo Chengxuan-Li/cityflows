@@ -1,7 +1,7 @@
-import { useAppStore } from './store';
+import { speeds, useAppStore } from './store';
+import { useEnabled } from './commands';
 import { MenuItem, ToolbarButton, type ToolbarAction } from './controls';
-
-const speeds = [1, 2, 5, 10, 20];
+import { labels } from './shortcuts';
 
 function clock(timeS: number) {
   const pad = (value: number) => String(Math.floor(value)).padStart(2, '0');
@@ -15,27 +15,32 @@ function clock(timeS: number) {
 export function RunControls({ inMenu = false }: { inMenu?: boolean }) {
   const mode = useAppStore((state) => state.viewMode);
   const run = useAppStore((state) => state.run);
-  const busy = useAppStore((state) => state.busy);
+  const can = useEnabled();
   const { control, setSpeed } = useAppStore.getState();
-  const disabled = !run || busy;
+  const disabled = !can.restart;
   const steps: ToolbarAction[] = [
     {
       icon: 'step',
       label: 'Step',
       tooltip: 'Advance one step',
-      disabled: disabled || run.stale || run.status !== 'paused',
+      command: 'step',
+      disabled: !can.step,
       onClick: () => void control('step'),
     },
     {
       icon: 'restart',
       label: 'Restart',
       tooltip: 'Restart the day',
+      command: 'restart',
       disabled,
       onClick: () => void control('restart'),
     },
   ];
   const speed = (
-    <label className={`speed ov-speed${inMenu ? ' menu-row' : ''}`}>
+    <label
+      className={`speed ov-speed${inMenu ? ' menu-row' : ''}`}
+      title={`Playback speed · ${labels('slower')[0]} slower · ${labels('faster')[0]} faster`}
+    >
       <span className={inMenu ? undefined : 'visually-hidden'}>Speed</span>
       <select
         disabled={disabled}
@@ -68,6 +73,7 @@ export function RunControls({ inMenu = false }: { inMenu?: boolean }) {
           {speed}
           <button {...view} className="menu-item view-toggle">
             3D
+            <kbd aria-hidden="true">{labels('view3d')[0]}</kbd>
           </button>
         </div>
       </>
@@ -79,15 +85,17 @@ export function RunControls({ inMenu = false }: { inMenu?: boolean }) {
           icon="play"
           label="Play"
           tooltip="Run the simulation"
+          command="playPause"
           className="play"
-          disabled={disabled || run.stale || run.status !== 'paused'}
+          disabled={!can.playPause || run?.status === 'playing'}
           onClick={() => void control('play')}
         />
         <ToolbarButton
           icon="pause"
           label="Pause"
           tooltip="Pause the simulation"
-          disabled={disabled || run.status !== 'playing'}
+          command="playPause"
+          disabled={!can.playPause || run?.status !== 'playing'}
           onClick={() => void control('pause')}
         />
         {steps.map((action) => (
@@ -97,7 +105,8 @@ export function RunControls({ inMenu = false }: { inMenu?: boolean }) {
       {speed}
       <ToolbarButton
         {...view}
-        tooltip="Switch between 2D and 3D · V"
+        tooltip="Switch between 2D and 3D"
+        command="view3d"
         className="view-toggle ov-speed"
       />
     </div>

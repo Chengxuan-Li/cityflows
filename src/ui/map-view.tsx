@@ -685,26 +685,6 @@ export function MapView() {
           tools[state.tool].refresh();
       });
       signal.addEventListener('abort', unsubscribe, { once: true });
-      window.addEventListener(
-        'keydown',
-        (event) => {
-          if (
-            event.repeat ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.altKey ||
-            document.querySelector('dialog[open]') ||
-            (event.target instanceof HTMLElement &&
-              event.target.closest('input, textarea, select, [contenteditable="true"]'))
-          )
-            return;
-          if (event.key.toLowerCase() === 'v') {
-            event.preventDefault();
-            getState().toggleView();
-          }
-        },
-        { signal },
-      );
       let down: Vec2 | null = null;
       canvas3D.addEventListener(
         'pointerdown',
