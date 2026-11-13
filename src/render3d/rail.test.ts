@@ -45,8 +45,8 @@ test('T62 a two-vertex bridge has a raised deck and ground endpoints', () => {
   expect(Math.min(...heights)).toBeCloseTo(0.06, 3);
 });
 test('T62 bridge approach picking uses the same endpoint height as its mesh', () => {
-  const { city, compiled } = bridge();
-  const { roadGrades, nodeGrades } = cityGrades(compiled, city);
+  const { compiled } = bridge();
+  const { roadGrades, nodeGrades } = cityGrades(compiled);
   expect(
     pickRail3D(
       compiled,

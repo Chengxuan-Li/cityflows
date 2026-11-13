@@ -342,6 +342,7 @@ export function layoutRoad(
       id: laneId(road.id, lane),
       road: compiled.idx,
       lane,
+      grade: compiled.grade,
       polyline,
       normals: normal,
       cumulative,

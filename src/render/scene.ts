@@ -622,7 +622,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       map.addChild(surroundings.container);
       if (import.meta.env.MODE === 'test')
         canvas.dataset.contextRebuildMs = String(performance.now() - started);
-      const { nodeGrades, roadGrades } = cityGrades(city, source);
+      const { nodeGrades, roadGrades } = cityGrades(city);
       visibleGrades = orderedLayers([
         ...nodeGrades,
         ...roadGrades,
@@ -1055,7 +1055,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       const staticHit = staticPick?.(point, camera.zoom);
       const roadGrade =
         city && staticHit?.kind === 'lane'
-          ? cityGrades(city, sourceGeometry).roadGrades[staticHit.road]!
+          ? cityGrades(city).roadGrades[staticHit.road]!
           : -Infinity;
       const train =
         city?.rail && layerVisibility.rail
@@ -1064,9 +1064,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
               point,
               camera.zoom,
               city.rail,
-              staticHit?.kind === 'node'
-                ? cityGrades(city, sourceGeometry).nodeGrades[staticHit.node]!
-                : roadGrade,
+              staticHit?.kind === 'node' ? cityGrades(city).nodeGrades[staticHit.node]! : roadGrade,
             )
           : null;
       return (

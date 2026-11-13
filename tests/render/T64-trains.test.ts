@@ -4,7 +4,6 @@ import { buildCity } from '../../src/fixtures/build-city';
 import { compile } from '../../src/network';
 import { compileRail, railHeights } from '../../src/network/rail';
 import type { CompiledCity } from '../../src/network';
-import type { City } from '../../src/schema';
 import { cityGrades } from '../../src/render/grades';
 import { trainTimetable, trainsAt } from '../../src/network/trains';
 import { Trains3D } from '../../src/render3d/trains';
@@ -41,8 +40,8 @@ function fixture(tunnel = false) {
   if (!result.ok) throw Error('compile');
   return { city, compiled: result.compiled, rail: result.compiled.rail! };
 }
-const heightsOf = (compiled: CompiledCity, city: City) => {
-  const { roadGrades, nodeGrades } = cityGrades(compiled, city);
+const heightsOf = (compiled: CompiledCity) => {
+  const { roadGrades, nodeGrades } = cityGrades(compiled);
   return railHeights(compiled, roadGrades, nodeGrades);
 };
 
@@ -53,7 +52,7 @@ test('T64 3D train bodies pitch with the rail ramp and tunnel bodies follow belo
   let time = table.departures[0]!.timeS;
   while ((trainsAt(rail, table, time)[0]?.cars[0]?.trackM ?? 0) < 40) time += 0.25;
   const trains = trainsAt(rail, table, time);
-  const layer = new Trains3D(rail, cityHeights(compiled, city), heightsOf(compiled, city), table);
+  const layer = new Trains3D(rail, cityHeights(compiled, city), heightsOf(compiled), table);
   layer.update(trains, false, null);
   const matrix = new Matrix4();
   layer.body.getMatrixAt(0, matrix);
@@ -65,7 +64,7 @@ test('T64 3D train bodies pitch with the rail ramp and tunnel bodies follow belo
     below = new Trains3D(
       tunnel.rail,
       cityHeights(tunnel.compiled, tunnel.city),
-      heightsOf(tunnel.compiled, tunnel.city),
+      heightsOf(tunnel.compiled),
       table,
     );
   below.update(trains, false, null);
@@ -112,7 +111,7 @@ test('T64 instance capacity includes trains still in the city from earlier timet
     layer = new Trains3D(
       rail,
       cityHeights(compiled, city),
-      heightsOf({ ...compiled, rail }, city),
+      heightsOf({ ...compiled, rail }),
       table,
     );
   layer.update(poses, false, null);
@@ -123,7 +122,7 @@ test('T64 instance capacity includes trains still in the city from earlier timet
 test('T76 controlled service clocks grow both 3D batches without dropping actors and reset empty poses', () => {
   const { city, compiled, rail } = fixture(),
     table = trainTimetable(rail);
-  const layer = new Trains3D(rail, cityHeights(compiled, city), heightsOf(compiled, city), table);
+  const layer = new Trains3D(rail, cityHeights(compiled, city), heightsOf(compiled), table);
   const pose = trainsAt(rail, table, table.departures[0]!.timeS + 20)[0]!;
   const oldBody = layer.body,
     oldRoof = layer.roof;

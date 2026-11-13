@@ -1204,7 +1204,7 @@ const EXTEND_M = 12;
 
 const segmentLanes = new WeakMap<CompiledCity, number[]>();
 /** The lanes whose polylines `line`'s bounding box touches (`laneSpatial` holds lane segments). */
-function lanesNear(city: CompiledCity, line: readonly Vec2[]): number[] {
+export function lanesNear(city: CompiledCity, line: readonly Vec2[]): number[] {
   let lanes = segmentLanes.get(city);
   if (!lanes) {
     lanes = city.lanes.flatMap((lane) => lane.polyline.slice(1).map(() => lane.idx));

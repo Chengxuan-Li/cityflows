@@ -246,7 +246,7 @@ export function parkingBandEdge(
 export function placeStreet(city: CompiledCity, source: CityGeometry, trees: readonly Tree[]) {
   city = paintedCity(city);
   const features = source.context?.features ?? [];
-  const { roadGrades, nodeGrades } = cityGrades(city, source);
+  const { roadGrades, nodeGrades } = cityGrades(city);
   const lamps: StreetLamp[] = features.flatMap((f) =>
     f.kind === 'point' && f.class === 'street_lamp'
       ? [

@@ -546,7 +546,7 @@ function unitOrCity(name: string) {
       const sampler = createTerrain(terrain);
       if (!plain.ok) throw new Error('Compile failed');
       const heights = cityHeights(plain.compiled, { ...city, terrain });
-      const grades = cityGrades(plain.compiled, city);
+      const grades = cityGrades(plain.compiled);
       let worstM = 0;
       let worst = '';
       for (const road of plain.compiled.roads) {

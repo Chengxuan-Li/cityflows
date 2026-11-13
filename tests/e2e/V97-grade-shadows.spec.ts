@@ -45,7 +45,7 @@ test('V97 shadows expose changing under-deck signals and remove all effects when
   if (!result.ok) throw new Error('Controlled under-deck signal must compile');
   const net = result.compiled,
     signalNode = net.nodes[net.index.node.get(node.id)!]!,
-    grades = cityGrades(net, source),
+    grades = cityGrades(net),
     coverage = new DeckCoverage(net, grades.roadGrades, grades.nodeGrades);
   const head = signalHeads(net, signalNode).find((h) => coverage.covers(h.x, h.y, 0))!;
   expect(head, 'a generated ground signal head covered by a higher deck').toBeDefined();

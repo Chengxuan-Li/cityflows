@@ -35,7 +35,7 @@ import {
 import type { PresentationSnapshot } from '../render/vehicle-pose';
 import { Basemap3D } from './basemap';
 import { buildGeometry } from './geometry';
-import { pickVehicle3D, vehicleScreenPoint } from './picking';
+import { pickLane3D, pickVehicle3D, vehicleScreenPoint } from './picking';
 import { signalMountM, signalRotationY } from './signals';
 import { buildingMaterial, groundMaterial } from './context';
 import { buildVegetation, surfaceTexture } from './vegetation';
@@ -249,7 +249,7 @@ export class Scene3D {
     this.trainTimeS = NaN;
     this.railSelection = undefined;
     this.content.add(this.rail.group);
-    this.catenary = buildCatenary(city, renderedSource, geometry.heights);
+    this.catenary = buildCatenary(city, geometry.heights);
     this.catenary.setBelowGround(this.belowGround);
     this.content.add(this.catenary.group);
     this.setRail(this.railVisible);
@@ -833,7 +833,8 @@ export class Scene3D {
           return { kind: 'parking', parking: facility.idx };
       }
     }
-    return this.city && this.railVisible
+    if (!this.city) return null;
+    const rail = this.railVisible
       ? pickRail3D(
           this.city,
           this.rail?.heights,
@@ -842,6 +843,15 @@ export class Scene3D {
           this.belowGround,
         )
       : null;
+    return (
+      rail ??
+      pickLane3D(
+        this.city,
+        { x, y },
+        (p, heightM) => this.worldToScreen(p, heightM + 0.02),
+        this.belowGround,
+      )
+    );
   }
 
   render(elapsedS: number, timeS: number) {
