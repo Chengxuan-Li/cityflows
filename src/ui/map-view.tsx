@@ -318,6 +318,15 @@ export function MapView() {
       scene = view;
       await view.ready;
       if (signal.aborted) return;
+      // A sidebar opening or closing resizes the map; what sat at its centre stays there.
+      let size = { width: canvas.clientWidth, height: canvas.clientHeight };
+      const recentre = new ResizeObserver(() => {
+        const next = { width: canvas.clientWidth, height: canvas.clientHeight };
+        view.camera.pan((next.width - size.width) / 2, (next.height - size.height) / 2);
+        size = next;
+      });
+      recentre.observe(canvas);
+      signal.addEventListener('abort', () => recentre.disconnect());
 
       let drawn: Session | null = null;
       let drawn3D: Session | null = null;

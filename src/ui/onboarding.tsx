@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from './store';
 
 type State = ReturnType<typeof useAppStore.getState>;
-type Side = 'right' | 'left' | 'above' | 'map';
+type Side = 'right' | 'left' | 'below' | 'map';
 
 interface Spot {
   /** The card sits beside this element. */
@@ -20,8 +20,11 @@ interface Hint {
 }
 
 const key = 'cityflows.hints';
+// Icon buttons carry their name in aria-label; text buttons in their content.
 const find = (selector: string, text: string) =>
-  [...document.querySelectorAll(selector)].find((element) => element.textContent === text) ?? null;
+  [...document.querySelectorAll(selector)].find(
+    (element) => (element.getAttribute('aria-label') ?? element.textContent) === text,
+  ) ?? null;
 const map = () => document.querySelector('[aria-label="City map"]');
 const streetSettings = () => find('.inspector summary', 'Lanes and street settings');
 const onMap = (): Spot | null => {
@@ -36,15 +39,12 @@ const beside = (selector: string, text: string, side: Side): Spot | null => {
 const hints: Hint[] = [
   {
     text: 'Choose a city to start from.',
-    locate: () => {
-      const ring = find('.top-bar button', 'New');
-      return ring && { anchor: ring.closest('.top-bar')!, side: 'right', ring };
-    },
+    locate: () => beside('.toolbar button', 'New', 'below'),
     done: (state, start) => state.session?.engine !== start.session?.engine,
   },
   {
     text: 'Press Play to start the day.',
-    locate: () => beside('.run-controls button', 'Play', 'above'),
+    locate: () => beside('.run-controls button', 'Play', 'below'),
     done: (state) => state.run?.status === 'playing',
   },
   {
@@ -62,13 +62,13 @@ const hints: Hint[] = [
   },
   {
     text: 'Restart to replay the day with your edits.',
-    locate: () => beside('.run-controls button', 'Restart', 'above'),
+    locate: () => beside('.run-controls button', 'Restart', 'below'),
     done: (_state, _start, clicked) =>
       clicked !== null && clicked.closest('button') === find('.run-controls button', 'Restart'),
   },
   {
     text: 'Compare runs before and after an edit.',
-    locate: () => beside('.run-summary button', 'Compare', 'above'),
+    locate: () => beside('.sidebar button', 'Compare', 'right'),
     done: (state) => state.compareOpen,
   },
 ];
@@ -112,10 +112,9 @@ function place(card: HTMLElement, ring: HTMLElement, { anchor, side, ring: targe
   if (side === 'right' && rect.right + gap + width <= innerWidth - inset) left = rect.right + gap;
   else if (side === 'right') top = rect.bottom + gap;
   else if (side === 'left') left = rect.left - gap - width;
-  else if (side === 'above') {
-    // Keep clear of the "Restart to apply changes" notice above the run controls.
-    const notice = anchor.closest('.run-controls')?.querySelector('.restart-notice');
-    top = Math.min(rect.top, notice?.getBoundingClientRect().top ?? Infinity) - gap - height;
+  else if (side === 'below') {
+    left = rect.left + (rect.width - width) / 2;
+    top = rect.bottom + gap;
   } else {
     left = rect.left + (rect.width - width) / 2;
     top = rect.top + 72;

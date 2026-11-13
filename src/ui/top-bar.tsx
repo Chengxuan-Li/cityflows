@@ -1,34 +1,68 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import { scenarios } from '../fixtures/scenarios';
-import { useAppStore } from './store';
+import { Sheet, ToolbarButton } from './controls';
 import { ExportMenu } from './export-menu';
+import { RunControls } from './run-bar';
+import { useAppStore } from './store';
+import { Toolbox } from './toolbox';
 
 const ImportWizard = lazy(() => import('./import/wizard'));
 
+/** The unified toolbar: file actions, history, tools, run controls and the sidebar toggles. */
 export function TopBar() {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [picking, setPicking] = useState(false);
+  // Stable, so the menu's Escape listener is not re-attached mid-keystroke when the window
+  // re-renders on the same Escape (closing the inspector), which would skip it.
+  const closeExport = useCallback(() => setExporting(false), []);
   const input = useRef<HTMLInputElement>(null);
-  const picker = useRef<HTMLDialogElement>(null);
   const session = useAppStore((state) => state.session);
   const in3D = useAppStore((state) => state.viewMode === '3d');
   const busy = useAppStore((state) => state.busy);
-  const { open, save, undo, redo } = useAppStore.getState();
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen);
+  const inspectorOpen = useAppStore((state) => state.inspectorOpen);
+  const { open, save, undo, redo, toggleSidebar, toggleInspector } = useAppStore.getState();
   const city = session?.project.city;
 
   return (
-    <header className="top-bar">
-      <h1>{city?.name ?? 'CityFlows'}</h1>
-      <div className="controls" role="group" aria-label="Project">
-        <button onClick={() => picker.current?.showModal()} aria-haspopup="dialog" disabled={busy}>
-          New
-        </button>
-        <button onClick={() => setImporting(true)} aria-haspopup="dialog" disabled={busy}>
-          Import
-        </button>
-        <button onClick={() => input.current?.click()} disabled={busy}>
-          Open
-        </button>
+    <header className="toolbar">
+      <ToolbarButton
+        icon="sidebarLeft"
+        className="sidebar-toggle"
+        label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+        aria-expanded={sidebarOpen}
+        aria-controls="sidebar"
+        onClick={toggleSidebar}
+      />
+      <div className="toolbar-title">
+        <h1>{city?.name ?? 'CityFlows'}</h1>
+        {city && <small>CityFlows</small>}
+      </div>
+      <div className="toolbar-group" role="group" aria-label="Project">
+        <ToolbarButton
+          icon="new"
+          label="New"
+          tooltip="Start from a bundled city"
+          aria-haspopup="dialog"
+          disabled={busy}
+          onClick={() => setPicking(true)}
+        />
+        <ToolbarButton
+          icon="import"
+          label="Import"
+          tooltip="Import a city from OpenStreetMap"
+          aria-haspopup="dialog"
+          disabled={busy}
+          onClick={() => setImporting(true)}
+        />
+        <ToolbarButton
+          icon="open"
+          label="Open"
+          tooltip="Open a saved project"
+          disabled={busy}
+          onClick={() => input.current?.click()}
+        />
         <input
           ref={input}
           type="file"
@@ -41,24 +75,31 @@ export function TopBar() {
             if (file) void open(file);
           }}
         />
-        <button onClick={() => void save()} disabled={busy || !session}>
-          Save
-        </button>
+        <ToolbarButton
+          icon="save"
+          label="Save"
+          tooltip="Save the project file"
+          disabled={busy || !session}
+          onClick={() => void save()}
+        />
         <div className="export-control">
-          <button
-            onClick={() => setExporting(!exporting)}
+          <ToolbarButton
+            icon="export"
+            label="Export"
+            tooltip="Export data files"
             disabled={busy || !session}
             aria-expanded={exporting}
             aria-controls="export-menu"
-          >
-            Export
-          </button>
-          {exporting && <ExportMenu onClose={() => setExporting(false)} />}
+            onClick={() => setExporting(!exporting)}
+          />
+          {exporting && <ExportMenu onClose={closeExport} />}
         </div>
       </div>
-      <div className="controls" role="group" aria-label="Edit history">
-        <button
-          onClick={() => void undo()}
+      <div className="toolbar-group" role="group" aria-label="Edit history">
+        <ToolbarButton
+          icon="undo"
+          label="Undo"
+          tooltip="Undo the last edit"
           disabled={
             busy ||
             !session?.undoStack.length ||
@@ -66,11 +107,12 @@ export function TopBar() {
               session.undoStack.at(-1)!.kind === 'city' &&
               !session.editor.canUndoDisplayOnly)
           }
-        >
-          Undo
-        </button>
-        <button
-          onClick={() => void redo()}
+          onClick={() => void undo()}
+        />
+        <ToolbarButton
+          icon="redo"
+          label="Redo"
+          tooltip="Redo the edit"
           disabled={
             busy ||
             !session?.redoStack.length ||
@@ -78,29 +120,36 @@ export function TopBar() {
               session.redoStack.at(-1)!.kind === 'city' &&
               !session.editor.canRedoDisplayOnly)
           }
-        >
-          Redo
-        </button>
+          onClick={() => void redo()}
+        />
       </div>
-      {city?.geo && <small className="attribution">{city.geo.source.attribution}</small>}
+      <Toolbox />
+      <RunControls />
+      <ToolbarButton
+        icon="sidebarRight"
+        className="sidebar-toggle"
+        label={inspectorOpen ? 'Hide inspector' : 'Show inspector'}
+        aria-expanded={inspectorOpen}
+        aria-controls="inspector-column"
+        onClick={toggleInspector}
+      />
       {importing && (
         <Suspense fallback={<p role="status">Loading import…</p>}>
           <ImportWizard onClose={() => setImporting(false)} />
         </Suspense>
       )}
-      <dialog ref={picker} className="new-picker" aria-labelledby="new-title">
-        <div className="sheet-heading">
-          <h2 id="new-title">New city</h2>
-          <button aria-label="Close New city" onClick={() => picker.current?.close()}>
-            ×
-          </button>
-        </div>
+      <Sheet
+        title="New city"
+        open={picking}
+        onClose={() => setPicking(false)}
+        className="new-picker"
+      >
         <ul className="scenario-list">
           {scenarios.map(({ id, name }) => (
             <li key={id}>
               <button
                 onClick={() => {
-                  picker.current?.close();
+                  setPicking(false);
                   void open(id);
                 }}
               >
@@ -109,7 +158,7 @@ export function TopBar() {
             </li>
           ))}
         </ul>
-      </dialog>
+      </Sheet>
     </header>
   );
 }

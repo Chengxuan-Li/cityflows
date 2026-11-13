@@ -137,7 +137,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
   return (
     <dialog
       ref={dialog}
-      className="new-picker import-wizard"
+      className="sheet import-wizard"
       aria-labelledby="import-title"
       onCancel={(event) => {
         event.preventDefault();

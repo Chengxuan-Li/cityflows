@@ -9,11 +9,12 @@ import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
 import { WalkerInspector } from './inspector/walker';
 import { PersonInspector } from './inspector/person';
+import { CloseButton } from './controls';
 import { MapView } from './map-view';
 import { Onboarding } from './onboarding';
-import { RunBar } from './run-bar';
+import { Panels, StatusBar } from './run-bar';
+import { Sidebar } from './sidebar';
 import { useAppStore } from './store';
-import { Toolbox } from './toolbox';
 import { TopBar } from './top-bar';
 import { NodeTopologyActions } from './tools/topology-actions';
 
@@ -130,6 +131,8 @@ export function App() {
   const rejectedEdit = useAppStore((state) => state.rejectedEdit);
   const selection = useAppStore((state) => state.selection);
   const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen);
+  const inspectorOpen = useAppStore((state) => state.inspectorOpen);
 
   function closeSheet() {
     const { diagnosticsOpen, toggleDiagnostics, select } = useAppStore.getState();
@@ -148,42 +151,47 @@ export function App() {
   return (
     <div className="app">
       <TopBar />
-      <Toolbox />
+      {sidebarOpen && <Sidebar />}
       <main className="map-view" aria-label="Map">
         <MapView />
+        <Panels />
         {error && (
           <div className="map-error" role="alert">
             {error}
           </div>
         )}
+        <Onboarding />
       </main>
-      {(selection || diagnosticsOpen) && (
-        <aside
-          className="inspector"
-          id={diagnosticsOpen ? 'diagnostics' : 'inspector'}
-          aria-label="Inspector"
-        >
-          <button className="close-sheet" aria-label="Close inspector" onClick={closeSheet}>
-            ×
-          </button>
-          <Inspector />
-          {!diagnosticsOpen && <NodeTopologyActions />}
-          {!diagnosticsOpen && rejectedEdit.length > 0 && (
-            <div className="edit-diagnostics" role="alert">
-              <strong>Edit rejected</strong>
-              <ul>
-                {rejectedEdit
-                  .filter(({ severity }) => severity === 'error')
-                  .map(({ message }, index) => (
-                    <li key={index}>{message}</li>
-                  ))}
-              </ul>
-            </div>
+      {inspectorOpen && (
+        <div id="inspector-column" className="inspector-column">
+          {selection || diagnosticsOpen ? (
+            <aside
+              className="inspector"
+              id={diagnosticsOpen ? 'diagnostics' : 'inspector'}
+              aria-label="Inspector"
+            >
+              <CloseButton label="Close inspector" className="close-sheet" onClick={closeSheet} />
+              <Inspector />
+              {!diagnosticsOpen && <NodeTopologyActions />}
+              {!diagnosticsOpen && rejectedEdit.length > 0 && (
+                <div className="edit-diagnostics" role="alert">
+                  <strong>Edit rejected</strong>
+                  <ul>
+                    {rejectedEdit
+                      .filter(({ severity }) => severity === 'error')
+                      .map(({ message }, index) => (
+                        <li key={index}>{message}</li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+            </aside>
+          ) : (
+            <p className="no-selection">No selection</p>
           )}
-        </aside>
+        </div>
       )}
-      <RunBar />
-      <Onboarding />
+      <StatusBar />
     </div>
   );
 }

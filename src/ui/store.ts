@@ -113,6 +113,10 @@ interface AppState {
   toggleLayers: () => void;
   toggleMetrics: () => void;
   toggleDemand: () => void;
+  sidebarOpen: boolean;
+  inspectorOpen: boolean;
+  toggleSidebar: () => void;
+  toggleInspector: () => void;
   tool: 'select' | 'road' | 'place' | 'ramp' | 'roundabout';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
@@ -547,6 +551,10 @@ export const useAppStore = create<AppState>((set, get) => {
       })),
     toggleDemand: () =>
       set(({ demandOpen }) => ({ demandOpen: !demandOpen, layersOpen: false, metricsOpen: false })),
+    sidebarOpen: true,
+    inspectorOpen: true,
+    toggleSidebar: () => set(({ sidebarOpen }) => ({ sidebarOpen: !sidebarOpen })),
+    toggleInspector: () => set(({ inspectorOpen }) => ({ inspectorOpen: !inspectorOpen })),
     tool: 'select',
     setTool: (tool) => {
       if (get().viewMode === '3d') return;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { TrajectoryStatus } from '../host/protocol';
+import { Popover } from './controls';
 import { useAppStore, type ExportFormat } from './store';
 
 const formats: [ExportFormat, string][] = [
@@ -54,7 +55,7 @@ export function ExportMenu({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <section id="export-menu" className="layers-sheet export-sheet" aria-label="Export files">
+    <Popover id="export-menu" className="export-sheet" aria-label="Export files">
       {formats.map(([format, label]) => (
         <button
           key={format}
@@ -81,6 +82,6 @@ export function ExportMenu({ onClose }: { onClose: () => void }) {
       <p className="muted">Every 10 simulated seconds while recording. Restart clears samples.</p>
       {run?.stale && <p className="muted">Restart to export the edited scenario.</p>}
       <p className="muted">synthetic traffic, not observed traffic</p>
-    </section>
+    </Popover>
   );
 }
