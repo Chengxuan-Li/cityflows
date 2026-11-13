@@ -422,7 +422,7 @@ export function createParking(
   function choose(
     id: number,
     timeS: number,
-    accept: (connector: number) => boolean,
+    accept: (connector: number) => boolean | number,
     atDeparture = false,
   ) {
     clockS = timeS;
@@ -446,6 +446,8 @@ export function createParking(
           )
             continue;
           if (checkExit && !departure(nextTrip[id]!).facilities[f.idx]) continue;
+          let selected = -1;
+          let bestCostS = Infinity;
           for (const connector of f.kind === 'roadside'
             ? shuffled(f.connectorsIn, `arrival:${trips[id]!.id}`)
             : f.connectorsIn) {
@@ -465,23 +467,39 @@ export function createParking(
               !hasFreeSpace(connector, id, needRoom, checkExit)
             )
               continue;
-            if (!accept(connector)) continue;
-            chosen[id] = f.idx;
-            allowWithoutExit[id] = Number(requiresExit(id) && !checkExit);
-            if (needRoom && !soft(f)) {
-              head(id, f.idx);
-              claimSince[id] = timeS;
-              if (f.kind === 'roadside' || f.source.mappedPortals?.length) {
-                const slot = freeSpace(connector, id)!.idx;
-                claimedSpaces[id] = slot;
-                claimedBy[slot] = id;
+            const accepted = accept(connector);
+            if (accepted === false) continue;
+            if (
+              f.kind === 'lot' &&
+              f.source.mappedPortals?.length &&
+              typeof accepted === 'number'
+            ) {
+              if (accepted < bestCostS) {
+                selected = connector;
+                bestCostS = accepted;
               }
+            } else {
+              selected = connector;
+              break;
             }
-            cachedHash = undefined;
-            walking[id] = distance(id, f.idx);
-            if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
-            return true;
           }
+          if (selected === -1) continue;
+          vehicles.destination[id] = selected;
+          chosen[id] = f.idx;
+          allowWithoutExit[id] = Number(requiresExit(id) && !checkExit);
+          if (needRoom && !soft(f)) {
+            head(id, f.idx);
+            claimSince[id] = timeS;
+            if (f.kind === 'roadside' || f.source.mappedPortals?.length) {
+              const slot = freeSpace(selected, id)!.idx;
+              claimedSpaces[id] = slot;
+              claimedBy[slot] = id;
+            }
+          }
+          cachedHash = undefined;
+          walking[id] = distance(id, f.idx);
+          if (!serves(f, destinationPlace(id).idx)) searching[id] = 1;
+          return true;
         }
     if (searching[id] && !Number.isNaN(searchStart[id])) searchTime[id] = timeS - searchStart[id]!;
     return false;

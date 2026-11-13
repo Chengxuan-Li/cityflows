@@ -595,6 +595,12 @@ borrowing an adjacent exit throat. Source aisle vehicle classes and access restr
 apply to route arrival, parking choice, initial stock and departure. Typed records persist
 through ZIP/JSON; inference markers are not used to recover site identity.
 
+Within a selected lot with mapped portals, arrival choice compares the existing deterministic
+street-route costs of its eligible entries and uses the cheapest, retaining canonical entry
+order on ties. Facility ranking, class/purpose permissions, reachable-space and departure
+checks, and seeded stall choice retain their existing rules. The chosen route is reused;
+legacy lots, garages and roadside strips retain their entry ordering.
+
 A lot with one known aisle grade excludes only road/node obstacles at that grade; unknown
 or mixed grades retain all obstacles. Source building exclusions remain obstacles. A mapped
 lot whose aisles are entrance stubs entirely outside its polygon may infer interior rows
