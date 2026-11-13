@@ -171,7 +171,11 @@ function createRun({
     parking,
     (id) => hasGrant(id) || !!intersections.groupPaths[id],
   );
-  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, parking.crossingBlocks);
+  // Neither a lane change nor a spawn lands on a lot car's crossing span (TASK-157) or on a span
+  // a walker holds (TASK-165).
+  const landingBlocked = (lane: number, fromM: number, toM: number) =>
+    parking.crossingBlocks(lane, fromM, toM) || !!walkers?.holds(lane, fromM, toM);
+  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, landingBlocked);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -438,7 +442,7 @@ function createRun({
     if (railCrossings && !railCrossings.canSpawn(lane, positionM, lengthM)) return false;
     const gap = Math.max(spawnMinGapM, idm.minGapM);
     const spacing = lengthM + gap;
-    if (parking.crossingBlocks(lane, positionM - spacing, positionM + gap)) return false;
+    if (landingBlocked(lane, positionM - spacing, positionM + gap)) return false;
     const maxSpacing = maxVehicleLength + gap;
     if (positionM < spacing) {
       for (const idx of compiled.lanes[lane]!.in) {
@@ -1399,7 +1403,7 @@ function createRun({
       groupRoute,
       routeVersion: () => costs.version,
     });
-    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, parking.crossingBlocks);
+    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );

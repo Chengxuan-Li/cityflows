@@ -17,7 +17,8 @@ export function createLaneChanges(
   vehicles: Vehicles,
   params: SimParams,
   hasGrant: (id: number) => boolean = () => false,
-  /** TASK-157: a lane span a lot car is crossing, which no change may land in. */
+  /** A lane span no change may land in: a lot car crossing it (TASK-157), a walker holding it
+   * (TASK-165). */
   crossing: (lane: number, fromM: number, toM: number) => boolean = () => false,
 ) {
   const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM } = params;

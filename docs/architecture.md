@@ -1771,6 +1771,11 @@ Step sequence, in this order every step:
      the exit also consume its space. After `boxWaitS` standing, admission needs actual rear
      clearance; waiting never replaces it with front clearance. Controlled movements recheck
      this storage when the front actually enters, since an approach grant can become stale.
+     TASK-165: the storage, for a single movement and for a group's exit alike, is measured from
+     the far edge of the exit lane's exit-side crosswalk (the span of a marked crossing at the
+     node the lane leaves), so an admitted car's whole body and gap fit beyond the stripes and it
+     does not queue across them. A car can still stand there when forced: a destination queue it
+     could not foresee, or a grant that went stale.
    - TASK-131 Phase 3: group entries check the entire routed path through inner roads and the
      final exit again when the front crosses the entry, including cars already admitted whose
      exit space is reserved. Forecasts stop at a leader, destination connector or red stop line,
@@ -2003,7 +2008,12 @@ its planned movement's exit lane and the next route lane, within 100 m), and the
 such a vehicle like an ungranted stop line (`edge - minGapM`, or where it stands). A vehicle too
 close to stop passes. A walker already inside a lane's band holds even a vehicle that cannot
 stop comfortably (counted in `hardStops`); a crossing walker does not enter a lane's band while
-a vehicle is over its span or will not stop for it. These give the zebra rule, the turning
+a vehicle is over its span or will not stop for it. TASK-165: neither a lane change nor a spawn
+(a departure from a connector or a parking exit joining the lane) lands a body, with its gaps, on
+a span a walker holds this step. The walker's checks read the vehicles already on the crossed
+lanes, so before this a car released behind a walker could change into the lane the walker was
+then crossing (Munich `r:922` at n:251), and a departure could appear on it. These give the zebra
+rule, the turning
 yield at signals (movements into an arm with walk green) and gate 4's invariant: no vehicle body
 overlaps a span while a walker is inside it on that lane. TASK-140 (B59): a crossing link meets
 every lane of a road end that draws stripes at the stripes' centre (section 5.6), so each span
