@@ -187,6 +187,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | queued (after TASK-154) |
 | [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
 | [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | queued (after TASK-154 and TASK-153 merge) |
+| [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1149,6 +1150,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-159 | Claude Code, the lead's subagent | Opus 5.5 | high | 5359 (production 5459) |
 | TASK-160 | Claude Code, the lead's subagent | Opus 5.5 | high | 5360 (production 5460) |
 | TASK-161 | Claude Code, the lead's subagent | Opus 5.5 | high | 5361 (production 5461) |
+| TASK-162 | Claude Code, the lead's subagent | Opus 5.5 | high | 5362 (production 5462) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3669,6 +3671,11 @@ failures (main before 4,560 / 4 / 0 / 0); T53 passes. `check` (1,304), `test:cit
 PR #1 closes with it. TASK-128 to TASK-130's holds are unaffected.
 
 ## Owner decisions log
+
+- 2026-11-13 (owner): reset the traffic baseline to main once PR #1's CI passes. Map styling
+  starts now in parallel with TASK-160 phase 2 (TASK-162): a plain canvas with the OSM tiles off by
+  default (still a Layers toggle), quiet place tints, and vehicles tinted by destination in the macOS
+  system colours.
 
 - 2026-11-13 (owner): restyle CityFlows as a clean Mac app in the Sonoma / Ventura flat manner
   (not Liquid Glass): Arimo throughout, macOS system blue accent, a docked window (unified
