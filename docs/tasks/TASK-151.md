@@ -87,3 +87,26 @@ Write it as the commit body:
 - hashes moved and why;
 - files touched;
 - anything left open.
+
+## Findings
+
+Seed-1 probe (`bench/import-probe.ts` morning, 0.15), completed / gridlocked / stalled heads /
+parking failures:
+
+| Tree | Seed 1 | Seed 2 | Seed 3 |
+| --- | --- | --- | --- |
+| PR #1's base `89fc5d8` | 3964 / 32 / 0 / 0 | 3347 / 56 / 0 / 0 | 3624 / 34 / 0 / 0 |
+| PR #1 `eb7c089` | 3719 / 37 / 0 / 0 | 3310 / 53 / 0 / 0 | 3116 / 38 / 1 / 0 |
+| main `0b0e726` | 3903 / 36 / 0 / 0 | 3909 / 30 / 0 / 0 | 3169 / 50 / 0 / 0 |
+| branch base `4855f09` | 3287 / 44 / 0 / 1 | 3248 / 56 / 0 / 0 | 3297 / 27 / 0 / 0 |
+
+PR #1 costs its own base 245, 37 and 508 trips (mean 263); on today's main the combination costs
+616, 661 and -128 (mean 383). The base-against-PR #1 difference is -432, -62 and +181: no
+systematic interaction with main's parking rules. Toggling single rules on the base at seed 1
+(diagnostic only): without the crossing controller 4215 / 35; without open-crossing storage
+admission 3686 / 47 (per facility: Landsberger `r:269`/`r:252` +263, the other three +43 to
++86); without the shared-mouth yield 3306 / 54; without the rail-exit storage refusal 3066 / 77;
+without the clearing-rails grant order 3137 / 62. Road vehicles stood still on the tracks of
+open served crossings for 10197 s (`r:966`), 6534 s (`r:252`) and 3645 s (`r:728`) vehicle-time
+on the base (PR #1: 8509, 5790, 2662): compact links wholly inside the road band, between two
+signals on the B56 corridor (`r:966` feeds `r:703`).
