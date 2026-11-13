@@ -254,6 +254,9 @@ for (const viewport of [
     page,
   }) => {
     await page.setViewportSize(viewport);
+    // The map keeps its centre, not its fit, through a resize (TASK-160); reload to fit anew.
+    await page.reload();
+    await expect(button(page, 'Play')).toBeEnabled();
     const homes = await gridPoint(page, 15, -15);
     await page.mouse.click(homes.x, homes.y);
     const inspector = page.getByRole('complementary', { name: 'Inspector' });
