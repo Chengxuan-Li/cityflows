@@ -290,6 +290,8 @@ interface ParkingFacility {
   access: ParkingAccess;          // private and customers belong to placeId
   placeId: PlaceId | null;        // the place it serves
   connectors: Connector[];        // garage and lot entries/exits; a roadside strip has none
+  mappedPortals?: { connectorId: ConnectorId; nodeId: NodeId; aisleRoadId: RoadId;
+    direction: 'in' | 'out' }[];   // source-proven directed mouth followed by the local parking path
   shape: { kind: 'point'; pos: Vec2 } | { kind: 'polygon'; ring: Vec2[] } | null;
   strip?: { roadId: RoadId; side: 'left' | 'right'; fromM: number; toM: number;
             layout: 'parallel' | 'angled' | 'perpendicular'; ring?: Vec2[] }; // roadside only
@@ -579,6 +581,26 @@ exclusion, a courtyard reached through a building passage (Munich `pk:2037`, Sin
 A bay retains its physical lane/station separately from its admission connector; curb
 openings and lamps continue to use physical bay access. No circulation edge enters the
 vehicle router.
+
+TASK-149 adds optional `ParkingFacility.mappedPortals` for source-proven accesses on an
+unsplit approach street. `entries` retains its meaning of nodes actually shared by the
+vehicle graph. A mapped record names the facility's own connector, its directed aisle and
+that aisle's matching start (`in`) or end (`out`) node. There is at most one record per
+connector/direction; a bidirectional connector may name different inbound and outbound
+aisles. Invalid, deleted or cross-facility references produce `parking_invalid`, not a
+compile exception. Legacy projects omit the field and keep their existing circulation.
+The street connector begins a fitted, direction-specific approach along the mapped throat;
+the approach is kept separate from the bidirectional internal graph, preventing a path from
+borrowing an adjacent exit throat. Source aisle vehicle classes and access restrictions also
+apply to route arrival, parking choice, initial stock and departure. Typed records persist
+through ZIP/JSON; inference markers are not used to recover site identity.
+
+A lot with one known aisle grade excludes only road/node obstacles at that grade; unknown
+or mixed grades retain all obstacles. Source building exclusions remain obstacles. A mapped
+lot whose aisles are entrance stubs entirely outside its polygon may infer interior rows
+when those stubs provide no bays, retaining the actual throat paths. An interior mapped
+aisle, a tiny lot, or a full/obstructed lot does not trigger this fallback. No public vehicle
+road is invented or split by these portals.
 
 `strips` carries pavement polygons and space indices outside the unchanged carriageway:
 bands are 2/4.5/5 m wide. Sidewalks offset outward beside these bands. Vehicle roads, lanes,

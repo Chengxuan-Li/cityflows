@@ -1,6 +1,7 @@
 import type { CompiledCity } from './types';
 import { isLaneDrop } from './lane-drop';
 import { vehicleClasses, type VehicleClass } from '../schema';
+import { parkingConnectorPermitted } from './parking';
 
 const cache = new WeakMap<CompiledCity, Map<string, ReturnType<typeof derive>>>();
 const reachability = new WeakMap<CompiledCity, Map<string, Float64Array>>();
@@ -158,7 +159,15 @@ function derive(
   }
   const connectors = Uint8Array.from(city.connectors, (c) => {
     const road = city.roads[city.lanes[c.lane]!.road]!;
-    return Number(latest(road.zone[kind]!)[c.lane]! + 1e-9 >= c.positionM);
+    return Number(
+      parkingConnectorPermitted(
+        city,
+        c.idx,
+        vehicleClass,
+        delivery ? 'delivery' : 'private',
+        'out',
+      ) && latest(road.zone[kind]!)[c.lane]! + 1e-9 >= c.positionM,
+    );
   });
   const facilities = Uint8Array.from(city.parking, (f) =>
     Number(f.connectorsOut.some((c) => connectors[c])),
@@ -176,6 +185,7 @@ function derive(
         lot.entries.some(
           (e) =>
             facility.connectorsOut.includes(e.connector) &&
+            e.direction !== 'in' &&
             connectors[e.connector] &&
             Number.isFinite(e.distances[lot.stallNodes[s.lotStall!]!]),
         ),

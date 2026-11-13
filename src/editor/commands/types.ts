@@ -28,7 +28,18 @@ export function mapConnectors(
         connectors.length !== owner.connectors.length ||
         connectors.some((connector, i) => connector !== owner.connectors[i])
       )
-        Object.assign((patch.set[collection] ??= {}), { [owner.id]: { ...owner, connectors } });
+        Object.assign((patch.set[collection] ??= {}), {
+          [owner.id]: {
+            ...owner,
+            ...patch.set[collection]?.[owner.id],
+            connectors,
+            ...('mappedPortals' in owner && {
+              mappedPortals: (owner as ParkingFacility).mappedPortals?.filter((p) =>
+                connectors.some((c) => c.id === p.connectorId),
+              ),
+            }),
+          },
+        });
     }
   }
 }

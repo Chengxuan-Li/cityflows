@@ -191,7 +191,7 @@ export function relocateConnectors(
       // Strip stations are resized after connector relocation, so omit affected old runs here.
       Object.entries(draft.parking ?? {})
         .filter(([, facility]) => !facility.strip || !patch.set.roads?.[facility.strip.roadId])
-        .map(([id, facility]) => [id, { ...facility, connectors: [] }]),
+        .map(([id, facility]) => [id, { ...facility, connectors: [], mappedPortals: undefined }]),
     ),
   });
   if (!before.ok || !after.ok) return patch; // The editor reports structural errors at commit.
@@ -392,6 +392,14 @@ export function editTopology(city: City, command: TopologyCommand): CommandPatch
   if (command.kind === 'mergeRoads')
     return mergeRoads(city, road, requireEntity(city.roads, command.otherRoadId));
   const patch: CommandPatch = { set: {}, remove: { roads: [road.id], nodes: [] }, warnings: [] };
+  for (const lot of Object.values(city.parking ?? {})) {
+    if (!lot.mappedPortals?.some((p) => p.aisleRoadId === road.id)) continue;
+    (patch.set.parking ??= {})[lot.id] = {
+      ...lot,
+      mappedPortals: lot.mappedPortals.filter((p) => p.aisleRoadId !== road.id),
+      aisles: lot.aisles?.filter((id) => id !== road.id),
+    };
+  }
   mapStrips(city, patch, road.id, () => []);
   const uses = ({ from, to }: { from: string; to: string }) => from === road.id || to === road.id;
   for (const node of Object.values(city.nodes)) {

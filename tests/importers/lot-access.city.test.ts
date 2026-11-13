@@ -8,6 +8,8 @@ import { createEngine } from '../../src/sim/engine';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import type { TripRequest } from '../../src/schema';
 import { trainTimetable } from '../../src/network/trains';
+import { lotPath } from '../../src/network/lot-paths';
+import { parkingConnectorPermitted } from '../../src/network/parking';
 
 test.each(['munich-donnersberger', 'sindelfingen-a81'])(
   '%s: restored lot joins are real same-grade source nodes with legal movements',
@@ -170,6 +172,88 @@ test.each(['munich-donnersberger', 'sindelfingen-a81'])(
       expect(engine.metrics().trips.completed).toBe(2);
       expect(engine.metrics().trips.failed).toBe(0);
       console.info('lot round trip', gateway, target, { dwellS, space });
+    }
+  },
+);
+
+test.each([
+  [
+    'munich-donnersberger',
+    [
+      846546795, 846546796, 1461102990, 4698232309, 1717584237, 1717584248, 8249838034, 8249838036,
+      3883875903, 15993165,
+    ],
+  ],
+  [
+    'sindelfingen-a81',
+    [
+      2955433067, 2955433074, 2955433090, 2955433092, 2955433080, 2955433068, 2955433069,
+      2955433079, 2955433066, 2955433082, 353403302, 353403616, 353403180, 353403162, 353403639,
+      11422610549,
+    ],
+  ],
+] as const)(
+  '%s: every remaining source mouth has a fitted, direction-aware parking path',
+  (name, expected) => {
+    const xml = readFileSync(`fixtures/osm/${name}.osm`, 'utf8');
+    const data = parseOsm(xml);
+    const imported = importOsmCached(xml, { importerVersion: '1', context: false, terrain: false });
+    if (typeof data === 'string' || !imported.ok) throw new Error('Fixture import failed');
+    const { city } = imported;
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const net = result.compiled,
+      sources = new Set<number>();
+    for (const lot of Object.values(city.parking!).filter((f) => f.mappedPortals?.length)) {
+      const graph = net.lots!.find((l) => l.id === lot.id)!.circulation!;
+      expect(graph.stallNodes.length, lot.id).toBeGreaterThan(0);
+      for (const portal of lot.mappedPortals!) {
+        const node = city.nodes[portal.nodeId]!,
+          aisle = city.roads[portal.aisleRoadId]!;
+        sources.add(node.provenance.osmIds![0]!);
+        expect(portal.direction === 'in' ? aisle.from : aisle.to).toBe(node.id);
+        expect(lot.entries).not.toContain(node.id);
+        const c = net.connectors[net.index.connector.get(portal.connectorId)!]!;
+        const street = net.roads[net.lanes[c.lane]!.road]!;
+        expect(
+          data.way.some(
+            (w) =>
+              city.roads[street.id]!.provenance.osmIds?.includes(w.id) &&
+              w.nd.includes(node.provenance.osmIds![0]!),
+          ),
+        ).toBe(true);
+        const paths = graph.stallNodes
+          .map((_, stall) => lotPath(graph, c.idx, stall, portal.direction))
+          .filter((p) => p !== null);
+        expect(paths.length, `${lot.id} ${portal.connectorId} ${portal.direction}`).toBeGreaterThan(
+          0,
+        );
+        const entry = graph.entries.find(
+          (e) => e.connector === c.idx && e.direction === portal.direction,
+        )!;
+        expect(entry.approach!.length).toBeGreaterThanOrEqual(2);
+        const mouthLane = net.lanes[net.index.lane.get(`${aisle.id}#0`)!]!;
+        const mouth =
+          portal.direction === 'in' ? mouthLane.polyline[0]! : mouthLane.polyline.at(-1)!;
+        expect(graph.nodes[entry.approach![1]!]).toEqual(mouth);
+        if (aisle.access?.van === 'no')
+          expect(parkingConnectorPermitted(net, c.idx, 'van', 'private', portal.direction)).toBe(
+            false,
+          );
+      }
+    }
+    expect([...sources].sort((a, b) => a - b)).toEqual([...expected].sort((a, b) => a - b));
+    if (name === 'munich-donnersberger') {
+      expect(
+        net.movements.some(
+          (m) =>
+            net.roads[net.lanes[m.fromLane]!.road]!.id === 'r:958' &&
+            net.roads[net.lanes[m.toLane]!.road]!.id === 'r:663',
+        ),
+      ).toBe(false);
+      expect(city.nodes['n:647']!.turnRules).toContainEqual(
+        expect.objectContaining({ from: 'r:958', to: 'r:663', allowed: false }),
+      );
     }
   },
 );

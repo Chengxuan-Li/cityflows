@@ -4,6 +4,8 @@ import {
   pointAtDistance,
   pointInPolygon,
   segmentIntersection,
+  cumulativeLengths,
+  polylineCrossings,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City } from '../schema';
@@ -67,15 +69,17 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
     const laneIds = new Set(mappedLanes.map((l) => l.idx));
     // Reuse the actual paved aisle paths, including every split section and its joins.
     // Canonical reference lines can lie outside a lot when its lane block is offset.
-    const paths = lot.aislePaths ?? [
-      ...mappedLanes.map((l) => l.polyline),
+    const directed = !!source.mappedPortals?.length;
+    const paths = [
+      ...mappedLanes.map((l) => ({ line: l.polyline, directed })),
       ...compiled.movements
         .filter((m) => !m.neverGreen && laneIds.has(m.fromLane) && laneIds.has(m.toLane))
-        .map((m) => m.polyline),
+        .map((m) => ({ line: m.polyline, directed })),
+      ...(lot.aislePaths ?? []).map((line) => ({ line, directed: false })),
     ];
-    const segments: { a: Vec2; b: Vec2; points: Vec2[] }[] = [];
+    const segments: { a: Vec2; b: Vec2; points: Vec2[]; directed: boolean }[] = [];
     const ends: Vec2[] = [];
-    for (const path of paths) {
+    for (const { line: path, directed } of paths) {
       const first = segments.length;
       for (let i = 1; i < path.length; i++) {
         const a = path[i - 1]!,
@@ -86,7 +90,7 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
           if (ts[j]! - ts[j - 1]! < 1e-8 || !inside(mix(a, b, (ts[j]! + ts[j - 1]!) / 2))) continue;
           const p = mix(a, b, ts[j - 1]!),
             q = mix(a, b, ts[j]!);
-          segments.push({ a: p, b: q, points: [p, q] });
+          segments.push({ a: p, b: q, points: [p, q], directed });
         }
       }
       const pieces = segments.slice(first);
@@ -140,19 +144,26 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       }
       return idx;
     };
-    const link = (from: number, to: number) => {
+    const link = (from: number, to: number, directed = false) => {
       if (
         from === to ||
         graph.adjacency[from]!.some((i) => {
           const e = graph.edges[i]!;
-          return e.from === to || e.to === to;
+          return (
+            (e.from === from && e.to === to) || (!e.directed && e.from === to && e.to === from)
+          );
         })
       )
         return;
       const idx = graph.edges.length;
-      graph.edges.push({ from, to, lengthM: distance(graph.nodes[from]!, graph.nodes[to]!) });
+      graph.edges.push({
+        from,
+        to,
+        lengthM: distance(graph.nodes[from]!, graph.nodes[to]!),
+        ...(directed && { directed }),
+      });
       graph.adjacency[from]!.push(idx);
-      graph.adjacency[to]!.push(idx);
+      if (!directed) graph.adjacency[to]!.push(idx);
     };
     const attach = (p: Vec2, entry: boolean) => {
       const choices = segments
@@ -193,19 +204,84 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
     ]) {
       const c = compiled.connectors[idx]!,
         lane = compiled.lanes[c.lane]!;
-      const p = pointAtDistance(lane.polyline, lane.cumulative, c.positionM),
-        start = attach(p, true);
+      const p = pointAtDistance(lane.polyline, lane.cumulative, c.positionM);
+      const portals = source.mappedPortals?.filter((portal) => portal.connectorId === c.id);
+      if (portals?.length) {
+        for (const portal of portals) {
+          const road = compiled.roads[compiled.index.road.get(portal.aisleRoadId)!];
+          if (!road) continue; // Invalid external records are reported by compileParking.
+          const mouth = road.lanes
+            .map((i) => compiled.lanes[i]!)
+            .filter((l) => l.allowed.includes('car'))[0];
+          if (!mouth) continue;
+          const path = portal.direction === 'in' ? mouth.polyline : mouth.polyline.toReversed();
+          const prefix = [p];
+          const lengths = cumulativeLengths(path);
+          const cuts = [
+            0,
+            ...polylineCrossings(path, boundary).map((hit) => hit.alongA),
+            lengths.at(-1)!,
+          ].sort((a, b) => a - b);
+          let end = lengths.at(-1)!;
+          for (let i = 1; i < cuts.length; i++)
+            if (
+              cuts[i]! - cuts[i - 1]! > 1e-6 &&
+              pointInPolygon(
+                pointAtDistance(path, lengths, (cuts[i]! + cuts[i - 1]!) / 2),
+                boundary,
+                0,
+              )
+            ) {
+              end = Math.min(cuts[i]!, cuts[i - 1]! + 0.25);
+              break;
+            }
+          prefix.push(
+            ...path.filter((_, i) => lengths[i]! < end),
+            pointAtDistance(path, lengths, end),
+          );
+          const target = attach(prefix.at(-1)!, true);
+          if (target === -1) continue;
+          // Keep the source throat directional and private to this entry. Sharing its
+          // graph edges would let an inbound path borrow an adjacent outbound stub.
+          const approach = prefix.slice(0, -1).map((point) => {
+            const at = graph.nodes.length;
+            graph.nodes.push(point);
+            graph.adjacency.push([]);
+            return at;
+          });
+          approach.push(target);
+          graph.entries.push({
+            connector: idx,
+            direction: portal.direction,
+            approach,
+            node: target,
+            distances: new Float64Array(),
+            previous: new Int32Array(),
+          });
+        }
+        continue;
+      }
+      const start = attach(p, true);
       if (start !== -1)
-        graph.entries.push({
-          connector: idx,
-          node: start,
-          distances: new Float64Array(),
-          previous: new Int32Array(),
-        });
+        for (const direction of directed ? (['in', 'out'] as const) : [undefined]) {
+          if (
+            (direction === 'in' && c.direction === 'out') ||
+            (direction === 'out' && c.direction === 'in')
+          )
+            continue;
+          graph.entries.push({
+            connector: idx,
+            ...(direction && { direction }),
+            node: start,
+            distances: new Float64Array(),
+            previous: new Int32Array(),
+          });
+        }
     }
     for (const s of segments) {
       s.points.sort((a, b) => distance(s.a, a) - distance(s.a, b));
-      for (let i = 1; i < s.points.length; i++) link(node(s.points[i - 1]!), node(s.points[i]!));
+      for (let i = 1; i < s.points.length; i++)
+        link(node(s.points[i - 1]!), node(s.points[i]!), s.directed);
     }
     // A mapped lot may exclude its access spine. Join clear aisle ends on the lot's
     // own pavement, using the shortest visible bridges between disconnected pieces.
@@ -249,11 +325,22 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       link(bridge.a, bridge.b);
       join(bridge.a, bridge.b);
     }
-    // A tiny local Dijkstra per entry. No road router or topology cache participates.
+    const reverse = graph.nodes.map((): number[] => []);
+    for (const [i, edge] of graph.edges.entries()) {
+      reverse[edge.to]!.push(i);
+      if (!edge.directed) reverse[edge.from]!.push(i);
+    }
+    // Outbound distances run backward through the directed source graph. Generated
+    // circulation and bay links remain bidirectional; legacy lots keep their paths.
     for (const entry of graph.entries) {
       entry.distances = new Float64Array(graph.nodes.length).fill(Infinity);
       entry.previous = new Int32Array(graph.nodes.length).fill(-1);
-      entry.distances[entry.node] = 0;
+      entry.distances[entry.node] = (entry.approach ?? [])
+        .slice(1)
+        .reduce(
+          (sum, at, i) => sum + distance(graph.nodes[entry.approach![i]!]!, graph.nodes[at]!),
+          0,
+        );
       const visited = new Uint8Array(graph.nodes.length);
       for (;;) {
         let current = -1,
@@ -265,7 +352,7 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
           }
         if (current === -1) break;
         visited[current] = 1;
-        for (const idx of graph.adjacency[current]!) {
+        for (const idx of (entry.direction === 'out' ? reverse : graph.adjacency)[current]!) {
           const e = graph.edges[idx]!,
             next = e.from === current ? e.to : e.from,
             cost = best + e.lengthM;
@@ -279,10 +366,16 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
     graph.unreachable = graph.stallNodes.flatMap((n, i) =>
       n === -1 ||
       !graph.entries.some(
-        (e) => facility?.connectorsIn.includes(e.connector) && Number.isFinite(e.distances[n]),
+        (e) =>
+          e.direction !== 'out' &&
+          facility?.connectorsIn.includes(e.connector) &&
+          Number.isFinite(e.distances[n]),
       ) ||
       !graph.entries.some(
-        (e) => facility?.connectorsOut.includes(e.connector) && Number.isFinite(e.distances[n]),
+        (e) =>
+          e.direction !== 'in' &&
+          facility?.connectorsOut.includes(e.connector) &&
+          Number.isFinite(e.distances[n]),
       )
         ? [i]
         : [],
@@ -301,12 +394,19 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
   }
 }
 
-export function lotPath(graph: LotCirculation, connector: number, stall: number): number[] | null {
-  const entry = graph.entries.find((e) => e.connector === connector),
+export function lotPath(
+  graph: LotCirculation,
+  connector: number,
+  stall: number,
+  direction: 'in' | 'out' = 'in',
+): number[] | null {
+  const entry = graph.entries.find(
+      (e) => e.connector === connector && (!e.direction || e.direction === direction),
+    ),
     target = graph.stallNodes[stall];
   if (!entry || target === undefined || target === -1 || !Number.isFinite(entry.distances[target]))
     return null;
   const path = [target];
   while (path.at(-1)! !== entry.node) path.push(entry.previous[path.at(-1)!]!);
-  return path.reverse();
+  return [...(entry.approach?.slice(0, -1) ?? []), ...path.reverse()];
 }

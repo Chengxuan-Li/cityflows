@@ -7,6 +7,7 @@ import {
 import { createRandom } from '../geo/random';
 import type { CompiledCity } from '../network';
 import { lotPath } from '../network/lot-paths';
+import { parkingConnectorPermitted } from '../network/parking';
 import { vehicleClasses, type Scenario, type SimParams, type TripRequest } from '../schema';
 import { parkingEgress } from './parking-egress';
 import type { Metrics, ParkedCarsSnapshot, ParkingClaimsSnapshot } from './types';
@@ -447,6 +448,16 @@ export function createParking(
             ? shuffled(f.connectorsIn, `arrival:${trips[id]!.id}`)
             : f.connectorsIn) {
             if (
+              !parkingConnectorPermitted(
+                compiled,
+                connector,
+                trips[id]!.vehicleClass,
+                trips[id]!.purpose,
+                'in',
+              )
+            )
+              continue;
+            if (
               f.kind !== 'garage' &&
               (needRoom || checkExit) &&
               !hasFreeSpace(connector, id, needRoom, checkExit)
@@ -492,7 +503,7 @@ export function createParking(
     const scores: { slot: (typeof spaces)[number]; score: number }[] = [];
     const checkExit = requiresExit(id) && !allowWithoutExit[id];
     const graph = lotGraph(f.idx),
-      entry = graph?.entries.find((e) => e.connector === connector);
+      entry = graph?.entries.find((e) => e.connector === connector && e.direction !== 'out');
     for (const i of usableSpaces(f)) {
       const s = spaces[i]!;
       if (
@@ -591,7 +602,7 @@ export function createParking(
   const localPath = (slot: number, connector: number, reverse = false) => {
     const space = spaces[slot]!,
       graph = lotGraph(space.parking)!;
-    const nodes = lotPath(graph, connector, space.lotStall!);
+    const nodes = lotPath(graph, connector, space.lotStall!, reverse ? 'out' : 'in');
     if (!nodes) throw new Error('Reserved stall has no circulation path');
     if (reverse) nodes.reverse();
     const points = nodes.map((i) => graph.nodes[i]!);
@@ -967,13 +978,22 @@ export function createParking(
         if (facility.kind === 'lot') {
           const graph = lotGraph(slot.parking)!;
           return facility.connectorsOut
-            .filter((c) => !!lotPath(graph, c, slot.lotStall!))
+            .filter(
+              (c) =>
+                parkingConnectorPermitted(
+                  compiled,
+                  c,
+                  trips[id]!.vehicleClass,
+                  trips[id]!.purpose,
+                  'out',
+                ) && !!lotPath(graph, c, slot.lotStall!, 'out'),
+            )
             .sort(
               (a, b) =>
-                graph.entries.find((e) => e.connector === a)!.distances[
+                graph.entries.find((e) => e.connector === a && e.direction !== 'in')!.distances[
                   graph.stallNodes[slot.lotStall!]!
                 ]! -
-                  graph.entries.find((e) => e.connector === b)!.distances[
+                  graph.entries.find((e) => e.connector === b && e.direction !== 'in')!.distances[
                     graph.stallNodes[slot.lotStall!]!
                   ]! || a - b,
             );

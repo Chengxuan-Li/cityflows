@@ -1,8 +1,40 @@
 import { nearestOnPolyline, pointAtDistance, polylineLength } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import { allocateId, type City, type Place } from '../schema';
+import {
+  allocateId,
+  vehicleClasses,
+  type City,
+  type Place,
+  type VehicleClass,
+  type TripRequest,
+} from '../schema';
 import type { CompiledCity, CParking, Diagnostic } from './types';
 import { compileStrip } from './strips';
+
+/** Source aisle permissions also apply to the fitted off-street leg at a mapped mouth. */
+export function parkingConnectorPermitted(
+  compiled: CompiledCity,
+  connector: number,
+  vehicleClass: VehicleClass,
+  purpose: TripRequest['purpose'] | undefined,
+  direction: 'in' | 'out',
+): boolean {
+  const c = compiled.connectors[connector];
+  const records =
+    c &&
+    compiled.parking[c.parking ?? -1]?.source.mappedPortals?.filter((p) => p.connectorId === c.id);
+  if (!records?.length) return true;
+  const kind = vehicleClasses.indexOf(vehicleClass);
+  return records.some((p) => {
+    if (p.direction !== direction) return false;
+    const road = compiled.roads[compiled.index.road.get(p.aisleRoadId)!];
+    if (!road || !road.lanes.some((i) => compiled.lanes[i]!.allowed.includes(vehicleClass)))
+      return false;
+    return (
+      road.access[kind] !== 'no' && (road.access[kind] !== 'delivery' || purpose === 'delivery')
+    );
+  });
+}
 
 /** Used by import and the editor; compile uses a copy for legacy files and pure fixtures. */
 export function addImplicitGarages(city: City, carShare = 1): void {
@@ -209,6 +241,26 @@ export function compileParking(
     if (!Number.isInteger(source.capacity) || source.capacity < 0) {
       error(`Parking ${source.id} needs a nonnegative slot count`);
       continue;
+    }
+    const mappedKeys = new Set<string>();
+    for (const portal of source.mappedPortals ?? []) {
+      const key = `${portal.connectorId}:${portal.direction}`;
+      const entry = source.connectors.find((c) => c.id === portal.connectorId);
+      const road = city.roads[portal.aisleRoadId];
+      if (
+        source.kind !== 'lot' ||
+        mappedKeys.has(key) ||
+        !entry ||
+        !road ||
+        !source.aisles?.includes(road.id) ||
+        !city.nodes[portal.nodeId] ||
+        (portal.direction === 'in' ? road.from : road.to) !== portal.nodeId ||
+        (entry.direction !== 'both' && entry.direction !== portal.direction)
+      )
+        error(
+          `Mapped parking portal ${portal.connectorId} needs its own connector and a matching directed aisle mouth`,
+        );
+      mappedKeys.add(key);
     }
     if (source.kind !== 'garage') {
       if (source.kind === 'roadside') {
