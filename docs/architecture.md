@@ -681,6 +681,25 @@ returns whole-train occupancy and articulated car poses without frame history. A
 the timetable departure plus each route stop's `arrivalS`, repeated by `periodS`; terminal
 services include station visits on both legs.
 
+TASK-138 reuses that motion, reservation and pose representation for an independent synthetic
+tram timetable (`network/trams.ts`). `RailGraph.tramStops` carries the canonical stop islands.
+Only tram sections with permitted continuations between extract boundary ends (or a lawful
+buffer return) receive service; disconnected fragments, service/depot tracks and closed loops
+without boundary entry remain excluded and reported by `tramCensus`. Stop attachment projects
+the mapped halt onto its named section and places the tram centre half a body length before
+it along the connected route, so its nose meets the halt marking in either travel direction.
+The centre may lie on a preceding section or outside the bounded extract; canonical halts stay
+unchanged. Buffer returns generate a separate reverse motion leg so the new leading cab meets
+each reachable halt, excluding return visits already behind that cab at turnaround. Attachment
+never uses geographic track proximity or jumps between fragments. Defaults are a 36 m articulated tram (four 9 m sections), 50 km/h
+ceiling (lower mapped limits apply), 1 m/s² acceleration/braking, 25 s dwell and 360 s nominal
+headway. Synthetic direction labels name the final served stop toward the city edge; mapped
+line labels are not presented as mapped route destinations. The existing train-only timetable
+and its hash stay unchanged. `railTimetable` combines both services on their least common
+period, repeating departures at each original cadence and retaining train route indices.
+`trainPoseAt(rail, table, departureIndex, cycle, ageS)` and `trainPositionAt(route, ageS)` expose
+per-occurrence service-age sampling for the crossing controller without wall-clock state.
+
 TASK-132 derives each track's height profile, `railHeights(compiled, roadGrades, nodeGrades)`
 in `network/rail.ts`, cached by rail graph identity outside `CompiledCity` like the timetable.
 Tags decide the grade, not `layer`: `covered` track is at grade; a tunnel's rail top lies at
@@ -1388,6 +1407,58 @@ TASK-111's test walkers use it once per source (place to place, `walkSpeedMps`,
 `walkStepsFactor`), sharing the route among the source's walkers; live edits route again.
 
 ## 8. Simulation
+
+TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
+adds per-lane painted stops, lane/movement conflict spans and rail-coordinate road spans to
+each facility; movement segments use `-movementIndex-1`. The controller advances on fixed
+simulation ticks, independently of drawing. Its snapshot `rail` contains facility-ordered
+`crossings` (0 open, 1 warning, 2 closed), `railReady` (1 only while closed and clear of road
+traffic), and authoritative articulated `trains`, including trams. Warning lasts three seconds
+before closure and begins at least twelve seconds before nose entry, increased for the fastest
+approach's braking time. A driver already beyond the marking, or unable to stop within its
+class's comfortable braking distance at warning onset, clears; the service waits before its
+nose enters the road band until the whole road vehicle, including a rear on the preceding
+lane or movement, clears. Road entry also requires downstream storage for the full vehicle
+past every conflicting track and any intervening junction movement. An open, isolated single
+lane may admit a moving platoon when its exclusive downstream prefix fits every intervening
+vehicle's full length plus gap, without moving any stopped or queued body. That prefix ends
+before road or pedestrian stops, access points, another served crossing, and the lane end
+(with a maximum-body rear guard). Lateral lanes, parking manoeuvres and clearance across a
+junction retain strict admission. A road red inside that
+clearance holds entry; release removes only the crossing obstacle and never grants a road
+signal. Unserved, pedestrian and grade-separated crossings impose no road restriction.
+An admitted vehicle that stops wholly upstream of the physical conflict yields to rail and
+holds there before resuming. Gridlock recovery is exempt only while a protected rail stop is
+the binding obstacle at the stopped vehicle's nose; an open crossing's downstream queue
+remains subject to ordinary recovery.
+
+At a junction beside a served crossing, a competing turn must have room for its full
+vehicle and gap beyond the last shared conflict zone. Storage accounts for cars already
+entering or granted that exit. A car whose body is on the tracks can receive the first
+legal grant to clear them. Signal, yield-gap, stop, occupied-zone and merge checks still
+apply, and turns on red wait for green candidates.
+
+Each scheduled occurrence has its own progress clock. Exceptional road blockage pauses that
+service before the crossing; occupied rail sections and same-tick reservations hold following
+or opposing services, while unrelated routes keep advancing. Delayed services also retain
+admission priority over new occurrences sharing their tracks. Protection remains until the
+last carriage clears the entire road band plus one second; overlapping warnings and services
+combine by the most restrictive state. That final second uses simulation time from the actual
+tail clearance, so a later service hold at another crossing or rail section cannot extend it.
+Live edits retain that timestamp only for the same facility and motion interval.
+Pausing freezes these clocks; restart reconstructs
+them from the timetable. Live edits remap progress by route identity, requested departure and
+cycle, discard removed services, rebuild road spans, and hold a service upstream if the edit
+places a road vehicle in its crossing. Snapshot poses are allocated only on request, and road
+occupancy scans only occupied influenced segments. Crossing-held road vehicles do not enter
+gridlock recovery. No rail field enters canonical project data.
+
+A service positively held before one facility by road occupancy may release its own warning
+at a separate, not-yet-entered downstream facility to let that road discharge. Other services'
+protection, occupied rail bands and tail guards still apply. Once the upstream hold clears,
+the downstream facility starts a full fresh braking-aware warning; the service may approach
+but waits before nose entry until that warning completes. These per-occurrence warning
+clocks pause with simulation time and survive live edits only for the same facility interval.
 
 TASK-102 keeps garage stock and person car chains in `sim/parking.ts`, separate from place
 event admission. Initial residential stock uses residents times scenario car share, bounded
@@ -2224,18 +2295,30 @@ TASK-127 draws articulated red/white S-Bahn and blue/grey main-line cars in grad
 layers and two instanced 3D batches. Train poses use snapshot/simulation time only; paused
 trains request no frames. Bridges occlude lower trains; tunnels hide train bodies (3D reveals
 them with See below ground). Rail hides tracks and trains together. Picking exposes train
-kind, route ends, station stops and next stop/exit; no train state enters car/walker counts,
-traffic controls, routing, demand or simulation hashes.
+kind, route ends, station stops and next stop/exit. Trains and trams have separate service
+counts. Their passage affects road traffic through the crossing controller in section 8.
+
+TASK-138 adds narrower teal articulated tram bodies to the same 2D layers and 3D batches,
+with identical picking, occlusion and Rail-layer visibility. Both scenes use authoritative
+`snapshot.rail.trains` when supplied; the pure combined timetable is the standalone fallback.
+The inspector reads that same authoritative snapshot, identifies synthetic tram service,
+names its direction, served stops, next stop and stopped/running status. It does not replace
+a held controller pose with a raw timetable sample.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
-dimensions. Every railway road approach gets an open striped gate, St Andrew's cross, lights
-and a stop marking; mapped `no` tags remain in saved data but do not suppress this sandbox
-equipment. Tram approaches get a horizontal white tram signal and a stop marking. Explicit
-bell tags add a bell housing. These are static visual facilities: gates stay upright and no
-train/car/tram protection state is implied. Rail hides all equipment in both views; 2D detail
-appears from 2 px/m. Mapped railway crossings expose twin railheads over the road in the same
-shared rail geometry, 0.085 m above grade in 3D; beds remain clipped below the road. Traffic
-interaction is deferred until after TASK-131 Phase 3 (trams: TASK-138).
+dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
+lights and stop marking. Explicit bell tags add a bell housing. Both views read the
+simulation snapshot in compiled facility order. Gates stand upright when open and during
+advance warning. Lamps alternate on simulation time during protection, and gates lie
+across the road while closed. Pausing freezes the displayed state.
+
+At a tram crossing the road approach indicates when drivers must stop. The white signal
+facing the track is horizontal while the tram must wait. Its vertical aspect requires
+the simulation to have closed the road and cleared the crossing for rail. Rail block
+reservations still govern the individual service. The Rail layer controls equipment
+visibility in both views. The 2D detail threshold is 2 px/m. Mapped railway crossings
+expose twin railheads over the road, 0.085 m above grade in 3D, with the bed clipped
+below the road.
 
 TASK-134 hangs overhead lines over wired track (section 4), computed once per rail graph by
 `catenary(compiled, roadGrades, nodeGrades)` in `network/catenary.ts` (cached like the heights;
