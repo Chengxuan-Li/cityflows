@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { City, Scenario } from '../../src/schema';
-import { departVehicle } from './helpers';
+import { departVehicle, driveEveryone } from './helpers';
 
 const fixtureUrl = new URL('../../fixtures/projects/grid5x5.cityflows.json', import.meta.url);
 
@@ -40,6 +40,8 @@ test.beforeEach(async ({ page }) => {
 test('T17 applies an edit while playing and keeps its vehicles inspectable @smoke', async ({
   page,
 }, testInfo) => {
+  // TASK-113: car traffic as before mode choice (every driver drives).
+  await driveEveryone(page);
   await pick(page, 60, 2);
   await expect(page.getByLabel('Speed limit (km/h)')).toBeHidden();
   await page.getByText('Lanes and street settings', { exact: true }).click();
@@ -75,6 +77,8 @@ test('T17 applies an edit while playing and keeps its vehicles inspectable @smok
 test('the first departing vehicle reroutes after banning a movement on its route', async ({
   page,
 }) => {
+  // TASK-113: car traffic as before mode choice (every driver drives).
+  await driveEveryone(page);
   await departVehicle(page, 1);
   const [route] = await routes(page, [1]);
   expect(route).toContain('r:26#0>r:30#0');

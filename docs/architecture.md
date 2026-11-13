@@ -1539,14 +1539,18 @@ reach their access point during the leave duration.
 Curve progress is eased, and snapshots carry the moving body throughout the handover.
 
 A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
-and becomes `in_lot` (counted among driving trips). TASK-156: it keeps `minGapM` clear of lane
-cars ahead on its lot's aisle lanes and their joining movements, other than cars bound for the
-lot (their admission orders them). On a public aisle, which
+and becomes `in_lot` (counted among driving trips). TASK-164: from a street it holds the lane,
+as a kerbside arrival does, until its body has left the lane's band (lane ends respected).
+TASK-156: it keeps `minGapM` clear of lane cars ahead on its lot's aisle lanes and their joining
+movements, other than cars bound for the lot (their admission orders them). On a public aisle, which
 through traffic drives, it is a lane's occupant while its body is inside that lane's band, at the
 farthest station its body reaches there, so lane cars follow it and departures' gap checks see
 it; it enters such a band only with the following gap ahead and the braking distance of the car
 behind, and an entry on such a lane keeps it in the lane. A private aisle's lane cars are
-departures from its bays, which do not yet check lot arrivals. It follows its local shortest path at
+departures from its bays; TASK-164: such a departure keeps its reversing room (its swept lane
+stations and `minGapM`) from every arriving lot car whose body is in its lane's band without
+being the lane's occupant, now or anywhere along its path at `lotSpeedMps` during
+`leaveManoeuvreS`. It follows its local shortest path at
 `lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
 across it; tied approaches use distance, then id. Narrow local paths admit one entry cohort of
 arrivals at a time to prevent opposing cars deadlocking. TASK-153: departures, including one
@@ -1582,7 +1586,13 @@ checks; one turning in from a crossed lane stops the spawn gap short of its span
 departure's spawn gap (with the reversing room ahead) while parked, is inserted there at speed 0,
 reverses out over `leaveManoeuvreS` and drives the aisle as a lane vehicle; it never starts in the
 lot. A lot exit whose drive-out has no pose clear of its lane is offered only when no other exit
-is. Gridlock recovery
+is. TASK-164: nor is one whose hold stands, lane ends respected, in the stretch of a lot aisle lane
+a lane car can stand in (from where one enters it, by a movement or else its first spawning
+connector, to its end if it leads on, else its last connector) or in a drivable movement joining
+the aisle lanes (TASK-175: an aisle lane at another level than the exit lane does not count). A bay on an aisle lane that carries none of its exits gets a departure when that
+lane passes at least one of them; the bay keeps every exit its departure does not pass
+(`departureMisses`) as a lot exit where that exit's hold is clear, and the departure carries the
+draw share of the exits it passes, so each exit keeps its share. Gridlock recovery
 never applies inside a lot. Trucks and buses use garages only; garage admission and stock
 rules are unchanged.
 
@@ -2142,7 +2152,13 @@ interface DemandConfig {
   throughTripsPerHour: number[];  // 24 values, gateway to gateway (Gate 3)
   classShares?: { local: Record<VehicleClass, number>; through: Record<VehicleClass, number> };
   chains?: { schoolShare?: number; shopShare?: number; leisureShare?: number }; // 0..1, omitted = 0
+  modeChoice?: Partial<ModeChoiceConfig>;          // TASK-113, omitted fields = DEFAULT_MODE_CHOICE
 }
+interface ModeChoiceConfig { enabled: boolean;    // default true; false = every driver drives
+  walkPreferenceMin: number;  // default 12: mean minutes a person would rather walk than drive
+  valueOfTimePerH: number;    // default 12: median euros per hour
+  carCostPerKm: number;       // default 0.30 euros
+  sensitivityPerMin: number } // default 0.3: logit scale per generalized minute
 
 interface Scenario { id: string; name: string; seed: number; startS: number; endS: number;
   demand: DemandConfig; simParams: Partial<SimParams> }   // SimParams type lives in src/schema/sim.ts; defaults in src/sim/params.ts
@@ -2367,6 +2383,45 @@ beyond the radius only once nothing within admits it (none exists, every one is 
 claimed or has refused it, or a free space is unreachable). `Metrics.parking.home` lists every
 car parked beyond the radius with its reason, and the distances from home of the others.
 Other destinations keep their choice.
+
+TASK-113 mode choice (`src/demand/mode-choice.ts`, run by `chooseTripModes` in
+`src/sim/persons.ts`). Each home-based tour of a person who has today's household car (a trip
+list's `carId`, TASK-129) chooses walk or car at its first departure; the car is at home then.
+Afterwards the car stays with its driver until it is back home, so every trip of the tour takes
+the tour's mode: a person who walked out walks home and never drives a car still parked at home,
+and one who drove out drives home. Persons without a free household car walk, as TASK-129 left
+them. A tour is in the choice only if each of its trips is a private car trip with no gateway end;
+tours with a van trip (TASK-100 classes), gateway commuters, through and event traffic keep their
+vehicles, and TASK-128's station riders stay walk-only, outside the choice and the mode shares. The choice is a multinomial logit over generalized minutes: walk is the walk-graph
+time minus the person's walk preference; car is the walk to the parked car, the drive on the
+run's current link costs, the expected parking search and the walk from the space, plus the
+running cost (`carCostPerKm` times the drive's length) over the person's value of time. Parking
+is estimated from the nearest facility of the place itself, else the nearest public facility
+within `parkingSearchRadiusM` with a 120 s search, else the place's connector; walks to and from
+it are straight lines times 1.3. Each person draws a walk preference (normal, sd 6 min) and a value
+of time (log-normal, sigma 0.5) from their own stream of the demand seed; each tour draws its choice
+from its first trip's stream of the scenario seed (`mode-choice`). The draws are standard and
+the configuration only rescales them, so a slider moves no draw, and raising the walk preference
+only turns car tours into walk tours. Transit is a third entry of the alternatives with no cost
+until stations carry riders (TASK-128).
+
+The choice runs when the engine loads, before parking chains the car trips and stocks their cars
+(parking's chains and stock are built once from the car trips), so "current link costs" are the
+costs the run starts with (free flow unless the host passes others), and a walked tour's car trips
+become walk trips without a `carId`. The walk routes it computes are the person walkers' later
+routes. A trip whose places have no walk route cannot walk, so a city without a walk network runs
+exactly as without the choice. `TripOutcome.mode` (and the trips CSV's `mode` column) gives
+each trip's mode after the choice, and `PersonMetrics.modes` counts person trips by mode when they
+start, in total and by hour of departure, and those completed: a car trip is `drive` when it
+parked at its destination's own facility (or the destination is a gateway), `driveWalk` when it
+parked elsewhere and walked on. Where the car parks stays the parking choice's decision, so drive
+and drive-and-walk are outcomes of one car alternative, not separate choices. A household car
+whose every tour walks is not in the starting stock, as TASK-129 leaves cars nobody drives.
+The default scenario and the app run with mode choice on. The Munich traffic gate (the gate, T63,
+T21, T29), T53 on Munich, the full-demand morning and `traffic:quick` measure car traffic with it
+off (owner, 2026-11-13); `tests/traffic/munich-mode-share.test.ts` (full traffic tier, not the
+light one) guards the choice on: the local walk share, its fall with distance, and the car trips'
+gridlock and stalled heads.
 
 ## 10. Engine host
 

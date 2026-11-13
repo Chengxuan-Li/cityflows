@@ -38,9 +38,9 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 // `van` removed they hash as at 56ffccd. Updated again at the TASK-101 merge (access, zones and
 // retained access-boundary junctions), TASK-104 (lots) and TASK-102 (garages in every city).
 const baselines = {
-  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   grid: 'd71677c8291c5ea092546030c62cc34d99fc05ce38ffd349a84bc7b193e7b7f8',
-  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   town: 'f2f836696de6c179409a7a1d61ced719ccfa745d7c7c207b3f4138efd9983cf2',
   // TASK-119 updates parking data and removes obsolete places; T55 pins unchanged vehicle geometry.
   // TASK-131 keeps OSM geometry: no node merges, junction groups, so both real cities no longer
@@ -51,12 +51,12 @@ const baselines = {
   // import without assignTramForms) every pin equals c3a6ec2's.
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
-  // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
+  // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
   // removed every pin equals 3e9951a's.
-  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
-  'munich-donnersberger': '4e9e69bffa21558143a072e62228b0b568b0610fa8f423d8836c545bfbf8a22a',
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+  'munich-donnersberger': '52bc7655fa12461456b812113c6cd3d078b7e90de02a0427f983ee9f3e258010',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
-  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   'sindelfingen-a81': 'd3e47d92b52a630718dae2babc7fc70ddaa4787d0a0f06e7445df4fc77fd92bc',
 };
 

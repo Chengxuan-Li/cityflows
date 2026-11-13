@@ -102,8 +102,13 @@ export function manoeuvrePath(
   return motionPath(points, headings);
 }
 
+/** A band a body stands clear of: a lane, or a movement given its lane width (TASK-164). */
+export type LaneBand = Pick<CLane, 'polyline' | 'cumulative' | 'lengthM' | 'widthM'> &
+  Partial<Pick<CLane, 'road'>>;
+
 /** TASK-175: the height a body stands at; a lane whose surface abreast of the body's middle lies
- * `levelClearanceM` or more above or below it is at another level and never meets the body. */
+ * `levelClearanceM` or more above or below it is at another level and never meets the body. A
+ * movement band (no road) is taken at the body's level. */
 export interface BodyLevel {
   city: CompiledCity;
   heightM: number;
@@ -111,17 +116,20 @@ export interface BodyLevel {
 
 export function bodyClearLane(
   pose: ParkingPose,
-  lane: CLane,
+  lane: LaneBand,
   lengthM: number,
   widthM: number,
   level?: BodyLevel,
 ) {
-  if (level) {
+  if (level && lane.road !== undefined) {
     const middle = {
       x: pose.x - (Math.cos(pose.heading) * lengthM) / 2,
       y: pose.y - (Math.sin(pose.heading) * lengthM) / 2,
     };
-    if (Math.abs(laneHeightAt(level.city, lane, middle) - level.heightM) >= levelClearanceM)
+    if (
+      Math.abs(laneHeightAt(level.city, { road: lane.road }, middle) - level.heightM) >=
+      levelClearanceM
+    )
       return true;
   }
   const offsets = [];
@@ -154,7 +162,7 @@ const corners = (pose: ParkingPose, lengthM: number, widthM: number) =>
  * lane, which `bodyClearLane` extends without limit. */
 export function bodyClearOf(
   pose: ParkingPose,
-  lane: CLane,
+  lane: LaneBand,
   lengthM: number,
   widthM: number,
   level?: BodyLevel,

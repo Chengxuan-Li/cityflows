@@ -178,7 +178,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-151](tasks/TASK-151.md) | 7 | PR #1 on today's main: find why crossings and tram service plus main's parking changes fail the gate (3,300 / 49 / 1) and repair the cause | `src/sim/**` (crossing control, rail service, parking, engine), tests | 136, 138, 147, 149, 150 | Munich gate, T75/T76, parking tests, 0.1 s replay | closed 2026-11-13: B56 fixed by TASK-154; PR #1 merged |
 | [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | done 2026-11-13 |
 | [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | done 2026-11-13 (merged on TASK-154) |
-| [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | in progress (Claude Code subagent) |
+| [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | done 2026-11-13 |
 | [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | done 2026-11-13 (drain (b) and (c) open: TASK-161, TASK-153) |
 | [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | done 2026-11-13 |
 | [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | done 2026-11-13 (partly; rest in TASK-164) |
@@ -189,16 +189,16 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | done 2026-11-13 |
 | [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
-| [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | in progress (Claude Code subagent) |
+| [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | done 2026-11-13 (pk:1475 left) |
 | [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | in progress (Claude Code subagent) |
 | [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | queued (after the UI merge) |
 | [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | queued (after the UI merge) |
 | [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | queued (after the UI merge) |
 | [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | queued (after TASK-164, TASK-165) |
 | [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | queued (after TASK-113; in sequence with TASK-169) |
-| [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | queued (when few sim branches are open) |
+| [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | in progress (Claude Code subagent) |
 | [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | queued (after the baseline reset) |
-| [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | queued (after TASK-113, TASK-164) |
+| [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | in progress (Claude Code subagent) |
 | [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | queued (after TASK-173) |
 | [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | in progress (Claude Code subagent) |
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | queued (near the end) |
@@ -3810,6 +3810,51 @@ in it (63 pairs). On main 5ee9467 seeds 1 to 3 equal main exactly (5,298 / 0 / 0
 5,312 / 0 / 0); route records byte-identical; 8 Munich compile pins moved for the 22 new departure
 connectors only; `lot-aisle-lanes.test.ts` (3 cases), tests/sim (416), `test:city`, light e2e (38),
 `check` pass (timeouts under load passed alone).
+
+TASK-113 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): mode choice. Each home-based tour
+of a person with today's household car picks walk or car at its first trip; the rest of the tour
+follows. A logit over generalized minutes: walk-graph time minus a per-person walk preference,
+against walk to the car, drive on link costs, parking search, walk from the space and running cost
+at the person's value of time (defaults: on, walk preference 12 min, 12 EUR/h, 0.30 EUR/km,
+sensitivity 0.3 per minute; per-person draws from the demand seed, the choice from its own stream).
+Transit is an empty third alternative. Gateway, through, event, rider and van tours stay outside
+the choice. Deviations: the choice runs once at engine load (`chooseTripModes` in
+`src/sim/persons.ts`), since parking chains and stock are built at load (TASK-173 moves it to
+departure); drive-and-walk is an outcome of the car alternative; `src/sim` imports the pure model
+from `src/demand/mode-choice.ts`. Munich seed 1 with the choice on: 7,315 local person trips, 70.6%
+walk (80% under 0.5 km, 73% to 1 km, 55% to 2 km), 2,730 vehicle trips completed. Owner decision:
+on by default; the gate, T53, full demand and `traffic:quick` run with the choice off; the guard
+`tests/traffic/munich-mode-share.test.ts` (full traffic tier) checks walk share 65 to 76%, falling
+walk share by distance band, car-trip health and determinism, with a town case in T79. Demand
+sheet sliders and mode-share metrics in `src/ui/panels/mode-choice.tsx` and `mode-shares.tsx`.
+Lead merge onto main with TASK-156: gate with the choice off 5,298 / 0 / 0 (= main) with T63, T21,
+T29 and T53; guard with the choice on 2,730 / 0 / 0; unit (1,348; route-audit and T46 timed out and
+pass alone), lint, format and build pass. The crossing overlap seen with the choice on is TASK-165.
+
+Traffic baseline reset 2 (lead, under the owner's decision of 2026-11-13 to reset as needed; after
+TASK-161 moved completions about +21% and TASK-113 landed): `bench/traffic-baseline.json` holds
+main at `21b161e` with mode choice off, Munich 0.15 to 10:00 seed 1: 5,298 completed, 0 gridlocked,
+0 stalled heads (was 4,373 / 5 / 0); the 09:30 quick sample 4,852 / 0 (was 3,737 / 4). Derived
+limits: at least 4,769 completed, 0 stalled heads. With main at zero gridlocks, 1.5 times the
+baseline would allow none, so the lead added a floor: gridlock at most max(1.5 x baseline, 5). This
+changes the gate's formula and is flagged for the owner's review; T63's absolute floor of 3,571 is
+unchanged.
+
+TASK-164 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): TASK-156's departure-side
+leftovers. (1) A bay gets its lane departure when that departure passes at least one exit, keeping
+every exit it misses as a lot exit when that exit's hold is clear; the departure carries the draw
+share of the exits it passes (pk:2056 bays 0 to 5 keep c:10872; pk:2052's 50 departure bays are
+again offered their missed exits). (2) An exit counts as clear only if the hold the car actually
+takes is clear of each usable aisle-lane stretch and drivable aisle movement, lane ends respected
+(pk:1487's c:2640 drops out for 59 bays). (3) pk:1475 left as is: no pose clear of both r:1572 and
+r:536 (a car 0.70 m short), no lane car can enter r:1572, so the overlap is only drawn. (4) A bay's
+departure keeps its reversing room from arriving lot cars in its lane (synthetic regression 112 to 0
+conflict samples). (5) An arriving car holds the street lane until its body clears: entrance
+overlaps 63 pairs to 53, at no gate cost. Census: Munich aisle holds 48 to 0, Sindelfingen 232 to 52
+(all pk:1475). Departure connectors 109 to 126; eight Munich compile pins moved for the 17 new
+connectors only; route records byte-identical; `src/sim/connectors.ts` touched for the exit draw.
+Lead merge onto main with TASK-113 and baseline reset 2: gate (choice off) 5,312 / 0 / 0 / 0, mode
+share guard 2,730 / 0 / 0, T53, sim and demand unit tests (462), lint and format pass.
 
 ## Owner decisions log
 

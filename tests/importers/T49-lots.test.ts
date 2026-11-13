@@ -28,12 +28,12 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 const baseline = {
   'munich-donnersberger': [
     'd600246c0ee9b4d5e9b54becf568912fd780e4c8b1d18ee83508eaf79cf70e26',
-    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     'b834c9c67eeeb5744aa3905ab34eb4c249f95e223cb4ccda27d78f28f13dd5ed',
   ],
   'sindelfingen-a81': [
     'eda6809b6682636376c1b9d6ee2333a2b88fc8776f6cd7340efabaf52888df0f',
-    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     'ccd3b0d5736a8cbf74c5b52a410690fc3edd2c82d594637370cc6e5296074f77',
   ],
 };

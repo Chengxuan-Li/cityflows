@@ -77,6 +77,15 @@ export const demandConfigSchema = z.object({
       leisureShare: z.number().min(0).max(1).optional(),
     })
     .optional(),
+  modeChoice: z
+    .object({
+      enabled: z.boolean().optional(),
+      walkPreferenceMin: z.number().optional(),
+      valueOfTimePerH: z.number().positive().optional(),
+      carCostPerKm: z.number().nonnegative().optional(),
+      sensitivityPerMin: z.number().nonnegative().optional(),
+    })
+    .optional(),
 }) satisfies z.ZodType<DemandConfig>;
 
 export const simParamsSchema = z

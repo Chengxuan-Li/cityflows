@@ -172,6 +172,8 @@ test('T48 implicit garages with ample capacity preserve grid morning completions
   const city = grid5x5(48),
     config = { ...scenario(48), startS: 7 * 3600, endS: 9 * 3600 };
   config.demand.personsPerResident = 0.03;
+  // Every driver drives (TASK-113's mode choice off), as the garages' figures were measured.
+  config.demand.modeChoice = { enabled: false };
   const result = compile(city);
   if (!result.ok) throw new Error('Invalid grid');
   const requests = scheduleTrips(

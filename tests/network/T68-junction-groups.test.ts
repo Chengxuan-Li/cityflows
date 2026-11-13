@@ -34,7 +34,7 @@ describe('T68 junction groups in the model', () => {
     expect(result.compiled.nodes.some((n) => 'group' in n)).toBe(false);
     // V106's pinned compiled hash of the grid, unchanged by the schema.
     expect(createHash('sha256').update(vehicleJson(result)).digest('hex')).toBe(
-      // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+      // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       'd71677c8291c5ea092546030c62cc34d99fc05ce38ffd349a84bc7b193e7b7f8',
     );
   });

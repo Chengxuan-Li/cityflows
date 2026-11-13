@@ -6,13 +6,18 @@ import type { createAccounting } from './metrics';
 import { COMPLETED, FAILED, QUEUED_ORIGIN, type Vehicles } from './vehicle';
 import type { createParking } from './parking';
 
-function pickConnector(compiled: CompiledCity, choices: number[], random: Random): number {
+function pickConnector(
+  compiled: CompiledCity,
+  choices: number[],
+  random: Random,
+  share = (idx: number) => compiled.connectors[idx]!.throughputPerMin,
+): number {
   if (choices.length === 0) return -1;
   if (choices.length === 1) return choices[0]!;
-  const total = choices.reduce((sum, idx) => sum + compiled.connectors[idx]!.throughputPerMin, 0);
+  const total = choices.reduce((sum, idx) => sum + share(idx), 0);
   let weight = random.uniform(0, total);
   for (const idx of choices) {
-    weight -= compiled.connectors[idx]!.throughputPerMin;
+    weight -= share(idx);
     if (weight < 0) return idx;
   }
   return choices.at(-1)!;
@@ -84,6 +89,7 @@ export function createConnectors(
       compiled,
       parking.exits(id, place(trip.originPlaceId).connectorsOut),
       rng,
+      (c) => parking.exitShare(id, c),
     );
     const destination = place(trip.destinationPlaceId);
     const into = pickConnector(
@@ -223,7 +229,8 @@ export function createConnectors(
         // A parked car must leave beyond its own arrival queue. Otherwise spawning at an
         // upstream "both" portal fills the only lane needed to free the next parking slot.
         const usable = (exit: CConnector) => {
-          if (parking.startsInLot(candidateId)) return parking.canStartLot(candidateId, exit.idx);
+          if (parking.startsInLot(candidateId, exit.idx))
+            return parking.canStartLot(candidateId, exit.idx);
           if (!canUse(exit, timeS) || !hasGap(exit, candidateId)) return false;
           if (place.capacity === null) return true;
           for (let car = vehicles.first(exit.lane); car !== -1; car = vehicles.next[car]!) {
@@ -265,7 +272,7 @@ export function createConnectors(
         }
         i++;
         vehicles.waiting[id] = vehicles.waiting[id]! + Math.max(0, timeS - queuedSince(id));
-        const inLot = parking.startsInLot(id);
+        const inLot = parking.startsInLot(id, exit.idx);
         parking.depart(id, timeS, exit.idx);
         if (!inLot) recordAdmission(exit, timeS);
         releasedFrom[id] = idx;

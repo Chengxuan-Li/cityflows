@@ -117,7 +117,7 @@ export function roadStation(road: CRoad, point: Vec2): number {
 }
 
 /** The height above ground of `lane`'s surface abreast of `point`. */
-export function laneHeightAt(city: CompiledCity, lane: CLane, point: Vec2) {
+export function laneHeightAt(city: CompiledCity, lane: Pick<CLane, 'road'>, point: Vec2) {
   const road = city.roads[lane.road]!;
   return profileHeightAt(gradeProfiles(city).roads[road.idx]!, roadStation(road, point));
 }

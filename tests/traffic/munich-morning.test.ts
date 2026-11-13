@@ -61,6 +61,8 @@ beforeAll(() => {
   const t29 = t29Observer(compiled);
   let steps = 0;
   morning = probeMorning(city, compiled, 0.15, {
+    // Owner, 2026-11-13: the gate tests car traffic with mode choice off; munich-mode-share guards the choice.
+    modeChoice: false,
     observe(engine) {
       steps++;
       if (!zones.overlap)
@@ -93,7 +95,11 @@ test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")
   // restored zero stalled heads; since TASK-122 the baseline holds one, the queue head of the
   // Landsberger loop (B56, `r:961`), which is as locked on main (lead, 2026-11-10).
   expect(morning.completed).toBeGreaterThanOrEqual(Math.ceil(0.9 * baseline.completed));
-  expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(1.5 * baseline.gridlocked);
+  // Lead, 2026-11-13: with main at zero gridlocks, 1.5 times the baseline would allow none; a
+  // floor of five keeps the rule meaningful against seed noise (main gives 0 to 1 over seeds 1-3).
+  expect(morning.failedByReason.gridlocked).toBeLessThanOrEqual(
+    Math.max(1.5 * baseline.gridlocked, 5),
+  );
   // TASK-103: a counted parking failure is the other allowed failure, under 2% of local arrivals.
   expect(morning.failed).toBe(
     morning.failedByReason.gridlocked + morning.failedByReason.no_parking,

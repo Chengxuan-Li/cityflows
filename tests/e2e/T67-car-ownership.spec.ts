@@ -24,6 +24,8 @@ test('T67 a household shows who drives which car, who borrows it and who has non
   scenario.demand.carShare = 0.5;
   scenario.demand.personsPerResident = 0.2;
   scenario.demand.workStart = { meanS: 7 * 3600 + 900, sdS: 600 };
+  // TASK-129's drivers as scheduled: mode choice off, so no driver's tour walks.
+  scenario.demand.modeChoice = { enabled: false };
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(
     city,

@@ -49,15 +49,15 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-132's `covered` too), and the
             // compile hash is unchanged.
             'c9c09b4522fd67cbc8612a77f7d2e19c965efc909bb89fc519de168f8d81dc8d',
-            // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
+            // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
             // removed every pin equals 3e9951a's.
-            // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
-            '4e9e69bffa21558143a072e62228b0b568b0610fa8f423d8836c545bfbf8a22a',
+            // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+            '52bc7655fa12461456b812113c6cd3d078b7e90de02a0427f983ee9f3e258010',
           ]
         : [
             '9f2bc7ae9ca77a4f306668c0d50bd740bb9903582d8084f28d31c466a1f164e6',
             // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
-            // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+            // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
             'd3e47d92b52a630718dae2babc7fc70ddaa4787d0a0f06e7445df4fc77fd92bc',
           ];
     // V114 adds a display-only setting; retain the original network hash.

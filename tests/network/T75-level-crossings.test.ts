@@ -151,14 +151,14 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const before = name.startsWith('munich')
       ? [
           '736ee70a649a46117a9ba163c118368808ca5b517f5a0348181f4b03c991932b',
-          // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
+          // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
-          // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
-          'fc622028b94810bd2504bd037c7220a6689bdac96dae55765eb599f16393f1be',
+          // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+          '1deeb2de81c25c5a123f21f6da3f6706a9e0bcbed8107fce8be80fe54f6af32f',
         ]
       : [
           '36ead1d461cbee968be497791dcc660e529b81aba385ac33701c57b730a9e1ba',
-          // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+          // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           'b7f486223eefacc55413289953454c37c0e7d4cc562819fffc1adfc7069d2e9c',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);

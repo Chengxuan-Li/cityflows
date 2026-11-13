@@ -164,18 +164,18 @@ const baselines = {
   // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
   // import without assignTramForms) every pin equals c3a6ec2's. Lead: Munich re-pinned for
   // TASK-135 and TASK-140 together.
-  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   grid: '94f4c0a0c54c607f58d079b290976c3b5429903d55353ac5f66bee1948e9aa5e',
-  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   town: '3595116920f094559c7d78b9cc1cfde9fa1b0773419b31a7df233ea8a4909e79',
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
-  // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
+  // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
   // removed every pin equals 3e9951a's.
-  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
-  'munich-donnersberger': '590cf332b5f8517ba15b26d26debef18f36b5d8a47c65b5d8ba3e9aa60bcf1cd',
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
+  'munich-donnersberger': 'a328c8d02049121e11097c2933fa4cd3ef296455fae5e9d18db6ca5ef1a25353',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
-  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   'sindelfingen-a81': '401dae542529c2aa46c21d8af35d9168e84fbeb8d7450aef54cc0b89da47ab6b',
 };
 const lampCounts = {
