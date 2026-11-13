@@ -197,7 +197,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-169](tasks/TASK-169.md) | 7 | Keep-clear at driveways, lot mouths and exit crosswalks (pk:2049 exit waits) | `src/sim/**` queue stops, `src/network` zones, marking | 164, 165 | exit-wait census, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-170](tasks/TASK-170.md) | 7 | Demand-aware signal splits and optional actuation | `src/network/signal-program.ts`, `src/sim/signals.ts`, signal editor | 113, 161 | seeds 1-3, drain criterion, gate | queued (after TASK-113; in sequence with TASK-169) |
 | [TASK-171](tasks/TASK-171.md) | CI | Test infrastructure: one timeout setting, heavy tests serialised, warm import cache | test config, test files | none | no timeout failures under load, CI not slower | in progress (Claude Code subagent) |
-| [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | in progress (Claude Code subagent) |
+| [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | done 2026-11-13 |
 | [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | in progress (Claude Code subagent) |
 | [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | queued (after TASK-173) |
 | [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | in progress (Claude Code subagent) |
@@ -3894,6 +3894,17 @@ Frame gates could not be measured on a quiet machine (both trees failed alike un
 per-frame work added); the lead merged under the owner's merge-when-green decision and defers the
 quiet-machine frame check to the first quiet window, at the latest TASK-176, logged for the owner.
 Follow-up: a half-height inspector sheet on phones.
+
+TASK-172 (Claude Code subagent, Sonnet 5.5 high, 2026-11-13; merged): `bench/seed-report.ts` (`npm run
+seed-report -- --out <dir> [--previous <file>] [--jobs n]`) runs Munich at 0.15 to 10:00 on seeds 1
+to 3 with mode choice off and on and writes JSON and markdown: completed, gridlocked, stalled heads,
+parking failures, mean delay, TASK-154's drain criteria with the six loop-road per-visit waits (a
+"sustained cycle" taken as 300 s, `SUSTAINED_RING_S`), and mode shares, compared with the baseline
+file and a previous report. The Full workflow gains an advisory `seed-report` job
+(`continue-on-error`, 90 min) that fetches the previous main artifact, writes the job summary and
+uploads the artifact. On main 6ea2994: choice off 5,312 / 0, 5,302 / 1, 5,312 / 0; choice on 2,730,
+2,701, 2,719 with 0 gridlocked; every drain criterion met; worst single visit on `r:961` 512 to 612 s
+(choice off). Seed 1 matches the gate. The workflow job is validated by a manual Full run after merge.
 
 ## Owner decisions log
 
