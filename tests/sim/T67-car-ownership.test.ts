@@ -251,12 +251,13 @@ test('T67 homes of one person replay main: same trips and simulation hashes', ()
   const trips = scheduleTrips(city, persons, scenario);
   const engine = createEngine();
   engine.load({ compiled: setup(city), trips, scenario, population: persons });
-  // Recorded on main a1cc570: hashes at 08:00, 12:00 and 18:00 (every person has a car).
+  // Recorded on main cd0b994 (after TASK-154, TASK-153 and PR #1): hashes at 08:00, 12:00 and
+  // 18:00 (every person has a car).
   const hashes: number[] = [];
   for (const hours of [1, 3, 7]) {
     engine.step(hours * 36000);
     hashes.push(engine.stateHash());
   }
   expect(trips).toHaveLength(1614);
-  expect(hashes).toEqual([204295983, 1113106748, 3734450422]);
+  expect(hashes).toEqual([890697552, 2048011605, 3080062683]);
 });
