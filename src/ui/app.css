@@ -1418,7 +1418,7 @@ input[type='file']::file-selector-button {
   cursor: grabbing;
 }
 
-.map:focus-visible {
+.map:focus-visible:not([data-pointer-focus]) {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -2442,6 +2442,23 @@ input[type='file']::file-selector-button {
 
   .traffic-notice {
     margin-left: 0;
+  }
+
+  /* The trip counts open from the status bar's left edge so they stay inside the window. */
+  .status-bar {
+    position: relative;
+  }
+
+  .status-bar .metrics {
+    position: static;
+  }
+
+  .status-bar .metrics-sheet {
+    left: var(--inset);
+  }
+
+  .status-bar .metrics-sheet::before {
+    display: none;
   }
 }
 

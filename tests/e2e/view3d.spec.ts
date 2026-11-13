@@ -91,7 +91,8 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   await button(page, 'Layers').click();
   for (const name of ['Select', 'Road', 'Place', 'Ramp', 'Roundabout']) {
     await expect(button(page, name)).toBeDisabled();
-    await expect(button(page, name)).toHaveAttribute('title', 'Editing is available in 2D');
+    // TASK-160: the tooltip is the button's accessible description.
+    await expect(button(page, name)).toHaveAccessibleDescription('Editing is available in 2D');
   }
   const entered = await page.evaluate(() => window.cityflows!.view3D!()!.centre);
   expect(Math.hypot(entered.x - centre.x, entered.y - centre.y)).toBeLessThan(0.01);

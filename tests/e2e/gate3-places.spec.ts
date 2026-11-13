@@ -198,7 +198,7 @@ test('profile and event editors commit through the inspector and move trips', as
   await button(page, 'Undo').click();
   expect((await city(page)).places['p:104']!.profile!.arrivals[17]).toBe(9);
 
-  await button(page, 'Close demand').click();
+  await button(page, 'Demand').click();
   const offices = await gridPoint(page, 465, 495);
   await page.mouse.click(offices.x, offices.y);
   await expect(page.getByRole('heading', { name: 'Offices' })).toBeVisible();

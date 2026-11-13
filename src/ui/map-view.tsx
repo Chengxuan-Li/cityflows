@@ -123,6 +123,8 @@ function bindPointer(
     (event) => {
       if ((event.button !== 0 && event.button !== 1) || drag || gesture) return;
       event.preventDefault();
+      // Focused by the pointer, the map shows no focus ring; one reached by Tab does (app.css).
+      canvas.dataset.pointerFocus = '';
       canvas.focus({ preventScroll: true });
       reset();
       const navigation = event.button === 1 || space;
@@ -232,6 +234,7 @@ function bindPointer(
     },
     { signal },
   );
+  canvas.addEventListener('blur', () => delete canvas.dataset.pointerFocus, { signal });
   window.addEventListener(
     'blur',
     () => {

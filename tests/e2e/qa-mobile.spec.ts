@@ -79,7 +79,8 @@ for (const [label, content] of [
     await reachable(await sidebarSection(page, label));
     await button(page, label).click();
     const sheet = page.locator(`#${content}`);
-    await reachable(sheet);
+    // The section is taller than a phone; the sidebar scrolls to each control below.
+    await expect(sheet).toBeVisible();
     for (const control of await sheet
       .locator('button:enabled, input:enabled, select:enabled, summary')
       .all()) {
@@ -142,7 +143,8 @@ test('QA phone play, pause and step controls are reachable', async ({ page }) =>
   await reachable(button(page, 'Pause'));
   await button(page, 'Pause').click();
   const paused = (await metrics(page)).timeS;
-  await reachable(button(page, 'Step'));
+  // A phone's toolbar keeps Step in its » overflow menu.
+  await reachable(await toolbarAction(page, 'Step'));
   await button(page, 'Step').click();
   await expect.poll(async () => (await metrics(page)).timeS).toBeCloseTo(paused + 0.1, 6);
 });

@@ -389,7 +389,8 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
     expect(changed / pixels, `${name}: silhouettes and depth`).toBeLessThan(0.01);
     expect(totalDelta / pixels, `${name}: palette and coverage`).toBeLessThan(0.3);
   }
-  await button(page, 'Layers').click();
+  // The window is 800 px wide here, where the sidebar floats and starts closed.
+  await (await sidebarSection(page, 'Layers')).click();
   const terrain = page
     .getByRole('region', { name: 'Map layers' })
     .getByLabel('Terrain', { exact: true });
