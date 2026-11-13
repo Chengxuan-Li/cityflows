@@ -25,6 +25,7 @@ export function MetricsPanel() {
     parking: Metrics['parking'];
     walkers: Metrics['walkers'];
     persons: Metrics['persons'];
+    transit: Metrics['transit'];
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -42,6 +43,7 @@ export function MetricsPanel() {
             parking: metrics.parking,
             walkers: metrics.walkers,
             persons: metrics.persons,
+            transit: metrics.transit,
           });
           setLoading(false);
         }
@@ -69,6 +71,7 @@ export function MetricsPanel() {
   const parking = result?.engine === session?.engine ? result?.parking : undefined;
   const walkers = result?.engine === session?.engine ? result?.walkers : undefined;
   const persons = result?.engine === session?.engine ? result?.persons : undefined;
+  const transit = result?.engine === session?.engine ? result?.transit : undefined;
   const charts: { key: string; label: string; color: string; values: number[]; maximum: number }[] =
     plots.map(([key, label, color]) => ({
       key,
@@ -154,7 +157,7 @@ export function MetricsPanel() {
           </dd>
         </dl>
       )}
-      {persons && <ModeShares modes={persons.modes} />}
+      {persons && <ModeShares modes={persons.modes} transit={transit} />}
       {chosen && (
         <label className="edit-field">
           Occupancy by facility

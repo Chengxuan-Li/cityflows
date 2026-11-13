@@ -6,8 +6,7 @@ import {
   type TripRequest,
 } from '../schema';
 
-/** The alternatives a trip can take, in draw order. Transit has no cost yet: it joins the choice
- * once stations carry riders (TASK-128), as one more entry of `ModeInputs`. */
+/** The alternatives a trip can take, in draw order. */
 export const modeAlternatives = ['walk', 'car', 'transit'] as const;
 export type ModeAlternative = (typeof modeAlternatives)[number];
 
@@ -18,7 +17,24 @@ export interface ModeInputs {
   /** Absent without a free household car at the origin. Access and egress are the walks to and
    * from the parked car, search the expected parking search at the destination. */
   car?: { accessS: number; driveS: number; searchS: number; egressS: number; distanceM: number };
+  /** TASK-174: absent without a transit plan that walks less than the direct walk. Walking to the
+   * first stop, between stops and from the last (platforms included), waiting at stops (the first
+   * and at transfers), riding (dwells on board included), and the number of transfers. */
+  transit?: { walkS: number; waitS: number; rideS: number; transfers: number };
 }
+
+/** TASK-174: the transit alternative's constants (no settings). In-vehicle time counts this many
+ * times a minute walked or waited; each transfer costs this many minutes; the fare is a flat
+ * expected cost per trip, between a short-trip ticket and nothing for pass holders (an assumption). */
+export const TRANSIT_CHOICE = { comfort: 1.1, transferMin: 5, fareEur: 1 };
+
+/** The weights the transit router minimizes: the generalized cost without the fare, which is the
+ * same for every plan. */
+export const transitWeights = {
+  ride: TRANSIT_CHOICE.comfort,
+  wait: 1,
+  transferS: 60 * TRANSIT_CHOICE.transferMin,
+};
 
 export interface ModePreferences {
   walkMin: number;
@@ -65,6 +81,13 @@ export function generalizedMinutes(
       (accessS + driveS + searchS + egressS) / 60 +
       (60 * config.carCostPerKm * distanceM) / 1000 / preferences.valueOfTimePerH;
   }
+  if (inputs.transit) {
+    const { walkS, waitS, rideS, transfers } = inputs.transit;
+    costs.transit =
+      (walkS + waitS + TRANSIT_CHOICE.comfort * rideS) / 60 +
+      TRANSIT_CHOICE.transferMin * transfers +
+      (60 * TRANSIT_CHOICE.fareEur) / preferences.valueOfTimePerH;
+  }
   return costs;
 }
 
@@ -94,11 +117,14 @@ export function modeDraw(scenarioSeed: number, tripId: string) {
  * home (or the person's last car trip); the car is at home when it starts and stays with its driver
  * until it is back. `eligible` says whether a car trip may walk (a private car trip between two
  * places a person can walk to); a tour with any other trip keeps its car. None when the choice is
- * off. TASK-173: the engine chooses each tour's mode when its first trip starts (`chooseTour`). */
+ * off. TASK-173: the engine chooses each tour's mode when its first trip starts (`chooseTour`).
+ * TASK-174: with `walkers`, the tours of persons walking all day (no free household car) join,
+ * to choose between walk and transit; `eligible` then also decides which walk trips may. */
 export function modeTours(
   trips: readonly TripRequest[],
   scenario: Scenario,
   eligible: (trip: TripRequest) => boolean,
+  walkers = false,
 ): number[][] {
   if (!modeChoiceConfig(scenario).enabled) return [];
   const byPerson = new Map<string, number[]>();
@@ -107,7 +133,9 @@ export function modeTours(
     .sort((a, b) => trips[a]!.departS - trips[b]!.departS || a - b);
   for (const id of order) {
     const { personId, carId, mode } = trips[id]!;
-    if (personId === null || carId === undefined || mode !== 'car') continue;
+    const car = carId !== undefined && mode === 'car';
+    if (personId === null || !(car || (walkers && mode === 'walk' && carId === undefined)))
+      continue;
     const chain = byPerson.get(personId);
     if (chain) chain.push(id);
     else byPerson.set(personId, [id]);
@@ -127,13 +155,30 @@ export function modeTours(
   return tours;
 }
 
-/** A tour's choice from the inputs at its first departure: the probability of walking, and
- * whether the tour walks by its first trip's own draw. */
+/** A tour's choice from the inputs at its first departure: the probabilities, and the mode its
+ * first trip's own draw picks, by cumulative probability in the order walk, car, transit. Without
+ * transit on offer every draw picks as TASK-113's walk-or-car draw did. */
 export function chooseTour(scenario: Scenario, firstTrip: TripRequest, inputs: ModeInputs) {
   const config = modeChoiceConfig(scenario);
   const preferences = modePreferences(scenario.demand.seed, firstTrip.personId!, config);
-  const walkProbability = modeProbabilities(inputs, preferences, config).walk ?? 0;
-  return { walkProbability, walk: modeDraw(scenario.seed, firstTrip.id) < walkProbability };
+  const probabilities = modeProbabilities(inputs, preferences, config);
+  const draw = modeDraw(scenario.seed, firstTrip.id);
+  let sum = 0;
+  const offered = modeAlternatives.filter((mode) => probabilities[mode] !== undefined);
+  const mode = offered.find((m) => draw < (sum += probabilities[m]!)) ?? offered.at(-1) ?? 'walk';
+  return { probabilities, walkProbability: probabilities.walk ?? 0, mode, walk: mode === 'walk' };
+}
+
+/** TASK-174: a trip of a tour that takes transit: mode `rail` (tram or S-Bahn), no household car.
+ * The engine routes each such trip as it departs. */
+export function transitTrip(trip: TripRequest): TripRequest {
+  const ridden: TripRequest = {
+    ...trip,
+    mode: 'rail',
+    legs: trip.legs.map((leg) => ({ ...leg, mode: 'rail' })),
+  };
+  delete ridden.carId;
+  return ridden;
 }
 
 /** A car trip as part of a tour that walks: every leg on foot, no household car. */

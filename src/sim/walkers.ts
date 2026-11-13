@@ -74,6 +74,8 @@ export interface WalkerDetail {
   route: { links: number[]; lengthM: number } | null;
   link: number;
   positionM: number;
+  /** TASK-174: a rider on a platform: the stop's name, and whether they wait for a vehicle. */
+  platform?: { stop: string; waiting: boolean };
 }
 
 export interface WalkerMetrics {
