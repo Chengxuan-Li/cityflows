@@ -121,9 +121,7 @@ describe('T53 crosswalk clearance at a signal exit', () => {
   test('T53 a walker waits while a queued car stands on the crosswalk, then crosses', () => {
     // The connector stands just past the stripes, so a car queued there covers them: it got there
     // with an empty exit lane, and only the slow connector holds it.
-    const fixture = signalExit(0);
-    const { exitSpans } = fixture;
-    const hi = Math.max(...exitSpans.map((s) => s.atM + s.halfM));
+    const hi = Math.max(...signalExit(0).exitSpans.map((s) => s.atM + s.halfM));
     const { compiled, crossing, west, south, left, right } = signalExit(hi + 1.5);
     const trips = Array.from({ length: 4 }, (_, i) => trip(`trip:${i}`, west, south, 100 + i * 5));
     const engine = load(compiled, trips, [{ fromPlaceId: left, toPlaceId: right, perHour: 360 }]);
@@ -166,10 +164,9 @@ describe('T53 crosswalk clearance at a signal exit', () => {
   });
 
   test('T53 a car is not admitted while the exit cannot store it beyond the crosswalk', () => {
-    // A car queued at the connector leaves 6.5 m (a car and its gap) before its rear, but not
+    // A car queued at the connector leaves room for a car and its gap before its rear, but not
     // beyond the stripes: the next car waits at its stop line instead of on the crosswalk.
-    const probe = signalExit(0);
-    const hi = Math.max(...probe.exitSpans.map((s) => s.atM + s.halfM));
+    const hi = Math.max(...signalExit(0).exitSpans.map((s) => s.atM + s.halfM));
     const { compiled, exitSpans, approach, west, south } = signalExit(hi + 2 * carLengthM + 1);
     const trips = Array.from({ length: 4 }, (_, i) => trip(`trip:${i}`, west, south, 100 + i * 5));
     const engine = load(compiled, trips, undefined);
