@@ -6,4 +6,5 @@ s=s.replace("expect(hash(street.lamps)).toBe(pins[name].lamps);","writeFileSync(
 s=s.replace("expect(hash(street.curbs)).toBe(pins[name].curbs);","writeFileSync(name+'-curbs.json',JSON.stringify(street.curbs));")
 s=s.replace("      expect(\n        hash([\n          city.roads.map", "      console.info(name,id,\n        hash([\n          city.roads.map")
 s=s.replace("      ).toBe(pins[name][id]);","      );")
+s=s.replace("tierCities(['grid', 'town', 'munich', 'sindelfingen'] as const)", "(['munich', 'sindelfingen'] as const)")
 p.write_text(s)
