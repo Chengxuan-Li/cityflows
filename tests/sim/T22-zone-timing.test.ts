@@ -48,15 +48,28 @@ test.each([0, 1])('T22: the same slow crossing car respects a %s second margin',
 test.each([2, 10])(
   'T22: a stopped exit queue retains rear clearance after %s seconds at the line',
   (boxWaitS) => {
-    const { left, vehicles, intersections, request } = opposing({
+    const { compiled, left, vehicles, intersections, request } = opposing({
       ...DEFAULT_SIM_PARAMS,
       intersection: { ...DEFAULT_SIM_PARAMS.intersection, boxWaitS },
     });
+    // TASK-165: the storage starts beyond the exit lane's crosswalk.
+    const crosswalkEnd = Math.max(
+      0,
+      ...compiled.walk.links.flatMap((link) =>
+        (link.crossing?.spans ?? [])
+          .filter(
+            (span) =>
+              span.lane === left.toLane &&
+              compiled.roads[compiled.lanes[span.lane]!.road]!.from === link.crossing!.node,
+          )
+          .map((span) => span.atM + span.halfM),
+      ),
+    );
     vehicles.remove(1);
     vehicles.insert(
       1,
       left.toLane,
-      DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM,
+      crosswalkEnd + DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM,
     );
     vehicles.junctionWaiting[0] = 100; // Time approaching the line does not count.
     request(0);
@@ -68,7 +81,9 @@ test.each([2, 10])(
     request(0);
     expect(intersections.grants[0]).toBe(-1);
     vehicles.position[1] =
-      2 * DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM;
+      crosswalkEnd +
+      2 * DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM +
+      DEFAULT_SIM_PARAMS.idm.minGapM;
     request(0);
     expect(intersections.grants[0]).toBe(left.idx);
   },
