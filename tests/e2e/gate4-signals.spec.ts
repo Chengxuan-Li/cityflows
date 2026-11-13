@@ -257,3 +257,75 @@ test('shortening the main-street phase and restarting reduces the side-street qu
     contentType: 'application/json',
   });
 });
+
+test('TASK-170: the editor shows the run’s demand split and a green set by hand overrides it', async ({
+  page,
+}, info) => {
+  // The side-street fixture of the test above, with its program's own greens: the homes' cars
+  // enter the centre from r:64 and leave on r:68.
+  const project = await fixture();
+  const { city } = project;
+  city.name = 'Demand split';
+  const homes = city.places['p:104']!;
+  const work = city.places['p:107']!;
+  homes.population = 80;
+  Object.assign(homes.connectors[0]!, { roadId: 'r:64', lane: 1, throughputPerMin: 120 });
+  Object.assign(work.connectors[1]!, {
+    roadId: 'r:68',
+    lane: 1,
+    positionM: 90,
+    throughputPerMin: 120,
+  });
+  project.manifest.files['city.json'] = createHash('sha256')
+    .update(JSON.stringify(city))
+    .digest('hex');
+  await page.getByLabel('Open project').setInputFiles({
+    name: 'demand-split.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(project)),
+  });
+  await expect(page.getByRole('heading', { name: city.name })).toBeVisible();
+  await selectSignal(page);
+  const split = page.getByRole('checkbox', { name: 'Split green by demand', exact: true });
+  const actuated = page.getByRole('checkbox', {
+    name: 'Actuated: end a green early when no one waits',
+    exact: true,
+  });
+  const greens = () =>
+    Promise.all(
+      [1, 2, 3, 4].map(async (p) =>
+        Number(await page.getByLabel(`Phase ${p} green (s)`).inputValue()),
+      ),
+    );
+  // The fixture's hand-written program runs its own greens.
+  await expect(split).not.toBeChecked();
+  await expect(actuated).not.toBeChecked();
+  const own = await greens();
+  await split.check();
+  await expect(page.getByText(/split by demand when the run loads/)).toBeVisible();
+  await actuated.check();
+  await apply(page).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Edit applied' })).toBeVisible();
+  // The live edit times the program by the loaded trips: the cycle keeps its green time.
+  await expect(page.getByText(/Cycle \d+ s, split by demand$/)).toBeVisible();
+  const timed = await greens();
+  expect(timed.reduce((a, b) => a + b)).toBeCloseTo(
+    own.reduce((a, b) => a + b),
+    6,
+  );
+  expect(timed).not.toEqual(own);
+  await page.screenshot({ path: info.outputPath('signal-demand-split.png') });
+  // The preview and the lights follow the engine's actuated state while the run plays.
+  const playedFrom = (await metrics(page)).timeS;
+  await button(page, 'Play').click();
+  await expect.poll(async () => (await preview(page))?.timeS ?? 0).toBeGreaterThan(playedFrom + 5);
+  await button(page, 'Pause').click();
+  expect(['green', 'amber', 'all-red']).toContain((await preview(page))?.state);
+  // A green set by hand: the other phases keep the greens shown and the split turns off.
+  await page.getByLabel('Phase 1 green (s)').fill(String(timed[0]! + 4));
+  await page.getByLabel('Phase 1 green (s)').press('Enter');
+  await expect(split).not.toBeChecked();
+  expect(await greens()).toEqual([timed[0]! + 4, ...timed.slice(1)]);
+  await expect(page.getByText(/split by demand/)).toBeHidden();
+  await expect(actuated).toBeChecked();
+});

@@ -20,6 +20,9 @@ export const GENERATED_TIMING: Pick<SignalProgram, 'demandSplit' | 'actuated'> =
 
 /** TASK-170: the shortest green a demand split or an actuated controller gives a phase. */
 export const MIN_GREEN_S = 5;
+/** TASK-170: the share of each phase's own green a demand split keeps: the free-flow demand
+ * misses the traffic that congestion moves onto other approaches. */
+export const SPLIT_FLOOR_SHARE = 0.5;
 
 /**
  * TASK-170: a program's green time `totalS` split by demand (architecture section 5.4).

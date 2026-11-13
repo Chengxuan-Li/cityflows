@@ -6,7 +6,7 @@ import {
   type CSignal,
   type CompiledCity,
 } from '../network';
-import { demandSplit, MIN_GREEN_S } from '../network/signal-program';
+import { demandSplit, MIN_GREEN_S, SPLIT_FLOOR_SHARE } from '../network/signal-program';
 import { freeFlowLinkCosts, type RouteProvider } from '../routing';
 import type { SimParams, VehicleClass, VehiclePurpose } from '../schema';
 import type { Vehicles } from './vehicle';
@@ -179,7 +179,9 @@ export function timedSignals(
     const split = demandSplit(
       list.map((g) => [...g.served].sort((a, b) => a - b)),
       list.map((g) => g.flow / g.lanes.size),
-      minimumGreens(city, signals, params),
+      minimumGreens(city, signals, params).map((minS, p) =>
+        Math.max(minS, SPLIT_FLOOR_SHARE * signals[0]!.phases[p]!.durationS),
+      ),
       totalS,
     );
     if (!split) continue;

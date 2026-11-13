@@ -155,24 +155,33 @@ function createRun({
     persons,
   );
   // TASK-170: demand-split signals are timed by the scenario's car trips routed on free-flow
-  // costs, from the origin connectors the trips were queued at.
+  // costs in the loaded city, from the origin connectors the trips were queued at; routed the
+  // first time a demand-split signal needs them (at load, or a live edit that sets one).
   const demandTrips: DemandTrip[] = [];
-  if (compiled.nodes.some((node) => node.signal?.demandSplit))
-    for (let id = 0; id < trips.length; id++) {
-      const origin = connectors.origin(id);
-      const destination = vehicles.destination[id]!;
-      if (origin === -1 || destination === -1) continue;
-      demandTrips.push({
-        origin: compiled.connectors[origin]!,
-        destination,
-        vehicleClass: vehicleClasses[vehicles.vclass[id]!]!,
-        purpose: vehiclePurposes[vehicles.purpose[id]!]!,
-      });
-    }
-  const demand = signalDemand(compiled, provider, demandTrips);
+  for (let id = 0; id < trips.length; id++) {
+    const origin = connectors.origin(id);
+    const destination = vehicles.destination[id]!;
+    if (origin === -1 || destination === -1) continue;
+    demandTrips.push({
+      origin: compiled.connectors[origin]!,
+      destination,
+      vehicleClass: vehicleClasses[vehicles.vclass[id]!]!,
+      purpose: vehiclePurposes[vehicles.purpose[id]!]!,
+    });
+  }
+  const loadedCity = compiled;
+  let demand: Map<string, number> | undefined;
+  const timed = (city: CompiledCity) =>
+    timedSignals(
+      city,
+      city.nodes.some((node) => node.signal?.demandSplit)
+        ? (demand ??= signalDemand(loadedCity, provider, demandTrips))
+        : new Map(),
+      params,
+    );
   let signalControl = createSignalControl(
     compiled,
-    timedSignals(compiled, demand, params),
+    timed(compiled),
     vehicles,
     params,
     scenario.startS,
@@ -1485,7 +1494,7 @@ function createRun({
     const signalled = patchSignals(before, next, time(), signalEpochs);
     signalControl = createSignalControl(
       signalled,
-      timedSignals(signalled, demand, params),
+      timed(signalled),
       vehicles,
       params,
       time(),
