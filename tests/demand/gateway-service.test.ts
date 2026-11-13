@@ -122,10 +122,13 @@ test('TASK-155 a cut-off gateway component generates no unservable trips and say
   const engine = createEngine();
   engine.load({ compiled: result.compiled, trips, scenario, population: persons });
   engine.step((scenario.endS - scenario.startS) * 10);
-  const { trips: counts, failedByReason } = engine.metrics();
+  const { trips: counts, failedByReason, persons: journeys } = engine.metrics();
   expect(counts.failed).toBe(0);
   expect(failedByReason.no_route + failedByReason.no_parking).toBe(0);
-  expect(counts.completed).toBe(trips.filter((t) => t.departS <= scenario.endS).length);
+  // TASK-113: the trips whose tour walked arrive on foot instead.
+  expect(counts.completed + journeys!.walkTripsCompleted).toBe(
+    trips.filter((t) => t.departS <= scenario.endS).length,
+  );
 });
 
 test('TASK-155 a connected gateway keeps exactly the trips it had without the cut-off pieces', () => {

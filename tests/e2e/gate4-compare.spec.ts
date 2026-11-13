@@ -36,6 +36,8 @@ test('baseline comparison detects a banned center turn and paints road usage dif
   const scenario = fixture.scenarios[0]!;
   scenario.demand.workStart = { meanS: scenario.startS, sdS: 0 };
   scenario.endS = scenario.startS + 900;
+  // TASK-113: car traffic as before mode choice (every driver drives).
+  scenario.demand.modeChoice = { enabled: false };
   for (const [name, data] of [
     ['city.json', fixture.city],
     ['scenarios.json', fixture.scenarios],

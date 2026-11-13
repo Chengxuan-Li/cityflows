@@ -67,7 +67,13 @@ if (profiler) {
   await profiler.post('Profiler.enable');
   await profiler.post('Profiler.start');
 }
-const morning = probeMorning(city, result.compiled, 0.15, { untilS, routeProvider, demandSeed });
+// Owner, 2026-11-13: the gate tests car traffic with mode choice off; munich-mode-share guards the choice.
+const morning = probeMorning(city, result.compiled, 0.15, {
+  untilS,
+  routeProvider,
+  demandSeed,
+  modeChoice: false,
+});
 if (profiler) {
   const { profile } = await profiler.post('Profiler.stop');
   writeFileSync(process.env.CITYFLOWS_CPU_PROFILE!, JSON.stringify(profile));
@@ -134,6 +140,7 @@ if (process.env.CITYFLOWS_BASELINE_ROOT) {
     scenario.startS = 7 * 3600;
     scenario.endS = untilS;
     scenario.demand.personsPerResident = 0.15;
+    scenario.demand.modeChoice = { enabled: false }; // as the quick gate above
     const persons = api.generatePopulation(source, scenario.demand);
     const trips = api.scheduleTrips(source, persons, scenario, result.compiled);
     const engine = api.createEngine();

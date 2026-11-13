@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   button,
+  driveEveryone,
   gridPoint,
   metrics,
   pageErrors,
@@ -32,6 +33,8 @@ test('demo A, morning commute: 2 000 residents drive to the offices at 08:00 and
   const errors = pageErrors(page);
   await page.goto('/');
   await expect(button(page, 'Play')).toBeEnabled();
+  // TASK-113: the demo's residents all drive (mode choice off).
+  await driveEveryone(page);
   const homes = await gridPoint(page, 15, -15);
   await page.mouse.click(homes.x, homes.y);
   await expect(page.getByRole('heading', { name: 'Homes' })).toBeVisible();
