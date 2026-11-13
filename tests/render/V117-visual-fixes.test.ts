@@ -179,14 +179,15 @@ const pins = {
     // TASK-144 physical compile/lamps stay fixed; TASK-146 changes drawing-only curbs/paint.
     // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
     // removed every pin equals 3e9951a's.
-    compile: '583765cc42e1f4207b33ca1d1aee9b830b591b32757bf77c8c81e3a80d72606c',
+    compile: '41ad2e2f7d2a91012436b21b5f88b5682901617c24a9b098f59a0f0b85080c85',
     lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
     curbs: '780f62342c39389d2fabd42f81e444fdc4c03c3070f91fce4489a3c671894919',
     de: '4e164c66620c2b8d248958ae2b0105194ff4ef6685892608c099b54ac5ce6a79',
     us: 'fec7df4ef9897468231a91a5a536b304230275613daebd83224174c2e2ad2f8b',
   },
   sindelfingen: {
-    compile: '3fcde22aefd60258dbc441d5b6618fe92cbf64c1506acc26321a72cd6bf2cc7a',
+    // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
+    compile: '52ff58a0d7eb61eff5f22d557083fc28e7f5f59e16ad3f1956d9105950a2b2ad',
     lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
     curbs: '24a6696b232568ba7bc93e4d1259eba28798648161c28e560d477bcd71496bd4',
     de: '4dc2db3cc1fac855c5bd6f2e3865ff6061a4679c858f314fa5365634d5f758cb',
