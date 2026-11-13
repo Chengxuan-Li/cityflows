@@ -1,0 +1,3 @@
+# TASK-148 — SwiftShader rail drawing
+
+Bring the default headless SwiftShader T62 stationary and T64 moving Munich 3D rail overhead within the existing 10% rail-on/off budget. Work from the TASK-145 timings and failed prototypes. Preserve the 2D and hardware paths, visible track forms, rail furniture, stations, trains, picking, camera and layer toggles. Own 3D rendering and focused regressions. Keep the timing harness, scene and workload comparable. Use ports 5348/5448, one worker, CI unset, with coordinated quiet samples. Record paired milliseconds, renderer identity, repeated test outcomes and matched real application views for visual verification. Run check, city and the named specs. Report candidate and evidence to the lead.
