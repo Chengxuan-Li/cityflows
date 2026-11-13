@@ -3831,6 +3831,15 @@ Lead merge onto main with TASK-156: gate with the choice off 5,298 / 0 / 0 (= ma
 T29 and T53; guard with the choice on 2,730 / 0 / 0; unit (1,348; route-audit and T46 timed out and
 pass alone), lint, format and build pass. The crossing overlap seen with the choice on is TASK-165.
 
+Traffic baseline reset 2 (lead, under the owner's decision of 2026-11-13 to reset as needed; after
+TASK-161 moved completions about +21% and TASK-113 landed): `bench/traffic-baseline.json` holds
+main at `21b161e` with mode choice off, Munich 0.15 to 10:00 seed 1: 5,298 completed, 0 gridlocked,
+0 stalled heads (was 4,373 / 5 / 0); the 09:30 quick sample 4,852 / 0 (was 3,737 / 4). Derived
+limits: at least 4,769 completed, 0 stalled heads. With main at zero gridlocks, 1.5 times the
+baseline would allow none, so the lead added a floor: gridlock at most max(1.5 x baseline, 5). This
+changes the gate's formula and is flagged for the owner's review; T63's absolute floor of 3,571 is
+unchanged.
+
 ## Owner decisions log
 
 - 2026-11-13 (owner, before a 24-hour absence): the lead keeps developing and testing
