@@ -182,7 +182,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | done 2026-11-13 (drain (b) and (c) open: TASK-161, TASK-153) |
 | [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | done 2026-11-13 |
 | [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
-| [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
+| [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | done 2026-11-13 |
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | not needed: TASK-129 passed after TASK-154 |
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | done 2026-11-13: no repair needed; TASK-128 merged |
 | [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
@@ -3721,6 +3721,23 @@ Seed-1 gate 4,308 completed, 2 gridlocked, 0 stalled heads, 0 parking failures, 
 T29 and T53; demand tests (37), lint, format, build, the unit tier and `test:city` pass (route-audit
 and T36.1 timed out under load, as on every branch today, and pass alone). TASK-128's hold since
 2026-11-11 ends.
+
+TASK-157 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): a lot car bound for the far lane
+now holds clear of every lane of the exit's street its body would stand in (the exit road's other
+lanes, the opposite direction, roads meeting it at either end; lot aisles and roads at another
+level excluded, since compiled roads carry no grade), with a lane test that respects lane ends.
+Its grant needs each crossed lane's insertion gap (follower braking included) over the stretch the
+body covers, together with the far-lane gap and the lot release; while it crosses, that stretch
+is an obstacle for the lane's traffic, spawns and lane changes (an optional callback in
+`lane-change.ts`), and an arrival from a crossed lane stops short. Census: Munich holds inside a
+crossed lane 255 street-level to 0 (20 at pk:2050 past a lane end; 98 under the bridge, a different
+level), Sindelfingen 1,743 to 1 (pk:1482's 7.9 m stubs keep the old hold). `far-lane-exit.test.ts`
+(7 cases; the six traffic variants fail on the old base). Munich seeds 1 to 3 equal main's state
+hashes (no lot departure before 10:00 crosses a near lane). Lead merge onto main with TASK-129,
+TASK-155 and TASK-128: seed-1 gate 4,308 / 2 / 0 / 0 (= main), sim unit tier (413), lint, format and
+build pass. Open: street-level crossings of roads that neither belong to the exit street nor meet
+it need road grade (a contract change); standing traffic across a crossed lane keeps the exit
+waiting (TASK-153's keep-clear item).
 
 ## Owner decisions log
 
