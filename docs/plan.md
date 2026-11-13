@@ -169,7 +169,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
 | [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | merged in PR #4 |
-| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
+| [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D fixed in TASK-148 |
 | [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | merged in PR #3 |
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
 | [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | done (PR #6) |
@@ -1142,8 +1142,9 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 How the lead runs this project, for whoever takes the role on another machine. Everything
 else is in this file, `AGENTS.md`, `docs/architecture.md` and `docs/tasks/`.
 
-The state at the 2026-11-12 handover (held branches, open decisions, how agents are run) is in
-`docs/lead-handoff-2026-11-12.md`.
+The [current lead handover after TASK-149](lead-handoff-2026-11-12-after-149.md) records the
+verified main build, owner holds, agent allocation and the next independent parking follow-up.
+The [earlier handoff](lead-handoff-2026-11-12.md) covers the start of the temporary lead shift.
 
 The owner subsequently assigned orchestration to the temporary lead. Unless the owner reserves a
 task, the lead starts Codex subagents in the lead chat and they report to the lead. Use up to
