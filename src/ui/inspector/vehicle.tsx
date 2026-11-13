@@ -65,6 +65,7 @@ export function VehicleInspector({
                     leave: 'Pulling out',
                     drive_out: 'Driving to exit',
                     exit: 'Waiting for a gap',
+                    merge: 'Joining the street',
                   }[detail.parkingPhase]
                 }
               </dd>

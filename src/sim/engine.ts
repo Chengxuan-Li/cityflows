@@ -1402,22 +1402,25 @@ function createRun({
             vehicles.speed[id] = 0;
             accounting.complete(id, time());
           },
-          exit(id, connector) {
-            const c = compiled.connectors[connector]!;
-            if (!hasSpawnGap(c, id) || !connectors.releaseLot(c, time())) return false;
-            if (!resumeParkingRoute(id, c, time())) {
+          exit(id, connector, positionM) {
+            // TASK-150: granted from the hold, at the station where the merge joins the lane.
+            // The car stands there at speed 0, a lane occupant, while its body merges.
+            const c = compiled.connectors[connector]!,
+              join = { ...c, positionM };
+            if (!hasSpawnGap(join, id) || !connectors.releaseLot(c, time())) return false;
+            if (!resumeParkingRoute(id, join, time())) {
               vehicles.lane[id] = c.lane;
-              vehicles.position[id] = c.positionM;
+              vehicles.position[id] = positionM;
               accounting.fail(id, 'no_parking');
               return true;
             }
-            vehicles.insert(id, c.lane, c.positionM);
+            vehicles.insert(id, c.lane, positionM);
             vehicles.speed[id] = 0;
             vehicles.jamS[id] = 0;
             accounting.transition(id, DRIVING);
             roadEnteredS[id] = time();
-            roadEnteredM[id] = c.positionM;
-            planLane(id, c.lane, c.positionM);
+            roadEnteredM[id] = positionM;
+            planLane(id, c.lane, positionM);
             return true;
           },
           resume(id, connector) {
