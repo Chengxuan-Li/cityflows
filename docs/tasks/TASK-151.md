@@ -110,3 +110,27 @@ without the clearing-rails grant order 3137 / 62. Road vehicles stood still on t
 open served crossings for 10197 s (`r:966`), 6534 s (`r:252`) and 3645 s (`r:728`) vehicle-time
 on the base (PR #1: 8509, 5790, 2662): compact links wholly inside the road band, between two
 signals on the B56 corridor (`r:966` feeds `r:703`).
+
+Where the cost sits. Treating the two Landsberger tram crossings (facilities 1 and 2) as unserved,
+over seeds 1 to 3, gives 3863 / 3453 / 3337 (base 3287 / 3248 / 3297, mean +274); treating the other
+three served crossings as unserved gives 3020 / 3122 / 3479 (mean -70); without the controller
+3813 on average (main 3660). Both crossings lie inside the B56 loop: `r:966` (7.75 m, its road band
+0 to 6.6 m) between `n:249` and `n:362`, feeding the loop ramp `r:703`, and `r:252` (6.42 m, band to
+6.4 m) between `n:251` and `n:246`. A car admitted onto either link waits at its stop line
+(front 5.7 m and 4.4 m) with its whole body on the tracks. At seed 1 the refusals that hold it
+there are the loop's: `r:966>r:703` exit-full (48 440 refusals), conflicts with `r:961>r:364`
+(23 243, the B56 queue head's road), `r:252>r:482` conflicts with `r:964>r:248` (45 000), then
+signals. The trams wait (safety holds), up to 446 s for `tram:rn:10155>rn:10188` at 09:24 with
+cars 3015 and 3317 on `r:966`, and the crossings stay closed. Requiring storage past the junction
+movement on the exit lane cut the on-track time by a third at seed 1 but gave 3397 / 3314 / 3061.
+
+The one parking failure (seed 1 only): van 2796 (`person:p:1758:60:trip:1`) was refused at lot
+pk:2056's mouth on `r:669#0` (38 m) at 08:02:39, 17 s after departure. `r:669` ends at the
+extract edge with no outgoing movement, so no other parking was reachable. It is a parking item
+on a dead-end lot approach, not a crossing interaction.
+
+Conclusion: the combination's loss is PR #1's crossing control at the two crossings inside the
+B56 loop, where the locked loop leaves admitted cars on the tracks. Main's parking changes only
+move the seed-1 trajectory. Per the contract this stops here without a fix: repairing it means
+draining B56 (TASK-131 Phase 3) or changing compact-link admission, which the lead's earlier
+reservation and storage trials already rejected.
