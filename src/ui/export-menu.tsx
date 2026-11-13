@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type { TrajectoryStatus } from '../host/protocol';
-import { Popover } from './controls';
 import { useAppStore, type ExportFormat } from './store';
 
 const formats: [ExportFormat, string][] = [
@@ -10,7 +9,7 @@ const formats: [ExportFormat, string][] = [
   ['trajectories', 'Trajectories CSV'],
 ];
 
-export function ExportMenu({ onClose }: { onClose: () => void }) {
+export function ExportMenu() {
   const session = useAppStore((state) => state.session);
   const run = useAppStore((state) => state.run);
   const busy = useAppStore((state) => state.busy);
@@ -34,14 +33,6 @@ export function ExportMenu({ onClose }: { onClose: () => void }) {
     };
   }, [session, run?.timeS, reportError]);
 
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [onClose]);
-
   async function toggle(enabled: boolean) {
     if (!engine) return;
     setToggling(true);
@@ -55,7 +46,7 @@ export function ExportMenu({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Popover id="export-menu" className="export-sheet" aria-label="Export files">
+    <section id="export-menu" className="export-menu" aria-label="Export files">
       {formats.map(([format, label]) => (
         <button
           key={format}
@@ -82,6 +73,6 @@ export function ExportMenu({ onClose }: { onClose: () => void }) {
       <p className="muted">Every 10 simulated seconds while recording. Restart clears samples.</p>
       {run?.stale && <p className="muted">Restart to export the edited scenario.</p>}
       <p className="muted">synthetic traffic, not observed traffic</p>
-    </Popover>
+    </section>
   );
 }

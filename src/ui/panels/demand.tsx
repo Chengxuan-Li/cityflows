@@ -127,7 +127,7 @@ export function DemandPanel() {
   const session = useAppStore((state) => state.session)!;
   const run = useAppStore((state) => state.run)!;
   const busy = useAppStore((state) => state.busy);
-  const { toggleDemand, regenerateDemand, reportError } = useAppStore.getState();
+  const { regenerateDemand, reportError } = useAppStore.getState();
   const { project, demandSummary: summary, engine } = session;
   const city = project.city;
   const seed = project.scenarios[0]!.demand.seed;
@@ -170,13 +170,6 @@ export function DemandPanel() {
       clearInterval(timer);
     };
   }, [engine, pausedTime, reportError]);
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') toggleDemand();
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [toggleDemand]);
 
   const persons = project.population.length;
   const withCar = project.population.filter((person) => person.hasCar).length;
@@ -188,15 +181,12 @@ export function DemandPanel() {
   const journeys = failed?.engine === engine ? failed.persons : undefined;
   const walkers = failed?.engine === engine ? failed.walkers : undefined;
   return (
-    <section id="demand" className="chart-sheet demand-sheet" aria-label="Demand">
+    <section id="demand" className="panel demand-panel" aria-label="Demand">
       <div className="chart-heading">
         <span>
           {persons.toLocaleString()} persons, {withCar.toLocaleString()} with a car ·{' '}
           {summary.totalTrips.toLocaleString()} trips over the day
         </span>
-        <button aria-label="Close demand" onClick={toggleDemand}>
-          ×
-        </button>
       </div>
       <div className="demand-columns">
         <figure>

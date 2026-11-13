@@ -35,7 +35,7 @@ export function TrainInspector({ id, route }: { id: string; route: number }) {
         {service.kind === 'tram' ? 'Tram' : service.kind === 'sbahn' ? 'S-Bahn' : 'Main-line train'}
       </h2>
       {service.kind === 'tram' && <p>Synthetic service</p>}
-      <dl>
+      <dl className="details">
         {service.destination && (
           <>
             <dt>Direction</dt>
@@ -81,7 +81,7 @@ export function RailInspector({ kind, index }: { kind: 'track' | 'platform'; ind
     return (
       <section aria-label="Track inspector">
         <h2>{t.name ?? names[t.kind]}</h2>
-        <dl>
+        <dl className="details">
           <dt>Kind</dt>
           <dd>{names[t.kind]}</dd>
           {t.kind === 'tram' && (
@@ -153,6 +153,7 @@ export function RailInspector({ kind, index }: { kind: 'track' | 'platform'; ind
       )}
       {station && (
         <button
+          className="nav-row"
           onClick={() =>
             useAppStore
               .getState()
@@ -167,6 +168,7 @@ export function RailInspector({ kind, index }: { kind: 'track' | 'platform'; ind
         return (
           <button
             key={id}
+            className="nav-row"
             onClick={() => useAppStore.getState().select({ kind: 'track', track: track.idx })}
           >
             {track.name ?? names[track.kind]} · {Math.round(track.lengthM)} m
@@ -192,6 +194,7 @@ export function StationRailDetails({ place }: { place: Place }) {
         return (
           <button
             key={id}
+            className="nav-row"
             onClick={() => useAppStore.getState().select({ kind: 'platform', platform: index })}
           >
             {p.ref ? `Platform ${p.ref}` : p.name} · {p.tracks.length} track sections

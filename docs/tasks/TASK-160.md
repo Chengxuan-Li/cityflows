@@ -11,8 +11,8 @@ owner's feedback starts the next phase. If no feedback arrives, the lead continu
   translucency, blur or glassy vibrancy. Use solid surfaces, light gray window chrome, hairline
   separators, rounded rectangles, and accent-filled selection.
 - **Font:** Arimo everywhere (UI, map labels, 3D labels). Bundle it locally so the deployed site,
-  Windows and CI's Linux runner all render the same metrics. Arimo is Apache 2.0; record it in
-  `NOTICE`. Ship the files with the build (an npm `@fontsource/arimo` dependency or vendored woff2
+  Windows and CI's Linux runner all render the same metrics. Arimo is SIL OFL 1.1 (the current
+  Google Fonts release; owner accepted 2026-11-13); record it in `NOTICE`. Ship the files with the build (an npm `@fontsource/arimo` dependency or vendored woff2
   in `public/`), not from a CDN.
 - **Accent:** macOS system blue, `#007AFF`, for selection, focus rings, the primary button and
   toggles.

@@ -79,8 +79,8 @@
   --shadow-sheet: 0 0 0 1px rgb(0 0 0 / 12%), 0 18px 48px rgb(0 0 0 / 24%);
   --toolbar-height: 52px;
   --status-height: 26px;
-  --sidebar-width: 216px;
-  --inspector-width: 288px;
+  --sidebar-width: 272px;
+  --inspector-width: 280px;
   --inset: 12px;
   /* The map canvas keeps its own palette until phase 3. */
   --canvas: #f4f1e7;
@@ -428,35 +428,35 @@ input[type='number']::-webkit-inner-spin-button {
   display: grid;
   flex: none;
   width: 15px;
+  height: 22px;
   border-radius: 5px;
   box-shadow: var(--shadow-control);
   background: var(--control);
   overflow: hidden;
 }
 
-.stepper button {
-  min-height: 11px;
-  height: 11px;
-  padding: 0;
-  border-radius: 0;
-  box-shadow: none;
+.stepper > span {
   background: no-repeat center / 9px 6px;
 }
 
-.stepper button:first-child {
+.stepper > span:active:not([data-disabled]) {
+  background-color: var(--control-pressed);
+}
+
+.stepper > span:first-child {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.5 4.5 4.5 1.5l3 3' fill='none' stroke='%231f1f1f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
-.stepper button:last-child {
+.stepper > span:last-child {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.5 1.5 4.5 4.5l3-3' fill='none' stroke='%231f1f1f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
-.stepper button:disabled {
-  opacity: 0.35;
+.stepper > span[data-disabled] {
+  opacity: 0.3;
 }
 
-/* Disclosure group: sidebar and inspector sections. */
-.disclosure-group > summary,
+/* Disclosure: inspector sections (details) and sidebar sections (a header button). */
+.disclosure-header,
 .disclosure > summary,
 .phase-list summary {
   display: flex;
@@ -468,13 +468,12 @@ input[type='number']::-webkit-inner-spin-button {
   list-style: none;
 }
 
-.disclosure-group > summary::-webkit-details-marker,
 .disclosure > summary::-webkit-details-marker,
 .phase-list summary::-webkit-details-marker {
   display: none;
 }
 
-.disclosure-group > summary::before,
+.disclosure-header::before,
 .disclosure > summary::before,
 .phase-list summary::before {
   content: '';
@@ -486,27 +485,467 @@ input[type='number']::-webkit-inner-spin-button {
   transition: transform 120ms;
 }
 
-.disclosure-group[open] > summary::before,
+.disclosure-header[aria-expanded='true']::before,
 .disclosure[open] > summary::before,
 .phase-list details[open] > summary::before {
   transform: rotate(90deg);
 }
 
-.disclosure-group > summary {
-  color: var(--label-secondary);
-  font-size: var(--text-small);
+.disclosure-header {
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  color: var(--label);
+  background: transparent;
+  box-shadow: none;
+  font-weight: 700;
+  text-align: left;
 }
 
-.disclosure-group > summary:hover,
+.disclosure-header:disabled {
+  box-shadow: none;
+}
+
+.disclosure-header:disabled::before {
+  opacity: 0.4;
+}
+
+.disclosure-header .row-count {
+  margin-left: auto;
+  font-weight: 400;
+}
+
+.disclosure-header:enabled:hover,
 .disclosure > summary:hover,
 .phase-list summary:hover {
   background: var(--hover);
 }
 
+.disclosure-group + .disclosure-group {
+  border-top: 1px solid var(--separator);
+}
+
 .disclosure-body {
   display: grid;
   gap: 2px;
-  padding: 2px 0 10px;
+  padding: 2px 4px 12px 20px;
+}
+
+/* Popover: a white panel with an arrow toward its control. */
+.popover {
+  position: absolute;
+  z-index: 3;
+  min-width: 180px;
+  padding: 10px;
+  border-radius: var(--radius-window);
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+  animation: pop-in 120ms ease-out;
+}
+
+.popover::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  box-shadow: -1px -1px 0 rgb(0 0 0 / 10%);
+  transform: rotate(45deg);
+}
+
+.popover[data-placement='below'] {
+  top: calc(100% + 10px);
+}
+
+.popover[data-placement='below']::before {
+  top: -6px;
+}
+
+.popover[data-placement='above'] {
+  bottom: calc(100% + 10px);
+}
+
+.popover[data-placement='above']::before {
+  bottom: -6px;
+  transform: rotate(225deg);
+}
+
+.popover[data-align='center'] {
+  left: 50%;
+  translate: -50% 0;
+}
+
+.popover[data-align='center']::before {
+  left: calc(50% - 6px);
+}
+
+.popover[data-align='start'] {
+  left: -4px;
+}
+
+.popover[data-align='start']::before {
+  left: 18px;
+}
+
+.popover[data-align='end'] {
+  right: -4px;
+}
+
+.popover[data-align='end']::before {
+  right: 18px;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A popover in the top layer, placed under its pull-down button by <PopoverButton>. */
+.popover.anchored {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  border: 0;
+  color: inherit;
+  overflow: visible;
+}
+
+.popover.anchored::before {
+  top: -6px;
+  left: calc(var(--arrow) - 6px);
+}
+
+/* Pull-down button: a push button with a down chevron. */
+.pull-down {
+  padding-right: 24px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M2 3.5 5 6.5l3-3' fill='none' stroke='%23646469' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      no-repeat right 8px center / 10px 10px,
+    var(--control);
+  text-align: left;
+}
+
+/* File chooser: its button drawn as a push button. */
+input[type='file'] {
+  min-width: 0;
+  font: inherit;
+}
+
+input[type='file']::file-selector-button {
+  margin-right: 8px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--label);
+  background: var(--control);
+  box-shadow: var(--shadow-control);
+  font: inherit;
+}
+
+/* Sheet: a modal panel that drops from under the toolbar; the window behind does not dim. */
+.sheet {
+  width: min(26rem, calc(100% - 2 * var(--inset)));
+  max-height: calc(100% - var(--toolbar-height) - 2 * var(--inset));
+  margin: calc(var(--toolbar-height) + 6px) auto auto;
+  padding: 14px 16px 16px;
+  border: 0;
+  border-radius: var(--radius-window);
+  color: inherit;
+  background: var(--surface);
+  box-shadow: var(--shadow-sheet);
+  animation: sheet-down 200ms ease-out;
+}
+
+.sheet::backdrop {
+  background: transparent;
+}
+
+@keyframes sheet-down {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+.sheet-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.close-button,
+.sheet-heading > button:last-child {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  min-height: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--label-secondary);
+  background: transparent;
+  box-shadow: none;
+}
+
+.close-button:enabled:hover,
+.sheet-heading > button:last-child:enabled:hover {
+  background: var(--hover);
+}
+
+/* Tooltip: below its control, after a pause on hover or at once on keyboard focus. */
+.tooltip-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 4;
+  width: max-content;
+  max-width: 260px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  color: var(--label);
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+  font-size: var(--text-small);
+  line-height: 14px;
+  white-space: normal;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  translate: -50% 0;
+  transition:
+    opacity 100ms,
+    visibility 0s 100ms;
+}
+
+.tooltip-anchor:hover > .tooltip {
+  visibility: visible;
+  opacity: 1;
+  transition:
+    opacity 100ms 700ms,
+    visibility 0s 700ms;
+}
+
+.tooltip-anchor:has(:focus-visible) > .tooltip {
+  visibility: visible;
+  opacity: 1;
+  transition: none;
+}
+
+/* Toolbar button: borderless; the glyph darkens on hover, the background shows when pressed. */
+.toolbar-button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  min-height: 28px;
+  padding: 0 7px;
+  color: #5a5a5f;
+  background: transparent;
+  box-shadow: none;
+}
+
+.toolbar-button:enabled:hover {
+  color: var(--label);
+  background: var(--hover);
+}
+
+.toolbar-button:enabled:active,
+.toolbar-button[aria-expanded='true'] {
+  color: var(--label);
+  background: var(--pressed);
+}
+
+/* A sidebar toggle shows its state by the sidebar itself, as on the Mac. */
+.toolbar-button.sidebar-toggle[aria-expanded='true']:not(:active, :hover) {
+  color: #5a5a5f;
+  background: transparent;
+}
+
+.toolbar-button:disabled {
+  color: #b9b9be;
+  box-shadow: none;
+}
+
+.toolbar-button[aria-pressed='true'] {
+  color: var(--accent-fill);
+  background: var(--pressed);
+}
+
+.toolbar-button[aria-pressed='true']:disabled {
+  color: #9ab9df;
+  background: transparent;
+}
+
+.icon {
+  display: block;
+}
+
+/* Segmented control: a grey track; the chosen segment is a raised white key. */
+.segmented {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgb(0 0 0 / 7%);
+}
+
+.segmented button {
+  position: relative;
+  min-height: 22px;
+  padding: 2px 10px;
+  border-radius: 5px;
+  color: var(--label);
+  background: transparent;
+  box-shadow: none;
+  line-height: 18px;
+}
+
+.segmented .tooltip-anchor + .tooltip-anchor button:not([aria-pressed='true'])::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: -1px;
+  width: 1px;
+  background: rgb(0 0 0 / 14%);
+}
+
+.segmented .tooltip-anchor:has([aria-pressed='true']) + .tooltip-anchor button::before {
+  display: none;
+}
+
+.segmented button:enabled:active {
+  background: var(--pressed);
+}
+
+.segmented button[aria-pressed='true'] {
+  color: var(--label);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+
+.segmented button:disabled {
+  color: var(--label-disabled);
+  box-shadow: none;
+}
+
+.segmented button[aria-pressed='true']:disabled {
+  color: var(--label-disabled);
+  background: rgb(255 255 255 / 60%);
+}
+
+/* The docked window. */
+.app {
+  display: grid;
+  grid-template:
+    'toolbar toolbar toolbar' var(--toolbar-height)
+    'sidebar content inspector' minmax(0, 1fr)
+    'status status status' var(--status-height)
+    / auto minmax(0, 1fr) auto;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--separator);
+  background: var(--toolbar);
+  z-index: 2;
+}
+
+.toolbar-title {
+  display: grid;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0 10px 0 4px;
+  line-height: 15px;
+}
+
+.toolbar-title h1,
+.toolbar-title small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-title small {
+  color: var(--label-secondary);
+}
+
+.toolbar-group,
+.run-controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar-group + .toolbar-group {
+  margin-left: 6px;
+}
+
+.toolbar .segmented {
+  margin: 0 auto;
+}
+
+.run-controls {
+  gap: 6px;
+}
+
+.run-controls .toolbar-group {
+  gap: 2px;
+}
+
+.toolbar .speed select {
+  min-width: 64px;
+}
+
+.toolbar .view-toggle {
+  font-weight: 700;
+}
+
+.sidebar {
+  grid-area: sidebar;
+  width: var(--sidebar-width);
+  padding: 6px 10px 12px;
+  overflow: auto;
+  border-right: 1px solid var(--separator);
+  background: var(--sidebar);
+}
+
+.row-count {
+  margin-left: auto;
+  font-weight: 400;
+}
+
+.disclosure-header:enabled:hover,
+.disclosure > summary:hover,
+.phase-list summary:hover {
+  background: var(--hover);
+}
+
+.disclosure-group + .disclosure-group {
+  border-top: 1px solid var(--separator);
+}
+
+.disclosure-body {
+  display: grid;
+  gap: 2px;
+  padding: 2px 4px 12px 20px;
 }
 
 /* Popover: a white panel with an arrow toward its control. */
@@ -898,12 +1337,28 @@ input[type='number']::-webkit-inner-spin-button {
   font-variant-numeric: tabular-nums;
 }
 
-[aria-expanded='true'] > .row-count {
-  color: inherit;
+/* A selection made while the inspector is hidden: a blue dot on its toggle. */
+.toolbar-button.waiting {
+  position: relative;
 }
 
-.sidebar .check-row {
-  padding: 2px 8px;
+.toolbar-button.waiting::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--toolbar);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* The last toolbar tooltip opens leftward so it stays inside the window. */
+.toolbar > .tooltip-anchor:last-of-type > .tooltip {
+  right: 0;
+  left: auto;
+  translate: none;
 }
 
 .map-view {
@@ -947,8 +1402,11 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 .no-selection {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   height: 100%;
   color: var(--label-secondary);
 }
@@ -1068,8 +1526,27 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 .inspector .muted,
+.inspector > p,
+.inspector > section > p,
 .details {
   margin-top: 6px;
+}
+
+.inspector .controls {
+  flex-wrap: wrap;
+}
+
+/* A row that opens a related item (a platform's tracks, a station's platforms). */
+.nav-row {
+  display: flex;
+  width: 100%;
+  margin-top: 6px;
+  padding-right: 26px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M3.5 2 6.5 5l-3 3' fill='none' stroke='%23646469' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      no-repeat right 9px center / 10px 10px,
+    var(--control);
+  text-align: left;
 }
 
 .details {
@@ -1103,7 +1580,26 @@ input[type='number']::-webkit-inner-spin-button {
 .inspector table {
   margin-top: 8px;
   width: 100%;
+  border-collapse: collapse;
   text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector th,
+.inspector td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--separator);
+  vertical-align: top;
+}
+
+.inspector thead th {
+  color: var(--label-secondary);
+  font-size: var(--text-small);
+}
+
+.inspector th:first-child {
+  padding-left: 0;
+  text-align: left;
 }
 
 .inspector .item-list {
@@ -1254,45 +1750,92 @@ input[type='number']::-webkit-inner-spin-button {
   margin-top: 10px;
 }
 
-/* Floating panels in the content area (phase 1); they move into the sidebar in phase 2. */
-.run-sheet {
-  position: absolute;
-  bottom: var(--inset);
-  left: var(--inset);
-  z-index: 1;
+/* Sidebar panels: Layers, Chart, Demand, Compare, Validation and the tool options. */
+.panel,
+.tool-options {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.panel p,
+.panel dl,
+.panel table,
+.panel figure {
+  margin: 0;
+}
+
+.panel .details {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 4px 8px;
+}
+
+.panel h3 {
+  margin-top: 4px;
+  font-size: var(--text-small);
+  color: var(--label-secondary);
+}
+
+.panel .muted,
+.tool-help {
+  font-size: var(--text-small);
+}
+
+.chart-heading,
+.chart-plots figcaption {
   display: flex;
-  max-width: calc(100% - 2 * var(--inset));
-  max-height: calc(100% - 64px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.layers-sheet,
-.chart-sheet {
-  max-height: 100%;
-  padding: 12px;
-  overflow: auto;
-  border-radius: var(--radius-window);
-  background: var(--surface);
-  box-shadow: var(--shadow-popover);
-  animation: pop-in 120ms ease-out;
+.chart-heading > span {
+  color: var(--label-secondary);
+  font-size: var(--text-small);
 }
 
-.layers-sheet {
-  width: 240px;
+.chart-plots,
+.demand-columns {
+  display: grid;
+  gap: 10px;
 }
 
-.layers-sheet label {
+.chart-plots figure,
+.demand-columns figure {
+  display: grid;
+  gap: 2px;
+}
+
+.chart-plots svg,
+.demand-columns svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.chart-plots text,
+.demand-columns text {
+  fill: var(--label-secondary);
+  font-size: 13px;
+}
+
+.layers-panel {
+  gap: 0;
+}
+
+.layers-panel label {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 24px;
 }
 
-.layers-sheet label select {
+.layers-panel label select {
   margin-left: auto;
 }
 
-.layers-sheet p {
-  margin-top: 8px;
+.layers-panel p {
+  margin-top: 6px;
 }
 
 .heat-key {
@@ -1307,81 +1850,39 @@ input[type='number']::-webkit-inner-spin-button {
   background: #4d8e94;
 }
 
-.chart-sheet {
-  width: min(980px, 100%);
-}
-
-.chart-heading,
-.chart-plots figcaption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.chart-plots {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  margin: 8px 0;
-}
-
-.chart-plots figure {
-  margin: 0;
-}
-
-.chart-plots svg {
-  display: block;
-  width: 100%;
-  overflow: visible;
-}
-
-.chart-plots text {
-  fill: var(--label-secondary);
-  font-size: 11px;
-}
-
-@media (max-width: 1250px) {
-  .chart-plots {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-}
-
-.compare-sheet {
-  width: min(620px, 100%);
-}
-
 .compare-actions {
   flex-wrap: wrap;
-  margin: 10px 0;
 }
 
-.compare-sheet table {
+.panel table {
   width: 100%;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
-  margin: 12px 0;
 }
 
-.compare-sheet th,
-.compare-sheet td {
-  text-align: right;
-  padding: 6px;
+.panel th,
+.panel td {
+  padding: 3px 4px;
   border-bottom: 1px solid var(--separator);
+  text-align: right;
 }
 
-.compare-sheet th:first-child {
+.panel th:first-child,
+.panel th[scope='row'] {
+  padding-left: 0;
   text-align: left;
+  font-weight: inherit;
 }
 
-.compare-sheet p {
-  margin-top: 8px;
+.panel thead th {
+  color: var(--label-secondary);
+  font-size: var(--text-small);
+  font-weight: 700;
 }
 
 .comparison-progress {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -1398,133 +1899,38 @@ input[type='number']::-webkit-inner-spin-button {
   color: #39737a;
 }
 
-.demand-sheet {
-  width: min(760px, 100%);
-}
-
-.demand-columns {
+.demand-panel form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
-  margin: 8px 0;
+  gap: 6px;
 }
 
-.demand-columns figure {
-  margin: 0;
+.tool-options select {
+  min-width: 0;
 }
 
-.demand-columns svg {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-  overflow: visible;
+/* The Export sheet. */
+.export-menu {
+  display: grid;
+  gap: 6px;
 }
 
-.demand-columns text {
-  fill: var(--label-secondary);
-  font-size: 11px;
-}
-
-.demand-sheet table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-
-.demand-sheet th,
-.demand-sheet td {
-  text-align: right;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--separator);
-}
-
-.demand-sheet th[scope='row'],
-.demand-sheet th:first-child {
-  text-align: left;
-  font-weight: inherit;
-}
-
-.demand-sheet form {
-  margin-top: 12px;
-}
-
-@media (max-width: 1250px) {
-  .demand-columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* The Export pull-down. */
-.export-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 250px;
-  padding: 6px;
-}
-
-.export-sheet > button {
-  padding: 3px 8px;
-  background: transparent;
-  box-shadow: none;
+.export-menu > button {
+  justify-self: start;
+  min-width: 160px;
   text-align: left;
 }
 
-.export-sheet > button:enabled:hover {
-  color: var(--on-accent);
-  background: var(--accent-fill);
-}
-
-.export-sheet > label {
+.export-menu > label {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 4px;
-  padding: 6px 8px 2px;
+  padding-top: 8px;
   border-top: 1px solid var(--separator);
 }
 
-.export-sheet > p {
-  padding: 0 8px;
+.export-menu > p {
   font-size: var(--text-small);
-}
-
-/* Tool options float at the top left of the map (phase 1). */
-.road-options,
-.ramp-hint {
-  position: absolute;
-  top: var(--inset);
-  left: var(--inset);
-  z-index: 1;
-  max-width: calc(100% - 2 * var(--inset));
-  padding: 6px 10px;
-  border-radius: var(--radius-window);
-  background: var(--surface);
-  box-shadow: var(--shadow-popover);
-}
-
-.ramp-hint {
-  pointer-events: none;
-}
-
-.road-option-fields,
-.road-option-fields label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.road-option-fields {
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.road-option-fields input[type='number'] {
-  width: 60px;
-}
-
-.road-options p {
-  margin-top: 4px;
 }
 
 /* Signal editor. */
@@ -1731,11 +2137,36 @@ input[type='number']::-webkit-inner-spin-button {
   pointer-events: none;
 }
 
-.show-hints {
+/* The hint card is a popover whose arrow points at the control it is about. */
+.hint::before {
+  content: '';
   position: absolute;
-  top: var(--inset);
-  right: var(--inset);
-  z-index: 1;
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  box-shadow: -1px -1px 0 rgb(0 0 0 / 10%);
+}
+
+.hint[data-side='below']::before {
+  top: -6px;
+  left: calc(var(--arrow) - 6px);
+  transform: rotate(45deg);
+}
+
+.hint[data-side='right']::before {
+  top: calc(var(--arrow) - 6px);
+  left: -6px;
+  transform: rotate(-45deg);
+}
+
+.hint[data-side='left']::before {
+  top: calc(var(--arrow) - 6px);
+  right: -6px;
+  transform: rotate(135deg);
+}
+
+.hint[data-side='map']::before {
+  display: none;
 }
 
 /* Under 900 px the sidebars float over the map instead of narrowing it (refined in phase 4). */
@@ -1760,8 +2191,6 @@ input[type='number']::-webkit-inner-spin-button {
 @media (prefers-reduced-motion: reduce) {
   .popover,
   .sheet,
-  .layers-sheet,
-  .chart-sheet,
   .hint {
     animation: none;
   }

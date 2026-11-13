@@ -1,8 +1,4 @@
 import { useAppStore } from './store';
-import { Layers } from './layers';
-import { MetricsPanel } from './panels/metrics';
-import { ComparePanel } from './panels/compare';
-import { DemandPanel } from './panels/demand';
 import { ToolbarButton } from './controls';
 
 const speeds = [1, 2, 5, 10, 20];
@@ -143,23 +139,5 @@ export function StatusBar() {
       <small className="traffic-notice">Synthetic traffic, not observed traffic</small>
       {attribution && <small className="attribution">{attribution}</small>}
     </footer>
-  );
-}
-
-/** The analysis panels opened from the sidebar; they float over the map until phase 2. */
-export function Panels() {
-  const layersOpen = useAppStore((state) => state.layersOpen);
-  const metricsOpen = useAppStore((state) => state.metricsOpen);
-  const demandOpen = useAppStore((state) => state.demandOpen);
-  const compareOpen = useAppStore((state) => state.compareOpen);
-  const showCompare = compareOpen && !layersOpen && !metricsOpen && !demandOpen;
-  if (!showCompare && !layersOpen && !metricsOpen && !demandOpen) return null;
-  return (
-    <div className="run-sheet">
-      {showCompare && <ComparePanel />}
-      {layersOpen && <Layers />}
-      {metricsOpen && <MetricsPanel />}
-      {demandOpen && <DemandPanel />}
-    </div>
   );
 }

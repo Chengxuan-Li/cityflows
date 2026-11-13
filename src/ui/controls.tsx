@@ -2,6 +2,7 @@ import {
   useEffect,
   useId,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type CSSProperties,
   type HTMLAttributes,
@@ -119,7 +120,37 @@ export function Slider({
   );
 }
 
-/** A number field with a Mac stepper beside it. */
+/** The Mac stepper beside a number field. Mouse only, as on the Mac: the field keeps the keyboard
+ *  (arrow keys), and the arrows stay out of the accessibility tree so the field's name is its own. */
+export function StepperArrows({
+  onStep,
+  canIncrease,
+  canDecrease,
+}: {
+  onStep: (direction: 1 | -1) => void;
+  canIncrease: boolean;
+  canDecrease: boolean;
+}) {
+  return (
+    <span className="stepper" aria-hidden="true">
+      {([1, -1] as const).map((direction) => {
+        const enabled = direction === 1 ? canIncrease : canDecrease;
+        return (
+          <span
+            key={direction}
+            data-disabled={enabled ? undefined : ''}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              if (enabled) onStep(direction);
+            }}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+/** A labelled number field with a stepper that changes the value at once. */
 export function Stepper({
   label,
   value,
@@ -135,7 +166,6 @@ export function Stepper({
   max: number;
   step?: number;
 }) {
-  const clamp = (next: number) => Math.min(max, Math.max(min, next));
   return (
     <label className="edit-field">
       {label}
@@ -150,22 +180,11 @@ export function Stepper({
             if (event.currentTarget.validity.valid) onChange(event.currentTarget.valueAsNumber);
           }}
         />
-        <span className="stepper">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={`Increase ${label}`}
-            disabled={value >= max}
-            onClick={() => onChange(clamp(value + step))}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={`Decrease ${label}`}
-            disabled={value <= min}
-            onClick={() => onChange(clamp(value - step))}
-          />
-        </span>
+        <StepperArrows
+          canIncrease={value < max}
+          canDecrease={value > min}
+          onStep={(direction) => onChange(Math.min(max, Math.max(min, value + direction * step)))}
+        />
       </span>
     </label>
   );
@@ -188,21 +207,106 @@ export function CloseButton({
   );
 }
 
-/** A collapsible group with a heading, open by default. */
+/** A collapsible section: a header button that shows or hides its body. Controlled through
+ *  `open` and `onToggle`, or open by default and self-managed. */
 export function DisclosureGroup({
   title,
-  children,
+  label,
+  count,
+  open: controlled,
+  onToggle,
   defaultOpen = true,
+  controls,
+  disabled,
+  children,
 }: {
   title: string;
-  children: ReactNode;
+  label?: string;
+  count?: number;
+  open?: boolean;
+  onToggle?: () => void;
   defaultOpen?: boolean;
+  controls?: string;
+  disabled?: boolean;
+  children: ReactNode;
 }) {
+  const [own, setOwn] = useState(defaultOpen);
+  const body = useId();
+  const open = controlled ?? own;
   return (
-    <details className="disclosure-group" open={defaultOpen}>
-      <summary>{title}</summary>
-      <div className="disclosure-body">{children}</div>
-    </details>
+    <section className="disclosure-group">
+      <button
+        className="disclosure-header"
+        aria-expanded={open}
+        aria-controls={open ? (controls ?? body) : undefined}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => (onToggle ? onToggle() : setOwn(!own))}
+      >
+        {title}
+        {count !== undefined && (
+          <span className="row-count" aria-hidden="true">
+            {count}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="disclosure-body" id={controls ? undefined : body}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** A pull-down button whose popover (top layer, light dismiss, Escape) sits under it with an
+ *  arrow, kept inside the window. For an edit that belongs to one item of the inspector. */
+export function PopoverButton({
+  label,
+  title,
+  children,
+}: {
+  label: string;
+  title?: string;
+  children: ReactNode;
+}) {
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const width = 264;
+  return (
+    <>
+      <button
+        ref={button}
+        className="pull-down"
+        popoverTarget={id}
+        aria-expanded={open}
+        aria-controls={id}
+      >
+        {label}
+      </button>
+      <section
+        id={id}
+        popover="auto"
+        className="popover anchored"
+        aria-label={title ?? label}
+        style={{ width }}
+        onBeforeToggle={(event) => {
+          if (event.newState !== 'open') return;
+          // Placed before it shows, so it never flashes at the default centre.
+          const anchor = button.current!.getBoundingClientRect();
+          const centre = anchor.left + anchor.width / 2;
+          const left = Math.max(8, Math.min(innerWidth - 8 - width, centre - width / 2));
+          const panel = event.currentTarget;
+          panel.style.left = `${left}px`;
+          panel.style.top = `${anchor.bottom + 10}px`;
+          panel.style.setProperty('--arrow', `${centre - left}px`);
+        }}
+        onToggle={(event) => setOpen(event.newState === 'open')}
+      >
+        {children}
+      </section>
+    </>
   );
 }
 

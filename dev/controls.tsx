@@ -5,6 +5,7 @@ import {
   CloseButton,
   DisclosureGroup,
   Popover,
+  PopoverButton,
   SegmentedControl,
   Sheet,
   Slider,
@@ -208,18 +209,20 @@ export function Gallery() {
       <section className="gallery-panel">
         <h2>Disclosure group</h2>
         <div className="sidebar gallery-sidebar">
-          <DisclosureGroup title="Map">
-            <button className="source-row" aria-expanded>
-              Layers
-            </button>
+          <DisclosureGroup title="Layers">
+            <label className="check-row">
+              <input type="checkbox" defaultChecked />
+              Lane markings
+            </label>
+            <label className="check-row">
+              <input type="checkbox" />
+              Road speeds
+            </label>
           </DisclosureGroup>
-          <DisclosureGroup title="Analysis">
-            <button className="source-row">Chart</button>
-            <button className="source-row">
-              Validation <span className="row-count">82</span>
-            </button>
+          <DisclosureGroup title="Chart" defaultOpen={false}>
+            <span>Hidden</span>
           </DisclosureGroup>
-          <DisclosureGroup title="Closed" defaultOpen={false}>
+          <DisclosureGroup title="Validation" count={82} defaultOpen={false}>
             <span>Hidden</span>
           </DisclosureGroup>
         </div>
@@ -227,6 +230,21 @@ export function Gallery() {
 
       <section className="gallery-panel gallery-popovers">
         <h2>Popover</h2>
+        <Row label="Pull-down">
+          <PopoverButton label="Vehicle classes" title="Access by vehicle class">
+            <div className="edit-fields">
+              {['car', 'bus'].map((name) => (
+                <label key={name} className="edit-field">
+                  {name} access
+                  <select aria-label={`${name} access`} defaultValue="">
+                    <option value="">Use all vehicles rule</option>
+                    <option>Open</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+          </PopoverButton>
+        </Row>
         <div className="gallery-popover-stage">
           <span className="export-control">
             <button aria-expanded>Export</button>
@@ -272,6 +290,7 @@ style.textContent = `
   .gallery-row { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 10px; }
   .gallery-row > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
   .gallery-sidebar { width: 216px; border: 1px solid var(--separator); border-radius: 6px; }
+  .export-control { position: relative; }
   .gallery-popover-stage { display: flex; justify-content: space-around; padding: 70px 0 70px; }
   .gallery-panel > .primary { justify-self: start; }
   .demo-open > .tooltip { visibility: visible; opacity: 1; }

@@ -17,6 +17,8 @@ import type { Pick as MapPick, VehicleSnapshot } from '../render/types';
 import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
 import type { Command, Person, Scenario } from '../schema';
+import type { DrawRoadOptions } from '../editor/commands/topology';
+import type { PaintKind } from './tools/place-paint';
 import type { RoadId } from '../schema';
 import type {
   Metrics,
@@ -117,6 +119,12 @@ interface AppState {
   inspectorOpen: boolean;
   toggleSidebar: () => void;
   toggleInspector: () => void;
+  /** Options of the drawing tools, shown in the sidebar while the tool is active. */
+  roadOptions: DrawRoadOptions;
+  placeKind: PaintKind;
+  placeHint: string;
+  /** The onboarding hint on screen, or null (onboarding.tsx). */
+  hintStep: number | null;
   tool: 'select' | 'road' | 'place' | 'ramp' | 'roundabout';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
@@ -370,7 +378,6 @@ export const useAppStore = create<AppState>((set, get) => {
         walker: null,
         personId: null,
         person: null,
-        diagnosticsOpen: false,
         rejectedEdit: [],
       });
     } catch (error) {
@@ -415,13 +422,7 @@ export const useAppStore = create<AppState>((set, get) => {
     compareOpen: false,
     comparison: null,
     comparisonProgress: null,
-    toggleCompare: () =>
-      set(({ compareOpen, layersOpen, metricsOpen, demandOpen }) => ({
-        compareOpen: layersOpen || metricsOpen || demandOpen || !compareOpen,
-        metricsOpen: false,
-        layersOpen: false,
-        demandOpen: false,
-      })),
+    toggleCompare: () => set(({ compareOpen }) => ({ compareOpen: !compareOpen })),
     cancelComparison,
     saveBaseline: () => {
       const { session, busy } = get();
@@ -541,20 +542,17 @@ export const useAppStore = create<AppState>((set, get) => {
     demandOpen: false,
     toggleLayer: (layer) =>
       set(({ layers }) => ({ layers: { ...layers, [layer]: !layers[layer] } })),
-    toggleLayers: () =>
-      set(({ layersOpen }) => ({ layersOpen: !layersOpen, metricsOpen: false, demandOpen: false })),
-    toggleMetrics: () =>
-      set(({ metricsOpen }) => ({
-        metricsOpen: !metricsOpen,
-        layersOpen: false,
-        demandOpen: false,
-      })),
-    toggleDemand: () =>
-      set(({ demandOpen }) => ({ demandOpen: !demandOpen, layersOpen: false, metricsOpen: false })),
+    toggleLayers: () => set(({ layersOpen }) => ({ layersOpen: !layersOpen })),
+    toggleMetrics: () => set(({ metricsOpen }) => ({ metricsOpen: !metricsOpen })),
+    toggleDemand: () => set(({ demandOpen }) => ({ demandOpen: !demandOpen })),
     sidebarOpen: true,
     inspectorOpen: true,
     toggleSidebar: () => set(({ sidebarOpen }) => ({ sidebarOpen: !sidebarOpen })),
     toggleInspector: () => set(({ inspectorOpen }) => ({ inspectorOpen: !inspectorOpen })),
+    roadOptions: { twoWay: true, lanes: 1, roadClass: 'residential', speedKph: 30 },
+    placeKind: 'residential',
+    placeHint: '',
+    hintStep: null,
     tool: 'select',
     setTool: (tool) => {
       if (get().viewMode === '3d') return;
@@ -592,7 +590,6 @@ export const useAppStore = create<AppState>((set, get) => {
         walker: null,
         personId: null,
         person: null,
-        diagnosticsOpen: false,
         rejectedEdit: [],
       });
     },
@@ -615,7 +612,6 @@ export const useAppStore = create<AppState>((set, get) => {
         walker: null,
         personId: null,
         person: null,
-        diagnosticsOpen: false,
         rejectedEdit: [],
       }),
     toggleDiagnostics: () => set(({ diagnosticsOpen }) => ({ diagnosticsOpen: !diagnosticsOpen })),

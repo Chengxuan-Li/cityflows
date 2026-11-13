@@ -41,6 +41,8 @@ test('QA every export downloads parseable data with columns, feature counts and 
   await button(page, 'Export').click();
   await page.getByLabel('Record trajectories', { exact: true }).click();
   await expect(page.getByLabel('Record trajectories', { exact: true })).toBeChecked();
+  // Export is a modal sheet (TASK-160): close it to run, reopen it to download.
+  await button(page, 'Close Export').click();
   await button(page, 'Play').click();
   const start = (await metrics(page)).timeS;
   await expect.poll(async () => (await metrics(page)).timeS).toBeGreaterThan(start);
@@ -80,6 +82,7 @@ test('QA every export downloads parseable data with columns, feature counts and 
     ['Trajectories CSV', ['vehicle id', 'time', 'x', 'y', 'lane', 'speed']],
   ] as const;
   const counts: Record<string, number> = {};
+  await button(page, 'Export').click();
   for (const [label, columns] of headers) {
     await expect(button(page, label)).toBeEnabled();
     const downloaded = await downloadText(page, label);
