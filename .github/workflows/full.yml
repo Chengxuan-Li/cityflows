@@ -91,3 +91,52 @@ jobs:
           name: playwright-results-full-${{ matrix.group }}
           path: test-results
           retention-days: 7
+
+  # TASK-172: advisory report, Munich at 0.15 to 10:00 on seeds 1 to 3, mode choice off and on, with
+  # TASK-154's drain criteria. It never fails the workflow; it compares with the last report on main.
+  seed-report:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/cityflows
+          key: city-imports-${{ hashFiles('src/**', 'fixtures/osm/**', 'package-lock.json') }}
+      - name: Download the previous report
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CURRENT_RUN: ${{ github.run_id }}
+        run: |
+          for run in $(gh run list --workflow full.yml --branch main --status completed --limit 14 --json databaseId --jq '.[].databaseId'); do
+            [ "$run" = "$CURRENT_RUN" ] && continue
+            if gh run download "$run" --name seed-report --dir previous; then break; fi
+          done
+      - name: Run the report
+        continue-on-error: true
+        run: |
+          previous=()
+          if [ -f previous/seed-report.json ]; then previous=(--previous previous/seed-report.json); fi
+          npm run seed-report -- --out seed-report "${previous[@]}"
+      - name: Job summary
+        if: ${{ !cancelled() && hashFiles('seed-report/seed-report.md') != '' }}
+        run: cat seed-report/seed-report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && hashFiles('seed-report/seed-report.json') != '' }}
+        with:
+          name: seed-report
+          path: seed-report
+          retention-days: 14
