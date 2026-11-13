@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { scenarios } from '../fixtures/scenarios';
 import { MenuItem, PopoverButton, Sheet, ToolbarButton, type ToolbarAction } from './controls';
 import { ExportMenu } from './export-menu';
@@ -13,7 +13,6 @@ export function TopBar() {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [picking, setPicking] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
   const session = useAppStore((state) => state.session);
   const in3D = useAppStore((state) => state.viewMode === '3d');
   const busy = useAppStore((state) => state.busy);
@@ -23,6 +22,9 @@ export function TopBar() {
   const waiting = useAppStore((state) => !state.inspectorOpen && state.selection !== null);
   const { open, save, undo, redo, toggleSidebar, toggleInspector } = useAppStore.getState();
   const city = session?.project.city;
+  // The file input is looked up when clicked rather than held in a ref: the actions are plain
+  // objects shared by the toolbar and its overflow menu.
+  const pickFile = () => document.querySelector<HTMLInputElement>('#open-project')!.click();
   const fileActions: ToolbarAction[] = [
     {
       icon: 'new',
@@ -45,7 +47,7 @@ export function TopBar() {
       label: 'Open',
       tooltip: 'Open a saved project',
       disabled: busy,
-      onClick: () => input.current?.click(),
+      onClick: pickFile,
     },
     {
       icon: 'save',
@@ -144,7 +146,7 @@ export function TopBar() {
         </div>
       </PopoverButton>
       <input
-        ref={input}
+        id="open-project"
         type="file"
         accept=".cityflows,.zip,.json,application/zip,application/json"
         aria-label="Open project"
