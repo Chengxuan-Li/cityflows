@@ -322,7 +322,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const editor = createEditor(project.city);
     const scenario = project.scenarios[0]!;
     const population = project.population ?? generatePopulation(editor.city, scenario.demand);
-    const trips = scheduleTrips(editor.city, population, scenario);
+    const trips = scheduleTrips(editor.city, population, scenario, editor.compiled);
     const engine = createEngineClient(
       new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' }),
     );
@@ -461,7 +461,12 @@ export const useAppStore = create<AppState>((set, get) => {
         const population = structuredClone(
           baseline.population ?? generatePopulation(baseline.city, baseline.scenario.demand),
         );
-        const trips = scheduleTrips(baseline.city, population, baseline.scenario);
+        const trips = scheduleTrips(
+          baseline.city,
+          population,
+          baseline.scenario,
+          original.compiled,
+        );
         for (const trip of trips) {
           if (
             !session.editor.city.places[trip.originPlaceId] ||
@@ -666,7 +671,7 @@ export const useAppStore = create<AppState>((set, get) => {
         const current = project.scenarios[0]!;
         const scenario = { ...current, seed, demand: { ...current.demand, seed } };
         const population = generatePopulation(project.city, scenario.demand);
-        const trips = scheduleTrips(project.city, population, scenario);
+        const trips = scheduleTrips(project.city, population, scenario, session.compiled);
         await engine.pause();
         const { timeS, trips: counts } = await engine.metrics();
         set({
@@ -766,7 +771,7 @@ export const useAppStore = create<AppState>((set, get) => {
             session.populationKey === demandKey(editor.city)
               ? project.population
               : generatePopulation(editor.city, scenario.demand);
-          const trips = scheduleTrips(editor.city, population, scenario);
+          const trips = scheduleTrips(editor.city, population, scenario, compiled);
           await engine.load({ compiled, trips, scenario, population });
           signalEpochs.clear();
           const { timeS, trips: counts } = await engine.metrics();

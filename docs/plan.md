@@ -180,7 +180,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | done 2026-11-13 (merged on TASK-154) |
 | [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | in progress (Claude Code subagent) |
 | [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | done 2026-11-13 (drain (b) and (c) open: TASK-161, TASK-153) |
-| [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | in progress (Claude Code subagent) |
+| [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | done 2026-11-13 |
 | [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
 | [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | not needed: TASK-129 passed after TASK-154 |
@@ -3691,6 +3691,23 @@ gridlocked, 0 stalled heads, 0 parking failures; T63, T21, T29 and T53 pass (the
 `check`, `test:city` and the light e2e (38) pass, with timeouts under load (T64, T46, route-audit,
 T36.1) passing alone. Earlier measurements on older mains are in the TASK-129 entries above.
 TASK-113 (mode choice) starts on this main.
+
+TASK-155 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): Sindelfingen's 245 to 290
+failures at 0.15 all touched four gateways (now p:1292, p:1295, p:1298, p:1307) on cropped motorway
+pieces that reach no local parking, labelled `no_parking` though no facility was reachable. A
+lane-level car reachability (`src/network/car-service.ts`) now lets a gateway generate only legs a
+car can serve (a person whose next leg cannot be served stays put for the day; through and event
+trips only between servable ends), an import note `gateway_unserved` names each such gateway, and
+a trip needing parking fails as `no_parking` only when one of its facilities was reachable.
+Sindelfingen seeds 1 to 3: 445 / 155 / 290 released / completed / failed to 155 / 155 / 0 (and 168,
+158 on seeds 2, 3), served trips byte-identical; Munich has no such gateway (state hashes equal
+main). At the lead's request `scheduleTrips` takes the caller's compiled city (a contract change in
+architecture, demand section): a Munich demand rebuild costs 64 to 94 ms instead of about 2.2 s.
+Lead merge onto main with TASK-129: `schedule.ts` truncates unservable agendas, then TASK-129
+assigns household cars; the gateway test now compares trips without car ids, since a household's
+car indices shift when a member whose work is on a cut-off piece stays home, and asserts each car
+trip uses the driver's household car. Seed-1 gate 4,076 / 1 / 0 / 0 with T63, T21, T29 and T53;
+lint, format, build, the demand and sim unit tiers (436) pass; timeouts under load passed alone.
 
 ## Owner decisions log
 

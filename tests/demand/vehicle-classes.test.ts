@@ -127,7 +127,8 @@ test('separate per-trip streams classify locals, events and through traffic with
   ];
   for (let i = 0; i < 2; i++) {
     const id = `p:${city.nextId++}`;
-    city.places[id] = { ...home!, id, kind: 'gateway', population: 1, jobs: 1, connectors: [] };
+    const connectors = home!.connectors.map((c) => ({ ...c, id: `c:${city.nextId++}` }));
+    city.places[id] = { ...home!, id, kind: 'gateway', population: 1, jobs: 1, connectors };
   }
   const scenario = defaultScenario('grid5x5');
   scenario.demand.throughTripsPerHour[8] = 100;

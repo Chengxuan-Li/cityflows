@@ -16,7 +16,7 @@ it.skipIf(env.RUN_SLOW !== '1')(
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
     const { compiled } = result;
     const population = generatePopulation(city, scenario.demand);
-    const trips = scheduleTrips(city, population, scenario);
+    const trips = scheduleTrips(city, population, scenario, compiled);
     const requested = trips.filter((trip) => trip.departS < scenario.endS).length;
     const engine = createEngine();
     engine.load({ compiled, trips, scenario });
