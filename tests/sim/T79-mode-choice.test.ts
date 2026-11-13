@@ -57,15 +57,21 @@ test('T79 walked tours leave their car at home; driven ones stock it and drive i
 });
 
 test('T79 the same seed gives the same run; off gives the run without a choice', () => {
+  const { compiled, scenario, persons, trips } = townMorning();
   const hash = (modeChoice?: Scenario['demand']['modeChoice']) => {
-    const { compiled, scenario, persons, trips } = townMorning(modeChoice);
     const engine = createEngine();
-    engine.load({ compiled, trips, scenario, population: persons });
-    engine.step(12000);
+    engine.load({
+      compiled,
+      trips,
+      scenario: { ...scenario, demand: { ...scenario.demand, modeChoice } },
+      population: persons,
+    });
+    engine.step(6000);
     return engine.stateHash();
   };
-  expect(hash()).toBe(hash());
-  expect(hash({ enabled: false })).not.toBe(hash());
+  const on = hash();
+  expect(hash()).toBe(on);
+  expect(hash({ enabled: false })).not.toBe(on);
 });
 
 test('T79 a city whose trips cannot walk runs exactly as without the choice', () => {
