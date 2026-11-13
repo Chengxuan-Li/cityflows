@@ -140,7 +140,8 @@ test('extend, demographic controls, connectors and delete remain undoable', asyn
 test('disconnected painting and cancelled gestures leave no dangling place', async ({ page }) => {
   const original = (await saved(page)).city;
   await button(page, 'Place').click();
-  await stroke(page, [-180, 200], [-140, 220]);
+  // West of the grid but still on the map, which the sidebar narrows (TASK-160).
+  await stroke(page, [-120, 200], [-90, 220]);
   await expect(page.getByText('No lane within 60 m. Paint closer to a street.')).toBeVisible();
   expect((await saved(page)).city).toEqual(original);
   const start = await mapPoint(page, 60, 60);

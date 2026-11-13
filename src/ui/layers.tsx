@@ -1,6 +1,6 @@
 import { cityMarkingTheme } from '../schema/marking-theme';
 import type { MarkingThemeId } from '../schema/city';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { placeTrees } from '../render/vegetation';
 import { treeContext } from '../render/street';
 import type { LayerVisibility } from '../render/types';
@@ -70,16 +70,9 @@ export function Layers() {
       ),
     ),
   );
-  const { toggleLayer, toggleLayers } = useAppStore.getState();
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') toggleLayers();
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [toggleLayers]);
+  const { toggleLayer } = useAppStore.getState();
   return (
-    <section id="layers" className="layers-sheet" aria-label="Map layers">
+    <section id="layers" className="panel layers-panel" aria-label="Map layers">
       {session && (
         <label>
           Marking style

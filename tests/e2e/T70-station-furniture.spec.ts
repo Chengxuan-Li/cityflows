@@ -142,7 +142,7 @@ test('T70 Donnersbergerbrücke furniture in 2D and 3D: displays follow the clock
     toggle = layers.getByLabel('Rail', { exact: true });
   for (const label of ['Basemap', 'Entrances and exits'])
     await layers.getByLabel(label, { exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   const start = 7 * 3600;
   await seek(page, start);
   for (const view of ['2d', '3d'] as const) {
@@ -232,13 +232,13 @@ test('T70 Donnersbergerbrücke furniture in 2D and 3D: displays follow the clock
     const hash = await page.evaluate(() => window.cityflows!.hash());
     await button(page, 'Layers').click();
     await toggle.uncheck();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     await expect(canvas).toHaveAttribute('data-rail-tracks', '0');
     expect((await counts(canvas)).boards).toBe(0);
     expect(await displays(canvas)).toEqual([]);
     await button(page, 'Layers').click();
     await toggle.check();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     await expect(canvas).toHaveAttribute('data-station-furniture', /"displays":2/);
     // Furniture is visual only: the run's state hash does not move.
     expect(await page.evaluate(() => window.cityflows!.hash())).toBe(hash);

@@ -1,5 +1,5 @@
 import type { Vec2 } from '../geo/vec2';
-import type { MarkingThemeId, RoadClass, VehicleClass } from '../schema';
+import type { MarkingThemeId, PlaceKind, RoadClass, VehicleClass } from '../schema';
 
 export type MarkingRole =
   'edge' | 'lane' | 'centre' | 'channel' | 'hatch' | 'arrow' | 'stop' | 'bus';
@@ -260,42 +260,78 @@ export function roadStyle(
   return { ...tone, color: roadClasses ? tone.color : style.asphalt };
 }
 
-const placePalette = [
-  0x78b397, // mint
-  0xd48a7e, // coral
-  0x849fd3, // periwinkle
-  0xc29b62, // honey
-  0xb893c4, // lilac
-  0x75aeb4, // lagoon
+export function mixColor(a: number, b: number, t: number): number {
+  let out = 0;
+  for (const shift of [16, 8, 0]) {
+    const x = (a >> shift) & 255,
+      y = (b >> shift) & 255;
+    out |= Math.round(x + (y - x) * t) << shift;
+  }
+  return out;
+}
+
+/** TASK-162: one macOS system colour per place type, drawn as a quiet tint with a thin, slightly
+ * darker edge. System blue (#007AFF) is kept for selection. */
+const placeHues: Record<PlaceKind, number> = {
+  residential: 0x34c759, // green
+  work: 0x5856d6, // indigo
+  retail: 0xff9500, // orange
+  school: 0xffcc00, // yellow
+  station: 0x30b0c7, // teal
+  airport: 0xaf52de, // purple
+  parking: 0x32ade6, // cyan
+  gateway: 0xa2845e, // brown
+  other: 0xff2d55, // pink
+};
+
+export function placeColors(kind: PlaceKind) {
+  const hue = placeHues[kind];
+  return { fill: mixColor(0xffffff, hue, 0.3), edge: mixColor(0xffffff, hue, 0.62) };
+}
+
+/** Vehicles take their destination's hue from the macOS system colours, spread per destination
+ * so neighbouring destinations of one type still differ. Blue is left out for selection, yellow
+ * because it vanishes on light surfaces. */
+const vehicleHues = [
+  0x34c759, // green
+  0xff9500, // orange
+  0xff3b30, // red
+  0xaf52de, // purple
+  0x30b0c7, // teal
+  0x5856d6, // indigo
+  0xff2d55, // pink
+  0xa2845e, // brown
 ] as const;
 
 export function placeHue(id: string): number {
   // Hash the canonical ID so a place keeps its hue through edits, sorting and reopens.
   let hash = 2166136261;
   for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
-  return placePalette[(hash >>> 0) % placePalette.length]!;
+  return vehicleHues[(hash >>> 0) % vehicleHues.length]!;
 }
 
 export const style = {
   stall: 0xf9f7ef,
   walk: { sidewalk: 0xe2ded2, footway: 0xd7d3c5, steps: 0xb2ac9d },
   hillshadeAlpha: 0.3,
-  background: 0xf4f1e7,
+  /** TASK-162: an Apple-Maps light canvas; buildings, land use, water and green to match. Roads,
+   * markings, paving, rail and street furniture keep their real-world tones. */
+  background: 0xf2f1ee,
   context: {
-    building: 0xe5e1d7,
-    buildingEdge: 0xd5d0c5,
-    water: 0xd0e2e6,
-    green: 0xe0e8d5,
+    building: 0xe0ded8,
+    buildingEdge: 0xcac7c0,
+    water: 0xb3d7f2,
+    green: 0xcfe7c5,
     parking: 0xe5e4de,
-    landuse: 0xece9df,
+    landuse: 0xeeede9,
     landuseSub: {
-      path: 0xe5e4de,
-      residential: 0xeee7de,
-      commercial: 0xe9e6e1,
-      retail: 0xeee5df,
-      industrial: 0xe6e4df,
-      railway: 0xe8e6df,
-      construction: 0xede7d9,
+      path: 0xe8e7e3,
+      residential: 0xefeeea,
+      commercial: 0xf0ecea,
+      retail: 0xf2ebe8,
+      industrial: 0xebeae7,
+      railway: 0xe9e8e5,
+      construction: 0xedeae3,
     } as Record<string, number>,
     rail: 0xa7aaa5,
     tram: 0xb2b5af,
@@ -304,29 +340,29 @@ export const style = {
     taggedColourStrength: 0.28,
     windowStrength: 0.32,
     walls: {
-      brick: 0xd4b7a6,
-      plaster: 0xe6dfcf,
-      concrete: 0xd4d2c9,
-      glass: 0xc7d9d5,
-      wood: 0xd8c5a9,
-      metal: 0xcbd0cb,
+      brick: 0xd8bcae,
+      plaster: 0xe8e5de,
+      concrete: 0xd8d7d3,
+      glass: 0xcddae2,
+      wood: 0xdbc9ae,
+      metal: 0xcfd2d5,
     } as Record<string, number>,
     roofs: {
-      tile: 0xc6a898,
-      tiles: 0xc6a898,
-      roof_tiles: 0xc6a898,
-      metal: 0xc1c9c6,
-      concrete: 0xd0cec5,
-      slate: 0xb6bcb9,
-      glass: 0xcbded9,
-      gravel: 0xd0cbbd,
+      tile: 0xcaaea0,
+      tiles: 0xcaaea0,
+      roof_tiles: 0xcaaea0,
+      metal: 0xc5cacf,
+      concrete: 0xd3d2ce,
+      slate: 0xb9bdc2,
+      glass: 0xcfdee6,
+      gravel: 0xd3d0c8,
     } as Record<string, number>,
-    pitchedRoof: 0xcbb4a4,
-    flatRoof: 0xd2d1c8,
-    window: 0x9bafac,
+    pitchedRoof: 0xcfb9ab,
+    flatRoof: 0xd6d5d1,
+    window: 0xa2b3c1,
     windowFadeM: [150, 600] as const,
   },
-  vegetation: { canopy: [0xc0d0b0, 0xc9d6b9, 0xb9cba8], trunk: 0x958c76 },
+  vegetation: { canopy: [0xb6d8a6, 0xc1deb2, 0xaad19a], trunk: 0x9c8f7a },
   /** TASK-135: tram track forms, apart from the railway palette in `rail-geometry.ts`. */
   tram: {
     beds: { grass: 0x9dbf88, paved: 0xc4b9a8, ballast: 0x9e9c95 },
@@ -339,7 +375,8 @@ export const style = {
     sleeperLengthM: 2.3,
     sleeperWidthM: 0.26,
   },
-  asphalt: 0xaebdb8,
+  // TASK-162: a neutral real asphalt gray (main: 0xaebdb8, green-gray) for the neutral canvas.
+  asphalt: 0xacb0b3,
   shadow: 0x303d3a,
   deckEdge: 0x6e817b,
   deckEdgeWidthM: 0.35,
@@ -347,9 +384,9 @@ export const style = {
   deckGhostAlpha: 0.35,
   marking: markingTheme.colors.lane,
   connector: 0x6f827a,
-  selection: 0x4d8e94,
-  route: 0x588eac,
-  driving: 0x667c81,
+  selection: 0x007aff,
+  route: 0x007aff,
+  driving: 0x8e8e93,
   // TASK-111: pedestrians, darker than the paving; a warmer tone while waiting at a kerb.
   walker: { walking: 0x3d4a52, waiting: 0xb4683f },
   signalRed: 0xc95656,
@@ -357,12 +394,13 @@ export const style = {
   signalGreen: 0x30926c,
   dividerWidthM: markingTheme.classes.residential.lane.widthM,
   pointRadiusM: 6,
+  placeAlpha: 0.72,
   connectorRadiusM: 0.7,
   vehicleClasses: {
-    car: { lengthM: 4.5, widthM: 1.8, heightM: 1.5, color: 0x789397 },
-    van: { lengthM: 5.5, widthM: 2, heightM: 2.2, color: 0xc49b70 },
-    truck: { lengthM: 12, widthM: 2.5, heightM: 3.5, color: 0xad8385 },
-    bus: { lengthM: 12, widthM: 2.55, heightM: 3.2, color: 0x8c91b2 },
+    car: { lengthM: 4.5, widthM: 1.8, heightM: 1.5, color: 0x30b0c7 },
+    van: { lengthM: 5.5, widthM: 2, heightM: 2.2, color: 0xff9500 },
+    truck: { lengthM: 12, widthM: 2.5, heightM: 3.5, color: 0xa2845e },
+    bus: { lengthM: 12, widthM: 2.55, heightM: 3.2, color: 0xaf52de },
   } satisfies Record<
     VehicleClass,
     { lengthM: number; widthM: number; heightM: number; color: number }

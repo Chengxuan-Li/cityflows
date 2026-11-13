@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Scene3D } from '../render3d/scene';
 import type { Vec2 } from '../geo/vec2';
 import type { Bounds } from '../render/camera';
@@ -9,14 +9,12 @@ import type { Route } from '../routing';
 import type { LaneId } from '../schema';
 import { DEFAULT_SIM_PARAMS } from '../sim/params';
 import { useAppStore, type Session } from './store';
-import { createDrawRoadTool, initialRoadOptions } from './tools/draw-road';
+import { createDrawRoadTool } from './tools/draw-road';
 import { createRampTool } from './tools/ramp';
 import { createRoundaboutTool } from './tools/roundabout';
-import { RoadOptions } from './tools/road-options';
 import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
-import { createPlacePaintTool, type PaintKind } from './tools/place-paint';
-import { PlaceOptions } from './tools/place-options';
+import { createPlacePaintTool } from './tools/place-paint';
 import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
 
 function snapshotForMap(
@@ -125,6 +123,8 @@ function bindPointer(
     (event) => {
       if ((event.button !== 0 && event.button !== 1) || drag || gesture) return;
       event.preventDefault();
+      // Focused by the pointer, the map shows no focus ring; one reached by Tab does (app.css).
+      canvas.dataset.pointerFocus = '';
       canvas.focus({ preventScroll: true });
       reset();
       const navigation = event.button === 1 || space;
@@ -234,6 +234,7 @@ function bindPointer(
     },
     { signal },
   );
+  canvas.addEventListener('blur', () => delete canvas.dataset.pointerFocus, { signal });
   window.addEventListener(
     'blur',
     () => {
@@ -289,17 +290,6 @@ export function MapView() {
   const canvas3DRef = useRef<HTMLCanvasElement>(null);
   const mode = useAppStore((state) => state.viewMode);
   const tool = useAppStore((state) => state.tool);
-  const [options, setOptions] = useState(initialRoadOptions);
-  const [placeKind, setPlaceKind] = useState<PaintKind>('residential');
-  const [placeHint, setPlaceHint] = useState('');
-  const placeKindRef = useRef(placeKind);
-  useEffect(() => {
-    placeKindRef.current = placeKind;
-  }, [placeKind]);
-  const optionsRef = useRef(options);
-  useEffect(() => {
-    optionsRef.current = options;
-  }, [options]);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -318,6 +308,15 @@ export function MapView() {
       scene = view;
       await view.ready;
       if (signal.aborted) return;
+      // A sidebar opening or closing resizes the map; what sat at its centre stays there.
+      let size = { width: canvas.clientWidth, height: canvas.clientHeight };
+      const recentre = new ResizeObserver(() => {
+        const next = { width: canvas.clientWidth, height: canvas.clientHeight };
+        view.camera.pan((next.width - size.width) / 2, (next.height - size.height) / 2);
+        size = next;
+      });
+      recentre.observe(canvas);
+      signal.addEventListener('abort', () => recentre.disconnect());
 
       let drawn: Session | null = null;
       let drawn3D: Session | null = null;
@@ -638,8 +637,12 @@ export function MapView() {
 
       const tools = {
         select: createSelectTool(view),
-        road: createDrawRoadTool(view, () => optionsRef.current),
-        place: createPlacePaintTool(view, () => placeKindRef.current, setPlaceHint),
+        road: createDrawRoadTool(view, () => getState().roadOptions),
+        place: createPlacePaintTool(
+          view,
+          () => getState().placeKind,
+          (placeHint) => setState({ placeHint }),
+        ),
         ramp: createRampTool(view),
         roundabout: createRoundaboutTool(view),
       };
@@ -755,15 +758,6 @@ export function MapView() {
         tabIndex={mode === '3d' ? 0 : -1}
         style={{ position: 'absolute', inset: 0, visibility: mode === '3d' ? 'visible' : 'hidden' }}
       />
-      {tool === 'road' && <RoadOptions value={options} onChange={setOptions} />}
-      {tool === 'place' && (
-        <PlaceOptions value={placeKind} onChange={setPlaceKind} hint={placeHint} />
-      )}
-      {tool === 'ramp' && (
-        <div className="ramp-hint">
-          Pick a start road, then an end road · Enter or click to build · Esc cancels
-        </div>
-      )}
     </>
   );
 }

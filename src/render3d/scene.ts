@@ -26,7 +26,12 @@ import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
 import { markingThemes, style } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
-import type { CityGeometry, Pick, ParkedCarsSnapshot } from '../render/types';
+import {
+  defaultLayers,
+  type CityGeometry,
+  type Pick,
+  type ParkedCarsSnapshot,
+} from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
 import { Basemap3D } from './basemap';
 import { buildGeometry } from './geometry';
@@ -70,7 +75,7 @@ export class Scene3D {
   private readonly camera = new PerspectiveCamera(45, 1, 0.2, 50000);
   private readonly controls: MapControls;
   private readonly observer: ResizeObserver;
-  private readonly sun = new DirectionalLight(0xfff8ec, 1.4);
+  private readonly sun = new DirectionalLight(0xffffff, 0.95);
   private readonly vehicles = new Vehicles3D();
   private readonly walkers = new Walkers3D();
   private walkSignals: ReturnType<typeof buildWalkSignals> | undefined;
@@ -129,7 +134,7 @@ export class Scene3D {
   private walk: { sidewalks: Mesh; footways: Mesh; steps: Mesh } | undefined;
   private walkVisibility = { sidewalks: true, footways: true };
   private basemap: Basemap3D | undefined;
-  private tilesEnabled = true;
+  private tilesEnabled = defaultLayers.basemap;
   private lastRenderMs = performance.now();
   private readonly vehicleMatrix = new Matrix4();
   private shadowView = '';
@@ -147,7 +152,8 @@ export class Scene3D {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFShadowMap;
     this.scene.add(
-      new HemisphereLight(0xffffff, 0x9eaa99, 1.4),
+      // TASK-162: more sky, less sun: lighter, softer shadows for the flat Sonoma look.
+      new HemisphereLight(0xffffff, 0xd9dad6, 2),
       this.sun,
       this.sun.target,
       this.content,

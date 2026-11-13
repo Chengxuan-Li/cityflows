@@ -208,7 +208,10 @@ export function drawStations(furniture: StationFurniture, rail: RailGraph, table
       near.forEach((label, i) => {
         let entry = pool[i];
         if (!entry) {
-          const text = new Text({ text: '', style: { fontFamily: 'Arial', fontSize: 48 } });
+          const text = new Text({
+            text: '',
+            style: { fontFamily: ['Arimo', 'Arial'], fontSize: 48 },
+          });
           pool.push((entry = { text, layer: NaN, shown: '' }));
         }
         const { text } = entry;
@@ -222,7 +225,7 @@ export function drawStations(furniture: StationFurniture, rail: RailGraph, table
         text.anchor.set(0.5, label.anchorTop ? 0 : 0.5);
         if (entry.shown !== key) {
           const screen = label.style === 'screen';
-          text.style.fontFamily = screen ? 'monospace' : 'Arial';
+          text.style.fontFamily = screen ? 'monospace' : ['Arimo', 'Arial'];
           text.style.fontWeight = screen ? 'normal' : 'bold';
           text.style.fontSize = screen ? 40 : 48;
           text.style.fill = screen

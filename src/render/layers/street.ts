@@ -62,7 +62,12 @@ export function drawStreet(
       ] as const) {
         const words = new Text({
           text,
-          style: { fontFamily: 'Arial', fontSize: 32, fontWeight: 'bold', fill: 0xfffcf3 },
+          style: {
+            fontFamily: ['Arimo', 'Arial'],
+            fontSize: 32,
+            fontWeight: 'bold',
+            fill: 0xfffcf3,
+          },
         });
         words.scale.set(0.4 / 32);
         words.anchor.set(0.5, 0);
@@ -77,7 +82,7 @@ export function drawStreet(
     if (label) {
       const text = new Text({
         text: label,
-        style: { fontFamily: 'Arial', fontSize: 32, fill: 0x344843, align: 'center' },
+        style: { fontFamily: ['Arimo', 'Arial'], fontSize: 32, fill: 0x344843, align: 'center' },
       });
       text.scale.set(0.85 / 32);
       text.anchor.set(0.5, 0);

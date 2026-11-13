@@ -68,7 +68,7 @@ function boardTexture(create: CreateCanvas, name: string) {
   ctx.fillStyle = hex(stationColors.ink);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  fitText(ctx, name, 'bold {}px Arial, sans-serif', 112, 930);
+  fitText(ctx, name, 'bold {}px Arimo, Arial, sans-serif', 112, 930);
   ctx.fillText(name, 512, 96);
   return canvasTexture(canvas);
 }
@@ -104,7 +104,7 @@ function entranceTexture(create: CreateCanvas, name: string) {
   ctx.fillStyle = hex(stationColors.ink);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  fitText(ctx, name, 'bold {}px Arial, sans-serif', 64, 540);
+  fitText(ctx, name, 'bold {}px Arimo, Arial, sans-serif', 64, 540);
   ctx.fillText(name, 300, 244);
   return canvasTexture(canvas);
 }

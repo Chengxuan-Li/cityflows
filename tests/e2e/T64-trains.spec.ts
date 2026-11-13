@@ -102,7 +102,7 @@ test('T64 Munich trains stop at both platforms, pass below bridge, select, pause
     toggle = layers.getByLabel('Rail', { exact: true });
   for (const label of ['Basemap', 'Entrances and exits'])
     await layers.getByLabel(label, { exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   for (const view of ['2d', '3d'] as const) {
     if (view === '3d') await button(page, '3D').click();
     const canvas = page.getByLabel(view === '2d' ? 'City map' : '3D city view', { exact: true });
@@ -166,12 +166,12 @@ test('T64 Munich trains stop at both platforms, pass below bridge, select, pause
     const hash = await page.evaluate(() => window.cityflows!.hash());
     await button(page, 'Layers').click();
     await toggle.uncheck();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     await expect(canvas).toHaveAttribute('data-trains', '0');
     await expect(canvas).toHaveAttribute('data-rail-tracks', '0');
     await button(page, 'Layers').click();
     await toggle.check();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     expect(await page.evaluate(() => window.cityflows!.hash())).toBe(hash);
   }
   expect(errors).toEqual([]);
@@ -273,7 +273,7 @@ test('T64 Munich moving-train frame budget in both views, two runs', async ({ pa
     toggle = layers.getByLabel('Rail', { exact: true });
   for (const label of ['Basemap', 'Entrances and exits'])
     await layers.getByLabel(label, { exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   await page.getByRole('combobox', { name: 'Speed', exact: true }).selectOption('5');
   await writeFile(
     info.outputPath('train-environment.json'),
@@ -295,7 +295,7 @@ test('T64 Munich moving-train frame budget in both views, two runs', async ({ pa
       const on = await frameTiming(page, view === '2d' ? 'cityflows:render' : 'cityflows:render3d');
       await button(page, 'Layers').click();
       await toggle.uncheck();
-      await page.keyboard.press('Escape');
+      await button(page, 'Layers').click();
       await expect(canvas).toHaveAttribute('data-trains', '0');
       await expect(canvas).toHaveAttribute('data-rail-tracks', '0');
       const off = await frameTiming(
@@ -309,7 +309,7 @@ test('T64 Munich moving-train frame budget in both views, two runs', async ({ pa
       runs.push({ run, on, off, ratio: on.frameMs / off.frameMs });
       await button(page, 'Layers').click();
       await toggle.check();
-      await page.keyboard.press('Escape');
+      await button(page, 'Layers').click();
     }
     reports.push({ view, runs });
     await writeFile(info.outputPath('train-frames.json'), JSON.stringify(reports, null, 2));
