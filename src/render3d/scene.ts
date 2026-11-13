@@ -24,7 +24,7 @@ import {
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
-import { markingThemes, roadTint, style } from '../render/style';
+import { markingThemes, style } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
 import {
   defaultLayers,
@@ -104,7 +104,6 @@ export class Scene3D {
   private streetCounts: ReturnType<typeof placeStreet>['counts'] | undefined;
   private street: ReturnType<typeof buildStreet> | undefined;
   private paint: Mesh[] = [];
-  private asphalt: Mesh<BufferGeometry, MeshLambertMaterial>[] = [];
   private treeCounts: ReturnType<typeof placeTrees>['counts'] | undefined;
   private ground: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private terrainEnabled = true;
@@ -281,7 +280,7 @@ export class Scene3D {
       this.content.add(mesh);
       return mesh;
     };
-    const ground = add(geometry.surfaces, style.asphalt, !terrain.grid);
+    add(geometry.surfaces, style.asphalt, !terrain.grid);
     if (terrain.grid) {
       // Ground asphalt cannot cast a useful shadow onto itself. Only decks and
       // raised approaches enter the shadow pass; their visible mesh is unchanged.
@@ -308,9 +307,6 @@ export class Scene3D {
       this.content.add(caster);
     }
     const asphalt = add(geometry.surfaces, style.asphalt, !terrain.grid);
-    const casing = add(geometry.casings, 0xffffff, false);
-    this.asphalt = [ground, asphalt, casing];
-    for (const mesh of this.asphalt) mesh.material.vertexColors = true;
     const walk = buildWalk(city, renderedSource, geometry.heights);
     this.walk = {
       sidewalks: add(walk.sidewalks, style.walk.sidewalk, false),
@@ -334,7 +330,7 @@ export class Scene3D {
     this.canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
     this.street = buildStreet(furniture, city, geometry.heights);
     this.content.add(this.street.group);
-    add(geometry.slabs, 0xb4b4b8);
+    add(geometry.slabs, 0x899b99);
     const paint = add(geometry.markings, 0xffffff, false);
     paint.material.vertexColors = true;
     this.paint = [
@@ -382,7 +378,7 @@ export class Scene3D {
     const transform = new Object3D();
     const piers = new InstancedMesh(
       new BoxGeometry(1.2, 1, 1.2),
-      new MeshLambertMaterial({ color: 0xb4b4b8 }),
+      new MeshLambertMaterial({ color: 0x95a29c }),
       geometry.piers.length,
     );
     geometry.piers.forEach((pier, i) => {
@@ -395,17 +391,17 @@ export class Scene3D {
     this.content.add(piers);
     const poles = new InstancedMesh(
       new BoxGeometry(0.15, 6, 0.15),
-      new MeshLambertMaterial({ color: 0x6e6e73 }),
+      new MeshLambertMaterial({ color: 0x637773 }),
       geometry.supports.length,
     );
     const arms = new InstancedMesh(
       new BoxGeometry(1, 1, 1),
-      new MeshLambertMaterial({ color: 0x6e6e73 }),
+      new MeshLambertMaterial({ color: 0x637773 }),
       geometry.supports.length,
     );
     const boxes = new InstancedMesh(
       new BoxGeometry(0.55, 0.95, 0.4),
-      new MeshLambertMaterial({ color: 0x3a3a3c }),
+      new MeshLambertMaterial({ color: 0x344843 }),
       geometry.heads.length,
     );
     this.lamps = new InstancedMesh(
@@ -891,9 +887,6 @@ export class Scene3D {
       this.geometry?.crossings.getAttribute('position').count ?? 0,
     );
     if (!this.demand.consume(renderContinuously())) return;
-    // TASK-162: white streets at overview, a light asphalt gray close up (`roadTint`).
-    const tint = roadTint(this.getView().zoom / style.roadDetailScale3d);
-    for (const mesh of this.asphalt) mesh.material.color.setHex(tint);
     this.parking?.update(this.getView().zoom, this.selectedParking);
     this.parkedCars?.setStyle(this.getView().zoom, this.colourByClass);
     if (this.city && this.geometry)

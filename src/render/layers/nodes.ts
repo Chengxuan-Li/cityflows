@@ -18,8 +18,9 @@ export function roadEndEdges(_city: CompiledCity, road: CRoad, atEnd: boolean) {
 }
 
 export function nodeColor(city: CompiledCity, node: CNode, roadClasses = false): number {
+  if (!roadClasses) return style.asphalt;
   const highest = highestRoad(city, node.group === undefined ? [node.idx] : groupNodes(city, node));
-  return highest ? roadStyle(highest, roadClasses).color : style.asphalt;
+  return highest ? roadStyle(highest, true).color : style.asphalt;
 }
 
 function groupNodes(city: CompiledCity, node: CNode): number[] {
@@ -37,38 +38,18 @@ function highestRoad(city: CompiledCity, nodes: readonly number[]): CRoad | unde
 }
 
 /** TASK-131: a junction group is one surface. Its inner roads take the tone its members take,
- * that of the highest-ranked road at any member, so no seam shows between them (TASK-162: with
- * the default tones too); elsewhere a road keeps its own. */
+ * that of the highest-ranked road at any member, so no seam shows between them with road classes
+ * on; elsewhere a road keeps its own. */
 export function roadFill(city: CompiledCity, road: CRoad, roadClasses = false): number {
-  if (road.group === undefined) return roadStyle(road, roadClasses).color;
+  if (!roadClasses || road.group === undefined) return roadStyle(road, roadClasses).color;
   const highest = highestRoad(city, city.groups?.[road.group]?.nodes ?? [road.from, road.to]);
-  return roadStyle(highest ?? road, roadClasses).color;
+  return roadStyle(highest ?? road, true).color;
 }
 
 /** The junction polygon, curbs included (TASK-083). */
 export function drawNode(graphics: Graphics, node: CNode, color: number = style.asphalt): void {
   if (!node.outline.length) return;
   graphics.poly(node.outline).fill(color);
-}
-
-/** TASK-162: the junction's casing, beyond its widest road verge (the curb bands' width). */
-export function drawNodeCasing(
-  graphics: Graphics,
-  city: CompiledCity,
-  node: CNode,
-  roadClasses = false,
-): void {
-  if (!node.outline.length) return;
-  const roads = city.roads.filter((r) => r.from === node.idx || r.to === node.idx);
-  const top = highestRoad(city, [node.idx]);
-  const vergeM = Math.max(0, ...roads.map((r) => roadStyle(r, roadClasses).vergeM));
-  graphics.poly(node.outline).stroke({
-    color: top
-      ? roadStyle(top, roadClasses).casing
-      : roadStyle({ roadClass: 'residential', lanes: [] }).casing,
-    width: 2 * (vergeM + style.casingM),
-    join: 'round',
-  });
 }
 
 export function drawRoadJoins(

@@ -1,14 +1,10 @@
-import Flatbush from 'flatbush';
-import { BufferGeometry, Color, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
+import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
 import { crossingStripes } from '../render/layers/roads';
-import { nodeColor, roadFill } from '../render/layers/nodes';
-import { pointInPolygon } from '../geo/polyline';
 import { signalLayout } from './signals';
-import { placeColors, roadStyle, style } from '../render/style';
-import { EndType, inflatePathsD, JoinType } from 'clipper2-ts';
+import { placeColors } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
 import { buildMarkings, goreTriangles, triangleHeight } from './markings';
@@ -101,43 +97,6 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
     }
 }
 
-/** TASK-162: the 2D surface tones (white, pale yellow motorways and trunks, their junctions) as
- * vertex colours, one per triangle by its centroid, so the 3D streets match the 2D map. */
-function roadTones(city: CompiledCity, geometry: BufferGeometry) {
-  const shapes = [
-    ...city.roads.map((road) => ({ ring: road.surface, color: roadFill(city, road) })),
-    ...city.nodes.map((node) => ({ ring: node.outline, color: nodeColor(city, node) })),
-  ].filter(({ ring, color }) => ring.length >= 3 && color !== 0xffffff);
-  const flat = geometry.index ? geometry.toNonIndexed() : geometry;
-  if (flat !== geometry) geometry.dispose();
-  const position = flat.getAttribute('position');
-  const colors = new Float32Array(position.count * 3).fill(1);
-  if (shapes.length) {
-    const index = new Flatbush(shapes.length);
-    for (const { ring } of shapes) {
-      const xs = ring.map((p) => p.x),
-        ys = ring.map((p) => p.y);
-      index.add(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
-    }
-    index.finish();
-    const color = new Color();
-    for (let i = 0; i < position.count; i += 3) {
-      const centroid = {
-        x: (position.getX(i) + position.getX(i + 1) + position.getX(i + 2)) / 3,
-        y: (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3,
-      };
-      const hit = index
-        .search(centroid.x, centroid.y, centroid.x, centroid.y)
-        .find((j) => pointInPolygon(centroid, shapes[j]!.ring));
-      if (hit === undefined) continue;
-      color.setHex(shapes[hit]!.color);
-      for (let k = 0; k < 3; k++) colors.set([color.r, color.g, color.b], (i + k) * 3);
-    }
-  }
-  flat.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  return indexTerrain(flat);
-}
-
 export function buildGeometry(city: CompiledCity, source: CityGeometry, omitContextGround = false) {
   city = paintedCity(city);
   const heights = cityHeights(city, source);
@@ -182,38 +141,6 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
       }
     }
   }
-  // TASK-162: the 2D casing in 3D: each flat ground-level surface grown by its verge and casing,
-  // 1.2 cm under the pavement, so only the band beyond it shows. Raised, ramped and draped
-  // surfaces have none: a filled outline would cut through their profile.
-  const casingPositions: number[] = [],
-    casingColors: number[] = [];
-  const casing = (ring: Vec2[], growM: number, hex: number) => {
-    if (ring.length < 3) return;
-    const start = casingPositions.length;
-    for (const path of inflatePathsD([ring], growM, JoinType.Round, EndType.Polygon, 2, 2))
-      polygon(casingPositions, path, () => -0.012);
-    const c = new Color(hex);
-    for (let i = start; i < casingPositions.length; i += 3) casingColors.push(c.r, c.g, c.b);
-  };
-  for (const road of city.roads) {
-    const h = heights.roads[road.idx]!;
-    if (h.crossfall || h.fromM || h.toM || h.deckM) continue;
-    const { vergeM, casing: hex } = roadStyle(road);
-    casing(road.surface, vergeM + style.casingM, hex);
-  }
-  for (const node of city.nodes) {
-    if (heights.nodes[node.idx] || (source.terrain && source.nodes[node.id]!.layer === 0)) continue;
-    const roads = city.roads.filter((r) => r.from === node.idx || r.to === node.idx);
-    const top = roads.reduce<CRoad | undefined>(
-      (best, r) => (!best || r.classRank > best.classRank ? r : best),
-      undefined,
-    );
-    if (!top) continue;
-    const vergeM = Math.max(...roads.map((r) => roadStyle(r).vergeM));
-    casing(node.outline, vergeM + style.casingM, roadStyle(top).casing);
-  }
-  const casingGeometry = buffer(casingPositions);
-  casingGeometry.setAttribute('color', new Float32BufferAttribute(casingColors, 3));
   for (const node of city.nodes) {
     const z = heights.nodes[node.idx]!;
     const ground = heights.terrain.groundAt(node.pos.x, node.pos.y);
@@ -285,7 +212,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
     !omitContextGround,
   );
   if (source.terrain) context.ground = indexTerrain(context.ground);
-  const surfaceGeometry = roadTones(city, terrainBuffer(surfaces, landSurfaces, true, flatAreas));
+  const surfaceGeometry = terrainBuffer(surfaces, landSurfaces, true, flatAreas);
   const positions = surfaceGeometry.getAttribute('position');
   const uv = new Float32BufferAttribute(new Float32Array(positions.count * 2), 2);
   for (let i = 0; i < positions.count; i++)
@@ -294,7 +221,6 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
   return {
     context,
     surfaces: surfaceGeometry,
-    casings: casingGeometry,
     slabs: buffer(slabs),
     markings: buildMarkings(city, source, heights),
     crossings: terrainBuffer(crossings, landCrossings),

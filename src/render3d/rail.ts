@@ -52,11 +52,11 @@ const structure = {
   pierM: 1.4,
   embankment: 1.5,
   colors: {
-    concrete: 0xd0cfcb,
-    deck: 0xc4c4c2,
-    pier: 0xb4b4b8,
-    bank: 0xc9c6ba,
-    tube: 0xa6a6aa,
+    concrete: 0xc8c5bb,
+    deck: 0xb9b8b0,
+    pier: 0x95a29c,
+    bank: 0xbcb69e,
+    tube: 0x98a09a,
   },
 };
 

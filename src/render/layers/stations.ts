@@ -15,11 +15,11 @@ export const stationColors = {
   ink: 0xf8f6ef,
   screen: 0x26343a,
   screenInk: 0xf3e7bf,
-  roof: 0x8e8e93,
+  roof: 0x6f8b86,
   bench: 0xb59a76,
   bin: 0x6b8579,
   /** Lettering on the map itself. */
-  map: 0x3a3a3c,
+  map: 0x344843,
 };
 const zooms = { base: 1.5, small: 4, board: 10, display: 12, entrance: 6 };
 const maxLabels = 24;

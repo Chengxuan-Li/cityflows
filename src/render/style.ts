@@ -237,28 +237,18 @@ export const markingThemes: Record<MarkingThemeId, MarkingTheme> = {
 };
 export const markingTheme = markingThemes.de;
 
-/** TASK-162: an Apple-Maps light palette. Road surfaces are white; hierarchy shows by width, by a
- * casing that darkens with rank, and by a pale yellow on motorways, trunks and ramps. The Road
- * classes layer swaps in stronger class tones. `color` is the default surface, `classColor` the
- * Road classes one, `casing` the soft gray edge drawn under every paved surface. */
-const tone = (color: number, classColor: number, casing: number, vergeM: number) => ({
-  color,
-  classColor,
-  casing,
-  vergeM,
-});
-const local = tone(0xffffff, 0xffffff, 0xd9d8d3, 0.25);
-const avenue = tone(0xffffff, 0xffeaa3, 0xc2c1bc, 0.55);
-const expressway = tone(0xfde8b4, 0xffbf5c, 0xdcb874, 0.9);
+const local = { color: 0xbcc8c4, vergeM: 0.25 };
+const avenue = { color: 0xa6b7b4, vergeM: 0.55 };
+const expressway = { color: 0x899fa5, vergeM: 0.9 };
 const roads: Record<RoadClass, typeof local> = {
   motorway: expressway,
-  trunk: tone(0xfdeec8, 0xffd27a, 0xdcc084, 0.9),
+  trunk: expressway,
   primary: avenue,
-  secondary: tone(0xffffff, 0xfff5d4, 0xc9c8c3, 0.55),
-  tertiary: tone(0xffffff, 0xffffff, 0xcfcec9, 0.4),
+  secondary: avenue,
+  tertiary: { color: 0xb0bfb9, vergeM: 0.4 },
   residential: local,
-  service: tone(0xfcfcfb, 0xf3f3f1, 0xdfded9, 0.1),
-  ramp: tone(0xfdecbf, 0xffc96b, 0xdcbb7a, 0.4),
+  service: { color: 0xcad0c3, vergeM: 0.1 },
+  ramp: { color: 0xa1b2b4, vergeM: 0.4 },
 };
 
 export function roadStyle(
@@ -267,20 +257,7 @@ export function roadStyle(
 ) {
   const tone =
     road.roadClass === 'residential' && road.lanes.length > 1 ? avenue : roads[road.roadClass];
-  return {
-    color: roadClasses ? tone.classColor : tone.color,
-    casing: tone.casing,
-    vergeM: tone.vergeM,
-  };
-}
-
-/** TASK-162: the multiplier on road and junction surfaces by zoom (px per m). White at overview
- * zooms, as Apple Maps draws streets; it eases to a light asphalt gray as lane markings appear,
- * so the white markings read on their surface. Quantized: a change recolours every surface. */
-export function roadTint(zoom: number): number {
-  const [from, to] = style.roadDetailZoom;
-  const t = Math.round(8 * Math.max(0, Math.min(1, (zoom - from) / (to - from)))) / 8;
-  return mixColor(0xffffff, style.roadDetail, t);
+  return { ...tone, color: roadClasses ? tone.color : style.asphalt };
 }
 
 export function mixColor(a: number, b: number, t: number): number {
@@ -314,7 +291,7 @@ export function placeColors(kind: PlaceKind) {
 
 /** Vehicles take their destination's hue from the macOS system colours, spread per destination
  * so neighbouring destinations of one type still differ. Blue is left out for selection, yellow
- * because it vanishes on white and pale yellow streets. */
+ * because it vanishes on light surfaces. */
 const vehicleHues = [
   0x34c759, // green
   0xff9500, // orange
@@ -334,16 +311,18 @@ export function placeHue(id: string): number {
 }
 
 export const style = {
-  stall: 0xffffff,
-  walk: { sidewalk: 0xe7e6e2, footway: 0xdedcd6, steps: 0xbebcb6 },
+  stall: 0xf9f7ef,
+  walk: { sidewalk: 0xe2ded2, footway: 0xd7d3c5, steps: 0xb2ac9d },
   hillshadeAlpha: 0.3,
+  /** TASK-162: an Apple-Maps light canvas; buildings, land use, water and green to match. Roads,
+   * markings, paving, rail and street furniture keep their real-world tones. */
   background: 0xf2f1ee,
   context: {
     building: 0xe0ded8,
     buildingEdge: 0xcac7c0,
     water: 0xb3d7f2,
     green: 0xcfe7c5,
-    parking: 0xe7e6e3,
+    parking: 0xe5e4de,
     landuse: 0xeeede9,
     landuseSub: {
       path: 0xe8e7e3,
@@ -354,8 +333,8 @@ export const style = {
       railway: 0xe9e8e5,
       construction: 0xedeae3,
     } as Record<string, number>,
-    rail: 0xaeaeb2,
-    tram: 0xbdbdc1,
+    rail: 0xa7aaa5,
+    tram: 0xb2b5af,
   },
   buildings: {
     taggedColourStrength: 0.28,
@@ -386,41 +365,33 @@ export const style = {
   vegetation: { canopy: [0xb6d8a6, 0xc1deb2, 0xaad19a], trunk: 0x9c8f7a },
   /** TASK-135: tram track forms, apart from the railway palette in `rail-geometry.ts`. */
   tram: {
-    beds: { grass: 0xa8d29a, paved: 0xd3d0ca, ballast: 0xb1afaa },
-    sleeper: 0xcfccc6,
-    rail: 0x6c6c71,
-    groove: 0x58585d,
+    beds: { grass: 0x9dbf88, paved: 0xc4b9a8, ballast: 0x9e9c95 },
+    sleeper: 0xc6c2b8,
+    rail: 0x5b6266,
+    groove: 0x4a5054,
     bedWidthM: 3.2,
     railWidthM: 0.16,
     sleeperSpacingM: 0.9,
     sleeperLengthM: 2.3,
     sleeperWidthM: 0.26,
   },
-  /** The surface tone everywhere a road class does not set one (junctions, transitions). */
-  asphalt: 0xffffff,
-  /** TASK-162: the multiplier `roadTint` reaches at `roadDetailZoom[1]`, a light neutral asphalt
-   * gray: white markings keep 1.8:1 on it (1.9:1 on the old asphalt). */
-  roadDetail: 0xbfc1c4,
-  roadDetailZoom: [1.2, 4] as const,
-  /** 3D zooms are divided by this before `roadTint`: the perspective view stays white longer. */
-  roadDetailScale3d: 2.5,
-  /** Under-surface casing: its width beyond the verge, m. */
-  casingM: 0.45,
-  shadow: 0x3a3a3c,
-  deckEdge: 0x9a9aa0,
+  // TASK-162: a neutral real asphalt gray (main: 0xaebdb8, green-gray) for the neutral canvas.
+  asphalt: 0xacb0b3,
+  shadow: 0x303d3a,
+  deckEdge: 0x6e817b,
   deckEdgeWidthM: 0.35,
   tunnelAlpha: 0.55,
   deckGhostAlpha: 0.35,
   marking: markingTheme.colors.lane,
-  connector: 0x8e8e93,
+  connector: 0x6f827a,
   selection: 0x007aff,
   route: 0x007aff,
   driving: 0x8e8e93,
   // TASK-111: pedestrians, darker than the paving; a warmer tone while waiting at a kerb.
-  walker: { walking: 0x3a3a3c, waiting: 0xff9500 },
-  signalRed: 0xff3b30,
-  signalAmber: 0xff9f0a,
-  signalGreen: 0x28c840,
+  walker: { walking: 0x3d4a52, waiting: 0xb4683f },
+  signalRed: 0xc95656,
+  signalAmber: 0xe7a637,
+  signalGreen: 0x30926c,
   dividerWidthM: markingTheme.classes.residential.lane.widthM,
   pointRadiusM: 6,
   placeAlpha: 0.72,

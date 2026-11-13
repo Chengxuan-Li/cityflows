@@ -1,8 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { button, city, gridPoint, pageErrors } from './helpers';
 
-/** Marking-coloured pixels (0xfffcf3, brighter than the 0xf2f1ee canvas and, zoomed in this far,
- * the asphalt tint of the white streets, TASK-162) of the map alone (the
+/** Marking-coloured pixels (0xfffcf3, brighter than the 0xf4f1e7 ground) of the map alone (the
  * panels hidden, as bench/geometry-shots.ts does) within `radius` px of `centre`: the crossings'
  * stripes and lane lines, which a crossing edit leaves. */
 async function markingPixels(page: Page, centre: { x: number; y: number }, radius = 160) {

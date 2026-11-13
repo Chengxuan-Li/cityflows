@@ -9,14 +9,14 @@ export const tramStopColors = {
   kerb: 0x8c897f,
   tactile: 0xe6d47c,
   rib: 0xbfa84c,
-  roof: 0x8e8e93,
+  roof: 0x6f8b86,
   plate: 0x3f7a58,
   screen: 0x26343a,
   screenInk: 0xf3e7bf,
   mark: 0xf4f1e6,
   markEdge: 0x6b7378,
   /** Lettering on the map itself. */
-  map: 0x3a3a3c,
+  map: 0x2f4640,
 };
 /** Zoom (pixels per metre) from which each part is drawn. */
 const zooms = { island: 1.5, mark: 3, tactile: 4, furniture: 5, label: 12 };

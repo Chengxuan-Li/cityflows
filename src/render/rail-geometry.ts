@@ -52,7 +52,7 @@ export interface RailShape {
   node?: number;
 }
 /** TASK-132: bridge decks, and the dashed outline and portal marks of tunnel and covered track. */
-const structureStyle = { deck: 0xdcdbd7, edge: 0x8e8e93, tunnelEdge: 0x7c7c80, portal: 0x636366 };
+const structureStyle = { deck: 0xd8d5cb, edge: 0x7d817b, tunnelEdge: 0x6d716b, portal: 0x5d615c };
 export const bedWidthM = (t: {
   kind: RailTrack['kind'];
   service?: string;
@@ -322,16 +322,16 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
       continue;
     }
     const color = t.service
-      ? 0xcbc8c2
+      ? 0xb6aa98
       : t.kind === 'subway' ||
           t.kind === 'light_rail' ||
           t.usage === 'suburban' ||
           stationWays.has(t.osmId ?? t.id)
-        ? 0xaab3bc
-        : 0xc2c1bd;
+        ? 0x8aa6a6
+        : 0xb5ae9e;
     stroke(t.line, bedWidthM(t), t.layer, color, alpha, false, pick);
     for (const side of [-0.72, 0.72])
-      stroke(offsetPolyline(t.line, side), 0.18, t.layer, 0x7c7c80, alpha, false, pick, true);
+      stroke(offsetPolyline(t.line, side), 0.18, t.layer, 0x777b78, alpha, false, pick, true);
     if (grade === 'ground') {
       const mapped = city.rail.nodes.filter(
         (n) => (n.id === t.from || n.id === t.to) && n.crossing?.kind === 'rail',
@@ -351,7 +351,7 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
           add(
             booleanOpD(ClipType.Intersection, rails, asphalt, FillRule.NonZero, 3),
             0,
-            0x67676c,
+            0x626b67,
             1,
             true,
             pick,
@@ -391,7 +391,7 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
     );
   }
   for (const n of city.rail.nodes.filter((n) => n.kind === 'switch'))
-    add([circle(n.pos, 1.3)], n.layer, 0x7c7c80, 1, false, undefined, false, { node: n.idx });
+    add([circle(n.pos, 1.3)], n.layer, 0x77857d, 1, false, undefined, false, { node: n.idx });
   for (const [platform, p] of city.rail.platforms.entries()) {
     const paths =
       p.shape.kind === 'polygon'
@@ -399,14 +399,14 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
         : p.shape.kind === 'line'
           ? inflatePathsD([p.shape.line], 1, JoinType.Round, EndType.Butt, 2, 3)
           : [circle(p.shape.pos, 1.8)];
-    add(paths, p.layer, p.mode === 'rail' ? 0xd7dade : 0xdcdcd8, 1, p.mode === 'tram', {
+    add(paths, p.layer, p.mode === 'rail' ? 0xc1d4ce : 0xd4d7cd, 1, p.mode === 'tram', {
       kind: 'platform',
       platform,
     });
   }
   for (const p of city.places.filter((p) => source?.places[p.id]?.station)) {
-    add([circle(p.centroid, 5)], 0, 0x30b0c7, 1, false, { kind: 'place', place: p.idx });
-    add([circle(p.centroid, 2.4)], 0, 0xffffff, 1, false, { kind: 'place', place: p.idx });
+    add([circle(p.centroid, 5)], 0, 0x587f77, 1, false, { kind: 'place', place: p.idx });
+    add([circle(p.centroid, 2.4)], 0, 0xf8f6ef, 1, false, { kind: 'place', place: p.idx });
   }
   return shapes;
 }

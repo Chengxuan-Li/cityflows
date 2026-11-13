@@ -5,7 +5,7 @@ import type { Vec2 } from '../../geo/vec2';
 import type { Pick } from '../types';
 import { style } from '../style';
 
-export const trainColors = { sbahn: 0xd8453e, mainline: 0x5b7896, tram: 0x2a9bb3, roof: 0xf2f2f2 };
+export const trainColors = { sbahn: 0xbc4647, mainline: 0x607e99, tram: 0x438b99, roof: 0xecebe4 };
 /** TASK-132: tunnels and roofs hide trains in 2D; a ground track keeps them whatever its layer. */
 const hidden = (track: RailGraph['tracks'][number]) =>
   trackGrade(track) === 'tunnel' || trackGrade(track) === 'covered';
