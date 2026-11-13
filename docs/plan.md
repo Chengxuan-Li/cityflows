@@ -163,29 +163,31 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-132](tasks/TASK-132.md) | 10 | Rail heights: tunnels below ground with portals, bridges and viaducts on piers, ramps within 4% (trams 6%); find and draw the Munich tunnel missing today | `src/network/rail.ts`, rail drawing 2D and 3D, `src/render3d/heights.ts` (rail), small importer functions | 126, 127, 135 | T72, the tunnel drawn, no sim hash change | done 2026-11-11 |
 | [TASK-134](tasks/TASK-134.md) | 10 | Overhead lines: wired by `electrified` (no tag draws it), close parallel tracks share masts and portals every 40 to 60 m clear of switches, crossings, roads and platforms, a contact and messenger wire over each track; 2D and 3D | new catenary modules, scene hooks, a small `electrified` read in the rail importer | 126, 132, 135 | T74, counts and shots, no hash change | done 2026-11-11 |
 | [TASK-137](tasks/TASK-137.md) | 10 | Tram stops: imported stops and platforms grouped per stop, generated islands for node-only stops, shelters, names, markings and a name-and-lines display; visual only | new tram-stop modules, `src/schema/rail.ts` (optional stops), scene hooks, rail inspector | 126, 133, 135 | T73, every Munich tram stop placed or listed, no sim hash change | done 2026-11-11 |
-| [TASK-136](tasks/TASK-136.md) | 10 | Level crossings | rail import, crossing placement and drawing | 127, 135, 138 for tram service | T75, shots | import and drawing merged; operating equipment reviewed in draft PR #1; CI green, held for owner |
-| [TASK-138](tasks/TASK-138.md) | 10 | Scheduled trams serving stops and crossing road traffic | timetable, tram poses, vehicle drawing and inspection | 135, 137, 136 for crossing priority | service tests, Munich shots and live car interaction | reviewed in draft PR #1; CI green, held for owner |
+| [TASK-136](tasks/TASK-136.md) | 10 | Level crossings | rail import, crossing placement and drawing | 127, 135, 138 for tram service | T75, shots | done 2026-11-13 (PR #1 merged on TASK-154) |
+| [TASK-138](tasks/TASK-138.md) | 10 | Scheduled trams serving stops and crossing road traffic | timetable, tram poses, vehicle drawing and inspection | 135, 137, 136 for crossing priority | service tests, Munich shots and live car interaction | done 2026-11-13 (PR #1 merged on TASK-154) |
 | [TASK-141](tasks/TASK-141.md) | 7 | Diagnose the Munich parking-motion failure | T54 repro and trace | 118 | first divergence on main | done with TASK-142 (lead review below) |
 | [TASK-142](tasks/TASK-142.md) | CI | Repair the November 12 nightly full suite | six affected browser specs, beside TASK-141 | nightly run 43187179345 | Full | done (Full run 43193281232 green) |
 | [TASK-143](tasks/TASK-143.md) | 3 | Reuse identical route searches by a waiting queue head | sim head detours | 121 | unchanged traffic hashes and fewer repeated searches | done (Full run 43216929096 passed) |
 | [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | merged in PR #4 |
 | [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D fixed in TASK-148 |
 | [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | merged in PR #3 |
-| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
+| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | done 2026-11-13 (PR #1 merged) |
 | [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | done (PR #6) |
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
 | [TASK-150](tasks/TASK-150.md) | 7 | A car leaving a lot waits clear of the public lane and merges continuously once granted | `src/sim/parking.ts`, `manoeuvre.ts`, `engine.ts` (exit), T77 | 118, 122, 149 | T77, witness 0 overlaps, T54/T59/T63, Munich gate, shots | done 2026-11-13 |
-| [TASK-151](tasks/TASK-151.md) | 7 | PR #1 on today's main: find why crossings and tram service plus main's parking changes fail the gate (3,300 / 49 / 1) and repair the cause | `src/sim/**` (crossing control, rail service, parking, engine), tests | 136, 138, 147, 149, 150 | Munich gate, T75/T76, parking tests, 0.1 s replay | stopped 2026-11-13: loss is inside B56 (owner decision) |
+| [TASK-151](tasks/TASK-151.md) | 7 | PR #1 on today's main: find why crossings and tram service plus main's parking changes fail the gate (3,300 / 49 / 1) and repair the cause | `src/sim/**` (crossing control, rail service, parking, engine), tests | 136, 138, 147, 149, 150 | Munich gate, T75/T76, parking tests, 0.1 s replay | closed 2026-11-13: B56 fixed by TASK-154; PR #1 merged |
 | [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | done 2026-11-13 |
-| [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | in progress (Claude Code subagent) |
+| [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | done 2026-11-13 (merged on TASK-154) |
 | [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | batch 3 (after TASK-129 merges) |
-| [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | in progress (Claude Code subagent) |
+| [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | done 2026-11-13 (drain (b) and (c) open: TASK-161, TASK-153) |
 | [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | in progress (Claude Code subagent) |
-| [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | queued (after TASK-153) |
-| [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | queued (after TASK-153, beside TASK-156) |
+| [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
+| [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | conditional (after TASK-154) |
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | queued (after TASK-154) |
 | [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
+| [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | queued (after TASK-154 and TASK-153 merge) |
+| [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1147,6 +1149,8 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-158 | Claude Code, the lead's subagent | Opus 5.5 | high | 5358 (production 5458) |
 | TASK-159 | Claude Code, the lead's subagent | Opus 5.5 | high | 5359 (production 5459) |
 | TASK-160 | Claude Code, the lead's subagent | Opus 5.5 | high | 5360 (production 5460) |
+| TASK-161 | Claude Code, the lead's subagent | Opus 5.5 | high | 5361 (production 5461) |
+| TASK-162 | Claude Code, the lead's subagent | Opus 5.5 | high | 5362 (production 5462) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3609,7 +3613,69 @@ the exit lane only, so a car bound for the far lane of a two-way street waits in
 (Munich 333 pairs, Sindelfingen 1,749), and its grant checks only the far lane's gap; holds inside
 aisle lanes no lane vehicle reaches (Munich 68, Sindelfingen 232).
 
+TASK-153 (Claude Code subagent, Opus 5.5 high, 2026-11-13; held until TASK-154): at pk:2049, car
+3599 waited 2,173 s at entry `c:2155` because `lotBusy` closed the lot to every arrival while any
+car was leaving, at either mouth (3796 held 2,111 s at exit `c:10844` for a gap on `r:663#0`).
+Relaxing that exposed a deadlock: TASK-149's shared-mouth yield measured from the connector, while
+TASK-150 checks the departing car's gap at its join station short of it. The branch blocks an
+arrival only where its path to its bay comes within body clearance of a departing car's stand or
+remaining drive (otherwise it takes the next free clear bay, moving its claim), measures the yield
+from the earlier of connector and join station, and lets a car leaving a full lot for a place the
+lot serves claim the bay it frees (van 2796's refusal at pk:2056 on PR #1 plus main; no case on
+main seeds 1 to 3). pk:2049 longest admission wait 2,173 s to 6.8 s (343 s counting a stop just
+upstream at a genuinely shared mouth); its exit waits worsen at seed 1 (2,111 to 3,152 s, car 3544
+held while through traffic stands across its join point on `r:639#0`), mixed on seeds 2 and 3.
+`tests/sim/lot-admission.test.ts` (4 cases, all failing on main); T48, T52, T54, T59, T63, T77 and
+the lot-access city test pass; `check`, `test:city`, light e2e 37. Seed 1: 4,327 completed, 32
+gridlocked, 1 stalled head (car 4622 at the head of `r:961#0`, waiting for `r:364#0`: the B56 loop),
+0 parking failures; seeds 2 and 3: 3,981 / 29 and 3,314 / 53 (main 3,909 / 30 and 3,169 / 50). No
+pinned hash moved. Held: it is re-measured on top of TASK-154. Open: pk:2049 exit waits need a
+keep-clear rule for through traffic; pk:2052's second entry starved by a stream of arrivals; trips
+starting and ending at one lot drive out and back. `5de8b78` on `task/153-lot-admission`.
+
+TASK-154 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): TASK-131 Phase 3 lands from
+candidate `4ab4d71` (exit reservation capped at physical length, reserved-lane passing, downstream
+lane choice, shared-lane early head release, bounded roadside courtesy) with one new rule: a car
+already admitted to a junction group blocks a shared movement only if it could reach it before the
+entering car clears, on the timing single junctions use (`r:961`'s right turn was refused through
+every green by cars admitted at `r:968` and `r:964` 70 m or more upstream; new T68 case). Four exact
+rewrites (seed-1 hash unchanged after each) brought Munich step time to +4.0% over eight warm
+alternating pairs (median pair +5.0%, range -0.3% to +9.4%; route requests 114,989 against
+124,583); Sindelfingen -0.8%. Drain criterion over seeds 1 to 3: (a) no sustained cycle (main 38 /
+72 / 58); (d) zero stalled heads; (b) not met, worst single visits `r:961` 1,803 / 1,785 / 1,544 s
+(group 10 gives its right turn 15 s per 120 s while the `r:966 > r:703` stream never stops inside
+the group: TASK-161) and `r:997` / `r:273` up to 1,299 s (the pk:2049 jam, TASK-153); (c) not met
+on seeds 2 and 3 (one to three cars on inner links at 10:00 for 13 to 111 s). Cars on the six loop
+roads at 10:00: 31 / 67 / 67 (main 85 / 54 / 107); longest inner-link stop all morning 179 s (main
+about 360). Seeds 1 to 3: 4,224 / 4,134 / 3,825 completed, 6 / 11 / 8 gridlocked, 0 stalled heads.
+PR #1 on top passes the seed-1 gate (3,818 / 8 / 0 / 0); cars stopped on the tracks 667 s at
+facility 1 and 4 s at facility 2 (TASK-151: 8,509 and 5,790), tram holds of 30 s or more 8 (32).
+Lead run of the merge onto main (`task/lead-154-merge`): `check` (1,248), seed-1 gate 4,224 / 6 / 0
+with one parking failure on `r:669#0` (within the test's 2% rule). Only the candidate's own pins
+moved (T46, T22, T53). The traffic baseline is unchanged pending the owner (main now completes far
+above it).
+
+TASK-153 merge (lead, 2026-11-13): stacked on main with TASK-154 (`task/lead-153-merge`, with the
+lead's integration of TASK-152 in `f8cb08a`). Seed-1 gate: 4,560 completed, 4 gridlocked, 0 stalled
+heads, 0 parking failures (TASK-154 alone 4,224 / 6 / 0 / 1; the `r:669` parking failure is gone).
+`check` (1,252), the sim unit tier (364). Merged.
+
+PR #1 merge (lead, 2026-11-13; TASK-136 operating crossings, TASK-138 scheduled trams, TASK-147
+repair, with TASK-151's Sindelfingen pins): stacked on main with TASK-154 and TASK-153
+(`task/lead-pr1-final`). Conflicts: `engine.ts` keeps TASK-154's reserved-space spawn check and PR
+#1's rail-crossing spawn check; `intersection.ts` keeps TASK-154's group clearance helpers and PR
+#1's rail bands; Munich compile pins move for TASK-152's departure connectors plus PR #1's crossing
+facilities and compiled `rail.tramStops` (T75's stripped compile for Munich alone, since Sindelfingen
+has no tram stops). Seed-1 gate: 4,373 completed, 5 gridlocked, 0 stalled heads, 0 parking
+failures (main before 4,560 / 4 / 0 / 0); T53 passes. `check` (1,304), `test:city` (168). Merged;
+PR #1 closes with it. TASK-128 to TASK-130's holds are unaffected.
+
 ## Owner decisions log
+
+- 2026-11-13 (owner): reset the traffic baseline to main once PR #1's CI passes. Map styling
+  starts now in parallel with TASK-160 phase 2 (TASK-162): a plain canvas with the OSM tiles off by
+  default (still a Layers toggle), quiet place tints, and vehicles tinted by destination in the macOS
+  system colours.
 
 - 2026-11-13 (owner): restyle CityFlows as a clean Mac app in the Sonoma / Ventura flat manner
   (not Liquid Glass): Arimo throughout, macOS system blue accent, a docked window (unified

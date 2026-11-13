@@ -471,8 +471,6 @@ export function createWalkers(
     held.position = position;
     held.braking = (v * v) / (2 * brakeOf(id));
     held.best = Infinity;
-    const route = vehicles.route[id];
-    const step = vehicles.routeStep[id]!;
     let offset: number;
     let current: number;
     if (lane) {
@@ -486,7 +484,9 @@ export function createWalkers(
       current = path!.toLane;
     }
     check(current, offset);
-    const after = city.movements[route?.movements[step + 1] ?? -1];
+    // The route is read only when the next movement can start within range (its lengthM >= 0).
+    if (offset + city.lanes[current]!.lengthM - position > RANGE_M) return held.best;
+    const after = city.movements[vehicles.route[id]?.movements[vehicles.routeStep[id]! + 1] ?? -1];
     if (after && after.fromLane === current) {
       offset += city.lanes[current]!.lengthM + after.lengthM;
       if (offset - position <= RANGE_M) check(after.toLane, offset);

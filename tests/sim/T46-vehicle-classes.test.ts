@@ -29,10 +29,11 @@ const before = {
     trips: 56,
   },
   town: {
+    // Phase 3's downstream lane choice saves 0.5 vehicle-seconds across the same 207 trips.
     completed: 207,
-    meanTravelTimeS: 139.12753623188408,
-    meanDelayS: 46.17287949926406,
-    hash: 2437126976,
+    meanTravelTimeS: 139.12512077294687,
+    meanDelayS: 46.17046404032686,
+    hash: 3659696175,
     trips: 414,
   },
 };

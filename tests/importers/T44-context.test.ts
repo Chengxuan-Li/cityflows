@@ -51,11 +51,12 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             '9005be62236f1a577c1233f52c7fd63f9cc784616b0ca0bc42c46d9aeb4db02b',
             // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
             // removed every pin equals 3e9951a's.
-            'a9235f46c7ca41ab42721c8a8e471965c7503d39f4a412225cc612b21fcfe3fa',
+            'c2ce8f1b2db76ed6a2dc86709e01c904ba2d0c02de344a436966c1345d7fb835',
           ]
         : [
             '9f2bc7ae9ca77a4f306668c0d50bd740bb9903582d8084f28d31c466a1f164e6',
-            '0e3784fb62ab22d8189d8faa7b114de51cd51534e4184563d3ffcf49d9286948',
+            // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
+            '986083590a892c4c6abcd6438f65e446421cbc9933cd6df5b6d3c7e5c40ca12d',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;
