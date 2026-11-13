@@ -97,6 +97,9 @@ export function createGrade(layer: number) {
   const arrows = new Graphics();
   const crossings = new Graphics();
   const places = new Graphics();
+  // TASK-167: place tints sit under the road surfaces at every zoom; outlines of lots and point
+  // markers stay in `places` above.
+  const placeFills = new Graphics();
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
@@ -105,6 +108,7 @@ export function createGrade(layer: number) {
   const bands = new Graphics();
   const slotTicks = new Graphics();
   terrain.addChild(
+    placeFills,
     rail,
     railDetail,
     footways,
@@ -146,6 +150,7 @@ export function createGrade(layer: number) {
     arrows,
     crossings,
     places,
+    placeFills,
     connectors,
     signals,
     vehicles,
@@ -463,6 +468,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     for (const graphics of walkerLayers.values()) graphics.visible = layerVisibility.pedestrians;
     disconnectedOverlay.visible = layerVisibility.disconnected;
     for (const grade of visibleGrades) {
+      if (grade.placeFills.visible !== layerVisibility.places) {
+        grade.placeFills.visible = layerVisibility.places;
+        grade.terrain.updateCacheTexture();
+      }
       grade.places.visible = layerVisibility.places;
       grade.connectors.visible = layerVisibility.connectors;
       grade.signals.visible = layerVisibility.signals;
@@ -827,7 +836,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           updateSignals.push(drawWalkSignals(city, node, grade.signals));
         }
       }
-      updatePlaces = drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
+      updatePlaces = drawPlaces(
+        grades.get(0)!.places,
+        city,
+        shapes,
+        grades.get(0)!.connectors,
+        grades.get(0)!.placeFills,
+      );
       updatePlaces(camera.zoom);
       for (const grade of visibleGrades) {
         const bounds = grade.terrain.getLocalBounds();

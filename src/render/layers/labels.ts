@@ -15,7 +15,7 @@ import type { ViewBounds } from './stations';
  * textures. */
 const fontOf = (s: LabelStyle) =>
   `${labelFonts[s].bold ? 'bold ' : ''}${labelFonts[s].sizePx}px Arimo, Arial, sans-serif`;
-const PAGE = 1024;
+const PAGE = 512;
 
 interface Glyph {
   fill: Texture;
@@ -23,7 +23,8 @@ interface Glyph {
 }
 
 class GlyphAtlas {
-  private readonly resolution = Math.max(2, Math.ceil(window.devicePixelRatio));
+  // Twice the device resolution: street names are drawn up to 1.45 times their atlas size.
+  private readonly resolution = 2 * Math.ceil(window.devicePixelRatio);
   private readonly glyphs = new Map<string, Glyph>();
   private readonly metrics = new Map<string, TextMetrics>();
   private readonly measurer = document.createElement('canvas').getContext('2d')!;
@@ -182,7 +183,7 @@ export function createLabelLayer() {
           sprite.alpha = label.alpha;
           sprite.position.set(g.x, g.y);
           sprite.rotation = g.rotation;
-          sprite.scale.set(1 / zoom);
+          sprite.scale.set(label.scale / zoom);
           sprite.visible = true;
         }
       }

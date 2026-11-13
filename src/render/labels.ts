@@ -10,14 +10,21 @@ import type { CityGeometry } from './types';
  * do not jitter while panning. Text sizes are screen pixels; positions are world metres.
  */
 export type LabelStyle = 'major' | 'minor' | 'station' | 'stop' | 'place' | 'area';
-export const labelFonts: Record<LabelStyle, { sizePx: number; bold: boolean }> = {
-  station: { sizePx: 13, bold: true },
-  major: { sizePx: 12, bold: true },
-  stop: { sizePx: 11, bold: false },
-  place: { sizePx: 11, bold: true },
-  minor: { sizePx: 11, bold: false },
-  area: { sizePx: 11, bold: false },
+/** Font sizes in pixels. Street names grow with the map from 2 px/m, as (zoom / 2)^0.3, up to
+ * `maxPx`: 11 to 16 px for minor streets, 12 to 17 px for major ones. */
+export const labelFonts: Record<LabelStyle, { sizePx: number; maxPx: number; bold: boolean }> = {
+  station: { sizePx: 13, maxPx: 13, bold: true },
+  major: { sizePx: 12, maxPx: 17, bold: true },
+  stop: { sizePx: 11, maxPx: 11, bold: false },
+  place: { sizePx: 11, maxPx: 11, bold: true },
+  minor: { sizePx: 11, maxPx: 16, bold: false },
+  area: { sizePx: 11, maxPx: 11, bold: false },
 };
+/** The factor a style's text is drawn at, relative to `sizePx`, at `zoom`. */
+export function labelScale(style: LabelStyle, zoom: number) {
+  const { sizePx, maxPx } = labelFonts[style];
+  return Math.min(maxPx / sizePx, Math.max(1, (zoom / 2) ** 0.3));
+}
 
 /** Glyph metrics of one text in one style, in pixels: each glyph's left edge and width. */
 export interface TextMetrics {
@@ -69,6 +76,8 @@ export interface PlacedLabel {
   /** Glyph centres in world metres; one horizontal run for point labels. */
   glyphs: PlacedGlyph[];
   alpha: number;
+  /** The text's size relative to its style's `sizePx` (`labelScale`). */
+  scale: number;
   /** World bounds of the label, for culling. */
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 }
@@ -367,7 +376,7 @@ class Occupancy {
   }
 }
 
-function layoutStreet(c: StreetCandidate, m: TextMetrics, zoom: number) {
+function layoutStreet(c: StreetCandidate, m: TextMetrics, zoom: number, scale: number) {
   const length = c.lengths.at(-1)!;
   const textM = m.width / zoom;
   if (textM > length) return null;
@@ -391,7 +400,7 @@ function layoutStreet(c: StreetCandidate, m: TextMetrics, zoom: number) {
   for (let i = 0; i < c.widths.length; i++)
     area +=
       Math.max(0, Math.min(s1, c.lengths[i + 1]!) - Math.max(s0, c.lengths[i]!)) * c.widths[i]!;
-  const fit = ((area / textM) * zoom) / labelFonts[c.style].sizePx;
+  const fit = ((area / textM) * zoom) / (labelFonts[c.style].sizePx * scale);
   if (fit < labelRules.minFit) return null;
   const at = (s: number) => pointAtDistance(c.line, c.lengths, s);
   // Upright: read along the line or against it, whichever runs left to right on screen.
@@ -449,12 +458,23 @@ export function placeLabels(
         : zoom < c.minZoom || zoom >= c.maxZoom
     )
       continue;
-    const m = measure(c.text, c.style);
+    const scale = labelScale(c.style, zoom);
+    const base = measure(c.text, c.style);
+    const m =
+      scale === 1
+        ? base
+        : {
+            ...base,
+            offsets: base.offsets.map((o) => o * scale),
+            widths: base.widths.map((w) => w * scale),
+            width: base.width * scale,
+            height: base.height * scale,
+          };
     let glyphs: PlacedGlyph[];
     let alpha: number;
     let boxes: number[][];
     if (c.kind === 'street') {
-      const layout = layoutStreet(c, m, zoom);
+      const layout = layoutStreet(c, m, zoom, scale);
       if (!layout) continue;
       ({ glyphs, alpha } = layout);
       boxes = glyphs.map((g, i) => {
@@ -505,7 +525,7 @@ export function placeLabels(
       }),
       { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
     );
-    placed.push({ candidate: c, glyphs, alpha, bounds });
+    placed.push({ candidate: c, glyphs, alpha, scale, bounds });
   }
   return placed;
 }
