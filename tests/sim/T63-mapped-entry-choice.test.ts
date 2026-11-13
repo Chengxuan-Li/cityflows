@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
 import { defaultScenario } from '../../src/fixtures/scenarios';
+import { nearestOnPolyline } from '../../src/geo/polyline';
 import { compile } from '../../src/network';
 import { allocateId, type TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
@@ -26,12 +27,20 @@ function entryWorld(mapped: boolean, nearClosed: boolean) {
   const far = street(farMouth, node(350, 40));
   for (const r of [...near, ...far]) r.roadClass = 'service';
   if (nearClosed) near[0].access = { car: 'no' };
+  const approaches = compile({ ...city, places: {} });
+  if (!approaches.ok) throw new Error(JSON.stringify(approaches.diagnostics));
+  const approachLanes = approaches.compiled.lanes;
+  const station = (roadId: string, point: { x: number; y: number }) =>
+    nearestOnPolyline(
+      approachLanes[approaches.compiled.index.lane.get(`${roadId}#0`)!]!.polyline,
+      point,
+    ).along;
   const id = allocateId(city, 'pk');
   const farEntry = {
     id: allocateId(city, 'c'),
     roadId: detour.id,
     lane: 0,
-    positionM: 50,
+    positionM: station(detour.id, farMouth.pos),
     direction: 'both' as const,
     throughputPerMin: 60,
   };
@@ -39,7 +48,7 @@ function entryWorld(mapped: boolean, nearClosed: boolean) {
     id: allocateId(city, 'c'),
     roadId: direct.id,
     lane: 0,
-    positionM: 150,
+    positionM: station(direct.id, nearMouth.pos),
     direction: 'both' as const,
     throughputPerMin: 60,
   };
