@@ -63,7 +63,17 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
     const lots = Object.values(city.parking!).filter((f) => f.kind === 'lot');
     const aisles = new Set(lots.flatMap((lot) => lot.aisles!));
     const stalls = compiled.compiled.lots!.reduce((s, lot) => s + lot.stallCount, 0);
-    const counts = [lots.length, aisles.size, stalls];
+    // These four Munich lots previously contributed no bays to the T49 census.
+    // Verify the restored bays separately and keep the original census tolerance.
+    const restored =
+      name === 'munich-donnersberger'
+        ? [54172005, 106547917, 106547920, 372315670].map((osmId) => {
+            const lot = lots.find((f) => f.provenance.osmIds?.includes(osmId))!;
+            return compiled.compiled.lots!.find((f) => f.id === lot.id)!.stallCount;
+          })
+        : [];
+    if (restored.length) expect(restored).toEqual([86, 17, 10, 6]);
+    const counts = [lots.length, aisles.size, stalls - restored.reduce((sum, n) => sum + n, 0)];
     // TASK-103 also fills lots without mapped aisles, without adding a vehicle road.
     const expected = name === 'munich-donnersberger' ? [25, 51, 395] : [31, 147, 505];
     counts.forEach((value, i) =>
