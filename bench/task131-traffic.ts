@@ -37,6 +37,13 @@ const stoppedSince = new Map<number, number>();
 const cycles: unknown[] = [];
 let cyclesAtEnd: unknown[] = [];
 const seenCycles = new Set<string>();
+// TASK-154 drain criterion (b): wait added within one visit to a watched road, every visit.
+const visitPeak = new Map<
+  string,
+  { id: number; addedS: number; sinceS: number; atS: number; waitingS: number }
+>();
+// TASK-154 drain criterion (a): how long each inferred ring persisted.
+const cycleSpans = new Map<string, { firstS: number; lastS: number; longestS: number }>();
 const traceCycles = process.env.CITYFLOWS_TRACE_CYCLES === '1';
 const watchedIds = new Set(
   (process.env.CITYFLOWS_WATCH_IDS ?? '').split(',').map(Number).filter(Boolean),
@@ -244,7 +251,10 @@ const morning = probeMorning(city, compiled, 0.15, {
     const innerStops: unknown[] = [];
     for (const [i, id] of snapshot.id.entries()) {
       const segment = snapshot.lane[i]!;
-      if (segment === -2147483648) continue;
+      if (segment === -2147483648) {
+        roadVisits.delete(id);
+        continue;
+      }
       const movement = segment < 0 ? compiled.movements[-segment - 1]! : null;
       const lane = compiled.lanes[movement?.fromLane ?? segment]!;
       const road = compiled.roads[lane.road]!;
@@ -267,6 +277,13 @@ const morning = probeMorning(city, compiled, 0.15, {
           sinceS: engine.timeS,
           waitingOnEntryS: engine.inspect(id)!.waitingS,
         });
+      if (watched.has(road.id)) {
+        const visit = roadVisits.get(id)!;
+        const waitingS = engine.inspect(id)!.waitingS;
+        const addedS = waitingS - visit.waitingOnEntryS;
+        if (addedS > (visitPeak.get(road.id)?.addedS ?? -1))
+          visitPeak.set(road.id, { id, addedS, sinceS: visit.sinceS, atS: engine.timeS, waitingS });
+      }
       const inner = road.group !== undefined;
       if (inner && snapshot.speed[i]! < 0.1) {
         const previous = standing.get(id);
@@ -366,6 +383,12 @@ const morning = probeMorning(city, compiled, 0.15, {
         if (ring.length < 2 || !ring.some((id) => watched.has(roadVisits.get(id)?.road ?? '')))
           continue;
         const key = [...ring].sort((a, b) => a - b).join(',');
+        const span = cycleSpans.get(key);
+        if (span && engine.timeS - span.lastS <= 1.5) span.lastS = engine.timeS;
+        else if (span) Object.assign(span, { firstS: engine.timeS, lastS: engine.timeS });
+        else cycleSpans.set(key, { firstS: engine.timeS, lastS: engine.timeS, longestS: 0 });
+        const current = cycleSpans.get(key)!;
+        current.longestS = Math.max(current.longestS, current.lastS - current.firstS);
         const event = { timeS: engine.timeS, heads: ring.map((id) => records.get(id)) };
         currentCycles.set(key, event);
         if (seenCycles.has(key)) continue;
@@ -444,6 +467,8 @@ writeFileSync(
       endInnerStanding,
       loopRoadDwell,
       loopViolators,
+      visitPeak: Object.fromEntries(visitPeak),
+      cycleSpans: Object.fromEntries(cycleSpans),
       cycles,
       cyclesAtEnd,
       journeys,
@@ -469,6 +494,16 @@ console.info(
     loop: morning.loopCensus,
     longestInnerStopS,
     longestInnerStopVehicle,
+    endInnerOverBox,
+    endInnerStanding,
+    visitPeak: Object.fromEntries(
+      [...visitPeak].map(([road, peak]) => [road, Math.round(peak.addedS)]),
+    ),
+    cycles: cycles.length,
+    cyclesAtEnd: cyclesAtEnd.length,
+    longestCycleS: Math.max(0, ...[...cycleSpans.values()].map((span) => span.longestS)),
+    stateHash: morning.stateHash,
+    stepTimeMs: Math.round(morning.stepTimeMs),
     report: out,
   }),
 );
