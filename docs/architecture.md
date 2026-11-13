@@ -1388,6 +1388,12 @@ holds there before resuming. Gridlock recovery is exempt only while a protected 
 the binding obstacle at the stopped vehicle's nose; an open crossing's downstream queue
 remains subject to ordinary recovery.
 
+At a junction beside a served crossing, a competing turn must have room for its full
+vehicle and gap beyond the last shared conflict zone. Storage accounts for cars already
+entering or granted that exit. A car whose body is on the tracks can receive the first
+legal grant to clear them. Signal, yield-gap, stop, occupied-zone and merge checks still
+apply, and turns on red wait for green candidates.
+
 Each scheduled occurrence has its own progress clock. Exceptional road blockage pauses that
 service before the crossing; occupied rail sections and same-tick reservations hold following
 or opposing services, while unrelated routes keep advancing. Delayed services also retain
