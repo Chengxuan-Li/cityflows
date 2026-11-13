@@ -173,7 +173,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | merged in PR #3 |
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
 | [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | in progress |
-| [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | in progress |
+| [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3476,7 +3476,12 @@ no parking failures ([traffic run](https://github.com/Chengxuan-Li/cityflows/act
 The old 5,595 s circular wait no longer appears in the matched trace. An egress at
 the other ramp mouth can still delay admission while it waits for public traffic.
 
-Parking follow-up: an exiting car's visible body can reach a public lane before
+Six representative facilities completed all 12 arrival and return legs on the
+integrated build. Matched captures cover eleven lots, including the additional
+under-bridge lot. All [PR #5 checks](https://github.com/Chengxuan-Li/cityflows/actions/runs/43359890405)
+passed on the reviewed source and final evidence.
+
+A parking follow-up remains. An exiting car's visible body can reach a public lane before
 a passing car leaves enough room for it to merge. On the same authored lot, main
 before TASK-149 and the integrated build produced the same 1,476 overlapping
 footprint samples. The first occurred at 152.4 s. Track the physical merge
