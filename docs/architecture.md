@@ -1663,7 +1663,10 @@ Step sequence, in this order every step:
 2. Spawn: for each `out` or `both` connector in index order, release queued trips whose
    departure time has passed while the lane has a free gap of `spawnMinGapM` at the connector
    and the connector's per-minute budget allows. A released trip gets a route request from the
-   connector lane; `no_route` fails the trip without spawning. TASK-112 holds person car trips
+   connector lane; `no_route` fails the trip without spawning. A trip that needs parking fails
+   as `no_parking` only when a car from its departure lanes could reach one of its facilities
+   (movements and lane changes on legal car lanes, `src/network/car-service.ts`); reaching none
+   is `no_route` (TASK-155). A car leaving a parked space keeps `no_parking`. TASK-112 holds person car trips
    until their access walk arrives. Local walk trips use the walker path; bus, rail and walks
    with a gateway end fail with `unsupported_mode` (T15).
 3. Proposals, for every driving vehicle in (lane idx, position descending) order, from the
@@ -1997,6 +2000,14 @@ trip counters; their outcomes and `no_walk_route` failure reasons remain availab
 `walkTripsFailed`, access/egress `{ count, meanTimeS, meanDistanceM }`, `walkFallbacks` and
 grouped `fallbacks`. Person state and leg progress participate in the deterministic hash.
 
+TASK-129: `sim/parking.ts` chains a car's trips by `carId` (by `personId` for trips without
+one), so a second household driver leaves from where the first parked, and TASK-122's exit
+mask follows the car's next trip, whoever drives it. In `sim/persons.ts` a trip whose car
+another member drove before waits until that drive completes (the car is parked), then starts
+its access walk; if that drive failed, the trip fails as stranded. A trip never takes another
+car. `Metrics.persons.carWaits` reports the waits (count, median, maximum). The person detail
+adds the household and its members, today's car (or none) and, for a borrowed car, its owner.
+
 TASK-030 admission windows: compiled places retain a copy of their events. Each event opens
 `arrivals` admission slots uniformly over its window (floor of the elapsed fraction times
 the count). Quotas add across events, are shared by all arrival connectors, and unused slots
@@ -2060,12 +2071,13 @@ regenerated deterministically from it.
 ```ts
 interface Activity { kind: 'home' | 'work' | 'school' | 'shop' | 'leisure' | 'other';
   placeId: PlaceId; startS: number; durationS: number }
-interface Person { id: string; homePlaceId: PlaceId; workPlaceId: PlaceId | null;
-  hasCar: boolean; agenda: Activity[] }
+interface Person { id: string; homePlaceId: PlaceId; householdId: string;   // TASK-129
+  workPlaceId: PlaceId | null; hasCar: boolean; agenda: Activity[] }
 type TripMode = 'car' | 'walk' | 'bus' | 'rail';
 interface Leg { mode: TripMode; fromPlaceId: PlaceId; toPlaceId: PlaceId }
 interface TripRequest { id: string; personId: string | null; originPlaceId: PlaceId;
   destinationPlaceId: PlaceId; departS: number; mode: TripMode; legs: Leg[];
+  carId?: string;                                // TASK-129: the household car of a car trip
   vehicleClass: VehicleClass; purpose: VehiclePurpose }
 type VehiclePurpose = 'private' | 'delivery' | 'service' | 'taxi' | 'through';
 
@@ -2085,7 +2097,8 @@ interface Scenario { id: string; name: string; seed: number; startS: number; end
   demand: DemandConfig; simParams: Partial<SimParams> }   // SimParams type lives in src/schema/sim.ts; defaults in src/sim/params.ts
 
 function generatePopulation(city: City, config: DemandConfig): Person[];
-function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[];  // sorted by departS
+function scheduleTrips(city: City, persons: Person[], scenario: Scenario,
+  compiled?: CompiledCity): TripRequest[];  // sorted by departS; `compiled` is `city` compiled (TASK-155)
 ```
 
 TASK-100 assigns class after mode choice, using a separate demand-seeded stream keyed by
@@ -2127,7 +2140,25 @@ variant. Saving a baseline captures current editor state, including unapplied li
   road arrivals; travel time is not subtracted. A profile overrides the default dwell duration.
 - Through demand draws origins by gateway population and distinct destinations by gateway
   jobs. Gateways without a feasible positive-weight counterpart are excluded; without any
-  eligible pair there are no through trips. Integer hourly rates are exact; fractional rates
+  eligible pair there are no through trips.
+- TASK-155: demand generates no car trip with a gateway end that no car can serve. A gateway
+  serves a place when its departure lanes reach one of the place's arrival connectors or
+  facilities it could park at (own, public, or an unowned lot, without the distance limit),
+  and a place serves a gateway when one of its departure connectors or such facilities reaches
+  the gateway's arrival lanes; between gateways, departure lanes must reach arrival lanes.
+  Reach follows movements (not `neverGreen` or lane-drop fallbacks) and adjacent-lane changes
+  on car-legal lanes: public roads and the trip end's own private/destination zone, entering
+  another zone only to end in it; lane-change distances and stations are ignored, so only
+  trips no route can serve are removed. Population and its draws are unchanged: a person
+  whose next leg is unserved stays at the activity before it for the rest of the day, and
+  that leg and the rest of the agenda generate no trips. Through destinations are drawn among
+  the gateways the origin serves. Event visitors are drawn among gateways that serve their
+  inbound and outbound legs, falling back to residential places when none does. Served trips
+  are unchanged: the Sindelfingen 0.15 morning keeps exactly its 155 departures.
+  `scheduleTrips` takes the caller's compiled city as an optional last argument (lead,
+  TASK-155 review); without it, it compiles the city itself when the city has a gateway. The
+  app's load, restart, regeneration and comparison and the import probe pass theirs; trip
+  lists are identical either way. Integer hourly rates are exact; fractional rates
   use seeded stochastic rounding. Times are uniform in each hour of the scenario day.
 - Each place event creates `max(arrivals, departures)` nonresident visitor identities on
   separate streams keyed by place, event and visitor index. The first `min` visitors have
@@ -2171,6 +2202,29 @@ variant. Saving a baseline captures current editor state, including unapplied li
   facilities retain legacy connector admission, including zero-demand event portals.
 - Validation summary (Gate 3 UI): trips by place and hour, total trips, mean length, queued
   unspawned, completed, failed by reason.
+
+TASK-128 station riders (`demand/stations.ts`, constants in `demand/rider-profile.ts`). After
+through and event trips, `scheduleTrips` appends S-Bahn riders: walk-only persons outside the
+population, with no household, car or parking. Every S-Bahn stop over the day (TASK-127's
+timetable, `stationArrivals` in `network/trains.ts`) at a platform listed by a station place
+brings riders who get off: commuters by the train's arrival hour (05:00 10, 06:00 30, 07:00 50,
+08:00 50, 09:00 30, 10:00 15 per stop), visitors 10 per stop from 11:00 to 21:59, none from
+22:00 to 04:59; at full population, scaled by `personsPerResident`, fractional counts rounded by a
+seeded draw per stop (`riders` stream keyed by the stop). Main-line trains have no stops and
+bring none. A rider is `rider:<station>:<platform>@<arrival second>:<i>`. The walk out, station to
+destination, departs at the arrival plus the platform-to-door delay: straight line from the
+rider's point along the standing train (a seeded uniform draw over its length, so a stop's riders
+leave over a minute or two; the stop reports the delay from the train's middle) to the nearest
+entrance x 1.3 at the scenario's walking speed (default 1.4 m/s); the walk itself leaves from the
+station's walk anchors (its entrances) by the cheapest route. The
+destination is a place within 1 500 m straight line of the station, never a gateway, parking
+place or the station, by `jobs x exp(-d / 600 m)` for commuters and `attraction x exp(-d / 600 m)`
+for visitors; a stop with no eligible place or no entrance brings nobody. The walk back departs at
+the walk out's departure + the straight-line walk (x 1.3) + the stay (commuters the scenario's
+work duration, visitors a uniform 1 to 3 h) and ends at the station, where the rider boards and
+is done. A rider whose walk out would leave before the scenario starts is at the destination
+already: only the walk back is emitted. Riders run through TASK-112's person walks unchanged; the
+person inspector reads a rider's day from the id and the trips.
 
 TASK-103 extends parking choice: work and school keep own garages first; a seeded person
 share `streetParkingShare` (default 0.3) seeks visible parking before their home garage.
@@ -2226,11 +2280,42 @@ Lead follow-up (2026-11-08). Starting stock holds the cars of the persons demand
 generation makes: `ceil(round(residents × personsPerResident) × carShare)` per home, not the
 full population, so every visible parked car belongs to someone; a resident whose moved
 street car a neighbour took starts from the home's inferred garage while the home has cars
-left. A lot whose own place has no demand (an OSM lot imports as its own `parking` place)
+left. TASK-129 replaces this with household cars for trip lists scheduled from a population
+(below); hand-built trip lists without `carId` keep this formula and first come, first served. A lot whose own place has no demand (an OSM lot imports as its own `parking` place)
 serves the places within 200 m as their car park: a customers lot the visitors of
 non-residential places, a private lot also their workers and residents (and their share of
 starting stock). It ranks first for those destinations, and a lot whose free stalls are all
 spoken for by cars on their way drops out of the choice.
+
+TASK-129 households and cars (`src/demand/households.ts`). Each home's persons form
+households in person order, with sizes drawn from Germany's 2023 microcensus (1 person 41%,
+2 34%, 3 12%, 4 9%, 5 or more 4%; constants, no settings) on a sub-stream of the demand seed
+per home; the last household takes the persons left over. Households group the sampled
+persons, so at `personsPerResident` 0.15 a home with 7 sampled persons has two or three
+households, and the shares describe the sampled population. A gateway person is a household of
+one. `householdId` is `hh:<homePlaceId>:<k>`. The population stays the persisted source: a
+saved population without `householdId` opens with the households the same grouping gives
+(a pure function of the persons, the places' kinds and the demand seed), so it equals a
+regenerated one. A household owns car `car:<householdId>:<k>` for its k-th member with
+`hasCar` (person index order), so the fleet is the car owners and no draw moves.
+`scheduleTrips` decides drivers per day from the planned agendas: a member's day away runs
+from the first departure to the planned return home plus 30 minutes; owners drive their own
+car on any day away; then the other members, by first departure, each take the first car
+free for their whole day away; everyone else walks all day (no mode choice, TASK-113). A
+car trip carries its `carId`; walk, rider, through and event trips have none. A car no one
+drives stays parked at home all day.
+
+The household cars are the starting stock: per home, the number of cars whose day begins
+there (from the trips' `carId`), under the TASK-103 rules (home garage, the
+`streetParkingShare` moved to strips and lots within the radius, the inferred home garage as
+the fallback). A car takes a space of its own home's stock only, in an order seeded per car,
+never another home's moved car. A car trip that ends at its household's home chooses within
+`SimParams.homeParkingRadiusM` (default 400 m) first, the home's inferred garage counting as
+within: it heads for a full facility there and searches on from it, as at departure, and looks
+beyond the radius only once nothing within admits it (none exists, every one is full or
+claimed or has refused it, or a free space is unreachable). `Metrics.parking.home` lists every
+car parked beyond the radius with its reason, and the distances from home of the others.
+Other destinations keep their choice.
 
 ## 10. Engine host
 
@@ -2910,6 +2995,9 @@ view.json         { camera, layers, selection }                    optional
 baseline.json     { city: City, scenario: Scenario, population?: Person[] } optional
 ```
 
+- TASK-129: `Person.householdId` is optional in saved files. `openProject` gives a population
+  (and a baseline population) saved without it the households a regenerated population would
+  have, from the first scenario's (or the baseline's) demand seed. Schema version remains 1.
 - Single JSON: `{ manifest, city, population?, scenarios, history?, view?, baseline? }`. Each member's
   hash is computed over its compact JSON serialization, which is embedded verbatim, so the
   same manifest verifies both forms. `manifest.schemaVersion` is the city's schema version at
@@ -3208,7 +3296,10 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    change plus 10 m clearance. A corridor without a multi-road cycle retains its directional
    portals. Every clipped motorway, trunk, primary and secondary end retains a portal even
    when disconnected, with diagnostics exposing its lack of access. Isolated minor-road
-   fragments retain their roads and diagnostics but generate no gateway demand.
+   fragments retain their roads and diagnostics but generate no gateway demand. TASK-155: the
+   import reports an info `gateway_unserved` for a gateway that reaches no local place or
+   parking, or that none reaches, naming the gateways it still serves (or that it generates
+   no trips); compile diagnostics are unchanged.
    Local two-way residential/service boundary ends have inferred turnarounds, allowing
    a driver who misses a turn to return instead of stranding at the crop boundary.
 9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
@@ -3414,5 +3505,5 @@ Benchmark the sim step, worker transfer, and render time separately (TASK-044).
 
 Transit vehicles and GTFS, PBF import and bulk extracts, permissive and actuated signals,
 adaptive routing beyond EWMA, editing in 3D, desktop packaging, bicycles, mode choice and
-households sharing a car. R7's multimodal readiness is covered by `TripRequest.legs` and
+car sharing between households (TASK-129 shares a car only within a household). R7's multimodal readiness is covered by `TripRequest.legs` and
 `TripMode` in section 9; nothing in the sim assumes a person equals a car.

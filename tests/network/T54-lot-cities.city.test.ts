@@ -12,6 +12,7 @@ import { town } from '../../src/fixtures/town';
 import type { CompiledCity } from '../../src/network';
 import { createEngine } from '../../src/sim/engine';
 import { eventTrips } from '../../src/demand/events';
+import { servedTrips } from '../../src/demand/served';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 
 test.each([
@@ -50,7 +51,7 @@ test.each([
     local: { car: 1, van: 0, truck: 0, bus: 0 },
     through: { car: 1, van: 0, truck: 0, bus: 0 },
   };
-  const trips = eventTrips(source, scenario),
+  const trips = eventTrips(source, scenario, servedTrips(source)),
     engine = createEngine();
   engine.load({ compiled: result.compiled, trips, scenario });
   let droveIn = false;

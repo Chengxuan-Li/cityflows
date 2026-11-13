@@ -1,9 +1,10 @@
 import { createRandom } from '../geo/random';
 import type { City, Scenario, TripRequest } from '../schema';
+import type { Served } from './served';
 import { weightedChoice } from './selection';
 import { tripVehicle } from './vehicle';
 
-export function eventTrips(city: City, scenario: Scenario): TripRequest[] {
+export function eventTrips(city: City, scenario: Scenario, served: Served): TripRequest[] {
   const places = Object.values(city.places).sort((a, b) =>
     a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
   );
@@ -11,14 +12,22 @@ export function eventTrips(city: City, scenario: Scenario): TripRequest[] {
   const trips: TripRequest[] = [];
   for (const place of places) {
     const gateways = places.filter((p) => p.kind === 'gateway' && p.id !== place.id);
-    const endpoints = gateways.length
-      ? gateways
-      : places.filter((p) => p.kind === 'residential' && p.id !== place.id);
+    const residential = places.filter((p) => p.kind === 'residential' && p.id !== place.id);
     for (const event of place.events) {
       for (let i = 0; i < Math.max(event.arrivals, event.departures); i++) {
         const personId = `visitor:${place.id}:${event.id}:${i}`;
         const random = root.derive(personId);
-        const endpoint = weightedChoice(endpoints, (p) => p.population + p.jobs, random);
+        // TASK-155: only gateways that can serve this visitor's trips; none falls back to homes.
+        const serving = gateways.filter(
+          (p) =>
+            (i >= event.arrivals || served(p.id, place.id)) &&
+            (i >= event.departures || served(place.id, p.id)),
+        );
+        const endpoint = weightedChoice(
+          serving.length ? serving : residential,
+          (p) => p.population + p.jobs,
+          random,
+        );
         if (!endpoint)
           throw new Error(
             `Event ${event.id} at ${place.id} needs a populated residential place or gateway`,

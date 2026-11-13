@@ -81,7 +81,7 @@ beforeAll(() => {
     contacts: zones.contacts,
     offTarget,
   });
-}, 600_000);
+}, 1_200_000); // Lead, 2026-11-13: a setup time limit, not a gate; CI runners and loaded machines took over 600 s.
 
 test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")', () => {
   // 90 percent of main's completed trips, gridlock at most 1.5 times main's, every failure a
