@@ -171,7 +171,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-144](tasks/TASK-144.md) | audit | Munich lot access | parking importer and route verification | 104, 122 | contract checks and lead review | merged in PR #4 |
 | [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
 | [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | merged in PR #3 |
-| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | clock repair on held PR, traffic and T63 still red |
+| [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -3417,6 +3417,30 @@ TASK-130 remain held and B56 deferred.
 [Road storage replay](https://github.com/Chengxuan-Li/cityflows/actions/runs/43326354796),
 [compact-link replay](https://github.com/Chengxuan-Li/cityflows/actions/runs/43328451433)
 and [combined replay](https://github.com/Chengxuan-Li/cityflows/actions/runs/43328502397).
+
+### 2026-11-12 TASK-147 crossing interlock and road discharge
+
+The held PR reproduced 3319 completions, 52 gridlocks and zero stalled heads on
+seed 1. One tram waited 307.7 seconds at the first crossing while keeping a second
+crossing closed ahead of it. The downstream road could have discharged during that wait.
+At an occupied rail exit, a competing turn could also take storage needed by a car on
+the tracks.
+
+The PR now releases the held service's downstream warning while an upstream road
+body prevents its entry. It gives the downstream road its full warning again before
+the tram can enter. Competing road grants account for already allocated storage beyond
+the shared conflict zone. A driver leaving the tracks can take the first legal grant.
+These changes are in `1a502a6` and `cb8fd8a`, integrated on the draft PR at `eb7c089`.
+
+Seed 1 completed 3719 trips with 37 gridlocks and zero stalled heads. The existing
+limits are 3702, 39 and zero. T21, T53 and T63 pass. A physical replay at 0.1 s
+intervals recorded 262 service entries and 261 exits by 10:00, with zero contacts at
+mapped crossings. The existing parallel road/track case on `r:981` and `rt:10157`
+still recorded two contacting pairs outside the mapped facilities (TASK-139). Browser
+checks passed for operating rail and tram crossings and the Munich tram's stop and
+departure in 2D and 3D. GitHub passed check, city and e2e at `eb7c089`. The PR remains held. TASK-128
+through TASK-130 remain held and B56 remains deferred.
+[PR #1 checks](https://github.com/Chengxuan-Li/cityflows/actions/runs/43338527308).
 
 ## Owner decisions log
 
