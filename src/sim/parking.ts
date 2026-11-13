@@ -243,15 +243,17 @@ export function createParking(
     const slot = claimedSpaces[id]!;
     if (slot !== -1) {
       const heldS = Math.max(0, timeS - claimSince[id]!);
-      heldTimes.push(heldS);
-      longestClaims.push({
-        vehicleId: id + 1,
-        facility: compiled.parking[heading[id]!]!.id,
-        space: slot,
-        heldS,
-      });
-      longestClaims.sort((a, b) => b.heldS - a.heldS || a.vehicleId - b.vehicleId);
-      longestClaims.length = Math.min(10, longestClaims.length);
+      if (compiled.parking[heading[id]!]!.kind === 'roadside') {
+        heldTimes.push(heldS);
+        longestClaims.push({
+          vehicleId: id + 1,
+          facility: compiled.parking[heading[id]!]!.id,
+          space: slot,
+          heldS,
+        });
+        longestClaims.sort((a, b) => b.heldS - a.heldS || a.vehicleId - b.vehicleId);
+        longestClaims.length = Math.min(10, longestClaims.length);
+      }
       claimedBy[slot] = -1;
       claimedSpaces[id] = -1;
     }
@@ -469,7 +471,7 @@ export function createParking(
             if (needRoom && !soft(f)) {
               head(id, f.idx);
               claimSince[id] = timeS;
-              if (f.kind === 'roadside') {
+              if (f.kind === 'roadside' || f.source.mappedPortals?.length) {
                 const slot = freeSpace(connector, id)!.idx;
                 claimedSpaces[id] = slot;
                 claimedBy[slot] = id;
@@ -495,6 +497,8 @@ export function createParking(
     const c = compiled.connectors[connector]!,
       f = compiled.parking[c.parking ?? -1];
     if (!f || f.kind === 'garage') return undefined;
+    const claim = claimedSpaces[id]!;
+    if (claim >= 0 && spaces[claim]!.parking === f.idx) return spaces[claim];
     const point = pointAtDistance(
       compiled.lanes[c.lane]!.polyline,
       compiled.lanes[c.lane]!.cumulative,
@@ -1204,7 +1208,7 @@ export function createParking(
       const held = heldTimes.slice();
       const longest = longestClaims.slice();
       for (let id = 0; id < trips.length; id++)
-        if (claimedSpaces[id] !== -1) {
+        if (claimedSpaces[id] !== -1 && compiled.parking[heading[id]!]!.kind === 'roadside') {
           const heldS = Math.max(0, timeS - claimSince[id]!);
           held.push(heldS);
           longest.push({
