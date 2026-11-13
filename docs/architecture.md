@@ -589,6 +589,9 @@ that aisle's matching start (`in`) or end (`out`) node. There is at most one rec
 connector/direction; a bidirectional connector may name different inbound and outbound
 aisles. Invalid, deleted or cross-facility references produce `parking_invalid`, not a
 compile exception. Legacy projects omit the field and keep their existing circulation.
+Road split/merge remaps aisle membership and downstream exit records; deleting an aisle or
+street removes dependent portal references. Merging across an actual mapped mouth is
+rejected until that access is removed, since silently removing its source node would detach it.
 The street connector begins a fitted, direction-specific approach along the mapped throat;
 the approach is kept separate from the internal graph, preventing a path from
 borrowing an adjacent exit throat. Source aisle edges are directed for typed lots; departure

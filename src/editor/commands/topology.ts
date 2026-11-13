@@ -266,6 +266,23 @@ function splitRoad(city: City, road: Road, atM: number): CommandPatch {
     const end = patch.set.nodes![direction.to] ?? city.nodes[direction.to]!;
     patch.set.nodes![end.id] = replaceReferences(end, direction.id, id);
     replacements[direction.id] = [direction.id, id];
+    for (const lot of Object.values(city.parking ?? {})) {
+      if (!lot.aisles?.includes(direction.id)) continue;
+      const current = patch.set.parking?.[lot.id] ?? lot;
+      (patch.set.parking ??= {})[lot.id] = {
+        ...current,
+        aisles: current.aisles!.flatMap((roadId) =>
+          roadId === direction.id ? [direction.id, id] : [roadId],
+        ),
+        ...(current.mappedPortals && {
+          mappedPortals: current.mappedPortals.map((portal) =>
+            portal.aisleRoadId === direction.id && portal.direction === 'out'
+              ? { ...portal, aisleRoadId: id }
+              : portal,
+          ),
+        }),
+      };
+    }
     patch.nextId = counter.nextId;
     mapStrips(city, patch, direction.id, (strip) => [
       { ...strip, toM: Math.min(strip.toM, position - 5) },
@@ -294,6 +311,12 @@ function mergeRoads(city: City, a: Road, b: Road): CommandPatch {
   if (first.id === second.id || first.to !== second.from || first.from === second.to)
     throw new Error('Roads must form a continuous path');
   const node = city.nodes[first.to]!;
+  if (
+    Object.values(city.parking ?? {}).some((lot) =>
+      lot.mappedPortals?.some((portal) => portal.nodeId === node.id),
+    )
+  )
+    throw new Error('Remove the mapped parking mouth before merging across it');
   const reverseFirst = opposite(city, first);
   const reverseSecond = opposite(city, second);
   const expected = [first, second, reverseFirst, reverseSecond].filter((r) => r !== undefined);
@@ -337,6 +360,19 @@ function mergeRoads(city: City, a: Road, b: Road): CommandPatch {
     const far = patch.set.nodes![end.to] ?? city.nodes[end.to]!;
     patch.set.nodes![far.id] = replaceReferences(far, end.id, start.id);
     replacements[start.id] = replacements[end.id] = [start.id];
+    for (const lot of Object.values(city.parking ?? {})) {
+      if (!lot.aisles?.includes(end.id)) continue;
+      const current = patch.set.parking?.[lot.id] ?? lot;
+      (patch.set.parking ??= {})[lot.id] = {
+        ...current,
+        aisles: [...new Set(current.aisles!.map((id) => (id === end.id ? start.id : id)))],
+        ...(current.mappedPortals && {
+          mappedPortals: current.mappedPortals.map((portal) =>
+            portal.aisleRoadId === end.id ? { ...portal, aisleRoadId: start.id } : portal,
+          ),
+        }),
+      };
+    }
     const offset = polylineLength(start.centerline);
     mapStrips(city, patch, end.id, (strip) => [
       { ...strip, roadId: start.id, fromM: strip.fromM + offset, toM: strip.toM + offset },

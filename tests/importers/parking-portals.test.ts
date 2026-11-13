@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
 import { lotPath } from '../../src/network/lot-paths';
-import { nearestOnPolyline } from '../../src/geo/polyline';
+import { nearestOnPolyline, polylineLength } from '../../src/geo/polyline';
 import { allocateId, type TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
 import { defaultScenario } from '../../src/fixtures/scenarios';
@@ -209,5 +209,34 @@ test('deleting a mapped aisle removes dependent street portals without retaining
   expect(result.ok).toBe(true);
   expect(editor.city.parking![lot.id]!.mappedPortals).toEqual([]);
   expect(editor.city.parking![lot.id]!.connectors).toEqual([]);
+  expect(compile(editor.city).ok).toBe(true);
+});
+
+test('splitting and merging a mapped aisle keep the exit on the actual downstream half', () => {
+  const { city, lot } = fixture(),
+    editor = createEditor(city);
+  const exit = lot.mappedPortals!.find((p) => p.direction === 'out')!;
+  const original = city.roads[exit.aisleRoadId]!;
+  const split = editor.apply({
+    kind: 'splitRoad',
+    roadId: original.id,
+    atM: polylineLength(original.centerline) / 2,
+  });
+  expect(split.ok).toBe(true);
+  const after = editor.city.parking![lot.id]!;
+  const moved = after.mappedPortals!.find((p) => p.connectorId === exit.connectorId)!;
+  expect(moved.aisleRoadId).not.toBe(original.id);
+  expect(editor.city.roads[moved.aisleRoadId]!.to).toBe(original.to);
+  expect(after.aisles).toContain(moved.aisleRoadId);
+  const merged = editor.apply({
+    kind: 'mergeRoads',
+    roadId: original.id,
+    otherRoadId: moved.aisleRoadId,
+  });
+  expect(merged.ok).toBe(true);
+  expect(
+    editor.city.parking![lot.id]!.mappedPortals!.find((p) => p.connectorId === exit.connectorId)!
+      .aisleRoadId,
+  ).toBe(original.id);
   expect(compile(editor.city).ok).toBe(true);
 });
