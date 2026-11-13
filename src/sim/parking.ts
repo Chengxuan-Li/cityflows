@@ -528,7 +528,7 @@ export function createParking(
       const entry = graph?.entries.find((e) => e.connector === connector && e.direction !== 'out');
       if (
         graph?.unreachable.includes(space.lotStall!) ||
-        !Number.isFinite(entry?.distances[graph!.stallNodes[space.lotStall!]!])
+        !Number.isFinite(entry?.distances[graph?.stallNodes[space.lotStall!] ?? -1])
       )
         return false;
     }
