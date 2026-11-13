@@ -2203,6 +2203,29 @@ variant. Saving a baseline captures current editor state, including unapplied li
 - Validation summary (Gate 3 UI): trips by place and hour, total trips, mean length, queued
   unspawned, completed, failed by reason.
 
+TASK-128 station riders (`demand/stations.ts`, constants in `demand/rider-profile.ts`). After
+through and event trips, `scheduleTrips` appends S-Bahn riders: walk-only persons outside the
+population, with no household, car or parking. Every S-Bahn stop over the day (TASK-127's
+timetable, `stationArrivals` in `network/trains.ts`) at a platform listed by a station place
+brings riders who get off: commuters by the train's arrival hour (05:00 10, 06:00 30, 07:00 50,
+08:00 50, 09:00 30, 10:00 15 per stop), visitors 10 per stop from 11:00 to 21:59, none from
+22:00 to 04:59; at full population, scaled by `personsPerResident`, fractional counts rounded by a
+seeded draw per stop (`riders` stream keyed by the stop). Main-line trains have no stops and
+bring none. A rider is `rider:<station>:<platform>@<arrival second>:<i>`. The walk out, station to
+destination, departs at the arrival plus the platform-to-door delay: straight line from the
+rider's point along the standing train (a seeded uniform draw over its length, so a stop's riders
+leave over a minute or two; the stop reports the delay from the train's middle) to the nearest
+entrance x 1.3 at the scenario's walking speed (default 1.4 m/s); the walk itself leaves from the
+station's walk anchors (its entrances) by the cheapest route. The
+destination is a place within 1 500 m straight line of the station, never a gateway, parking
+place or the station, by `jobs x exp(-d / 600 m)` for commuters and `attraction x exp(-d / 600 m)`
+for visitors; a stop with no eligible place or no entrance brings nobody. The walk back departs at
+the walk out's departure + the straight-line walk (x 1.3) + the stay (commuters the scenario's
+work duration, visitors a uniform 1 to 3 h) and ends at the station, where the rider boards and
+is done. A rider whose walk out would leave before the scenario starts is at the destination
+already: only the walk back is emitted. Riders run through TASK-112's person walks unchanged; the
+person inspector reads a rider's day from the id and the trips.
+
 TASK-103 extends parking choice: work and school keep own garages first; a seeded person
 share `streetParkingShare` (default 0.3) seeks visible parking before their home garage.
 Other visits rank admissible strips/lots within the walking radius first, then the own
