@@ -243,9 +243,14 @@ CityFlows looks and behaves like a clean Mac app in the Sonoma / Ventura flat ma
   sliders and map selection; `#0064D1` behind white text (primary button, selected rows) so text
   meets WCAG AA. Every text and control meets AA, focus is always visible, and every control is
   reachable by keyboard.
+- **Dark appearance.** Every token has a dark value under `:root[data-appearance='dark']`
+  (TASK-166), in the same flat Sonoma manner, with the accent at `#0A84FF`. Add any new colour
+  as a token with both values; `src/ui/contrast.test.ts` checks AA in both appearances.
 - **Map.** A neutral, Apple-Maps-like light palette in 2D and 3D (TASK-162): a plain warm-grey
   canvas, white roads with soft casings, quiet place tints, vehicles in the system colours by
-  destination. Marking themes keep their regulatory colours.
+  destination. Marking themes keep their regulatory colours. The dark map (TASK-166) darkens the
+  canvas, land use and place tints only; roads, markings, rail, vehicles and street furniture keep
+  their real colours in both appearances (owner, 2026-11-13).
 - **Behaviour.** Direct manipulation over forms: drag to pan, scroll to zoom, click to select,
   drag handles to move, draw to create. Every control changes something visible. Simplify how
   features are presented, never what the application can do.
