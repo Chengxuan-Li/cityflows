@@ -61,6 +61,8 @@ beforeAll(() => {
   const t29 = t29Observer(compiled);
   let steps = 0;
   morning = probeMorning(city, compiled, 0.15, {
+    // Owner, 2026-11-13: the gate tests car traffic with mode choice off; munich-mode-share guards the choice.
+    modeChoice: false,
     observe(engine) {
       steps++;
       if (!zones.overlap)

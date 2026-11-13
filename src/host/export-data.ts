@@ -29,6 +29,7 @@ export function tripRecords(engine: TrafficEngine, trips: readonly TripRequest[]
       parkingFacility: outcome.parkingFacility,
       walkingDistanceM: outcome.walkingDistanceM,
       parkingSearchTimeS: outcome.parkingSearchTimeS,
+      mode: outcome.mode,
     };
   });
 }

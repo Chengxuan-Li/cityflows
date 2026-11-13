@@ -47,9 +47,11 @@ test('@smoke T53 test pedestrians walk, wait and cross; walk groups edit with un
 
   // A walker opens its inspector.
   const snapshot = await page.evaluate(() => window.cityflows!.drawnSnapshot!()!.walkers!);
+  // A test-source walker: TASK-113's walking persons open the person view instead.
+  const source = Array.from(snapshot.tripLeg.subarray(0, snapshot.count)).indexOf(0);
   const point = await page.evaluate((p) => window.cityflows!.worldToScreen!(p), {
-    x: snapshot.x[0]!,
-    y: snapshot.y[0]!,
+    x: snapshot.x[source]!,
+    y: snapshot.y[source]!,
   });
   await map.click({ position: point });
   await expect(page.getByRole('heading', { name: /^Pedestrian \d+$/ })).toBeVisible();

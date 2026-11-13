@@ -16,7 +16,8 @@ test('Munich import satisfies topology, demand, route and morning-run targets', 
   const { city } = imported;
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const morning = probeMorning(city, result.compiled);
+  // Owner, 2026-11-13: the gate tests car traffic with mode choice off; munich-mode-share guards the choice.
+  const morning = probeMorning(city, result.compiled, 1, { modeChoice: false });
   console.info('Munich morning probe', morning);
   expect(morning.releasedTrips).toBeGreaterThan(10_000);
   // At full demand the city jams; the only failures are trips stuck at a jam head again after

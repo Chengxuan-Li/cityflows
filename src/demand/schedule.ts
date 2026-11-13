@@ -34,6 +34,8 @@ export function scheduleTrips(
     person.agenda = agenda;
   }
   // TASK-129: a person drives a household car only when one is free for their whole day away.
+  // TASK-113's mode choice then walks some of the drivers' tours when the engine loads
+  // (src/sim/persons.ts); through, event and rider trips stay outside it.
   const drivers = assignCars(persons);
 
   for (const person of persons) {
