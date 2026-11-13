@@ -1020,6 +1020,19 @@ the OSM `lanes` tags carry one.
   entry to the exit. Its walk entries are those at the member; derived walk green stays per
   crossing. A green group that does not name an entry and an exit is `signal_phase_invalid`.
   Until Phase 3 there is no box rule: a car can stop on an inner road at the next member.
+- TASK-161: a generated group program (import, grouping in the editor, the signal editor's
+  Generate default program) keeps every green group's whole path clear. Its green groups are the
+  entry-to-exit pairs of the chains. Two share a phase only if no movement on one's chains or
+  switched road pairs conflicts with one on the other's, movements from inner roads included (two lanes merging into one inner lane
+  excepted), so a stream released into an inner road stops whenever a green group it crosses is
+  green. A chain that passes a member twice (circling the group beside a direct way) counts only
+  for a pair with no direct chain. The phases are the fewest that separate every crossing pair
+  (an exact colouring, from a first-fit bound, kept after 100,000 search steps); each green group
+  then also joins every other phase it fits. With no demand known, every entry lane is taken to
+  carry the same flow, so the phases share the green evenly (Webster's split with equal flow
+  ratios): 30 s a phase, at most a 120 s cycle (`GROUP_CYCLE_MAX_S`), amber 3 s, all-red 1 s.
+  Every green group is green for at least an even split of the green time. Single-node programs
+  are unchanged.
 - Each phase's `groups` expand to every movement between the named road pair. A movement may
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
 - State at simulation time `t`: `((t + offsetS) mod cycleS)` locates the phase and whether it
@@ -3193,7 +3206,8 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    within a road-pair group before generating the program: keep the first nonconflicting
    movement in deterministic compiler order, explicitly ban conflicting pairs and record
    `signalLaneAssignment`. Drivers must merge on the approach; unresolved groups still get
-   `osm_signal_group_conflict`. `highway=stop` gives `stop`;
+   `osm_signal_group_conflict`. A signalised junction group's one program follows section 5.4
+   (TASK-161). `highway=stop` gives `stop`;
    `highway=give_way` gives `yield`; else `uncontrolled`.
 8. Clip to the bbox: a road crossing the edge is cut there; the cut end becomes a node and a
    `gateway` place with an `out` connector (5 m into entering roads) or an `in` connector (5 m

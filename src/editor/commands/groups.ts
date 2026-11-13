@@ -156,7 +156,7 @@ function regroup(
     if (group.signal)
       patch.set.junctionGroups![group.id] = {
         ...group,
-        signal: generateGroupSignalProgram(draft, group.id, result.compiled, []),
+        signal: generateGroupSignalProgram(group.id, result.compiled, []),
       };
   for (const { node, signalised } of freed)
     if (signalised)

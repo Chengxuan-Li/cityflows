@@ -56,11 +56,10 @@ export function generateSignalProgram(
  * on through the group whatever else is green. Two green groups share a phase only if no movement
  * on one's chains conflicts with a movement on the other's, inner movements included: the stream
  * a phase releases into an inner road stops whenever a green group that crosses it is green.
- * Each green group then joins every other phase it fits, and phase greens are split by the entry
- * lanes each phase serves, with at least `GROUP_MIN_SHARE` of the cycle for every green group.
+ * The phases are the fewest that separate every crossing pair; each green group then joins every
+ * other phase it fits, and the phases share the green time evenly.
  */
 export function generateGroupSignalProgram(
-  city: City,
   groupId: string,
   compiled: CompiledCity,
   diagnostics: Diagnostic[],
@@ -92,12 +91,10 @@ export function generateGroupSignalProgram(
           }),
         ),
         path: new Set(),
-        lanes: new Set(),
         chains: [],
       };
       units.set(key, unit);
     }
-    unit.lanes.add(compiled.movements[chain.movements[0]!]!.fromLane);
     unit.chains.push(chain.movements);
   }
   // A chain that passes a member twice circles the group (Munich jg:10787's r:327 to r:1279
@@ -121,8 +118,6 @@ interface GroupUnit {
   members: number[];
   /** Every movement its green switches or its chains drive, inner ones included. */
   path: Set<number>;
-  /** The entry lanes its chains start from. */
-  lanes: Set<number>;
   chains: number[][];
 }
 
@@ -156,13 +151,14 @@ function groupPhases(
       });
     return !conflicting;
   });
-  const n = usable.length;
   const crossing = usable.map((a) => usable.map((b) => a !== b && crosses(a, b)));
   const colour = fewestPhases(crossing);
   const phases: GroupUnit[][] = [];
   usable.forEach((unit, i) => (phases[colour[i]!] ??= []).push(unit));
+  // A group none of whose entries reaches an exit still runs a cycle.
+  if (!phases.length) phases.push([]);
   // Then each green group joins every other phase none of whose green groups it crosses.
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < usable.length; i++)
     phases.forEach((phase, p) => {
       if (p !== colour[i] && phase.every((o) => !crossing[i]![usable.indexOf(o)]))
         phase.push(usable[i]!);
@@ -205,7 +201,7 @@ function fewestPhases(crossing: boolean[][], budget = 100_000): number[] {
   colour.fill(-1);
   let steps = 0;
   const search = (i: number, k: number) => {
-    if (steps++ > budget) return;
+    if (k >= bestK || steps++ > budget) return;
     if (i === n) {
       best = [...colour];
       bestK = k;

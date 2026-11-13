@@ -192,7 +192,7 @@ export function addGroupSignal(
   data?: OsmData,
 ): void {
   const group = city.junctionGroups![groupId]!;
-  group.signal = generateGroupSignalProgram(city, groupId, compiled, diagnostics);
+  group.signal = generateGroupSignalProgram(groupId, compiled, diagnostics);
   group.signal.turnOnRed = turnOnRed(data);
   if (group.signal.turnOnRed === undefined) delete group.signal.turnOnRed;
   group.provenance.inferred!.push('signal');
