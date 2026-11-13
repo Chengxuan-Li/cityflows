@@ -308,7 +308,8 @@ export class Scene3D {
       this.content.add(caster);
     }
     const asphalt = add(geometry.surfaces, style.asphalt, !terrain.grid);
-    this.asphalt = [ground, asphalt];
+    const casing = add(geometry.casings, 0xffffff, false);
+    this.asphalt = [ground, asphalt, casing];
     for (const mesh of this.asphalt) mesh.material.vertexColors = true;
     const walk = buildWalk(city, renderedSource, geometry.heights);
     this.walk = {
