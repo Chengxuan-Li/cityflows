@@ -171,7 +171,11 @@ function createRun({
     parking,
     (id) => hasGrant(id) || !!intersections.groupPaths[id],
   );
-  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, parking.crossingBlocks);
+  // A lane change lands on neither a lot car's crossing span (TASK-157) nor a span a walker
+  // holds (TASK-165).
+  const landingBlocked = (lane: number, fromM: number, toM: number) =>
+    parking.crossingBlocks(lane, fromM, toM) || !!walkers?.holds(lane, fromM, toM);
+  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, landingBlocked);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -1399,7 +1403,7 @@ function createRun({
       groupRoute,
       routeVersion: () => costs.version,
     });
-    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, parking.crossingBlocks);
+    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );

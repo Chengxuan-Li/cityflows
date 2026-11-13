@@ -84,6 +84,16 @@ export function createIntersections(
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const reservedSpace = new Float64Array(compiled.lanes.length);
+  // TASK-165: the far edge of each lane's exit-side crosswalk (a marked crossing at the node the
+  // lane leaves), 0 without one. Exit storage is measured from there, so a car is admitted only
+  // when its whole body fits beyond the stripes and does not queue across them.
+  const crosswalkEnd = new Float64Array(compiled.lanes.length);
+  for (const link of compiled.walk.links)
+    for (const span of link.crossing?.spans ?? []) {
+      const lane = compiled.lanes[span.lane]!;
+      if (compiled.roads[lane.road]!.from !== link.crossing!.node) continue;
+      crosswalkEnd[lane.idx] = Math.max(crosswalkEnd[lane.idx]!, span.atM + span.halfM);
+    }
   type GroupPath = { movements: number[]; route: Route; step: number };
   const groupPaths: (GroupPath | undefined)[] = [];
   const groupOccupants = compiled.groups?.map(() => new Set<number>()) ?? [];
@@ -453,7 +463,11 @@ export function createIntersections(
           return 'box';
         distance += part.lengthM;
         const tail = vehicles.last(part.toLane);
-        const clearance = profile(id).lengthM + params.idm.minGapM + reservedSpace[part.toLane]!;
+        const clearance =
+          crosswalkEnd[part.toLane]! +
+          profile(id).lengthM +
+          params.idm.minGapM +
+          reservedSpace[part.toLane]!;
         if (reservedSpace[part.toLane]! > 0 && compiled.lanes[part.toLane]!.lengthM < clearance)
           return 'exit-full';
         if (tail !== -1) {
@@ -468,7 +482,7 @@ export function createIntersections(
       }
       return null;
     }
-    const clearance = profile(id).lengthM + params.idm.minGapM;
+    const clearance = crosswalkEnd[movement.toLane]! + profile(id).lengthM + params.idm.minGapM;
     const horizon =
       vehicles.stopped[id]! >= params.intersection.boxWaitS
         ? 0
