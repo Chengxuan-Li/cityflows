@@ -134,8 +134,10 @@ export function createParking(
   );
   const lotGraph = (facility: number) => lotGraphs[facility];
   /** TASK-156: each lot's aisle-road car lanes, and the movements joining them. A lot arrival
-   * whose body is inside such a lane's band is that lane's occupant (lane vehicles there treat
-   * it as a leader, and a departure's gap checks see it), and it keeps clear of their cars. */
+   * keeps clear of lane cars ahead on all of them. On a public aisle, which through traffic
+   * drives, it is a lane's occupant while its body is inside that lane's band, so lane cars
+   * follow it and departures' gap checks see it. A private aisle's lane cars are departures
+   * from its bays, which start by their own gap check. */
   const aisleSegmentsOf = (city: CompiledCity) =>
     city.parking.map((f) => {
       const lot = f.kind === 'lot' ? city.lots?.find((l) => l.id === f.id) : undefined;
@@ -145,7 +147,10 @@ export function createParking(
       const movements = city.movements
         .filter((m) => lanes.includes(m.fromLane) || lanes.includes(m.toLane))
         .map((m) => -m.idx - 1);
-      return { lanes, segments: [...lanes, ...movements] };
+      return {
+        lanes: lanes.filter((lane) => city.roads[city.lanes[lane]!.road]!.access[0] === 'yes'),
+        segments: [...lanes, ...movements],
+      };
     });
   let aisleSegments = aisleSegmentsOf(compiled);
   const eligibleSpaces = () =>
@@ -1035,7 +1040,7 @@ export function createParking(
       pose: from,
       speed: 0,
     });
-    // TASK-156: an entry on one of the lot's aisle lanes keeps the car that lane's occupant.
+    // TASK-156: an entry on a public aisle lane keeps the arriving car that lane's occupant.
     const m = motionById[id]!;
     if (lot && aisleBand(id, m, from)?.lane === m.lane) m.laneHeld = true;
     return true;

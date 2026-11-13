@@ -938,11 +938,12 @@ function createRun({
           throw new Error('Parking entry admission changed within a step');
         if (parking.lotArrival(connector.idx)) {
           leaveRoad(id, timeS, connector.positionM);
+          // TASK-156: an entry on a public aisle lane keeps the arriving car in it.
+          const held = parking.motion(id)!.laneHeld;
+          if (!held) vehicles.remove(id);
           intersections.release(id);
           laneChanges.leaveLane(id);
-          // TASK-156: an entry on the lot's own aisle lane leaves the car that lane's occupant.
-          if (!parking.motion(id)!.laneHeld) {
-            vehicles.remove(id);
+          if (!held) {
             vehicles.lane[id] = OFF_LANE;
             vehicles.position[id] = 0;
           }

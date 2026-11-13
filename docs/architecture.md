@@ -1511,12 +1511,13 @@ reach their access point during the leave duration.
 Curve progress is eased, and snapshots carry the moving body throughout the handover.
 
 A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
-and becomes `in_lot` (counted among driving trips). TASK-156: while its body is inside the band
-of one of its lot's aisle lanes it is that lane's occupant at the farthest station its body
-reaches there, so lane cars on the aisle follow it and departures' gap checks see it; it keeps
-`minGapM` clear of lane cars on the aisle lanes and their joining movements, and enters a band
-only with the following gap ahead and the braking distance of the car behind. An entry on an
-aisle lane keeps the arriving car in that lane. It follows its local shortest path at
+and becomes `in_lot` (counted among driving trips). TASK-156: it keeps `minGapM` clear of lane
+cars ahead on its lot's aisle lanes and their joining movements. On a public aisle, which
+through traffic drives, it is a lane's occupant while its body is inside that lane's band, at the
+farthest station its body reaches there, so lane cars follow it and departures' gap checks see
+it; it enters such a band only with the following gap ahead and the braking distance of the car
+behind, and an entry on such a lane keeps it in the lane. A private aisle's lane cars are
+departures from its bays, which do not yet check lot arrivals. It follows its local shortest path at
 `lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
 across it; tied approaches use distance, then id. Narrow local paths admit one entry cohort of
 arrivals at a time to prevent opposing cars deadlocking. TASK-153: departures, including one
