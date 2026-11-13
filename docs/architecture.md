@@ -1625,9 +1625,32 @@ Step sequence, in this order every step:
      its whole length past the movement (the rear of the exit lane's last vehicle, projected
      forward by that vehicle's speed over the candidate's time to cross, at least
      `candidate.lengthM + minGapM` along the lane) is not granted, so it waits at the stop line
-     rather than in the junction. After `boxWaitS` of waiting at the line it falls back to
-     the older rule (the last vehicle's front at least `candidate.lengthM + minGapM` along), so a
-     jammed junction still drains.
+     rather than in the junction. TASK-131 Phase 3 / B56 bounds that forecast by leaders,
+     destination connectors and red stop lines, and by `boxWaitS`. Cars already crossing toward
+     the exit also consume its space. After `boxWaitS` standing, admission needs actual rear
+     clearance; waiting never replaces it with front clearance. Controlled movements recheck
+     this storage when the front actually enters, since an approach grant can become stale.
+   - TASK-131 Phase 3: group entries check the entire routed path through inner roads and the
+     final exit again when the front crosses the entry, including cars already admitted whose
+     exit space is reserved. Forecasts stop at a leader, destination connector or red stop line,
+     and never extend beyond `boxWaitS`; waiting never relaxes this group rear-clearance rule.
+     Conflicting group paths wait outside until the admitted car's rear clears the relevant
+     member movements; already-cleared members do not reserve the rest of a long group.
+     The chosen movements persist through inner roads, whose member stop, yield and signal
+     controls do not stop a cleared car. Physical following, conflict-zone backstops and walker
+     holds remain active. Required safe lane changes and destinations on inner roads remain
+     reachable; discretionary lane changes and congestion/parking reroutes wait until group exit.
+     A fallback or proposed head diversion uses the suffix from its actual landing lane, even
+     when it enters the incumbent route's next road; replanning invalidates cached entry paths.
+     Outstanding exit slots cannot exceed the lane's finite storage, including when a moving
+     occupant's projected rear would lie beyond the lane end.
+     A required inner lane change targets the reserved movement's source lane, even when the
+     road route also accepts the current lane through a different downstream lane-change plan.
+     Exit, gridlock recovery and live edits release the derived group reservations.
+     A short external exit that cannot store the vehicle carries its clearance through any
+     conflict-free uncontrolled continuations to downstream storage. A mainline merge keeps
+     its rear-gap, insertion-deceleration and approaching-follower safety checks; only an
+     ungranted outside ramp waiting on this car's existing reservation loses its priority claim.
 5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
    its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
@@ -1668,13 +1691,25 @@ for `exit-full` or `box`. A red signal pauses the timer; movement, becoming a fo
 changing the lane plan or a live patch resets it. This also checks an approach grant or
 an automatic continuation whose exit has filled since admission. After 45 s by default,
 it tries other movements from its current lane, excluding `neverGreen`, class/access bans
-and movements in its trip's `attemptedFallbacks`. A candidate needs room on its exit now
-and a route from that exit to the current destination connector. The lowest remaining
+and movements in its trip's `attemptedFallbacks`. TASK-131's shared-lane trial permits one
+search before that delay when the head and its immediate follower are stopped at normal
+queue spacing, the head's outlet is full, and the follower has a distinct green outlet with
+storage. Outlets are the actual exits beyond a junction group. An early candidate must also
+be green. The pair is tried once while eligible; an unsuccessful search leaves the ordinary
+timer running. A changed lane plan, live patch or recovery resets the pair. A candidate needs
+room on its exit now and a route from that exit to the current destination connector. The lowest remaining
 route cost wins, with movement index breaking ties. It releases any approach grant and
 requests the chosen movement through ordinary signal, gap and conflict arbitration.
 Taking it uses the existing `missed_turn` fallback and reroutes on the next lane, without
 spending a congestion replan. After the delay it remains eligible as room opens; an
 unsuccessful search does not restart the delay. Without an alternative it keeps waiting;
+TASK-131 Phase 3 / B56 rejects a head alternative whose suffix repeats the current blocked
+movement or an earlier unresolved blockage in that vehicle's executed head diversions. Two
+individually nonreturning head choices therefore cannot send the vehicle back to an earlier
+blocked movement. A record is made only when the diversion actually executes and is released
+when the vehicle reaches the blocked movement's target road; another usable entry lane remains
+available. Recovery, edits and a changed parking destination reset this history. This constrains
+the engine's head choices without changing route search or its request/result contract.
 TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
 not contain the other per-vehicle timers).
 
@@ -1684,6 +1719,17 @@ patch, clears the epoch on a cost-version change, and replaces a head's entries 
 destination, class, purpose, desired speed, noise or route seed changes. Every step still
 checks candidate permissions, attempted fallbacks, exit occupancy and intersection blocking;
 only the identical suffix search is reused. `RouteProvider` retains no route-result cache.
+
+Roadside origin courtesy (TASK-131 trial). A roadside departure continuously checked as the
+eligible FIFO candidate for `gridlock.respawnS` may request one bounded gap. Access walking
+and intervals without head eligibility do not age that request. A safely stoppable road
+follower, fully on an external lane and without a movement grant, group clearance or parking
+motion, may hold outside both the full swept body envelope and the normal spawn spacing.
+The leader must already move and project clear within `boxWaitS`; the pre-clear hold lasts
+at most that window, with one request per owner/leader pair and one active hold per lane.
+Ordinary spawn, departure-room and insertion IDM checks alone authorize departure; the
+existing parking manoeuvre then proceeds normally. Loss of eligibility, a follower commitment
+or lane change, and live edits cancel the hold. A slowed leader cannot extend it indefinitely.
 
 Stop positions (TASK-072, TASK-094). `CLane.stopM` is where an ungranted vehicle stops. On a
 signalized approach with a served movement and a crossing, `stopM` is the crossing's far edge
@@ -1743,6 +1789,12 @@ the change up: it takes the TASK-048 fallback from its current lane (the cheapes
 movement whose landing lane routes to its destination), which now also applies when the
 route still needs another lane on this road and to a required diverge, and reroutes with
 `missed_turn`. With no such movement it keeps waiting, and gridlock recovery below applies.
+Phase 3 additionally checks the near downstream route before a discretionary change. Over
+one `missedTurnAfterS` window of posted-speed travel, it compares how many mandatory changes
+remain from each lane, including legal alternatives through the intervening junctions.
+A move that increases that count is suppressed. The usual MOBIL and gap checks apply to
+moves with equal or lower counts.
+
 TASK-076, second round (lead, after the first round's Munich trace): a discretionary (MOBIL)
 change is never proposed to a lane from which the car needs more changes to reach its route's
 target lanes than from its current lane, on any road of the route, not only the last (on
