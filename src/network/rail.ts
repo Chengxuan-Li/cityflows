@@ -12,7 +12,7 @@ import {
 import type { Vec2 } from '../geo/vec2';
 import type { City } from '../schema';
 import type { CompiledCity } from './types';
-import type { CatenaryMast, RailNode, RailTrack, RailPlatform } from '../schema/rail';
+import type { CatenaryMast, RailNode, RailTrack, RailPlatform, TramStop } from '../schema/rail';
 import { compileLevelCrossings, type LevelCrossing } from './level-crossings';
 
 export interface RailGraph {
@@ -25,6 +25,7 @@ export interface RailGraph {
     cumulative: Float64Array;
   })[];
   platforms: RailPlatform[];
+  tramStops?: TramStop[];
   connections: { node: number; from: number; to: number }[];
   components: number[][];
   crossings: { roadId: string; track: number; pos: Vec2; roadM: number; trackM: number }[];
@@ -151,6 +152,9 @@ export function compileRail(city: City, geometry?: CompiledCity): RailGraph | un
     tracks,
     platforms: Object.values(city.rail.platforms).sort((a, b) => a.id.localeCompare(b.id)),
     connections,
+    ...(city.rail.tramStops
+      ? { tramStops: Object.values(city.rail.tramStops).sort((a, b) => a.id.localeCompare(b.id)) }
+      : {}),
     components,
     crossings,
     facilities: compileLevelCrossings(city, { nodes, tracks }, geometry),

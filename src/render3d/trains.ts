@@ -11,6 +11,7 @@ import {
 import type { RailGraph, RailHeights } from '../network/rail';
 import {
   trainDefaults,
+  serviceCarLengthM,
   type TrainPose,
   type TrainTrackPose,
   type TrainTimetable,
@@ -21,8 +22,8 @@ import { railElevation } from './rail';
 
 export class Trains3D {
   readonly group = new Group();
-  readonly body: InstancedMesh;
-  readonly roof: InstancedMesh;
+  body: InstancedMesh;
+  roof: InstancedMesh;
   private readonly matrix = new Matrix4();
   private readonly scale = new Vector3();
   private readonly rotation = new Euler(0, 0, 0, 'YXZ');
@@ -42,7 +43,7 @@ export class Trains3D {
         return (
           sum +
           Math.ceil(r.durationS / timetable.periodS) *
-            Math.ceil(trainDefaults[r.kind].lengthM / trainDefaults.carLengthM)
+            Math.ceil(trainDefaults[r.kind].lengthM / serviceCarLengthM(r.kind))
         );
       }, 0),
     );
@@ -57,6 +58,25 @@ export class Trains3D {
     this.group.add(this.body, this.roof);
   }
   update(trains: TrainPose[], below: boolean, selected: string | null) {
+    const required = trains.reduce(
+      (sum, train) =>
+        sum +
+        train.cars.filter((car) => below || this.railHeights.grades[car.track] !== 'tunnel').length,
+      0,
+    );
+    if (required > this.body.instanceMatrix.count) {
+      const capacity = Math.max(required, this.body.instanceMatrix.count * 2);
+      const grow = (old: InstancedMesh) => {
+        const mesh = new InstancedMesh(old.geometry, old.material, capacity);
+        mesh.frustumCulled = false;
+        this.group.remove(old);
+        old.dispose();
+        return mesh;
+      };
+      this.body = grow(this.body);
+      this.roof = grow(this.roof);
+      this.group.add(this.body, this.roof);
+    }
     let count = 0;
     this.ids = [];
     for (const train of trains)
@@ -76,7 +96,7 @@ export class Trains3D {
         this.rotation.set(0, -car.heading, pitch, 'YXZ');
         this.matrix
           .makeRotationFromEuler(this.rotation)
-          .scale(this.scale.set(car.lengthM, 2.8, 3))
+          .scale(this.scale.set(car.lengthM, 2.8, train.kind === 'tram' ? 2.4 : 3))
           .setPosition(car.x, y, car.y);
         this.body.setMatrixAt(count, this.matrix);
         this.body.setColorAt(
@@ -85,7 +105,9 @@ export class Trains3D {
         );
         this.matrix
           .makeRotationFromEuler(this.rotation)
-          .scale(this.scale.set(Math.max(0, car.lengthM - 2), 0.15, 2.4))
+          .scale(
+            this.scale.set(Math.max(0, car.lengthM - 2), 0.15, train.kind === 'tram' ? 1.9 : 2.4),
+          )
           .setPosition(
             this.roofOffset
               .set(0, 1.45, 0)

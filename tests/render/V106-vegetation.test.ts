@@ -51,8 +51,9 @@ const baselines = {
   // stripped every pin equals 2df05a1's.
   // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
   // removed every pin equals 3e9951a's.
-  'munich-donnersberger': 'a9235f46c7ca41ab42721c8a8e471965c7503d39f4a412225cc612b21fcfe3fa',
-  'sindelfingen-a81': '0e3784fb62ab22d8189d8faa7b114de51cd51534e4184563d3ffcf49d9286948',
+  'munich-donnersberger': 'c2ce8f1b2db76ed6a2dc86709e01c904ba2d0c02de344a436966c1345d7fb835',
+  // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
+  'sindelfingen-a81': '986083590a892c4c6abcd6438f65e446421cbc9933cd6df5b6d3c7e5c40ca12d',
 };
 
 unitTest(

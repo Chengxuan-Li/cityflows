@@ -129,6 +129,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
         parkingClaims,
         parkedCars: stock,
         walkers,
+        rail,
         ...arrays
       } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
@@ -137,6 +138,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
       if (walkers)
         for (const array of Object.values(walkers))
           if (typeof array !== 'number') transfer.push(array.buffer);
+      if (rail) transfer.push(rail.crossings.buffer, rail.railReady.buffer);
       const now = performance.now();
       const updateOverlays = now - lastOverlayMs >= 500;
       const roadSpeedRatio = updateOverlays ? engine.metrics().roadSpeedRatio : undefined;
@@ -169,6 +171,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
           parkingClaims,
           parkedCars,
           walkers,
+          rail,
         },
       };
       self.postMessage(reply, { transfer });
