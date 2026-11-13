@@ -104,6 +104,8 @@ test('T77 a refused exit holds clear of the lane beside a through car, then merg
       expect(connector).toBe(w.exit.idx);
       asked++;
       joinM = positionM;
+      // As the engine's grant does: the car is inserted at its join station.
+      if (granted) vehicles.position[1] = positionM;
       return granted;
     },
     resume() {},

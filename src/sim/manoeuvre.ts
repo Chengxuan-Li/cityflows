@@ -142,14 +142,13 @@ export function holdProgress(path: MotionPath, lane: CLane, lengthM: number, wid
   return -1;
 }
 
-/** TASK-150: the lane station where a held car's front bumper joins: downstream of its
- * connector by the hold's distance from the lane centre, so the merge turns into the lane
- * instead of hooking back to a station straight ahead. */
+/** TASK-150: the lane station where a held car's front bumper joins: past the hold's nearest
+ * lane station by its distance from the lane centre, so the merge turns into the lane instead
+ * of hooking back to a station straight ahead. A drive-out path that runs along the lane (an
+ * aisle mapped on a road) joins where it meets the lane, not at its connector further on. */
 export function joinStation(hold: ParkingPose, lane: CLane, connectorM: number) {
-  return Math.max(
-    connectorM,
-    Math.min(connectorM + nearestOnPolyline(lane.polyline, hold).away, lane.stopM),
-  );
+  const hit = nearestOnPolyline(lane.polyline, hold);
+  return Math.min(hit.along + hit.away, Math.max(connectorM, lane.stopM));
 }
 
 /** Farthest occupied lane station during a pull-in, including its forward setup. */

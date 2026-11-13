@@ -865,7 +865,7 @@ export function createParking(
     callbacks: {
       clearLane: (id: number) => void;
       park: (id: number, connector: number) => void;
-      exit: (id: number, connector: number, positionM: number) => boolean;
+      exit: (id: number, connector: number, joinM: number) => boolean;
       resume: (id: number, connector: number) => void;
     },
   ) {
@@ -882,8 +882,9 @@ export function createParking(
       const space = spaces[m.slot]!,
         before = m.pose;
       if (m.phase === 'exit') {
-        // The car holds clear of the lane. A grant inserts it where it joins, which reserves
-        // its gap for following traffic before its body crosses the lane edge.
+        // The car holds clear of the lane. A grant inserts it where it joins (the engine may
+        // stop short at a destination), which reserves its gap for following traffic before
+        // its body crosses the lane edge.
         m.speed = 0;
         const joinM = joinStation(
           m.pose,
@@ -896,7 +897,7 @@ export function createParking(
           totalDrive += m.driveS;
           if (vehicles.state[id] === FAILED) removeMotion(id);
           else {
-            const to = lanePose(m.connector, joinM);
+            const to = lanePose(m.connector, vehicles.position[id]!);
             nextPath(m, manoeuvrePath(m.pose, to, false), 'merge', timeS);
             m.laneHeld = true;
           }
