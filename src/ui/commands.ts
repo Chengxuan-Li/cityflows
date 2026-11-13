@@ -20,7 +20,7 @@ export interface AppCommand {
 
 const store = useAppStore.getState;
 
-/** A sheet's own close: a dialog also reports closing when another sheet replaced it. */
+/** A sheet's own close: nothing happens when another sheet has already replaced it. */
 export function closeSheet(name: SheetName) {
   if (store().sheet === name) store().showSheet(null);
 }
@@ -296,9 +296,11 @@ export function installShortcuts() {
     if (!id) return;
     const command = byId[id];
     // A sheet takes the keys, except that the command menu and the shortcut sheet toggle each other.
+    // The store, not the DOM, says which: the dialog opens in an effect after the store changes,
+    // and a key pressed in between must already go to the sheet.
     const { sheet } = store();
     const ownSheet = sheet === 'commands' || sheet === 'shortcuts';
-    if (document.querySelector('dialog[open]') && !(command.insideSheet && ownSheet)) return;
+    if (sheet && !(command.insideSheet && ownSheet)) return;
     if (id === 'playPause') {
       if (pressesOnSpace(event.target)) return;
       event.preventDefault();

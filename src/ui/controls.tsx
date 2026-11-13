@@ -1,6 +1,6 @@
 import {
-  useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -397,7 +397,10 @@ export function Popover({
   );
 }
 
-/** A modal sheet that drops from under the toolbar; Escape or the close button dismisses it. */
+/** A modal sheet that drops from under the toolbar; Escape or the close button dismisses it.
+ *  `open` alone shows and hides it. Escape reports through `cancel`, which fires during the key
+ *  press; the `close` event comes a task later and may land after the sheet reopened, so it
+ *  must not close anything. */
 export function Sheet({
   title,
   open,
@@ -413,7 +416,8 @@ export function Sheet({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
-  useEffect(() => {
+  // In the commit, not after it: a key pressed right after the store opens the sheet goes to it.
+  useLayoutEffect(() => {
     const dialog = ref.current!;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
@@ -423,7 +427,10 @@ export function Sheet({
       ref={ref}
       className={`sheet${className ? ` ${className}` : ''}`}
       aria-labelledby={id}
-      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
     >
       <div className="sheet-heading">
         <h2 id={id}>{title}</h2>
