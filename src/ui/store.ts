@@ -71,6 +71,8 @@ export interface Session {
   diagnostics: Diagnostic[];
   engine: EngineClient;
   vehicleHues: Uint32Array;
+  /** TASK-129: the household car of each loaded trip, by one-based vehicle id less one. */
+  vehicleCars: (string | null)[];
   /** Place demographics the population was generated from; restart regenerates when they change. */
   populationKey: string;
   demandSummary: DemandSummary;
@@ -348,6 +350,7 @@ export const useAppStore = create<AppState>((set, get) => {
           vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
             placeHue(destinationPlaceId),
           ),
+          vehicleCars: trips.map(({ carId }) => carId ?? null),
         },
         run: {
           status: 'paused',
@@ -777,6 +780,7 @@ export const useAppStore = create<AppState>((set, get) => {
               vehicleHues: Uint32Array.from(trips, ({ destinationPlaceId }) =>
                 placeHue(destinationPlaceId),
               ),
+              vehicleCars: trips.map(({ carId }) => carId ?? null),
             },
             run: {
               ...run,

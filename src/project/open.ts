@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { withHouseholds } from '../demand/households';
+import type { City, Person } from '../schema';
 import { migrateCity } from '../schema/migrate';
 import { sha256 } from './hash';
 import { manifestSchema, type ProjectFile } from './manifest';
@@ -24,6 +26,13 @@ function readJsonDocument(text: string): Record<string, Uint8Array> {
       encoder.encode(JSON.stringify(value)),
     ]),
   );
+}
+
+/** TASK-129: a population saved before households gets the grouping a regenerated one has. */
+function households(city: City, persons: z.infer<typeof populationSchema>, seed: number) {
+  return persons.every((person): person is Person => person.householdId !== undefined)
+    ? persons
+    : withHouseholds(city, persons, seed);
 }
 
 export async function openProject(input: Uint8Array | string): Promise<OpenResult> {
@@ -58,11 +67,21 @@ export async function openProject(input: Uint8Array | string): Promise<OpenResul
     const project = { city, scenarios };
     const baseline =
       files['baseline.json'] || manifest.files['baseline.json']
-        ? await read('baseline.json', (value) => baselineSchema.parse(value))
+        ? await read('baseline.json', (value) => {
+            const { population, ...baseline } = baselineSchema.parse(value);
+            return population
+              ? {
+                  ...baseline,
+                  population: households(baseline.city, population, baseline.scenario.demand.seed),
+                }
+              : baseline;
+          })
         : undefined;
     const population =
       files['population.json'] || manifest.files['population.json']
-        ? await read('population.json', (value) => populationSchema.parse(value))
+        ? await read('population.json', (value) =>
+            households(city, populationSchema.parse(value), scenarios[0]!.demand.seed),
+          )
         : undefined;
     const history =
       files['history.json'] || manifest.files['history.json']

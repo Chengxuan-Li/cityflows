@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation, scheduleTrips } from '../src/demand';
+import { householdCensus } from '../src/demand/households';
 import { defaultScenario } from '../src/fixtures/scenarios';
 import { importOsmCached } from './city-cache';
 import { compile, type CompiledCity } from '../src/network';
@@ -235,7 +236,8 @@ export function probeWalk(city: City, compiled: CompiledCity) {
 }
 
 /** `untilS` stops the run early (the same demand, a prefix of the morning: `traffic:quick`);
- * `observe` sees the engine after every step (the traffic tier's observers, TASK-090). */
+ * `observe` sees the engine after every step (the traffic tier's observers, TASK-090). `seed`
+ * and `endS` give the other demand seeds and a longer day (TASK-129). */
 export function probeMorning(
   city: City,
   compiled: CompiledCity,
@@ -246,11 +248,13 @@ export function probeMorning(
     routeProvider,
     includeWalkLegs = false,
     demandSeed = 1,
+    endS = 10 * 3600,
     intersectionObserver,
     engine = createEngine(),
     originObserver,
     headDetourObserver,
   }: {
+    endS?: number;
     untilS?: number;
     observe?: (engine: TrafficEngine) => void;
     routeProvider?: RouteProvider;
@@ -267,7 +271,7 @@ export function probeMorning(
   const scenario = defaultScenario('grid5x5', demandSeed);
   scenario.demand.personsPerResident = scale;
   scenario.startS = 7 * 3600;
-  scenario.endS = 10 * 3600;
+  scenario.endS = endS;
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, population, scenario);
   const provider = routeProvider ?? createRouteProvider();
@@ -553,6 +557,20 @@ export function probeMorning(
         );
       })
     : undefined;
+  // TASK-129: households, cars and drivers, and the stock against the formula it replaces.
+  const homes = Object.values(city.places).filter((p) => p.kind === 'residential');
+  const households = {
+    ...householdCensus(city, population, trips),
+    homeCars: population.filter(
+      (p) => p.hasCar && city.places[p.homePlaceId]!.kind === 'residential',
+    ).length,
+    formulaStock: homes.reduce(
+      (n, p) => n + Math.ceil(Math.round(p.population * scale) * scenario.demand.carShare),
+      0,
+    ),
+    carWaits: metrics.persons?.carWaits,
+    home: metrics.parking.home,
+  };
   return {
     scale,
     demandSeed,
@@ -560,6 +578,7 @@ export function probeMorning(
     loopCensus,
     stateHash: engine.stateHash(),
     persons: population.length,
+    households,
     trips: trips.length,
     releasedTrips,
     completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,
