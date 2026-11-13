@@ -187,7 +187,7 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       return -1;
     };
     for (const stall of lot.stalls) {
-      if (mappedLanes.length) {
+      if (mappedLanes.length && !lot.aislePaths?.length) {
         const candidate = mappedLanes
           .map((lane) => ({ lane, hit: nearestOnPolyline(lane.polyline, stall.position) }))
           .sort((a, b) => a.hit.away - b.hit.away || a.lane.idx - b.lane.idx)[0]!;
