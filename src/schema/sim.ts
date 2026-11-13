@@ -8,6 +8,8 @@ export interface SimParams {
   parkManoeuvreS: { parallel: number; angled: number; perpendicular: number };
   leaveManoeuvreS: number;
   parkingSearchRadiusM: number;
+  /** TASK-129: a car going home parks within this distance of it while anything there admits it. */
+  homeParkingRadiusM: number;
   dtS: number;
   vehicleClasses: Record<
     VehicleClass,

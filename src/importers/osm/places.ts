@@ -5,10 +5,11 @@ import {
   pointInPolygon,
   polylineCrossings,
 } from '../../geo/polyline';
+import { carService } from '../../network/car-service';
 import { parkingEgress } from '../../network/parking-egress';
 import { compileVisibleParking } from '../../network/parking';
 import { lonLatToLocal } from '../../geo/projection';
-import type { CompiledCity } from '../../network';
+import type { CompiledCity, Diagnostic } from '../../network';
 import { allocateId, type City, type Place, type RoadClass } from '../../schema';
 import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
@@ -243,6 +244,32 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
       });
     }
   }
+}
+
+/**
+ * TASK-155: demand generates no trip with a gateway end that no car can serve. Say which
+ * gateways the crop left with nothing, or nothing in one direction, to serve.
+ */
+export function gatewayDiagnostics(compiled: CompiledCity): Diagnostic[] {
+  const gateways = compiled.places.filter((p) => p.kind === 'gateway');
+  if (!gateways.length) return [];
+  const locals = compiled.places.filter((p) => p.kind !== 'gateway');
+  const { served } = carService(compiled);
+  return gateways.flatMap((gateway): Diagnostic[] => {
+    const enters = locals.some((p) => served(gateway.idx, p.idx));
+    const leaves = locals.some((p) => served(p.idx, gateway.idx));
+    if (enters && leaves) return [];
+    const others = gateways
+      .filter((g) => g !== gateway && (served(gateway.idx, g.idx) || served(g.idx, gateway.idx)))
+      .map((g) => g.id);
+    const message =
+      enters || leaves
+        ? enters
+          ? `No local place can reach gateway ${gateway.id}, so no trips leave through it`
+          : `Cars entering at gateway ${gateway.id} reach no local parking, so no trips start there`
+        : `Gateway ${gateway.id} reaches no local place or parking, so it ${others.length ? `only serves trips with ${others.join(', ')}` : 'generates no trips'}`;
+    return [{ severity: 'info', code: 'gateway_unserved', refs: [gateway.id, ...others], message }];
+  });
 }
 
 function placeKind(tag: OsmTags): Place['kind'] | undefined {

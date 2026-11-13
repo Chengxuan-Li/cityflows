@@ -179,7 +179,8 @@ export function DemandPanel() {
   }, [toggleDemand]);
 
   const persons = project.population.length;
-  const withCar = project.population.filter((person) => person.hasCar).length;
+  const cars = project.population.filter((person) => person.hasCar).length;
+  const households = new Set(project.population.map((person) => person.householdId)).size;
   const max = Math.max(1, ...summary.byHour);
   const places = Object.values(city.places).sort((a, b) => a.name.localeCompare(b.name));
   const reasons = (Object.keys(failReasons) as FailReason[]).filter(
@@ -191,8 +192,9 @@ export function DemandPanel() {
     <section id="demand" className="chart-sheet demand-sheet" aria-label="Demand">
       <div className="chart-heading">
         <span>
-          {persons.toLocaleString()} persons, {withCar.toLocaleString()} with a car ·{' '}
-          {summary.totalTrips.toLocaleString()} trips over the day
+          {persons.toLocaleString()} persons, {cars.toLocaleString()} with a car ·{' '}
+          {summary.totalTrips.toLocaleString()} trips over the day · {households.toLocaleString()}{' '}
+          households
         </span>
         <button aria-label="Close demand" onClick={toggleDemand}>
           ×

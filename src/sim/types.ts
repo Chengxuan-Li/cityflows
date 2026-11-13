@@ -130,6 +130,15 @@ export interface Metrics {
       stripManoeuvresPerHour: number;
       meanStallChoiceRank: number;
     };
+    /** TASK-129: household cars parking at their home, how far from it, and every car that
+     * parked beyond `homeParkingRadiusM` with its reason. */
+    home?: {
+      arrivals: number;
+      medianM: number;
+      p90M: number;
+      maxM: number;
+      beyondRadius: { tripId: string; facility: string; distanceM: number; reason: string }[];
+    };
   };
   completedByClass: Record<VehicleClass, number>;
   timeS: number;

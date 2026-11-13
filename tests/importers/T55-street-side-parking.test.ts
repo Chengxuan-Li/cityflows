@@ -393,7 +393,7 @@ test.each(
   // and e4654d8 (merging lanes kept on a group's inner roads).
   expect(vehicleHash(net)).toBe(
     name.startsWith('munich')
-      ? 'e43890eca4a5d296f35afbbc1bfd51e17595d449d8dedec09aae07d7435a66fd'
+      ? '498cd35151969382501dec99b186ad1d5a56a0819e872cff6c0795e85bc85526'
       : '1b1a1ebb005d8f0e73cd565be40e4825a57e123cbbff292ac4394f3e060639ea',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));

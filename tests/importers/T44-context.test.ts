@@ -48,10 +48,10 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // with those removed and `nextId` 14 lower, the city hash is c227f80f… (lead: re-pinned with
             // TASK-132's `covered` too), and the
             // compile hash is unchanged.
-            '9005be62236f1a577c1233f52c7fd63f9cc784616b0ca0bc42c46d9aeb4db02b',
-            // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
+            'c9c09b4522fd67cbc8612a77f7d2e19c965efc909bb89fc519de168f8d81dc8d',
+            // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
             // removed every pin equals 3e9951a's.
-            'ad2edc4c21a7b57df2d4ed6444f657628720586b99ce2aa5ff3978fa5a707029',
+            '62eb7d779b0a5357cda6a2adee239ce3a8d75474158501c728ff5bc8e4a4e3ca',
           ]
         : [
             '9f2bc7ae9ca77a4f306668c0d50bd740bb9903582d8084f28d31c466a1f164e6',

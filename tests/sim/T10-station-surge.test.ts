@@ -22,7 +22,7 @@ test('T10 the bundled station surge peaks within fifteen minutes, slows its appr
   const event = station.events[0]!;
   expect(event.startS).toBe(8 * 3600 + 5 * 60);
   const compiled = setup(city);
-  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
+  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario, compiled);
   const visitors = trips.filter(
     (t) => t.destinationPlaceId === station.id || t.originPlaceId === station.id,
   );
@@ -33,17 +33,19 @@ test('T10 the bundled station surge peaks within fifteen minutes, slows its appr
   ).toBe(true);
   const quietCity = structuredClone(city);
   for (const place of Object.values(quietCity.places)) place.events = [];
+  const quietCompiled = setup(quietCity);
   const quietTrips = scheduleTrips(
     quietCity,
     generatePopulation(quietCity, scenario.demand),
     scenario,
+    quietCompiled,
   );
   const engine = createEngine(),
     replay = createEngine(),
     quiet = createEngine();
   engine.load({ compiled, trips, scenario });
   replay.load({ compiled, trips, scenario });
-  quiet.load({ compiled: setup(quietCity), trips: quietTrips, scenario });
+  quiet.load({ compiled: quietCompiled, trips: quietTrips, scenario });
   const upstream = compiled.roads.find((r) => city.roads[r.id]!.name === 'Station approach')!;
   const loopRoads = compiled.roads
     .filter((r) => city.roads[r.id]!.name === 'Pickup loop')
@@ -245,7 +247,7 @@ test('T10 Station with a second bidirectional connector drains paired visits wit
   });
   const compiled = setup(city);
   const scenario = scenarios[0]!;
-  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
+  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario, compiled);
   const engine = createEngine(),
     replay = createEngine();
   engine.load({ compiled, trips, scenario });
