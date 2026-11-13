@@ -452,13 +452,16 @@ test.each([0, 1])(
       expect(exits).toHaveLength(1);
       if (compiled.connectors[exits[0]!]!.parking === lot.idx) lotExits.push(exits[0]!);
     }
+    // TASK-152: the lot's aisle is the street, so each bay leaves into it at its own station.
     expect(lotExits).toHaveLength(2);
-    expect(new Set(lotExits).size).toBe(1);
+    expect(new Set(lotExits).size).toBe(2);
+    expect(lotExits.every((c) => compiled.parkingSpaces!.some((s) => s.departure === c))).toBe(
+      true,
+    );
     for (let id = 0; id < requests.length; id++) parking.depart(id, 100);
     expect(
-      new Set(
-        requests.flatMap((_, id) => (parking.motion(id)?.lot ? [parking.motion(id)!.slot] : [])),
-      ).size,
+      new Set(requests.flatMap((_, id) => (parking.motion(id) ? [parking.motion(id)!.slot] : [])))
+        .size,
     ).toBe(2);
     expect(homeFacilities.reduce((sum, f) => sum + parking.snapshot()[f.idx]!, 0)).toBe(0);
     expect(occupiedSpaces(parking.stockSnapshot().occupied, stock.id.length)).toEqual([]);

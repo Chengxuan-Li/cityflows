@@ -147,6 +147,7 @@ function derive(
   const spaces = Uint8Array.from(city.parkingSpaces ?? [], (s) => {
     const facility = city.parking[s.parking]!;
     if (facility.kind !== 'lot') return connectors[s.connector]!;
+    if (s.departure !== undefined) return connectors[s.departure]!;
     const lot = lots[facility.idx]!;
     return Number(
       lot.entries.some(

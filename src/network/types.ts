@@ -76,6 +76,8 @@ export interface CParkingSpace {
   layout: ParkingLayout;
   connector: number;
   manoeuvre: boolean;
+  /** TASK-152: a lot bay beside a vehicle-graph lane leaves into it here, like a kerbside space. */
+  departure?: number;
 }
 
 export interface CStrip {
