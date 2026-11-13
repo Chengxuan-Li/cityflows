@@ -1,9 +1,5 @@
 import { useAppStore } from './store';
-import { Layers } from './layers';
-import { MetricsPanel } from './panels/metrics';
-import { ComparePanel } from './panels/compare';
-import { DemandPanel } from './panels/demand';
-import { ToolbarButton } from './controls';
+import { MenuItem, ToolbarButton, type ToolbarAction } from './controls';
 
 const speeds = [1, 2, 5, 10, 20];
 
@@ -13,13 +9,69 @@ function clock(timeS: number) {
   return `${pad(tenths / 36000)}:${pad((tenths / 600) % 60)}:${pad((tenths / 10) % 60)}.${tenths % 10}`;
 }
 
-/** Play, pause, step, restart, speed and the 2D / 3D switch, in the toolbar. */
-export function RunControls() {
+/** Play, pause, step, restart, speed and the 2D / 3D switch. In the toolbar, Play and Pause
+ *  always show; with `inMenu`, the items the toolbar overflows (Step and Restart, speed, 3D)
+ *  render as overflow-menu entries, each hidden by CSS while the toolbar still has room for it. */
+export function RunControls({ inMenu = false }: { inMenu?: boolean }) {
   const mode = useAppStore((state) => state.viewMode);
   const run = useAppStore((state) => state.run);
   const busy = useAppStore((state) => state.busy);
   const { control, setSpeed } = useAppStore.getState();
   const disabled = !run || busy;
+  const steps: ToolbarAction[] = [
+    {
+      icon: 'step',
+      label: 'Step',
+      tooltip: 'Advance one step',
+      disabled: disabled || run.stale || run.status !== 'paused',
+      onClick: () => void control('step'),
+    },
+    {
+      icon: 'restart',
+      label: 'Restart',
+      tooltip: 'Restart the day',
+      disabled,
+      onClick: () => void control('restart'),
+    },
+  ];
+  const speed = (
+    <label className={`speed ov-speed${inMenu ? ' menu-row' : ''}`}>
+      <span className={inMenu ? undefined : 'visually-hidden'}>Speed</span>
+      <select
+        disabled={disabled}
+        value={run?.speed ?? 1}
+        onChange={(event) => void setSpeed(Number(event.currentTarget.value))}
+      >
+        {speeds.map((speed) => (
+          <option key={speed} value={speed}>
+            ×{speed}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  const view = {
+    label: '3D',
+    disabled,
+    'aria-pressed': mode === '3d',
+    onClick: () => useAppStore.getState().toggleView(),
+  };
+  if (inMenu)
+    return (
+      <>
+        <div className="menu-group ov-steps">
+          {steps.map((action) => (
+            <MenuItem key={action.label} {...action} />
+          ))}
+        </div>
+        <div className="menu-group ov-speed">
+          {speed}
+          <button {...view} className="menu-item view-toggle">
+            3D
+          </button>
+        </div>
+      </>
+    );
   return (
     <div className="run-controls">
       <div className="toolbar-group" role="group" aria-label="Run controls">
@@ -38,42 +90,15 @@ export function RunControls() {
           disabled={disabled || run.status !== 'playing'}
           onClick={() => void control('pause')}
         />
-        <ToolbarButton
-          icon="step"
-          label="Step"
-          tooltip="Advance one step"
-          disabled={disabled || run.stale || run.status !== 'paused'}
-          onClick={() => void control('step')}
-        />
-        <ToolbarButton
-          icon="restart"
-          label="Restart"
-          tooltip="Restart the day"
-          disabled={disabled}
-          onClick={() => void control('restart')}
-        />
+        {steps.map((action) => (
+          <ToolbarButton key={action.label} {...action} className="ov-steps" />
+        ))}
       </div>
-      <label className="speed">
-        <span className="visually-hidden">Speed</span>
-        <select
-          disabled={disabled}
-          value={run?.speed ?? 1}
-          onChange={(event) => void setSpeed(Number(event.currentTarget.value))}
-        >
-          {speeds.map((speed) => (
-            <option key={speed} value={speed}>
-              ×{speed}
-            </option>
-          ))}
-        </select>
-      </label>
+      {speed}
       <ToolbarButton
-        label="3D"
+        {...view}
         tooltip="Switch between 2D and 3D · V"
-        className="view-toggle"
-        disabled={disabled}
-        aria-pressed={mode === '3d'}
-        onClick={() => useAppStore.getState().toggleView()}
+        className="view-toggle ov-speed"
       />
     </div>
   );
@@ -143,23 +168,5 @@ export function StatusBar() {
       <small className="traffic-notice">Synthetic traffic, not observed traffic</small>
       {attribution && <small className="attribution">{attribution}</small>}
     </footer>
-  );
-}
-
-/** The analysis panels opened from the sidebar; they float over the map until phase 2. */
-export function Panels() {
-  const layersOpen = useAppStore((state) => state.layersOpen);
-  const metricsOpen = useAppStore((state) => state.metricsOpen);
-  const demandOpen = useAppStore((state) => state.demandOpen);
-  const compareOpen = useAppStore((state) => state.compareOpen);
-  const showCompare = compareOpen && !layersOpen && !metricsOpen && !demandOpen;
-  if (!showCompare && !layersOpen && !metricsOpen && !demandOpen) return null;
-  return (
-    <div className="run-sheet">
-      {showCompare && <ComparePanel />}
-      {layersOpen && <Layers />}
-      {metricsOpen && <MetricsPanel />}
-      {demandOpen && <DemandPanel />}
-    </div>
   );
 }

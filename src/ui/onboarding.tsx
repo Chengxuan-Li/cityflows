@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAppStore } from './store';
 
 type State = ReturnType<typeof useAppStore.getState>;
@@ -114,13 +114,25 @@ function place(card: HTMLElement, ring: HTMLElement, { anchor, side, ring: targe
   else if (side === 'left') left = rect.left - gap - width;
   else if (side === 'below') {
     left = rect.left + (rect.width - width) / 2;
-    top = rect.bottom + gap;
+    // Clear of the ring, which stands 3 px off the control.
+    top = rect.bottom + gap + 4;
   } else {
     left = rect.left + (rect.width - width) / 2;
     top = rect.top + 72;
   }
-  card.style.left = `${Math.max(inset, Math.min(left, innerWidth - inset - width))}px`;
-  card.style.top = `${Math.max(inset, Math.min(top, innerHeight - inset - height))}px`;
+  left = Math.max(inset, Math.min(left, innerWidth - inset - width));
+  top = Math.max(inset, Math.min(top, innerHeight - inset - height));
+  card.style.left = `${left}px`;
+  card.style.top = `${top}px`;
+  // The card's arrow points at the middle of the control it is about.
+  const placed = side === 'right' && left < rect.right ? 'below' : side;
+  card.dataset.side = placed;
+  card.style.setProperty(
+    '--arrow',
+    placed === 'below'
+      ? `${rect.left + rect.width / 2 - left}px`
+      : `${rect.top + rect.height / 2 - top}px`,
+  );
   const marked = target?.getBoundingClientRect();
   ring.hidden = !marked;
   if (marked) {
@@ -131,21 +143,29 @@ function place(card: HTMLElement, ring: HTMLElement, { anchor, side, ring: targe
   }
 }
 
+function go(next: number | null) {
+  const finished = next === null || next >= hints.length;
+  write(finished ? 'done' : String(next));
+  useAppStore.setState({ hintStep: finished ? null : next });
+}
+
+/** Reopens the hints; it sits in the empty inspector, so a selection hides it. */
+export function ShowHints() {
+  const step = useAppStore((state) => state.hintStep);
+  return step === null ? (
+    <button className="show-hints" onClick={() => go(0)}>
+      Show hints
+    </button>
+  ) : null;
+}
+
 export function Onboarding() {
-  const [step, setStep] = useState(initialStep);
+  const step = useAppStore((state) => state.hintStep);
   const card = useRef<HTMLElement>(null);
   const ring = useRef<HTMLDivElement>(null);
-  const sheetOpen = useAppStore(
-    (state) => !!state.selection || state.selectedRoads.length > 0 || state.diagnosticsOpen,
-  );
-
-  function go(next: number | null) {
-    const finished = next === null || next >= hints.length;
-    write(finished ? 'done' : String(next));
-    setStep(finished ? null : next);
-  }
 
   useEffect(() => {
+    useAppStore.setState({ hintStep: initialStep() });
     if (window.cityflows) window.cityflows.resetHints = () => go(0);
   }, []);
 
@@ -180,13 +200,7 @@ export function Onboarding() {
     };
   }, [step]);
 
-  if (step === null) {
-    return sheetOpen ? null : (
-      <button className="show-hints" onClick={() => go(0)}>
-        Show hints
-      </button>
-    );
-  }
+  if (step === null) return null;
   const last = step === hints.length - 1;
   return (
     <>
@@ -198,7 +212,9 @@ export function Onboarding() {
             {step + 1} of {hints.length}
           </small>
           <button onClick={() => go(null)}>Skip</button>
-          <button onClick={() => go(step + 1)}>{last ? 'Done' : 'Next'}</button>
+          <button className="primary" onClick={() => go(step + 1)}>
+            {last ? 'Done' : 'Next'}
+          </button>
         </div>
       </section>
     </>

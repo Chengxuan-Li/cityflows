@@ -2,6 +2,7 @@ import {
   useEffect,
   useId,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type CSSProperties,
   type HTMLAttributes,
@@ -36,6 +37,31 @@ export function ToolbarButton({
         </span>
       )}
     </span>
+  );
+}
+
+/** A toolbar action, drawn as a toolbar button or, when the toolbar overflows, a menu item. */
+export type ToolbarAction = ButtonHTMLAttributes<HTMLButtonElement> & {
+  icon: IconName;
+  label: string;
+  tooltip?: string;
+};
+
+/** A toolbar action inside the overflow menu: its glyph and its name as text. */
+export function MenuItem({ icon, label, tooltip, className, onClick, ...props }: ToolbarAction) {
+  return (
+    <button
+      {...props}
+      className={`menu-item${className ? ` ${className}` : ''}`}
+      title={tooltip}
+      onClick={(event) => {
+        event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover();
+        onClick?.(event);
+      }}
+    >
+      <Icon name={icon} />
+      {label}
+    </button>
   );
 }
 
@@ -119,7 +145,37 @@ export function Slider({
   );
 }
 
-/** A number field with a Mac stepper beside it. */
+/** The Mac stepper beside a number field. Mouse only, as on the Mac: the field keeps the keyboard
+ *  (arrow keys), and the arrows stay out of the accessibility tree so the field's name is its own. */
+export function StepperArrows({
+  onStep,
+  canIncrease,
+  canDecrease,
+}: {
+  onStep: (direction: 1 | -1) => void;
+  canIncrease: boolean;
+  canDecrease: boolean;
+}) {
+  return (
+    <span className="stepper" aria-hidden="true">
+      {([1, -1] as const).map((direction) => {
+        const enabled = direction === 1 ? canIncrease : canDecrease;
+        return (
+          <span
+            key={direction}
+            data-disabled={enabled ? undefined : ''}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              if (enabled) onStep(direction);
+            }}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+/** A labelled number field with a stepper that changes the value at once. */
 export function Stepper({
   label,
   value,
@@ -135,7 +191,6 @@ export function Stepper({
   max: number;
   step?: number;
 }) {
-  const clamp = (next: number) => Math.min(max, Math.max(min, next));
   return (
     <label className="edit-field">
       {label}
@@ -150,22 +205,11 @@ export function Stepper({
             if (event.currentTarget.validity.valid) onChange(event.currentTarget.valueAsNumber);
           }}
         />
-        <span className="stepper">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={`Increase ${label}`}
-            disabled={value >= max}
-            onClick={() => onChange(clamp(value + step))}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={`Decrease ${label}`}
-            disabled={value <= min}
-            onClick={() => onChange(clamp(value - step))}
-          />
-        </span>
+        <StepperArrows
+          canIncrease={value < max}
+          canDecrease={value > min}
+          onStep={(direction) => onChange(Math.min(max, Math.max(min, value + direction * step)))}
+        />
       </span>
     </label>
   );
@@ -188,21 +232,124 @@ export function CloseButton({
   );
 }
 
-/** A collapsible group with a heading, open by default. */
+/** A collapsible section: a header button that shows or hides its body. Controlled through
+ *  `open` and `onToggle`, or open by default and self-managed. */
 export function DisclosureGroup({
   title,
-  children,
+  label,
+  count,
+  open: controlled,
+  onToggle,
   defaultOpen = true,
+  controls,
+  disabled,
+  children,
 }: {
   title: string;
-  children: ReactNode;
+  label?: string;
+  count?: number;
+  open?: boolean;
+  onToggle?: () => void;
   defaultOpen?: boolean;
+  controls?: string;
+  disabled?: boolean;
+  children: ReactNode;
 }) {
+  const [own, setOwn] = useState(defaultOpen);
+  const body = useId();
+  const open = controlled ?? own;
   return (
-    <details className="disclosure-group" open={defaultOpen}>
-      <summary>{title}</summary>
-      <div className="disclosure-body">{children}</div>
-    </details>
+    <section className="disclosure-group">
+      <button
+        className="disclosure-header"
+        aria-expanded={open}
+        aria-controls={open ? (controls ?? body) : undefined}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => (onToggle ? onToggle() : setOwn(!own))}
+      >
+        {title}
+        {count !== undefined && (
+          <span className="row-count" aria-hidden="true">
+            {count}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="disclosure-body" id={controls ? undefined : body}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** A pull-down button whose popover (top layer, light dismiss, Escape) sits under it with an
+ *  arrow, kept inside the window. For an edit that belongs to one item of the inspector. */
+export function PopoverButton({
+  label,
+  title,
+  icon,
+  className,
+  onOpen,
+  children,
+}: {
+  label: string;
+  title?: string;
+  icon?: IconName;
+  className?: string;
+  onOpen?: () => void;
+  children: ReactNode;
+}) {
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const width = 300;
+  return (
+    <>
+      <button
+        ref={button}
+        className={`${icon ? 'toolbar-button' : 'pull-down'}${className ? ` ${className}` : ''}`}
+        popoverTarget={id}
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label={icon ? label : undefined}
+      >
+        {icon ? <Icon name={icon} /> : label}
+      </button>
+      <section
+        id={id}
+        popover="auto"
+        className="popover anchored"
+        aria-label={title ?? label}
+        style={{ width }}
+        onBeforeToggle={(event) => {
+          if (event.newState !== 'open') return;
+          // Placed before it shows, so it never flashes at the default centre.
+          const anchor = button.current!.getBoundingClientRect();
+          const centre = anchor.left + anchor.width / 2;
+          const left = Math.max(8, Math.min(innerWidth - 8 - width, centre - width / 2));
+          const panel = event.currentTarget;
+          panel.style.left = `${left}px`;
+          panel.style.setProperty('--arrow', `${centre - left}px`);
+          // Below the button, or above it when the room below is short; the body scrolls in
+          // whatever room there is.
+          const below = innerHeight - anchor.bottom - 24;
+          const above = anchor.top - 24;
+          const down = below >= 240 || below >= above;
+          panel.dataset.placement = down ? 'below' : 'above';
+          panel.style.top = down ? `${anchor.bottom + 10}px` : '';
+          panel.style.bottom = down ? '' : `${innerHeight - anchor.top + 10}px`;
+          panel.style.setProperty('--room', `${(down ? below : above) - 20}px`);
+        }}
+        onToggle={(event) => {
+          setOpen(event.newState === 'open');
+          if (event.newState === 'open') onOpen?.();
+        }}
+      >
+        <div className="popover-body">{children}</div>
+      </section>
+    </>
   );
 }
 
@@ -265,5 +412,59 @@ export function Sheet({
       </div>
       {children}
     </dialog>
+  );
+}
+
+/** The draggable inner edge of a sidebar, as in a Mac split view: drag or arrow keys resize it,
+ *  a double click restores its default width. `edge` is the side of the column it sits on. */
+export function ResizeHandle({
+  label,
+  edge,
+  value,
+  min,
+  max,
+  onChange,
+  onReset,
+  className,
+}: {
+  label: string;
+  edge: 'start' | 'end';
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+  onReset: () => void;
+  className: string;
+}) {
+  const sign = edge === 'end' ? 1 : -1;
+  const clamp = (next: number) => Math.round(Math.min(max, Math.max(min, next)));
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      aria-valuenow={value}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      tabIndex={0}
+      className={`resize-handle ${className}`}
+      onPointerDown={(event) => {
+        const handle = event.currentTarget;
+        const start = event.clientX;
+        handle.setPointerCapture(event.pointerId);
+        const move = (next: PointerEvent) => onChange(clamp(value + sign * (next.clientX - start)));
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('lostpointercapture', () =>
+          handle.removeEventListener('pointermove', move),
+        );
+      }}
+      onDoubleClick={onReset}
+      onKeyDown={(event) => {
+        const step = { ArrowRight: 16, ArrowLeft: -16 }[event.key];
+        if (step === undefined) return;
+        event.preventDefault();
+        onChange(clamp(value + sign * step));
+      }}
+    />
   );
 }

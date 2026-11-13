@@ -166,7 +166,7 @@ test('TASK-153 an arrival yielding at a shared mouth stops clear of the departur
   vehicles.destination[0] = mouth.idx;
   vehicles.insert(0, mouth.lane, 60);
   vehicles.state[0] = DRIVING;
-  expect(parking.startsInLot(1)).toBe(true);
+  expect(parking.startsInLot(1, mouth.idx)).toBe(true);
   parking.depart(1, 100, mouth.idx);
   let joinM = NaN;
   const callbacks = {
@@ -212,7 +212,7 @@ test('TASK-153 a car leaving a full lot for a place the lot serves keeps a place
   const trips = [visit('leaving'), { ...w.trip('other'), personId: null }];
   const vehicles = createVehicles(2, net.lanes.length, net.movements.length);
   const parking = createParking(net, trips, w.scenario, DEFAULT_SIM_PARAMS, vehicles);
-  expect(parking.startsInLot(0)).toBe(true);
+  expect(parking.startsInLot(0, facility.connectorsOut[0]!)).toBe(true);
   expect(parking.snapshot()[facility.idx]).toBe(facility.capacity);
   expect(parking.choose(0, 100, () => 0, true)).toBe(true);
   expect(parking.claimSnapshot().facility[0]).toBe(facility.idx);

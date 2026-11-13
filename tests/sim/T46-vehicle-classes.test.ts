@@ -30,10 +30,11 @@ const before = {
   },
   town: {
     // Phase 3's downstream lane choice saves 0.5 vehicle-seconds across the same 207 trips.
+    // TASK-165: exit storage beyond the exit crosswalk costs 0.06 s per trip on the town.
     completed: 207,
-    meanTravelTimeS: 139.12512077294687,
-    meanDelayS: 46.17046404032686,
-    hash: 3659696175,
+    meanTravelTimeS: 139.18212560386476,
+    meanDelayS: 46.22746887124475,
+    hash: 2901093485,
     trips: 414,
   },
 };
@@ -49,6 +50,8 @@ test.each([
     scenario.endS = 9.5 * 3600;
     scenario.demand.personsPerResident = 0.03;
     Object.assign(scenario.demand, { classShares: { local: allCars, through: allCars } });
+    // The legacy trips all drive: TASK-113's mode choice off.
+    scenario.demand.modeChoice = { enabled: false };
     const compiled = setup(city);
     const population = generatePopulation(city, scenario.demand);
     const requests = scheduleTrips(city, population, scenario, compiled);

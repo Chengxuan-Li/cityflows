@@ -24,16 +24,37 @@ export function Toolbox() {
   const tool = useAppStore((state) => state.tool);
   const in3D = useAppStore((state) => state.viewMode === '3d');
   const disabled = useAppStore((state) => state.busy || !state.session || state.viewMode === '3d');
-  return (
-    <SegmentedControl
-      as="nav"
-      label="Toolbox"
-      options={
-        in3D ? tools.map((option) => ({ ...option, tooltip: 'Editing is available in 2D' })) : tools
-      }
+  // Below 660 px the segmented control gives way to this pop-up menu (app.css).
+  const popup = (
+    <select
+      className="tool-popup"
+      aria-label="Tool"
       value={tool}
       disabled={disabled}
-      onChange={(next) => useAppStore.getState().setTool(next)}
-    />
+      onChange={(event) => useAppStore.getState().setTool(event.currentTarget.value as Tool)}
+    >
+      {tools.map(({ value, label }) => (
+        <option key={value} value={value}>
+          {label}
+        </option>
+      ))}
+    </select>
+  );
+  return (
+    <>
+      {popup}
+      <SegmentedControl
+        as="nav"
+        label="Toolbox"
+        options={
+          in3D
+            ? tools.map((option) => ({ ...option, tooltip: 'Editing is available in 2D' }))
+            : tools
+        }
+        value={tool}
+        disabled={disabled}
+        onChange={(next) => useAppStore.getState().setTool(next)}
+      />
+    </>
   );
 }

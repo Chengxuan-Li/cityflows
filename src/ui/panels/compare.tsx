@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import type { HeadlessResult } from '../../host/protocol';
 import { useAppStore } from '../store';
 
@@ -14,27 +13,16 @@ export function ComparePanel() {
   const result = useAppStore((state) => state.comparison);
   const progress = useAppStore((state) => state.comparisonProgress);
   const busy = useAppStore((state) => state.busy);
-  const { toggleCompare, saveBaseline, restoreBaseline, runComparison, cancelComparison } =
-    useAppStore.getState();
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') toggleCompare();
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [toggleCompare]);
+  const { saveBaseline, restoreBaseline, runComparison, cancelComparison } = useAppStore.getState();
   const baseline = session?.project.baseline;
   return (
-    <section id="compare" className="chart-sheet compare-sheet" aria-label="Scenario comparison">
+    <section id="compare" className="panel compare-panel" aria-label="Scenario comparison">
       <div className="chart-heading">
         <span>
           {baseline
             ? `Baseline saved · city version ${baseline.city.version}`
             : 'Save a baseline before editing the city.'}
         </span>
-        <button aria-label="Close comparison" onClick={toggleCompare}>
-          ×
-        </button>
       </div>
       <div className="controls compare-actions">
         <button disabled={busy || !!progress} onClick={saveBaseline}>

@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { Diagnostics } from './inspector/diagnostics';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { RailInspector, TrainInspector } from './inspector/rail';
@@ -9,10 +8,10 @@ import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
 import { WalkerInspector } from './inspector/walker';
 import { PersonInspector } from './inspector/person';
-import { CloseButton } from './controls';
+import { CloseButton, ResizeHandle } from './controls';
 import { MapView } from './map-view';
-import { Onboarding } from './onboarding';
-import { Panels, StatusBar } from './run-bar';
+import { Onboarding, ShowHints } from './onboarding';
+import { StatusBar } from './run-bar';
 import { Sidebar } from './sidebar';
 import { useAppStore } from './store';
 import { TopBar } from './top-bar';
@@ -26,19 +25,12 @@ function Inspector() {
   const walker = useAppStore((state) => state.walker);
   const personId = useAppStore((state) => state.personId);
   const person = useAppStore((state) => state.person);
-  const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
-  const timeS = useAppStore((state) => (state.diagnosticsOpen ? state.run?.timeS : undefined));
 
   if (!session) return null;
   const {
     project: { city },
     compiled,
-    engine,
-    diagnostics,
   } = session;
-  if (diagnosticsOpen && timeS !== undefined) {
-    return <Diagnostics diagnostics={diagnostics} engine={engine} timeS={timeS} />;
-  }
   if (selectedRoads.length >= 2)
     return (
       <BatchInspector
@@ -110,6 +102,31 @@ function Inspector() {
   }
 }
 
+const widths = { min: 220, max: 440 };
+
+/** A sidebar's width, remembered per viewer; storage can be blocked (private windows), and the
+ *  width then lasts for the visit. */
+function useStoredWidth(key: string, initial: number) {
+  const [width, setWidth] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem(key));
+      return stored >= widths.min && stored <= widths.max ? stored : initial;
+    } catch {
+      return initial;
+    }
+  });
+  function change(next: number | null) {
+    setWidth(next ?? initial);
+    try {
+      if (next === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, String(next));
+    } catch {
+      return;
+    }
+  }
+  return [width, change] as const;
+}
+
 export function App() {
   useEffect(() => {
     if (window.cityflows) {
@@ -130,50 +147,74 @@ export function App() {
   const error = useAppStore((state) => state.error);
   const rejectedEdit = useAppStore((state) => state.rejectedEdit);
   const selection = useAppStore((state) => state.selection);
-  const diagnosticsOpen = useAppStore((state) => state.diagnosticsOpen);
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const inspectorOpen = useAppStore((state) => state.inspectorOpen);
-
-  function closeSheet() {
-    const { diagnosticsOpen, toggleDiagnostics, select } = useAppStore.getState();
-    if (diagnosticsOpen) toggleDiagnostics();
-    else select(null);
-  }
+  const [sidebarWidth, setSidebarWidth] = useStoredWidth('cityflows.sidebarWidth', 272);
+  const [inspectorWidth, setInspectorWidth] = useStoredWidth('cityflows.inspectorWidth', 280);
 
   useEffect(() => {
     function clear(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) closeSheet();
+      if (event.key === 'Escape' && !document.querySelector('dialog[open], :popover-open'))
+        useAppStore.getState().select(null);
     }
     window.addEventListener('keydown', clear);
     return () => window.removeEventListener('keydown', clear);
   }, []);
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={
+        {
+          '--sidebar-width': `${sidebarWidth}px`,
+          '--inspector-width': `${inspectorWidth}px`,
+        } as CSSProperties
+      }
+    >
       <TopBar />
       {sidebarOpen && <Sidebar />}
+      {sidebarOpen && (
+        <ResizeHandle
+          label="Sidebar width"
+          edge="end"
+          className="sidebar-edge"
+          value={sidebarWidth}
+          {...widths}
+          onChange={setSidebarWidth}
+          onReset={() => setSidebarWidth(null)}
+        />
+      )}
       <main className="map-view" aria-label="Map">
         <MapView />
-        <Panels />
         {error && (
           <div className="map-error" role="alert">
             {error}
           </div>
         )}
-        <Onboarding />
       </main>
       {inspectorOpen && (
+        <ResizeHandle
+          label="Inspector width"
+          edge="start"
+          className="inspector-edge"
+          value={inspectorWidth}
+          {...widths}
+          onChange={setInspectorWidth}
+          onReset={() => setInspectorWidth(null)}
+        />
+      )}
+      {inspectorOpen && (
         <div id="inspector-column" className="inspector-column">
-          {selection || diagnosticsOpen ? (
-            <aside
-              className="inspector"
-              id={diagnosticsOpen ? 'diagnostics' : 'inspector'}
-              aria-label="Inspector"
-            >
-              <CloseButton label="Close inspector" className="close-sheet" onClick={closeSheet} />
+          {selection ? (
+            <aside className="inspector" id="inspector" aria-label="Inspector">
+              <CloseButton
+                label="Close inspector"
+                className="close-sheet"
+                onClick={() => useAppStore.getState().select(null)}
+              />
               <Inspector />
-              {!diagnosticsOpen && <NodeTopologyActions />}
-              {!diagnosticsOpen && rejectedEdit.length > 0 && (
+              <NodeTopologyActions />
+              {rejectedEdit.length > 0 && (
                 <div className="edit-diagnostics" role="alert">
                   <strong>Edit rejected</strong>
                   <ul>
@@ -187,11 +228,15 @@ export function App() {
               )}
             </aside>
           ) : (
-            <p className="no-selection">No selection</p>
+            <div className="no-selection">
+              <p>No selection</p>
+              <ShowHints />
+            </div>
           )}
         </div>
       )}
       <StatusBar />
+      <Onboarding />
     </div>
   );
 }

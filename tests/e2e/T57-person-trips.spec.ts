@@ -139,7 +139,8 @@ test('@smoke T57 a walker and a vehicle occupant open the person journey', async
   const demand = page.getByRole('region', { name: 'Demand', exact: true });
   await expect(demand.getByLabel('Person journeys', { exact: true })).toContainText('2, 2, 0');
   await expect(demand.getByLabel('Person journeys', { exact: true })).toContainText('1, 0');
-  await page.keyboard.press('Escape');
+  // Sidebar sections stay open until their header is clicked again (TASK-160).
+  await button(page, 'Demand').click();
   await button(page, 'New').click();
   await page
     .getByRole('dialog', { name: 'New city', exact: true })
@@ -150,7 +151,7 @@ test('@smoke T57 a walker and a vehicle occupant open the person journey', async
   await expect(page.getByRole('region', { name: 'Demand', exact: true })).toContainText(
     '0 persons',
   );
-  await page.keyboard.press('Escape');
+  await button(page, 'Demand').click();
   await button(page, 'Layers').click();
   await expect(
     page.getByRole('region', { name: 'Map layers' }).getByLabel('Pedestrians', { exact: true }),

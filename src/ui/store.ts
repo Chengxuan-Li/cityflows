@@ -16,7 +16,9 @@ import type { Project } from '../project/types';
 import type { Pick as MapPick, VehicleSnapshot } from '../render/types';
 import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
-import type { Command, Person, Scenario } from '../schema';
+import type { Command, ModeChoiceConfig, Person, Scenario } from '../schema';
+import type { DrawRoadOptions } from '../editor/commands/topology';
+import type { PaintKind } from './tools/place-paint';
 import type { RoadId } from '../schema';
 import type {
   Metrics,
@@ -119,6 +121,12 @@ interface AppState {
   inspectorOpen: boolean;
   toggleSidebar: () => void;
   toggleInspector: () => void;
+  /** Options of the drawing tools, shown in the sidebar while the tool is active. */
+  roadOptions: DrawRoadOptions;
+  placeKind: PaintKind;
+  placeHint: string;
+  /** The onboarding hint on screen, or null (onboarding.tsx). */
+  hintStep: number | null;
   tool: 'select' | 'road' | 'place' | 'ramp' | 'roundabout';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
@@ -151,6 +159,8 @@ interface AppState {
   redo: () => Promise<void>;
   setSpeed: (speed: number) => Promise<void>;
   regenerateDemand: (seed: number) => Promise<void>;
+  /** TASK-113: change the mode choice's parameters (restart to apply). */
+  setModeChoice: (change: Partial<ModeChoiceConfig>) => Promise<void>;
   /** TASK-111: replace the scenario's test pedestrians (undoable; restart to apply). */
   setTestWalkers: (walkers: TestWalkers) => Promise<void>;
 }
@@ -373,7 +383,6 @@ export const useAppStore = create<AppState>((set, get) => {
         walker: null,
         personId: null,
         person: null,
-        diagnosticsOpen: false,
         rejectedEdit: [],
       });
     } catch (error) {
@@ -418,13 +427,7 @@ export const useAppStore = create<AppState>((set, get) => {
     compareOpen: false,
     comparison: null,
     comparisonProgress: null,
-    toggleCompare: () =>
-      set(({ compareOpen, layersOpen, metricsOpen, demandOpen }) => ({
-        compareOpen: layersOpen || metricsOpen || demandOpen || !compareOpen,
-        metricsOpen: false,
-        layersOpen: false,
-        demandOpen: false,
-      })),
+    toggleCompare: () => set(({ compareOpen }) => ({ compareOpen: !compareOpen })),
     cancelComparison,
     saveBaseline: () => {
       const { session, busy } = get();
@@ -549,20 +552,18 @@ export const useAppStore = create<AppState>((set, get) => {
     demandOpen: false,
     toggleLayer: (layer) =>
       set(({ layers }) => ({ layers: { ...layers, [layer]: !layers[layer] } })),
-    toggleLayers: () =>
-      set(({ layersOpen }) => ({ layersOpen: !layersOpen, metricsOpen: false, demandOpen: false })),
-    toggleMetrics: () =>
-      set(({ metricsOpen }) => ({
-        metricsOpen: !metricsOpen,
-        layersOpen: false,
-        demandOpen: false,
-      })),
-    toggleDemand: () =>
-      set(({ demandOpen }) => ({ demandOpen: !demandOpen, layersOpen: false, metricsOpen: false })),
-    sidebarOpen: true,
+    toggleLayers: () => set(({ layersOpen }) => ({ layersOpen: !layersOpen })),
+    toggleMetrics: () => set(({ metricsOpen }) => ({ metricsOpen: !metricsOpen })),
+    toggleDemand: () => set(({ demandOpen }) => ({ demandOpen: !demandOpen })),
+    // Under 900 px the sidebar floats over the map, so it starts closed there.
+    sidebarOpen: !window.matchMedia('(max-width: 900px)').matches,
     inspectorOpen: true,
     toggleSidebar: () => set(({ sidebarOpen }) => ({ sidebarOpen: !sidebarOpen })),
     toggleInspector: () => set(({ inspectorOpen }) => ({ inspectorOpen: !inspectorOpen })),
+    roadOptions: { twoWay: true, lanes: 1, roadClass: 'residential', speedKph: 30 },
+    placeKind: 'residential',
+    placeHint: '',
+    hintStep: null,
     tool: 'select',
     setTool: (tool) => {
       if (get().viewMode === '3d') return;
@@ -600,7 +601,6 @@ export const useAppStore = create<AppState>((set, get) => {
         walker: null,
         personId: null,
         person: null,
-        diagnosticsOpen: false,
         rejectedEdit: [],
       });
     },
@@ -623,7 +623,6 @@ export const useAppStore = create<AppState>((set, get) => {
         walker: null,
         personId: null,
         person: null,
-        diagnosticsOpen: false,
         rejectedEdit: [],
       }),
     toggleDiagnostics: () => set(({ diagnosticsOpen }) => ({ diagnosticsOpen: !diagnosticsOpen })),
@@ -692,6 +691,26 @@ export const useAppStore = create<AppState>((set, get) => {
             },
             populationKey: demandKey(project.city),
             demandSummary: demandSummary(trips, project.city),
+          },
+          run: { ...run, status: 'paused', stale: true, achieved: 0, timeS, counts },
+        });
+      }),
+    setModeChoice: (change) =>
+      perform(async () => {
+        const { session, run } = get();
+        if (!session || !run) return;
+        const { project, engine } = session;
+        const current = project.scenarios[0]!;
+        const scenario: Scenario = {
+          ...current,
+          demand: { ...current.demand, modeChoice: { ...current.demand.modeChoice, ...change } },
+        };
+        await engine.pause();
+        const { timeS, trips: counts } = await engine.metrics();
+        set({
+          session: {
+            ...session,
+            project: { ...project, scenarios: [scenario, ...project.scenarios.slice(1)] },
           },
           run: { ...run, status: 'paused', stale: true, achieved: 0, timeS, counts },
         });

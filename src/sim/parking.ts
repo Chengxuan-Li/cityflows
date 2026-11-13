@@ -7,7 +7,7 @@ import {
 import { createRandom } from '../geo/random';
 import type { CParkingSpace, CompiledCity } from '../network';
 import { lotPath } from '../network/lot-paths';
-import { parkingConnectorPermitted } from '../network/parking';
+import { departureMisses, parkingConnectorPermitted } from '../network/parking';
 import { vehicleClasses, type Scenario, type SimParams, type TripRequest } from '../schema';
 import { parkingEgress } from './parking-egress';
 import type { Metrics, ParkedCarsSnapshot, ParkingClaimsSnapshot } from './types';
@@ -15,13 +15,19 @@ import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import { parkingHash } from './hash';
 import {
   bodyClearLane,
+  bodyClearOf,
   holdProgress,
   joinStation,
+  laneCrossings,
+  lotHold,
+  manoeuvreLaneBounds,
   manoeuvrePath,
   manoeuvreLaneReach,
   motionPath,
   parkedPose,
   pathPose,
+  type LaneBand,
+  type LaneCrossing,
   type MotionPath,
   type ParkingPose,
 } from './manoeuvre';
@@ -38,6 +44,8 @@ interface ParkingMotion {
   holdM: number;
   /** Lane station where the car joins from its hold (TASK-150). */
   joinM: number;
+  /** Lanes its merge crosses before it joins (TASK-157). */
+  crossings: LaneCrossing[];
   startedS: number;
   entryS: number;
   driveS: number;
@@ -177,6 +185,52 @@ export function createParking(
     (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
   );
   const lotGraph = (facility: number) => lotGraphs[facility];
+  /** TASK-156: each lot's aisle-road car lanes, and the movements joining them. A lot arrival
+   * keeps clear of lane cars ahead on all of them. On a public aisle, which through traffic
+   * drives, it is a lane's occupant while its body is inside that lane's band, so lane cars
+   * follow it and departures' gap checks see it. A private aisle's lane cars are departures
+   * from its bays, which start by their own gap check. TASK-164: `stands` is the stretch of
+   * each aisle lane a lane car can stand in: from where one enters it (by a movement, else at
+   * its first spawning connector) to its end if it leads on, else to its last connector; and
+   * each movement joining the aisle lanes that a lane car can drive, given its lane's width. */
+  const aisleSegmentsOf = (city: CompiledCity) =>
+    city.parking.map((f) => {
+      const lot = f.kind === 'lot' ? city.lots?.find((l) => l.id === f.id) : undefined;
+      const lanes = (lot?.aisles ?? [])
+        .flatMap((id) => city.roads[city.index.road.get(id) ?? -1]?.lanes ?? [])
+        .filter((lane) => city.lanes[lane]!.allowed.includes('car'));
+      const movements = city.movements
+        .filter((m) => lanes.includes(m.fromLane) || lanes.includes(m.toLane))
+        .map((m) => -m.idx - 1);
+      const stands = lanes.flatMap((idx) => {
+        const lane = city.lanes[idx]!,
+          stations = lane.connectors.map((c) => city.connectors[c]!);
+        const spawns = stations.filter((c) => c.direction !== 'in').map((c) => c.positionM);
+        const entered = lane.in.some((i) => !city.movements[i]!.neverGreen);
+        if (!entered && !spawns.length) return [];
+        const fromM = entered ? 0 : Math.min(...spawns);
+        const toM = lane.out.length
+          ? lane.lengthM
+          : Math.max(fromM, ...stations.map((c) => c.positionM));
+        return [{ lane: idx, band: lane as LaneBand, fromM, toM }];
+      });
+      for (const i of movements) {
+        const m = city.movements[-i - 1]!;
+        if (
+          m.neverGreen ||
+          (lanes.includes(m.fromLane) && !stands.some((s) => s.lane === m.fromLane))
+        )
+          continue;
+        const band = { ...m, widthM: city.lanes[m.toLane]!.widthM };
+        stands.push({ lane: -1, band, fromM: 0, toM: m.lengthM });
+      }
+      return {
+        lanes: lanes.filter((lane) => city.roads[city.lanes[lane]!.road]!.access[0] === 'yes'),
+        segments: [...lanes, ...movements],
+        stands,
+      };
+    });
+  let aisleSegments = aisleSegmentsOf(compiled);
   const eligibleSpaces = () =>
     compiled.parking.map((f) =>
       (f.spaces ?? []).filter(
@@ -728,7 +782,22 @@ export function createParking(
   }
   const motions = new Map<number, ParkingMotion>();
   let approachReach = new Float64Array(spaces.length * 2).fill(NaN);
-  const clearHolds = new Map<number, number>();
+  /** TASK-164: the nearest lane station a lot bay's departure sweeps while it backs out. */
+  let leaveRear = new Float64Array(spaces.length * 2).fill(NaN);
+  const clearHolds = new Map<number, boolean>();
+  /** TASK-164: by bay, the exits its departure does not drive past. */
+  const missed = new Map<number, number[]>();
+  const departureMissed = (slot: number) => {
+    let exits = missed.get(slot);
+    if (!exits) missed.set(slot, (exits = departureMisses(compiled, slot)));
+    return exits;
+  };
+  const drives = new Map<
+    number,
+    { path: MotionPath; holdM: number; joinM: number; crossings: LaneCrossing[] }
+  >();
+  /** TASK-157: by lane, the spans merging lot cars are crossing. */
+  const crossing = new Map<number, { fromM: number; toM: number }[]>();
   const motionById = Array<ParkingMotion | undefined>(trips.length).fill(undefined);
   const setMotion = (id: number, m: ParkingMotion) => {
     motions.set(id, m);
@@ -772,12 +841,13 @@ export function createParking(
     if (points.length === 1) points.push(points[0]!);
     return motionPath(points);
   };
-  const isLotSpace = (id: number) => {
+  /** Whether a parked car leaving by `connector` starts in its lot: not by its bay's departure. */
+  const isLotSpace = (id: number, connector: number) => {
     const slot = spaces[originSpace(id)];
     return (
       !!slot &&
       compiled.parking[slot.parking]!.kind === 'lot' &&
-      slot.departure === undefined &&
+      slot.departure !== connector &&
       !left[id]
     );
   };
@@ -791,45 +861,139 @@ export function createParking(
         spaces[m.slot]!.parking === facility &&
         (leavingLot(m) !== leaving || m.connector !== connector),
     );
-  /** TASK-150: a lot departure's drive-out path, its hold clear of the exit lane, and the lane
-   * station where it joins from the hold. */
+  /** TASK-157: the lanes a car leaving a lot by `exit` meets at grade: the exit road's other
+   * lanes, the other carriageway of its street, and the roads meeting it at either end. Other
+   * roads drawn across a lot (the bridges above Munich pk:2049) are not crossed, and the lot's
+   * own aisles are left to TASK-156. */
+  function streetLanes(facility: number, exit: number) {
+    const aisles = compiled.lots?.find((l) => l.id === compiled.parking[facility]!.id)?.aisles,
+      road = compiled.roads[compiled.lanes[exit]!.road]!;
+    return compiled.roads
+      .filter(
+        (r) =>
+          r === road ||
+          (road.corridorId !== null && r.corridorId === road.corridorId) ||
+          [r.from, r.to].some((n) => n === road.from || n === road.to),
+      )
+      .filter((r) => !aisles?.includes(r.id))
+      .flatMap((r) => r.lanes.map((i) => compiled.lanes[i]!));
+  }
+  /** A lot bay's exits for this car: permitted, reached by circulation, nearest first. */
+  function lotExits(id: number, slot: CParkingSpace) {
+    const facility = compiled.parking[slot.parking]!,
+      graph = lotGraph(slot.parking)!;
+    const distance = (c: number) =>
+      graph.entries.find((e) => e.connector === c && e.direction !== 'in')!.distances[
+        graph.stallNodes[slot.lotStall!]!
+      ]!;
+    return facility.connectorsOut
+      .filter(
+        (c) =>
+          parkingConnectorPermitted(
+            compiled,
+            c,
+            trips[id]!.vehicleClass,
+            trips[id]!.purpose,
+            'out',
+          ) && !!lotPath(graph, c, slot.lotStall!, 'out'),
+      )
+      .sort((a, b) => distance(a) - distance(b) || a - b);
+  }
+  /** TASK-152: whether a lot exit's drive-out has a pose clear of its exit lane. TASK-164: and
+   * whether the hold the car takes there is clear of the stretch of every aisle lane of its lot
+   * that a lane car can stand in, the lane's ends respected. Sindelfingen pk:1487's holds for
+   * c:2640 stand in an interior junction of its aisles: `bodyClearLane` extends the exit lane's
+   * band back past its start, so the hold stops short of the junction's far side. A hold at the
+   * mouth end of the aisle it drives (a lane no lane car can stand in there) stays clear. */
+  function clearExit(id: number, slot: number, connector: number) {
+    const key = (slot * compiled.connectors.length + connector) * 2 + vehicles.vclass[id]!;
+    let clear = clearHolds.get(key);
+    if (clear === undefined) {
+      const out = driveOut(id, slot, connector),
+        exit = compiled.connectors[connector]!.lane,
+        pose = pathPose(out.path, out.holdM),
+        body = corners(pose, length(id), width(id));
+      clear =
+        holdProgress(out.path, compiled.lanes[exit]!, length(id), width(id)) >= 0 &&
+        aisleSegments[spaces[slot]!.parking]!.stands.every(({ lane, band, fromM, toM }) => {
+          if (lane === exit || bodyClearOf(pose, band, length(id), width(id))) return true;
+          const at = body.map((p) => nearestOnPolyline(band.polyline, p).along);
+          return Math.max(...at) <= fromM - length(id) + 1e-6 || Math.min(...at) >= toM - 1e-6;
+        });
+      clearHolds.set(key, clear);
+    }
+    return clear;
+  }
+  /** TASK-150: a lot departure's drive-out path, its hold, and the lane station where it joins
+   * from the hold. TASK-157: the hold is clear of every lane the body would stand in, and the
+   * merge lists the lanes it crosses before the exit lane. */
   function driveOut(id: number, slot: number, connector: number) {
+    const key = (slot * compiled.connectors.length + connector) * 2 + vehicles.vclass[id]!;
+    let out = drives.get(key);
+    if (out) return out;
     const path = localPath(slot, connector, true),
       c = compiled.connectors[connector]!,
-      lane = compiled.lanes[c.lane]!;
-    const holdM = Math.max(0, holdProgress(path, lane, length(id), width(id)));
-    return { path, holdM, joinM: joinStation(pathPose(path, holdM), lane, c.positionM) };
+      lane = compiled.lanes[c.lane]!,
+      street = streetLanes(spaces[slot]!.parking, lane.idx);
+    const holdM = lotHold(path, lane, street, length(id), width(id));
+    const hold = pathPose(path, holdM),
+      joinM = joinStation(hold, lane, c.positionM),
+      merge = manoeuvrePath(hold, lanePose(connector, joinM), false);
+    const crossings = laneCrossings(merge, lane, street, length(id), width(id));
+    drives.set(key, (out = { path, holdM, joinM, crossings }));
+    return out;
   }
   /** TASK-153: the departure's spawn gap is checked at its join station, which can lie short
-   * of its connector, so the yield keeps the arriving car clear of both. */
-  function sharedMouthStop(arriving: number, leaving: number, exit: number, joinM: number) {
+   * of its connector, so the yield keeps the arriving car clear of both. TASK-157: a car turning
+   * in from a lane the merge crosses stops short of the span the crossing checks there. */
+  function sharedMouthStop(
+    arriving: number,
+    leaving: number,
+    exit: number,
+    way: { joinM: number; crossings: LaneCrossing[] },
+  ) {
     const into = compiled.connectors[vehicles.destination[arriving]!],
       out = compiled.connectors[exit]!;
-    if (!into || into.parking !== out.parking || into.lane !== out.lane) return Infinity;
+    if (!into || into.parking !== out.parking) return Infinity;
     const gap = Math.max(params.spawnMinGapM, params.idm.minGapM);
-    const stop = Math.min(out.positionM, joinM) - length(leaving) - gap - 0.1;
-    return into.positionM >= stop &&
-      into.positionM < Math.max(out.positionM, joinM) + length(arriving) + gap
+    const crossing = way.crossings.find((c) => c.lane === into.lane);
+    const [stop, past] =
+      into.lane === out.lane
+        ? [
+            Math.min(out.positionM, way.joinM) - length(leaving) - gap - 0.1,
+            Math.max(out.positionM, way.joinM),
+          ]
+        : crossing
+          ? [crossing.fromM - gap - 0.1, crossing.toM]
+          : [-Infinity, -Infinity];
+    return into.positionM >= stop && into.positionM < past + length(arriving) + gap
       ? stop
       : Infinity;
   }
-  function arrivalBlocksDeparture(leaving: number, exit: number, joinM: number) {
-    const c = compiled.connectors[exit]!,
-      lane = compiled.lanes[c.lane]!;
-    const approaches = [
-      { segment: lane.idx, offset: 0 },
-      ...lane.in.flatMap((i) => {
-        const movement = compiled.movements[i]!,
-          from = compiled.lanes[movement.fromLane]!;
-        return [
-          { segment: -i - 1, offset: movement.lengthM },
-          { segment: from.idx, offset: from.lengthM + movement.lengthM },
-        ];
-      }),
-    ];
-    for (const { segment, offset } of approaches)
+  function arrivalBlocksDeparture(
+    leaving: number,
+    exit: number,
+    way: { joinM: number; crossings: LaneCrossing[] },
+  ) {
+    const lanes = [compiled.connectors[exit]!.lane, ...way.crossings.map((c) => c.lane)];
+    const approaches = lanes.flatMap((idx) => {
+      const lane = compiled.lanes[idx]!;
+      return [
+        { lane: idx, segment: idx, offset: 0 },
+        ...lane.in.flatMap((i) => {
+          const movement = compiled.movements[i]!,
+            from = compiled.lanes[movement.fromLane]!;
+          return [
+            { lane: idx, segment: -i - 1, offset: movement.lengthM },
+            { lane: idx, segment: from.idx, offset: from.lengthM + movement.lengthM },
+          ];
+        }),
+      ];
+    });
+    for (const { lane, segment, offset } of approaches)
       for (let id = vehicles.first(segment); id !== -1; id = vehicles.next[id]!) {
-        const stop = sharedMouthStop(id, leaving, exit, joinM);
+        if (compiled.connectors[vehicles.destination[id]!]?.lane !== lane) continue;
+        const stop = sharedMouthStop(id, leaving, exit, way);
         if (!Number.isFinite(stop)) continue;
         const speed = vehicles.speed[id]!,
           profile = params.vehicleClasses[vehicleClasses[vehicles.vclass[id]!]!];
@@ -869,6 +1033,90 @@ export function createParking(
     { x: pose.x - Math.cos(pose.heading) * lengthM, y: pose.y - Math.sin(pose.heading) * lengthM },
     pose,
   ];
+  /** Corners of a body from its front bumper, `aheadM` longer at the front. */
+  const corners = (pose: ParkingPose, lengthM: number, widthM: number, aheadM = 0) => {
+    const c = Math.cos(pose.heading),
+      s = Math.sin(pose.heading);
+    return [
+      [aheadM, -widthM / 2],
+      [aheadM, widthM / 2],
+      [-lengthM, widthM / 2],
+      [-lengthM, -widthM / 2],
+    ].map(([a, b]) => ({ x: pose.x + a! * c - b! * s, y: pose.y + a! * s + b! * c }));
+  };
+  const overlaps = (a: { x: number; y: number }[], b: { x: number; y: number }[]) =>
+    [a, b].every((poly) =>
+      poly.every((p, i) => {
+        const q = poly[(i + 1) % poly.length]!,
+          nx = q.y - p.y,
+          ny = p.x - q.x;
+        const pa = a.map((v) => v.x * nx + v.y * ny),
+          pb = b.map((v) => v.x * nx + v.y * ny);
+        return Math.max(...pa) > Math.min(...pb) && Math.max(...pb) > Math.min(...pa);
+      }),
+    );
+  /** TASK-156: a lot arrival stepping `stepM` to `pose` would move into a lane vehicle on its
+   * lot's aisle lanes, or within `minGapM` of one ahead (a kerbside-style departure counts where
+   * it is drawn). Cars behind or beside it, and cars bound for this lot, do not hold it. */
+  function aisleTraffic(id: number, m: ParkingMotion, pose: ParkingPose, stepM: number) {
+    const mine = corners(pose, stepM, width(id), params.idm.minGapM);
+    for (const segment of aisleSegments[spaces[m.slot]!.parking]!.segments)
+      for (let other = vehicles.first(segment); other !== -1; other = vehicles.next[other]!) {
+        const om = motionById[other];
+        // Lot motions follow the cohort rules, and a car stopping at one of this lot's entries
+        // waits on its admission, which may wait on this very arrival.
+        if (
+          other === id ||
+          om?.lot ||
+          compiled.connectors[vehicles.destination[other]!]?.parking === spaces[m.slot]!.parking
+        )
+          continue;
+        const path = segment >= 0 ? compiled.lanes[segment]! : compiled.movements[-segment - 1]!;
+        const at = vehicles.position[other]!;
+        const theirs = om?.pose ?? {
+          ...pointAtDistance(path.polyline, path.cumulative, at),
+          heading: headingAtDistance(path.polyline, path.cumulative, at),
+        };
+        if (overlaps(mine, corners(theirs, length(other), width(other)))) return true;
+      }
+    return false;
+  }
+  /** TASK-156: the aisle lane whose band an arriving body is inside (the lane it holds while it
+   * still is), and the farthest station its body reaches there. */
+  function aisleBand(id: number, m: ParkingMotion, pose: ParkingPose) {
+    const rear = body(pose, length(id))[0]!;
+    let band: { lane: number; positionM: number; away: number } | undefined;
+    for (const lane of aisleSegments[spaces[m.slot]!.parking]!.lanes) {
+      const l = compiled.lanes[lane]!;
+      if (bodyClearLane(pose, l, length(id), width(id))) continue;
+      // bodyClearLane extends a band past the lane's ends; only the lane itself counts here.
+      const front = nearestOnPolyline(l.polyline, pose),
+        back = nearestOnPolyline(l.polyline, rear),
+        inside = (along: number) => along > 1e-6 && along < l.lengthM - 1e-6;
+      if (!inside(front.along) && !inside(back.along)) continue;
+      const found = { lane, positionM: Math.max(front.along, back.along), away: front.away };
+      if (m.laneHeld && lane === m.lane) return found;
+      if (!band || found.away < band.away) band = found;
+    }
+    return band;
+  }
+  /** TASK-156: room for an arriving body to become a lane's occupant at `positionM`: clear of
+   * the car ahead by the following gap, and ahead of the car behind by its braking distance. */
+  function laneRoom(id: number, lane: number, positionM: number) {
+    for (let other = vehicles.first(lane); other !== -1; other = vehicles.next[other]!) {
+      if (other === id) continue;
+      const at = vehicles.position[other]!,
+        speed = vehicles.speed[other]!;
+      if (
+        at >= positionM
+          ? at - length(other) - params.idm.minGapM < positionM
+          : positionM - length(id) - params.idm.minGapM <
+            at + (speed * speed) / (2 * params.idm.bMps2) + speed * params.dtS
+      )
+        return false;
+    }
+    return true;
+  }
   /** The bay and path an arriving car takes if it enters now, or undefined while it waits. */
   function admission(id: number, connector: number) {
     const facility = compiled.parking[compiled.connectors[connector]!.parking ?? -1];
@@ -1013,6 +1261,7 @@ export function createParking(
       progressM: 0,
       holdM: 0,
       joinM: NaN,
+      crossings: [],
       startedS: timeS,
       entryS: timeS,
       driveS: 0,
@@ -1020,6 +1269,13 @@ export function createParking(
       pose: from,
       speed: 0,
     });
+    // TASK-156: an entry on a public aisle lane keeps the arriving car that lane's occupant.
+    const m = motionById[id]!;
+    if (lot && aisleBand(id, m, from)?.lane === m.lane) m.laneHeld = true;
+    // TASK-164: an entry on a street holds the street lane until the body has left its band,
+    // as a kerbside space does.
+    if (lot && !m.laneHeld && !aisleSegments[slot.parking]!.segments.includes(m.lane))
+      m.laneHeld = true;
     return true;
   }
   function arrive(id: number, connector: number, timeS: number) {
@@ -1098,8 +1354,10 @@ export function createParking(
     callbacks: {
       clearLane: (id: number) => void;
       park: (id: number, connector: number) => void;
-      exit: (id: number, connector: number, joinM: number) => boolean;
+      exit: (id: number, connector: number, joinM: number, crossings: LaneCrossing[]) => boolean;
       resume: (id: number, connector: number) => void;
+      /** TASK-156: make a lot arrival `lane`'s occupant at `positionM`, or none (-1). */
+      occupy?: (id: number, lane: number, positionM: number, speed: number) => void;
     },
   ) {
     clockS = timeS;
@@ -1117,9 +1375,10 @@ export function createParking(
       if (m.phase === 'exit') {
         // The car holds clear of the lane. A grant inserts it where it joins (the engine may
         // stop short at a destination), which reserves its gap for following traffic before
-        // its body crosses the lane edge.
+        // its body crosses the lane edge. TASK-157: the grant also needs a crossing gap on each
+        // lane the merge crosses first, which it then holds as a standing obstacle.
         m.speed = 0;
-        if (callbacks.exit(id, m.connector, m.joinM)) {
+        if (callbacks.exit(id, m.connector, m.joinM, m.crossings)) {
           lotLeaves++;
           totalLeave += timeS - m.entryS;
           totalDrive += m.driveS;
@@ -1193,9 +1452,47 @@ export function createParking(
         }
         m.driveS += params.dtS;
       }
+      let pose = pathPose(m.path, target);
+      const arriving = m.lot && (m.phase === 'drive_in' || m.phase === 'park');
+      if (arriving && m.phase === 'drive_in' && target > m.progressM) {
+        // TASK-156: an arrival waits clear of aisle traffic, and enters an aisle lane's band
+        // only where it has room to be that lane's occupant.
+        const band = aisleBand(id, m, pose);
+        if (
+          aisleTraffic(id, m, pose, target - m.progressM) ||
+          (band &&
+            !(m.laneHeld && band.lane === m.lane) &&
+            !laneRoom(id, band.lane, band.positionM))
+        ) {
+          target = m.progressM;
+          pose = m.pose;
+        }
+      }
       m.progressM = target;
-      m.pose = pathPose(m.path, target);
+      m.pose = pose;
       m.speed = pointDistance(before, m.pose) / params.dtS;
+      if (arriving && m.laneHeld && !aisleSegments[space.parking]!.segments.includes(m.lane)) {
+        if (bodyClearOf(pose, compiled.lanes[m.lane]!, length(id), width(id))) {
+          callbacks.occupy?.(id, -1, 0, 0);
+          m.laneHeld = false;
+        }
+      } else if (arriving) {
+        const band = aisleBand(id, m, pose);
+        if (band) {
+          const held = m.laneHeld && band.lane === m.lane;
+          callbacks.occupy?.(
+            id,
+            band.lane,
+            held ? Math.max(vehicles.position[id]!, band.positionM) : band.positionM,
+            m.speed,
+          );
+          m.lane = band.lane;
+          m.laneHeld = true;
+        } else if (m.laneHeld) {
+          callbacks.occupy?.(id, -1, 0, 0);
+          m.laneHeld = false;
+        }
+      }
       if (
         !m.lot &&
         m.phase === 'park' &&
@@ -1214,7 +1511,8 @@ export function createParking(
       if (m.phase === 'drive_in') {
         nextPath(m, manoeuvrePath(m.pose, parkedPose(space, length(id)), false), 'park', timeS);
       } else if (m.phase === 'park') {
-        if (m.laneHeld) callbacks.clearLane(id);
+        if (m.laneHeld && m.lot) callbacks.occupy?.(id, -1, 0, 0);
+        else if (m.laneHeld) callbacks.clearLane(id);
         arrive(id, m.connector, timeS);
         if (m.lot) {
           lotArrivals++;
@@ -1242,6 +1540,14 @@ export function createParking(
         m.phase = 'exit';
       }
     }
+    markCrossings();
+  }
+  function markCrossings() {
+    crossing.clear();
+    for (const m of motions.values())
+      if (m.phase === 'merge')
+        for (const c of m.crossings)
+          if (m.progressM < c.untilM) crossing.set(c.lane, [...(crossing.get(c.lane) ?? []), c]);
   }
   return {
     location(id: number, atOrigin = false) {
@@ -1286,18 +1592,29 @@ export function createParking(
       let positionM = Infinity;
       for (const [other, m] of motions)
         if (leavingLot(m))
-          positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector, m.joinM));
+          positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector, m));
       // TASK-153: a car that would enter at once does not wait for the departure.
       return Number.isFinite(positionM) && !admission(id, destination!.idx)
         ? { lane: destination!.lane, positionM }
         : undefined;
     },
+    /** TASK-157: where a lane's traffic from `fromM` on meets a lot car crossing it: the near
+     * edge of the crossing span, a standing obstacle until the body has left the lane. */
+    crossingStop(lane: number, fromM: number) {
+      let stop = Infinity;
+      for (const span of crossing.get(lane) ?? [])
+        if (span.fromM >= fromM) stop = Math.min(stop, span.fromM);
+      return stop;
+    },
+    /** TASK-157: whether a lot car is crossing a lane between two of its stations. */
+    crossingBlocks: (lane: number, fromM: number, toM: number) =>
+      crossing.get(lane)?.some((span) => span.fromM < toM && span.toM > fromM) ?? false,
     startsInLot: isLotSpace,
     canStartLot(id: number, connector: number) {
       const slot = spaces[originSpace(id)]!;
       if (lotBusy(slot.parking, true, connector)) return false;
       const way = driveOut(id, slot.idx, connector);
-      if (arrivalBlocksDeparture(id, connector, way.joinM)) return false;
+      if (arrivalBlocksDeparture(id, connector, way)) return false;
       const out = pathPose(way.path, 0);
       return ![...motions].some(
         ([otherId, m]) =>
@@ -1321,18 +1638,57 @@ export function createParking(
       const c = compiled.connectors[slot.departure ?? slot.connector]!,
         lane = compiled.lanes[c.lane]!,
         key = slot.idx * 2 + vehicles.vclass[id]!;
+      const path = () =>
+        manoeuvrePath(lanePose(c.idx), parkedPose(slot, length(id)), slot.layout === 'parallel');
       if (Number.isNaN(approachReach[key]))
         approachReach[key] = manoeuvreLaneReach(
-          manoeuvrePath(lanePose(c.idx), parkedPose(slot, length(id)), slot.layout === 'parallel'),
+          path(),
           lane,
           length(id),
           params.vehicleClasses[vehicles.vclass[id] === 0 ? 'car' : 'van'].widthM,
         );
+      const reach = approachReach[key]!;
       for (let other = vehicles.last(c.lane); other !== -1; other = vehicles.previous[other]!) {
         if (vehicles.position[other]! < c.positionM) continue;
-        return (
-          vehicles.position[other]! - length(other) - params.idm.minGapM >= approachReach[key]!
-        );
+        if (vehicles.position[other]! - length(other) - params.idm.minGapM < reach) return false;
+        break;
+      }
+      // TASK-164: a lot bay's departure keeps the same room from the lot's arriving cars in its
+      // lane's band that are not the lane's occupants (on a private aisle), now and wherever
+      // they can drive along their path at lot speed while it backs out: they keep clear of it
+      // as drawn, but cannot keep clear of a body backing towards them.
+      if (slot.departure !== undefined && motions.size) {
+        if (Number.isNaN(leaveRear[key]))
+          leaveRear[key] =
+            manoeuvreLaneBounds(path(), lane, length(id), width(id))?.low ??
+            c.positionM - length(id);
+        for (const [other, m] of motions) {
+          if (
+            !m.lot ||
+            (m.phase !== 'drive_in' && m.phase !== 'park') ||
+            spaces[m.slot]!.parking !== slot.parking ||
+            (m.laneHeld && m.lane === c.lane)
+          )
+            continue;
+          const until = Math.min(
+            m.path.lengthM,
+            m.progressM + params.lotSpeedMps * params.leaveManoeuvreS,
+          );
+          for (let at = m.progressM; ; at = Math.min(until, at + 0.5)) {
+            const pose = pathPose(m.path, at);
+            if (!bodyClearOf(pose, lane, length(other), width(other))) {
+              const stations = corners(pose, length(other), width(other)).map(
+                (p) => nearestOnPolyline(lane.polyline, p).along,
+              );
+              if (
+                Math.max(...stations) + params.idm.minGapM > leaveRear[key]! &&
+                Math.min(...stations) - params.idm.minGapM < reach
+              )
+                return false;
+            }
+            if (at >= until) break;
+          }
+        }
       }
       return true;
     },
@@ -1353,51 +1709,24 @@ export function createParking(
     exits(id: number, fallback: number[]) {
       const slot = spaces[originSpace(id)];
       if (slot && !left[id]) {
-        const facility = compiled.parking[slot.parking]!;
-        if (slot.departure !== undefined) return [slot.departure];
-        if (facility.kind === 'lot') {
-          const graph = lotGraph(slot.parking)!;
-          const exits = facility.connectorsOut
-            .filter(
-              (c) =>
-                parkingConnectorPermitted(
-                  compiled,
-                  c,
-                  trips[id]!.vehicleClass,
-                  trips[id]!.purpose,
-                  'out',
-                ) && !!lotPath(graph, c, slot.lotStall!, 'out'),
-            )
-            .sort(
-              (a, b) =>
-                graph.entries.find((e) => e.connector === a && e.direction !== 'in')!.distances[
-                  graph.stallNodes[slot.lotStall!]!
-                ]! -
-                  graph.entries.find((e) => e.connector === b && e.direction !== 'in')!.distances[
-                    graph.stallNodes[slot.lotStall!]!
-                  ]! || a - b,
-            );
-          // TASK-152: a drive-out with no pose clear of its exit lane runs inside the lane
-          // band from the bay. It is offered only when no other exit is (a bay beside an aisle
-          // lane it cannot legally leave into: Sindelfingen pk:1487 into a private street).
-          const clear = exits.filter((c) => {
-            const key = (slot.idx * compiled.connectors.length + c) * 2 + vehicles.vclass[id]!;
-            let hold = clearHolds.get(key);
-            if (hold === undefined)
-              clearHolds.set(
-                key,
-                (hold = holdProgress(
-                  localPath(slot.idx, c, true),
-                  compiled.lanes[compiled.connectors[c]!.lane]!,
-                  length(id),
-                  width(id),
-                )),
-              );
-            return hold >= 0;
-          });
-          return clear.length ? clear : exits;
+        if (compiled.parking[slot.parking]!.kind !== 'lot') return [slot.connector];
+        const exits = lotExits(id, slot);
+        // TASK-164: a bay's departure stands for the exits it drives past. Each exit it misses
+        // stays offered as a lot exit where that exit's hold is clear (Munich pk:2056, whose
+        // aisle lanes reach the west exits but not mapped exit c:10872 onto r:669).
+        if (slot.departure !== undefined) {
+          const misses = departureMissed(slot.idx);
+          return [
+            slot.departure,
+            ...exits.filter((c) => misses.includes(c) && clearExit(id, slot.idx, c)),
+          ];
         }
-        return [slot.connector];
+        // TASK-152: a drive-out with no pose clear of its exit lane runs inside the lane band
+        // from the bay; TASK-164: one whose hold stands in an aisle lane's band waits in a lane
+        // too. Such an exit is offered only when no other exit is (Sindelfingen pk:1487's c:2640,
+        // and its bays beside an aisle lane they cannot legally leave into).
+        const clear = exits.filter((c) => clearExit(id, slot.idx, c));
+        return clear.length ? clear : exits;
       }
       const f = compiled.parking[originFacility(id)];
       if (!f && previous[id] !== -1 && vehicles.state[previous[id]!] !== COMPLETED) {
@@ -1412,6 +1741,19 @@ export function createParking(
             .flatMap((f) => f.connectorsOut);
       }
       return f ? f.connectorsOut : fallback;
+    },
+    /** TASK-164: an origin exit's weight in the draw. A bay's departure carries the share of
+     * every exit it drives past, so each of the bay's exits keeps its share. */
+    exitShare(id: number, connector: number) {
+      const slot = spaces[originSpace(id)];
+      const share = (c: number) => compiled.connectors[c]!.throughputPerMin;
+      if (!slot || left[id] || connector !== slot.departure) return share(connector);
+      const misses = departureMissed(slot.idx);
+      return (
+        lotExits(id, slot)
+          .filter((c) => !misses.includes(c))
+          .reduce((sum, c) => sum + share(c), 0) || share(connector)
+      );
     },
     depart(id: number, timeS = scenario.startS, connector = spaces[originSpace(id)]?.connector) {
       if (left[id]) return;
@@ -1441,6 +1783,7 @@ export function createParking(
             progressM: 0,
             holdM: out?.holdM ?? 0,
             joinM: out?.joinM ?? NaN,
+            crossings: out?.crossings ?? [],
             startedS: timeS,
             entryS: timeS,
             driveS: 0,
@@ -1703,7 +2046,15 @@ export function createParking(
           JSON.stringify([slot.position, slot.heading, next.lanes[c.lane]!.polyline]) !==
             JSON.stringify([old.position, old.heading, compiled.lanes[m.lane]!.polyline]) ||
           (m.lot &&
-            JSON.stringify(topology(next, f.id)) !== JSON.stringify(topology(compiled, f.id)))
+            JSON.stringify(topology(next, f.id)) !== JSON.stringify(topology(compiled, f.id))) ||
+          m.crossings.some((x) => {
+            const lane = next.index.lane.get(compiled.lanes[x.lane]!.id);
+            return (
+              lane === undefined ||
+              JSON.stringify(next.lanes[lane]!.polyline) !==
+                JSON.stringify(compiled.lanes[x.lane]!.polyline)
+            );
+          })
         )
           throw new Error(
             `Parking ${f.id} has an active manoeuvre affected by this edit; restart the run`,
@@ -1788,7 +2139,16 @@ export function createParking(
       for (const m of motions.values()) {
         m.slot = remapSpace(m.slot);
         m.connector = next.index.connector.get(compiled.connectors[m.connector]!.id)!;
-        m.lane = next.connectors[m.connector]!.lane;
+        // TASK-156: an arrival holds an aisle lane, which need not be its entry's.
+        const held =
+          m.lot && m.laneHeld && (m.phase === 'drive_in' || m.phase === 'park')
+            ? next.index.lane.get(compiled.lanes[m.lane]!.id)
+            : undefined;
+        m.lane = held ?? next.connectors[m.connector]!.lane;
+        m.crossings = m.crossings.map((x) => ({
+          ...x,
+          lane: next.index.lane.get(compiled.lanes[x.lane]!.id)!,
+        }));
       }
       stock = new Int32Array(spaces.length).fill(-1);
       classes = new Uint8Array(spaces.length);
@@ -1807,9 +2167,14 @@ export function createParking(
         (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
       );
       usable = eligibleSpaces();
+      aisleSegments = aisleSegmentsOf(compiled);
       prepareDepartures();
       approachReach = new Float64Array(spaces.length * 2).fill(NaN);
+      leaveRear = new Float64Array(spaces.length * 2).fill(NaN);
       clearHolds.clear();
+      missed.clear();
+      drives.clear();
+      markCrossings();
     },
   };
 }

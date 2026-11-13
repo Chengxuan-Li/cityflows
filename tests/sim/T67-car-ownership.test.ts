@@ -30,6 +30,8 @@ function world(streetParkingShare = 1, homeStrip = { occupancyAtStart: null as n
     provenance: { source: 'authored' },
   };
   w.scenario.simParams.streetParkingShare = streetParkingShare;
+  // These household car trips drive as given (TASK-113's choice would walk the short ones).
+  w.scenario.demand.modeChoice = { enabled: false };
   return { ...w, stripId: id };
 }
 
@@ -212,6 +214,8 @@ test('T67 town: home stock equals household cars, late shifts borrow, the same s
   const scenario = { ...defaultScenario('town'), startS: 7 * 3600, endS: 9 * 3600 };
   scenario.demand.carShare = 0.5;
   scenario.demand.personsPerResident = 0.2;
+  // Every driver drives all day (TASK-113 off): the stock is then every household car driven.
+  scenario.demand.modeChoice = { enabled: false };
   const persons = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, persons, scenario);
   const compiled = setup(city);
@@ -247,17 +251,20 @@ test('T67 homes of one person replay main: same trips and simulation hashes', ()
   for (const place of Object.values(city.places))
     if (place.kind === 'residential') place.population = 1;
   const scenario = defaultScenario('town');
+  // TASK-113 off replays main exactly: the hashes below are main's (with TASK-165's rule).
+  scenario.demand.modeChoice = { enabled: false };
   const persons = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, persons, scenario);
   const engine = createEngine();
   engine.load({ compiled: setup(city), trips, scenario, population: persons });
   // Recorded on main cd0b994 (after TASK-154, TASK-153 and PR #1): hashes at 08:00, 12:00 and
-  // 18:00 (every person has a car).
+  // 18:00 (every person has a car). TASK-165: re-recorded; exit storage is measured beyond the
+  // exit crosswalk, so cars wait at the stop line rather than on the stripes.
   const hashes: number[] = [];
   for (const hours of [1, 3, 7]) {
     engine.step(hours * 36000);
     hashes.push(engine.stateHash());
   }
   expect(trips).toHaveLength(1614);
-  expect(hashes).toEqual([890697552, 2048011605, 3080062683]);
+  expect(hashes).toEqual([1843605177, 3544339055, 4008114394]);
 });

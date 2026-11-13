@@ -24,6 +24,8 @@ test('T67 a household shows who drives which car, who borrows it and who has non
   scenario.demand.carShare = 0.5;
   scenario.demand.personsPerResident = 0.2;
   scenario.demand.workStart = { meanS: 7 * 3600 + 900, sdS: 600 };
+  // TASK-129's drivers as scheduled: mode choice off, so no driver's tour walks.
+  scenario.demand.modeChoice = { enabled: false };
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(
     city,
@@ -84,7 +86,7 @@ test('T67 a household shows who drives which car, who borrows it and who has non
   await expect(page.getByRole('region', { name: 'Demand', exact: true })).toContainText(
     `${new Set(population.map((p) => p.householdId)).size.toLocaleString('en')} households`,
   );
-  await page.keyboard.press('Escape');
+  await button(page, 'Demand').click();
 
   // Run until the owner has walked to the car and drives it.
   const vehicle = await page.evaluate(async (owner) => {

@@ -18,10 +18,13 @@ test('V163 lighting persists per viewer and leaves the simulation and project un
 
   await button(page, 'Layers').click();
   const layers = page.getByRole('region', { name: 'Map layers' });
-  await expect(layers.getByLabel('Time of day')).toHaveValue('day');
-  await layers.getByLabel('Time of day').selectOption('night');
+  const preset = (name: string) =>
+    layers.getByRole('group', { name: 'Time of day' }).getByRole('button', { name });
+  await expect(preset('Day')).toHaveAttribute('aria-pressed', 'true');
+  await preset('Night').click();
+  await expect(preset('Night')).toHaveAttribute('aria-pressed', 'true');
   await layers.getByLabel('Exposure').fill('0.8');
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   await expect(map).toHaveAttribute('data-lighting', /"mode":"night","artificial":1/);
   expect(await stateHash(page)).toBe(dayHash);
 
@@ -34,7 +37,8 @@ test('V163 lighting persists per viewer and leaves the simulation and project un
   expect(await city(page)).toEqual(project);
   await button(page, 'Layers').click();
   await expect(layers.getByLabel('Exposure')).toHaveValue('0.8');
-  await page.keyboard.press('Escape');
+  await expect(preset('Night')).toHaveAttribute('aria-pressed', 'true');
+  await button(page, 'Layers').click();
 
   await button(page, '3D').click();
   const view = page.getByLabel('3D city view', { exact: true });

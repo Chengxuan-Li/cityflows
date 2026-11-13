@@ -4,6 +4,7 @@ import { areaError, defaultEndpoint, fetchOverpass, type Bbox } from '../../impo
 import type { ImportResult } from '../../importers/types';
 import type { ImportMessage } from '../../importers/worker';
 import { defaultScenario } from '../../fixtures/scenarios';
+import { CloseButton, Slider } from '../controls';
 import { useAppStore } from '../store';
 import { DiagnosticsStep } from './diagnostics-step';
 
@@ -146,9 +147,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
     >
       <div className="sheet-heading">
         <h2 id="import-title">Import city</h2>
-        <button aria-label="Close Import city" disabled={busy} onClick={onClose}>
-          ×
-        </button>
+        <CloseButton label="Close Import city" disabled={busy} onClick={onClose} />
       </div>
       <p className="muted">
         {step === 'progress' ? 'Importing' : step[0]!.toUpperCase() + step.slice(1)}
@@ -186,7 +185,11 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
           </Suspense>
           <div className="controls">
             <button onClick={() => setStep('source')}>Back</button>
-            <button disabled={!!areaError(bbox)} onClick={() => setStep('options')}>
+            <button
+              className="primary"
+              disabled={!!areaError(bbox)}
+              onClick={() => setStep('options')}
+            >
               Next
             </button>
           </div>
@@ -240,6 +243,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
           <div className="controls">
             <button onClick={() => setStep(file ? 'source' : 'area')}>Back</button>
             <button
+              className="primary"
               disabled={!name.trim() || (!file && !!areaError(bbox))}
               onClick={() => void runImport()}
             >
@@ -262,6 +266,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
           <div className="controls">
             <button onClick={() => setStep('options')}>Back</button>
             <button
+              className="primary"
               disabled={!result.ok || result.diagnostics.some((d) => d.severity === 'error')}
               onClick={() => setStep('accept')}
             >
@@ -279,11 +284,10 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
           <div className="edit-fields">
             <label className="edit-field">
               Demand
-              <input
+              <Slider
                 id="import-demand"
-                type="range"
-                min="0.05"
-                max="1"
+                min={0.05}
+                max={1}
                 step="0.05"
                 value={demandScale}
                 disabled={busy}
@@ -301,7 +305,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
             <button disabled={busy} onClick={() => setStep('diagnostics')}>
               Back
             </button>
-            <button disabled={busy} onClick={() => void accept()}>
+            <button className="primary" disabled={busy} onClick={() => void accept()}>
               Accept city
             </button>
           </div>

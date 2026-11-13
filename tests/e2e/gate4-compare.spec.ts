@@ -36,6 +36,8 @@ test('baseline comparison detects a banned center turn and paints road usage dif
   const scenario = fixture.scenarios[0]!;
   scenario.demand.workStart = { meanS: scenario.startS, sdS: 0 };
   scenario.endS = scenario.startS + 900;
+  // TASK-113: car traffic as before mode choice (every driver drives).
+  scenario.demand.modeChoice = { enabled: false };
   for (const [name, data] of [
     ['city.json', fixture.city],
     ['scenarios.json', fixture.scenarios],
@@ -55,7 +57,7 @@ test('baseline comparison detects a banned center turn and paints road usage dif
   await button('Compare').click();
   await button('Save as baseline').click();
   await expect(page.getByText(/Baseline saved/)).toBeVisible();
-  await button('Close comparison').click();
+  await button('Compare').click();
   const map = page.getByLabel('City map');
   const box = (await map.boundingBox())!;
   await map.click({ position: { x: box.width / 2, y: box.height / 2 } });
@@ -78,7 +80,7 @@ test('baseline comparison detects a banned center turn and paints road usage dif
     .poll(async () => Number(await map.getAttribute('data-difference-roads')))
     .toBeGreaterThan(0);
   await page.screenshot({ path: testInfo.outputPath('comparison-panel.png') });
-  await button('Close comparison').click();
+  await button('Compare').click();
   await button('Layers').click();
   const toggle = page.getByLabel('Comparison road usage', { exact: true });
   await expect(toggle).toBeChecked();

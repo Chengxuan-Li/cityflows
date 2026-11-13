@@ -88,7 +88,7 @@ test('T77 a refused exit holds clear of the lane beside a through car, then merg
     ...pointAtDistance(w.lane.polyline, w.lane.cumulative, w.exit.positionM),
     heading: headingAtDistance(w.lane.polyline, w.lane.cumulative, w.exit.positionM),
   };
-  expect(parking.startsInLot(1)).toBe(true);
+  expect(parking.startsInLot(1, w.exit.idx)).toBe(true);
   parking.depart(1, 100, w.exit.idx);
   let granted = false,
     asked = 0,
@@ -220,3 +220,47 @@ test.each([[[110]], [[110, 145]]])(
     for (const id of exiting) expect(engine.inspect(id)!.state).toBe('completed');
   },
 );
+
+test('TASK-164 a car entering a lot from the street stays the lane occupant until its body has left the lane', () => {
+  const w = parkingWorld(),
+    result = compile(w.city);
+  if (!result.ok) throw new Error('compile');
+  const net = result.compiled;
+  const lane = net.lanes[net.index.lane.get(`${w.street.id}#0`)!]!;
+  const engine = createEngine();
+  // Three arrivals close together: each follower queues on the street behind the one turning in.
+  engine.load({
+    compiled: net,
+    trips: [w.trip('a'), w.trip('b', 101), w.trip('c', 102)],
+    scenario: w.scenario,
+  });
+  let held = 0,
+    turning = 0;
+  for (let step = 0; step < 6000; step++) {
+    engine.step();
+    const s = engine.snapshot();
+    const poses = [...s.id].map((_, i) => ({ x: s.x[i]!, y: s.y[i]!, heading: s.heading[i]! }));
+    for (let i = 0; i < s.count; i++) {
+      const phase = engine.inspect(s.id[i]!)!.parkingPhase;
+      if (phase !== 'drive_in') continue;
+      turning++;
+      // While its body is in the street lane's band it holds the lane, so the car behind keeps
+      // its gap instead of driving into the turning body.
+      if (!bodyClearLane(poses[i]!, lane, 4.5, 1.8)) {
+        expect(s.lane[i], `car ${s.id[i]} at ${engine.timeS}`).toBe(lane.idx);
+        held++;
+      }
+      for (let j = 0; j < s.count; j++)
+        if (j !== i && engine.inspect(s.id[j]!)!.state !== 'in_lot')
+          expect(overlap(poses[i]!, poses[j]!), `cars ${s.id[i]}, ${s.id[j]}`).toBe(false);
+    }
+    if ([1, 2, 3].every((id) => engine.inspect(id)!.state === 'completed')) break;
+  }
+  expect(held).toBeGreaterThan(0);
+  expect(turning).toBeGreaterThan(held);
+  expect([1, 2, 3].map((id) => engine.inspect(id)!.state)).toEqual([
+    'completed',
+    'completed',
+    'completed',
+  ]);
+});

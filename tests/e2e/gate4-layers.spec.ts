@@ -99,7 +99,7 @@ test('layer toggles leave the simulation unchanged; minute charts show the morni
   expect(values[peak]![1]).toBeLessThan(values.at(-1)![1]! - 20);
   expect(await page.evaluate(() => window.cityflows!.hash())).toBe(finalHash);
   await page.screenshot({ path: testInfo.outputPath('morning-chart.png') });
-  await page.getByRole('button', { name: 'Close chart' }).click();
+  await page.getByRole('button', { name: 'Chart', exact: true }).click();
   await page.getByRole('button', { name: 'Restart', exact: true }).click();
   await page.evaluate((steps) => window.cityflows!.step(steps), peak * 600);
   // Allow the 500 ms snapshot heat throttle to deliver the paused peak frame.
@@ -107,7 +107,7 @@ test('layer toggles leave the simulation unchanged; minute charts show the morni
   await page.screenshot({ path: testInfo.outputPath('morning-heat.png') });
   await page.getByRole('button', { name: 'Layers', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('layer-list.png') });
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Layers', exact: true }).click();
   await expect(layers).toBeHidden();
   await page.getByRole('button', { name: 'Restart', exact: true }).click();
   await page.getByRole('button', { name: 'Chart', exact: true }).click();

@@ -17,6 +17,9 @@ export function createLaneChanges(
   vehicles: Vehicles,
   params: SimParams,
   hasGrant: (id: number) => boolean = () => false,
+  /** A lane span no change may land in: a lot car crossing it (TASK-157), a walker holding it
+   * (TASK-165). */
+  crossing: (lane: number, fromM: number, toM: number) => boolean = () => false,
 ) {
   const { idm, mobil, laneChangeDistanceM, mandatoryUrgencyM } = params;
   const proposals: Proposal[] = [];
@@ -220,6 +223,7 @@ export function createLaneChanges(
 
   function safeGap(id: number, lane: CLane, positionM: number, leader: number, follower: number) {
     const clearance = profile(id).lengthM + idm.minGapM;
+    if (crossing(lane.idx, positionM - clearance, positionM + idm.minGapM)) return false;
     if (
       leader !== -1 &&
       vehicles.position[leader]! - positionM < profile(leader).lengthM + idm.minGapM

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { MetricsSample } from '../../host/protocol';
 import type { Metrics } from '../../sim/types';
 import { useAppStore } from '../store';
+import { ModeShares } from './mode-shares';
 
 function clock(timeS: number) {
   return `${String(Math.floor(timeS / 3600)).padStart(2, '0')}:${String(Math.floor(timeS / 60) % 60).padStart(2, '0')}`;
@@ -17,12 +18,13 @@ const plots = [
 export function MetricsPanel() {
   const session = useAppStore((state) => state.session);
   const selection = useAppStore((state) => state.selection);
-  const { toggleMetrics, reportError } = useAppStore.getState();
+  const { reportError } = useAppStore.getState();
   const [result, setResult] = useState<{
     engine: NonNullable<typeof session>['engine'];
     samples: MetricsSample[];
     parking: Metrics['parking'];
     walkers: Metrics['walkers'];
+    persons: Metrics['persons'];
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -39,6 +41,7 @@ export function MetricsPanel() {
             samples,
             parking: metrics.parking,
             walkers: metrics.walkers,
+            persons: metrics.persons,
           });
           setLoading(false);
         }
@@ -53,13 +56,6 @@ export function MetricsPanel() {
       active = false;
     };
   }, [session, revision, reportError]);
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') toggleMetrics();
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [toggleMetrics]);
 
   const samples = result?.engine === session?.engine ? (result?.samples ?? []) : [];
   const first = samples[0];
@@ -72,6 +68,7 @@ export function MetricsPanel() {
     facilities[0];
   const parking = result?.engine === session?.engine ? result?.parking : undefined;
   const walkers = result?.engine === session?.engine ? result?.walkers : undefined;
+  const persons = result?.engine === session?.engine ? result?.persons : undefined;
   const charts: { key: string; label: string; color: string; values: number[]; maximum: number }[] =
     plots.map(([key, label, color]) => ({
       key,
@@ -89,7 +86,7 @@ export function MetricsPanel() {
       maximum: chosen.capacity,
     });
   return (
-    <section id="metrics-chart" className="chart-sheet" aria-label="Traffic over time">
+    <section id="metrics-chart" className="panel chart-panel" aria-label="Traffic over time">
       <div className="chart-heading">
         <span>
           {last ? `Through ${clock(last.timeS)} · every simulated minute` : 'Loading history…'}
@@ -103,9 +100,6 @@ export function MetricsPanel() {
             }}
           >
             Refresh
-          </button>
-          <button aria-label="Close chart" onClick={toggleMetrics}>
-            ×
           </button>
         </div>
       </div>
@@ -160,6 +154,7 @@ export function MetricsPanel() {
           </dd>
         </dl>
       )}
+      {persons && <ModeShares modes={persons.modes} />}
       {chosen && (
         <label className="edit-field">
           Occupancy by facility

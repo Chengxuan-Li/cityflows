@@ -1,4 +1,4 @@
-import type { VehicleClass, VehiclePurpose } from '../schema';
+import type { TripMode, VehicleClass, VehiclePurpose } from '../schema';
 
 export interface ExportProvenance {
   seed: number;
@@ -23,6 +23,8 @@ export interface TripRecord {
   parkingFacility: string | null;
   walkingDistanceM: number;
   parkingSearchTimeS: number;
+  /** TASK-113: the mode the trip travelled in, after the mode choice. */
+  mode: TripMode;
 }
 
 export interface RoadStats {
@@ -87,6 +89,7 @@ export function exportTripsCsv(records: readonly TripRecord[], provenance: Expor
       'parking facility',
       'walking distance',
       'parking search time',
+      'mode',
     ],
     records.map((r) => [
       r.id,
@@ -104,6 +107,7 @@ export function exportTripsCsv(records: readonly TripRecord[], provenance: Expor
       r.parkingFacility,
       r.walkingDistanceM,
       r.parkingSearchTimeS,
+      r.mode,
     ]),
   );
 }

@@ -150,10 +150,10 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const hash = (v: unknown) => createHash('sha256').update(vehicleJson(v)).digest('hex');
     const before = name.startsWith('munich')
       ? [
-          '7be026f2964c879ee0767a1fa6b700ad818352f63fc4a36991a82aa699ec3df4',
-          // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
+          '736ee70a649a46117a9ba163c118368808ca5b517f5a0348181f4b03c991932b',
+          // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
-          '12d01f1241163801a0079d8a9644fb79f44fabadf0b31cacc93d0bda35c9e6ec',
+          '77f113b0cef3feeb678ee6d5703bfc6120f8de0ed164fbafb225f119979af06a',
         ]
       : [
           '36ead1d461cbee968be497791dcc660e529b81aba385ac33701c57b730a9e1ba',
