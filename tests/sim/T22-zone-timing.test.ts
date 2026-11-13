@@ -46,7 +46,7 @@ test.each([0, 1])('T22: the same slow crossing car respects a %s second margin',
 });
 
 test.each([2, 10])(
-  'T22: a stopped exit queue holds a candidate for %s seconds at the line',
+  'T22: a stopped exit queue retains rear clearance after %s seconds at the line',
   (boxWaitS) => {
     const { left, vehicles, intersections, request } = opposing({
       ...DEFAULT_SIM_PARAMS,
@@ -65,6 +65,10 @@ test.each([2, 10])(
     request(0);
     expect(intersections.grants[0]).toBe(-1);
     vehicles.stopped[0] = boxWaitS;
+    request(0);
+    expect(intersections.grants[0]).toBe(-1);
+    vehicles.position[1] =
+      2 * DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM + DEFAULT_SIM_PARAMS.idm.minGapM;
     request(0);
     expect(intersections.grants[0]).toBe(left.idx);
   },
@@ -287,14 +291,22 @@ test.each([0.001, 6.5])(
     const all = movementTrips(city);
     const requests = [left, other].map((m) => all.find((trip) => trip.id === `${m.id}:0`)!);
     const compiled = setup(city);
-    compiled.lanes[left.toLane]!.speedLimitMps = 1;
     const engine = createEngine();
     engine.load({ compiled, trips: requests, scenario: scenario() });
     let checked = false;
+    let slowed = false;
     for (let step = 0; step < 2000; step++) {
       engine.step();
       const cars = [engine.inspect(1)!, engine.inspect(2)!];
-      if (!cars.every((c) => c.lane < 0 && c.speedMps > 0.2 && c.speedMps < 1.1)) continue;
+      if (!cars.every((c) => c.lane < 0 && c.speedMps > 0.2)) continue;
+      if (!slowed) {
+        const next = setup(city);
+        next.lanes[left.toLane]!.speedLimitMps = 1;
+        engine.patch(next);
+        slowed = true;
+        continue;
+      }
+      if (!cars.every((c) => c.speedMps < 1.1)) continue;
       const next = setup(city);
       next.lanes[left.toLane]!.speedLimitMps = 1;
       for (const car of cars) {
