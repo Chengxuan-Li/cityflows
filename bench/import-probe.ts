@@ -541,8 +541,10 @@ export function probeMorning(
       (gatewayTraffic[cls] ??= { entered: 0, left: 0 }).left++;
     }
   }
-  // Vehicle trips only: walk trips (TASK-128 riders) are not vehicle trips and never pending.
-  const releasedTrips = trips.filter((t) => t.mode !== 'walk').length - metrics.trips.pending;
+  // Vehicle trips only: walk trips (TASK-128 riders, tours that chose to walk) are not vehicle
+  // trips and never pending.
+  const releasedTrips =
+    metrics.tripOutcomes!.filter((t) => t.mode !== 'walk').length - metrics.trips.pending;
   const parkingNodes = new Map<number, Set<string>>();
   const parkingAt = (node: number, id: string) => {
     const list = parkingNodes.get(node) ?? new Set<string>();

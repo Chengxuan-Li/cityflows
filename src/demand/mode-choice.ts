@@ -115,7 +115,7 @@ export function modeTours(
   const tours: number[][] = [];
   for (const chain of byPerson.values()) {
     const home = trips[chain[0]!]!.originPlaceId;
-    for (let start = 0; start < chain.length; ) {
+    for (let start = 0; start < chain.length;) {
       let end = start;
       while (end < chain.length - 1 && trips[chain[end]!]!.destinationPlaceId !== home) end++;
       const tour = chain.slice(start, end + 1);
