@@ -181,7 +181,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | in progress (Claude Code subagent) |
 | [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | done 2026-11-13 (drain (b) and (c) open: TASK-161, TASK-153) |
 | [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | done 2026-11-13 |
-| [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | in progress on TASK-153's branch (Claude Code subagent) |
+| [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | done 2026-11-13 (partly; rest in TASK-164) |
 | [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | done 2026-11-13 |
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | not needed: TASK-129 passed after TASK-154 |
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | done 2026-11-13: no repair needed; TASK-128 merged |
@@ -3755,6 +3755,21 @@ argument from four callers. Lead merge onto main with TASK-128 and TASK-157: see
 completed, 0 gridlocked, 0 stalled heads; every pin passes; lint, format, build, unit (1,331) and the
 network tier pass, with route-audit, T46, T33.2, T37 and T64 timing out under load and passing
 alone (27). Open: splits are even, cycles 102 to 120 s.
+
+TASK-156 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged, gate 1 partly met): a bay on an
+aisle lane that carries none of its exits now gets TASK-152's lane departure when that departure is
+legal and passes every one of the bay's exits (22 Munich bays: pk:2050 10, pk:2053 12); arriving lot
+cars no longer drive into lane cars ahead on aisle lanes, and on public aisles they occupy the lane
+while in it (on private aisles that cost 75 to 186 trips per seed and was dropped). Aisle holds:
+Munich 68 to 48 (pk:2050 fixed), Sindelfingen 232 unchanged. Left for a follow-up (TASK-164,
+departure side): pk:2056 (a departure must not replace mapped exit c:10872 onto r:669), pk:1487 (its
+hold for exit c:2640 lands in an interior junction because `bodyClearLane` extends a lane band past
+its ends), pk:1475 (private aisles meet only private roads, no clear pose at the passage), private
+aisle departures not checking arriving cars, street entrances releasing the lane while the body is
+in it (63 pairs). On main 5ee9467 seeds 1 to 3 equal main exactly (5,298 / 0 / 0, 5,304 / 1 / 0,
+5,312 / 0 / 0); route records byte-identical; 8 Munich compile pins moved for the 22 new departure
+connectors only; `lot-aisle-lanes.test.ts` (3 cases), tests/sim (416), `test:city`, light e2e (38),
+`check` pass (timeouts under load passed alone).
 
 ## Owner decisions log
 

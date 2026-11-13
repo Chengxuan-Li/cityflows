@@ -151,9 +151,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const before = name.startsWith('munich')
       ? [
           '736ee70a649a46117a9ba163c118368808ca5b517f5a0348181f4b03c991932b',
-          // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
+          // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
-          'c9bae0ed41924c043a735ccdc5d5ec6983d07de60254af33c8add66bd743a688',
+          'd60544cc5ac59f42e3c450648ea7e1e857ca915676886fee39a8568f1269c4ed',
         ]
       : [
           '36ead1d461cbee968be497791dcc660e529b81aba385ac33701c57b730a9e1ba',

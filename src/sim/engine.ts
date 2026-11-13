@@ -960,11 +960,15 @@ function createRun({
           throw new Error('Parking entry admission changed within a step');
         if (parking.lotArrival(connector.idx)) {
           leaveRoad(id, timeS, connector.positionM);
-          vehicles.remove(id);
+          // TASK-156: an entry on a public aisle lane keeps the arriving car in it.
+          const held = parking.motion(id)!.laneHeld;
+          if (!held) vehicles.remove(id);
           intersections.release(id);
           laneChanges.leaveLane(id);
-          vehicles.lane[id] = OFF_LANE;
-          vehicles.position[id] = 0;
+          if (!held) {
+            vehicles.lane[id] = OFF_LANE;
+            vehicles.position[id] = 0;
+          }
           accounting.transition(id, IN_LOT);
         } else accounting.transition(id, QUEUED_DESTINATION);
       } else {
@@ -1607,6 +1611,16 @@ function createRun({
               laneChanges.leaveLane(id);
               vehicles.lane[id] = OFF_LANE;
             }
+          },
+          occupy(id, lane, positionM, speed) {
+            if (vehicles.lane[id] !== OFF_LANE && vehicles.lane[id] !== lane) {
+              vehicles.remove(id);
+              vehicles.lane[id] = OFF_LANE;
+            }
+            if (lane === -1) return;
+            if (vehicles.lane[id] === lane) vehicles.position[id] = positionM;
+            else vehicles.insert(id, lane, positionM);
+            vehicles.speed[id] = speed;
           },
           park(id, connector) {
             const c = compiled.connectors[connector]!;
