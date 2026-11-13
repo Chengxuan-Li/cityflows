@@ -172,7 +172,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
 | [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | merged in PR #3 |
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
-| [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | in progress |
+| [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | done (PR #6) |
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -3455,7 +3455,11 @@ A hardware RTX 4070 SUPER kept the original mesh and passed all six named tests.
 The combined build passed the stationary 3D gate at 221.66 ms with rail on and
 208.14 ms off (+6.50%). Its moving 3D pairs were +7.23% and +8.95%. One unchanged
 moving 2D pair exceeded the 10% budget at +12.98%. The full first combined run
-therefore recorded five passes and one failure.
+therefore recorded five passes and one failure. A fresh complete combined run
+passed all six tests with stationary 3D +7.36%, moving 3D +8.04% and +7.50%,
+and moving 2D +9.35% and +9.54%. Rail geometry also survived a WebGL context
+loss and restoration with identical pixels at the original camera. The original
+workload and threshold were used throughout. See the [TASK-148 report](tasks/TASK-148.md).
 
 TASK-149 traced ten Munich and sixteen Sindelfingen mouths to shared OSM nodes.
 The first candidate split the through roads at all 26 mouths. It changed 43 of the
