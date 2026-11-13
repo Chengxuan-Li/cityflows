@@ -186,6 +186,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | conditional (after TASK-154) |
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | queued (after TASK-154) |
 | [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
+| [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | queued (after TASK-154 and TASK-153 merge) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1147,6 +1148,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-158 | Claude Code, the lead's subagent | Opus 5.5 | high | 5358 (production 5458) |
 | TASK-159 | Claude Code, the lead's subagent | Opus 5.5 | high | 5359 (production 5459) |
 | TASK-160 | Claude Code, the lead's subagent | Opus 5.5 | high | 5360 (production 5460) |
+| TASK-161 | Claude Code, the lead's subagent | Opus 5.5 | high | 5361 (production 5461) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
