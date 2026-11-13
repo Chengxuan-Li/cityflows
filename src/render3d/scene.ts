@@ -131,6 +131,12 @@ export class Scene3D {
   private lastRenderMs = performance.now();
   private readonly vehicleMatrix = new Matrix4();
   private shadowView = '';
+  private readonly restoreContext = () => {
+    this.renderer.setClearColor(style.background);
+    this.rail?.paintCache.reset();
+    this.shadowView = '';
+    this.invalidate();
+  };
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const renderer = (this.renderer = new WebGLRenderer({ canvas, antialias: true }));
@@ -164,6 +170,7 @@ export class Scene3D {
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas);
     this.resize();
+    canvas.addEventListener('webglcontextrestored', this.restoreContext);
     canvas.dataset.view = '3d';
     if (import.meta.env.MODE === 'test') canvas.dataset.frames = '0';
   }
@@ -1036,6 +1043,7 @@ export class Scene3D {
     this.content.clear();
   }
   destroy() {
+    this.canvas.removeEventListener('webglcontextrestored', this.restoreContext);
     this.observer.disconnect();
     this.controls.dispose();
     this.basemap?.destroy();

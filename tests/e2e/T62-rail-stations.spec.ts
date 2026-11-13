@@ -238,6 +238,7 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
   const reports = [];
   for (const [name, zoom, pitch, bearing] of [
     ['station', 1.6, 40, 0],
+    ['restored', 1.6, 40, 0],
     ['train-focus', 1.6, 40, 0],
     ['selected', 1.6, 40, 0],
     ['rotated', 3.2, 45, 70],
@@ -298,7 +299,23 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
       await expect(canvas).toHaveJSProperty('width', 1600);
     }
     const images = await page.evaluate(
-      async ({ centre, zoom, pitch, bearing }) => {
+      async ({ centre, zoom, pitch, bearing, restore }) => {
+        if (restore) {
+          const before = (await window.cityflows!.capture3D!())[1]!;
+          const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-view="3d"]')!;
+          const extension = canvas.getContext('webgl2')!.getExtension('WEBGL_lose_context');
+          if (!extension) throw new Error('Context restoration is unavailable');
+          await new Promise<void>((resolve) => {
+            canvas.addEventListener('webglcontextrestored', () => resolve(), { once: true });
+            canvas.addEventListener(
+              'webglcontextlost',
+              () => setTimeout(() => extension.restoreContext(), 100),
+              { once: true },
+            );
+            extension.loseContext();
+          });
+          return [before, (await window.cityflows!.capture3D!())[1]!];
+        }
         window.cityflows!.setView3D!(centre, zoom, pitch, bearing);
         return window.cityflows!.capture3D!();
       },
@@ -312,6 +329,7 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
         zoom,
         pitch,
         bearing,
+        restore: name === 'restored',
       },
     );
     await expect(canvas).toHaveAttribute(
