@@ -1,12 +1,12 @@
 {
-  "tree": "main at the TASK-140 merge (crossing walk links, walk lights and walker conflict zones at the zebra stripes, B59; with TASK-135 tram tracks, which moves no traffic), on top of TASK-131's junction groups, reset per the owner's rule 7, 2026-11-11. 0 parking failures, 0 stranded; every failure is gridlock. 0 stalled heads at 10:00 and at the 09:30 quick sample.",
+  "tree": "main at the PR #1 merge (cd0b994: TASK-136 operating level crossings and TASK-138 scheduled trams), on top of TASK-154 (TASK-131 Phase 3, the Landsberger loop's deadlock cycles drained), TASK-153 (lot admission), TASK-152 and TASK-150; reset by the owner's decision of 2026-11-13. 0 parking failures, 0 stranded; every failure is gridlock. 0 stalled heads at 10:00 and at the 09:30 quick sample.",
   "scale": 0.15,
-  "completed": 4113,
-  "gridlocked": 26,
+  "completed": 4373,
+  "gridlocked": 5,
   "stalledHeads": 0,
   "quick": {
     "until": "09:30",
-    "completed": 3777,
-    "gridlocked": 12
+    "completed": 3737,
+    "gridlocked": 4
   }
 }
