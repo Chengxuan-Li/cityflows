@@ -1453,10 +1453,19 @@ connector; a destination between the two (their own lot, chosen again) is where 
 instead. The grant inserts the car there at speed 0, so following traffic treats it as a lane
 occupant before its body crosses the lane edge; the body then merges (`merge` phase) along a
 front-bumper curve at `lotSpeedMps` and drives on. A lot aisle mapped on a road is such a
-lane: the car joins it where its path first meets it. A car turning into the same mouth on the
+lane: the car joins it where its path first meets it. TASK-157: the hold is also clear of every
+other lane of the exit's street that the body would stand in (its road's other lanes, the other
+carriageway of a two-way street, the roads meeting it at either end; not the lot's own aisles,
+and not roads drawn across the lot at another grade, which the compiled model cannot tell
+apart): such a lane joins the set until a pose is clear of all, or the car keeps the exit-only
+hold if none is. The lanes the merge curve then crosses before the exit lane each need the same
+spawn gap, with followers' braking, around the station span the body covers there, checked with
+the join gap at the grant. From the grant until its body has left a crossed lane, that span is a
+standing obstacle for the lane's traffic (and for traffic about to enter it), clamped like a stop
+line, and no spawn or lane change lands in it. A car turning into the same mouth on the
 exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
 the join station, whichever is earlier (TASK-153), so it never stands in the gap the grant
-checks. TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
+checks; one turning in from a crossed lane stops the spawn gap short of its span. TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
 departure's spawn gap (with the reversing room ahead) while parked, is inserted there at speed 0,
 reverses out over `leaveManoeuvreS` and drives the aisle as a lane vehicle; it never starts in the
 lot. A lot exit whose drive-out has no pose clear of its lane is offered only when no other exit
