@@ -89,29 +89,18 @@ export function modeDraw(scenarioSeed: number, tripId: string) {
   return createRandom(scenarioSeed).derive('mode-choice').derive(tripId).next();
 }
 
-export interface ModeChoice {
-  /** The trips with each walked tour's car trips turned into walks (the input when nothing
-   * changes). */
-  trips: TripRequest[];
-  /** Per trip: the probability of walking at the decision that set its mode, or null for trips
-   * outside the choice (through, event and van trips, persons without a car, gateway ends). */
-  walkProbability: (number | null)[];
-}
-
-/** TASK-113: each home-based tour of a person with today's household car (TASK-129) chooses walk
- * or car at its first departure, from that trip's inputs. The car is at home then; afterwards it
- * stays with its driver until it is back home, so a person who walked out walks home, and one who
- * drove out drives home. `eligible` says whether a car trip may walk (a private car trip between
- * two places a person can walk to); a tour with any other trip keeps its car. */
-export function chooseModes(
+/** TASK-113: the home-based tours in the choice, each its trip ids in departure order. A tour of a
+ * person with today's household car (TASK-129) runs from a departure at home to the next return
+ * home (or the person's last car trip); the car is at home when it starts and stays with its driver
+ * until it is back. `eligible` says whether a car trip may walk (a private car trip between two
+ * places a person can walk to); a tour with any other trip keeps its car. None when the choice is
+ * off. TASK-173: the engine chooses each tour's mode when its first trip starts (`chooseTour`). */
+export function modeTours(
   trips: readonly TripRequest[],
   scenario: Scenario,
   eligible: (trip: TripRequest) => boolean,
-  inputs: (id: number) => ModeInputs,
-): ModeChoice {
-  const config = modeChoiceConfig(scenario);
-  const walkProbability: (number | null)[] = trips.map(() => null);
-  if (!config.enabled) return { trips: trips as TripRequest[], walkProbability };
+): number[][] {
+  if (!modeChoiceConfig(scenario).enabled) return [];
   const byPerson = new Map<string, number[]>();
   const order = trips
     .map((_, id) => id)
@@ -123,33 +112,37 @@ export function chooseModes(
     if (chain) chain.push(id);
     else byPerson.set(personId, [id]);
   }
-  let result: TripRequest[] | null = null;
-  for (const [personId, chain] of byPerson) {
+  const tours: number[][] = [];
+  for (const chain of byPerson.values()) {
     const home = trips[chain[0]!]!.originPlaceId;
-    let preferences: ModePreferences | undefined;
-    for (let start = 0; start < chain.length;) {
+    for (let start = 0; start < chain.length; ) {
       let end = start;
       while (end < chain.length - 1 && trips[chain[end]!]!.destinationPlaceId !== home) end++;
       const tour = chain.slice(start, end + 1);
       start = end + 1;
-      if (trips[tour[0]!]!.originPlaceId !== home || !tour.every((id) => eligible(trips[id]!)))
-        continue;
-      preferences ??= modePreferences(scenario.demand.seed, personId, config);
-      const p = modeProbabilities(inputs(tour[0]!), preferences, config);
-      const pWalk = p.walk ?? 0;
-      for (const id of tour) walkProbability[id] = pWalk;
-      if (modeDraw(scenario.seed, trips[tour[0]!]!.id) >= pWalk) continue;
-      result ??= trips.slice();
-      for (const id of tour) {
-        const trip: TripRequest = {
-          ...trips[id]!,
-          mode: 'walk',
-          legs: trips[id]!.legs.map((leg) => ({ ...leg, mode: 'walk' })),
-        };
-        delete trip.carId;
-        result[id] = trip;
-      }
+      if (trips[tour[0]!]!.originPlaceId === home && tour.every((id) => eligible(trips[id]!)))
+        tours.push(tour);
     }
   }
-  return { trips: result ?? (trips as TripRequest[]), walkProbability };
+  return tours;
+}
+
+/** A tour's choice from the inputs at its first departure: the probability of walking, and
+ * whether the tour walks by its first trip's own draw. */
+export function chooseTour(scenario: Scenario, firstTrip: TripRequest, inputs: ModeInputs) {
+  const config = modeChoiceConfig(scenario);
+  const preferences = modePreferences(scenario.demand.seed, firstTrip.personId!, config);
+  const walkProbability = modeProbabilities(inputs, preferences, config).walk ?? 0;
+  return { walkProbability, walk: modeDraw(scenario.seed, firstTrip.id) < walkProbability };
+}
+
+/** A car trip as part of a tour that walks: every leg on foot, no household car. */
+export function walkTrip(trip: TripRequest): TripRequest {
+  const walked: TripRequest = {
+    ...trip,
+    mode: 'walk',
+    legs: trip.legs.map((leg) => ({ ...leg, mode: 'walk' })),
+  };
+  delete walked.carId;
+  return walked;
 }

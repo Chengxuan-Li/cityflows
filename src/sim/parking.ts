@@ -1696,6 +1696,34 @@ export function createParking(
     noOriginCar: (id: number) => !!noOriginCar[id],
     /** The car's previous trip, whoever drove it (TASK-129), or -1. */
     carBefore: (id: number) => previous[id]!,
+    /** TASK-173: a tour that chose to walk as it departed leaves its car where it is. Its trips
+     * leave the car's chain, whose trips before and after it both meet at home, and when the tour
+     * began the car's day, its starting place passes to the car's next trip. */
+    walked(tour: readonly number[]) {
+      const first = tour[0]!,
+        last = tour.at(-1)!;
+      for (let i = 1; i < tour.length; i++)
+        if (previous[tour[i]!] !== tour[i - 1]) throw new Error('A walked tour left its car chain');
+      const before = previous[first]!,
+        after = nextTrip[last]!;
+      if (before !== -1) nextTrip[before] = after;
+      if (after !== -1) {
+        previous[after] = before;
+        if (before === -1) {
+          origins[after] = origins[first]!;
+          originSpaces[after] = originSpaces[first]!;
+          noOriginCar[after] = noOriginCar[first]!;
+        }
+      }
+      const slot = originSpaces[first]!;
+      if (before === -1 && slot !== -1) stockCar[slot] = after;
+      for (const id of tour) {
+        previous[id] = nextTrip[id] = -1;
+        origins[id] = originSpaces[id] = -1;
+        noOriginCar[id] = 0;
+      }
+      cachedHash = undefined;
+    },
     ready(id: number) {
       const before = previous[id]!;
       return (
@@ -1802,6 +1830,11 @@ export function createParking(
       const c = compiled.connectors[connector]!,
         f = compiled.parking[c.parking ?? -1];
       return f?.kind !== 'garage' && (f?.spaces ?? []).some((i) => spaces[i]!.manoeuvre);
+    },
+    /** TASK-173: room for one more car now, counting cars on their way (TASK-125). */
+    hasRoom: (facility: number) => {
+      const f = compiled.parking[facility]!;
+      return soft(f) || occupied[facility]! + enRoute[facility]! < f.capacity;
     },
     full(connector: number, id = -1) {
       const facility = compiled.connectors[connector]!.parking;
