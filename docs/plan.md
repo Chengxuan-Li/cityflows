@@ -189,7 +189,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | done 2026-11-13 |
 | [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
-| [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | in progress (Claude Code subagent) |
+| [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | done 2026-11-13 (pk:1475 left) |
 | [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | in progress (Claude Code subagent) |
 | [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | queued (after the UI merge) |
 | [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | queued (after the UI merge) |
@@ -3839,6 +3839,22 @@ limits: at least 4,769 completed, 0 stalled heads. With main at zero gridlocks, 
 baseline would allow none, so the lead added a floor: gridlock at most max(1.5 x baseline, 5). This
 changes the gate's formula and is flagged for the owner's review; T63's absolute floor of 3,571 is
 unchanged.
+
+TASK-164 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): TASK-156's departure-side
+leftovers. (1) A bay gets its lane departure when that departure passes at least one exit, keeping
+every exit it misses as a lot exit when that exit's hold is clear; the departure carries the draw
+share of the exits it passes (pk:2056 bays 0 to 5 keep c:10872; pk:2052's 50 departure bays are
+again offered their missed exits). (2) An exit counts as clear only if the hold the car actually
+takes is clear of each usable aisle-lane stretch and drivable aisle movement, lane ends respected
+(pk:1487's c:2640 drops out for 59 bays). (3) pk:1475 left as is: no pose clear of both r:1572 and
+r:536 (a car 0.70 m short), no lane car can enter r:1572, so the overlap is only drawn. (4) A bay's
+departure keeps its reversing room from arriving lot cars in its lane (synthetic regression 112 to 0
+conflict samples). (5) An arriving car holds the street lane until its body clears: entrance
+overlaps 63 pairs to 53, at no gate cost. Census: Munich aisle holds 48 to 0, Sindelfingen 232 to 52
+(all pk:1475). Departure connectors 109 to 126; eight Munich compile pins moved for the 17 new
+connectors only; route records byte-identical; `src/sim/connectors.ts` touched for the exit draw.
+Lead merge onto main with TASK-113 and baseline reset 2: gate (choice off) 5,312 / 0 / 0 / 0, mode
+share guard 2,730 / 0 / 0, T53, sim and demand unit tests (462), lint and format pass.
 
 ## Owner decisions log
 

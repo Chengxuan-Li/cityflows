@@ -1524,14 +1524,18 @@ reach their access point during the leave duration.
 Curve progress is eased, and snapshots carry the moving body throughout the handover.
 
 A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
-and becomes `in_lot` (counted among driving trips). TASK-156: it keeps `minGapM` clear of lane
-cars ahead on its lot's aisle lanes and their joining movements, other than cars bound for the
-lot (their admission orders them). On a public aisle, which
+and becomes `in_lot` (counted among driving trips). TASK-164: from a street it holds the lane,
+as a kerbside arrival does, until its body has left the lane's band (lane ends respected).
+TASK-156: it keeps `minGapM` clear of lane cars ahead on its lot's aisle lanes and their joining
+movements, other than cars bound for the lot (their admission orders them). On a public aisle, which
 through traffic drives, it is a lane's occupant while its body is inside that lane's band, at the
 farthest station its body reaches there, so lane cars follow it and departures' gap checks see
 it; it enters such a band only with the following gap ahead and the braking distance of the car
 behind, and an entry on such a lane keeps it in the lane. A private aisle's lane cars are
-departures from its bays, which do not yet check lot arrivals. It follows its local shortest path at
+departures from its bays; TASK-164: such a departure keeps its reversing room (its swept lane
+stations and `minGapM`) from every arriving lot car whose body is in its lane's band without
+being the lane's occupant, now or anywhere along its path at `lotSpeedMps` during
+`leaveManoeuvreS`. It follows its local shortest path at
 `lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
 across it; tied approaches use distance, then id. Narrow local paths admit one entry cohort of
 arrivals at a time to prevent opposing cars deadlocking. TASK-153: departures, including one
@@ -1566,7 +1570,13 @@ checks; one turning in from a crossed lane stops the spawn gap short of its span
 departure's spawn gap (with the reversing room ahead) while parked, is inserted there at speed 0,
 reverses out over `leaveManoeuvreS` and drives the aisle as a lane vehicle; it never starts in the
 lot. A lot exit whose drive-out has no pose clear of its lane is offered only when no other exit
-is. Gridlock recovery
+is. TASK-164: nor is one whose hold stands, lane ends respected, in the stretch of a lot aisle lane
+a lane car can stand in (from where one enters it, by a movement or else its first spawning
+connector, to its end if it leads on, else its last connector) or in a drivable movement joining
+the aisle lanes. A bay on an aisle lane that carries none of its exits gets a departure when that
+lane passes at least one of them; the bay keeps every exit its departure does not pass
+(`departureMisses`) as a lot exit where that exit's hold is clear, and the departure carries the
+draw share of the exits it passes, so each exit keeps its share. Gridlock recovery
 never applies inside a lot. Trucks and buses use garages only; garage admission and stock
 rules are unchanged.
 

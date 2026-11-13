@@ -4,8 +4,11 @@ import { defaultScenario } from '../../src/fixtures/scenarios';
 import { compile, type CompiledCity } from '../../src/network';
 import { allocateId, type City, type TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
-import { bodyClearLane } from '../../src/sim/manoeuvre';
+import { departureMisses } from '../../src/network/parking';
+import { bodyClearLane, bodyClearOf } from '../../src/sim/manoeuvre';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
+import { createParking } from '../../src/sim/parking';
+import { createVehicles } from '../../src/sim/vehicle';
 
 type Pose = { x: number; y: number; heading: number };
 const { lengthM, widthM } = DEFAULT_SIM_PARAMS.vehicleClasses.car;
@@ -105,7 +108,7 @@ function aisleWorld(kind: 'two-way' | 'one-way', westExit = false) {
           ? [
               connector(aisles[0]!, 0, 'in'),
               connector(aisles[1]!, 110, 'out'),
-              ...(westExit ? [connector(west, 192, 'out')] : []),
+              ...(westExit ? [connector(west, 186, 'out')] : []),
             ]
           : [],
       shape: {
@@ -191,13 +194,62 @@ test('TASK-156 a bay on the dead-end half of a two-way aisle leaves into the oth
   expect(engine.inspect(1)!.state).toBe('completed');
 });
 
-test('TASK-156 a bay keeps its lot drive-out when the aisle lane beside it does not pass every exit', () => {
+test('TASK-164 a bay whose aisle departure misses an exit keeps that exit, and each exit keeps its share of the draw', () => {
   const w = aisleWorld('two-way', true);
+  w.city.parking![w.id]!.occupancyAtStart = 1;
   const net = compiled(w.city);
   const lot = net.parking[net.index.parking.get(w.id)!]!;
+  const through = lane(net, w.aisles[1]!);
+  const west = lot.connectorsOut.find((c) => net.connectors[c]!.lane !== through.idx)!;
+  const street = net.lanes[net.connectors[west]!.lane]!;
   expect(lot.connectorsOut.length).toBe(2);
   expect(lot.spaces!.length).toBeGreaterThan(20);
-  expect(lot.spaces!.every((i) => net.parkingSpaces![i]!.departure === undefined)).toBe(true);
+  // Every bay leaves into the through half, which passes the aisle exit but not the west one.
+  for (const i of lot.spaces!) {
+    expect(net.connectors[net.parkingSpaces![i]!.departure!]!.lane).toBe(through.idx);
+    expect(departureMisses(net, i)).toEqual([west]);
+  }
+  const trips = Array.from({ length: 16 }, (_, i) =>
+    trip(`leave:${i}`, w.shop, w.homeIn, 160 + i * 25),
+  );
+  const scenario = { ...defaultScenario('grid5x5', 164), startS: 100, endS: 2500 };
+  const vehicles = createVehicles(trips.length, net.lanes.length, net.movements.length);
+  const parking = createParking(net, trips, scenario, DEFAULT_SIM_PARAMS, vehicles);
+  for (let id = 0; id < trips.length; id++) {
+    const departure = net.parkingSpaces![parking.location(id, true).space]!.departure!;
+    expect(parking.exits(id, [])).toEqual([departure, west]);
+    expect([departure, west].map((c) => parking.exitShare(id, c))).toEqual([30, 30]);
+  }
+  const engine = createEngine();
+  engine.load({ compiled: net, trips, scenario });
+  const lotExit = new Set<number>();
+  for (let step = 0; step < 24000; step++) {
+    engine.step();
+    const s = engine.snapshot();
+    for (let at = 0; at < s.count; at++) {
+      const detail = engine.inspect(s.id[at]!)!;
+      if (detail.parkingPhase === 'drive_out') lotExit.add(s.id[at]!);
+      // A car leaving by the west exit waits clear of the street and of the through half, where
+      // lane cars drive (it may touch the dead-end half only past the entry, where none can).
+      if (detail.parkingPhase === 'exit')
+        for (const band of [street, through])
+          expect(
+            bodyClearOf(
+              { x: s.x[at]!, y: s.y[at]!, heading: s.heading[at]! },
+              band,
+              lengthM,
+              widthM,
+            ),
+            `car ${s.id[at]} holds in ${band.id}`,
+          ).toBe(true);
+    }
+    if (trips.every((_, i) => ['completed', 'failed'].includes(engine.inspect(i + 1)?.state ?? '')))
+      break;
+  }
+  // Both ways out are used.
+  expect(lotExit.size).toBeGreaterThan(0);
+  expect(lotExit.size).toBeLessThan(trips.length);
+  expect(trips.every((_, i) => engine.inspect(i + 1)!.state === 'completed')).toBe(true);
 });
 
 test('TASK-156 lot arrivals on an aisle lane never overlap the cars queued in it, and every car arrives', () => {
@@ -240,5 +292,66 @@ test('TASK-156 lot arrivals on an aisle lane never overlap the cars queued in it
   expect(samples).toBeGreaterThan(100);
   expect(overlaps).toBe(0);
   expect(engine.metrics().trips.failed).toBe(0);
+  expect(trips.every((_, i) => engine.inspect(i + 1)!.state === 'completed')).toBe(true);
+});
+
+test('TASK-164 on a private aisle a bay departure never starts onto or just ahead of an arriving lot car', () => {
+  const w = aisleWorld('one-way');
+  for (const road of w.aisles) road.access = { all: 'private' };
+  w.city.parking![w.id]!.occupancyAtStart = 0.5;
+  const net = compiled(w.city);
+  const lot = net.parking[net.index.parking.get(w.id)!]!;
+  expect(lot.spaces!.every((i) => net.parkingSpaces![i]!.departure !== undefined)).toBe(true);
+  const scenario = {
+    ...defaultScenario('grid5x5', 164),
+    startS: 100,
+    endS: 2500,
+    simParams: { streetParkingShare: 0 },
+  };
+  const arrivals = Array.from({ length: 12 }, (_, i) =>
+    trip(`arrive:${i}`, w.southOut, w.shop, 100 + i * 6),
+  );
+  const departures = Array.from({ length: 12 }, (_, i) =>
+    trip(`leave:${i}`, w.shop, w.homeIn, 103 + i * 6),
+  );
+  const trips = [...arrivals, ...departures];
+  const engine = createEngine();
+  engine.load({ compiled: net, trips, scenario });
+  const arriving = new Set(arrivals.map((_, i) => i + 1));
+  const started = new Map<number, number>();
+  let samples = 0,
+    conflicts = 0;
+  for (let step = 0; step < 24000; step++) {
+    engine.step();
+    const s = engine.snapshot();
+    const poses = new Map<number, Pose>();
+    for (let i = 0; i < s.count; i++)
+      poses.set(s.id[i]!, { x: s.x[i]!, y: s.y[i]!, heading: s.heading[i]! });
+    for (const [id, pose] of poses) {
+      const detail = engine.inspect(id)!;
+      if (arriving.has(id) || detail.parkingPhase !== 'leave') continue;
+      if (!started.has(id)) started.set(id, engine.timeS);
+      if (engine.timeS - started.get(id)! > 4) continue;
+      // While it backs out, no arriving lot car is within the following gap of its body along
+      // the aisle, nor overlaps it.
+      for (const other of arriving) {
+        const theirs = poses.get(other);
+        const phase = engine.inspect(other)?.parkingPhase;
+        if (!theirs || (phase !== 'drive_in' && phase !== 'park')) continue;
+        samples++;
+        const grown = {
+          x: theirs.x + Math.cos(theirs.heading) * DEFAULT_SIM_PARAMS.idm.minGapM,
+          y: theirs.y + Math.sin(theirs.heading) * DEFAULT_SIM_PARAMS.idm.minGapM,
+          heading: theirs.heading,
+        };
+        if (overlap(pose, theirs) || overlap(pose, grown)) conflicts++;
+      }
+    }
+    if (trips.every((_, i) => ['completed', 'failed'].includes(engine.inspect(i + 1)?.state ?? '')))
+      break;
+  }
+  expect(started.size).toBe(departures.length);
+  expect(samples).toBeGreaterThan(0);
+  expect(conflicts).toBe(0);
   expect(trips.every((_, i) => engine.inspect(i + 1)!.state === 'completed')).toBe(true);
 });
