@@ -164,6 +164,12 @@ export function createRailCrossings(
     for (const span of f.spans ?? [])
       spansBySegment[bucket(span.segment)]!.push({ facility, from: span.fromM, to: span.toM });
   });
+  /** Segments with a stop marking or a span: most of a path has neither (TASK-176). */
+  const marked = Uint8Array.from(stopsBySegment, (stops, b) =>
+    Number(stops.length > 0 || spansBySegment[b]!.length > 0),
+  );
+  /** Per vehicle in `roadOccupancy`: the facilities its body overlaps. */
+  const bodyInside = new Uint8Array(facilities.length);
   const pathStops = new Float64Array(facilities.length);
   const pathStarts = new Float64Array(facilities.length);
   const pathEnds = new Float64Array(facilities.length);
@@ -265,8 +271,9 @@ export function createRailCrossings(
     pathStarts.fill(Infinity);
     pathEnds.fill(-Infinity);
     for (let s = 0; s < segments.length; s++) {
-      const b = bucket(segments[s]!),
-        offset = offsets[s]!;
+      const b = bucket(segments[s]!);
+      if (!marked[b]) continue;
+      const offset = offsets[s]!;
       for (const marking of stopsBySegment[b]!) {
         const at = offset + marking.at;
         if (at >= position - 1e-6)
@@ -366,6 +373,31 @@ export function createRailCrossings(
           const passed = field === previousSegment ? position > marking.at + 1e-6 : true;
           if (passed && previousPosition <= marking.at + 1e-6) committed[marking.facility]!.add(id);
         }
+        // The body, walked back once for every facility: the segments it covers.
+        bodyInside.fill(0);
+        let segment = field,
+          front = position,
+          rear = front - length(id),
+          step = vehicles.routeStep[id]!;
+        for (let back = 0; back < 32; back++) {
+          const b = bucket(segment);
+          if (marked[b])
+            for (const s of spansBySegment[b]!)
+              if (front >= s.from && rear <= s.to) bodyInside[s.facility] = 1;
+          if (rear >= 0) break;
+          const actual = history.trail[back];
+          if (actual !== undefined) {
+            if (segment >= 0) step--;
+            segment = actual;
+          } else if (segment < 0) segment = city.movements[-segment - 1]!.fromLane;
+          else {
+            const m = vehicles.route[id]?.movements[--step];
+            if (m === undefined) break;
+            segment = -m - 1;
+          }
+          front = segmentLength(segment);
+          rear += front;
+        }
         for (let f = 0; f < facilities.length; f++) {
           if (!served[f]) continue;
           const stop = pathStops[f]!,
@@ -381,34 +413,14 @@ export function createRailCrossings(
             near - position < (speed * speed) / (2 * brake) + params.idm.minGapM
           )
             committed[f]!.add(id);
-          let bodyInside = false;
-          let segment = field,
-            front = position,
-            rear = front - length(id),
-            step = vehicles.routeStep[id]!;
-          for (let back = 0; back < 32; back++) {
-            if (overlaps(f, segment, front, rear)) {
-              occupied[f] = 1;
-              bodyInside = true;
-              committed[f]!.add(id);
-            }
-            if (rear >= 0) break;
-            const actual = history.trail[back];
-            if (actual !== undefined) {
-              if (segment >= 0) step--;
-              segment = actual;
-            } else if (segment < 0) segment = city.movements[-segment - 1]!.fromLane;
-            else {
-              const m = vehicles.route[id]?.movements[--step];
-              if (m === undefined) break;
-              segment = -m - 1;
-            }
-            front = segmentLength(segment);
-            rear += front;
+          const inside = bodyInside[f] === 1;
+          if (inside) {
+            occupied[f] = 1;
+            committed[f]!.add(id);
           }
-          if (speed < 0.1 && !bodyInside && near > position + 1e-6) committed[f]!.delete(id);
+          if (speed < 0.1 && !inside && near > position + 1e-6) committed[f]!.delete(id);
           if (committed[f]!.has(id)) {
-            if (near < Infinity || bodyInside) occupied[f] = 1;
+            if (near < Infinity || inside) occupied[f] = 1;
             else committed[f]!.delete(id);
           }
         }
