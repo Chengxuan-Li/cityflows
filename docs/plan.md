@@ -3476,6 +3476,12 @@ no parking failures ([traffic run](https://github.com/Chengxuan-Li/cityflows/act
 The old 5,595 s circular wait no longer appears in the matched trace. An egress at
 the other ramp mouth can still delay admission while it waits for public traffic.
 
+Parking follow-up: an exiting car's visible body can reach a public lane before
+a passing car leaves enough room for it to merge. On the same authored lot, main
+before TASK-149 and the integrated build produced the same 1,476 overlapping
+footprint samples. The first occurred at 152.4 s. Track the physical merge
+separately from the repaired mapped entrances.
+
 ## Owner decisions log
 
 - 2026-11-12 (owner): run the SwiftShader rendering fix and remaining parking access checks in parallel with GPT-6.1 Sol high. Supply geometry shots for parking fixes. PR #1 and TASK-128 through TASK-130 stay held, and B56 stays deferred.
