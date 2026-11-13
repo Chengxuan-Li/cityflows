@@ -373,7 +373,7 @@ export interface DepartureDisplay {
   rows: string[];
 }
 const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-const kindLabel = { sbahn: 'S-Bahn', mainline: 'Train' } as const;
+const kindLabel = { sbahn: 'S-Bahn', mainline: 'Train', tram: 'Tram' } as const;
 
 /** What a platform's display shows at `timeS`: the next three departures from the timetable.
  * The timetable names no destinations, so rows give the direction the train leaves in. */

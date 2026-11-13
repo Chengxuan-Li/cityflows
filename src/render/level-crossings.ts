@@ -1,5 +1,7 @@
 import type { Vec2 } from '../geo/vec2';
 import type { LevelCrossing } from '../network/level-crossings';
+import type { RailGraph } from '../network/rail';
+import { headingAtDistance, pointAtDistance } from '../geo/polyline';
 
 export const crossingColors = {
   post: 0x68716b,
@@ -7,6 +9,7 @@ export const crossingColors = {
   white: 0xf5f1df,
   dark: 0x343b38,
   lamp: 0x8f3e38,
+  lit: 0xff5146,
   tram: 0xf1df9b,
 };
 export interface CrossingPart extends Vec2 {
@@ -17,6 +20,7 @@ export interface CrossingPart extends Vec2 {
   height: number;
   color: number;
   roll?: number;
+  kind?: 'arm' | 'lamp' | 'tram-signal';
 }
 export interface CrossingDrawing {
   layer: number;
@@ -36,10 +40,55 @@ export function crossingCounts(facilities: readonly LevelCrossing[]) {
   };
 }
 export const noLevelCrossings = crossingCounts([]);
-/** Both views consume these exact metres, headings and equipment dimensions. Gates stand open;
- * the visual delivery does not claim a train-protection state. */
-export function crossingDrawings(facilities: readonly LevelCrossing[]): CrossingDrawing[] {
-  return facilities.map((f) => {
+/** Closed tram crossings also distinguish a rail hold from permission to enter. */
+export function crossingAspect(state: number, timeS: number, railReady = false) {
+  return state === 0
+    ? 0
+    : 1 + (state - 1) * 2 + (state === 2 && railReady ? 2 : 0) + (Math.floor(timeS * 2) % 2);
+}
+export interface TramCrossingSignal {
+  pos: Vec2;
+  heading: number;
+}
+/** Tram-facing signals stand beside the track before its road conflict, never on internal track links. */
+export function tramCrossingSignals(f: LevelCrossing, graph?: RailGraph): TramCrossingSignal[] {
+  if (f.kind !== 'tram' || !graph) return [];
+  return graph.tracks.flatMap((t) => {
+    const from = f.nodes.includes(t.from),
+      to = f.nodes.includes(t.to);
+    if (
+      t.kind !== 'tram' ||
+      from === to ||
+      (from && t.preferredDirection === 'forward') ||
+      (to && t.preferredDirection === 'backward')
+    )
+      return [];
+    const outward =
+      headingAtDistance(t.line, t.cumulative, from ? 0 : t.lengthM) + (from ? 0 : Math.PI);
+    const setback = Math.max(
+      3,
+      ...f.approaches.map(
+        (a) => a.halfWidthM / Math.max(0.25, Math.abs(Math.sin(outward - a.heading))) + 3,
+      ),
+    );
+    const s = from ? Math.min(setback, t.lengthM - 0.5) : Math.max(0.5, t.lengthM - setback);
+    const p = pointAtDistance(t.line, t.cumulative, s),
+      heading = headingAtDistance(t.line, t.cumulative, s) + (from ? Math.PI : 0);
+    return [
+      { pos: { x: p.x - Math.sin(heading) * 2.2, y: p.y + Math.cos(heading) * 2.2 }, heading },
+    ];
+  });
+}
+/** Both views consume these exact metres, headings and snapshot-controlled aspects. */
+export function crossingDrawings(
+  facilities: readonly LevelCrossing[],
+  states?: Uint8Array,
+  timeS = 0,
+  railReady?: Uint8Array,
+  tramSignals?: readonly (readonly TramCrossingSignal[])[],
+): CrossingDrawing[] {
+  return facilities.map((f, index) => {
+    const state = states?.[index] ?? 0;
     const drawing: CrossingDrawing = { layer: f.layer, parts: [], marks: [], crosses: [] };
     for (const a of f.approaches) {
       const c = Math.cos(a.heading),
@@ -54,7 +103,9 @@ export function crossingDrawings(facilities: readonly LevelCrossing[]): Crossing
         color: number,
         heading = a.heading,
         roll = 0,
-      ) => drawing.parts.push({ ...pos, heading, length, width, bottom, height, color, roll });
+        kind?: CrossingPart['kind'],
+      ) =>
+        drawing.parts.push({ ...pos, heading, length, width, bottom, height, color, roll, kind });
       add(a.post, 0.16, 0.16, 0, 3.2, crossingColors.post);
       drawing.marks.push({
         a: { x: a.pos.x - right.x * a.halfWidthM, y: a.pos.y - right.y * a.halfWidthM },
@@ -91,10 +142,15 @@ export function crossingDrawings(facilities: readonly LevelCrossing[]): Crossing
               y: a.post.y - s * 0.14 + right.y * lateral,
             },
             0.04,
-            f.kind === 'tram' ? 0.32 : 0.22,
+            0.22,
             2.03,
-            f.kind === 'tram' ? 0.07 : 0.2,
-            f.kind === 'tram' ? crossingColors.tram : crossingColors.lamp,
+            0.2,
+            state !== 0 && (count === 1 || Math.floor(timeS * 2) % 2 === i)
+              ? crossingColors.lit
+              : crossingColors.lamp,
+            a.heading,
+            0,
+            'lamp',
           );
         }
       }
@@ -102,18 +158,61 @@ export function crossingDrawings(facilities: readonly LevelCrossing[]): Crossing
       if (a.barrier) {
         const gate = { x: a.post.x + c * 0.8, y: a.post.y + s * 0.8 };
         add(gate, 0.65, 0.65, 0, 0.9, crossingColors.post);
-        // Upright striped arm: no closure is implied until train interaction is implemented.
-        const length = Math.min(6, 2 * a.halfWidthM + 0.8);
+        const length = Math.min(6, 2 * a.halfWidthM + 0.8),
+          roll = state === 2 ? 0 : Math.PI / 2,
+          side = Math.sign((a.post.x - a.pos.x) * right.x + (a.post.y - a.pos.y) * right.y),
+          inward = { x: -right.x * side, y: -right.y * side },
+          heading = Math.atan2(inward.y, inward.x);
         for (let h = 0; h < length; h += 0.5)
           add(
-            gate,
-            0.16,
-            0.22,
-            0.9 + h,
+            {
+              x: gate.x + inward.x * (h + 0.25) * Math.cos(roll),
+              y: gate.y + inward.y * (h + 0.25) * Math.cos(roll),
+            },
             Math.min(0.5, length - h),
+            0.22,
+            0.9 + (h + 0.25) * Math.sin(roll) - 0.08,
+            0.16,
             Math.round(h * 2) % 2 ? crossingColors.red : crossingColors.white,
+            heading,
+            roll,
+            'arm',
           );
       }
+    }
+    for (const signal of tramSignals?.[index] ?? []) {
+      const ready = state === 2 && railReady?.[index] === 1;
+      const add = (
+        length: number,
+        width: number,
+        bottom: number,
+        height: number,
+        color: number,
+        kind?: CrossingPart['kind'],
+      ) =>
+        drawing.parts.push({
+          ...signal.pos,
+          heading: signal.heading,
+          length,
+          width,
+          bottom,
+          height,
+          color,
+          kind,
+        });
+      add(0.16, 0.16, 0, 3.2, crossingColors.post);
+      add(0.24, 0.52, 1.8, 0.6, crossingColors.dark);
+      drawing.parts.push({
+        x: signal.pos.x - Math.cos(signal.heading) * 0.14,
+        y: signal.pos.y - Math.sin(signal.heading) * 0.14,
+        heading: signal.heading,
+        length: 0.04,
+        width: ready ? 0.07 : 0.32,
+        bottom: ready ? 1.9 : 2.03,
+        height: ready ? 0.32 : 0.07,
+        color: crossingColors.tram,
+        kind: 'tram-signal',
+      });
     }
     return drawing;
   });
