@@ -18,6 +18,7 @@ import { bedWidthM, railGeometry, type RailShape } from '../render/rail-geometry
 import type { CityGeometry, Pick } from '../render/types';
 import type { Vec2 } from '../geo/vec2';
 import type { cityHeights } from './heights';
+import { RailPaintCache } from './rail-paint-cache';
 import { distance, headingAtDistance, nearestOnPolyline, pointAtDistance } from '../geo/polyline';
 
 type Track = RailGraph['tracks'][number];
@@ -508,6 +509,8 @@ export function buildRail(
   below.visible = false;
   const structures = rail && buildStructures(city, rail, heights);
   if (structures) group.add(structures.solidMesh, structures.tubeMesh);
+  const paintCache = new RailPaintCache(meshes[0]!);
+  group.add(paintCache.mesh);
   if (structures) {
     const material = structures.tubeMesh.material as MeshLambertMaterial;
     material.transparent = true;
@@ -532,7 +535,14 @@ export function buildRail(
       attribute.needsUpdate = true;
     });
   };
-  return { group, select, setBelowGround, heights: rail, structures: structures?.counts };
+  return {
+    group,
+    select,
+    setBelowGround,
+    paintCache,
+    heights: rail,
+    structures: structures?.counts,
+  };
 }
 
 /** Screen-space picking follows elevated rail geometry rather than projecting to the ground. */
