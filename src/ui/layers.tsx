@@ -6,6 +6,7 @@ import { treeContext } from '../render/street';
 import type { LayerVisibility } from '../render/types';
 import { useAppStore } from './store';
 import { LightingControls } from './lighting';
+import { AppearanceControls } from './appearance';
 
 const labels: [keyof LayerVisibility, string][] = [
   ['basemap', 'Basemap'],
@@ -94,6 +95,7 @@ export function Layers() {
         </label>
       )}
       <LightingControls />
+      <AppearanceControls />
       {labels
         .filter(
           ([key]) =>

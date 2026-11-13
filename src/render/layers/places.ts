@@ -24,6 +24,7 @@ export function drawPlaces(
   shapes: readonly Place['shape'][],
   connectorGraphics: Graphics = graphics,
   fillGraphics: Graphics = graphics,
+  placeBase?: number,
 ): (zoom: number) => void {
   for (const connector of city.connectors) {
     const { centroid } =
@@ -50,7 +51,7 @@ export function drawPlaces(
       points.push(target);
       local = { kind: 'point', pos: { x: 0, y: 0 } };
     }
-    const { fill, edge } = placeColors(kind);
+    const { fill, edge } = placeColors(kind, placeBase);
     // A parking area's place is its outline: the lot's aisles and stalls (TASK-104) lie inside.
     if (kind === 'parking' && local.kind === 'polygon')
       placePath(target, local, kind, Infinity).stroke({ color: edge, width: 1.2 });

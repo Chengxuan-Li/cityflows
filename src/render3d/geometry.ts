@@ -1,10 +1,10 @@
-import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
+import { BufferGeometry, Color, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
 import { crossingStripes } from '../render/layers/roads';
 import { signalLayout } from './signals';
-import { placeColors } from '../render/style';
+import { mapPalettes, placeColors, type MapPalette } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
 import { buildMarkings, goreTriangles, triangleHeight } from './markings';
@@ -97,7 +97,12 @@ function roadSurface(surfaces: number[], slabs: number[], road: CRoad, height: R
     }
 }
 
-export function buildGeometry(city: CompiledCity, source: CityGeometry, omitContextGround = false) {
+export function buildGeometry(
+  city: CompiledCity,
+  source: CityGeometry,
+  omitContextGround = false,
+  palette: MapPalette = mapPalettes.light,
+) {
   city = paintedCity(city);
   const heights = cityHeights(city, source);
   const surfaces: number[] = [],
@@ -172,9 +177,9 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
           }));
     const start = places.length;
     polygon(places, ring, () => -0.02);
-    const color = placeColors(place.kind).fill;
-    for (let i = start; i < places.length; i += 3)
-      colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
+    // Vertex colours are linear (TASK-166: sRGB bytes read as linear washed the dark tints out).
+    const { r, g, b } = new Color(placeColors(place.kind, palette.placeBase).fill);
+    for (let i = start; i < places.length; i += 3) colors.push(r, g, b);
   }
   let placeGeometry = buffer(places);
   placeGeometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
@@ -210,6 +215,7 @@ export function buildGeometry(city: CompiledCity, source: CityGeometry, omitCont
     ),
     heights.terrain,
     !omitContextGround,
+    palette,
   );
   if (source.terrain) context.ground = indexTerrain(context.ground);
   const surfaceGeometry = terrainBuffer(surfaces, landSurfaces, true, flatAreas);

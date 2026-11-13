@@ -337,13 +337,13 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
                     pointAtDistance(lane.polyline, lane.cumulative, distance),
                     pointAtDistance(lane.polyline, lane.cumulative, end),
                   ])}
-                  stroke="#dcded2"
+                  style={{ stroke: 'var(--schematic-road)' }}
                   strokeWidth={lane.widthM}
                   strokeLinecap="round"
                 />
               );
             })}
-          <circle r={node.radiusM} fill="#e8e8dc" />
+          <circle r={node.radiusM} style={{ fill: 'var(--schematic-node)' }} />
           {crossings.map((crossing) => {
             const checked = walkGreen(active, crossing);
             return (

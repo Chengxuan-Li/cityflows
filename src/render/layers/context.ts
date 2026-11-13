@@ -1,9 +1,12 @@
 import { BufferImageSource, Container, FillPattern, Graphics, Matrix, Texture } from 'pixi.js';
 import type { ContextFeature } from '../../schema';
 import { groundSurface, surfaceGrain, type Surface } from '../vegetation';
-import { style } from '../style';
+import { mapPalettes, style, type MapPalette } from '../style';
 
-export function drawContext(features: readonly ContextFeature[]) {
+export function drawContext(
+  features: readonly ContextFeature[],
+  palette: MapPalette = mapPalettes.light,
+) {
   const container = new Container();
   container.eventMode = 'none';
   const patterns = new Map<Surface, FillPattern>();
@@ -50,8 +53,8 @@ export function drawContext(features: readonly ContextFeature[]) {
     if (feature.kind === 'area') {
       const color =
         feature.class === 'landuse'
-          ? (style.context.landuseSub[feature.sub ?? ''] ?? style.context.landuse)
-          : style.context[feature.class];
+          ? (palette.context.landuseSub[feature.sub ?? ''] ?? palette.context.landuse)
+          : palette.context[feature.class];
       const surface = groundSurface(feature);
       shapes.poly(feature.rings[0]!).fill(
         surface
@@ -67,11 +70,11 @@ export function drawContext(features: readonly ContextFeature[]) {
       if (feature.rings.length > 1) shapes.cut();
       if (feature.class === 'building')
         for (const ring of feature.rings)
-          shapes.poly(ring).stroke({ color: style.context.buildingEdge, width: 0.2 });
+          shapes.poly(ring).stroke({ color: palette.context.buildingEdge, width: 0.2 });
     } else {
       const water = feature.class === 'waterway';
       shapes.poly(feature.line, false).stroke({
-        color: feature.class === 'waterway' ? style.context.water : style.context[feature.class],
+        color: feature.class === 'waterway' ? palette.context.water : style.context[feature.class],
         width: water ? (feature.widthM ?? 2) : feature.class === 'tram' ? 0.45 : 0.7,
         cap: 'round',
         join: 'round',

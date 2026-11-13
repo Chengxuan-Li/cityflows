@@ -21,7 +21,7 @@ import { parallelOffset } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { ContextFeature } from '../schema';
 import { groundSurface, surfaceGrain, type Surface } from '../render/vegetation';
-import { style } from '../render/style';
+import { mapPalettes, style, type MapPalette } from '../render/style';
 import { buildingRingHash, buildingSeed, lampColors, windowLitGlsl } from '../render/lighting';
 import { drape, lowestGround, triangulate, type Terrain } from './terrain';
 import { buildRoof } from './roofs';
@@ -84,14 +84,14 @@ function facade(feature: Building, low: number, high: number) {
   return windowInfo(geometry, bands, buildingSeed(feature.rings[0]!));
 }
 
-function buildingColour(feature: Building) {
-  if (feature.colour) return mutedColour(feature.colour, style.context.building);
-  const material = Object.hasOwn(style.buildings.walls, feature.material ?? '')
-    ? style.buildings.walls[feature.material!]
+function buildingColour(feature: Building, palette: MapPalette) {
+  if (feature.colour) return mutedColour(feature.colour, palette.context.building);
+  const material = Object.hasOwn(palette.buildings.walls, feature.material ?? '')
+    ? palette.buildings.walls[feature.material!]
     : undefined;
   if (material !== undefined) return material;
   const hash = buildingRingHash(feature.rings[0]!);
-  return new Color(style.context.building).multiplyScalar(0.96 + (hash % 9) / 100).getHex();
+  return new Color(palette.context.building).multiplyScalar(0.96 + (hash % 9) / 100).getHex();
 }
 
 function mutedColour(colour: string, base: number) {
@@ -101,7 +101,7 @@ function mutedColour(colour: string, base: number) {
 /** One facade shader for the whole batch; roof and canopy vertices carry a zero pitch. After
  * dark (`setBuildingLights`) the same window grid lights up cell by cell from each building's
  * seed, by the pattern of `windowLit` in `render/lighting.ts`. */
-export function buildingMaterial() {
+export function buildingMaterial(windowColour = style.buildings.window as number) {
   const material = new MeshLambertMaterial({ vertexColors: true });
   material.userData.lights = {
     windowShare: { value: 0 },
@@ -109,7 +109,7 @@ export function buildingMaterial() {
     litColour: { value: new Color(lampColors.window) },
   };
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.windowColour = { value: new Color(style.buildings.window) };
+    shader.uniforms.windowColour = { value: new Color(windowColour) };
     Object.assign(shader.uniforms, material.userData.lights);
     shader.vertexShader =
       'attribute vec3 windowInfo; varying vec3 vWindowInfo;\n' +
@@ -216,6 +216,7 @@ export function buildContext(
   features: readonly ContextFeature[],
   terrain?: Terrain,
   groundMeshes = true,
+  palette: MapPalette = mapPalettes.light,
 ) {
   const start = performance.now();
   const buildings: BufferGeometry[] = [],
@@ -251,7 +252,7 @@ export function buildContext(
         curveSegments: 1,
       }).rotateX(-Math.PI / 2);
       if (terrain?.grid) geometry.translate(0, lowestGround(feature.rings, terrain, true), 0);
-      buildings.push(paint(geometry, style.context.building, style.context.buildingEdge));
+      buildings.push(paint(geometry, palette.context.building, palette.context.buildingEdge));
       const canopy = feature.sub === 'roof';
       const minimum = feature.minHeightM ?? (canopy ? 3 : 0);
       const roofFeature = canopy
@@ -273,13 +274,13 @@ export function buildContext(
           }
         : feature;
       const roof = buildRoof(roofFeature);
-      const wallColour = buildingColour(feature);
+      const wallColour = buildingColour(feature, palette);
       const defaultRoof =
-        roof.shape === 'flat' ? style.buildings.flatRoof : style.buildings.pitchedRoof;
+        roof.shape === 'flat' ? palette.buildings.flatRoof : palette.buildings.pitchedRoof;
       const roofColour = feature.roof?.colour
         ? mutedColour(feature.roof.colour, defaultRoof)
-        : Object.hasOwn(style.buildings.roofs, feature.roof?.material ?? '')
-          ? style.buildings.roofs[feature.roof!.material!]!
+        : Object.hasOwn(palette.buildings.roofs, feature.roof?.material ?? '')
+          ? palette.buildings.roofs[feature.roof!.material!]!
           : defaultRoof;
       const parts = [windowInfo(paint(roof.roof, roofColour))];
       if (canopy) roof.infill.dispose();
@@ -312,8 +313,8 @@ export function buildContext(
       rings = feature.rings;
       color =
         feature.class === 'landuse'
-          ? (style.context.landuseSub[feature.sub ?? ''] ?? style.context.landuse)
-          : style.context[feature.class];
+          ? (palette.context.landuseSub[feature.sub ?? ''] ?? palette.context.landuse)
+          : palette.context[feature.class];
     } else {
       const width =
         feature.class === 'waterway'
@@ -327,7 +328,7 @@ export function buildContext(
           ...parallelOffset(feature.line, width / 2).reverse(),
         ],
       ];
-      color = feature.class === 'waterway' ? style.context.water : style.context[feature.class];
+      color = feature.class === 'waterway' ? palette.context.water : style.context[feature.class];
     }
     let geometry: BufferGeometry = new ShapeGeometry(shape(rings), 1)
       .toNonIndexed()
@@ -407,7 +408,11 @@ export function groundMaterial() {
 }
 
 /** Split the shared terrain by context boundaries, keeping one colour pass and exact heights. */
-export function buildTerrainGround(ground: BufferGeometry, features: readonly ContextFeature[]) {
+export function buildTerrainGround(
+  ground: BufferGeometry,
+  features: readonly ContextFeature[],
+  palette: MapPalette = mapPalettes.light,
+) {
   const order = {
     tree: -1,
     street_lamp: -1,
@@ -448,10 +453,12 @@ export function buildTerrainGround(ground: BufferGeometry, features: readonly Co
       rings = rings.map((ring, i) => (areaD(ring) > 0 === (i === 0) ? ring : [...ring].reverse()));
       const colour =
         feature.class === 'landuse'
-          ? (style.context.landuseSub[feature.sub ?? ''] ?? style.context.landuse)
+          ? (palette.context.landuseSub[feature.sub ?? ''] ?? palette.context.landuse)
           : feature.class === 'waterway'
-            ? style.context.water
-            : style.context[feature.class];
+            ? palette.context.water
+            : feature.kind === 'area'
+              ? palette.context[feature.class]
+              : style.context[feature.class];
       return [{ rings, color: new Color(colour) }];
     });
   const index = areas.length ? new Flatbush(areas.length) : undefined;
@@ -474,7 +481,7 @@ export function buildTerrainGround(ground: BufferGeometry, features: readonly Co
   const p = ground.getAttribute('position'),
     n = ground.getAttribute('normal');
   const count = ground.index?.count ?? p.count;
-  const background = new Color(style.background);
+  const background = new Color(palette.background);
   for (let i = 0; i < count; i += 3) {
     const ids = [0, 1, 2].map((j) => ground.index?.getX(i + j) ?? i + j);
     const vertices = ids.map((j) => ({ x: p.getX(j), y: p.getZ(j), h: p.getY(j) }));
@@ -486,7 +493,7 @@ export function buildTerrainGround(ground: BufferGeometry, features: readonly Co
     const det = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
     if (Math.abs(det) < 1e-8) {
       // Vertical excavation banks must survive the planar context overlay pass.
-      const color = new Color(style.context.buildingEdge);
+      const color = new Color(palette.context.buildingEdge);
       for (const target of [opaque, transparent])
         for (const j of ids) {
           target.positions.push(p.getX(j), p.getY(j), p.getZ(j));

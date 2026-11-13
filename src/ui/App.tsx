@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useState, type CSSProperties } from 'react';
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { RailInspector, TrainInspector } from './inspector/rail';
@@ -8,6 +8,7 @@ import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
 import { WalkerInspector } from './inspector/walker';
 import { PersonInspector } from './inspector/person';
+import { resolveAppearance, useAppearance } from './appearance-store';
 import { CommandMenu, ShortcutSheet } from './command-menu';
 import { installShortcuts } from './commands';
 import { CloseButton, ResizeHandle } from './controls';
@@ -17,6 +18,7 @@ import { StatusBar } from './run-bar';
 import { Sidebar } from './sidebar';
 import { useAppStore } from './store';
 import { TopBar } from './top-bar';
+import { useLighting } from './lighting-store';
 import { NodeTopologyActions } from './tools/topology-actions';
 
 function Inspector() {
@@ -129,7 +131,21 @@ function useStoredWidth(key: string, initial: number) {
   return [width, change] as const;
 }
 
+/** TASK-166: puts the resolved appearance on the root element, where app.css swaps the tokens. The
+ *  selector re-renders only when the answer changes, not on every clock tick. */
+function useDocumentAppearance() {
+  const { settings, systemDark } = useAppearance();
+  const lighting = useLighting((state) => state.lighting);
+  const dark = useAppStore(
+    (state) => resolveAppearance(settings, systemDark, lighting, state.run?.timeS).dark,
+  );
+  useLayoutEffect(() => {
+    document.documentElement.dataset.appearance = dark ? 'dark' : 'light';
+  }, [dark]);
+}
+
 export function App() {
+  useDocumentAppearance();
   useEffect(() => {
     if (window.cityflows) {
       window.cityflows.city = () => useAppStore.getState().session!.project.city;

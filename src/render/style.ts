@@ -284,9 +284,10 @@ const placeHues: Record<PlaceKind, number> = {
   other: 0xff2d55, // pink
 };
 
-export function placeColors(kind: PlaceKind) {
+/** `base` is the ground the tint is mixed from: white, or the dark appearance's (TASK-166). */
+export function placeColors(kind: PlaceKind, base = 0xffffff) {
   const hue = placeHues[kind];
-  return { fill: mixColor(0xffffff, hue, 0.3), edge: mixColor(0xffffff, hue, 0.62) };
+  return { fill: mixColor(base, hue, 0.3), edge: mixColor(base, hue, 0.62) };
 }
 
 /** Vehicles take their destination's hue from the macOS system colours, spread per destination
@@ -423,3 +424,78 @@ export const style = {
   minZoom: 0.00001,
   maxZoom: 32,
 } as const;
+
+/** TASK-166: the map's canvas, land use and buildings for each appearance. Light is TASK-162's
+ * palette. Dark (the chosen appearance, at every lighting preset, which then lights or darkens
+ * it) follows Apple Maps' dark style: a near-black canvas, buildings a step lighter
+ * than the ground, deep water and green, places as quiet tints of that ground, and paving toned
+ * down from near-white. Roads, markings, rail, vehicles and street furniture keep their real
+ * colours in both. */
+export interface MapPalette {
+  background: number;
+  /** The ground place tints are mixed from (`placeColors`). */
+  placeBase: number;
+  /** Sidewalk and footway paving, and the step hatching. */
+  walk: Record<'sidewalk' | 'footway' | 'steps', number>;
+  /** Map label inks and their halo (TASK-167), each ink at least 4.5:1 on the canvas, the place
+   * tints and the halo. */
+  label: Record<'street' | 'place' | 'area' | 'station' | 'halo', number>;
+  context: Record<
+    'building' | 'buildingEdge' | 'water' | 'green' | 'parking' | 'landuse',
+    number
+  > & {
+    landuseSub: Record<string, number>;
+  };
+  buildings: Record<'pitchedRoof' | 'flatRoof' | 'window', number> & {
+    walls: Record<string, number>;
+    roofs: Record<string, number>;
+  };
+}
+const darkBuilding = 0x3a3b3f,
+  darkFlatRoof = 0x434448,
+  darkPitchedRoof = 0x4a4241;
+/** A material's dark variant: the dark base with a trace of the material's own hue. */
+const darkMaterial = (base: number, colours: Record<string, number>) =>
+  Object.fromEntries(Object.entries(colours).map(([k, c]) => [k, mixColor(base, c, 0.14)]));
+export const mapPalettes: Record<'light' | 'dark', MapPalette> = {
+  light: {
+    background: style.background,
+    placeBase: 0xffffff,
+    walk: style.walk,
+    label: style.label,
+    context: style.context,
+    buildings: style.buildings,
+  },
+  dark: {
+    background: 0x222326,
+    placeBase: 0x2b2c30,
+    // Concrete in shade: a step below the asphalt so roads lead, light enough for pedestrians.
+    walk: { sidewalk: 0x8c8981, footway: 0x7f7c75, steps: 0x9a978f },
+    // Light inks on a halo darker than the canvas, so street names also read on the light asphalt.
+    label: { street: 0xe8e8ea, place: 0xd6d6da, area: 0xc6c6cc, station: 0x6fd3df, halo: 0x18191b },
+    context: {
+      building: darkBuilding,
+      buildingEdge: 0x4d4e53,
+      water: 0x1b3045,
+      green: 0x223628,
+      parking: 0x2e2f33,
+      landuse: 0x26272a,
+      landuseSub: {
+        path: 0x2d2e31,
+        residential: 0x27282b,
+        commercial: 0x2a2729,
+        retail: 0x2c2728,
+        industrial: 0x28292c,
+        railway: 0x29292b,
+        construction: 0x2b2a27,
+      },
+    },
+    buildings: {
+      walls: darkMaterial(darkBuilding, style.buildings.walls),
+      roofs: darkMaterial(darkFlatRoof, style.buildings.roofs),
+      pitchedRoof: darkPitchedRoof,
+      flatRoof: darkFlatRoof,
+      window: 0x23282e,
+    },
+  },
+};
