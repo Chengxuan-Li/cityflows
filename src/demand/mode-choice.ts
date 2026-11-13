@@ -25,8 +25,9 @@ export interface ModeInputs {
 
 /** TASK-174: the transit alternative's constants (no settings). In-vehicle time counts this many
  * times a minute walked or waited; each transfer costs this many minutes; the fare is a flat
- * expected cost per trip, between a short-trip ticket and nothing for pass holders (an assumption). */
-export const TRANSIT_CHOICE = { comfort: 1.1, transferMin: 5, fareEur: 1 };
+ * expected cost per trip: about a 2 EUR short-trip ticket for one trip in four, nothing for pass
+ * holders (an assumption). */
+export const TRANSIT_CHOICE = { comfort: 1.1, transferMin: 5, fareEur: 0.5 };
 
 /** The weights the transit router minimizes: the generalized cost without the fare, which is the
  * same for every plan. */
