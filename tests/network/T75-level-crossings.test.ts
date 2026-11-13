@@ -153,11 +153,13 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           '736ee70a649a46117a9ba163c118368808ca5b517f5a0348181f4b03c991932b',
           // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
-          'd60544cc5ac59f42e3c450648ea7e1e857ca915676886fee39a8568f1269c4ed',
+          // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+          'fc622028b94810bd2504bd037c7220a6689bdac96dae55765eb599f16393f1be',
         ]
       : [
           '36ead1d461cbee968be497791dcc660e529b81aba385ac33701c57b730a9e1ba',
-          'f27bfb37d71fd86db87c963c9797d048a9606617bea9ecfbc369fe316a550cea',
+          // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+          'b7f486223eefacc55413289953454c37c0e7d4cc562819fffc1adfc7069d2e9c',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

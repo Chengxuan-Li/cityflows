@@ -52,16 +52,19 @@ import { tierCities, unitTest } from '../tier';
 // stripped every pin equals 2df05a1's.
 const baseline = {
   grid: {
-    compile: '41664cabf1ab1d44115242181e2d531294b4cd516eb00209669329ad514b53f3',
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+    compile: '4156fecd6e9e525741099b24bb0441f5a3c3dfcaf3fd4fc6ebc26112c54ed3dc',
     arrows: '46a5ce9adeddd011af72c58a0c8ef9e9b315ad7f732ebfa71b2cff6c2d531748',
   },
   town: {
-    compile: '3c319559549227be144c8ccb3fa783d7d9ca9bd46c66ecb715cabf26a709fa0d',
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+    compile: '7f5bfb562f0080553f42f174074ca87c31bf68c8be869201caca4f9cc55c72a4',
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
-    compile: '9967a15554ad9d6da98de9aa33898fe23ca88883b9d92d5b716722fcc5362c46',
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+    compile: '010fb8548db036c37fec6759058fa4b2bc8bc522ccccb409b527c0881c690f5e',
     arrows: '29bd956f1a3e4825fe96236f91eb9bfbd94b07e62f23f9eff2f7f0e51621ba0a',
   },
   munich: {
@@ -70,7 +73,8 @@ const baseline = {
     // import without assignTramForms) every pin equals c3a6ec2's.
     // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
     // removed every pin equals 3e9951a's.
-    compile: '55fb3e2e9873d0c923a180226bf86b4a96f387f00dce6e0cdabafd04b866e5b7',
+    // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+    compile: '8d3210e1f9cc04bcd7c3cd0a8a18f25002e2efe0577d8596e8460b5646199fff',
     arrows: 'd7a4069aceff35d73a6c6596a536edac25dbb82c71b88fe1ef70cebd591b8a27',
   },
 } as const;

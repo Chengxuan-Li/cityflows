@@ -109,7 +109,7 @@ interface Provenance {
 interface Node {
   id: NodeId;
   pos: Vec2;
-  layer: number;           // from OSM `layer`; informational, connectivity is by shared ids
+  layer: number;           // grade, from OSM `layer` (TASK-175: compiled as CNode.grade); connectivity is by shared ids
   control: Control;
   minorRoads: RoadId[];    // for yield/stop: incoming roads that must yield. Empty = by class.
   turnRules: TurnRule[];
@@ -163,7 +163,7 @@ interface Road {
   id: RoadId;
   from: NodeId;
   to: NodeId;
-  layer?: number;          // visual grade; omitted uses the lower endpoint grade
+  layer?: number;          // grade (TASK-175: CRoad.grade); omitted uses the lower endpoint grade
   centerline: Vec2[];      // >= 2 points; first equals nodes[from].pos, last equals nodes[to].pos
   lateralOffsetM: number;  // lane block center relative to centerline; positive = right of travel
   lanes: Lane[];           // index 0 = leftmost in travel direction
@@ -500,12 +500,12 @@ interface CompiledCity {
   laneSpatial: Flatbush;   // lane segments, for picking and snapping
 }
 
-interface CNode { idx: number; id: NodeId; pos: Vec2; radiusM: number; control: Control;
+interface CNode { idx: number; id: NodeId; pos: Vec2; grade: number; radiusM: number; control: Control;
   movements: number[]; signal: CSignal | null; group?: number; }
 interface CGroup { idx: number; id: JunctionGroupId; nodes: number[]; innerRoads: number[];
   entries: number[]; exits: number[];          // road idx entering / leaving the group
   chains: { from: number; to: number; movements: number[] }[]; signalised: boolean; }
-interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[];
+interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: number[]; grade: number;
   access: AccessValue[]; zone: Int32Array; // indexed by vehicleClasses
   roadClass: RoadClass; classRank: number; speedLimitMps: number; lengthM: number;
   streetGroupId: string | null; corridorId: string | null;   // corridorId ?? streetGroupId
@@ -514,7 +514,7 @@ interface CRoad { idx: number; id: RoadId; from: number; to: number; lanes: numb
 A group's chains (TASK-131) are its lane paths: from a lane of an entry road, the member-node
 movements along inner-road lanes to a lane of an exit road, no lane twice in a chain. The road
 pairs with a chain are the group's turn permissions, those the merged node of TASK-049 allowed.
-interface CLane { idx: number; id: LaneId; road: number; lane: number; polyline: Vec2[];
+interface CLane { idx: number; id: LaneId; road: number; lane: number; grade: number; polyline: Vec2[];
   cumulative: Float64Array; lengthM: number; widthM: number; allowed: VehicleClass[];
   speedLimitMps: number; left: number; right: number;   // adjacent lane idx or -1
   out: number[]; in: number[];                          // movement idx
@@ -530,6 +530,21 @@ interface CConnector { idx: number; id: ConnectorId; place: number; parking?: nu
 interface CPlace { idx: number; id: PlaceId; kind: PlaceKind; centroid: Vec2;
   connectorsIn: number[]; connectorsOut: number[]; capacity: number | null; events: PlaceEvent[]; }
 ```
+
+TASK-175 (contract change, owner-approved 2026-11-13): compiled nodes, roads and lanes carry their
+vertical level, `grade`. A node's is its canonical `layer` (the importer's OSM `layer`, else 1 on a
+`bridge`, -1 in a `tunnel` or `covered` way, else 0, with a bridge end that has no deck continuation
+on the ground); a road's is its `layer`, else the lower of its nodes' grades; a lane's is its
+road's. `network/heights.ts` turns grades into surface heights above the ground, TASK-132's road
+model that the 3D view draws (with terrain added there): 5 m per grade; a road's ends at its nodes'
+heights and its deck at its own, a deck outside the end heights reached by cubic ramps over at most
+60 m at each end, otherwise one cubic over the whole road; through continuations without a junction
+surface share PCHIP tangents. `laneHeightAt(city, lane, point)` gives a lane's surface height
+abreast of a point. Two surfaces 4.5 m or more apart (`levelClearanceM`: a 3.5 m truck under a
+0.8 m deck, with margin, less than one grade) are at different levels; a ramp within 4.5 m of the
+ground is at ground level there. 2D grade groups, picking and shadows (`render/grades.ts`) and
+3D heights read these compiled grades, so the views and the simulation agree. The simulation
+uses levels only in lot exits (section 8); routing, demand and conflicts are unchanged.
 
 `CParking` carries canonical identity/kind/access/capacity, owner place index (`-1` when
 unowned), centroid, entry/exit connector indices, initial occupancy fraction, resident count
@@ -1551,13 +1566,14 @@ instead. The grant inserts the car there at speed 0, so following traffic treats
 occupant before its body crosses the lane edge; the body then merges (`merge` phase) along a
 front-bumper curve at `lotSpeedMps` and drives on. A lot aisle mapped on a road is such a
 lane: the car joins it where its path first meets it. TASK-157: the hold is also clear of every
-other lane of the exit's street that the body would stand in (its road's other lanes, the other
-carriageway of a two-way street, the roads meeting it at either end; not the lot's own aisles,
-and not roads drawn across the lot at another grade, which the compiled model cannot tell
-apart): such a lane joins the set until a pose is clear of all, or the car keeps the exit-only
-hold if none is. The lanes the merge curve then crosses before the exit lane each need the same
-spawn gap, with followers' braking, around the station span the body covers there, checked with
-the join gap at the grant. From the grant until its body has left a crossed lane, that span is a
+other lane the body would stand in (TASK-175: any lane within a body length and width of the
+drive-out, not the lot's own aisles, kept only where its surface abreast of the body's middle is
+within 4.5 m of the exit lane's surface at its connector, section 5; so a bridge overhead never
+holds the car, while a road at grade that is not part of the exit's street, or a ramp still near
+the ground, does): such a lane joins the set until a pose is clear of all, or the car keeps the
+exit-only hold if none is. The lanes the merge curve then crosses before the exit lane (at the
+lot's level, by the same rule) each need the same spawn gap, with followers' braking, around the
+station span the body covers there, checked with the join gap at the grant. From the grant until its body has left a crossed lane, that span is a
 standing obstacle for the lane's traffic (and for traffic about to enter it), clamped like a stop
 line, and no spawn or lane change lands in it. A car turning into the same mouth on the
 exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
@@ -2820,9 +2836,9 @@ the city, and roads retain the strongest tone.
   "Road classes" (off by default) turns on the per-class tones of `roadStyle`; then a
   junction takes the tone of its incident road with the highest `classRank`. Presentation
   only, like every Layers entry.
-- `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes and
-  road and node layers are not in the compiled model. Grade groups draw from lowest to
-  highest, with roads in compiled index order inside each grade.
+- `Scene.setCity(compiled, city)` also takes the canonical `City`, because place shapes are not
+  in the compiled model. Grade groups draw from lowest to highest, by the compiled grades
+  (TASK-175), with roads in compiled index order inside each grade.
   TASK-097 (owner revision): the default-on "Shadows" layer affects non-ground streets only.
   Raised grades use 5 m per grade and cast a south-east shadow at 0.6 m per metre above the
   next lower grade. Three unioned fills (16%, 7%, 4%, the latter two offset another 0.75 m
@@ -2869,7 +2885,10 @@ Raised decks have 0.8 m slabs and piers every 30 m. The 3D camera starts at the 
 hands its ground target and scale back on
 return; the hidden 2D scene stops drawing while 3D is active. Vehicle raycasting opens the existing
 inspector, with the same eight-pixel picking tolerance as 2D; playback stays live and a
-ground-opacity toggle reveals tunnels. Pedestrian stripes reuse the 2D crossing polygons.
+ground-opacity toggle reveals tunnels. TASK-175: after vehicles, walkers, parking and rail, a
+click picks a lane: each centreline is projected at its compiled surface height (every 5 m on a
+ramp) and hit within half its projected width (at least 3 px), the highest grade winning where
+lanes overlap on screen, as in 2D; lanes below ground only with See below ground. Pedestrian stripes reuse the 2D crossing polygons.
 Signal heads face the approaching lane and hang at 5.5 m from 6 m curbside cantilevers.
 A ground-mesh adapter reuses the 2D tile loader, projection, cache, retry and URL settings;
 the Basemap layer also works in 3D and follows the ground-opacity toggle. Surface normals

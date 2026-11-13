@@ -412,7 +412,7 @@ export function buildRail(
   heights: ReturnType<typeof cityHeights>,
 ) {
   const group = new Group();
-  const { roadGrades, nodeGrades } = cityGrades(city, source);
+  const { roadGrades, nodeGrades } = cityGrades(city);
   const rail = city.rail ? railHeights(city, roadGrades, nodeGrades) : undefined;
   // Tracks above ground in one batch; tunnel track in another shown with "See below ground".
   const batches = [0, 1].map(() => ({

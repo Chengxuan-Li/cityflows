@@ -353,14 +353,16 @@ test.each(
   tierCities([
     [
       'munich',
-      'db4871a709d6e10086e0a620aa160a889f1cff73dcafb31bc1fbe4991603979e',
+      // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+      'e1525e9029b6fcf729720daff642605180d994bfefe0efdf4d81fc4ae543dd73',
       '9e15a4d6ac0cd7d3254c2abb9d8e7e8ed88365a158a6ae2f596319a6d680cafe',
       14,
       79,
     ],
     [
       'sindelfingen',
-      '3cc84f10067597e210d09a5ff08bfa2546334d4bd43bc044142a66082eb6e5c0',
+      // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+      'a4de4301abf294a4da9074eb6ea8f154dae170d61b8b21ea5a9e175e0453e1f5',
       'e386a323dff201af5378e7cee85444cf6d04a9fbe33db85d7ba0f61a794a8e68',
       31,
       703,

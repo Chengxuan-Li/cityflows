@@ -32,8 +32,10 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       name.startsWith('munich')
         ? // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
-          '769985adad3cf876cbb8ca0b8326fe9f1fb03f402137f7fa5cbd04820cb4e00b'
-        : 'f6cd69f8b5c1c244b521e06a29b012a470171de28f8e7706ff0fa17e3afbb617',
+          // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+          '7e11706d86ddcfe8b3d857c5e7d0711e9740319b456f24422ced030cd72e10e8'
+        : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+          '9a74a67ef1e5873c79b98be0436fd65ecab744d99d1bd48b48e2b47b79ea4231',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')

@@ -6,7 +6,8 @@ import {
   pointAtDistance,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { CLane, CParkingSpace } from '../network';
+import type { CLane, CompiledCity, CParkingSpace } from '../network';
+import { laneHeightAt, levelClearanceM } from '../network/heights';
 
 export interface ParkingPose extends Vec2 {
   heading: number;
@@ -101,7 +102,28 @@ export function manoeuvrePath(
   return motionPath(points, headings);
 }
 
-export function bodyClearLane(pose: ParkingPose, lane: CLane, lengthM: number, widthM: number) {
+/** TASK-175: the height a body stands at; a lane whose surface abreast of the body's middle lies
+ * `levelClearanceM` or more above or below it is at another level and never meets the body. */
+export interface BodyLevel {
+  city: CompiledCity;
+  heightM: number;
+}
+
+export function bodyClearLane(
+  pose: ParkingPose,
+  lane: CLane,
+  lengthM: number,
+  widthM: number,
+  level?: BodyLevel,
+) {
+  if (level) {
+    const middle = {
+      x: pose.x - (Math.cos(pose.heading) * lengthM) / 2,
+      y: pose.y - (Math.sin(pose.heading) * lengthM) / 2,
+    };
+    if (Math.abs(laneHeightAt(level.city, lane, middle) - level.heightM) >= levelClearanceM)
+      return true;
+  }
   const offsets = [];
   for (const along of [0, -lengthM]) {
     const p = {
@@ -130,7 +152,13 @@ const corners = (pose: ParkingPose, lengthM: number, widthM: number) =>
 
 /** TASK-157: `bodyClearLane`, also clear where the whole body lies beyond either end of the
  * lane, which `bodyClearLane` extends without limit. */
-export function bodyClearOf(pose: ParkingPose, lane: CLane, lengthM: number, widthM: number) {
+export function bodyClearOf(
+  pose: ParkingPose,
+  lane: CLane,
+  lengthM: number,
+  widthM: number,
+  level?: BodyLevel,
+) {
   const beyond = (at: number, sign: number) => {
     const end = pointAtDistance(lane.polyline, lane.cumulative, at),
       heading = headingAtDistance(lane.polyline, lane.cumulative, at);
@@ -138,7 +166,9 @@ export function bodyClearOf(pose: ParkingPose, lane: CLane, lengthM: number, wid
       (p) => sign * ((p.x - end.x) * Math.cos(heading) + (p.y - end.y) * Math.sin(heading)) > 0,
     );
   };
-  return bodyClearLane(pose, lane, lengthM, widthM) || beyond(lane.lengthM, 1) || beyond(0, -1);
+  return (
+    bodyClearLane(pose, lane, lengthM, widthM, level) || beyond(lane.lengthM, 1) || beyond(0, -1)
+  );
 }
 
 /** The farthest progress along a path whose pose passes `clear`; -1 if none does. */
@@ -172,13 +202,15 @@ export function holdProgress(path: MotionPath, lane: CLane, lengthM: number, wid
  * `street` its body would stand in there, such as the near lane of a two-way street whose far
  * lane it joins, or a lane ending at the mouth's junction. A lane the held body still touches
  * joins the set until a pose is clear of all of them; with none clear, it keeps TASK-150's hold
- * (Sindelfingen pk:1482, whose exit and near lanes are 7.9 m stubs). */
+ * (Sindelfingen pk:1482, whose exit and near lanes are 7.9 m stubs). TASK-175: lanes at another
+ * `level` than the body's are left out pose by pose (the bridges over Munich pk:2049). */
 export function lotHold(
   path: MotionPath,
   exit: CLane,
   street: CLane[],
   lengthM: number,
   widthM: number,
+  level?: BodyLevel,
 ) {
   const lanes: CLane[] = [];
   for (;;) {
@@ -186,12 +218,12 @@ export function lotHold(
       path,
       (pose) =>
         bodyClearLane(pose, exit, lengthM, widthM) &&
-        lanes.every((lane) => bodyClearOf(pose, lane, lengthM, widthM)),
+        lanes.every((lane) => bodyClearOf(pose, lane, lengthM, widthM, level)),
     );
     if (holdM < 0) return Math.max(0, holdProgress(path, exit, lengthM, widthM));
     const pose = pathPose(path, holdM);
     const touched = street.filter(
-      (l) => l !== exit && !lanes.includes(l) && !bodyClearOf(pose, l, lengthM, widthM),
+      (l) => l !== exit && !lanes.includes(l) && !bodyClearOf(pose, l, lengthM, widthM, level),
     );
     if (!touched.length) return holdM;
     lanes.push(...touched);
@@ -207,14 +239,16 @@ export interface LaneCrossing {
   untilM: number;
 }
 
-/** TASK-157: the lanes of `street` other than the exit lane that a merge's body crosses, each
- * with the station span it covers there and the merge progress at which it has left. */
+/** TASK-157: the lanes of `street` other than the exit lane that a merge's body crosses (TASK-175:
+ * at its `level`), each with the station span it covers there and the merge progress at which it
+ * has left. */
 export function laneCrossings(
   merge: MotionPath,
   exit: CLane,
   street: CLane[],
   lengthM: number,
   widthM: number,
+  level?: BodyLevel,
 ) {
   const crossings: LaneCrossing[] = [];
   for (const lane of street) {
@@ -224,7 +258,7 @@ export function laneCrossings(
       untilM = -1;
     for (let i = 0; i < merge.points.length; i++) {
       const pose = { ...merge.points[i]!, heading: merge.headings![i]! };
-      if (bodyClearOf(pose, lane, lengthM, widthM)) continue;
+      if (bodyClearOf(pose, lane, lengthM, widthM, level)) continue;
       for (const corner of corners(pose, lengthM, widthM)) {
         const at = nearestOnPolyline(lane.polyline, corner).along;
         fromM = Math.min(fromM, at);

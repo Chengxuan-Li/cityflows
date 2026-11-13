@@ -56,8 +56,10 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
     // TASK-144 lot geometry plus TASK-146 renderer-only addition paint; physical pins stay fixed.
     expect(paintHash(shapes)).toBe(
       name === 'munich'
-        ? '50eedcfb4d77e413aef53060f248952f88c60fa95f50635d47f724789ba7da35'
-        : 'ec9a6401eb2184d37e39094c177a6c01582c44cf83477b887c25fa6a67b2554f',
+        ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+          '8184eeefe4078577460d7aca7fd86dc5238e35d0afac4f8a9a0d6cdd400ef302'
+        : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+          '751660c4485f163b3c34c4de8dd33d2755134c566fac0143f28e12928114ba0e',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

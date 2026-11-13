@@ -89,7 +89,7 @@ test('T74 Munich overhead lines in 2D and 3D: counts, the layer toggle, shots', 
   const source = await city(page),
     compiled = compile(source);
   if (!compiled.ok) throw Error('compile');
-  const { roadGrades, nodeGrades } = cityGrades(compiled.compiled, source);
+  const { roadGrades, nodeGrades } = cityGrades(compiled.compiled);
   const lines = catenary(compiled.compiled, roadGrades, nodeGrades);
   const expected = JSON.stringify({
     supports: lines.supports.length,

@@ -164,15 +164,19 @@ const baselines = {
   // TASK-135: Munich's 54 tram tracks gain `form` and `provenance`; with them stripped (the
   // import without assignTramForms) every pin equals c3a6ec2's. Lead: Munich re-pinned for
   // TASK-135 and TASK-140 together.
-  grid: '6c1e86734dfc688415bd805d175bc5d173385a0a83fb18da32136aa1018fb3e7',
-  town: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  grid: '94f4c0a0c54c607f58d079b290976c3b5429903d55353ac5f66bee1948e9aa5e',
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  town: '3595116920f094559c7d78b9cc1cfde9fa1b0773419b31a7df233ea8a4909e79',
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
   // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
   // removed every pin equals 3e9951a's.
-  'munich-donnersberger': '5dfb74e52826584f9421090276fb29c009112bf2f64f4add153f623d465711c4',
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  'munich-donnersberger': '590cf332b5f8517ba15b26d26debef18f36b5d8a47c65b5d8ba3e9aa60bcf1cd',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
-  'sindelfingen-a81': '52ff58a0d7eb61eff5f22d557083fc28e7f5f59e16ad3f1956d9105950a2b2ad',
+  // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals c88d6b4's.
+  'sindelfingen-a81': '401dae542529c2aa46c21d8af35d9168e84fbeb8d7450aef54cc0b89da47ab6b',
 };
 const lampCounts = {
   grid: [0, 0],
@@ -315,7 +319,7 @@ unitTest('V107 2D lamp geometry belongs above its elevated road grade', () => {
   b.road(a, c, { roadClass: 'secondary' });
   const network = compiled(b.city),
     street = placeStreet(network, b.city, []);
-  const flat = drawStreet(street, cityGrades(network, b.city).roadGrades);
+  const flat = drawStreet(street, cityGrades(network).roadGrades);
   expect(Array.isArray(flat)).toBe(true);
   expect(flat).toHaveLength(1);
   expect(flat[0]!.grade).toBe(1);

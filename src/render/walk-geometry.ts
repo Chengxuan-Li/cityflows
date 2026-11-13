@@ -32,7 +32,7 @@ export interface WalkShape {
 const positive = (ring: Vec2[]) => (areaD(ring) < 0 ? [...ring].reverse() : ring);
 /** One paving footprint for both renderers, with building holes and same-grade asphalt removed. */
 export function walkGeometry(city: CompiledCity, source?: CityGeometry): WalkShape[] {
-  const { roadGrades, nodeGrades } = cityGrades(city, source);
+  const { roadGrades, nodeGrades } = cityGrades(city);
   const obstacles = [
     ...city.roads.map((r) => ({
       rings: [positive(r.surface)],

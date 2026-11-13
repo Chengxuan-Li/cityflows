@@ -5,9 +5,12 @@ import {
   pointAtDistance,
 } from '../geo/polyline';
 import { createRandom } from '../geo/random';
+import type { Vec2 } from '../geo/vec2';
 import type { CParkingSpace, CompiledCity } from '../network';
+import { laneHeightAt } from '../network/heights';
 import { lotPath } from '../network/lot-paths';
 import { parkingConnectorPermitted } from '../network/parking';
+import { lanesNear } from '../network/walk';
 import { vehicleClasses, type Scenario, type SimParams, type TripRequest } from '../schema';
 import { parkingEgress } from './parking-egress';
 import type { Metrics, ParkedCarsSnapshot, ParkingClaimsSnapshot } from './types';
@@ -822,26 +825,25 @@ export function createParking(
         spaces[m.slot]!.parking === facility &&
         (leavingLot(m) !== leaving || m.connector !== connector),
     );
-  /** TASK-157: the lanes a car leaving a lot by `exit` meets at grade: the exit road's other
-   * lanes, the other carriageway of its street, and the roads meeting it at either end. Other
-   * roads drawn across a lot (the bridges above Munich pk:2049) are not crossed, and the lot's
-   * own aisles are left to TASK-156. */
-  function streetLanes(facility: number, exit: number) {
-    const aisles = compiled.lots?.find((l) => l.id === compiled.parking[facility]!.id)?.aisles,
-      road = compiled.roads[compiled.lanes[exit]!.road]!;
-    return compiled.roads
-      .filter(
-        (r) =>
-          r === road ||
-          (road.corridorId !== null && r.corridorId === road.corridorId) ||
-          [r.from, r.to].some((n) => n === road.from || n === road.to),
-      )
-      .filter((r) => !aisles?.includes(r.id))
-      .flatMap((r) => r.lanes.map((i) => compiled.lanes[i]!));
+  /** TASK-157: the lanes a car leaving a lot may meet. TASK-175: every lane within `marginM` of
+   * the `points` of its drive-out, at any level, but the lot's own aisles (left to TASK-156);
+   * the hold and crossing checks keep those at the lot's level where the body stands. */
+  function streetLanes(facility: number, points: Vec2[], marginM: number) {
+    const aisles = compiled.lots?.find((l) => l.id === compiled.parking[facility]!.id)?.aisles;
+    const xs = points.map((p) => p.x),
+      ys = points.map((p) => p.y);
+    const box = [
+      { x: Math.min(...xs) - marginM, y: Math.min(...ys) - marginM },
+      { x: Math.max(...xs) + marginM, y: Math.max(...ys) + marginM },
+    ];
+    return lanesNear(compiled, box)
+      .map((i) => compiled.lanes[i]!)
+      .filter((l) => !aisles?.includes(compiled.roads[l.road]!.id));
   }
   /** TASK-150: a lot departure's drive-out path, its hold, and the lane station where it joins
    * from the hold. TASK-157: the hold is clear of every lane the body would stand in, and the
-   * merge lists the lanes it crosses before the exit lane. */
+   * merge lists the lanes it crosses before the exit lane. TASK-175: both at the lot's level, the
+   * exit lane's at its connector. */
   function driveOut(id: number, slot: number, connector: number) {
     const key = (slot * compiled.connectors.length + connector) * 2 + vehicles.vclass[id]!;
     let out = drives.get(key);
@@ -849,12 +851,28 @@ export function createParking(
     const path = localPath(slot, connector, true),
       c = compiled.connectors[connector]!,
       lane = compiled.lanes[c.lane]!,
-      street = streetLanes(spaces[slot]!.parking, lane.idx);
-    const holdM = lotHold(path, lane, street, length(id), width(id));
+      facility = spaces[slot]!.parking,
+      marginM = length(id) + width(id),
+      level = { city: compiled, heightM: laneHeightAt(compiled, lane, lanePose(connector)) };
+    const holdM = lotHold(
+      path,
+      lane,
+      streetLanes(facility, path.points, marginM),
+      length(id),
+      width(id),
+      level,
+    );
     const hold = pathPose(path, holdM),
       joinM = joinStation(hold, lane, c.positionM),
       merge = manoeuvrePath(hold, lanePose(connector, joinM), false);
-    const crossings = laneCrossings(merge, lane, street, length(id), width(id));
+    const crossings = laneCrossings(
+      merge,
+      lane,
+      streetLanes(facility, merge.points, marginM),
+      length(id),
+      width(id),
+      level,
+    );
     drives.set(key, (out = { path, holdM, joinM, crossings }));
     return out;
   }
