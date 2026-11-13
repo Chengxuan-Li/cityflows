@@ -20,21 +20,21 @@ export function mapConnectors(
   for (const collection of ['places', 'parking'] as const) {
     const owners: (Place | ParkingFacility)[] = Object.values(city[collection] ?? {});
     for (const owner of owners) {
-      const connectors = owner.connectors.flatMap((connector) => {
+      const current = patch.set[collection]?.[owner.id] ?? owner;
+      const connectors = current.connectors.flatMap((connector) => {
         const next = update(connector, owner.id);
         return next ? [next] : [];
       });
       if (
-        connectors.length !== owner.connectors.length ||
-        connectors.some((connector, i) => connector !== owner.connectors[i])
+        connectors.length !== current.connectors.length ||
+        connectors.some((connector, i) => connector !== current.connectors[i])
       )
         Object.assign((patch.set[collection] ??= {}), {
           [owner.id]: {
-            ...owner,
-            ...patch.set[collection]?.[owner.id],
+            ...current,
             connectors,
-            ...('mappedPortals' in owner && {
-              mappedPortals: (owner as ParkingFacility).mappedPortals?.filter((p) =>
+            ...('mappedPortals' in current && {
+              mappedPortals: (current as ParkingFacility).mappedPortals?.filter((p) =>
                 connectors.some((c) => c.id === p.connectorId),
               ),
             }),

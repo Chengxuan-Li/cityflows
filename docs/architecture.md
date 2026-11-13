@@ -564,7 +564,7 @@ route at a canonical entry or the end of a mapped aisle lane; stalls share these
 Lot simulation capacity equals the reachable generated stall count. A lot without mapped
 aisles gets a derived grid of stalls clipped to its polygon and saved exclusions, without
 inventing vehicle roads.
-TASK-118 adds `CLot.circulation`: local nodes, bidirectional edges and adjacency, one access
+TASK-118 adds `CLot.circulation`: local nodes, edges and adjacency, one access
 node per stall, and entry connector nodes with precomputed shortest-path distances and
 predecessors. Mapped aisle lane centrelines and their existing joining curves are read-only
 geometry inputs, retaining every split section. Generated row gaps and short visible bridges
@@ -590,8 +590,11 @@ connector/direction; a bidirectional connector may name different inbound and ou
 aisles. Invalid, deleted or cross-facility references produce `parking_invalid`, not a
 compile exception. Legacy projects omit the field and keep their existing circulation.
 The street connector begins a fitted, direction-specific approach along the mapped throat;
-the approach is kept separate from the bidirectional internal graph, preventing a path from
-borrowing an adjacent exit throat. Source aisle vehicle classes and access restrictions also
+the approach is kept separate from the internal graph, preventing a path from
+borrowing an adjacent exit throat. Source aisle edges are directed for typed lots; departure
+distances search their reverse graph. Generated circulation and legacy lots retain
+bidirectional edges. Clear bay manoeuvres can reach either direction of the same physical
+two-way aisle, without adding a reverse edge to any one-way aisle. Source aisle vehicle classes and access restrictions also
 apply to route arrival, parking choice, initial stock and departure. Typed records persist
 through ZIP/JSON; inference markers are not used to recover site identity.
 

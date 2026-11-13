@@ -134,6 +134,30 @@ test('T49 narrow one-way aisles get angled stalls', () => {
     expect(Math.abs(stall.heading)).toBeCloseTo(Math.PI / 3);
 });
 
+test('T149 parking bays respect their known aisle grade and keep ground obstructions', () => {
+  const { city, aisle, node, road } = lotFixture();
+  aisle.layer = 0;
+  const baseline = compile(city);
+  if (!baseline.ok) throw new Error('Fixture compile');
+  const bridge = road(node(50, -40), node(50, 40), { roadClass: 'primary', lanes: 3 });
+  bridge.layer = 1;
+  const above = compile(city);
+  if (!above.ok) throw new Error('Bridge compile');
+  expect(above.compiled.lots![0]!.stallCount).toBe(baseline.compiled.lots![0]!.stallCount);
+  bridge.layer = 0;
+  const atGrade = compile(city);
+  if (!atGrade.ok) throw new Error('Ground compile');
+  expect(atGrade.compiled.lots![0]!.stallCount).toBeLessThan(
+    baseline.compiled.lots![0]!.stallCount,
+  );
+  // With an unknown lot grade, preserve conservative legacy obstruction handling.
+  delete aisle.layer;
+  bridge.layer = 1;
+  const unknown = compile(city);
+  if (!unknown.ok) throw new Error('Unknown-grade compile');
+  expect(unknown.compiled.lots![0]!.stallCount).toBe(atGrade.compiled.lots![0]!.stallCount);
+});
+
 test.each([saveProject, saveProjectJson])(
   'T49 lots survive save/open and older files without lots still open',
   async (save) => {

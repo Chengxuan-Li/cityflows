@@ -247,13 +247,22 @@ export function compileParking(
       const key = `${portal.connectorId}:${portal.direction}`;
       const entry = source.connectors.find((c) => c.id === portal.connectorId);
       const road = city.roads[portal.aisleRoadId];
+      const street = entry && city.roads[entry.roadId];
+      const node = city.nodes[portal.nodeId];
+      const lane =
+        entry && compiled.lanes[compiled.index.lane.get(`${entry.roadId}#${entry.lane}`)!];
       if (
         source.kind !== 'lot' ||
         mappedKeys.has(key) ||
         !entry ||
         !road ||
         !source.aisles?.includes(road.id) ||
-        !city.nodes[portal.nodeId] ||
+        !node ||
+        !street ||
+        !lane ||
+        (street.layer ?? 0) !== (road.layer ?? 0) ||
+        nearestOnPolyline(street.centerline, node.pos).away > 1 ||
+        Math.abs(nearestOnPolyline(lane.polyline, node.pos).along - entry.positionM) > 1 ||
         (portal.direction === 'in' ? road.from : road.to) !== portal.nodeId ||
         (entry.direction !== 'both' && entry.direction !== portal.direction)
       )

@@ -394,9 +394,20 @@ export function editTopology(city: City, command: TopologyCommand): CommandPatch
   const patch: CommandPatch = { set: {}, remove: { roads: [road.id], nodes: [] }, warnings: [] };
   for (const lot of Object.values(city.parking ?? {})) {
     if (!lot.mappedPortals?.some((p) => p.aisleRoadId === road.id)) continue;
+    const mappedPortals = lot.mappedPortals.filter((p) => p.aisleRoadId !== road.id);
+    const removed = new Set(
+      lot.mappedPortals
+        .filter(
+          (p) =>
+            p.aisleRoadId === road.id &&
+            !mappedPortals.some((other) => other.connectorId === p.connectorId),
+        )
+        .map((p) => p.connectorId),
+    );
     (patch.set.parking ??= {})[lot.id] = {
       ...lot,
-      mappedPortals: lot.mappedPortals.filter((p) => p.aisleRoadId !== road.id),
+      mappedPortals,
+      connectors: lot.connectors.filter((c) => !removed.has(c.id)),
       aisles: lot.aisles?.filter((id) => id !== road.id),
     };
   }
