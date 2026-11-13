@@ -2,6 +2,7 @@ import { distance } from '../geo/polyline';
 import { createRandom } from '../geo/random';
 import { compile } from '../network';
 import type { City, DemandConfig, Person } from '../schema';
+import { withHouseholds } from './households';
 
 export function generatePopulation(city: City, config: DemandConfig): Person[] {
   const result = compile(city);
@@ -12,7 +13,7 @@ export function generatePopulation(city: City, config: DemandConfig): Person[] {
   const { places } = result.compiled;
   const workplaces = places.filter((place) => city.places[place.id]!.jobs > 0);
   const random = createRandom(config.seed).derive('population');
-  const persons: Person[] = [];
+  const persons: Omit<Person, 'householdId'>[] = [];
 
   for (const home of places) {
     if (home.kind !== 'residential' && home.kind !== 'gateway') continue;
@@ -45,5 +46,5 @@ export function generatePopulation(city: City, config: DemandConfig): Person[] {
       });
     }
   }
-  return persons;
+  return withHouseholds(city, persons, config.seed);
 }

@@ -14,6 +14,40 @@ function waitingReason(detail: VehicleDetail, compiled: CompiledCity): string | 
   return node.signal ? 'Stopped at a signal' : 'Yielding at a junction';
 }
 
+/** TASK-129: the household car a vehicle id stands for, and the household's members. */
+export function HouseholdCar({
+  vehicleId,
+  occupant = null,
+}: {
+  vehicleId: number;
+  occupant?: string | null;
+}) {
+  const carId = useAppStore((state) => state.session?.vehicleCars[vehicleId - 1] ?? null);
+  const population = useAppStore((state) => state.session?.project.population);
+  if (!carId) return null;
+  const household = carId.slice('car:'.length, carId.lastIndexOf(':'));
+  const members = population?.filter((person) => person.householdId === household) ?? [];
+  return (
+    <>
+      <dt>Car</dt>
+      <dd>{carId}</dd>
+      <dt>Household</dt>
+      <dd>
+        {household}
+        {members
+          .filter((member) => member.id !== occupant)
+          .map((member) => (
+            <div key={member.id}>
+              <button onClick={() => useAppStore.getState().selectPerson(member.id)}>
+                {member.id}
+              </button>
+            </div>
+          ))}
+      </dd>
+    </>
+  );
+}
+
 export function VehicleInspector({
   id,
   detail,
@@ -48,6 +82,7 @@ export function VehicleInspector({
               'None'
             )}
           </dd>
+          <HouseholdCar vehicleId={id} occupant={detail.personId} />
           <dt>Origin</dt>
           <dd>{city.places[detail.originPlace]!.name}</dd>
           <dt>Destination</dt>
