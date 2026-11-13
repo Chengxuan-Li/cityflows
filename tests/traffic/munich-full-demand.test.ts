@@ -38,5 +38,8 @@ test(
     expect(morning.sampledRoadTraffic.ramp!.entered).toBeGreaterThan(0);
     expect(morning.sampledRoadTraffic.ramp!.left).toBeGreaterThan(0);
   },
-  limit(900_000),
-); // CI runners took 203 to 479 s before TASK-118/119 (lead, 2026-11-09)
+  // CI runners took 203 to 479 s before TASK-118/119 (lead, 2026-11-09), 808 s on 706eaa0 and
+  // 2,563 s on 738af8c (Full run 43479489386, after the 2026-11-13 simulation merges: twice the
+  // completions at a similar peak); an hour leaves 40% above that (TASK-178).
+  limit(3_600_000),
+);
