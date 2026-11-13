@@ -28,9 +28,9 @@ test('the grid has no validation issues and lists its 15 lane drops under Notes 
   page,
 }) => {
   await page.getByRole('button', { name: 'Validation (0)', exact: true }).click();
-  const inspector = page.getByRole('complementary', { name: 'Inspector' });
-  await expect(inspector).toContainText('No network issues found.');
-  const notes = inspector.getByRole('region', { name: 'Notes', exact: true });
+  const validation = page.getByRole('region', { name: 'Validation', exact: true });
+  await expect(validation).toContainText('No network issues found.');
+  const notes = validation.getByRole('region', { name: 'Notes', exact: true });
   await expect(notes.getByRole('heading', { name: 'Notes' })).toBeVisible();
   await expect(notes.getByRole('listitem')).toHaveCount(15);
   await expect(notes.getByRole('listitem').first()).toContainText('must merge upstream');
@@ -60,11 +60,12 @@ test('runs, pauses, replays the same steps, and inspects the map @smoke', async 
   await expect.poll(() => page.evaluate(() => window.cityflows!.hash())).toBe(hash);
 
   const inspector = page.getByRole('complementary', { name: 'Inspector' });
+  // Validation is a sidebar section (TASK-160); its header opens and closes it.
   await page.getByRole('button', { name: /^Validation/ }).click();
-  await expect(inspector.getByRole('heading', { name: 'Diagnostics' })).toBeVisible();
-  await expect(inspector.getByText(String(hash), { exact: true })).toBeVisible();
+  const validation = page.getByRole('region', { name: 'Validation', exact: true });
+  await expect(validation.getByText(String(hash), { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('diagnostics-open.png') });
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Validation/ }).click();
 
   // TASK-112: the first owner reaches their car before this repeatable vehicle click.
   await restart.click();

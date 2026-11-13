@@ -273,7 +273,7 @@ export function PopoverButton({
   const id = useId();
   const button = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const width = 264;
+  const width = 300;
   return (
     <>
       <button

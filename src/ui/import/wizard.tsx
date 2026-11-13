@@ -4,7 +4,7 @@ import { areaError, defaultEndpoint, fetchOverpass, type Bbox } from '../../impo
 import type { ImportResult } from '../../importers/types';
 import type { ImportMessage } from '../../importers/worker';
 import { defaultScenario } from '../../fixtures/scenarios';
-import { CloseButton } from '../controls';
+import { CloseButton, Slider } from '../controls';
 import { useAppStore } from '../store';
 import { DiagnosticsStep } from './diagnostics-step';
 
@@ -284,11 +284,10 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
           <div className="edit-fields">
             <label className="edit-field">
               Demand
-              <input
+              <Slider
                 id="import-demand"
-                type="range"
-                min="0.05"
-                max="1"
+                min={0.05}
+                max={1}
                 step="0.05"
                 value={demandScale}
                 disabled={busy}

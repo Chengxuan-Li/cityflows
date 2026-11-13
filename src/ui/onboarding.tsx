@@ -114,7 +114,8 @@ function place(card: HTMLElement, ring: HTMLElement, { anchor, side, ring: targe
   else if (side === 'left') left = rect.left - gap - width;
   else if (side === 'below') {
     left = rect.left + (rect.width - width) / 2;
-    top = rect.bottom + gap;
+    // Clear of the ring, which stands 3 px off the control.
+    top = rect.bottom + gap + 4;
   } else {
     left = rect.left + (rect.width - width) / 2;
     top = rect.top + 72;
@@ -211,7 +212,9 @@ export function Onboarding() {
             {step + 1} of {hints.length}
           </small>
           <button onClick={() => go(null)}>Skip</button>
-          <button onClick={() => go(step + 1)}>{last ? 'Done' : 'Next'}</button>
+          <button className="primary" onClick={() => go(step + 1)}>
+            {last ? 'Done' : 'Next'}
+          </button>
         </div>
       </section>
     </>
