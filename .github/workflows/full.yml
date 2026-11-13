@@ -1,5 +1,11 @@
-name: Parking access verification
-on: workflow_dispatch
+name: Parking admission verification
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full candidate commit
+        type: string
+        required: true
 permissions:
   contents: read
 jobs:
@@ -7,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.revision }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -17,13 +25,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          path: harness
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.revision }}
+          path: source
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
       - run: npm ci
-      - run: node --experimental-strip-types --import ./bench/register.ts bench/parking-morning-review.mjs
+        working-directory: source
+      - run: cp ../harness/bench/parking-morning-review.mjs bench && node --experimental-strip-types --import ./bench/register.ts bench/parking-morning-review.mjs
+        working-directory: source
       - uses: actions/upload-artifact@v7
         with:
           name: parking-morning
-          path: parking-morning.json
+          path: source/parking-morning.json
