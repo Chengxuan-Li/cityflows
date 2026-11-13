@@ -190,6 +190,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
 | [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | in progress (Claude Code subagent) |
+| [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | in progress (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1155,6 +1156,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-162 | Claude Code, the lead's subagent | Opus 5.5 | high | 5362 (production 5462) |
 | TASK-163 | Claude Code, the lead's subagent | Opus 5.5 | high | 5363 (production 5463) |
 | TASK-164 | Claude Code, the lead's subagent | Opus 5.5 | high | 5364 (production 5464) |
+| TASK-165 | Claude Code, the lead's subagent | Opus 5.5 | high | 5365 (production 5465) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3774,6 +3776,10 @@ connectors only; `lot-aisle-lanes.test.ts` (3 cases), tests/sim (416), `test:cit
 `check` pass (timeouts under load passed alone).
 
 ## Owner decisions log
+
+- 2026-11-13 (owner): mode choice (TASK-113) ships on by default; the Munich traffic gate keeps
+  testing car traffic with mode choice off, and a separate mode-share test guards the choice. The
+  T53 crossing overlap seen with mode choice on is fixed in its own task (TASK-165).
 
 - 2026-11-13 (owner): road surfaces, lane markings and similar stay close to real-world colours;
   TASK-162 rolls back its road and marking palette (canvas, places, buildings, vehicles and labels
