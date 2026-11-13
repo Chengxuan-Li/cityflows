@@ -176,7 +176,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
 | [TASK-150](tasks/TASK-150.md) | 7 | A car leaving a lot waits clear of the public lane and merges continuously once granted | `src/sim/parking.ts`, `manoeuvre.ts`, `engine.ts` (exit), T77 | 118, 122, 149 | T77, witness 0 overlaps, T54/T59/T63, Munich gate, shots | done 2026-11-13 |
 | [TASK-151](tasks/TASK-151.md) | 7 | PR #1 on today's main: find why crossings and tram service plus main's parking changes fail the gate (3,300 / 49 / 1) and repair the cause | `src/sim/**` (crossing control, rail service, parking, engine), tests | 136, 138, 147, 149, 150 | Munich gate, T75/T76, parking tests, 0.1 s replay | stopped 2026-11-13: loss is inside B56 (owner decision) |
-| [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | in progress (Claude Code subagent) |
+| [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | done 2026-11-13 |
 | [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | in progress (Claude Code subagent) |
 | [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | batch 3 (after TASK-129 merges) |
 | [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | in progress (Claude Code subagent) |
@@ -3575,6 +3575,27 @@ unmerged pending the owner's call on B56 or a new entry rule for links inside a 
 TASK-129 on main with TASK-150 (lead, `task/lead-129-merge`): 4,091 completed, 44 gridlocked, 0
 stalled heads, 0 parking failures: fails the gridlock limit (39). Not merged; re-measured at the next
 main change.
+
+TASK-152 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): at five lots each bay's access
+point lies on a car lane that also carries its exit, so TASK-150 found no hold pose and the car
+waited in the lane band (pk:2054 and pk:2057 also turned on the spot). `compileBayDepartures` in
+`src/network/parking.ts` gives such a bay a departure connector at its own station on that lane
+(or the opposite lane of the same two-way aisle; never against a one-way), only where the public
+network is legally reachable from there. The connectors are appended after all others, with no walk
+anchor and no entry listing, so admission and claims are unchanged. The car leaves strip-like:
+gap, followers' braking and reversing room checked while parked, then inserted at its station.
+Bays switched: pk:2052 39, pk:2053 14, pk:2054 33, pk:2057 1. Sindelfingen pk:1487's aisle exit is
+illegal (private plant street), so an exit with no clear hold is offered only when no other exists.
+Census: Munich no-clear-pose pairs 136 to 0, in-place U-turns 34 to 0; Sindelfingen 6 to 0. A
+wider first rule (126 Munich bays) failed the gate (3,675 / 50, seed 2 a stalled head) by sending
+pk:2056 cars through n:661 onto r:666, and was narrowed. T78 (3 cases, all failing on main). The
+192 route records are byte-identical. Munich to 10:00 equals main's state hash every minute on
+seeds 1 to 3 (no departures from these lots before 10:00). Eight Munich compile pins moved, all
+from the 87 new connectors (each passes on main's pin with the step disabled). Lead run of the
+merge: `check` (1,195), seed-1 gate 3,903 / 36 / 0 / 0. Open: TASK-150's hold is checked against
+the exit lane only, so a car bound for the far lane of a two-way street waits inside the near lane
+(Munich 333 pairs, Sindelfingen 1,749), and its grant checks only the far lane's gap; holds inside
+aisle lanes no lane vehicle reaches (Munich 68, Sindelfingen 232).
 
 ## Owner decisions log
 

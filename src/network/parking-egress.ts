@@ -157,21 +157,21 @@ function derive(
     }
     return first[laneIndex]!;
   }
-  const connectors = Uint8Array.from(city.connectors, (c) => {
-    const road = city.roads[city.lanes[c.lane]!.road]!;
-    return Number(
-      parkingConnectorPermitted(
-        city,
-        c.idx,
-        vehicleClass,
-        delivery ? 'delivery' : 'private',
-        'out',
-      ) && latest(road.zone[kind]!)[c.lane]! + 1e-9 >= c.positionM,
-    );
-  });
-  const facilities = Uint8Array.from(city.parking, (f) =>
-    Number(f.connectorsOut.some((c) => connectors[c])),
-  );
+  // Lazy, like `spaces`: compile asks for `latestDeparture` before it appends bay departures.
+  let connectors: Uint8Array | undefined, facilities: Uint8Array | undefined;
+  const connectorExits = () =>
+    Uint8Array.from(city.connectors, (c) => {
+      const road = city.roads[city.lanes[c.lane]!.road]!;
+      return Number(
+        parkingConnectorPermitted(
+          city,
+          c.idx,
+          vehicleClass,
+          delivery ? 'delivery' : 'private',
+          'out',
+        ) && latest(road.zone[kind]!)[c.lane]! + 1e-9 >= c.positionM,
+      );
+    });
   let spaces: Uint8Array | undefined;
   const parkingSpaces = () => {
     const lots = city.parking.map((f) =>
@@ -179,14 +179,15 @@ function derive(
     );
     return Uint8Array.from(city.parkingSpaces ?? [], (s) => {
       const facility = city.parking[s.parking]!;
-      if (facility.kind !== 'lot') return connectors[s.connector]!;
+      if (facility.kind !== 'lot') return result.connectors[s.connector]!;
+      if (s.departure !== undefined) return result.connectors[s.departure]!;
       const lot = lots[facility.idx]!;
       return Number(
         lot.entries.some(
           (e) =>
             facility.connectorsOut.includes(e.connector) &&
             e.direction !== 'in' &&
-            connectors[e.connector] &&
+            result.connectors[e.connector] &&
             Number.isFinite(e.distances[lot.stallNodes[s.lotStall!]!]),
         ),
       );
@@ -194,13 +195,20 @@ function derive(
   };
   const latestDeparture = (lane: number) =>
     latest(city.roads[city.lanes[lane]!.road]!.zone[kind]!)[lane]!;
-  return {
-    connectors,
-    facilities,
+  const result = {
+    get connectors() {
+      return (connectors ??= connectorExits());
+    },
+    get facilities() {
+      return (facilities ??= Uint8Array.from(city.parking, (f) =>
+        Number(f.connectorsOut.some((c) => result.connectors[c])),
+      ));
+    },
     get spaces() {
       return (spaces ??= parkingSpaces());
     },
     latestDeparture,
     earliestArrival,
   };
+  return result;
 }

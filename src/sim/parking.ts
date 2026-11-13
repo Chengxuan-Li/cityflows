@@ -629,6 +629,7 @@ export function createParking(
   }
   const motions = new Map<number, ParkingMotion>();
   let approachReach = new Float64Array(spaces.length * 2).fill(NaN);
+  const clearHolds = new Map<number, number>();
   const motionById = Array<ParkingMotion | undefined>(trips.length).fill(undefined);
   const setMotion = (id: number, m: ParkingMotion) => {
     motions.set(id, m);
@@ -674,7 +675,12 @@ export function createParking(
   };
   const isLotSpace = (id: number) => {
     const slot = spaces[originSpace(id)];
-    return !!slot && compiled.parking[slot.parking]!.kind === 'lot' && !left[id];
+    return (
+      !!slot &&
+      compiled.parking[slot.parking]!.kind === 'lot' &&
+      slot.departure === undefined &&
+      !left[id]
+    );
   };
   const leavingLot = (m: ParkingMotion) =>
     m.lot &&
@@ -1006,7 +1012,11 @@ export function createParking(
             holdProgress(m.path, compiled.lanes[m.lane]!, length(id), width(id)),
           );
         } else {
-          stripManoeuvres++;
+          if (space.departure === undefined) stripManoeuvres++;
+          else {
+            lotLeaves++;
+            totalLeave += timeS - m.entryS;
+          }
           removeMotion(id);
           callbacks.resume(id, m.connector);
         }
@@ -1079,8 +1089,13 @@ export function createParking(
     required,
     departureRoom(id: number) {
       const slot = spaces[originSpace(id)];
-      if (!slot || left[id] || compiled.parking[slot.parking]!.kind !== 'roadside') return true;
-      const c = compiled.connectors[slot.connector]!,
+      if (
+        !slot ||
+        left[id] ||
+        (compiled.parking[slot.parking]!.kind !== 'roadside' && slot.departure === undefined)
+      )
+        return true;
+      const c = compiled.connectors[slot.departure ?? slot.connector]!,
         lane = compiled.lanes[c.lane]!,
         key = slot.idx * 2 + vehicles.vclass[id]!;
       if (Number.isNaN(approachReach[key]))
@@ -1114,9 +1129,10 @@ export function createParking(
       const slot = spaces[originSpace(id)];
       if (slot && !left[id]) {
         const facility = compiled.parking[slot.parking]!;
+        if (slot.departure !== undefined) return [slot.departure];
         if (facility.kind === 'lot') {
           const graph = lotGraph(slot.parking)!;
-          return facility.connectorsOut
+          const exits = facility.connectorsOut
             .filter(
               (c) =>
                 parkingConnectorPermitted(
@@ -1136,6 +1152,25 @@ export function createParking(
                     graph.stallNodes[slot.lotStall!]!
                   ]! || a - b,
             );
+          // TASK-152: a drive-out with no pose clear of its exit lane runs inside the lane
+          // band from the bay. It is offered only when no other exit is (a bay beside an aisle
+          // lane it cannot legally leave into: Sindelfingen pk:1487 into a private street).
+          const clear = exits.filter((c) => {
+            const key = (slot.idx * compiled.connectors.length + c) * 2 + vehicles.vclass[id]!;
+            let hold = clearHolds.get(key);
+            if (hold === undefined)
+              clearHolds.set(
+                key,
+                (hold = holdProgress(
+                  localPath(slot.idx, c, true),
+                  compiled.lanes[compiled.connectors[c]!.lane]!,
+                  length(id),
+                  width(id),
+                )),
+              );
+            return hold >= 0;
+          });
+          return clear.length ? clear : exits;
         }
         return [slot.connector];
       }
@@ -1163,7 +1198,8 @@ export function createParking(
         stock[slot] = -1;
         const space = spaces[slot]!;
         if (space.manoeuvre && connector !== undefined) {
-          const lot = compiled.parking[space.parking]!.kind === 'lot';
+          const lot =
+            compiled.parking[space.parking]!.kind === 'lot' && connector !== space.departure;
           const out = lot ? localPath(slot, connector, true) : null;
           const to = out ? pathPose(out, 0) : lanePose(connector);
           const pose = parkedPose(space, length(id));
@@ -1532,6 +1568,7 @@ export function createParking(
       usable = eligibleSpaces();
       prepareDepartures();
       approachReach = new Float64Array(spaces.length * 2).fill(NaN);
+      clearHolds.clear();
     },
   };
 }

@@ -10,6 +10,8 @@ import {
 } from '../schema';
 import type { CompiledCity, CParking, Diagnostic } from './types';
 import { compileStrip } from './strips';
+import { parkingEgress } from './parking-egress';
+import { STALL_LINK_M } from './lot-paths';
 
 /** Source aisle permissions also apply to the fitted off-street leg at a mapped mouth. */
 export function parkingConnectorPermitted(
@@ -375,5 +377,93 @@ export function compileParking(
       if (entry.direction !== 'out') facility.connectorsIn.push(idx);
       if (entry.direction !== 'in') facility.connectorsOut.push(idx);
     }
+  }
+}
+
+/**
+ * TASK-152: a lot bay whose access point lies in the band of a vehicle-graph lane that carries
+ * one of its own exits (a mapped aisle road, or a street a generated row adjoins) leaves into
+ * that lane at its own station, by the kerbside departure rule, and then drives the lane as a
+ * lane vehicle. Without this its drive-out ran inside the exit lane band, with no pose clear of
+ * it, as a motion lane traffic cannot see. The lane must lead
+ * by legal movements to the public network; on a two-way aisle whose near lane does not, the bay
+ * leaves into the opposite lane of the same physical aisle (TASK-149's clear bay manoeuvre).
+ * A one-way lane is never reversed. Departure connectors are appended, so every existing
+ * connector keeps its index, and belong to no entry list: lot admission is unchanged.
+ */
+export function compileBayDepartures(compiled: CompiledCity): void {
+  // A car departure's legal reach, by the access-zone rules routing uses, at the default
+  // lane-change distance (as the compile diagnostics use it).
+  const { latestDeparture } = parkingEgress(compiled, 30);
+  const added: { space: number; lane: number; positionM: number; id: string }[] = [];
+  for (const f of compiled.parking) {
+    const lot = f.kind === 'lot' ? compiled.lots?.find((l) => l.id === f.id) : undefined;
+    const graph = lot?.circulation;
+    if (!lot || !graph) continue;
+    const candidates = [
+      ...new Set([
+        ...lot.aisles.flatMap(
+          (id) => compiled.roads[compiled.index.road.get(id) ?? -1]?.lanes ?? [],
+        ),
+        ...[...f.connectorsIn, ...f.connectorsOut].map((c) => compiled.connectors[c]!.lane),
+      ]),
+    ].filter((lane) => compiled.lanes[lane]!.allowed.includes('car'));
+    for (const idx of f.spaces ?? []) {
+      const space = compiled.parkingSpaces![idx]!,
+        stall = lot.stalls[space.lotStall!]!;
+      if (graph.unreachable.includes(space.lotStall!)) continue;
+      const access = stall.access ?? stall.position;
+      const hits = candidates
+        .map((lane) => ({ lane, hit: nearestOnPolyline(compiled.lanes[lane]!.polyline, access) }))
+        .sort((a, b) => a.hit.away - b.hit.away || a.lane - b.lane);
+      // Only where one of the bay's own exits lies on that lane: its drive-out would run
+      // inside the exit lane's band, with no pose clear of it (TASK-150's census).
+      const node = graph.stallNodes[space.lotStall!]!;
+      const exitLanes = new Set(
+        graph.entries
+          .filter(
+            (e) =>
+              e.direction !== 'in' &&
+              f.connectorsOut.includes(e.connector) &&
+              Number.isFinite(e.distances[node]),
+          )
+          .map((e) => compiled.connectors[e.connector]!.lane),
+      );
+      const near = hits.find(({ lane }) => exitLanes.has(lane));
+      if (!near || near.hit.away > compiled.lanes[near.lane]!.widthM / 2) continue;
+      const group = compiled.roads[compiled.lanes[near.lane]!.road]!.streetGroupId;
+      const choice = hits.find(
+        ({ lane, hit }) =>
+          (lane === near.lane ||
+            (group !== null &&
+              compiled.roads[compiled.lanes[lane]!.road]!.streetGroupId === group &&
+              hit.away <= STALL_LINK_M)) &&
+          latestDeparture(lane) + 1e-9 >= hit.along,
+      );
+      if (choice)
+        added.push({
+          space: idx,
+          lane: choice.lane,
+          positionM: choice.hit.along,
+          id: `c:${f.id}:depart:${space.lotStall}`,
+        });
+    }
+  }
+  for (const { space, lane, positionM, id } of added) {
+    const idx = compiled.connectors.length,
+      facility = compiled.parking[compiled.parkingSpaces![space]!.parking]!;
+    compiled.connectors.push({
+      idx,
+      id,
+      lane,
+      positionM,
+      place: facility.place,
+      parking: facility.idx,
+      direction: 'out',
+      throughputPerMin: 30,
+    });
+    compiled.index.connector.set(id, idx);
+    compiled.lanes[lane]!.connectors.push(idx);
+    compiled.parkingSpaces![space]!.departure = idx;
   }
 }
