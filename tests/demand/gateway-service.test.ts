@@ -145,7 +145,15 @@ test('TASK-155 a connected gateway keeps exactly the trips it had without the cu
   const reference = scheduleTrips(alone, structuredClone(persons.filter(local)), scenario);
   expect(kept.length).toBeGreaterThan(0);
   expect(ends(city, kept)).toContain('Connected>Offices');
-  expect(kept).toEqual(reference);
+  // TASK-129 shares household cars over every member's day, and a member whose work is on a
+  // cut-off piece now stays home, so which household car a loop person drives can differ from
+  // the reference that leaves those members out. The trips themselves are identical.
+  const withoutCar = (trips: typeof kept) => trips.map((trip) => ({ ...trip, carId: undefined }));
+  expect(withoutCar(kept)).toEqual(withoutCar(reference));
+  for (const trip of kept.filter((t) => t.mode === 'car')) {
+    const person = persons.find((p) => p.id === trip.personId)!;
+    expect(trip.carId?.startsWith(`car:${person.householdId}:`)).toBe(true);
+  }
 });
 
 test('TASK-155 a trip that reaches none of its parking fails as no_route, a full one as no_parking', () => {
