@@ -162,18 +162,24 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
 /** TASK-113: the person trips by mode (as the mode choice left them; TASK-173: the caller passes
  * the trips whose tours have chosen) and straight-line distance band, each mode's distance
  * profile, and the person metrics' shares by hour and completions by mode. Local trips have no
- * gateway end; trips with one always drive. */
+ * gateway end; trips with one always drive. TASK-174: transit (mode `rail`) is the third mode,
+ * with the riders per line and stop from the transit metrics. */
 export function modeCensus(
   compiled: CompiledCity,
   trips: readonly TripRequest[],
   persons: Metrics['persons'],
+  transit?: Metrics['transit'],
 ) {
   const bands = [500, 1000, 2000, 3000, Infinity];
   const label = (m: number) => (m === Infinity ? '3 km+' : `<${m / 1000} km`);
   const byBand = Object.fromEntries(
-    bands.map((m) => [label(m), { walk: 0, car: 0, walkShare: 0 }]),
+    bands.map((m) => [label(m), { walk: 0, car: 0, transit: 0, walkShare: 0, transitShare: 0 }]),
   );
-  const distances: Record<'walk' | 'car', number[]> = { walk: [], car: [] };
+  const distances: Record<'walk' | 'car' | 'transit', number[]> = {
+    walk: [],
+    car: [],
+    transit: [],
+  };
   let gatewayCar = 0;
   for (const trip of trips) {
     if (trip.personId === null || trip.purpose !== 'private' || trip.vehicleClass !== 'car')
@@ -188,34 +194,63 @@ export function modeCensus(
       continue;
     }
     const meters = distance(from.centroid, to.centroid);
-    const mode = trip.mode === 'walk' ? 'walk' : 'car';
+    const mode = trip.mode === 'walk' ? 'walk' : trip.mode === 'rail' ? 'transit' : 'car';
     byBand[label(bands.find((m) => meters < m)!)]![mode]++;
     distances[mode].push(meters);
   }
-  for (const band of Object.values(byBand))
-    band.walkShare = band.walk + band.car ? band.walk / (band.walk + band.car) : 0;
+  for (const band of Object.values(byBand)) {
+    const all = band.walk + band.car + band.transit;
+    band.walkShare = all ? band.walk / all : 0;
+    band.transitShare = all ? band.transit / all : 0;
+  }
   const profile = (values: number[]) => {
     const sorted = values.slice().sort((a, b) => a - b);
     const at = (q: number) =>
       Math.round(sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)] ?? 0);
     return { trips: sorted.length, p10M: at(0.1), medianM: at(0.5), p90M: at(0.9) };
   };
-  const local = distances.walk.length + distances.car.length;
+  const local = distances.walk.length + distances.car.length + distances.transit.length;
   const byHour = persons
     ? persons.modes.byHour.walk.flatMap((walk, hour) => {
-        const car = persons.modes.byHour.car[hour]!;
-        return walk + car ? [{ hour, walk, car, walkShare: walk / (walk + car) }] : [];
+        const car = persons.modes.byHour.car[hour]!,
+          transit = persons.modes.byHour.transit[hour]!;
+        const all = walk + car + transit;
+        return all
+          ? [{ hour, walk, car, transit, walkShare: walk / all, transitShare: transit / all }]
+          : [];
       })
     : [];
   return {
     localPersonTrips: local,
     walkShareLocal: local ? distances.walk.length / local : 0,
+    transitShareLocal: local ? distances.transit.length / local : 0,
     gatewayPersonTrips: gatewayCar,
     byBand,
-    profile: { walk: profile(distances.walk), car: profile(distances.car) },
+    profile: {
+      walk: profile(distances.walk),
+      car: profile(distances.car),
+      transit: profile(distances.transit),
+    },
     startedByHour: byHour,
     started: persons?.modes.started,
     completed: persons?.modes.completed,
+    transit: transit && {
+      lines: transit.lines.map(
+        ({ name, capacity, boardings, alightings, riderBoardings, riderAlightings, peakLoad }) => ({
+          name,
+          capacity,
+          boardings,
+          alightings,
+          riderBoardings,
+          riderAlightings,
+          peakLoad,
+        }),
+      ),
+      stops: transit.stops.filter((s) => s.boardings + s.alightings),
+      waits: transit.waits,
+      deniedBoardings: transit.deniedBoardings,
+      gaveUp: transit.gaveUp,
+    },
   };
 }
 
@@ -541,10 +576,10 @@ export function probeMorning(
       (gatewayTraffic[cls] ??= { entered: 0, left: 0 }).left++;
     }
   }
-  // Vehicle trips only: walk trips (TASK-128 riders, tours that chose to walk) are not vehicle
-  // trips and never pending.
+  // Vehicle trips only: walk and transit trips (TASK-128 riders, tours that walk or ride) are not
+  // vehicle trips and never pending.
   const releasedTrips =
-    metrics.tripOutcomes!.filter((t) => t.mode !== 'walk').length - metrics.trips.pending;
+    metrics.tripOutcomes!.filter((t) => t.mode === 'car').length - metrics.trips.pending;
   const parkingNodes = new Map<number, Set<string>>();
   const parkingAt = (node: number, id: string) => {
     const list = parkingNodes.get(node) ?? new Set<string>();
@@ -686,6 +721,7 @@ export function probeMorning(
       compiled,
       travelled.filter((_, id) => decided.has(id)),
       metrics.persons,
+      metrics.transit,
     ),
     trips: trips.length,
     releasedTrips,
@@ -718,7 +754,7 @@ export function probeMorning(
     // Vehicle arrivals only: a walked trip's outcome reads as completed from the start.
     localArrivals: travelled.filter(
       (trip, id) =>
-        trip.mode !== 'walk' &&
+        trip.mode === 'car' &&
         city.places[trip.destinationPlaceId]!.kind !== 'gateway' &&
         (engine.inspect(id + 1)?.state === 'completed' ||
           engine.inspect(id + 1)?.failReason === 'no_parking'),

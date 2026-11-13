@@ -787,6 +787,13 @@ export function createRailCrossings(
       }
       return result;
     },
+    /** TASK-174: the runs in service at their controlled ages, or null when no crossing is served
+     * and the timetable runs as published. */
+    services() {
+      return enabled
+        ? services.map((s) => ({ departure: s.departure, cycle: s.cycle, ageS: s.ageS }))
+        : null;
+    },
     snapshot(): RailSnapshot {
       return {
         crossings: states.slice(),

@@ -1448,6 +1448,23 @@ request-dependent route is cached. The simulation consumes these routes for test
 TASK-111's test walkers use it once per source (place to place, `walkSpeedMps`,
 `walkStepsFactor`), sharing the route among the source's walkers; live edits route again.
 
+TASK-174 adds `transitNetwork(compiled, walkSpeedMps, stepsFactor)` (`routing/transit.ts`, cached
+by compiled city and speed). Stops are the platforms `railTimetable` calls at: TASK-138's tram
+stops and the S-Bahn platforms of station places; lines are its routes with stops (main-line
+trains have none). A tram stop is reached from the nearest non-crossing walk link within 60 m on
+its grade, an S-Bahn platform from its station's walk anchors; the last metres to the platform's
+middle are a straight line x 1.3 (`PLATFORM_DETOUR`). One one-to-all walk search per stop gives
+walking seconds from every walk node (`placeAccess(placeId)` takes the place's anchors); stops
+within a 10 min walk of each other are transfers. The graph is time-expanded over two days of
+runs: per run and stop an arrival, a departure on board and a departure from the platform. Arcs:
+ride, dwell (on board), wait (a stop's platform departures in time order), and alighting to board
+again at the same stop after 60 s or at a transfer stop after the walk; boarding the same run
+again is excluded. Every arc goes forward in time, so `route({ departS, accessS, egressS },
+weights)` scans the events in time order once (within two hours of the departure, walks at most
+15 min) for the least generalized cost: walking and waiting seconds, riding seconds times
+`weights.ride`, `weights.transferS` per transfer. The plan lists its rides (route, run, stops,
+times), transfer walks, access and egress stops, and walking, waiting and riding seconds.
+
 ## 8. Simulation
 
 TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
@@ -2129,6 +2146,25 @@ road id, connectors by connector id, signals by node id. Order of the patch:
    before, so a place that lost its connectors fails its trips at release with the existing
    reasons.
 
+TASK-174 transit (`sim/transit.ts`). Where `transitNetwork` has stops and walkers exist, the
+engine follows the runs the simulation runs: the crossing controller's service ages
+(`createRailCrossings().services()`), or the timetable's where it serves no crossing. Capacity per
+vehicle at full population, scaled by `personsPerResident` (at least 1): tram 210 (a 36 m
+four-section car), S-Bahn 1 088 (two ET 423 units). A rider walks from the walk network to a spot
+drawn on the platform and waits; a run of one of the rider's routes (those that reach the planned
+stop from this one) standing at the stop takes waiting riders in order of arrival while it has
+room, and a full one leaves them for the next (`deniedBoardings`, once per rider and run). A
+boarding rider walks to the nearest point of the body, done before the run leaves. When the run
+reaches the rider's stop they get off at a door drawn along the body and walk off the platform to
+the planned access. After 30 min of waiting a rider walks on from the stop. `persons.ts` runs a
+transit trip (mode `rail`) as legs `walk` (to the stop), then per vehicle `wait` and `ride`,
+a transfer `walk` or a wait at the same stop, and `walk` on; a missing walk route fails it as
+`no_walk_route`. Riders on platforms join the walker snapshot (ids from `TRANSIT_RIDER_ID`,
+states walking and waiting) and are inspected through `inspectWalker`; `snapshot.transit.vehicles`
+lists each run's riders by train pose id; `Metrics.transit` counts boardings and alightings per
+line and stop, TASK-128's riders apart, the most aboard per line, waits, denied boardings and riders
+who gave up. The transit state enters the state hash only once a rider of the mode choice has come.
+
 A patch is deterministic: the same patches at the same steps give the same state hash (T19).
 The engine never applies a patch mid-step; the host handles the request between loop ticks
 and pauses nothing. `restart` after a patch reloads the latest patched compiled city with the
@@ -2415,8 +2451,8 @@ TASK-125's: occupied plus claimed below capacity (inferred soft garages always h
 person draws a walk preference (normal, sd 6 min) and a value of time (log-normal, sigma 0.5) from
 their own stream of the demand seed; each tour draws its choice from its first trip's stream of the
 scenario seed (`mode-choice`). The draws are standard and the configuration only rescales them, so a
-slider moves no draw, and raising the walk preference only turns car tours into walk tours. Transit
-is a third entry of the alternatives with no cost until stations carry riders (TASK-128).
+slider moves no draw, and raising the walk preference only turns car tours into walk tours.
+TASK-174 fills the third alternative, transit (below).
 
 TASK-173: the choice runs when the tour's first trip starts, that is when the person leaves home
 (after their previous trip and, for a shared car, after the car is back), so "current link costs"
@@ -2447,6 +2483,29 @@ T21, T29), T53 on Munich, the full-demand morning and `traffic:quick` measure ca
 off (owner, 2026-11-13); `tests/traffic/munich-mode-share.test.ts` (full traffic tier, not the
 light one) guards the choice on: the local walk share, its fall with distance, and the car trips'
 gridlock and stalled heads.
+
+TASK-174 transit as a mode. At a tour's first departure the choice asks the transit router
+(section 7) for a plan from that moment (`transitWeights`: ride x 1.1, wait x 1, 5 min per
+transfer). Transit is on offer when a plan exists and walks less (access, transfers and egress,
+platforms included) than walking the whole way. Its generalized minutes are walk + wait + 1.1 x
+ride + 5 per transfer + 60 x fare / value of time, with a flat expected fare of 0.5 EUR
+(`TRANSIT_CHOICE` in `demand/mode-choice.ts`: about a 2 EUR short-trip ticket for one trip in
+four, nothing for pass holders; constants, no settings). The tour's own draw picks by cumulative
+probability in the order walk, car, transit, so a choice without transit on offer is TASK-113's
+exactly. With transit on offer, tours of persons who walk all day (no free household car) also
+choose, between walk and transit; car tours choose among all three. A tour that takes transit
+turns its trips into mode `rail` without a `carId` (`transitTrip`), and a car tour's car stays
+parked as for a walked tour. Its first trip rides the plan the choice saw; each later trip plans
+as it leaves and walks when no plan exists. In Munich every S-Bahn route calls at one stop inside
+the extract, so residents' transit there is the tram. `PersonMetrics.modes` counts `transit`
+started, by hour and completed, and the census in `bench/import-probe.ts` gives transit shares by
+distance band and riders per line. Choice off: no tours, no plans, main's run.
+
+TASK-128's station riders stay background demand, outside the choice and the mode shares, with
+their trips and walks unchanged; they also ride the S-Bahn (`sim/transit.ts`): each comes in
+aboard the run that stops at their platform at their arrival second, gets off at a door and walks
+to the platform's nearest entrance until their walk out departs, and after the walk back walks onto
+the station's other platform (the way back) and leaves on the next S-Bahn with room.
 
 ## 10. Engine host
 
@@ -3139,6 +3198,15 @@ compiled bay corners draw three thin warm-white edges, open toward the aisle. Th
 paint fades at overview zoom; 3D paint is split and draped over the terrain triangles like
 other ground paint. The default-on “Parking stalls” layer controls paint in both views,
 leaving the lot surface visible. No parked vehicles or parking simulation are introduced.
+
+TASK-174: riders on platforms are drawn and picked with the walkers (waiting in the walkers'
+waiting colour); picking one opens the person inspector, whose current leg names the stop waited
+at or ridden to. The train inspector shows a run's riders against its places and
+lists them as links to the person inspector, whose journey shows wait legs at their stop and ride
+legs with the line and the stop where the rider gets off. The Chart section's mode shares add
+transit (system purple) to the caption, the counts and the hourly bars, the mean wait, riders left
+by a full vehicle, and a table of riders per line (residents boarded, TASK-128's riders off and on,
+the most aboard of the places).
 
 ## 12. Project format and migrations
 

@@ -28,6 +28,8 @@ import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
 import { createPersons, hasPerson } from './persons';
+import { transitNetwork } from '../routing/transit';
+import { createTransit, scheduledServices, TRANSIT_RIDER_ID } from './transit';
 import { createWalkRouter } from '../routing/walk';
 import type {
   PatchResult,
@@ -35,6 +37,8 @@ import type {
   VehicleDetail,
   VehicleSnapshot,
   VehicleState,
+  WalkerDetail,
+  WalkerSnapshot,
 } from './types';
 import {
   createVehicles,
@@ -122,6 +126,22 @@ function createRun({
     vehicles,
     trips.some((trip) => hasPerson(trip) || trip.mode === 'walk'),
   );
+  // TASK-174: riders on platforms and in vehicles, where the timetable calls at stops. The
+  // vehicles are the crossing controller's runs, or the timetable's where it serves no crossing.
+  const network =
+    walkers && compiled.rail
+      ? transitNetwork(compiled, params.walkSpeedMps, params.walkStepsFactor)
+      : null;
+  const transit = network
+    ? createTransit(
+        compiled,
+        network,
+        params,
+        scenario.seed,
+        scenario.demand.personsPerResident,
+        (timeS) => railCrossings?.services() ?? scheduledServices(network, timeS + dtS),
+      )
+    : null;
   const persons = createPersons(
     compiled,
     trips,
@@ -134,6 +154,7 @@ function createRun({
     population,
     walkRouter,
     { provider, costs },
+    transit,
   );
   const connectors = createConnectors(
     compiled,
@@ -1239,6 +1260,28 @@ function createRun({
     }
   }
 
+  /** TASK-174: riders on platforms are drawn and picked like walkers. */
+  function withRiders(snapshot: WalkerSnapshot): WalkerSnapshot {
+    const riders = transit?.snapshot(time());
+    if (!riders?.count) return snapshot;
+    const join = <T extends Uint32Array | Float32Array | Uint8Array | Int8Array>(a: T, b: T): T => {
+      const out = new (a.constructor as new (n: number) => T)(a.length + b.length);
+      out.set(a);
+      out.set(b, a.length);
+      return out;
+    };
+    return {
+      count: snapshot.count + riders.count,
+      id: join(snapshot.id, riders.id),
+      x: join(snapshot.x, riders.x),
+      y: join(snapshot.y, riders.y),
+      heading: join(snapshot.heading, riders.heading),
+      state: join(snapshot.state, riders.state),
+      layer: join(snapshot.layer, riders.layer),
+      tripLeg: join(snapshot.tripLeg, new Uint8Array(riders.count).fill(3)),
+    };
+  }
+
   function snapshot(): VehicleSnapshot {
     const { respawnS, fadeS } = params.gridlock;
     const count = accounting.trips.driving + accounting.trips.queuedDestination;
@@ -1259,8 +1302,9 @@ function createRun({
       parkedCars: parking.stockSnapshot(),
       fade: new Float32Array(count),
       poseLane: new Int32Array(count).fill(-1),
-      ...(walkers && { walkers: walkers.snapshot() }),
+      ...(walkers && { walkers: withRiders(walkers.snapshot()) }),
       ...(railCrossings && { rail: railCrossings.snapshot() }),
+      ...(transit && { transit: { vehicles: transit.snapshot(time()).vehicles } }),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
@@ -1576,9 +1620,33 @@ function createRun({
       const metrics = accounting.metrics(time());
       if (walkers) metrics.walkers = walkers.metrics();
       if (persons.enabled) metrics.persons = persons.metrics();
+      if (transit) metrics.transit = transit.metrics();
       return metrics;
     },
-    inspectWalker: (id: number) => walkers?.inspect(id) ?? null,
+    inspectWalker: (id: number): WalkerDetail | null => {
+      if (id < TRANSIT_RIDER_ID) return walkers?.inspect(id) ?? null;
+      const rider = transit?.inspect(id);
+      if (!rider) return null;
+      const trip = trips.find((t) => t.id === rider.tripId);
+      return {
+        id,
+        fromPlace: trip?.originPlaceId ?? '',
+        toPlace: trip?.destinationPlaceId ?? '',
+        personId: rider.personId,
+        tripId: rider.tripId,
+        tripLeg: 'walk',
+        state: rider.phase === 'waiting' ? 'waiting' : 'walking',
+        spawnedS: rider.sinceS,
+        arrivedS: null,
+        waitingS: rider.phase === 'waiting' ? time() - rider.sinceS : 0,
+        currentWaitS: rider.phase === 'waiting' ? time() - rider.sinceS : 0,
+        crossings: 0,
+        crossing: null,
+        route: null,
+        link: -1,
+        positionM: 0,
+      };
+    },
     inspectPerson: (id: string) => persons.inspect(id),
     stateHash: () =>
       stateHash(
