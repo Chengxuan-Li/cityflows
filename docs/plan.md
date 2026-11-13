@@ -203,6 +203,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | done 2026-11-13 |
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | queued (near the end) |
 | [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after the UI merge and TASK-168) |
+| [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | in progress (Claude Code subagent; merges held until green) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1181,6 +1182,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-175 | Claude Code, the lead's subagent | Opus 5.5 | high | 5375 (production 5475) |
 | TASK-176 | Claude Code, the lead's subagent | Opus 5.5 | high | 5376 (production 5476) |
 | TASK-177 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5377 (production 5477) |
+| TASK-178 | Claude Code, the lead's subagent | Opus 5.5 | high | 5378 (production 5478) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3967,6 +3969,13 @@ no hash or render pin moved. Lead merge onto main with TASK-173 and TASK-175: ty
 build, unit (1,371), city (173), light e2e (39) and V163 pass. Open: the bundled scenarios end at
 18:00, so Follow clock never reaches evening in a normal run; in 2D, vehicle lights under a bridge
 deck show through it; the evening hue (mauve) awaits the owner.
+
+Full run 43479489386 (lead, manual, on 738af8c): the new seed-report job passed (TASK-172 validated);
+the full tier failed (traffic: munich-full-demand timed out at 900 s; e2e a, b, c and rest: T19, T47,
+V100, gate4-layers, qa-mobile, T16 grid5x5-stress, T63, T54 Munich and others), mostly specs that
+expect car traffic now that mode choice is on by default, plus layout leftovers. Per AGENTS.md new
+merges are held until TASK-178 makes the full tier green; TASK-163 had been pushed before the result
+arrived.
 
 ## Owner decisions log
 
