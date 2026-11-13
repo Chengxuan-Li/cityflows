@@ -308,7 +308,8 @@ export function labelCandidates(city: CompiledCity, source: CityGeometry): Label
       key: `${sourcePlace.name}/${place.id}`,
       pos: place.centroid,
       minZoom: station ? 0.1 : generic ? (box ? 0.8 : 1.5) : 0.6,
-      maxZoom: Infinity,
+      // From 6 px/m a station's entrances carry its name (layers/stations.ts).
+      maxZoom: station && sourcePlace.station?.entrances.length ? 6 : Infinity,
       ...(generic && box
         ? { areaM: { width: box.maxX - box.minX, height: box.maxY - box.minY } }
         : {}),

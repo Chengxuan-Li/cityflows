@@ -149,14 +149,15 @@ export function createLabelLayer() {
         });
 
   function draw(zoom: number, view: ViewBounds) {
-    // Cover half a view more on each side, so a pan rebuilds the sprites only now and then.
+    // Cover a quarter view more on each side: a pan rebuilds the sprites now and then, and
+    // few sprites off screen cost render time.
     const w = view.maxX - view.minX,
       h = view.maxY - view.minY;
     covered = {
-      minX: view.minX - w / 2,
-      minY: view.minY - h / 2,
-      maxX: view.maxX + w / 2,
-      maxY: view.maxY + h / 2,
+      minX: view.minX - w / 4,
+      minY: view.minY - h / 4,
+      maxX: view.maxX + w / 4,
+      maxY: view.maxY + h / 4,
     };
     let used = 0;
     for (const label of placed) {

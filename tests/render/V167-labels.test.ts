@@ -175,9 +175,9 @@ cityTest('V167 Munich labels are deterministic, collision-free and upright at ev
       {},
     );
   });
-  // The station from the overview on; streets wherever they are wide enough; tram stops in
-  // between, until their boards take over.
-  expect(counts.map((n) => n.station)).toEqual([1, 1, 1, 1, 1]);
+  // The station from the overview until its entrances carry the name at 6 px/m; streets wherever
+  // they are wide enough; tram stops in between, until their boards take over.
+  expect(counts.map((n) => n.station)).toEqual([1, 1, 1, undefined, undefined]);
   expect(counts[0]!.street).toBeGreaterThan(0);
   expect(counts[2]!.street).toBeGreaterThan(counts[1]!.street!);
   expect(counts[2]!.stop).toBeGreaterThan(0);
