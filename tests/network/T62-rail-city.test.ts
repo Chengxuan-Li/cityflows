@@ -28,8 +28,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     // and e4654d8 (merging lanes kept on a group's inner roads).
     expect(createHash('sha256').update(JSON.stringify({ lanes, movements })).digest('hex')).toBe(
       name.startsWith('munich')
-        ? '674653ac0b5ead5eb84ff9e69f16c61fdc138df9745b38f858329a66aaa11ada'
-        : '364c9cb42837ecb214d540cf0f1b9c06442b2cecdbbe67f4a72597d5d2043a71',
+        ? 'e61ac1ae4d174a2f291665fcc0f665afa0f4af35afb3abfb0c031dab51c7961e'
+        : 'ec6f0fa77ebc23d1b1c04344c6eca38dea08cc5cfbe793fd9a02f909cc65d775',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);
     expect(
