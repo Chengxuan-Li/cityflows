@@ -1,14 +1,13 @@
-name: Parking geometry verification
+name: Parking access investigation
 on: workflow_dispatch
 permissions:
   contents: read
 jobs:
-  geometry:
+  trace:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
-        revision: [aa4006c50fc0097a26755cc6144e3ac8c3f53594, e99c03c1ba7c4513b2b8289c1c15ab08b35ed4f5]
+        revision: [94ff5b94ad3f2a6a09fca2c88e5a7d4dbb08a570]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -22,13 +21,11 @@ jobs:
           node-version: 24
       - run: npm ci
         working-directory: source
-      - run: python ../harness/bench/street-inspect.py && npx vitest run --project city tests/render/V117-visual-fixes.test.ts
+      - run: python ../harness/bench/parking-inspect.py
+        working-directory: source
+      - run: cp ../harness/bench/*parking-passive.mjs bench/ && node --experimental-strip-types --import ./bench/register.ts bench/run-parking-passive.mjs
         working-directory: source
       - uses: actions/upload-artifact@v7
-        if: always()
         with:
-          name: street-${{ matrix.revision }}
-          path: |
-            source/*-lamps.json
-            source/*-curbs.json
-
+          name: parking-trace-${{ matrix.revision }}
+          path: source/parking-trace.json
