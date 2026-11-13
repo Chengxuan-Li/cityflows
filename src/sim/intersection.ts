@@ -482,7 +482,8 @@ export function createIntersections(
       }
       return null;
     }
-    const clearance = crosswalkEnd[movement.toLane]! + profile(id).lengthM + params.idm.minGapM;
+    const body = profile(id).lengthM + params.idm.minGapM;
+    const clearance = crosswalkEnd[movement.toLane]! + body;
     const horizon =
       vehicles.stopped[id]! >= params.intersection.boxWaitS
         ? 0
@@ -492,12 +493,14 @@ export function createIntersections(
       const space = exitRear(exitTail, horizon);
       if (space < clearance) return vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box';
     }
+    // Cars still crossing toward the exit are moving: they need room for the body only, as a
+    // platoon shares a green. A queue that forms is judged from the exit lane's tail above.
     for (const idx of compiled.lanes[movement.toLane]!.in) {
       const incoming = compiled.movements[idx]!;
       for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!) {
         const front = vehicles.position[car]! - incoming.lengthM + vehicles.speed[car]! * horizon;
         if (idx !== movement.idx && front < 0) continue;
-        if (front - profile(car).lengthM < clearance) return 'box';
+        if (front - profile(car).lengthM < body) return 'box';
       }
     }
     return null;
