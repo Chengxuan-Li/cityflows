@@ -199,10 +199,11 @@ export function sceneLight(settings: LightingSettings, timeS: number): SceneLigh
   if (mode === 'evening') return resolve(evening, true, 1, 0.45, exposure);
   if (mode === 'night') return resolve(night, false, 1, 0.22, exposure);
   const { elevation, azimuth, hour } = sunAt(timeS);
-  // Day above 10°, evening at the horizon, night below -12° (past nautical twilight).
+  // Day above 20°, golden light to evening at the horizon, night below -12° (past nautical
+  // twilight).
   const [from, to, t] =
     elevation >= 0
-      ? [evening, day, clamp01(elevation / 10)]
+      ? [evening, day, clamp01(elevation / 20)]
       : [evening, night, clamp01(-elevation / 12)];
   const up = elevation > 0;
   const sunIntensity = up

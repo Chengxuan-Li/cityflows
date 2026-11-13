@@ -132,7 +132,7 @@ export class NightLayer {
     this.lamps.visible = glow > 0 && layers.streetLights;
     this.platforms.visible = glow > 0 && layers.rail;
     this.lamps.alpha = 0.55 * glow;
-    this.platforms.alpha = 0.45 * glow;
+    this.platforms.alpha = 0.3 * glow;
     this.signals.visible = glow > 0 && layers.signals;
     this.vehicles.visible = glow > 0;
     this.vehicles.alpha = 0.7 * glow;

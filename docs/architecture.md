@@ -2632,6 +2632,33 @@ the city, and roads retain the strongest tone.
   and 3D Curbs default on; BUS uses the Lane markings switch. Counts and placement timings
   are exposed on the map canvas in test mode. Neither canonical network nor compile changes.
 
+- TASK-163: scene lighting is view-only state. `render/lighting.ts` turns `{ mode, exposure }`
+  (`day`, `evening`, `night` or `clock`; exposure 0.5 to 1.5) and the simulation clock into one
+  `SceneLight` for both views: sun direction, colour and intensity, whether it casts shadows,
+  hemisphere sky and ground colours, background, an `ambient` factor (light on a flat surface
+  relative to Day, per linear channel), the artificial-light level and the share of windows
+  lit. Day reproduces TASK-162's lights exactly (ambient 1, no artificial light). "Follow
+  clock" uses a fixed day (sunrise 06:00, sunset 20:00, 52° at 13:00), blends Day, Evening and
+  Night by sun elevation and moves once per simulated minute. The UI keeps the setting in its
+  own store (`ui/lighting-store.ts`), per viewer in `localStorage` (`cityflows.lighting`,
+  parsed and clamped on read, Day when missing, broken or blocked), never in the project; it
+  cannot change simulation, project or render-geometry hashes. The Shadows layer also turns
+  the 3D sun's shadows on and off. Colours are never changed, only lit: 3D lit materials take
+  the lights; unlit materials (rail paint, wires, sign faces, pedestrians) are multiplied by
+  `ambient`; light sources (signal lamps, illuminated station boards and screens, overlays)
+  are flagged `userData.lit` and keep their colour. After dark 3D adds instanced additive
+  decals and sprites, no real lights: a pool on the road and a halo at each lamp head (lamp
+  heads emissive), pools along railway platforms (about every 12 m) and at tram shelters,
+  halos on signal heads, level-crossing lamps brighter. Facade windows light up in the
+  building shader by cell, from a 24-bit seed hashed from the building's outer ring
+  (`windowLit`; context buildings have no id), blending to their average glow far off.
+  Vehicles paint head- and tail-lamps in their shader and draw headlight beams as a second
+  instanced mesh sharing the bodies' instance matrices; train cars light their side windows.
+  Each effect is a shader define, so Day runs the unchanged programs. 2D draws a night layer
+  over the map and under overlays: a multiply tint by `ambient` (an additive lift above
+  exposure 1), additive lamp and platform glows, vehicle light sprites and bright copies of
+  the signal heads. Both canvases publish the resolved mode as `data-lighting`.
+
 - TASK-108: `render/marking-geometry.ts` owns world-metre paint shapes (role-coloured
   polylines with widths and dash metadata, and filled polygons). Road clipping, dash phase,
   approach controls and arrows, continuation seams/tapers, junction guides and crossing
