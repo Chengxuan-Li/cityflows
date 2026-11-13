@@ -86,13 +86,17 @@ capacity is never fabricated to make a reachability check pass. The original `r:
 `r:663` restriction at `n:647` retains the German source note's banned direct Arnulfstraße
 approach; a legal route may reach the mouth by a detour, not by that prohibited movement.
 
-Verification/evidence in progress: focused source/path tests pass all 26 mouths and original
+Verification: focused source/path tests pass all 26 mouths and original
 TASK-144 round trips; independent synthetic checks find 0 wrong-way eligible paths and 0
 actual wrong-way motion samples, with legal car parking/return and restricted van refusal.
 The lead's independent compatibility proof retains all 192 complete historical route results,
 all physical road/lane/movement geometry and controls, canonical walking source and the full
 train timetable. No raw route fixture or threshold is changed. The unchanged original traffic
-gate and the complete check/city runs are required before this task is marked complete.
+suite passes on integrated product head `94ff5b9`: 3,928 completed, 36 gridlocked, 0 stalled
+heads and 0 parking failures (dedicated hosted run `43358073560`). Strict city and light
+browser tests also pass in run `43358095390`; its check job found only three invalid synthetic
+test anchors, corrected and reverified in test-only `ff20080`. Final PR check results remain
+the lead's integration gate; no product acceptance threshold was changed.
 
 Evidence directory: `D:/cityflows-task149-evidence`. Matched genuine app captures are
 `baseline-` and `current-`, with suffixes `-2d.png` and `-3d.png`, for
@@ -100,6 +104,47 @@ Evidence directory: `D:/cityflows-task149-evidence`. Matched genuine app capture
 `landshuter-372315670`, `private-449747772`, `bridge-106547920`, `spine-292031578`,
 `west-1231631260`, `east-1231649712` and `north-1231649715`. Ports are 5349/5449;
 captures and local checks were coordinated around TASK-148's reserved measurement windows.
+
+The final native baseline images were recaptured using the actual main compiler/renderer
+at `aa4006c50fc0097a26755cc6144e3ac8c3f53594`, served from the detached
+`baseline-source` checkout on 5449, with the same canonical baseline city, viewport and
+camera projection as the candidate. `baseline-<city>-served-proof.json` records HTTP module
+hashes and verifies that the served compiler has neither the new throat-layout code nor the
+typed local paths. Loading an old City with the new compiler is not used as a before image.
+The gallery `index.html` and `richel-comparison.png` were regenerated with the corrected
+native captures. Elevated bridge decks legitimately occlude ground bays in some native
+views; the gallery's separately labeled compiled plan overlays expose that geometry.
+
+Six complete flows were rerun on the exact integrated `ff20080` runtime. Each visits the
+named source lot from a real gateway, drives in, parks visibly, dwells, leaves, drives out
+and returns to a public road. Arrival is 07:00:10 and the dependent return is 07:10:00.
+All twelve legs complete with zero failures, with the parked car observed in each lot.
+
+| Source lot / facility | Destination place | Parked dwell |
+|---|---|---|
+| 54172005 / pk:2047 (Richelstraße) | p:1486 | 371 s |
+| 106547917 / pk:2049 (ramps) | p:1496 | 472 s |
+| 106547920 / pk:2050 (under bridge) | p:1498 | 368 s |
+| 372315670 / pk:2056 (Landshuter Allee) | p:1570 | 445 s |
+| 449747772 / pk:2059 (private aisle) | p:1576 | 348 s |
+| 292031578 / pk:1476 (dense private lot) | p:1342 | 404 s |
+
+`current-workflows.json` contains the trip inputs, gateways, complete road histories,
+per-second actual motion poses, states and final metrics, plus the runtime revision and
+engine/parking source hashes. `current-pk-<number>-motion.svg` depicts those recorded
+positions on an explicitly labeled ground-level source plan, not a substituted screenshot.
+Local focused source/persistence/edit/grade tests pass 40/40 with typecheck; the shared-mouth
+T54/T59 subset passes 43/43. These include full one-way path direction checks, actual car
+parking/return, van refusal, ZIP/JSON and legacy loading, stale-reference diagnostics and
+successful mapped-aisle split/merge with the exit remapped to the downstream half.
+
+One separately verified legacy visual defect remains outside this access repair: an ordinary
+street occupant can overlap a departing car's rendered endpoint while its street gap is
+refused. The controlled, oriented-body witness produces the same 1,476 overlap samples
+from 152.4 s through 299.9 s in main `aa4006c` and integrated `ff20080`, on an authored lot
+with no typed portals. `pre149-legacy-merge-overlap.json`,
+`current-legacy-merge-overlap.json` and `legacy-merge-overlap.mjs` retain the exact evidence.
+No larger manoeuvre model change is included here; the lead tracks that legacy follow-up.
 
 Entry-choice follow-up (lead approved): after selecting a mapped lot in the existing facility
 ranking, choose its cheapest eligible street route instead of the first canonical entry.
