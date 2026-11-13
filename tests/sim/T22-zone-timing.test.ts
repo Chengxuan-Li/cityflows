@@ -173,6 +173,9 @@ test('T22: an approach grant cannot bypass the zone clamp during movement entry'
     node.control = 'uncontrolled';
     node.signal = null;
   }
+  // The cars start at their stop lines; without the signal a crossing there would make them move
+  // up to clear it (TASK-169's keep clear) and miss the timing this case needs.
+  for (const road of Object.values(city.roads)) road.crossings = { start: false, end: false };
   const all = movementTrips(city);
   const requests = [
     all.find((trip) => trip.id === `${left.id}:0`)!,
@@ -235,6 +238,9 @@ test('T22: newly granted cars predict acceleration without their former stop-lin
     node.control = 'uncontrolled';
     node.signal = null;
   }
+  // The cars start at their stop lines; without the signal a crossing there would make them move
+  // up to clear it (TASK-169's keep clear) and miss the timing this case needs.
+  for (const road of Object.values(city.roads)) road.crossings = { start: false, end: false };
   const all = movementTrips(city);
   const requests = [left, through].map((m) => all.find((trip) => trip.id === `${m.id}:0`)!);
   const compiled = setup(city);
@@ -370,6 +376,9 @@ test('T22: speed-limit braking does not reserve a long zone forever', () => {
     node.control = 'uncontrolled';
     node.signal = null;
   }
+  // The cars start at their stop lines; without the signal a crossing there would make them move
+  // up to clear it (TASK-169's keep clear) and miss the timing this case needs.
+  for (const road of Object.values(city.roads)) road.crossings = { start: false, end: false };
   const all = movementTrips(city);
   const requests = [left, through].map((m, i) => ({
     ...all.find((trip) => trip.id === `${m.id}:0`)!,

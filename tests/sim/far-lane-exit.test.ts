@@ -174,7 +174,7 @@ test.each(['near', 'far', 'stream', 'spawn', 'lanes', 'none'] as const)(
       w.through.flatMap((_, i) => {
         const o = engine.inspect(i + 1);
         return o?.state === 'driving' && o.lane === lane
-          ? [[o.positionM - lengthM, o.positionM]]
+          ? [[o.positionM - lengthM, o.positionM, o.speedMps]]
           : [];
       });
     // Lane bodies while it holds and when it is granted, judged after the run against the span
@@ -241,15 +241,21 @@ test.each(['near', 'far', 'stream', 'spawn', 'lanes', 'none'] as const)(
       return [fromM, toM] as const;
     });
     for (const [fromM, toM] of spans) expect(toM - fromM).toBeGreaterThan(widthM);
+    // TASK-169: the near lane keeps the mouth clear, and a car standing beside it there needs
+    // only the following gap; moving cars the spawn gap.
     const inside = (on: number[][], from: number, to: number) =>
-      on.some(([rear, front]) => front! > from - GAP && rear! < to + GAP);
+      on.some(([rear, front, speed]) => {
+        const gap = speed! < 0.1 ? DEFAULT_SIM_PARAMS.idm.minGapM : GAP;
+        return front! > from - gap && rear! < to + gap;
+      });
     const nearBusy = (h: Lanes) => spans.some(([from, to], i) => inside(h.near[i]!, from, to)),
       farBusy = (h: Lanes) => inside(h.far, joinM - lengthM, joinM);
     // Granted only with both gaps: nobody within the gap of a near-lane span or the join.
     expect([nearBusy(grant!), farBusy(grant!)]).toEqual([false, false]);
     // It waited while either lane was occupied, each on its own.
+    // TASK-169: the near queue keeps the mouth clear, so that wait is shorter than the far one.
     if (traffic === 'near')
-      expect(held.filter((h) => nearBusy(h) && !farBusy(h)).length).toBeGreaterThan(100);
+      expect(held.filter((h) => nearBusy(h) && !farBusy(h)).length).toBeGreaterThan(50);
     if (traffic === 'far')
       expect(held.filter((h) => farBusy(h) && !nearBusy(h)).length).toBeGreaterThan(100);
     // Followers brake for it no harder than the insertion limit.

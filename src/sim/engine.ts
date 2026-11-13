@@ -27,6 +27,8 @@ import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
+import { inMouth, keepClearStand } from './keep-clear';
+import { keepClearZones } from '../network/keep-clear';
 import { chooseTripModes, createPersons, hasPerson } from './persons';
 import { createWalkRouter } from '../routing/walk';
 import type {
@@ -176,6 +178,10 @@ function createRun({
   const landingBlocked = (lane: number, fromM: number, toM: number) =>
     parking.crossingBlocks(lane, fromM, toM) || !!walkers?.holds(lane, fromM, toM);
   let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, landingBlocked);
+  // TASK-169: each lane's keep-clear zones, and where a head held short of one stands.
+  let keepClear = keepClearZones(compiled);
+  const keepClearStop = new Float64Array(trips.length).fill(Infinity);
+  const keepClearHeld = new Uint8Array(trips.length);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -443,6 +449,9 @@ function createRun({
     const gap = Math.max(spawnMinGapM, idm.minGapM);
     const spacing = lengthM + gap;
     if (landingBlocked(lane, positionM - spacing, positionM + gap)) return false;
+    // TASK-169: a body joining in a mouth zone, which queued traffic keeps clear, needs only the
+    // following gap to cars standing beside it; moving traffic keeps the spawn gap.
+    const mouth = inMouth(keepClear[lane]!, positionM - lengthM, positionM);
     const maxSpacing = maxVehicleLength + gap;
     if (positionM < spacing) {
       for (const idx of compiled.lanes[lane]!.in) {
@@ -473,7 +482,8 @@ function createRun({
       id !== -1 && vehicles.position[id]! <= positionM + maxSpacing;
       id = vehicles.previous[id]!
     ) {
-      const required = vehicles.position[id]! >= positionM ? profile(id).lengthM + gap : spacing;
+      const g = mouth && vehicles.speed[id]! < 0.1 ? idm.minGapM : gap;
+      const required = vehicles.position[id]! >= positionM ? profile(id).lengthM + g : lengthM + g;
       if (Math.abs(vehicles.position[id]! - positionM) < required) return false;
     }
     const source = compiled.lanes[lane]!;
@@ -604,6 +614,7 @@ function createRun({
           continue;
         }
         const position = vehicles.position[id]!;
+        keepClearStop[id] = Infinity;
         // A safe parking target can fill while the car is en route. Reconsider from here
         // once a second, before a one-way approach commits it to cruising past the target.
         if (
@@ -722,6 +733,51 @@ function createRun({
           limit[id] = Math.min(limit[id]!, Math.max(position, railStop));
         }
         const driving = profile(id);
+        // TASK-169: keep clear. Where its front would stand (behind a leader, projected by the
+        // leader's braking distance, or at a stop) would leave its body on a keep-clear zone, it
+        // stops short of the zone: once within its request distance of that stand, if it can at
+        // its comfortable deceleration, and then until it stands there. A head at its stop line
+        // first moves up to the line if that clears the zone; one waiting short of a zone for its
+        // junction counts that stand as its stop line.
+        const zones = lane ? keepClear[lane.idx]! : undefined;
+        const atStopLine = !!lane && stopAt === lane.stopM && obstacle === stopAt;
+        const front = zones?.length
+          ? keepClearStand(
+              zones,
+              driving.lengthM,
+              obstacle - idm.minGapM + (leaderSpeed * leaderSpeed) / (2 * idm.bMps2),
+              destination?.lane === lane!.idx ? destination.positionM : Infinity,
+              atStopLine ? lane!.stopM : -Infinity,
+            )
+          : null;
+        const ownSpeed = vehicles.speed[id]!;
+        const movesUp = front !== null && front > obstacle - idm.minGapM;
+        if (
+          front !== null &&
+          (movesUp
+            ? atStopLine && front + idm.minGapM <= rear
+            : keepClearHeld[id]
+              ? front >= position - 1e-6
+              : front >= position &&
+                front - position <=
+                  Math.max(
+                    params.intersection.decisionDistanceM,
+                    (ownSpeed * ownSpeed) / (2 * driving.idm.bMps2) + idm.minGapM,
+                  ) &&
+                idmAcceleration(
+                  driving.idm,
+                  ownSpeed,
+                  Math.min(speedLimit * vehicles.speedFactor[id]!, driving.maxSpeedMps),
+                  0,
+                  front + idm.minGapM - position,
+                ) >= -driving.idm.bMps2)
+        ) {
+          keepClearHeld[id] = 1;
+          obstacle = front + idm.minGapM;
+          leaderSpeed = 0;
+          if (!movesUp) limit[id] = Math.min(limit[id]!, Math.max(position, front));
+          if (ahead === -1) keepClearStop[id] = front;
+        } else keepClearHeld[id] = 0;
         const desiredSpeed = Math.min(speedLimit * vehicles.speedFactor[id]!, driving.maxSpeedMps);
         walkers?.account(
           id,
@@ -824,7 +880,7 @@ function createRun({
             intersections.grants[ahead] !== -1 ||
             (intersections.continuations[vehicles.movement[ahead]!] &&
               !laneChanges.holding[ahead])) &&
-          lane.stopM - position <= requestDistance
+          Math.min(lane.stopM, keepClearStop[id]! + idm.minGapM) - position <= requestDistance
         ) {
           intersections.request(id, movement);
         }
@@ -1093,7 +1149,7 @@ function createRun({
         continue;
       }
       const lane = compiled.lanes[field]!;
-      const remaining = lane.stopM - previousPosition;
+      const remaining = Math.min(lane.stopM, keepClearStop[id]! + idm.minGapM) - previousPosition;
       const movement = vehicles.movement[id]!;
       let granted = intersections.continuations[movement] ? movement : intersections.grants[id]!;
       if (
@@ -1107,7 +1163,12 @@ function createRun({
         granted = -1;
       }
       if ((movement !== -1 && granted === -1) || laneChanges.holding[id] || waitingForLane[id]) {
-        position = Math.min(position, Math.max(previousPosition, lane.stopM - idm.minGapM));
+        // TASK-169: or where it moved up to clear a keep-clear zone behind the line.
+        const stand = keepClearStop[id]! < Infinity ? keepClearStop[id]! : -Infinity;
+        position = Math.min(
+          position,
+          Math.max(previousPosition, lane.stopM - idm.minGapM, Math.min(stand, lane.stopM)),
+        );
         if (remaining <= params.intersection.decisionDistanceM) {
           vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;
         }
@@ -1404,6 +1465,7 @@ function createRun({
       routeVersion: () => costs.version,
     });
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked);
+    keepClear = keepClearZones(next);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );
