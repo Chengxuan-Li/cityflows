@@ -168,9 +168,9 @@ const baselines = {
   town: '00190f0813eca63be8fbf85dfa182edd1c5c7d3512d8097ee90968bf7b21b7bc',
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
-  // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
+  // TASK-152 and TASK-156 append 87 + 22 Munich bay departure connectors (lane connector lists too); with them
   // removed every pin equals 3e9951a's.
-  'munich-donnersberger': '41ad2e2f7d2a91012436b21b5f88b5682901617c24a9b098f59a0f0b85080c85',
+  'munich-donnersberger': 'ddb067c97a5a2d838cb96afd1ccd04c340d7a48d637dfe94afcdbec5a3dcdc63',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   'sindelfingen-a81': '52ff58a0d7eb61eff5f22d557083fc28e7f5f59e16ad3f1956d9105950a2b2ad',
 };
