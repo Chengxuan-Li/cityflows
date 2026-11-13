@@ -67,6 +67,13 @@ export interface TurnRule {
 
 export interface SignalProgram {
   turnOnRed?: boolean; // curb-side turn after a full stop; omitted = false
+  /** TASK-170: the run splits the phases' green time by the scenario's demand (architecture
+   * section 5.4); the phases' `durationS` are then the split's total and the fallback. Omitted =
+   * false: the phases run their own `durationS`. */
+  demandSplit?: boolean;
+  /** TASK-170: a phase ends early, after its minimum green, when no vehicle or walker waits or
+   * arrives for it, and the controller skips to the next phase with demand. Omitted = false. */
+  actuated?: boolean;
   offsetS: number;
   amberS: number; // follows every phase
   allRedS: number; // follows amber

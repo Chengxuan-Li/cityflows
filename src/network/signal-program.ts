@@ -11,6 +11,48 @@ function roadHeading(road: Road, end: boolean): number {
   return Math.atan2(b.y - a.y, b.x - a.x);
 }
 
+/** TASK-170: generated programs split their green by demand when a run loads; their phases'
+ * durations are the split's total and the fallback. */
+export const GENERATED_TIMING: Pick<SignalProgram, 'demandSplit' | 'actuated'> = {
+  demandSplit: true,
+  actuated: true,
+};
+
+/** TASK-170: the shortest green a demand split or an actuated controller gives a phase. */
+export const MIN_GREEN_S = 5;
+
+/**
+ * TASK-170: a program's green time `totalS` split by demand (architecture section 5.4).
+ * `served[g]` lists the phases in which green group g is green, `load[g]` its expected flow per
+ * lane, and `minS[p]` phase p's minimum green. Webster's rule, equal degrees of saturation, for
+ * phases that share green groups: from the minimums, each further second goes to the green group
+ * with the least green per unit of load, in its phase with the least green. A green group green
+ * in every phase gets the whole green whatever the split, so it is left out. Null when no green
+ * group carries load or the minimums exceed `totalS`: the program's own split stands.
+ */
+export function demandSplit(
+  served: readonly number[][],
+  load: readonly number[],
+  minS: readonly number[],
+  totalS: number,
+): number[] | null {
+  const loaded = load.flatMap((l, g) =>
+    l > 0 && served[g]!.length && served[g]!.length < minS.length ? [g] : [],
+  );
+  const green = [...minS];
+  let left = totalS - green.reduce((sum, s) => sum + s, 0);
+  if (!loaded.length || left < -1e-9) return null;
+  const share = (g: number) => served[g]!.reduce((sum, p) => sum + green[p]!, 0) / load[g]!;
+  while (left > 1e-9) {
+    const worst = loaded.reduce((a, g) => (share(g) < share(a) ? g : a));
+    const phase = served[worst]!.reduce((a, p) => (green[p]! < green[a]! ? p : a));
+    const step = Math.min(1, left);
+    green[phase] = green[phase]! + step;
+    left -= step;
+  }
+  return green;
+}
+
 /** One green group: the movements a road pair (`from` to `to`, road ids) switches together. */
 interface Unit {
   from: string;
@@ -168,6 +210,7 @@ function groupPhases(
   // 30 s a phase, as a single junction's, within a cycle of `GROUP_CYCLE_MAX_S`.
   const greenS = Math.min(30, Math.floor(GROUP_CYCLE_MAX_S / phases.length) - 4);
   return {
+    ...GENERATED_TIMING,
     offsetS: 0,
     amberS: 3,
     allRedS: 1,
@@ -230,7 +273,13 @@ function phasesFor(
   compiled: CompiledCity,
   diagnostics: Diagnostic[],
 ): SignalProgram {
-  const program: SignalProgram = { offsetS: 0, amberS: 3, allRedS: 1, phases: [] };
+  const program: SignalProgram = {
+    ...GENERATED_TIMING,
+    offsetS: 0,
+    amberS: 3,
+    allRedS: 1,
+    phases: [],
+  };
   const assigned: Set<number>[] = [];
   const addPhase = (durationS: number) => {
     assigned.push(new Set());

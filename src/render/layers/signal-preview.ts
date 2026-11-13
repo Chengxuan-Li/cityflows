@@ -1,7 +1,9 @@
 import type { Graphics } from 'pixi.js';
 import { headingAtDistance, pointAtDistance } from '../../geo/polyline';
-import { signalStateAt, type CompiledCity } from '../../network';
+import type { CompiledCity } from '../../network';
 import { style } from '../style';
+import type { SignalStates } from '../types';
+import { signalLight } from './signals';
 
 /** Uses the loaded engine tables, never the inspector's draft program. */
 export function drawSignalPreview(
@@ -9,12 +11,13 @@ export function drawSignalPreview(
   city: CompiledCity | null,
   nodeId: string | null,
   timeS: number,
+  states?: SignalStates,
 ) {
   graphics.clear();
   const index = nodeId === null ? undefined : city?.index.node.get(nodeId);
   const node = index === undefined ? undefined : city!.nodes[index];
   if (!node?.signal) return null;
-  const { phase, state } = signalStateAt(node.signal, timeS);
+  const { phase, state } = signalLight(node.signal, node.idx, timeS, states);
   const movements = state === 'green' ? node.signal.phases[phase]!.movements : [];
   for (const index of movements) {
     const { polyline, cumulative, lengthM } = city!.movements[index]!;

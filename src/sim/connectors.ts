@@ -70,6 +70,7 @@ export function createConnectors(
       visits.set(trip.destinationPlaceId, id);
   }
   const random = createRandom(scenario.seed);
+  const queuedAt = new Int32Array(trips.length).fill(-1);
   const queuedSince = (id: number) => Math.max(scenario.startS, trips[id]!.departS, requeuedS[id]!);
 
   for (const [id, trip] of trips.entries()) {
@@ -106,6 +107,7 @@ export function createConnectors(
       continue;
     }
     vehicles.destination[id] = into;
+    queuedAt[id] = out;
     vehicles.speedFactor[id] = Math.max(0.1, rng.normal(1, params.idm.desiredSpeedSd));
     vehicles.routeSeed[id] = Math.floor(rng.next() * 0x100000000);
     queues[out]!.push(id);
@@ -410,6 +412,8 @@ export function createConnectors(
   }
 
   return {
+    /** TASK-170: the connector a car trip was queued at when the run loaded, or -1. */
+    origin: (id: number) => queuedAt[id]!,
     spawn,
     canArrive,
     arrive,

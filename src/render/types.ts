@@ -27,6 +27,15 @@ export interface VehicleSnapshot {
   fade: Float32Array; // sprite alpha: 1, falling to 0 before a gridlock respawn (TASK-077)
   walkers?: WalkerSnapshot;
   rail?: { crossings: Uint8Array; railReady: Uint8Array; trains: TrainPose[] };
+  signals?: SignalStates;
+}
+
+/** TASK-170: the signals as the run drives them: each node's phase (-1 without a signal) and
+ * stage (0 green, 1 amber, 2 all-red), and each walk link's walk light (1 green). */
+export interface SignalStates {
+  phase: Int16Array;
+  state: Uint8Array;
+  walk: Uint8Array;
 }
 
 export interface WalkerSnapshot {
@@ -138,7 +147,8 @@ export interface Scene {
   setTiles(enabled: boolean): void;
   setSnapshot(snapshot: VehicleSnapshot): void;
   setParkedCars(snapshot: ParkedCarsSnapshot | null): void;
-  setSignalPreview(loaded: CompiledCity | null, timeS: number): void;
+  /** `states`: the snapshot's signal states, in the loaded city's node order (TASK-170). */
+  setSignalPreview(loaded: CompiledCity | null, timeS: number, states?: SignalStates): void;
   setSelection(selection: Pick | null): void;
   setMultiSelection(roads: readonly number[]): void;
   setRouteOverlay(route: RouteOverlay | null): void;

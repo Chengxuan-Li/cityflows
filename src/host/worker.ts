@@ -113,6 +113,8 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return engine.inspectWalker(request.walkerId);
     case 'inspectPerson':
       return engine.inspectPerson(request.personId);
+    case 'signalTiming':
+      return engine.signalTiming();
     case 'hash':
       return engine.stateHash();
   }
@@ -130,6 +132,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
         parkedCars: stock,
         walkers,
         rail,
+        signals,
         ...arrays
       } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
@@ -139,6 +142,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
         for (const array of Object.values(walkers))
           if (typeof array !== 'number') transfer.push(array.buffer);
       if (rail) transfer.push(rail.crossings.buffer, rail.railReady.buffer);
+      if (signals) transfer.push(signals.phase.buffer, signals.state.buffer, signals.walk.buffer);
       const now = performance.now();
       const updateOverlays = now - lastOverlayMs >= 500;
       const roadSpeedRatio = updateOverlays ? engine.metrics().roadSpeedRatio : undefined;
@@ -172,6 +176,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
           parkedCars,
           walkers,
           rail,
+          signals,
         },
       };
       self.postMessage(reply, { transfer });

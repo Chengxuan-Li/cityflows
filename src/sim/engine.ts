@@ -23,7 +23,13 @@ import { createAccounting } from './metrics';
 import { createParking } from './parking';
 import { DEFAULT_SIM_PARAMS } from './params';
 import { createProjector, patchChanges, remapRoute } from './patch';
-import { patchSignals } from './signals';
+import {
+  createSignalControl,
+  patchSignals,
+  signalDemand,
+  timedSignals,
+  type DemandTrip,
+} from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
@@ -123,6 +129,7 @@ function createRun({
     params,
     vehicles,
     trips.some((trip) => hasPerson(trip) || trip.mode === 'walk'),
+    (link, timeS) => signalControl.walkGreen(link, timeS),
   );
   const persons = createPersons(
     compiled,
@@ -147,6 +154,30 @@ function createRun({
     parking,
     persons,
   );
+  // TASK-170: demand-split signals are timed by the scenario's car trips routed on free-flow
+  // costs, from the origin connectors the trips were queued at.
+  const demandTrips: DemandTrip[] = [];
+  if (compiled.nodes.some((node) => node.signal?.demandSplit))
+    for (let id = 0; id < trips.length; id++) {
+      const origin = connectors.origin(id);
+      const destination = vehicles.destination[id]!;
+      if (origin === -1 || destination === -1) continue;
+      demandTrips.push({
+        origin: compiled.connectors[origin]!,
+        destination,
+        vehicleClass: vehicleClasses[vehicles.vclass[id]!]!,
+        purpose: vehiclePurposes[vehicles.purpose[id]!]!,
+      });
+    }
+  const demand = signalDemand(compiled, provider, demandTrips);
+  let signalControl = createSignalControl(
+    compiled,
+    timedSignals(compiled, demand, params),
+    vehicles,
+    params,
+    scenario.startS,
+    () => walkers?.walkCalls(),
+  );
   let merges = createMerges(compiled, vehicles, params, (id, ramp, movement) =>
     intersections.blocksEntry(id, ramp, movement),
   );
@@ -155,6 +186,7 @@ function createRun({
     acceleration: (id) => reservationAcceleration[id]!,
     groupRoute,
     routeVersion: () => costs.version,
+    signalColors: (timeS, colors) => signalControl.update(timeS, colors),
   });
   let railCrossings = createRailCrossings(compiled, vehicles, params, scenario.startS, (m) =>
     intersections.red(m),
@@ -1319,6 +1351,9 @@ function createRun({
       fade: new Float32Array(count),
       poseLane: new Int32Array(count).fill(-1),
       ...(walkers && { walkers: walkers.snapshot() }),
+      ...(compiled.nodes.some((node) => node.signal) && {
+        signals: signalControl.snapshot(time()),
+      }),
       ...(railCrossings && { rail: railCrossings.snapshot() }),
     };
     let i = 0;
@@ -1448,6 +1483,15 @@ function createRun({
       intersections.blocksEntry(id, ramp, movement),
     );
     const signalled = patchSignals(before, next, time(), signalEpochs);
+    signalControl = createSignalControl(
+      signalled,
+      timedSignals(signalled, demand, params),
+      vehicles,
+      params,
+      time(),
+      () => walkers?.walkCalls(),
+      signalControl.states(),
+    );
     persons.patch(signalled);
     walkers?.patch(signalled, time());
     intersections = createIntersections(signalled, vehicles, params, merges.canEnter, {
@@ -1455,6 +1499,7 @@ function createRun({
       acceleration: (id) => reservationAcceleration[id]!,
       groupRoute,
       routeVersion: () => costs.version,
+      signalColors: (timeS, colors) => signalControl.update(timeS, colors),
     });
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked);
     keepClear = keepClearZones(next);
@@ -1639,6 +1684,7 @@ function createRun({
       return metrics;
     },
     inspectWalker: (id: number) => walkers?.inspect(id) ?? null,
+    signalTiming: () => signalControl.timing(),
     inspectPerson: (id: string) => persons.inspect(id),
     stateHash: () =>
       stateHash(
@@ -1776,6 +1822,7 @@ export function createEngine() {
     inspect: (id) => loaded().inspect(id),
     inspectWalker: (id) => loaded().inspectWalker(id),
     inspectPerson: (id) => loaded().inspectPerson(id),
+    signalTiming: () => loaded().signalTiming(),
     stateHash: () => loaded().stateHash(),
   } satisfies TrafficEngine;
 }

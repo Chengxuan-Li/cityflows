@@ -60,7 +60,7 @@ import {
   sceneLight,
   type LightingSettings,
 } from './lighting';
-import type { Pick, CityGeometry, Scene, WalkerSnapshot } from './types';
+import type { Pick, CityGeometry, Scene, SignalStates, WalkerSnapshot } from './types';
 import { defaultLayers, type LayerVisibility } from './types';
 
 export function orderedLayers(layers: readonly number[]): number[] {
@@ -298,7 +298,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let sourceGeometry: CityGeometry | undefined;
   let shapes: Place['shape'][] = [];
   let staticPick: ReturnType<typeof createPicker> | undefined;
-  let updateSignals: ((timeS: number) => void)[] = [];
+  let updateSignals: ((timeS: number, states?: SignalStates) => void)[] = [];
   let updatePlaces: ((zoom: number) => void) | undefined;
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
@@ -967,7 +967,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       redrawWalkers();
       if (import.meta.env.MODE === 'test')
         canvas.dataset.walkers = String(walkerSnapshot?.count ?? 0);
-      for (const update of updateSignals) update(snapshot.timeS);
+      for (const update of updateSignals) update(snapshot.timeS, snapshot.signals);
       for (const ghost of ghosts) ghost.sync();
       if (selection?.kind === 'vehicle') {
         selectedVehicle = snapshot.id.subarray(0, snapshot.count).indexOf(selection.id);
@@ -1008,14 +1008,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       invalidate();
       if (city) drawMultiSelection(multiSelectionOverlay, city, roads);
     },
-    setSignalPreview(loaded, timeS) {
+    setSignalPreview(loaded, timeS, states) {
       const nodeId = selection?.kind === 'node' ? city!.nodes[selection.node]!.id : null;
       if (loaded === previewLoaded && timeS === previewTimeS && nodeId === previewNode) return;
       previewLoaded = loaded;
       previewTimeS = timeS;
       previewNode = nodeId;
       invalidate();
-      const preview = drawSignalPreview(signalPreview, loaded, nodeId, timeS);
+      const preview = drawSignalPreview(signalPreview, loaded, nodeId, timeS, states);
       canvas.setAttribute(
         'aria-description',
         preview ? `Signal ${nodeId}: phase ${preview.phase + 1}, ${preview.state}` : '',
