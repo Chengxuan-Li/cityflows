@@ -1636,6 +1636,11 @@ Step sequence, in this order every step:
      and never extend beyond `boxWaitS`; waiting never relaxes this group rear-clearance rule.
      Conflicting group paths wait outside until the admitted car's rear clears the relevant
      member movements; already-cleared members do not reserve the rest of a long group.
+     TASK-154: a member the admitted car has not reached yet holds the entry only while that
+     car, from its current speed at full acceleration up to its maximum speed, could reach the
+     conflict zone before the entering car's rear clears it plus `zoneMarginS` (canGrant's timing).
+     Before this, a stream admitted at another entry of a large group (Munich group 10 at
+     Donnersbergerbrücke) held a merge for its whole traversal and starved the signalled entry.
      The chosen movements persist through inner roads, whose member stop, yield and signal
      controls do not stop a cleared car. Physical following, conflict-zone backstops and walker
      holds remain active. Required safe lane changes and destinations on inner roads remain

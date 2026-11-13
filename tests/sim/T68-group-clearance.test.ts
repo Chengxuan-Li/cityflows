@@ -920,3 +920,65 @@ test.each(['rear', 'idm', 'follower'] as const)(
     expect(intersections.grants[0]).toBe(-1);
   },
 );
+
+test('T68: an admitted car still far from a shared member does not hold an entry that clears first', () => {
+  // TASK-154: the entry on the side road merges into the exit 150 m ahead of an admitted car on
+  // the inner road. It enters and clears long before that car arrives; before the timed check
+  // it waited until the admitted car had passed the merge.
+  const { city, node, road, place } = buildCity('Timed group clearance', 1);
+  const a = node(100, 0),
+    b = node(250, 0);
+  const entry = road(node(0, 0), a, { speedKmh: 36 }),
+    inner = road(a, b, { speedKmh: 36 });
+  const side = road(node(250, 100), b, { speedKmh: 36 }),
+    exit = road(b, node(450, 0), { speedKmh: 36 });
+  city.junctionGroups = {
+    'jg:100': {
+      id: 'jg:100',
+      nodes: [a.id, b.id],
+      innerRoads: [inner.id],
+      signal: null,
+      provenance: { source: 'authored' },
+    },
+  };
+  const initial = setup(city),
+    sideStop = initial.lanes[initial.index.lane.get(`${side.id}#0`)!]!.stopM;
+  place('Main origin', 'gateway', a.pos, [{ road: entry, direction: 'out', positionM: 90 }]);
+  place('Side origin', 'gateway', b.pos, [
+    { road: side, direction: 'out', positionM: sideStop - 2 },
+  ]);
+  place('Destination', 'work', b.pos, [{ road: exit, direction: 'in', positionM: 150 }]);
+  const places = Object.values(city.places);
+  const requests: TripRequest[] = [0, 1].map((p) => ({
+    id: `trip:${p}`,
+    personId: null,
+    originPlaceId: places[p]!.id,
+    destinationPlaceId: places[2]!.id,
+    departS: p === 0 ? 100 : 104,
+    mode: 'car',
+    vehicleClass: 'car',
+    purpose: 'private',
+    legs: [],
+  }));
+  const compiled = setup(city),
+    engine = createEngine();
+  const innerLane = compiled.index.lane.get(`${inner.id}#0`)!,
+    sideLane = compiled.index.lane.get(`${side.id}#0`)!;
+  const merge = (from: number) => compiled.movements.find((m) => m.fromLane === from)!;
+  expect(merge(sideLane).conflicts).toContain(merge(innerLane).idx);
+  engine.load({ compiled, trips: requests, scenario: scenario(), params: { maxReplans: 0 } });
+  let mainWhenSideEntered: number | null = null;
+  for (let i = 0; i < 900; i++) {
+    engine.step();
+    sampleConflictZones(engine, compiled);
+    const main = engine.inspect(1),
+      other = engine.inspect(2);
+    if (mainWhenSideEntered === null && other?.state === 'driving' && other.lane !== sideLane)
+      mainWhenSideEntered = main?.lane === innerLane ? main.positionM : -1;
+  }
+  // The side car left its road while the admitted car was still more than 60 m from the merge.
+  expect(mainWhenSideEntered).toBeGreaterThanOrEqual(0);
+  expect(mainWhenSideEntered!).toBeLessThan(compiled.lanes[innerLane]!.lengthM - 60);
+  expect(engine.metrics().trips.completed).toBe(2);
+  expect(engine.metrics().respawns).toBe(0);
+});

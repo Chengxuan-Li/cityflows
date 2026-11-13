@@ -305,7 +305,15 @@ export function createIntersections(
     return space;
   }
 
-  function conflictsWithClearance(path: GroupPath, id: number) {
+  /** Whether admitted car `id` still holds a member movement that conflicts with `path`. With a
+   * `requester` entering by `entry`, a conflict the holder has not yet reached is held only if
+   * the holder could arrive there before the requester's rear clears it (canGrant's timing). */
+  function conflictsWithClearance(
+    path: GroupPath,
+    id: number,
+    requester?: number,
+    entry?: CMovement,
+  ) {
     const held = groupPaths[id]!;
     const field = vehicles.lane[id]!;
     const at = held.movements.findIndex((m) =>
@@ -314,11 +322,40 @@ export function createIntersections(
         : compiled.lanes[compiled.movements[m]!.toLane]!.road === compiled.lanes[field]!.road,
     );
     const cleared = at + Number(field >= 0 && vehicles.position[id]! >= profile(id).lengthM);
-    return path.movements.some((m) =>
-      compiled.movements[m]!.conflicts.some(
-        (other) => held.movements.indexOf(other) >= Math.max(0, cleared),
-      ),
-    );
+    let ahead = 0;
+    for (const m of path.movements) {
+      const movement = compiled.movements[m]!;
+      for (let i = 0; i < movement.conflicts.length; i++) {
+        const k = held.movements.indexOf(movement.conflicts[i]!);
+        if (k < Math.max(0, cleared)) continue;
+        if (requester === undefined || at === -1 || k <= at) return true;
+        // The holder's front to the start of member k, then into the conflict zone.
+        let distance =
+          (field < 0
+            ? compiled.movements[held.movements[at]!]!.lengthM +
+              compiled.lanes[compiled.movements[held.movements[at]!]!.toLane]!.lengthM
+            : compiled.lanes[field]!.lengthM) - vehicles.position[id]!;
+        for (let j = at + 1; j < k; j++) {
+          const member = compiled.movements[held.movements[j]!]!;
+          distance += member.lengthM + compiled.lanes[member.toLane]!.lengthM;
+        }
+        const [start] = opposingZones[movement.idx]![i]!;
+        const arrival = travelTime(
+          distance + start,
+          vehicles.speed[id]!,
+          profile(id).maxSpeedMps,
+          profile(id).idm.aMps2,
+        );
+        const exit = candidateTime(
+          requester,
+          entry!,
+          ahead + movement.conflictZones[i]![1] + profile(requester).lengthM,
+        );
+        if (arrival < exit + params.intersection.zoneMarginS) return true;
+      }
+      ahead += movement.lengthM + compiled.lanes[movement.toLane]!.lengthM;
+    }
+    return false;
   }
 
   function blockedExit(id: number, movement: CMovement): 'exit-full' | 'box' | null {
@@ -328,7 +365,7 @@ export function createIntersections(
       if (!chain) return 'box';
       for (const car of groupOccupants[groupIndex]!) {
         if (car === id) continue;
-        if (conflictsWithClearance(chain, car)) return 'box';
+        if (conflictsWithClearance(chain, car, id, movement)) return 'box';
       }
       let distance = 0;
       for (const idx of chain.movements) {
