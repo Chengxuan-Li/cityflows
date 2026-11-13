@@ -141,10 +141,17 @@ test('draw a roundabout, restart, inspect circulating routes and restore the jun
 }, info) => {
   const errors = pageErrors(page);
   const original = await openTraffic(page, 'roundabout');
-  const { center, edge } = await page.evaluate(() => ({
-    center: window.cityflows!.worldToScreen!({ x: 240, y: 240 }),
-    edge: window.cityflows!.worldToScreen!({ x: 265, y: 240 }),
-  }));
+  // worldToScreen is relative to the map canvas, which no longer starts at the page origin.
+  const { center, edge } = await page.evaluate(() => {
+    const { left, top } = document
+      .querySelector('canvas[aria-label="City map"]')!
+      .getBoundingClientRect();
+    const page = ({ x, y }: { x: number; y: number }) => ({ x: left + x, y: top + y });
+    return {
+      center: page(window.cityflows!.worldToScreen!({ x: 240, y: 240 })),
+      edge: page(window.cityflows!.worldToScreen!({ x: 265, y: 240 })),
+    };
+  });
   await button(page, 'Roundabout').click();
   await page.mouse.move(center.x, center.y);
   await page.mouse.down();
