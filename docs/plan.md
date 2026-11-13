@@ -3468,7 +3468,13 @@ reachable bay on approach removed all 16 parking failures in `5475921`, with
 3,498 completed trips, 43 gridlock failures and zero stalled heads. A separate
 trace shows a van waiting 5,595 simulated seconds at lot pk:2049 on r:639.
 An outbound car required the same lane gap where the van waited for admission.
-PR #5 is in review while the team tests entrance choice and shared-mouth yielding.
+The combined repair ranks legal entrances within the selected lot, claims a bay
+reachable from that entrance, and leaves a lane gap for an already committed
+departure at a shared mouth. The original seed-1 T54/T63 traffic gate passed at
+`94ff5b9` with 3,928 trips completed, 36 gridlock failures, no stalled heads and
+no parking failures ([traffic run](https://github.com/Chengxuan-Li/cityflows/actions/runs/43358073560)).
+The old 5,595 s circular wait no longer appears in the matched trace. An egress at
+the other ramp mouth can still delay admission while it waits for public traffic.
 
 ## Owner decisions log
 
