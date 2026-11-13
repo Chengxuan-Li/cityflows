@@ -58,7 +58,7 @@ function railway(
   const result = compile(city);
   if (!result.ok) throw Error(JSON.stringify(result.diagnostics));
   const compiled = result.compiled;
-  const { roadGrades, nodeGrades } = cityGrades(compiled, city);
+  const { roadGrades, nodeGrades } = cityGrades(compiled);
   return { compiled, heights: railHeights(compiled, roadGrades, nodeGrades) };
 }
 const track = (compiled: CompiledCity, id: string) =>
@@ -320,7 +320,7 @@ test('T72 same import, same hash: tunnels, building passages and bridges from OS
   const heightsOf = (city: City) => {
     const result = compile(city);
     if (!result.ok) throw Error('compile');
-    const { roadGrades, nodeGrades } = cityGrades(result.compiled, city);
+    const { roadGrades, nodeGrades } = cityGrades(result.compiled);
     return {
       compiled: result.compiled,
       heights: railHeights(result.compiled, roadGrades, nodeGrades),

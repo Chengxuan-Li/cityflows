@@ -6,7 +6,12 @@ import {
   type InstancedMesh,
   type PerspectiveCamera,
 } from 'three';
+import { distance, nearestOnPolyline } from '../geo/polyline';
+import type { Vec2 } from '../geo/vec2';
+import type { CompiledCity } from '../network';
+import { gradeProfiles, profileHeightAt, roadStation } from '../network/heights';
 import { style } from '../render/style';
+import type { Pick } from '../render/types';
 
 export function vehicleScreenPoint(
   mesh: InstancedMesh,
@@ -53,4 +58,54 @@ export function pickVehicle3D(
     }
   }
   return candidate ? (cast(candidate.x, candidate.y) ?? null) : null;
+}
+
+/** TASK-175: the lane drawn under a screen point in 3D. Each lane's centreline is projected at its
+ * surface height (every 5 m on a ramp) and hit within half its projected width (at least 3 px);
+ * where lanes overlap on screen the highest grade wins, as in the 2D picker. Lanes below ground
+ * count only with "See below ground". */
+export function pickLane3D(
+  city: CompiledCity,
+  screen: Vec2,
+  project: (p: Vec2, heightM: number) => Vec2,
+  belowGround = false,
+): Pick | null {
+  const profiles = gradeProfiles(city).roads;
+  let hit: Pick | null = null,
+    grade = -Infinity,
+    best = Infinity;
+  for (const lane of city.lanes) {
+    if ((lane.grade < 0 && !belowGround) || lane.grade < grade) continue;
+    const road = city.roads[lane.road]!,
+      profile = profiles[road.idx]!;
+    const flat = !profile.fromM && !profile.toM && !profile.deckM;
+    const points: Vec2[] = [lane.polyline[0]!];
+    for (let i = 1; i < lane.polyline.length; i++) {
+      const a = lane.polyline[i - 1]!,
+        b = lane.polyline[i]!,
+        steps = flat ? 1 : Math.max(1, Math.ceil(distance(a, b) / 5));
+      for (let j = 1; j <= steps; j++)
+        points.push({ x: a.x + ((b.x - a.x) * j) / steps, y: a.y + ((b.y - a.y) * j) / steps });
+    }
+    const heights = points.map((p) => (flat ? 0 : profileHeightAt(profile, roadStation(road, p))));
+    const line = points.map((p, i) => project(p, heights[i]!));
+    const { along, away } = nearestOnPolyline(line, screen);
+    let i = 1,
+      at = 0;
+    while (i < line.length - 1 && at + distance(line[i - 1]!, line[i]!) < along)
+      at += distance(line[i - 1]!, line[i++]!);
+    const a = points[i - 1]!,
+      b = points[i]!,
+      length = distance(a, b) || 1;
+    const side = {
+      x: a.x - ((b.y - a.y) / length) * (lane.widthM / 2),
+      y: a.y + ((b.x - a.x) / length) * (lane.widthM / 2),
+    };
+    const half = Math.max(3, distance(line[i - 1]!, project(side, heights[i - 1]!)));
+    if (away > half || (lane.grade === grade && away >= best)) continue;
+    grade = lane.grade;
+    best = away;
+    hit = { kind: 'lane', lane: lane.idx, road: road.idx };
+  }
+  return hit;
 }

@@ -16,7 +16,6 @@ import type { CompiledCity } from '../network';
 import { catenary, catenaryRule, type Catenary } from '../network/catenary';
 import { cityGrades } from '../render/grades';
 import { catenaryColors, catenaryZooms } from '../render/layers/catenary';
-import type { CityGeometry } from '../render/types';
 import type { cityHeights } from './heights';
 
 /** Sizes in metres: mast and beam sections, the portal beam's clearance over the messenger. */
@@ -50,13 +49,9 @@ interface Box {
  * messenger wires as line segments (open track, and tunnel track shown only with "See below
  * ground"): four draw calls.
  */
-export function buildCatenary(
-  city: CompiledCity,
-  source: CityGeometry,
-  heights: ReturnType<typeof cityHeights>,
-) {
+export function buildCatenary(city: CompiledCity, heights: ReturnType<typeof cityHeights>) {
   const group = new Group();
-  const { roadGrades, nodeGrades } = cityGrades(city, source);
+  const { roadGrades, nodeGrades } = cityGrades(city);
   const lines: Catenary | undefined = city.rail
     ? catenary(city, roadGrades, nodeGrades)
     : undefined;

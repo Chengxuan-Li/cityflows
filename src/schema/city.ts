@@ -30,7 +30,7 @@ export interface Provenance {
 export interface Node {
   id: NodeId;
   pos: Vec2;
-  layer: number; // from OSM `layer`; informational, connectivity is by shared ids
+  layer: number; // grade, from OSM `layer` (compiled as CNode.grade); connectivity is by shared ids
   control: Control;
   minorRoads: RoadId[]; // for yield/stop: incoming roads that must yield. Empty = by class.
   turnRules: TurnRule[];
@@ -89,7 +89,9 @@ export interface Road {
   id: RoadId;
   from: NodeId;
   to: NodeId;
-  layer?: number; // visual grade, independent of endpoint grades
+  /** Grade, independent of endpoint grades; omitted = the lower endpoint grade. Compiled as
+   * CRoad.grade, the level of its deck (TASK-175, architecture section 5). */
+  layer?: number;
   centerline: Vec2[]; // >= 2 points; first equals nodes[from].pos, last equals nodes[to].pos
   lateralOffsetM: number; // lane block center relative to centerline; positive = right of travel
   lanes: Lane[]; // index 0 = leftmost in travel direction
