@@ -3670,6 +3670,14 @@ has no tram stops). Seed-1 gate: 4,373 completed, 5 gridlocked, 0 stalled heads,
 failures (main before 4,560 / 4 / 0 / 0); T53 passes. `check` (1,304), `test:city` (168). Merged;
 PR #1 closes with it. TASK-128 to TASK-130's holds are unaffected.
 
+Traffic baseline reset (lead, owner's decision of 2026-11-13, after PR #1's CI passed on main,
+run 43412997493): `bench/traffic-baseline.json` now holds main at `cd0b994`, Munich 0.15 to 10:00
+seed 1: 4,373 completed, 5 gridlocked, 0 stalled heads (was 4,113 / 26 / 0); the 09:30 quick sample
+3,737 / 4 / 0 (was 3,777 / 12). The gate's derived limits become at least 3,936 completed and at
+most 7 gridlocked (1.5 times the baseline) with zero stalled heads; T63's absolute floor of 3,571
+is unchanged. Branches in flight (TASK-129, 156, 157, 159, 161, 162) are judged against the new
+baseline.
+
 ## Owner decisions log
 
 - 2026-11-13 (owner): reset the traffic baseline to main once PR #1's CI passes. Map styling
