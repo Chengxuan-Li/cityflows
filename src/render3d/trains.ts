@@ -21,6 +21,34 @@ import { style } from '../render/style';
 import type { cityHeights } from './heights';
 import { railElevation } from './rail';
 
+/** TASK-163: lit passenger windows along both sides of every car, in the unit box before the
+ * instance's scale (x along the car, y up, z across). */
+function bodyMaterial(lights: { value: number }) {
+  const material = new MeshLambertMaterial();
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.cabinLights = lights;
+    shader.vertexShader =
+      '#ifdef CABIN_LIGHTS\nvarying vec3 vBox; varying vec3 vBoxNormal;\n#endif\n' +
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n#ifdef CABIN_LIGHTS\nvBox = position; vBoxNormal = normal;\n#endif',
+      );
+    shader.fragmentShader =
+      '#ifdef CABIN_LIGHTS\nuniform float cabinLights; varying vec3 vBox; varying vec3 vBoxNormal;\n#endif\n' +
+      shader.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        #ifdef CABIN_LIGHTS
+          float pane = fract(vBox.x * 9.0 + 0.5);
+          float window = step(0.5, abs(vBoxNormal.z)) * step(-0.08, vBox.y) * step(vBox.y, 0.3)
+            * step(0.12, pane) * step(pane, 0.88) * step(abs(vBox.x), 0.46);
+          totalEmissiveRadiance += cabinLights * window * vec3(1.15, 1.05, 0.85);
+        #endif`,
+      );
+  };
+  return material;
+}
+
 export class Trains3D {
   readonly group = new Group();
   body: InstancedMesh;
@@ -31,6 +59,7 @@ export class Trains3D {
   private readonly roofOffset = new Vector3();
   private readonly color = new Color();
   private ids: { id: string; route: number }[] = [];
+  private readonly lights = { value: 0 };
   constructor(
     private readonly rail: RailGraph,
     private readonly heights: ReturnType<typeof cityHeights>,
@@ -48,7 +77,7 @@ export class Trains3D {
         );
       }, 0),
     );
-    this.body = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshLambertMaterial(), capacity);
+    this.body = new InstancedMesh(new BoxGeometry(1, 1, 1), bodyMaterial(this.lights), capacity);
     this.roof = new InstancedMesh(
       new BoxGeometry(1, 1, 1),
       new MeshLambertMaterial({ color: trainColors.roof }),
@@ -122,6 +151,15 @@ export class Trains3D {
     this.body.count = this.roof.count = count;
     this.body.instanceMatrix.needsUpdate = this.roof.instanceMatrix.needsUpdate = true;
     if (this.body.instanceColor) this.body.instanceColor.needsUpdate = true;
+  }
+  /** 0: the Day shader; above 0 the cabins glow with that strength. */
+  setLights(level: number) {
+    const material = this.body.material as MeshLambertMaterial;
+    if (level > 0 !== (material.defines?.CABIN_LIGHTS !== undefined)) {
+      material.defines = level > 0 ? { CABIN_LIGHTS: '' } : {};
+      material.needsUpdate = true;
+    }
+    this.lights.value = level;
   }
   pick(index: number) {
     return { kind: 'train' as const, ...this.ids[index]! };

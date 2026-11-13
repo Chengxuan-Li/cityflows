@@ -9,6 +9,7 @@ import {
   Group,
   HemisphereLight,
   InstancedMesh,
+  LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
@@ -18,6 +19,7 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  ShaderMaterial,
   Vector3,
   WebGLRenderer,
 } from 'three';
@@ -37,7 +39,17 @@ import { Basemap3D } from './basemap';
 import { buildGeometry } from './geometry';
 import { pickLane3D, pickVehicle3D, vehicleScreenPoint } from './picking';
 import { signalMountM, signalRotationY } from './signals';
-import { buildingMaterial, groundMaterial } from './context';
+import { buildingMaterial, groundMaterial, setBuildingLights } from './context';
+import {
+  defaultLighting,
+  lampColors,
+  lightKey,
+  platformLights,
+  sceneLight,
+  type LightingSettings,
+} from '../render/lighting';
+import { buildHalos, buildPools, type LightPoint } from './lights';
+import { tramStopSize } from '../render/tram-stops';
 import { buildVegetation, surfaceTexture } from './vegetation';
 import { placeTrees } from '../render/vegetation';
 import { placeStreet, treeContext } from '../render/street';
@@ -76,6 +88,23 @@ export class Scene3D {
   private readonly controls: MapControls;
   private readonly observer: ResizeObserver;
   private readonly sun = new DirectionalLight(0xffffff, 0.95);
+  // TASK-162: more sky, less sun: lighter, softer shadows for the flat Sonoma look.
+  private readonly sky = new HemisphereLight(0xffffff, 0xd9dad6, 2);
+  /** TASK-163: view-only lighting; the Day preset reproduces the lights above exactly. */
+  private lighting: LightingSettings = defaultLighting;
+  private lightMinute = 0;
+  private light = sceneLight(defaultLighting, 0);
+  private lightKey = '';
+  private shadowsLayer = true;
+  private streetLightsVisible = true;
+  private night:
+    | {
+        lampPools: InstancedMesh;
+        lampHalos: InstancedMesh;
+        platformPools: InstancedMesh;
+        signalHalos: InstancedMesh;
+      }
+    | undefined;
   private readonly vehicles = new Vehicles3D();
   private readonly walkers = new Walkers3D();
   private walkSignals: ReturnType<typeof buildWalkSignals> | undefined;
@@ -139,7 +168,7 @@ export class Scene3D {
   private readonly vehicleMatrix = new Matrix4();
   private shadowView = '';
   private readonly restoreContext = () => {
-    this.renderer.setClearColor(style.background);
+    this.renderer.setClearColor(this.light.background);
     this.rail?.paintCache.reset();
     this.shadowView = '';
     this.invalidate();
@@ -152,16 +181,17 @@ export class Scene3D {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFShadowMap;
     this.scene.add(
-      // TASK-162: more sky, less sun: lighter, softer shadows for the flat Sonoma look.
-      new HemisphereLight(0xffffff, 0xd9dad6, 2),
+      this.sky,
       this.sun,
       this.sun.target,
       this.content,
       this.vehicles.mesh,
+      this.vehicles.beams,
       this.walkers.mesh,
       this.selection,
     );
     this.selection.visible = false;
+    this.selection.material.userData.lit = true;
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.00008;
@@ -207,7 +237,7 @@ export class Scene3D {
     this.disposeContent();
     if (this.city !== city) {
       this.vehicles.poses.snapshot = null;
-      this.vehicles.mesh.count = 0;
+      this.vehicles.mesh.count = this.vehicles.beams.count = 0;
       this.walkers.mesh.count = 0;
       this.parkedSnapshot = null;
     }
@@ -219,6 +249,7 @@ export class Scene3D {
       Boolean(renderedSource.terrain),
     ));
     const terrain = geometry.heights.terrain;
+    const platformPools: LightPoint[] = [];
     this.rail = buildRail(city, renderedSource, geometry.heights);
     this.crossingStates = undefined;
     if (city.rail) {
@@ -237,8 +268,26 @@ export class Scene3D {
         geometry.heights,
       );
       this.content.add(this.stations.group);
-      this.tramStops = new TramStops3D(placeTramStops(city, renderedSource), geometry.heights);
+      const tramStops = placeTramStops(city, renderedSource);
+      this.tramStops = new TramStops3D(tramStops, geometry.heights);
       this.content.add(this.tramStops.group);
+      // Illuminated name boards and screens stay lit after dark; other unlit faces are shaded.
+      for (const mesh of [
+        ...this.stations.panels,
+        ...this.stations.displays.map((d) => d.mesh),
+        ...this.tramStops.panels,
+      ])
+        for (const material of [mesh.material].flat())
+          if (material instanceof MeshBasicMaterial) material.userData.lit = true;
+      for (const p of platformLights(city, tramStops))
+        platformPools.push({
+          ...p,
+          z:
+            terrain.groundAt(p.x, p.y) +
+            p.layer * 5 +
+            (p.island ? tramStopSize.islandM + 0.02 : 0.1),
+          color: lampColors.platform,
+        });
       this.levelCrossings = new LevelCrossings3D(
         city.rail.facilities ?? [],
         geometry.heights,
@@ -330,6 +379,24 @@ export class Scene3D {
     this.canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
     this.street = buildStreet(furniture, city, geometry.heights);
     this.content.add(this.street.group);
+    this.night = {
+      lampPools: buildPools(this.street.lampLights.map((l) => l.pool)),
+      lampHalos: buildHalos(this.street.lampLights.map((l) => l.halo)),
+      platformPools: buildPools(platformPools),
+      signalHalos: buildHalos(
+        geometry.heads.map((head) => ({
+          x: head.x,
+          y: head.y,
+          z: head.height + signalMountM,
+          radiusM: 0.75,
+          color: style.signalRed,
+        })),
+      ),
+    };
+    this.content.add(...Object.values(this.night));
+    this.canvas.dataset.nightLights = JSON.stringify(
+      Object.fromEntries(Object.entries(this.night).map(([key, mesh]) => [key, mesh.count])),
+    );
     add(geometry.slabs, 0x899b99);
     const paint = add(geometry.markings, 0xffffff, false);
     paint.material.vertexColors = true;
@@ -409,6 +476,7 @@ export class Scene3D {
       new MeshBasicMaterial(),
       geometry.heads.length,
     );
+    (this.lamps.material as MeshBasicMaterial).userData.lit = true;
     transform.scale.setScalar(1);
     geometry.supports.forEach((support, i) => {
       transform.position.set(support.x, support.height + support.clearanceM / 2, support.y);
@@ -487,6 +555,72 @@ export class Scene3D {
     this.camera.position.y += groundHeight - this.controls.target.y;
     this.controls.target.y = groundHeight;
     this.canvas.dataset.meshes = String(this.content.children.length + 1);
+    this.lightKey = '';
+    this.applyLight();
+  }
+
+  /** TASK-163: the view's lighting preset and exposure, and the Shadows layer. View-only: it
+   * never reaches the simulation, the project or their hashes. */
+  setLighting(settings: LightingSettings, timeS: number, shadows: boolean) {
+    // Following the clock, the light moves once a simulated minute.
+    const minute = settings.mode === 'clock' ? Math.floor(timeS / 60) : 0;
+    if (settings === this.lighting && minute === this.lightMinute && shadows === this.shadowsLayer)
+      return;
+    this.lighting = settings;
+    this.lightMinute = minute;
+    this.shadowsLayer = shadows;
+    this.light = sceneLight(settings, minute * 60);
+    this.applyLight();
+  }
+
+  private applyLight() {
+    const light = this.light;
+    const key = `${lightKey(light)},${this.shadowsLayer},${this.streetLightsVisible},${this.railVisible}`;
+    if (key === this.lightKey) return;
+    this.lightKey = key;
+    this.invalidate();
+    this.shadowView = '';
+    this.sky.color.setHex(light.sky);
+    this.sky.groundColor.setHex(light.ground);
+    this.sky.intensity = light.skyIntensity;
+    this.sun.color.setHex(light.sunColor);
+    this.sun.intensity = light.sunIntensity;
+    this.sun.castShadow = light.shadows && this.shadowsLayer && light.sunIntensity > 0;
+    this.renderer.setClearColor(light.background);
+    // Unlit surfaces (rail paint, wires, sign faces, pedestrians) take the light a flat surface
+    // receives, so they darken with the rest of the scene instead of glowing.
+    const [r, g, b] = light.ambient;
+    this.scene.traverse((object) => {
+      const material = (object as Partial<Mesh>).material;
+      if (!material) return;
+      for (const m of [material].flat())
+        if ((m instanceof MeshBasicMaterial || m instanceof LineBasicMaterial) && !m.userData.lit) {
+          const base = (m.userData.baseColor ??= m.color.clone()) as Color;
+          m.color.setRGB(base.r * r, base.g * g, base.b * b);
+        }
+    });
+    const on = light.artificial;
+    this.vehicles.setLights(on);
+    this.trains?.setLights(on);
+    this.levelCrossings?.setNight(on);
+    if (this.street) (this.street.heads.material as MeshLambertMaterial).emissiveIntensity = on;
+    if (this.buildings) setBuildingLights(this.buildings.material, light.windows, on);
+    if (this.night) {
+      const { lampPools, lampHalos, platformPools, signalHalos } = this.night;
+      lampPools.visible = lampHalos.visible = on > 0 && this.streetLightsVisible;
+      platformPools.visible = on > 0 && this.railVisible;
+      signalHalos.visible = on > 0;
+      (lampPools.material as MeshBasicMaterial).opacity = 0.42 * on;
+      (platformPools.material as MeshBasicMaterial).opacity = 0.32 * on;
+      (lampHalos.material as ShaderMaterial).uniforms.intensity!.value = 0.9 * on;
+      (signalHalos.material as ShaderMaterial).uniforms.intensity!.value = 0.8 * on;
+    }
+    this.canvas.dataset.lighting = JSON.stringify({
+      mode: this.lighting.mode,
+      artificial: Number(on.toFixed(3)),
+      windows: Number(light.windows.toFixed(3)),
+      shadows: this.sun.castShadow,
+    });
   }
 
   setVehicleGeometry(city: CompiledCity, durationS: number) {
@@ -611,8 +745,11 @@ export class Scene3D {
             : style.signalAmber,
       );
       this.lamps!.setColorAt(i, color);
+      this.night?.signalHalos.setColorAt(i, color);
     });
     if (this.lamps.instanceColor) this.lamps.instanceColor.needsUpdate = true;
+    const halos = this.night?.signalHalos.instanceColor;
+    if (halos) halos.needsUpdate = true;
   }
 
   setBelowGround(enabled: boolean) {
@@ -671,6 +808,10 @@ export class Scene3D {
 
   setStreet(lights: boolean, signs: boolean, curbs: boolean, markings: boolean) {
     if (!this.street) return;
+    if (lights !== this.streetLightsVisible) {
+      this.streetLightsVisible = lights;
+      this.applyLight();
+    }
     this.street.lamps.visible = lights;
     this.street.signs.visible = signs;
     this.street.curbs.visible = curbs;
@@ -940,7 +1081,10 @@ export class Scene3D {
     this.sun.shadow.normalBias = Math.max(0.05, (2 * extent) / this.sun.shadow.mapSize.x);
     const target = this.controls.target;
     this.sun.target.position.copy(target);
-    this.sun.position.set(target.x - extent, target.y + extent * 1.5, target.z - extent);
+    // TASK-163: along the preset's sun; the Day sun sits at (-1, 1.5, -1) extents, as before.
+    const [dx, dy, dz] = this.light.sun,
+      reach = extent * Math.hypot(1, 1.5, 1);
+    this.sun.position.set(target.x + dx * reach, target.y + dy * reach, target.z + dz * reach);
     const shadow = this.sun.shadow.camera;
     shadow.left = shadow.bottom = -extent;
     shadow.right = shadow.top = extent;
@@ -973,7 +1117,8 @@ export class Scene3D {
       this.vegetation?.street.visible ? 1 : 0,
     ]
       .map((n) => n.toFixed(4))
-      .join(',');
+      .join(',')
+      .concat(this.lightKey);
     this.renderer.shadowMap.autoUpdate = !cacheShadows;
     if (shadowView !== this.shadowView) this.renderer.shadowMap.needsUpdate = true;
     this.shadowView = shadowView;
@@ -1020,6 +1165,7 @@ export class Scene3D {
       this.trainTimeS = NaN;
     }
     this.railVisible = visible;
+    this.applyLight();
     if (this.rail) this.rail.group.visible = visible;
     if (this.trains) this.trains.group.visible = visible;
     if (this.stations) this.stations.group.visible = visible;

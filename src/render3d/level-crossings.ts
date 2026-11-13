@@ -86,6 +86,13 @@ export class LevelCrossings3D {
       }
     }
   }
+  /** TASK-163: lit lamps glow harder after dark (0.7 by day, as before). */
+  setNight(artificial: number) {
+    this.group.traverse((object) => {
+      const material = object instanceof Mesh ? (object.material as MeshLambertMaterial) : null;
+      if (material?.emissive.getHex()) material.emissiveIntensity = 0.7 + 0.6 * artificial;
+    });
+  }
   setSnapshot(states?: Uint8Array, timeS = 0, railReady?: Uint8Array) {
     this.variants.forEach((appearances, i) => {
       const active = crossingAspect(

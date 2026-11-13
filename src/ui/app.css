@@ -2060,6 +2060,26 @@ input[type='file']::file-selector-button {
   margin-left: auto;
 }
 
+/* TASK-163: the light preset across the panel's width, the exposure slider below it. */
+.lighting-controls {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.lighting-controls .segmented {
+  display: flex;
+}
+
+.lighting-controls .segmented .tooltip-anchor {
+  flex: 1;
+}
+
+.lighting-controls .segmented button {
+  width: 100%;
+  padding: 2px 4px;
+}
+
 .layers-panel p {
   margin-top: 6px;
 }
