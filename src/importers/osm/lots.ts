@@ -360,57 +360,63 @@ export function restoreLotJunctions(
       }),
     ]),
   );
-  const result = joinLotAisles(
-    city,
-    data,
-    Object.values(city.roads).filter((r) => !aisleIds.has(r.id)),
-    lots.flatMap((lot) =>
-      (lot.aisles ?? []).map((id) => ({
-        id,
-        holes: holes.get(lot.provenance.osmIds?.[0] ?? -1) ?? [],
-      })),
-    ),
-    diagnostics,
-    compiled,
-  );
-  if (!result) return;
-  const joined = new Set(result.nodes);
-  const affected: ParkingFacility[] = [];
-  const previous = new Map<string, ParkingFacility['connectors']>();
-  for (const lot of lots) {
-    const roads = (lot.aisles ?? [])
-      .map((id) => city.roads[id]!)
-      .filter((road) => joined.has(road.from) || joined.has(road.to));
-    if (!roads.length) continue;
-    affected.push(lot);
-    previous.set(lot.id, lot.connectors);
-    lot.entries = [
-      ...new Set([
-        ...(lot.entries ?? []),
-        ...roads.flatMap((r) => [r.from, r.to].filter((id) => joined.has(id))),
-      ]),
-    ].sort();
-    lot.connectors = [];
-    lot.provenance.inferred = lot.provenance.inferred?.filter((value) => value !== 'driveway');
-  }
-  connectCarExits(city, result.compiled, undefined, new Set(affected.map((lot) => lot.id)));
-  for (const lot of affected) {
-    const retained = previous.get(lot.id)!;
-    const used = new Set<string>();
-    for (const connector of lot.connectors) {
-      const old = retained.find(
-        (c) =>
-          !used.has(c.id) &&
-          c.roadId === connector.roadId &&
-          c.lane === connector.lane &&
-          Math.abs(c.positionM - connector.positionM) < 1e-6,
-      );
-      if (!old) continue;
-      connector.id = old.id;
-      connector.direction = old.direction === connector.direction ? old.direction : 'both';
-      connector.throughputPerMin = old.throughputPerMin;
-      used.add(old.id);
+  // Finish the original retained-vertex pass first, including portal allocation, so
+  // extending access cannot renumber the previously imported roads or connectors.
+  for (const extended of [false, true]) {
+    const result = joinLotAisles(
+      city,
+      data,
+      Object.values(city.roads).filter((r) => !aisleIds.has(r.id)),
+      lots.flatMap((lot) =>
+        (lot.aisles ?? []).map((id) => ({
+          id,
+          holes: holes.get(lot.provenance.osmIds?.[0] ?? -1) ?? [],
+        })),
+      ),
+      diagnostics,
+      compiled,
+      extended,
+    );
+    if (!result) continue;
+    const joined = new Set(result.nodes);
+    const affected: ParkingFacility[] = [];
+    const previous = new Map<string, ParkingFacility['connectors']>();
+    for (const lot of lots) {
+      const roads = (lot.aisles ?? [])
+        .map((id) => city.roads[id]!)
+        .filter((road) => joined.has(road.from) || joined.has(road.to));
+      if (!roads.length) continue;
+      affected.push(lot);
+      previous.set(lot.id, lot.connectors);
+      lot.entries = [
+        ...new Set([
+          ...(lot.entries ?? []),
+          ...roads.flatMap((r) => [r.from, r.to].filter((id) => joined.has(id))),
+        ]),
+      ].sort();
+      lot.connectors = [];
+      lot.provenance.inferred = lot.provenance.inferred?.filter((value) => value !== 'driveway');
     }
-    lot.connectors.push(...retained.filter((c) => !used.has(c.id)));
+    connectCarExits(city, result.compiled, undefined, new Set(affected.map((lot) => lot.id)));
+    for (const lot of affected) {
+      const retained = previous.get(lot.id)!;
+      const used = new Set<string>();
+      for (const connector of lot.connectors) {
+        const old = retained.find(
+          (c) =>
+            !used.has(c.id) &&
+            c.roadId === connector.roadId &&
+            c.lane === connector.lane &&
+            Math.abs(c.positionM - connector.positionM) < 1e-6,
+        );
+        if (!old) continue;
+        connector.id = old.id;
+        connector.direction = old.direction === connector.direction ? old.direction : 'both';
+        connector.throughputPerMin = old.throughputPerMin;
+        used.add(old.id);
+      }
+      lot.connectors.push(...retained.filter((c) => !used.has(c.id)));
+    }
+    compiled = result.compiled;
   }
 }
