@@ -190,7 +190,7 @@ function chains(pieces: Piece[]): Piece[][] {
 }
 
 function streetCandidates(city: CompiledCity, source: CityGeometry): StreetCandidate[] {
-  const { roadGrades } = cityGrades(city, source);
+  const { roadGrades } = cityGrades(city);
   const junction = city.nodes.map((node) =>
     node.outline.length ? Math.max(...node.outline.map((p) => distance(p, node.pos))) : 0,
   );
