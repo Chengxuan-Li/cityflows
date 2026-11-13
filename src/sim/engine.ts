@@ -182,6 +182,8 @@ function createRun({
   let keepClear = keepClearZones(compiled);
   const keepClearStop = new Float64Array(trips.length).fill(Infinity);
   const keepClearHeld = new Uint8Array(trips.length);
+  // Where each car's front will come to stand, as far as this step knows (behind its leader's).
+  const standFront = new Float64Array(trips.length).fill(Infinity);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -605,11 +607,8 @@ function createRun({
       for (let id = head; id !== -1; id = vehicles.next[id]!) {
         order[orderCount++] = id;
         if (ahead !== -1 || !lane) vehicles.headDetourS[id] = 0;
-        if (parking.motion(id)) {
-          ahead = id;
-          continue;
-        }
-        if (vehicles.state[id] === QUEUED_DESTINATION) {
+        if (parking.motion(id) || vehicles.state[id] === QUEUED_DESTINATION) {
+          standFront[id] = vehicles.position[id]!;
           ahead = id;
           continue;
         }
@@ -734,23 +733,32 @@ function createRun({
         }
         const driving = profile(id);
         // TASK-169: keep clear. Where its front would stand (behind a leader, projected by the
-        // leader's braking distance, or at a stop) would leave its body on a keep-clear zone, it
-        // stops short of the zone: once within its request distance of that stand, if it can at
-        // its comfortable deceleration, and then until it stands there. A head at its stop line
+        // leader's braking distance but no farther than behind the leader's own stand, or at a
+        // stop) would leave its body on a keep-clear zone, it
+        // stops short of the zone: from one and a half times its comfortable braking distance
+        // short of that stand (at least the decision distance), if it can stop there at its
+        // comfortable deceleration, and then until it stands there. A head at its stop line
         // first moves up to the line if that clears the zone; one waiting short of a zone for its
         // junction counts that stand as its stop line.
         const zones = lane ? keepClear[lane.idx]! : undefined;
         const atStopLine = !!lane && stopAt === lane.stopM && obstacle === stopAt;
+        let standM = obstacle - idm.minGapM + (leaderSpeed * leaderSpeed) / (2 * idm.bMps2);
+        if (leader !== -1 && obstacle === rear)
+          standM = Math.min(
+            standM,
+            offset + standFront[leader]! - profile(leader).lengthM - idm.minGapM,
+          );
         const front = zones?.length
           ? keepClearStand(
               zones,
               driving.lengthM,
-              obstacle - idm.minGapM + (leaderSpeed * leaderSpeed) / (2 * idm.bMps2),
+              standM,
               destination?.lane === lane!.idx ? destination.positionM : Infinity,
               atStopLine ? lane!.stopM : -Infinity,
             )
           : null;
         const ownSpeed = vehicles.speed[id]!;
+        const braking = (ownSpeed * ownSpeed) / (2 * driving.idm.bMps2);
         const movesUp = front !== null && front > obstacle - idm.minGapM;
         if (
           front !== null &&
@@ -758,19 +766,9 @@ function createRun({
             ? atStopLine && front + idm.minGapM <= rear
             : keepClearHeld[id]
               ? front >= position - 1e-6
-              : front >= position &&
+              : front - position >= braking &&
                 front - position <=
-                  Math.max(
-                    params.intersection.decisionDistanceM,
-                    (ownSpeed * ownSpeed) / (2 * driving.idm.bMps2) + idm.minGapM,
-                  ) &&
-                idmAcceleration(
-                  driving.idm,
-                  ownSpeed,
-                  Math.min(speedLimit * vehicles.speedFactor[id]!, driving.maxSpeedMps),
-                  0,
-                  front + idm.minGapM - position,
-                ) >= -driving.idm.bMps2)
+                  Math.max(params.intersection.decisionDistanceM, 1.5 * braking + idm.minGapM))
         ) {
           keepClearHeld[id] = 1;
           obstacle = front + idm.minGapM;
@@ -778,6 +776,7 @@ function createRun({
           if (!movesUp) limit[id] = Math.min(limit[id]!, Math.max(position, front));
           if (ahead === -1) keepClearStop[id] = front;
         } else keepClearHeld[id] = 0;
+        standFront[id] = keepClearHeld[id] ? front! : standM;
         const desiredSpeed = Math.min(speedLimit * vehicles.speedFactor[id]!, driving.maxSpeedMps);
         walkers?.account(
           id,

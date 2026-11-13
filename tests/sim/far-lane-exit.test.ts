@@ -63,12 +63,13 @@ function farLaneWorld(traffic: Traffic) {
   place('East end', 'gateway', { x: 410, y: 10 }, [
     { road: east!, positionM: 390, direction: 'in' },
   ]);
-  // Just past the mouth (x = 150) on each carriageway: x = 165 eastbound, x = 135 westbound.
-  place('Near stop', 'gateway', { x: 165, y: 10 }, [
-    { road: east!, positionM: 165, direction: 'in' },
+  // Just past the mouth (x = 150) on each carriageway: x = 155 eastbound, x = 145 westbound,
+  // inside its keep-clear zone, so the queue for them stands across the mouth (TASK-169).
+  place('Near stop', 'gateway', { x: 155, y: 10 }, [
+    { road: east!, positionM: 155, direction: 'in' },
   ]);
-  place('Far stop', 'gateway', { x: 135, y: -10 }, [
-    { road: west!, positionM: 265, direction: 'in' },
+  place('Far stop', 'gateway', { x: 145, y: -10 }, [
+    { road: west!, positionM: 255, direction: 'in' },
   ]);
   place('Mouth', 'gateway', { x: 146, y: 10 }, [{ road: east!, positionM: 146, direction: 'out' }]);
   place('Inner start', 'gateway', { x: 120, y: 10 }, [
@@ -253,9 +254,8 @@ test.each(['near', 'far', 'stream', 'spawn', 'lanes', 'none'] as const)(
     // Granted only with both gaps: nobody within the gap of a near-lane span or the join.
     expect([nearBusy(grant!), farBusy(grant!)]).toEqual([false, false]);
     // It waited while either lane was occupied, each on its own.
-    // TASK-169: the near queue keeps the mouth clear, so that wait is shorter than the far one.
     if (traffic === 'near')
-      expect(held.filter((h) => nearBusy(h) && !farBusy(h)).length).toBeGreaterThan(50);
+      expect(held.filter((h) => nearBusy(h) && !farBusy(h)).length).toBeGreaterThan(100);
     if (traffic === 'far')
       expect(held.filter((h) => farBusy(h) && !nearBusy(h)).length).toBeGreaterThan(100);
     // Followers brake for it no harder than the insertion limit.

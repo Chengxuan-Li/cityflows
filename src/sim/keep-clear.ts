@@ -9,8 +9,8 @@ export const KEEP_CLEAR_STOP_M = 0.5;
  * `KEEP_CLEAR_STOP_M` short of the first zone its body would cover there, repeated while the new
  * stand still covers one. A zone its body covers at its destination connector on the lane
  * (`arrivalM`) does not count: it leaves the lane there. A car standing at its stop line
- * (`stopLineM`) first moves up to `KEEP_CLEAR_STOP_M` short of the line, past the gap it keeps to
- * the line, when its body then clears every zone. Null when the stand at `standM` is clear of
+ * (`stopLineM`) first moves up, as far as `KEEP_CLEAR_STOP_M` short of the line and past the gap
+ * it keeps to the line, when its body then clears every zone. Null when the stand at `standM` is clear of
  * every zone, or when the rear would stand short of the lane's start, on the movement it came by.
  */
 export function keepClearStand(
@@ -26,7 +26,8 @@ export function keepClearStand(
     zone.toM > front - lengthM;
   const last = zones.findLast((zone) => covers(zone, standM));
   if (!last) return null;
-  const ahead = last.toM + lengthM;
+  // IDM settles a little short of its stand; the rear keeps 0.2 m spare past the zone.
+  const ahead = last.toM + lengthM + 0.2;
   if (ahead <= stopLineM - KEEP_CLEAR_STOP_M && !zones.some((zone) => covers(zone, ahead)))
     return ahead;
   let front = standM;
