@@ -1,3 +1,4 @@
+import { riderOf } from '../../demand/stations';
 import type { CompiledCity } from '../../network';
 import type { City } from '../../schema';
 import type { PersonDetail, PersonLegDetail } from '../../sim/types';
@@ -29,6 +30,9 @@ export function PersonInspector({
   city: City;
   compiled: CompiledCity;
 }) {
+  const rider = riderOf(id);
+  if (rider && detail?.trips.length)
+    return <RiderInspector id={id} rider={rider} detail={detail} city={city} />;
   const place = (id: string) => `${city.places[id]?.name ?? id} (${id})`;
   const facility = detail?.car.facility
     ? compiled.parking.find(({ id }) => id === detail.car.facility)
@@ -112,48 +116,96 @@ export function PersonInspector({
               ))}
             </tbody>
           </table>
-          {trips.map((trip) => (
-            <p key={trip.tripId}>
-              {city.places[trip.originPlaceId]?.name ?? trip.originPlaceId} →{' '}
-              {city.places[trip.destinationPlaceId]?.name ?? trip.destinationPlaceId} ·{' '}
-              {clock(trip.departS)} · {trip.state}
-              {trip.failReason && ` · ${trip.failReason.replaceAll('_', ' ')}`}
-            </p>
-          ))}
-          {trips.length ? (
-            <table aria-label="Journey legs">
-              <thead>
-                <tr>
-                  <th scope="col">Leg</th>
-                  <th scope="col">Left</th>
-                  <th scope="col">Arrived</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trips.flatMap((trip, index) =>
-                  trip.legs.map((leg) => (
-                    <tr key={`${trip.tripId}:${leg.kind}`}>
-                      <th scope="row">
-                        {index + 1}. {legNames[leg.kind]}
-                        <div className="muted">
-                          {leg.state}
-                          {leg.kind !== 'drive' && ` · ${Math.round(leg.distanceM)} m`}
-                        </div>
-                      </th>
-                      <td style={{ whiteSpace: 'nowrap' }}>{clock(leg.startedS)}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{clock(leg.arrivedS)}</td>
-                    </tr>
-                  )),
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <p className="muted">No trips started.</p>
-          )}
+          <Journey trips={trips} city={city} />
         </>
       ) : (
         <p className="muted">Reading person details…</p>
       )}
+    </>
+  );
+}
+
+function Journey({ trips, city }: { trips: PersonDetail['trips']; city: City }) {
+  return (
+    <>
+      {trips.map((trip) => (
+        <p key={trip.tripId}>
+          {city.places[trip.originPlaceId]?.name ?? trip.originPlaceId} →{' '}
+          {city.places[trip.destinationPlaceId]?.name ?? trip.destinationPlaceId} ·{' '}
+          {clock(trip.departS)} · {trip.state}
+          {trip.failReason && ` · ${trip.failReason.replaceAll('_', ' ')}`}
+        </p>
+      ))}
+      {trips.length ? (
+        <table aria-label="Journey legs">
+          <thead>
+            <tr>
+              <th scope="col">Leg</th>
+              <th scope="col">Left</th>
+              <th scope="col">Arrived</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trips.flatMap((trip, index) =>
+              trip.legs.map((leg) => (
+                <tr key={`${trip.tripId}:${leg.kind}`}>
+                  <th scope="row">
+                    {index + 1}. {legNames[leg.kind]}
+                    <div className="muted">
+                      {leg.state}
+                      {leg.kind !== 'drive' && ` · ${Math.round(leg.distanceM)} m`}
+                    </div>
+                  </th>
+                  <td style={{ whiteSpace: 'nowrap' }}>{clock(leg.startedS)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{clock(leg.arrivedS)}</td>
+                </tr>
+              )),
+            )}
+          </tbody>
+        </table>
+      ) : (
+        <p className="muted">No trips started.</p>
+      )}
+    </>
+  );
+}
+
+/** TASK-128: an S-Bahn rider has no home, car or agenda; their day is the train, the place nearby
+ * and the walk back to board. */
+function RiderInspector({
+  id,
+  rider,
+  detail,
+  city,
+}: {
+  id: string;
+  rider: NonNullable<ReturnType<typeof riderOf>>;
+  detail: PersonDetail;
+  city: City;
+}) {
+  const back = detail.trips.at(-1)!;
+  const name = (id: string) => city.places[id]?.name ?? id;
+  return (
+    <>
+      <h2>Person {id}</h2>
+      <dl className="details" aria-label="Person details">
+        <dt>Arrived</dt>
+        <dd>
+          By train at {name(rider.stationId)} {clock(rider.arrivalS).slice(0, 5)}
+        </dd>
+        <dt>{rider.kind === 'commuter' ? 'Work' : 'Visit'}</dt>
+        <dd>
+          {name(back.originPlaceId)} ({back.originPlaceId})
+        </dd>
+        <dt>Return</dt>
+        <dd>
+          To {name(rider.stationId)} at {clock(back.departS).slice(0, 5)}
+          {back.state === 'completed' && ', boarded'}
+        </dd>
+        <dt>State</dt>
+        <dd className="capitalize">{detail.state}</dd>
+      </dl>
+      <Journey trips={detail.trips.filter((trip) => trip.state !== 'pending')} city={city} />
     </>
   );
 }
