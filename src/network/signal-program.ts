@@ -50,53 +50,176 @@ export function generateSignalProgram(
 
 /**
  * TASK-131: a junction group's program. Its green groups are entry-to-exit pairs; each switches
- * the member-node road pairs of its chains (as `memberProgram` compiles them), so the conflicts
- * are checked over every movement those road pairs hold at every member.
+ * the member-node road pairs of its chains (as `memberProgram` compiles them).
+ *
+ * TASK-161: movements from inner roads are green in every phase, so a green group's chains run
+ * on through the group whatever else is green. Two green groups share a phase only if no movement
+ * on one's chains conflicts with a movement on the other's, inner movements included: the stream
+ * a phase releases into an inner road stops whenever a green group that crosses it is green.
+ * The phases are the fewest that separate every crossing pair; each green group then joins every
+ * other phase it fits, and the phases share the green time evenly.
  */
 export function generateGroupSignalProgram(
-  city: City,
   groupId: string,
   compiled: CompiledCity,
   diagnostics: Diagnostic[],
 ): SignalProgram {
   const group = compiled.groups![compiled.index.group!.get(groupId)!]!;
   const inner = new Set(group.innerRoads);
-  const units = new Map<string, Unit>();
+  const roadId = (lane: number) => compiled.roads[compiled.lanes[lane]!.road]!.id;
+  const units = new Map<string, GroupUnit>();
   for (const chain of group.chains) {
     const key = `${chain.from}>${chain.to}`;
-    if (units.has(key)) continue;
-    const members = group.nodes.flatMap((n) => {
-      const pairs = new Set(memberPairs(compiled, group, n, chain.from, chain.to));
-      return compiled.nodes[n]!.movements.filter((m) => {
-        const movement = compiled.movements[m]!;
-        // Movements from inner roads are green in every phase (`memberProgram`).
-        if (inner.has(compiled.lanes[movement.fromLane]!.road)) return false;
-        return pairs.has(
-          `${compiled.roads[compiled.lanes[movement.fromLane]!.road]!.id}>${compiled.roads[compiled.lanes[movement.toLane]!.road]!.id}`,
-        );
-      });
-    });
-    const left = group.chains.some(
-      (c) =>
-        c.from === chain.from &&
-        c.to === chain.to &&
-        c.movements.some((m) => ['left', 'uturn'].includes(compiled.movements[m]!.turn)),
-    );
-    units.set(key, {
-      from: compiled.roads[chain.from]!.id,
-      to: compiled.roads[chain.to]!.id,
-      members,
-      left,
-    });
+    let unit = units.get(key);
+    if (!unit) {
+      const pairs = new Map(
+        group.nodes.map((n) => [n, new Set(memberPairs(compiled, group, n, chain.from, chain.to))]),
+      );
+      unit = {
+        from: compiled.roads[chain.from]!.id,
+        to: compiled.roads[chain.to]!.id,
+        entry: chain.from,
+        exit: chain.to,
+        // The movements the green switches: those of its road pairs from outside the group.
+        members: group.nodes.flatMap((n) =>
+          compiled.nodes[n]!.movements.filter((m) => {
+            const movement = compiled.movements[m]!;
+            return (
+              !inner.has(compiled.lanes[movement.fromLane]!.road) &&
+              pairs.get(n)!.has(`${roadId(movement.fromLane)}>${roadId(movement.toLane)}`)
+            );
+          }),
+        ),
+        path: new Set(),
+        chains: [],
+      };
+      units.set(key, unit);
+    }
+    unit.chains.push(chain.movements);
   }
-  const ordered = [...units.entries()]
-    .sort(([a], [b]) => {
-      const [af, at] = a.split('>').map(Number) as [number, number];
-      const [bf, bt] = b.split('>').map(Number) as [number, number];
-      return af - bf || at - bt;
-    })
-    .map(([, unit]) => unit);
-  return phasesFor(city, groupId, ordered, group.entries.length, compiled, diagnostics);
+  // A chain that passes a member twice circles the group (Munich jg:10787's r:327 to r:1279
+  // around its four members, beside the direct through): it is driven only where a lane has no
+  // direct way, so it sets the unit's conflicts only when the unit has no direct chain.
+  for (const unit of units.values()) {
+    const direct = unit.chains.filter(
+      (c) => new Set(c.map((m) => compiled.movements[m]!.node)).size === c.length,
+    );
+    unit.path = new Set([...unit.members, ...(direct.length ? direct : unit.chains).flat()]);
+  }
+  const ordered = [...units.values()].sort((a, b) => a.entry - b.entry || a.exit - b.exit);
+  return groupPhases(groupId, ordered, compiled, diagnostics);
+}
+
+interface GroupUnit {
+  from: string;
+  to: string;
+  entry: number;
+  exit: number;
+  members: number[];
+  /** Every movement its green switches or its chains drive, inner ones included. */
+  path: Set<number>;
+  chains: number[][];
+}
+
+/** TASK-161: the longest cycle of a generated group program, intergreens included. */
+export const GROUP_CYCLE_MAX_S = 120;
+
+function groupPhases(
+  label: string,
+  units: GroupUnit[],
+  compiled: CompiledCity,
+  diagnostics: Diagnostic[],
+): SignalProgram {
+  const crosses = (a: GroupUnit, b: GroupUnit) =>
+    [...a.path].some((m) => {
+      const movement = compiled.movements[m]!;
+      return movement.conflicts.some((o) => b.path.has(o) && !intoInnerLane(compiled, movement, o));
+    });
+  const usable = units.filter((unit) => {
+    const own = new Set(unit.members);
+    const conflicting = unit.members.some((m) =>
+      compiled.movements[m]!.conflicts.some(
+        (o) => own.has(o) && !intoInnerLane(compiled, compiled.movements[m]!, o),
+      ),
+    );
+    if (conflicting)
+      diagnostics.push({
+        severity: 'warning',
+        code: 'osm_signal_group_conflict',
+        refs: [label, unit.from, unit.to],
+        message: `Signal ${label} cannot serve conflicting lanes from ${unit.from} to ${unit.to} as one group`,
+      });
+    return !conflicting;
+  });
+  const crossing = usable.map((a) => usable.map((b) => a !== b && crosses(a, b)));
+  const colour = fewestPhases(crossing);
+  const phases: GroupUnit[][] = [];
+  usable.forEach((unit, i) => (phases[colour[i]!] ??= []).push(unit));
+  // A group none of whose entries reaches an exit still runs a cycle.
+  if (!phases.length) phases.push([]);
+  // Then each green group joins every other phase none of whose green groups it crosses.
+  for (let i = 0; i < usable.length; i++)
+    phases.forEach((phase, p) => {
+      if (p !== colour[i] && phase.every((o) => !crossing[i]![usable.indexOf(o)]))
+        phase.push(usable[i]!);
+    });
+  // No demand is known, so every entry lane is taken to carry the same flow: every phase then
+  // holds a lane with the same flow ratio, and Webster's split gives each phase the same green.
+  // 30 s a phase, as a single junction's, within a cycle of `GROUP_CYCLE_MAX_S`.
+  const greenS = Math.min(30, Math.floor(GROUP_CYCLE_MAX_S / phases.length) - 4);
+  return {
+    offsetS: 0,
+    amberS: 3,
+    allRedS: 1,
+    phases: phases.map((phase) => ({
+      durationS: greenS,
+      groups: phase
+        .toSorted((a, b) => a.entry - b.entry || a.exit - b.exit)
+        .map(({ from, to }) => ({ from, to })),
+    })),
+  };
+}
+
+/**
+ * The phase of each green group: a colouring of the crossing graph with the fewest colours, by
+ * a search from a first-fit bound in order of degree (a group has a few dozen green groups; the
+ * search keeps its best after `budget` steps). Phases are numbered in green group order.
+ */
+function fewestPhases(crossing: boolean[][], budget = 100_000): number[] {
+  const n = crossing.length;
+  const degree = crossing.map((row) => row.filter(Boolean).length);
+  const order = [...Array(n).keys()].sort((a, b) => degree[b]! - degree[a]! || a - b);
+  const colour = new Array<number>(n).fill(-1);
+  const free = (u: number, c: number) => crossing[u]!.every((x, v) => !x || colour[v] !== c);
+  for (const u of order) {
+    let c = 0;
+    while (!free(u, c)) c++;
+    colour[u] = c;
+  }
+  let best = [...colour];
+  let bestK = Math.max(0, ...colour) + 1;
+  colour.fill(-1);
+  let steps = 0;
+  const search = (i: number, k: number) => {
+    if (k >= bestK || steps++ > budget) return;
+    if (i === n) {
+      best = [...colour];
+      bestK = k;
+      return;
+    }
+    const u = order[i]!;
+    for (let c = 0; c <= k && c < bestK - 1; c++) {
+      if (!free(u, c)) continue;
+      colour[u] = c;
+      search(i + 1, Math.max(k, c + 1));
+      colour[u] = -1;
+    }
+  };
+  search(0, 0);
+  // Number the phases by their first green group.
+  const first = new Map<number, number>();
+  best.forEach((c) => first.has(c) || first.set(c, first.size));
+  return best.map((c) => first.get(c)!);
 }
 
 function phasesFor(

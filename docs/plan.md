@@ -186,7 +186,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | not needed: TASK-129 passed after TASK-154 |
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | done 2026-11-13: no repair needed; TASK-128 merged |
 | [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
-| [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | queued (after TASK-154 and TASK-153 merge) |
+| [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | done 2026-11-13 |
 | [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -3738,6 +3738,23 @@ TASK-155 and TASK-128: seed-1 gate 4,308 / 2 / 0 / 0 (= main), sim unit tier (41
 build pass. Open: street-level crossings of roads that neither belong to the exit street nor meet
 it need road grade (a contract change); standing traffic across a crossed lane keeps the exit
 waiting (TASK-153's keep-clear item).
+
+TASK-161 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): a junction group's generated
+signal program now separates every pair of green groups whose chains or switched road pairs
+conflict, counting inner movements (green in every phase), so whatever feeds an inner road is red
+while any crossing green group is green; fewest phases by exact search, even splits (no demand at
+generation; 30 s phases, cycle at most 120 s, amber 3 s, all-red 1 s), each green group at least an
+even share. Census: all nine Munich groups go to zero crossing pairs (group 10, jg:10783, from 5 pairs
+and a 15 s of 121 s right turn for `r:961` to three 30 s phases in 102 s); Sindelfingen has no
+signalised groups. Drain criterion on seeds 1 to 3 now fully met: worst single visit `r:961` 530 /
+554 / 616 s (main 1,380 / 964 / 1,364), every loop road under 900 s, no cycle, no inner-link stand,
+no stalled heads. On its base (70b14be) seeds 1 to 3: 5,312 / 5,311 / 5,311 completed, 0 gridlocked;
+on seeds 1 and 3 every trip released before 10:00 completes; step time about 0.68 of main's.
+Munich pins move only for the nine programs (proved by nulling them); the generator drops its city
+argument from four callers. Lead merge onto main with TASK-128 and TASK-157: seed-1 gate 5,298
+completed, 0 gridlocked, 0 stalled heads; every pin passes; lint, format, build, unit (1,331) and the
+network tier pass, with route-audit, T46, T33.2, T37 and T64 timing out under load and passing
+alone (27). Open: splits are even, cycles 102 to 120 s.
 
 ## Owner decisions log
 
