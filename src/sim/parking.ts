@@ -511,12 +511,48 @@ export function createParking(
   function originSpace(id: number) {
     return previous[id] === -1 ? originSpaces[id]! : parkedSpaces[previous[id]!]!;
   }
+  function claimReachable(city: CompiledCity, connector: number, slot: number, id: number) {
+    const c = city.connectors[connector],
+      space = city.parkingSpaces?.[slot];
+    if (!c || c.direction === 'out' || !space || c.parking !== space.parking) return false;
+    if (
+      !parkingConnectorPermitted(city, connector, trips[id]!.vehicleClass, trips[id]!.purpose, 'in')
+    )
+      return false;
+    const f = city.parking[space.parking]!;
+    if (f.kind === 'roadside') {
+      if (space.connector !== connector) return false;
+    } else {
+      const graph =
+        city === compiled ? lotGraph(f.idx) : city.lots?.find((l) => l.id === f.id)?.circulation;
+      const entry = graph?.entries.find((e) => e.connector === connector && e.direction !== 'out');
+      if (
+        graph?.unreachable.includes(space.lotStall!) ||
+        !Number.isFinite(entry?.distances[graph!.stallNodes[space.lotStall!]!])
+      )
+        return false;
+    }
+    if (!requiresExit(id) || allowWithoutExit[id]) return true;
+    const later = nextTrip[id]!,
+      trip = trips[later]!;
+    const exits =
+      city === compiled
+        ? departure(later)
+        : parkingEgress(
+            city,
+            params.laneChangeDistanceM,
+            trip.vehicleClass,
+            trip.purpose === 'delivery',
+          );
+    return !!exits.spaces[slot];
+  }
   function freeSpace(connector: number, id: number) {
     const c = compiled.connectors[connector]!,
       f = compiled.parking[c.parking ?? -1];
     if (!f || f.kind === 'garage') return undefined;
     const claim = claimedSpaces[id]!;
-    if (claim >= 0 && spaces[claim]!.parking === f.idx) return spaces[claim];
+    if (claim >= 0)
+      return claimReachable(compiled, connector, claim, id) ? spaces[claim] : undefined;
     const point = pointAtDistance(
       compiled.lanes[c.lane]!.polyline,
       compiled.lanes[c.lane]!.cumulative,
@@ -1364,15 +1400,16 @@ export function createParking(
           ? -1
           : (next.parking[facility]!.spaces?.[ordinal[old]!] ?? -1);
       };
-      // A vanished slot or entry releases its claim while old indices still identify it.
+      // Recheck the claimed bay's actual access before remapping stable slot ordinals.
       for (let id = 0; id < trips.length; id++) {
         const facility = heading[id]!;
         if (facility === -1) continue;
         const slot = claimedSpaces[id]!;
         const connector = compiled.connectors[vehicles.destination[id]!];
+        const mappedConnector = connector ? next.index.connector.get(connector.id) : undefined;
         if (
           !next.index.parking.has(compiled.parking[facility]!.id) ||
-          (slot !== -1 && remapSpace(slot) === -1) ||
+          (slot !== -1 && !claimReachable(next, mappedConnector ?? -1, remapSpace(slot), id)) ||
           (connector && !next.index.connector.has(connector.id))
         )
           release(id);

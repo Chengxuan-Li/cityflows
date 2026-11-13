@@ -106,3 +106,5 @@ ranking, choose its cheapest eligible street route instead of the first canonica
 Reuse the winning route. T63 covers a direct mouth beating a three-road detour, the nearer
 public garage retaining lower facility priority, closed-mouth permissions and legacy entry
 ordering. Dedicated hosted traffic and full checks remain required before integration.
+The follow-up T63 live-edit case cuts a selected throat while retaining the claimed bay's
+ordinal; the claim is released and the car completes through another legal mouth.

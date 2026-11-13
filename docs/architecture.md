@@ -606,6 +606,10 @@ street-route costs of its eligible entries and uses the cheapest, retaining cano
 order on ties. Facility ranking, class/purpose permissions, reachable-space and departure
 checks, and seeded stall choice retain their existing rules. The chosen route is reused;
 legacy lots, garages and roadside strips retain their entry ordering.
+An exact bay claim survives a live edit only while its current entry still permits the
+vehicle and reaches that bay, and the required departure remains usable. A stable bay ordinal
+alone does not retain a claim; changed access releases it through ordinary claim accounting
+before the car makes its next parking choice.
 
 A lot with one known aisle grade excludes only road/node obstacles at that grade; unknown
 or mixed grades retain all obstacles. Source building exclusions remain obstacles. A mapped
