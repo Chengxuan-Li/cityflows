@@ -4,7 +4,9 @@ import {
   city,
   clickVehicle,
   clickWorld,
+  closeSidebarOverlay,
   departVehicle,
+  driveEveryone,
   metrics,
   pageErrors,
   sidebarSection,
@@ -38,6 +40,9 @@ test.beforeEach(async ({ page }) => {
 
 test('QA phone plays and selects a rendered car', async ({ page }) => {
   const errors = pageErrors(page);
+  // TASK-113: with mode choice on, vehicle 1's driver may walk; this case selects a car.
+  await driveEveryone(page);
+  await closeSidebarOverlay(page);
   await reachable(button(page, 'Play'));
   await button(page, 'Play').click();
   await expect.poll(async () => (await metrics(page)).trips.driving).toBeGreaterThan(0);
