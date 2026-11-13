@@ -172,10 +172,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-145](tasks/TASK-145.md) | audit | T62/T64 frame times | rail performance tests and renderer | 126, 127 | contract checks and lead review | audit merged, SwiftShader 3D remains over budget |
 | [TASK-146](tasks/TASK-146.md) | audit | Westbound lane gain | Munich source and compiled road geometry | after 144 and 145 | contract checks and lead review | merged in PR #3 |
 | [TASK-147](tasks/TASK-147.md) | audit | PR #1 traffic CI repair | operating crossings on the held PR | 136 and 138 branch | contract checks and lead review | repaired on draft PR #1 at `eb7c089`; held for owner |
-| [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
-
 | [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | in progress |
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | in progress |
+| [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
 
@@ -3445,6 +3444,20 @@ checks passed for operating rail and tram crossings and the Munich tram's stop a
 departure in 2D and 3D. GitHub passed check, city and e2e at `eb7c089`. The PR remains held. TASK-128
 through TASK-130 remain held and B56 remains deferred.
 [PR #1 checks](https://github.com/Chengxuan-Li/cityflows/actions/runs/43338527308).
+
+### 2026-11-12 TASK-148 and TASK-149 candidate review
+
+TASK-148 reproduced the rail overhead with the original stationary camera. Culling
+35,453 off-screen triangles within one draw left the frame interval at 236.66 ms
+in both cases. Single-sided paint and vertex colour conversion also missed the
+10% target. The renderer agent is testing reuse of settled-camera rail paint.
+
+TASK-149 traced ten Munich and sixteen Sindelfingen mouths to shared OSM nodes.
+The first candidate split the through roads at all 26 mouths. It changed 43 of the
+96 reference routes against a limit of nine and was rejected. The next candidate
+keeps the through road and attaches parking circulation at the source entrance.
+The original route and TASK-144 round-trip tests pass. Physical entrance paths,
+one-way movement and lots with zero generated stalls still need verification.
 
 ## Owner decisions log
 
