@@ -200,7 +200,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-172](tasks/TASK-172.md) | CI | Nightly three-seed traffic report (advisory) | `bench/seed-report.ts`, Full workflow | 113, baseline reset | manual Full run | done 2026-11-13 |
 | [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | done 2026-11-13 |
 | [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | queued (after TASK-173) |
-| [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | in progress (Claude Code subagent) |
+| [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | done 2026-11-13 |
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | queued (near the end) |
 | [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after the UI merge and TASK-168) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -3932,6 +3932,22 @@ started by 10:00; 2,755 all-walk days keep their cars parked at home. Step time 
 guard (choice on) 2,561 / 0 / 0, T53, sim and demand unit (467), lint, format, build, T63 and T79
 specs pass. Open: the full-suite T54 Munich case fails as on main (its commuters walk);
 `src/host/headless.ts` counts car trips by scheduled mode; a walker's inspector shows no car.
+
+TASK-175 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): compiled nodes, roads and lanes
+carry `grade` (a road's `layer`, else the lower of its end nodes'; equal to what the renderers
+derived before), and the terrain-free road height profile moved from `src/render3d/heights.ts` to
+`src/network/heights.ts` (`laneHeightAt`), shared by 3D and the simulation; two surfaces 4.5 m or
+more apart are at different levels (architecture 4, 5, 8, 11; a pre-approved contract change). The
+lot hold, crossing checks and TASK-164's exit-clear test consider nearby lanes at the lot's level,
+so roads overhead never hold or block a lot car and at-grade roads beyond the exit street need a
+crossing gap; 3D picking selects the upper road. Census changes only at pk:2050 (the r:1298 ramp's
+ground end, 20 pairs), pk:2056 (ramps 2.3 to 4.4 m up; bays 412 to 414 hold under 4.5 m clearance)
+and pk:2060 (r:2133 crossed); pk:2049 unchanged. Thirteen pin files moved for the field only (proved
+by hiding `grade`). On its base, seeds 1 and 3 equal main and seed 2 goes from 5,302 / 1 to 5,310 / 0
+(a pk:2056 departure). Lead merge onto main with TASK-165, 160, 171, 172 and 173: type-check, lint,
+format, build, unit (1,361) and city (173) with no timeouts, gate (choice off) 5,310 / 0 / 0, guard
+2,561 / 0 / 0, T53, light e2e (39) pass. Open: bays under the low part of ramps (stall generation
+compares whole-number grades), and smoothed rather than surveyed ramp heights.
 
 ## Owner decisions log
 
