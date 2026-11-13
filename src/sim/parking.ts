@@ -548,7 +548,7 @@ export function createParking(
       f = compiled.parking[c.parking ?? -1];
     if (!f || f.kind === 'garage') return false;
     const graph = lotGraph(f.idx),
-      entry = graph?.entries.find((e) => e.connector === connector);
+      entry = graph?.entries.find((e) => e.connector === connector && e.direction !== 'out');
     return usableSpaces(f).some(
       (i) =>
         (!needRoom ||
@@ -662,7 +662,7 @@ export function createParking(
     cachedHash = undefined;
     if (lot) {
       const graph = lotGraph(slot.parking)!,
-        entry = graph.entries.find((e) => e.connector === connector)!;
+        entry = graph.entries.find((e) => e.connector === connector && e.direction !== 'out')!;
       const scores = usableSpaces(compiled.parking[slot.parking]!)
         .filter((i) => stock[i] === -1 && (reserved[i] === -1 || reserved[i] === id))
         .map((i) => ({
