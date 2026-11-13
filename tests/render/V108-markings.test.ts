@@ -60,7 +60,8 @@ const baseline = {
     arrows: '7e7450ea45037fb309353bfcafce6cf910155b7eb5909a1db610e54aadd7e700',
   },
   sindelfingen: {
-    compile: '40bbaabba7418f8dad1211b81b8921daead05d7b8347a134ba485df07d1d1814',
+    // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
+    compile: '9967a15554ad9d6da98de9aa33898fe23ca88883b9d92d5b716722fcc5362c46',
     arrows: '29bd956f1a3e4825fe96236f91eb9bfbd94b07e62f23f9eff2f7f0e51621ba0a',
   },
   munich: {
@@ -69,7 +70,7 @@ const baseline = {
     // import without assignTramForms) every pin equals c3a6ec2's.
     // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
     // removed every pin equals 3e9951a's.
-    compile: 'b046e853efc9cb6ab61159312293182a16a9bacfa43d19f456e69ebe6e12bcea',
+    compile: '9522a7ff834ea8e9dfeb3bf70198009f99ea733b217012a2abfa4303748b2f20',
     arrows: 'd7a4069aceff35d73a6c6596a536edac25dbb82c71b88fe1ef70cebd591b8a27',
   },
 } as const;

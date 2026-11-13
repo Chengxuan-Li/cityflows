@@ -1,5 +1,6 @@
 import { headingAtDistance } from '../geo/polyline';
 import type { CMovement, CompiledCity } from '../network';
+import { railTimetable } from '../network/trams';
 import { vehicleClasses, type SimParams } from '../schema';
 import { reachableLanes, type Route } from '../routing';
 import { AMBER, GREEN, RED, updateSignals } from './signals';
@@ -358,6 +359,79 @@ export function createIntersections(
     return false;
   }
 
+  const railBands = compiled.lanes.map(() => [] as { fromM: number; toM: number }[]);
+  const rail = compiled.rail;
+  if (rail?.facilities?.length) {
+    const table = railTimetable(rail);
+    const tracks = new Set(
+      table.departures.flatMap((d) => table.routes[d.route]!.sections.map((s) => s.track)),
+    );
+    for (const facility of rail.facilities) {
+      if (facility.railSpans?.some((span) => tracks.has(span.track)))
+        for (const span of facility.spans ?? [])
+          if (span.segment >= 0) railBands[span.segment]!.push(span);
+    }
+  }
+  const maxLength = Math.max(...profiles.map((p) => p.lengthM));
+  const exitBands = railBands.map((spans, lane) =>
+    spans.some((s) => s.toM >= compiled.lanes[lane]!.stopM - maxLength - params.idm.minGapM),
+  );
+  const railExits = compiled.movements.map((m) =>
+    m.conflicts.flatMap((rival, i) => {
+      const exit = compiled.movements[rival]!;
+      return exitBands[exit.fromLane] ? [{ exit, end: m.conflictZones[i]![1] }] : [];
+    }),
+  );
+  function onRail(id: number) {
+    const front = vehicles.position[id]!;
+    return railBands[vehicles.lane[id]!]!.some(
+      (span) => front >= span.fromM && front - profile(id).lengthM <= span.toM,
+    );
+  }
+  function usesRailExit(exit: CMovement) {
+    const lane = compiled.lanes[exit.fromLane]!;
+    const front = vehicles.first(lane.idx);
+    if (front !== -1 && vehicles.movement[front] === exit.idx && onRail(front)) return true;
+    for (const m of lane.in) {
+      const entering = vehicles.first(-m - 1);
+      if (entering === -1) continue;
+      const step = vehicles.routeStep[entering]! + 1;
+      const route = vehicles.route[entering];
+      if (
+        route?.movements[step] === exit.idx &&
+        route.roads[step + 1] === compiled.lanes[exit.toLane]!.road &&
+        railBands[lane.idx]!.some(
+          (span) => span.fromM <= profile(entering).lengthM + params.idm.minGapM,
+        )
+      )
+        return true;
+    }
+    return false;
+  }
+  function obstructsRailExit(id: number, movement: CMovement) {
+    let end = -Infinity;
+    for (const rival of railExits[movement.idx]!)
+      if (usesRailExit(rival.exit)) end = Math.max(end, rival.end);
+    if (end === -Infinity) return false;
+    // A stopped candidate and vehicles already promised this exit must fit beyond its last shared zone.
+    const lane = compiled.lanes[movement.toLane]!,
+      tail = vehicles.last(lane.idx);
+    const gap = params.idm.minGapM;
+    let storage =
+      movement.lengthM +
+      Math.min(
+        lane.stopM,
+        tail === -1 ? Infinity : vehicles.position[tail]! - profile(tail).lengthM,
+      ) -
+      end;
+    for (const m of lane.in) {
+      for (let v = vehicles.first(-m - 1); v !== -1; v = vehicles.next[v]!)
+        if (v !== id) storage -= profile(v).lengthM + gap;
+      for (let v = vehicles.first(compiled.movements[m]!.fromLane); v !== -1; v = vehicles.next[v]!)
+        if (v !== id && grants[v] === m) storage -= profile(v).lengthM + gap;
+    }
+    return storage < profile(id).lengthM + gap;
+  }
   function blockedExit(id: number, movement: CMovement): 'exit-full' | 'box' | null {
     const groupIndex = compiled.nodes[movement.node]!.group;
     if (groupIndex !== undefined && !inner(movement)) {
@@ -417,7 +491,7 @@ export function createIntersections(
 
   function canGrant(id: number, movement: CMovement) {
     if (!signalAllows(id, movement)) return refuse(id, movement, 'signal');
-    const blocked = blockedExit(id, movement);
+    const blocked = blockedExit(id, movement) ?? (obstructsRailExit(id, movement) ? 'box' : null);
     if (blocked) return refuse(id, movement, blocked);
     const control = compiled.nodes[movement.node]!.control;
     for (let i = 0; i < movement.conflicts.length; i++) {
@@ -522,7 +596,18 @@ export function createIntersections(
 
   const movementOf = (id: number) => compiled.movements[vehicles.movement[id]!]!;
   const priority = (id: number) => (onRed(movementOf(id)) ? -1 : movementOf(id).priority);
+  const clearingRails = (id: number) => {
+    const movement = movementOf(id);
+    return (
+      onRail(id) &&
+      signalAllows(id, movement) &&
+      !blockedExit(id, movement) &&
+      !obstructsRailExit(id, movement)
+    );
+  };
   const compare = (a: number, b: number) =>
+    Number(onRed(movementOf(a))) - Number(onRed(movementOf(b))) ||
+    Number(clearingRails(b)) - Number(clearingRails(a)) ||
     priority(b) - priority(a) ||
     vehicles.junctionWaiting[b]! - vehicles.junctionWaiting[a]! ||
     a - b;
