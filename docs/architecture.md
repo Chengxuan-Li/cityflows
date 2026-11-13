@@ -1403,7 +1403,9 @@ TASK-125 claims parking when the room-required choice pass accepts a reachable e
 holds at most one claim: an exact roadside space, or one capacity unit in a hard garage or lot.
 Claimed roadside spaces are unavailable to other cars; hard facilities drop out when occupied
 plus claimed reaches capacity. Entry checks exclude the asking car's own claim. The full-facility
-departure forecast makes no claim. Soft inferred garages remain unlimited and are not counted.
+departure forecast makes no claim. TASK-153: a car choosing as it leaves counts its own parked
+car and space as free, so it can claim a place in the facility it is leaving. Soft inferred
+garages remain unlimited and are not counted.
 Choosing again, entry rejection, parking, failure and gridlock respawn release through the same
 parking release operation; trip accounting covers every terminal path. Claims never move origin
 stock. Live edits remap claims by facility/entry id and space ordinal, releasing removed targets.
@@ -1426,8 +1428,13 @@ Curve progress is eased, and snapshots carry the moving body throughout the hand
 A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
 and becomes `in_lot` (counted among driving trips). It follows its local shortest path at
 `lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
-across it; tied approaches use distance, then id. Narrow local paths admit one entry/direction
-cohort at a time to prevent opposing cars deadlocking. Reversing departures take an aisle
+across it; tied approaches use distance, then id. Narrow local paths admit one entry cohort of
+arrivals at a time to prevent opposing cars deadlocking. TASK-153: departures, including one
+holding for a street gap, refuse an arrival only where its path to its bay and its pull-in come
+within body clearance (half of each width plus 0.3 m) of a departing body, now or along the
+rest of its leave manoeuvre, drive-out to the hold and merge. A bay blocked so gives way to the
+next free bay in choice order whose way is clear, and a claim moves with it. A departure still
+waits while any arrival is in the lot. Reversing departures take an aisle
 gap, leave their stall and follow the local path toward an outbound entry. TASK-150: they hold
 at the path's farthest pose whose whole body is clear of the exit lane (a path with no clear
 pose holds where it starts), keeping their claim; lot followers queue behind them. From the
@@ -1438,7 +1445,10 @@ connector; a destination between the two (their own lot, chosen again) is where 
 instead. The grant inserts the car there at speed 0, so following traffic treats it as a lane
 occupant before its body crosses the lane edge; the body then merges (`merge` phase) along a
 front-bumper curve at `lotSpeedMps` and drives on. A lot aisle mapped on a road is such a
-lane: the car joins it where its path first meets it. Gridlock recovery
+lane: the car joins it where its path first meets it. A car turning into the same mouth on the
+exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
+the join station, whichever is earlier (TASK-153), so it never stands in the gap the grant
+checks. Gridlock recovery
 never applies inside a lot. Trucks and buses use garages only; garage admission and stock
 rules are unchanged.
 
