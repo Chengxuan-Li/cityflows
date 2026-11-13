@@ -734,12 +734,11 @@ function createRun({
         const driving = profile(id);
         // TASK-169: keep clear. Where its front would stand (behind a leader, projected by the
         // leader's braking distance but no farther than behind the leader's own stand, or at a
-        // stop) would leave its body on a keep-clear zone, it
-        // stops short of the zone: from one and a half times its comfortable braking distance
-        // short of that stand (at least the decision distance), if it can stop there at its
-        // comfortable deceleration, and then until it stands there. A head at its stop line
-        // first moves up to the line if that clears the zone; one waiting short of a zone for its
-        // junction counts that stand as its stop line.
+        // stop) would leave its body on a keep-clear zone, it stops short of the zone: from 1.5
+        // times its comfortable braking distance short of that stand (at least the decision
+        // distance), if it can stop there at its comfortable deceleration, and then until it
+        // stands there. A head at its stop line first moves up to the line if that clears the
+        // zone; one waiting short of a zone for its junction counts that stand as its stop line.
         const zones = lane ? keepClear[lane.idx]! : undefined;
         const atStopLine = !!lane && stopAt === lane.stopM && obstacle === stopAt;
         let standM = obstacle - idm.minGapM + (leaderSpeed * leaderSpeed) / (2 * idm.bMps2);
@@ -1163,10 +1162,10 @@ function createRun({
       }
       if ((movement !== -1 && granted === -1) || laneChanges.holding[id] || waitingForLane[id]) {
         // TASK-169: or where it moved up to clear a keep-clear zone behind the line.
-        const stand = keepClearStop[id]! < Infinity ? keepClearStop[id]! : -Infinity;
+        const movedUp = keepClearStop[id] === Infinity ? -Infinity : keepClearStop[id]!;
         position = Math.min(
           position,
-          Math.max(previousPosition, lane.stopM - idm.minGapM, Math.min(stand, lane.stopM)),
+          Math.max(previousPosition, lane.stopM - idm.minGapM, movedUp),
         );
         if (remaining <= params.intersection.decisionDistanceM) {
           vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;
