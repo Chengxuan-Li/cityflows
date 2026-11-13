@@ -1,8 +1,8 @@
 import type { PersonMetrics } from '../../sim/types';
 
-// macOS system green and blue, as in the map's palette (TASK-162).
-const walkColor = '#34c759';
-const carColor = '#007aff';
+// macOS system green and blue, as in the map's palette (TASK-162); app.css holds both appearances.
+const walkColor = 'var(--chart-walk)';
+const carColor = 'var(--chart-car)';
 
 const percent = (part: number, total: number) =>
   total ? `${Math.round((100 * part) / total)}%` : '—';
@@ -31,7 +31,7 @@ export function ModeShares({ modes }: { modes: PersonMetrics['modes'] }) {
       </dl>
       {total > 0 && (
         <svg viewBox="0 0 300 124" role="img" aria-label="Walk share by hour">
-          <path d="M44 24V100H294" fill="none" stroke="#d4d4d4" />
+          <path d="M44 24V100H294" fill="none" style={{ stroke: 'var(--separator)' }} />
           <text x="38" y="28" textAnchor="end">
             100%
           </text>
@@ -50,14 +50,14 @@ export function ModeShares({ modes }: { modes: PersonMetrics['modes'] }) {
                   y={24}
                   width={8.4}
                   height={76 - walkHeight}
-                  fill={carColor}
+                  style={{ fill: carColor }}
                 />
                 <rect
                   x={45 + hour * 10.4}
                   y={100 - walkHeight}
                   width={8.4}
                   height={walkHeight}
-                  fill={walkColor}
+                  style={{ fill: walkColor }}
                 />
                 <title>{`${String(hour).padStart(2, '0')}:00 · ${walk.toLocaleString()} walking, ${car.toLocaleString()} by car`}</title>
               </g>

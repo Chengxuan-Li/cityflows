@@ -3,7 +3,7 @@ import type { Scene3D } from '../render3d/scene';
 import type { Vec2 } from '../geo/vec2';
 import type { Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
-import { style, placeHue } from '../render/style';
+import { mapPalettes, style, placeHue } from '../render/style';
 import type { Pick, Scene, VehicleSnapshot } from '../render/types';
 import type { Route } from '../routing';
 import type { LaneId } from '../schema';
@@ -17,6 +17,7 @@ import type { MapTool } from './tools/pointer-tool';
 import { createPlacePaintTool } from './tools/place-paint';
 import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
 import { useLighting } from './lighting-store';
+import { resolveAppearance, useAppearance } from './appearance-store';
 
 function snapshotForMap(
   snapshot: VehicleSnapshot,
@@ -481,6 +482,18 @@ export function MapView() {
           view.setTiles(layers.basemap);
           drawnLayers = layers;
         }
+        // TASK-166: the map's dark variant in the chosen dark appearance.
+        const { lighting } = useLighting.getState();
+        const appearance = useAppearance.getState();
+        const palette = resolveAppearance(
+          appearance.settings,
+          appearance.systemDark,
+          lighting,
+          getState().run?.timeS,
+        ).darkMap
+          ? mapPalettes.dark
+          : mapPalettes.light;
+        view.setMapPalette(palette);
         if (
           drawn?.compiled !== session.compiled ||
           drawn?.project.city.markingTheme !== session.project.city.markingTheme
@@ -545,6 +558,7 @@ export function MapView() {
           view.setActive(!active3D);
           snapshotTime = NaN;
         }
+        if (active3D) three!.setMapPalette(palette);
         if (
           active3D &&
           (drawn3D?.compiled !== session.compiled ||
@@ -593,7 +607,6 @@ export function MapView() {
           );
         }
         // TASK-163: view-only lighting, from its own per-viewer store.
-        const { lighting } = useLighting.getState();
         if (active3D) three!.setLighting(lighting, getState().run?.timeS ?? 0, layers.shadows);
         else view.setLighting(lighting, getState().run?.timeS ?? 0);
         if (selection !== drawnSelection) {

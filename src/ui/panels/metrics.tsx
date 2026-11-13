@@ -9,10 +9,10 @@ function clock(timeS: number) {
 }
 
 const plots = [
-  ['driving', 'Driving', '#4d8e94'],
-  ['queued', 'Waiting at entrances and exits', '#a47950'],
-  ['completed', 'Completed trips', '#668e72'],
-  ['meanDelayS', 'Average delay · seconds', '#987ca0'],
+  ['driving', 'Driving', 'var(--chart-driving)'],
+  ['queued', 'Waiting at entrances and exits', 'var(--chart-queued)'],
+  ['completed', 'Completed trips', 'var(--chart-completed)'],
+  ['meanDelayS', 'Average delay · seconds', 'var(--chart-delay)'],
 ] as const;
 
 export function MetricsPanel() {
@@ -81,7 +81,7 @@ export function MetricsPanel() {
     charts.push({
       key: 'parking',
       label: 'Parking occupancy',
-      color: '#668e72',
+      color: 'var(--chart-completed)',
       values: samples.map((sample) => sample.parkingOccupancy?.[chosen.id] ?? 0),
       maximum: chosen.capacity,
     });
@@ -184,14 +184,14 @@ export function MetricsPanel() {
                 {label} <strong>{last ? Math.round(values.at(-1)!).toLocaleString() : '—'}</strong>
               </figcaption>
               <svg viewBox="0 0 300 124" role="img" aria-label={`${label} over simulated time`}>
-                <path d="M36 24V100H286" fill="none" stroke="#dcded2" />
+                <path d="M36 24V100H286" fill="none" style={{ stroke: 'var(--chart-axis)' }} />
                 <text x="30" y="28" textAnchor="end">
                   {Math.ceil(max)}
                 </text>
                 <text x="30" y="100" textAnchor="end">
                   0
                 </text>
-                <polyline points={points} fill="none" stroke={color} strokeWidth="2" />
+                <polyline points={points} fill="none" style={{ stroke: color }} strokeWidth="2" />
                 {first && (
                   <text x="36" y="118">
                     {clock(first.timeS)}

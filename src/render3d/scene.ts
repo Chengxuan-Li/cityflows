@@ -26,7 +26,7 @@ import {
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
 import { signalStateAt, type CompiledCity } from '../network';
-import { markingThemes, style } from '../render/style';
+import { mapPalettes, markingThemes, style, type MapPalette } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
 import {
   defaultLayers,
@@ -94,6 +94,9 @@ export class Scene3D {
   private lighting: LightingSettings = defaultLighting;
   private lightMinute = 0;
   private light = sceneLight(defaultLighting, 0);
+  /** TASK-166: the canvas, land use, buildings, lots, place tints and paving follow the appearance. */
+  private palette = mapPalettes.light;
+  private builtPalette = mapPalettes.light;
   private lightKey = '';
   private shadowsLayer = true;
   private streetLightsVisible = true;
@@ -228,7 +231,8 @@ export class Scene3D {
     if (
       this.city === city &&
       this.source === source &&
-      this.renderedTerrain === this.terrainEnabled
+      this.renderedTerrain === this.terrainEnabled &&
+      this.builtPalette === this.palette
     )
       return;
     this.invalidate();
@@ -243,10 +247,12 @@ export class Scene3D {
     }
     this.city = city;
     const renderedSource = this.terrainEnabled ? source : { ...source, terrain: undefined };
+    this.builtPalette = this.palette;
     const geometry = (this.geometry = buildGeometry(
       city,
       renderedSource,
       Boolean(renderedSource.terrain),
+      this.palette,
     ));
     const terrain = geometry.heights.terrain;
     const platformPools: LightPoint[] = [];
@@ -358,9 +364,9 @@ export class Scene3D {
     const asphalt = add(geometry.surfaces, style.asphalt, !terrain.grid);
     const walk = buildWalk(city, renderedSource, geometry.heights);
     this.walk = {
-      sidewalks: add(walk.sidewalks, style.walk.sidewalk, false),
-      footways: add(walk.footways, style.walk.footway, false),
-      steps: add(walk.steps, style.walk.steps, false),
+      sidewalks: add(walk.sidewalks, this.palette.walk.sidewalk, false),
+      footways: add(walk.footways, this.palette.walk.footway, false),
+      steps: add(walk.steps, this.palette.walk.steps, false),
     };
     this.setWalkLayers(this.walkVisibility.sidewalks, this.walkVisibility.footways);
     asphalt.material.map = surfaceTexture('asphalt');
@@ -405,7 +411,7 @@ export class Scene3D {
       add(geometry.crossings, markingThemes[cityMarkingTheme(source)].colors.stop, false),
     ];
     const lots = lotGeometry(city, renderedSource, terrain);
-    add(lots.surface, style.context.parking, false);
+    add(lots.surface, this.palette.context.parking, false);
     const strips = stripGeometry(city, renderedSource, geometry.heights);
     add(strips.surface, style.context.parking, false);
     add(strips.paint, style.stall, false);
@@ -425,7 +431,7 @@ export class Scene3D {
       0xffffff,
     );
     this.buildings.material.dispose();
-    this.buildings.material = buildingMaterial();
+    this.buildings.material = buildingMaterial(this.palette.buildings.window);
     this.buildings.material.side = DoubleSide;
     this.canvas.dataset.contextBuildMs = geometry.context.buildMs.toFixed(1);
     this.canvas.dataset.buildingTriangles = JSON.stringify(geometry.context.buildingTriangles);
@@ -527,7 +533,7 @@ export class Scene3D {
     };
     this.ground = new Mesh(
       renderedSource.terrain ? groundMesh(terrain, bounds, -0.04) : new PlaneGeometry(width, depth),
-      new MeshLambertMaterial({ color: style.background }),
+      new MeshLambertMaterial({ color: this.palette.background }),
     );
     this.ground.renderOrder = 2;
     if (!renderedSource.terrain) {
@@ -538,7 +544,11 @@ export class Scene3D {
     this.content.add(this.ground);
     if (grid) {
       const surface = this.ground.geometry.clone().translate(0, 0.015, 0);
-      this.terrainGround = buildTerrainGround(surface, source.context?.features ?? []);
+      this.terrainGround = buildTerrainGround(
+        surface,
+        source.context?.features ?? [],
+        this.palette,
+      );
       surface.dispose();
       this.surroundings.geometry.dispose();
       this.surroundings.material.forceSinglePass = true;
@@ -569,7 +579,18 @@ export class Scene3D {
     this.lighting = settings;
     this.lightMinute = minute;
     this.shadowsLayer = shadows;
-    this.light = sceneLight(settings, minute * 60);
+    this.light = sceneLight(settings, minute * 60, this.palette.background);
+    this.applyLight();
+  }
+
+  /** TASK-166: the map's ground and buildings for the appearance; a change rebuilds the scene,
+   * as a terrain change does. */
+  setMapPalette(palette: MapPalette) {
+    if (palette === this.palette) return;
+    this.palette = palette;
+    this.canvas.dataset.mapPalette = palette === mapPalettes.dark ? 'dark' : 'light';
+    this.light = sceneLight(this.lighting, this.lightMinute * 60, palette.background);
+    if (this.city && this.source) this.setCity(this.city, this.source);
     this.applyLight();
   }
 

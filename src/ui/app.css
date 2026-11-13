@@ -42,9 +42,11 @@
     U+A720-A7FF;
 }
 
-/* Tokens: macOS Sonoma / Ventura light appearance, flat (solid surfaces, no blur or vibrancy).
-   Text colours meet WCAG AA on every surface they sit on; #007aff fills carry no text because white
-   on it reaches only 4.0:1, so text-bearing accent fills use --accent-fill (5.6:1). */
+/* Tokens: macOS Sonoma / Ventura, flat (solid surfaces, no blur or vibrancy), in a light and a dark
+   appearance. Every colour the chrome draws is a token here; the dark block below redefines them.
+   Text colours meet WCAG AA on every surface they sit on (src/ui/contrast.test.ts checks both
+   appearances); #007aff fills carry no text because white on it reaches only 4.0:1, so
+   text-bearing accent fills use --accent-fill (5.6:1). */
 :root {
   color-scheme: light;
   --font: Arimo, Arial, sans-serif;
@@ -58,35 +60,176 @@
   --sidebar: #ebebeb;
   --inspector: #f5f5f5;
   --surface: #ffffff;
+  --popover: #ffffff;
   --separator: #d4d4d4;
   --control: #ffffff;
   --control-pressed: #e4e4e4;
+  --edge-disabled: rgb(0 0 0 / 7%);
   --hover: rgb(0 0 0 / 6%);
   --pressed: rgb(0 0 0 / 11%);
+  --field: #ffffff;
+  --field-edge: #c9c9c9;
+  --field-disabled: #f7f7f7;
+  --checkbox: #ffffff;
+  --checkbox-edge: #b9b9be;
+  --checkbox-shadow: rgb(0 0 0 / 10%);
   --track: #e1e1e1;
+  --track-edge: rgb(0 0 0 / 8%);
+  --knob: #ffffff;
+  --segmented-track: rgb(0 0 0 / 7%);
+  --segmented-divider: rgb(0 0 0 / 14%);
+  --segmented-key: #ffffff;
+  --segmented-key-disabled: rgb(255 255 255 / 60%);
+  --toolbar-glyph: #5a5a5f;
+  --toolbar-glyph-disabled: #b9b9be;
   --accent: #007aff;
   --accent-fill: #0064d1;
+  --accent-fill-pressed: #0055b3;
+  --accent-disabled: #9ab9df;
+  --accent-text: #0058b8;
   --on-accent: #ffffff;
+  --on-accent-disabled: #ffffff;
   --warning-text: #8a4b00;
   --warning-fill: #fdf0dc;
   --danger-text: #a3261e;
   --danger-fill: #fbe9e7;
   --danger-edge: #efc3bd;
+  /* Charts, map keys and the signal editor. */
+  --chart-axis: #dcded2;
+  --chart-driving: #4d8e94;
+  --chart-queued: #a47950;
+  --chart-completed: #668e72;
+  --chart-delay: #987ca0;
+  --chart-walk: #34c759;
+  --chart-car: #007aff;
+  --heat: #4d8e94;
+  --usage-up: #8f5a3a;
+  --usage-down: #39737a;
+  --profile-bar: #7fb2e5;
+  --signal-green-fill: #d7e8d9;
+  --signal-green-handle: #86b28f;
+  --signal-amber-fill: #f2cf7e;
+  --signal-red-fill: #e6a9a2;
+  --signal-idle: #8e8e93;
+  --signal-served: #248a3d;
+  --signal-conflict: #d70015;
+  --schematic-road: #dcded2;
+  --schematic-node: #e8e8dc;
+  /* Glyphs drawn in CSS. */
+  --glyph-popup: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' rx='4' fill='%23007aff'/%3E%3Cpath d='M5 6.5 8 3.75l3 2.75M5 9.5l3 2.75 3-2.75' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-popup-disabled: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M5 6.5 8 3.75l3 2.75M5 9.5l3 2.75 3-2.75' fill='none' stroke='%23a5a5aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-step-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.5 4.5 4.5 1.5l3 3' fill='none' stroke='%231f1f1f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-step-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.5 1.5 4.5 4.5l3-3' fill='none' stroke='%231f1f1f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-disclosure: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M3.5 2 6.5 5l-3 3' fill='none' stroke='%23646469' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-pull-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M2 3.5 5 6.5l3-3' fill='none' stroke='%23646469' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-menu-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='m2.5 6.5 2.5 2.5 4.5-5.5' fill='none' stroke='%231f1f1f' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --radius: 6px;
   --radius-window: 10px;
   --shadow-control: 0 0 0 1px rgb(0 0 0 / 10%), 0 1px 1.5px rgb(0 0 0 / 14%);
   --shadow-popover: 0 0 0 1px rgb(0 0 0 / 10%), 0 6px 22px rgb(0 0 0 / 16%);
   --shadow-sheet: 0 0 0 1px rgb(0 0 0 / 12%), 0 18px 48px rgb(0 0 0 / 24%);
+  --popover-arrow-edge: rgb(0 0 0 / 10%);
+  --knob-shadow: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 1px 2px rgb(0 0 0 / 22%);
+  --thumb-shadow: 0 0 0 0.5px rgb(0 0 0 / 18%), 0 1px 3px rgb(0 0 0 / 25%);
   --toolbar-height: 52px;
   --status-height: 26px;
   --sidebar-width: 272px;
   --inspector-width: 280px;
   --inset: 12px;
-  /* The map canvas keeps its own palette until phase 3. */
-  --canvas: #f4f1e7;
+  /* Behind the map while it loads: the map's canvas (src/render/style.ts `mapPalettes`). */
+  --canvas: #f2f1ee;
   font: var(--text) / 1.3 var(--font);
   color: var(--label);
   background: var(--window);
+}
+
+/* TASK-166: the dark appearance (System when the OS is dark, Dark, or Match lighting after dusk;
+   src/ui/appearance-store.ts). Dark solid surfaces, lighter as they rise toward the viewer; the
+   accent is system blue's dark variant. */
+:root[data-appearance='dark'] {
+  color-scheme: dark;
+  --label: #e5e5e7;
+  --label-secondary: #a4a4a9;
+  --label-disabled: #6c6c71;
+  --window: #1e1e1e;
+  --toolbar: #2b2b2b;
+  --sidebar: #252525;
+  --inspector: #2b2b2b;
+  --surface: #1c1c1e;
+  --popover: #323234;
+  --separator: #3d3d3f;
+  --control: #505053;
+  --control-pressed: #636366;
+  --edge-disabled: rgb(255 255 255 / 9%);
+  --hover: rgb(255 255 255 / 7%);
+  --pressed: rgb(255 255 255 / 11%);
+  --field: #1c1c1e;
+  --field-edge: #58585c;
+  --field-disabled: #262628;
+  --checkbox: #3a3a3c;
+  --checkbox-edge: #707075;
+  --checkbox-shadow: rgb(0 0 0 / 30%);
+  --track: #48484a;
+  --track-edge: rgb(255 255 255 / 8%);
+  --knob: #dcdcde;
+  --segmented-track: rgb(255 255 255 / 8%);
+  --segmented-divider: rgb(255 255 255 / 15%);
+  --segmented-key: #5a5a5d;
+  --segmented-key-disabled: rgb(255 255 255 / 10%);
+  --toolbar-glyph: #b9b9be;
+  --toolbar-glyph-disabled: #5e5e63;
+  --accent: #0a84ff;
+  --accent-fill: #0a6cdb;
+  --accent-fill-pressed: #0859b8;
+  --accent-disabled: #2b4a70;
+  --accent-text: #74b8ff;
+  --on-accent: #ffffff;
+  --on-accent-disabled: #a2adbd;
+  --warning-text: #ffb340;
+  --warning-fill: #3d2f14;
+  --danger-text: #ff8f85;
+  --danger-fill: #3c2220;
+  --danger-edge: #6e302b;
+  --chart-axis: #4a4a4d;
+  --chart-driving: #6db7be;
+  --chart-queued: #cf9f73;
+  --chart-completed: #8fbf9b;
+  --chart-delay: #bda3c6;
+  --chart-walk: #30d158;
+  --chart-car: #0a84ff;
+  --heat: #6db7be;
+  --usage-up: #e7a57d;
+  --usage-down: #7cc6ce;
+  --profile-bar: #4b8fd8;
+  --signal-green-fill: #2b4733;
+  --signal-green-handle: #4f8a5d;
+  --signal-amber-fill: #7d6020;
+  --signal-red-fill: #733732;
+  --signal-idle: #8e8e93;
+  --signal-served: #30d158;
+  --signal-conflict: #ff453a;
+  --schematic-road: #48484a;
+  --schematic-node: #3a3a3c;
+  --glyph-popup: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' rx='4' fill='%230a84ff'/%3E%3Cpath d='M5 6.5 8 3.75l3 2.75M5 9.5l3 2.75 3-2.75' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-popup-disabled: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M5 6.5 8 3.75l3 2.75M5 9.5l3 2.75 3-2.75' fill='none' stroke='%236c6c71' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-step-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.5 4.5 4.5 1.5l3 3' fill='none' stroke='%23e5e5e7' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-step-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.5 1.5 4.5 4.5l3-3' fill='none' stroke='%23e5e5e7' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-disclosure: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M3.5 2 6.5 5l-3 3' fill='none' stroke='%23a4a4a9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-pull-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M2 3.5 5 6.5l3-3' fill='none' stroke='%23a4a4a9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-menu-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='m2.5 6.5 2.5 2.5 4.5-5.5' fill='none' stroke='%23e5e5e7' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --shadow-control:
+    0 0 0 0.5px rgb(0 0 0 / 60%), inset 0 0.5px 0 rgb(255 255 255 / 12%),
+    0 1px 1.5px rgb(0 0 0 / 30%);
+  --shadow-popover:
+    0 0 0 0.5px rgb(0 0 0 / 80%), inset 0 0 0 1px rgb(255 255 255 / 10%),
+    0 6px 22px rgb(0 0 0 / 45%);
+  --shadow-sheet:
+    0 0 0 0.5px rgb(0 0 0 / 80%), inset 0 0 0 1px rgb(255 255 255 / 10%),
+    0 18px 48px rgb(0 0 0 / 55%);
+  --popover-arrow-edge: rgb(255 255 255 / 10%);
+  --knob-shadow: 0 0 0 0.5px rgb(0 0 0 / 40%), 0 1px 2px rgb(0 0 0 / 45%);
+  --thumb-shadow: 0 0 0 0.5px rgb(0 0 0 / 40%), 0 1px 3px rgb(0 0 0 / 50%);
+  --canvas: #222326;
 }
 
 * {
@@ -184,7 +327,7 @@ button:enabled:active {
 
 button:disabled {
   color: var(--label-disabled);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 7%);
+  box-shadow: 0 0 0 1px var(--edge-disabled);
 }
 
 button[aria-pressed='true'],
@@ -196,18 +339,18 @@ button[aria-pressed='true'],
 
 button[aria-pressed='true']:enabled:active,
 .primary:enabled:active {
-  background: #0055b3;
+  background: var(--accent-fill-pressed);
 }
 
 .primary:disabled {
   color: var(--label-disabled);
   background: var(--control);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 7%);
+  box-shadow: 0 0 0 1px var(--edge-disabled);
 }
 
 button[aria-pressed='true']:disabled {
-  color: var(--surface);
-  background: #9ab9df;
+  color: var(--on-accent-disabled);
+  background: var(--accent-disabled);
 }
 
 button[aria-expanded='true'] {
@@ -223,8 +366,7 @@ select {
   border-radius: var(--radius);
   color: var(--label);
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' rx='4' fill='%23007aff'/%3E%3Cpath d='M5 6.5 8 3.75l3 2.75M5 9.5l3 2.75 3-2.75' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-      no-repeat right 4px center / 16px 16px,
+    var(--glyph-popup) no-repeat right 4px center / 16px 16px,
     var(--control);
   box-shadow: var(--shadow-control);
   font: inherit;
@@ -234,10 +376,9 @@ select {
 select:disabled {
   color: var(--label-disabled);
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M5 6.5 8 3.75l3 2.75M5 9.5l3 2.75 3-2.75' fill='none' stroke='%23a5a5aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-      no-repeat right 4px center / 16px 16px,
+    var(--glyph-popup-disabled) no-repeat right 4px center / 16px 16px,
     var(--control);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 7%);
+  box-shadow: 0 0 0 1px var(--edge-disabled);
 }
 
 /* Text and number fields. */
@@ -246,10 +387,10 @@ textarea {
   min-width: 0;
   min-height: 24px;
   padding: 3px 7px;
-  border: 1px solid #c9c9c9;
+  border: 1px solid var(--field-edge);
   border-radius: 5px;
   color: var(--label);
-  background: var(--surface);
+  background: var(--field);
   font: inherit;
   line-height: 16px;
   font-variant-numeric: tabular-nums;
@@ -257,7 +398,7 @@ textarea {
 
 input:is([type='text'], [type='number'], [type='search'], :not([type])):disabled {
   color: var(--label-disabled);
-  background: #f7f7f7;
+  background: var(--field-disabled);
 }
 
 input:is([type='text'], [type='number'], [type='search'], :not([type])):focus-visible,
@@ -275,10 +416,10 @@ input[type='checkbox'] {
   height: 14px;
   margin: 0;
   border-radius: 3.5px;
-  background: var(--surface);
+  background: var(--checkbox);
   box-shadow:
-    inset 0 0 0 1px #b9b9be,
-    0 0.5px 1px rgb(0 0 0 / 10%);
+    inset 0 0 0 1px var(--checkbox-edge),
+    0 0.5px 1px var(--checkbox-shadow);
   vertical-align: -2px;
 }
 
@@ -301,7 +442,7 @@ input[type='checkbox'][role='switch'] {
   height: 18px;
   border-radius: 9px;
   background: var(--track);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+  box-shadow: inset 0 0 0 1px var(--track-edge);
   transition: background-color 150ms;
 }
 
@@ -313,10 +454,8 @@ input[type='checkbox'][role='switch']::after {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--surface);
-  box-shadow:
-    0 0 0 0.5px rgb(0 0 0 / 12%),
-    0 1px 2px rgb(0 0 0 / 22%);
+  background: var(--knob);
+  box-shadow: var(--knob-shadow);
   transition: transform 150ms;
 }
 
@@ -380,10 +519,8 @@ input[type='range']::-webkit-slider-thumb {
   height: 18px;
   margin-top: -7px;
   border-radius: 50%;
-  background: var(--surface);
-  box-shadow:
-    0 0 0 0.5px rgb(0 0 0 / 18%),
-    0 1px 3px rgb(0 0 0 / 25%);
+  background: var(--knob);
+  box-shadow: var(--thumb-shadow);
 }
 
 input[type='range']::-moz-range-thumb {
@@ -391,10 +528,8 @@ input[type='range']::-moz-range-thumb {
   height: 18px;
   border: 0;
   border-radius: 50%;
-  background: var(--surface);
-  box-shadow:
-    0 0 0 0.5px rgb(0 0 0 / 18%),
-    0 1px 3px rgb(0 0 0 / 25%);
+  background: var(--knob);
+  box-shadow: var(--thumb-shadow);
 }
 
 input[type='range']:disabled {
@@ -444,11 +579,11 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 .stepper > span:first-child {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.5 4.5 4.5 1.5l3 3' fill='none' stroke='%231f1f1f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: var(--glyph-step-up);
 }
 
 .stepper > span:last-child {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.5 1.5 4.5 4.5l3-3' fill='none' stroke='%231f1f1f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: var(--glyph-step-down);
 }
 
 .stepper > span[data-disabled] {
@@ -480,8 +615,7 @@ input[type='number']::-webkit-inner-spin-button {
   flex: none;
   width: 10px;
   height: 10px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M3.5 2 6.5 5l-3 3' fill='none' stroke='%23646469' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    center / 10px 10px;
+  background: var(--glyph-disclosure) center / 10px 10px;
   transition: transform 120ms;
 }
 
@@ -533,14 +667,14 @@ input[type='number']::-webkit-inner-spin-button {
   padding: 2px 4px 12px 20px;
 }
 
-/* Popover: a white panel with an arrow toward its control. */
+/* Popover: a solid panel with an arrow toward its control. */
 .popover {
   position: absolute;
   z-index: 3;
   min-width: 180px;
   padding: 10px;
   border-radius: var(--radius-window);
-  background: var(--surface);
+  background: var(--popover);
   box-shadow: var(--shadow-popover);
   animation: pop-in 120ms ease-out;
 }
@@ -550,8 +684,8 @@ input[type='number']::-webkit-inner-spin-button {
   position: absolute;
   width: 12px;
   height: 12px;
-  background: var(--surface);
-  box-shadow: -1px -1px 0 rgb(0 0 0 / 10%);
+  background: var(--popover);
+  box-shadow: -1px -1px 0 var(--popover-arrow-edge);
   transform: rotate(45deg);
 }
 
@@ -638,8 +772,7 @@ input[type='number']::-webkit-inner-spin-button {
 /* Pull-down button: a push button with a down chevron. */
 .pull-down[aria-expanded='true'] {
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M2 3.5 5 6.5l3-3' fill='none' stroke='%23646469' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-      no-repeat right 8px center / 10px 10px,
+    var(--glyph-pull-down) no-repeat right 8px center / 10px 10px,
     var(--control-pressed);
 }
 
@@ -649,8 +782,7 @@ input[type='number']::-webkit-inner-spin-button {
   text-overflow: ellipsis;
   white-space: nowrap;
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M2 3.5 5 6.5l3-3' fill='none' stroke='%23646469' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-      no-repeat right 8px center / 10px 10px,
+    var(--glyph-pull-down) no-repeat right 8px center / 10px 10px,
     var(--control);
   text-align: left;
 }
@@ -681,7 +813,7 @@ input[type='file']::file-selector-button {
   border: 0;
   border-radius: var(--radius-window);
   color: inherit;
-  background: var(--surface);
+  background: var(--popover);
   box-shadow: var(--shadow-sheet);
   animation: sheet-down 200ms ease-out;
 }
@@ -741,7 +873,7 @@ input[type='file']::file-selector-button {
   padding: 3px 7px;
   border-radius: 5px;
   color: var(--label);
-  background: var(--surface);
+  background: var(--popover);
   box-shadow: var(--shadow-popover);
   font-size: var(--text-small);
   line-height: 14px;
@@ -776,7 +908,7 @@ input[type='file']::file-selector-button {
   min-width: 30px;
   min-height: 28px;
   padding: 0 7px;
-  color: #5a5a5f;
+  color: var(--toolbar-glyph);
   background: transparent;
   box-shadow: none;
 }
@@ -794,22 +926,22 @@ input[type='file']::file-selector-button {
 
 /* A sidebar toggle shows its state by the sidebar itself, as on the Mac. */
 .toolbar-button.sidebar-toggle[aria-expanded='true']:not(:active, :hover) {
-  color: #5a5a5f;
+  color: var(--toolbar-glyph);
   background: transparent;
 }
 
 .toolbar-button:disabled {
-  color: #b9b9be;
+  color: var(--toolbar-glyph-disabled);
   box-shadow: none;
 }
 
 .toolbar-button[aria-pressed='true'] {
-  color: var(--accent-fill);
+  color: var(--accent-text);
   background: var(--pressed);
 }
 
 .toolbar-button[aria-pressed='true']:disabled {
-  color: #9ab9df;
+  color: var(--accent-disabled);
   background: transparent;
 }
 
@@ -817,13 +949,13 @@ input[type='file']::file-selector-button {
   display: block;
 }
 
-/* Segmented control: a grey track; the chosen segment is a raised white key. */
+/* Segmented control: a grey track; the chosen segment is a raised key. */
 .segmented {
   display: inline-flex;
   flex: none;
   padding: 2px;
   border-radius: 7px;
-  background: rgb(0 0 0 / 7%);
+  background: var(--segmented-track);
 }
 
 .segmented button {
@@ -844,7 +976,7 @@ input[type='file']::file-selector-button {
   bottom: 5px;
   left: -1px;
   width: 1px;
-  background: rgb(0 0 0 / 14%);
+  background: var(--segmented-divider);
 }
 
 .segmented .tooltip-anchor:has([aria-pressed='true']) + .tooltip-anchor button::before {
@@ -857,7 +989,7 @@ input[type='file']::file-selector-button {
 
 .segmented button[aria-pressed='true'] {
   color: var(--label);
-  background: var(--surface);
+  background: var(--segmented-key);
   box-shadow: var(--shadow-control);
 }
 
@@ -868,7 +1000,7 @@ input[type='file']::file-selector-button {
 
 .segmented button[aria-pressed='true']:disabled {
   color: var(--label-disabled);
-  background: rgb(255 255 255 / 60%);
+  background: var(--segmented-key-disabled);
 }
 
 /* The docked window. */
@@ -977,14 +1109,14 @@ input[type='file']::file-selector-button {
   padding: 2px 4px 12px 20px;
 }
 
-/* Popover: a white panel with an arrow toward its control. */
+/* Popover: a solid panel with an arrow toward its control. */
 .popover {
   position: absolute;
   z-index: 3;
   min-width: 180px;
   padding: 10px;
   border-radius: var(--radius-window);
-  background: var(--surface);
+  background: var(--popover);
   box-shadow: var(--shadow-popover);
   animation: pop-in 120ms ease-out;
 }
@@ -994,8 +1126,8 @@ input[type='file']::file-selector-button {
   position: absolute;
   width: 12px;
   height: 12px;
-  background: var(--surface);
-  box-shadow: -1px -1px 0 rgb(0 0 0 / 10%);
+  background: var(--popover);
+  box-shadow: -1px -1px 0 var(--popover-arrow-edge);
   transform: rotate(45deg);
 }
 
@@ -1056,7 +1188,7 @@ input[type='file']::file-selector-button {
   border: 0;
   border-radius: var(--radius-window);
   color: inherit;
-  background: var(--surface);
+  background: var(--popover);
   box-shadow: var(--shadow-sheet);
   animation: sheet-down 200ms ease-out;
 }
@@ -1116,7 +1248,7 @@ input[type='file']::file-selector-button {
   padding: 3px 7px;
   border-radius: 5px;
   color: var(--label);
-  background: var(--surface);
+  background: var(--popover);
   box-shadow: var(--shadow-popover);
   font-size: var(--text-small);
   line-height: 14px;
@@ -1151,7 +1283,7 @@ input[type='file']::file-selector-button {
   min-width: 30px;
   min-height: 28px;
   padding: 0 7px;
-  color: #5a5a5f;
+  color: var(--toolbar-glyph);
   background: transparent;
   box-shadow: none;
 }
@@ -1169,22 +1301,22 @@ input[type='file']::file-selector-button {
 
 /* A sidebar toggle shows its state by the sidebar itself, as on the Mac. */
 .toolbar-button.sidebar-toggle[aria-expanded='true']:not(:active, :hover) {
-  color: #5a5a5f;
+  color: var(--toolbar-glyph);
   background: transparent;
 }
 
 .toolbar-button:disabled {
-  color: #b9b9be;
+  color: var(--toolbar-glyph-disabled);
   box-shadow: none;
 }
 
 .toolbar-button[aria-pressed='true'] {
-  color: var(--accent-fill);
+  color: var(--accent-text);
   background: var(--pressed);
 }
 
 .toolbar-button[aria-pressed='true']:disabled {
-  color: #9ab9df;
+  color: var(--accent-disabled);
   background: transparent;
 }
 
@@ -1192,13 +1324,13 @@ input[type='file']::file-selector-button {
   display: block;
 }
 
-/* Segmented control: a grey track; the chosen segment is a raised white key. */
+/* Segmented control: a grey track; the chosen segment is a raised key. */
 .segmented {
   display: inline-flex;
   flex: none;
   padding: 2px;
   border-radius: 7px;
-  background: rgb(0 0 0 / 7%);
+  background: var(--segmented-track);
 }
 
 .segmented button {
@@ -1219,7 +1351,7 @@ input[type='file']::file-selector-button {
   bottom: 5px;
   left: -1px;
   width: 1px;
-  background: rgb(0 0 0 / 14%);
+  background: var(--segmented-divider);
 }
 
 .segmented .tooltip-anchor:has([aria-pressed='true']) + .tooltip-anchor button::before {
@@ -1232,7 +1364,7 @@ input[type='file']::file-selector-button {
 
 .segmented button[aria-pressed='true'] {
   color: var(--label);
-  background: var(--surface);
+  background: var(--segmented-key);
   box-shadow: var(--shadow-control);
 }
 
@@ -1243,7 +1375,7 @@ input[type='file']::file-selector-button {
 
 .segmented button[aria-pressed='true']:disabled {
   color: var(--label-disabled);
-  background: rgb(255 255 255 / 60%);
+  background: var(--segmented-key-disabled);
 }
 
 /* The docked window. */
@@ -1590,8 +1722,7 @@ input[type='file']::file-selector-button {
 }
 
 .menu-item.view-toggle[aria-pressed='true'] {
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='m2.5 6.5 2.5 2.5 4.5-5.5' fill='none' stroke='%231f1f1f' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    no-repeat 10px center / 12px 12px;
+  background: var(--glyph-menu-check) no-repeat 10px center / 12px 12px;
 }
 
 .menu-item.view-toggle:enabled:hover {
@@ -1752,8 +1883,7 @@ input[type='file']::file-selector-button {
   margin-top: 6px;
   padding-right: 26px;
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M3.5 2 6.5 5l-3 3' fill='none' stroke='%23646469' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-      no-repeat right 9px center / 10px 10px,
+    var(--glyph-disclosure) no-repeat right 9px center / 10px 10px,
     var(--control);
   text-align: left;
 }
@@ -1827,7 +1957,7 @@ input[type='file']::file-selector-button {
 }
 
 .item-list .selected {
-  color: var(--accent-fill);
+  color: var(--accent-text);
 }
 
 .edit-fields {
@@ -2093,7 +2223,7 @@ input[type='file']::file-selector-button {
 .heat-key span {
   width: 14px;
   height: 14px;
-  background: #4d8e94;
+  background: var(--heat);
 }
 
 .compare-actions {
@@ -2138,11 +2268,11 @@ input[type='file']::file-selector-button {
 }
 
 .usage-up {
-  color: #98603e;
+  color: var(--usage-up);
 }
 
 .usage-down {
-  color: #39737a;
+  color: var(--usage-down);
 }
 
 .demand-panel form {
@@ -2203,7 +2333,7 @@ input[type='file']::file-selector-button {
   padding: 2px;
   border-radius: 4px 0 0 4px;
   color: var(--label);
-  background: #d7e8d9;
+  background: var(--signal-green-fill);
   box-shadow: none;
 }
 
@@ -2219,7 +2349,7 @@ input[type='file']::file-selector-button {
   flex: 0 0 9px;
   padding: 0;
   border-radius: 0;
-  background: #86b28f;
+  background: var(--signal-green-handle);
   box-shadow: none;
   cursor: ew-resize;
   touch-action: none;
@@ -2227,12 +2357,12 @@ input[type='file']::file-selector-button {
 
 .signal-amber {
   flex-basis: 0;
-  background: #f2cf7e;
+  background: var(--signal-amber-fill);
 }
 
 .signal-red {
   flex-basis: 0;
-  background: #e6a9a2;
+  background: var(--signal-red-fill);
 }
 
 .signal-schematic {
@@ -2246,7 +2376,7 @@ input[type='file']::file-selector-button {
 }
 
 .signal-movement {
-  stroke: #8e8e93;
+  stroke: var(--signal-idle);
   cursor: pointer;
   pointer-events: stroke;
   opacity: 0.45;
@@ -2257,11 +2387,11 @@ input[type='file']::file-selector-button {
 }
 
 .signal-movement.served {
-  stroke: #248a3d;
+  stroke: var(--signal-served);
 }
 
 .signal-movement.conflict {
-  stroke: #d70015;
+  stroke: var(--signal-conflict);
 }
 
 .signal-movement:hover {
@@ -2269,7 +2399,7 @@ input[type='file']::file-selector-button {
 }
 
 .signal-crossing {
-  stroke: #d70015;
+  stroke: var(--signal-conflict);
   stroke-dasharray: 0.6 0.4;
   cursor: pointer;
   pointer-events: stroke;
@@ -2277,7 +2407,7 @@ input[type='file']::file-selector-button {
 }
 
 .signal-crossing.served {
-  stroke: #248a3d;
+  stroke: var(--signal-served);
   opacity: 1;
 }
 
@@ -2328,7 +2458,7 @@ input[type='file']::file-selector-button {
 }
 
 .profile-row rect {
-  fill: #7fb2e5;
+  fill: var(--profile-bar);
   min-height: 1px;
 }
 
@@ -2363,7 +2493,7 @@ input[type='file']::file-selector-button {
   width: 15rem;
   padding: 10px 12px 8px;
   border-radius: var(--radius-window);
-  background: var(--surface);
+  background: var(--popover);
   box-shadow: var(--shadow-popover);
   animation: pop-in 140ms ease-out;
 }
@@ -2389,8 +2519,8 @@ input[type='file']::file-selector-button {
   position: absolute;
   width: 12px;
   height: 12px;
-  background: var(--surface);
-  box-shadow: -1px -1px 0 rgb(0 0 0 / 10%);
+  background: var(--popover);
+  box-shadow: -1px -1px 0 var(--popover-arrow-edge);
 }
 
 .hint[data-side='below']::before {

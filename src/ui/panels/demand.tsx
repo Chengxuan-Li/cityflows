@@ -195,7 +195,7 @@ export function DemandPanel() {
         <figure>
           <figcaption>Trips starting in each hour</figcaption>
           <svg viewBox="0 0 300 124" role="img" aria-label="Trips by hour">
-            <path d="M36 24V100H286" fill="none" stroke="#dcded2" />
+            <path d="M36 24V100H286" fill="none" style={{ stroke: 'var(--chart-axis)' }} />
             <text x="30" y="28" textAnchor="end">
               {max}
             </text>
@@ -211,7 +211,7 @@ export function DemandPanel() {
                 y={100 - (76 * trips) / max}
                 width={8.4}
                 height={(76 * trips) / max}
-                fill="#4d8e94"
+                style={{ fill: 'var(--chart-driving)' }}
               >
                 <title>{`${String(hour).padStart(2, '0')}:00 · ${trips.toLocaleString()} trips`}</title>
               </rect>

@@ -65,7 +65,7 @@ const toward = (elevationDeg: number, azimuthDeg: number): Rgb => {
 };
 const dayLength = Math.hypot(1, 1.5, 1);
 /** TASK-162's light, unchanged: a white sun from the north-west and a strong white sky. */
-const day: Preset = {
+const dayPreset: Preset = {
   sun: [-1 / dayLength, 1.5 / dayLength, -1 / dayLength],
   sunColor: 0xffffff,
   sunIntensity: 0.95,
@@ -125,11 +125,11 @@ function irradiance(sky: number, skyIntensity: number, sun: Rgb, color: number, 
   return [0, 1, 2].map((i) => s[i]! * skyIntensity + c[i]! * intensity * up) as unknown as Rgb;
 }
 const dayIrradiance = irradiance(
-  day.sky,
-  day.skyIntensity,
-  day.sun,
-  day.sunColor,
-  day.sunIntensity,
+  dayPreset.sky,
+  dayPreset.skyIntensity,
+  dayPreset.sun,
+  dayPreset.sunColor,
+  dayPreset.sunIntensity,
 );
 
 /** A simple Munich-like day for "Follow simulation clock": sunrise 06:00, sunset 20:00, the sun
@@ -192,9 +192,15 @@ function resolve(
   };
 }
 
-/** The light for `settings` at simulation time `timeS` (seconds since midnight). */
-export function sceneLight(settings: LightingSettings, timeS: number): SceneLight {
+/** The light for `settings` at simulation time `timeS` (seconds since midnight). `canvas` is the
+ * map's canvas under the Day light (TASK-166: the dark appearance's canvas). */
+export function sceneLight(
+  settings: LightingSettings,
+  timeS: number,
+  canvas: number = style.background,
+): SceneLight {
   const { mode, exposure } = settings;
+  const day = canvas === dayPreset.background ? dayPreset : { ...dayPreset, background: canvas };
   if (mode === 'day') return resolve(day, true, 0, 0, exposure);
   if (mode === 'evening') return resolve(evening, true, 1, 0.45, exposure);
   if (mode === 'night') return resolve(night, false, 1, 0.22, exposure);

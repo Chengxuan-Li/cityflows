@@ -3,7 +3,7 @@ import { markingThemes } from './style';
 import { Application, Container, Graphics, Polygon } from 'pixi.js';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
-import type { Place } from '../schema';
+import type { ContextFeature, Place } from '../schema';
 import { cityGrades } from './grades';
 import { Camera } from './camera';
 import { FrameDemand, renderContinuously } from './frame-demand';
@@ -50,7 +50,7 @@ import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { ParkedCars } from './layers/parked-cars';
 import { stripTicks } from './strip-geometry';
 import { createPicker, pickParking, pickVehicle } from './picking';
-import { style } from './style';
+import { mapPalettes, style, type MapPalette } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
 import { NightLayer } from './layers/night';
 import {
@@ -169,6 +169,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   animateVehicles(elapsedS: number, playing?: boolean): void;
   setWalkerRoute(links: readonly number[] | null): void;
   setLighting(settings: LightingSettings, timeS: number): void;
+  setMapPalette(palette: MapPalette): void;
 } {
   const app = new Application();
   const demand = new FrameDemand();
@@ -224,6 +225,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   const parkedCars = new ParkedCars();
   let surroundings: ReturnType<typeof drawContext> | undefined;
   let lots: ReturnType<typeof drawLots> | undefined;
+  // TASK-166: the canvas, land use, buildings, lots, place tints and paving follow the appearance.
+  let palette = mapPalettes.light;
+  let contextFeatures: ContextFeature[] = [];
   let hillshade: ReturnType<typeof drawHillshade> | undefined;
   let contextCount = 0;
   let vegetation: ReturnType<typeof drawVegetation> | undefined;
@@ -300,6 +304,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let staticPick: ReturnType<typeof createPicker> | undefined;
   let updateSignals: ((timeS: number) => void)[] = [];
   let updatePlaces: ((zoom: number) => void) | undefined;
+  let redrawPlaces = () => {};
+  let redrawWalk = () => {};
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
   let walkerLayers = new Map<number, Graphics>();
@@ -519,7 +525,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       height: Math.max(1, canvas.clientHeight),
       resolution: window.devicePixelRatio,
       antialias: true,
-      backgroundColor: style.background,
+      backgroundColor: palette.background,
       preference: 'webgl',
     })
     .then(() => {
@@ -680,7 +686,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       const vegetationStart = performance.now();
       vegetation = drawVegetation(placed.trees);
       canvas.dataset.vegetationRebuildMs = String(performance.now() - vegetationStart);
-      surroundings = drawContext(features);
+      contextFeatures = features;
+      surroundings = drawContext(features, palette);
       contextCount = features.length;
       map.addChild(surroundings.container);
       if (import.meta.env.MODE === 'test')
@@ -739,10 +746,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       }
       walkerLayers = new Map(visibleGrades.map((grade) => [grade.layer, grade.walkers]));
       drawnWalkers = false;
-      for (const shape of walkGeometry(compiled, source)) {
-        const grade = grades.get(shape.layer)!;
-        drawWalk(shape.sidewalk ? grade.sidewalks : grade.footways, shape);
-      }
+      const walkShapes = walkGeometry(compiled, source);
+      redrawWalk = () => {
+        for (const grade of visibleGrades) {
+          grade.sidewalks.clear();
+          grade.footways.clear();
+        }
+        for (const shape of walkShapes) {
+          const grade = grades.get(shape.layer)!;
+          drawWalk(shape.sidewalk ? grade.sidewalks : grade.footways, shape, palette.walk);
+        }
+      };
+      redrawWalk();
       for (const { group } of visibleGrades) map.addChild(group);
       for (const strip of compiled.strips ?? [])
         grades.get(roadGrades[strip.road]!)!.bands.poly(strip.polygon).fill(style.context.parking);
@@ -755,7 +770,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       // without another map-sized textured quad on software GPUs.
       visibleGrades[0]!.terrain.addChildAt(surroundings.container, 0);
       visibleGrades[0]!.terrain.addChildAt(vegetation.container, 1);
-      lots = drawLots(compiled, source);
+      lots = drawLots(compiled, source, palette.context.parking);
       visibleGrades[0]!.terrain.addChildAt(lots.container, 1);
       if (source?.terrain) {
         hillshade = drawHillshade(source.terrain);
@@ -865,8 +880,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           updateSignals.push(drawWalkSignals(city, node, grade.signals));
         }
       }
-      updatePlaces = drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
-      updatePlaces(camera.zoom);
+      redrawPlaces = () => {
+        const { places, connectors } = grades.get(0)!;
+        for (const child of places.removeChildren()) child.destroy();
+        places.clear();
+        connectors.clear();
+        updatePlaces = drawPlaces(places, city!, shapes, connectors, palette.placeBase);
+        updatePlaces(camera.zoom);
+      };
+      redrawPlaces();
       for (const grade of visibleGrades) {
         const bounds = grade.terrain.getLocalBounds();
         grade.terrainSize = Math.max(bounds.width, bounds.height);
@@ -1078,6 +1100,34 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (reshade) rebuildShadows();
       applyVisibility();
       applyLight();
+    },
+    setMapPalette(next) {
+      if (next === palette) return;
+      palette = next;
+      invalidate();
+      canvas.dataset.mapPalette = palette === mapPalettes.dark ? 'dark' : 'light';
+      void ready.then(() => {
+        if (!destroyed) app.renderer.background.color = palette.background;
+      });
+      if (!surroundings || !lots) return;
+      const terrain = visibleGrades[0]!.terrain;
+      const context = drawContext(contextFeatures, palette);
+      context.container.visible = surroundings.container.visible;
+      terrain.addChildAt(context.container, terrain.getChildIndex(surroundings.container));
+      surroundings.container.destroy({ children: true, context: true });
+      surroundings = context;
+      const fresh = drawLots(city!, sourceGeometry, palette.context.parking);
+      fresh.stalls.visible = lots.stalls.visible;
+      terrain.addChildAt(fresh.container, terrain.getChildIndex(lots.container));
+      lots.container.destroy({ children: true, context: true });
+      lots = fresh;
+      redrawPlaces();
+      redrawWalk();
+      for (const grade of visibleGrades) {
+        grade.terrain.cacheAsTexture(false);
+        grade.cacheResolution = 0;
+      }
+      updateTerrainCache();
     },
     setLighting(settings, timeS) {
       // Following the clock, the light moves once a simulated minute.

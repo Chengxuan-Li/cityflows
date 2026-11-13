@@ -3,13 +3,17 @@ import type { CompiledCity } from '../../network';
 import type { CityGeometry } from '../types';
 import { style } from '../style';
 
-export function drawLots(city: CompiledCity, source?: CityGeometry) {
+export function drawLots(
+  city: CompiledCity,
+  source?: CityGeometry,
+  surfaceColor: number = style.context.parking,
+) {
   const container = new Container();
   const surface = new Graphics();
   const stalls = new Graphics();
   for (const lot of Object.values(source?.parking ?? {})) {
     if (lot.kind !== 'lot' || lot.shape?.kind !== 'polygon') continue;
-    surface.poly(lot.shape.ring.flatMap((p) => [p.x, p.y])).fill(style.context.parking);
+    surface.poly(lot.shape.ring.flatMap((p) => [p.x, p.y])).fill(surfaceColor);
     for (const hole of lot.exclusions ?? []) surface.poly(hole.flatMap((p) => [p.x, p.y])).cut();
   }
   for (const lot of city.lots ?? [])
