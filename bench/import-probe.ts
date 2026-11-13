@@ -12,7 +12,7 @@ import { createWalkRouter, type WalkRequest, type WalkRoute } from '../src/routi
 import { distance, pointAtDistance } from '../src/geo/polyline';
 import { createEngine } from '../src/sim/engine';
 import type { IntersectionObserver } from '../src/sim/intersection';
-import type { TrafficEngine } from '../src/sim/types';
+import type { Metrics, TrafficEngine } from '../src/sim/types';
 import { walkComponents } from '../src/network/walk-joins';
 import { parkingEgress } from '../src/network/parking-egress';
 
@@ -45,15 +45,17 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const [file, ...args] = process.argv.slice(2);
   if (!file || args.length < 4 || (args.length - 4) % 2)
     throw new Error(
-      'Usage: import-probe <file.osm> w s e n [--scale n] [--seed n] [--walk-legs file.json] [--parking-report file.json]',
+      'Usage: import-probe <file.osm> w s e n [--scale n] [--seed n] [--mode-choice on|off] [--walk-legs file.json] [--parking-report file.json]',
     );
   let scaleArg = '1',
     seedArg = '1',
+    modeChoiceArg = 'on',
     walkLegsFile: string | undefined,
     parkingReportFile: string | undefined;
   for (let i = 4; i < args.length; i += 2) {
     if (args[i] === '--scale') scaleArg = args[i + 1]!;
     else if (args[i] === '--seed') seedArg = args[i + 1]!;
+    else if (args[i] === '--mode-choice') modeChoiceArg = args[i + 1]!;
     else if (args[i] === '--walk-legs') walkLegsFile = args[i + 1]!;
     else if (args[i] === '--parking-report') parkingReportFile = args[i + 1]!;
     else throw new Error(`Unknown option: ${args[i]}`);
@@ -62,6 +64,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const demandSeed = Number(seedArg);
   if (!Number.isSafeInteger(demandSeed) || demandSeed < 1)
     throw new Error('--seed must be a positive integer');
+  if (modeChoiceArg !== 'on' && modeChoiceArg !== 'off')
+    throw new Error('--mode-choice must be on or off');
   if (!scaleArg.trim() || !Number.isFinite(scale) || scale < 0)
     throw new Error('--scale must be a finite, nonnegative number');
   const bbox = args.slice(0, 4).map(Number) as [number, number, number, number];
@@ -132,6 +136,7 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
   const { walkLegs, ...morning } = probeMorning(city, compiled, scale, {
     includeWalkLegs: !!walkLegsFile,
     demandSeed,
+    modeChoice: modeChoiceArg === 'on',
   });
   if (walkLegsFile) writeFileSync(walkLegsFile, JSON.stringify(walkLegs, null, 2));
   if (parkingReportFile)
@@ -151,6 +156,66 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/import-probe.ts')) {
       ),
     );
   console.info(morning);
+  console.info('Mode census', JSON.stringify(morning.modes));
+}
+
+/** TASK-113: the day's person trips by mode (as the mode choice left them) and straight-line
+ * distance band, each mode's distance profile, and the person metrics' shares by hour and
+ * completions by mode. Local trips have no gateway end; trips with one always drive. */
+export function modeCensus(
+  compiled: CompiledCity,
+  trips: readonly TripRequest[],
+  persons: Metrics['persons'],
+) {
+  const bands = [500, 1000, 2000, 3000, Infinity];
+  const label = (m: number) => (m === Infinity ? '3 km+' : `<${m / 1000} km`);
+  const byBand = Object.fromEntries(
+    bands.map((m) => [label(m), { walk: 0, car: 0, walkShare: 0 }]),
+  );
+  const distances: Record<'walk' | 'car', number[]> = { walk: [], car: [] };
+  let gatewayCar = 0;
+  for (const trip of trips) {
+    if (trip.personId === null || trip.purpose !== 'private' || trip.vehicleClass !== 'car')
+      continue;
+    // TASK-128's station riders came by train: outside the choice and the shares.
+    if (riderOf(trip.personId)) continue;
+    const place = (id: string) => compiled.places[compiled.index.place.get(id)!]!;
+    const from = place(trip.originPlaceId),
+      to = place(trip.destinationPlaceId);
+    if (from.kind === 'gateway' || to.kind === 'gateway') {
+      gatewayCar++;
+      continue;
+    }
+    const meters = distance(from.centroid, to.centroid);
+    const mode = trip.mode === 'walk' ? 'walk' : 'car';
+    byBand[label(bands.find((m) => meters < m)!)]![mode]++;
+    distances[mode].push(meters);
+  }
+  for (const band of Object.values(byBand))
+    band.walkShare = band.walk + band.car ? band.walk / (band.walk + band.car) : 0;
+  const profile = (values: number[]) => {
+    const sorted = values.slice().sort((a, b) => a - b);
+    const at = (q: number) =>
+      Math.round(sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)] ?? 0);
+    return { trips: sorted.length, p10M: at(0.1), medianM: at(0.5), p90M: at(0.9) };
+  };
+  const local = distances.walk.length + distances.car.length;
+  const byHour = persons
+    ? persons.modes.byHour.walk.flatMap((walk, hour) => {
+        const car = persons.modes.byHour.car[hour]!;
+        return walk + car ? [{ hour, walk, car, walkShare: walk / (walk + car) }] : [];
+      })
+    : [];
+  return {
+    localPersonTrips: local,
+    walkShareLocal: local ? distances.walk.length / local : 0,
+    gatewayPersonTrips: gatewayCar,
+    byBand,
+    profile: { walk: profile(distances.walk), car: profile(distances.car) },
+    startedByHour: byHour,
+    started: persons?.modes.started,
+    completed: persons?.modes.completed,
+  };
 }
 
 /** Compare the actual routed endpoints, including direction and partial first/last links. */
@@ -254,7 +319,10 @@ export function probeMorning(
     engine = createEngine(),
     originObserver,
     headDetourObserver,
+    modeChoice = true,
   }: {
+    /** TASK-113: false turns the mode choice off (every driver drives, as before). */
+    modeChoice?: boolean;
     endS?: number;
     untilS?: number;
     observe?: (engine: TrafficEngine) => void;
@@ -273,6 +341,7 @@ export function probeMorning(
   scenario.demand.personsPerResident = scale;
   scenario.startS = 7 * 3600;
   scenario.endS = endS;
+  if (!modeChoice) scenario.demand.modeChoice = { enabled: false };
   const population = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, population, scenario, compiled);
   const provider = routeProvider ?? createRouteProvider();
@@ -559,10 +628,18 @@ export function probeMorning(
         );
       })
     : undefined;
+  const outcomes = metrics.tripOutcomes!;
+  // TASK-113: the trips as the run took them, walked tours without their car.
+  const travelled = trips.map((trip, id) => {
+    if (outcomes[id]!.mode === trip.mode) return trip;
+    const walked: typeof trip = { ...trip, mode: outcomes[id]!.mode };
+    delete walked.carId;
+    return walked;
+  });
   // TASK-129: households, cars and drivers, and the stock against the formula it replaces.
   const homes = Object.values(city.places).filter((p) => p.kind === 'residential');
   const households = {
-    ...householdCensus(city, population, trips),
+    ...householdCensus(city, population, travelled),
     homeCars: population.filter(
       (p) => p.hasCar && city.places[p.homePlaceId]!.kind === 'residential',
     ).length,
@@ -581,6 +658,7 @@ export function probeMorning(
     stateHash: engine.stateHash(),
     persons: population.length,
     households,
+    modes: modeCensus(compiled, travelled, metrics.persons),
     trips: trips.length,
     releasedTrips,
     completedShareOfReleased: releasedTrips ? metrics.trips.completed / releasedTrips : 0,
@@ -609,7 +687,8 @@ export function probeMorning(
     failedByReason: metrics.failedByReason,
     parking: metrics.parking,
     parkingSearchTimeS: (metrics.tripOutcomes ?? []).reduce((n, t) => n + t.parkingSearchTimeS, 0),
-    localArrivals: trips.filter(
+    // Vehicle arrivals only: a walked trip's outcome reads as completed from the start.
+    localArrivals: travelled.filter(
       (trip, id) =>
         trip.mode !== 'walk' &&
         city.places[trip.destinationPlaceId]!.kind !== 'gateway' &&

@@ -178,7 +178,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-151](tasks/TASK-151.md) | 7 | PR #1 on today's main: find why crossings and tram service plus main's parking changes fail the gate (3,300 / 49 / 1) and repair the cause | `src/sim/**` (crossing control, rail service, parking, engine), tests | 136, 138, 147, 149, 150 | Munich gate, T75/T76, parking tests, 0.1 s replay | closed 2026-11-13: B56 fixed by TASK-154; PR #1 merged |
 | [TASK-152](tasks/TASK-152.md) | 7 | Lots whose aisles are roads: a bay beside a drivable aisle leaves into the aisle lane by the strip rule, not along it as a motion | `src/network/parking.ts`, `src/importers/osm/parking.ts` (connectors), minimal `src/sim/parking.ts` | 104, 149, 150 | census 0 in-lane holds, regression, route records, Munich gate, shots | done 2026-11-13 |
 | [TASK-153](tasks/TASK-153.md) | 7 | Lot admission waits behind exiting cars (pk:2049 up to 2,173 s) | `src/sim/parking.ts`, engine callbacks | 149, 150, 151 | per-lot wait census, pk:2049 under 300 s, Munich gate, shots | done 2026-11-13 (merged on TASK-154) |
-| [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | in progress (Claude Code subagent) |
+| [TASK-113](tasks/TASK-113.md) | 9 | Mode choice: walk, drive, or drive and walk per trip by a logit model with household car availability; sliders and mode shares | `src/demand/**`, demand schema, demand sheet, metrics, `src/sim/persons.ts` at departure | 112, 129 | model tests, Munich census, gate with choice off and on, shots | done 2026-11-13 |
 | [TASK-154](tasks/TASK-154.md) | 7 | Land TASK-131 Phase 3 (candidate `4ab4d71`) and drain the Landsberger loop (B56): step time within budget, per-visit drain criterion, PR #1 checked on top | `src/sim/**` (not parking admission) | 131, 143, 149, 150 | seed-1 gate, drain criterion seeds 1-3, step time, PR #1 check, shots | done 2026-11-13 (drain (b) and (c) open: TASK-161, TASK-153) |
 | [TASK-155](tasks/TASK-155.md) | 9 | Sindelfingen gateway trips on cut-off motorway components (245 failures) generated only where servable, failures labelled by real reason | `src/demand` gateway trips, `src/sim/connectors.ts` attribution, gateway import | 104, 122 | Sindelfingen before/after, Munich unchanged, regression | done 2026-11-13 |
 | [TASK-156](tasks/TASK-156.md) | 7 | Lot aisles no lane vehicle reaches (Munich 68, Sindelfingen 232 holds) and visible arrivals on aisle roads | `src/network/parking.ts`, `parking-egress.ts`, arrival path in `src/sim/parking.ts` | 152, 153 | census, route records, Munich gate, shots | done 2026-11-13 (partly; rest in TASK-164) |
@@ -3810,6 +3810,35 @@ in it (63 pairs). On main 5ee9467 seeds 1 to 3 equal main exactly (5,298 / 0 / 0
 5,312 / 0 / 0); route records byte-identical; 8 Munich compile pins moved for the 22 new departure
 connectors only; `lot-aisle-lanes.test.ts` (3 cases), tests/sim (416), `test:city`, light e2e (38),
 `check` pass (timeouts under load passed alone).
+
+TASK-113 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): mode choice. Each home-based tour
+of a person with today's household car picks walk or car at its first trip; the rest of the tour
+follows. A logit over generalized minutes: walk-graph time minus a per-person walk preference,
+against walk to the car, drive on link costs, parking search, walk from the space and running cost
+at the person's value of time (defaults: on, walk preference 12 min, 12 EUR/h, 0.30 EUR/km,
+sensitivity 0.3 per minute; per-person draws from the demand seed, the choice from its own stream).
+Transit is an empty third alternative. Gateway, through, event, rider and van tours stay outside
+the choice. Deviations: the choice runs once at engine load (`chooseTripModes` in
+`src/sim/persons.ts`), since parking chains and stock are built at load (TASK-173 moves it to
+departure); drive-and-walk is an outcome of the car alternative; `src/sim` imports the pure model
+from `src/demand/mode-choice.ts`. Munich seed 1 with the choice on: 7,315 local person trips, 70.6%
+walk (80% under 0.5 km, 73% to 1 km, 55% to 2 km), 2,730 vehicle trips completed. Owner decision:
+on by default; the gate, T53, full demand and `traffic:quick` run with the choice off; the guard
+`tests/traffic/munich-mode-share.test.ts` (full traffic tier) checks walk share 65 to 76%, falling
+walk share by distance band, car-trip health and determinism, with a town case in T79. Demand
+sheet sliders and mode-share metrics in `src/ui/panels/mode-choice.tsx` and `mode-shares.tsx`.
+Lead merge onto main with TASK-156: gate with the choice off 5,298 / 0 / 0 (= main) with T63, T21,
+T29 and T53; guard with the choice on 2,730 / 0 / 0; unit (1,348; route-audit and T46 timed out and
+pass alone), lint, format and build pass. The crossing overlap seen with the choice on is TASK-165.
+
+Traffic baseline reset 2 (lead, under the owner's decision of 2026-11-13 to reset as needed; after
+TASK-161 moved completions about +21% and TASK-113 landed): `bench/traffic-baseline.json` holds
+main at `21b161e` with mode choice off, Munich 0.15 to 10:00 seed 1: 5,298 completed, 0 gridlocked,
+0 stalled heads (was 4,373 / 5 / 0); the 09:30 quick sample 4,852 / 0 (was 3,737 / 4). Derived
+limits: at least 4,769 completed, 0 stalled heads. With main at zero gridlocks, 1.5 times the
+baseline would allow none, so the lead added a floor: gridlock at most max(1.5 x baseline, 5). This
+changes the gate's formula and is flagged for the owner's review; T63's absolute floor of 3,571 is
+unchanged.
 
 ## Owner decisions log
 

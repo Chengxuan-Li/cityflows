@@ -27,8 +27,8 @@ import { patchSignals } from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
-import { createPersons, hasPerson } from './persons';
-import type { createWalkRouter } from '../routing/walk';
+import { chooseTripModes, createPersons, hasPerson } from './persons';
+import { createWalkRouter } from '../routing/walk';
 import type {
   PatchResult,
   TrafficEngine,
@@ -68,7 +68,7 @@ const detailStates: (VehicleState | null)[] = [
 
 function createRun({
   compiled,
-  trips,
+  trips: requested,
   scenario,
   params: overrides,
   routeProvider,
@@ -77,7 +77,7 @@ function createRun({
   headDetourObserver,
   originObserver,
   population,
-  walkRouter,
+  walkRouter: injectedWalkRouter,
   debugParkingClaims = false,
 }: LoadInput) {
   const params: SimParams = {
@@ -91,6 +91,14 @@ function createRun({
     },
   };
   const { dtS, idm, spawnMinGapM } = params;
+  const provider =
+    routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
+  const observedCosts = createLinkCosts(compiled, params, scenario.startS);
+  const costs = linkCosts ?? observedCosts.costs;
+  const walkRouter = injectedWalkRouter ?? createWalkRouter(compiled.walk);
+  // TASK-113: modes are chosen before parking chains the car trips and stocks their cars.
+  const modes = chooseTripModes(compiled, requested, scenario, params, provider, costs, walkRouter);
+  const trips = modes.trips;
   const parkingCheckSteps = Math.max(1, Math.round(1 / dtS));
   const vehicles = createVehicles(trips.length, compiled.lanes.length, compiled.movements.length);
   const profiles = createVehicleProfiles(params);
@@ -106,7 +114,13 @@ function createRun({
   let tick = 0;
   const time = () => scenario.startS + tick * dtS;
   const parking = createParking(compiled, trips, scenario, params, vehicles);
-  const accounting = createAccounting(compiled, vehicles, parking, time);
+  const accounting = createAccounting(
+    compiled,
+    vehicles,
+    parking,
+    time,
+    trips.map((trip) => trip.mode),
+  );
   const walkers = createWalkers(
     compiled,
     scenario,
@@ -125,6 +139,7 @@ function createRun({
     walkers,
     population,
     walkRouter,
+    modes.walkRoutes,
   );
   const connectors = createConnectors(
     compiled,
@@ -161,10 +176,6 @@ function createRun({
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const signalEpochs = new Map<string, number>();
-  const provider =
-    routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
-  const observedCosts = createLinkCosts(compiled, params, scenario.startS);
-  const costs = linkCosts ?? observedCosts.costs;
   const headRoutes = new Map<
     number,
     { request: RouteRequest; results: Map<number, RouteResult> }

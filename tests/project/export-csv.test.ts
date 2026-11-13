@@ -64,6 +64,7 @@ test('trip export retains every loaded trip and engine outcomes, with nonnegativ
     expect(record.parkingFacility).toBe(detail.parkingFacility);
     expect(record.walkingDistanceM).toBe(detail.walkingDistanceM);
     expect(record.parkingSearchTimeS).toBe(detail.parkingSearchTimeS);
+    expect(record.mode).toBe('car');
   }
   expect(records.find((r) => r.id === 'unsupported')).toMatchObject({
     departure: null,
@@ -80,7 +81,7 @@ test('trip export retains every loaded trip and engine outcomes, with nonnegativ
   });
   const rows = lines(exportTripsCsv(records, provenance));
   expect(rows[0]).toBe(
-    'id,person,origin,destination,class,purpose,departure,arrival,travel time,delay,fail reason,respawns,parking facility,walking distance,parking search time',
+    'id,person,origin,destination,class,purpose,departure,arrival,travel time,delay,fail reason,respawns,parking facility,walking distance,parking search time,mode',
   );
   expect(rows).toHaveLength(requests.length + 1);
   expect(rows[1]!.split(',').slice(4, 6)).toEqual(['truck', 'through']);
@@ -107,12 +108,13 @@ test('trip CSV preserves parking facility, walking distance and search time', ()
           parkingFacility: 'pk:7',
           walkingDistanceM: 125.5,
           parkingSearchTimeS: 14,
+          mode: 'car',
         },
       ],
       provenance,
     ),
   );
-  expect(rows[1]!.split(',').slice(-3)).toEqual(['pk:7', '125.5', '14']);
+  expect(rows[1]!.split(',').slice(-4)).toEqual(['pk:7', '125.5', '14', 'car']);
 });
 
 test('road metrics record throughput and queue maxima and escape imported names', () => {

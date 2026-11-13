@@ -30,6 +30,8 @@ function world(streetParkingShare = 1, homeStrip = { occupancyAtStart: null as n
     provenance: { source: 'authored' },
   };
   w.scenario.simParams.streetParkingShare = streetParkingShare;
+  // These household car trips drive as given (TASK-113's choice would walk the short ones).
+  w.scenario.demand.modeChoice = { enabled: false };
   return { ...w, stripId: id };
 }
 
@@ -212,6 +214,8 @@ test('T67 town: home stock equals household cars, late shifts borrow, the same s
   const scenario = { ...defaultScenario('town'), startS: 7 * 3600, endS: 9 * 3600 };
   scenario.demand.carShare = 0.5;
   scenario.demand.personsPerResident = 0.2;
+  // Every driver drives all day (TASK-113 off): the stock is then every household car driven.
+  scenario.demand.modeChoice = { enabled: false };
   const persons = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, persons, scenario);
   const compiled = setup(city);
@@ -247,6 +251,8 @@ test('T67 homes of one person replay main: same trips and simulation hashes', ()
   for (const place of Object.values(city.places))
     if (place.kind === 'residential') place.population = 1;
   const scenario = defaultScenario('town');
+  // TASK-113 off replays main exactly: the hashes below are main's.
+  scenario.demand.modeChoice = { enabled: false };
   const persons = generatePopulation(city, scenario.demand);
   const trips = scheduleTrips(city, persons, scenario);
   const engine = createEngine();

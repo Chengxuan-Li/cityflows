@@ -3,6 +3,7 @@ import type { Place } from '../../schema';
 import { vehicleClasses } from '../../schema/city';
 import type { FailReason, Metrics } from '../../sim/types';
 import { useAppStore, type TestWalkers } from '../store';
+import { ModeChoiceControls } from './mode-choice';
 
 const failReasons: Record<FailReason, string> = {
   no_parking: 'No parking available',
@@ -387,6 +388,7 @@ export function DemandPanel() {
             Regenerating draws new homes, workplaces and departure times from the seed; restart to
             run them.
           </p>
+          <ModeChoiceControls />
           <TestPedestrians
             places={places}
             walkers={project.scenarios[0]!.walkers ?? []}
