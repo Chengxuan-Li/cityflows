@@ -188,7 +188,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | done 2026-11-13 (merged together) |
 | [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | done 2026-11-13 |
 | [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | done 2026-11-13 (merged together) |
-| [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
+| [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | done 2026-11-13 (2D Evening cost to TASK-176) |
 | [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | done 2026-11-13 (pk:1475 left) |
 | [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | done 2026-11-13 |
 | [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | queued (after the UI merge) |
@@ -3948,6 +3948,25 @@ by hiding `grade`). On its base, seeds 1 and 3 equal main and seed 2 goes from 5
 format, build, unit (1,361) and city (173) with no timeouts, gate (choice off) 5,310 / 0 / 0, guard
 2,561 / 0 / 0, T53, light e2e (39) pass. Open: bays under the low part of ramps (stall generation
 compares whole-number grades), and smoothed rather than surveyed ramp heights.
+
+TASK-163 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): one lighting model for 2D and 3D
+(`src/render/lighting.ts`): Day (TASK-162's lighting exactly; every new effect behind a shader flag),
+Evening (a low warm sun, long shadows, dim blue sky, lamps on, 45% of windows lit), Night (moonlight,
+no shadows, lamps on, 22% of windows), Follow clock (sunrise 06:00, sunset 20:00, blended by sun
+height, updated per simulated minute), and exposure 0.5 to 1.5. Colours are lit or darkened, never
+recoloured; light sources keep their colour. Lit after dark: 543 street lamps (head, pool, halo,
+instanced), 48 platform lights, 117 signal heads, windows in 1,406 buildings (seeded by an outline
+hash), head- and tail-lamps and a road beam on moving vehicles, lit train and tram windows; 3D adds
+5 draw calls and no real lights; 2D adds one night layer. The setting is a view preference in
+localStorage (`cityflows.lighting`), never in the project; the Shadows layer now also switches the 3D
+sun's shadows. Controls: a Day / Evening / Night / Clock segmented control and an Exposure slider in
+the sidebar's Layers section. Frame cost against Day: Day level or faster; 3D Evening +0.1 to +5%,
+3D Night -16 to -24%; 2D Night +1.6 to +9.1%; 2D Evening +4.9 to +9.4% over seven rounds and +17.4%
+in one loaded sample on the T64 workload, which is handed to TASK-176. V163 unit (10) and e2e tests;
+no hash or render pin moved. Lead merge onto main with TASK-173 and TASK-175: type-check, lint, format,
+build, unit (1,371), city (173), light e2e (39) and V163 pass. Open: the bundled scenarios end at
+18:00, so Follow clock never reaches evening in a normal run; in 2D, vehicle lights under a bridge
+deck show through it; the evening hue (mauve) awaits the owner.
 
 ## Owner decisions log
 
