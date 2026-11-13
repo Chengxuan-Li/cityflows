@@ -17,6 +17,7 @@ import { separation } from '../../src/network/continuity';
 import { seams } from '../../src/render/layers/transitions';
 import type { City } from '../../src/schema';
 import { cityTest, tierCities, unitTest } from '../tier';
+import { limit } from '../timeouts';
 
 function compiled(city: City): CompiledCity {
   const result = compile(city);
@@ -160,37 +161,41 @@ const munich = () => {
   return imported.city;
 };
 
-test('T33.2: transition lanes never cross themselves and keep a continuous heading', () => {
-  for (const city of tierCities(['continuity', 'munich']).map((name) =>
-    name === 'munich' ? munich() : continuity(),
-  )) {
-    const net = compiled(city);
-    const transitions = net.roads.filter(
-      (r) =>
-        r.startOffsetM ||
-        r.endOffsetM ||
-        r.lanes.some((i) => net.lanes[i]!.taperStartM || net.lanes[i]!.taperEndM),
-    );
-    expect(transitions.length).toBeGreaterThan(3);
-    // r:1308#0 folds within its first 0.2 m at n:104 (its far end from the n:643 widening), as
-    // on main: the offset of a sharp source corner, not a transition.
-    // TASK-131 keeps OSM geometry: smoothing leaves the vertices within 30 m of a node, so lanes
-    // offset from sharp source corners fold there. r:728#0 (Landsberger Straße, -3.5 m, the OSM
-    // curve into n:474 with vertices 2 m apart) backs up 0.34 m and 0.15 m 18 to 20 m in;
-    // r:256#0 (Trappentreustraße, 1.5 m start offset, a corner 19.8 m from n:207) repeats a
-    // vertex at 16.5 m, a zero-length step rather than a visible fold.
-    const folds = ['r:1308#0', 'r:728#0', 'r:256#0'];
-    expect(selfIntersections(net, transitions).filter((id) => !folds.includes(id))).toEqual([]);
-    // TASK-131 keeps OSM geometry: tapers and shifts squeezed into roads between OSM nodes main
-    // merged into one turn more than 5 degrees per vertex: Westendstraße r:1284 (16.6 m, n:841 to
-    // n:1282, a 10.7 m taper), Hansastraße r:1287 (8.2 m, n:1285 to n:1286, 5.3 m) and
-    // Arnulfstraße r:700 (8 m, n:52 to n:695, jg:10778's inner road, a 1.75 m end shift).
-    const squeezed = ['r:1284#2', 'r:1287#1', 'r:700#0', 'r:700#1'];
-    expect(
-      kinks(net, city, transitions).filter((id) => !squeezed.includes(id.split('@')[0]!)),
-    ).toEqual([]);
-  }
-}, 60_000);
+test(
+  'T33.2: transition lanes never cross themselves and keep a continuous heading',
+  () => {
+    for (const city of tierCities(['continuity', 'munich']).map((name) =>
+      name === 'munich' ? munich() : continuity(),
+    )) {
+      const net = compiled(city);
+      const transitions = net.roads.filter(
+        (r) =>
+          r.startOffsetM ||
+          r.endOffsetM ||
+          r.lanes.some((i) => net.lanes[i]!.taperStartM || net.lanes[i]!.taperEndM),
+      );
+      expect(transitions.length).toBeGreaterThan(3);
+      // r:1308#0 folds within its first 0.2 m at n:104 (its far end from the n:643 widening), as
+      // on main: the offset of a sharp source corner, not a transition.
+      // TASK-131 keeps OSM geometry: smoothing leaves the vertices within 30 m of a node, so lanes
+      // offset from sharp source corners fold there. r:728#0 (Landsberger Straße, -3.5 m, the OSM
+      // curve into n:474 with vertices 2 m apart) backs up 0.34 m and 0.15 m 18 to 20 m in;
+      // r:256#0 (Trappentreustraße, 1.5 m start offset, a corner 19.8 m from n:207) repeats a
+      // vertex at 16.5 m, a zero-length step rather than a visible fold.
+      const folds = ['r:1308#0', 'r:728#0', 'r:256#0'];
+      expect(selfIntersections(net, transitions).filter((id) => !folds.includes(id))).toEqual([]);
+      // TASK-131 keeps OSM geometry: tapers and shifts squeezed into roads between OSM nodes main
+      // merged into one turn more than 5 degrees per vertex: Westendstraße r:1284 (16.6 m, n:841 to
+      // n:1282, a 10.7 m taper), Hansastraße r:1287 (8.2 m, n:1285 to n:1286, 5.3 m) and
+      // Arnulfstraße r:700 (8 m, n:52 to n:695, jg:10778's inner road, a 1.75 m end shift).
+      const squeezed = ['r:1284#2', 'r:1287#1', 'r:700#0', 'r:700#1'];
+      expect(
+        kinks(net, city, transitions).filter((id) => !squeezed.includes(id.split('@')[0]!)),
+      ).toEqual([]);
+    }
+  },
+  limit(60_000),
+);
 
 /** m², unique 0.25 m cells inside both road surfaces. */
 function overlapM2(a: Vec2[], b: Vec2[]) {
@@ -291,5 +296,5 @@ cityTest(
     }
     console.info('T33.3 overlap m2 before/after and divider m', report);
   },
-  60_000,
+  limit(60_000),
 );

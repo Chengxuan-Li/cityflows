@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest';
 import { cachePath, importerGraph, importOsmCached } from '../../bench/city-cache';
 import { importOsm } from '../../src/importers/osm';
 import type { ImportOptions } from '../../src/importers/types';
+import { limit } from '../timeouts';
 
 // TASK-090: the disk cache of real-city imports (bench/city-cache.ts).
 
@@ -31,7 +32,7 @@ test.each([
     expect(plain.ok && plain.city).toStrictEqual(planar);
     expect(cachePath(xml, { ...options, relaxMaxM: 0 })).not.toBe(cachePath(xml, options));
   },
-  Number(process.env.CITYFLOWS_TEST_TIMEOUT_MS ?? 60_000),
+  limit(60_000),
 );
 
 test('the cache key covers the importer, the network it compiles with and their libraries', () => {

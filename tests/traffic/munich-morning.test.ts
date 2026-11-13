@@ -6,6 +6,7 @@ import { compile, type CompiledCity } from '../../src/network';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import type { TrafficEngine } from '../../src/sim/types';
 import { sampleConflictZones } from '../sim/conflict-zone-safety';
+import { limit } from '../timeouts';
 
 // TASK-090: the one Munich morning at scale 0.15, 7:00 to 10:00, that T21, T29 and the traffic
 // gates each ran on their own: `npm run import-probe` at --scale 0.15, run once with every
@@ -83,7 +84,7 @@ beforeAll(() => {
     contacts: zones.contacts,
     offTarget,
   });
-}, 1_200_000); // Lead, 2026-11-13: a setup time limit, not a gate; CI runners and loaded machines took over 600 s.
+}, limit(1_200_000)); // Lead, 2026-11-13: a setup time limit, not a gate; CI runners and loaded machines took over 600 s.
 
 test('traffic gate: Munich at 0.15 against main (docs/plan.md "Geometry rework")', () => {
   // 90 percent of main's completed trips, gridlock at most 1.5 times main's, every failure a

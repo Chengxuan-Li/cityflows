@@ -4,6 +4,7 @@ import { importOsmCached } from '../../bench/city-cache';
 import { compile } from '../../src/network';
 import { trainTimetable, trainsAt, trainCensus } from '../../src/network/trains';
 import { tierCities } from '../tier';
+import { limit } from '../timeouts';
 
 test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
   'T64 %s timetable is collision-free, has stable daily service and preserves compiled vehicle data',
@@ -48,5 +49,5 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     }
     console.info('T64 timetable', name, { buildMs, ...census });
   },
-  60000,
+  limit(60000),
 );

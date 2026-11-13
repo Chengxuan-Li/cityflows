@@ -7,6 +7,7 @@ import { compile, type CompiledCity, type CNode } from '../../src/network';
 import { junctionCorners } from '../../src/network/junctions';
 import type { City } from '../../src/schema';
 import { cityTest, tierCities, unitTest } from '../tier';
+import { limit } from '../timeouts';
 
 // T42 (TASK-092, B48, B51, B52): every junction corner sweeps with a radius and every median nose
 // is rounded, by the geometry audit's corner sharpness (measure 10): a corner is sharp where its
@@ -198,7 +199,7 @@ test.each(tierCities(auditCities))(
     console.info('T42.1', name, sharp.length, 'sharp, named', Object.keys(named[name]).length);
     expect(sharp.filter((key) => !named[name][key])).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 // TASK-131 keeps OSM nodes: main's merged n:262 and n:247 are members of one group (n:246, n:249,
@@ -231,7 +232,7 @@ cityTest(
     ] as const)
       expect(curb(id, a, b)?.radius, `${id} ${a}>${b}`).toBeGreaterThan(2);
   },
-  120_000,
+  limit(120_000),
 );
 
 // TASK-131 rewrote T42.3: main's split-pair noses came from the merge, which joined a pair's two
@@ -271,7 +272,7 @@ cityTest(
       cornerAudit(city, net, node(net, 'n:366')).filter((c) => c.kind === 'nose' && !c.sharp),
     ).toHaveLength(1);
   },
-  120_000,
+  limit(120_000),
 );
 
 unitTest('T42.4: the corner measure finds a junction drawn without its curbs', () => {

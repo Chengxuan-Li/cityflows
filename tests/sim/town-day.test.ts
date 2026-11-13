@@ -6,6 +6,7 @@ import { town } from '../../src/fixtures/town';
 import { compile } from '../../src/network';
 import { createEngine } from '../../src/sim/engine';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
+import { limit } from '../timeouts';
 
 it.skipIf(env.RUN_SLOW !== '1')(
   'runs a full town day with under 1% failed trips and no stranded vehicles',
@@ -52,5 +53,5 @@ it.skipIf(env.RUN_SLOW !== '1')(
     expect(metrics.trips.failed / requested).toBeLessThan(0.01);
     expect(metrics.failedByReason.stranded).toBe(0);
   },
-  300_000,
+  limit(300_000),
 );

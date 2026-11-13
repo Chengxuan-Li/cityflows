@@ -13,6 +13,7 @@ import type { CompiledCity } from '../../src/network';
 import { markingClips } from '../../src/render/layers/roads';
 import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { tierCities } from '../tier';
+import { limit } from '../timeouts';
 
 // T27 (TASK-074): what stays of it after TASK-083. Its outline measures (simple, movements held,
 // road ends met, curbs tangent), its storage test and its Munich morning moved to T38.
@@ -51,7 +52,7 @@ test.each(tierCities(auditCities))(
       expect(rest).toBeLessThanOrEqual(baselineOverlapM2[name] / 2);
     }
   },
-  120_000,
+  limit(120_000),
 );
 
 test.each(tierCities(auditCities))(
@@ -87,7 +88,7 @@ test.each(tierCities(auditCities))(
     }
     expect(offending).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 // TASK-108 remeasures semantic lane-line paint with 3/6 and 6/12 dashes;
@@ -109,5 +110,5 @@ test.each(tierCities(auditCities))(
     console.info('T27 markings', name, lengths, 'main lines outside', mainLineOutsideM[name]);
     expect(lengths.lineOutsideM).toBeGreaterThanOrEqual(0.98 * mainLineOutsideM[name]);
   },
-  120_000,
+  limit(120_000),
 );

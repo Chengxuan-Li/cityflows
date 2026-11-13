@@ -22,6 +22,7 @@ import type { Vec2 } from '../../src/geo/vec2';
 import { compile, type CompiledCity, type CNode } from '../../src/network';
 import { CURB_RADIUS_M, junctionCorners } from '../../src/network/junctions';
 import type { City } from '../../src/schema';
+import { limit } from '../timeouts';
 
 // T38 (TASK-083, docs/plan.md "Geometry rework" stage 3): junction polygons, osm2streets-style
 // on TASK-082's corridors. Moved here: T20's simple outlines and contained movements (fixtures
@@ -79,7 +80,7 @@ cityTest(
     expect(node(net, 'n:1365').group).toBe(node(net, 'n:774').group);
     expect(node(net, 'n:1357').group).toBe(node(net, 'n:719').group);
   },
-  120_000,
+  limit(120_000),
 );
 
 /** The movement surface samples of a node that lie neither in its outline (0.1 m) nor on the
@@ -147,7 +148,7 @@ test.each(tierCities(auditCities))(
     expect(junctions.flatMap((n) => escaping(net, n))).toEqual([]);
     expect(junctions.flatMap((n) => cutsOff(net, n))).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 // Main after stage 2 (7d92383), npm run geometry-audit: junction bulge (outline and curbs) and
@@ -199,7 +200,7 @@ test.each(tierCities(auditCities))(
     expect(bulge).toBeLessThanOrEqual(stage2[name].bulgeM2 / 4);
     expect(overlap).toBeLessThanOrEqual((keptOverlapM2[name] ?? stage2[name].overlapM2) + 0.01);
   },
-  120_000,
+  limit(120_000),
 );
 
 test.each(tierCities(auditCities))(
@@ -258,7 +259,7 @@ test.each(tierCities(auditCities))(
     console.info('T38.3', name, 'curbs by limit', limits);
     expect(failures).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 const turnDegrees = (a: Vec2, p: Vec2, b: Vec2) => {
@@ -329,7 +330,7 @@ test.each(tierCities(auditCities))(
     }
     expect(failures).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 test.each(tierCities(auditCities))(
@@ -374,7 +375,7 @@ test.each(tierCities(auditCities))(
     }
     expect(failures).toEqual([]);
   },
-  120_000,
+  limit(120_000),
 );
 
 unitTest(
@@ -577,7 +578,7 @@ test.each(tierCities(auditCities))(
       [],
     );
   },
-  120_000,
+  limit(120_000),
 );
 
 // T38.5, Munich's morning, became the traffic gate in tests/traffic/munich-morning.test.ts.
