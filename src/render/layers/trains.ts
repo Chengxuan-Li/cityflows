@@ -3,6 +3,7 @@ import { trackGrade, type RailGraph } from '../../network/rail';
 import type { TrainPose } from '../../network/trains';
 import type { Vec2 } from '../../geo/vec2';
 import type { Pick } from '../types';
+import { style } from '../style';
 
 export const trainColors = { sbahn: 0xbc4647, mainline: 0x607e99, tram: 0x438b99, roof: 0xecebe4 };
 /** TASK-132: tunnels and roofs hide trains in 2D; a ground track keeps them whatever its layer. */
@@ -30,7 +31,7 @@ export function drawTrains(
           [-length / 2, width / 2],
         ].map(([x, y]) => ({ x: car.x + x! * c - y! * s, y: car.y + x! * s + y! * c }));
       if (selected === train.id)
-        g.poly(rectangle(car.lengthM + 1, 4.8)).fill({ color: 0x4dafa6, alpha: 0.6 });
+        g.poly(rectangle(car.lengthM + 1, 4.8)).fill({ color: style.selection, alpha: 0.6 });
       g.poly(rectangle(car.lengthM, train.kind === 'tram' ? 2.4 : 3)).fill(trainColors[train.kind]);
       if (car.lengthM > 3) g.poly(rectangle(car.lengthM - 3, 1.4)).fill(trainColors.roof);
     }

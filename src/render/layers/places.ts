@@ -2,7 +2,7 @@ import { Graphics } from 'pixi.js';
 import type { CompiledCity } from '../../network';
 import type { Place } from '../../schema';
 import { connectorPosition } from '../picking';
-import { placeHue, style } from '../style';
+import { placeColors, style } from '../style';
 
 export function placePath(
   graphics: Graphics,
@@ -49,13 +49,15 @@ export function drawPlaces(
       points.push(target);
       local = { kind: 'point', pos: { x: 0, y: 0 } };
     }
+    const { fill, edge } = placeColors(kind);
     // A parking area's place is its outline: the lot's aisles and stalls (TASK-104) lie inside.
     if (kind === 'parking' && local.kind === 'polygon')
-      placePath(target, local, kind, Infinity).stroke({ color: placeHue(id), width: 1.2 });
+      placePath(target, local, kind, Infinity).stroke({ color: edge, width: 1.2 });
+    // TASK-162: a quiet tint over the surroundings, so buildings still show, with a thin edge.
     else
       placePath(target, local, kind, Infinity)
-        .fill(placeHue(id))
-        .stroke({ color: style.marking, width: 0.6 });
+        .fill({ color: fill, alpha: local.kind === 'polygon' ? style.placeAlpha : 1 })
+        .stroke({ color: edge, width: 0.6 });
   }
   return (zoom) => {
     for (const point of points) point.scale.set(Math.max(1, 8 / (zoom * style.pointRadiusM)));

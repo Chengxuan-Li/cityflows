@@ -80,7 +80,8 @@ test('@smoke T44 imports, toggles and measures surroundings without changing the
     const basemap = layers.getByLabel('Basemap', { exact: true });
     const firstImport = file === 'munich-donnersberger';
     await expect(toggle).toBeChecked({ checked: firstImport });
-    await expect(basemap).toBeChecked({ checked: firstImport });
+    // TASK-162: the OSM tiles are off by default; our own canvas and context draw the map.
+    await expect(basemap).not.toBeChecked();
     await toggle.check();
     await basemap.check();
     await expect(canvas).toHaveAttribute(

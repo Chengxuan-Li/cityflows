@@ -271,7 +271,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   let parkingCounts: ArrayLike<number> | null = null;
   let tiles: Tiles | undefined;
-  let tilesEnabled = true;
+  let tilesEnabled = defaultLayers.basemap;
   let sourceGeometry: CityGeometry | undefined;
   let shapes: Place['shape'][] = [];
   let staticPick: ReturnType<typeof createPicker> | undefined;
