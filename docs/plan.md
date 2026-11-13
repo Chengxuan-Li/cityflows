@@ -175,6 +175,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-148](tasks/TASK-148.md) | render | Reduce SwiftShader rail drawing time | 3D renderer | 145 | T62/T64 with local assertions | done (PR #6) |
 | [TASK-149](tasks/TASK-149.md) | importer | Verify remaining parking-lot access in both extracts | OSM parking access, route tests | 144 | 26 sites, legal routes and geometry shots | done (PR #5) |
 | [TASK-150](tasks/TASK-150.md) | 7 | A car leaving a lot waits clear of the public lane and merges continuously once granted | `src/sim/parking.ts`, `manoeuvre.ts`, `engine.ts` (exit), T77 | 118, 122, 149 | T77, witness 0 overlaps, T54/T59/T63, Munich gate, shots | done 2026-11-13 |
+| [TASK-151](tasks/TASK-151.md) | 7 | PR #1 on today's main: find why crossings and tram service plus main's parking changes fail the gate (3,300 / 49 / 1) and repair the cause | `src/sim/**` (crossing control, rail service, parking, engine), tests | 136, 138, 147, 149, 150 | Munich gate, T75/T76, parking tests, 0.1 s replay | in progress (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1125,6 +1126,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-137 | Claude Code, the lead's subagent | Sonnet 5.5 | high | 5337 (production 5437) |
 | TASK-134 | Claude Code, the lead's subagent | Opus 5.5 | high | 5334 (production 5434) |
 | TASK-150 | Claude Code, the lead's subagent | Opus 5.5 | high | 5350 (production 5450) |
+| TASK-151 | Claude Code, the lead's subagent | Opus 5.5 | high | 5351 (production 5451) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3534,6 +3536,9 @@ runs this gate. The likely interaction is TASK-149's restored lot access with PR
 control; diagnosis waits for the owner.
 
 ## Owner decisions log
+
+- 2026-11-13 (owner): an agent finds and repairs why PR #1 merged onto today's main fails the
+  unchanged traffic gate (TASK-151); PR #1 merges once the combination passes.
 
 - 2026-11-13 (owner): the lead (Claude Code) orchestrates every agent from its own chat with
   Claude subagents; no Codex models unless the owner names one. PR #1 and TASK-128 to TASK-130
