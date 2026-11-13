@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { RailInspector, TrainInspector } from './inspector/rail';
@@ -8,7 +8,7 @@ import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
 import { WalkerInspector } from './inspector/walker';
 import { PersonInspector } from './inspector/person';
-import { CloseButton } from './controls';
+import { CloseButton, ResizeHandle } from './controls';
 import { MapView } from './map-view';
 import { Onboarding, ShowHints } from './onboarding';
 import { StatusBar } from './run-bar';
@@ -102,6 +102,31 @@ function Inspector() {
   }
 }
 
+const widths = { min: 220, max: 440 };
+
+/** A sidebar's width, remembered per viewer; storage can be blocked (private windows), and the
+ *  width then lasts for the visit. */
+function useStoredWidth(key: string, initial: number) {
+  const [width, setWidth] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem(key));
+      return stored >= widths.min && stored <= widths.max ? stored : initial;
+    } catch {
+      return initial;
+    }
+  });
+  function change(next: number | null) {
+    setWidth(next ?? initial);
+    try {
+      if (next === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, String(next));
+    } catch {
+      return;
+    }
+  }
+  return [width, change] as const;
+}
+
 export function App() {
   useEffect(() => {
     if (window.cityflows) {
@@ -124,6 +149,8 @@ export function App() {
   const selection = useAppStore((state) => state.selection);
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const inspectorOpen = useAppStore((state) => state.inspectorOpen);
+  const [sidebarWidth, setSidebarWidth] = useStoredWidth('cityflows.sidebarWidth', 272);
+  const [inspectorWidth, setInspectorWidth] = useStoredWidth('cityflows.inspectorWidth', 280);
 
   useEffect(() => {
     function clear(event: KeyboardEvent) {
@@ -135,9 +162,28 @@ export function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={
+        {
+          '--sidebar-width': `${sidebarWidth}px`,
+          '--inspector-width': `${inspectorWidth}px`,
+        } as CSSProperties
+      }
+    >
       <TopBar />
       {sidebarOpen && <Sidebar />}
+      {sidebarOpen && (
+        <ResizeHandle
+          label="Sidebar width"
+          edge="end"
+          className="sidebar-edge"
+          value={sidebarWidth}
+          {...widths}
+          onChange={setSidebarWidth}
+          onReset={() => setSidebarWidth(null)}
+        />
+      )}
       <main className="map-view" aria-label="Map">
         <MapView />
         {error && (
@@ -146,6 +192,17 @@ export function App() {
           </div>
         )}
       </main>
+      {inspectorOpen && (
+        <ResizeHandle
+          label="Inspector width"
+          edge="start"
+          className="inspector-edge"
+          value={inspectorWidth}
+          {...widths}
+          onChange={setInspectorWidth}
+          onReset={() => setInspectorWidth(null)}
+        />
+      )}
       {inspectorOpen && (
         <div id="inspector-column" className="inspector-column">
           {selection ? (

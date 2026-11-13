@@ -6,6 +6,7 @@ import { crossingArms } from '../../network/crossings';
 import type { City, JunctionGroup, Node, SignalProgram } from '../../schema';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
+import { PopoverButton } from '../controls';
 
 /** TASK-131: with `group`, the editor edits the junction group's program (its road pairs are
  * the group's entry-to-exit chains; applying it sets every member's derived program). */
@@ -423,12 +424,7 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
               min={0.1}
               onCommit={(durationS) => changePhase(index, { durationS: durationS! })}
             />
-            <details
-              onToggle={(event) => {
-                if (event.currentTarget.open) setActive(index);
-              }}
-            >
-              <summary>Phase {index + 1} road pairs</summary>
+            <PopoverButton label={`Phase ${index + 1} road pairs`} onOpen={() => setActive(index)}>
               {crossings.length > 0 && (
                 <p className="muted">
                   Walk green {phase.walk ? 'set by hand' : 'where no traffic leaves the arm'}
@@ -480,7 +476,7 @@ function SignalDraft({ node, source, compiled, city, group }: Props & { city: Ci
                   {roads.from} → {roads.to}
                 </label>
               ))}
-            </details>
+            </PopoverButton>
           </li>
         ))}
       </ul>

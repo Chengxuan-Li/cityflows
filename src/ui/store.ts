@@ -545,7 +545,8 @@ export const useAppStore = create<AppState>((set, get) => {
     toggleLayers: () => set(({ layersOpen }) => ({ layersOpen: !layersOpen })),
     toggleMetrics: () => set(({ metricsOpen }) => ({ metricsOpen: !metricsOpen })),
     toggleDemand: () => set(({ demandOpen }) => ({ demandOpen: !demandOpen })),
-    sidebarOpen: true,
+    // Under 900 px the sidebar floats over the map, so it starts closed there.
+    sidebarOpen: !window.matchMedia('(max-width: 900px)').matches,
     inspectorOpen: true,
     toggleSidebar: () => set(({ sidebarOpen }) => ({ sidebarOpen: !sidebarOpen })),
     toggleInspector: () => set(({ inspectorOpen }) => ({ inspectorOpen: !inspectorOpen })),
