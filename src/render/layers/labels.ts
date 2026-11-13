@@ -7,12 +7,12 @@ import {
   type PlacedLabel,
   type TextMetrics,
 } from '../labels';
-import { style } from '../style';
+import { style, type MapPalette } from '../style';
 import type { ViewBounds } from './stations';
 
 /** Upright text from a glyph atlas: each glyph once as a white fill and once as a white halo, so
- * the ink and halo colours are sprite tints (`style.label`) and a new palette needs no new
- * textures. */
+ * the ink and halo colours are sprite tints (`style.label`, or the dark appearance's from
+ * `setColours`) and a new palette needs no new glyph textures. */
 const fontOf = (s: LabelStyle) =>
   `${labelFonts[s].bold ? 'bold ' : ''}${labelFonts[s].sizePx}px Arimo, Arial, sans-serif`;
 const PAGE = 512;
@@ -114,13 +114,13 @@ class GlyphAtlas {
   }
 }
 
-const ink: Record<LabelStyle, () => number> = {
-  station: () => style.label.station,
-  stop: () => style.label.station,
-  major: () => style.label.street,
-  minor: () => style.label.street,
-  place: () => style.label.place,
-  area: () => style.label.area,
+const ink: Record<LabelStyle, keyof MapPalette['label']> = {
+  station: 'station',
+  stop: 'station',
+  major: 'street',
+  minor: 'street',
+  place: 'place',
+  area: 'area',
 };
 
 const overlaps = (a: ViewBounds, b: ViewBounds) =>
@@ -134,6 +134,7 @@ export function createLabelLayer() {
   container.addChild(halos, fills);
   let atlas: GlyphAtlas | undefined;
   let candidates: readonly LabelCandidate[] = [];
+  let colours: MapPalette['label'] = style.label;
   let placed: PlacedLabel[] = [];
   let placedZoom = NaN;
   let covered: ViewBounds | null = null;
@@ -177,8 +178,8 @@ export function createLabelLayer() {
         }
         used++;
         for (const [sprite, texture, tint] of [
-          [sprites.halo, glyph.halo, style.label.halo],
-          [sprites.fill, glyph.fill, ink[s]()],
+          [sprites.halo, glyph.halo, colours.halo],
+          [sprites.fill, glyph.fill, colours[ink[s]]],
         ] as const) {
           sprite.texture = texture;
           sprite.tint = tint;
@@ -208,6 +209,12 @@ export function createLabelLayer() {
   return {
     container,
     fontsReady,
+    /** TASK-166: new inks for the appearance; the cached label texture is redrawn on the next
+     * update. */
+    setColours(next: MapPalette['label']) {
+      colours = next;
+      covered = null;
+    },
     setCandidates(next: readonly LabelCandidate[]) {
       candidates = next;
       placedZoom = NaN;

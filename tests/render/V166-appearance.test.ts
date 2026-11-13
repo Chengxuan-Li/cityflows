@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { defaultLighting, sceneLight, type LightingSettings } from '../../src/render/lighting';
-import { mapPalettes, placeColors, style } from '../../src/render/style';
+import { mapPalettes, mixColor, placeColors, style } from '../../src/render/style';
+import type { PlaceKind } from '../../src/schema';
 import { buildContext } from '../../src/render3d/context';
 import type { ContextFeature } from '../../src/schema';
 import {
@@ -109,6 +110,46 @@ describe('V166 dark map palette', () => {
     }
     expect(grey(dark.fill)).toBeGreaterThan(grey(mapPalettes.dark.background));
     expect(grey(dark.edge)).toBeGreaterThan(grey(dark.fill));
+  });
+
+  test('label inks meet 4.5:1 on the canvas, the place tints and their halo, in both', () => {
+    const luminance = (c: number) =>
+      [16, 8, 0]
+        .map((shift) => ((c >> shift) & 255) / 255)
+        .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+        .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i]!, 0);
+    const ratio = (a: number, b: number) => {
+      const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+      return (x! + 0.05) / (y! + 0.05);
+    };
+    const kinds: PlaceKind[] = [
+      'residential',
+      'work',
+      'retail',
+      'school',
+      'station',
+      'airport',
+      'parking',
+      'gateway',
+      'other',
+    ];
+    for (const [name, palette] of Object.entries(mapPalettes)) {
+      const { halo, ...inks } = palette.label;
+      const grounds = [
+        palette.background,
+        halo,
+        // Labels sit on polygon places, tinted at placeAlpha over the canvas; point markers are
+        // small and labelled beside them.
+        ...kinds.map((kind) =>
+          mixColor(palette.background, placeColors(kind, palette.placeBase).fill, style.placeAlpha),
+        ),
+      ];
+      for (const [ink, colour] of Object.entries(inks))
+        for (const ground of grounds)
+          expect(ratio(colour, ground), `${name} ${ink} on ${ground.toString(16)}`).toBeGreaterThan(
+            4.5,
+          );
+    }
   });
 
   test('daylight in dark keeps the Day light and swaps only the canvas', () => {

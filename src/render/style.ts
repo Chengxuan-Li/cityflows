@@ -437,6 +437,9 @@ export interface MapPalette {
   placeBase: number;
   /** Sidewalk and footway paving, and the step hatching. */
   walk: Record<'sidewalk' | 'footway' | 'steps', number>;
+  /** Map label inks and their halo (TASK-167), each ink at least 4.5:1 on the canvas, the place
+   * tints and the halo. */
+  label: Record<'street' | 'place' | 'area' | 'station' | 'halo', number>;
   context: Record<
     'building' | 'buildingEdge' | 'water' | 'green' | 'parking' | 'landuse',
     number
@@ -459,6 +462,7 @@ export const mapPalettes: Record<'light' | 'dark', MapPalette> = {
     background: style.background,
     placeBase: 0xffffff,
     walk: style.walk,
+    label: style.label,
     context: style.context,
     buildings: style.buildings,
   },
@@ -467,6 +471,8 @@ export const mapPalettes: Record<'light' | 'dark', MapPalette> = {
     placeBase: 0x2b2c30,
     // Concrete in shade: a step below the asphalt so roads lead, light enough for pedestrians.
     walk: { sidewalk: 0x8c8981, footway: 0x7f7c75, steps: 0x9a978f },
+    // Light inks on a halo darker than the canvas, so street names also read on the light asphalt.
+    label: { street: 0xe8e8ea, place: 0xd6d6da, area: 0xc6c6cc, station: 0x6fd3df, halo: 0x18191b },
     context: {
       building: darkBuilding,
       buildingEdge: 0x4d4e53,

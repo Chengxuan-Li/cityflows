@@ -1139,6 +1139,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       palette = next;
       invalidate();
       canvas.dataset.mapPalette = palette === mapPalettes.dark ? 'dark' : 'light';
+      labels.setColours(palette.label);
       void ready.then(() => {
         if (!destroyed) app.renderer.background.color = palette.background;
       });
@@ -1161,6 +1162,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         grade.cacheResolution = 0;
       }
       updateTerrainCache();
+      updateLabels();
     },
     setLighting(settings, timeS) {
       // Following the clock, the light moves once a simulated minute.
