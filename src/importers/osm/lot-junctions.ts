@@ -1,13 +1,110 @@
-import {
-  cumulativeLengths,
-  nearestOnPolyline,
-  pointAtDistance,
-  pointInPolygon,
-} from '../../geo/polyline';
+import { nearestOnPolyline, pointAtDistance, pointInPolygon } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import { compile, type CompiledCity, type Diagnostic } from '../../network';
 import { allocateId, type City, type Connector, type Road } from '../../schema';
 import type { OsmData } from './parse';
+
+/** Parking routing ends at the mapped mouth; circulation continues along the lot's aisles.
+ * Keep through streets intact, including their controls, lane changes and historic routes. */
+export function addMappedLotPortals(
+  city: City,
+  data: OsmData,
+  diagnostics: Diagnostic[],
+  net: CompiledCity,
+) {
+  const ways = new Map(data.way.map((way) => [way.id, way]));
+  const lots = Object.values(city.parking ?? {}).filter((lot) => lot.kind === 'lot');
+  const aisles = new Set(lots.flatMap((lot) => lot.aisles ?? []));
+  const publicRoads = Object.values(city.roads).filter((road) => !aisles.has(road.id));
+  const restored = new Set<string>();
+  for (const lot of lots) {
+    const portals: Connector[] = [];
+    const nodes = [
+      ...new Set((lot.aisles ?? []).flatMap((id) => [city.roads[id]!.from, city.roads[id]!.to])),
+    ];
+    for (const id of nodes) {
+      if (publicRoads.some((r) => r.from === id || r.to === id)) continue;
+      const node = city.nodes[id]!,
+        source = node.provenance.osmIds?.[0];
+      if (
+        source === undefined ||
+        lot.exclusions?.some((ring) => pointInPolygon(node.pos, [...ring, ring[0]!]))
+      )
+        continue;
+      const mouths = (lot.aisles ?? [])
+        .map((id) => city.roads[id]!)
+        .filter((r) => r.from === id || r.to === id);
+      const mapped = publicRoads.filter(
+        (r) =>
+          r.provenance.osmIds?.some((osm) => ways.get(osm)?.nd.includes(source)) &&
+          nearestOnPolyline(r.centerline, node.pos).away <= 1,
+      );
+      for (const road of mapped) {
+        if (!mouths.every((r) => (r.layer ?? 0) === (road.layer ?? 0))) continue;
+        if (['no', 'delivery'].includes(road.access?.car ?? road.access?.all ?? 'yes')) continue;
+        const roadDirection = nearestOnPolyline(road.centerline, node.pos).direction;
+        for (const mouth of mouths) {
+          const incoming = mouth.from === id;
+          if (['no', 'delivery'].includes(mouth.access?.car ?? mouth.access?.all ?? 'yes'))
+            continue;
+          const line = incoming ? mouth.centerline : mouth.centerline.toReversed();
+          const dx = line[1]!.x - line[0]!.x,
+            dy = line[1]!.y - line[0]!.y;
+          const side = roadDirection.x * dy - roadDirection.y * dx;
+          // Use the edge lane facing the source mouth, including left-side accesses
+          // on one-way roads. Provenance selects this carriageway, never its neighbour.
+          const laneIndex = side > 0 ? road.lanes.length - 1 : 0;
+          if (!road.lanes[laneIndex]!.allowed.includes('car')) continue;
+          const lane = net.lanes[net.index.lane.get(`${road.id}#${laneIndex}`)!]!;
+          const hit = nearestOnPolyline(lane.polyline, node.pos);
+          const direction = incoming ? 'in' : 'out';
+          const previous = portals.find(
+            (c) =>
+              c.roadId === road.id &&
+              c.lane === laneIndex &&
+              Math.abs(c.positionM - hit.along) < 1e-6,
+          );
+          if (previous) {
+            if (previous.direction !== direction) previous.direction = 'both';
+          } else
+            portals.push({
+              id: allocateId(city, 'c'),
+              roadId: road.id,
+              lane: laneIndex,
+              positionM: hit.along,
+              direction,
+              throughputPerMin: 30,
+            });
+          restored.add(id);
+        }
+      }
+    }
+    if (!portals.length) continue;
+    if (lot.provenance.inferred?.includes('driveway')) {
+      // A nearest-road driveway was only a fallback for the missing mapped mouth.
+      // Move its IDs to the real accesses rather than leaving a second shortcut.
+      for (const [index, old] of lot.connectors.entries()) {
+        const portal = portals[index];
+        if (portal) Object.assign(portal, { id: old.id, throughputPerMin: old.throughputPerMin });
+      }
+      lot.connectors = portals;
+      lot.provenance.inferred = lot.provenance.inferred.filter((value) => value !== 'driveway');
+    } else lot.connectors.push(...portals);
+    (lot.provenance.inferred ??= []).push('mappedLotPortals');
+  }
+  for (let i = diagnostics.length - 1; i >= 0; i--)
+    if (
+      diagnostics[i]!.code === 'parking_entry_unreachable' &&
+      diagnostics[i]!.refs.some((id) => restored.has(id))
+    )
+      diagnostics[i] = {
+        ...diagnostics[i]!,
+        severity: 'info',
+        code: 'parking_mapped_portal',
+        message:
+          'Mapped mouth uses a parking portal on its source street; the aisle remains separate from through-road routing',
+      };
+}
 
 /** Restore mapped aisle joins after public-road allocation, retaining unrelated import IDs. */
 export function joinLotAisles(
@@ -17,11 +114,9 @@ export function joinLotAisles(
   aisles: { id: string; holes: Vec2[][] }[],
   diagnostics: Diagnostic[],
   publicGeometry: CompiledCity,
-  extended = false,
 ): { compiled: CompiledCity; nodes: string[] } | undefined {
   const ways = new Map(data.way.map((way) => [way.id, way]));
   const grouped = new Set(Object.values(city.junctionGroups ?? {}).flatMap((g) => g.nodes));
-  const inner = new Set(Object.values(city.junctionGroups ?? {}).flatMap((g) => g.innerRoads));
   const nodes = new Set(
     aisles.flatMap(({ id, holes }) =>
       [city.roads[id]!.from, city.roads[id]!.to].filter(
@@ -41,15 +136,9 @@ export function joinLotAisles(
         road.provenance.osmIds?.some((osmId) => ways.get(osmId)?.nd.includes(source)),
     );
     if (!mapped.length) return [];
-    const roads = mapped.filter((road) => {
-      if (!extended)
-        return road.centerline.slice(1, -1).some((p) => p.x === node.pos.x && p.y === node.pos.y);
-      const hit = nearestOnPolyline(road.centerline, node.pos);
-      const length = cumulativeLengths(road.centerline).at(-1)!;
-      // Only a shared source node qualifies. Smoothing may have replaced its vertex;
-      // follow that existing line within one metre, never invent a public-road bend.
-      return hit.away <= 1 && hit.along > 1 && hit.along < length - 1;
-    });
+    const roads = mapped.filter((road) =>
+      road.centerline.slice(1, -1).some((p) => p.x === node.pos.x && p.y === node.pos.y),
+    );
     if (!roads.length) {
       diagnostics.push({
         severity: 'warning',
@@ -75,18 +164,14 @@ export function joinLotAisles(
       paired &&
       roads.every(
         (road) =>
-          (extended || (road.roadClass === 'service' && road.lanes.length === 1)) &&
-          road.lanes.some((lane) => lane.allowed.includes('car')) &&
-          !(extended ? ['no', 'delivery'] : ['no', 'private', 'delivery']).includes(
-            road.access?.car ?? road.access?.all ?? 'yes',
-          ) &&
+          road.roadClass === 'service' &&
+          road.lanes.length === 1 &&
+          road.lanes[0]!.allowed.includes('car') &&
+          !['no', 'private', 'delivery'].includes(road.access?.car ?? road.access?.all ?? 'yes') &&
           aisleLayers.every((layer) => layer === (road.layer ?? 0)) &&
-          !inner.has(road.id) &&
-          !Object.values(city.parking ?? {}).some((p) => p.strip?.roadId === road.id) &&
-          (extended ||
-            [road.from, road.to].every(
-              (end) => city.nodes[end]!.control === 'uncontrolled' && !grouped.has(end),
-            )),
+          [road.from, road.to].every(
+            (end) => city.nodes[end]!.control === 'uncontrolled' && !grouped.has(end),
+          ),
       );
     if (!plain) {
       diagnostics.push({
@@ -98,41 +183,18 @@ export function joinLotAisles(
       });
       return [];
     }
-    return [
-      {
-        node,
-        source,
-        pos: extended ? nearestOnPolyline(roads[0]!.centerline, node.pos).point : node.pos,
-      },
-    ];
+    return [{ node, source }];
   });
   if (!candidates.length) return;
   const replacements = new Map<string, string[]>();
-  for (const { node, source, pos } of candidates) {
+  for (const { node, source } of candidates) {
     const roads = publicRoads.filter(
       (road) =>
         road.from !== node.id &&
         road.to !== node.id &&
         road.provenance.osmIds?.some((osmId) => ways.get(osmId)?.nd.includes(source)) &&
-        (extended
-          ? nearestOnPolyline(road.centerline, pos).away < 1e-6
-          : road.centerline.slice(1, -1).some((p) => p.x === node.pos.x && p.y === node.pos.y)),
+        road.centerline.slice(1, -1).some((p) => p.x === node.pos.x && p.y === node.pos.y),
     );
-    if (extended) {
-      node.pos = pos;
-      for (const { id } of aisles) {
-        const road = city.roads[id]!;
-        if (road.from === node.id) road.centerline[0] = pos;
-        if (road.to === node.id) road.centerline[road.centerline.length - 1] = pos;
-      }
-      for (const road of roads) {
-        if (road.centerline.some((p) => p.x === pos.x && p.y === pos.y)) continue;
-        const hit = nearestOnPolyline(road.centerline, pos);
-        const lengths = cumulativeLengths(road.centerline);
-        const at = lengths.findIndex((length) => length > hit.along);
-        road.centerline.splice(at, 0, pos);
-      }
-    }
     const group = roads[0]!.streetGroupId;
     const splitGroup = group === null ? null : `${group}@${node.id}`;
     for (const [direction, road] of roads.entries()) {
@@ -165,16 +227,6 @@ export function joinLotAisles(
         from: rule.from === road.id ? id : rule.from,
         to: rule.to === road.id ? id : rule.to,
       }));
-      // Group entry programs can live away from the physical downstream node.
-      for (const owner of [
-        ...Object.values(city.nodes),
-        ...Object.values(city.junctionGroups ?? {}),
-      ])
-        for (const phase of owner.signal?.phases ?? []) {
-          for (const movement of phase.groups) if (movement.from === road.id) movement.from = id;
-          for (const crossing of phase.walk ?? [])
-            if (crossing.roadId === road.id && crossing.end === 'end') crossing.roadId = id;
-        }
       city.roads[id] = next;
       publicRoads.push(next);
       const original = [...replacements].find(([, ids]) => ids.includes(road.id))?.[0] ?? road.id;
@@ -195,12 +247,6 @@ export function joinLotAisles(
   });
   if (!geometry.ok) throw new Error('Mapped lot junction split produced invalid geometry');
   const joined = new Set(candidates.map(({ node }) => node.id));
-  for (let i = diagnostics.length - 1; i >= 0; i--)
-    if (
-      diagnostics[i]!.code === 'parking_entry_unreachable' &&
-      diagnostics[i]!.refs.some((id) => joined.has(id))
-    )
-      diagnostics.splice(i, 1);
   const affected = new Set(
     Object.values(city.roads)
       .filter((r) => joined.has(r.from) || joined.has(r.to))

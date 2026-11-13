@@ -31,12 +31,12 @@ test.each(['munich-donnersberger', 'sindelfingen-a81'])(
           (r) => !aisles.has(r.id) && (r.from === node.id || r.to === node.id),
         ),
     );
-    expect(restored.length).toBe(name === 'munich-donnersberger' ? 12 : 16);
+    expect(restored.length).toBe(name === 'munich-donnersberger' ? 2 : 0);
     for (const node of restored) {
       const source = node.provenance.osmIds![0]!;
       const roads = Object.values(city.roads).filter((r) => r.from === node.id || r.to === node.id);
       const publicRoads = roads.filter((r) => !aisles.has(r.id));
-      expect(publicRoads.every((r) => r.lanes.some((lane) => lane.allowed.includes('car')))).toBe(
+      expect(publicRoads.every((r) => r.roadClass === 'service' && r.lanes.length === 1)).toBe(
         true,
       );
       for (const road of roads) {

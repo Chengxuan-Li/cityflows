@@ -10,6 +10,7 @@ import type { ImportOptions, ImportResult } from '../types';
 import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
 import { importContext } from './context';
 import { addLots, restoreLotJunctions } from './lots';
+import { addMappedLotPortals } from './lot-junctions';
 import { importWalk } from './walk';
 import { assignTramForms, importRail } from './rail';
 import { importTramStops } from './tram-stops';
@@ -414,7 +415,15 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     );
 
   importTramStops(city, data, positions, bounds, parkingGraph, diagnostics);
-  restoreLotJunctions(city, data, positions, bounds, diagnostics, parkingGraph);
+  const portalGeometry = restoreLotJunctions(
+    city,
+    data,
+    positions,
+    bounds,
+    diagnostics,
+    parkingGraph,
+  );
+  addMappedLotPortals(city, data, diagnostics, portalGeometry ?? parkingGraph);
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)
