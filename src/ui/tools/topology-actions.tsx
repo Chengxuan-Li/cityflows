@@ -1,6 +1,7 @@
 import { editTopology, nearestPointOnLine } from '../../editor/commands/topology';
 import { polylineLength } from '../../geo/polyline';
 import type { Command, Road } from '../../schema';
+import { streetDeletion } from '../commands';
 import { useAppStore } from '../store';
 
 export function StreetTopologyActions({ road }: { road: Road }) {
@@ -10,16 +11,7 @@ export function StreetTopologyActions({ road }: { road: Road }) {
   const inside = atM > 1 && atM < polylineLength(road.centerline) - 1;
   function remove() {
     const { session, commit } = useAppStore.getState();
-    if (!session) return;
-    const roads = Object.values(session.project.city.roads).filter(
-      (r) =>
-        r.id === road.id || (road.streetGroupId !== null && r.streetGroupId === road.streetGroupId),
-    );
-    void commit({
-      kind: 'batch',
-      label: 'Delete street',
-      commands: roads.map((r) => ({ kind: 'deleteRoad', roadId: r.id })),
-    });
+    if (session) void commit(streetDeletion(session.project.city, [road.id]));
   }
   return (
     <div className="controls topology-actions">

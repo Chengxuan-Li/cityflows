@@ -8,6 +8,8 @@ import { BatchInspector } from './inspector/batch';
 import { VehicleInspector } from './inspector/vehicle';
 import { WalkerInspector } from './inspector/walker';
 import { PersonInspector } from './inspector/person';
+import { CommandMenu, ShortcutSheet } from './command-menu';
+import { installShortcuts } from './commands';
 import { CloseButton, ResizeHandle } from './controls';
 import { MapView } from './map-view';
 import { Onboarding, ShowHints } from './onboarding';
@@ -152,14 +154,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useStoredWidth('cityflows.sidebarWidth', 272);
   const [inspectorWidth, setInspectorWidth] = useStoredWidth('cityflows.inspectorWidth', 280);
 
-  useEffect(() => {
-    function clear(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !document.querySelector('dialog[open], :popover-open'))
-        useAppStore.getState().select(null);
-    }
-    window.addEventListener('keydown', clear);
-    return () => window.removeEventListener('keydown', clear);
-  }, []);
+  useEffect(installShortcuts, []);
 
   return (
     <div
@@ -237,6 +232,8 @@ export function App() {
       )}
       <StatusBar />
       <Onboarding />
+      <CommandMenu />
+      <ShortcutSheet />
     </div>
   );
 }

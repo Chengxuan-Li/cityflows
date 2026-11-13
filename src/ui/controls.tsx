@@ -10,17 +10,26 @@ import {
   type ReactNode,
 } from 'react';
 import { Icon, type IconName } from './icons';
+import { labels, withShortcut, type CommandId } from './shortcuts';
 
-/** A borderless toolbar button: an icon or a short label, its tooltip below it on hover or focus. */
+/** A borderless toolbar button: an icon or a short label, its tooltip below it on hover or focus.
+ *  `command` adds the action's first key to the tooltip. */
 export function ToolbarButton({
   icon,
   label,
-  tooltip,
+  tooltip: text,
+  command,
   children,
   className,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: IconName; label: string; tooltip?: string }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  icon?: IconName;
+  label: string;
+  tooltip?: string;
+  command?: CommandId;
+}) {
   const id = useId();
+  const tooltip = command && labels(command).length ? withShortcut(text ?? label, command) : text;
   return (
     <span className="tooltip-anchor">
       <button
@@ -45,10 +54,19 @@ export type ToolbarAction = ButtonHTMLAttributes<HTMLButtonElement> & {
   icon: IconName;
   label: string;
   tooltip?: string;
+  command?: CommandId;
 };
 
-/** A toolbar action inside the overflow menu: its glyph and its name as text. */
-export function MenuItem({ icon, label, tooltip, className, onClick, ...props }: ToolbarAction) {
+/** A toolbar action inside the overflow menu: its glyph and its name as text, its key at the end. */
+export function MenuItem({
+  icon,
+  label,
+  tooltip,
+  command,
+  className,
+  onClick,
+  ...props
+}: ToolbarAction) {
   return (
     <button
       {...props}
@@ -61,6 +79,7 @@ export function MenuItem({ icon, label, tooltip, className, onClick, ...props }:
     >
       <Icon name={icon} />
       {label}
+      {command && labels(command).length > 0 && <kbd aria-hidden="true">{labels(command)[0]}</kbd>}
     </button>
   );
 }
