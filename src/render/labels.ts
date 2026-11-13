@@ -2,6 +2,7 @@ import { cumulativeLengths, distance, pointAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import { cityGrades } from './grades';
+import { style as mapStyle } from './style';
 import type { CityGeometry } from './types';
 
 /**
@@ -62,6 +63,8 @@ export interface PointCandidate extends Common {
   maxZoom: number;
   /** For an unnamed place: the size of its outline, which the text must fit inside. */
   areaM?: { width: number; height: number };
+  /** For a place drawn as a marker: the text sits under it, clear of the marker's radius. */
+  markerM?: number;
 }
 export type LabelCandidate = StreetCandidate | PointCandidate;
 
@@ -84,9 +87,9 @@ export interface PlacedLabel {
 
 export const labelRules = {
   /** A street is labelled at its middle and every 400 m from it; gaps fill from anchors at 200,
-   * 100, 50 and 25 m (levels 1 to 4) where the labels of one street stay `repeat(zoom)` apart:
-   * 300 m up to 2 px/m (450 px on screen at most), 600 px on screen closer in. Twin carriageways
-   * get one label. */
+   * 100, 50 and 25 m (levels 1 to 4) where the labels of one street stay `repeat(zoom)` metres
+   * apart: max(450 px, min(300 m, 600 px)), so 300 m or more up to 2 px/m and 600 px on screen
+   * closer in. Twin carriageways get one label. */
   repeatM: 400,
   maxLevel: 4,
   repeat: (zoom: number) => Math.max(450 / zoom, Math.min(300, 600 / zoom)),
@@ -106,9 +109,9 @@ export const labelRules = {
   pointFade: 1.3,
   /** Pieces of one street join where their ends meet within this many metres and turn less. */
   joinM: 1.5,
+  joinTurn: Math.PI / 4,
   /** A street label moves up to this far along its street to clear a junction surface. */
   nudgeM: 25,
-  joinTurn: Math.PI / 4,
 };
 
 const tiers = { station: 0, major: 1, stop: 2, place: 3, minor: 4, area: 5 } as const;
@@ -309,15 +312,14 @@ export function labelCandidates(city: CompiledCity, source: CityGeometry): Label
       ...(generic && box
         ? { areaM: { width: box.maxX - box.minX, height: box.maxY - box.minY } }
         : {}),
+      ...(box ? {} : { markerM: mapStyle.pointRadiusM }),
     });
   }
   const rail = city.rail;
   for (const stop of rail?.tramStops ?? []) {
     if (stop.layer < 0) continue;
-    const platform =
-      stop.platform?.kind === 'mapped'
-        ? rail!.platforms.find((p) => p.id === (stop.platform as { platform: string }).platform)
-        : undefined;
+    const mapped = stop.platform?.kind === 'mapped' ? stop.platform.platform : null;
+    const platform = mapped ? rail!.platforms.find((p) => p.id === mapped) : undefined;
     const pos = platform
       ? platform.shape.kind === 'point'
         ? platform.shape.pos
@@ -493,21 +495,25 @@ export function placeLabels(
       )
         continue;
       const left = c.pos.x - m.width / 2 / zoom;
+      // Markers are at least 8 px in radius (layers/places.ts).
+      const y =
+        c.pos.y +
+        (c.markerM === undefined ? 0 : (Math.max(c.markerM * zoom, 8) + 2 + m.height / 2) / zoom);
       glyphs = m.glyphs.map((char, i) => ({
         char,
         x: left + (m.offsets[i]! + m.widths[i]! / 2) / zoom,
-        y: c.pos.y,
+        y,
         rotation: 0,
       }));
       alpha = Math.min(1, (zoom / c.minZoom - 1) / (labelRules.pointFade - 1));
       const x = c.pos.x * zoom,
-        y = c.pos.y * zoom;
+        sy = y * zoom;
       boxes = [
         [
           x - m.width / 2 - pad,
-          y - m.height / 2 - pad,
+          sy - m.height / 2 - pad,
           x + m.width / 2 + pad,
-          y + m.height / 2 + pad,
+          sy + m.height / 2 + pad,
         ],
       ];
     }
