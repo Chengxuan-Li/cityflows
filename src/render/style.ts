@@ -361,6 +361,8 @@ export const style = {
     flatRoof: 0xd6d5d1,
     window: 0xa2b3c1,
     windowFadeM: [150, 600] as const,
+    // TASK-163: lit windows stay distinct further out than the daytime panes.
+    litWindowFadeM: [700, 1600] as const,
   },
   vegetation: { canopy: [0xb6d8a6, 0xc1deb2, 0xaad19a], trunk: 0x9c8f7a },
   /** TASK-135: tram track forms, apart from the railway palette in `rail-geometry.ts`. */

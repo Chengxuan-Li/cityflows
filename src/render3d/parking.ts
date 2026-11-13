@@ -34,6 +34,8 @@ export class Parking3D {
     );
     this.mesh.renderOrder = 8;
     this.ring.renderOrder = 9;
+    // TASK-163: map overlays keep their colours after dark.
+    (this.mesh.material as MeshBasicMaterial).userData.lit = this.ring.material.userData.lit = true;
     this.ring.visible = false;
     this.group.add(this.mesh, this.ring);
     this.setCounts(null);

@@ -23,6 +23,7 @@ import {
   type Curb,
   type placeStreet,
 } from '../render/street';
+import { lampColors } from '../render/lighting';
 import { heightAt, roadStation, type cityHeights } from './heights';
 
 // Bound both final 3D edges against each replacement chord; keep every gap run separate.
@@ -208,11 +209,13 @@ export function buildStreet(
   const transform = new Object3D();
   const material = new MeshLambertMaterial({ color: 0x64726d });
   const poles = new InstancedMesh(new BoxGeometry(0.13, 1, 0.13), material, street.lamps.length);
+  // TASK-163: the head's emissive intensity is the scene's artificial light (0 by day).
   const heads = new InstancedMesh(
     new BoxGeometry(0.85, 0.16, 0.32).translate(0.35, 0, 0),
-    new MeshLambertMaterial({ color: 0xe7dcc0 }),
+    new MeshLambertMaterial({ color: 0xe7dcc0, emissive: lampColors.street, emissiveIntensity: 0 }),
     street.lamps.length,
   );
+  const light: { base: number }[] = [];
   street.lamps.forEach((lamp, i) => {
     const road = lamp.road === undefined ? undefined : city.roads[lamp.road]!;
     const profile = road ? heights.roads[road.idx]! : undefined;
@@ -229,8 +232,33 @@ export function buildStreet(
     transform.scale.setScalar(1);
     transform.updateMatrix();
     heads.setMatrixAt(i, transform.matrix);
+    light.push({ base });
   });
   lamps.add(poles, heads);
+  /** Where each lamp's light falls: a pool on the road beside it and a halo at its head. */
+  const lampLights = street.lamps.map((lamp, i) => {
+    // Generated heads reach over the road; mapped lamps carry no heading, so their pool centres
+    // on the post.
+    const reach = lamp.source === 'generated' ? 1 : 0;
+    const c = Math.cos(lamp.heading) * reach,
+      s = Math.sin(lamp.heading) * reach;
+    return {
+      pool: {
+        x: lamp.pos.x + 2.5 * c,
+        y: lamp.pos.y + 2.5 * s,
+        z: light[i]!.base + 0.05,
+        radiusM: Math.max(7, lamp.heightM * 1.3),
+        color: lampColors.street,
+      },
+      halo: {
+        x: lamp.pos.x + 0.6 * c,
+        y: lamp.pos.y + 0.6 * s,
+        z: light[i]!.base + lamp.heightM - 0.15,
+        radiusM: 1.3,
+        color: lampColors.street,
+      },
+    };
+  });
   const posts = new InstancedMesh(
     new BoxGeometry(0.07, 2.8, 0.07),
     material.clone(),
@@ -273,5 +301,5 @@ export function buildStreet(
     new MeshLambertMaterial({ color: 0xc9c9bb }),
   );
   group.add(lamps, signs, curbs);
-  return { group, lamps, signs, curbs };
+  return { group, lamps, heads, signs, curbs, lampLights };
 }

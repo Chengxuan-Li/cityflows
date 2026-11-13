@@ -161,6 +161,11 @@ export class RailPaintCache {
       .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
       .multiply(this.source.matrixWorld);
     const version = (this.source.geometry.getAttribute('color') as BufferAttribute).version;
+    // TASK-163: the scene shades the unlit paint after dark; the cached copy follows.
+    if (!this.copy.material.color.equals(this.source.material.color)) {
+      this.copy.material.color.copy(this.source.material.color);
+      this.initialized = false;
+    }
     if (
       !this.initialized ||
       !railViewMatches(this.view, this.nextView, this.bounds, this.size) ||

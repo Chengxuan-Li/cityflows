@@ -1287,8 +1287,13 @@ input[type='number']::-webkit-inner-spin-button {
   min-height: 24px;
 }
 
-.layers-sheet label select {
+.layers-sheet label select,
+.layers-sheet label input[type='range'] {
   margin-left: auto;
+}
+
+.layers-sheet label input[type='range'] {
+  width: 120px;
 }
 
 .layers-sheet p {

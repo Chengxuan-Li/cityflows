@@ -18,6 +18,7 @@ import type { MapTool } from './tools/pointer-tool';
 import { createPlacePaintTool, type PaintKind } from './tools/place-paint';
 import { PlaceOptions } from './tools/place-options';
 import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
+import { useLighting } from './lighting-store';
 
 function snapshotForMap(
   snapshot: VehicleSnapshot,
@@ -601,6 +602,10 @@ export function MapView() {
             getState().run?.stale ? null : session.loadedCompiled,
           );
         }
+        // TASK-163: view-only lighting, from its own per-viewer store.
+        const { lighting } = useLighting.getState();
+        if (active3D) three!.setLighting(lighting, getState().run?.timeS ?? 0, layers.shadows);
+        else view.setLighting(lighting, getState().run?.timeS ?? 0);
         if (selection !== drawnSelection) {
           view.setSelection(selection);
           drawnSelection = selection;

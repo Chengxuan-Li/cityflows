@@ -91,6 +91,8 @@ export function buildWalkSignals(city: CompiledCity, heights: ReturnType<typeof 
     Math.max(1, marks.length),
   );
   posts.count = heads.count = marks.length;
+  // TASK-163: signal lamps are light sources; they keep their colour after dark.
+  heads.material.userData.lit = true;
   const transform = new Object3D();
   marks.forEach(({ pos, node }, i) => {
     const layer = city.walk.links.find((l) => l.crossing?.node === node)?.layer ?? 0;
