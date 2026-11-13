@@ -1402,22 +1402,34 @@ function createRun({
             vehicles.speed[id] = 0;
             accounting.complete(id, time());
           },
-          exit(id, connector) {
+          exit(id, connector, joinM) {
+            // TASK-150: granted from the hold, with the gap checked where the merge joins the
+            // lane. The car stands there at speed 0, a lane occupant, while its body merges. Its
+            // route starts at the connector, and a destination between the two (its own lot,
+            // entered again) is where it joins instead: it has no way back from past it.
             const c = compiled.connectors[connector]!;
-            if (!hasSpawnGap(c, id) || !connectors.releaseLot(c, time())) return false;
+            if (!hasSpawnGap({ ...c, positionM: joinM }, id) || !connectors.releaseLot(c, time()))
+              return false;
             if (!resumeParkingRoute(id, c, time())) {
               vehicles.lane[id] = c.lane;
               vehicles.position[id] = c.positionM;
               accounting.fail(id, 'no_parking');
               return true;
             }
-            vehicles.insert(id, c.lane, c.positionM);
+            const destination = compiled.connectors[vehicles.destination[id]!];
+            const positionM =
+              destination?.lane === c.lane &&
+              destination.positionM >= c.positionM &&
+              destination.positionM < joinM
+                ? destination.positionM
+                : joinM;
+            vehicles.insert(id, c.lane, positionM);
             vehicles.speed[id] = 0;
             vehicles.jamS[id] = 0;
             accounting.transition(id, DRIVING);
             roadEnteredS[id] = time();
-            roadEnteredM[id] = c.positionM;
-            planLane(id, c.lane, c.positionM);
+            roadEnteredM[id] = positionM;
+            planLane(id, c.lane, positionM);
             return true;
           },
           resume(id, connector) {
