@@ -20,7 +20,7 @@ import { addGroupSignal, addSignal, assignSignalLanes, markRoundaboutEntries } f
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
 import { addOsmGarages } from './parking';
-import { addGateways, addOsmPlaces, connectCarExits } from './places';
+import { addGateways, addOsmPlaces, connectCarExits, gatewayDiagnostics } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
 import { smoothRoads } from './smooth';
@@ -474,5 +474,6 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     );
   }
   diagnostics.push(...final.diagnostics);
+  if (final.ok) diagnostics.push(...gatewayDiagnostics(final.compiled));
   return final.ok ? { ok: true, city, diagnostics } : { ok: false, diagnostics };
 }

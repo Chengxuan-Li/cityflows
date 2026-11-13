@@ -22,7 +22,12 @@ for (const [name, city, endS] of [
   scenario.endS = endS;
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const trips = scheduleTrips(city, generatePopulation(city, scenario.demand), scenario);
+  const trips = scheduleTrips(
+    city,
+    generatePopulation(city, scenario.demand),
+    scenario,
+    result.compiled,
+  );
   const engine = createEngine();
   engine.load({ compiled: result.compiled, trips, scenario });
   const steps = (endS - scenario.startS) * 10;

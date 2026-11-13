@@ -203,7 +203,7 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
   // Fix a real episode at the required 08:00 camera, without changing any geometry.
   for (let attempt = 0; attempt < 20; attempt++) {
     const engine = createEngine(),
-      trips = scheduleTrips(source, population, scenario);
+      trips = scheduleTrips(source, population, scenario, net);
     engine.load({ compiled: net, trips, scenario });
     engine.step((targetTime - scenario.startS) * 10);
     const s = engine.snapshot();
