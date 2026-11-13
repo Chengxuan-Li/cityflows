@@ -147,7 +147,12 @@ test.each(['munich-donnersberger', 'sindelfingen-a81'])(
         dwellS = 0;
       let space: number | null = null;
       for (let second = 0; second < 1800; second++) {
-        engine.step(10);
+        // TASK-150: a lot aisle mapped on a road is a public lane, so a drive-out can hold
+        // before it within a second of leaving the bay (pk:2052) and join it there.
+        for (let step = 0; step < 10; step++) {
+          engine.step();
+          droveOut ||= engine.inspect(2)?.parkingPhase === 'drive_out';
+        }
         const arrival = engine.inspect(1),
           departure = engine.inspect(2);
         if (arrival?.state === 'in_lot') {
