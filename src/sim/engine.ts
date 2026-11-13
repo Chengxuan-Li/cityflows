@@ -138,7 +138,7 @@ function createRun({
     acceleration: (id) => reservationAcceleration[id]!,
   });
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
-  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant);
+  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, parking.crossingBlocks);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -369,6 +369,7 @@ function createRun({
     const { lane, positionM } = connector;
     const gap = Math.max(spawnMinGapM, idm.minGapM);
     const spacing = lengthM + gap;
+    if (parking.crossingBlocks(lane, positionM - spacing, positionM + gap)) return false;
     const maxSpacing = maxVehicleLength + gap;
     if (positionM < spacing) {
       for (const idx of compiled.lanes[lane]!.in) {
@@ -1204,7 +1205,7 @@ function createRun({
       onDecision: intersectionObserver,
       acceleration: (id) => reservationAcceleration[id]!,
     });
-    laneChanges = createLaneChanges(next, vehicles, params, hasGrant);
+    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, parking.crossingBlocks);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );

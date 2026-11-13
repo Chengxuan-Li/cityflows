@@ -661,8 +661,8 @@ export function createParking(
     number,
     { path: MotionPath; holdM: number; joinM: number; crossings: LaneCrossing[] }
   >();
-  /** TASK-157: by lane, the near edges of the spans merging lot cars are crossing. */
-  const crossing = new Map<number, number[]>();
+  /** TASK-157: by lane, the spans merging lot cars are crossing. */
+  const crossing = new Map<number, { fromM: number; toM: number }[]>();
   const motionById = Array<ParkingMotion | undefined>(trips.length).fill(undefined);
   const setMotion = (id: number, m: ParkingMotion) => {
     motions.set(id, m);
@@ -1222,8 +1222,7 @@ export function createParking(
     for (const m of motions.values())
       if (m.phase === 'merge')
         for (const c of m.crossings)
-          if (m.progressM < c.untilM)
-            crossing.set(c.lane, [...(crossing.get(c.lane) ?? []), c.fromM]);
+          if (m.progressM < c.untilM) crossing.set(c.lane, [...(crossing.get(c.lane) ?? []), c]);
   }
   return {
     location(id: number, atOrigin = false) {
@@ -1278,9 +1277,13 @@ export function createParking(
      * edge of the crossing span, a standing obstacle until the body has left the lane. */
     crossingStop(lane: number, fromM: number) {
       let stop = Infinity;
-      for (const at of crossing.get(lane) ?? []) if (at >= fromM) stop = Math.min(stop, at);
+      for (const span of crossing.get(lane) ?? [])
+        if (span.fromM >= fromM) stop = Math.min(stop, span.fromM);
       return stop;
     },
+    /** TASK-157: whether a lot car is crossing a lane between two of its stations. */
+    crossingBlocks: (lane: number, fromM: number, toM: number) =>
+      crossing.get(lane)?.some((span) => span.fromM < toM && span.toM > fromM) ?? false,
     startsInLot: isLotSpace,
     canStartLot(id: number, connector: number) {
       const slot = spaces[originSpace(id)]!;
