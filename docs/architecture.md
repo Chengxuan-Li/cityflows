@@ -589,6 +589,12 @@ reach the public network from there (parking egress, access zones included). On 
 aisle whose near lane cannot, the opposite lane of the same physical aisle within 5 m is used;
 a one-way lane is never reversed. Departure connectors are appended after every other
 connector, have no walk anchor and belong to no entry list, so admission is unchanged.
+TASK-156: a bay whose access point lies in the band of one of its lot's aisle lanes that carries
+none of its exits (Munich pk:2050, beside the dead-end half of a two-way aisle) gets the same
+departure on that lane or the same aisle's opposite lane, only where a lane car from there
+passes every one of the bay's exits by legal movements on the lot's aisle lanes and the exit's
+own lane. A bay with an exit no lane car reaches (pk:2056's mapped portal onto r:669) keeps its
+lot drive-out.
 
 TASK-149 adds optional `ParkingFacility.mappedPortals` for source-proven accesses on an
 unsplit approach street. `entries` retains its meaning of nodes actually shared by the
@@ -1434,7 +1440,12 @@ reach their access point during the leave duration.
 Curve progress is eased, and snapshots carry the moving body throughout the handover.
 
 A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
-and becomes `in_lot` (counted among driving trips). It follows its local shortest path at
+and becomes `in_lot` (counted among driving trips). TASK-156: while its body is inside the band
+of one of its lot's aisle lanes it is that lane's occupant at the farthest station its body
+reaches there, so lane cars on the aisle follow it and departures' gap checks see it; it keeps
+`minGapM` clear of lane cars on the aisle lanes and their joining movements, and enters a band
+only with the following gap ahead and the braking distance of the car behind. An entry on an
+aisle lane keeps the arriving car in that lane. It follows its local shortest path at
 `lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
 across it; tied approaches use distance, then id. Narrow local paths admit one entry cohort of
 arrivals at a time to prevent opposing cars deadlocking. TASK-153: departures, including one

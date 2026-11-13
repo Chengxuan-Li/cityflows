@@ -829,10 +829,11 @@ export function createParking(
         return Math.max(...pa) > Math.min(...pb) && Math.max(...pb) > Math.min(...pa);
       }),
     );
-  /** TASK-156: a lot arrival at `pose` would come within `minGapM` ahead of, or touch, a lane
-   * vehicle on its lot's aisle lanes (a kerbside-style departure counts where it is drawn). */
-  function aisleTraffic(id: number, m: ParkingMotion, pose: ParkingPose) {
-    const mine = corners(pose, length(id), width(id), params.idm.minGapM);
+  /** TASK-156: a lot arrival stepping `stepM` to `pose` would move into a lane vehicle on its
+   * lot's aisle lanes, or within `minGapM` of one ahead (a kerbside-style departure counts where
+   * it is drawn). Cars behind or beside it do not hold it. */
+  function aisleTraffic(id: number, m: ParkingMotion, pose: ParkingPose, stepM: number) {
+    const mine = corners(pose, stepM, width(id), params.idm.minGapM);
     for (const segment of aisleSegments[spaces[m.slot]!.parking]!.segments)
       for (let other = vehicles.first(segment); other !== -1; other = vehicles.next[other]!) {
         const om = motionById[other];
@@ -1208,7 +1209,7 @@ export function createParking(
         // only where it has room to be that lane's occupant.
         const band = aisleBand(id, m, pose);
         if (
-          aisleTraffic(id, m, pose) ||
+          aisleTraffic(id, m, pose, target - m.progressM) ||
           (band &&
             !(m.laneHeld && band.lane === m.lane) &&
             !laneRoom(id, band.lane, band.positionM))
