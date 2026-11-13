@@ -332,6 +332,7 @@ export function createLaneChanges(
     const oldFollower = vehicles.next[id]!;
     let bestLane = -1;
     let bestIncentive = mobil.thresholdMps2;
+    let sourceFuture = -1;
     for (let side = 0; side < 2; side++) {
       const target = side === 0 ? source.left : source.right;
       const lane = compiled.lanes[target];
@@ -392,8 +393,8 @@ export function createLaneChanges(
         acceleration(id, source, oldLeader) +
         mobil.politeness * (oldFollowerGain + newFollowerGain);
       if (incentive > bestIncentive) {
-        if (futureChanges(id, target, positionM) > futureChanges(id, source.idx, positionM))
-          continue;
+        if (sourceFuture === -1) sourceFuture = futureChanges(id, source.idx, positionM);
+        if (futureChanges(id, target, positionM) > sourceFuture) continue;
         bestIncentive = incentive;
         bestLane = target;
       }

@@ -807,15 +807,16 @@ function createRun({
       if (!lane) break;
       const id = vehicles.first(segment);
       const planned = compiled.movements[vehicles.movement[id]!];
-      if (
-        vehicles.state[id] !== DRIVING ||
-        intersections.groupPaths[id] ||
-        !planned ||
-        vehicles.speed[id]! >= 0.1 ||
-        lane.stopM - vehicles.position[id]! > params.intersection.decisionDistanceM ||
-        laneChanges.holding[id] ||
-        !intersections.blockedExit(id, planned)
-      ) {
+      const blocked =
+        vehicles.state[id] === DRIVING &&
+        !intersections.groupPaths[id] &&
+        planned &&
+        vehicles.speed[id]! < 0.1 &&
+        lane.stopM - vehicles.position[id]! <= params.intersection.decisionDistanceM &&
+        !laneChanges.holding[id]
+          ? intersections.blockedExit(id, planned)
+          : null;
+      if (!blocked) {
         vehicles.headDetourS[id] = 0;
         sharedFollower[id] = -1;
         continue;
@@ -834,7 +835,7 @@ function createRun({
           vehicles.speed[follower] === 0 &&
           vehicles.position[id]! - vehicles.position[follower]! <=
             profile(id).lengthM + idm.minGapM + 0.1 &&
-          intersections.blockedExit(id, planned) === 'exit-full' &&
+          blocked === 'exit-full' &&
           next !== undefined &&
           !intersections.red(next.idx) &&
           exit !== -1 &&
