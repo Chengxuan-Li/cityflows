@@ -53,7 +53,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           ]
         : [
             '9f2bc7ae9ca77a4f306668c0d50bd740bb9903582d8084f28d31c466a1f164e6',
-            '0e3784fb62ab22d8189d8faa7b114de51cd51534e4184563d3ffcf49d9286948',
+            // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
+            '986083590a892c4c6abcd6438f65e446421cbc9933cd6df5b6d3c7e5c40ca12d',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

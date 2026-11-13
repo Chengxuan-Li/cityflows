@@ -169,7 +169,8 @@ const baselines = {
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
   'munich-donnersberger': 'd1f7117b107d7b0bb88a349d90cb6e5080ff19481d73cbb003a7fa1d9cd6f18f',
-  'sindelfingen-a81': '3fcde22aefd60258dbc441d5b6618fe92cbf64c1506acc26321a72cd6bf2cc7a',
+  // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
+  'sindelfingen-a81': '52ff58a0d7eb61eff5f22d557083fc28e7f5f59e16ad3f1956d9105950a2b2ad',
 };
 const lampCounts = {
   grid: [0, 0],

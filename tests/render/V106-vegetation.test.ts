@@ -50,7 +50,8 @@ const baselines = {
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
   'munich-donnersberger': 'a79309292e5c869ce93938adde11d988a33d5df5979edd96e7ceb72228dcc492',
-  'sindelfingen-a81': '0e3784fb62ab22d8189d8faa7b114de51cd51534e4184563d3ffcf49d9286948',
+  // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
+  'sindelfingen-a81': '986083590a892c4c6abcd6438f65e446421cbc9933cd6df5b6d3c7e5c40ca12d',
 };
 
 unitTest(
