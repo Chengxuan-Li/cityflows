@@ -185,6 +185,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | queued (after TASK-153, beside TASK-156) |
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | conditional (after TASK-154) |
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | queued (after TASK-154) |
+| [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -1145,6 +1146,7 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-157 | Claude Code, the lead's subagent | Opus 5.5 | high | 5357 (production 5457) |
 | TASK-158 | Claude Code, the lead's subagent | Opus 5.5 | high | 5358 (production 5458) |
 | TASK-159 | Claude Code, the lead's subagent | Opus 5.5 | high | 5359 (production 5459) |
+| TASK-160 | Claude Code, the lead's subagent | Opus 5.5 | high | 5360 (production 5460) |
 
 | Item | What | Today | Depends on |
 | --- | --- | --- | --- |
@@ -3608,6 +3610,12 @@ the exit lane only, so a car bound for the far lane of a two-way street waits in
 aisle lanes no lane vehicle reaches (Munich 68, Sindelfingen 232).
 
 ## Owner decisions log
+
+- 2026-11-13 (owner): restyle CityFlows as a clean Mac app in the Sonoma / Ventura flat manner
+  (not Liquid Glass): Arimo throughout, macOS system blue accent, a docked window (unified
+  toolbar, left sidebar, right inspector, status bar), and both the interface and the map palette.
+  This replaces the Mini Motorways design direction (2026-11-03). TASK-160 runs in its own branch
+  with screenshots to the owner at each phase.
 
 - 2026-11-13 (owner): queue the follow-up plan, unsupervised. TASK-155 now; TASK-156 and TASK-157
   after TASK-153; after TASK-154: PR #1, TASK-129 (TASK-158 if it still fails), TASK-113 once
