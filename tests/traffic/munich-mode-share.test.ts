@@ -10,8 +10,13 @@ import { createEngine } from '../../src/sim/engine';
 // TASK-113 guard (owner, 2026-11-13): the traffic gate measures car traffic with mode choice off;
 // this Munich morning at 0.15, seed 1, runs the default scenario with it on. Not in
 // `test:traffic:light` (a second whole Munich run); the full traffic tier runs it.
-// Seeds 1 to 3 on main 5ee9467: local walk share 70.6% / 71.2% / 70.7%; vehicle trips completed
-// 2,730 / 2,701 / 2,719, 0 gridlocked, 0 stalled heads, 0 parking failures in each.
+// TASK-173: each tour chooses as it departs, from that minute's link costs and the car's actual
+// space, and the census counts the trips of tours started by 10:00. Seeds 1 to 3: local walk share
+// 78.5% / 79.2% / 78.9% of 7,021 / 7,035 / 7,035 trips; vehicle trips completed 2,557 / 2,527 /
+// 2,539, 0 gridlocked, 0 stalled heads, 0 parking failures in each. Main 0d7405b (choice at load)
+// on the same census: 73.6% / 74.2% / 73.8% (70.6% / 71.2% / 70.7% over the whole day's 7,315 to
+// 7,337 trips). Of seed 1's +4.9 points, link costs of the hour give +3.7 (free-flow costs at
+// departure: 74.8%), the walk from the car's actual space +1.1, parking room 0.
 
 let city: City;
 let compiled: CompiledCity;
@@ -33,12 +38,12 @@ beforeAll(() => {
 
 test('mode share: about 70% of local person trips walk, fewer the farther they go', () => {
   const { walkShareLocal, byBand, localPersonTrips } = morning.modes;
-  expect(localPersonTrips).toBeGreaterThan(7000);
-  // The seeds span 0.6 points; five points either side catches a changed model or input, not
+  expect(localPersonTrips).toBeGreaterThan(6500);
+  // The seeds span 0.7 points; five points either side catches a changed model or input, not
   // seed noise.
-  expect(walkShareLocal).toBeGreaterThan(0.65);
-  expect(walkShareLocal).toBeLessThan(0.76);
-  // Seed 1: 80% under 0.5 km, 73% to 1 km, 55% to 2 km (no local trips beyond 2 km).
+  expect(walkShareLocal).toBeGreaterThan(0.74);
+  expect(walkShareLocal).toBeLessThan(0.84);
+  // Seed 1: 85% under 0.5 km, 81% to 1 km, 66% to 2 km (no local trips beyond 2 km).
   const shares = Object.values(byBand)
     .filter((band) => band.walk + band.car >= 100)
     .map((band) => band.walkShare);
@@ -55,8 +60,8 @@ test('mode share: car trips complete with no stalled heads and gridlock within t
     morning.failedByReason.gridlocked + morning.failedByReason.no_parking,
   );
   expect(morning.failedByReason.no_parking).toBeLessThan(0.02 * morning.localArrivals);
-  // Seeds 2,701 to 2,730: ten percent below the lowest.
-  expect(morning.completed).toBeGreaterThanOrEqual(2430);
+  // Seeds 2,527 to 2,557: ten percent below the lowest.
+  expect(morning.completed).toBeGreaterThanOrEqual(2270);
 });
 
 test('mode share: the same seed chooses the same modes and starts the same run', () => {
@@ -76,6 +81,8 @@ test('mode share: the same seed chooses the same modes and starts the same run',
     };
   };
   const first = load();
-  expect(first.modes.filter((mode) => mode === 'walk').length).toBeGreaterThan(5000);
+  // TASK-173: at 07:05 the walks are the day's trips of persons without a free car and those of
+  // tours that chose to walk by then (seed 1: 2,675).
+  expect(first.modes.filter((mode) => mode === 'walk').length).toBeGreaterThan(2000);
   expect(load()).toEqual(first);
 });

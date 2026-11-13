@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import { generatePopulation, scheduleTrips } from '../../src/demand';
 import {
-  chooseModes,
+  chooseTour,
   generalizedMinutes,
   modeDraw,
   modePreferences,
   modeProbabilities,
+  modeTours,
+  walkTrip,
   type ModeInputs,
 } from '../../src/demand/mode-choice';
 import { defaultScenario } from '../../src/fixtures/scenarios';
@@ -88,6 +90,24 @@ const inputs = (trips: readonly TripRequest[]) => (id: number) => {
   return { walkS: meters / 1.4, car: { ...car, driveS: meters / 8, distanceM: meters } };
 };
 
+/** Every tour in the choice chooses from `inputs`, as the engine does at its departure (TASK-173). */
+function chooseAll(
+  trips: readonly TripRequest[],
+  scenario: Scenario,
+  eligible: (trip: TripRequest) => boolean = () => true,
+) {
+  const chosen = trips.slice();
+  const walkProbability: (number | null)[] = trips.map(() => null);
+  for (const tour of modeTours(trips, scenario, eligible)) {
+    const choice = chooseTour(scenario, trips[tour[0]!]!, inputs(trips)(tour[0]!));
+    for (const id of tour) {
+      walkProbability[id] = choice.walkProbability;
+      if (choice.walk) chosen[id] = walkTrip(trips[id]!);
+    }
+  }
+  return { trips: chosen, walkProbability };
+}
+
 /** A person's trips as home-based tours, in departure order. */
 function tours(trips: readonly TripRequest[], person: Person) {
   const chain = trips
@@ -105,7 +125,7 @@ function tours(trips: readonly TripRequest[], person: Person) {
 describe('T79 tours', () => {
   test('a person without a free household car never drives, and the choice moves no draw', () => {
     const { scenario, trips } = townDay();
-    const { trips: chosen } = chooseModes(trips, scenario, () => true, inputs(trips));
+    const { trips: chosen } = chooseAll(trips, scenario);
     expect(chosen.some((trip) => trip.mode === 'walk' && trip.carId === undefined)).toBe(true);
     for (const [id, trip] of chosen.entries()) {
       const before = trips[id]!;
@@ -119,12 +139,7 @@ describe('T79 tours', () => {
 
   test('a tour keeps one mode: who walked out walks home, who drove out drives home', () => {
     const { scenario, persons, trips } = townDay();
-    const { trips: chosen, walkProbability } = chooseModes(
-      trips,
-      scenario,
-      () => true,
-      inputs(trips),
-    );
+    const { trips: chosen, walkProbability } = chooseAll(trips, scenario);
     let mixedDays = 0;
     for (const person of persons) {
       const days = tours(trips, person);
@@ -145,12 +160,7 @@ describe('T79 tours', () => {
 
   test('a tour with a trip that cannot walk keeps its car', () => {
     const { scenario, persons, trips } = townDay();
-    const { trips: chosen } = chooseModes(
-      trips,
-      scenario,
-      (trip) => trip.vehicleClass === 'car',
-      inputs(trips),
-    );
+    const { trips: chosen } = chooseAll(trips, scenario, (trip) => trip.vehicleClass === 'car');
     let vanTours = 0;
     for (const person of persons)
       for (const tour of tours(trips, person))
@@ -163,7 +173,7 @@ describe('T79 tours', () => {
 
   test('off, every driver drives as before', () => {
     const { scenario, trips } = townDay({ enabled: false });
-    expect(chooseModes(trips, scenario, () => true, inputs(trips)).trips).toBe(trips);
+    expect(modeTours(trips, scenario, () => true)).toEqual([]);
   });
 });
 
@@ -171,9 +181,7 @@ describe('T79 determinism', () => {
   test('the same seed chooses the same modes', () => {
     const a = townDay(),
       b = townDay();
-    expect(chooseModes(a.trips, a.scenario, () => true, inputs(a.trips)).trips).toEqual(
-      chooseModes(b.trips, b.scenario, () => true, inputs(b.trips)).trips,
-    );
+    expect(chooseAll(a.trips, a.scenario).trips).toEqual(chooseAll(b.trips, b.scenario).trips);
   });
 
   test('sliders rescale the persons’ draws and move no draw, so walking more only adds walks', () => {
@@ -192,7 +200,7 @@ describe('T79 determinism', () => {
 
     const walks = (walkPreferenceMin: number) => {
       const { scenario, trips } = townDay({ walkPreferenceMin });
-      const { trips: chosen } = chooseModes(trips, scenario, () => true, inputs(trips));
+      const { trips: chosen } = chooseAll(trips, scenario);
       return new Set(
         chosen.filter((t, id) => t.mode === 'walk' && trips[id]!.carId).map((t) => t.id),
       );
