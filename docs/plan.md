@@ -185,9 +185,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-157](tasks/TASK-157.md) | 7 | Lot exits bound for the far lane hold clear of the near lane and are granted both gaps (Munich 333, Sindelfingen 1,749) | `src/sim/parking.ts` hold/grant, `manoeuvre.ts`, engine exit | 150, 153 | census, regression, Munich gate, shots | done 2026-11-13 |
 | [TASK-158](tasks/TASK-158.md) | 9 | TASK-129's extra gridlock (44 against 39), only if it persists after TASK-154 | `src/demand` households, initial stock | 129, 154 | Munich gate with TASK-129 | not needed: TASK-129 passed after TASK-154 |
 | [TASK-159](tasks/TASK-159.md) | 10 | TASK-128 riders' car cost (-11%, -16%, -4%): re-measure after B56, then repair | `src/demand/stations.ts`, walker crossings in `src/sim` | 128, 154 | Munich gate with riders, T65, T53 | done 2026-11-13: no repair needed; TASK-128 merged |
-| [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | in progress, phase 1 (Claude Code subagent) |
+| [TASK-160](tasks/TASK-160.md) | UI | macOS-style interface and map: Sonoma/Ventura flat, Arimo, system blue, docked window (toolbar, sidebars, inspector, status bar), neutral map palette in 2D and 3D | `src/ui/**`, `src/render/style.ts` and colours, `src/render3d` colours, fonts, `AGENTS.md` design | 050 | phase shots to the owner, check, e2e, T62/T64 frame gates, contrast | done 2026-11-13 (merged together) |
 | [TASK-161](tasks/TASK-161.md) | 7 | Junction-group signal programs serve every approach (group 10 gives `r:961`'s right turn 15 s per 120 s; single loop visits up to 1,803 s) | `src/network/groups.ts`, `signals.ts`, `signal-program.ts` | 131, 154 | drain criterion (b) for `r:961`, group program census, Munich gate | done 2026-11-13 |
-| [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
+| [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | done 2026-11-13 (merged together) |
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
 | [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | done 2026-11-13 (pk:1475 left) |
 | [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | done 2026-11-13 |
@@ -3872,6 +3872,28 @@ baseline reset 2: gate (choice off) 5,310 / 0 / 0, mode-share guard 2,730 / 0 / 
 and demand unit tests (466), lint, format and build pass. Open: cars stopping across approach-side
 crosswalks (about 2,400 events at seed 1, zebras within a car length of the stop position), taken
 up by TASK-169.
+
+TASK-160 and TASK-162 (Claude Code subagents, Opus 5.5 high, 2026-11-13; merged): the Mac-style
+interface and map. TASK-160 (four phases with owner previews): Arimo bundled (OFL 1.1, 400 and 700,
+latin and latin-ext), Sonoma/Ventura flat tokens, the Mac control set (`src/ui/controls.tsx`, glyphs
+in `icons.tsx`), a docked window (toolbar with the tool segmented control and run controls, left
+sidebar with collapsible sections for tool options, Layers, Chart, Demand, Compare, Validation and
+3D view, right inspector, status bar), sheets for New, Import and Export, popovers for vehicle-class
+access and signal phase road pairs, resizable sidebars (220 to 440 px, remembered per viewer), a
+toolbar that never wraps (a "»" overflow, the tool control a pop-up under 660 px), narrow and phone
+layouts, focus rings, `AGENTS.md` "Design direction" rewritten for the Mac style, TASK-113's mode
+choice moved into the Demand and Chart sections. 1,914 of 1,916 rendered glyphs come from bundled
+Arimo, so CI's Linux layout no longer depends on system fonts; every text pair meets WCAG AA.
+TASK-162 (map, in parallel, merged into TASK-160's branch): a plain warm-gray canvas with OSM tiles
+off by default, softer buildings and land use, quiet place tints, vehicles in eight system colours
+by destination with darker rims, Arimo labels, softer 3D shadows; roads, markings, rail and street
+furniture keep real-world colours (owner rollback), with the neutral asphalt `#ACB0B3` (owner).
+Lead merge onto main with TASK-165: type-check, lint, format, build, unit (1,356) and light e2e (39)
+pass. The full e2e on the branch: 105 pass, one fixed, the rest load timeouts or failing as on main.
+Frame gates could not be measured on a quiet machine (both trees failed alike under load, with no
+per-frame work added); the lead merged under the owner's merge-when-green decision and defers the
+quiet-machine frame check to the first quiet window, at the latest TASK-176, logged for the owner.
+Follow-up: a half-height inspector sheet on phones.
 
 ## Owner decisions log
 
