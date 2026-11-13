@@ -33,6 +33,7 @@ import {
   type CrossingSource,
 } from '../network/crossings';
 import { SETBACK_CAP_M, junctionCorners } from '../network/junctions';
+import { keepClearZones } from '../network/keep-clear';
 import {
   markingTheme as defaultTheme,
   type MarkingRole,
@@ -129,6 +130,94 @@ export function busLabels(city: CompiledCity, road: CRoad, source?: CrossingSour
     }
   }
   return labels;
+}
+// Stencil glyphs for KEEP CLEAR, as `busGlyphs`.
+const keepGlyphs: Record<string, string[]> = {
+  K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
+  C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
+  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+  A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
+  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+};
+/** TASK-169: the keep-clear markings of a road's mouth zones (`keepClearZones`), one per lane
+ * and zone: the German theme's hatched box (a border with diagonal stripes), the US and UK
+ * themes' KEEP CLEAR text, read in travel order, KEEP first. */
+export function keepClearMarkings(
+  city: CompiledCity,
+  road: CRoad,
+  markingTheme: MarkingTheme = defaultTheme,
+): MarkingShape[] {
+  const shapes: MarkingShape[] = [];
+  const zones = keepClearZones(city);
+  for (const index of road.lanes) {
+    const lane = city.lanes[index]!;
+    for (const zone of zones[index]!) {
+      if (zone.kind !== 'mouth' || zone.toM - zone.fromM < 3) continue;
+      const half = lane.widthM / 2 - 0.15;
+      // Lane coordinates: `x` along the lane from the zone's start, `y` to the driver's right.
+      const world = ({ x, y }: Vec2) => {
+        const at = Math.max(0, Math.min(lane.lengthM, zone.fromM + x));
+        const p = pointAtDistance(lane.polyline, lane.cumulative, at),
+          h = headingAtDistance(lane.polyline, lane.cumulative, at);
+        return { x: p.x - Math.sin(h) * y, y: p.y + Math.cos(h) * y };
+      };
+      const length = zone.toM - zone.fromM;
+      const rect = (x0: number, y0: number, x1: number, y1: number): Vec2[] => [
+        { x: x0, y: y0 },
+        { x: x1, y: y0 },
+        { x: x1, y: y1 },
+        { x: x0, y: y1 },
+      ];
+      const push = (local: Vec2[]) => shapes.push(fillShape('hatch', local.map(world), 0.9));
+      if (markingTheme.id === 'de') {
+        const line = 0.12;
+        push(rect(0, -half, length, -half + line));
+        push(rect(0, half - line, length, half));
+        push(rect(0, -half, line, half));
+        push(rect(length - line, -half, length, half));
+        const box = [rect(0, -half, length, half)];
+        const stripe = 0.3 * Math.SQRT2;
+        for (let x = -2 * half; x < length; x += 1.5)
+          for (const part of filledParts(
+            intersect(
+              [
+                [
+                  { x, y: -half },
+                  { x: x + stripe, y: -half },
+                  { x: x + stripe + 2 * half, y: half },
+                  { x: x + 2 * half, y: half },
+                ],
+              ],
+              box,
+            ),
+          ))
+            if (Math.abs(areaD(part)) > 0.01) push(part);
+        continue;
+      }
+      const words = ['KEEP', 'CLEAR'];
+      const cell = (2 * half) / 29;
+      const glyphM = Math.min(2.4, (length - 1.5) / 2.5);
+      if (glyphM < 0.8) continue;
+      words.forEach((word, line) => {
+        // KEEP nearer the driver, CLEAR beyond it, centred in the zone.
+        const bottom = length / 2 + (line === 0 ? -0.25 - glyphM : 0.25);
+        const left = (-word.length * 6 + 1) * (cell / 2);
+        [...word].forEach((letter, k) =>
+          keepGlyphs[letter]!.forEach((row, y) => {
+            for (let x = 0; x < 5; x++) {
+              if (row[x] !== '1') continue;
+              const top = bottom + glyphM - (y * glyphM) / 7;
+              const l = left + (k * 6 + x) * cell;
+              push(rect(top - glyphM / 7, l, top, l + cell));
+            }
+          }),
+        );
+      });
+    }
+  }
+  return shapes;
 }
 /** Side is relative to travel (-1 left, +1 right). Strip runs are cut by `besideNoStrip`. */
 export function edgeLineColor(city: CompiledCity, road: CRoad, side: number, theme: MarkingTheme) {
@@ -351,6 +440,7 @@ export function roadMarkingGeometry(
     aboveShapes.push(...approachShapes(city, lane, endFarM, markingTheme));
   }
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
+  belowShapes.push(...keepClearMarkings(city, road, markingTheme));
   return { below: belowShapes, above: aboveShapes, pavement };
 }
 

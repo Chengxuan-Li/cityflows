@@ -125,6 +125,9 @@ export function createWalkers(
   params: SimParams,
   vehicles: Vehicles,
   enabled = false,
+  /** TASK-170: remaining walk green from the run's signal control (timed and actuated signals);
+   * without it, from the compiled programs. */
+  signalWalkGreen?: (link: number, timeS: number) => number,
 ) {
   const sources = scenario.walkers ?? [];
   if (!sources.length && !enabled) return null;
@@ -251,6 +254,7 @@ export function createWalkers(
   function walkGreen(index: number, timeS: number) {
     const crossing = link(index).crossing!;
     if (crossing.control !== 'signal') return Infinity;
+    if (signalWalkGreen) return signalWalkGreen(index, timeS);
     const signal = city.nodes[crossing.node]?.signal;
     if (!signal) return 0;
     let spans = windows.get(index);
@@ -339,15 +343,24 @@ export function createWalkers(
     return scan(lane, 0, -1, 0);
   }
 
-  /** At a signal, the run's walk green covers the crossing at walking speed plus the clearance. */
+  /** At a signal, the run's walk green covers the crossing at walking speed plus the clearance.
+   * TASK-170: a walker without it calls for that green at each signal leg of its run (`calls`). */
+  let calls = new Map<number, number>();
   function greenEnough(id: number, timeS: number) {
     if (runKind[id] !== SIGNAL) return true;
     const legs = route[id]!.legs;
+    const needS = runLength[id]! / params.walkSpeedMps + params.walkClearanceS;
     let green = Infinity;
     for (let i = leg[id]!; i < runEnd[id]!; i++)
       if (link(legs[i]!.link).crossing!.control === 'signal')
         green = Math.min(green, walkGreen(legs[i]!.link, timeS));
-    return green >= runLength[id]! / params.walkSpeedMps + params.walkClearanceS;
+    if (green >= needS) return true;
+    for (let i = leg[id]!; i < runEnd[id]!; i++) {
+      const index = legs[i]!.link;
+      if (link(index).crossing!.control === 'signal')
+        calls.set(index, Math.max(calls.get(index) ?? 0, needS));
+    }
+    return false;
   }
 
   // Whether each waiting walker has enough walk green this step (set in `step`).
@@ -539,6 +552,7 @@ export function createWalkers(
     /** Spawn and advance walkers, then mark the lanes they hold this step. */
     step(timeS: number) {
       lastTimeS = timeS;
+      calls = new Map();
       while (next < testCount && spawnS[next]! <= timeS + 1e-9) {
         const id = next++;
         totals.spawned++;
@@ -580,6 +594,9 @@ export function createWalkers(
     get blocking() {
       return blocking;
     },
+    /** TASK-170: the signal crossing links walkers wait at for walk green, with the green their
+     * runs need (seconds), as of the last step. */
+    walkCalls: () => calls,
     hold(id: number, lane: CLane | undefined, path: CMovement | null) {
       return blocking ? hold(id, lane, path) : Infinity;
     },

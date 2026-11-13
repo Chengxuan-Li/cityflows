@@ -394,9 +394,11 @@ test.each(
   expect(vehicleHash(net)).toBe(
     name.startsWith('munich')
       ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-        '30aa60b0237d64707ba1ac84ab322a4f19292c3161ac130cc5076f547b807f89'
+        // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
+        'bd02ff20533afa3e302a8fafd94ba38014a53285c24c338218e041a9c0caf063'
       : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-        '78b744f53785049104371187acfc9e77c6c26e3597485d13a74ca8b50dde6d81',
+        // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
+        '5708db5627076dfe2ed27104d5d545a3bf4b38a5aea9bd034c12db7adcf7b22c',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

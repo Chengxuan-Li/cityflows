@@ -216,6 +216,11 @@ test('T29 a car held at the end of its lane beside a steady platoon gets a gap f
   for (let k = 0; k < 24; k++) platoon.push(depart(1, 5 + 13 * k, 100));
   // The late car starts 30 m before the end of the left lane while the platoon passes.
   const requester = depart(0, 960, 210);
+  // TASK-169: the origins are plain gateways, not homes with driveways: a home's garage mouth is
+  // a keep-clear zone that would let the platoon start closer together. The held car stands at
+  // the end of its lane, where a crossing would hold it short of the stripes.
+  for (const p of Object.values(city.places)) if (p.kind === 'residential') p.kind = 'gateway';
+  main.crossings = { end: false };
   const compiled = setup(city);
   const left = compiled.index.lane.get(`${main.id}#0`)!;
   const right = compiled.index.lane.get(`${main.id}#1`)!;

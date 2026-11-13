@@ -23,10 +23,18 @@ import { createAccounting } from './metrics';
 import { createParking } from './parking';
 import { DEFAULT_SIM_PARAMS } from './params';
 import { createProjector, patchChanges, remapRoute } from './patch';
-import { patchSignals } from './signals';
+import {
+  createSignalControl,
+  patchSignals,
+  signalDemand,
+  timedSignals,
+  type DemandTrip,
+} from './signals';
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
+import { inMouth, keepClearStand } from './keep-clear';
+import { keepClearZones } from '../network/keep-clear';
 import { createPersons, hasPerson } from './persons';
 import { transitNetwork } from '../routing/transit';
 import { createTransit, scheduledServices, TRANSIT_RIDER_ID } from './transit';
@@ -125,6 +133,7 @@ function createRun({
     params,
     vehicles,
     trips.some((trip) => hasPerson(trip) || trip.mode === 'walk'),
+    (link, timeS) => signalControl.walkGreen(link, timeS),
   );
   // TASK-174: riders on platforms and in vehicles, where the timetable calls at stops. The
   // vehicles are the crossing controller's runs, or the timetable's where it serves no crossing.
@@ -166,6 +175,39 @@ function createRun({
     parking,
     persons,
   );
+  // TASK-170: demand-split signals are timed by the scenario's car trips routed on free-flow
+  // costs in the loaded city, from the origin connectors the trips were queued at; routed the
+  // first time a demand-split signal needs them (at load, or a live edit that sets one).
+  const demandTrips: DemandTrip[] = [];
+  for (let id = 0; id < trips.length; id++) {
+    const origin = connectors.origin(id);
+    const destination = vehicles.destination[id]!;
+    if (origin === -1 || destination === -1) continue;
+    demandTrips.push({
+      origin: compiled.connectors[origin]!,
+      destination,
+      vehicleClass: vehicleClasses[vehicles.vclass[id]!]!,
+      purpose: vehiclePurposes[vehicles.purpose[id]!]!,
+    });
+  }
+  const loadedCity = compiled;
+  let demand: Map<string, number> | undefined;
+  const timed = (city: CompiledCity) =>
+    timedSignals(
+      city,
+      city.nodes.some((node) => node.signal?.demandSplit)
+        ? (demand ??= signalDemand(loadedCity, provider, demandTrips))
+        : new Map(),
+      params,
+    );
+  let signalControl = createSignalControl(
+    compiled,
+    timed(compiled),
+    vehicles,
+    params,
+    scenario.startS,
+    () => walkers?.walkCalls(),
+  );
   let merges = createMerges(compiled, vehicles, params, (id, ramp, movement) =>
     intersections.blocksEntry(id, ramp, movement),
   );
@@ -174,6 +216,7 @@ function createRun({
     acceleration: (id) => reservationAcceleration[id]!,
     groupRoute,
     routeVersion: () => costs.version,
+    signalColors: (timeS, colors) => signalControl.update(timeS, colors),
   });
   let railCrossings = createRailCrossings(compiled, vehicles, params, scenario.startS, (m) =>
     intersections.red(m),
@@ -191,6 +234,12 @@ function createRun({
   const landingBlocked = (lane: number, fromM: number, toM: number) =>
     parking.crossingBlocks(lane, fromM, toM) || !!walkers?.holds(lane, fromM, toM);
   let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, landingBlocked);
+  // TASK-169: each lane's keep-clear zones, and where a head held short of one stands.
+  let keepClear = keepClearZones(compiled);
+  const keepClearStop = new Float64Array(trips.length).fill(Infinity);
+  const keepClearHeld = new Uint8Array(trips.length);
+  // Where each car's front will come to stand, as far as this step knows (behind its leader's).
+  const standFront = new Float64Array(trips.length).fill(Infinity);
   let allowedLanes = vehicleClasses.map((name) =>
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
@@ -458,6 +507,9 @@ function createRun({
     const gap = Math.max(spawnMinGapM, idm.minGapM);
     const spacing = lengthM + gap;
     if (landingBlocked(lane, positionM - spacing, positionM + gap)) return false;
+    // TASK-169: a body joining in a mouth zone, which queued traffic keeps clear, needs only the
+    // following gap to cars standing beside it; moving traffic keeps the spawn gap.
+    const mouth = inMouth(keepClear[lane]!, positionM - lengthM, positionM);
     const maxSpacing = maxVehicleLength + gap;
     if (positionM < spacing) {
       for (const idx of compiled.lanes[lane]!.in) {
@@ -488,7 +540,8 @@ function createRun({
       id !== -1 && vehicles.position[id]! <= positionM + maxSpacing;
       id = vehicles.previous[id]!
     ) {
-      const required = vehicles.position[id]! >= positionM ? profile(id).lengthM + gap : spacing;
+      const g = mouth && vehicles.speed[id]! < 0.1 ? idm.minGapM : gap;
+      const required = vehicles.position[id]! >= positionM ? profile(id).lengthM + g : lengthM + g;
       if (Math.abs(vehicles.position[id]! - positionM) < required) return false;
     }
     const source = compiled.lanes[lane]!;
@@ -610,15 +663,13 @@ function createRun({
       for (let id = head; id !== -1; id = vehicles.next[id]!) {
         order[orderCount++] = id;
         if (ahead !== -1 || !lane) vehicles.headDetourS[id] = 0;
-        if (parking.motion(id)) {
-          ahead = id;
-          continue;
-        }
-        if (vehicles.state[id] === QUEUED_DESTINATION) {
+        if (parking.motion(id) || vehicles.state[id] === QUEUED_DESTINATION) {
+          standFront[id] = vehicles.position[id]!;
           ahead = id;
           continue;
         }
         const position = vehicles.position[id]!;
+        keepClearStop[id] = Infinity;
         // A safe parking target can fill while the car is en route. Reconsider from here
         // once a second, before a one-way approach commits it to cruising past the target.
         if (
@@ -737,6 +788,50 @@ function createRun({
           limit[id] = Math.min(limit[id]!, Math.max(position, railStop));
         }
         const driving = profile(id);
+        // TASK-169: keep clear. Where its front would stand (behind a leader, projected by the
+        // leader's braking distance but no farther than behind the leader's own stand, or at a
+        // stop) would leave its body on a keep-clear zone, it stops short of the zone: from 1.5
+        // times its comfortable braking distance short of that stand (at least the decision
+        // distance), if it can stop there at its comfortable deceleration, and then until it
+        // stands there. A head at its stop line first moves up to the line if that clears the
+        // zone; one waiting short of a zone for its junction counts that stand as its stop line.
+        const zones = lane ? keepClear[lane.idx]! : undefined;
+        const atStopLine = !!lane && stopAt === lane.stopM && obstacle === stopAt;
+        let standM = obstacle - idm.minGapM + (leaderSpeed * leaderSpeed) / (2 * idm.bMps2);
+        if (leader !== -1 && obstacle === rear)
+          standM = Math.min(
+            standM,
+            offset + standFront[leader]! - profile(leader).lengthM - idm.minGapM,
+          );
+        const front = zones?.length
+          ? keepClearStand(
+              zones,
+              driving.lengthM,
+              standM,
+              destination?.lane === lane!.idx ? destination.positionM : Infinity,
+              atStopLine ? lane!.stopM : -Infinity,
+            )
+          : null;
+        const ownSpeed = vehicles.speed[id]!;
+        const braking = (ownSpeed * ownSpeed) / (2 * driving.idm.bMps2);
+        const movesUp = front !== null && front > obstacle - idm.minGapM;
+        if (
+          front !== null &&
+          (movesUp
+            ? atStopLine && front + idm.minGapM <= rear
+            : keepClearHeld[id]
+              ? front >= position - 1e-6
+              : front - position >= braking &&
+                front - position <=
+                  Math.max(params.intersection.decisionDistanceM, 1.5 * braking + idm.minGapM))
+        ) {
+          keepClearHeld[id] = 1;
+          obstacle = front + idm.minGapM;
+          leaderSpeed = 0;
+          if (!movesUp) limit[id] = Math.min(limit[id]!, Math.max(position, front));
+          if (ahead === -1) keepClearStop[id] = front;
+        } else keepClearHeld[id] = 0;
+        standFront[id] = keepClearHeld[id] ? front! : standM;
         const desiredSpeed = Math.min(speedLimit * vehicles.speedFactor[id]!, driving.maxSpeedMps);
         walkers?.account(
           id,
@@ -839,7 +934,7 @@ function createRun({
             intersections.grants[ahead] !== -1 ||
             (intersections.continuations[vehicles.movement[ahead]!] &&
               !laneChanges.holding[ahead])) &&
-          lane.stopM - position <= requestDistance
+          Math.min(lane.stopM, keepClearStop[id]! + idm.minGapM) - position <= requestDistance
         ) {
           intersections.request(id, movement);
         }
@@ -1108,7 +1203,7 @@ function createRun({
         continue;
       }
       const lane = compiled.lanes[field]!;
-      const remaining = lane.stopM - previousPosition;
+      const remaining = Math.min(lane.stopM, keepClearStop[id]! + idm.minGapM) - previousPosition;
       const movement = vehicles.movement[id]!;
       let granted = intersections.continuations[movement] ? movement : intersections.grants[id]!;
       if (
@@ -1122,7 +1217,12 @@ function createRun({
         granted = -1;
       }
       if ((movement !== -1 && granted === -1) || laneChanges.holding[id] || waitingForLane[id]) {
-        position = Math.min(position, Math.max(previousPosition, lane.stopM - idm.minGapM));
+        // TASK-169: or where it moved up to clear a keep-clear zone behind the line.
+        const movedUp = keepClearStop[id] === Infinity ? -Infinity : keepClearStop[id]!;
+        position = Math.min(
+          position,
+          Math.max(previousPosition, lane.stopM - idm.minGapM, movedUp),
+        );
         if (remaining <= params.intersection.decisionDistanceM) {
           vehicles.junctionWaiting[id] = vehicles.junctionWaiting[id]! + dtS;
         }
@@ -1303,6 +1403,9 @@ function createRun({
       fade: new Float32Array(count),
       poseLane: new Int32Array(count).fill(-1),
       ...(walkers && { walkers: withRiders(walkers.snapshot()) }),
+      ...(compiled.nodes.some((node) => node.signal) && {
+        signals: signalControl.snapshot(time()),
+      }),
       ...(railCrossings && { rail: railCrossings.snapshot() }),
       ...(transit && { transit: { vehicles: transit.snapshot(time()).vehicles } }),
     };
@@ -1433,6 +1536,15 @@ function createRun({
       intersections.blocksEntry(id, ramp, movement),
     );
     const signalled = patchSignals(before, next, time(), signalEpochs);
+    signalControl = createSignalControl(
+      signalled,
+      timed(signalled),
+      vehicles,
+      params,
+      time(),
+      () => walkers?.walkCalls(),
+      signalControl.states(),
+    );
     persons.patch(signalled);
     walkers?.patch(signalled, time());
     intersections = createIntersections(signalled, vehicles, params, merges.canEnter, {
@@ -1440,8 +1552,10 @@ function createRun({
       acceleration: (id) => reservationAcceleration[id]!,
       groupRoute,
       routeVersion: () => costs.version,
+      signalColors: (timeS, colors) => signalControl.update(timeS, colors),
     });
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked);
+    keepClear = keepClearZones(next);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );
@@ -1647,6 +1761,7 @@ function createRun({
         positionM: 0,
       };
     },
+    signalTiming: () => signalControl.timing(),
     inspectPerson: (id: string) => persons.inspect(id),
     stateHash: () =>
       stateHash(
@@ -1784,6 +1899,7 @@ export function createEngine() {
     inspect: (id) => loaded().inspect(id),
     inspectWalker: (id) => loaded().inspectWalker(id),
     inspectPerson: (id) => loaded().inspectPerson(id),
+    signalTiming: () => loaded().signalTiming(),
     stateHash: () => loaded().stateHash(),
   } satisfies TrafficEngine;
 }

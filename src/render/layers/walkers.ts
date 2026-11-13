@@ -2,7 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import type { Vec2 } from '../../geo/vec2';
 import { walkGreenS, type CNode, type CompiledCity, type CWalkLink } from '../../network';
 import { style } from '../style';
-import type { WalkerSnapshot } from '../types';
+import type { SignalStates, WalkerSnapshot } from '../types';
 
 /** TASK-111: the two kerb ends of each signalised crossing of a node: the outer ends of the pieces
  * of one crossing (its compiled links share an id before `/`), each with the link that ends there. */
@@ -33,7 +33,7 @@ export function drawWalkSignals(
   city: CompiledCity,
   node: CNode,
   container: Container,
-): (timeS: number) => void {
+): (timeS: number, states?: SignalStates) => void {
   const signal = node.signal!;
   const marks = walkSignalMarks(city, node).map(({ link, pos }) => ({
     link,
@@ -46,8 +46,12 @@ export function drawWalkSignals(
     ),
   }));
   let previous = '';
-  return (timeS) => {
-    const key = marks.map(({ link }) => (walkGreenS(signal, link, timeS) > 0 ? 1 : 0)).join('');
+  return (timeS, states) => {
+    const key = marks
+      .map(({ link }) =>
+        states ? states.walk[link]! : walkGreenS(signal, link, timeS) > 0 ? 1 : 0,
+      )
+      .join('');
     if (key === previous) return;
     previous = key;
     marks.forEach(({ graphic }, i) => {

@@ -25,7 +25,9 @@ import {
 } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
-import { signalStateAt, type CompiledCity } from '../network';
+import type { CompiledCity } from '../network';
+import { signalLight } from '../render/layers/signals';
+import type { SignalStates } from '../render/types';
 import { markingThemes, style } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
 import {
@@ -156,6 +158,8 @@ export class Scene3D {
   private parkingVisible = false;
   private parkingCounts: ArrayLike<number> | null = null;
   private signalCity: CompiledCity | null = null;
+  /** TASK-170: the snapshot's signal states, in the displayed city's order. */
+  private signalStates: SignalStates | undefined;
   private lastSignalKey = '';
   private capture: { images: string[]; resolve: (images: string[]) => void } | null = null;
   private belowGround = false;
@@ -646,6 +650,7 @@ export class Scene3D {
     this.invalidate();
   }
   setSnapshot(snapshot: PresentationSnapshot) {
+    this.signalStates = snapshot.signals;
     this.crossingStates = snapshot.rail?.crossings;
     this.levelCrossings?.setSnapshot(this.crossingStates, snapshot.timeS, snapshot.rail?.railReady);
     this.canvas.dataset.levelCrossingStates = JSON.stringify(
@@ -714,13 +719,14 @@ export class Scene3D {
   setSignals(timeS: number, loaded: CompiledCity | null = this.signalCity) {
     this.signalCity = loaded;
     if (!this.geometry || !this.lamps || !this.city) return;
-    const states = new Map<number, ReturnType<typeof signalStateAt>>();
+    const states = new Map<number, ReturnType<typeof signalLight>>();
     for (const head of this.geometry.heads) {
       const index = loaded?.index.node.get(this.city.nodes[head.node]!.id);
       const signal = index === undefined ? null : loaded!.nodes[index]!.signal;
-      if (signal && !states.has(head.node)) states.set(head.node, signalStateAt(signal, timeS));
+      if (signal && !states.has(head.node))
+        states.set(head.node, signalLight(signal, head.node, timeS, this.signalStates));
     }
-    if (this.walkSignals?.update(timeS, loaded)) this.invalidate();
+    if (this.walkSignals?.update(timeS, loaded, this.signalStates)) this.invalidate();
     const key = [...states].map(([n, s]) => `${n}:${s.phase}:${s.state}`).join('|');
     if (key === this.lastSignalKey) return;
     this.lastSignalKey = key;

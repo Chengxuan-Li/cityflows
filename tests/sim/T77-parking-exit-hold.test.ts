@@ -40,7 +40,8 @@ function exitWorld() {
   w.city.parking![w.id]!.placeId = w.shop.id;
   w.city.parking![w.id]!.occupancyAtStart = 0.25;
   // A gateway just beyond the lot, so through traffic passes its mouth without parking. It
-  // admits one car per 10 s, so a queue stands across the mouth for a while.
+  // admits one car per 10 s, so a queue stands across the mouth for a while: it lies inside the
+  // exit's keep-clear zone, so cars queue there for it (TASK-169).
   const east = allocateId(w.city, 'p');
   w.city.places[east] = {
     ...w.home,
@@ -52,7 +53,7 @@ function exitWorld() {
         id: allocateId(w.city, 'c'),
         roadId: w.street.id,
         lane: 0,
-        positionM: 190,
+        positionM: 155,
         direction: 'in',
         throughputPerMin: 6,
       },

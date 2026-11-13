@@ -21,6 +21,8 @@ const provenance = z.object({
 
 export const signalProgramSchema = z.object({
   turnOnRed: z.boolean().optional(),
+  demandSplit: z.boolean().optional(),
+  actuated: z.boolean().optional(),
   offsetS: z.number(),
   amberS: nonnegative,
   allRedS: nonnegative,

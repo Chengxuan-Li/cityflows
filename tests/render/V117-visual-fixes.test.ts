@@ -150,22 +150,24 @@ unitTest('V117 UK kerb lines leave out parking strip runs (lead, TASK-103 merge)
 // TASK-123: only the walk graph and derived signal walk indices move.
 // TASK-140 (B59): compile pins follow V107 (walk links at the stripes; only the walk graph and
 // the signal walk lists move).
+// TASK-169: DE and US paint add keep-clear markings at lot and garage mouths; without
+// `keepClearMarkings` every paint pin equals ddd8a78's (main with TASK-175).
 const pins = {
   grid: {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     compile: '94f4c0a0c54c607f58d079b290976c3b5429903d55353ac5f66bee1948e9aa5e',
     lamps: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
     curbs: 'e45b9bee6d047cf3354bb3e6f57e86ae929db7210a24bf866f44e2e46892736d',
-    de: 'e2a4f545e1d33189b550c6ab045eaef2ed5305a3f8def23d48d86f6d990c4852',
-    us: '15ec3e5bd9c9bae2e76e2aede004db70fa1f18dc6f9a7af2197f22138009f570',
+    de: '822b5cf8111f54a40468c2a59f1bf1b48d4acbc602a8c78be8daf1bc70cf86d8',
+    us: '619044a5c6f76eb0ae11811514404d30215ceebf4246e71469b1bed6f144e52f',
   },
   town: {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     compile: '3595116920f094559c7d78b9cc1cfde9fa1b0773419b31a7df233ea8a4909e79',
     lamps: 'bd56acb9b3028f1d5a884f0926a86e19405a839f16185957cb0479a89ee99d7f',
     curbs: 'e5b1df98b54b260c89c37bf096c4aa51ba309b50ed7b6dfdb318d0487fe170ca',
-    de: '84454e2c6b1b1eeac928e004cdab547b5884ab43d3f70b7e8f6c7d7fb89ba7da',
-    us: '819ef4cd85ef88daf63225cf166ce7ebd9053abcce407c7d81e3f3a055e19041',
+    de: '7f515227bf45fa456c539a3ec5b25cb9c98e2c45790f34d5fd89b62fc0b459a6',
+    us: '832e7626f8885cb77334373a6a9c8ce57f9f73f9c828e11f4bffb80504d033da',
   },
   // TASK-131 keeps OSM geometry (no node merges, junction groups): the real cities' roads,
   // lamps, curbs and paint move, so they no longer equal main's.
@@ -182,20 +184,22 @@ const pins = {
     // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
     // removed every pin equals 3e9951a's.
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-    compile: 'a328c8d02049121e11097c2933fa4cd3ef296455fae5e9d18db6ca5ef1a25353',
+    // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
+    compile: '730a7b22bb8300cf95b83da79f09250112eb3f3425cb3e07972ba8ee8fdacdb5',
     lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
     curbs: '780f62342c39389d2fabd42f81e444fdc4c03c3070f91fce4489a3c671894919',
-    de: 'd35ce4db94ce5e1695cebf87ea627a63d291c966cf5d1a07821021842b352720',
-    us: 'f78e0b2d198cffe79f2970440b1797e503eeab3a79a60df74b7c080085804e8d',
+    de: '8b7938b03e68ee58a8aa0c86f5d0fbe3aac265f9d4f6fce9e61aa6980827dc79',
+    us: '33c25b1c73892664627deb6c326fa7ead07815db265325ff3a67c567226946ac',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-    compile: '401dae542529c2aa46c21d8af35d9168e84fbeb8d7450aef54cc0b89da47ab6b',
+    // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
+    compile: '543e8039b249d3b3b7d59dcf5fc78dc54796b4e28b911af176a995bf39dd8679',
     lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
     curbs: '24a6696b232568ba7bc93e4d1259eba28798648161c28e560d477bcd71496bd4',
-    de: '20ce2ce6f16cc2d0740fedfcfb1e840239ced898f93ef85101ad54942de03560',
-    us: '374ae1c7aa4311463b25a9091f42a59e6faf42f948fc95b958b14e52ce5a6051',
+    de: '008af8c2eb93c84032b0ca14492f91914ede12b4fce5b1c2572e540f3f1a292b',
+    us: 'b54c8a1d4baaf30d9b48409e2b73b04a33c6b1f0e4d64fdbd273d14a5b8606a6',
   },
 } as const;
 const hash = (value: unknown) =>

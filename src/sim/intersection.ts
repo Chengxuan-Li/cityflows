@@ -3,7 +3,7 @@ import type { CMovement, CompiledCity } from '../network';
 import { railTimetable } from '../network/trams';
 import { vehicleClasses, type SimParams } from '../schema';
 import { reachableLanes, type Route } from '../routing';
-import { AMBER, GREEN, RED, updateSignals } from './signals';
+import { AMBER, GREEN, RED, createSignalControl, type SignalControl } from './signals';
 import { createVehicleProfiles, DRIVING, type Vehicles } from './vehicle';
 
 /** Constant current acceleration, then the speed cap; a stop short of the target is unreachable. */
@@ -39,6 +39,9 @@ export function createIntersections(
     acceleration?: (id: number) => number;
     groupRoute?: (id: number, movement: CMovement) => { route: Route; step: number } | null;
     routeVersion?: () => number;
+    /** TASK-170: the run's signal control (timed and actuated signals); without it each signal
+     * shows its compiled program at the step's time. */
+    signalColors?: (timeS: number, colors: Uint8Array) => void;
   } = {},
 ) {
   const inner = (movement: CMovement) =>
@@ -250,8 +253,20 @@ export function createIntersections(
     redGrants[id] = 0;
   }
 
+  let ownControl: SignalControl | undefined;
+  const signalColors =
+    options.signalColors ??
+    ((timeS: number, colors: Uint8Array) =>
+      (ownControl ??= createSignalControl(
+        compiled,
+        compiled.nodes.map((n) => n.signal),
+        vehicles,
+        params,
+        timeS,
+        () => undefined,
+      )).update(timeS, colors));
   function signals(timeS: number) {
-    updateSignals(compiled, timeS, colors);
+    signalColors(timeS, colors);
     // A reservation cannot authorize entry after the light changes.
     for (let id = 0; id < vehicles.count; id++) {
       const idx = grants[id]!;

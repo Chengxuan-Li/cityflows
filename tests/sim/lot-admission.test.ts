@@ -29,7 +29,9 @@ function overlap(a: ParkingPose, b: ParkingPose) {
 }
 
 /** pk:2049's pattern on the authored lot: an entry mouth and an exit mouth at 215 m, where a
- * queue for a slow gateway at 260 m stands across the exit. */
+ * queue for a slow gateway at 218 m stands across the exit. The gateway lies in the exit's mouth
+ * zone, so the queue stands there regardless of TASK-169's keep clear; three cars cover the exit
+ * and leave the entry at 205 m free. */
 function twoMouthWorld(entryM: number) {
   const w = parkingWorld();
   w.home.kind = 'gateway';
@@ -60,7 +62,7 @@ function twoMouthWorld(entryM: number) {
         id: allocateId(w.city, 'c'),
         roadId: w.street.id,
         lane: 0,
-        positionM: 260,
+        positionM: 218,
         direction: 'in',
         throughputPerMin: 1,
       },
@@ -83,7 +85,7 @@ function twoMouthWorld(entryM: number) {
     ...w,
     net: result.compiled,
     trips: [
-      ...Array.from({ length: 8 }, (_, i) => through(`through:${i}`, 100 + i * 2)),
+      ...Array.from({ length: 3 }, (_, i) => through(`through:${i}`, 100 + i * 2)),
       leaving('leave:0', 120),
       leaving('leave:1', 124),
       { ...w.trip('arrival', 170), personId: null },
@@ -99,8 +101,8 @@ test.each([
   const w = twoMouthWorld(entryM),
     engine = createEngine();
   engine.load({ compiled: w.net, trips: w.trips, scenario: { ...w.scenario, endS: 3000 } });
-  const lot = [9, 10, 11],
-    arrival = 11;
+  const lot = [4, 5, 6],
+    arrival = 6;
   let besideHold = 0,
     refused = 0,
     contacts = 0;
@@ -127,7 +129,7 @@ test.each([
   expect(refused).toBeLessThan(10);
   expect(contacts).toBe(0);
   for (const id of lot) expect(engine.inspect(id)!.state).toBe('completed');
-  expect(engine.inspect(arrival)!.arrivedS).toBeLessThan(engine.inspect(9)!.departedS! + 120);
+  expect(engine.inspect(arrival)!.arrivedS).toBeLessThan(engine.inspect(4)!.departedS! + 120);
 });
 
 test('TASK-153 an arrival yielding at a shared mouth stops clear of the departure join station', () => {

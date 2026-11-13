@@ -73,7 +73,8 @@ test('T66: uncongested arrivals retain main times and order', () => {
     }
   }
   expect(arrived).toEqual([2, 3, 4, 1]);
-  expect(times).toEqual([144.1, 144.2, 144.7, 144.9]);
+  // TASK-169: heads at the ring's give-way lines move up past the zebra behind them.
+  expect(times).toEqual([143.7, 143.8, 144.3, 144.6]);
 });
 
 test('T66: the ring is deterministic for the same seed', () => {

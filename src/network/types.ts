@@ -242,6 +242,9 @@ export interface CMovement {
   turnOnRed?: boolean;
 }
 export interface CSignal {
+  /** TASK-170: `SignalProgram.demandSplit` and `actuated`, present only when true. */
+  demandSplit?: true;
+  actuated?: true;
   offsetS: number;
   amberS: number;
   allRedS: number;
