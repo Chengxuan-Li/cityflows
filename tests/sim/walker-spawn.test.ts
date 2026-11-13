@@ -237,3 +237,29 @@ test('edits reroute a person to the original partial-link target and report drop
   dropping.patch(compiled(), 103);
   expect(dropped).toHaveLength(1);
 });
+
+// TASK-178: a live edit that removes a link the walker already walked keeps the walker; the
+// next edit crashed remapping that gone leg (T19's live turn ban after a drawn road).
+test('a second edit after one removed a walked link keeps the walker and its route', () => {
+  const { city, compiled } = fixture();
+  const before = compiled();
+  const people = walkers(before);
+  const arrivals: [number, boolean][] = [];
+  const id = people.spawn({ ...owner, route: path(before), timeS: 100 }, (...args) =>
+    arrivals.push(args),
+  );
+  for (let t = 100; t <= 120; t++) people.step(t);
+  const last = before.walk.links[people.inspect(id)!.link]!.id;
+  expect(last.startsWith('wl:22/')).toBe(true);
+  delete city.walk!.links['wl:20'];
+  const edited = compiled();
+  people.patch(edited, 121);
+  delete city.walk!.links['wl:24'];
+  const again = compiled();
+  people.patch(again, 122);
+  const detail = people.inspect(id)!;
+  expect(detail.state).toBe('walking');
+  expect(detail.route!.links.every((link) => again.walk.links[link] !== undefined)).toBe(true);
+  for (let t = 122; t <= 140; t++) people.step(t);
+  expect(arrivals).toEqual([[expect.any(Number), false]]);
+});

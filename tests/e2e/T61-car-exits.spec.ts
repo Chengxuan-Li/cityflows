@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { placeCamera } from '../../bench/geometry-shots';
 import { pointAtDistance } from '../../src/geo/polyline';
 import { compile } from '../../src/network';
+import { scheduleTrips } from '../../src/demand';
+import { withHouseholds } from '../../src/demand/households';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import { button, city, clickVehicle, clickWorld, importOsm, metrics, pageErrors } from './helpers';
 
@@ -59,6 +61,8 @@ test('T61 Munich split garage keeps its arrival and a controlled driver leaves o
     local: { car: 1, van: 0, truck: 0, bus: 0 },
     through: { car: 1, van: 0, truck: 0, bus: 0 },
   };
+  // TASK-113: mode choice is on by default; the controlled driver drives.
+  scenario.demand.modeChoice = { enabled: false };
   const population = [
     { id: 'garage-driver', homePlaceId: home.id, workPlaceId: 'p:1836', hasCar: true, agenda: [] },
   ];
@@ -78,25 +82,33 @@ test('T61 Munich split garage keeps its arrival and a controlled driver leaves o
   });
   await expect(page.getByRole('heading', { name: source.name, exact: true })).toBeVisible();
   await expect(button(page, 'Play')).toBeEnabled();
-  await page.evaluate(async () => {
+  // Station riders (TASK-128) come first in the schedule; the driver's trip is found by person.
+  const driverId =
+    scheduleTrips(
+      source,
+      withHouseholds(source, population, scenario.demand.seed),
+      scenario,
+      net,
+    ).findIndex((trip) => trip.personId === 'garage-driver') + 1;
+  await page.evaluate(async (id) => {
     const api = window.cityflows!;
     for (let second = 0; second < 600; second++) {
       await api.step(10);
-      const driver = await api.inspect(1);
+      const driver = await api.inspect(id);
       if (driver?.state === 'driving' && driver.lane >= 0) return;
     }
     throw new Error('The controlled driver did not leave the garage');
-  });
+  }, driverId);
   await placeCamera(page, [exitPoint.x, exitPoint.y], 4);
-  await clickVehicle(page, 1);
+  await clickVehicle(page, driverId);
   await page.screenshot({ path: info.outputPath('garage-driver-on-exit.png') });
   const roads = await page.evaluate(
-    async (roadIds) => {
+    async ({ roadIds, id }) => {
       const api = window.cityflows!,
         seen: string[] = [];
       const remaining = Math.round((9 * 3600 - (await api.metrics()).timeS) * 10);
       for (let step = 0; step <= remaining; step += 10) {
-        const detail = await api.inspect(1);
+        const detail = await api.inspect(id);
         if (detail?.state === 'driving' && detail.lane >= 0) {
           const id = roadIds[detail.lane]!;
           if (seen.at(-1) !== id) seen.push(id);
@@ -105,7 +117,7 @@ test('T61 Munich split garage keeps its arrival and a controlled driver leaves o
       }
       return seen;
     },
-    net.lanes.map((l) => net.roads[l.road]!.id),
+    { roadIds: net.lanes.map((l) => net.roads[l.road]!.id), id: driverId },
   );
   expect(roads[0]).toBe('r:380');
   expect(roads.length).toBeGreaterThan(1);

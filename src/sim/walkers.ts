@@ -738,7 +738,14 @@ export function createWalkers(
             .some((l) => Math.max(l.fromM, l.toM) > city.walk.links[l.link]!.lengthM + 1e-6);
         const crossingAgain = state[id] === WAITING || state[id] === CROSSING;
         if (!broken) {
-          route[id] = { ...path, legs, links: legs.map((l) => l.link) };
+          // Legs already walked may have lost their link (-1): drop them so every leg of a kept
+          // route exists, or the next edit cannot remap it (TASK-178).
+          const kept = legs.slice(0, first).some((l) => l.link === -1) ? legs.slice(first) : legs;
+          route[id] = { ...path, legs: kept, links: kept.map((l) => l.link) };
+          if (kept !== legs) {
+            leg[id] = 0;
+            if (runEnd[id]! >= 0) runEnd[id] = runEnd[id]! - first;
+          }
         } else {
           const target = owners[id]?.target;
           const targetLink = target ? byId.get(target.linkId) : undefined;

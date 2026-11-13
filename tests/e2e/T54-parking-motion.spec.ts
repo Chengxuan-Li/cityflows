@@ -27,6 +27,8 @@ function controlledScenario(): Scenario {
     through: { car: 1, van: 0, truck: 0, bus: 0 },
   };
   scenario.demand.chains = { schoolShare: 0, shopShare: 0, leisureShare: 0 };
+  // TASK-113: mode choice is on by default; these controlled commuters drive.
+  scenario.demand.modeChoice = { enabled: false };
   return scenario;
 }
 async function openProject(page: Page, source: City, population: Person[], scenario: Scenario) {
@@ -200,31 +202,36 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
   source.places[net.places[lot.place]!.id]!.profile = null;
   const scenario = controlledScenario();
   let moving = 0;
-  // Fix a real episode at the required 08:00 camera, without changing any geometry.
+  // Fix a real episode at the required 08:00 camera, without changing any geometry. Station
+  // riders (TASK-128) join every schedule, so only the commuters' own trips steer the search: a
+  // commuter already in the lot or arrived means a later start, none there yet an earlier one,
+  // bisected once both are seen (the lot drive lasts only a few seconds).
+  let early = -Infinity,
+    late = Infinity;
   for (let attempt = 0; attempt < 20; attempt++) {
     const engine = createEngine(),
       trips = scheduleTrips(source, population, scenario, net);
     engine.load({ compiled: net, trips, scenario });
     engine.step((targetTime - scenario.startS) * 10);
-    const s = engine.snapshot();
+    const commuters = trips.flatMap((trip, i) =>
+      trip.personId?.startsWith('v118:') && trip.originPlaceId === home.id ? [i + 1] : [],
+    );
     moving =
-      [...s.id].find(
+      commuters.find(
         (id) =>
           engine.inspect(id)?.parkingPhase === 'drive_in' &&
           engine.inspect(id)?.parkingFacility === lot.id,
       ) ?? 0;
     if (moving) break;
-    const arrived = trips.flatMap((_, i) => {
-      const d = engine.inspect(i + 1);
-      return d?.arrivedS ? [d.arrivedS] : [];
-    });
-    scenario.demand.workStart.meanS += [...s.id].some(
-      (id) => engine.inspect(id)?.parkingPhase === 'park',
-    )
-      ? 5
-      : arrived.length
-        ? Math.max(2, targetTime - Math.max(...arrived) + 8)
-        : -10;
+    const ahead = commuters.some((id) =>
+      ['in_lot', 'completed'].includes(engine.inspect(id)?.state ?? ''),
+    );
+    if (ahead) early = scenario.demand.workStart.meanS;
+    else late = scenario.demand.workStart.meanS;
+    scenario.demand.workStart.meanS =
+      Number.isFinite(early) && Number.isFinite(late)
+        ? (early + late) / 2
+        : scenario.demand.workStart.meanS + (ahead ? 10 : -10);
   }
   expect(moving, 'controlled arrivals drive the TASK-104 camera lot at 08:00').toBeGreaterThan(0);
   await openProject(page, source, population, scenario);
@@ -243,15 +250,27 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
         Math.hypot(a.centroid.x + 300, a.centroid.y - 290) -
         Math.hypot(b.centroid.x + 300, b.centroid.y - 290),
     )[0]!;
-  for (const f of Object.values(stripSource.parking!))
-    f.occupancyAtStart = f.id === strip.id ? 1 : 0;
+  // TASK-129: a household car starts in its own home's stock, and with every car on the street
+  // a home's garage cars move to free street spaces near it. The nearest home with a garage keeps
+  // its default stock, the strip starts empty (default) and everything else empty, so the owner's
+  // car is parked in the strip.
   const origin = net.places
-    .filter((p) => p.kind === 'residential')
+    .filter(
+      (p) =>
+        p.kind === 'residential' &&
+        net.parking.some((f) => f.place === p.idx && f.kind === 'garage'),
+    )
     .sort(
       (a, b) =>
         Math.hypot(a.centroid.x - strip.centroid.x, a.centroid.y - strip.centroid.y) -
         Math.hypot(b.centroid.x - strip.centroid.x, b.centroid.y - strip.centroid.y),
     )[0]!;
+  for (const f of net.parking) {
+    const facility = stripSource.parking![f.id]!;
+    if (f.id === strip.id || (f.place === origin.idx && f.kind === 'garage'))
+      delete facility.occupancyAtStart;
+    else facility.occupancyAtStart = 0;
+  }
   stripSource.places[origin.id]!.profile = null;
   stripScenario.simParams.streetParkingShare = 1;
   stripScenario.demand.workStart.meanS = targetTime - 2;
@@ -264,16 +283,23 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
     agenda: [],
   };
   await openProject(page, stripSource, [owner], stripScenario);
+  // Station riders come first in the schedule; the owner's trip is found by person.
+  const driver =
+    scheduleTrips(stripSource, [owner], stripScenario, net).findIndex(
+      (trip) => trip.personId === owner.id,
+    ) + 1;
   // The owner now walks to the strip first; observe the first departure after that access leg.
-  await departVehicle(page, 1);
-  expect((await page.evaluate(() => window.cityflows!.inspect(1)))?.parkingPhase).toBe('leave');
+  await departVehicle(page, driver);
+  expect((await page.evaluate((id) => window.cityflows!.inspect(id), driver))?.parkingPhase).toBe(
+    'leave',
+  );
   const stripTimeS = (await metrics(page)).timeS;
   await expect
     .poll(() => page.evaluate(() => window.cityflows!.drawnSnapshot!()?.timeS))
     .toBe(stripTimeS);
   const stripSnapshot = await page.evaluate(() => window.cityflows!.drawnSnapshot!());
   expect(stripSnapshot?.poseLane?.[0]).toBeGreaterThanOrEqual(0);
-  const stripShots = await capture(page, info, 'V118-munich-street', 1, strip.centroid, 12);
+  const stripShots = await capture(page, info, 'V118-munich-street', driver, strip.centroid, 12);
   await writeFile(
     info.outputPath('V118-motion.json'),
     JSON.stringify(
