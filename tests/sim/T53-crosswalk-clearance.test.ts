@@ -246,3 +246,49 @@ test('T53 a lane change does not land a body on a crosswalk span a walker holds'
   expect(overlap).toBeNull();
   expect(engine.metrics().trips.completed).toBeGreaterThan(50);
 });
+
+/** A street west to east through a T junction (a zebra on each arm). Cars leave homes whose
+ * connector stands `departM` into the east arm and drive on east; walkers cross the east arm. */
+function zebraDeparture(departM: number) {
+  const { city, node, street, place } = buildCity('Departure at a crosswalk', 1);
+  const centre = node(0, 0);
+  street(node(-300, 0), centre);
+  const [eastOut] = street(centre, node(300, 0));
+  street(centre, node(0, -150));
+  place('East homes', 'residential', { x: 20, y: 10 }, [
+    { road: eastOut, direction: 'out', positionM: departM },
+  ]);
+  place('East offices', 'work', { x: 290, y: 10 }, [
+    { road: eastOut, direction: 'in', positionM: 250 },
+  ]);
+  const [homes, offices] = Object.keys(city.places);
+  const north = walkPlace(city, 'North bank', { x: 24, y: -14 });
+  const south = walkPlace(city, 'South bank', { x: 24, y: 14 });
+  const compiled = setup(city);
+  const exitRoad = compiled.index.road.get(eastOut.id)!;
+  const spans = compiled.walk.links.flatMap((link) =>
+    (link.crossing?.spans ?? []).filter((span) => compiled.lanes[span.lane]!.road === exitRoad),
+  );
+  return { compiled, spans, homes: homes!, offices: offices!, north, south };
+}
+
+test('T53 a car does not depart onto a crosswalk span a walker holds', () => {
+  // The connector stands just past the stripes, so a departing body would cover them.
+  const { spans } = zebraDeparture(30);
+  const hi = Math.max(...spans.map((s) => s.atM + s.halfM));
+  const { compiled, homes, offices, north, south } = zebraDeparture(hi + 2);
+  const trips = Array.from({ length: 200 }, (_, i) =>
+    trip(`trip:${i}`, homes, offices, 100 + i * 3),
+  );
+  const engine = load(compiled, trips, [
+    { fromPlaceId: north, toPlaceId: south, perHour: 600 },
+    { fromPlaceId: south, toPlaceId: north, perHour: 600 },
+  ]);
+  let overlap: string | null = null;
+  for (let step = 0; step < 6000 && !overlap; step++) {
+    engine.step();
+    overlap = sampleCrossings(engine, compiled);
+  }
+  expect(overlap).toBeNull();
+  expect(engine.metrics().trips.completed).toBeGreaterThan(25);
+});

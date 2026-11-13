@@ -1998,10 +1998,12 @@ its planned movement's exit lane and the next route lane, within 100 m), and the
 such a vehicle like an ungranted stop line (`edge - minGapM`, or where it stands). A vehicle too
 close to stop passes. A walker already inside a lane's band holds even a vehicle that cannot
 stop comfortably (counted in `hardStops`); a crossing walker does not enter a lane's band while
-a vehicle is over its span or will not stop for it. TASK-165: a lane change never lands a body,
-with `minGapM` ahead and behind, on a span a walker holds this step. The walker's checks read
-only the crossed lanes, so before this a car released behind a walker could change into the lane
-the walker was then crossing (Munich `r:922` at n:251). These give the zebra rule, the turning
+a vehicle is over its span or will not stop for it. TASK-165: neither a lane change nor a spawn
+(a departure from a connector or a parking exit joining the lane) lands a body, with its gaps, on
+a span a walker holds this step. The walker's checks read the vehicles already on the crossed
+lanes, so before this a car released behind a walker could change into the lane the walker was
+then crossing (Munich `r:922` at n:251), and a departure could appear on it. These give the zebra
+rule, the turning
 yield at signals (movements into an arm with walk green) and gate 4's invariant: no vehicle body
 overlaps a span while a walker is inside it on that lane. TASK-140 (B59): a crossing link meets
 every lane of a road end that draws stripes at the stripes' centre (section 5.6), so each span
