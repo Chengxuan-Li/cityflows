@@ -1,5 +1,6 @@
 import { createRandom, type Random } from '../geo/random';
 import type { CConnector, CompiledCity } from '../network';
+import { carService } from '../network/car-service';
 import type { Scenario, SimParams, TripRequest } from '../schema';
 import type { createAccounting } from './metrics';
 import { COMPLETED, FAILED, QUEUED_ORIGIN, type Vehicles } from './vehicle';
@@ -252,10 +253,14 @@ export function createConnectors(
         if (!exit) {
           if (candidates.length !== exits.length) break;
           i++;
-          accounting.fail(
-            id,
-            parking.required(id) || parking.leavingSpace(id) ? 'no_parking' : 'no_route',
-          );
+          // TASK-155: a trip that needs parking but reaches none of its facilities has no route.
+          const parkable =
+            parking.required(id) &&
+            carService(compiled).reachesParking(
+              candidates.map((c) => c.lane),
+              compiled.index.place.get(trips[id]!.destinationPlaceId)!,
+            );
+          accounting.fail(id, parkable || parking.leavingSpace(id) ? 'no_parking' : 'no_route');
           continue;
         }
         i++;

@@ -269,7 +269,7 @@ export function probeMorning(
   scenario.startS = 7 * 3600;
   scenario.endS = 10 * 3600;
   const population = generatePopulation(city, scenario.demand);
-  const trips = scheduleTrips(city, population, scenario);
+  const trips = scheduleTrips(city, population, scenario, compiled);
   const provider = routeProvider ?? createRouteProvider();
   const walkRouter = createWalkRouter(compiled.walk);
   let routeRequests = 0;

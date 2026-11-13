@@ -1663,7 +1663,10 @@ Step sequence, in this order every step:
 2. Spawn: for each `out` or `both` connector in index order, release queued trips whose
    departure time has passed while the lane has a free gap of `spawnMinGapM` at the connector
    and the connector's per-minute budget allows. A released trip gets a route request from the
-   connector lane; `no_route` fails the trip without spawning. TASK-112 holds person car trips
+   connector lane; `no_route` fails the trip without spawning. A trip that needs parking fails
+   as `no_parking` only when a car from its departure lanes could reach one of its facilities
+   (movements and lane changes on legal car lanes, `src/network/car-service.ts`); reaching none
+   is `no_route` (TASK-155). A car leaving a parked space keeps `no_parking`. TASK-112 holds person car trips
    until their access walk arrives. Local walk trips use the walker path; bus, rail and walks
    with a gateway end fail with `unsupported_mode` (T15).
 3. Proposals, for every driving vehicle in (lane idx, position descending) order, from the
@@ -2085,7 +2088,8 @@ interface Scenario { id: string; name: string; seed: number; startS: number; end
   demand: DemandConfig; simParams: Partial<SimParams> }   // SimParams type lives in src/schema/sim.ts; defaults in src/sim/params.ts
 
 function generatePopulation(city: City, config: DemandConfig): Person[];
-function scheduleTrips(city: City, persons: Person[], scenario: Scenario): TripRequest[];  // sorted by departS
+function scheduleTrips(city: City, persons: Person[], scenario: Scenario,
+  compiled?: CompiledCity): TripRequest[];  // sorted by departS; `compiled` is `city` compiled (TASK-155)
 ```
 
 TASK-100 assigns class after mode choice, using a separate demand-seeded stream keyed by
@@ -2127,7 +2131,25 @@ variant. Saving a baseline captures current editor state, including unapplied li
   road arrivals; travel time is not subtracted. A profile overrides the default dwell duration.
 - Through demand draws origins by gateway population and distinct destinations by gateway
   jobs. Gateways without a feasible positive-weight counterpart are excluded; without any
-  eligible pair there are no through trips. Integer hourly rates are exact; fractional rates
+  eligible pair there are no through trips.
+- TASK-155: demand generates no car trip with a gateway end that no car can serve. A gateway
+  serves a place when its departure lanes reach one of the place's arrival connectors or
+  facilities it could park at (own, public, or an unowned lot, without the distance limit),
+  and a place serves a gateway when one of its departure connectors or such facilities reaches
+  the gateway's arrival lanes; between gateways, departure lanes must reach arrival lanes.
+  Reach follows movements (not `neverGreen` or lane-drop fallbacks) and adjacent-lane changes
+  on car-legal lanes: public roads and the trip end's own private/destination zone, entering
+  another zone only to end in it; lane-change distances and stations are ignored, so only
+  trips no route can serve are removed. Population and its draws are unchanged: a person
+  whose next leg is unserved stays at the activity before it for the rest of the day, and
+  that leg and the rest of the agenda generate no trips. Through destinations are drawn among
+  the gateways the origin serves. Event visitors are drawn among gateways that serve their
+  inbound and outbound legs, falling back to residential places when none does. Served trips
+  are unchanged: the Sindelfingen 0.15 morning keeps exactly its 155 departures.
+  `scheduleTrips` takes the caller's compiled city as an optional last argument (lead,
+  TASK-155 review); without it, it compiles the city itself when the city has a gateway. The
+  app's load, restart, regeneration and comparison and the import probe pass theirs; trip
+  lists are identical either way. Integer hourly rates are exact; fractional rates
   use seeded stochastic rounding. Times are uniform in each hour of the scenario day.
 - Each place event creates `max(arrivals, departures)` nonresident visitor identities on
   separate streams keyed by place, event and visitor index. The first `min` visitors have
@@ -3208,7 +3230,10 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    change plus 10 m clearance. A corridor without a multi-road cycle retains its directional
    portals. Every clipped motorway, trunk, primary and secondary end retains a portal even
    when disconnected, with diagnostics exposing its lack of access. Isolated minor-road
-   fragments retain their roads and diagnostics but generate no gateway demand.
+   fragments retain their roads and diagnostics but generate no gateway demand. TASK-155: the
+   import reports an info `gateway_unserved` for a gateway that reaches no local place or
+   parking, or that none reaches, naming the gateways it still serves (or that it generates
+   no trips); compile diagnostics are unchanged.
    Local two-way residential/service boundary ends have inferred turnarounds, allowing
    a driver who misses a turn to return instead of stranding at the crop boundary.
 9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
