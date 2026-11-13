@@ -200,20 +200,34 @@ function groupCensus(compiled: CompiledCity) {
   });
 }
 
-cityTest('Munich: every generated program splits by demand, members of a group alike', () => {
-  const result = compile(loadAuditCity('munich'));
-  if (!result.ok) throw new Error('Munich must compile');
-  const census = groupCensus(result.compiled);
-  expect(census.length).toBeGreaterThan(40);
-  for (const { id, members, programS, demandSplit } of census) {
-    expect(demandSplit, id).toBe(true);
-    for (const greens of members) {
-      expect(greens, id).toEqual(members[0]);
-      expect(
-        greens.reduce((a, b) => a + b),
-        id,
-      ).toBeCloseTo(programS, 6);
-      for (const green of greens) expect(green, id).toBeGreaterThanOrEqual(MIN_GREEN_S);
+cityTest(
+  'Munich: generated programs are actuated; a demand split times group members alike',
+  () => {
+    const city = structuredClone(loadAuditCity('munich'));
+    const programs = [
+      ...Object.values(city.nodes).map((n) => n.signal),
+      ...Object.values(city.junctionGroups ?? {}).map((g) => g.signal),
+    ].filter((p) => p !== null);
+    for (const program of programs) {
+      expect(program.actuated).toBe(true);
+      expect(program.demandSplit).toBeUndefined();
+      program.demandSplit = true;
     }
-  }
-});
+    const result = compile(city);
+    if (!result.ok) throw new Error('Munich must compile');
+    const census = groupCensus(result.compiled);
+    // Munich: nine signalised junction groups and one single signal node (n:635).
+    expect(census).toHaveLength(10);
+    for (const { id, members, programS, demandSplit } of census) {
+      expect(demandSplit, id).toBe(true);
+      for (const greens of members) {
+        expect(greens, id).toEqual(members[0]);
+        expect(
+          greens.reduce((a, b) => a + b),
+          id,
+        ).toBeCloseTo(programS, 6);
+        for (const green of greens) expect(green, id).toBeGreaterThanOrEqual(MIN_GREEN_S);
+      }
+    }
+  },
+);

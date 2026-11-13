@@ -184,7 +184,8 @@ const pins = {
     // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
     // removed every pin equals 3e9951a's.
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-    compile: 'a328c8d02049121e11097c2933fa4cd3ef296455fae5e9d18db6ca5ef1a25353',
+    // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
+    compile: '730a7b22bb8300cf95b83da79f09250112eb3f3425cb3e07972ba8ee8fdacdb5',
     lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
     curbs: '780f62342c39389d2fabd42f81e444fdc4c03c3070f91fce4489a3c671894919',
     de: '8b7938b03e68ee58a8aa0c86f5d0fbe3aac265f9d4f6fce9e61aa6980827dc79',
@@ -193,7 +194,8 @@ const pins = {
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-    compile: '401dae542529c2aa46c21d8af35d9168e84fbeb8d7450aef54cc0b89da47ab6b',
+    // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
+    compile: '543e8039b249d3b3b7d59dcf5fc78dc54796b4e28b911af176a995bf39dd8679',
     lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
     curbs: '24a6696b232568ba7bc93e4d1259eba28798648161c28e560d477bcd71496bd4',
     de: '008af8c2eb93c84032b0ca14492f91914ede12b4fce5b1c2572e540f3f1a292b',

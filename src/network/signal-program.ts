@@ -11,10 +11,11 @@ function roadHeading(road: Road, end: boolean): number {
   return Math.atan2(b.y - a.y, b.x - a.x);
 }
 
-/** TASK-170: generated programs split their green by demand when a run loads; their phases'
- * durations are the split's total and the fallback. */
+/** TASK-170: the timing flags of generated programs. They are actuated: on Munich seeds 1 to 6
+ * that completed more trips with less delay than fixed greens. The demand split stays a
+ * per-program choice: on the same seeds every split tried lengthened single visits to the
+ * Landsberger loop's roads past TASK-154's 900 s on some seed. */
 export const GENERATED_TIMING: Pick<SignalProgram, 'demandSplit' | 'actuated'> = {
-  demandSplit: true,
   actuated: true,
 };
 

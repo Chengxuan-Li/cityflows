@@ -1058,8 +1058,11 @@ the OSM `lanes` tags carry one.
   Every green group is green for at least an even split of the green time. Single-node programs
   are unchanged.
 - TASK-170 (demand split and actuation). Generated programs (import, grouping, Generate default
-  program) set `demandSplit` and `actuated`; hand-written and saved programs without the flags run
-  as before. A controller is a signalised junction group (its members in lockstep) or a single
+  program) set `actuated` (`GENERATED_TIMING`); `demandSplit` is a per-program choice in the
+  signal editor, off by default: on Munich seeds 1 to 6 every split tried lengthened single visits
+  to the Landsberger loop's roads past TASK-154's 900 s on some seed, while actuation alone
+  completed more trips with less delay. Hand-written and saved programs without the flags run as
+  before. A controller is a signalised junction group (its members in lockstep) or a single
   signal node.
   - Demand split. At load the engine routes every car trip of the scenario from the connector it
     was queued at to its destination connector on free-flow costs (no noise; one route per
@@ -1068,7 +1071,9 @@ the OSM `lanes` tags carry one.
     green group is a road pair at a member that is not from an inner road; its load is its
     movements' trips per approach lane, and it is served by the phases whose movements include
     it. `demandSplit` (Webster's rule, equal degrees of saturation, for phases that share green
-    groups) starts every phase at its minimum green and hands out the rest of the program's green
+    groups) starts every phase at its minimum green, but at least `SPLIT_FLOOR_SHARE` (half) of
+    its own green, since free-flow routes miss the traffic congestion moves onto other
+    approaches, and hands out the rest of the program's green
     time a second at a time to the green group with the least green per unit of load, in its
     phase with the least green; a green group green in every phase is left out. The cycle and the
     phases' movements and walk green are unchanged, so TASK-161's conflict separation holds; the
