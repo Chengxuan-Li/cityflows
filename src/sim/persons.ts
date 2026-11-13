@@ -57,7 +57,7 @@ export interface PersonMetrics {
   /** TASK-129: trips that waited for a household car another member had not brought back. */
   carWaits: { count: number; medianS: number; maxS: number };
   /** TASK-113: person trips by mode when they started, in total and by hour of departure, and
-   * those completed. A completed car trip is `drive` when the car parked at its destination's
+   * those completed (station riders excluded). A completed car trip is `drive` when the car parked at its destination's
    * own facility (or the destination is a gateway), `driveWalk` when it parked elsewhere. */
   modes: {
     started: { walk: number; car: number };
@@ -277,6 +277,8 @@ export function createPersons(
     completed: { walk: 0, drive: 0, driveWalk: 0 },
   };
   const parkedAway = new Uint8Array(trips.length);
+  /** TASK-128's station riders came by train and walk on: outside the mode shares. */
+  const rider = (id: number) => trips[id]!.personId?.startsWith('rider:') ?? false;
   const activeDrives = new Set<number>();
   const fallbackWalks = new Map<
     number,
@@ -409,9 +411,10 @@ export function createPersons(
     if (reason) failed++;
     else {
       completed++;
-      modes.completed[
-        trips[id]!.mode === 'walk' ? 'walk' : parkedAway[id] ? 'driveWalk' : 'drive'
-      ]++;
+      if (!rider(id))
+        modes.completed[
+          trips[id]!.mode === 'walk' ? 'walk' : parkedAway[id] ? 'driveWalk' : 'drive'
+        ]++;
     }
     for (const item of record.legs)
       if (item.state === 'active') {
@@ -545,8 +548,10 @@ export function createPersons(
     record.state = 'active';
     started++;
     const mode = trips[id]!.mode === 'walk' ? 'walk' : 'car';
-    modes.started[mode]++;
-    modes.byHour[mode][Math.floor(trips[id]!.departS / 3600) % 24]!++;
+    if (!rider(id)) {
+      modes.started[mode]++;
+      modes.byHour[mode][Math.floor(trips[id]!.departS / 3600) % 24]!++;
+    }
     if (car !== -1 && vehicles.state[car] === FAILED && vehicles.state[id] !== FAILED)
       accounting.fail(id, 'stranded');
     if (before?.state === 'failed' || vehicles.state[id] === FAILED) {
