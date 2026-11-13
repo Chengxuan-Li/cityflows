@@ -1,0 +1,240 @@
+import { CanvasSource, Container, Rectangle, Sprite, Texture } from 'pixi.js';
+import {
+  labelFonts,
+  placeLabels,
+  type LabelCandidate,
+  type LabelStyle,
+  type PlacedLabel,
+  type TextMetrics,
+} from '../labels';
+import { style } from '../style';
+import type { ViewBounds } from './stations';
+
+/** Upright text from a glyph atlas: each glyph once as a white fill and once as a white halo, so
+ * the ink and halo colours are sprite tints (`style.label`) and a new palette needs no new
+ * textures. */
+const fontOf = (s: LabelStyle) =>
+  `${labelFonts[s].bold ? 'bold ' : ''}${labelFonts[s].sizePx}px Arimo, Arial, sans-serif`;
+const PAGE = 1024;
+
+interface Glyph {
+  fill: Texture;
+  halo: Texture;
+}
+
+class GlyphAtlas {
+  private readonly resolution = Math.max(2, Math.ceil(window.devicePixelRatio));
+  private readonly glyphs = new Map<string, Glyph>();
+  private readonly metrics = new Map<string, TextMetrics>();
+  private readonly measurer = document.createElement('canvas').getContext('2d')!;
+  private pages: { context: CanvasRenderingContext2D; source: CanvasSource }[] = [];
+  private x = PAGE;
+  private y = 0;
+  private row = 0;
+  private dirty = new Set<CanvasSource>();
+
+  measure(text: string, s: LabelStyle): TextMetrics {
+    const key = `${s}/${text}`;
+    let m = this.metrics.get(key);
+    if (!m) {
+      this.measurer.font = fontOf(s);
+      const glyphs = Array.from(text);
+      const offsets: number[] = [];
+      let prefix = '';
+      for (const glyph of glyphs) {
+        offsets.push(prefix ? this.measurer.measureText(prefix).width : 0);
+        prefix += glyph;
+      }
+      const width = this.measurer.measureText(text).width;
+      const widths = offsets.map((o, i) => (offsets[i + 1] ?? width) - o);
+      m = { glyphs, offsets, widths, width, height: labelFonts[s].sizePx * 1.2 };
+      this.metrics.set(key, m);
+    }
+    return m;
+  }
+
+  private cell(width: number, height: number) {
+    if (this.x + width > PAGE) {
+      this.x = 0;
+      this.y += this.row;
+      this.row = 0;
+    }
+    if (!this.pages.length || this.y + height > PAGE) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = PAGE * this.resolution;
+      const context = canvas.getContext('2d')!;
+      context.scale(this.resolution, this.resolution);
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.lineJoin = 'round';
+      context.fillStyle = context.strokeStyle = '#ffffff';
+      const source = new CanvasSource({ resource: canvas, resolution: this.resolution });
+      this.pages.push({ context, source });
+      this.x = this.y = this.row = 0;
+    }
+    const at = { x: this.x, y: this.y, page: this.pages.at(-1)! };
+    this.x += width;
+    this.row = Math.max(this.row, height);
+    return at;
+  }
+
+  glyph(char: string, s: LabelStyle): Glyph {
+    const key = `${s}/${char}`;
+    let g = this.glyphs.get(key);
+    if (!g) {
+      const halo = style.label.haloPx;
+      this.measurer.font = fontOf(s);
+      const width = Math.ceil(this.measurer.measureText(char).width + 2 * halo + 2);
+      const height = Math.ceil(labelFonts[s].sizePx * 1.4 + 2 * halo);
+      const textures = [0, 1].map((stroke) => {
+        const { x, y, page } = this.cell(width, height);
+        const { context } = page;
+        context.font = fontOf(s);
+        context.lineWidth = 2 * halo;
+        if (stroke) context.strokeText(char, x + width / 2, y + height / 2);
+        else context.fillText(char, x + width / 2, y + height / 2);
+        this.dirty.add(page.source);
+        return new Texture({ source: page.source, frame: new Rectangle(x, y, width, height) });
+      });
+      g = { fill: textures[0]!, halo: textures[1]! };
+      this.glyphs.set(key, g);
+    }
+    return g;
+  }
+
+  upload() {
+    for (const source of this.dirty) source.update();
+    this.dirty.clear();
+  }
+
+  destroy() {
+    for (const { source } of this.pages) source.destroy();
+  }
+}
+
+const ink: Record<LabelStyle, () => number> = {
+  station: () => style.label.station,
+  stop: () => style.label.station,
+  major: () => style.label.street,
+  minor: () => style.label.street,
+  place: () => style.label.place,
+  area: () => style.label.area,
+};
+
+const overlaps = (a: ViewBounds, b: ViewBounds) =>
+  a.maxX >= b.minX && a.minX <= b.maxX && a.maxY >= b.minY && a.minY <= b.maxY;
+
+export function createLabelLayer() {
+  const container = new Container();
+  container.eventMode = 'none';
+  const halos = new Container(),
+    fills = new Container();
+  container.addChild(halos, fills);
+  let atlas: GlyphAtlas | undefined;
+  let candidates: readonly LabelCandidate[] = [];
+  let placed: PlacedLabel[] = [];
+  let placedZoom = NaN;
+  let covered: ViewBounds | null = null;
+  let glyphs = 0;
+  let inView: PlacedLabel[] = [];
+  const pool: { halo: Sprite; fill: Sprite }[] = [];
+  const fontsReady =
+    typeof document === 'undefined'
+      ? Promise.resolve()
+      : Promise.all(
+          (['station', 'minor'] as const).map((s) => document.fonts.load(fontOf(s))),
+        ).then(() => {
+          atlas = new GlyphAtlas();
+        });
+
+  function draw(zoom: number, view: ViewBounds) {
+    // Cover half a view more on each side, so a pan rebuilds the sprites only now and then.
+    const w = view.maxX - view.minX,
+      h = view.maxY - view.minY;
+    covered = {
+      minX: view.minX - w / 2,
+      minY: view.minY - h / 2,
+      maxX: view.maxX + w / 2,
+      maxY: view.maxY + h / 2,
+    };
+    let used = 0;
+    for (const label of placed) {
+      if (!overlaps(label.bounds, covered)) continue;
+      const s = label.candidate.style;
+      for (const g of label.glyphs) {
+        if (g.char.trim() === '') continue;
+        const glyph = atlas!.glyph(g.char, s);
+        let sprites = pool[used];
+        if (!sprites) {
+          sprites = { halo: new Sprite(), fill: new Sprite() };
+          for (const sprite of [sprites.halo, sprites.fill]) sprite.anchor.set(0.5);
+          halos.addChild(sprites.halo);
+          fills.addChild(sprites.fill);
+          pool.push(sprites);
+        }
+        used++;
+        for (const [sprite, texture, tint] of [
+          [sprites.halo, glyph.halo, style.label.halo],
+          [sprites.fill, glyph.fill, ink[s]()],
+        ] as const) {
+          sprite.texture = texture;
+          sprite.tint = tint;
+          sprite.alpha = label.alpha;
+          sprite.position.set(g.x, g.y);
+          sprite.rotation = g.rotation;
+          sprite.scale.set(1 / zoom);
+          sprite.visible = true;
+        }
+      }
+    }
+    for (let i = used; i < pool.length; i++) pool[i]!.halo.visible = pool[i]!.fill.visible = false;
+    glyphs = used;
+    atlas!.upload();
+  }
+
+  return {
+    container,
+    fontsReady,
+    setCandidates(next: readonly LabelCandidate[]) {
+      candidates = next;
+      placedZoom = NaN;
+    },
+    /** Places labels for a new zoom step and draws those near the view. */
+    update(zoom: number, view: ViewBounds, visible: boolean) {
+      container.visible = visible;
+      if (!visible || !atlas) return;
+      // Placement runs at zoom steps of 2^(1/8): between steps the text scales with the map by
+      // at most 4.4 %, and a zoom gesture re-places labels a few times instead of every frame.
+      const step = 2 ** (Math.round(Math.log2(zoom) * 8) / 8);
+      if (step !== placedZoom) {
+        placed = placeLabels(candidates, step, (text, s) => atlas!.measure(text, s));
+        placedZoom = step;
+        covered = null;
+      }
+      if (
+        !covered ||
+        view.minX < covered.minX ||
+        view.minY < covered.minY ||
+        view.maxX > covered.maxX ||
+        view.maxY > covered.maxY
+      )
+        draw(step, view);
+      inView = placed.filter((label) => label.alpha > 0 && overlaps(label.bounds, view));
+    },
+    /** Labels visible in the view, by kind, and the glyph sprites drawn around it. */
+    get counts() {
+      const counts = { street: 0, station: 0, stop: 0, place: 0, glyphs: 0 };
+      if (!container.visible || !atlas) return counts;
+      for (const label of inView) counts[label.candidate.kind]++;
+      counts.glyphs = glyphs;
+      return counts;
+    },
+    /** The labels visible in the view (for tests). */
+    get visibleLabels() {
+      return container.visible ? inView : [];
+    },
+    destroy() {
+      atlas?.destroy();
+    },
+  };
+}
