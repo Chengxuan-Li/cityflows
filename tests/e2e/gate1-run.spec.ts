@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { pointAtDistance } from '../../src/geo/polyline';
 import { compile } from '../../src/network';
-import { clickClearMapPoint, clickVehicle, departVehicle } from './helpers';
+import { clickClearMapPoint, clickVehicle, departVehicle, driveEveryone } from './helpers';
 
 async function metrics(page: Page) {
   return page.evaluate(() => window.cityflows!.metrics());
@@ -39,6 +39,8 @@ test('the grid has no validation issues and lists its 15 lane drops under Notes 
 test('runs, pauses, replays the same steps, and inspects the map @smoke', async ({
   page,
 }, testInfo) => {
+  // TASK-113: car traffic as before mode choice (every driver drives).
+  await driveEveryone(page);
   const start = await metrics(page);
   await page.getByRole('combobox', { name: 'Speed', exact: true }).selectOption('20');
   await page.getByRole('button', { name: 'Play', exact: true }).click();

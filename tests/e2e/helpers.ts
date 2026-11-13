@@ -88,6 +88,20 @@ export async function departVehicle(page: Page, id: number) {
   }, id);
 }
 
+/** TASK-113: every person with a free household car drives, as before mode choice, for specs
+ * about car traffic on the default city. Turns the demand sheet's mode choice off and restarts. */
+export async function driveEveryone(page: Page) {
+  await button(page, 'Demand').click();
+  const toggle = page
+    .getByRole('region', { name: 'Demand', exact: true })
+    .getByRole('checkbox', { name: 'Choose walk or car per trip', exact: true });
+  await toggle.click();
+  await expect(toggle).not.toBeChecked();
+  await page.keyboard.press('Escape');
+  await button(page, 'Restart').click();
+  await expect(button(page, 'Play')).toBeEnabled();
+}
+
 /** Picks an exposed part of a road without selecting a vehicle or pedestrian over it. */
 export async function clickClearMapPoint(page: Page, points: Vec2[]) {
   const timeS = (await metrics(page)).timeS;
