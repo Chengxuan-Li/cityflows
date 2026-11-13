@@ -382,7 +382,8 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
     if (name === 'selected') {
       let accent = 0;
       for (let i = 0; i < b.data.length; i += b.channels)
-        if (b.data[i] === 77 && b.data[i + 1] === 175 && b.data[i + 2] === 166) accent++;
+        // The selection colour, system blue #007AFF since TASK-162 (was #4DAFA6).
+        if (b.data[i] === 0 && b.data[i + 1] === 122 && b.data[i + 2] === 255) accent++;
       expect(accent, 'selected track is recolored in the cache').toBeGreaterThan(5);
     }
     expect(alphaChanged, `${name}: opaque framebuffer alpha`).toBe(0);
