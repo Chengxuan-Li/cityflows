@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { closeSheet, commands, useEnabled, useLabels, type AppCommand } from './commands';
 import { Sheet } from './controls';
 import { labels, matches } from './shortcuts';
@@ -98,8 +98,9 @@ function Commands() {
 /** The command menu (⌘K): every command, searchable, run with the arrow keys and Enter. */
 export function CommandMenu() {
   const open = useAppStore((state) => state.sheet === 'commands');
-  // The sheet shows after its content renders, and the search field takes the focus then.
-  useEffect(() => {
+  // The sheet shows after its content renders, and the search field takes the focus in the same
+  // commit, so the keys typed right after ⌘K land in it.
+  useLayoutEffect(() => {
     if (open) document.querySelector<HTMLInputElement>('.command-menu input')?.focus();
   }, [open]);
   return (
