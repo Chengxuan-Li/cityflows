@@ -110,3 +110,9 @@ against places), and reads transit and riders per line in the Chart section's mo
 With `CITYFLOWS_SHOT_DIR` it saves the five previews. Checked by eye: S-Bahn riders step off the
 doors onto the platform, not onto the tracks or the far side; the tram rider stands at the leading
 car beside the island; the purple transit share is a sliver at 1%.
+
+### Gates (milestone 6)
+
+On the final code: gate with the choice off 5,310 / 0 / 0 (main 5,310 / 0 / 0), T53 passes;
+mode-share guard 4 / 4 (seed 1: walk 77.7%, transit 0.80%); `npm run check` passes (1,366 unit
+tests, 1 skipped); `test:city` 173 passed, 1 skipped; `test:e2e:light` 39 passed; T80 e2e passes.
