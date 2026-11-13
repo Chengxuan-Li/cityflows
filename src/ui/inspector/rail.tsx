@@ -1,27 +1,54 @@
 import type { Place } from '../../schema';
 import { useAppStore } from '../store';
-import { trainTimetable, trainsAt } from '../../network/trains';
+import { useEffect, useState } from 'react';
+import { trainsAt, type TrainPose } from '../../network/trains';
+import { railTimetable, tramTimetable } from '../../network/trams';
 
 export function TrainInspector({ id, route }: { id: string; route: number }) {
   const session = useAppStore((s) => s.session);
   const timeS = useAppStore((s) => s.run?.timeS ?? 0);
+  const [controlled, setControlled] = useState<
+    { timeS: number; poses: TrainPose[] } | null | undefined
+  >(undefined);
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    void session.engine.snapshot().then((snapshot) => {
+      const rail = snapshot.rail;
+      if (active) setControlled(rail ? { timeS: snapshot.timeS, poses: rail.trains } : null);
+    });
+    return () => {
+      active = false;
+    };
+  }, [session, timeS]);
   if (!session?.compiled.rail) return null;
   const rail = session.compiled.rail,
-    table = trainTimetable(rail),
+    table = railTimetable(rail),
     service = table.routes[route];
   if (!service) return null;
-  const train = trainsAt(rail, table, timeS).find((t) => t.id === id);
+  const train = (
+    controlled?.poses ?? (controlled === null ? trainsAt(rail, table, timeS) : [])
+  ).find((t) => t.id === id);
   return (
     <section aria-label="Train inspector">
-      <h2>{service.kind === 'sbahn' ? 'S-Bahn' : 'Main-line train'}</h2>
+      <h2>
+        {service.kind === 'tram' ? 'Tram' : service.kind === 'sbahn' ? 'S-Bahn' : 'Main-line train'}
+      </h2>
+      {service.kind === 'tram' && <p>Synthetic service</p>}
       <dl>
+        {service.destination && (
+          <>
+            <dt>Direction</dt>
+            <dd>{service.destination}</dd>
+          </>
+        )}
         <dt>Route</dt>
         <dd>
           {rail.nodes[service.from]!.id} →{' '}
           {service.terminal !== undefined && <>{rail.nodes[service.terminal]!.id} → </>}
           {rail.nodes[service.to]!.id}
         </dd>
-        <dt>Station stops</dt>
+        <dt>{service.kind === 'tram' ? 'Stops' : 'Station stops'}</dt>
         <dd>{[...new Set(service.stops.map((s) => s.name))].join(', ') || 'Passes through'}</dd>
         <dt>Next</dt>
         <dd>{train?.next ?? 'Exited'}</dd>
@@ -67,7 +94,13 @@ export function RailInspector({ kind, index }: { kind: 'track' | 'platform'; ind
             </>
           )}
           <dt>Service</dt>
-          <dd>{t.service ?? (t.kind === 'rail' ? 'Main line' : 'Running line')}</dd>
+          <dd>
+            {t.kind === 'tram'
+              ? tramTimetable(rail).unused.includes(t.id)
+                ? 'No scheduled service'
+                : 'Synthetic tram service'
+              : (t.service ?? (t.kind === 'rail' ? 'Main line' : 'Running line'))}
+          </dd>
           <dt>Length</dt>
           <dd>{Math.round(t.lengthM)} m</dd>
           <dt>Layer</dt>

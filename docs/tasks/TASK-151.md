@@ -87,3 +87,50 @@ Write it as the commit body:
 - hashes moved and why;
 - files touched;
 - anything left open.
+
+## Findings
+
+Seed-1 probe (`bench/import-probe.ts` morning, 0.15), completed / gridlocked / stalled heads /
+parking failures:
+
+| Tree | Seed 1 | Seed 2 | Seed 3 |
+| --- | --- | --- | --- |
+| PR #1's base `89fc5d8` | 3964 / 32 / 0 / 0 | 3347 / 56 / 0 / 0 | 3624 / 34 / 0 / 0 |
+| PR #1 `eb7c089` | 3719 / 37 / 0 / 0 | 3310 / 53 / 0 / 0 | 3116 / 38 / 1 / 0 |
+| main `0b0e726` | 3903 / 36 / 0 / 0 | 3909 / 30 / 0 / 0 | 3169 / 50 / 0 / 0 |
+| branch base `4855f09` | 3287 / 44 / 0 / 1 | 3248 / 56 / 0 / 0 | 3297 / 27 / 0 / 0 |
+
+PR #1 costs its own base 245, 37 and 508 trips (mean 263); on today's main the combination costs
+616, 661 and -128 (mean 383). The base-against-PR #1 difference is -432, -62 and +181: no
+systematic interaction with main's parking rules. Toggling single rules on the base at seed 1
+(diagnostic only): without the crossing controller 4215 / 35; without open-crossing storage
+admission 3686 / 47 (per facility: Landsberger `r:269`/`r:252` +263, the other three +43 to
++86); without the shared-mouth yield 3306 / 54; without the rail-exit storage refusal 3066 / 77;
+without the clearing-rails grant order 3137 / 62. Road vehicles stood still on the tracks of
+open served crossings for 10197 s (`r:966`), 6534 s (`r:252`) and 3645 s (`r:728`) vehicle-time
+on the base (PR #1: 8509, 5790, 2662): compact links wholly inside the road band, between two
+signals on the B56 corridor (`r:966` feeds `r:703`).
+
+Where the cost sits. Treating the two Landsberger tram crossings (facilities 1 and 2) as unserved,
+over seeds 1 to 3, gives 3863 / 3453 / 3337 (base 3287 / 3248 / 3297, mean +274); treating the other
+three served crossings as unserved gives 3020 / 3122 / 3479 (mean -70); without the controller
+3813 on average (main 3660). Both crossings lie inside the B56 loop: `r:966` (7.75 m, its road band
+0 to 6.6 m) between `n:249` and `n:362`, feeding the loop ramp `r:703`, and `r:252` (6.42 m, band to
+6.4 m) between `n:251` and `n:246`. A car admitted onto either link waits at its stop line
+(front 5.7 m and 4.4 m) with its whole body on the tracks. At seed 1 the refusals that hold it
+there are the loop's: `r:966>r:703` exit-full (48 440 refusals), conflicts with `r:961>r:364`
+(23 243, the B56 queue head's road), `r:252>r:482` conflicts with `r:964>r:248` (45 000), then
+signals. The trams wait (safety holds), up to 446 s for `tram:rn:10155>rn:10188` at 09:24 with
+cars 3015 and 3317 on `r:966`, and the crossings stay closed. Requiring storage past the junction
+movement on the exit lane cut the on-track time by a third at seed 1 but gave 3397 / 3314 / 3061.
+
+The one parking failure (seed 1 only): van 2796 (`person:p:1758:60:trip:1`) was refused at lot
+pk:2056's mouth on `r:669#0` (38 m) at 08:02:39, 17 s after departure. `r:669` ends at the
+extract edge with no outgoing movement, so no other parking was reachable. It is a parking item
+on a dead-end lot approach, not a crossing interaction.
+
+Conclusion: the combination's loss is PR #1's crossing control at the two crossings inside the
+B56 loop, where the locked loop leaves admitted cars on the tracks. Main's parking changes only
+move the seed-1 trajectory. Per the contract this stops here without a fix: repairing it means
+draining B56 (TASK-131 Phase 3) or changing compact-link admission, which the lead's earlier
+reservation and storage trials already rejected.

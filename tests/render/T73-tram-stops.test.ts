@@ -100,7 +100,7 @@ test('T73 an island carries a shelter, two name boards, a display and a tactile 
   }
 });
 
-test('T73 placement is deterministic, and changes neither the city nor the compiled network', () => {
+test('T73 placement is deterministic; compiled stops add only service metadata', () => {
   const city = load(),
     snapshot = JSON.stringify(city),
     cc = compiled(city);
@@ -108,10 +108,13 @@ test('T73 placement is deterministic, and changes neither the city nor the compi
   expect(JSON.stringify(city)).toBe(snapshot);
   const again = load();
   expect(placeTramStops(compiled(again), again)).toEqual(placements);
-  // Stops are not part of the network: the compile of a city without them is the same.
+  // TASK-138 carries stop metadata for service; all other compiled bytes are unchanged.
   const without = structuredClone(city);
   delete without.rail!.tramStops;
-  expect(hash(compile(without))).toBe(hash(compile(city)));
+  const withStops = compiled(city);
+  expect(withStops.rail!.tramStops).toHaveLength(Object.keys(city.rail!.tramStops!).length);
+  delete withStops.rail!.tramStops;
+  expect(hash(compiled(without))).toBe(hash(withStops));
   expect(placeTramStops(compiled(without), without)).toEqual([]);
 });
 

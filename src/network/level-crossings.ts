@@ -9,6 +9,7 @@ import {
   polylineLength,
   segmentDistance,
   segmentIntersection,
+  trimPolyline,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, Road } from '../schema';
@@ -20,6 +21,11 @@ export interface LevelCrossing {
   nodes: string[];
   kind: 'rail' | 'tram';
   layer: number;
+  /** Sim segment encoding: lane >= 0, movement = -index - 1. */
+  spans?: { segment: number; fromM: number; toM: number }[];
+  stops?: { lane: number; stopM: number }[];
+  /** Track metres occupied by the road surface, including a clearance margin. */
+  railSpans?: { track: number; fromM: number; toM: number }[];
   approaches: {
     roadId: string;
     /** Stop marking centre; heading points toward the tracks. */
@@ -278,7 +284,177 @@ export function compileLevelCrossings(
         along = polylineLength(road.centerline);
       }
     }
-    if (facility.approaches.length) result.push(facility);
+    if (facility.approaches.length) {
+      if (geometry) compileProtection(facility, graph, geometry, city);
+      result.push(facility);
+    }
   }
   return result;
+}
+
+function compileProtection(
+  facility: LevelCrossing,
+  rail: Pick<RailGraph, 'nodes' | 'tracks'>,
+  city: CompiledCity,
+  source: City,
+) {
+  const nodes = rail.nodes.filter((n) => facility.nodes.includes(n.id));
+  const tracks = rail.tracks.filter(
+    (t) => atGrade(t) && nodes.some((n) => t.from === n.id || t.to === n.id),
+  );
+  facility.stops = facility.approaches.flatMap((a) => {
+    const road = city.roads.find((r) => r.id === a.roadId)!;
+    return road.lanes.map((lane) => ({
+      lane,
+      stopM: nearestOnPolyline(city.lanes[lane]!.polyline, a.pos).along,
+    }));
+  });
+  facility.spans = [];
+  facility.railSpans = [];
+  const sameGrade = (lane: number) => {
+    const road = source.roads[city.roads[city.lanes[lane]!.road]!.id]!;
+    return (road.layer ?? source.nodes[road.from]!.layer) === facility.layer;
+  };
+  const segments = [
+    ...city.lanes
+      .filter((l) => sameGrade(l.idx))
+      .map((l) => ({ ...l, segment: l.idx, halfWidth: l.widthM / 2 })),
+    ...city.movements
+      .filter((m) => sameGrade(m.fromLane) && sameGrade(m.toLane))
+      .map((m) => ({
+        ...m,
+        segment: -m.idx - 1,
+        halfWidth: Math.max(city.lanes[m.fromLane]!.widthM, city.lanes[m.toLane]!.widthM) / 2,
+      })),
+  ].filter((s) => nodes.some((n) => nearestOnPolyline(s.polyline, n.pos).away <= 30));
+  const localTracks = tracks.map((t) => {
+    const at = nodes
+      .filter((n) => t.from === n.id || t.to === n.id)
+      .map((n) => nearestOnPolyline(t.line, n.pos).along);
+    const low = Math.max(0, Math.min(...at) - 30),
+      high = Math.min(t.lengthM, Math.max(...at) + 30);
+    return {
+      ...t,
+      line: trimPolyline(t.line, low, t.lengthM - high),
+      low,
+      high,
+      halfWidth: t.kind === 'tram' ? 1.2 : 1.5,
+    };
+  });
+  const active = new Set<number>();
+  for (const s of segments)
+    if (
+      localTracks.some((t) =>
+        polylineCrossings(s.polyline, t.line).some((h) =>
+          nodes.some((n) => Math.hypot(n.pos.x - h.point.x, n.pos.y - h.point.y) <= 30),
+        ),
+      )
+    )
+      active.add(s.segment);
+  // A body-width cross section, sampled at <=25 cm; the margin covers the sample interval.
+  const contact = (
+    line: readonly Vec2[],
+    cumulative: Float64Array,
+    lengthM: number,
+    halfWidth: number,
+    other: readonly Vec2[],
+    otherHalfWidth: number,
+  ) => {
+    let low = Infinity,
+      high = -Infinity;
+    const count = Math.max(1, Math.ceil(lengthM / 0.25));
+    for (let i = 0; i <= count; i++) {
+      const at = (i * lengthM) / count,
+        p = pointAtDistance(line, cumulative, at),
+        heading = headingAtDistance(line, cumulative, at);
+      const nx = -Math.sin(heading) * halfWidth,
+        ny = Math.cos(heading) * halfWidth;
+      if (
+        crossingSegmentClear(
+          { x: p.x - nx, y: p.y - ny },
+          { x: p.x + nx, y: p.y + ny },
+          other,
+          otherHalfWidth + 0.25,
+        )
+      )
+        continue;
+      low = Math.min(low, Math.max(0, at - 0.25));
+      high = Math.max(high, Math.min(lengthM, at + 0.25));
+    }
+    return low <= high ? { fromM: low, toM: high } : undefined;
+  };
+  const contacts = new Map(
+    segments.flatMap((s) => {
+      const intervals = localTracks.flatMap((t) => {
+        const hit = contact(s.polyline, s.cumulative, s.lengthM, s.halfWidth, t.line, t.halfWidth);
+        return hit ? [hit] : [];
+      });
+      return intervals.length
+        ? [
+            [
+              s.segment,
+              {
+                fromM: Math.min(...intervals.map((i) => i.fromM)),
+                toM: Math.max(...intervals.map((i) => i.toM)),
+              },
+            ] as const,
+          ]
+        : [];
+    }),
+  );
+  const neighbours = (segment: number) =>
+    segment >= 0
+      ? [...city.lanes[segment]!.in, ...city.lanes[segment]!.out].map((m) => -m - 1)
+      : [city.movements[-segment - 1]!.fromLane, city.movements[-segment - 1]!.toLane];
+  // Only actual crossing paths and the touching ends of their connected lanes/movements count.
+  // Proximity to a parallel street does not invent an additional crossing.
+  const queue = [...active];
+  for (const segment of queue)
+    for (const next of neighbours(segment))
+      if (!active.has(next) && contacts.has(next)) {
+        active.add(next);
+        queue.push(next);
+      }
+  facility.spans = segments.flatMap((s) =>
+    active.has(s.segment) && contacts.has(s.segment)
+      ? [{ segment: s.segment, ...contacts.get(s.segment)! }]
+      : [],
+  );
+  for (const t of localTracks) {
+    const cumulative = cumulativeLengths(t.line),
+      lengthM = polylineLength(t.line);
+    const intervals = segments
+      .filter((s) => active.has(s.segment))
+      .flatMap((s) => {
+        const hit = contact(t.line, cumulative, lengthM, t.halfWidth, s.polyline, s.halfWidth);
+        return hit ? [hit] : [];
+      });
+    if (intervals.length)
+      facility.railSpans.push({
+        track: t.idx,
+        fromM: t.low + Math.min(...intervals.map((i) => i.fromM)),
+        toM: t.low + Math.max(...intervals.map((i) => i.toM)),
+      });
+  }
+  const spans = new Map(facility.spans.map((s) => [s.segment, s]));
+  const stops = new Map(facility.stops.map((s) => [s.lane, s.stopM]));
+  const seen = new Set<number>();
+  const entry = (segment: number) => {
+    if (seen.has(segment)) return;
+    seen.add(segment);
+    if (segment < 0) {
+      entry(city.movements[-segment - 1]!.fromLane);
+      return;
+    }
+    const lane = city.lanes[segment]!,
+      span = spans.get(segment);
+    if (span && span.fromM < 0.5) {
+      for (const m of lane.in) entry(-m - 1);
+      return;
+    }
+    const stopM = Math.max(0, Math.min(lane.stopM, span ? span.fromM - 0.5 : lane.lengthM));
+    stops.set(segment, Math.min(stops.get(segment) ?? Infinity, stopM));
+  };
+  for (const span of facility.spans) entry(span.segment);
+  facility.stops = [...stops].sort(([a], [b]) => a - b).map(([lane, stopM]) => ({ lane, stopM }));
 }

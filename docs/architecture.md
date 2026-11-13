@@ -689,6 +689,25 @@ returns whole-train occupancy and articulated car poses without frame history. A
 the timetable departure plus each route stop's `arrivalS`, repeated by `periodS`; terminal
 services include station visits on both legs.
 
+TASK-138 reuses that motion, reservation and pose representation for an independent synthetic
+tram timetable (`network/trams.ts`). `RailGraph.tramStops` carries the canonical stop islands.
+Only tram sections with permitted continuations between extract boundary ends (or a lawful
+buffer return) receive service; disconnected fragments, service/depot tracks and closed loops
+without boundary entry remain excluded and reported by `tramCensus`. Stop attachment projects
+the mapped halt onto its named section and places the tram centre half a body length before
+it along the connected route, so its nose meets the halt marking in either travel direction.
+The centre may lie on a preceding section or outside the bounded extract; canonical halts stay
+unchanged. Buffer returns generate a separate reverse motion leg so the new leading cab meets
+each reachable halt, excluding return visits already behind that cab at turnaround. Attachment
+never uses geographic track proximity or jumps between fragments. Defaults are a 36 m articulated tram (four 9 m sections), 50 km/h
+ceiling (lower mapped limits apply), 1 m/s² acceleration/braking, 25 s dwell and 360 s nominal
+headway. Synthetic direction labels name the final served stop toward the city edge; mapped
+line labels are not presented as mapped route destinations. The existing train-only timetable
+and its hash stay unchanged. `railTimetable` combines both services on their least common
+period, repeating departures at each original cadence and retaining train route indices.
+`trainPoseAt(rail, table, departureIndex, cycle, ageS)` and `trainPositionAt(route, ageS)` expose
+per-occurrence service-age sampling for the crossing controller without wall-clock state.
+
 TASK-132 derives each track's height profile, `railHeights(compiled, roadGrades, nodeGrades)`
 in `network/rail.ts`, cached by rail graph identity outside `CompiledCity` like the timetable.
 Tags decide the grade, not `layer`: `covered` track is at grade; a tunnel's rail top lies at
@@ -1397,6 +1416,58 @@ TASK-111's test walkers use it once per source (place to place, `walkSpeedMps`,
 
 ## 8. Simulation
 
+TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
+adds per-lane painted stops, lane/movement conflict spans and rail-coordinate road spans to
+each facility; movement segments use `-movementIndex-1`. The controller advances on fixed
+simulation ticks, independently of drawing. Its snapshot `rail` contains facility-ordered
+`crossings` (0 open, 1 warning, 2 closed), `railReady` (1 only while closed and clear of road
+traffic), and authoritative articulated `trains`, including trams. Warning lasts three seconds
+before closure and begins at least twelve seconds before nose entry, increased for the fastest
+approach's braking time. A driver already beyond the marking, or unable to stop within its
+class's comfortable braking distance at warning onset, clears; the service waits before its
+nose enters the road band until the whole road vehicle, including a rear on the preceding
+lane or movement, clears. Road entry also requires downstream storage for the full vehicle
+past every conflicting track and any intervening junction movement. An open, isolated single
+lane may admit a moving platoon when its exclusive downstream prefix fits every intervening
+vehicle's full length plus gap, without moving any stopped or queued body. That prefix ends
+before road or pedestrian stops, access points, another served crossing, and the lane end
+(with a maximum-body rear guard). Lateral lanes, parking manoeuvres and clearance across a
+junction retain strict admission. A road red inside that
+clearance holds entry; release removes only the crossing obstacle and never grants a road
+signal. Unserved, pedestrian and grade-separated crossings impose no road restriction.
+An admitted vehicle that stops wholly upstream of the physical conflict yields to rail and
+holds there before resuming. Gridlock recovery is exempt only while a protected rail stop is
+the binding obstacle at the stopped vehicle's nose; an open crossing's downstream queue
+remains subject to ordinary recovery.
+
+At a junction beside a served crossing, a competing turn must have room for its full
+vehicle and gap beyond the last shared conflict zone. Storage accounts for cars already
+entering or granted that exit. A car whose body is on the tracks can receive the first
+legal grant to clear them. Signal, yield-gap, stop, occupied-zone and merge checks still
+apply, and turns on red wait for green candidates.
+
+Each scheduled occurrence has its own progress clock. Exceptional road blockage pauses that
+service before the crossing; occupied rail sections and same-tick reservations hold following
+or opposing services, while unrelated routes keep advancing. Delayed services also retain
+admission priority over new occurrences sharing their tracks. Protection remains until the
+last carriage clears the entire road band plus one second; overlapping warnings and services
+combine by the most restrictive state. That final second uses simulation time from the actual
+tail clearance, so a later service hold at another crossing or rail section cannot extend it.
+Live edits retain that timestamp only for the same facility and motion interval.
+Pausing freezes these clocks; restart reconstructs
+them from the timetable. Live edits remap progress by route identity, requested departure and
+cycle, discard removed services, rebuild road spans, and hold a service upstream if the edit
+places a road vehicle in its crossing. Snapshot poses are allocated only on request, and road
+occupancy scans only occupied influenced segments. Crossing-held road vehicles do not enter
+gridlock recovery. No rail field enters canonical project data.
+
+A service positively held before one facility by road occupancy may release its own warning
+at a separate, not-yet-entered downstream facility to let that road discharge. Other services'
+protection, occupied rail bands and tail guards still apply. Once the upstream hold clears,
+the downstream facility starts a full fresh braking-aware warning; the service may approach
+but waits before nose entry until that warning completes. These per-occurrence warning
+clocks pause with simulation time and survive live edits only for the same facility interval.
+
 TASK-102 keeps garage stock and person car chains in `sim/parking.ts`, separate from place
 event admission. Initial residential stock uses residents times scenario car share, bounded
 by slots and distributed across facilities; explicit `occupancyAtStart` wins. Otherwise work
@@ -1411,7 +1482,9 @@ TASK-125 claims parking when the room-required choice pass accepts a reachable e
 holds at most one claim: an exact roadside space, or one capacity unit in a hard garage or lot.
 Claimed roadside spaces are unavailable to other cars; hard facilities drop out when occupied
 plus claimed reaches capacity. Entry checks exclude the asking car's own claim. The full-facility
-departure forecast makes no claim. Soft inferred garages remain unlimited and are not counted.
+departure forecast makes no claim. TASK-153: a car choosing as it leaves counts its own parked
+car and space as free, so it can claim a place in the facility it is leaving. Soft inferred
+garages remain unlimited and are not counted.
 Choosing again, entry rejection, parking, failure and gridlock respawn release through the same
 parking release operation; trip accounting covers every terminal path. Claims never move origin
 stock. Live edits remap claims by facility/entry id and space ordinal, releasing removed targets.
@@ -1434,8 +1507,13 @@ Curve progress is eased, and snapshots carry the moving body throughout the hand
 A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
 and becomes `in_lot` (counted among driving trips). It follows its local shortest path at
 `lotSpeedMps` (2.5 m/s), keeps `minGapM` behind a leader and gives a merge to a car already
-across it; tied approaches use distance, then id. Narrow local paths admit one entry/direction
-cohort at a time to prevent opposing cars deadlocking. Reversing departures take an aisle
+across it; tied approaches use distance, then id. Narrow local paths admit one entry cohort of
+arrivals at a time to prevent opposing cars deadlocking. TASK-153: departures, including one
+holding for a street gap, refuse an arrival only where its path to its bay and its pull-in come
+within body clearance (half of each width plus 0.3 m) of a departing body, now or along the
+rest of its leave manoeuvre, drive-out to the hold and merge. A bay blocked so gives way to the
+next free bay in choice order whose way is clear, and a claim moves with it. A departure still
+waits while any arrival is in the lot. Reversing departures take an aisle
 gap, leave their stall and follow the local path toward an outbound entry. TASK-150: they hold
 at the path's farthest pose whose whole body is clear of the exit lane (a path with no clear
 pose holds where it starts), keeping their claim; lot followers queue behind them. From the
@@ -1445,11 +1523,15 @@ capped at the stop line or the connector, whichever is later. Their route starts
 connector; a destination between the two (their own lot, chosen again) is where they join
 instead. The grant inserts the car there at speed 0, so following traffic treats it as a lane
 occupant before its body crosses the lane edge; the body then merges (`merge` phase) along a
-front-bumper curve at `lotSpeedMps` and drives on. TASK-152: a bay with a `departure` leaves
-as a kerbside space does: it takes the departure's spawn gap (with the reversing room ahead)
-while parked, is inserted there at speed 0, reverses out over `leaveManoeuvreS` and drives the
-aisle as a lane vehicle; it never starts in the lot. A lot exit whose drive-out has no pose
-clear of its lane is offered only when no other exit is. Gridlock recovery
+front-bumper curve at `lotSpeedMps` and drives on. A lot aisle mapped on a road is such a
+lane: the car joins it where its path first meets it. A car turning into the same mouth on the
+exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
+the join station, whichever is earlier (TASK-153), so it never stands in the gap the grant
+checks. TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
+departure's spawn gap (with the reversing room ahead) while parked, is inserted there at speed 0,
+reverses out over `leaveManoeuvreS` and drives the aisle as a lane vehicle; it never starts in the
+lot. A lot exit whose drive-out has no pose clear of its lane is offered only when no other exit
+is. Gridlock recovery
 never applies inside a lot. Trucks and buses use garages only; garage admission and stock
 rules are unchanged.
 
@@ -1636,9 +1718,37 @@ Step sequence, in this order every step:
      its whole length past the movement (the rear of the exit lane's last vehicle, projected
      forward by that vehicle's speed over the candidate's time to cross, at least
      `candidate.lengthM + minGapM` along the lane) is not granted, so it waits at the stop line
-     rather than in the junction. After `boxWaitS` of waiting at the line it falls back to
-     the older rule (the last vehicle's front at least `candidate.lengthM + minGapM` along), so a
-     jammed junction still drains.
+     rather than in the junction. TASK-131 Phase 3 / B56 bounds that forecast by leaders,
+     destination connectors and red stop lines, and by `boxWaitS`. Cars already crossing toward
+     the exit also consume its space. After `boxWaitS` standing, admission needs actual rear
+     clearance; waiting never replaces it with front clearance. Controlled movements recheck
+     this storage when the front actually enters, since an approach grant can become stale.
+   - TASK-131 Phase 3: group entries check the entire routed path through inner roads and the
+     final exit again when the front crosses the entry, including cars already admitted whose
+     exit space is reserved. Forecasts stop at a leader, destination connector or red stop line,
+     and never extend beyond `boxWaitS`; waiting never relaxes this group rear-clearance rule.
+     Conflicting group paths wait outside until the admitted car's rear clears the relevant
+     member movements; already-cleared members do not reserve the rest of a long group.
+     TASK-154: a member the admitted car has not reached yet holds the entry only while that
+     car, from its current speed at full acceleration up to its maximum speed, could reach the
+     conflict zone before the entering car's rear clears it plus `zoneMarginS` (canGrant's timing).
+     Before this, a stream admitted at another entry of a large group (Munich group 10 at
+     Donnersbergerbrücke) held a merge for its whole traversal and starved the signalled entry.
+     The chosen movements persist through inner roads, whose member stop, yield and signal
+     controls do not stop a cleared car. Physical following, conflict-zone backstops and walker
+     holds remain active. Required safe lane changes and destinations on inner roads remain
+     reachable; discretionary lane changes and congestion/parking reroutes wait until group exit.
+     A fallback or proposed head diversion uses the suffix from its actual landing lane, even
+     when it enters the incumbent route's next road; replanning invalidates cached entry paths.
+     Outstanding exit slots cannot exceed the lane's finite storage, including when a moving
+     occupant's projected rear would lie beyond the lane end.
+     A required inner lane change targets the reserved movement's source lane, even when the
+     road route also accepts the current lane through a different downstream lane-change plan.
+     Exit, gridlock recovery and live edits release the derived group reservations.
+     A short external exit that cannot store the vehicle carries its clearance through any
+     conflict-free uncontrolled continuations to downstream storage. A mainline merge keeps
+     its rear-gap, insertion-deceleration and approaching-follower safety checks; only an
+     ungranted outside ramp waiting on this car's existing reservation loses its priority claim.
 5. Commit: `v = max(0, v + a * dt)`, `x += v * dt`. A vehicle that passes its lane end enters
    its granted movement, then the to-lane. A vehicle that reaches an arrival connector completes
    if the place accepts it (capacity and throughput), otherwise becomes `queued_destination` at
@@ -1679,13 +1789,25 @@ for `exit-full` or `box`. A red signal pauses the timer; movement, becoming a fo
 changing the lane plan or a live patch resets it. This also checks an approach grant or
 an automatic continuation whose exit has filled since admission. After 45 s by default,
 it tries other movements from its current lane, excluding `neverGreen`, class/access bans
-and movements in its trip's `attemptedFallbacks`. A candidate needs room on its exit now
-and a route from that exit to the current destination connector. The lowest remaining
+and movements in its trip's `attemptedFallbacks`. TASK-131's shared-lane trial permits one
+search before that delay when the head and its immediate follower are stopped at normal
+queue spacing, the head's outlet is full, and the follower has a distinct green outlet with
+storage. Outlets are the actual exits beyond a junction group. An early candidate must also
+be green. The pair is tried once while eligible; an unsuccessful search leaves the ordinary
+timer running. A changed lane plan, live patch or recovery resets the pair. A candidate needs
+room on its exit now and a route from that exit to the current destination connector. The lowest remaining
 route cost wins, with movement index breaking ties. It releases any approach grant and
 requests the chosen movement through ordinary signal, gap and conflict arbitration.
 Taking it uses the existing `missed_turn` fallback and reroutes on the next lane, without
 spending a congestion replan. After the delay it remains eligible as room opens; an
 unsuccessful search does not restart the delay. Without an alternative it keeps waiting;
+TASK-131 Phase 3 / B56 rejects a head alternative whose suffix repeats the current blocked
+movement or an earlier unresolved blockage in that vehicle's executed head diversions. Two
+individually nonreturning head choices therefore cannot send the vehicle back to an earlier
+blocked movement. A record is made only when the diversion actually executes and is released
+when the vehicle reaches the blocked movement's target road; another usable entry lane remains
+available. Recovery, edits and a changed parking destination reset this history. This constrains
+the engine's head choices without changing route search or its request/result contract.
 TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
 not contain the other per-vehicle timers).
 
@@ -1695,6 +1817,17 @@ patch, clears the epoch on a cost-version change, and replaces a head's entries 
 destination, class, purpose, desired speed, noise or route seed changes. Every step still
 checks candidate permissions, attempted fallbacks, exit occupancy and intersection blocking;
 only the identical suffix search is reused. `RouteProvider` retains no route-result cache.
+
+Roadside origin courtesy (TASK-131 trial). A roadside departure continuously checked as the
+eligible FIFO candidate for `gridlock.respawnS` may request one bounded gap. Access walking
+and intervals without head eligibility do not age that request. A safely stoppable road
+follower, fully on an external lane and without a movement grant, group clearance or parking
+motion, may hold outside both the full swept body envelope and the normal spawn spacing.
+The leader must already move and project clear within `boxWaitS`; the pre-clear hold lasts
+at most that window, with one request per owner/leader pair and one active hold per lane.
+Ordinary spawn, departure-room and insertion IDM checks alone authorize departure; the
+existing parking manoeuvre then proceeds normally. Loss of eligibility, a follower commitment
+or lane change, and live edits cancel the hold. A slowed leader cannot extend it indefinitely.
 
 Stop positions (TASK-072, TASK-094). `CLane.stopM` is where an ungranted vehicle stops. On a
 signalized approach with a served movement and a crossing, `stopM` is the crossing's far edge
@@ -1754,6 +1887,12 @@ the change up: it takes the TASK-048 fallback from its current lane (the cheapes
 movement whose landing lane routes to its destination), which now also applies when the
 route still needs another lane on this road and to a required diverge, and reroutes with
 `missed_turn`. With no such movement it keeps waiting, and gridlock recovery below applies.
+Phase 3 additionally checks the near downstream route before a discretionary change. Over
+one `missedTurnAfterS` window of posted-speed travel, it compares how many mandatory changes
+remain from each lane, including legal alternatives through the intervening junctions.
+A move that increases that count is suppressed. The usual MOBIL and gap checks apply to
+moves with equal or lower counts.
+
 TASK-076, second round (lead, after the first round's Munich trace): a discretionary (MOBIL)
 change is never proposed to a lane from which the car needs more changes to reach its route's
 target lanes than from its current lane, on any road of the route, not only the last (on
@@ -2244,18 +2383,30 @@ TASK-127 draws articulated red/white S-Bahn and blue/grey main-line cars in grad
 layers and two instanced 3D batches. Train poses use snapshot/simulation time only; paused
 trains request no frames. Bridges occlude lower trains; tunnels hide train bodies (3D reveals
 them with See below ground). Rail hides tracks and trains together. Picking exposes train
-kind, route ends, station stops and next stop/exit; no train state enters car/walker counts,
-traffic controls, routing, demand or simulation hashes.
+kind, route ends, station stops and next stop/exit. Trains and trams have separate service
+counts. Their passage affects road traffic through the crossing controller in section 8.
+
+TASK-138 adds narrower teal articulated tram bodies to the same 2D layers and 3D batches,
+with identical picking, occlusion and Rail-layer visibility. Both scenes use authoritative
+`snapshot.rail.trains` when supplied; the pure combined timetable is the standalone fallback.
+The inspector reads that same authoritative snapshot, identifies synthetic tram service,
+names its direction, served stops, next stop and stopped/running status. It does not replace
+a held controller pose with a raw timetable sample.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
-dimensions. Every railway road approach gets an open striped gate, St Andrew's cross, lights
-and a stop marking; mapped `no` tags remain in saved data but do not suppress this sandbox
-equipment. Tram approaches get a horizontal white tram signal and a stop marking. Explicit
-bell tags add a bell housing. These are static visual facilities: gates stay upright and no
-train/car/tram protection state is implied. Rail hides all equipment in both views; 2D detail
-appears from 2 px/m. Mapped railway crossings expose twin railheads over the road in the same
-shared rail geometry, 0.085 m above grade in 3D; beds remain clipped below the road. Traffic
-interaction is deferred until after TASK-131 Phase 3 (trams: TASK-138).
+dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
+lights and stop marking. Explicit bell tags add a bell housing. Both views read the
+simulation snapshot in compiled facility order. Gates stand upright when open and during
+advance warning. Lamps alternate on simulation time during protection, and gates lie
+across the road while closed. Pausing freezes the displayed state.
+
+At a tram crossing the road approach indicates when drivers must stop. The white signal
+facing the track is horizontal while the tram must wait. Its vertical aspect requires
+the simulation to have closed the road and cleared the crossing for rail. Rail block
+reservations still govern the individual service. The Rail layer controls equipment
+visibility in both views. The 2D detail threshold is 2 px/m. Mapped railway crossings
+expose twin railheads over the road, 0.085 m above grade in 3D, with the bed clipped
+below the road.
 
 TASK-134 hangs overhead lines over wired track (section 4), computed once per rail graph by
 `catenary(compiled, roadGrades, nodeGrades)` in `network/catenary.ts` (cached like the heights;
