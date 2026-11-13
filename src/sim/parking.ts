@@ -836,13 +836,20 @@ export function createParking(
     );
   /** TASK-156: a lot arrival stepping `stepM` to `pose` would move into a lane vehicle on its
    * lot's aisle lanes, or within `minGapM` of one ahead (a kerbside-style departure counts where
-   * it is drawn). Cars behind or beside it do not hold it. */
+   * it is drawn). Cars behind or beside it, and cars bound for this lot, do not hold it. */
   function aisleTraffic(id: number, m: ParkingMotion, pose: ParkingPose, stepM: number) {
     const mine = corners(pose, stepM, width(id), params.idm.minGapM);
     for (const segment of aisleSegments[spaces[m.slot]!.parking]!.segments)
       for (let other = vehicles.first(segment); other !== -1; other = vehicles.next[other]!) {
         const om = motionById[other];
-        if (other === id || om?.lot) continue;
+        // Lot motions follow the cohort rules, and a car stopping at one of this lot's entries
+        // waits on its admission, which may wait on this very arrival.
+        if (
+          other === id ||
+          om?.lot ||
+          compiled.connectors[vehicles.destination[other]!]?.parking === spaces[m.slot]!.parking
+        )
+          continue;
         const path = segment >= 0 ? compiled.lanes[segment]! : compiled.movements[-segment - 1]!;
         const at = vehicles.position[other]!;
         const theirs = om?.pose ?? {

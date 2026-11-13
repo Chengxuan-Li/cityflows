@@ -1512,7 +1512,8 @@ Curve progress is eased, and snapshots carry the moving body throughout the hand
 
 A lot arrival obeys connector admission, reserves a free reachable stall, releases its lane
 and becomes `in_lot` (counted among driving trips). TASK-156: it keeps `minGapM` clear of lane
-cars ahead on its lot's aisle lanes and their joining movements. On a public aisle, which
+cars ahead on its lot's aisle lanes and their joining movements, other than cars bound for the
+lot (their admission orders them). On a public aisle, which
 through traffic drives, it is a lane's occupant while its body is inside that lane's band, at the
 farthest station its body reaches there, so lane cars follow it and departures' gap checks see
 it; it enters such a band only with the following gap ahead and the braking distance of the car
