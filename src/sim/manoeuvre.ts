@@ -120,26 +120,121 @@ export function bodyClearLane(pose: ParkingPose, lane: CLane, lengthM: number, w
   );
 }
 
-/** TASK-150: the farthest progress along a lot's drive-out path whose whole body stands clear
- * of the exit lane, where the car holds until it is granted the lane; -1 if no pose is clear. */
-export function holdProgress(path: MotionPath, lane: CLane, lengthM: number, widthM: number) {
-  const clear = (at: number) => bodyClearLane(pathPose(path, at), lane, lengthM, widthM);
+const corners = (pose: ParkingPose, lengthM: number, widthM: number) =>
+  [0, -lengthM].flatMap((along) =>
+    [-widthM / 2, widthM / 2].map((across) => ({
+      x: pose.x + Math.cos(pose.heading) * along - Math.sin(pose.heading) * across,
+      y: pose.y + Math.sin(pose.heading) * along + Math.cos(pose.heading) * across,
+    })),
+  );
+
+/** TASK-157: `bodyClearLane`, also clear where the whole body lies beyond either end of the
+ * lane, which `bodyClearLane` extends without limit. */
+export function bodyClearOf(pose: ParkingPose, lane: CLane, lengthM: number, widthM: number) {
+  const beyond = (at: number, sign: number) => {
+    const end = pointAtDistance(lane.polyline, lane.cumulative, at),
+      heading = headingAtDistance(lane.polyline, lane.cumulative, at);
+    return corners(pose, lengthM, widthM).every(
+      (p) => sign * ((p.x - end.x) * Math.cos(heading) + (p.y - end.y) * Math.sin(heading)) > 0,
+    );
+  };
+  return bodyClearLane(pose, lane, lengthM, widthM) || beyond(lane.lengthM, 1) || beyond(0, -1);
+}
+
+/** The farthest progress along a path whose pose passes `clear`; -1 if none does. */
+function farthestClear(path: MotionPath, clear: (pose: ParkingPose) => boolean) {
+  const clearAt = (at: number) => clear(pathPose(path, at));
   let unclear = path.lengthM;
-  if (clear(unclear)) return unclear;
+  if (clearAt(unclear)) return unclear;
   let at = unclear;
   do {
     unclear = at;
     at = Math.max(0, at - 0.5);
-    if (clear(at)) {
+    if (clearAt(at)) {
       while (unclear - at > 0.01) {
         const mid = (at + unclear) / 2;
-        if (clear(mid)) at = mid;
+        if (clearAt(mid)) at = mid;
         else unclear = mid;
       }
       return at;
     }
   } while (at > 0);
   return -1;
+}
+
+/** TASK-150: the farthest progress along a lot's drive-out path whose whole body stands clear
+ * of the exit lane, where the car holds until it is granted the lane; -1 if no pose is clear. */
+export function holdProgress(path: MotionPath, lane: CLane, lengthM: number, widthM: number) {
+  return farthestClear(path, (pose) => bodyClearLane(pose, lane, lengthM, widthM));
+}
+
+/** TASK-157: a lot exit's hold, clear of its exit lane (as TASK-150) and of every other lane of
+ * `street` its body would stand in there, such as the near lane of a two-way street whose far
+ * lane it joins, or a lane ending at the mouth's junction. A lane the held body still touches
+ * joins the set until a pose is clear of all of them; with none clear, it keeps TASK-150's hold
+ * (Sindelfingen pk:1482, whose exit and near lanes are 7.9 m stubs). */
+export function lotHold(
+  path: MotionPath,
+  exit: CLane,
+  street: CLane[],
+  lengthM: number,
+  widthM: number,
+) {
+  const lanes: CLane[] = [];
+  for (;;) {
+    const holdM = farthestClear(
+      path,
+      (pose) =>
+        bodyClearLane(pose, exit, lengthM, widthM) &&
+        lanes.every((lane) => bodyClearOf(pose, lane, lengthM, widthM)),
+    );
+    if (holdM < 0) return Math.max(0, holdProgress(path, exit, lengthM, widthM));
+    const pose = pathPose(path, holdM);
+    const touched = street.filter(
+      (l) => l !== exit && !lanes.includes(l) && !bodyClearOf(pose, l, lengthM, widthM),
+    );
+    if (!touched.length) return holdM;
+    lanes.push(...touched);
+  }
+}
+
+export interface LaneCrossing {
+  lane: number;
+  /** Station span the body covers on the crossed lane during the merge. */
+  fromM: number;
+  toM: number;
+  /** Merge progress after which the body has left the crossed lane. */
+  untilM: number;
+}
+
+/** TASK-157: the lanes of `street` other than the exit lane that a merge's body crosses, each
+ * with the station span it covers there and the merge progress at which it has left. */
+export function laneCrossings(
+  merge: MotionPath,
+  exit: CLane,
+  street: CLane[],
+  lengthM: number,
+  widthM: number,
+) {
+  const crossings: LaneCrossing[] = [];
+  for (const lane of street) {
+    if (lane === exit) continue;
+    let fromM = Infinity,
+      toM = -Infinity,
+      untilM = -1;
+    for (let i = 0; i < merge.points.length; i++) {
+      const pose = { ...merge.points[i]!, heading: merge.headings![i]! };
+      if (bodyClearOf(pose, lane, lengthM, widthM)) continue;
+      for (const corner of corners(pose, lengthM, widthM)) {
+        const at = nearestOnPolyline(lane.polyline, corner).along;
+        fromM = Math.min(fromM, at);
+        toM = Math.max(toM, at);
+      }
+      untilM = merge.cumulative[i + 1] ?? merge.lengthM;
+    }
+    if (untilM >= 0) crossings.push({ lane: lane.idx, fromM, toM, untilM });
+  }
+  return crossings;
 }
 
 /** TASK-150: the lane station where a held car's front bumper joins: past the hold's nearest

@@ -179,7 +179,7 @@ const pins = {
     // TASK-144 physical compile/lamps stay fixed; TASK-146 changes drawing-only curbs/paint.
     // TASK-152 appends 87 Munich bay departure connectors (lane connector lists too); with them
     // removed every pin equals 3e9951a's.
-    compile: '41ad2e2f7d2a91012436b21b5f88b5682901617c24a9b098f59a0f0b85080c85',
+    compile: '366dab934a8f03bfcaf126d938d4858f3e446d9bfcede6e17c1469a4631d4efc',
     lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
     curbs: '780f62342c39389d2fabd42f81e444fdc4c03c3070f91fce4489a3c671894919',
     de: '4e164c66620c2b8d248958ae2b0105194ff4ef6685892608c099b54ac5ce6a79',

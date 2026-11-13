@@ -141,12 +141,7 @@ export function NodeInspector({
                 control,
                 ...(control === 'signal' && {
                   signal: group
-                    ? generateGroupSignalProgram(
-                        useAppStore.getState().session!.project.city,
-                        group.id,
-                        compiled,
-                        [],
-                      )
+                    ? generateGroupSignalProgram(group.id, compiled, [])
                     : generateSignalProgram(
                         useAppStore.getState().session!.project.city,
                         source,
