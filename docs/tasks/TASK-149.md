@@ -100,3 +100,9 @@ Evidence directory: `D:/cityflows-task149-evidence`. Matched genuine app capture
 `landshuter-372315670`, `private-449747772`, `bridge-106547920`, `spine-292031578`,
 `west-1231631260`, `east-1231649712` and `north-1231649715`. Ports are 5349/5449;
 captures and local checks were coordinated around TASK-148's reserved measurement windows.
+
+Entry-choice follow-up (lead approved): after selecting a mapped lot in the existing facility
+ranking, choose its cheapest eligible street route instead of the first canonical entry.
+Reuse the winning route. T63 covers a direct mouth beating a three-road detour, the nearer
+public garage retaining lower facility priority, closed-mouth permissions and legacy entry
+ordering. Dedicated hosted traffic and full checks remain required before integration.
