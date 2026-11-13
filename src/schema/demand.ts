@@ -10,6 +10,8 @@ export interface Activity {
 export interface Person {
   id: string;
   homePlaceId: PlaceId;
+  /** TASK-129: `hh:<homePlaceId>:<k>`; a gateway person is a household of one. */
+  householdId: string;
   workPlaceId: PlaceId | null;
   hasCar: boolean;
   agenda: Activity[];
@@ -34,6 +36,9 @@ export interface TripRequest {
   departS: number;
   mode: TripMode;
   legs: Leg[];
+  /** TASK-129: the household car a car trip uses, `car:<householdId>:<k>`; walk, through and
+   * event trips have none. */
+  carId?: string;
   vehicleClass: VehicleClass;
   purpose: VehiclePurpose;
 }

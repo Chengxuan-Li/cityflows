@@ -1847,6 +1847,14 @@ trip counters; their outcomes and `no_walk_route` failure reasons remain availab
 `walkTripsFailed`, access/egress `{ count, meanTimeS, meanDistanceM }`, `walkFallbacks` and
 grouped `fallbacks`. Person state and leg progress participate in the deterministic hash.
 
+TASK-129: `sim/parking.ts` chains a car's trips by `carId` (by `personId` for trips without
+one), so a second household driver leaves from where the first parked, and TASK-122's exit
+mask follows the car's next trip, whoever drives it. In `sim/persons.ts` a trip whose car
+another member drove before waits until that drive completes (the car is parked), then starts
+its access walk; if that drive failed, the trip fails as stranded. A trip never takes another
+car. `Metrics.persons.carWaits` reports the waits (count, median, maximum). The person detail
+adds the household and its members, today's car (or none) and, for a borrowed car, its owner.
+
 TASK-030 admission windows: compiled places retain a copy of their events. Each event opens
 `arrivals` admission slots uniformly over its window (floor of the elapsed fraction times
 the count). Quotas add across events, are shared by all arrival connectors, and unused slots
@@ -1910,12 +1918,13 @@ regenerated deterministically from it.
 ```ts
 interface Activity { kind: 'home' | 'work' | 'school' | 'shop' | 'leisure' | 'other';
   placeId: PlaceId; startS: number; durationS: number }
-interface Person { id: string; homePlaceId: PlaceId; workPlaceId: PlaceId | null;
-  hasCar: boolean; agenda: Activity[] }
+interface Person { id: string; homePlaceId: PlaceId; householdId: string;   // TASK-129
+  workPlaceId: PlaceId | null; hasCar: boolean; agenda: Activity[] }
 type TripMode = 'car' | 'walk' | 'bus' | 'rail';
 interface Leg { mode: TripMode; fromPlaceId: PlaceId; toPlaceId: PlaceId }
 interface TripRequest { id: string; personId: string | null; originPlaceId: PlaceId;
   destinationPlaceId: PlaceId; departS: number; mode: TripMode; legs: Leg[];
+  carId?: string;                                // TASK-129: the household car of a car trip
   vehicleClass: VehicleClass; purpose: VehiclePurpose }
 type VehiclePurpose = 'private' | 'delivery' | 'service' | 'taxi' | 'through';
 
@@ -2076,11 +2085,42 @@ Lead follow-up (2026-11-08). Starting stock holds the cars of the persons demand
 generation makes: `ceil(round(residents × personsPerResident) × carShare)` per home, not the
 full population, so every visible parked car belongs to someone; a resident whose moved
 street car a neighbour took starts from the home's inferred garage while the home has cars
-left. A lot whose own place has no demand (an OSM lot imports as its own `parking` place)
+left. TASK-129 replaces this with household cars for trip lists scheduled from a population
+(below); hand-built trip lists without `carId` keep this formula and first come, first served. A lot whose own place has no demand (an OSM lot imports as its own `parking` place)
 serves the places within 200 m as their car park: a customers lot the visitors of
 non-residential places, a private lot also their workers and residents (and their share of
 starting stock). It ranks first for those destinations, and a lot whose free stalls are all
 spoken for by cars on their way drops out of the choice.
+
+TASK-129 households and cars (`src/demand/households.ts`). Each home's persons form
+households in person order, with sizes drawn from Germany's 2023 microcensus (1 person 41%,
+2 34%, 3 12%, 4 9%, 5 or more 4%; constants, no settings) on a sub-stream of the demand seed
+per home; the last household takes the persons left over. Households group the sampled
+persons, so at `personsPerResident` 0.15 a home with 7 sampled persons has two or three
+households, and the shares describe the sampled population. A gateway person is a household of
+one. `householdId` is `hh:<homePlaceId>:<k>`. The population stays the persisted source: a
+saved population without `householdId` opens with the households the same grouping gives
+(a pure function of the persons, the places' kinds and the demand seed), so it equals a
+regenerated one. A household owns car `car:<householdId>:<k>` for its k-th member with
+`hasCar` (person index order), so the fleet is the car owners and no draw moves.
+`scheduleTrips` decides drivers per day from the planned agendas: a member's day away runs
+from the first departure to the planned return home plus 30 minutes; owners drive their own
+car on any day away; then the other members, by first departure, each take the first car
+free for their whole day away; everyone else walks all day (no mode choice, TASK-113). A
+car trip carries its `carId`; walk, rider, through and event trips have none. A car no one
+drives stays parked at home all day.
+
+The household cars are the starting stock: per home, the number of cars whose day begins
+there (from the trips' `carId`), under the TASK-103 rules (home garage, the
+`streetParkingShare` moved to strips and lots within the radius, the inferred home garage as
+the fallback). A car takes a space of its own home's stock only, in an order seeded per car,
+never another home's moved car. A car trip that ends at its household's home chooses within
+`SimParams.homeParkingRadiusM` (default 400 m) first, the home's inferred garage counting as
+within: it heads for a full facility there and searches on from it, as at departure, and looks
+beyond the radius only once nothing within admits it (none exists, every one is full or
+claimed or has refused it, or a free space is unreachable). `Metrics.parking.home` lists every
+car parked beyond the radius with its reason, and the distances from home of the others.
+Other destinations keep their choice.
 
 ## 10. Engine host
 
@@ -2748,6 +2788,9 @@ view.json         { camera, layers, selection }                    optional
 baseline.json     { city: City, scenario: Scenario, population?: Person[] } optional
 ```
 
+- TASK-129: `Person.householdId` is optional in saved files. `openProject` gives a population
+  (and a baseline population) saved without it the households a regenerated population would
+  have, from the first scenario's (or the baseline's) demand seed. Schema version remains 1.
 - Single JSON: `{ manifest, city, population?, scenarios, history?, view?, baseline? }`. Each member's
   hash is computed over its compact JSON serialization, which is embedded verbatim, so the
   same manifest verifies both forms. `manifest.schemaVersion` is the city's schema version at
@@ -3252,5 +3295,5 @@ Benchmark the sim step, worker transfer, and render time separately (TASK-044).
 
 Transit vehicles and GTFS, PBF import and bulk extracts, permissive and actuated signals,
 adaptive routing beyond EWMA, editing in 3D, desktop packaging, bicycles, mode choice and
-households sharing a car. R7's multimodal readiness is covered by `TripRequest.legs` and
+car sharing between households (TASK-129 shares a car only within a household). R7's multimodal readiness is covered by `TripRequest.legs` and
 `TripMode` in section 9; nothing in the sim assumes a person equals a car.

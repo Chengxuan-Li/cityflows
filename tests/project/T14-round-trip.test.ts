@@ -118,6 +118,7 @@ it.each([
       {
         id: 'person-1',
         homePlaceId: home!.id,
+        householdId: `hh:${home!.id}:0`,
         workPlaceId: work!.id,
         hasCar: true,
         agenda: [{ kind: 'work', placeId: work!.id, startS: 28800, durationS: 32400 }],
