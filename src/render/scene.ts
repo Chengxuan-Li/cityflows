@@ -17,6 +17,8 @@ import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawStations } from './layers/stations';
+import { createLabelLayer } from './layers/labels';
+import { labelCandidates } from './labels';
 import { drawTramStops } from './layers/tram-stops';
 import { noTramStops, placeTramStops } from './tram-stops';
 import { drawLevelCrossings } from './layers/level-crossings';
@@ -103,6 +105,9 @@ export function createGrade(layer: number) {
   const arrows = new Graphics();
   const crossings = new Graphics();
   const places = new Graphics();
+  // TASK-167: place tints sit under the road surfaces at every zoom; outlines of lots and point
+  // markers stay in `places` above.
+  const placeFills = new Graphics();
   const connectors = new Graphics();
   const signals = new Container();
   const vehicles = createVehicleLayer();
@@ -111,6 +116,7 @@ export function createGrade(layer: number) {
   const bands = new Graphics();
   const slotTicks = new Graphics();
   terrain.addChild(
+    placeFills,
     rail,
     railDetail,
     footways,
@@ -152,6 +158,7 @@ export function createGrade(layer: number) {
     arrows,
     crossings,
     places,
+    placeFills,
     connectors,
     signals,
     vehicles,
@@ -199,6 +206,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   const signalPreview = new Graphics();
   const parking = new Graphics();
   // TASK-163: the evening tint and lights sit over the map, under selection and overlays.
+  const labels = createLabelLayer();
   const night = new NightLayer();
   let lighting = defaultLighting;
   let lightMinute = 0;
@@ -207,6 +215,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   world.addChild(
     map,
     night.container,
+    labels.container,
     routeOverlay,
     walkerRoute,
     selectionOverlay,
@@ -270,6 +279,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         layerVisibility.rail ? stations.displayTexts(trainTimeS) : [],
       );
     }
+  };
+  const updateLabels = () => {
+    const a = camera.screenToWorld({ x: 0, y: 0 }),
+      b = camera.screenToWorld({ x: app.screen.width, y: app.screen.height });
+    labels.update(
+      camera.zoom,
+      { minX: a.x, minY: a.y, maxX: b.x, maxY: b.y },
+      layerVisibility.labels,
+    );
+    if (import.meta.env.MODE === 'test') canvas.dataset.labels = JSON.stringify(labels.counts);
   };
   const updateTrainPoses = () => {
     if (!layerVisibility.rail) return;
@@ -389,6 +408,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     );
     updateStations();
     updateCatenary();
+    updateLabels();
     canvas.dataset.stationFurniture = JSON.stringify(
       layerVisibility.rail && stations ? stations.counts : noFurniture,
     );
@@ -495,6 +515,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     for (const graphics of walkerLayers.values()) graphics.visible = layerVisibility.pedestrians;
     disconnectedOverlay.visible = layerVisibility.disconnected;
     for (const grade of visibleGrades) {
+      if (grade.placeFills.visible !== layerVisibility.places) {
+        grade.placeFills.visible = layerVisibility.places;
+        grade.terrain.updateCacheTexture();
+      }
       grade.places.visible = layerVisibility.places;
       grade.connectors.visible = layerVisibility.connectors;
       grade.signals.visible = layerVisibility.signals;
@@ -566,6 +590,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       animation = requestAnimationFrame(frame);
     });
 
+  void Promise.all([ready, labels.fontsReady]).then(() => {
+    if (destroyed) return;
+    updateLabels();
+    invalidate();
+  });
+
   function updateVehicleRing(): void {
     vehicleRing.visible = selectedVehicle >= 0;
     if (selectedVehicle >= 0)
@@ -587,6 +617,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     updatePlaces?.(camera.zoom);
     updateStations();
     if (city) drawParking(parking, city, parkingCounts, camera.zoom);
+    updateLabels();
     if (city) drawSelection(selectionOverlay, city, shapes, selection, camera.zoom);
     redrawWalkers();
   });
@@ -686,6 +717,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (import.meta.env.MODE === 'test')
         canvas.dataset.contextRebuildMs = String(performance.now() - started);
       const { nodeGrades, roadGrades } = cityGrades(city);
+      labels.setCandidates(labelCandidates(compiled, source ?? { nodes: {}, places: {} }));
       visibleGrades = orderedLayers([
         ...nodeGrades,
         ...roadGrades,
@@ -865,7 +897,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           updateSignals.push(drawWalkSignals(city, node, grade.signals));
         }
       }
-      updatePlaces = drawPlaces(grades.get(0)!.places, city, shapes, grades.get(0)!.connectors);
+      updatePlaces = drawPlaces(
+        grades.get(0)!.places,
+        city,
+        shapes,
+        grades.get(0)!.connectors,
+        grades.get(0)!.placeFills,
+      );
       updatePlaces(camera.zoom);
       for (const grade of visibleGrades) {
         const bounds = grade.terrain.getLocalBounds();
@@ -1158,6 +1196,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       night.destroy();
       parkedCars.destroy();
       hillshade?.destroy({ texture: true, textureSource: true });
+      labels.destroy();
       tiles?.destroy();
       if (resizeObserver) {
         resizeObserver.disconnect();
