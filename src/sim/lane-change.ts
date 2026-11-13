@@ -174,20 +174,35 @@ export function createLaneChanges(
       future = next;
       cached.costs.set(key, future);
     }
+    // reachableLanes(from, its length, positionM) unrolled: this runs on every MOBIL candidate.
+    const nextRoad = route.roads[step + 1];
     let minimum = Infinity;
-    for (const reach of reachableLanes(
-      compiled,
-      graph.allowed,
-      from,
-      compiled.lanes[from]!.lengthM,
-      laneChangeDistanceM,
-      positionM,
-    ))
-      for (const m of graph.outgoing[reach.lane]!) {
+    const leave = (lane: number, changes: number) => {
+      for (const m of graph.outgoing[lane]!) {
         const target = compiled.lanes[compiled.movements[m]!.toLane]!;
-        if (target.road === route.roads[step + 1])
-          minimum = Math.min(minimum, reach.changes + future[target.lane]!);
+        if (target.road === nextRoad) minimum = Math.min(minimum, changes + future[target.lane]!);
       }
+    };
+    const start = compiled.lanes[from]!;
+    if (!graph.allowed[from] || positionM > start.lengthM) return minimum;
+    leave(from, 0);
+    for (const side of ['left', 'right'] as const) {
+      let lane = start;
+      for (let changes = 1; ; changes++) {
+        const at = positionM + changes * laneChangeDistanceM;
+        const next = lane[side];
+        if (
+          next === -1 ||
+          !graph.allowed[next] ||
+          at > start.lengthM ||
+          at > lane.lengthM ||
+          at > compiled.lanes[next]!.lengthM
+        )
+          break;
+        leave(next, changes);
+        lane = compiled.lanes[next]!;
+      }
+    }
     return minimum;
   }
 
