@@ -16,6 +16,7 @@ import type { ViewBounds } from './stations';
 const fontOf = (s: LabelStyle) =>
   `${labelFonts[s].bold ? 'bold ' : ''}${labelFonts[s].sizePx}px Arimo, Arial, sans-serif`;
 const PAGE = 512;
+const MAX_TEXTURE = 4096;
 
 interface Glyph {
   fill: Texture;
@@ -149,15 +150,15 @@ export function createLabelLayer() {
         });
 
   function draw(zoom: number, view: ViewBounds) {
-    // Cover a quarter view more on each side: a pan rebuilds the sprites now and then, and
-    // few sprites off screen cost render time.
+    // Cover an eighth of a view more on each side: a pan redraws the labels now and then, and
+    // their cached texture stays small.
     const w = view.maxX - view.minX,
       h = view.maxY - view.minY;
     covered = {
-      minX: view.minX - w / 4,
-      minY: view.minY - h / 4,
-      maxX: view.maxX + w / 4,
-      maxY: view.maxY + h / 4,
+      minX: view.minX - w / 8,
+      minY: view.minY - h / 8,
+      maxX: view.maxX + w / 8,
+      maxY: view.maxY + h / 8,
     };
     let used = 0;
     for (const label of placed) {
@@ -192,6 +193,16 @@ export function createLabelLayer() {
     for (let i = used; i < pool.length; i++) pool[i]!.halo.visible = pool[i]!.fill.visible = false;
     glyphs = used;
     atlas!.upload();
+    // The labels change only with a zoom step or a pan out of `covered`: drawn once into a
+    // texture at screen resolution (at most MAX_TEXTURE px wide), every frame costs one quad.
+    container.cacheAsTexture(false);
+    if (used) {
+      const resolution = Math.min(
+        zoom * window.devicePixelRatio,
+        MAX_TEXTURE / Math.max(covered.maxX - covered.minX, covered.maxY - covered.minY),
+      );
+      container.cacheAsTexture({ resolution, antialias: true });
+    }
   }
 
   return {
