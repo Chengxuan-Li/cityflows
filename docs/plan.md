@@ -190,7 +190,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-162](tasks/TASK-162.md) | UI | Mac-style map (TASK-160 phase 3, in parallel): plain canvas with OSM tiles off by default, quiet place tints, system-colour destination tints, Apple-Maps light roads, 2D and 3D | `src/render/**`, `src/render3d/**` colours and styles, tiles default | 160 | matched shots, contrast, T62/T64 frame gates, render tests | in progress (Claude Code subagent) |
 | [TASK-163](tasks/TASK-163.md) | UI | Scene lighting settings (Day / Evening / Night, follow the sim clock, exposure) and an evening scene with artificial lighting: lit lamps with ground glow, lit windows, vehicle lights, emissive signals; 2D evening tint | `src/render3d/**`, `src/render/**` evening layers, a lighting settings component | 107, 162 | shots per preset, T62/T64 within 10% of Day, view-only state | in progress on TASK-162's branch (Claude Code subagent; started early at the owner's request) |
 | [TASK-164](tasks/TASK-164.md) | 7 | Remaining lot aisle holds (pk:2056, pk:1487, pk:1475), private-aisle departures checking arrivals, lot-entrance lane release (TASK-156 follow-up) | `src/sim/parking.ts` exits/departureRoom/hold, `manoeuvre.ts`, `src/network/parking.ts` | 152, 156, 157 | census, regressions, route records, Munich gate, shots | done 2026-11-13 (pk:1475 left) |
-| [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | in progress (Claude Code subagent) |
+| [TASK-165](tasks/TASK-165.md) | 9 | Crosswalk safety at junction-group exits: walkers never step onto a span a vehicle body stands on; cars not admitted onto an exit crosswalk without room past it (T53 overlap at n:251 with mode choice on) | `src/sim/walkers.ts`, crossings, `intersection.ts` exit storage | 111, 140, 154, 161, 113 | T53 with mode choice on, regression, Munich gate | done 2026-11-13 |
 | [TASK-166](tasks/TASK-166.md) | UI | Dark appearance for the Mac UI (System / Light / Dark, optional match to night lighting) | `src/ui/**` tokens, map dark variant | 160, 162, 163 | shots both appearances, contrast, T62/T64 | queued (after the UI merge) |
 | [TASK-167](tasks/TASK-167.md) | UI | Street-name labels and map typography (Arimo, along roads, collision-free) | `src/render/**` label layer | 160, 162 | shots, no overlaps, T62/T64 within 5% | queued (after the UI merge) |
 | [TASK-168](tasks/TASK-168.md) | UI | Keyboard shortcuts and a command menu (⌘K), shortcut sheet | `src/ui` key bindings, command menu | 160 | e2e spec, previews | queued (after the UI merge) |
@@ -3855,6 +3855,23 @@ overlaps 63 pairs to 53, at no gate cost. Census: Munich aisle holds 48 to 0, Si
 connectors only; route records byte-identical; `src/sim/connectors.ts` touched for the exit draw.
 Lead merge onto main with TASK-113 and baseline reset 2: gate (choice off) 5,312 / 0 / 0 / 0, mode
 share guard 2,730 / 0 / 0, T53, sim and demand unit tests (462), lint and format pass.
+
+TASK-165 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): the T53 overlap with mode
+choice on was not a car queued on the crosswalk (its 180 s was accumulated waiting): at 07:55:55.9
+car 2153 changed lanes into `r:922#1` onto the span walker 8265 already held; seed 3 also showed a
+departure from an origin connector onto a held span. Rules: (1) exit storage is measured from the
+far edge of the exit-side crosswalk at signals and zebras, for single movements and group exits
+(cars already crossing need only their own length, so platoons still share a green; cars standing
+on exit-side zebras 1,036 events to 187 at seed 1, completed 5,307 to 5,312); (2) walkers wait for a
+body on their span (already true since TASK-111, now pinned); (3) no lane change or departure may
+land a body on a span a walker holds (`walkers.ts`, wired in `engine.ts`; a lane-change and
+departure behaviour change limited to held spans). With the choice on, T53 overlaps 1 / 1 / 4 to 0
+on seeds 1 to 3, hard stops to 0. `T53-crosswalk-clearance.test.ts` (4 cases); T22, T46 and T67 pins
+moved (exit queues measured past the crosswalk). Lead merge onto main with TASK-113, TASK-164 and
+baseline reset 2: gate (choice off) 5,310 / 0 / 0, mode-share guard 2,730 / 0 / 0, T53 passes, sim
+and demand unit tests (466), lint, format and build pass. Open: cars stopping across approach-side
+crosswalks (about 2,400 events at seed 1, zebras within a car length of the stop position), taken
+up by TASK-169.
 
 ## Owner decisions log
 
