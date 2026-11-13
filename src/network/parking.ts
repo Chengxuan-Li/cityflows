@@ -381,10 +381,11 @@ export function compileParking(
 }
 
 /**
- * TASK-152: a lot bay whose access point lies in the band of a vehicle-graph lane (a mapped
- * aisle road, or a street a generated row adjoins) leaves into that lane at its own station, by
- * the kerbside departure rule, and then drives the lane as a lane vehicle. Without this its
- * drive-out ran inside the lane band as a motion lane traffic cannot see. The lane must lead
+ * TASK-152: a lot bay whose access point lies in the band of a vehicle-graph lane that carries
+ * one of its own exits (a mapped aisle road, or a street a generated row adjoins) leaves into
+ * that lane at its own station, by the kerbside departure rule, and then drives the lane as a
+ * lane vehicle. Without this its drive-out ran inside the exit lane band, with no pose clear of
+ * it, as a motion lane traffic cannot see. The lane must lead
  * by legal movements to the public network; on a two-way aisle whose near lane does not, the bay
  * leaves into the opposite lane of the same physical aisle (TASK-149's clear bay manoeuvre).
  * A one-way lane is never reversed. Departure connectors are appended, so every existing
@@ -415,7 +416,20 @@ export function compileBayDepartures(compiled: CompiledCity): void {
       const hits = candidates
         .map((lane) => ({ lane, hit: nearestOnPolyline(compiled.lanes[lane]!.polyline, access) }))
         .sort((a, b) => a.hit.away - b.hit.away || a.lane - b.lane);
-      const near = hits[0];
+      // Only where one of the bay's own exits lies on that lane: its drive-out would run
+      // inside the exit lane's band, with no pose clear of it (TASK-150's census).
+      const node = graph.stallNodes[space.lotStall!]!;
+      const exitLanes = new Set(
+        graph.entries
+          .filter(
+            (e) =>
+              e.direction !== 'in' &&
+              f.connectorsOut.includes(e.connector) &&
+              Number.isFinite(e.distances[node]),
+          )
+          .map((e) => compiled.connectors[e.connector]!.lane),
+      );
+      const near = hits.find(({ lane }) => exitLanes.has(lane));
       if (!near || near.hit.away > compiled.lanes[near.lane]!.widthM / 2) continue;
       const group = compiled.roads[compiled.lanes[near.lane]!.road]!.streetGroupId;
       const choice = hits.find(
