@@ -164,7 +164,7 @@ export function drawTramStops(placements: readonly TramStopPlacement[]) {
           const text = new Text({
             text: '',
             style: {
-              fontFamily: 'Arial',
+              fontFamily: ['Arimo', 'Arial'],
               fontSize: 48,
               fontWeight: 'bold',
               fill: tramStopColors.map,

@@ -1,7 +1,8 @@
 import type { PersonMetrics } from '../../sim/types';
 
-const walkColor = '#668e72';
-const carColor = '#4d8e94';
+// macOS system green and blue, as in the map's palette (TASK-162).
+const walkColor = '#34c759';
+const carColor = '#007aff';
 
 const percent = (part: number, total: number) =>
   total ? `${Math.round((100 * part) / total)}%` : '—';
@@ -30,7 +31,7 @@ export function ModeShares({ modes }: { modes: PersonMetrics['modes'] }) {
       </dl>
       {total > 0 && (
         <svg viewBox="0 0 300 124" role="img" aria-label="Walk share by hour">
-          <path d="M44 24V100H294" fill="none" stroke="#dcded2" />
+          <path d="M44 24V100H294" fill="none" stroke="#d4d4d4" />
           <text x="38" y="28" textAnchor="end">
             100%
           </text>

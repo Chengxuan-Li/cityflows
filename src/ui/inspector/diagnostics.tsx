@@ -35,15 +35,14 @@ export function Diagnostics({
   }, [engine, timeS]);
 
   return (
-    <>
-      <h2>Diagnostics</h2>
+    <section id="diagnostics" className="panel" aria-label="Validation">
       <dl className="details">
         <dt>State hash</dt>
         <dd>
           <code>{error ?? hash ?? '…'}</code>
         </dd>
       </dl>
-      <h3>Network validation</h3>
+      <h3>Issues</h3>
       {issues.length ? (
         <ul className="item-list">
           {issues.map(({ severity, message }, index) => (
@@ -66,6 +65,6 @@ export function Diagnostics({
           </ul>
         </section>
       )}
-    </>
+    </section>
   );
 }

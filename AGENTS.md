@@ -216,26 +216,35 @@ the importer's sources); `CITYFLOWS_NO_CACHE=1` imports fresh.
 
 ## Design direction
 
-CityFlows is a polished minimalist transportation game in the spirit of Mini Motorways and
-Mini Metro, not an engineering simulator, a GIS tool or a dashboard. The references are
-inspiration for an original CityFlows identity, not interfaces to copy.
+CityFlows looks and behaves like a clean Mac app in the Sonoma / Ventura flat manner (owner,
+2026-11-13; TASK-160). Not Liquid Glass: solid surfaces, no translucency, blur or vibrancy.
 
-- The map is the interface. Panels, borders, buttons and labels are kept to the minimum that
-  still exposes every capability; advanced controls (lanes, turns, signals, demand,
-  diagnostics) appear contextually, one tap from the thing they belong to.
-- Soft pastel palette on a light, slightly warm background; clean geometric shapes; roads
-  with rounded ends whose width and tone show hierarchy; junctions as discs; places as simple
-  colored shapes, each with a hue from a fixed palette; vehicles as rounded pills tinted by
-  their destination's hue; signal state as a small glow; selection as a soft ring; lane
-  markings and arrows that fade out at low zoom. Arrows exist only for legal movements.
-- Motion matters: eased zoom at the pointer, inertia on pan, smooth lane-change animation,
-  subtle transitions when panels appear. The city should feel alive while idle.
-- Direct manipulation over forms: drag to pan, scroll to zoom, click to select, drag handles
-  to move connectors, draw to create. Compact floating run controls; metrics and
-  configuration only when asked for.
-- Restrained typography: the system UI font, two sizes, one weight contrast. No cards inside
-  cards, no decorative gradients, no emoji or icon packs, no headings that only name a panel,
-  no copy that repeats what a control already says, no AI-oriented or self-referential text.
-- Simplify how features are presented, never what the application can do. Every control
-  changes something visible. Metrics use plain words and carry the "synthetic traffic, not
-  observed traffic" notice.
+- **Window.** A docked window: a unified toolbar (city name over "CityFlows", file actions,
+  history, the tool segmented control, run controls, speed, 3D, the sidebar toggles), a left
+  sidebar of collapsible sections (the active tool's options, Layers, Chart, Demand, Compare,
+  Validation), a right inspector for the selection, a status bar (clock, trip counts, the
+  synthetic-traffic notice, map attribution), and the map filling the content area. Both sidebars
+  collapse from the toolbar and resize by their inner edge. Nothing floats over the map but its
+  own transient overlays. Under 900 px the sidebars float over the map, and toolbar items that do
+  not fit move into the » overflow menu in priority order, never wrapping.
+- **Controls.** One control set (`src/ui/controls.tsx`, `src/ui/app.css`), reused everywhere:
+  push, primary and toolbar buttons, segmented control, pop-up and pull-down menus, checkbox,
+  switch, slider, text and number fields with a stepper, disclosure sections, popovers with an
+  arrow for edits that belong to one item, sheets dropping from the toolbar for import, export
+  and new city, tooltips. Build new UI from these; do not add one-off styles.
+- **Type and colour.** Arimo (bundled, OFL-1.1), 13 px body and 11 px small, regular and bold.
+  The tokens in `app.css`: light grey chrome, hairline separators, 6 px control and 10 px window
+  radius, shadows on popovers and sheets only. macOS blue `#007AFF` for focus rings, switches,
+  sliders and map selection; `#0064D1` behind white text (primary button, selected rows) so text
+  meets WCAG AA. Every text and control meets AA, focus is always visible, and every control is
+  reachable by keyboard.
+- **Map.** A neutral, Apple-Maps-like light palette in 2D and 3D (TASK-162): a plain warm-grey
+  canvas, white roads with soft casings, quiet place tints, vehicles in the system colours by
+  destination. Marking themes keep their regulatory colours.
+- **Behaviour.** Direct manipulation over forms: drag to pan, scroll to zoom, click to select,
+  drag handles to move, draw to create. Every control changes something visible. Simplify how
+  features are presented, never what the application can do.
+- **Words.** Plain, short labels; contextual help only where needed. No emoji, no decorative
+  gradients, no cards inside cards, no headings that only repeat a control, no copy that repeats
+  what a control already says, no AI-oriented or self-referential text. Metrics use plain words
+  and carry the "synthetic traffic, not observed traffic" notice.

@@ -79,7 +79,7 @@ async function bothViews(page: Page, info: TestInfo, name: string, state: number
     await expect(canvas).toHaveAttribute('data-level-crossing-states', '[]');
     await rail.check();
     await expect(canvas).toHaveAttribute('data-level-crossing-states', JSON.stringify([state]));
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
   }
 }
 
@@ -137,7 +137,7 @@ for (const kind of ['rail', 'tram'] as const)
     const layers = page.getByRole('region', { name: 'Map layers' });
     for (const label of ['Street trees', 'Overhead lines'])
       await layers.getByLabel(label, { exact: true }).uncheck();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     await synced(page);
     await bothViews(page, info, `operating-${kind}-open`, 0);
     await page.evaluate(async () => {

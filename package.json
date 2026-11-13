@@ -33,6 +33,7 @@
     "traffic:quick": "node --experimental-strip-types --import ./bench/register.ts ./bench/traffic-quick.ts"
   },
   "dependencies": {
+    "@fontsource/arimo": "5.3.0",
     "@types/three": "0.187.0",
     "clipper2-ts": "2.0.1-18",
     "fast-png": "8.0.0",

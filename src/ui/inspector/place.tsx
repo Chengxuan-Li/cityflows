@@ -6,6 +6,7 @@ import { useAppStore } from '../store';
 import { nearestPlaceLane } from '../tools/place-brush';
 import { NumberField } from './number-field';
 import { StationRailDetails } from './rail';
+import { Slider } from '../controls';
 
 const directions = { in: 'Arrivals', out: 'Departures', both: 'Arrivals and departures' };
 const kinds: PlaceKind[] = [
@@ -62,8 +63,7 @@ function DemographicSlider({
       <span>
         {label} <output>{draft}</output>
       </span>
-      <input
-        type="range"
+      <Slider
         aria-label={label}
         min={0}
         max={Math.max(2000, value * 2)}

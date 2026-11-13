@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DEFAULT_MODE_CHOICE, type ModeChoiceConfig } from '../../schema';
+import { Slider, Switch } from '../controls';
 import { useAppStore } from '../store';
 
 type Numeric = Exclude<keyof ModeChoiceConfig, 'enabled'>;
@@ -25,7 +26,7 @@ const sliders: {
   },
 ];
 
-function Slider({
+function ModeSlider({
   label,
   unit,
   min,
@@ -52,8 +53,7 @@ function Slider({
           {draft} {unit}
         </output>
       </span>
-      <input
-        type="range"
+      <Slider
         aria-label={label}
         min={min}
         max={max}
@@ -77,17 +77,14 @@ export function ModeChoiceControls() {
   const config = { ...DEFAULT_MODE_CHOICE, ...demand.modeChoice };
   return (
     <fieldset className="edit-fields mode-choice" aria-label="Mode choice">
-      <label className="edit-field">
-        Choose walk or car per trip
-        <input
-          type="checkbox"
-          checked={config.enabled}
-          disabled={busy}
-          onChange={(event) => void setModeChoice({ enabled: event.currentTarget.checked })}
-        />
-      </label>
+      <Switch
+        label="Choose walk or car per trip"
+        checked={config.enabled}
+        disabled={busy}
+        onChange={(event) => void setModeChoice({ enabled: event.currentTarget.checked })}
+      />
       {sliders.map((slider) => (
-        <Slider
+        <ModeSlider
           {...slider}
           key={slider.name}
           value={config[slider.name]}

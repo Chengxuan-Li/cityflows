@@ -128,7 +128,7 @@ test('T73 tram stops in Munich: both views, the Rail layer carries them, shots',
   const layers = page.getByRole('region', { name: 'Map layers' }),
     toggle = layers.getByLabel('Rail', { exact: true });
   await layers.getByLabel('Entrances and exits', { exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await button(page, 'Layers').click();
   for (const view of ['2d', '3d'] as const) {
     if (view === '3d') await button(page, '3D').click();
     const canvas = page.getByLabel(view === '2d' ? 'City map' : '3D city view', { exact: true });
@@ -165,11 +165,11 @@ test('T73 tram stops in Munich: both views, the Rail layer carries them, shots',
     const hash = await page.evaluate(() => window.cityflows!.hash());
     await button(page, 'Layers').click();
     await toggle.uncheck();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     expect((await counts(canvas)).stops).toBe(0);
     await button(page, 'Layers').click();
     await toggle.check();
-    await page.keyboard.press('Escape');
+    await button(page, 'Layers').click();
     expect(await counts(canvas)).toEqual(expected);
     // Tram stops are visual only: the run's state hash does not move.
     expect(await page.evaluate(() => window.cityflows!.hash())).toBe(hash);

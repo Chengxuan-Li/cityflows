@@ -9,7 +9,7 @@ const formats: [ExportFormat, string][] = [
   ['trajectories', 'Trajectories CSV'],
 ];
 
-export function ExportMenu({ onClose }: { onClose: () => void }) {
+export function ExportMenu() {
   const session = useAppStore((state) => state.session);
   const run = useAppStore((state) => state.run);
   const busy = useAppStore((state) => state.busy);
@@ -33,14 +33,6 @@ export function ExportMenu({ onClose }: { onClose: () => void }) {
     };
   }, [session, run?.timeS, reportError]);
 
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [onClose]);
-
   async function toggle(enabled: boolean) {
     if (!engine) return;
     setToggling(true);
@@ -54,7 +46,7 @@ export function ExportMenu({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <section id="export-menu" className="layers-sheet export-sheet" aria-label="Export files">
+    <section id="export-menu" className="export-menu" aria-label="Export files">
       {formats.map(([format, label]) => (
         <button
           key={format}

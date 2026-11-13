@@ -7,6 +7,7 @@ import {
   type ParkingLayout,
 } from '../../schema';
 import { vehicleClasses, type AccessValue } from '../../schema';
+import { PopoverButton } from '../controls';
 import { useAppStore } from '../store';
 import { NumberField } from './number-field';
 import { StreetTopologyActions } from '../tools/topology-actions';
@@ -113,10 +114,9 @@ export function StreetInspector({ road, city, lane }: { road: Road; city: City; 
         <summary>Lanes and street settings</summary>
         <div className="edit-fields">
           {accessControl('all')}
-          <details className="disclosure">
-            <summary>Vehicle classes</summary>
+          <PopoverButton label="Vehicle classes" title="Access by vehicle class">
             <div className="edit-fields">{vehicleClasses.map(accessControl)}</div>
-          </details>
+          </PopoverButton>
           <label className="edit-field">
             Road class
             <select
