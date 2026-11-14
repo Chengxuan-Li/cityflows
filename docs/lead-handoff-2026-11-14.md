@@ -32,24 +32,24 @@ decision; those wait for the owner.
 
 ### 2. Planned-task contracts (status in plan.md: "planned (not started; awaiting owner)")
 
-- [ ] `docs/tasks/TASK-185.md`: 2D labels frame cost (T62 2D +4.0 to +5.5% against the 5% gate).
-- [ ] `docs/tasks/TASK-186.md`: 2D Evening frame cost (+10.6% against Day, limit 10%).
-- [ ] `docs/tasks/TASK-187.md`: full-demand step time (rail crossings about 300 s, spawn about 230 s).
-- [ ] `docs/tasks/TASK-188.md`: actuated signals as the default again, after the seed-6 Landsberger
+- [x] `docs/tasks/TASK-185.md`: 2D labels frame cost (T62 2D +4.0 to +5.5% against the 5% gate).
+- [x] `docs/tasks/TASK-186.md`: 2D Evening frame cost (+10.6% against Day, limit 10%).
+- [x] `docs/tasks/TASK-187.md`: full-demand step time (rail crossings about 300 s, spawn about 230 s).
+- [x] `docs/tasks/TASK-188.md`: actuated signals as the default again, after the seed-6 Landsberger
       loop exit (n:306 onto r:307) drains.
-- [ ] `docs/tasks/TASK-189.md`: phone-width inspector as a bottom sheet.
-- [ ] `docs/tasks/TASK-190.md`: parking bays under low ramps.
-- [ ] `docs/tasks/TASK-191.md`: shortcut chords that browsers reserve.
-- [ ] `docs/tasks/TASK-192.md` onward, only if TASK-183 leaves open items (listed here when written).
-- [ ] Each has a row in `docs/plan.md`'s task table.
+- [x] `docs/tasks/TASK-189.md`: phone-width inspector as a bottom sheet.
+- [x] `docs/tasks/TASK-190.md`: parking bays under low ramps.
+- [x] `docs/tasks/TASK-191.md`: shortcut chords that browsers reserve.
+- [ ] (pending TASK-183) `docs/tasks/TASK-192.md` onward, only if TASK-183 leaves open items (listed here when written).
+- [x] Each has a row in `docs/plan.md`'s task table.
 
 ### 3. Owner decision documents (each ends "Status: awaiting owner")
 
-- [ ] `docs/decisions/2026-11-14-exit-clearing.md`: TASK-169/180 exit-clearing trade-off.
-- [ ] `docs/decisions/2026-11-14-signal-timing.md`: fixed-time against actuated default.
-- [ ] `docs/decisions/2026-11-14-light-3d-tints.md`: TASK-166 colour-space fix deepens Light 3D tints.
-- [ ] `docs/decisions/2026-11-14-evening-hue.md`: TASK-163's mauve evening hue.
-- [ ] `docs/decisions/2026-11-14-appearance-default.md`: System as the default appearance.
+- [x] `docs/decisions/2026-11-14-exit-clearing.md`: TASK-169/180 exit-clearing trade-off.
+- [x] `docs/decisions/2026-11-14-signal-timing.md`: fixed-time against actuated default.
+- [x] `docs/decisions/2026-11-14-light-3d-tints.md`: TASK-166 colour-space fix deepens Light 3D tints.
+- [x] `docs/decisions/2026-11-14-evening-hue.md`: TASK-163's mauve evening hue.
+- [x] `docs/decisions/2026-11-14-appearance-default.md`: System as the default appearance.
 
 ## Where things stand
 
@@ -62,3 +62,6 @@ decision; those wait for the owner.
 ## Notes as items land
 
 (The lead appends dated notes here.)
+
+- 2026-11-14: contracts TASK-185 to 191 and the five decision documents written and pushed; TASK-183
+  still running its frame tests.

@@ -210,6 +210,13 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | done |
 | [TASK-183](tasks/TASK-183.md) | UI | Street, station, stop and place labels in 3D (TASK-167's rules, collision-free, Labels toggle) | `src/render3d/**`, `src/render/labels.ts` shared parts | 167 | no overlaps, T64 3D within 5%, shots | in progress (Claude Code subagent) |
 | [TASK-184](tasks/TASK-184.md) | UI | Follow clock seasons so a run reaches evening; 2D vehicle lights under bridge decks | `src/render/lighting.ts`, lighting settings, 2D light layer | 163 | sun model tests, V163, T62/T64, shots | done |
+| [TASK-185](tasks/TASK-185.md) | render | 2D street-label frame cost under TASK-167's 5% gate | `src/render/layers/labels.ts`, 2D scene | 167, 176 | T62/T64 2D rounds, placement unchanged | planned (not started; awaiting owner) |
+| [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | planned (not started; awaiting owner) |
+| [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | planned (not started; awaiting owner) |
+| [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | planned (not started; awaiting owner) |
+| [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | planned (not started; awaiting owner) |
+| [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | planned (not started; awaiting owner) |
+| [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | planned (not started; awaiting owner) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
