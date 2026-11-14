@@ -38,7 +38,7 @@ import {
 } from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
 import { Basemap3D } from './basemap';
-import { buildGeometry } from './geometry';
+import { buildGeometry, buildMapContext, buildPlaces } from './geometry';
 import { pickLane3D, pickVehicle3D, vehicleScreenPoint } from './picking';
 import { signalMountM, signalRotationY } from './signals';
 import { buildingMaterial, groundMaterial, setBuildingLights } from './context';
@@ -167,7 +167,10 @@ export class Scene3D {
   private capture: { images: string[]; resolve: (images: string[]) => void } | null = null;
   private belowGround = false;
   private placesVisible = true;
-  private walk: { sidewalks: Mesh; footways: Mesh; steps: Mesh } | undefined;
+  private walk:
+    | Record<'sidewalks' | 'footways' | 'steps', Mesh<BufferGeometry, MeshLambertMaterial>>
+    | undefined;
+  private lotSurface: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private walkVisibility = { sidewalks: true, footways: true };
   private basemap: Basemap3D | undefined;
   private tilesEnabled = defaultLayers.basemap;
@@ -415,7 +418,7 @@ export class Scene3D {
       add(geometry.crossings, markingThemes[cityMarkingTheme(source)].colors.stop, false),
     ];
     const lots = lotGeometry(city, renderedSource, terrain);
-    add(lots.surface, this.palette.context.parking, false);
+    this.lotSurface = add(lots.surface, this.palette.context.parking, false);
     const strips = stripGeometry(city, renderedSource, geometry.heights);
     add(strips.surface, style.context.parking, false);
     add(strips.paint, style.stall, false);
@@ -587,15 +590,70 @@ export class Scene3D {
     this.applyLight();
   }
 
-  /** TASK-166: the map's ground and buildings for the appearance; a change rebuilds the scene,
-   * as a terrain change does. */
+  /** TASK-166: the map's ground and buildings for the appearance. */
   setMapPalette(palette: MapPalette) {
     if (palette === this.palette) return;
     this.palette = palette;
     this.canvas.dataset.mapPalette = palette === mapPalettes.dark ? 'dark' : 'light';
     this.light = sceneLight(this.lighting, this.lightMinute * 60, palette.background);
-    if (this.city && this.source) this.setCity(this.city, this.source);
+    if (this.city && this.source && this.builtPalette !== palette) this.recolour();
     this.applyLight();
+  }
+
+  /** TASK-176: an appearance change recolours the built scene, the same scene a rebuild in the new
+   * palette gives: the place tints and the context (buildings, land use) are built again, and the
+   * paving, lot, ground and window colours set on their materials. Nothing else depends on it. */
+  private recolour() {
+    const start = performance.now();
+    const palette = this.palette,
+      city = this.city!,
+      source = this.source!,
+      geometry = this.geometry!;
+    const rendered = this.renderedTerrain ? source : { ...source, terrain: undefined };
+    this.invalidate();
+    this.shadowView = '';
+    // As after a rebuild, the next frame draws the rail paint from its mesh.
+    this.rail?.paintCache.reset();
+    this.builtPalette = palette;
+    const places = this.content.getObjectByName('places') as Mesh;
+    places.geometry.dispose();
+    places.geometry = geometry.places = buildPlaces(city, rendered, geometry.heights, palette);
+    const previous = geometry.context;
+    previous.buildings.dispose();
+    previous.detailedBuildings.dispose();
+    const context = (geometry.context = buildMapContext(
+      city,
+      rendered,
+      geometry.heights,
+      Boolean(rendered.terrain),
+      palette,
+    ));
+    const buildings = this.buildings!;
+    buildings.geometry = this.buildingDetails ? context.detailedBuildings : context.buildings;
+    buildings.material.dispose();
+    buildings.material = buildingMaterial(palette.buildings.window);
+    buildings.material.side = DoubleSide;
+    this.canvas.dataset.contextBuildMs = context.buildMs.toFixed(1);
+    if (rendered.terrain) {
+      this.terrainGround!.opaque.dispose();
+      this.terrainGround!.transparent.dispose();
+      const surface = this.ground!.geometry.clone().translate(0, 0.015, 0);
+      this.terrainGround = buildTerrainGround(surface, source.context?.features ?? [], palette);
+      surface.dispose();
+      context.ground.dispose();
+      this.updateTerrainBackdrop();
+    } else {
+      previous.ground.dispose();
+      this.surroundings!.geometry = context.ground;
+    }
+    const walk = this.walk!;
+    walk.sidewalks.material.color.set(palette.walk.sidewalk);
+    walk.footways.material.color.set(palette.walk.footway);
+    walk.steps.material.color.set(palette.walk.steps);
+    this.lotSurface!.material.color.set(palette.context.parking);
+    this.ground!.material.color.set(palette.background);
+    this.lightKey = '';
+    this.canvas.dataset.paletteMs = (performance.now() - start).toFixed(1);
   }
 
   private applyLight() {

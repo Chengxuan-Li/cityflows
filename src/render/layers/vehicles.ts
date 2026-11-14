@@ -220,8 +220,9 @@ export class Vehicles {
       if (particle.alpha !== fade[i]) particle.alpha = fade[i]!;
     }
     this.particles.length = count;
-    this.animate(0);
+    // Lights first: animating places one light per vehicle, so there must be enough of them.
     if (this.lights) this.updateLights(snapshot);
+    this.animate(0);
     for (const { count, container, pool } of this.layers) {
       const children = container.particleChildren;
       if (children.length === count) continue;

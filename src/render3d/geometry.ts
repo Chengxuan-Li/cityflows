@@ -163,28 +163,7 @@ export function buildGeometry(
         quad(slabs, vertex(a, z), vertex(b, z), vertex(b, z - 0.8), vertex(a, z - 0.8));
       }
   }
-  const places: number[] = [],
-    colors: number[] = [];
-  for (const place of city.places) {
-    if (source.places[place.id]!.station?.platforms.length) continue;
-    const shape = source.places[place.id]!.shape;
-    const ring =
-      shape.kind === 'polygon'
-        ? shape.ring
-        : Array.from({ length: 24 }, (_, i) => ({
-            x: shape.pos.x + 6 * Math.cos((i * Math.PI) / 12),
-            y: shape.pos.y + 6 * Math.sin((i * Math.PI) / 12),
-          }));
-    const start = places.length;
-    polygon(places, ring, () => -0.02);
-    // Vertex colours are linear (TASK-166: sRGB bytes read as linear washed the dark tints out).
-    const { r, g, b } = new Color(placeColors(place.kind, palette.placeBase).fill);
-    for (let i = start; i < places.length; i += 3) colors.push(r, g, b);
-  }
-  let placeGeometry = buffer(places);
-  placeGeometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  if (source.terrain)
-    placeGeometry = indexTerrain(drape(placeGeometry, heights.terrain, -0.02, false, true));
+  const placeGeometry = buildPlaces(city, source, heights, palette);
   const { heads, supports } = signalLayout(city, heights);
   if (source.terrain)
     for (const part of [...heads, ...supports]) {
@@ -209,15 +188,7 @@ export function buildGeometry(
     parts[2]?.dispose();
     return indexTerrain(result);
   };
-  const context = buildContext(
-    (source.context?.features ?? []).filter(
-      (f) => !city.rail || (f.class !== 'rail' && f.class !== 'tram'),
-    ),
-    heights.terrain,
-    !omitContextGround,
-    palette,
-  );
-  if (source.terrain) context.ground = indexTerrain(context.ground);
+  const context = buildMapContext(city, source, heights, omitContextGround, palette);
   const surfaceGeometry = terrainBuffer(surfaces, landSurfaces, true, flatAreas);
   const positions = surfaceGeometry.getAttribute('position');
   const uv = new Float32BufferAttribute(new Float32Array(positions.count * 2), 2);
@@ -236,4 +207,59 @@ export function buildGeometry(
     supports,
     heights,
   };
+}
+
+type Heights = ReturnType<typeof cityHeights>;
+
+/** Place tints. With `buildMapContext`, all the 3D geometry the map palette colours (TASK-166):
+ * an appearance change rebuilds just these two (TASK-176). */
+export function buildPlaces(
+  city: CompiledCity,
+  source: CityGeometry,
+  heights: Heights,
+  palette: MapPalette,
+) {
+  const places: number[] = [],
+    colors: number[] = [];
+  for (const place of city.places) {
+    if (source.places[place.id]!.station?.platforms.length) continue;
+    const shape = source.places[place.id]!.shape;
+    const ring =
+      shape.kind === 'polygon'
+        ? shape.ring
+        : Array.from({ length: 24 }, (_, i) => ({
+            x: shape.pos.x + 6 * Math.cos((i * Math.PI) / 12),
+            y: shape.pos.y + 6 * Math.sin((i * Math.PI) / 12),
+          }));
+    const start = places.length;
+    polygon(places, ring, () => -0.02);
+    // Vertex colours are linear (TASK-166: sRGB bytes read as linear washed the dark tints out).
+    const { r, g, b } = new Color(placeColors(place.kind, palette.placeBase).fill);
+    for (let i = start; i < places.length; i += 3) colors.push(r, g, b);
+  }
+  const geometry = buffer(places);
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  return source.terrain
+    ? indexTerrain(drape(geometry, heights.terrain, -0.02, false, true))
+    : geometry;
+}
+
+/** Buildings and the context ground (land use, water, green), in the map palette. */
+export function buildMapContext(
+  city: CompiledCity,
+  source: CityGeometry,
+  heights: Heights,
+  omitContextGround: boolean,
+  palette: MapPalette,
+) {
+  const context = buildContext(
+    (source.context?.features ?? []).filter(
+      (f) => !city.rail || (f.class !== 'rail' && f.class !== 'tram'),
+    ),
+    heights.terrain,
+    !omitContextGround,
+    palette,
+  );
+  if (source.terrain) context.ground = indexTerrain(context.ground);
+  return context;
 }

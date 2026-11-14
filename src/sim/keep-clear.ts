@@ -20,22 +20,37 @@ export function keepClearStand(
   arrivalM = Infinity,
   stopLineM = -Infinity,
 ): number | null {
-  const covers = (zone: KeepClearZone, front: number) =>
-    !(zone.fromM < arrivalM && zone.toM > arrivalM - lengthM) &&
-    zone.fromM < front &&
-    zone.toM > front - lengthM;
-  const last = zones.findLast((zone) => covers(zone, standM));
-  if (!last) return null;
+  // Plain loops: this runs for every car on a lane with zones, every step (TASK-176).
+  let last = zones.length - 1;
+  while (last >= 0 && !covers(zones[last]!, standM, lengthM, arrivalM)) last--;
+  if (last < 0) return null;
   // IDM settles a little short of its stand; the rear keeps 0.2 m spare past the zone.
-  const ahead = last.toM + lengthM + 0.2;
-  if (ahead <= stopLineM - KEEP_CLEAR_STOP_M && !zones.some((zone) => covers(zone, ahead)))
-    return ahead;
+  const ahead = zones[last]!.toM + lengthM + 0.2;
+  if (ahead <= stopLineM - KEEP_CLEAR_STOP_M) {
+    let clear = true;
+    for (let i = 0; clear && i < zones.length; i++)
+      clear = !covers(zones[i]!, ahead, lengthM, arrivalM);
+    if (clear) return ahead;
+  }
   let front = standM;
-  for (let i = zones.length - 1; i >= 0; i--)
-    if (covers(zones[i]!, front)) front = zones[i]!.fromM - KEEP_CLEAR_STOP_M;
+  for (let i = last; i >= 0; i--)
+    if (covers(zones[i]!, front, lengthM, arrivalM)) front = zones[i]!.fromM - KEEP_CLEAR_STOP_M;
   return front - lengthM < 0 ? null : front;
 }
 
+/** Whether a body `lengthM` long with its front at `front` covers `zone`, a zone it covers at its
+ * arrival (`arrivalM`) never counting. */
+function covers(zone: KeepClearZone, front: number, lengthM: number, arrivalM: number) {
+  return (
+    !(zone.fromM < arrivalM && zone.toM > arrivalM - lengthM) &&
+    zone.fromM < front &&
+    zone.toM > front - lengthM
+  );
+}
+
 /** Whether a body over `[fromM, toM]` of the lane lies in one of its mouth zones. */
-export const inMouth = (zones: readonly KeepClearZone[], fromM: number, toM: number) =>
-  zones.some((zone) => zone.kind === 'mouth' && zone.fromM < toM && zone.toM > fromM);
+export function inMouth(zones: readonly KeepClearZone[], fromM: number, toM: number) {
+  for (const zone of zones)
+    if (zone.kind === 'mouth' && zone.fromM < toM && zone.toM > fromM) return true;
+  return false;
+}
