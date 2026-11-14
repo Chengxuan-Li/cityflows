@@ -5,15 +5,16 @@ import { join } from 'node:path';
 import { button, city, importOsm, pageErrors } from './helpers';
 import { riderOf, stationRiders } from '../../src/demand/stations';
 import { defaultScenario } from '../../src/fixtures/scenarios';
-import { distance } from '../../src/geo/polyline';
+import { distance, nearestOnPolyline } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { compileRail } from '../../src/network/rail';
 import { stationArrivals, trainTimetable } from '../../src/network/trains';
+import { TRANSIT_RIDER_ID } from '../../src/sim/transit';
 import { railStation } from '../demand/rail-station';
 
 // TASK-128 (T65): S-Bahn riders walk out of Donnersbergerbrücke's entrances just after a train
 // stops, a selected rider reads as arrived by train, and a returning rider's trip ends at the
-// station. Munich imports with 3D: e2e group e, beside the other rail specs.
+// station. TASK-174: they ride in on that train and cross its platform to the entrance first. Munich imports with 3D: e2e group e, beside the other rail specs.
 
 test.use({
   trace: {
@@ -128,8 +129,9 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
     await layers.getByLabel(label, { exact: true }).uncheck();
   await button(page, 'Layers').click();
 
-  // The first S-Bahn stop at the station after 07:15, while its riders stream out: they get off
-  // along the whole train, so they reach the entrances over about two minutes.
+  // The first S-Bahn stop at the station after 07:15. TASK-174: its riders get off at doors along
+  // the whole train, walk across the platform at walking pace and pass the entrance their walk out
+  // starts at just as that walk departs, so they reach the entrances over about two minutes.
   const arrival = stationArrivals(rail, trainTimetable(rail), 7.25 * 3600, 8 * 3600).find(
     (a) => a.kind === 'sbahn' && station.station!.platforms.includes(a.platform),
   )!;
@@ -138,18 +140,68 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
   );
   expect(out.length).toBeGreaterThan(1);
   const leftS = new Map(out.map((t) => [t.personId!, t.departS]));
+  const everyone = [...leftS.keys()].sort();
   const order = [...leftS.values()].sort((a, b) => a - b);
   const timeS = order[Math.floor(order.length / 2)]! + 15;
-  await seek(page, timeS);
-  const fresh = (await riderWalkers(page)).filter((w) => leftS.has(w.personId));
-  expect(fresh.length).toBe(order.filter((s) => s <= timeS).length);
-  for (const w of fresh) {
-    // Each started at an entrance, not on the tracks or in the station's middle: no farther from
-    // the nearest entrance than it has walked since.
-    const walked = (timeS - leftS.get(w.personId)!) * 1.4;
-    expect(Math.min(...doors.map((d) => distance(d, w)))).toBeLessThanOrEqual(walked + 5);
-    expect(distance(arrival.middle, w)).toBeGreaterThan(20);
+  const pace = 1.4;
+  const toEntrance = (p: Vec2) => Math.min(...doors.map((d) => distance(d, p)));
+  const toTrain = (p: Vec2) => nearestOnPolyline(arrival.body, p).away;
+  /** This train's riders on the map, each drawn exactly once. */
+  const drawn = async () => {
+    const found = (await riderWalkers(page)).filter((w) => leftS.has(w.personId));
+    expect(new Set(found.map((w) => w.personId)).size).toBe(found.length);
+    return found;
+  };
+
+  // Just after the stop every rider is on the platform at a door of the train, along its length.
+  await seek(page, arrival.arrivalS + 2);
+  const off = await drawn();
+  expect(off.map((w) => w.personId).sort()).toEqual(everyone);
+  for (const w of off) {
+    expect(w.id).toBeGreaterThanOrEqual(TRANSIT_RIDER_ID);
+    expect(toTrain(w)).toBeLessThan(2 * pace + 1);
   }
+  const along = off.map((w) => nearestOnPolyline(arrival.body, w).along);
+  expect(Math.max(...along) - Math.min(...along)).toBeGreaterThan(40);
+
+  /** Each rider reaches an entrance on the platform just before its walk out departs and walks
+   * on from that spot: no jump between the platform and the walk network. */
+  const passEntrances = async (riders: string[]) => {
+    for (const personId of riders) {
+      const walkS = leftS.get(personId)!;
+      await seek(page, walkS - 0.5);
+      const before = (await drawn()).find((w) => w.personId === personId)!;
+      expect(before.id).toBeGreaterThanOrEqual(TRANSIT_RIDER_ID);
+      expect(toEntrance(before)).toBeLessThan(3);
+      await seek(page, walkS + 1);
+      const after = (await drawn()).find((w) => w.personId === personId)!;
+      expect(after.id).toBeLessThan(TRANSIT_RIDER_ID);
+      expect(distance(before, after)).toBeLessThan(1.5 * pace + 2);
+    }
+  };
+  const byWalk = [...everyone].sort((a, b) => leftS.get(a)! - leftS.get(b)!);
+  await passEntrances(byWalk.filter((p) => leftS.get(p)! <= timeS));
+
+  // Midway: the riders whose walk has left walk away from the entrances, the others are still on
+  // the platform, within walking pace of the train since the stop and of an entrance by their walk.
+  await seek(page, timeS);
+  const fresh = await drawn();
+  expect(fresh.map((w) => w.personId).sort()).toEqual(everyone);
+  for (const w of fresh) {
+    const walkS = leftS.get(w.personId)!;
+    if (walkS > timeS) {
+      expect(w.id).toBeGreaterThanOrEqual(TRANSIT_RIDER_ID);
+      expect(toTrain(w)).toBeLessThanOrEqual((timeS - arrival.arrivalS) * pace + 2);
+      expect(toEntrance(w)).toBeLessThanOrEqual((walkS - timeS) * pace + 2);
+    } else {
+      expect(w.id).toBeLessThan(TRANSIT_RIDER_ID);
+      expect(toEntrance(w)).toBeLessThanOrEqual((timeS - walkS) * pace + 5);
+      expect(distance(arrival.middle, w)).toBeGreaterThan(20);
+    }
+  }
+  const platform = fresh.filter((w) => w.id >= TRANSIT_RIDER_ID);
+  expect(platform.length).toBeGreaterThan(0);
+  expect(platform.length).toBeLessThan(fresh.length);
   const near = (d: Vec2) => fresh.filter((w) => distance(d, w) < 60).length;
   const door = doors.reduce((best, d) => (near(d) > near(best) ? d : best));
   const group = fresh.filter((w) => distance(door, w) < 60);
@@ -161,7 +213,9 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
   await centre2D(page, focus, 20);
   await shot(map, info, 'riders-leaving-2d.png');
 
-  const rider = fresh.sort((a, b) => distance(door, a) - distance(door, b))[0]!;
+  const rider = fresh
+    .filter((w) => w.id < TRANSIT_RIDER_ID)
+    .sort((a, b) => distance(door, a) - distance(door, b))[0]!;
   const at = await page.evaluate((p) => window.cityflows!.worldToScreen!(p), {
     x: rider.x,
     y: rider.y,
@@ -177,6 +231,20 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
     'Walk',
   );
   await shot(page, info, 'rider-inspector-2d.png');
+  // A rider still crossing the platform opens the same person inspector.
+  const crossing = platform.sort((a, b) => toEntrance(b) - toEntrance(a))[0]!;
+  await centre2D(page, crossing, 20);
+  await map.click({
+    position: await page.evaluate((p) => window.cityflows!.worldToScreen!(p), {
+      x: crossing.x,
+      y: crossing.y,
+    }),
+  });
+  await expect(
+    page.getByRole('heading', { name: `Person ${crossing.personId}`, exact: true }),
+  ).toBeVisible();
+  await expect(details).toContainText(`By train at Donnersbergerbrücke ${clock}`);
+  await shot(page, info, 'rider-on-platform-2d.png');
 
   await button(page, '3D').click();
   const canvas = page.getByLabel('3D city view', { exact: true });
@@ -191,6 +259,7 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
   await shot(page, info, 'rider-inspector-3d.png');
   await button(page, 'Close inspector').click();
   await shot(canvas, info, 'riders-leaving-3d.png');
+  await passEntrances(byWalk.filter((p) => leftS.get(p)! > timeS));
   expect(errors).toEqual([]);
 });
 

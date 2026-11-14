@@ -2568,9 +2568,11 @@ distance band and riders per line. Choice off: no tours, no plans, main's run.
 
 TASK-128's station riders stay background demand, outside the choice and the mode shares, with
 their trips and walks unchanged; they also ride the S-Bahn (`sim/transit.ts`): each comes in
-aboard the run that stops at their platform at their arrival second, gets off at a door and walks
-to the platform's nearest entrance until their walk out departs, and after the walk back walks onto
-the station's other platform (the way back) and leaves on the next S-Bahn with room.
+aboard the run that stops at their platform at their arrival second, gets off at their own point
+along the train (the one their walk out was timed from), steps onto the platform, walks along it to
+its edge nearest the entrance their walk out leaves from and on to that entrance, reaching it as
+the walk departs, and after the walk back walks onto the station's other platform (the way back)
+and leaves on the next S-Bahn with room.
 
 ## 10. Engine host
 
