@@ -94,7 +94,7 @@ export function ModeChoiceControls() {
       ))}
       <p className="muted">
         {config.enabled
-          ? 'Short trips walk, long ones drive; persons without a free household car walk.'
+          ? 'Short trips walk, long ones drive or ride transit; persons without a free household car walk or ride transit.'
           : 'Everyone with a free household car drives.'}{' '}
         Restart to apply.
       </p>

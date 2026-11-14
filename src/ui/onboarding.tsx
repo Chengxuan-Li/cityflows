@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { labels } from './shortcuts';
 import { useAppStore } from './store';
 
 type State = ReturnType<typeof useAppStore.getState>;
@@ -70,6 +71,16 @@ const hints: Hint[] = [
     text: 'Compare runs before and after an edit.',
     locate: () => beside('.sidebar button', 'Compare', 'right'),
     done: (state) => state.compareOpen,
+  },
+  {
+    text: 'Open Layers for the time of day, the appearance and labels.',
+    locate: () => beside('.sidebar button', 'Layers', 'right'),
+    done: (state) => state.layersOpen,
+  },
+  {
+    text: `Press ${labels('commandMenu')[0]} to find any command.`,
+    locate: onMap,
+    done: (state) => state.sheet === 'commands',
   },
 ];
 
