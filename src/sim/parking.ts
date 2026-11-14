@@ -803,25 +803,39 @@ export function createParking(
   /** TASK-157: by lane, the spans merging lot cars are crossing. */
   const crossing = new Map<number, { fromM: number; toM: number }[]>();
   const motionById = Array<ParkingMotion | undefined>(trips.length).fill(undefined);
-  /** TASK-176: the motions by the parking facility of their connector, for `arrivalStop`, which
-   * runs for every car bound for a lot, every step: only a motion at its own facility can stop it. */
+  /** TASK-176: the motions by the parking facility of their connector (`motionsAt`) and of their
+   * space (`motionsIn`). The checks that run for every car bound for or leaving a lot, every step,
+   * read only their own facility's: a motion elsewhere never passes their facility test. */
   let motionsAt = new Map<number, Map<number, ParkingMotion>>();
-  const facilityOf = (m: ParkingMotion) => compiled.connectors[m.connector]!.parking ?? -1;
+  let motionsIn = new Map<number, Map<number, ParkingMotion>>();
+  const connectorFacility = (m: ParkingMotion) => compiled.connectors[m.connector]!.parking ?? -1;
+  const spaceFacility = (m: ParkingMotion) => spaces[m.slot]?.parking ?? -1;
+  const atFacility = (index: Map<number, Map<number, ParkingMotion>>, facility: number) =>
+    index.get(facility) ?? new Map<number, ParkingMotion>();
   const indexMotion = (id: number, m: ParkingMotion) => {
-    let at = motionsAt.get(facilityOf(m));
-    if (!at) motionsAt.set(facilityOf(m), (at = new Map()));
-    at.set(id, m);
+    for (const [index, facility] of [
+      [motionsAt, connectorFacility(m)],
+      [motionsIn, spaceFacility(m)],
+    ] as const) {
+      let at = index.get(facility);
+      if (!at) index.set(facility, (at = new Map()));
+      at.set(id, m);
+    }
+  };
+  const unindexMotion = (id: number) => {
+    const previous = motionById[id];
+    if (!previous) return;
+    motionsAt.get(connectorFacility(previous))!.delete(id);
+    motionsIn.get(spaceFacility(previous))!.delete(id);
   };
   const setMotion = (id: number, m: ParkingMotion) => {
-    const previous = motionById[id];
-    if (previous) motionsAt.get(facilityOf(previous))!.delete(id);
+    unindexMotion(id);
     motions.set(id, m);
     motionById[id] = m;
     indexMotion(id, m);
   };
   const removeMotion = (id: number) => {
-    const previous = motionById[id];
-    if (previous) motionsAt.get(facilityOf(previous))!.delete(id);
+    unindexMotion(id);
     motions.delete(id);
     motionById[id] = undefined;
   };
@@ -873,7 +887,7 @@ export function createParking(
     m.lot &&
     (m.phase === 'leave' || m.phase === 'drive_out' || m.phase === 'exit' || m.phase === 'merge');
   const lotBusy = (facility: number, leaving: boolean, connector: number) =>
-    [...motions.values()].some(
+    [...atFacility(motionsIn, facility).values()].some(
       (m) =>
         m.lot &&
         spaces[m.slot]!.parking === facility &&
@@ -1040,9 +1054,68 @@ export function createParking(
       }
     return false;
   }
+  /** TASK-176: the points an arriving body passes on its way from `connector` to lot space `s`
+   * (its parked front, then its path and the manoeuvre into the space every 0.5 m) and their
+   * bounding box. They depend on the city alone, and an arrival blocked by departures tests every
+   * space of the lot against them each step it waits, so they are kept (until a live edit). */
+  const arrivalSweeps = new Map<string, { points: Vec2[]; bounds: number[] }>();
+  function arrivalSweep(s: CParkingSpace, connector: number, lengthM: number) {
+    const key = `${s.idx}:${connector}:${lengthM}`;
+    let sweep = arrivalSweeps.get(key);
+    if (sweep) return sweep;
+    const p = localPath(s.idx, connector),
+      parked = parkedPose(s, lengthM),
+      points: Vec2[] = [body(parked, lengthM)[0]!];
+    for (const part of [p, manoeuvrePath(pathPose(p, p.lengthM), parked, false)])
+      for (let at = 0; ; at = Math.min(part.lengthM, at + 0.5)) {
+        points.push(pathPose(part, at));
+        if (at >= part.lengthM) break;
+      }
+    const xs = points.map((q) => q.x),
+      ys = points.map((q) => q.y);
+    sweep = {
+      points,
+      bounds: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+    };
+    arrivalSweeps.set(key, sweep);
+    return sweep;
+  }
   /** TASK-153: where a departing car stands and will drive until it has joined the lane: body
    * segments along the rest of its leave manoeuvre, drive-out to the hold, and merge. */
+  /** TASK-176: each departure's bodies, kept until its motion moves on (a new pose, path, phase or
+   * progress) or the city is edited: every arrival waiting at its lot reads them each step. */
+  const departureCache = new WeakMap<
+    ParkingMotion,
+    { key: readonly unknown[]; bodies: Vec2[][]; extent: number[] }
+  >();
+  let edits = 0;
   function departureBodies(other: number, m: ParkingMotion) {
+    const key = [
+      m.pose,
+      m.path,
+      m.phase,
+      m.progressM,
+      m.holdM,
+      m.joinM,
+      m.slot,
+      m.connector,
+      length(other),
+      edits,
+    ] as const;
+    const kept = departureCache.get(m);
+    if (kept && kept.key.every((value, i) => value === key[i])) return kept;
+    const bodies = movingBodies(other, m),
+      xs = bodies.flat().map((p) => p.x),
+      ys = bodies.flat().map((p) => p.y);
+    const entry = {
+      key,
+      bodies,
+      extent: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+    };
+    departureCache.set(m, entry);
+    return entry;
+  }
+  function movingBodies(other: number, m: ParkingMotion) {
     const routes: [MotionPath, number, number][] = [];
     let hold = m.pose;
     if (m.phase !== 'exit')
@@ -1158,7 +1231,7 @@ export function createParking(
     // One entry cohort at a time; departures are checked against the arrival's own path below.
     if (
       facility?.kind === 'lot' &&
-      [...motions.values()].some(
+      [...atFacility(motionsIn, facility.idx).values()].some(
         (m) =>
           m.lot &&
           spaces[m.slot]!.parking === facility.idx &&
@@ -1197,53 +1270,50 @@ export function createParking(
       // unless its way to the bay comes within body clearance of where they stand or will go.
       // A bay that is blocked so gives way to the next free one whose way is clear; a claim
       // moves with it.
-      const departing = [...motions]
+      const departing = [...atFacility(motionsIn, slot.parking)]
         .filter(([, m]) => leavingLot(m) && spaces[m.slot]!.parking === slot.parking)
         .map(([otherId, m]) => {
-          const bodies = departureBodies(otherId, m),
-            clearance = (width(id) + width(otherId)) / 2 + 0.3,
-            xs = bodies.flat().map((p) => p.x),
-            ys = bodies.flat().map((p) => p.y);
+          const { bodies, extent } = departureBodies(otherId, m),
+            clearance = (width(id) + width(otherId)) / 2 + 0.3;
           return {
             bodies,
             clearance,
             box: [
-              Math.min(...xs) - clearance,
-              Math.min(...ys) - clearance,
-              Math.max(...xs) + clearance,
-              Math.max(...ys) + clearance,
+              extent[0]! - clearance,
+              extent[1]! - clearance,
+              extent[2]! + clearance,
+              extent[3]! + clearance,
             ],
           };
         });
-      const clear = (s: CParkingSpace, p: MotionPath) => {
-        const parked = parkedPose(s, length(id)),
-          points = [body(parked, length(id))[0]!];
-        for (const part of [p, manoeuvrePath(pathPose(p, p.lengthM), parked, false)])
-          for (let at = 0; ; at = Math.min(part.lengthM, at + 0.5)) {
-            points.push(pathPose(part, at));
-            if (at >= part.lengthM) break;
-          }
-        return !departing.some(({ bodies, clearance, box }) =>
-          points.some(
-            (q) =>
-              q.x >= box[0]! &&
-              q.y >= box[1]! &&
-              q.x <= box[2]! &&
-              q.y <= box[3]! &&
-              bodies.some((b) => nearestOnPolyline(b, q).away < clearance),
-          ),
+      const clear = (s: CParkingSpace) => {
+        const { points, bounds } = arrivalSweep(s, connector, length(id));
+        return !departing.some(
+          ({ bodies, clearance, box }) =>
+            box[0]! <= bounds[2]! &&
+            box[2]! >= bounds[0]! &&
+            box[1]! <= bounds[3]! &&
+            box[3]! >= bounds[1]! &&
+            points.some(
+              (q) =>
+                q.x >= box[0]! &&
+                q.y >= box[1]! &&
+                q.x <= box[2]! &&
+                q.y <= box[3]! &&
+                bodies.some((b) => nearestOnPolyline(b, q).away < clearance),
+            ),
         );
       };
-      if (departing.length && !clear(slot, path)) {
+      if (departing.length && !clear(slot)) {
         const other = spaceScores(connector, id)
           .map((s) => s.slot)
-          .find((s) => s !== slot && clear(s, localPath(s.idx, connector)));
+          .find((s) => s !== slot && clear(s));
         if (!other) return undefined;
         slot = other;
         path = localPath(other.idx, connector);
       }
       if (
-        [...motions].some(([otherId, m]) => {
+        [...atFacility(motionsIn, slot.parking)].some(([otherId, m]) => {
           if (spaces[m.slot]!.parking !== slot.parking) return false;
           const hit = nearestOnPolyline(path.points, m.pose);
           return hit.away < 0.6 && hit.along < length(otherId) + params.idm.minGapM;
@@ -1625,7 +1695,7 @@ export function createParking(
       const destination = compiled.connectors[vehicles.destination[id]!];
       if (compiled.parking[destination?.parking ?? -1]?.kind !== 'lot') return undefined;
       let positionM = Infinity;
-      for (const [other, m] of motionsAt.get(destination!.parking!) ?? [])
+      for (const [other, m] of atFacility(motionsAt, destination!.parking!))
         if (leavingLot(m))
           positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector, m));
       // TASK-153: a car that would enter at once does not wait for the departure.
@@ -1651,7 +1721,7 @@ export function createParking(
       const way = driveOut(id, slot.idx, connector);
       if (arrivalBlocksDeparture(id, connector, way)) return false;
       const out = pathPose(way.path, 0);
-      return ![...motions].some(
+      return ![...atFacility(motionsIn, slot.parking)].some(
         ([otherId, m]) =>
           spaces[m.slot]!.parking === slot.parking &&
           (m.phase === 'leave' ||
@@ -2230,8 +2300,10 @@ export function createParking(
         }
       }
       revision++;
+      edits++;
       compiled = next;
       motionsAt = new Map();
+      motionsIn = new Map();
       for (const [id, m] of motions) indexMotion(id, m);
       lotGraphs = compiled.parking.map(
         (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
@@ -2244,6 +2316,7 @@ export function createParking(
       clearHolds.clear();
       missed.clear();
       drives.clear();
+      arrivalSweeps.clear();
       markCrossings();
     },
   };
