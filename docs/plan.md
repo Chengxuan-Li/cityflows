@@ -204,6 +204,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | in progress (Claude Code subagent; quiet machine, owed frame and step-time checks from 160, 163, 166, 167, 170, 178) |
 | [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after TASK-176 measures, to keep the machine quiet) |
 | [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13 (Full run 43516520585 green) |
+| [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | in progress (Claude Code subagent, low load beside TASK-176) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4059,6 +4060,12 @@ snapshot fields kept, transit rider inspection plus signal timing), 167 against 
 above the night layer, `cityGrades(city)` after TASK-175), and 166 against the stack (resolved by its
 agent). Verified on the final tree: type-check, lint, format, build, unit (1,460), city (175), light e2e (45), gate and guard and T53 (9 and 1 expected fail) pass; the Full run 43516520585 on a183a0b (TASK-178) was green in every job, which released the merge hold. Probe, Munich seed 1, choice off: 5,449 completed
 (+2.8% against the baseline's 5,298, no reset), 0 stalled heads.
+
+Full run 43528001134 (lead, manual, on dec1c8a after the queue merge): check, seed report and e2e a,
+c, d and rest passed; e2e b (T16 grid5x5-stress: 2,692 active against the 2,700 floor, after actuated
+signals) and e (T65 station riders: 7 drawn against 4, after TASK-174 seats riders in the S-Bahn)
+failed on both attempts. Both are Full-tier specs the delivering agents did not run. TASK-179 repairs
+them; new merges are held until the full tier is green again (TASK-176 and 177 are not yet due).
 
 ## Owner decisions log
 
