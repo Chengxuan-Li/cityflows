@@ -208,6 +208,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-180](tasks/TASK-180.md) | 9 | Full-demand throughput drop after the queue merge (3,579 to 2,460 completed) and the actuation default, measured | diagnosis, `src/sim/**`, `signal-program.ts` | 169, 170, 174, 176 | seeds 1-6 and full demand table, gate, guard, drain | done |
 | [TASK-181](tasks/TASK-181.md) | UI | Window scrolls sideways after Play at 1280 px; mode-choice switch label covers transit | `src/ui/**` | 160, 174, 177 | no horizontal scroll at 1280/1024/900 px, e2e | done 2026-11-14 |
 | [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | done |
+| [TASK-183](tasks/TASK-183.md) | UI | Street, station, stop and place labels in 3D (TASK-167's rules, collision-free, Labels toggle) | `src/render3d/**`, `src/render/labels.ts` shared parts | 167 | no overlaps, T64 3D within 5%, shots | in progress (Claude Code subagent) |
+| [TASK-184](tasks/TASK-184.md) | UI | Follow clock seasons so a run reaches evening; 2D vehicle lights under bridge decks | `src/render/lighting.ts`, lighting settings, 2D light layer | 163 | sun model tests, V163, T62/T64, shots | in progress (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
