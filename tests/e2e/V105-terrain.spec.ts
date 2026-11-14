@@ -50,7 +50,8 @@ test('@smoke V105 wizard terrain drapes 3D, shades 2D and toggles back to the pl
   expect(terrain!.cols).toBe(169);
   await button(page, 'Layers').click();
   const layers = page.getByRole('region', { name: 'Map layers' });
-  for (const name of ['Basemap', 'Places', 'Entrances and exits'])
+  // Labels (TASK-183) place once the camera settles, so frames right after a camera move differ.
+  for (const name of ['Basemap', 'Places', 'Entrances and exits', 'Labels'])
     await layers.getByLabel(name, { exact: true }).uncheck();
   const toggle = layers.getByLabel('Terrain', { exact: true });
   await expect(toggle).toBeChecked();
