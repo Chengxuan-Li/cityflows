@@ -207,7 +207,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | done 2026-11-13 (Full run waits for TASK-176's full-demand item) |
 | [TASK-180](tasks/TASK-180.md) | 9 | Full-demand throughput drop after the queue merge (3,579 to 2,460 completed) and the actuation default, measured | diagnosis, `src/sim/**`, `signal-program.ts` | 169, 170, 174, 176 | seeds 1-6 and full demand table, gate, guard, drain | in progress (Claude Code subagent) |
 | [TASK-181](tasks/TASK-181.md) | UI | Window scrolls sideways after Play at 1280 px; mode-choice switch label covers transit | `src/ui/**` | 160, 174, 177 | no horizontal scroll at 1280/1024/900 px, e2e | done 2026-11-14 |
-| [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | in progress (Claude Code subagent) |
+| [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4126,6 +4126,18 @@ clip`; no horizontal scroll from 390 to 1,920 px. New light-tier spec `window-sc
 without the fix). The Demand switch reads "Choose walk, car or transit" (T79, the `driveEveryone` helper
 and the README follow). Check and light e2e (48) pass. Open: `app.css` holds two near-identical copies of
 most rules (a merge leftover; the later wins), for a cleanup task.
+
+TASK-182 (Claude Code subagent, Sonnet 5.5 high, 2026-11-14; merged): `app.css` keeps one copy of each
+rule, 2,807 to 2,428 lines (412 rules to 354; 57 duplicated selector groups to none). The earlier copy of
+51 duplicated rules and two keyframes is removed, keeping the later copy that already won; where the copies
+differed the winner stays (`.app` `overflow: clip`, `.sidebar` padding `8px 10px`), and `.row-count` and the
+600 px `.status-bar` rules are merged. A before/after harness over 166 states (Light, Dark, tools,
+inspectors, sheets, popovers, tooltips, hover and focus, 17 widths, phone, reduced motion) found 0 computed
+style differences across 170,334 nodes and every property; 165 of 166 screenshots match pixel for pixel
+(the other is render noise, reproduced on the old build), and a planted padding change was caught. The
+built CSS shrinks only 38,040 to 38,008 bytes since Vite had merged most duplicates. Contrast (44), check
+(1,460) and light e2e (48) pass. The agent's cleanup killed every headless Chromium on the machine; TASK-180
+was told to rerun any browser run that broke.
 
 ## Owner decisions log
 
