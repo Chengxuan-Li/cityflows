@@ -4197,6 +4197,11 @@ their last angle and size while the camera moves; the rail-off cost needs a quie
 Full run 43575816774 (lead, manual, on 72f8e8c after TASK-180): every job green, including the full
 traffic tier in the city job (29 minutes).
 
+Full run 43584685019 (lead, manual, on a92e0f0 after TASK-183): every job green except e2e b: V105 terrain
+compared a 3D frame taken two animation frames after a camera move with an earlier capture, and TASK-183's
+labels place 120 ms after the camera settles. Lead fix: V105 unchecks Labels with the other layers it
+already turns off (3 of 3 local repeats pass); V183 covers the labels.
+
 ## Owner decisions log
 
 - 2026-11-13 (owner, before a 24-hour absence): the lead keeps developing and testing

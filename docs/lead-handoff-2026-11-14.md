@@ -68,3 +68,5 @@ decision; those wait for the owner.
   still running its frame tests.
 - 2026-11-14: TASK-183 merged (gates re-run on the merge), TASK-192 written; CI and a Full run on the
   merge are pending.
+- 2026-11-14: main CI green on a92e0f0; Full run 43584685019 red only in e2e b (V105 frame compare
+  raced the 3D labels). Fixed in the spec; a new Full run is dispatched on the fix.
