@@ -20,14 +20,14 @@ decision; those wait for the owner.
 
 ### 1. TASK-183 (street, station, stop and place labels in 3D)
 
-- [ ] Agent delivered on branch `task/183-labels-3d` (worktree `D:\cityflows-wt\183`, ports 5383/5483).
-- [ ] Lead reviewed and merged: `git log main --oneline | grep "task/183-labels-3d"` shows the merge;
+- [x] Agent delivered on branch `task/183-labels-3d` (worktree `D:\cityflows-wt\183`, ports 5383/5483).
+- [x] Lead reviewed and merged: `git log main --oneline | grep "task/183-labels-3d"` shows the merge;
       a "TASK-183 (...; merged)" review entry sits before "## Owner decisions log" in `docs/plan.md`;
       its task row reads done.
 - [ ] Main CI green on the merge: `gh run list --branch main --workflow CI --limit 3`.
 - [ ] Full run green after the merge: `gh run list --workflow Full --limit 3` shows a success on a sha
       at or after the merge.
-- [ ] Screenshots forwarded to the owner (evidence in `D:\cityflows-wt\183-evidence\`).
+- [x] Screenshots forwarded to the owner (evidence in `D:\cityflows-wt\183-evidence\`).
 - [ ] Worktree `D:\cityflows-wt\183` removed (junction first).
 
 ### 2. Planned-task contracts (status in plan.md: "planned (not started; awaiting owner)")
@@ -40,7 +40,8 @@ decision; those wait for the owner.
 - [x] `docs/tasks/TASK-189.md`: phone-width inspector as a bottom sheet.
 - [x] `docs/tasks/TASK-190.md`: parking bays under low ramps.
 - [x] `docs/tasks/TASK-191.md`: shortcut chords that browsers reserve.
-- [ ] (pending TASK-183) `docs/tasks/TASK-192.md` onward, only if TASK-183 leaves open items (listed here when written).
+- [x] `docs/tasks/TASK-192.md`: TASK-183 leftovers (labels of hidden streets, labels while the camera
+      moves, rail-off frame cost). No further leftover contracts.
 - [x] Each has a row in `docs/plan.md`'s task table.
 
 ### 3. Owner decision documents (each ends "Status: awaiting owner")
@@ -65,3 +66,5 @@ decision; those wait for the owner.
 
 - 2026-11-14: contracts TASK-185 to 191 and the five decision documents written and pushed; TASK-183
   still running its frame tests.
+- 2026-11-14: TASK-183 merged (gates re-run on the merge), TASK-192 written; CI and a Full run on the
+  merge are pending.

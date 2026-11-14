@@ -208,7 +208,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-180](tasks/TASK-180.md) | 9 | Full-demand throughput drop after the queue merge (3,579 to 2,460 completed) and the actuation default, measured | diagnosis, `src/sim/**`, `signal-program.ts` | 169, 170, 174, 176 | seeds 1-6 and full demand table, gate, guard, drain | done |
 | [TASK-181](tasks/TASK-181.md) | UI | Window scrolls sideways after Play at 1280 px; mode-choice switch label covers transit | `src/ui/**` | 160, 174, 177 | no horizontal scroll at 1280/1024/900 px, e2e | done 2026-11-14 |
 | [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | done |
-| [TASK-183](tasks/TASK-183.md) | UI | Street, station, stop and place labels in 3D (TASK-167's rules, collision-free, Labels toggle) | `src/render3d/**`, `src/render/labels.ts` shared parts | 167 | no overlaps, T64 3D within 5%, shots | in progress (Claude Code subagent) |
+| [TASK-183](tasks/TASK-183.md) | UI | Street, station, stop and place labels in 3D (TASK-167's rules, collision-free, Labels toggle) | `src/render3d/**`, `src/render/labels.ts` shared parts | 167 | no overlaps, T64 3D within 5%, shots | done |
 | [TASK-184](tasks/TASK-184.md) | UI | Follow clock seasons so a run reaches evening; 2D vehicle lights under bridge decks | `src/render/lighting.ts`, lighting settings, 2D light layer | 163 | sun model tests, V163, T62/T64, shots | done |
 | [TASK-185](tasks/TASK-185.md) | render | 2D street-label frame cost under TASK-167's 5% gate | `src/render/layers/labels.ts`, 2D scene | 167, 176 | T62/T64 2D rounds, placement unchanged | planned (not started; awaiting owner) |
 | [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | planned (not started; awaiting owner) |
@@ -217,6 +217,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | planned (not started; awaiting owner) |
 | [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | planned (not started; awaiting owner) |
 | [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | planned (not started; awaiting owner) |
+| [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | planned (not started; awaiting owner) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4179,6 +4180,22 @@ V163, T62 and T64 pass; 2D Evening adds about 0.8% (Evening against Day +10.6%, 
 was +9.2%). Lead re-ran check on the merge. Beyond the named scope: `src/render/scene.ts`, vehicle and
 shadow layers, README, the TASK-163 paragraph of `docs/architecture.md`. Open: the bundled 5x5 grid has
 no lamps, so its Winter shots show only the sky.
+
+TASK-183 (Claude Code subagent, Opus 5.5 high, 2026-11-14; merged): street, station, stop and place labels
+in 3D (`src/render3d/labels.ts`). When the camera settles (120 ms and 3 frames still) every candidate is
+projected to the screen and placed by TASK-167's own placement code (`LabelFrame`: each candidate in
+screen pixels with the map scale at its distance), so priority, no overlaps, upright flipping, repeats
+and junction nudges carry over; between placements labels ride with the map, and a still camera places
+and redraws nothing. Arimo at the 2D sizes and halo in a glyph atlas (two draw calls), not darkened by
+Evening or Night, dark inks in Dark; drawn over buildings; the Labels layer toggles them. 2D placement is
+identical to main at 57 zoom steps on Munich and Sindelfingen (10,179 labels). T64 3D labels on +3.7%
+(rail on) and +4.9% (rail off) against main on a busy machine (labels off level). New V183 unit and e2e
+tests. Lead re-ran on the merge: check (1,470), city (176), light e2e (48), V183 e2e. Screenshots sent to
+the owner. Open (to TASK-192): a street hidden behind a building shows its name on the roof; labels keep
+their last angle and size while the camera moves; the rail-off cost needs a quiet confirmation.
+
+Full run 43575816774 (lead, manual, on 72f8e8c after TASK-180): every job green, including the full
+traffic tier in the city job (29 minutes).
 
 ## Owner decisions log
 
