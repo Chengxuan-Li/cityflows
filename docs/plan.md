@@ -202,7 +202,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | done 2026-11-13 |
 | [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | done 2026-11-13 |
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | done 2026-11-14 |
-| [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | in progress (Claude Code subagent) |
+| [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | done 2026-11-14 |
 | [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13 (Full run 43516520585 green) |
 | [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | done 2026-11-13 (Full run waits for TASK-176's full-demand item) |
 | [TASK-180](tasks/TASK-180.md) | 9 | Full-demand throughput drop after the queue merge (3,579 to 2,460 completed) and the actuation default, measured | diagnosis, `src/sim/**`, `signal-program.ts` | 169, 170, 174, 176 | seeds 1-6 and full demand table, gate, guard, drain | in progress (Claude Code subagent) |
@@ -4103,6 +4103,18 @@ off) and so vehicle-steps (to TASK-180). A TASK-163 bug fixed in its own commit 
 chunk. Lead merge onto main with TASK-179: check (1,460), city (175), light e2e (45), gate, guard and T53
 pass. Open: at full demand rail crossings (300 s), spawn (230 s), walker hold (160 s) and lane changes
 (150 s) remain; full demand completes 2,460 against a183a0b's 3,579 (to TASK-180).
+
+Full run 43561296476 (lead, manual, on 674841d after TASK-176 and 179): every job green; munich-full-demand
+took 2,043 s on CI (timed out at 3,600 s on dec1c8a). The merge hold is released.
+
+TASK-177 (Claude Code subagent, Sonnet 5.5 high, 2026-11-14; merged): the README covers the Mac window, map
+look, labels, lighting, dark appearance, marking styles and keep clear, the keys table and command menu,
+the signal editor's switches, households, mode choice with transit, and station riders (pointing at the
+bundled Munich extract), with five screenshots in `docs/assets/` (128-colour PNGs under 125 kB); the old
+line crediting tiles by default is corrected (Basemap is opt-in). Two new hints: Layers (time of day,
+appearance, labels) and the command-menu key; the demo-onboarding e2e expects eight. Check (1,460) and
+light e2e (45) pass. Open (to TASK-181): the Demand switch still reads "Choose walk or car per trip" though
+it covers transit; after Play at 1280 px the dev build's `.app` scrolled 32 px sideways.
 
 ## Owner decisions log
 
