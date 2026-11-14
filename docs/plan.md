@@ -207,6 +207,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | done 2026-11-13 (Full run waits for TASK-176's full-demand item) |
 | [TASK-180](tasks/TASK-180.md) | 9 | Full-demand throughput drop after the queue merge (3,579 to 2,460 completed) and the actuation default, measured | diagnosis, `src/sim/**`, `signal-program.ts` | 169, 170, 174, 176 | seeds 1-6 and full demand table, gate, guard, drain | in progress (Claude Code subagent) |
 | [TASK-181](tasks/TASK-181.md) | UI | Window scrolls sideways after Play at 1280 px; mode-choice switch label covers transit | `src/ui/**` | 160, 174, 177 | no horizontal scroll at 1280/1024/900 px, e2e | done 2026-11-14 |
+| [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | in progress (Claude Code subagent) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
