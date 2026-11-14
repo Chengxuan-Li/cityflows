@@ -205,7 +205,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | done 2026-11-14 |
 | [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13 (Full run 43516520585 green) |
 | [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | done 2026-11-13 (Full run waits for TASK-176's full-demand item) |
-| [TASK-180](tasks/TASK-180.md) | 9 | Full-demand throughput drop after the queue merge (3,579 to 2,460 completed) and the actuation default, measured | diagnosis, `src/sim/**`, `signal-program.ts` | 169, 170, 174, 176 | seeds 1-6 and full demand table, gate, guard, drain | in progress (Claude Code subagent) |
+| [TASK-180](tasks/TASK-180.md) | 9 | Full-demand throughput drop after the queue merge (3,579 to 2,460 completed) and the actuation default, measured | diagnosis, `src/sim/**`, `signal-program.ts` | 169, 170, 174, 176 | seeds 1-6 and full demand table, gate, guard, drain | done |
 | [TASK-181](tasks/TASK-181.md) | UI | Window scrolls sideways after Play at 1280 px; mode-choice switch label covers transit | `src/ui/**` | 160, 174, 177 | no horizontal scroll at 1280/1024/900 px, e2e | done 2026-11-14 |
 | [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4138,6 +4138,25 @@ style differences across 170,334 nodes and every property; 165 of 166 screenshot
 built CSS shrinks only 38,040 to 38,008 bytes since Vite had merged most duplicates. Contrast (44), check
 (1,460) and light e2e (48) pass. The agent's cleanup killed every headless Chromium on the machine; TASK-180
 was told to rerun any browser run that broke.
+
+TASK-180 (Claude Code subagent, Opus 5.5 high, 2026-11-14; merged): the full-demand drop was TASK-169's mouth
+rule, not 174, 176 or 179 (with keep clear and actuation off, main reproduces a183a0b's 3,579 and hash). A
+queue held short of a lot or garage mouth until a whole body fitted beyond it, and lot cars joined inside
+the mouth on `minGapM`, so each creep forward let in another lot car and the through car behind waited for
+the lot to empty; streets behind busy exits starved back into the upstream boxes (signals hold about 10%
+of the stopped time). Fix (`src/sim/engine.ts`): joins zip, one at a time; a standing car that let one in
+at a mouth is not cut in front of again there until it has passed (new test fails on main). Generated
+signal programs are fixed-time again (`GENERATED_TIMING = {}`): with the zip, actuation had less delay at
+0.15 (714 s against 853 s) but took a seed-6 Landsberger loop visit to 1,042 s (over TASK-154's 900 s) and
+completed fewer trips at full demand (2,875 against 3,015). Munich 0.15 seeds 1-6 choice off: completed
+5,294-5,312 (at most -1.1%, no baseline reset), gridlock 0-1, stalled 0, worst loop visit 789 s; mean
+delay mixed (seed 3 865 to 759 s, seed 5 740 to 954 s); choice on means 2,541 completed, delay 82 to 118 s.
+Full demand 2,460 to 3,015 completed (+22.6%), failed 269 to 167. pk:2049 exit waits 17-41 s. City and
+compile hashes re-pinned (generated programs lose `actuated`). Lead re-ran on the merge: check (1,461),
+city (175), traffic light (gate 5,302 / 0 / 0), mode-share guard (4), light e2e (48). Open, for the owner:
+full demand is still 16% under a183a0b, the price of keeping exits clear (dropping the hold-short half
+gives 3,827 but brings back pk:2049's long waits); actuation's 0.15 delay gain (16% choice off, 31% on)
+returns once the seed-6 loop exit at n:306 onto r:307 drains; garage waits over 60 s roughly doubled.
 
 ## Owner decisions log
 
