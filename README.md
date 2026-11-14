@@ -48,9 +48,10 @@ In a narrow window they float over the map and the toolbar moves what does not f
 
 - **Time of day.** In **Layers**, **Day**, **Evening** and **Night** change the light in 2D and
   3D: street lamps, lit windows, head- and tail-lamps and signal heads switch on after dark.
-  **Clock** follows the simulation clock (sunrise 06:00, sunset 20:00). **Exposure** brightens or
-  darkens the scene; double-click it to reset. The setting belongs to your browser, not to the
-  project, and does not change the simulation.
+  **Clock** follows the simulation clock, and its **Season** (Summer, Spring/autumn, Winter) sets
+  sunrise and sunset: in Winter dusk falls at 16:20, so a run reaches the evening. **Exposure**
+  brightens or darkens the scene; double-click it to reset. The setting belongs to your browser,
+  not to the project, and does not change the simulation.
 
 ![Evening in 2D: lit street lamps and street names](docs/assets/lighting-evening.png)
 

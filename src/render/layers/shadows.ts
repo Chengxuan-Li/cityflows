@@ -245,6 +245,34 @@ export class DeckCoverage {
   }
 }
 
+/** Outlines of the surfaces above `grade` that can cover its own, in the compiled city's frame:
+ * where the lights of the vehicles at `grade` must not show (TASK-184). */
+export function deckCover(
+  city: CompiledCity,
+  roadGrades: readonly number[],
+  nodeGrades: readonly number[],
+  grade: number,
+): Vec2[][] {
+  const surfaces = [
+    ...city.roads.map((road) => ({ grade: roadGrades[road.idx]!, ring: road.surface })),
+    ...city.nodes.map((node) => ({ grade: nodeGrades[node.idx]!, ring: node.outline })),
+  ].filter(({ ring }) => ring.length > 2);
+  const own = surfaces.filter((surface) => surface.grade === grade);
+  const above = surfaces.filter((surface) => surface.grade > grade);
+  if (!own.length || !above.length) return [];
+  const bounds = ({ ring }: { ring: Vec2[] }) => {
+    const xs = ring.map((p) => p.x),
+      ys = ring.map((p) => p.y);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] as const;
+  };
+  const index = new Flatbush(own.length);
+  for (const surface of own) index.add(...bounds(surface));
+  index.finish();
+  return above
+    .filter((surface) => index.search(...bounds(surface)).length > 0)
+    .map(({ ring }) => ring);
+}
+
 /** Heads share contexts and live tints. Vehicle ghosts reuse the whole particle array:
  * the contract permits an unmasked copy, avoiding per-car coverage queries every frame. */
 export class DeckGhosts {

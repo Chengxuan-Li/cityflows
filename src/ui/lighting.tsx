@@ -1,4 +1,4 @@
-import { exposureRange, type LightingMode } from '../render/lighting';
+import { exposureRange, seasons, type LightingMode, type Season } from '../render/lighting';
 import { SegmentedControl, Slider } from './controls';
 import { useLighting } from './lighting-store';
 
@@ -20,6 +20,22 @@ export function LightingControls() {
         value={lighting.mode}
         onChange={(mode) => setLighting({ mode })}
       />
+      {lighting.mode === 'clock' && (
+        <label>
+          Season
+          <select
+            aria-label="Season"
+            value={lighting.season}
+            onChange={(event) => setLighting({ season: event.currentTarget.value as Season })}
+          >
+            {seasons.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="edit-field">
         <span>
           Exposure <output>{lighting.exposure.toFixed(2)}×</output>

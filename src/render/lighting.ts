@@ -5,25 +5,45 @@ import type { TramStopPlacement } from './tram-stops';
 
 /** TASK-163: view-only scene lighting. Nothing here reaches the simulation or the project. */
 export type LightingMode = 'day' | 'evening' | 'night' | 'clock';
+export type Season = 'summer' | 'equinox' | 'winter';
 export interface LightingSettings {
   mode: LightingMode;
   /** Multiplies the scene's light: sun, sky, unlit surfaces and the background. */
   exposure: number;
+  /** The time of year the Clock mode's sun follows (TASK-184). */
+  season: Season;
 }
 export const lightingModes: readonly LightingMode[] = ['day', 'evening', 'night', 'clock'];
 export const exposureRange = { min: 0.5, max: 1.5, step: 0.05 } as const;
-export const defaultLighting: LightingSettings = { mode: 'day', exposure: 1 };
+
+/** Munich at 48.14 N. `declination` is the sun's at the solstice or equinox; `noon` is solar noon
+ * in clock hours. The equinoxes straddle the clock change (spring noon 12:15, autumn 13:15), so
+ * Spring/autumn takes the middle. Sunrise and sunset come out at about 05:25 and 21:30 in Summer,
+ * 06:40 and 18:50 in Spring/autumn, and 08:00 and 16:20 in Winter. */
+export const seasons: readonly {
+  value: Season;
+  label: string;
+  declination: number;
+  noon: number;
+}[] = [
+  { value: 'summer', label: 'Summer', declination: 23.44, noon: 13.43 },
+  { value: 'equinox', label: 'Spring/autumn', declination: 0, noon: 12.75 },
+  { value: 'winter', label: 'Winter', declination: -23.44, noon: 12.17 },
+];
+export const defaultLighting: LightingSettings = { mode: 'day', exposure: 1, season: 'equinox' };
 
 /** Settings from storage or any other untrusted source; anything malformed falls back. */
 export function parseLighting(value: unknown): LightingSettings {
   if (typeof value !== 'object' || value === null) return defaultLighting;
-  const { mode, exposure } = value as Record<string, unknown>;
+  const { mode, exposure, season } = value as Record<string, unknown>;
   return {
     mode: lightingModes.includes(mode as LightingMode) ? (mode as LightingMode) : 'day',
     exposure:
       typeof exposure === 'number' && Number.isFinite(exposure)
         ? Math.min(exposureRange.max, Math.max(exposureRange.min, exposure))
         : 1,
+    // Values stored before TASK-184 carry no season.
+    season: seasons.some((s) => s.value === season) ? (season as Season) : defaultLighting.season,
   };
 }
 
@@ -132,16 +152,28 @@ const dayIrradiance = irradiance(
   dayPreset.sunIntensity,
 );
 
-/** A simple Munich-like day for "Follow simulation clock": sunrise 06:00, sunset 20:00, the sun
- * 52° high at 13:00, rising in the east-north-east and setting in the west-north-west. */
-export function sunAt(timeS: number) {
+/** The sun over Munich at `timeS` (seconds since midnight) in `season`, for "Follow simulation
+ * clock": elevation in degrees (0 at sunrise and sunset, counting the disc and refraction) and
+ * compass azimuth. */
+export function sunAt(timeS: number, season: Season = defaultLighting.season) {
   const hour = (((timeS / 3600) % 24) + 24) % 24;
-  if (hour >= 6 && hour <= 20) {
-    const t = (hour - 6) / 14;
-    return { elevation: 52 * Math.sin(Math.PI * t), azimuth: 70 + 220 * t, hour };
-  }
-  const t = (hour >= 20 ? hour - 20 : hour + 4) / 10;
-  return { elevation: -35 * Math.sin(Math.PI * t), azimuth: 290 + 140 * t, hour };
+  const { declination, noon } = seasons.find((s) => s.value === season)!;
+  const rad = Math.PI / 180,
+    latitude = 48.14 * rad,
+    delta = declination * rad,
+    angle = (hour - noon) * 15 * rad;
+  const elevation =
+    Math.asin(
+      Math.sin(latitude) * Math.sin(delta) + Math.cos(latitude) * Math.cos(delta) * Math.cos(angle),
+    ) /
+      rad +
+    0.833;
+  // Measured from south through west; the compass azimuth runs from north through east.
+  const south = Math.atan2(
+    Math.sin(angle),
+    Math.cos(angle) * Math.sin(latitude) - Math.tan(delta) * Math.cos(latitude),
+  );
+  return { elevation, azimuth: (south / rad + 540) % 360, hour };
 }
 
 /** Share of windows lit through the day: offices by day, homes in the evening, few after midnight. */
@@ -204,7 +236,7 @@ export function sceneLight(
   if (mode === 'day') return resolve(day, true, 0, 0, exposure);
   if (mode === 'evening') return resolve(evening, true, 1, 0.45, exposure);
   if (mode === 'night') return resolve(night, false, 1, 0.22, exposure);
-  const { elevation, azimuth, hour } = sunAt(timeS);
+  const { elevation, azimuth, hour } = sunAt(timeS, settings.season);
   // Day above 20°, golden light to evening at the horizon, night below -12° (past nautical
   // twilight).
   const [from, to, t] =

@@ -92,9 +92,14 @@ export class Vehicles {
   private zoom = 1;
   private readonly poses = new VehiclePoses();
   private particles: Particle[] = [];
-  /** TASK-163: head- and tail-light sprites, one per vehicle, while the night layer draws. */
-  private lights: { container: ParticleContainer; vehicle: Texture; glow: Texture } | null = null;
+  /** TASK-163: head- and tail-light sprites, one per vehicle, while the night layer draws.
+   * TASK-184: `containers` runs parallel to `layers`, so a deck above covers the lights below. */
+  private lights: { containers: ParticleContainer[]; vehicle: Texture; glow: Texture } | null =
+    null;
   private lightParticles: Particle[] = [];
+  private lightGroups: Particle[][] = [];
+  private layerIndex = new Map<VehicleLayer, number>();
+  private vehicleLayer: number[] = [];
   get snapshot() {
     return this.poses.snapshot;
   }
@@ -111,6 +116,7 @@ export class Vehicles {
     movementLayers: VehicleLayer[],
   ): void {
     this.layers = layers;
+    this.layerIndex = new Map(layers.map((layer, i) => [layer, i]));
     this.laneLayers = laneLayers;
     this.movementLayers = movementLayers;
     this.poses.snapshot = null;
@@ -130,12 +136,12 @@ export class Vehicles {
     if (this.lights && this.snapshot) this.updateLights(this.snapshot);
   }
 
-  /** Draw vehicle lights into `lights.container`, or stop with null. */
-  setLights(lights: { container: ParticleContainer; vehicle: Texture; glow: Texture } | null) {
+  /** Draw vehicle lights into `lights.containers`, or stop with null. */
+  setLights(lights: { containers: ParticleContainer[]; vehicle: Texture; glow: Texture } | null) {
     if (lights === this.lights) return;
-    if (this.lights) {
-      this.lights.container.particleChildren = [];
-      this.lights.container.update();
+    for (const container of this.lights?.containers ?? []) {
+      container.particleChildren = [];
+      container.update();
     }
     this.lights = lights;
     if (lights && this.snapshot) this.updateLights(this.snapshot);
@@ -144,6 +150,8 @@ export class Vehicles {
   private updateLights(snapshot: PresentationSnapshot) {
     const lights = this.lights!;
     const { length, front, across } = vehicleLightSprite;
+    const groups = lights.containers.map((_, i) => (this.lightGroups[i] ??= []));
+    for (const group of groups) group.length = 0;
     for (let i = 0; i < snapshot.count; i++) {
       const particle = (this.lightParticles[i] ??= new Particle({ texture: lights.vehicle }));
       const dimensions = style.vehicleClasses[vehicleClasses[snapshot.vclass[i]!]!];
@@ -161,11 +169,14 @@ export class Vehicles {
         particle.scaleY = (dimensions.widthM * across) / lights.vehicle.height;
       }
       particle.alpha = snapshot.fade[i]!;
+      groups[this.vehicleLayer[i]!]!.push(particle);
     }
-    lights.container.particleChildren = this.lightParticles.slice(0, snapshot.count);
-    lights.container.texture = this.dot ? lights.glow : lights.vehicle;
     this.animateLights();
-    lights.container.update();
+    for (const [i, container] of lights.containers.entries()) {
+      container.particleChildren = groups[i]!.slice();
+      container.texture = this.dot ? lights.glow : lights.vehicle;
+      container.update();
+    }
   }
 
   private animateLights() {
@@ -199,6 +210,7 @@ export class Vehicles {
       const layer = (
         laneIndex >= 0 ? this.laneLayers[laneIndex] : this.movementLayers[-laneIndex - 1]
       )!;
+      this.vehicleLayer[i] = this.layerIndex.get(layer)!;
       const index = layer.count++;
       let particle = layer.pool[index];
       if (!particle) {
