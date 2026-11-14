@@ -201,8 +201,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-173](tasks/TASK-173.md) | 9 | Mode choice at each departure (progressive car chains and stock) | `src/sim/persons.ts`, `parking.ts`, `src/demand` | 113, 164 | choice off = main, mode-share guard, gate | done 2026-11-13 |
 | [TASK-174](tasks/TASK-174.md) | 9 | Transit as a mode: walk, tram or S-Bahn, walk, with capacity | `src/demand`, transit routing, `src/sim`, inspector | 173, 138, 127, 128 | routing tests, census, gate | done 2026-11-13 |
 | [TASK-175](tasks/TASK-175.md) | 5 | Road grade in the compiled network (contract change, pre-approved) | `src/network`, schema, parking holds, picking | none | under-bridge census, gate, pins proved | done 2026-11-13 |
-| [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | in progress (Claude Code subagent; quiet machine, owed frame and step-time checks from 160, 163, 166, 167, 170, 178) |
-| [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after TASK-176 measures, to keep the machine quiet) |
+| [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | done 2026-11-14 |
+| [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | in progress (Claude Code subagent) |
 | [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13 (Full run 43516520585 green) |
 | [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | done 2026-11-13 (Full run waits for TASK-176's full-demand item) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4082,6 +4082,26 @@ count fell from 2,746 to 2,682 with TASK-169's keep clear, not TASK-170 (the str
 is fixed-time); the stress workload now has 43 residents and jobs a place (6,708 trips, 2,806
 active), so `npm run bench`'s grid5x5-stress row is not comparable with earlier rows. T16 9/9, T65
 6/6, light traffic tier and check (1,460) pass.
+
+TASK-176 (Claude Code subagent, Opus 5.5 high, 2026-11-14; merged): performance pass on a quiet machine
+(direct timers; V8 profiles over-weighted small functions). munich-full-demand: 2,462 s on main to 974 s,
+same state hash (3369660939). The cause was TASK-153's lot admission check, run every step for each car
+queued behind a departure and sweeping every space of the lot (about 0.3 ms a call), multiplied by the
+heavier post-merge traffic; it is now cached per space, connector and body length and indexed by
+facility (8c33aa5, dfeed1d). Also exact: keep-clear stands without closures, rail crossings keep paths
+while a vehicle stands. Munich 0.15 choice off 89.6 s to 75.6 s (seed 1; -17% and -19% on seeds 2 and 3),
+choice on -5 to -8%; hashes identical on seeds 1 to 3, choice off and on, and at full demand. A 3D
+appearance switch now recolours instead of rebuilding: 3.0 s to 63-81 ms on Munich (terrain still
+rebuilds its ground, 1.8 s), matched pixel for pixel. Owed frame checks, all on the quiet machine: the
+Mac UI and dark appearance are 14-16% faster than b25e4c4 in every view and Dark is within 0.6% of
+Light; T64 2D Evening +5.5 to 8.1% against Day (gate 10%); labels +2.8 to 3.8% on T64 2D (gate 5%), T62
+2D +4.0 and +5.5% (at or just over in one round, no change made); T62's rail check passes. Actuated
+controllers cost nothing measurable; actuation raises seed 1's mean delay (836 s against 727 s with it
+off) and so vehicle-steps (to TASK-180). A TASK-163 bug fixed in its own commit (e0631d0, lead accepted):
+2D vehicle lights threw 180 page errors at Evening on T64. Load time unchanged; bundle +2.5 kB in the 3D
+chunk. Lead merge onto main with TASK-179: check (1,460), city (175), light e2e (45), gate, guard and T53
+pass. Open: at full demand rail crossings (300 s), spawn (230 s), walker hold (160 s) and lane changes
+(150 s) remain; full demand completes 2,460 against a183a0b's 3,579 (to TASK-180).
 
 ## Owner decisions log
 
