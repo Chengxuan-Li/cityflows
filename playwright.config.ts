@@ -77,6 +77,7 @@ const light = [
   'T67-car-ownership',
   'T79-mode-choice',
   'T80-shortcuts',
+  'window-scroll',
 ];
 const group =
   process.env.CITYFLOWS_E2E_GROUP ??
