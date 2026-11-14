@@ -607,6 +607,7 @@ export function MapView() {
           three!.setSelection(selection);
           three!.setBelowGround(getState().belowGround);
           three!.setPlaces(layers.places);
+          three!.setLabels(layers.labels);
           three!.setParkingVisible(layers.parkingOccupancy);
           three!.setColourVehiclesByClass(layers.vehicleClasses);
           three!.setSurroundings(layers.context, getState().buildings);

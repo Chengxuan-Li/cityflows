@@ -78,6 +78,7 @@ import { noTramStops, placeTramStops } from '../render/tram-stops';
 import { trainTimetable, trainsAt } from '../network/trains';
 import { railTimetable } from '../network/trams';
 import { paintedCity } from '../render/road-paint';
+import { Labels3D, loadLabelAtlas } from './labels';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -110,6 +111,8 @@ export class Scene3D {
         signalHalos: InstancedMesh;
       }
     | undefined;
+  /** TASK-183: street, station, stop and place names. */
+  private readonly labels = new Labels3D(loadLabelAtlas());
   private readonly vehicles = new Vehicles3D();
   private readonly walkers = new Walkers3D();
   private walkSignals: ReturnType<typeof buildWalkSignals> | undefined;
@@ -199,6 +202,7 @@ export class Scene3D {
       this.vehicles.beams,
       this.walkers.mesh,
       this.selection,
+      this.labels.group,
     );
     this.selection.visible = false;
     this.selection.material.userData.lit = true;
@@ -562,6 +566,8 @@ export class Scene3D {
       this.updateTerrainBackdrop();
     }
     this.setBelowGround(this.belowGround);
+    this.labels.setCity(city, source, geometry.heights);
+    this.updateLabelDataset();
     this.signalCity = city;
     this.lastSignalKey = '';
     this.setSignals(0);
@@ -595,6 +601,8 @@ export class Scene3D {
     if (palette === this.palette) return;
     this.palette = palette;
     this.canvas.dataset.mapPalette = palette === mapPalettes.dark ? 'dark' : 'light';
+    this.labels.setColours(palette.label);
+    this.invalidate();
     this.light = sceneLight(this.lighting, this.lightMinute * 60, palette.background);
     if (this.city && this.source && this.builtPalette !== palette) this.recolour();
     this.applyLight();
@@ -884,6 +892,16 @@ export class Scene3D {
       enabled ? (this.city?.lots?.reduce((sum, lot) => sum + lot.stallCount, 0) ?? 0) : 0,
     );
   }
+  /** TASK-183: the Labels layer. */
+  setLabels(visible: boolean) {
+    if (!this.labels.setVisible(visible)) return;
+    this.invalidate();
+    this.updateLabelDataset();
+  }
+  private updateLabelDataset() {
+    if (import.meta.env.MODE === 'test')
+      this.canvas.dataset.labels = JSON.stringify(this.labels.counts);
+  }
   setPlaces(visible: boolean) {
     if (this.placesVisible !== visible) this.invalidate();
     this.placesVisible = visible;
@@ -1106,6 +1124,15 @@ export class Scene3D {
     this.camera.updateMatrixWorld();
     const now = performance.now();
     if (
+      this.labels.update(
+        { camera: this.camera, width: this.canvas.clientWidth, height: this.canvas.clientHeight },
+        now,
+      )
+    ) {
+      this.invalidate();
+      this.updateLabelDataset();
+    }
+    if (
       this.basemap &&
       (this.demand.pending || this.basemap.needsUpdate) &&
       this.basemap.update(
@@ -1321,6 +1348,7 @@ export class Scene3D {
     this.disposeContent();
     this.vehicles.destroy();
     this.walkers.destroy();
+    this.labels.destroy();
     this.selection.geometry.dispose();
     this.selection.material.dispose();
     this.sun.shadow.dispose();
