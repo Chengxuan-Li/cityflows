@@ -150,20 +150,20 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const hash = (v: unknown) => createHash('sha256').update(vehicleJson(v)).digest('hex');
     const before = name.startsWith('munich')
       ? [
-          // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
-          'b372b82e2b5444a2bce817a29911510e5eec6e958b1ffb388925419725447333',
+          // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
+          '736ee70a649a46117a9ba163c118368808ca5b517f5a0348181f4b03c991932b',
           // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-          // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
-          '67aaf1a97ba88dea8b810d12da66524d53dcecded850a995dda3ae38d306c322',
+          // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
+          '1deeb2de81c25c5a123f21f6da3f6706a9e0bcbed8107fce8be80fe54f6af32f',
         ]
       : [
-          // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
-          'aef11c80f71c20d3841bced93241056d018f02bc48f2c1bcffa557db3083db41',
+          // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
+          '36ead1d461cbee968be497791dcc660e529b81aba385ac33701c57b730a9e1ba',
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-          // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
-          'd028b5288badf5524e7f9f3aba03fefc0357afb9c99a7acf9537d893fb566507',
+          // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
+          'b7f486223eefacc55413289953454c37c0e7d4cc562819fffc1adfc7069d2e9c',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

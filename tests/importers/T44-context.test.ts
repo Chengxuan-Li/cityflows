@@ -48,21 +48,21 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // with those removed and `nextId` 14 lower, the city hash is c227f80f… (lead: re-pinned with
             // TASK-132's `covered` too), and the
             // compile hash is unchanged.
-            // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
-            'e0389fdcb646d402c1b741497e7d2cd647801b4e4524ad89c1292e2a030aaa6c',
+            // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
+            'c9c09b4522fd67cbc8612a77f7d2e19c965efc909bb89fc519de168f8d81dc8d',
             // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
             // removed every pin equals 3e9951a's.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-            // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
-            '3268fb8a451214331ce5c711fef57e6361ab6e6d72a85d47c2fd4eda23849bbf',
+            // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
+            '52bc7655fa12461456b812113c6cd3d078b7e90de02a0427f983ee9f3e258010',
           ]
         : [
-            // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
-            '1aa0fc19e99e5abe54903d21e19d1801e287d825cf76a88dc3877b995f149250',
+            // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
+            '9f2bc7ae9ca77a4f306668c0d50bd740bb9903582d8084f28d31c466a1f164e6',
             // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-            // TASK-170: generated signal programs gain `actuated`; with GENERATED_TIMING empty every pin equals db08f1a's.
-            'bcc5a8fecf2bb085384909da6f3989713fb7b62b9801e422ac97cf455fb39d64',
+            // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
+            'd3e47d92b52a630718dae2babc7fc70ddaa4787d0a0f06e7445df4fc77fd92bc',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

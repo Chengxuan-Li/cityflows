@@ -11,13 +11,12 @@ function roadHeading(road: Road, end: boolean): number {
   return Math.atan2(b.y - a.y, b.x - a.x);
 }
 
-/** TASK-170: the timing flags of generated programs. They are actuated: on Munich seeds 1 to 6
- * that completed more trips with less delay than fixed greens. The demand split stays a
- * per-program choice: on the same seeds every split tried lengthened single visits to the
- * Landsberger loop's roads past TASK-154's 900 s on some seed. */
-export const GENERATED_TIMING: Pick<SignalProgram, 'demandSplit' | 'actuated'> = {
-  actuated: true,
-};
+/** TASK-170: the timing flags of generated programs. Both stay per-program choices. The demand
+ * split: on Munich seeds 1 to 6 every split tried lengthened single visits to the Landsberger
+ * loop's roads past TASK-154's 900 s on some seed. TASK-180: actuation too, after mouth joins
+ * zip: actuated programs then had less delay at 0.15 but took one seed-6 loop visit to 1,042 s,
+ * and completed fewer trips at full demand than fixed greens. */
+export const GENERATED_TIMING: Pick<SignalProgram, 'demandSplit' | 'actuated'> = {};
 
 /** TASK-170: the shortest green a demand split or an actuated controller gives a phase. */
 export const MIN_GREEN_S = 5;

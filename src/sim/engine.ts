@@ -33,7 +33,7 @@ import {
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
-import { inMouth, keepClearStand } from './keep-clear';
+import { mouthAt, keepClearStand } from './keep-clear';
 import { keepClearZones } from '../network/keep-clear';
 import { createPersons, hasPerson } from './persons';
 import { transitNetwork } from '../routing/transit';
@@ -238,6 +238,9 @@ function createRun({
   let keepClear = keepClearZones(compiled);
   const keepClearStop = new Float64Array(trips.length).fill(Infinity);
   const keepClearHeld = new Uint8Array(trips.length);
+  // TASK-180: the mouth (lane and zone start) where a standing car let a joining car in.
+  const yieldedLane = new Int32Array(trips.length).fill(-1);
+  const yieldedZoneM = new Float64Array(trips.length);
   // Where each car's front will come to stand, as far as this step knows (behind its leader's).
   const standFront = new Float64Array(trips.length).fill(Infinity);
   let allowedLanes = vehicleClasses.map((name) =>
@@ -508,8 +511,13 @@ function createRun({
     const spacing = lengthM + gap;
     if (landingBlocked(lane, positionM - spacing, positionM + gap)) return false;
     // TASK-169: a body joining in a mouth zone, which queued traffic keeps clear, needs only the
-    // following gap to cars standing beside it; moving traffic keeps the spawn gap.
-    const mouth = inMouth(keepClear[lane]!, positionM - lengthM, positionM);
+    // following gap to cars standing beside it; moving traffic keeps the spawn gap. TASK-180:
+    // zip, one at a time: not again in front of a car that has let one in at this mouth.
+    const zone = mouthAt(keepClear[lane]!, positionM - lengthM, positionM);
+    const follower = zone ? followerAt(lane, positionM) : -1;
+    const mouth =
+      !!zone &&
+      (follower === -1 || yieldedLane[follower] !== lane || yieldedZoneM[follower] !== zone.fromM);
     const maxSpacing = maxVehicleLength + gap;
     if (positionM < spacing) {
       for (const idx of compiled.lanes[lane]!.in) {
@@ -573,6 +581,37 @@ function createRun({
     }
     return true;
   }
+
+  /** The car behind `positionM` on `lane`, or -1. */
+  function followerAt(lane: number, positionM: number) {
+    let follower = -1;
+    for (
+      let id = vehicles.last(lane);
+      id !== -1 && vehicles.position[id]! < positionM;
+      id = vehicles.previous[id]!
+    )
+      follower = id;
+    return follower;
+  }
+
+  /** TASK-180: after car `id` joined `lane` at `positionM`: a standing car it joined in front of
+   * inside a mouth zone, nearer than the spawn gap, has let it in there. */
+  function zipAtMouth(id: number, lane: number, positionM: number) {
+    yieldedLane[id] = -1;
+    const lengthM = profile(id).lengthM;
+    const zone = mouthAt(keepClear[lane]!, positionM - lengthM, positionM);
+    const follower = vehicles.next[id]!;
+    if (
+      zone &&
+      follower !== -1 &&
+      vehicles.speed[follower]! < 0.1 &&
+      positionM - vehicles.position[follower]! < lengthM + Math.max(spawnMinGapM, idm.minGapM)
+    ) {
+      yieldedLane[follower] = lane;
+      yieldedZoneM[follower] = zone.fromM;
+    }
+  }
+
   const spawnGap = (connector: CConnector, id: number) => {
     const gap = hasSpawnGap(connector, id);
     originCourtesy.consider(id, connector, gap, time());
@@ -606,6 +645,7 @@ function createRun({
       accounting.transition(id, IN_LOT);
     } else {
       vehicles.insert(id, lane, positionM);
+      zipAtMouth(id, lane, positionM);
       accounting.transition(id, DRIVING);
     }
     persons.departed(id, timeS);
@@ -1852,6 +1892,7 @@ function createRun({
                 : joinM;
             vehicles.insert(id, c.lane, positionM);
             vehicles.speed[id] = 0;
+            zipAtMouth(id, c.lane, positionM);
             vehicles.jamS[id] = 0;
             accounting.transition(id, DRIVING);
             roadEnteredS[id] = time();
