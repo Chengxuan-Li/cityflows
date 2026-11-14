@@ -205,7 +205,8 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
   page,
   browser,
 }, info) => {
-  test.setTimeout(180_000);
+  // 2.3 to 2.7 min on CI runners, so 180 s timed out on a slower one (Full run 43587159656).
+  test.setTimeout(300_000);
   const errors: string[] = [];
   async function openMap(next: Page) {
     next.on('pageerror', (error) => errors.push(error.message));

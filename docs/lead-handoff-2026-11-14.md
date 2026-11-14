@@ -70,3 +70,5 @@ decision; those wait for the owner.
   merge are pending.
 - 2026-11-14: main CI green on a92e0f0; Full run 43584685019 red only in e2e b (V105 frame compare
   raced the 3D labels). Fixed in the spec; a new Full run is dispatched on the fix.
+- 2026-11-14: Full run 43587159656 on 4f24042: b green, e red (T62 cached paint over its 180 s limit on a
+  slow runner). Limit raised to 300 s; another Full run dispatched. Main CI green on 4f24042.

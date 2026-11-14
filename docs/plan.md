@@ -4202,6 +4202,11 @@ compared a 3D frame taken two animation frames after a camera move with an earli
 labels place 120 ms after the camera settles. Lead fix: V105 unchecks Labels with the other layers it
 already turns off (3 of 3 local repeats pass); V183 covers the labels.
 
+Full run 43587159656 (lead, manual, on 4f24042 after the V105 fix): e2e b now green; e2e e red: T62 cached
+paint timed out at 180 s on both attempts after reaching its last line, on a runner about 10% slower
+(the test took 2.3 to 2.7 min on earlier runs). Lead fix: its time limit is 300 s (a time limit, not a
+gate); 1.2 min locally.
+
 ## Owner decisions log
 
 - 2026-11-13 (owner, before a 24-hour absence): the lead keeps developing and testing
