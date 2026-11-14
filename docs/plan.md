@@ -206,7 +206,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13 (Full run 43516520585 green) |
 | [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | done 2026-11-13 (Full run waits for TASK-176's full-demand item) |
 | [TASK-180](tasks/TASK-180.md) | 9 | Full-demand throughput drop after the queue merge (3,579 to 2,460 completed) and the actuation default, measured | diagnosis, `src/sim/**`, `signal-program.ts` | 169, 170, 174, 176 | seeds 1-6 and full demand table, gate, guard, drain | in progress (Claude Code subagent) |
-| [TASK-181](tasks/TASK-181.md) | UI | Window scrolls sideways after Play at 1280 px; mode-choice switch label covers transit | `src/ui/**` | 160, 174, 177 | no horizontal scroll at 1280/1024/900 px, e2e | in progress (Claude Code subagent) |
+| [TASK-181](tasks/TASK-181.md) | UI | Window scrolls sideways after Play at 1280 px; mode-choice switch label covers transit | `src/ui/**` | 160, 174, 177 | no horizontal scroll at 1280/1024/900 px, e2e | done 2026-11-14 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4116,6 +4116,15 @@ line crediting tiles by default is corrected (Basemap is opt-in). Two new hints:
 appearance, labels) and the command-menu key; the demo-onboarding e2e expects eight. Check (1,460) and
 light e2e (45) pass. Open (to TASK-181): the Demand switch still reads "Choose walk or car per trip" though
 it covers transit; after Play at 1280 px the dev build's `.app` scrolled 32 px sideways.
+
+TASK-181 (Claude Code subagent, Sonnet 5.5 high, 2026-11-14; merged): the sideways scroll was the 3D
+toggle's hidden tooltip (186 px, centred under its button): `visibility: hidden` still counts toward
+scrollable overflow, so `.app` was 1,312 px wide in a 1,280 px window from load, and Play's focus change
+scrolled it. The tooltip now opens leftward like the inspector toggle's, and `.app` uses `overflow:
+clip`; no horizontal scroll from 390 to 1,920 px. New light-tier spec `window-scroll.spec.ts` (fails
+without the fix). The Demand switch reads "Choose walk, car or transit" (T79, the `driveEveryone` helper
+and the README follow). Check and light e2e (48) pass. Open: `app.css` holds two near-identical copies of
+most rules (a merge leftover; the later wins), for a cleanup task.
 
 ## Owner decisions log
 
