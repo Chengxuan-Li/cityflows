@@ -209,7 +209,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-181](tasks/TASK-181.md) | UI | Window scrolls sideways after Play at 1280 px; mode-choice switch label covers transit | `src/ui/**` | 160, 174, 177 | no horizontal scroll at 1280/1024/900 px, e2e | done 2026-11-14 |
 | [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | done |
 | [TASK-183](tasks/TASK-183.md) | UI | Street, station, stop and place labels in 3D (TASK-167's rules, collision-free, Labels toggle) | `src/render3d/**`, `src/render/labels.ts` shared parts | 167 | no overlaps, T64 3D within 5%, shots | in progress (Claude Code subagent) |
-| [TASK-184](tasks/TASK-184.md) | UI | Follow clock seasons so a run reaches evening; 2D vehicle lights under bridge decks | `src/render/lighting.ts`, lighting settings, 2D light layer | 163 | sun model tests, V163, T62/T64, shots | in progress (Claude Code subagent) |
+| [TASK-184](tasks/TASK-184.md) | UI | Follow clock seasons so a run reaches evening; 2D vehicle lights under bridge decks | `src/render/lighting.ts`, lighting settings, 2D light layer | 163 | sun model tests, V163, T62/T64, shots | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4159,6 +4159,19 @@ city (175), traffic light (gate 5,302 / 0 / 0), mode-share guard (4), light e2e 
 full demand is still 16% under a183a0b, the price of keeping exits clear (dropping the hold-short half
 gives 3,827 but brings back pk:2049's long waits); actuation's 0.15 delay gain (16% choice off, 31% on)
 returns once the seed-6 loop exit at n:306 onto r:307 drains; garage waits over 60 s roughly doubled.
+
+TASK-184 (Claude Code subagent, Sonnet 5.5 high, 2026-11-14; merged): Follow clock has a season (a sun
+model for Munich at 48.14 N): Summer 05:24 to 21:28, Spring/autumn 06:41 to 18:50 (default, the closest
+to the old 06:00 to 20:00 day, so the default clock's sunset moves to 18:50 and its noon sun from 52 to
+43 degrees), Winter 08:00 to 16:21. A Season pop-up shows in Layers while Clock is chosen; it is stored in
+`cityflows.lighting` (older values load as Spring/autumn), never in the project; Day, Evening and Night
+ignore it. In Winter a bundled run is lit by 16:30 (lamps, windows, no shadows). In 2D each grade has its
+own vehicle-light container, masked by the decks above it (`deckCover`), so lamps and beams under a
+bridge no longer show through (shots at Donnersbergerbrucke). Check (1,467), city (175), light e2e (48),
+V163, T62 and T64 pass; 2D Evening adds about 0.8% (Evening against Day +10.6%, at TASK-163's limit,
+was +9.2%). Lead re-ran check on the merge. Beyond the named scope: `src/render/scene.ts`, vehicle and
+shadow layers, README, the TASK-163 paragraph of `docs/architecture.md`. Open: the bundled 5x5 grid has
+no lamps, so its Winter shots show only the sky.
 
 ## Owner decisions log
 
