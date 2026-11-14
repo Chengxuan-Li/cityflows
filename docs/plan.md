@@ -4066,6 +4066,9 @@ c, d and rest passed; e2e b (T16 grid5x5-stress: 2,692 active against the 2,700 
 signals) and e (T65 station riders: 7 drawn against 4, after TASK-174 seats riders in the S-Bahn)
 failed on both attempts. Both are Full-tier specs the delivering agents did not run. TASK-179 repairs
 them; new merges are held until the full tier is green again (TASK-176 and 177 are not yet due).
+The traffic job failed too: munich-full-demand timed out at its 3,600 s limit (2,659 s on a183a0b in
+Full run 43516520585), so the queue merge added at least 36% on that workload. TASK-176 takes it as
+its first item (profile against a183a0b, exact rewrites); the limit stays until it reports.
 
 ## Owner decisions log
 
