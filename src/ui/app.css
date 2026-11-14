@@ -653,92 +653,6 @@ input[type='number']::-webkit-inner-spin-button {
   font-weight: 400;
 }
 
-.disclosure-header:enabled:hover,
-.disclosure > summary:hover,
-.phase-list summary:hover {
-  background: var(--hover);
-}
-
-.disclosure-group + .disclosure-group {
-  border-top: 1px solid var(--separator);
-}
-
-.disclosure-body {
-  display: grid;
-  gap: 2px;
-  padding: 2px 4px 12px 20px;
-}
-
-/* Popover: a solid panel with an arrow toward its control. */
-.popover {
-  position: absolute;
-  z-index: 3;
-  min-width: 180px;
-  padding: 10px;
-  border-radius: var(--radius-window);
-  background: var(--popover);
-  box-shadow: var(--shadow-popover);
-  animation: pop-in 120ms ease-out;
-}
-
-.popover::before {
-  content: '';
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  background: var(--popover);
-  box-shadow: -1px -1px 0 var(--popover-arrow-edge);
-  transform: rotate(45deg);
-}
-
-.popover[data-placement='below'] {
-  top: calc(100% + 10px);
-}
-
-.popover[data-placement='below']::before {
-  top: -6px;
-}
-
-.popover[data-placement='above'] {
-  bottom: calc(100% + 10px);
-}
-
-.popover[data-placement='above']::before {
-  bottom: -6px;
-  transform: rotate(225deg);
-}
-
-.popover[data-align='center'] {
-  left: 50%;
-  translate: -50% 0;
-}
-
-.popover[data-align='center']::before {
-  left: calc(50% - 6px);
-}
-
-.popover[data-align='start'] {
-  left: -4px;
-}
-
-.popover[data-align='start']::before {
-  left: 18px;
-}
-
-.popover[data-align='end'] {
-  right: -4px;
-}
-
-.popover[data-align='end']::before {
-  right: 18px;
-}
-
-@keyframes pop-in {
-  from {
-    opacity: 0;
-  }
-}
-
 /* A popover in the top layer, placed under its pull-down button by <PopoverButton>. */
 .popover.anchored {
   position: fixed;
@@ -804,295 +718,6 @@ input[type='file']::file-selector-button {
   background: var(--control);
   box-shadow: var(--shadow-control);
   font: inherit;
-}
-
-/* Sheet: a modal panel that drops from under the toolbar; the window behind does not dim. */
-.sheet {
-  width: min(26rem, calc(100% - 2 * var(--inset)));
-  max-height: calc(100% - var(--toolbar-height) - 2 * var(--inset));
-  margin: calc(var(--toolbar-height) + 6px) auto auto;
-  padding: 14px 16px 16px;
-  border: 0;
-  border-radius: var(--radius-window);
-  color: inherit;
-  background: var(--popover);
-  box-shadow: var(--shadow-sheet);
-  animation: sheet-down 200ms ease-out;
-}
-
-.sheet::backdrop {
-  background: transparent;
-}
-
-@keyframes sheet-down {
-  from {
-    opacity: 0;
-    transform: translateY(-14px);
-  }
-}
-
-.sheet-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.close-button,
-.sheet-heading > button:last-child {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 22px;
-  min-height: 22px;
-  height: 22px;
-  padding: 0;
-  border-radius: 50%;
-  color: var(--label-secondary);
-  background: transparent;
-  box-shadow: none;
-}
-
-.close-button:enabled:hover,
-.sheet-heading > button:last-child:enabled:hover {
-  background: var(--hover);
-}
-
-/* Tooltip: below its control, after a pause on hover or at once on keyboard focus. */
-.tooltip-anchor {
-  position: relative;
-  display: inline-flex;
-}
-
-.tooltip {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  z-index: 4;
-  width: max-content;
-  max-width: 260px;
-  padding: 3px 7px;
-  border-radius: 5px;
-  color: var(--label);
-  background: var(--popover);
-  box-shadow: var(--shadow-popover);
-  font-size: var(--text-small);
-  line-height: 14px;
-  white-space: normal;
-  pointer-events: none;
-  visibility: hidden;
-  opacity: 0;
-  translate: -50% 0;
-  transition:
-    opacity 100ms,
-    visibility 0s 100ms;
-}
-
-.tooltip-anchor:hover > .tooltip {
-  visibility: visible;
-  opacity: 1;
-  transition:
-    opacity 100ms 700ms,
-    visibility 0s 700ms;
-}
-
-.tooltip-anchor:has(:focus-visible) > .tooltip {
-  visibility: visible;
-  opacity: 1;
-  transition: none;
-}
-
-/* Toolbar button: borderless; the glyph darkens on hover, the background shows when pressed. */
-.toolbar-button {
-  display: inline-grid;
-  place-items: center;
-  min-width: 30px;
-  min-height: 28px;
-  padding: 0 7px;
-  color: var(--toolbar-glyph);
-  background: transparent;
-  box-shadow: none;
-}
-
-.toolbar-button:enabled:hover {
-  color: var(--label);
-  background: var(--hover);
-}
-
-.toolbar-button:enabled:active,
-.toolbar-button[aria-expanded='true'] {
-  color: var(--label);
-  background: var(--pressed);
-}
-
-/* A sidebar toggle shows its state by the sidebar itself, as on the Mac. */
-.toolbar-button.sidebar-toggle[aria-expanded='true']:not(:active, :hover) {
-  color: var(--toolbar-glyph);
-  background: transparent;
-}
-
-.toolbar-button:disabled {
-  color: var(--toolbar-glyph-disabled);
-  box-shadow: none;
-}
-
-.toolbar-button[aria-pressed='true'] {
-  color: var(--accent-text);
-  background: var(--pressed);
-}
-
-.toolbar-button[aria-pressed='true']:disabled {
-  color: var(--accent-disabled);
-  background: transparent;
-}
-
-.icon {
-  display: block;
-}
-
-/* Segmented control: a grey track; the chosen segment is a raised key. */
-.segmented {
-  display: inline-flex;
-  flex: none;
-  padding: 2px;
-  border-radius: 7px;
-  background: var(--segmented-track);
-}
-
-.segmented button {
-  position: relative;
-  min-height: 22px;
-  padding: 2px 10px;
-  border-radius: 5px;
-  color: var(--label);
-  background: transparent;
-  box-shadow: none;
-  line-height: 18px;
-}
-
-.segmented .tooltip-anchor + .tooltip-anchor button:not([aria-pressed='true'])::before {
-  content: '';
-  position: absolute;
-  top: 5px;
-  bottom: 5px;
-  left: -1px;
-  width: 1px;
-  background: var(--segmented-divider);
-}
-
-.segmented .tooltip-anchor:has([aria-pressed='true']) + .tooltip-anchor button::before {
-  display: none;
-}
-
-.segmented button:enabled:active {
-  background: var(--pressed);
-}
-
-.segmented button[aria-pressed='true'] {
-  color: var(--label);
-  background: var(--segmented-key);
-  box-shadow: var(--shadow-control);
-}
-
-.segmented button:disabled {
-  color: var(--label-disabled);
-  box-shadow: none;
-}
-
-.segmented button[aria-pressed='true']:disabled {
-  color: var(--label-disabled);
-  background: var(--segmented-key-disabled);
-}
-
-/* The docked window. */
-.app {
-  display: grid;
-  grid-template:
-    'toolbar toolbar toolbar' var(--toolbar-height)
-    'sidebar content inspector' minmax(0, 1fr)
-    'status status status' var(--status-height)
-    / auto minmax(0, 1fr) auto;
-  height: 100%;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.toolbar {
-  grid-area: toolbar;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--separator);
-  background: var(--toolbar);
-  z-index: 2;
-}
-
-.toolbar-title {
-  display: grid;
-  flex: 0 1 auto;
-  min-width: 0;
-  margin: 0 10px 0 4px;
-  line-height: 15px;
-}
-
-.toolbar-title h1,
-.toolbar-title small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.toolbar-title small {
-  color: var(--label-secondary);
-}
-
-.toolbar-group,
-.run-controls {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 2px;
-}
-
-.toolbar-group + .toolbar-group {
-  margin-left: 6px;
-}
-
-.toolbar .segmented {
-  margin: 0 auto;
-}
-
-.run-controls {
-  gap: 6px;
-}
-
-.run-controls .toolbar-group {
-  gap: 2px;
-}
-
-.toolbar .speed select {
-  min-width: 64px;
-}
-
-.toolbar .view-toggle {
-  font-weight: 700;
-}
-
-.sidebar {
-  grid-area: sidebar;
-  width: var(--sidebar-width);
-  padding: 6px 10px 12px;
-  overflow: auto;
-  border-right: 1px solid var(--separator);
-  background: var(--sidebar);
-}
-
-.row-count {
-  margin-left: auto;
-  font-weight: 400;
 }
 
 .disclosure-header:enabled:hover,
@@ -1468,6 +1093,8 @@ input[type='file']::file-selector-button {
   overflow: auto;
   border-right: 1px solid var(--separator);
   background: var(--sidebar);
+  /* panels reflow to the sidebar's width */
+  container-type: inline-size;
 }
 
 .source-row {
@@ -1497,7 +1124,9 @@ input[type='file']::file-selector-button {
 }
 
 .row-count {
+  margin-left: auto;
   color: var(--label-secondary);
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1840,11 +1469,6 @@ input[type='file']::file-selector-button {
   grid-area: inspector;
   justify-self: start;
   margin-left: -4px;
-}
-
-/* Panels reflow to the sidebar's width. */
-.sidebar {
-  container-type: inline-size;
 }
 
 @container (min-width: 390px) {
@@ -2594,15 +2218,12 @@ input[type='file']::file-selector-button {
     row-gap: 2px;
     padding-block: 4px;
     white-space: normal;
+    /* the trip counts open from the status bar's left edge so they stay inside the window */
+    position: relative;
   }
 
   .traffic-notice {
     margin-left: 0;
-  }
-
-  /* The trip counts open from the status bar's left edge so they stay inside the window. */
-  .status-bar {
-    position: relative;
   }
 
   .status-bar .metrics {
