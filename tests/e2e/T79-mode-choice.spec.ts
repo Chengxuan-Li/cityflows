@@ -48,7 +48,7 @@ test('T79 a slider in the demand sheet moves the mode shares after a restart', a
 
   // Off, everyone with a free household car drives (the default city gives everyone one).
   await button(page, 'Demand').click();
-  const toggle = choice.getByRole('switch', { name: 'Choose walk or car per trip' });
+  const toggle = choice.getByRole('switch', { name: 'Choose walk, car or transit' });
   await toggle.click();
   await expect(toggle).not.toBeChecked();
   await expect(choice.getByRole('slider', { name: 'Walk preference' })).toBeDisabled();

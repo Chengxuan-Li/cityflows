@@ -1389,7 +1389,8 @@ input[type='file']::file-selector-button {
     'status status status' var(--status-height)
     / auto minmax(0, 1fr) auto;
   height: 100%;
-  overflow: hidden;
+  /* clip, not hidden: nothing, not even focus, scrolls the window sideways */
+  overflow: clip;
   isolation: isolate;
 }
 
@@ -1517,8 +1518,11 @@ input[type='file']::file-selector-button {
   background: var(--accent);
 }
 
-/* The last toolbar tooltip opens leftward so it stays inside the window. */
-.toolbar > .tooltip-anchor:last-of-type > .tooltip {
+/* The tooltips of the last two toolbar buttons (3D, then the inspector toggle) open leftward so they
+   stay inside the window: a hidden tooltip still counts toward the scrollable overflow, and the 3D
+   one, centred under its button, ran 32 px past the right edge and let focus scroll the window. */
+.toolbar > .tooltip-anchor:last-of-type > .tooltip,
+.tooltip-anchor:has(> .view-toggle) > .tooltip {
   right: 0;
   left: auto;
   translate: none;

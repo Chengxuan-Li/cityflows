@@ -101,7 +101,7 @@ shares the cycle between phases by the demand the run expects, and is off until 
 - **Households.** Each household owns cars that its members share. A person leaves in a car only
   if the household has one free that day; click a car and its **Household** lists the members,
   and a person's inspector shows **Car today**.
-- **Mode choice.** In **Demand**, the **Choose walk or car per trip** switch lets each person
+- **Mode choice.** In **Demand**, the **Choose walk, car or transit** switch lets each person
   choose, at each departure, between walking, driving and, where the city has a tram or S-Bahn,
   riding it. **Walk preference**, **Value of time**, **Car cost** and **Cost sensitivity** tune
   the choice. Changes apply at the next **Restart**. **Chart** shows the mode shares by hour.

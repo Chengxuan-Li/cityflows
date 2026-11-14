@@ -128,7 +128,7 @@ export async function driveEveryone(page: Page) {
   const demand = page.getByRole('region', { name: 'Demand', exact: true });
   const opened = !(await demand.isVisible());
   if (opened) await (await sidebarSection(page, 'Demand')).click();
-  const toggle = demand.getByRole('switch', { name: 'Choose walk or car per trip', exact: true });
+  const toggle = demand.getByRole('switch', { name: 'Choose walk, car or transit', exact: true });
   await toggle.click();
   await expect(toggle).not.toBeChecked();
   if (opened) await button(page, 'Demand').click();

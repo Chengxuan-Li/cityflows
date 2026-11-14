@@ -78,7 +78,7 @@ export function ModeChoiceControls() {
   return (
     <fieldset className="edit-fields mode-choice" aria-label="Mode choice">
       <Switch
-        label="Choose walk or car per trip"
+        label="Choose walk, car or transit"
         checked={config.enabled}
         disabled={busy}
         onChange={(event) => void setModeChoice({ enabled: event.currentTarget.checked })}
