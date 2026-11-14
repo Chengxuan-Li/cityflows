@@ -9,8 +9,9 @@ import {
   walkTrip,
   type ModeInputs,
 } from '../demand/mode-choice';
-import { riderOf } from '../demand/stations';
+import { riderDoor, riderDraw, riderOf } from '../demand/stations';
 import type { CompiledCity } from '../network';
+import { stationArrivals, trainTimetable } from '../network/trains';
 import type { LinkCosts, RouteProvider } from '../routing';
 import { transitNetwork, type TransitNetwork, type TransitPlan } from '../routing/transit';
 import { createWalkRouter, type WalkPosition, type WalkResult } from '../routing/walk';
@@ -243,12 +244,37 @@ export function createPersons(
     tours.set(tour[0]!, tour);
   /** TASK-174: the plan a transit tour's first trip chose with, used as it leaves. */
   const plans = new Map<number, TransitPlan>();
-  // TASK-128's riders come in on the S-Bahn that brings them.
-  if (transit)
-    for (const trip of trips) {
-      const station = trip.id.endsWith(':out') && trip.personId ? riderOf(trip.personId) : null;
-      if (station) transit.expect(trip.personId!, station.platform, station.arrivalS, trip.departS);
+  // TASK-128's riders come in on the S-Bahn that brings them, get off where their walk out was
+  // timed from and walk to the entrance that walk starts at.
+  const riderTrips = transit
+    ? trips.filter((t) => t.id.endsWith(':out') && t.personId && riderOf(t.personId))
+    : [];
+  if (riderTrips.length) {
+    const bodies = new Map(
+      stationArrivals(city.rail!, trainTimetable(city.rail!), 0, 86400).map((a) => [
+        `${a.platform}@${Math.round(a.arrivalS)}`,
+        a.body,
+      ]),
+    );
+    for (const trip of riderTrips) {
+      const { platform, arrivalS } = riderOf(trip.personId!)!;
+      const door = riderDoor(
+        bodies.get(`${platform}@${arrivalS}`)!,
+        riderDraw(scenario.seed, trip.personId!),
+      );
+      transit!.expect(trip.personId!, platform, arrivalS, trip.departS, door, () => {
+        const result = walkRoute(
+          [{ placeId: trip.originPlaceId }],
+          [{ placeId: trip.destinationPlaceId }],
+          `walk:${trip.originPlaceId}:${trip.destinationPlaceId}`,
+        );
+        if (!result.ok) return null;
+        const { link, fromM } = result.route.legs[0]!;
+        const line = city.walk.links[link]!;
+        return pointAtDistance(line.line, line.cumulative, fromM);
+      });
     }
+  }
   let parkingNear = new Map<
     number,
     { own: CompiledCity['parking']; near: CompiledCity['parking'] }

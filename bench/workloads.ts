@@ -23,6 +23,11 @@ export function workload(name: WorkloadName) {
     for (const road of Object.values(city.roads))
       road.centerline = road.centerline.map(({ x, y }) => ({ x: x * 10, y: y * 10 }));
     const template = Object.values(city.places)[0]!;
+    // 43 residents and jobs a place, not 40: since TASK-169 queues stand short of crosswalks and
+    // garage mouths (keep clear), which slows the morning build-up, and T16 needs 2,700 or more
+    // cars on the roads at 08:04 (at 08:04:10: 2,746 at 40 before TASK-169, 2,682 at 40 after,
+    // 2,806 at 43).
+    const people = 43;
     city.places = {};
     for (const road of Object.values(city.roads)) {
       const id = allocateId(city, 'p');
@@ -32,8 +37,8 @@ export function workload(name: WorkloadName) {
         id,
         name: `Stress ${road.id}`,
         kind: 'residential',
-        population: 40,
-        jobs: 40,
+        population: people,
+        jobs: people,
         shape: { kind: 'point', pos: { x: point.x + 20, y: point.y + 20 } },
         connectors: [
           {

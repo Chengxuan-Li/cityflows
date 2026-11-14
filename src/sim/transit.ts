@@ -41,6 +41,14 @@ export interface TransitRiderInput {
   onGiveUp: (timeS: number) => void;
 }
 
+/** A TASK-128 rider: where it gets off, and where its walk out starts (null: no walk route). */
+interface Expected {
+  personId: string;
+  walkS: number;
+  door: Vec2;
+  exit: () => Vec2 | null;
+}
+
 type Phase = 'platform' | 'waiting' | 'boarding' | 'aboard' | 'alighting' | 'done';
 interface Rider {
   personId: string;
@@ -54,6 +62,8 @@ interface Rider {
   exit: Vec2;
   spot: Vec2;
   from: Vec2;
+  /** Getting off: the points walked between the door (`from`) and `exit`. */
+  via: Vec2[];
   to: Vec2;
   startS: number;
   endS: number;
@@ -163,7 +173,7 @@ export function createTransit(
   const waiting: number[][] = stops.map(() => []);
   const vehicles = new Map<string, Vehicle>();
   /** TASK-128 riders by the stop and second their train arrives, for seating them on board. */
-  const expected = new Map<string, { personId: string; walkS: number }[]>();
+  const expected = new Map<string, Expected[]>();
   const random = createRandom(scenarioSeed).derive('transit');
   const counts = {
     lines: lines.map(() => ({ boardings: 0, alightings: 0, rider: [0, 0], peak: 0 })),
@@ -186,6 +196,8 @@ export function createTransit(
     const pose = trainPoseAt(rail, table, vehicle.departure, vehicle.cycle, vehicle.ageS);
     return pose ? pose.cars.flatMap((car) => [car.rear, car.front]) : [];
   }
+  const pathM = (points: Vec2[]) =>
+    points.slice(1).reduce((n, p, k) => n + distance(points[k]!, p), 0);
   function add(rider: Rider) {
     riders.push(rider);
     if (rider.phase !== 'aboard') arrived.push(riders.length - 1);
@@ -201,21 +213,22 @@ export function createTransit(
   function alight(vehicle: Vehicle, index: number, timeS: number) {
     const rider = riders[index]!;
     const line = vehicle.line;
-    const door = body(vehicle);
-    const draw = random.derive(rider.personId).derive('door');
     rider.phase = 'alighting';
-    rider.from = door.length
-      ? door[Math.floor(draw.next() * door.length)]!
-      : stops[rider.toStop]!.centre;
-    // Off the door onto the platform, then to where the rider leaves it.
-    rider.spot = spotOn(rider.toStop, rider.personId);
+    // Off a door onto the platform, then to where the rider leaves it. TASK-128's riders were seated
+    // with their door and path to their walk's entrance.
+    if (!rider.background) {
+      const door = body(vehicle);
+      const draw = random.derive(rider.personId).derive('door');
+      rider.from = door.length
+        ? door[Math.floor(draw.next() * door.length)]!
+        : stops[rider.toStop]!.centre;
+      rider.via = [spotOn(rider.toStop, rider.personId)];
+    }
     rider.to = rider.exit;
     rider.startS = timeS;
     if (!rider.background || rider.endS <= timeS)
       rider.endS =
-        timeS +
-        ((distance(rider.from, rider.spot) + distance(rider.spot, rider.exit)) * PLATFORM_DETOUR) /
-          speed;
+        timeS + (pathM([rider.from, ...rider.via, rider.exit]) * PLATFORM_DETOUR) / speed;
     rider.vehicle = null;
     arrived.push(index);
     counts.stops[rider.toStop]!.alightings++;
@@ -242,6 +255,7 @@ export function createTransit(
         exit: input.exit,
         spot: spotOn(input.stop, input.personId),
         from: input.from,
+        via: [],
         to: input.from,
         startS: input.timeS,
         endS: input.timeS,
@@ -251,13 +265,22 @@ export function createTransit(
       });
       walkOnto(index, input.timeS);
     },
-    /** A TASK-128 rider arrives on the S-Bahn run that stops at `platform` at `arrivalS` and walks
-     * off the platform to the entrance, leaving it at `walkS` (their walk's departure). */
-    expect(personId: string, platform: string, arrivalS: number, walkS: number) {
+    /** A TASK-128 rider arrives on the S-Bahn run that stops at `platform` at `arrivalS`, gets off
+     * at `door` and walks off the platform to `exit` (where their walk starts; without a walk
+     * route, the entrance nearest the platform's middle), reaching it at `walkS`, their walk's
+     * departure. */
+    expect(
+      personId: string,
+      platform: string,
+      arrivalS: number,
+      walkS: number,
+      door: Vec2,
+      exit: () => Vec2 | null,
+    ) {
       const key = `${platform}@${Math.round(arrivalS)}`;
       const list = expected.get(key);
-      if (list) list.push({ personId, walkS });
-      else expected.set(key, [{ personId, walkS }]);
+      if (list) list.push({ personId, walkS, door, exit });
+      else expected.set(key, [{ personId, walkS, door, exit }]);
     },
     /** A TASK-128 rider back at the station walks onto a platform and leaves on the next S-Bahn
      * with room there. */
@@ -274,6 +297,7 @@ export function createTransit(
         exit: from,
         spot: spotOn(stop, personId),
         from,
+        via: [],
         to: from,
         startS: timeS,
         endS: timeS,
@@ -317,11 +341,17 @@ export function createTransit(
             if (visit.arrivalS <= service.ageS) continue;
             const stop = stops[visit.stop]!;
             const arriving = expected.get(`${stop.id}@${Math.round(startS + visit.arrivalS)}`);
-            for (const { personId, walkS } of arriving ?? []) {
-              // They leave by the entrance nearest the platform's middle.
-              const exit = stop.access.reduce((a, b) =>
-                distance(a.point, stop.centre) <= distance(b.point, stop.centre) ? a : b,
-              ).point;
+            for (const { personId, walkS, door, exit: walkStart } of arriving ?? []) {
+              const exit =
+                walkStart() ??
+                stop.access.reduce((a, b) =>
+                  distance(a.point, stop.centre) <= distance(b.point, stop.centre) ? a : b,
+                ).point;
+              // They step off onto the platform beside their door and walk along it to its edge
+              // nearest that entrance.
+              const edge = stop.shape.length > 2 ? [...stop.shape, stop.shape[0]!] : stop.shape;
+              const onto = (p: Vec2) =>
+                edge.length > 1 ? nearestOnPolyline(edge, p).point : edge[0]!;
               const index = add({
                 personId,
                 tripId: `${personId}:out`,
@@ -331,8 +361,9 @@ export function createTransit(
                 routes: [line.route],
                 toStop: visit.stop,
                 exit,
-                spot: exit,
-                from: exit,
+                spot: door,
+                from: door,
+                via: [onto(door), onto(exit)],
                 to: exit,
                 startS: timeS,
                 endS: walkS,
@@ -465,9 +496,11 @@ export function createTransit(
           rider.endS > rider.startS
             ? Math.min(1, Math.max(0, (timeS - rider.startS) / (rider.endS - rider.startS)))
             : 1;
-        // Getting off walks door, spot on the platform, exit; the others walk straight.
+        // Getting off walks door, platform, exit; the others walk straight.
         const path =
-          rider.phase === 'alighting' ? [rider.from, rider.spot, rider.to] : [rider.from, rider.to];
+          rider.phase === 'alighting'
+            ? [rider.from, ...rider.via, rider.to]
+            : [rider.from, rider.to];
         const legs = path.slice(1).map((p, k) => distance(path[k]!, p));
         let along = f * legs.reduce((a, b) => a + b, 0),
           k = 0;

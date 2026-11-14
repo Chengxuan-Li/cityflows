@@ -1,5 +1,5 @@
 import { cumulativeLengths, distance, pointAtDistance } from '../geo/polyline';
-import { createRandom } from '../geo/random';
+import { createRandom, type Random } from '../geo/random';
 import type { Vec2 } from '../geo/vec2';
 import { centroid } from '../network/compile';
 import { compileRail } from '../network/rail';
@@ -44,6 +44,18 @@ export function riderOf(personId: string) {
     arrivalS,
     kind: riderKind(Math.floor(arrivalS / 3600) % 24)!,
   };
+}
+
+/** A rider's own random stream: where it gets off (`riderDoor`), then its destination and stay. */
+export const riderDraw = (seed: number, personId: string) =>
+  createRandom(seed).derive('riders').derive(personId);
+
+/** Where a rider gets off along the standing train (`StationArrival.body`): its walk out leaves
+ * when it would reach the nearest entrance from there (TASK-128), and the simulation lets it off
+ * there (TASK-174). Takes the first draw of the rider's stream. */
+export function riderDoor(body: readonly Vec2[], draw: Random) {
+  const along = cumulativeLengths(body);
+  return pointAtDistance(body, along, draw.uniform(0, along[along.length - 1]!));
 }
 
 /**
@@ -110,8 +122,6 @@ export function stationRiders(
     const eligible = candidates.get(station.id)!.filter((c) => weight(c) > 0);
     const toDoorS = (p: Vec2) => Math.min(...doors.map((d) => walkS(p, d)));
     const doorS = doors.length ? toDoorS(arrival.middle) : 0;
-    const body = cumulativeLengths(arrival.body),
-      lengthM = body[body.length - 1]!;
     const riders = eligible.length && doors.length ? count : 0;
     stops.push({
       stationId: station.id,
@@ -133,9 +143,9 @@ export function stationRiders(
     });
     for (let i = 0; i < riders; i++) {
       const personId = riderId(station.id, arrival.platform, arrival.arrivalS, i);
-      const draw = root.derive(personId);
+      const draw = riderDraw(scenario.seed, personId);
       // Riders get off along the whole train, so they leave the station over about a minute.
-      const exit = pointAtDistance(arrival.body, body, draw.uniform(0, lengthM));
+      const exit = riderDoor(arrival.body, draw);
       const destination = weightedChoice(eligible, weight, draw)!;
       const stayS =
         kind === 'commuter'
