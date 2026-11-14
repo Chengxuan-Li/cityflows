@@ -2,7 +2,7 @@ import { cumulativeLengths, distance, pointAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import { cityGrades } from './grades';
-import { style as mapStyle } from './style';
+import { style as mapStyle, type MapPalette } from './style';
 import type { CityGeometry } from './types';
 
 /**
@@ -21,6 +21,18 @@ export const labelFonts: Record<LabelStyle, { sizePx: number; maxPx: number; bol
   minor: { sizePx: 11, maxPx: 16, bold: false },
   area: { sizePx: 11, maxPx: 11, bold: false },
 };
+/** The canvas font of a style, as the glyph atlases draw it. */
+export const labelFont = (s: LabelStyle) =>
+  `${labelFonts[s].bold ? 'bold ' : ''}${labelFonts[s].sizePx}px Arimo, Arial, sans-serif`;
+/** The palette ink of each style. */
+export const labelInk: Record<LabelStyle, Exclude<keyof MapPalette['label'], 'halo'>> = {
+  station: 'station',
+  stop: 'station',
+  major: 'street',
+  minor: 'street',
+  place: 'place',
+  area: 'area',
+};
 /** The factor a style's text is drawn at, relative to `sizePx`, at `zoom`. */
 export function labelScale(style: LabelStyle, zoom: number) {
   const { sizePx, maxPx } = labelFonts[style];
@@ -36,6 +48,24 @@ export interface TextMetrics {
   height: number;
 }
 export type Measure = (text: string, style: LabelStyle) => TextMetrics;
+/** A text's glyph metrics from a canvas's text measurement. */
+export function measureText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  s: LabelStyle,
+): TextMetrics {
+  context.font = labelFont(s);
+  const glyphs = Array.from(text);
+  const offsets: number[] = [];
+  let prefix = '';
+  for (const glyph of glyphs) {
+    offsets.push(prefix ? context.measureText(prefix).width : 0);
+    prefix += glyph;
+  }
+  const width = context.measureText(text).width;
+  const widths = offsets.map((o, i) => (offsets[i + 1] ?? width) - o);
+  return { glyphs, offsets, widths, width, height: labelFonts[s].sizePx * 1.2 };
+}
 
 interface Common {
   text: string;
@@ -379,7 +409,13 @@ class Occupancy {
   }
 }
 
-function layoutStreet(c: StreetCandidate, m: TextMetrics, zoom: number, scale: number) {
+function layoutStreet(
+  c: StreetCandidate,
+  m: TextMetrics,
+  zoom: number,
+  scale: number,
+  nudge: number,
+) {
   const length = c.lengths.at(-1)!;
   const textM = m.width / zoom;
   if (textM > length) return null;
@@ -394,7 +430,7 @@ function layoutStreet(c: StreetCandidate, m: TextMetrics, zoom: number, scale: n
       .flatMap((j) => [j.atM + j.radiusM, j.atM - j.radiusM - textM])
       .filter(clear)
       .sort((a, b) => Math.abs(a - s0) - Math.abs(b - s0) || a - b);
-    if (options.length && Math.abs(options[0]! - s0) <= labelRules.nudgeM) s0 = options[0]!;
+    if (options.length && Math.abs(options[0]! - s0) <= nudge) s0 = options[0]!;
   }
   const s1 = s0 + textM;
   // The street's width under the text, averaged by length: short narrow links at junctions do
@@ -438,30 +474,44 @@ function layoutStreet(c: StreetCandidate, m: TextMetrics, zoom: number, scale: n
   return { glyphs, alpha };
 }
 
+/** TASK-183: a view that is not a flat map (the 3D camera) gives each candidate in screen pixels,
+ * with the map's scale at it in pixels per metre, or null where it is off screen. The layout then
+ * runs at one pixel per unit, and the zoom rules (text size, fades, zoom ranges, repeats, nudges)
+ * read the candidate's own scale. */
+export type LabelFrame = (c: LabelCandidate) => { candidate: LabelCandidate; zoom: number } | null;
+
 /** Lays out `candidates` (in placement order) at `zoom`: collision-free and deterministic. */
 export function placeLabels(
   candidates: readonly LabelCandidate[],
   zoom: number,
   measure: Measure,
+  frame?: LabelFrame,
 ): PlacedLabel[] {
   const occupied = new Occupancy();
   const seen = new Map<string, Vec2[]>();
   const pad = labelRules.paddingPx;
   const placed: PlacedLabel[] = [];
-  const same = (c: LabelCandidate, p: Vec2) =>
+  // `g` scales the layout's coordinates to screen pixels; `z` is the zoom the rules read. On the
+  // flat map both are `zoom`.
+  const same = (c: LabelCandidate, p: Vec2, g: number, z: number) =>
     (seen.get(`${c.kind}/${c.text}`) ?? []).some(
       (q) =>
-        Math.hypot(q.x - p.x, q.y - p.y) * zoom <
-        (c.kind === 'street' ? labelRules.repeat(zoom) * zoom : labelRules.sameTextPx),
+        Math.hypot(q.x - p.x, q.y - p.y) * g <
+        (c.kind === 'street' ? labelRules.repeat(z) * z : labelRules.sameTextPx),
     );
-  for (const c of candidates) {
+  for (const original of candidates) {
+    const framed = frame ? frame(original) : { candidate: original, zoom };
+    if (!framed) continue;
+    const c = framed.candidate,
+      z = framed.zoom,
+      g = frame ? 1 : zoom;
     if (
       c.kind === 'street'
-        ? same(c, pointAtDistance(c.line, c.lengths, c.anchorM))
-        : zoom < c.minZoom || zoom >= c.maxZoom
+        ? same(c, pointAtDistance(c.line, c.lengths, c.anchorM), g, z)
+        : z < c.minZoom || z >= c.maxZoom
     )
       continue;
-    const scale = labelScale(c.style, zoom);
+    const scale = labelScale(c.style, z);
     const base = measure(c.text, c.style);
     const m =
       scale === 1
@@ -477,38 +527,35 @@ export function placeLabels(
     let alpha: number;
     let boxes: number[][];
     if (c.kind === 'street') {
-      const layout = layoutStreet(c, m, zoom, scale);
+      const layout = layoutStreet(c, m, g, scale, labelRules.nudgeM * (z / g));
       if (!layout) continue;
       ({ glyphs, alpha } = layout);
-      boxes = glyphs.map((g, i) => {
+      boxes = glyphs.map((p, i) => {
         const a = m.widths[i]! / 2 + pad,
           b = m.height / 2 + pad;
-        const cos = Math.abs(Math.cos(g.rotation)),
-          sin = Math.abs(Math.sin(g.rotation));
+        const cos = Math.abs(Math.cos(p.rotation)),
+          sin = Math.abs(Math.sin(p.rotation));
         const hw = cos * a + sin * b,
           hh = sin * a + cos * b;
-        return [g.x * zoom - hw, g.y * zoom - hh, g.x * zoom + hw, g.y * zoom + hh];
+        return [p.x * g - hw, p.y * g - hh, p.x * g + hw, p.y * g + hh];
       });
     } else {
-      if (
-        c.areaM &&
-        (m.width > c.areaM.width * zoom * 0.9 || m.height > c.areaM.height * zoom * 0.6)
-      )
+      if (c.areaM && (m.width > c.areaM.width * z * 0.9 || m.height > c.areaM.height * z * 0.6))
         continue;
-      const left = c.pos.x - m.width / 2 / zoom;
+      const left = c.pos.x - m.width / 2 / g;
       // Markers are at least 8 px in radius (layers/places.ts).
       const y =
         c.pos.y +
-        (c.markerM === undefined ? 0 : (Math.max(c.markerM * zoom, 8) + 2 + m.height / 2) / zoom);
+        (c.markerM === undefined ? 0 : (Math.max(c.markerM * z, 8) + 2 + m.height / 2) / g);
       glyphs = m.glyphs.map((char, i) => ({
         char,
-        x: left + (m.offsets[i]! + m.widths[i]! / 2) / zoom,
+        x: left + (m.offsets[i]! + m.widths[i]! / 2) / g,
         y,
         rotation: 0,
       }));
-      alpha = Math.min(1, (zoom / c.minZoom - 1) / (labelRules.pointFade - 1));
-      const x = c.pos.x * zoom,
-        sy = y * zoom;
+      alpha = Math.min(1, (z / c.minZoom - 1) / (labelRules.pointFade - 1));
+      const x = c.pos.x * g,
+        sy = y * g;
       boxes = [
         [
           x - m.width / 2 - pad,
@@ -519,16 +566,16 @@ export function placeLabels(
       ];
     }
     const centre = glyphs[Math.floor(glyphs.length / 2)]!;
-    if (same(c, centre) || !boxes.every((box) => occupied.free(box))) continue;
+    if (same(c, centre, g, z) || !boxes.every((box) => occupied.free(box))) continue;
     for (const box of boxes) occupied.add(box);
     const key = `${c.kind}/${c.text}`;
     seen.set(key, [...(seen.get(key) ?? []), { x: centre.x, y: centre.y }]);
     const bounds = boxes.reduce(
       (b, box) => ({
-        minX: Math.min(b.minX, box[0]! / zoom),
-        minY: Math.min(b.minY, box[1]! / zoom),
-        maxX: Math.max(b.maxX, box[2]! / zoom),
-        maxY: Math.max(b.maxY, box[3]! / zoom),
+        minX: Math.min(b.minX, box[0]! / g),
+        minY: Math.min(b.minY, box[1]! / g),
+        maxX: Math.max(b.maxX, box[2]! / g),
+        maxY: Math.max(b.maxY, box[3]! / g),
       }),
       { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
     );

@@ -1,6 +1,9 @@
 import { CanvasSource, Container, Rectangle, Sprite, Texture } from 'pixi.js';
 import {
+  labelFont as fontOf,
   labelFonts,
+  labelInk as ink,
+  measureText,
   placeLabels,
   type LabelCandidate,
   type LabelStyle,
@@ -13,8 +16,6 @@ import type { ViewBounds } from './stations';
 /** Upright text from a glyph atlas: each glyph once as a white fill and once as a white halo, so
  * the ink and halo colours are sprite tints (`style.label`, or the dark appearance's from
  * `setColours`) and a new palette needs no new glyph textures. */
-const fontOf = (s: LabelStyle) =>
-  `${labelFonts[s].bold ? 'bold ' : ''}${labelFonts[s].sizePx}px Arimo, Arial, sans-serif`;
 const PAGE = 512;
 const MAX_TEXTURE = 4096;
 
@@ -39,17 +40,7 @@ class GlyphAtlas {
     const key = `${s}/${text}`;
     let m = this.metrics.get(key);
     if (!m) {
-      this.measurer.font = fontOf(s);
-      const glyphs = Array.from(text);
-      const offsets: number[] = [];
-      let prefix = '';
-      for (const glyph of glyphs) {
-        offsets.push(prefix ? this.measurer.measureText(prefix).width : 0);
-        prefix += glyph;
-      }
-      const width = this.measurer.measureText(text).width;
-      const widths = offsets.map((o, i) => (offsets[i + 1] ?? width) - o);
-      m = { glyphs, offsets, widths, width, height: labelFonts[s].sizePx * 1.2 };
+      m = measureText(this.measurer, text, s);
       this.metrics.set(key, m);
     }
     return m;
@@ -113,15 +104,6 @@ class GlyphAtlas {
     for (const { source } of this.pages) source.destroy();
   }
 }
-
-const ink: Record<LabelStyle, keyof MapPalette['label']> = {
-  station: 'station',
-  stop: 'station',
-  major: 'street',
-  minor: 'street',
-  place: 'place',
-  area: 'area',
-};
 
 const overlaps = (a: ViewBounds, b: ViewBounds) =>
   a.maxX >= b.minX && a.minX <= b.maxX && a.maxY >= b.minY && a.minY <= b.maxY;
