@@ -4207,6 +4207,10 @@ paint timed out at 180 s on both attempts after reaching its last line, on a run
 (the test took 2.3 to 2.7 min on earlier runs). Lead fix: its time limit is 300 s (a time limit, not a
 gate); 1.2 min locally.
 
+Full run 43591345828 (lead, manual, on a5be347 after the T62 time limit): every job green. Lead handoff
+finished (`docs/lead-handoff-2026-11-14.md`); TASK-185 to 192 and the decisions in `docs/decisions/` await
+the owner.
+
 ## Owner decisions log
 
 - 2026-11-13 (owner, before a 24-hour absence): the lead keeps developing and testing
