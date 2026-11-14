@@ -3,6 +3,9 @@ import { button, clickGrid, clickVehicle, pageErrors } from './helpers';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
+// TASK-168: ⌘ on a Mac, Ctrl elsewhere.
+const commandKey = process.platform === 'darwin' ? '⌘K' : 'Ctrl+K';
+
 const hint = (page: Page) => page.getByRole('region', { name: 'Hint' });
 
 /** The soft ring sits around the control the hint is about, and that control is usable. */
@@ -34,7 +37,7 @@ test('a new player following only the hints completes the loop once', async ({ p
     page.screenshot({ path: info.outputPath(`hint-${step}.png`) });
 
   await expect(hint(page)).toContainText('Choose a city to start from.');
-  await expect(hint(page)).toContainText('1 of 6');
+  await expect(hint(page)).toContainText('1 of 8');
   await expect(button(page, 'Show hints')).toBeHidden();
   await ringed(page, button(page, 'New'));
   await shot(1);
@@ -77,11 +80,31 @@ test('a new player following only the hints completes the loop once', async ({ p
   await expect(page.getByText('Restart to apply changes', { exact: true })).toBeHidden();
 
   await expect(hint(page)).toContainText('Compare runs before and after an edit.');
-  await expect(hint(page)).toContainText('6 of 6');
+  await expect(hint(page)).toContainText('6 of 8');
   await ringed(page, button(page, 'Compare'));
   await shot(6);
   await button(page, 'Compare').click();
   await expect(page.getByRole('region', { name: 'Scenario comparison' })).toBeVisible();
+
+  await expect(hint(page)).toContainText(
+    'Open Layers for the time of day, the appearance and labels.',
+  );
+  await expect(hint(page)).toContainText('7 of 8');
+  await ringed(page, button(page, 'Layers'));
+  await shot(7);
+  await button(page, 'Layers').click();
+  const layers = page.getByRole('region', { name: 'Map layers' });
+  await expect(layers.getByRole('group', { name: 'Time of day' })).toBeVisible();
+  await expect(layers.getByLabel('Appearance')).toBeVisible();
+  await expect(layers.getByLabel('Labels')).toBeVisible();
+
+  // The last hint names a key, not a control, so nothing is ringed.
+  await expect(hint(page)).toContainText(`Press ${commandKey} to find any command.`);
+  await expect(hint(page)).toContainText('8 of 8');
+  await expect(page.locator('.hint-ring')).toBeHidden();
+  await shot(8);
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(page.getByRole('dialog', { name: 'Commands', exact: true })).toBeVisible();
   await expect(hint(page)).toBeHidden();
   expect(await page.evaluate(() => localStorage.getItem('cityflows.hints'))).toBe('done');
 
@@ -110,7 +133,7 @@ test('hints can be skipped, reopened, and resume after a reload @smoke', async (
   await page.reload();
   await expect(button(page, 'Play')).toBeEnabled();
   await expect(hint(page)).toContainText('Press Play to start the day.');
-  await expect(hint(page)).toContainText('2 of 6');
+  await expect(hint(page)).toContainText('2 of 8');
   // A selected street hides "Show hints" behind its sheet but leaves an active hint in place.
   await clickGrid(page, 60, 2);
   await expect(page.getByRole('heading', { name: /^Street / })).toBeVisible();
