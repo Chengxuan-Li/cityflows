@@ -145,8 +145,6 @@ export function createRailCrossings(
   const services: Service[] = [];
   const nextCycle = new Int32Array(table.departures.length);
   const warningMax = Math.max(0, ...events.flatMap((e) => e.map((v) => v.warningS)));
-  const segments: number[] = [];
-  const offsets: number[] = [];
   const influences = new Uint8Array(city.lanes.length + city.movements.length);
   const reach = new Float64Array(influences.length).fill(-Infinity);
   const bucket = (segment: number) => (segment >= 0 ? segment : city.lanes.length - segment - 1);
@@ -170,9 +168,30 @@ export function createRailCrossings(
   );
   /** Per vehicle in `roadOccupancy`: the facilities its body overlaps. */
   const bodyInside = new Uint8Array(facilities.length);
-  const pathStops = new Float64Array(facilities.length);
-  const pathStarts = new Float64Array(facilities.length);
-  const pathEnds = new Float64Array(facilities.length);
+  /** TASK-176: a vehicle's path ahead and, per facility, its nearest stop marking and the extent
+   * of its spans along it. Kept while the vehicle's lane, position, movement, route and route step
+   * stay the same (routes are replaced, never edited): a standing queue, and the hold after the
+   * occupancy pass in the same step, reuse it. `path` points the names below at the vehicle's. */
+  type Path = {
+    lane: number;
+    position: number;
+    step: number;
+    movement: number;
+    route: (typeof vehicles.route)[number] | undefined;
+    segments: number[];
+    offsets: number[];
+    stops: Float64Array;
+    starts: Float64Array;
+    ends: Float64Array;
+    ranged: boolean;
+  };
+  const paths: (Path | undefined)[] = [];
+  let current: Path | undefined,
+    segments: number[] = [],
+    offsets: number[] = [],
+    pathStops: Float64Array = new Float64Array(0),
+    pathStarts = pathStops,
+    pathEnds = pathStops;
   const histories = new Map<number, { segment: number; trail: number[]; position: number }>();
   const segmentLength = (segment: number) =>
     segment >= 0 ? city.lanes[segment]!.lengthM : city.movements[-segment - 1]!.lengthM;
@@ -240,19 +259,59 @@ export function createRailCrossings(
     });
   }
   function path(id: number) {
+    const lane = vehicles.lane[id]!,
+      position = vehicles.position[id]!,
+      routeStep = vehicles.routeStep[id]!,
+      firstMovement = vehicles.movement[id]!,
+      route = vehicles.route[id];
+    let entry = paths[id];
+    const kept =
+      entry !== undefined &&
+      entry.lane === lane &&
+      entry.position === position &&
+      entry.step === routeStep &&
+      entry.movement === firstMovement &&
+      entry.route === route;
+    if (!entry) {
+      entry = {
+        lane,
+        position,
+        step: routeStep,
+        movement: firstMovement,
+        route,
+        segments: [],
+        offsets: [],
+        stops: new Float64Array(facilities.length),
+        starts: new Float64Array(facilities.length),
+        ends: new Float64Array(facilities.length),
+        ranged: false,
+      };
+      paths[id] = entry;
+    }
+    current = entry;
+    segments = entry.segments;
+    offsets = entry.offsets;
+    pathStops = entry.stops;
+    pathStarts = entry.starts;
+    pathEnds = entry.ends;
+    if (kept) return;
+    entry.lane = lane;
+    entry.position = position;
+    entry.step = routeStep;
+    entry.movement = firstMovement;
+    entry.route = route;
+    entry.ranged = false;
     segments.length = offsets.length = 0;
-    let segment = vehicles.lane[id]!,
+    let segment = lane,
       offset = 0,
-      step = vehicles.routeStep[id]!;
-    const route = vehicles.route[id];
+      step = routeStep;
     for (let count = 0; count < 128; count++) {
       segments.push(segment);
       offsets.push(offset);
       offset += segmentLength(segment);
-      if (offset - vehicles.position[id]! > 600) break;
+      if (offset - position > 600) break;
       if (segment >= 0) {
-        const movement =
-          segments.length === 1 ? vehicles.movement[id]! : (route?.movements[step] ?? -1);
+        const movement = segments.length === 1 ? firstMovement : (route?.movements[step] ?? -1);
         if (movement === -1 || city.movements[movement]!.fromLane !== segment) break;
         segment = -movement - 1;
       } else {
@@ -266,7 +325,12 @@ export function createRailCrossings(
       (s) => s.facility === f && front >= s.from && rear <= s.to,
     );
   }
-  function ranges(position: number) {
+  /** The current path's ranges from the vehicle's position. */
+  function ranges() {
+    const entry = current!;
+    if (entry.ranged) return;
+    entry.ranged = true;
+    const position = entry.position;
     pathStops.fill(Infinity);
     pathStarts.fill(Infinity);
     pathEnds.fill(-Infinity);
@@ -368,7 +432,7 @@ export function createRailCrossings(
           remaining -= segmentLength(history.trail[keep++]!);
         history.trail.length = keep;
         path(id);
-        ranges(position);
+        ranges();
         for (const marking of continuous ? stopsBySegment[bucket(previousSegment)]! : []) {
           const passed = field === previousSegment ? position > marking.at + 1e-6 : true;
           if (passed && previousPosition <= marking.at + 1e-6) committed[marking.facility]!.add(id);
@@ -682,7 +746,7 @@ export function createRailCrossings(
       const field = vehicles.lane[id]!;
       if (field < -city.movements.length || !influences[bucket(field)]) return Infinity;
       path(id);
-      ranges(vehicles.position[id]!);
+      ranges();
       const position = vehicles.position[id]!;
       let best = Infinity;
       let protectedStop = false;
