@@ -204,7 +204,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-176](tasks/TASK-176.md) | perf | Performance pass after the 2026-11-13 merges | profiles, exact rewrites | most of the above | quiet-machine numbers, hashes unchanged | in progress (Claude Code subagent; quiet machine, owed frame and step-time checks from 160, 163, 166, 167, 170, 178) |
 | [TASK-177](tasks/TASK-177.md) | docs | User documentation and in-app help for the new features | README, hints | 160-163, 168 | links, onboarding e2e | queued (after TASK-176 measures, to keep the machine quiet) |
 | [TASK-178](tasks/TASK-178.md) | CI | Repair the full test tier after the 2026-11-13 merges (Full run 43479489386: full-demand timeout, T19, T47, V100, gate4-layers, qa-mobile, T16 stress, T54 Munich and others) | `tests/e2e/**`, `tests/traffic/**`, small fixes | 113, 160, 161, 173, 175 | full tier green, manual Full run | done 2026-11-13 (Full run 43516520585 green) |
-| [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | in progress (Claude Code subagent, low load beside TASK-176) |
+| [TASK-179](tasks/TASK-179.md) | CI | Full-tier specs after the queue merge (T65 riders under TASK-174, T16 stress under actuated signals) | `tests/e2e/**`, `bench/workloads.ts` | 166-170, 174 | both specs, check, Full run | done 2026-11-13 (Full run waits for TASK-176's full-demand item) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4069,6 +4069,19 @@ them; new merges are held until the full tier is green again (TASK-176 and 177 a
 The traffic job failed too: munich-full-demand timed out at its 3,600 s limit (2,659 s on a183a0b in
 Full run 43516520585), so the queue merge added at least 36% on that workload. TASK-176 takes it as
 its first item (profile against a183a0b, exact rewrites); the limit stays until it reports.
+
+TASK-179 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged): T65 showed a real defect from
+TASK-174. Station riders got off at a random door and headed for the entrance nearest the platform's
+middle, while their walk out starts at the entrance that suits the destination (3 of 7 jumped 52 m
+when the walk began; pace 0.6 to 2.2 m/s). Each rider now leaves the train at its own point, walks
+along the platform to the entrance its walk starts from and arrives as the walk departs (about
+1.1 m/s); positions only, no state or hash change (architecture section 9 sentence updated). T65 now
+checks that model: riders spread along the train after the stop, within 3 m of their entrance half a
+second before the walk and no jump over 4.1 m, each drawn once, inspector in 2D and 3D. T16's stress
+count fell from 2,746 to 2,682 with TASK-169's keep clear, not TASK-170 (the stress grid's one signal
+is fixed-time); the stress workload now has 43 residents and jobs a place (6,708 trips, 2,806
+active), so `npm run bench`'s grid5x5-stress row is not comparable with earlier rows. T16 9/9, T65
+6/6, light traffic tier and check (1,460) pass.
 
 ## Owner decisions log
 
