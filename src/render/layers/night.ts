@@ -1,4 +1,5 @@
 import { Container, Graphics, Particle, ParticleContainer, Rectangle, Texture } from 'pixi.js';
+import type { Vec2 } from '../../geo/vec2';
 import { lampColors, linearToHex, type SceneLight } from '../lighting';
 
 /** TASK-163: the 2D evening. A multiply tint darkens the whole map; above it, additive glows
@@ -65,10 +66,9 @@ export class NightLayer {
   /** Street-lamp and platform pools. */
   private readonly lamps = new ParticleContainer({ texture: this.textures.glow });
   private readonly platforms = new ParticleContainer({ texture: this.textures.glow });
-  readonly vehicles = new ParticleContainer({
-    texture: this.textures.vehicle,
-    dynamicProperties: { position: true, rotation: true, vertex: true, uvs: true },
-  });
+  /** Vehicle lights, one container per grade (TASK-184). */
+  readonly vehicles = new Container();
+  vehicleLights: ParticleContainer[] = [];
   /** Bright copies of the signal heads, recoloured with the originals. */
   readonly signals = new Container();
   private on = false;
@@ -78,7 +78,7 @@ export class NightLayer {
     for (const g of [this.tint, this.lift]) g.rect(-1e6, -1e6, 2e6, 2e6).fill(0xffffff);
     this.tint.blendMode = 'multiply';
     this.lift.blendMode = 'add';
-    for (const c of [this.lamps, this.platforms, this.vehicles]) c.blendMode = 'add';
+    for (const c of [this.lamps, this.platforms]) c.blendMode = 'add';
     this.container.addChild(
       this.tint,
       this.lift,
@@ -113,6 +113,27 @@ export class NightLayer {
       );
       container.update();
     }
+  }
+
+  /** One light container per grade, bottom to top. `covers[i]` outlines the decks above grade i:
+   * its lights are drawn only outside them, as the vehicles themselves are. */
+  setVehicleGrades(covers: readonly (readonly (readonly Vec2[])[])[]) {
+    for (const child of this.vehicles.removeChildren()) child.destroy();
+    this.vehicleLights = covers.map((rings) => {
+      const lights = new ParticleContainer({
+        texture: this.textures.vehicle,
+        dynamicProperties: { position: true, rotation: true, vertex: true, uvs: true },
+      });
+      lights.blendMode = 'add';
+      this.vehicles.addChild(lights);
+      if (rings.length) {
+        const mask = new Graphics();
+        for (const ring of rings) mask.poly(ring as Vec2[]).fill(0xffffff);
+        this.vehicles.addChild(mask);
+        lights.setMask({ mask, inverse: true });
+      }
+      return lights;
+    });
   }
 
   /** True when the night layer draws: the vehicles then add their lights to `vehicles`. */

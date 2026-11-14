@@ -46,7 +46,7 @@ import { paintedCity } from './road-paint';
 import { drawSignal } from './layers/signals';
 import { drawWalkerRoute, drawWalkers, drawWalkSignals } from './layers/walkers';
 import { drawSigns } from './layers/signs';
-import { DeckCoverage, DeckGhosts, drawGradeShadows } from './layers/shadows';
+import { DeckCoverage, deckCover, DeckGhosts, drawGradeShadows } from './layers/shadows';
 import { Tiles } from './layers/tiles';
 import { createVehicleLayer, Vehicles } from './layers/vehicles';
 import { ParkedCars } from './layers/parked-cars';
@@ -390,7 +390,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     vehicles.setLights(
       on
         ? {
-            container: night.vehicles,
+            containers: night.vehicleLights,
             vehicle: night.textures.vehicle,
             glow: night.textures.glow,
           }
@@ -648,6 +648,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       city = compiled;
       parkingCounts = null;
       drawParking(parking, city, parkingCounts, camera.zoom);
+      vehicles.setLights(null);
       vehicles.setGeometry(compiled);
       if (sourceGeometry?.geo !== source?.geo) {
         tiles?.destroy();
@@ -933,6 +934,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         city.lanes.map(({ road }) => grades.get(roadGrades[road]!)!.vehicles),
         city.movements.map(({ node }) => grades.get(nodeGrades[node]!)!.vehicles),
       );
+      night.setVehicleGrades(
+        visibleGrades.map((grade) => deckCover(compiled, roadGrades, nodeGrades, grade.layer)),
+      );
+      drawnLight = '';
+      applyLight();
       parkedCars.setGeometry(
         compiled,
         visibleGrades.map((grade) => grade.parkedCars),

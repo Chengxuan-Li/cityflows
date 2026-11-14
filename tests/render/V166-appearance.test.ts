@@ -14,7 +14,11 @@ import {
   type AppearanceSettings,
 } from '../../src/ui/appearance-store';
 
-const lit = (mode: LightingSettings['mode']): LightingSettings => ({ mode, exposure: 1 });
+const lit = (mode: LightingSettings['mode']): LightingSettings => ({
+  mode,
+  exposure: 1,
+  season: 'equinox',
+});
 const settings = (appearance: AppearanceSettings['appearance'], matchLighting = false) => ({
   appearance,
   matchLighting,

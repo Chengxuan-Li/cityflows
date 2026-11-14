@@ -4,9 +4,11 @@ import {
   defaultLighting,
   parseLighting,
   sceneLight,
+  seasons,
   sunAt,
   windowLit,
   type LightingSettings,
+  type Season,
 } from '../../src/render/lighting';
 import { style } from '../../src/render/style';
 import { buildContext } from '../../src/render3d/context';
@@ -20,8 +22,12 @@ const ring = (x: number, y: number, w: number, h: number) => [
   { x, y: y + h },
   { x, y },
 ];
-const at = (mode: LightingSettings['mode'], hour = 12, exposure = 1) =>
-  sceneLight({ mode, exposure }, hour * 3600);
+const at = (
+  mode: LightingSettings['mode'],
+  hour = 12,
+  exposure = 1,
+  season: Season = defaultLighting.season,
+) => sceneLight({ mode, exposure, season }, hour * 3600);
 
 describe('V163 lighting model', () => {
   test('Day reproduces the TASK-162 lights exactly', () => {
@@ -68,13 +74,13 @@ describe('V163 lighting model', () => {
   });
 
   test('following the clock: morning sun in the east, noon in the south, lamps at night', () => {
-    const morning = at('clock', 7),
+    const morning = at('clock', 8),
       noon = at('clock', 13),
       late = at('clock', 21);
     expect(morning.artificial).toBe(0);
     expect(morning.shadows).toBe(true);
     expect(morning.sun[0]).toBeGreaterThan(0.5);
-    expect(sunAt(13 * 3600).elevation).toBeCloseTo(52);
+    expect(sunAt(12.75 * 3600).elevation).toBeCloseTo(42.7, 0);
     expect(noon.sun[2]).toBeGreaterThan(0);
     expect(noon.ambient.every((c) => c > 0.95)).toBe(true);
     expect(late.artificial).toBe(1);
@@ -82,12 +88,94 @@ describe('V163 lighting model', () => {
     // No jumps in the light through a whole day, minute by minute.
     let previous = at('clock', 0);
     for (let minute = 1; minute <= 24 * 60; minute++) {
-      const light = sceneLight({ mode: 'clock', exposure: 1 }, minute * 60);
+      const light = sceneLight({ mode: 'clock', exposure: 1, season: 'equinox' }, minute * 60);
       for (let i = 0; i < 3; i++)
         expect(Math.abs(light.ambient[i]! - previous.ambient[i]!)).toBeLessThan(0.05);
       expect(Math.abs(light.artificial - previous.artificial)).toBeLessThan(0.05);
       previous = light;
     }
+  });
+});
+
+describe('V184 seasons', () => {
+  const clock = (hour: number, season: Season) => at('clock', hour, 1, season);
+  /** Sunrise and sunset in clock hours, from the first and last minute the sun is up. */
+  const riseAndSet = (season: Season) => {
+    let rise = 0,
+      set = 0;
+    for (let minute = 1; minute < 24 * 60; minute++) {
+      const before = sunAt((minute - 1) * 60, season).elevation,
+        now = sunAt(minute * 60, season).elevation;
+      if (before < 0 && now >= 0) rise = minute / 60;
+      if (before >= 0 && now < 0) set = minute / 60;
+    }
+    return { rise, set };
+  };
+
+  test("sunrise and sunset follow Munich's year", () => {
+    const expected: Record<Season, [number, number]> = {
+      summer: [5 + 25 / 60, 21 + 30 / 60],
+      equinox: [6 + 40 / 60, 18 + 50 / 60],
+      winter: [8, 16 + 20 / 60],
+    };
+    for (const { value } of seasons) {
+      const { rise, set } = riseAndSet(value);
+      expect(rise, `${value} sunrise`).toBeCloseTo(expected[value][0], 0.5);
+      expect(set, `${value} sunset`).toBeCloseTo(expected[value][1], 0.5);
+    }
+    // The sun climbs highest in Summer, rises in the north-east then and in the south-east in Winter.
+    const noon = (season: Season) => sunAt(13 * 3600, season).elevation;
+    expect(noon('summer')).toBeGreaterThan(noon('equinox') + 15);
+    expect(noon('equinox')).toBeGreaterThan(noon('winter') + 15);
+    const sunriseAzimuth = (season: Season) =>
+      sunAt(riseAndSet(season).rise * 3600, season).azimuth;
+    expect(sunriseAzimuth('summer')).toBeLessThan(65);
+    expect(sunriseAzimuth('winter')).toBeGreaterThan(115);
+    // The default season is the one closest to the former fixed day, 06:00 to 20:00.
+    const distance = (season: Season) =>
+      Math.abs(riseAndSet(season).rise - 6) + Math.abs(riseAndSet(season).set - 20);
+    const closest = [...seasons].sort((a, b) => distance(a.value) - distance(b.value))[0]!;
+    expect(closest.value).toBe(defaultLighting.season);
+  });
+
+  test('Winter reaches dusk and the evening look before a run ends at 18:00', () => {
+    const afternoon = clock(15, 'winter'),
+      dusk = clock(16.5, 'winter'),
+      evening = clock(17.75, 'winter');
+    expect(afternoon.artificial).toBe(0);
+    expect(afternoon.shadows).toBe(true);
+    for (const light of [dusk, evening]) {
+      expect(light.artificial).toBe(1);
+      expect(light.windows).toBeGreaterThan(0.1);
+      expect(Math.max(...light.ambient)).toBeLessThan(0.8);
+      expect(light.shadows).toBe(false);
+    }
+    // The other seasons are still day-lit then, with the lamps off.
+    expect(clock(17.75, 'summer').artificial).toBe(0);
+    expect(clock(17.75, 'equinox').artificial).toBeLessThan(0.5);
+    // A bundled run's start, 06:00, is before the Winter sunrise.
+    expect(clock(6, 'winter').artificial).toBe(1);
+  });
+
+  test('every season keeps the light continuous and Day-bright at its noon', () => {
+    for (const { value, noon } of seasons) {
+      const light = clock(noon, value);
+      if (value !== 'winter') expect(light.ambient.every((c) => c > 0.95)).toBe(true);
+      let previous = clock(0, value);
+      for (let minute = 1; minute <= 24 * 60; minute++) {
+        const next = sceneLight({ mode: 'clock', exposure: 1, season: value }, minute * 60);
+        for (let i = 0; i < 3; i++)
+          expect(Math.abs(next.ambient[i]! - previous.ambient[i]!)).toBeLessThan(0.05);
+        expect(Math.abs(next.artificial - previous.artificial)).toBeLessThan(0.05);
+        previous = next;
+      }
+    }
+  });
+
+  test('the Day, Evening and Night presets ignore the season', () => {
+    for (const mode of ['day', 'evening', 'night'] as const)
+      for (const { value } of seasons)
+        expect(at(mode, 12, 1, value)).toEqual(at(mode, 5, 1, 'summer'));
   });
 });
 
@@ -104,9 +192,10 @@ describe('V163 settings persistence', () => {
   test('settings round-trip through storage', () => {
     const storage = memory();
     expect(loadLighting(storage)).toEqual(defaultLighting);
-    saveLighting(storage, { mode: 'night', exposure: 0.8 });
-    expect(JSON.parse(storage.values.get(lightingKey)!)).toEqual({ mode: 'night', exposure: 0.8 });
-    expect(loadLighting(storage)).toEqual({ mode: 'night', exposure: 0.8 });
+    const night: LightingSettings = { mode: 'night', exposure: 0.8, season: 'winter' };
+    saveLighting(storage, night);
+    expect(JSON.parse(storage.values.get(lightingKey)!)).toEqual(night);
+    expect(loadLighting(storage)).toEqual(night);
   });
 
   test('missing, broken or throwing storage falls back to Day', () => {
@@ -123,18 +212,35 @@ describe('V163 settings persistence', () => {
       },
     };
     expect(loadLighting(throwing)).toEqual(defaultLighting);
-    expect(() => saveLighting(throwing, { mode: 'evening', exposure: 1 })).not.toThrow();
+    expect(() => saveLighting(throwing, defaultLighting)).not.toThrow();
   });
 
   test('malformed values are clamped or replaced', () => {
     expect(parseLighting(null)).toEqual(defaultLighting);
     expect(parseLighting('evening')).toEqual(defaultLighting);
-    expect(parseLighting({ mode: 'dusk', exposure: 1.2 })).toEqual({ mode: 'day', exposure: 1.2 });
-    expect(parseLighting({ mode: 'clock', exposure: 9 })).toEqual({ mode: 'clock', exposure: 1.5 });
-    expect(parseLighting({ mode: 'night', exposure: Number.NaN })).toEqual({
-      mode: 'night',
-      exposure: 1,
+    expect(parseLighting({ mode: 'dusk', exposure: 1.2 })).toEqual({
+      ...defaultLighting,
+      exposure: 1.2,
     });
+    expect(parseLighting({ mode: 'clock', exposure: 9 })).toEqual({
+      ...defaultLighting,
+      mode: 'clock',
+      exposure: 1.5,
+    });
+    expect(parseLighting({ mode: 'night', exposure: Number.NaN })).toEqual({
+      ...defaultLighting,
+      mode: 'night',
+    });
+    expect(parseLighting({ mode: 'clock', exposure: 1, season: 'monsoon' }).season).toBe(
+      defaultLighting.season,
+    );
+  });
+
+  // TASK-184: a value stored before seasons existed still loads, with the default season.
+  test('a lighting value stored before seasons loads with the default season', () => {
+    const storage = memory();
+    storage.values.set(lightingKey, '{"mode":"clock","exposure":0.9}');
+    expect(loadLighting(storage)).toEqual({ mode: 'clock', exposure: 0.9, season: 'equinox' });
   });
 });
 

@@ -2899,16 +2899,20 @@ the city, and roads retain the strongest tone.
   and 3D Curbs default on; BUS uses the Lane markings switch. Counts and placement timings
   are exposed on the map canvas in test mode. Neither canonical network nor compile changes.
 
-- TASK-163: scene lighting is view-only state. `render/lighting.ts` turns `{ mode, exposure }`
-  (`day`, `evening`, `night` or `clock`; exposure 0.5 to 1.5) and the simulation clock into one
+- TASK-163: scene lighting is view-only state. `render/lighting.ts` turns `{ mode, exposure, season }`
+  (`day`, `evening`, `night` or `clock`; exposure 0.5 to 1.5; `summer`, `equinox` or `winter`, TASK-184)
+  and the simulation clock into one
   `SceneLight` for both views: sun direction, colour and intensity, whether it casts shadows,
   hemisphere sky and ground colours, background, an `ambient` factor (light on a flat surface
   relative to Day, per linear channel), the artificial-light level and the share of windows
   lit. Day reproduces TASK-162's lights exactly (ambient 1, no artificial light). "Follow
-  clock" uses a fixed day (sunrise 06:00, sunset 20:00, 52° at 13:00), blends Day, Evening and
+  clock" puts the sun where it is over Munich (48.14° N) at the chosen season's solstice or
+  equinox (sunrise and sunset about 05:25 and 21:30 in Summer, 06:40 and 18:50 in Spring/autumn,
+  08:00 and 16:20 in Winter; the sun 65°, 43° and 19° high at noon), blends Day, Evening and
   Night by sun elevation and moves once per simulated minute. The UI keeps the setting in its
   own store (`ui/lighting-store.ts`), per viewer in `localStorage` (`cityflows.lighting`,
-  parsed and clamped on read, Day when missing, broken or blocked), never in the project; it
+  parsed and clamped on read, Day and Spring/autumn when missing, broken or blocked; a value
+  stored before seasons loads with Spring/autumn), never in the project; it
   cannot change simulation, project or render-geometry hashes. The Shadows layer also turns
   the 3D sun's shadows on and off. Colours are never changed, only lit: 3D lit materials take
   the lights; unlit materials (rail paint, wires, sign faces, pedestrians) are multiplied by
