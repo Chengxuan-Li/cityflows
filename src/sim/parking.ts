@@ -803,11 +803,25 @@ export function createParking(
   /** TASK-157: by lane, the spans merging lot cars are crossing. */
   const crossing = new Map<number, { fromM: number; toM: number }[]>();
   const motionById = Array<ParkingMotion | undefined>(trips.length).fill(undefined);
+  /** TASK-176: the motions by the parking facility of their connector, for `arrivalStop`, which
+   * runs for every car bound for a lot, every step: only a motion at its own facility can stop it. */
+  let motionsAt = new Map<number, Map<number, ParkingMotion>>();
+  const facilityOf = (m: ParkingMotion) => compiled.connectors[m.connector]!.parking ?? -1;
+  const indexMotion = (id: number, m: ParkingMotion) => {
+    let at = motionsAt.get(facilityOf(m));
+    if (!at) motionsAt.set(facilityOf(m), (at = new Map()));
+    at.set(id, m);
+  };
   const setMotion = (id: number, m: ParkingMotion) => {
+    const previous = motionById[id];
+    if (previous) motionsAt.get(facilityOf(previous))!.delete(id);
     motions.set(id, m);
     motionById[id] = m;
+    indexMotion(id, m);
   };
   const removeMotion = (id: number) => {
+    const previous = motionById[id];
+    if (previous) motionsAt.get(facilityOf(previous))!.delete(id);
     motions.delete(id);
     motionById[id] = undefined;
   };
@@ -1611,7 +1625,7 @@ export function createParking(
       const destination = compiled.connectors[vehicles.destination[id]!];
       if (compiled.parking[destination?.parking ?? -1]?.kind !== 'lot') return undefined;
       let positionM = Infinity;
-      for (const [other, m] of motions)
+      for (const [other, m] of motionsAt.get(destination!.parking!) ?? [])
         if (leavingLot(m))
           positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector, m));
       // TASK-153: a car that would enter at once does not wait for the departure.
@@ -2217,6 +2231,8 @@ export function createParking(
       }
       revision++;
       compiled = next;
+      motionsAt = new Map();
+      for (const [id, m] of motions) indexMotion(id, m);
       lotGraphs = compiled.parking.map(
         (f) => compiled.lots?.find((l) => l.id === f.id)?.circulation,
       );
