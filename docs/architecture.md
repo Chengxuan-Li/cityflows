@@ -1057,11 +1057,12 @@ the OSM `lanes` tags carry one.
   ratios): 30 s a phase, at most a 120 s cycle (`GROUP_CYCLE_MAX_S`), amber 3 s, all-red 1 s.
   Every green group is green for at least an even split of the green time. Single-node programs
   are unchanged.
-- TASK-170 (demand split and actuation). Generated programs (import, grouping, Generate default
-  program) set `actuated` (`GENERATED_TIMING`); `demandSplit` is a per-program choice in the
-  signal editor, off by default: on Munich seeds 1 to 6 every split tried lengthened single visits
-  to the Landsberger loop's roads past TASK-154's 900 s on some seed, while actuation alone
-  completed more trips with less delay. Hand-written and saved programs without the flags run as
+- TASK-170 (demand split and actuation). Both flags are per-program choices in the signal
+  editor, off in generated programs (import, grouping, Generate default program;
+  `GENERATED_TIMING`): on Munich seeds 1 to 6 every split tried lengthened single visits to the
+  Landsberger loop's roads past TASK-154's 900 s on some seed. TASK-180: generated programs were
+  actuated until mouth joins zipped (section 8, keep clear); since then actuation lengthens a
+  seed-6 loop visit to 1,042 s and completes fewer trips at full demand. Hand-written and saved programs without the flags run as
   before. A controller is a signalised junction group (its members in lockstep) or a single
   signal node.
   - Demand split. At load the engine routes every car trip of the scenario from the connector it
@@ -1817,7 +1818,10 @@ Step sequence, in this order every step:
      of the line); one held short counts that stand as its stop line (stop signs, turn on red,
      entry requests). A spawn or lot exit whose body joins inside a mouth zone needs only
      `minGapM` to cars standing beside it; moving traffic keeps the spawn gap and the
-     follower's insertion check.
+     follower's insertion check. TASK-180: they zip in one at a time. A standing car that such a
+     join came in front of within the spawn gap has let one in at that mouth; until it has
+     passed, the next join there in front of it needs the spawn gap (without this a lot or
+     garage emptied into the queue while the through car behind its mouth waited).
    - Acceleration from IDM.
    - Lane change proposal: mandatory toward `targetLanes` when the distance to the lane end is
      below `changesNeeded * laneChangeDistanceM + mandatoryUrgencyM` (accepts gaps down to

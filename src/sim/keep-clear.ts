@@ -48,9 +48,9 @@ function covers(zone: KeepClearZone, front: number, lengthM: number, arrivalM: n
   );
 }
 
-/** Whether a body over `[fromM, toM]` of the lane lies in one of its mouth zones. */
-export function inMouth(zones: readonly KeepClearZone[], fromM: number, toM: number) {
+/** The first of the lane's mouth zones a body over `[fromM, toM]` lies in, if any. */
+export function mouthAt(zones: readonly KeepClearZone[], fromM: number, toM: number) {
   for (const zone of zones)
-    if (zone.kind === 'mouth' && zone.fromM < toM && zone.toM > fromM) return true;
-  return false;
+    if (zone.kind === 'mouth' && zone.fromM < toM && zone.toM > fromM) return zone;
+  return undefined;
 }

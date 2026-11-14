@@ -13,11 +13,11 @@ import type { TrafficEngine, VehicleDetail } from '../src/sim/types';
 
 // TASK-172, the nightly three-seed report (advisory, never a gate): Munich at 0.15 to 10:00 on
 // demand seeds 1 to 3, mode choice off and on, six runs in parallel child processes.
-// Usage: npm run seed-report -- --out <dir> [--previous <report.json>] [--jobs n]
+// Usage: npm run seed-report -- --out <dir> [--previous <report.json>] [--jobs n] [--seeds 1,2,3]
+// [--actuated on|off] (TASK-180: other seeds; every generated program's actuation set).
 // Writes <dir>/seed-report.json and <dir>/seed-report.md.
 
 const SCALE = 0.15;
-const SEEDS = [1, 2, 3];
 /** The Landsberger loop's six roads (TASK-154's drain criteria; `probeMorning`'s loop census). */
 const LOOP_ROADS = ['r:961', 'r:364', 'r:248', 'r:703', 'r:273', 'r:997'];
 /** Criterion (b): the most wait one visit to a loop road may add. */
@@ -64,14 +64,19 @@ interface Report {
   commit: string;
   generatedAt: string;
   scale: number;
+  /** TASK-180: the actuation set on every generated program, when the run overrode it. */
+  actuated?: boolean;
   runs: Run[];
   failed: { seed: number; modeChoice: boolean; error: string }[];
 }
 
 /** One run, with TASK-154's observers (`bench/task131-traffic.ts`) cut down to the figures the
  * drain criteria need. */
-function runOne(seed: number, modeChoice: boolean): Run {
+function runOne(seed: number, modeChoice: boolean, actuated?: boolean): Run {
   const city = loadAuditCity('munich');
+  if (actuated !== undefined)
+    for (const owner of [...Object.values(city.nodes), ...Object.values(city.junctionGroups ?? {})])
+      if (owner.signal) owner.signal.actuated = actuated;
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   const { compiled } = result;
@@ -239,14 +244,19 @@ const delta = (value: number, before: number | undefined) =>
 const pct = (share: number | null) => (share === null ? '-' : `${(100 * share).toFixed(1)}%`);
 const label = (run: Run) => `${run.seed} | ${run.modeChoice ? 'on' : 'off'}`;
 
-function markdown(report: Report, previous: Report | undefined, baseline: Record<string, number>) {
+function markdown(
+  seeds: number[],
+  report: Report,
+  previous: Report | undefined,
+  baseline: Record<string, number>,
+) {
   const before = (run: Run) =>
     previous?.runs.find((p) => p.seed === run.seed && p.modeChoice === run.modeChoice);
   const sorted = report.runs.toSorted((a, b) => a.seed - b.seed || +a.modeChoice - +b.modeChoice);
   const lines = [
-    `## Munich at ${SCALE} to 10:00, seeds ${SEEDS.join(', ')}`,
+    `## Munich at ${SCALE} to 10:00, seeds ${seeds.join(', ')}`,
     '',
-    `Commit \`${report.commit}\`. Previous report: ${previous ? `\`${previous.commit}\`` : 'none'}. Advisory; changes since the previous report in parentheses.`,
+    `Commit \`${report.commit}\`. Previous report: ${previous ? `\`${previous.commit}\`` : 'none'}.${report.actuated === undefined ? '' : ` Signals ${report.actuated ? 'actuated' : 'fixed-time'}.`} Advisory; changes since the previous report in parentheses.`,
     '',
     '| Seed | Mode choice | Completed | Gridlocked | Stalled heads | Parking failures | Mean delay (s) |',
     '| --- | --- | --- | --- | --- | --- | --- |',
@@ -308,8 +318,8 @@ function markdown(report: Report, previous: Report | undefined, baseline: Record
   return lines.join('\n') + '\n';
 }
 
-function worker(seed: number, modeChoice: boolean) {
-  console.log(JSON.stringify(runOne(seed, modeChoice)));
+function worker(seed: number, modeChoice: boolean, actuated?: boolean) {
+  console.log(JSON.stringify(runOne(seed, modeChoice, actuated)));
 }
 
 async function main(args: string[]) {
@@ -317,6 +327,8 @@ async function main(args: string[]) {
   const out = option('--out');
   if (!out) throw new Error('Usage: seed-report --out <dir> [--previous <report.json>] [--jobs n]');
   const jobs = Number(option('--jobs') ?? Math.min(6, Math.max(1, availableParallelism() - 1)));
+  const seeds = (option('--seeds') ?? '1,2,3').split(',').map(Number);
+  const actuated = option('--actuated');
   const previousFile = option('--previous');
   const previous =
     previousFile && existsSync(previousFile)
@@ -324,11 +336,12 @@ async function main(args: string[]) {
       : undefined;
   if (previousFile && !previous) console.info(`No previous report at ${previousFile}`);
 
-  const queue = SEEDS.flatMap((seed) => [false, true].map((modeChoice) => ({ seed, modeChoice })));
+  const queue = seeds.flatMap((seed) => [false, true].map((modeChoice) => ({ seed, modeChoice })));
   const report: Report = {
     commit: execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim(),
     generatedAt: new Date().toISOString(),
     scale: SCALE,
+    ...(actuated && { actuated: actuated === 'on' }),
     runs: [],
     failed: [],
   };
@@ -342,6 +355,7 @@ async function main(args: string[]) {
           '--worker',
           String(seed),
           modeChoice ? 'on' : 'off',
+          ...(actuated ? [actuated] : []),
         ],
         { stdio: ['ignore', 'pipe', 'inherit'] },
       );
@@ -373,12 +387,13 @@ async function main(args: string[]) {
   >;
   report.runs.sort((a, b) => a.seed - b.seed || +a.modeChoice - +b.modeChoice);
   writeFileSync(join(out, 'seed-report.json'), JSON.stringify(report, null, 2));
-  const summary = markdown(report, previous, baseline);
+  const summary = markdown(seeds, report, previous, baseline);
   writeFileSync(join(out, 'seed-report.md'), summary);
   console.info(summary);
   if (report.failed.length) process.exitCode = 1;
 }
 
 const args = process.argv.slice(2);
-if (args[0] === '--worker') worker(Number(args[1]), args[2] === 'on');
+if (args[0] === '--worker')
+  worker(Number(args[1]), args[2] === 'on', args[3] === undefined ? undefined : args[3] === 'on');
 else await main(args);

@@ -17,7 +17,7 @@ const { lengthM } = DEFAULT_SIM_PARAMS.vehicleClasses.car;
  * on the near (eastbound) lane, `far` adds one on the westbound lane at x = 150. A gateway on
  * the near lane at x = 175 admits one car per 20 s, so a platoon queues back across the mouth.
  */
-function mouthWorld(far = false) {
+function mouthWorld(far = false, occupancy = 0.1) {
   const { city, node, street, place } = buildCity('Keep clear', 169);
   const [east, west] = street(node(0, 0), node(400, 0));
   place('Shop', 'retail', { x: 160, y: 30 }, []);
@@ -58,7 +58,7 @@ function mouthWorld(far = false) {
           { x: 80, y: 50 },
         ],
       },
-      occupancyAtStart: 0.1,
+      occupancyAtStart: occupancy,
       provenance: { source: 'authored', inferred: ['driveway'] },
     },
   };
@@ -178,6 +178,46 @@ test('TASK-169 a queue keeps the mouth clear and the lot car joins it while it s
   expect(joinedStandingQueue).toBe(true);
   expect(grantS - exitS).toBeLessThan(5);
   expect(engine.inspect(id)!.state).toBe('completed');
+  expect(engine.metrics().trips.failed).toBe(0);
+});
+
+test('TASK-180 lot cars zip into a standing queue: each through car lets one in', () => {
+  const w = mouthWorld(false, 0.5);
+  const zone = keepClearZones(w.net)[w.near.idx]!.find((z) => z.kind === 'mouth')!;
+  const leaving = [0, 1, 2, 3].map((i) => ({ ...w.leaving(150 + i), id: `leaving:${i}` }));
+  const trips = [...w.platoon, ...leaving];
+  const engine = createEngine();
+  engine.load({ compiled: w.net, trips, scenario });
+  const lotIds = new Set(leaving.map((_, i) => w.platoon.length + i + 1));
+  // The car each lot car joined in front of, when it stood within the mouth's reach.
+  const letIn: number[] = [];
+  const joined = new Set<number>();
+  for (let step = 0; step < 12000; step++) {
+    engine.step();
+    for (const id of lotIds) {
+      const car = engine.inspect(id);
+      if (joined.has(id) || car?.state !== 'driving' || car.lane !== w.near.idx) continue;
+      joined.add(id);
+      let follower = -1,
+        at = -Infinity;
+      for (let other = 1; other <= trips.length; other++) {
+        const o = engine.inspect(other);
+        if (o?.state !== 'driving' || o.lane !== w.near.idx || o === car) continue;
+        if (o.positionM < car.positionM && o.positionM > at) [follower, at] = [other, o.positionM];
+      }
+      if (
+        follower !== -1 &&
+        at > zone.fromM - 2 * lengthM &&
+        engine.inspect(follower)!.speedMps < 0.1
+      )
+        letIn.push(follower);
+    }
+    if (trips.every((_, i) => engine.inspect(i + 1)?.state === 'completed')) break;
+  }
+  expect(joined.size).toBe(leaving.length);
+  // At least two joins needed a standing car's courtesy, and no car gave it twice.
+  expect(letIn.length).toBeGreaterThanOrEqual(2);
+  expect(new Set(letIn).size).toBe(letIn.length);
   expect(engine.metrics().trips.failed).toBe(0);
 });
 
