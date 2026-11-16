@@ -210,7 +210,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-182](tasks/TASK-182.md) | UI | One copy of each rule in `app.css` (duplicate blocks from the UI merges) | `src/ui/app.css` | 160, 166, 181 | computed styles identical, shots, contrast | done |
 | [TASK-183](tasks/TASK-183.md) | UI | Street, station, stop and place labels in 3D (TASK-167's rules, collision-free, Labels toggle) | `src/render3d/**`, `src/render/labels.ts` shared parts | 167 | no overlaps, T64 3D within 5%, shots | done |
 | [TASK-184](tasks/TASK-184.md) | UI | Follow clock seasons so a run reaches evening; 2D vehicle lights under bridge decks | `src/render/lighting.ts`, lighting settings, 2D light layer | 163 | sun model tests, V163, T62/T64, shots | done |
-| [TASK-185](tasks/TASK-185.md) | render | 2D street-label frame cost under TASK-167's 5% gate | `src/render/layers/labels.ts`, 2D scene | 167, 176 | T62/T64 2D rounds, placement unchanged | in progress (Claude Code subagent) |
+| [TASK-185](tasks/TASK-185.md) | render | 2D street-label frame cost under TASK-167's 5% gate | `src/render/layers/labels.ts`, 2D scene | 167, 176 | T62/T64 2D rounds, placement unchanged | done |
 | [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | in progress (Claude Code subagent) |
 | [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | in progress (Claude Code subagent) |
 | [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | planned (decision taken 2026-11-16; not started) |
@@ -4210,6 +4210,18 @@ gate); 1.2 min locally.
 Full run 43591345828 (lead, manual, on a5be347 after the T62 time limit): every job green. Lead handoff
 finished (`docs/lead-handoff-2026-11-14.md`); TASK-185 to 192 and the decisions in `docs/decisions/` await
 the owner.
+
+TASK-185 (Claude Code subagent, Sonnet 5.5 high, 2026-11-16; merged): the 2D label cost was fill, not
+placement. TASK-167 cached the labels in one view-sized texture, nearly all transparent, and every frame
+blended that quad (4 to 6% on the software GPU). The glyph sprites now render once per redraw into a
+texture (same resolution, MSAA and whole-metre origin) and each frame draws only horizontal runs of the
+16 px tiles a glyph touches (70 runs at 1.2 px/m, 11% of the view in Munich). Placement and counts are
+identical; pixels differ only at glyph edges (largest channel difference 9 of 255). Labels on against
+off, interleaved with main on a machine 73 to 97% busy: T62 2D main +5.6% and branch -0.5%; T64 2D main
++5.3% and branch +2.3% (one round with a load drop at +16.8%; without it +0.4%). `gate4-layers` asserts
+the layer draws under 10% of the map's pixels. Check (1,470), city (176), light e2e (48), T62/T64 and
+gate4-layers pass; lead re-ran check, light e2e and gate4-layers on the merge. Open: no quiet-machine
+repeat; a real GPU's fill is cheaper, so the saving there is smaller.
 
 ## Owner decisions log
 
