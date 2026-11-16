@@ -1,15 +1,15 @@
-import { Polygon, type Graphics, type ParticleContainer } from 'pixi.js';
+import { ParticleContainer, Polygon, type Graphics } from 'pixi.js';
 import { expect, it, vi } from 'vitest';
 import { buildCity } from '../../fixtures/build-city';
 import { compile } from '../../network';
 import { cityGrades } from '../grades';
 import type { PresentationSnapshot } from '../vehicle-pose';
-import { NightLayer } from './night';
+import { sceneLight } from '../lighting';
+import { NightLayer, tinted } from './night';
 import { deckCover } from './shadows';
 import { createVehicleLayer, Vehicles } from './vehicles';
 
-// TASK-184: a vehicle's lights are drawn under the decks above it, as the vehicle is.
-it('hides the lights of a vehicle under a deck and keeps those of a vehicle on it', () => {
+function stubCanvas() {
   const context = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
   class Canvas {
     width = 0;
@@ -20,6 +20,58 @@ it('hides the lights of a vehicle under a deck and keeps those of a vehicle on i
   }
   vi.stubGlobal('HTMLCanvasElement', Canvas);
   vi.stubGlobal('document', { createElement: () => new Canvas() });
+}
+
+// TASK-186: the map is tinted by its container, which must equal a multiply pass over it.
+it('tints the map by the ambient light and leaves Day untouched', () => {
+  expect(tinted(0xffffff, 0x4080c0)).toBe(0x4080c0);
+  expect(tinted(0x123456, 0xffffff)).toBe(0x123456);
+  expect(tinted(0xff8000, 0x80ff40)).toBe(0x808000);
+  stubCanvas();
+  try {
+    const night = new NightLayer();
+    const light = (mode: 'day' | 'evening') =>
+      sceneLight({ mode, exposure: 1, season: 'equinox' }, 0);
+    night.setLight(light('evening'), { streetLights: true, signals: true, rail: true });
+    expect(night.mapTint).not.toBe(0xffffff);
+    night.setLight(light('day'), { streetLights: true, signals: true, rail: true });
+    expect(night.mapTint).toBe(0xffffff);
+    night.destroy();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+// TASK-186: only a grade under a deck needs a container (and a mask) of its own.
+it('gives the grades with no deck above them one light container', () => {
+  stubCanvas();
+  try {
+    const ring = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+    ];
+    const night = new NightLayer();
+    night.setVehicleGrades([[ring], [], [ring], [], []]);
+    const lights = night.vehicleLights;
+    expect(lights[0]!.mask).toBeDefined();
+    expect(lights[2]!.mask).toBeDefined();
+    expect(lights[0]).not.toBe(lights[2]);
+    expect(lights[1]!.mask).toBeUndefined();
+    expect(lights[3]).toBe(lights[1]);
+    expect(lights[4]).toBe(lights[1]);
+    expect(
+      night.vehicles.children.filter((child) => child instanceof ParticleContainer),
+    ).toHaveLength(3);
+    night.destroy();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+// TASK-184: a vehicle's lights are drawn under the decks above it, as the vehicle is.
+it('hides the lights of a vehicle under a deck and keeps those of a vehicle on it', () => {
+  stubCanvas();
   try {
     // A street along y = 0 and a layer-2 bridge over it at x = 150.
     const b = buildCity('Deck lights', 184);
@@ -82,6 +134,7 @@ it('hides the lights of a vehicle under a deck and keeps those of a vehicle on i
       fade: new Float32Array(3).fill(1),
     };
     vehicles.update(snapshot);
+    expect([ground.visible, deck.visible]).toEqual([true, true]);
     expect(ground.particleChildren.map((particle) => particle.x)).toEqual([150, 50]);
     expect(deck.particleChildren.map((particle) => particle.x)).toEqual([150]);
     // The first of the street's two lights is under the mask, the other is not.
@@ -89,6 +142,14 @@ it('hides the lights of a vehicle under a deck and keeps those of a vehicle on i
       true,
       false,
     ]);
+    // A container with no lights is not drawn: its mask would still cost a pass.
+    vehicles.update({
+      ...snapshot,
+      count: 1,
+      id: new Uint32Array([2]),
+      lane: new Int32Array([laneOf(2)]),
+    });
+    expect([ground.visible, deck.visible]).toEqual([false, true]);
     vehicles.setLights(null);
     expect(ground.particleChildren).toHaveLength(0);
     vehicles.destroy();

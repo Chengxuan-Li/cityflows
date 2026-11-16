@@ -2,8 +2,18 @@ import { Container, Graphics, Particle, ParticleContainer, Rectangle, Texture } 
 import type { Vec2 } from '../../geo/vec2';
 import { lampColors, linearToHex, type SceneLight } from '../lighting';
 
-/** TASK-163: the 2D evening. A multiply tint darkens the whole map; above it, additive glows
- * (lamps, platforms, vehicle lights) and copies of the signal heads stay bright. */
+/** TASK-163: the 2D evening. The map is tinted by the ambient light (TASK-186: the scene sets
+ * `mapTint` on the map's container and on the clear colour, which is what a multiply pass over the
+ * map would give, minus the pass); above it, additive glows (lamps, platforms, vehicle lights) and
+ * copies of the signal heads stay bright. */
+
+/** `hex` times `tint`, channel by channel, as a multiply blend would give. */
+export const tinted = (hex: number, tint: number) =>
+  [16, 8, 0].reduce(
+    (out, shift) =>
+      out | (Math.round((((hex >> shift) & 255) * ((tint >> shift) & 255)) / 255) << shift),
+    0,
+  );
 
 /** Vehicle-light sprite in body units: the rear at x = 0, the front bumper at `front`, the beam
  * on to the right edge; the height spans `across` body widths. */
@@ -60,13 +70,16 @@ export function nightTextures() {
 
 export class NightLayer {
   readonly container = new Container();
-  private readonly tint = new Graphics();
+  /** The colour that multiplies the map and its background: white by day. */
+  mapTint = 0xffffff;
   private readonly lift = new Graphics();
   readonly textures = nightTextures();
   /** Street-lamp and platform pools. */
   private readonly lamps = new ParticleContainer({ texture: this.textures.glow });
   private readonly platforms = new ParticleContainer({ texture: this.textures.glow });
-  /** Vehicle lights, one container per grade (TASK-184). */
+  /** Vehicle lights (TASK-184): `vehicleLights[i]` takes the lights of grade i. A grade under a
+   * deck has a container of its own, masked by the decks above it; all other grades share one
+   * (the lights add, so their order does not matter), which keeps the draw calls few (TASK-186). */
   readonly vehicles = new Container();
   vehicleLights: ParticleContainer[] = [];
   /** Bright copies of the signal heads, recoloured with the originals. */
@@ -74,19 +87,11 @@ export class NightLayer {
   private on = false;
 
   constructor() {
-    // Far beyond any city: the tint covers the whole view at every zoom.
-    for (const g of [this.tint, this.lift]) g.rect(-1e6, -1e6, 2e6, 2e6).fill(0xffffff);
-    this.tint.blendMode = 'multiply';
+    // Far beyond any city: the lift covers the whole view at every zoom.
+    this.lift.rect(-1e6, -1e6, 2e6, 2e6).fill(0xffffff);
     this.lift.blendMode = 'add';
     for (const c of [this.lamps, this.platforms]) c.blendMode = 'add';
-    this.container.addChild(
-      this.tint,
-      this.lift,
-      this.platforms,
-      this.lamps,
-      this.signals,
-      this.vehicles,
-    );
+    this.container.addChild(this.lift, this.platforms, this.lamps, this.signals, this.vehicles);
     this.container.visible = false;
   }
 
@@ -115,23 +120,27 @@ export class NightLayer {
     }
   }
 
-  /** One light container per grade, bottom to top. `covers[i]` outlines the decks above grade i:
-   * its lights are drawn only outside them, as the vehicles themselves are. */
+  /** `covers[i]` outlines the decks above grade i, bottom to top: its lights are drawn only
+   * outside them, as the vehicles themselves are. */
   setVehicleGrades(covers: readonly (readonly (readonly Vec2[])[])[]) {
     for (const child of this.vehicles.removeChildren()) child.destroy();
-    this.vehicleLights = covers.map((rings) => {
+    const container = () => {
       const lights = new ParticleContainer({
         texture: this.textures.vehicle,
         dynamicProperties: { position: true, rotation: true, vertex: true, uvs: true },
       });
       lights.blendMode = 'add';
       this.vehicles.addChild(lights);
-      if (rings.length) {
-        const mask = new Graphics();
-        for (const ring of rings) mask.poly(ring as Vec2[]).fill(0xffffff);
-        this.vehicles.addChild(mask);
-        lights.setMask({ mask, inverse: true });
-      }
+      return lights;
+    };
+    let open: ParticleContainer | undefined;
+    this.vehicleLights = covers.map((rings) => {
+      if (!rings.length) return (open ??= container());
+      const lights = container();
+      const mask = new Graphics();
+      for (const ring of rings) mask.poly(ring as Vec2[]).fill(0xffffff);
+      this.vehicles.addChild(mask);
+      lights.setMask({ mask, inverse: true });
       return lights;
     });
   }
@@ -143,8 +152,7 @@ export class NightLayer {
     const bright = Math.max(r, g, b) > 1.001;
     this.on = dark || bright || light.artificial > 0;
     this.container.visible = this.on;
-    this.tint.visible = dark;
-    this.tint.tint = linearToHex([Math.min(1, r), Math.min(1, g), Math.min(1, b)]);
+    this.mapTint = dark ? linearToHex([Math.min(1, r), Math.min(1, g), Math.min(1, b)]) : 0xffffff;
     // Exposure above 1: an additive lift approximates the brighter light a multiply cannot give.
     this.lift.visible = bright;
     const over = (c: number) => Math.max(0, c - 1) * 0.25;

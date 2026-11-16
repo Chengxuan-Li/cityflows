@@ -54,7 +54,7 @@ import { stripTicks } from './strip-geometry';
 import { createPicker, pickParking, pickVehicle } from './picking';
 import { mapPalettes, style, type MapPalette } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
-import { NightLayer } from './layers/night';
+import { NightLayer, tinted } from './layers/night';
 import {
   defaultLighting,
   lightKey,
@@ -380,6 +380,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     for (const ghost of ghosts) ghost.sync();
   }
 
+  /** The clear colour sits under the map's tint, as the map does. */
+  function syncBackground() {
+    void ready.then(() => {
+      if (!destroyed) app.renderer.background.color = tinted(palette.background, night.mapTint);
+    });
+  }
+
   /** TASK-163: draw the current light; a no-op while nothing it depends on changed. */
   function applyLight() {
     const key = `${lightKey(light)},${layerVisibility.streetLights},${layerVisibility.signals},${layerVisibility.rail}`;
@@ -387,6 +394,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     drawnLight = key;
     invalidate();
     const on = night.setLight(light, layerVisibility);
+    map.tint = night.mapTint;
+    syncBackground();
     vehicles.setLights(
       on
         ? {
@@ -549,7 +558,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       height: Math.max(1, canvas.clientHeight),
       resolution: window.devicePixelRatio,
       antialias: true,
-      backgroundColor: palette.background,
+      backgroundColor: tinted(palette.background, night.mapTint),
       preference: 'webgl',
     })
     .then(() => {
@@ -1146,9 +1155,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       invalidate();
       canvas.dataset.mapPalette = palette === mapPalettes.dark ? 'dark' : 'light';
       labels.setColours(palette.label);
-      void ready.then(() => {
-        if (!destroyed) app.renderer.background.color = palette.background;
-      });
+      syncBackground();
       if (!surroundings || !lots) return;
       const terrain = visibleGrades[0]!.terrain;
       const context = drawContext(contextFeatures, palette);
