@@ -211,7 +211,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-183](tasks/TASK-183.md) | UI | Street, station, stop and place labels in 3D (TASK-167's rules, collision-free, Labels toggle) | `src/render3d/**`, `src/render/labels.ts` shared parts | 167 | no overlaps, T64 3D within 5%, shots | done |
 | [TASK-184](tasks/TASK-184.md) | UI | Follow clock seasons so a run reaches evening; 2D vehicle lights under bridge decks | `src/render/lighting.ts`, lighting settings, 2D light layer | 163 | sun model tests, V163, T62/T64, shots | done |
 | [TASK-185](tasks/TASK-185.md) | render | 2D street-label frame cost under TASK-167's 5% gate | `src/render/layers/labels.ts`, 2D scene | 167, 176 | T62/T64 2D rounds, placement unchanged | done |
-| [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | in progress (Claude Code subagent) |
+| [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | done |
 | [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | in progress (Claude Code subagent) |
 | [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | planned (decision taken 2026-11-16; not started) |
 | [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | planned (not started; awaiting owner) |
@@ -4222,6 +4222,21 @@ off, interleaved with main on a machine 73 to 97% busy: T62 2D main +5.6% and br
 the layer draws under 10% of the map's pixels. Check (1,470), city (176), light e2e (48), T62/T64 and
 gate4-layers pass; lead re-ran check, light e2e and gate4-layers on the merge. Open: no quiet-machine
 repeat; a real GPU's fill is cheaper, so the saving there is smaller.
+
+TASK-186 (Claude Code subagent, Sonnet 5.5 high, 2026-11-16; merged): on the software GPU the 2D Evening
+cost was raster work. The full-screen multiply tint was about 7 to 10 ms (scaling with area) and the
+vehicle lights about 10 ms, about 5 ms of it the two stencil deck masks, which an empty masked container
+still paid. The ambient tint is now the map container's `tint`, multiplied into the clear colour
+(`NightLayer.mapTint`, `tinted`, `syncBackground` in `scene.ts`); grades with no deck above share one
+light container, and an empty one is hidden (Evening at Donnersbergerbrucke: 79 draws and 8 stencil
+operations to 76 and 4). Evening over Day, interleaved with main (medians, busy then quieter machine):
+T64 main +10.2 / +9.8%, branch +4.5 / +5.3%; T62 main +10.4 / +9.0%, branch +7.5 / +3.6%; Bridge main
++7.9 / +9.4%, branch +6.8 / +3.2%. Munich 2D Evening and Night shots at three zooms: no pixel differs by
+more than 2 of 255. Check (1,472), city (176), light e2e (48), traffic light, V163, V184, T62 and T64
+pass (T64's Day rail frame budget failed once under load and passed on rerun). Lead re-ran check, city,
+light e2e, V163 and gate4-layers on the merge, and reworded the TASK-163 paragraph of
+`docs/architecture.md`. Open: the ground grade's deck mask is about 3.3 ms of the remaining 6.8 ms of
+vehicle lights on the Bridge view (dropping it when no light overlaps a deck needs a per-frame test).
 
 ## Owner decisions log
 
