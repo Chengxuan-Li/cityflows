@@ -67,6 +67,8 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   originObserver?: (id: number, connector: CConnector, hasGap: boolean) => void;
   walkRouter?: ReturnType<typeof createWalkRouter>;
   debugParkingClaims?: boolean;
+  /** TASK-187: check after every step that each lane's list is ordered by position. */
+  debugLaneOrder?: boolean;
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -91,6 +93,7 @@ function createRun({
   population,
   walkRouter: injectedWalkRouter,
   debugParkingClaims = false,
+  debugLaneOrder = false,
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -501,13 +504,18 @@ function createRun({
     lengthM = profile(vehicle).lengthM,
   ) {
     const { lane, positionM } = connector;
+    const gap = Math.max(spawnMinGapM, idm.minGapM);
+    const maxSpacing = maxVehicleLength + gap;
+    // TASK-187: the checks below only conjoin, so their order is free. A car on the lane nearer
+    // than the smallest gap any of them allows fails the lane check whatever the mouth rule says;
+    // nearly every blocked origin fails so, each step, so this runs first.
+    if (!laneClear(lane, positionM, lengthM, maxSpacing, idm.minGapM, false)) return false;
     if (
       positionM < intersections.reservedSpace[lane]! + lengthM + idm.minGapM &&
       intersections.reservedSpace[lane]! > 0
     )
       return false;
     if (railCrossings && !railCrossings.canSpawn(lane, positionM, lengthM)) return false;
-    const gap = Math.max(spawnMinGapM, idm.minGapM);
     const spacing = lengthM + gap;
     if (landingBlocked(lane, positionM - spacing, positionM + gap)) return false;
     // TASK-169: a body joining in a mouth zone, which queued traffic keeps clear, needs only the
@@ -518,7 +526,6 @@ function createRun({
     const mouth =
       !!zone &&
       (follower === -1 || yieldedLane[follower] !== lane || yieldedZoneM[follower] !== zone.fromM);
-    const maxSpacing = maxVehicleLength + gap;
     if (positionM < spacing) {
       for (const idx of compiled.lanes[lane]!.in) {
         if (intersections.occupancy[idx]! > 0) return false;
@@ -543,15 +550,7 @@ function createRun({
           return false;
       }
     }
-    for (
-      let id = vehicles.last(lane);
-      id !== -1 && vehicles.position[id]! <= positionM + maxSpacing;
-      id = vehicles.previous[id]!
-    ) {
-      const g = mouth && vehicles.speed[id]! < 0.1 ? idm.minGapM : gap;
-      const required = vehicles.position[id]! >= positionM ? profile(id).lengthM + g : lengthM + g;
-      if (Math.abs(vehicles.position[id]! - positionM) < required) return false;
-    }
+    if (!laneClear(lane, positionM, lengthM, maxSpacing, gap, mouth)) return false;
     const source = compiled.lanes[lane]!;
     if (parking.leavingSpace(vehicle)) {
       if (!parking.departureRoom(vehicle)) return false;
@@ -578,6 +577,28 @@ function createRun({
         )
           return false;
       }
+    }
+    return true;
+  }
+
+  /** Whether the cars on `lane` up to `maxSpacing` past `positionM` keep `gap` to a body
+   * `lengthM` long joining there; in a mouth (`mouth`), standing cars only the minimum gap. */
+  function laneClear(
+    lane: number,
+    positionM: number,
+    lengthM: number,
+    maxSpacing: number,
+    gap: number,
+    mouth: boolean,
+  ) {
+    for (
+      let id = vehicles.last(lane);
+      id !== -1 && vehicles.position[id]! <= positionM + maxSpacing;
+      id = vehicles.previous[id]!
+    ) {
+      const g = mouth && vehicles.speed[id]! < 0.1 ? idm.minGapM : gap;
+      const required = vehicles.position[id]! >= positionM ? profile(id).lengthM + g : lengthM + g;
+      if (Math.abs(vehicles.position[id]! - positionM) < required) return false;
     }
     return true;
   }
@@ -1912,6 +1933,7 @@ function createRun({
         });
         recoverGridlock(time());
         if (debugParkingClaims) parking.assertClaims();
+        if (debugLaneOrder) vehicles.assertOrdered();
         observedCosts.update(time());
       }
     },
