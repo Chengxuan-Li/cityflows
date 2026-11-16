@@ -291,6 +291,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       camera.zoom,
       { minX: a.x, minY: a.y, maxX: b.x, maxY: b.y },
       layerVisibility.labels,
+      app.renderer,
     );
     if (import.meta.env.MODE === 'test') canvas.dataset.labels = JSON.stringify(labels.counts);
   };

@@ -1,4 +1,4 @@
-import { CanvasSource, Container, Rectangle, Sprite, Texture } from 'pixi.js';
+import { CanvasSource, Container, Rectangle, Sprite, Texture, type Renderer } from 'pixi.js';
 import {
   labelFont as fontOf,
   labelFonts,
@@ -18,6 +18,8 @@ import type { ViewBounds } from './stations';
  * `setColours`) and a new palette needs no new glyph textures. */
 const PAGE = 512;
 const MAX_TEXTURE = 4096;
+/** Side in pixels of the squares the label texture is cut into, to draw only those with ink. */
+const TILE = 16;
 
 interface Glyph {
   fill: Texture;
@@ -111,9 +113,14 @@ const overlaps = (a: ViewBounds, b: ViewBounds) =>
 export function createLabelLayer() {
   const container = new Container();
   container.eventMode = 'none';
-  const halos = new Container(),
+  // The glyph sprites live outside the scene, in a container scaled to texture pixels; the scene
+  // holds only sprites of the squares of their texture that contain ink.
+  const sheet = new Container(),
+    scaled = new Container(),
+    halos = new Container(),
     fills = new Container();
-  container.addChild(halos, fills);
+  scaled.addChild(halos, fills);
+  sheet.addChild(scaled);
   let atlas: GlyphAtlas | undefined;
   let candidates: readonly LabelCandidate[] = [];
   let colours: MapPalette['label'] = style.label;
@@ -121,8 +128,12 @@ export function createLabelLayer() {
   let placedZoom = NaN;
   let covered: ViewBounds | null = null;
   let glyphs = 0;
+  let drawnRuns = 0;
+  let drawnPx = 0;
   let inView: PlacedLabel[] = [];
+  let sheetTexture: Texture | undefined;
   const pool: { halo: Sprite; fill: Sprite }[] = [];
+  const runs: { sprite: Sprite; texture?: Texture }[] = [];
   const fontsReady =
     typeof document === 'undefined'
       ? Promise.resolve()
@@ -132,7 +143,7 @@ export function createLabelLayer() {
           atlas = new GlyphAtlas();
         });
 
-  function draw(zoom: number, view: ViewBounds) {
+  function draw(zoom: number, view: ViewBounds, renderer: Renderer) {
     // Cover an eighth of a view more on each side: a pan redraws the labels now and then, and
     // their cached texture stays small.
     const w = view.maxX - view.minX,
@@ -143,6 +154,13 @@ export function createLabelLayer() {
       maxX: view.maxX + w / 8,
       maxY: view.maxY + h / 8,
     };
+    // The labels change only with a zoom step or a pan out of `covered`: drawn once into a texture
+    // at screen resolution (at most MAX_TEXTURE px wide).
+    const resolution = Math.min(
+      zoom * window.devicePixelRatio,
+      MAX_TEXTURE / Math.max(covered.maxX - covered.minX, covered.maxY - covered.minY),
+    );
+    scaled.scale.set(resolution);
     let used = 0;
     for (const label of placed) {
       if (!overlaps(label.bounds, covered)) continue;
@@ -176,16 +194,89 @@ export function createLabelLayer() {
     for (let i = used; i < pool.length; i++) pool[i]!.halo.visible = pool[i]!.fill.visible = false;
     glyphs = used;
     atlas!.upload();
-    // The labels change only with a zoom step or a pan out of `covered`: drawn once into a
-    // texture at screen resolution (at most MAX_TEXTURE px wide), every frame costs one quad.
-    container.cacheAsTexture(false);
+    for (const run of runs) run.texture?.destroy();
+    sheetTexture?.destroy(true);
+    sheetTexture = undefined;
+    drawnRuns = 0;
+    drawnPx = 0;
     if (used) {
-      const resolution = Math.min(
-        zoom * window.devicePixelRatio,
-        MAX_TEXTURE / Math.max(covered.maxX - covered.minX, covered.maxY - covered.minY),
-      );
-      container.cacheAsTexture({ resolution, antialias: true });
+      // The texture holds just the ink, from whole metres (as Pixi's cacheAsTexture bounds were, so
+      // the text keeps its pixels). Most of it is transparent and a full-size quad costs fill rate
+      // every frame, so each frame draws only runs of its TILE squares that a glyph touches.
+      const bounds = sheet.getLocalBounds(),
+        left = Math.floor(bounds.minX / resolution),
+        top = Math.floor(bounds.minY / resolution),
+        frame = new Rectangle(
+          left * resolution,
+          top * resolution,
+          Math.ceil((Math.ceil(bounds.maxX / resolution) - left) * resolution),
+          Math.ceil((Math.ceil(bounds.maxY / resolution) - top) * resolution),
+        ),
+        columns = Math.ceil(frame.width / TILE),
+        rows = Math.ceil(frame.height / TILE),
+        inked = new Uint8Array(columns * rows);
+      for (let i = 0; i < used; i++) {
+        const { position, scale, rotation, texture } = pool[i]!.fill;
+        // The glyph quad's bounding box, in texture pixels.
+        const w = texture.frame.width * scale.x * resolution,
+          h = texture.frame.height * scale.x * resolution,
+          cos = Math.abs(Math.cos(rotation)),
+          sin = Math.abs(Math.sin(rotation)),
+          x = position.x * resolution - frame.x,
+          y = position.y * resolution - frame.y,
+          hw = (cos * w + sin * h) / 2,
+          hh = (sin * w + cos * h) / 2;
+        for (
+          let row = Math.max(0, Math.floor((y - hh) / TILE));
+          row < rows && row * TILE < y + hh;
+          row++
+        )
+          for (
+            let column = Math.max(0, Math.floor((x - hw) / TILE));
+            column < columns && column * TILE < x + hw;
+            column++
+          )
+            inked[row * columns + column] = 1;
+      }
+      sheetTexture = renderer.textureGenerator.generateTexture({
+        target: sheet,
+        frame,
+        resolution: 1,
+        antialias: true,
+      });
+      for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++) {
+          if (!inked[row * columns + column]) continue;
+          let end = column + 1;
+          while (end < columns && inked[row * columns + end]) end++;
+          const x = column * TILE,
+            y = row * TILE;
+          let run = runs[drawnRuns];
+          if (!run) {
+            run = { sprite: new Sprite() };
+            container.addChild(run.sprite);
+            runs.push(run);
+          }
+          drawnRuns++;
+          run.texture = new Texture({
+            source: sheetTexture.source,
+            frame: new Rectangle(
+              x,
+              y,
+              Math.min(end * TILE, frame.width) - x,
+              Math.min(y + TILE, frame.height) - y,
+            ),
+          });
+          run.sprite.texture = run.texture;
+          drawnPx += run.texture.frame.width * run.texture.frame.height;
+          run.sprite.position.set((frame.x + x) / resolution, (frame.y + y) / resolution);
+          run.sprite.scale.set(1 / resolution);
+          run.sprite.visible = true;
+          column = end;
+        }
+      }
     }
+    for (let i = drawnRuns; i < runs.length; i++) runs[i]!.sprite.visible = false;
   }
 
   return {
@@ -202,7 +293,7 @@ export function createLabelLayer() {
       placedZoom = NaN;
     },
     /** Places labels for a new zoom step and draws those near the view. */
-    update(zoom: number, view: ViewBounds, visible: boolean) {
+    update(zoom: number, view: ViewBounds, visible: boolean, renderer: Renderer) {
       container.visible = visible;
       if (!visible || !atlas) return;
       // Placement runs at zoom steps of 2^(1/8): between steps the text scales with the map by
@@ -220,15 +311,17 @@ export function createLabelLayer() {
         view.maxX > covered.maxX ||
         view.maxY > covered.maxY
       )
-        draw(step, view);
+        draw(step, view, renderer);
       inView = placed.filter((label) => label.alpha > 0 && overlaps(label.bounds, view));
     },
     /** Labels visible in the view, by kind, and the glyph sprites drawn around it. */
     get counts() {
-      const counts = { street: 0, station: 0, stop: 0, place: 0, glyphs: 0 };
+      const counts = { street: 0, station: 0, stop: 0, place: 0, glyphs: 0, runs: 0, drawnPx: 0 };
       if (!container.visible || !atlas) return counts;
       for (const label of inView) counts[label.candidate.kind]++;
       counts.glyphs = glyphs;
+      counts.runs = drawnRuns;
+      counts.drawnPx = drawnPx;
       return counts;
     },
     /** The labels visible in the view (for tests). */
@@ -236,6 +329,7 @@ export function createLabelLayer() {
       return container.visible ? inView : [];
     },
     destroy() {
+      sheetTexture?.destroy(true);
       atlas?.destroy();
     },
   };

@@ -128,6 +128,13 @@ test('TASK-167 map labels show by default and follow their Layers toggle', async
     JSON.parse((await map.getAttribute('data-labels')) ?? '{}') as Record<string, number>;
   // The grid's two places, Homes and Offices, under their markers.
   await expect.poll(async () => (await labels()).place).toBe(2);
+  // TASK-185: every frame draws only the parts of the label texture that hold glyphs, a small
+  // part of the map (a full-size label quad cost 4 to 6% of the frame on a software GPU).
+  const drawn = await labels();
+  expect(drawn.runs).toBeGreaterThan(0);
+  expect(drawn.drawnPx).toBeGreaterThan(0);
+  const { width, height } = (await map.boundingBox())!;
+  expect(drawn.drawnPx).toBeLessThan(0.1 * width * height);
   const shown = await map.screenshot();
   await page.getByRole('button', { name: 'Layers', exact: true }).click();
   const toggle = page
