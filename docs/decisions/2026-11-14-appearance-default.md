@@ -23,4 +23,4 @@ already pin the appearance explicitly, so the default does not affect them.
 
 Change the fallback in `src/ui/appearance-store.ts` (and its unit test); no other file depends on it.
 
-Status: awaiting owner
+Status: decided 2026-11-16 by the owner (all lead recommendations accepted): Option 1 (System).

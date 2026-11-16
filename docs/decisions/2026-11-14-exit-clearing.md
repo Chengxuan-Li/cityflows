@@ -42,4 +42,4 @@ Option 1: nothing. Option 2: a small change to `keepClearStand` in `src/sim/keep
 callers in `src/sim/engine.ts`, with seeds 1 to 6 and full-demand tables and the baseline rule.
 Option 3: a new task contract.
 
-Status: awaiting owner
+Status: decided 2026-11-16 by the owner (all lead recommendations accepted): Option 1 (keep hold short and zip).

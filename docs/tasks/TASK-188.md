@@ -18,8 +18,7 @@ is the loop's exit onto trunk r:307 at n:306, not an exit zone or a signal (plan
 3. Also fix the TASK-170 open item: actuated walk lights show red during amber and all-red even when
    the next phase keeps that walk green.
 
-This changes the default only if the owner has approved the signal-timing decision
-(`docs/decisions/2026-11-14-signal-timing.md`); check its status first.
+The owner approved this route on 2026-11-16 (`docs/decisions/2026-11-14-signal-timing.md`, option 3).
 
 ## Scope
 

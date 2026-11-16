@@ -27,4 +27,4 @@ how a city looks once street lamps are on, which is when the scene matters most.
 Change the `evening` preset's colours in `src/render/lighting.ts` (view-only, no hash moves), check
 V163 and the contrast of labels over the tint, and send Munich 2D and 3D screenshots for approval.
 
-Status: awaiting owner
+Status: decided 2026-11-16 by the owner (all lead recommendations accepted): Option 1 (keep the mauve evening).

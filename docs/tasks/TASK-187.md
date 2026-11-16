@@ -1,6 +1,6 @@
 # TASK-187 — Full-demand step time
 
-Status: planned, not started; awaiting owner approval (lead, 2026-11-14). Proposed owner: Claude Code
+Status: approved by the owner 2026-11-16; in progress. Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/187-step-time`, worktree `D:\cityflows-wt\187`, ports 5387 / 5487.
 
 ## Goal
