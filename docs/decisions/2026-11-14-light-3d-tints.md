@@ -27,4 +27,4 @@ Option 1: nothing. Option 2: in `buildGeometry`, use the old byte path when the 
 `mapPalettes.light` (a few lines), with a 3D Light screenshot before and after. Option 3: revert the
 `Color` line.
 
-Status: awaiting owner
+Status: decided 2026-11-16 by the owner (all lead recommendations accepted): Option 1 (keep the fix).

@@ -38,4 +38,4 @@ Option 1: nothing. Option 2: set `actuated: true` in `GENERATED_TIMING`, re-pin 
 hashes, and change the TASK-154 drain test (a gate change the owner must approve). Option 3: approve
 TASK-188 (`docs/tasks/TASK-188.md`).
 
-Status: awaiting owner
+Status: decided 2026-11-16 by the owner (all lead recommendations accepted): Option 3 (fixed-time until TASK-188 fixes the loop exit and measures).

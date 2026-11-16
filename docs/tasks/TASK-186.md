@@ -1,6 +1,6 @@
 # TASK-186 — 2D Evening frame cost
 
-Status: planned, not started; awaiting owner approval (lead, 2026-11-14). Proposed owner: Claude Code
+Status: approved by the owner 2026-11-16; in progress. Proposed owner: Claude Code
 subagent (Sonnet 5.5, high). Branch `task/186-evening-cost`, worktree `D:\cityflows-wt\186`, ports 5386 / 5486.
 
 ## Goal
