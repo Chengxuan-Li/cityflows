@@ -810,8 +810,9 @@ export function createParking(
   let motionsIn = new Map<number, Map<number, ParkingMotion>>();
   const connectorFacility = (m: ParkingMotion) => compiled.connectors[m.connector]!.parking ?? -1;
   const spaceFacility = (m: ParkingMotion) => spaces[m.slot]?.parking ?? -1;
+  const noMotions: ReadonlyMap<number, ParkingMotion> = new Map();
   const atFacility = (index: Map<number, Map<number, ParkingMotion>>, facility: number) =>
-    index.get(facility) ?? new Map<number, ParkingMotion>();
+    index.get(facility) ?? noMotions;
   const indexMotion = (id: number, m: ParkingMotion) => {
     for (const [index, facility] of [
       [motionsAt, connectorFacility(m)],
@@ -1706,9 +1707,10 @@ export function createParking(
     /** TASK-157: where a lane's traffic from `fromM` on meets a lot car crossing it: the near
      * edge of the crossing span, a standing obstacle until the body has left the lane. */
     crossingStop(lane: number, fromM: number) {
+      const spans = crossing.get(lane);
+      if (!spans) return Infinity;
       let stop = Infinity;
-      for (const span of crossing.get(lane) ?? [])
-        if (span.fromM >= fromM) stop = Math.min(stop, span.fromM);
+      for (const span of spans) if (span.fromM >= fromM) stop = Math.min(stop, span.fromM);
       return stop;
     },
     /** TASK-157: whether a lot car is crossing a lane between two of its stations. */

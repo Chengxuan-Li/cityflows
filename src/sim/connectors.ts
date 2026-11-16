@@ -69,6 +69,12 @@ export function createConnectors(
     if (tracked[compiled.index.place.get(trip.destinationPlaceId)!])
       visits.set(trip.destinationPlaceId, id);
   }
+  // TASK-187: each trip's origin place index, looked up once (a blocked origin asks every step).
+  const originPlaces = new Int32Array(trips.length).fill(-1);
+  const originPlace = (id: number) =>
+    originPlaces[id] === -1
+      ? (originPlaces[id] = compiled.index.place.get(trips[id]!.originPlaceId)!)
+      : originPlaces[id]!;
   const random = createRandom(scenario.seed);
   const queuedAt = new Int32Array(trips.length).fill(-1);
   const queuedSince = (id: number) => Math.max(scenario.startS, trips[id]!.departS, requeuedS[id]!);
@@ -237,8 +243,7 @@ export function createConnectors(
           accounting.fail(queue[i++]!, 'no_destination_connector');
           continue;
         }
-        const place =
-          compiled.places[compiled.index.place.get(trips[candidateId]!.originPlaceId)!]!;
+        const place = compiled.places[originPlace(candidateId)]!;
         // A parked car must leave beyond its own arrival queue. Otherwise spawning at an
         // upstream "both" portal fills the only lane needed to free the next parking slot.
         const usable = (exit: CConnector) => {
@@ -369,6 +374,7 @@ export function createConnectors(
   }
 
   function patch(next: CompiledCity) {
+    originPlaces.fill(-1);
     const nextQueues = next.connectors.map((): number[] => []);
     const assign = (id: number, oldConnector?: CConnector) => {
       const place = next.places[next.index.place.get(trips[id]!.originPlaceId)!]!;

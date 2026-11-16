@@ -156,6 +156,7 @@ export function createOriginCourtesy(
         }
     },
     hold(id: number) {
+      if (followerLane[id] === -1) return null;
       const held = holds.get(followerLane[id]!);
       if (!held) return null;
       if (!valid(held)) {

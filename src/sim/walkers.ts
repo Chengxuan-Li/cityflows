@@ -242,6 +242,11 @@ export function createWalkers(
   let blocks: (number[] | undefined)[] = [];
   let touched: number[] = [];
   let blocking = false;
+  /** TASK-187: the lanes held this step and the lanes with a movement onto one. `hold` looks at a
+   * vehicle's lane, the lane its movement enters and the lane its route takes from there, so it
+   * finds nothing for a vehicle whose lane is not held and whose movement enters no such lane. */
+  let nearHeld = new Uint8Array(city.lanes.length);
+  let nearHeldLanes: number[] = [];
 
   const link = (index: number) => city.walk.links[index]!;
   const speedOn = (index: number) =>
@@ -450,7 +455,9 @@ export function createWalkers(
 
   function holdLanes() {
     for (const lane of touched) blocks[lane] = undefined;
+    for (const lane of nearHeldLanes) nearHeld[lane] = 0;
     touched = [];
+    nearHeldLanes = [];
     for (const id of active) {
       const s = state[id];
       if (s !== WAITING && s !== CROSSING) continue;
@@ -469,6 +476,15 @@ export function createWalkers(
       }
     }
     blocking = touched.length > 0;
+    const mark = (lane: number) => {
+      if (nearHeld[lane]) return;
+      nearHeld[lane] = 1;
+      nearHeldLanes.push(lane);
+    };
+    for (const lane of touched) {
+      mark(lane);
+      for (const m of city.lanes[lane]!.in) mark(city.movements[m]!.fromLane);
+    }
   }
 
   // Scratch for `hold`: the kind of the binding block.
@@ -598,7 +614,12 @@ export function createWalkers(
      * runs need (seconds), as of the last step. */
     walkCalls: () => calls,
     hold(id: number, lane: CLane | undefined, path: CMovement | null) {
-      return blocking ? hold(id, lane, path) : Infinity;
+      if (!blocking) return Infinity;
+      if (lane) {
+        const movement = city.movements[vehicles.movement[id]!];
+        if (!blocks[lane.idx] && (!movement || !nearHeld[movement.toLane])) return Infinity;
+      } else if (!nearHeld[path!.toLane]) return Infinity;
+      return hold(id, lane, path);
     },
     /** TASK-165: whether a span a walker holds this step overlaps [fromM, toM] of `lane`. A lane
      * change must not land a body there: `clear` checked the lane, not its neighbours. */
@@ -734,6 +755,8 @@ export function createWalkers(
       blocks = [];
       touched = [];
       blocking = false;
+      nearHeld = new Uint8Array(city.lanes.length);
+      nearHeldLanes = [];
       const index = city.walk.links.map((l) => l.id);
       const byId = new Map(index.map((id, i) => [id, i]));
       for (const id of active.slice()) {

@@ -80,11 +80,21 @@ export function createVehicles(count: number, laneCount: number, movementCount: 
     if (head[bucket] === -1) occupied.splice(rank(bucket), 1);
   }
 
+  /** TASK-187: throws unless every segment's list runs front to back, positions not increasing;
+   * the searches that start from a vehicle instead of a list end rely on it. */
+  function assertOrdered() {
+    for (const bucket of occupied)
+      for (let id = head[bucket]!; next[id] !== -1; id = next[id]!)
+        if (position[next[id]!]! > position[id]!)
+          throw new Error(`Vehicle ${next[id]} is ahead of vehicle ${id} it follows`);
+  }
+
   return {
     count,
     lane,
     position,
     head,
+    assertOrdered,
     resetSegments(lanes: number, movements: number) {
       laneCount = lanes;
       head = new Int32Array(lanes + movements).fill(-1);

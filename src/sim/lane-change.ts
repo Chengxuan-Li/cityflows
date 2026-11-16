@@ -61,13 +61,43 @@ export function createLaneChanges(
     return offsetM[id]! * Math.max(0, 1 - progress);
   }
 
-  function findNeighbors(lane: number, positionM: number) {
-    nearFollower = -1;
-    nearLeader = vehicles.last(lane);
-    while (nearLeader !== -1 && vehicles.position[nearLeader]! < positionM) {
-      nearFollower = nearLeader;
-      nearLeader = vehicles.previous[nearLeader]!;
+  // TASK-187: between `startProposals` and `resolve` no list changes and each lane's cars ask
+  // front to back, so a target lane's leader for the next, farther back, position is this one or
+  // behind it (lists run front to back by position, vehicle.ts). Per lane: the last leader found,
+  // and where, in this round of proposals (0 outside one).
+  let proposalRound = 0;
+  let rounds = 0;
+  const askedRound = new Uint32Array(compiled.lanes.length);
+  const askedLeader = new Int32Array(compiled.lanes.length);
+  const askedM = new Float64Array(compiled.lanes.length);
+
+  function findNeighbors(lane: number, positionM: number, proposing = false) {
+    proposing &&= proposalRound !== 0;
+    if (
+      proposing &&
+      askedRound[lane] === proposalRound &&
+      askedLeader[lane] !== -1 &&
+      positionM <= askedM[lane]!
+    ) {
+      nearLeader = askedLeader[lane]!;
+      while (
+        vehicles.next[nearLeader] !== -1 &&
+        vehicles.position[vehicles.next[nearLeader]!]! >= positionM
+      )
+        nearLeader = vehicles.next[nearLeader]!;
+      nearFollower = vehicles.next[nearLeader]!;
+    } else {
+      nearFollower = -1;
+      nearLeader = vehicles.last(lane);
+      while (nearLeader !== -1 && vehicles.position[nearLeader]! < positionM) {
+        nearFollower = nearLeader;
+        nearLeader = vehicles.previous[nearLeader]!;
+      }
     }
+    if (!proposing) return;
+    askedRound[lane] = proposalRound;
+    askedLeader[lane] = nearLeader;
+    askedM[lane] = positionM;
   }
 
   /** Lane changes from a lane ordinal to the nearest surviving target lane of the route step. */
@@ -293,6 +323,7 @@ export function createLaneChanges(
 
   /** Clears last step's cooperative pairs; every requester picks again in proposal order. */
   function startProposals() {
+    proposalRound = ++rounds;
     for (const id of yielders) {
       yielderOf[yieldingTo[id]!] = -1;
       yieldingTo[id] = -1;
@@ -376,7 +407,7 @@ export function createLaneChanges(
             remaining < changesAfter * laneChangeDistanceM + mandatoryUrgencyM
       )
         continue;
-      findNeighbors(target, positionM);
+      findNeighbors(target, positionM, true);
       const leader = nearLeader;
       const follower = nearFollower;
       if (!safeGap(id, lane, positionM, leader, follower)) {
@@ -423,6 +454,7 @@ export function createLaneChanges(
   }
 
   function resolve(tick: number, apply: (id: number, lane: number, positionM: number) => void) {
+    proposalRound = 0;
     for (const { id, lane, positionM } of proposals) {
       const target = compiled.lanes[lane]!;
       findNeighbors(lane, positionM);
