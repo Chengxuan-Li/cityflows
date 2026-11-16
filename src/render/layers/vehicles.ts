@@ -93,11 +93,12 @@ export class Vehicles {
   private readonly poses = new VehiclePoses();
   private particles: Particle[] = [];
   /** TASK-163: head- and tail-light sprites, one per vehicle, while the night layer draws.
-   * TASK-184: `containers` runs parallel to `layers`, so a deck above covers the lights below. */
+   * TASK-184: `containers` runs parallel to `layers`, so a deck above covers the lights below;
+   * grades may share a container (TASK-186). */
   private lights: { containers: ParticleContainer[]; vehicle: Texture; glow: Texture } | null =
     null;
   private lightParticles: Particle[] = [];
-  private lightGroups: Particle[][] = [];
+  private lightGroups = new Map<ParticleContainer, Particle[]>();
   private layerIndex = new Map<VehicleLayer, number>();
   private vehicleLayer: number[] = [];
   get snapshot() {
@@ -144,14 +145,14 @@ export class Vehicles {
       container.update();
     }
     this.lights = lights;
+    this.lightGroups = new Map(lights?.containers.map((container) => [container, []]));
     if (lights && this.snapshot) this.updateLights(this.snapshot);
   }
 
   private updateLights(snapshot: PresentationSnapshot) {
     const lights = this.lights!;
     const { length, front, across } = vehicleLightSprite;
-    const groups = lights.containers.map((_, i) => (this.lightGroups[i] ??= []));
-    for (const group of groups) group.length = 0;
+    for (const group of this.lightGroups.values()) group.length = 0;
     for (let i = 0; i < snapshot.count; i++) {
       const particle = (this.lightParticles[i] ??= new Particle({ texture: lights.vehicle }));
       const dimensions = style.vehicleClasses[vehicleClasses[snapshot.vclass[i]!]!];
@@ -169,11 +170,13 @@ export class Vehicles {
         particle.scaleY = (dimensions.widthM * across) / lights.vehicle.height;
       }
       particle.alpha = snapshot.fade[i]!;
-      groups[this.vehicleLayer[i]!]!.push(particle);
+      this.lightGroups.get(lights.containers[this.vehicleLayer[i]!]!)!.push(particle);
     }
     this.animateLights();
-    for (const [i, container] of lights.containers.entries()) {
-      container.particleChildren = groups[i]!.slice();
+    for (const [container, group] of this.lightGroups) {
+      container.particleChildren = group.slice();
+      // An empty container still pays for its mask and its draw.
+      container.visible = group.length > 0;
       container.texture = this.dot ? lights.glow : lights.vehicle;
       container.update();
     }
