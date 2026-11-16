@@ -2926,9 +2926,11 @@ the city, and roads retain the strongest tone.
   Vehicles paint head- and tail-lamps in their shader and draw headlight beams as a second
   instanced mesh sharing the bodies' instance matrices; train cars light their side windows.
   Each effect is a shader define, so Day runs the unchanged programs. 2D draws a night layer
-  over the map and under overlays: a multiply tint by `ambient` (an additive lift above
-  exposure 1), additive lamp and platform glows, vehicle light sprites and bright copies of
-  the signal heads. Both canvases publish the resolved mode as `data-lighting`.
+  over the map and under overlays: the map is tinted by `ambient` (TASK-186: as the map
+  container's tint and the clear colour, the same result as a multiply pass, without the pass;
+  an additive lift above exposure 1), additive lamp and platform glows, vehicle light sprites
+  (grades under a deck in their own masked container, the rest sharing one) and bright copies
+  of the signal heads. Both canvases publish the resolved mode as `data-lighting`.
 
 - TASK-166: the appearance is view-only state as well. `ui/appearance-store.ts` keeps
   `{ appearance, matchLighting }` (`system`, `light` or `dark`; System by default, following the
