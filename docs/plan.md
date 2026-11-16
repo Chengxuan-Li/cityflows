@@ -212,7 +212,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-184](tasks/TASK-184.md) | UI | Follow clock seasons so a run reaches evening; 2D vehicle lights under bridge decks | `src/render/lighting.ts`, lighting settings, 2D light layer | 163 | sun model tests, V163, T62/T64, shots | done |
 | [TASK-185](tasks/TASK-185.md) | render | 2D street-label frame cost under TASK-167's 5% gate | `src/render/layers/labels.ts`, 2D scene | 167, 176 | T62/T64 2D rounds, placement unchanged | done |
 | [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | done |
-| [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | in progress (Claude Code subagent) |
+| [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | done (23.7% of 25%) |
 | [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | planned (decision taken 2026-11-16; not started) |
 | [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | planned (not started; awaiting owner) |
 | [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | planned (not started; awaiting owner) |
@@ -4237,6 +4237,23 @@ pass (T64's Day rail frame budget failed once under load and passed on rerun). L
 light e2e, V163 and gate4-layers on the merge, and reworded the TASK-163 paragraph of
 `docs/architecture.md`. Open: the ground grade's deck mask is about 3.3 ms of the remaining 6.8 ms of
 vehicle lights on the Bridge view (dropping it when no light overlaps a deck needs a per-frame test).
+
+TASK-187 (Claude Code subagent, Opus 5.5 high, 2026-11-16; merged, contract target narrowly missed): full
+demand steps 23.7% faster (1,109.5 to 846.6 s of stepping, wall 1,113 to 851 s, back to back with the same
+timers) with identical results: Munich 0.15 seeds 1 to 3 (5,302 / 5,304 / 5,312 completed, 0 failed,
+hashes 4237403929, 2572602396, 1491970289) and full demand (3,015 / 167, hash 767875161) equal main. The
+two largest costs were TASK-176's: spawn (429 s, of which 296 s the gap check; 99.96% of 144.7M checks
+fail on a car standing near the connector) and rail crossings (315 s). The gap check now runs the lane
+test first with the smallest gap any rule allows (exact, since its checks only conjoin); a vehicle's
+crossing path is kept while lane, movement and route stay the same; committed-set membership is
+mirrored in flags; the rail hold and lane-change neighbour search start from the vehicle; the walker
+hold skips lanes without a held crossing. New `debugLaneOrder` load option and `lane-order.test.ts`
+check that each lane's list stays ordered by position, which the vehicle-relative searches rely on.
+Check (1,475), city (176), traffic light, mode-share guard and T16 stress pass; lead re-ran check, city,
+traffic light, guard and light e2e (48) on the merge. The lead accepts 23.7% against the contract's 25%
+(the target is the contract's, not a gate). Open: the following pass (376 s), lane-change proposals
+(107 s), spawn bookkeeping for blocked origins (86 s; skipping an origin until something near it changes
+is the next large exact cut, keeping origin courtesy's bookkeeping), rail crossings (175 s), lot admission.
 
 ## Owner decisions log
 
