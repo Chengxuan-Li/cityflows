@@ -4255,6 +4255,9 @@ traffic light, guard and light e2e (48) on the merge. The lead accepts 23.7% aga
 (107 s), spawn bookkeeping for blocked origins (86 s; skipping an origin until something near it changes
 is the next large exact cut, keeping origin courtesy's bookkeeping), rail crossings (175 s), lot admission.
 
+Full run 43885610218 (lead, manual, on 592ad58 after TASK-185, 186 and 187): every job green; the city
+job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full run 43591345828.
+
 ## Owner decisions log
 
 - 2026-11-16 (owner): every recommendation in `docs/decisions/2026-11-14-*.md` accepted. Exit clearing:
