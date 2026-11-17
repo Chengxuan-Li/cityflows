@@ -223,7 +223,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | done |
 | [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
 | [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; recommends Freiburg (runner-up Lübeck), awaits the owner's pick |
-| [TASK-198](tasks/TASK-198.md) | UI | Build the chosen landing city as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | planned (after 197 and the owner's pick) |
+| [TASK-198](tasks/TASK-198.md) | UI | Build Freiburg, the chosen landing city, as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | in progress (owner picked Freiburg 2026-11-17) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4394,6 +4394,7 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-17 (owner): the landing city is Freiburg (TASK-197's recommendation); TASK-198 builds it.
 - 2026-11-17 (owner): TASK-197 may download its OSM extracts from Overpass now; it runs alongside
   TASK-194.
 - 2026-11-17 (owner): the landing view should be a showcase: a curated, stable real place in Germany,
