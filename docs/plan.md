@@ -4424,6 +4424,10 @@ console errors. Open: 8 tram stops unserved; 3D camera crops the west behind the
 leaves margin; the e2e production build cache under `node_modules/.cache/qa-production` is shared by
 every worktree; a wider extract with `building:part` and AWS terrain need the owner's go-ahead.
 
+Full run 44130610052 (lead, manual, on 07cf54b after TASK-198): every job green, including all five
+e2e shards (the full e2e suite TASK-198 did not run); CI green on 07cf54b and Pages deployed it; the
+city job took 32.5 min.
+
 Full run 44114508937 (lead, manual, on 9a939d9 after TASK-194): every job green; CI green on 9a939d9;
 the city job took 39.9 min (29.6 min on the last run).
 
