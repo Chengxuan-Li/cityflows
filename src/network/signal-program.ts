@@ -15,7 +15,10 @@ function roadHeading(road: Road, end: boolean): number {
  * split: on Munich seeds 1 to 6 every split tried lengthened single visits to the Landsberger
  * loop's roads past TASK-154's 900 s on some seed. TASK-180: actuation too, after mouth joins
  * zip: actuated programs then had less delay at 0.15 but took one seed-6 loop visit to 1,042 s,
- * and completed fewer trips at full demand than fixed greens. */
+ * and completed fewer trips at full demand than fixed greens. TASK-188: that visit was a
+ * network-wide ring through jg:10802 and back to n:263, not the loop exit; re-measured after
+ * the amber walk-light fix, actuation passes the drain criterion on seeds 1 to 6 but still
+ * completes fewer trips at full demand (2,814 against 3,069), so generated programs stay fixed. */
 export const GENERATED_TIMING: Pick<SignalProgram, 'demandSplit' | 'actuated'> = {};
 
 /** TASK-170: the shortest green a demand split or an actuated controller gives a phase. */
