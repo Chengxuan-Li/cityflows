@@ -1,6 +1,6 @@
 # TASK-193 — The jam ring behind jg:10802
 
-Status: approved by the owner 2026-11-17; in progress. Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-17 (merged; see plan.md). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/193-jam-ring`, worktree `D:\cityflows-wt\193`, ports 5394 / 5494.
 
 ## Goal

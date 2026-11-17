@@ -218,8 +218,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | done |
 | [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | done |
 | [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | done |
-| [TASK-193](tasks/TASK-193.md) | 9 | The jam ring behind jg:10802 (detours feeding the queue they leave, or the exit-full hold on single-movement entry lanes) | `src/sim/**` | 121, 154, 188 | seeds 1-12 both modes, full demand, drain, gate, guard | in progress (approved 2026-11-17) |
-| [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | planned (approved 2026-11-17; after 193) |
+| [TASK-193](tasks/TASK-193.md) | 9 | The jam ring behind jg:10802 (detours feeding the queue they leave, or the exit-full hold on single-movement entry lanes) | `src/sim/**` | 121, 154, 188 | seeds 1-12 both modes, full demand, drain, gate, guard | done (actuated full demand -3.3%, accepted; see review) |
+| [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | in progress (approved 2026-11-17) |
 | [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | done |
 | [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
 | [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | planned (awaits go-ahead for downloads) |
@@ -4352,6 +4352,27 @@ against 340. Check (1,482), city (176), light e2e (53), T62, T64 (the moving-tra
 under outside load and passed alone), V183. Open: low-pitch street views stay sparse; a moved point
 label can overlap a roof edge; a label can jump stretch at the next settle; the area lookup relies on
 the 2D candidate key format (`name/id`).
+
+TASK-193 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged): the ring behind jg:10802 was fed by
+missed turns, not head detours or the exit-full hold (about 1,200 s of holds per morning on r:639#0):
+cars that could not reach the right lane at r:639 (right to r:680) or r:654 (straight to r:715) were
+rerouted round a 2.5 km lap (r:663, the ring, n:263, the loop, its exit) back onto the same approach;
+on main seed 7 fixed-time 307 of the 319 cars turning onto r:663 were missed turns. `rerouteFrom`
+(`src/sim/engine.ts`): after a missed turn or a head detour, if the normal route comes back over roads
+the trip already drove, the router searches again with those roads made very expensive and takes the
+result if it reuses fewer of them (a first version avoiding only the road being left broke actuated
+seed 3). Seeds 1 to 12, main to branch, worst loop visit: fixed choice off 933 to 736 s (mean delay
+834.9 to 796.3 s), on 294 to 263 s; actuated off 942 to 829 s (786.0 to 747.2 s), on 680 to 680 s; all
+four drain criteria met on all 48 runs (main failed fixed seed 7 and actuated seed 10); completions
+move at most 0.3% per seed; the gate seed goes 5,302 to 5,308. Full demand: fixed 3,069 / 165 to
+3,086 / 169 (hash 2602931525, the new reference); actuated 2,814 / 165 to 2,721 / 174 (-3.3%, under
+the contract's gate). Lead decision: accepted, because fixed-time is the shipped default and improves,
+the drain now holds everywhere, and the actuated gap belongs to TASK-194, whose bar (match fixed-time,
+now 3,086) is unchanged. No hashes re-pinned. Check (1,482), city (176), traffic light and guard,
+light e2e (53). Open: the misses still happen (from r:654 lane 1 the only way on is the ring; choosing
+the lane earlier on the jughandle in `lane-change.ts` is the next step); head-detour candidates are
+still ranked by normal cost; fixed seeds 4 and 5 and actuated seed 11 have more delay (all within the
+gates).
 
 Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job green; CI green on
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.

@@ -1,6 +1,6 @@
 # TASK-194 — The actuated full-demand gap
 
-Status: approved by the owner 2026-11-17; waits for TASK-193. Proposed owner: Claude Code subagent
+Status: approved by the owner 2026-11-17; in progress (TASK-193 merged). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/194-actuated-gap`, worktree `D:\cityflows-wt\194`, ports 5395 / 5495.
 
 ## Goal
@@ -22,6 +22,10 @@ measure:
 3. If actuation then passes every gate and completes at least as many trips at full demand, make it the
    generated default (`GENERATED_TIMING` in `src/network/signal-program.ts`), re-pinning what moves.
    Otherwise report the numbers and leave fixed-time.
+
+After TASK-193 (missed-turn reroutes avoid roads already driven) the full-demand references are
+fixed-time 3,086 / 169 (hash 2602931525) and actuated 2,721 / 174 (hash 392598518), so the gap is now
+-11.8%; TASK-193's review in plan.md has the timing of the deficit.
 
 ## Scope
 
