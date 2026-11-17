@@ -2,6 +2,9 @@ import { beforeAll, expect, test } from 'vitest';
 import { curateFreiburg, importFreiburg } from '../../bench/freiburg';
 import { probeMorning } from '../../bench/import-probe';
 import { compile } from '../../src/network';
+import { compileRail } from '../../src/network/rail';
+import { trainTimetable } from '../../src/network/trains';
+import { tramCensus, tramTimetable } from '../../src/network/trams';
 import type { City } from '../../src/schema';
 import { limit } from '../timeouts';
 
@@ -64,4 +67,31 @@ test('every entry carries trips in and out by 10:00', () => {
     if (gateway.provenance.osmIds!.includes(234491459)) continue;
     expect(trips?.left, `${gateway.id} left`).toBeGreaterThan(0);
   }
+});
+
+test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
+  const rail = compileRail(city)!;
+  const table = tramTimetable(rail);
+  const census = tramCensus(rail, table);
+  console.info(
+    'Freiburg trams',
+    census.routes.map((r) => `${r.destination}: ${r.stops.map((s) => s.name).join(', ')}`),
+  );
+  const end = (node: number) => rail.nodes[node]!.id;
+  // West at the Stühlingerbrücke, east at the Schwabentorbrücke, north on Habsburgerstraße,
+  // south on Günterstalstraße, and the Rotteckring line from Kronenstraße.
+  expect(table.routes.map((r) => `${end(r.from)}>${end(r.to)}`)).toEqual([
+    'rn:12244>rn:12227',
+    'rn:12885>rn:12227',
+    'rn:12229>rn:12562',
+    'rn:12518>rn:12578',
+    'rn:12050>rn:12516',
+  ]);
+  for (const route of table.routes.filter((r) => end(r.from) !== 'rn:12885'))
+    expect(route.stops.map((s) => s.name)).toContain('Bertoldsbrunnen');
+  expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10, 10, 10]);
+  expect(table.periodS).toBe(720);
+  expect(census.servedStops).toHaveLength(24);
+  expect(table.hash).toBe('aff6c2fd');
+  expect(trainTimetable(rail).routes).toHaveLength(5);
 });

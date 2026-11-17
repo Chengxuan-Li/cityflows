@@ -721,8 +721,16 @@ services include station visits on both legs.
 TASK-138 reuses that motion, reservation and pose representation for an independent synthetic
 tram timetable (`network/trams.ts`). `RailGraph.tramStops` carries the canonical stop islands.
 Only tram sections with permitted continuations between extract boundary ends (or a lawful
-buffer return) receive service; disconnected fragments, service/depot tracks and closed loops
-without boundary entry remain excluded and reported by `tramCensus`. Stop attachment projects
+buffer return) receive service; disconnected fragments, depot tracks and closed loops without
+boundary entry remain excluded and reported by `tramCensus`. TASK-198: trams may run over
+`service=siding` and `crossover` tracks (lines joined in the street, as Freiburg's
+Rotteckring), at the service-track cost; `yard` and `spur` stay depot tracks. A tram route
+keeps to its own track of a pair (no wrong-way share, where trains allow 15%), and each
+boundary entry takes the reachable exit that turns least off the straight at the junctions it
+passes (nodes of three or more tracks, heading 15 m before to 15 m after), so a line runs on
+across the centre rather than to the nearest edge. Tram routes may share directed sections; a
+shorter one is dropped only when a longer route already serves all of its track, and the
+reservations keep their bodies apart. Stop attachment projects
 the mapped halt onto its named section and places the tram centre half a body length before
 it along the connected route, so its nose meets the halt marking in either travel direction.
 The centre may lie on a preceding section or outside the bounded extract; canonical halts stay

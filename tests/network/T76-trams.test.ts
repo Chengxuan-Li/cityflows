@@ -114,6 +114,9 @@ test('T76 tram speed respects mapped limits, skips depot tracks, and mixed perio
     }
   city.rail!.tracks['rt:2']!.service = 'yard';
   expect(buildTramTimetable(compileRail(city)!).routes).toEqual([]);
+  // TASK-198: a siding or crossover in the street joins lines (Freiburg's Rotteckring).
+  city.rail!.tracks['rt:2']!.service = 'siding';
+  expect(buildTramTimetable(compileRail(city)!).routes).toHaveLength(2);
   const mixed = fixture();
   for (const [id, pos] of [
     ['rn:10', { x: 0, y: 100 }],

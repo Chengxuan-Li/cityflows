@@ -104,6 +104,32 @@ function directions(rail: RailGraph) {
   });
 }
 
+/** TASK-198: trams run over sidings and crossovers that join lines in the street (Freiburg's
+ * Rotteckring is joined to the network by tracks so tagged), at the cost of a service track;
+ * yards and spurs stay depot tracks. */
+const tramService = (service: string | undefined) =>
+  !service || service === 'siding' || service === 'crossover';
+
+/** How far a route turns off the straight at the junctions it passes (nodes of three tracks or
+ * more), from 15 m before each to 15 m after it, in radians: a line keeps straight on. */
+function turning(rail: RailGraph, route: TrainRoute) {
+  const heading = (s: Section, d: number) => {
+    const t = rail.tracks[s.track]!,
+      at = Math.max(0, Math.min(t.lengthM, s.forward ? d : t.lengthM - d));
+    return headingAtDistance(t.line, t.cumulative, at) + (s.forward ? 0 : Math.PI);
+  };
+  let total = 0;
+  for (let i = 1; i < route.sections.length; i++) {
+    const a = route.sections[i - 1]!,
+      b = route.sections[i]!,
+      ta = rail.tracks[a.track]!;
+    if (rail.nodes[a.forward ? ta.toNode : ta.fromNode]!.tracks.length < 3) continue;
+    const delta = heading(b, 15) - heading(a, ta.lengthM - 15);
+    total += Math.abs(Math.atan2(Math.sin(delta), Math.cos(delta)));
+  }
+  return total;
+}
+
 function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
   const allowed = directions(rail);
   const adjacency = new Map<string, number[]>();
@@ -132,7 +158,7 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
       const t = rail.tracks[track]!,
         forward = t.fromNode === node;
       if (
-        (mode === 'tram' ? t.kind !== 'tram' || Boolean(t.service) : t.kind === 'tram') ||
+        (mode === 'tram' ? t.kind !== 'tram' || !tramService(t.service) : t.kind === 'tram') ||
         (t.preferredDirection &&
           t.preferredDirection !== 'both' &&
           t.preferredDirection !== (forward ? 'forward' : 'backward'))
@@ -156,6 +182,9 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
     const seen = new Set<string>();
     let terminalRoute: TrainRoute | undefined,
       through = false;
+    // TASK-198: a tram line runs on across the centre, keeping to its own track and straight on
+    // at the junctions, rather than to the nearest edge.
+    const tramRoutes: TrainRoute[] = [];
     while (queue.length) {
       queue.sort((a, b) => a.cost - b.cost || a.track - b.track);
       const step = queue.shift()!,
@@ -178,7 +207,9 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
           0,
         );
         const total = step.path.reduce((sum, s) => sum + rail.tracks[s.track]!.lengthM, 0);
-        if (wrong > total * 0.15) continue;
+        // TASK-198: a tram keeps to its own track of a pair; a train may run against the
+        // geometry for up to 15% of its path.
+        if (wrong > total * (mode === 'tram' ? 0 : 0.15)) continue;
         let lengthM = 0;
         const sections = step.path.map((s) => {
           const startM = lengthM;
@@ -287,12 +318,27 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
         }
         motion(rail, route);
         through = true;
+        if (mode === 'tram') {
+          tramRoutes.push(route);
+          continue;
+        }
         routes.push(route);
         break;
       }
       for (const next of adjacency.get(`${node}/${step.track}`) ?? [])
         push(next, node, step.cost, step.path);
     }
+    if (tramRoutes.length)
+      routes.push(
+        tramRoutes
+          .map((route) => ({ route, turning: turning(rail, route) }))
+          .sort(
+            (a, b) =>
+              a.turning - b.turning ||
+              a.route.lengthM - b.route.lengthM ||
+              a.route.id.localeCompare(b.route.id),
+          )[0]!.route,
+      );
     if (!through && terminalRoute) routes.push(terminalRoute);
   }
   const used = new Set<string>();
@@ -306,7 +352,10 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
         a.id.localeCompare(b.id),
     )
     .filter((r) => {
-      if (r.sections.some((s) => used.has(`${s.track}/${s.forward}`))) return false;
+      // TASK-198: tram lines share the street's trunk; a tram route stays if it serves track no
+      // longer route does. The reservations keep their bodies apart.
+      const shared = r.sections.filter((s) => used.has(`${s.track}/${s.forward}`)).length;
+      if (r.kind === 'tram' ? shared === r.sections.length : shared) return false;
       for (const s of r.sections) used.add(`${s.track}/${s.forward}`);
       return true;
     });
