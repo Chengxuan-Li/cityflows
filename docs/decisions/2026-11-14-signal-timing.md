@@ -43,3 +43,10 @@ Status: decided 2026-11-16 by the owner (all lead recommendations accepted): Opt
 Outcome 2026-11-16 (TASK-188): fixed-time stays. Actuated passed every 0.15 gate on seeds 1 to 6
 (mean delay -6.5% choice off, -30.4% choice on) but completed 2,814 against 3,069 at full demand
 (-8.3%). The seed-6 holdup was a jam ring from jg:10802, not the loop exit; see plan.md.
+
+Outcome 2026-11-17 (TASK-194, owner approved the switch): generated programs are actuated. The full-demand
+deficit came from the outer controllers skipping uncalled phases, which filled the core's exits sooner.
+A movement the next phase also serves now stays green through amber and all-red in both modes. On the
+same tree actuated completes 2,875 against fixed-time's 2,859 at full demand (seed 1; seed 2 is -2.5%),
+and the default's full-demand completions fall from 3,086 to 2,875; mean delay at 0.15 falls from
+796.3 to 669.0 s with choice off and from 118.7 to 81.1 s with choice on (seeds 1 to 12).

@@ -1,6 +1,6 @@
 # TASK-194 — The actuated full-demand gap
 
-Status: approved by the owner 2026-11-17; in progress (TASK-193 merged). Proposed owner: Claude Code subagent
+Status: done 2026-11-17 (actuated default, owner approved). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/194-actuated-gap`, worktree `D:\cityflows-wt\194`, ports 5395 / 5495.
 
 ## Goal

@@ -219,7 +219,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | done |
 | [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | done |
 | [TASK-193](tasks/TASK-193.md) | 9 | The jam ring behind jg:10802 (detours feeding the queue they leave, or the exit-full hold on single-movement entry lanes) | `src/sim/**` | 121, 154, 188 | seeds 1-12 both modes, full demand, drain, gate, guard | done (actuated full demand -3.3%, accepted; see review) |
-| [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | in progress (approved 2026-11-17) |
+| [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | done 2026-11-17 (actuated default, owner approved) |
 | [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | done |
 | [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
 | [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; recommends Freiburg (runner-up Lübeck), awaits the owner's pick |
@@ -4374,6 +4374,28 @@ the lane earlier on the jughandle in `lane-change.ts` is the next step); head-de
 still ranked by normal cost; fixed seeds 4 and 5 and actuated seed 11 have more delay (all within the
 gates).
 
+TASK-194 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged with the owner's approval of the
+switch): main reproduced both references (fixed 3,086 / 169, actuated 2,721 / 174). Actuated led until
+07:30 and was -172 by 08:00. The core groups jg:10783 and jg:10802 ran the same greens in both modes
+and lost because their exits were full; the cause was outside the core: n:635, jg:10786, jg:10780 and
+jg:10798 skip uncalled phases, sending 131 more vehicles in the first half hour (actuating only the
+outer controllers gives 2,680, the whole deficit). Rejected: not skipping phase 1 at jg:10802 (2,612),
+standing cars not extending a green, dropping n:635's empty phase. Fix (`5f588a3`): in amber and
+all-red a movement the next phase also serves stays green, in both modes; the snapshot carries
+`signals.next` so the 2D and 3D lights and the signal preview show it (architecture snapshot line
+updated). Full demand, main to branch, seeds 1 / 2 / 3: fixed 3,086 / 2,882 / 2,827 to 2,859 / 2,768 /
+2,678; actuated 2,721 / 2,534 / 2,618 to 2,875 / 2,699 / 2,878. The fix helps actuated and costs
+fixed-time 4 to 7%; why the same change pulls the two modes apart is not isolated. Default switch
+(`354c1d7`, `GENERATED_TIMING` actuated): seeds 1 to 12 default against default, mean delay 796.3 to
+669.0 s choice off (-16.0%), 118.7 to 81.1 s choice on (-31.7%); drain criterion met on all 48 runs
+(worst 858 s, fixed seed 8); completions at 0.15 move at most 1.3%, gate seed 5,308 to 5,312; no
+baseline reset. New full-demand references: actuated 2,875 / 151 (hash 1228152198), fixed 2,859 / 181
+(hash 628103954). Re-pinned only network hashes that move because generated programs carry
+`actuated: true` (T44, T49, T55, T75, V106, V107, V108, V117, the Munich census). Lead decision: the
+margin over fixed-time is thin (+0.6% seed 1, -2.5% seed 2) and the default's full-demand completions
+fall 6.8%; put to the owner, who approved the switch. Open: n:635's empty phase (34 s of all-red per
+102 s cycle); jughandle lane choice is the likely lever for full demand in both modes.
+
 TASK-197 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged): four Overpass extracts cut by a
 polygon along each natural edge (Freiburg, Köln, Lübeck, München Altstadtring), imported with the
 existing importer; `docs/decisions/2026-11-17-landing-city.md` with numbers, gaps and shots in
@@ -4394,6 +4416,8 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-17 (owner): merge TASK-194 with actuated generated signals as the default, accepting about
+  7% fewer completed trips at full demand for 16 to 32% less delay at 0.15.
 - 2026-11-17 (owner): the landing city is Freiburg (TASK-197's recommendation); TASK-198 builds it.
 - 2026-11-17 (owner): TASK-197 may download its OSM extracts from Overpass now; it runs alongside
   TASK-194.
