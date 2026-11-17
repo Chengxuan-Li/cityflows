@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('heading', { name: '5 × 5 grid' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
 });

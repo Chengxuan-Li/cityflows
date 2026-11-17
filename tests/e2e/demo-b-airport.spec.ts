@@ -29,7 +29,7 @@ test('demo B, terminal access: the 08:05 arrival wave queues cars; a dedicated a
 }, info) => {
   test.setTimeout(240_000);
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await button(page, 'New').click();
   await page.getByRole('dialog').getByRole('button', { name: 'Station', exact: true }).click();

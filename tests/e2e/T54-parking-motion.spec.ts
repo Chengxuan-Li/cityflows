@@ -150,7 +150,7 @@ test('T54 Munich: select a car driving a lot and a strip car mid-manoeuvre in bo
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route(/^https:\/\//, (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm');
   const source = await city(page),

@@ -142,6 +142,11 @@ interface AppState {
   sheetHeight: number | null;
   setSheetHeight: (height: number | null) => void;
   session: Session | null;
+  /** TASK-198: a city being opened, drawn before its demand and engine are ready (the landing
+   *  view's first frame); null once its session is set or the open failed. */
+  preview: (Pick<Session, 'project' | 'compiled' | 'editor'> & { complete?: boolean }) | null;
+  /** Called by the map once it has drawn `preview`. */
+  previewShown: () => void;
   run: Run | null;
   selection: MapPick | null;
   selectedRoads: RoadId[];
@@ -339,21 +344,51 @@ export const useAppStore = create<AppState>((set, get) => {
     });
   }
 
+  let previewDrawn: (() => void) | undefined;
+
   async function loadSession(project: Project) {
-    // The editor exposes the compiled city but does not retain the initial diagnostics.
-    const validation = compile(project.city);
-    if (!validation.ok) {
-      throw new Error(validation.diagnostics.map(({ message }) => message).join('\n'));
-    }
-    const editor = createEditor(project.city);
-    const scenario = project.scenarios[0]!;
-    const population = project.population ?? generatePopulation(editor.city, scenario.demand);
-    const trips = scheduleTrips(editor.city, population, scenario, editor.compiled);
+    // The engine's worker loads its code while the city compiles (TASK-198).
     const engine = createEngineClient(
       new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' }),
     );
     try {
-      await engine.load({ compiled: editor.compiled, trips, scenario, population });
+      // The editor exposes the compiled city but does not retain the initial diagnostics. The
+      // pedestrian graph compiles once the city is on screen (TASK-198).
+      let compileWalk = () => {};
+      const validation = compile(project.city, (finish) => (compileWalk = finish));
+      if (!validation.ok) {
+        throw new Error(validation.diagnostics.map(({ message }) => message).join('\n'));
+      }
+      const editor = createEditor(project.city, validation);
+      const scenario = project.scenarios[0]!;
+      const population = project.population ?? generatePopulation(editor.city, scenario.demand);
+      // Draw the city before the trips and the engine: the map shows it while they load.
+      set({
+        preview: {
+          project: { ...project, city: editor.city, population },
+          compiled: editor.compiled,
+          editor,
+        },
+      });
+      await new Promise<void>((resolve) => {
+        // The 3D view draws no preview; a map that never draws it holds the load 2 s at most.
+        if (get().viewMode !== '2d') return resolve();
+        const timer = setTimeout(resolve, 2000);
+        previewDrawn = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+      previewDrawn = undefined;
+      // Let the frame reach the screen before the walk graph, the trips and the engine.
+      await new Promise((resolve) => setTimeout(resolve));
+      compileWalk();
+      const trips = scheduleTrips(editor.city, population, scenario, editor.compiled);
+      const loading = engine.load({ compiled: editor.compiled, trips, scenario, population });
+      // The walk graph is compiled: the map draws the city's details while the engine loads.
+      const { preview } = get();
+      if (preview) set({ preview: { ...preview, complete: true } });
+      await loading;
       const { timeS, trips: counts } = await engine.metrics();
       const signalTiming = await engine.signalTiming();
       engine.onEvent((event) => onEvent(engine, event));
@@ -402,6 +437,8 @@ export const useAppStore = create<AppState>((set, get) => {
     } catch (error) {
       engine.terminate();
       throw error;
+    } finally {
+      set({ preview: null });
     }
   }
 
@@ -632,6 +669,8 @@ export const useAppStore = create<AppState>((set, get) => {
     diagnosticsOpen: false,
     rejectedEdit: [],
     busy: false,
+    preview: null,
+    previewShown: () => previewDrawn?.(),
     error: null,
     select: (selection) =>
       set({
@@ -661,7 +700,7 @@ export const useAppStore = create<AppState>((set, get) => {
       return changeWalkers({ kind: 'walkers', before, after: walkers }, 'commit');
     },
     reportError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
-    open: (source = 'grid5x5') =>
+    open: (source = 'freiburg') =>
       perform(async () => {
         const result =
           typeof source === 'string'

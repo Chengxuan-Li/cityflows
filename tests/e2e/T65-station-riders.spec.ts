@@ -111,7 +111,7 @@ test('T65 Munich riders walk out of Donnersbergerbrücke after an S-Bahn stop, 2
   await page.route('https://**/*', (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', { terrain: false });
   const source = await city(page);
@@ -292,7 +292,7 @@ test('T65 a returning rider walks back to the station and boards there', async (
   );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await page.getByLabel('Open project', { exact: true }).setInputFiles({
     name: 'rail-station.cityflows.json',

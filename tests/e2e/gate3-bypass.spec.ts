@@ -7,7 +7,7 @@ test('demo C: draw an expressway and ramps, restart, use the bypass and reduce t
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const baseline = await runMorning(page);
   expect(baseline.trips.completed).toBeGreaterThan(100);

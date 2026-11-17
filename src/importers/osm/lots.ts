@@ -171,6 +171,8 @@ export function addLots(
         pos: positions.get(osmId)!,
       }));
       for (const part of clipPart(points, bounds, `aisle/${way.id}/${segment}`, new Set())) {
+        // TASK-198: an aisle the polygon ring cuts would end inside the lot; it is not kept.
+        if (bounds.ring && (part.cutStart || part.cutEnd)) continue;
         const owners = lots.filter((lot) =>
           touchesLot(
             part.points.map((p) => p.pos),

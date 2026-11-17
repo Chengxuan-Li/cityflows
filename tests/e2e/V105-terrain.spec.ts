@@ -23,7 +23,7 @@ test('@smoke V105 wizard terrain drapes 3D, shades 2D and toggles back to the pl
     }),
   );
   await fixtureTerrain(page, 'fixtures/osm/sindelfingen-a81.osm');
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   async function importCity(terrain: boolean) {
     await button(page, 'Import').click();

@@ -35,7 +35,7 @@ test('QA every export downloads parseable data with columns, feature counts and 
   page,
 }, info) => {
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const source = await city(page);
   await button(page, 'Export').click();
@@ -156,7 +156,7 @@ test('QA every export downloads parseable data with columns, feature counts and 
 test('QA GeoJSON export is clickable without the toolbox intercepting it @smoke', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await button(page, 'Export').click();
   await button(page, 'GeoJSON').click({ trial: true, timeout: 3000 });

@@ -66,16 +66,21 @@ export function compileRail(city: City, geometry?: CompiledCity): RailGraph | un
     x1 = Math.max(...points.map((p) => p.x)),
     y0 = Math.min(...points.map((p) => p.y)),
     y1 = Math.max(...points.map((p) => p.y));
+  // TASK-198: a polygon import's ends lie on its boundary ring, not on the bbox.
+  const ring = city.geo?.boundary?.map(([lon, lat]) => lonLatToLocal(city.geo!, { lon, lat }));
+  if (ring) ring.push(ring[0]!);
   for (const n of nodes)
     n.boundary =
       n.kind !== 'buffer_stop' &&
       n.tracks.length === 1 &&
-      Math.min(
-        Math.abs(n.pos.x - x0),
-        Math.abs(n.pos.x - x1),
-        Math.abs(n.pos.y - y0),
-        Math.abs(n.pos.y - y1),
-      ) < 0.1;
+      (ring
+        ? nearestOnPolyline(ring, n.pos).away < 0.1
+        : Math.min(
+            Math.abs(n.pos.x - x0),
+            Math.abs(n.pos.x - x1),
+            Math.abs(n.pos.y - y0),
+            Math.abs(n.pos.y - y1),
+          ) < 0.1);
   const connections: RailGraph['connections'] = [];
   const outward = (t: RailTrack, id: string) => {
     const start = t.from === id;

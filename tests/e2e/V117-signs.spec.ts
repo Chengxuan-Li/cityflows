@@ -30,7 +30,7 @@ test('V117 all access rules change their actual sign faces in both views @smoke'
   if (!compiled.ok) throw Error('compile');
   const signs = placeStreet(compiled.compiled, b.city, []).signs;
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await page.getByLabel('Open project').setInputFiles({
     name: 'signs.cityflows.json',

@@ -26,7 +26,7 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
   test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const tile = await page.evaluate(() => {
     const canvas = document.createElement('canvas');

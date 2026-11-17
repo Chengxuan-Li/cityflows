@@ -51,7 +51,7 @@ test('QA area picker downloads, accepts, plays and reuses the persisted Overpass
       contentType: 'application/xml',
     });
   });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await chooseArea(page, bounds[0], true);
   const dialog = page.getByRole('dialog', { name: 'Import city' });
@@ -97,7 +97,7 @@ test('QA failed Overpass response leaves the current city and simulation alone',
     requests++;
     await route.fulfill({ status: 503, body: 'Recorded service unavailable' });
   });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await page.evaluate(() => window.cityflows!.step(100));
   const before = {

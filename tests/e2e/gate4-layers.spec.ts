@@ -10,7 +10,7 @@ test('layer toggles leave the simulation unchanged; minute charts show the morni
   await page.setViewportSize({ width: 1440, height: 900 });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
   const fixture = JSON.parse(
     await readFile(
@@ -121,7 +121,7 @@ test('TASK-167 map labels show by default and follow their Layers toggle', async
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
   const map = page.getByLabel('City map', { exact: true });
   const labels = async () =>

@@ -6,7 +6,7 @@ test('T48 garage occupancy, editable capacity and access, and both views @smoke'
 }, info) => {
   test.setTimeout(120_000);
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const source = await city(page);
   const garage = Object.values(source.parking!).find((facility) => facility.name === 'Homes')!;

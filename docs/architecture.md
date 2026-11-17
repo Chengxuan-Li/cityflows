@@ -231,7 +231,11 @@ interface City {
   version: number;         // bumps on every committed edit; caches key on it
   name: string;
   drivingSide: DrivingSide;
-  geo: (GeoReference & { bbox: [number, number, number, number]; source: GeoSource }) | null;
+  geo: (GeoReference & {
+    bbox: [number, number, number, number];
+    boundary?: [number, number][]; // TASK-198: a polygon import's ring, [lon, lat], open
+    source: GeoSource;
+  }) | null;
   nodes: Record<NodeId, Node>;
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
@@ -689,7 +693,8 @@ No safe placement means no approach equipment. `compileRail(city, compiled)` use
 surfaces; standalone `compileRail(city)` derives approaches without the surface check.
 
 TASK-127 marks degree-one, non-buffer nodes within 0.1 m of the geographic bbox as boundary
-ends (synthetic cities use their rail extent). `network/trains.ts` builds oriented paths through
+ends (synthetic cities use their rail extent); a polygon import (TASK-198) uses its
+`geo.boundary` ring instead of the bbox. `network/trains.ts` builds oriented paths through
 the compiled continuations only. Preferred direction is binding; untagged parallel running
 tracks within 12 m favor right-hand operation. Route search penalizes service tracks and
 opposing parallel geometry, rejects paths with more than 15% against that geometry, and keeps
@@ -716,8 +721,16 @@ services include station visits on both legs.
 TASK-138 reuses that motion, reservation and pose representation for an independent synthetic
 tram timetable (`network/trams.ts`). `RailGraph.tramStops` carries the canonical stop islands.
 Only tram sections with permitted continuations between extract boundary ends (or a lawful
-buffer return) receive service; disconnected fragments, service/depot tracks and closed loops
-without boundary entry remain excluded and reported by `tramCensus`. Stop attachment projects
+buffer return) receive service; disconnected fragments, depot tracks and closed loops without
+boundary entry remain excluded and reported by `tramCensus`. TASK-198: trams may run over
+`service=siding` and `crossover` tracks (lines joined in the street, as Freiburg's
+Rotteckring), at the service-track cost; `yard` and `spur` stay depot tracks. A tram route
+keeps to its own track of a pair (no wrong-way share, where trains allow 15%), and each
+boundary entry takes the reachable exit that turns least off the straight at the junctions it
+passes (nodes of three or more tracks, heading 15 m before to 15 m after), so a line runs on
+across the centre rather than to the nearest edge. Tram routes may share directed sections; a
+shorter one is dropped only when a longer route already serves all of its track, and the
+reservations keep their bodies apart. Stop attachment projects
 the mapped halt onto its named section and places the tram centre half a body length before
 it along the connected route, so its nose meets the halt marking in either travel direction.
 The centre may lie on a preceding section or outside the bounded extract; canonical halts stay
@@ -1191,6 +1204,10 @@ carry a polyline, cumulative metres, length, width, grade, kind and `generated`.
 name their compiled road and travel-relative side; corners name their node. Crossings name
 their road, `start`/`end` (or `midblock` for mapped crossings) and `zebra`/`signal` control.
 `places`, `parking`, `connectors` and `sourceNodes` maps expose walk-node access indices.
+TASK-198: `compile(city, deferWalk)` hands this step (and the signals' walk phases) to the
+caller instead of running it; the graph is empty until the caller runs it, then filled in place.
+The rail compiles before it and never reads it. The app opens a city this way, drawing the first
+frame before the walk graph.
 
 Default 2 m sidewalks follow the compiled outer curb, their centre 1 m beyond it, on
 residential, tertiary, secondary and primary streets. Motorways, trunks, ramps and service
@@ -3660,6 +3677,24 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    no trips); compile diagnostics are unchanged.
    Local two-way residential/service boundary ends have inferred turnarounds, allowing
    a driver who misses a turn to return instead of stranding at the crop boundary.
+   TASK-198, polygon boundaries: `ImportOptions.polygon`, a ring of `[lon, lat]` in degrees,
+   replaces the bbox. `geo.bbox` and the local frame come from the ring's bounding box, and
+   `geo.boundary` keeps the ring (open, as given) so the views can draw the natural edge; a
+   bbox import has no `boundary` and is unchanged. Roads, rail, walk links, aisles and
+   platforms are cut where they cross the ring (several pieces where a concave ring leaves and
+   re-enters; a cut sliver under 1 m is dropped); areas (buildings, land use, water, lots,
+   street-side strips) keep their largest piece inside the ring (`clipper2-ts`); points
+   (places, trees, lamps, masts, stops, entrances) inside it are kept. A cut road is kept only
+   as an entry: tertiary class or above, or a link. A minor road the ring cuts is removed back
+   to the junction it leaves (a node it joined to one other street goes with it), and what the
+   cut leaves apart from the largest connected road network is dropped (info
+   `osm_polygon_pruned`). A lot aisle the ring cuts is not kept. Where the cut removed a road
+   at a junction, an `only_*` restriction onto a removed way, or bans that leave an approach no
+   exit, are ignored with `osm_unsupported_tag`. Every entry-class road end at the ring
+   carries a gateway connector. A ring has no box sides, so gateways pair without the
+   same-edge test: named carriageways within 150 m, then each link end joins the nearest
+   non-link entry within 80 m (its own interchange), then complementary one-way ends within
+   150 m.
 9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
    and `shop=mall`. TASK-048 also imports residential, office/commercial, retail and industrial
    building footprints and land use, including multipolygon courtyards and bbox clipping.

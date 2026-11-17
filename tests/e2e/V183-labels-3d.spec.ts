@@ -50,7 +50,7 @@ test('V183 Munich 3D labels place when the camera settles, stay still and follow
   await page.route('https://**/*', (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', { terrain: false });
   await layers(page, async (region) => {

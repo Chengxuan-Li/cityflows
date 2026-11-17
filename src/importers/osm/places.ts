@@ -11,7 +11,7 @@ import { compileVisibleParking } from '../../network/parking';
 import { lonLatToLocal } from '../../geo/projection';
 import type { CompiledCity, Diagnostic } from '../../network';
 import { allocateId, type City, type Place, type RoadClass } from '../../schema';
-import { contains, type Bounds } from './clip';
+import { contains, entryClasses, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
 import type { OsmRoad } from './roads';
 
@@ -124,6 +124,7 @@ export function addPlace(
 
 export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity): void {
   const access = networkAccess(compiled);
+  const polygon = Boolean(city.geo!.boundary);
   const [west, south, east, north] = city.geo!.bbox;
   const nw = lonLatToLocal(city.geo!, { lon: west, lat: north });
   const se = lonLatToLocal(city.geo!, { lon: east, lat: south });
@@ -137,9 +138,12 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
       let candidates = lanes.filter((l) =>
         (end === 'start' ? access.toCore : access.fromCore).has(l.idx),
       );
+      // A polygon import keeps only entries at its ring (TASK-198): each carries a gateway.
       if (
         !candidates.length &&
-        ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass)
+        (polygon
+          ? entryClasses.has(road.roadClass)
+          : ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass))
       )
         candidates = lanes;
       if (!candidates.length) return [];
@@ -151,7 +155,7 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
         Math.abs(node.pos.y - nw.y),
         Math.abs(node.pos.y - se.y),
       ];
-      const edge = distances.indexOf(Math.min(...distances));
+      const edge = polygon ? 0 : distances.indexOf(Math.min(...distances));
       return [{ source, end, lane, node, edge }];
     });
   });
@@ -168,7 +172,7 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
   const complementary = (a: End[], b: End[]) =>
     (!has(a, 'start') && has(b, 'start')) || (!has(a, 'end') && has(b, 'end'));
   // First pair named carriageways; then pair nearby one-way streets serving the same edge.
-  for (const named of [true, false]) {
+  const pair = (named: boolean, maxM: number) => {
     for (const group of groups) {
       if (!group.length || (has(group, 'start') && has(group, 'end'))) continue;
       const first = group[0]!;
@@ -179,7 +183,7 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
             other.length &&
             complementary(group, other) &&
             first.edge === other[0]!.edge &&
-            gap(group, other) <= (named ? 150 : 300) &&
+            gap(group, other) <= maxM &&
             (!named ||
               (first.source.road.name !== null &&
                 other[0]!.source.road.name === first.source.road.name &&
@@ -188,22 +192,33 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
         .sort((a, b) => gap(group, a) - gap(group, b));
       if (candidates[0]) group.push(...candidates[0].splice(0));
     }
-  }
+  };
   // A clipped link belongs to its nearby parent gateway, and contributes no extra demand.
-  for (const group of groups) {
-    if (!group.length || !group.every((e) => e.source.road.roadClass === 'ramp')) continue;
-    const parent = groups
-      .filter(
-        (other) =>
-          other !== group &&
-          other.some((e) =>
-            ['motorway', 'trunk', 'primary', 'secondary'].includes(e.source.road.roadClass),
-          ) &&
-          other[0]!.edge === group[0]!.edge &&
-          gap(group, other) < 300,
-      )
-      .sort((a, b) => gap(group, a) - gap(group, b))[0];
-    if (parent) parent.push(...group.splice(0));
+  const attachLinks = (parents: readonly RoadClass[], maxM: number) => {
+    for (const group of groups) {
+      if (!group.length || !group.every((e) => e.source.road.roadClass === 'ramp')) continue;
+      const parent = groups
+        .filter(
+          (other) =>
+            other !== group &&
+            other.some((e) => parents.includes(e.source.road.roadClass)) &&
+            other[0]!.edge === group[0]!.edge &&
+            gap(group, other) < maxM,
+        )
+        .sort((a, b) => gap(group, a) - gap(group, b))[0];
+      if (parent) parent.push(...group.splice(0));
+    }
+  };
+  if (polygon) {
+    // TASK-198: a ring has no box sides. Links join the carriageway of their own interchange
+    // before one-way carriageways pair, so a named link street further off keeps its gateway.
+    pair(true, 150);
+    attachLinks(['motorway', 'trunk', 'primary', 'secondary', 'tertiary'], 80);
+    pair(false, 150);
+  } else {
+    pair(true, 150);
+    pair(false, 300);
+    attachLinks(['motorway', 'trunk', 'primary', 'secondary'], 300);
   }
   for (const group of groups) {
     if (!group.length) continue;

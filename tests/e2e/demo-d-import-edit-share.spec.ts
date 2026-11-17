@@ -23,7 +23,7 @@ test('demo D, import-edit-share: import OSM, fix a turn restriction, save, reope
   test.setTimeout(240_000);
   const errors = pageErrors(page);
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await button(page, 'Import').click();
   const dialog = page.getByRole('dialog', { name: 'Import city' });
@@ -123,7 +123,7 @@ test('demo D, import-edit-share: import OSM, fix a turn restriction, save, reope
   const other = await elsewhere.newPage();
   const otherErrors = pageErrors(other);
   await other.route('https://**/*', (route) => route.abort());
-  await other.goto('/');
+  await other.goto('/?city=grid5x5');
   await expect(button(other, 'Play')).toBeEnabled();
   await other.getByLabel('Open project').setInputFiles(archive);
   await expect(other.getByRole('heading', { name: imported.name, level: 1 })).toBeVisible();

@@ -1,8 +1,9 @@
-import { segmentsIntersect } from '../../geo/polyline';
+import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
+import { pointInPolygon, segmentsIntersect } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CompiledCity } from '../../network';
 import type { City, Place } from '../../schema';
-import type { Bounds } from './clip';
+import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
 import { addPlace, layoutConnector, polygonCenter } from './places';
 
@@ -65,7 +66,15 @@ export function clip(ring: Vec2[], bounds: Bounds): Vec2[] {
     }
     ring = output;
   }
-  return ring;
+  const boundary = bounds.ring;
+  if (!boundary || ring.length < 3 || ring.every((p) => pointInPolygon(p, boundary))) return ring;
+  // TASK-198: a polygon boundary keeps the largest piece of the area inside it.
+  return (
+    booleanOpD(ClipType.Intersection, [ring], [boundary.slice(0, -1)], FillRule.NonZero, 4)
+      .map((piece) => ({ piece, area: Math.abs(areaD(piece)) }))
+      .sort((a, b) => b.area - a.area)[0]
+      ?.piece.map(({ x, y }) => ({ x, y })) ?? []
+  );
 }
 
 // Trace the bounded faces of surface streets. Service accesses do not divide a city block.
@@ -301,10 +310,13 @@ export function addBuildings(
     const total = group.reduce((sum, item) => sum + item.count, 0);
     const count = Math.round(total);
     if (count === 0) continue;
-    const center = {
+    let center = {
       x: group.reduce((s, d) => s + d.center.x * d.count, 0) / total,
       y: group.reduce((s, d) => s + d.center.y * d.count, 0) / total,
     };
+    // TASK-198: a group along a concave polygon edge can centre outside the ring.
+    if (bounds.ring && !contains(bounds, center))
+      center = group.reduce((a, b) => (b.count > a.count ? b : a)).center;
     const kind: Place['kind'] =
       first.use === 'residential' ? 'residential' : first.use === 'retail' ? 'retail' : 'work';
     const shape: Place['shape'] =

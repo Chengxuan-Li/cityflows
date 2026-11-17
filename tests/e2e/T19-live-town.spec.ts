@@ -10,7 +10,7 @@ test('T19 town at 10x applies a drawn road and turn ban, then restarts and retai
 }, info) => {
   test.setTimeout(120_000);
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const input = workload('town');
   const { manifest } = JSON.parse(

@@ -12,7 +12,7 @@ test('T63 Munich from 08:30 shows a searching car’s claimed strip space', asyn
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route(/^https:\/\//, (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', { terrain: false });
   const source = await city(page),

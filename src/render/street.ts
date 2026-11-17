@@ -17,7 +17,7 @@ import { cityMarkingTheme } from '../schema/marking-theme';
 import { cityGrades } from './grades';
 import { busLabels } from './marking-geometry';
 import type { CityGeometry } from './types';
-import type { Tree } from './vegetation';
+import { placeTrees, type Tree } from './vegetation';
 import { paintedCity } from './road-paint';
 
 export interface StreetLamp {
@@ -168,6 +168,29 @@ function resolveSigns(city: CompiledCity, entries: AccessSign[]) {
 }
 
 /** TASK-106 predates lamp points; keep its input restricted to the features it owns. */
+const placements = new WeakMap<
+  CompiledCity,
+  WeakMap<
+    CityGeometry,
+    { trees: ReturnType<typeof placeTrees>; street: ReturnType<typeof placeStreet> }
+  >
+>();
+
+/** TASK-198: a city's trees and street furniture, placed once for both views (the landing
+ *  city's 3D view would otherwise place them again after the 2D view did). */
+export function placeDetails(city: CompiledCity, source: CityGeometry) {
+  city = paintedCity(city);
+  let bySource = placements.get(city);
+  if (!bySource) placements.set(city, (bySource = new WeakMap()));
+  let placed = bySource.get(source);
+  if (!placed) {
+    const trees = placeTrees(city, treeContext(source));
+    placed = { trees, street: placeStreet(city, source, trees.trees) };
+    bySource.set(source, placed);
+  }
+  return placed;
+}
+
 export function treeContext(source: CityGeometry): CityGeometry {
   if (!source.context?.features.some((f) => f.class === 'street_lamp')) return source;
   return {

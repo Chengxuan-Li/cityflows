@@ -9,7 +9,7 @@ test('T52 edit a roadside strip, undo, and select parked cars in both views @smo
   const errors = pageErrors(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const original = await city(page);
   const road = Object.values(original.roads).find(

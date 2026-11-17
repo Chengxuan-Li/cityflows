@@ -20,7 +20,7 @@ test('T47 local traffic only reroutes a live through trip and undo restores acce
   page,
 }, info) => {
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Step')).toBeEnabled();
   // TASK-113: vehicle 1's driver may walk with mode choice on; this case follows a car.
   await driveEveryone(page);
@@ -78,7 +78,7 @@ test('T47 Munich local access diverts through traffic and permits a local depart
   test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', {
     surroundings: false,

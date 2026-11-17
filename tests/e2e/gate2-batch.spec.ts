@@ -13,7 +13,7 @@ async function point(page: Page, x: number, y: number) {
 test('box selection edits street speeds in one undoable batch @smoke', async ({
   page,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
   const start = await point(page, 30, -15);
   const end = await point(page, 210, 135);
@@ -46,7 +46,7 @@ test('box selection edits street speeds in one undoable batch @smoke', async ({
 test('opposite-direction batches keep the edited survivors selected and can restore two-way streets', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
   const before = await page.evaluate(() => window.cityflows!.city!());
   const first = await point(page, 60, 1.5);
@@ -84,7 +84,7 @@ test('opposite-direction batches keep the edited survivors selected and can rest
 test('a crossing centerline is box-selected without endpoints inside; Shift-click toggles roads', async ({
   page,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
   const start = await point(page, 30, -5);
   const end = await point(page, 90, 5);
@@ -114,7 +114,7 @@ test('a crossing centerline is box-selected without endpoints inside; Shift-clic
 test('mixed fields preserve untouched values, and lanes, class and direction commit together', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
   const first = await point(page, 60, 1.5);
   await page.mouse.click(first.x, first.y);

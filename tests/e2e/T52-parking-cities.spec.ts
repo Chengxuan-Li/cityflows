@@ -24,7 +24,7 @@ test('T55 mapped Munich street-side bands hold real parked cars in both views @s
   await page.route(/^https:\/\//, (route) => route.abort());
   const osm = 'fixtures/osm/munich-donnersberger.osm';
   await fixtureTerrain(page, osm);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, osm, { terrain: true });
   const source = await city(page);
@@ -141,7 +141,7 @@ test('T55 mapped Munich street-side bands hold real parked cars in both views @s
     await baselinePage.setViewportSize({ width: 1280, height: 800 });
     await baselinePage.emulateMedia({ reducedMotion: 'reduce' });
     await baselinePage.route(/^https:\/\//, (route) => route.abort());
-    await baselinePage.goto('/');
+    await baselinePage.goto('/?city=grid5x5');
     await expect(button(baselinePage, 'Play')).toBeEnabled();
     await baselinePage.getByLabel('Open project').setInputFiles(baseline);
     await expect
@@ -222,7 +222,7 @@ for (const cameraTarget of [
     await page.route(/^https:\/\//, (route) => route.abort());
     const osm = `fixtures/osm/${cameraTarget.city}.osm`;
     await fixtureTerrain(page, osm);
-    await page.goto('/');
+    await page.goto('/?city=grid5x5');
     await expect(button(page, 'Play')).toBeEnabled();
     await importOsm(page, osm, { terrain: true });
     const original = await city(page);
@@ -434,7 +434,7 @@ for (const name of ['munich-donnersberger', 'sindelfingen-a81']) {
     await page.route(/^https:\/\//, (route) => route.abort());
     const osm = `fixtures/osm/${name}.osm`;
     await fixtureTerrain(page, osm);
-    await page.goto('/');
+    await page.goto('/?city=grid5x5');
     await expect(button(page, 'Play')).toBeEnabled();
     await importOsm(page, osm, { terrain: true });
     const source = await city(page),

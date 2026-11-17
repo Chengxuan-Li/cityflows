@@ -34,7 +34,7 @@ async function reachable(locator: Locator) {
 
 test.beforeEach(async ({ page }) => {
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
 });
 

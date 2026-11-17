@@ -135,7 +135,7 @@ for (const name of ['grid5x5', 'grid5x5-stress', 'town'] satisfies WorkloadName[
         post.call(this, message, options as StructuredSerializeOptions);
       };
     });
-    await page.goto('/');
+    await page.goto('/?city=grid5x5');
     await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
     const input = workload(name);
     // Distinguish the uploaded grid from the identically named initial project.

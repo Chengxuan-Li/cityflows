@@ -171,7 +171,7 @@ export function TopBar() {
         className="new-picker"
       >
         <ul className="scenario-list">
-          {scenarios.map(({ id, name }) => (
+          {[{ id: 'freiburg', name: 'Freiburg im Breisgau' }, ...scenarios].map(({ id, name }) => (
             <li key={id}>
               <button
                 onClick={() => {

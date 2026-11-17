@@ -256,6 +256,7 @@ export function importContext(
   const snapped: Bounds = {
     min: { x: Math.ceil(bounds.min.x * 10) / 10, y: Math.ceil(bounds.min.y * 10) / 10 },
     max: { x: Math.floor(bounds.max.x * 10) / 10, y: Math.floor(bounds.max.y * 10) / 10 },
+    ...(bounds.ring && { ring: bounds.ring }),
   };
   const round = (line: Vec2[]) =>
     simplify(line)
@@ -272,7 +273,8 @@ export function importContext(
       p.x < snapped.min.x ||
       p.y < snapped.min.y ||
       p.x > snapped.max.x ||
-      p.y > snapped.max.y
+      p.y > snapped.max.y ||
+      (snapped.ring && !pointInPolygon(p, snapped.ring))
     )
       continue;
     const pos = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };

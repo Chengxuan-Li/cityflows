@@ -31,7 +31,23 @@ export interface WalkShape {
 }
 const positive = (ring: Vec2[]) => (areaD(ring) < 0 ? [...ring].reverse() : ring);
 /** One paving footprint for both renderers, with building holes and same-grade asphalt removed. */
+const walkShapes = new WeakMap<
+  CompiledCity,
+  { features: unknown; links: CompiledCity['walk']['links']; shapes: WalkShape[] }
+>();
+
+/** TASK-198: computed once per city for both views (the 3D build would repeat the 2D one). */
 export function walkGeometry(city: CompiledCity, source?: CityGeometry): WalkShape[] {
+  const features = source?.context?.features;
+  const cached = walkShapes.get(city);
+  if (cached && cached.features === features && cached.links === city.walk.links)
+    return cached.shapes;
+  const shapes = buildWalkGeometry(city, source);
+  walkShapes.set(city, { features, links: city.walk.links, shapes });
+  return shapes;
+}
+
+function buildWalkGeometry(city: CompiledCity, source?: CityGeometry): WalkShape[] {
   const { roadGrades, nodeGrades } = cityGrades(city);
   const obstacles = [
     ...city.roads.map((r) => ({

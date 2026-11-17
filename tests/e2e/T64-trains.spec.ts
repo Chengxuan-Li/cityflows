@@ -85,7 +85,7 @@ test('T64 Munich trains stop at both platforms, pass below bridge, select, pause
   await page.route('https://**/*', (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', { terrain: false });
   const source = await city(page),
@@ -185,7 +185,7 @@ test('T64 Sindelfingen terminal train occupies level crossing in 2D and 3D', asy
   await page.route('https://**/*', (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/sindelfingen-a81.osm', { terrain: false });
   const source = await city(page),
@@ -261,7 +261,7 @@ test('T64 Munich moving-train frame budget in both views, two runs', async ({ pa
   await page.route('https://**/*', (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', { terrain: false });
   const rail = compileRail(await city(page))!,

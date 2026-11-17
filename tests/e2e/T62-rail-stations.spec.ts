@@ -46,7 +46,7 @@ test('T62 Munich rail layers, station/platform/track inspection, pictures and fr
   await page.route('https://**/*', (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', { terrain: false });
   const source = await city(page),
@@ -212,7 +212,7 @@ test('T62 cached paint keeps camera changes, selection, resize and rail edges vi
     next.on('pageerror', (error) => errors.push(error.message));
     await next.route('https://**/*', (route) => route.abort());
     await fixtureTerrain(next, 'fixtures/osm/munich-donnersberger.osm');
-    await next.goto('/');
+    await next.goto('/?city=grid5x5');
     await expect(button(next, 'Play')).toBeEnabled();
     await importOsm(next, 'fixtures/osm/munich-donnersberger.osm');
     await (await sidebarSection(next, 'Layers')).click();

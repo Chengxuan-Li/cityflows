@@ -8,7 +8,17 @@ export function project(
   options: ImportOptions,
   roadNodes: OsmData['node'],
 ): NonNullable<City['geo']> | string {
-  let bbox = options.bbox ?? data.bounds;
+  const closed = options.polygon && closeRing(options.polygon);
+  if (typeof closed === 'string') return closed;
+  const ring = closed;
+  let bbox = ring
+    ? ([
+        Math.min(...ring.map(([lon]) => lon)),
+        Math.min(...ring.map(([, lat]) => lat)),
+        Math.max(...ring.map(([lon]) => lon)),
+        Math.max(...ring.map(([, lat]) => lat)),
+      ] as [number, number, number, number])
+    : (options.bbox ?? data.bounds);
   if (!bbox) {
     let west = Infinity,
       south = Infinity,
@@ -46,6 +56,9 @@ export function project(
   return {
     ...ref,
     bbox: [...bbox],
+    ...(ring && {
+      boundary: ring.slice(0, -1).map(([lon, lat]) => [lon, lat] as [number, number]),
+    }),
     source: {
       kind: 'osm',
       snapshotDate: data.meta?.osm_base?.slice(0, 10) ?? null,
@@ -55,4 +68,18 @@ export function project(
       inferredCount: 0,
     },
   };
+}
+
+/** The polygon option closed, or why it is not a ring. */
+function closeRing(polygon: [number, number][]): [number, number][] | string {
+  const first = polygon[0],
+    last = polygon.at(-1);
+  const ring =
+    first && last && (first[0] !== last[0] || first[1] !== last[1]) ? [...polygon, first] : polygon;
+  if (
+    ring.length < 4 ||
+    !ring.every(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lat) < 90)
+  )
+    return 'Expected a polygon of at least three [longitude, latitude] points';
+  return ring;
 }

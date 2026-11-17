@@ -47,7 +47,7 @@ test('@smoke T57 a walker and a vehicle occupant open the person journey', async
   );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await page.getByLabel('Open project', { exact: true }).setInputFiles({
     name: 'person-trips.cityflows.json',

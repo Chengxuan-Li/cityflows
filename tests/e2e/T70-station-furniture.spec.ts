@@ -112,7 +112,7 @@ test('T70 Donnersbergerbrücke furniture in 2D and 3D: displays follow the clock
   await page.route('https://**/*', (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm', { terrain: false });
   const source = await city(page),
