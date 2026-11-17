@@ -213,7 +213,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-185](tasks/TASK-185.md) | render | 2D street-label frame cost under TASK-167's 5% gate | `src/render/layers/labels.ts`, 2D scene | 167, 176 | T62/T64 2D rounds, placement unchanged | done |
 | [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | done |
 | [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | done (23.7% of 25%) |
-| [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | in progress (approved 2026-11-16) |
+| [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | done (fixed-time stays; walk lights fixed) |
 | [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | done |
 | [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | done |
 | [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | done |
@@ -4285,6 +4285,25 @@ capacities and index shifts only): T44, V106, T50, T62, T75, V107/V117 compile, 
 census, the TASK-164 pk:2056 case; T149's synthetic bridge now has layer-1 ends (a level deck 5 m up).
 Munich gate 5,302 / 1 gridlocked / 0 stalled (main 5,302 / 0 / 0); guard 2,554 / 0 / 0. Check (1,476),
 city (54 files), traffic light, light e2e (48).
+
+TASK-188 (Claude Code subagent, Opus 5.5 high, 2026-11-16; merged): generated signals stay fixed-time.
+The seed-6 1,042 s r:961 visit was not the n:306 exit: n:306 queued behind spill-back from jg:10802
+(about 400 m down r:639), whose lane 0 has one movement and whose head cars, going round the group to
+r:663, were held "exit-full" for up to 1,755 s; r:663 drains into a 1.5 km ring (r:679/r:735, r:1258,
+jg:10784, r:264, n:263) fed in both modes by detoured cars (about half of those entering r:676 and
+r:663). Fixed-time fails 900 s on extra seed 7 (933 s), actuated on seed 10 (942 s). Fixing it means
+changing TASK-121 head detours or the group-entry exit-full hold, so nothing changed at n:306. Walk
+lights (`src/sim/signals.ts`): in amber and all-red an actuated crossing the next phase keeps green
+stays green to that phase's minimum green, as fixed-time already did; walkers read it too (seed 6
+actuated alone went 1,042 to 699 s). Fixed-time hashes unchanged. On fcf6973 (after TASK-190), choice
+off fixed / actuated mean 5,304.8 / 5,312.2 completed, delay 830 / 775 s (-6.5%), worst visit 634 /
+836 s; choice on 2,541.3 / 2,562.5, 118.1 / 82.2 s (-30.4%); drain met on all six seeds in both.
+Full demand fixed 3,069 / 165 (hash 2427576212, the new reference after TASK-190's bays; was 3,015),
+actuated 2,814 / 165 (-8.3%, ahead until 07:30). Check (1,478), city (176), traffic light and guard,
+light e2e (53). Open: the jam ring (its own task: detours that refuse routes back into the jam, or
+the exit-full hold on single-movement group-entry lanes); the actuated full-demand gap (candidate:
+phase 1 skipped at jg:10802, r:639 green 58% against 65%); amber and all-red shown to movements that
+stay green into the next phase (about 4 s per change, both modes).
 
 Full run 43885610218 (lead, manual, on 592ad58 after TASK-185, 186 and 187): every job green; the city
 job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full run 43591345828.
