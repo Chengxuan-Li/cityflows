@@ -218,6 +218,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | done |
 | [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | done |
 | [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | done |
+| [TASK-193](tasks/TASK-193.md) | 9 | The jam ring behind jg:10802 (detours feeding the queue they leave, or the exit-full hold on single-movement entry lanes) | `src/sim/**` | 121, 154, 188 | seeds 1-12 both modes, full demand, drain, gate, guard | in progress (approved 2026-11-17) |
+| [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | planned (approved 2026-11-17; after 193) |
+| [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | in progress (approved 2026-11-17) |
+| [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | in progress (approved 2026-11-17) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4328,6 +4332,8 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-17 (owner): contracts for the four follow-ups of TASK-188 to 192 (TASK-193 to 196) approved;
+  the lead starts them when it judges best. TASK-194 runs after TASK-193 (both change traffic results).
 - 2026-11-16 (owner): "Proceed with the next round of tasks": TASK-188 to 192 run now.
 - 2026-11-16 (owner): every recommendation in `docs/decisions/2026-11-14-*.md` accepted. Exit clearing:
   keep hold short and zip. Signal timing: fixed-time until TASK-188 fixes the seed-6 loop exit and
