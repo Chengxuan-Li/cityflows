@@ -215,7 +215,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | done (23.7% of 25%) |
 | [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | in progress (approved 2026-11-16) |
 | [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | done |
-| [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | in progress (approved 2026-11-16) |
+| [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | done |
 | [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | done |
 | [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | in progress (approved 2026-11-16) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4274,6 +4274,17 @@ ring (an inset ring in `--shadow-popover`) broken by the pinned heading; the hea
 short of each side. Check (1,476), light e2e (53 with the new `qa-phone-sheet`), `qa-mobile` (11),
 contrast (44). Open: a selection under the sheet is not re-centred (a camera change outside `src/ui`);
 dragging starts only on the grabber row.
+
+TASK-190 (Claude Code subagent, Sonnet 5.5 high, 2026-11-16; merged): `generateStalls`
+(`src/network/stalls.ts`) drops a bay that a road or junction of another grade overlaps when that
+surface, sampled with `laneHeightAt` at the bay's corners and centre, is under 4.5 m
+(`levelClearanceM`) above the bay's aisle; a road below a bay is ignored. Munich: pk:2056 6 to 2 bays
+(four under r:1301/r:1302 at 3.9 to 4.4 m), pk:2050 10 to 8 (two on r:737's ground end), pk:2049
+unchanged, 484 to 478 in all; Sindelfingen and synthetic cities unchanged. Re-pinned (bays, the two
+capacities and index shifts only): T44, V106, T50, T62, T75, V107/V117 compile, V117 curbs, V108, the T49
+census, the TASK-164 pk:2056 case; T149's synthetic bridge now has layer-1 ends (a level deck 5 m up).
+Munich gate 5,302 / 1 gridlocked / 0 stalled (main 5,302 / 0 / 0); guard 2,554 / 0 / 0. Check (1,476),
+city (54 files), traffic light, light e2e (48).
 
 Full run 43885610218 (lead, manual, on 592ad58 after TASK-185, 186 and 187): every job green; the city
 job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full run 43591345828.
