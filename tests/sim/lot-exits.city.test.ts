@@ -55,7 +55,8 @@ function stocked(name: string, lot: string) {
 
 test('TASK-164 Munich pk:2056: a bay whose departure reaches the west exits keeps mapped exit c:10872, each exit with its share', () => {
   const bays = stocked('munich-donnersberger', 'pk:2056');
-  expect(bays.length).toBe(6);
+  // TASK-190: four of its six bays stood under the low part of a ramp.
+  expect(bays.length).toBe(2);
   for (const bay of bays) {
     // The departure drives past c:9409 and c:10871 (one share each); c:10872 onto r:669 lies
     // beyond a dead-end aisle lane, so it stays a lot exit.

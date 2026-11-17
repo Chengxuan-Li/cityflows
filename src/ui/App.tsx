@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from 'react';
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { RailInspector, TrainInspector } from './inspector/rail';
@@ -12,6 +18,7 @@ import { resolveAppearance, useAppearance } from './appearance-store';
 import { CommandMenu, ShortcutSheet } from './command-menu';
 import { installShortcuts } from './commands';
 import { CloseButton, ResizeHandle } from './controls';
+import { InspectorSheet } from './inspector-sheet';
 import { MapView } from './map-view';
 import { Onboarding, ShowHints } from './onboarding';
 import { StatusBar } from './run-bar';
@@ -131,6 +138,20 @@ function useStoredWidth(key: string, initial: number) {
   return [width, change] as const;
 }
 
+/** The phone layout of app.css (its `@media (max-width: 600px)` rules). */
+const phoneQuery = '(max-width: 600px)';
+
+function usePhone() {
+  return useSyncExternalStore(
+    (notify) => {
+      const query = matchMedia(phoneQuery);
+      query.addEventListener('change', notify);
+      return () => query.removeEventListener('change', notify);
+    },
+    () => matchMedia(phoneQuery).matches,
+  );
+}
+
 /** TASK-166: puts the resolved appearance on the root element, where app.css swaps the tokens. The
  *  selector re-renders only when the answer changes, not on every clock tick. */
 function useDocumentAppearance() {
@@ -167,10 +188,42 @@ export function App() {
   const selection = useAppStore((state) => state.selection);
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const inspectorOpen = useAppStore((state) => state.inspectorOpen);
+  const phone = usePhone();
   const [sidebarWidth, setSidebarWidth] = useStoredWidth('cityflows.sidebarWidth', 272);
   const [inspectorWidth, setInspectorWidth] = useStoredWidth('cityflows.inspectorWidth', 280);
 
   useEffect(installShortcuts, []);
+
+  const inspector = selection ? (
+    <aside className="inspector" id="inspector" aria-label="Inspector">
+      {!phone && (
+        <CloseButton
+          label="Close inspector"
+          className="close-sheet"
+          onClick={() => useAppStore.getState().select(null)}
+        />
+      )}
+      <Inspector />
+      <NodeTopologyActions />
+      {rejectedEdit.length > 0 && (
+        <div className="edit-diagnostics" role="alert">
+          <strong>Edit rejected</strong>
+          <ul>
+            {rejectedEdit
+              .filter(({ severity }) => severity === 'error')
+              .map(({ message }, index) => (
+                <li key={index}>{message}</li>
+              ))}
+          </ul>
+        </div>
+      )}
+    </aside>
+  ) : (
+    <div className="no-selection">
+      <p>No selection</p>
+      <ShowHints />
+    </div>
+  );
 
   return (
     <div
@@ -214,38 +267,14 @@ export function App() {
           onReset={() => setInspectorWidth(null)}
         />
       )}
-      {inspectorOpen && (
-        <div id="inspector-column" className="inspector-column">
-          {selection ? (
-            <aside className="inspector" id="inspector" aria-label="Inspector">
-              <CloseButton
-                label="Close inspector"
-                className="close-sheet"
-                onClick={() => useAppStore.getState().select(null)}
-              />
-              <Inspector />
-              <NodeTopologyActions />
-              {rejectedEdit.length > 0 && (
-                <div className="edit-diagnostics" role="alert">
-                  <strong>Edit rejected</strong>
-                  <ul>
-                    {rejectedEdit
-                      .filter(({ severity }) => severity === 'error')
-                      .map(({ message }, index) => (
-                        <li key={index}>{message}</li>
-                      ))}
-                  </ul>
-                </div>
-              )}
-            </aside>
-          ) : (
-            <div className="no-selection">
-              <p>No selection</p>
-              <ShowHints />
-            </div>
-          )}
-        </div>
-      )}
+      {inspectorOpen &&
+        (phone && selection ? (
+          <InspectorSheet>{inspector}</InspectorSheet>
+        ) : (
+          <div id="inspector-column" className="inspector-column">
+            {inspector}
+          </div>
+        ))}
       <StatusBar />
       <Onboarding />
       <CommandMenu />

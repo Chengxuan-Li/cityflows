@@ -39,3 +39,7 @@ hashes, and change the TASK-154 drain test (a gate change the owner must approve
 TASK-188 (`docs/tasks/TASK-188.md`).
 
 Status: decided 2026-11-16 by the owner (all lead recommendations accepted): Option 3 (fixed-time until TASK-188 fixes the loop exit and measures).
+
+Outcome 2026-11-16 (TASK-188): fixed-time stays. Actuated passed every 0.15 gate on seeds 1 to 6
+(mean delay -6.5% choice off, -30.4% choice on) but completed 2,814 against 3,069 at full demand
+(-8.3%). The seed-6 holdup was a jam ring from jg:10802, not the loop exit; see plan.md.

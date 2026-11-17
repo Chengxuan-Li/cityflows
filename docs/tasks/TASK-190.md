@@ -1,6 +1,6 @@
 # TASK-190 — Parking bays under low ramps
 
-Status: approved by the owner 2026-11-16; in progress. Proposed owner: Claude Code
+Status: done 2026-11-16 (merged; see plan.md). Proposed owner: Claude Code
 subagent (Sonnet 5.5, high). Branch `task/190-ramp-bays`, worktree `D:\cityflows-wt\190`, ports 5393 / 5493 (5390 is the lead's).
 
 ## Goal

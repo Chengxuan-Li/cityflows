@@ -1062,7 +1062,10 @@ the OSM `lanes` tags carry one.
   `GENERATED_TIMING`): on Munich seeds 1 to 6 every split tried lengthened single visits to the
   Landsberger loop's roads past TASK-154's 900 s on some seed. TASK-180: generated programs were
   actuated until mouth joins zipped (section 8, keep clear); since then actuation lengthens a
-  seed-6 loop visit to 1,042 s and completes fewer trips at full demand. Hand-written and saved programs without the flags run as
+  seed-6 loop visit to 1,042 s and completes fewer trips at full demand. TASK-188: that visit
+  came from a jam ring through jg:10802 and back to n:263 that fixed-time runs also form (a
+  933 s visit on seed 7); actuation now passes the drain criterion on seeds 1 to 6 but still
+  completes fewer trips at full demand, so generated programs stay fixed-time. Hand-written and saved programs without the flags run as
   before. A controller is a signalised junction group (its members in lockstep) or a single
   signal node.
   - Demand split. At load the engine routes every car trip of the scenario from the connector it
@@ -1095,7 +1098,10 @@ the OSM `lanes` tags carry one.
     call the green ends once its minimum has passed and no extension holds it, or at the phase's
     timed green (the split's), and amber and all-red lead to the first later phase with a call;
     unused phases are skipped. Without a call the green rests. Walkers see an actuated green's
-    walk green only to its current end, and none in amber or all-red. After a live edit a
+    walk green only to its current end. In amber and all-red a crossing walk-green in both the
+    ending phase and the next one stays green to the end of the next phase's minimum green, as a
+    fixed program's walk window runs on into the next phase (TASK-188); other crossings show
+    red, and the walk lights draw the same state. After a live edit a
     controller with the same id and enough phases keeps its state.
   - The engine owns the signal state (`createSignalControl`): intersections, walkers and rail
     crossings read it, and each snapshot carries it (`VehicleSnapshot.signals`) for the 2D and 3D

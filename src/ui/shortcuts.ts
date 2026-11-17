@@ -4,9 +4,11 @@
 
 /** An action's keys, each written `[mod+][shift+]key`: `mod` is ⌘ on a Mac and Ctrl elsewhere, the
  *  key is `event.key` in lower case, `space` and `escape` are named, and `delete` is the key
- *  that deletes (Backspace on a Mac keyboard). The first key is the one shown. */
+ *  that deletes (Backspace on a Mac keyboard). The first key is the one shown. Browsers keep some
+ *  chords for themselves (new window, tab switching), so New city and the panel toggles are plain
+ *  letters, like the tools; `shortcuts.test.ts` lists the reserved chords. */
 export const bindings = {
-  new: ['mod+n'],
+  new: ['n'],
   import: [],
   open: ['mod+o'],
   save: ['mod+s'],
@@ -23,9 +25,9 @@ export const bindings = {
   place: ['3'],
   ramp: ['4'],
   roundabout: ['5'],
-  sidebar: ['mod+1'],
-  inspector: ['mod+2'],
-  view3d: ['mod+3', 'v'],
+  sidebar: ['s'],
+  inspector: ['i'],
+  view3d: ['v'],
   layers: [],
   chart: [],
   demand: [],

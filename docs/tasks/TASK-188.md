@@ -1,6 +1,6 @@
 # TASK-188 — Actuated signals as the default again
 
-Status: approved by the owner 2026-11-16; in progress. Proposed owner: Claude Code
+Status: done 2026-11-16 (merged; fixed-time stays; see plan.md). Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/188-actuated-default`, worktree `D:\cityflows-wt\188`, ports 5388 / 5488.
 
 ## Goal
