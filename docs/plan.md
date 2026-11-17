@@ -222,8 +222,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | done 2026-11-17 (actuated default, owner approved) |
 | [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | done |
 | [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
-| [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; recommends Freiburg (runner-up Lübeck), awaits the owner's pick |
-| [TASK-198](tasks/TASK-198.md) | UI | Build Freiburg, the chosen landing city, as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | in progress (owner picked Freiburg 2026-11-17) |
+| [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; owner picked Freiburg |
+| [TASK-198](tasks/TASK-198.md) | UI | Build Freiburg, the chosen landing city, as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | done 2026-11-17 (Freiburg fixed-time until TASK-199) |
+| [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | planned |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4396,6 +4397,33 @@ margin over fixed-time is thin (+0.6% seed 1, -2.5% seed 2) and the default's fu
 fall 6.8%; put to the owner, who approved the switch. Open: n:635's empty phase (34 s of all-red per
 102 s cycle); jughandle lane choice is the likely lever for full demand in both modes.
 
+TASK-198 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged): Freiburg is the landing view.
+Phases: (1) `ImportOptions.polygon` clips every layer to the ring and cuts ways at the crossing (700
+nodes / 1,043 roads against the bbox's 857 / 1,322; 0 m of road outside against 3,810 m; 41
+disconnected lanes, all lot aisles, against 255; bbox imports byte-identical); (2) 11 gateways at the
+ring crossings (the decision document's entries plus Leopoldring, where the polygon tip cuts the ring;
+the Lessingstraße exit carries no trips, its loop back is outside the extract), 15 rail and 10 tram
+ends; (3) trams run: tracks tagged siding or crossover joined Freiburg's lines and tram routing skipped
+them; 5 routes at 10 per hour, 4 through Bertoldsbrunnen, 24 of 32 stops served; Munich and
+Sindelfingen timetables unchanged; (4) `fixtures/projects/freiburg.cityflows.json` (5.70 MB, 1.04 MB
+gzip, population shipped) rebuilt byte-identically by `bench/freiburg.ts` from
+`fixtures/osm/freiburg-altstadt.osm`; Münster 30 m body plus 116 m tower, St. Martin capped,
+building passages at grade, polygon-shaped 3D ground, showcase camera, terrain flat (no download);
+(5) first frame 1.8 to 2.1 s from page open (was 7.9 to 8.5 s; one compile instead of two, population
+shipped, walk network and street details after the first frame, worker loads during compile, shared
+2D/3D geometry), 3D 2.0 to 4.0 s later; (6) `open('freiburg')` paused at 07:00, New city lists it
+first, `?city=<id>` opens any bundled city, 66 e2e specs open the grid that way; (7) Freiburg's gate:
+0 gridlocked, 0 stalled, 0 no-route, 0 parking failures, worst visit 799 s, render CPU p95 3.1 ms 2D,
+3.8 ms 3D (budgets 4 and 6). Curation for the gate: Siegesdenkmal U-turn bans, the two ring gateways at
+30% demand. With TASK-194's actuated programs Freiburg gridlocks (11 trips, a stalled head on r:904
+from 09:13, 2,838 s), so `curateFreiburg` removes `actuated` from its programs; owner approved
+shipping that way (2026-11-17), TASK-199 written. Schema: optional `geo.boundary` (allowed by the
+contract). Lead check on the merge: check (1,486), city (183), traffic light, light e2e (61); the
+production build opened in the browser on Freiburg in Light and Dark at 1440 and 800 px with no
+console errors. Open: 8 tram stops unserved; 3D camera crops the west behind the inspector; the 2D view
+leaves margin; the e2e production build cache under `node_modules/.cache/qa-production` is shared by
+every worktree; a wider extract with `building:part` and AWS terrain need the owner's go-ahead.
+
 Full run 44114508937 (lead, manual, on 9a939d9 after TASK-194): every job green; CI green on 9a939d9;
 the city job took 39.9 min (29.6 min on the last run).
 
@@ -4419,6 +4447,7 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-17 (owner): Freiburg ships now with fixed-time signals; TASK-199 fixes its actuated jam.
 - 2026-11-17 (owner): merge TASK-194 with actuated generated signals as the default, accepting about
   7% fewer completed trips at full demand for 16 to 32% less delay at 0.15.
 - 2026-11-17 (owner): the landing city is Freiburg (TASK-197's recommendation); TASK-198 builds it.

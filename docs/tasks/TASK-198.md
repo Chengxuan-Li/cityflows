@@ -1,6 +1,6 @@
 # TASK-198 — The showcase landing city: Freiburg
 
-Status: in progress (owner picked Freiburg 2026-11-17). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-17 (fixed-time signals until TASK-199). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/198-landing-city`, worktree `D:\cityflows-wt\198`, ports 5399 / 5499.
 
 ## Goal
