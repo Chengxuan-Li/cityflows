@@ -1,6 +1,6 @@
 # TASK-192 — 3D labels: hidden streets and labels while the camera moves
 
-Status: approved by the owner 2026-11-16; in progress. Proposed owner: Claude Code
+Status: done 2026-11-16 (merged; see plan.md). Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/192-labels-3d-polish`, worktree `D:\cityflows-wt\192`, ports
 5392 / 5492.
 

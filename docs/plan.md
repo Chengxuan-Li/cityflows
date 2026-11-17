@@ -217,7 +217,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | done |
 | [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | done |
 | [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | done |
-| [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | in progress (approved 2026-11-16) |
+| [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4304,6 +4304,21 @@ light e2e (53). Open: the jam ring (its own task: detours that refuse routes bac
 the exit-full hold on single-movement group-entry lanes); the actuated full-demand gap (candidate:
 phase 1 skipped at jg:10802, r:639 green 58% against 65%); amber and all-red shown to movements that
 stay green into the next phase (about 4 s per change, both modes).
+
+TASK-192 (Claude Code subagent, Opus 5.5 high, 2026-11-16; merged): 3D labels (`src/render3d/labels.ts`)
+now treat buildings and road decks as occluders, checked once per placement (2 to 5 ms in Node on
+Munich): a street name runs only on a visible stretch at least as long as its text; stations, stops
+and places drop when their point is hidden (their own building does not count); hiding Buildings or
+Surroundings stops the occlusion. While the camera moves each placed street glyph follows its road
+point, turns with the road on screen, scales with distance and flips to read left to right; at the
+placement camera it matches the placement to 0.01 px (chosen over fading, which would blank names on
+every gesture). Quiet rounds after the batch (lead request; 1 to 4 valid, 5 and 6 discarded for an
+outside job): T64 3D labels on against off, branch +2.1% rail on and +4.1% rail off (main +3.8% and
++3.8%; one rail-off round +6.5% under 11 to 17% outside load); 340 glyphs against main's 529. Check
+(1,477), city (176), light e2e (48), T62, T64, V183, V105. Open: at TASK-183's street camera only 1
+street and 1 place remain (8 streets, 1 stop, 6 places on main, mostly on roofs), and a partly hidden
+street loses its name; trees, trains, terrain and canopies do not occlude; pitched roofs count at full
+height; while moving, text is not capped at TASK-167's maximum size until it settles.
 
 Full run 43885610218 (lead, manual, on 592ad58 after TASK-185, 186 and 187): every job green; the city
 job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full run 43591345828.
