@@ -1,4 +1,4 @@
-import { compile, type Diagnostic } from '../network';
+import { compile, type CompileResult, type Diagnostic } from '../network';
 import { addImplicitGarages } from '../network/parking';
 import type { City, HistoryEntry, Patch } from '../schema';
 import { dispatch } from './commands';
@@ -15,11 +15,14 @@ function displayOnly(patch: Patch): boolean {
   );
 }
 
-export function createEditor(initialCity: City): Editor {
+/** `precompiled`, when given, is `compile(initialCity)` already done by the caller (TASK-198:
+ * the landing city compiles once on load); it is used unless implicit garages change the city. */
+export function createEditor(initialCity: City, precompiled?: CompileResult): Editor {
   const materialized = { ...initialCity, parking: { ...initialCity.parking } };
   addImplicitGarages(materialized);
-  if (materialized.nextId !== initialCity.nextId) initialCity = materialized;
-  const initial = compile(initialCity);
+  const changed = materialized.nextId !== initialCity.nextId;
+  if (changed) initialCity = materialized;
+  const initial = precompiled && !changed ? precompiled : compile(initialCity);
   if (!initial.ok) {
     throw new Error(
       `Cannot edit invalid city: ${initial.diagnostics.map(({ message }) => message).join('; ')}`,

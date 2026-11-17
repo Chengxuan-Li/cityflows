@@ -57,8 +57,8 @@ import {
 import { buildHalos, buildPools, type LightPoint } from './lights';
 import { tramStopSize } from '../render/tram-stops';
 import { buildVegetation, surfaceTexture } from './vegetation';
-import { placeTrees } from '../render/vegetation';
-import { placeStreet, treeContext } from '../render/street';
+import type { placeTrees } from '../render/vegetation';
+import { placeDetails, type placeStreet } from '../render/street';
 import { buildStreet } from './street';
 import { Vehicles3D } from './vehicles';
 import { buildWalkSignals, Walkers3D } from './walkers';
@@ -386,7 +386,8 @@ export class Scene3D {
     this.setWalkLayers(this.walkVisibility.sidewalks, this.walkVisibility.footways);
     asphalt.material.map = surfaceTexture('asphalt');
     const placementStart = performance.now();
-    const placed = placeTrees(city, treeContext(source));
+    const details = placeDetails(city, source);
+    const placed = details.trees;
     this.canvas.dataset.treePlacementMs = String(performance.now() - placementStart);
     this.treeCounts = placed.counts;
     this.canvas.dataset.treeCounts = JSON.stringify(placed.counts);
@@ -394,7 +395,7 @@ export class Scene3D {
     this.vegetation = buildVegetation(placed.trees, (p) => terrain.groundAt(p.x, p.y));
     this.content.add(this.vegetation.group);
     const streetStart = performance.now();
-    const furniture = placeStreet(city, source, placed.trees);
+    const furniture = details.street;
     this.streetCounts = furniture.counts;
     this.canvas.dataset.streetCounts = JSON.stringify(furniture.counts);
     this.canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);

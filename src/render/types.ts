@@ -147,7 +147,11 @@ export interface Scene {
   readonly camera: Camera;
   setActive(active: boolean): void;
   /** Supply source geometry to draw place rings and stack grade-separated roads. */
-  setCity(compiled: CompiledCity, source?: CityGeometry): void;
+  /** `deferDetails` (TASK-198): trees, street furniture, the walk network, stations, walk
+   *  signals and junction guides wait for `drawDetails`, as the landing city's first frame does
+   *  while its walk graph compiles. */
+  setCity(compiled: CompiledCity, source?: CityGeometry, deferDetails?: boolean): void;
+  drawDetails(): void;
   setTiles(enabled: boolean): void;
   setSnapshot(snapshot: VehicleSnapshot): void;
   setParkedCars(snapshot: ParkedCarsSnapshot | null): void;
@@ -179,4 +183,6 @@ export type CityGeometry = {
   geo?: City['geo'];
   context?: City['context'];
   terrain?: City['terrain'];
+  /** TASK-198: the mapped walk network, for its grades while the walk graph is deferred. */
+  walk?: City['walk'];
 };

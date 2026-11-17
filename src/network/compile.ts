@@ -81,7 +81,10 @@ export function centroid(shape: Place['shape']): Vec2 | null {
   return { x: origin.x + x / (3 * area), y: origin.y + y / (3 * area) };
 }
 
-export function compile(city: City): CompileResult {
+/** `deferWalk`, when given, receives the step that compiles the pedestrian graph (and the
+ * signals' walk phases) instead of compile running it: the caller runs it before using the walk
+ * graph, which is empty until then (TASK-198: the landing city draws its first frame first). */
+export function compile(city: City, deferWalk?: (finish: () => void) => void): CompileResult {
   const diagnostics: Diagnostic[] = [];
   const sourceNodes = sortedValues(city.nodes);
   const sourceRoads = sortedValues(city.roads);
@@ -581,8 +584,16 @@ export function compile(city: City): CompileResult {
   for (const lane of lanes)
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   warnAboutConnectivity(compiled, diagnostics);
-  compiled.walk = compileWalk(city, compiled);
-  compileSignalWalk(compiled, programs);
   if (city.rail) compiled.rail = compileRail(city, compiled);
+  if (deferWalk)
+    // Filled in place: views made of the compiled city before (paintedCity) share the graph.
+    deferWalk(() => {
+      Object.assign(compiled.walk, compileWalk(city, compiled));
+      compileSignalWalk(compiled, programs);
+    });
+  else {
+    compiled.walk = compileWalk(city, compiled);
+    compileSignalWalk(compiled, programs);
+  }
   return { ok: true, compiled, diagnostics };
 }

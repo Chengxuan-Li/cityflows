@@ -8,8 +8,8 @@ import { cityGrades } from './grades';
 import { Camera } from './camera';
 import { FrameDemand, renderContinuously } from './frame-demand';
 import { drawVegetation } from './layers/vegetation';
-import { placeTrees } from './vegetation';
-import { placeStreet, treeContext } from './street';
+import type { placeTrees } from './vegetation';
+import { placeDetails, type placeStreet } from './street';
 import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
 import { drawRail } from './layers/rail';
@@ -326,6 +326,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let updatePlaces: ((zoom: number) => void) | undefined;
   let redrawPlaces = () => {};
   let redrawWalk = () => {};
+  let pendingDetails: (() => void) | undefined;
+  function drawDetails() {
+    const details = pendingDetails;
+    pendingDetails = undefined;
+    details?.();
+  }
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
   let walkerLayers = new Map<number, Graphics>();
@@ -647,7 +653,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (import.meta.env.MODE === 'test') canvas.dataset.active = String(active);
       if (active) invalidate();
     },
-    setCity(compiled, source) {
+    setCity(compiled, source, deferDetails = false) {
       compiled = paintedCity(compiled);
       const markingTheme = markingThemes[cityMarkingTheme(source)];
       // Versions identify edits within a city. Different source cities can share a version.
@@ -697,37 +703,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       const features = (source?.context?.features ?? []).filter(
         (f) => !compiled.rail || (f.class !== 'rail' && f.class !== 'tram'),
       );
-      const placementStart = performance.now();
-      const placed = placeTrees(compiled, treeContext(source ?? { nodes: {}, places: {} }));
-      treeCounts = placed.counts;
-      canvas.dataset.treePlacementMs = String(performance.now() - placementStart);
-      canvas.dataset.treeCounts = JSON.stringify(placed.counts);
-      canvas.dataset.treeCap = String(placed.capped);
-      const streetStart = performance.now();
-      const street = placeStreet(compiled, source ?? { nodes: {}, places: {} }, placed.trees);
+      // TASK-198: trees, street furniture, the walk network, stations, walk signals and junction
+      // guide lines are drawn by `details` below: at the end of setCity, or after the landing
+      // city's first frame and its walk graph (`deferDetails`).
+      treeCounts = undefined;
+      furnitureCounts = undefined;
       const tramPlacements = compiled.rail
         ? placeTramStops(compiled, source ?? { nodes: {}, places: {} })
         : [];
-      night.setPoints(
-        street.lamps.map(({ pos, heading, source }) => {
-          // Generated heads reach over the road; mapped lamps centre on the post (as in 3D).
-          const reach = source === 'generated' ? 2.5 : 0;
-          return {
-            x: pos.x + reach * Math.cos(heading),
-            y: pos.y + reach * Math.sin(heading),
-            radiusM: 8,
-          };
-        }),
-        platformLights(compiled, tramPlacements),
-      );
+      night.setPoints([], platformLights(compiled, tramPlacements));
       for (const child of night.signals.removeChildren()) child.destroy();
-      furnitureCounts = street.counts;
-      canvas.dataset.streetCounts = JSON.stringify(street.counts);
-      canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
-
-      const vegetationStart = performance.now();
-      vegetation = drawVegetation(placed.trees);
-      canvas.dataset.vegetationRebuildMs = String(performance.now() - vegetationStart);
+      vegetation = drawVegetation([]);
+      furniture = [];
       contextFeatures = features;
       surroundings = drawContext(features, palette);
       contextCount = features.length;
@@ -740,21 +727,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ...nodeGrades,
         ...roadGrades,
         ...compiled.walk.links.map((l) => l.layer),
+        // TASK-198: while the walk graph is deferred, the mapped walk network's grades.
+        ...(compiled.walk.links.length
+          ? []
+          : [
+              ...Object.values(source?.walk?.links ?? {}).map((l) => l.layer ?? 0),
+              ...Object.values(source?.walk?.nodes ?? {}).map((n) => n.layer),
+            ]),
         ...(compiled.rail?.tracks.map((t) => t.layer) ?? []),
         ...(compiled.rail?.platforms.map((p) => p.layer) ?? []),
       ]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
-      stations = compiled.rail
-        ? drawStations(
-            placeStationFurniture(compiled, source ?? { nodes: {}, places: {} }),
-            compiled.rail,
-            trainTimetable(compiled.rail),
-          )
-        : undefined;
-      for (const [layer, { container }] of stations?.grades ?? []) {
-        const grade = grades.get(layer) ?? grades.get(0)!;
-        grade.group.addChildAt(container, grade.group.getChildIndex(grade.places) + 1);
-      }
+      stations = undefined;
       tramStops = compiled.rail ? drawTramStops(tramPlacements) : undefined;
       for (const [layer, { container }] of tramStops?.grades ?? []) {
         const grade = grades.get(layer) ?? grades.get(0)!;
@@ -789,7 +773,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       }
       walkerLayers = new Map(visibleGrades.map((grade) => [grade.layer, grade.walkers]));
       drawnWalkers = false;
-      const walkShapes = walkGeometry(compiled, source);
+      let walkShapes: ReturnType<typeof walkGeometry> = [];
       redrawWalk = () => {
         for (const grade of visibleGrades) {
           grade.sidewalks.clear();
@@ -821,8 +805,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         visibleGrades[0]!.terrain.addChildAt(hillshade, 0);
       }
       const base = grades.get(0)!;
-      furniture = drawStreet(street, roadGrades);
-      for (const layer of furniture) grades.get(layer.grade)!.group.addChild(layer.container);
       base.group.addChildAt(heat.roads, base.group.getChildIndex(base.connectors));
       base.group.addChildAt(difference, base.group.getChildIndex(base.connectors));
       applyVisibility();
@@ -910,18 +892,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         }
         updateTerrainCache();
       };
-      // Guide lines do not depend on road-class tones.
-      for (const node of city.nodes)
-        drawJunctionMarkings(grades.get(nodeGrades[node.idx]!)!.guides, city, node, markingTheme);
       redrawTerrain();
       canvas.dataset.markingTheme = markingTheme.id;
       for (const node of city.nodes) {
         const grade = grades.get(nodeGrades[node.idx]!)!;
         drawSigns(city, node, grade.signals);
-        if (node.signal) {
-          updateSignals.push(drawSignal(city, node, grade.signals, night.signals));
-          updateSignals.push(drawWalkSignals(city, node, grade.signals));
-        }
+        if (node.signal) updateSignals.push(drawSignal(city, node, grade.signals, night.signals));
       }
       redrawPlaces = () => {
         const { places, connectors, placeFills } = grades.get(0)!;
@@ -1013,7 +989,90 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         performance.measure('cityflows:rebuild', { start: rebuildStart, end: performance.now() });
         performance.clearMeasures('cityflows:rebuild');
       }
+      const details = () => {
+        if (destroyed || city !== compiled) return;
+        const context = source ?? { nodes: {}, places: {} };
+        const placementStart = performance.now();
+        const details = placeDetails(compiled, context);
+        const placed = details.trees;
+        treeCounts = placed.counts;
+        canvas.dataset.treePlacementMs = String(performance.now() - placementStart);
+        canvas.dataset.treeCounts = JSON.stringify(placed.counts);
+        canvas.dataset.treeCap = String(placed.capped);
+        const streetStart = performance.now();
+        const street = details.street;
+        night.setPoints(
+          street.lamps.map(({ pos, heading, source }) => {
+            // Generated heads reach over the road; mapped lamps centre on the post (as in 3D).
+            const reach = source === 'generated' ? 2.5 : 0;
+            return {
+              x: pos.x + reach * Math.cos(heading),
+              y: pos.y + reach * Math.sin(heading),
+              radiusM: 8,
+            };
+          }),
+          platformLights(compiled, tramPlacements),
+        );
+        furnitureCounts = street.counts;
+        canvas.dataset.streetCounts = JSON.stringify(street.counts);
+        canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
+        const vegetationStart = performance.now();
+        const terrain = visibleGrades[0]!.terrain;
+        const fresh = drawVegetation(placed.trees);
+        terrain.addChildAt(fresh.container, terrain.getChildIndex(vegetation!.container));
+        vegetation!.container.destroy({ children: true });
+        vegetation = fresh;
+        canvas.dataset.vegetationRebuildMs = String(performance.now() - vegetationStart);
+        walkShapes = walkGeometry(compiled, source);
+        redrawWalk();
+        // Guide lines do not depend on road-class tones; like the markings, they are hidden at
+        // the overview zoom a city opens on.
+        // Stations place their entrances on walk nodes; walk signals mark signalised crossings.
+        stations = compiled.rail
+          ? drawStations(
+              placeStationFurniture(compiled, context),
+              compiled.rail,
+              trainTimetable(compiled.rail),
+            )
+          : undefined;
+        for (const [layer, { container }] of stations?.grades ?? []) {
+          const grade = grades.get(layer) ?? grades.get(0)!;
+          const after = [
+            tramStops?.grades.get(layer)?.container,
+            levelCrossings?.grades.get(layer)?.container,
+            grade.places,
+          ].find((c) => c?.parent === grade.group)!;
+          grade.group.addChildAt(container, grade.group.getChildIndex(after) + 1);
+        }
+        updateStations();
+        for (const node of compiled.nodes)
+          if (node.signal)
+            updateSignals.push(
+              drawWalkSignals(compiled, node, grades.get(nodeGrades[node.idx]!)!.signals),
+            );
+        for (const node of compiled.nodes)
+          drawJunctionMarkings(
+            grades.get(nodeGrades[node.idx]!)!.guides,
+            compiled,
+            node,
+            markingTheme,
+          );
+        furniture = drawStreet(street, roadGrades);
+        for (const layer of furniture) grades.get(layer.grade)!.group.addChild(layer.container);
+        drawnLight = '';
+        applyLight();
+        applyVisibility();
+        for (const grade of visibleGrades) {
+          grade.terrain.cacheAsTexture(false);
+          grade.cacheResolution = 0;
+        }
+        updateTerrainCache();
+        invalidate();
+      };
+      pendingDetails = details;
+      if (!deferDetails) drawDetails();
     },
+    drawDetails,
     setTiles(enabled) {
       invalidate();
       tilesEnabled = enabled;

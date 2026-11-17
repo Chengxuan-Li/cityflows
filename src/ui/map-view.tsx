@@ -79,6 +79,14 @@ function walkLinksForMap(links: readonly number[], { compiled, loadedCompiled }:
     .filter((i) => i !== undefined);
 }
 
+/** TASK-198: what a city being opened draws with, before its session (store `preview`). */
+type Preview = {
+  project: Session['project'];
+  compiled: Session['compiled'];
+  editor: Session['editor'];
+  complete?: boolean;
+};
+
 /** TASK-198: a bundled project's showcase 3D camera (view.json `camera['3d']`): centre in
  *  metres, zoom as a multiple of the fitted 2D zoom, pitch and bearing in degrees. */
 function showcase3D(project: Session['project']) {
@@ -95,7 +103,7 @@ function showcase3D(project: Session['project']) {
     : undefined;
 }
 
-function fitCity(scene: Scene, canvas: HTMLCanvasElement, { project, compiled }: Session) {
+function fitCity(scene: Scene, canvas: HTMLCanvasElement, { project, compiled }: Preview) {
   const bounds: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   const points = [
     ...compiled.roads.flatMap(({ surface }) => surface),
@@ -352,6 +360,7 @@ export function MapView() {
       signal.addEventListener('abort', () => recentre.disconnect());
 
       let drawn: Session | null = null;
+      let drawnPreview: Preview | null = null;
       let showcased: Session['editor'] | null = null;
       let fittedZoom = 1;
       let drawn3D: Session | null = null;
@@ -530,9 +539,41 @@ export function MapView() {
       function frame(now: number) {
         animation = requestAnimationFrame(frame);
         if (!active3D) pointer.advance(now);
-        const { session, selection, vehicle, walker, busy } = getState();
+        const { session, selection, vehicle, walker, busy, preview } = getState();
         const elapsedS = Math.max(0, now - lastFrame) / 1000;
         lastFrame = now;
+        // TASK-198: a city being opened is drawn while its trips and engine load; its session
+        // then keeps this drawing (same compiled city) and fits it again to the settled map.
+        if (busy && preview?.complete && drawnPreview?.compiled === preview.compiled)
+          view.drawDetails();
+        if (busy && preview && !active3D && preview.compiled !== drawnPreview?.compiled) {
+          if (getState().layers !== drawnLayers) {
+            view.setLayerVisibility(getState().layers);
+            view.setTiles(getState().layers.basemap);
+            drawnLayers = getState().layers;
+          }
+          const appearance = useAppearance.getState();
+          view.setMapPalette(
+            resolveAppearance(
+              appearance.settings,
+              appearance.systemDark,
+              useLighting.getState().lighting,
+              preview.project.scenarios[0]!.startS,
+            ).darkMap
+              ? mapPalettes.dark
+              : mapPalettes.light,
+          );
+          view.setCity(preview.compiled, preview.project.city, true);
+          pointer.reset();
+          fitCity(view, canvas, preview);
+          fittedZoom = view.camera.zoom;
+          requestAnimationFrame(() => {
+            performance.mark('cityflows:first-frame');
+            getState().previewShown();
+          });
+          drawnPreview = preview;
+          drawn = null;
+        }
         if (!session || busy) return;
         if (revealCheck) {
           revealCheck = false;
@@ -581,6 +622,8 @@ export function MapView() {
           drawn?.project.city.markingTheme !== session.project.city.markingTheme
         ) {
           view.setCity(session.compiled, session.project.city);
+          // The preview's trees, furniture and walk network, now that its walk graph is compiled.
+          view.drawDetails();
           view.setDisconnected(
             session.diagnostics
               .filter(({ code }) => code === 'disconnected_component')
@@ -659,6 +702,7 @@ export function MapView() {
             drawn3D?.project.city.markingTheme !== session.project.city.markingTheme)
         ) {
           three!.setCity(session.compiled, session.project.city, layers.terrain);
+          if (!drawn3D) requestAnimationFrame(() => performance.mark('cityflows:first-frame-3d'));
           three!.setParkingOccupancy(parkingCounts);
           three!.setParkedCars(
             remapParkedCars(getState().parkedCars, session.loadedCompiled, session.compiled),
