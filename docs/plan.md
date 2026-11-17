@@ -4323,6 +4323,9 @@ height; while moving, text is not capped at TASK-167's maximum size until it set
 Full run 43885610218 (lead, manual, on 592ad58 after TASK-185, 186 and 187): every job green; the city
 job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full run 43591345828.
 
+Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job green; CI green on
+each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
+
 ## Owner decisions log
 
 - 2026-11-16 (owner): "Proceed with the next round of tasks": TASK-188 to 192 run now.
