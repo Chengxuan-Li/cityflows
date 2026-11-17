@@ -1972,6 +1972,17 @@ the engine's head choices without changing route search or its request/result co
 TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
 not contain the other per-vehicle timers).
 
+Detour reroutes (TASK-193). The reroute after a head detour, and after every missed turn taken
+by a lane fallback (including the chain chosen through a junction group), avoids coming back
+over roads the trip has already driven, the road it is leaving among them. When the plain route
+returns over any of them, the search is repeated with a large constant added to each such
+road's cost, and that route is taken if it returns over fewer; otherwise the plain route stands.
+Respawn and live patches clear a vehicle's driven roads; like the head history, they are not in
+snapshots or the hash. In Munich, cars that missed jg:10802's
+right turn onto r:680, or the lanes to r:715 at r:654, had been sent round a 2.5 km lap through
+r:663, the single-lane r:679 and r:735, jg:10784, n:263 and the Landsberger loop back to the
+same approach, a jam ring that spilled back into the loop.
+
 TASK-143 reuses each waiting head's landing-lane suffix results, including failures, within
 the current link-cost epoch. The engine drops these results on a lane-plan change or live
 patch, clears the epoch on a cost-version change, and replaces a head's entries when its

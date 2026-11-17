@@ -59,6 +59,11 @@ import {
   OFF_LANE,
 } from './vehicle';
 
+/** TASK-193: added to the cost of each road a rerouting car has already driven on this trip, so
+ * the search returns over as few of them as it can (finite, so a route that must return is still
+ * found). */
+const LAP_PENALTY_S = 1e6;
+
 type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   routeProvider?: RouteProvider;
   linkCosts?: LinkCosts;
@@ -281,6 +286,31 @@ function createRun({
     );
   }
 
+  /** TASK-193: the route of a car that missed its turn or took a head detour, from `lane`. The
+   * plain route stands unless it comes back over roads the trip has already driven (`left`, the
+   * road being left, among them); then a route over fewer of them wins when one exists. Munich's
+   * jam ring behind jg:10802 was fed by cars sent round a 2.5 km lap back to where they missed. */
+  const avoidCosts: LinkCosts = { roadTravelTimeS: new Float64Array(0), version: 0 };
+  const visited: (Set<number> | undefined)[] = Array(trips.length);
+  function rerouteFrom(id: number, lane: number, left: number) {
+    const result = routeFrom(id, lane, 0);
+    const seen = (visited[id] ??= new Set()).add(left);
+    const revisits = (roads: number[]) => roads.slice(1).filter((road) => seen.has(road)).length;
+    if (!result.ok) return result;
+    const plain = revisits(result.route.roads);
+    if (!plain) return result;
+    avoidCosts.roadTravelTimeS = costs.roadTravelTimeS.slice();
+    for (const road of seen)
+      avoidCosts.roadTravelTimeS[road] = avoidCosts.roadTravelTimeS[road]! + LAP_PENALTY_S;
+    avoidCosts.version++;
+    const avoiding = provider.route(
+      compiled,
+      avoidCosts,
+      vehicleRouteRequest(vehicles, params, id, lane, 0),
+    );
+    return avoiding.ok && revisits(avoiding.route.roads) < plain ? avoiding : result;
+  }
+
   function headRouteFrom(id: number, lane: number) {
     const request = vehicleRouteRequest(vehicles, params, id, lane, 0);
     let cached = headRoutes.get(id);
@@ -338,7 +368,7 @@ function createRun({
       route.roads[step + 1] === compiled.lanes[movement.toLane]!.road
     )
       return { route, step };
-    const result = routeFrom(id, movement.toLane, 0);
+    const result = rerouteFrom(id, movement.toLane, compiled.lanes[movement.fromLane]!.road);
     return result.ok ? { route: result.route, step: -1 } : null;
   }
 
@@ -1177,6 +1207,8 @@ function createRun({
 
   function enterLane(id: number, lane: number, position: number, timeS: number) {
     const road = compiled.lanes[lane]!.road;
+    const from = vehicles.lane[id]!;
+    (visited[id] ??= new Set()).add(road);
     for (const movement of unresolvedHeads[id] ?? []) {
       if (compiled.lanes[compiled.movements[movement]!.toLane]!.road === road)
         unresolvedHeads[id]!.delete(movement);
@@ -1196,7 +1228,9 @@ function createRun({
       }
     } else if (fallback[id]) {
       const result =
-        cleared?.step === -1 ? { ok: true as const, route: cleared.route } : routeFrom(id, lane, 0);
+        cleared?.step === -1
+          ? { ok: true as const, route: cleared.route }
+          : rerouteFrom(id, lane, compiled.lanes[compiled.movements[-from - 1]!.fromLane]!.road);
       if (!result.ok) {
         vehicles.lane[id] = lane;
         vehicles.position[id] = 0;
@@ -1416,6 +1450,7 @@ function createRun({
       vehicles.position[id] = 0;
       vehicles.route[id] = null;
       vehicles.attemptedFallbacks[id] = undefined;
+      visited[id] = undefined;
       accounting.respawn(id);
       connectors.requeue(id, timeS);
     }
@@ -1570,6 +1605,7 @@ function createRun({
     vehicles.headDetourS.fill(0);
     sharedFollower.fill(-1);
     unresolvedHeads.fill(undefined);
+    visited.fill(undefined);
     pendingHead.fill(-1);
     const changes = patchChanges(before, next);
     const project = createProjector(next);
