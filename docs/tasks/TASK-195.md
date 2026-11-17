@@ -1,6 +1,6 @@
 # TASK-195 — 3D names for partly hidden streets
 
-Status: approved by the owner 2026-11-17; in progress. Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-17 (merged; see plan.md). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/195-partly-hidden-streets`, worktree `D:\cityflows-wt\195`, ports 5396 / 5496.
 
 ## Goal

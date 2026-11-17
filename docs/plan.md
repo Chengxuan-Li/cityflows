@@ -220,7 +220,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | done |
 | [TASK-193](tasks/TASK-193.md) | 9 | The jam ring behind jg:10802 (detours feeding the queue they leave, or the exit-full hold on single-movement entry lanes) | `src/sim/**` | 121, 154, 188 | seeds 1-12 both modes, full demand, drain, gate, guard | in progress (approved 2026-11-17) |
 | [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | planned (approved 2026-11-17; after 193) |
-| [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | in progress (approved 2026-11-17) |
+| [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | done |
 | [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
 | [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | planned (awaits go-ahead for downloads) |
 | [TASK-198](tasks/TASK-198.md) | UI | Build the chosen landing city as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | planned (after 197 and the owner's pick) |
@@ -4338,6 +4338,20 @@ Wider layouts never mount the sheet; camera centres at 768 and 1280 px, 2D and 3
 Check (1,480), light e2e (61 with the new `qa-phone-recentre`), `qa-mobile` and `qa-phone-sheet` (16).
 Open: a selected train has no anchor; a long street centres on its middle, not the tapped point; at full
 height the anchor lands in the 44 px strip; a 3D pan can show the ground plane's edge (as any pan does).
+
+TASK-195 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged): a 3D street name is tried on every
+visible stretch of every road with that name (both carriageways, either direction), most road in view
+first, at the street's anchor nearest the stretch's middle, then smaller down to TASK-167's minimum;
+visible stretches now run to within 2 px of what hides them; every glyph's sight line is re-tested after
+placement. A hidden station, stop or place moves to the nearest visible open ground of its own area.
+Counts (streets / stops / places) against TASK-192: TASK-183 street camera 1/0/1 to 1/0/4 (Lilli-Palmer-
+Straße shows about 65 px of road, shorter than its name at the minimum), station street view 3/0/3 to
+4/0/6, west street view 3/0/2 to 5/1/5, overview 6/0/2 to 7/0/5. Quiet window (TASK-193 paused), four
+clean rounds: T64 3D labels on against off +2.7% rail on, +2.9% rail off (worst +4.2%); 424 glyphs
+against 340. Check (1,482), city (176), light e2e (53), T62, T64 (the moving-train budget failed once
+under outside load and passed alone), V183. Open: low-pitch street views stay sparse; a moved point
+label can overlap a roof edge; a label can jump stretch at the next settle; the area lookup relies on
+the 2D candidate key format (`name/id`).
 
 Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job green; CI green on
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
