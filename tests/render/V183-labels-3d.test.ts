@@ -11,7 +11,13 @@ import { buildCity } from '../../src/fixtures/build-city';
 import type { Vec2 } from '../../src/geo/vec2';
 import { nearestOnPolyline } from '../../src/geo/polyline';
 import { compile, type CompiledCity } from '../../src/network';
-import { labelCandidates, labelFonts, labelRules, type Measure } from '../../src/render/labels';
+import {
+  labelCandidates,
+  labelFonts,
+  labelRules,
+  labelScale,
+  type Measure,
+} from '../../src/render/labels';
 import type { CityGeometry } from '../../src/render/types';
 import { cityHeights } from '../../src/render3d/heights';
 import type { ContextFeature } from '../../src/schema';
@@ -22,6 +28,7 @@ import {
   Labels3D,
   Occluders,
   placeLabels3D,
+  pointAreas,
   sampleLines,
   settleFrames,
   settleMs,
@@ -94,7 +101,15 @@ function place(city: CompiledCity, source: CityGeometry, v: LabelView, hidden: O
   const candidates = labelCandidates(city, source);
   const heights = cityHeights(city, source);
   const ground = (p: Vec2) => heights.terrain.groundAt(p.x, p.y);
-  return placeLabels3D(candidates, sampleLines(candidates, ground), ground, v, measure, hidden);
+  return placeLabels3D(
+    candidates,
+    sampleLines(candidates, ground),
+    ground,
+    v,
+    measure,
+    hidden,
+    pointAreas(city, source, candidates),
+  );
 }
 
 /** A flat-roofed block of `heightM` over the rectangle. */
@@ -398,6 +413,111 @@ unitTest('V192 street labels stay on their roads and upright through a scripted 
   expect(turned.at(-1)!.x).toBeGreaterThan(turned[0]!.x);
 });
 
+/** Whether every placed glyph, and every point label's point, has a clear sight line. */
+function allSeen(placed: Placed3D[], v: LabelView, hidden: Occluders[]) {
+  const eye = { x: v.camera.position.x, y: v.camera.position.z, h: v.camera.position.y };
+  return placed.every((p) =>
+    p.along
+      ? p.along.placed.every(
+          ({ at }) => !hidden.some((o) => o.blocked(eye, at.x, at.y, at.h + 0.5)),
+        )
+      : !hidden.some((o) => o.blocked(eye, p.anchor.x, p.anchor.y, p.anchor.h, true)),
+  );
+}
+
+unitTest('V195 a street hidden for most of its length keeps its name where it shows', () => {
+  const { compiled, city } = town();
+  // Weg 600 runs north from Hauptstraße (y = 0) to y = -300, its anchors every 25 m from
+  // y = -150. Two 30 m blocks east of it leave a gap between the anchors at y = -125 and -100.
+  const gap = (from: number, to: number) => [
+    block(615, -315, 700, from, 30),
+    block(615, to, 700, -8, 30),
+  ];
+  const east = view({ x: 600, y: -112.5 }, 150, 10, 90);
+  const weg = (features: ContextFeature[]) => {
+    city.context = { features };
+    const hidden = occluders(compiled, city);
+    const placed = expectGoodPlacement(compiled, city, east, hidden);
+    expect(allSeen(placed, east, hidden)).toBe(true);
+    return placed.filter((p) => p.label.candidate.text === 'Weg 600' && p.inView);
+  };
+  // Through a 17 m gap the camera sees about 19 m of the street: its name runs there, at its
+  // size, on road the camera sees.
+  const shown = weg(gap(-121, -104));
+  expect(shown).toHaveLength(1);
+  const { label, along } = shown[0]!;
+  for (const { at } of along!.placed) {
+    expect(at.y).toBeGreaterThan(-123);
+    expect(at.y).toBeLessThan(-102);
+  }
+  const zoom = (v: LabelView, at: { x: number; y: number; h: number }) =>
+    v.height / (2 * Math.tan((v.camera.fov * Math.PI) / 360)) / depth(v, at);
+  const middle = along!.placed[Math.floor(along!.placed.length / 2)]!.at;
+  expect(label.scale).toBeCloseTo(labelScale(label.candidate.style, zoom(east, middle)), 6);
+  // Through a 8.5 m gap the name fits only smaller, down to TASK-167's smallest size.
+  const smaller = weg(gap(-116.75, -108.25));
+  expect(smaller).toHaveLength(1);
+  expect(smaller[0]!.label.scale).toBeGreaterThanOrEqual(1);
+  expect(smaller[0]!.label.scale).toBeLessThan(labelScale('minor', zoom(east, middle)) - 0.05);
+  // Through a 2 m gap, or behind one block, it stays unnamed.
+  expect(weg(gap(-113.5, -111.5))).toEqual([]);
+  expect(weg([block(615, -315, 700, -8, 30)])).toEqual([]);
+});
+
+unitTest('V195 a hidden place moves to open ground of its own area that the camera sees', () => {
+  const { city } = town();
+  const rathaus = Object.values(city.places).find((p) => p.name === 'Rathaus')!;
+  rathaus.shape = {
+    kind: 'polygon',
+    ring: [
+      { x: 300, y: 60 },
+      { x: 500, y: 60 },
+      { x: 500, y: 140 },
+      { x: 300, y: 140 },
+      { x: 300, y: 60 },
+    ],
+  };
+  const result = compile(city);
+  if (!result.ok) throw Error('compile');
+  const compiled = result.compiled;
+  const candidates = labelCandidates(compiled, city);
+  const areas = pointAreas(compiled, city, candidates);
+  const heights = cityHeights(compiled, city);
+  const ground = (p: Vec2) => heights.terrain.groundAt(p.x, p.y);
+  const lines = sampleLines(candidates, ground);
+  const south = view({ x: 400, y: 100 }, 300, 12, 0);
+  const find = (features: ContextFeature[], withAreas = areas) => {
+    city.context = { features };
+    const hidden = occluders(compiled, city);
+    const placed = placeLabels3D(candidates, lines, ground, south, measure, hidden, withAreas);
+    expect(allSeen(placed, south, hidden)).toBe(true);
+    return { hidden, label: placed.find((p) => p.label.candidate.text === 'Rathaus') };
+  };
+  // Seen, it stays at its point.
+  expect(find([]).label!.anchor).toMatchObject({ x: 400, y: 100 });
+  // A tower south of the area hides its point but not its ends: the name moves to the nearest
+  // open ground of the area the camera sees, never inside a building.
+  const tower = block(360, 150, 440, 170, 40);
+  const hall = block(310, 70, 352, 130, 15);
+  const { hidden, label } = find([tower, hall]);
+  const { x, y, h } = label!.anchor;
+  expect(x < 360 || x > 440).toBe(true);
+  expect(x).toBeGreaterThanOrEqual(300);
+  expect(x).toBeLessThanOrEqual(500);
+  expect(y).toBeGreaterThanOrEqual(60);
+  expect(y).toBeLessThanOrEqual(140);
+  const eye = {
+    x: south.camera.position.x,
+    y: south.camera.position.z,
+    h: south.camera.position.y,
+  };
+  expect(hidden.some((o) => o.blocked(eye, x, y, h))).toBe(false);
+  expect(x >= 310 && x <= 352 && y >= 70 && y <= 130).toBe(false);
+  // Without its area, or behind a wall as wide as the area, it stays hidden.
+  expect(find([tower], new Map()).label).toBeUndefined();
+  expect(find([block(280, 150, 520, 170, 40)]).label).toBeUndefined();
+});
+
 cityTest(
   'V183 Munich 3D labels are collision-free and upright at street level and overview',
   () => {
@@ -406,21 +526,19 @@ cityTest(
     if (!imported.ok) throw Error('import');
     const result = compile(imported.city);
     if (!result.ok) throw Error('compile');
-    // Around the S-Bahn station.
     const station = result.compiled.places.find((p) => p.kind === 'station')!.centroid;
-    const ground = cityHeights(result.compiled, imported.city).terrain.groundAt(
-      station.x,
-      station.y,
-    );
+    const { terrain } = cityHeights(result.compiled, imported.city);
     const hidden = occluders(result.compiled, imported.city);
+    // TASK-183's street camera, then around the S-Bahn station.
     const counts = (
       [
-        [180, 35, 20],
-        [700, 55, 0],
-        [2500, 60, 200],
+        [{ x: 165, y: -330 }, 213, 20, 0],
+        [station, 180, 35, 20],
+        [station, 700, 55, 0],
+        [station, 2500, 60, 200],
       ] as const
-    ).map(([distance, pitch, bearing]) => {
-      const v = view(station, distance, pitch, bearing, ground);
+    ).map(([target, distance, pitch, bearing]) => {
+      const v = view(target, distance, pitch, bearing, terrain.groundAt(target.x, target.y));
       const t0 = performance.now();
       place(result.compiled, imported.city, v);
       const t1 = performance.now();
@@ -434,17 +552,14 @@ cityTest(
         placed.length,
         place(result.compiled, imported.city, v).length,
       );
-      // Every street glyph stands on road the camera sees.
-      const eye = { x: v.camera.position.x, y: v.camera.position.z, h: v.camera.position.y };
-      for (const p of placed)
-        for (const g of p.along?.placed ?? [])
-          expect(hidden.some((o) => o.blocked(eye, g.at.x, g.at.y, g.at.h + 0.5))).toBe(false);
+      // Every street glyph stands on road the camera sees, every point label on a seen point.
+      expect(allSeen(placed, v, hidden)).toBe(true);
       return placed.reduce<Record<string, number>>(
         (n, p) => ({ ...n, [p.label.candidate.kind]: (n[p.label.candidate.kind] ?? 0) + 1 }),
         {},
       );
     });
     for (const n of counts) expect(n.street).toBeGreaterThan(0);
-    expect(counts[2]!.station).toBe(1);
+    expect(counts[3]!.station).toBe(1);
   },
 );

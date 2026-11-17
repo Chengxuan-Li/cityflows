@@ -14,7 +14,7 @@ import {
   Vector3,
   type PerspectiveCamera,
 } from 'three';
-import { cumulativeLengths, nearestOnPolyline } from '../geo/polyline';
+import { cumulativeLengths, nearestOnPolyline, preparePolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import { profileHeightAt } from '../network/heights';
@@ -23,12 +23,15 @@ import {
   labelFont,
   labelFonts,
   labelInk,
+  labelScale,
   measureText,
   placeLabels,
   type LabelCandidate,
+  type LabelFrame,
   type LabelStyle,
   type Measure,
   type PlacedLabel,
+  type StreetCandidate,
   type TextMetrics,
 } from '../render/labels';
 import { style, type MapPalette } from '../render/style';
@@ -68,10 +71,16 @@ const clearM = 0.5;
 const deckPieceM = 4;
 /** Below this height above the ground a deck hides nothing under it. */
 const deckMinM = 1;
-/** Street samples are tested for occlusion at most this often on screen. */
+/** Street samples are tested for occlusion at most this often on screen, and the edges of what
+ * hides them found this closely. */
 const testPx = 6;
+const edgePx = 2;
 /** The occluder grid's cell size. */
 const cellM = 32;
+/** A hidden point label tries at most about this many points of its own area, this far apart at
+ * the closest. */
+const spotCount = 64;
+const spotM = 4;
 
 interface Spot {
   x: number;
@@ -431,7 +440,7 @@ export function sampleLines(
  * camera. */
 function projectLine(samples: LineSamples, p: Projector, hidden: Occluders[]): Run[] {
   const runs: Run[] = [];
-  let run: Run | null = null;
+  let run = null as Run | null;
   const finish = () => {
     if (run && run.line.length >= 2) {
       run.lengths = cumulativeLengths(run.line);
@@ -443,31 +452,70 @@ function projectLine(samples: LineSamples, p: Projector, hidden: Occluders[]): R
     }
     run = null;
   };
-  // The last sample tested for occlusion: samples closer than `testPx` to it on screen go with it.
-  let tested: Vec2 | null = null;
-  for (let k = 0; k < samples.x.length; k++) {
-    const x = samples.x[k]!,
-      y = samples.y[k]!,
-      h = samples.h[k]!;
-    if (!p.project(x, y, h)) {
-      finish();
-      continue;
+  type Point = Spot & { s: number };
+  const sample = (k: number): Point => ({
+    x: samples.x[k]!,
+    y: samples.y[k]!,
+    h: samples.h[k]!,
+    s: samples.s[k]!,
+  });
+  const seen = (q: Point) => !hidden.some((o) => o.blocked(p.eye, q.x, q.y, q.h + clearM));
+  const screen = (q: Point) => (p.project(q.x, q.y, q.h), { x: p.sx, y: p.sy });
+  /** TASK-195: where a stretch starts or ends between a seen point and a hidden one, the seen
+   * point within `edgePx` on screen of the edge, so a stretch reaches as far as the road shows. */
+  const edge = (from: Point, to: Point) => {
+    for (;;) {
+      const a = screen(from),
+        b = screen(to);
+      if (Math.hypot(a.x - b.x, a.y - b.y) < edgePx) return from;
+      const mid = {
+        x: (from.x + to.x) / 2,
+        y: (from.y + to.y) / 2,
+        h: (from.h + to.h) / 2,
+        s: (from.s + to.s) / 2,
+      };
+      if (!p.project(mid.x, mid.y, mid.h)) return from;
+      if (seen(mid)) from = mid;
+      else to = mid;
     }
-    if (!run || !tested || Math.hypot(p.sx - tested.x, p.sy - tested.y) >= testPx) {
-      if (hidden.some((o) => o.blocked(p.eye, x, y, h + clearM))) {
-        finish();
-        continue;
-      }
-      tested = { x: p.sx, y: p.sy };
-    }
+  };
+  const push = (q: Point, widthM: number) => {
+    p.project(q.x, q.y, q.h);
     const last = run?.line.at(-1);
-    if (last && Math.hypot(p.sx - last.x, p.sy - last.y) < 0.05) continue;
+    if (last && Math.hypot(p.sx - last.x, p.sy - last.y) < 0.05) return;
     run ??= { line: [], lengths: new Float64Array(0), widths: [], s: [], depth: [], world: [] };
     run.line.push({ x: p.sx, y: p.sy });
-    run.widths.push(samples.widthM[k]!);
-    run.s.push(samples.s[k]!);
+    run.widths.push(widthM);
+    run.s.push(q.s);
     run.depth.push(p.depth);
-    run.world.push({ x, y, h });
+    run.world.push({ x: q.x, y: q.y, h: q.h });
+  };
+  // The last sample tested for occlusion and whether it was seen: samples closer than `testPx`
+  // to a seen one on screen go with it, and the vertices of the run up to it.
+  let tested: { point: Point; at: Vec2; seen: boolean; vertices: number } | null = null;
+  for (let k = 0; k < samples.x.length; k++) {
+    const q = sample(k);
+    if (!p.project(q.x, q.y, q.h)) {
+      finish();
+      tested = null;
+      continue;
+    }
+    const at = { x: p.sx, y: p.sy };
+    if (run && tested?.seen && Math.hypot(at.x - tested.at.x, at.y - tested.at.y) < testPx) {
+      push(q, samples.widthM[k]!);
+      continue;
+    }
+    const visible = seen(q);
+    if (!visible && run && tested?.seen) {
+      // Back to the last tested sample, then on to the edge.
+      run.line.length = run.widths.length = run.s.length = run.depth.length = tested.vertices;
+      run.world.length = tested.vertices;
+      push(edge(tested.point, q), samples.widthM[k]!);
+      finish();
+    } else if (visible && !run && tested && !tested.seen)
+      push(edge(q, tested.point), samples.widthM[k - 1]!);
+    if (visible) push(q, samples.widthM[k]!);
+    tested = { point: q, at, seen: visible, vertices: run?.line.length ?? 0 };
   }
   finish();
   return runs;
@@ -485,23 +533,156 @@ function bracket(s: ArrayLike<number>, v: number) {
   return lo;
 }
 
-/** The world point `along` pixels along a run's screen line (perspective-correct). */
-function worldAt(run: Run, along: number): Spot {
+/** The run segment `along` pixels along a run's screen line, and how far along it in the world
+ * (perspective-correct). */
+function segmentAt(run: Run, along: number) {
   const L = run.lengths;
   const v = Math.min(L.at(-1)!, Math.max(0, along));
   const i = bracket(L, v);
   const t = (v - L[i]!) / (L[i + 1]! - L[i]!);
   const w0 = run.depth[i]!,
     w1 = run.depth[i + 1]!;
-  const u = (t * w0) / ((1 - t) * w1 + t * w0);
+  return { i, u: (t * w0) / ((1 - t) * w1 + t * w0) };
+}
+
+/** The world point `along` pixels along a run's screen line. */
+function worldAt(run: Run, along: number): Spot {
+  const { i, u } = segmentAt(run, along);
   const a = run.world[i]!,
     b = run.world[i + 1]!;
   return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, h: a.h + (b.h - a.h) * u };
 }
 
+/** The view depth and the distance along the street line `along` pixels along a run. */
+function depthAt(run: Run, along: number) {
+  const { i, u } = segmentAt(run, along);
+  return {
+    depth: run.depth[i]! + (run.depth[i + 1]! - run.depth[i]!) * u,
+    s: run.s[i]! + (run.s[i + 1]! - run.s[i]!) * u,
+  };
+}
+
+/** The longest part of a run inside the view, in pixels along it. */
+function partInView(run: Run, width: number, height: number): [number, number] | null {
+  let best: [number, number] | null = null;
+  let part: [number, number] | null = null;
+  const close = () => {
+    if (part && (!best || part[1] - part[0] > best[1] - best[0])) best = part;
+    part = null;
+  };
+  for (let i = 0; i + 1 < run.line.length; i++) {
+    const a = run.line[i]!,
+      b = run.line[i + 1]!;
+    // Liang-Barsky: the segment's parameters inside the view rectangle.
+    let t0 = 0,
+      t1 = 1;
+    for (const [d, q] of [
+      [a.x - b.x, a.x],
+      [b.x - a.x, width - a.x],
+      [a.y - b.y, a.y],
+      [b.y - a.y, height - a.y],
+    ] as const) {
+      if (d === 0) {
+        if (q < 0) t1 = -1;
+      } else if (d < 0) t0 = Math.max(t0, q / d);
+      else t1 = Math.min(t1, q / d);
+    }
+    if (t0 >= t1) {
+      close();
+      continue;
+    }
+    const L0 = run.lengths[i]!,
+      length = run.lengths[i + 1]! - L0;
+    if (!part || t0 > 0) {
+      close();
+      part = [L0 + t0 * length, L0 + t1 * length];
+    } else part[1] = L0 + t1 * length;
+    if (t1 < 1) close();
+  }
+  close();
+  return best;
+}
+
+/** TASK-195: the open ground of a label's own area nearest its point that the camera sees, tried
+ * on a grid of at most about `spotCount` points. */
+function visibleSpot(
+  ring: readonly Vec2[],
+  from: Vec2,
+  p: Projector,
+  hidden: Occluders[],
+  pointHeight: (p: Vec2) => number,
+): Spot | null {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const q of ring) {
+    minX = Math.min(minX, q.x);
+    minY = Math.min(minY, q.y);
+    maxX = Math.max(maxX, q.x);
+    maxY = Math.max(maxY, q.y);
+  }
+  const step = Math.max(spotM, Math.sqrt(((maxX - minX) * (maxY - minY)) / spotCount));
+  const inside = preparePolygon(ring);
+  const spots: Vec2[] = [];
+  for (let x = minX + step / 2; x < maxX; x += step)
+    for (let y = minY + step / 2; y < maxY; y += step) if (inside({ x, y })) spots.push({ x, y });
+  spots.sort(
+    (a, b) =>
+      Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y) ||
+      a.x - b.x ||
+      a.y - b.y,
+  );
+  for (const { x, y } of spots) {
+    const h = pointHeight({ x, y });
+    // Not inside a building, unlike a label's own point: no name comes back on a roof.
+    if (p.project(x, y, h) && !hidden.some((o) => o.blocked(p.eye, x, y, h))) return { x, y, h };
+  }
+  return null;
+}
+
+/** TASK-195: the area of each station, stop and place label that has one (its place's outline,
+ * its platform's or island's ring), closed. A candidate's key ends in its place's or stop's id. */
+export function pointAreas(
+  city: CompiledCity,
+  source: CityGeometry,
+  candidates: readonly LabelCandidate[],
+): Map<LabelCandidate, readonly Vec2[]> {
+  const result = new Map<LabelCandidate, readonly Vec2[]>();
+  const stops = new Map((city.rail?.tramStops ?? []).map((s) => [s.id, s]));
+  const platforms = new Map((city.rail?.platforms ?? []).map((p) => [p.id, p]));
+  for (const c of candidates) {
+    if (c.kind === 'street') continue;
+    const id = c.key.slice(c.key.lastIndexOf('/') + 1);
+    let ring: readonly Vec2[] | undefined;
+    if (c.kind === 'stop') {
+      const platform = stops.get(id)?.platform;
+      if (platform?.kind === 'generated') ring = platform.ring;
+      else if (platform?.kind === 'mapped') {
+        const shape = platforms.get(platform.platform)?.shape;
+        if (shape?.kind === 'polygon') ring = shape.ring;
+      }
+    } else {
+      const shape = source.places[id]?.shape;
+      if (shape?.kind === 'polygon') ring = shape.ring;
+    }
+    if (!ring || ring.length < 3) continue;
+    const first = ring[0]!,
+      last = ring.at(-1)!;
+    result.set(c, first.x === last.x && first.y === last.y ? ring : [...ring, first]);
+  }
+  return result;
+}
+
 /** Lays out `candidates` (in placement order) for the camera in `view`: TASK-167's rules on
  * screen, collision-free and deterministic for a camera. Nothing is placed where `hidden` hides
- * it from the camera. */
+ * it from the camera.
+ * TASK-195: when a street's name comes up (its first candidate), it is first tried on each
+ * visible stretch of every line of that name, the stretch with the most road in view first: at
+ * the street's own anchor nearest the middle of that part (else the middle itself), then against
+ * either end of it. Where a stretch is too short for the name at its size, the name is tried
+ * there at a smaller size, down to TASK-167's smallest, after every other label of its style. A
+ * hidden point label moves to a visible point of its own area in `areas`, if it has one. */
 export function placeLabels3D(
   candidates: readonly LabelCandidate[],
   lines: LabelLines,
@@ -509,51 +690,44 @@ export function placeLabels3D(
   view: LabelView,
   measure: Measure,
   hidden: Occluders[] = [],
+  areas: ReadonlyMap<LabelCandidate, readonly Vec2[]> = new Map(),
 ): Placed3D[] {
   const p = new Projector(view);
   const runs = new Map<readonly Vec2[], Run[]>();
   const runOf = new Map<readonly Vec2[], Run>();
-  const points = new Map<LabelCandidate, Vec2>();
-  const placed = placeLabels(candidates, 1, measure, (c) => {
-    if (c.kind !== 'street') {
-      const h = pointHeight(c.pos);
-      if (
-        !p.project(c.pos.x, c.pos.y, h) ||
-        hidden.some((o) => o.blocked(p.eye, c.pos.x, c.pos.y, h, true))
-      )
-        return null;
-      const framed = { ...c, pos: { x: p.sx, y: p.sy } };
-      points.set(framed, c.pos);
-      return { candidate: framed, zoom: p.focal / p.depth };
-    }
-    let list = runs.get(c.line);
+  const runsOf = (line: readonly Vec2[]) => {
+    let list = runs.get(line);
     if (!list) {
-      list = projectLine(lines.get(c.line)!, p, hidden);
-      runs.set(c.line, list);
+      list = projectLine(lines.get(line)!, p, hidden);
+      runs.set(line, list);
       for (const run of list) runOf.set(run.line, run);
     }
-    const run = list.find((r) => c.anchorM >= r.s[0]! && c.anchorM <= r.s.at(-1)!);
-    if (!run) return null;
-    const at = (v: number) => {
-      const i = bracket(run.s, v);
-      const u = (v - run.s[i]!) / (run.s[i + 1]! - run.s[i]!);
-      const w0 = run.depth[i]!,
-        w1 = run.depth[i + 1]!;
-      // Depth is linear along the world segment; screen distance is linear in u / depth.
-      const t = (u * w1) / ((1 - u) * w0 + u * w1);
-      return {
-        along: run.lengths[i]! + (run.lengths[i + 1]! - run.lengths[i]!) * t,
-        zoom: p.focal / (w0 + (w1 - w0) * u),
-      };
+    return list;
+  };
+  const points = new Map<LabelCandidate, Vec2>();
+  /** The pixels along a run and the map scale at `v` metres along its street line. */
+  const at = (run: Run, v: number) => {
+    const i = bracket(run.s, v);
+    const u = (v - run.s[i]!) / (run.s[i + 1]! - run.s[i]!);
+    const w0 = run.depth[i]!,
+      w1 = run.depth[i + 1]!;
+    // Depth is linear along the world segment; screen distance is linear in u / depth.
+    const t = (u * w1) / ((1 - u) * w0 + u * w1);
+    return {
+      along: run.lengths[i]! + (run.lengths[i + 1]! - run.lengths[i]!) * t,
+      zoom: p.focal / (w0 + (w1 - w0) * u),
     };
+  };
+  /** A street candidate on a run, its anchor `along` pixels along it, at the text size of
+   * `zoom`. */
+  const onRun = (c: StreetCandidate, run: Run, along: number, zoom: number) => {
     // Junction surfaces on the visible stretch, in pixels along it.
     run.junctions ??= c.junctions
       .filter((j) => j.atM + j.radiusM >= run.s[0]! && j.atM - j.radiusM <= run.s.at(-1)!)
       .map((j) => {
-        const { along, zoom } = at(Math.min(run.s.at(-1)!, Math.max(run.s[0]!, j.atM)));
-        return { atM: along, radiusM: j.radiusM * zoom };
+        const a = at(run, Math.min(run.s.at(-1)!, Math.max(run.s[0]!, j.atM)));
+        return { atM: a.along, radiusM: j.radiusM * a.zoom };
       });
-    const anchor = at(c.anchorM);
     return {
       candidate: {
         ...c,
@@ -561,12 +735,123 @@ export function placeLabels3D(
         lengths: run.lengths,
         widths: run.widths,
         junctions: run.junctions,
-        anchorM: anchor.along,
+        anchorM: along,
       },
-      zoom: anchor.zoom,
+      zoom,
     };
+  };
+
+  // The lines of each street name, with their candidates.
+  const streets = new Map<string, Map<readonly Vec2[], StreetCandidate[]>>();
+  for (const c of candidates) {
+    if (c.kind !== 'street') continue;
+    const byLine = streets.get(c.text) ?? new Map<readonly Vec2[], StreetCandidate[]>();
+    streets.set(c.text, byLine);
+    const list = byLine.get(c.line) ?? [];
+    byLine.set(c.line, list);
+    list.push(c);
+  }
+  // The tries made for this camera (TASK-195), already on screen: copies of their streets' candidates.
+  const framed = new Map<LabelCandidate, NonNullable<ReturnType<LabelFrame>>>();
+  const extra = (c: StreetCandidate, run: Run, along: number, zoom?: number) => {
+    const tried = { ...c };
+    framed.set(tried, onRun(tried, run, along, zoom ?? p.focal / depthAt(run, along).depth));
+    return tried;
+  };
+  const stretches = (name: string) => {
+    const first: LabelCandidate[] = [];
+    const smaller: LabelCandidate[] = [];
+    const parts: { run: Run; part: [number, number]; list: StreetCandidate[] }[] = [];
+    for (const [line, list] of streets.get(name)!) {
+      for (const run of runsOf(line)) {
+        const part = partInView(run, view.width, view.height);
+        if (part) parts.push({ run, part, list });
+      }
+    }
+    parts.sort((a, b) => b.part[1] - b.part[0] - (a.part[1] - a.part[0]));
+    for (const { run, part, list } of parts) {
+      const c = list[0]!;
+      const m = measure(c.text, c.style);
+      const length = run.lengths.at(-1)!;
+      // Too short even at the smallest size.
+      if (m.width > length) continue;
+      const middle = (part[0] + part[1]) / 2;
+      const { depth, s } = depthAt(run, middle);
+      const zoom = p.focal / depth;
+      const scale = labelScale(c.style, zoom);
+      const text = m.width * scale;
+      if (text > length) {
+        // At the size whose zoom fits the name in the stretch, as TASK-167 grows names with zoom.
+        const fit = Math.max(1, (0.99 * length) / m.width);
+        smaller.push(extra(c, run, length / 2, 2 * fit ** (1 / 0.3)));
+        continue;
+      }
+      // The street's own anchor nearest the middle, so a small move of the camera keeps it.
+      let own: StreetCandidate | undefined;
+      for (const o of list)
+        if (
+          o.anchorM >= run.s[0]! &&
+          o.anchorM <= run.s.at(-1)! &&
+          (!own || Math.abs(o.anchorM - s) < Math.abs(own.anchorM - s))
+        )
+          own = o;
+      first.push(own ?? extra(c, run, middle));
+      if (part[1] - part[0] > text)
+        first.push(extra(c, run, part[0] + text / 2), extra(c, run, part[1] - text / 2));
+    }
+    return { first, smaller };
+  };
+  // Every candidate in order, each street name's tries before its first candidate, and its
+  // smaller tries after the last candidate of its style.
+  const order: LabelCandidate[] = [];
+  const later = new Map<LabelStyle, LabelCandidate[]>();
+  const named = new Set<string>();
+  for (const c of candidates) {
+    for (const [s, list] of later)
+      if (s !== c.style) {
+        order.push(...list);
+        later.delete(s);
+      }
+    if (c.kind === 'street' && !named.has(c.text)) {
+      named.add(c.text);
+      const { first, smaller } = stretches(c.text);
+      order.push(...first);
+      if (smaller.length) later.set(c.style, [...(later.get(c.style) ?? []), ...smaller]);
+    }
+    order.push(c);
+  }
+  for (const list of later.values()) order.push(...list);
+
+  const placed = placeLabels(order, 1, measure, (c) => {
+    const ready = framed.get(c);
+    if (ready) return ready;
+    if (c.kind !== 'street') {
+      let pos = c.pos;
+      let h = pointHeight(pos);
+      if (!p.project(pos.x, pos.y, h)) return null;
+      if (hidden.some((o) => o.blocked(p.eye, pos.x, pos.y, h, true))) {
+        const area = areas.get(c);
+        const zoom = p.focal / p.depth;
+        // Out of its zoom range it would not be placed anyway.
+        const spot =
+          area && zoom >= c.minZoom && zoom < c.maxZoom
+            ? visibleSpot(area, pos, p, hidden, pointHeight)
+            : null;
+        if (!spot) return null;
+        pos = { x: spot.x, y: spot.y };
+        h = spot.h;
+        p.project(pos.x, pos.y, h);
+      }
+      const framedPoint = { ...c, pos: { x: p.sx, y: p.sy } };
+      points.set(framedPoint, pos);
+      return { candidate: framedPoint, zoom: p.focal / p.depth };
+    }
+    const run = runsOf(c.line).find((r) => c.anchorM >= r.s[0]! && c.anchorM <= r.s.at(-1)!);
+    if (!run) return null;
+    const anchor = at(run, c.anchorM);
+    return onRun(c, run, anchor.along, anchor.zoom);
   });
-  return placed.map((label) => {
+  const result = placed.map((label): Placed3D => {
     const c = label.candidate;
     let anchor: Spot;
     let along: Placed3D['along'];
@@ -609,6 +894,14 @@ export function placeLabels3D(
       ...(along && { along }),
     };
   });
+  // Between tested samples a sliver of a stretch may be hidden: a glyph on one is dropped with its
+  // label, so no placed glyph is hidden.
+  return result.filter(
+    ({ along }) =>
+      !along?.placed.some(({ at }) =>
+        hidden.some((o) => o.blocked(p.eye, at.x, at.y, at.h + clearM)),
+      ),
+  );
 }
 
 /** A glyph for a camera: its world point, screen position, rotation and size factor (0 where it
@@ -817,6 +1110,7 @@ export class Labels3D {
   private candidates: readonly LabelCandidate[] = [];
   private lines: LabelLines = new Map();
   private pointHeight: (p: Vec2) => number = () => 0;
+  private areas = new Map<LabelCandidate, readonly Vec2[]>();
   private visible = true;
   /** The camera's world matrix, field of view and viewport, as last seen. */
   private readonly viewKey = new Float64Array(19);
@@ -868,8 +1162,10 @@ export class Labels3D {
 
   /** The candidates of a new city or source, and the heights of a new 3D build. */
   setCity(city: CompiledCity, source: CityGeometry, heights: ReturnType<typeof cityHeights>) {
-    if (city !== this.city || source !== this.source)
+    if (city !== this.city || source !== this.source) {
       this.candidates = labelCandidates(city, source);
+      this.areas = pointAreas(city, source, this.candidates);
+    }
     this.city = city;
     this.source = source;
     // A street label sits on the road surface: decks and ramps at their height.
@@ -947,6 +1243,7 @@ export class Labels3D {
       view,
       this.atlas.measure,
       this.buildingsShown ? [this.buildings, this.decks] : [this.decks],
+      this.areas,
     );
     this.fill(view);
     return true;
