@@ -6,9 +6,9 @@ import { compile, type CompiledCity } from '../../src/network';
 import { demandSplit, MIN_GREEN_S } from '../../src/network/signal-program';
 import type { City, Scenario, TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
-import { OFF_LANE } from '../../src/sim/vehicle';
+import { createVehicles, OFF_LANE } from '../../src/sim/vehicle';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
-import { signalControllers, timedSignals } from '../../src/sim/signals';
+import { createSignalControl, signalControllers, timedSignals } from '../../src/sim/signals';
 import { cityTest, unitTest } from '../tier';
 import { scenario, setup } from './fixtures';
 
@@ -249,6 +249,64 @@ unitTest(
       expect(counts['0>1'] ?? 0, `actuated ${actuated}`).toBeGreaterThan(0);
       expect(Object.keys(counts), `actuated ${actuated}`).toEqual(['0>1']);
     }
+  },
+);
+
+unitTest(
+  'actuation: a car waiting short of a short approach lane calls its phase (TASK-199)',
+  () => {
+    // The south arm reaches the signal over a 9 m road behind a way boundary, as Freiburg's
+    // Wallstraße reaches n:68: a car held before the boundary is off the approach lane but within
+    // `DETECT_M` of the stop line along its route, and calls the south phase from the resting west
+    // green; one 60 m back does not.
+    const { city, node, street, signal } = buildCity('Short approach', 1);
+    const center = node(0, 0);
+    const boundary = node(0, 9);
+    const arms = [node(-120, 0), node(120, 0), node(0, -120)].map((end) => street(end, center));
+    const south = street(boundary, center);
+    const [far] = street(node(0, 150), boundary);
+    signal(center, [...arms, south]);
+    center.signal!.actuated = true;
+    const compiled = setup(city);
+    const road = (id: string) => compiled.index.road.get(id)!;
+    const lane = (id: string) => compiled.roads[road(id)]!.lanes[0]!;
+    const into = (from: number, to: number) =>
+      compiled.lanes[from]!.out.find((m) => compiled.movements[m]!.toLane === to)!;
+    const east = arms[1]![1];
+    const route = {
+      roads: [road(far!.id), road(south[0].id), road(east.id)],
+      movements: [into(lane(far!.id), lane(south[0].id)), into(lane(south[0].id), lane(east.id))],
+      targetLanes: [],
+      costS: 0,
+    };
+    const index = compiled.index.node.get(center.id)!;
+    const signals = compiled.nodes.map((n) => n.signal);
+    function shown(backM: number) {
+      const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
+      const farLane = compiled.lanes[lane(far!.id)]!;
+      vehicles.insert(0, farLane.idx, farLane.lengthM - backM);
+      vehicles.state[0] = 1;
+      vehicles.route[0] = route;
+      vehicles.movement[0] = route.movements[0]!;
+      const control = createSignalControl(
+        compiled,
+        signals,
+        vehicles,
+        DEFAULT_SIM_PARAMS,
+        0,
+        () => undefined,
+      );
+      const phases = new Set<number>();
+      const colors = new Uint8Array(compiled.movements.length);
+      for (let t = 0; t < 120; t += 0.1) {
+        control.update(t, colors);
+        const states = control.snapshot(t);
+        if (states.state[index] === 0) phases.add(states.phase[index]!);
+      }
+      return [...phases];
+    }
+    expect(shown(2)).toEqual([0, 3]);
+    expect(shown(60)).toEqual([0]);
   },
 );
 

@@ -205,6 +205,15 @@ const GREEN_STAGE = 0;
 const AMBER_STAGE = 1;
 const ALL_RED_STAGE = 2;
 
+/** TASK-199: a lane or movement (`segment`, a vehicle lane field) upstream of an approach lane,
+ * from `fromM` on, `hops` roads before the approach `road`. */
+interface Upstream {
+  segment: number;
+  fromM: number;
+  hops: number;
+  road: number;
+}
+
 interface ActuatedState {
   phase: number;
   stage: number;
@@ -245,6 +254,33 @@ export function createSignalControl(
       }),
     );
     const lanes = [...new Set([...phaseMask.keys()].map((m) => city.movements[m]!.fromLane))];
+    // TASK-199: where an approach lane is shorter than `DETECT_M` before its stop line, the range
+    // runs on back over the movements and lanes that feed it, through other junctions, as a
+    // detector 40 m upstream would: a car held at the junction behind a short approach lane
+    // (Freiburg's 6 m Wallstraße into n:68) otherwise never called, and the green rested.
+    const upstream = new Map<string, Upstream>();
+    const feed = (lane: number, rangeM: number, hops: number, road: number) => {
+      if (rangeM <= 0) return;
+      for (const m of city.lanes[lane]!.in) {
+        const movement = city.movements[m]!;
+        if (controller.nodes.includes(movement.node)) continue;
+        const from = city.lanes[movement.fromLane]!;
+        for (const [segment, fromM, lengthM] of [
+          [-m - 1, movement.lengthM - rangeM, movement.lengthM],
+          [from.idx, from.lengthM + movement.lengthM - rangeM, from.lengthM],
+        ] as const) {
+          if (fromM >= lengthM) continue;
+          const key = `${segment}:${hops}:${road}`;
+          const known = upstream.get(key);
+          if (!known || fromM < known.fromM) upstream.set(key, { segment, fromM, hops, road });
+        }
+        feed(from.idx, rangeM - movement.lengthM - from.lengthM, hops + 1, road);
+      }
+    };
+    for (const lane of lanes) {
+      const { stopM, road } = city.lanes[lane]!;
+      feed(lane, DETECT_M - stopM, 1, road);
+    }
     const old = previous?.get(controller.id);
     const state: ActuatedState =
       old && old.phase < members[0]!.phases.length
@@ -263,6 +299,7 @@ export function createSignalControl(
         phaseMask,
         walkMask,
         lanes: lanes.sort((a, b) => a - b),
+        upstream: [...upstream.values()],
         minS: minimumGreens(city, members, params),
         state,
       },
@@ -289,6 +326,16 @@ export function createSignalControl(
           else calls |= mask;
         }
       }
+      for (const { segment, fromM, hops, road } of c.upstream)
+        for (let id = vehicles.first(segment); id !== -1; id = vehicles.next[id]!) {
+          if (vehicles.position[id]! < fromM) break;
+          const route = vehicles.route[id];
+          const step = vehicles.routeStep[id]! + hops;
+          if (route?.roads[step] !== road) continue;
+          const mask = c.phaseMask.get(route.movements[step]!) ?? 0;
+          if (mask & own) extend = true;
+          else calls |= mask;
+        }
       let walkNeedS = 0;
       for (const [link, needS] of walkCalls() ?? []) {
         const mask = c.walkMask.get(link);

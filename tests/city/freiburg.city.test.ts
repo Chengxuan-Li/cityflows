@@ -167,9 +167,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // openProject checks city.json against this manifest hash, so it pins the city.
   const { manifest } = JSON.parse(readFileSync(freiburgProject, 'utf8'));
   expect(manifest.files['city.json']).toBe(
-    'c28e8a47ce09f0f201ed684b086ac5cf5f2ad497c85194b2f9bc965902284429',
+    'ded060cfd6e9787fdb7e846b3f5c074a2e0e3d2e0822ed0751c80aea696b9539',
   );
-  expect(morning.stateHash).toBe(3091275482);
+  expect(morning.stateHash).toBe(1137612334);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

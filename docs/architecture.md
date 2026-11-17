@@ -1105,8 +1105,12 @@ the OSM `lanes` tags carry one.
     plus `walkClearanceS`, rounded up; never more than the phase's own green.
   - Actuation. An actuated controller keeps its own phase and stage instead of
     `(t + offsetS) mod cycleS`; at load it starts green in the phase the program shows then. A
-    vehicle on an approach lane within `DETECT_M` (40 m) of the stop line whose planned movement
-    the green phase serves extends the green to `PASSAGE_S` (3 s) from now; a walker waiting at a
+    vehicle within `DETECT_M` (40 m) of the stop line whose planned movement the green phase
+    serves extends the green to `PASSAGE_S` (3 s) from now. The range is measured along the
+    route: where an approach lane is shorter, it runs back over the movements and lanes feeding
+    it, through other junctions, signalised or not, and a car there counts by the movement its
+    route takes at the controller (TASK-199: a car held at the junction behind a short approach
+    lane, such as Freiburg's 6 m Wallstraße into n:68, otherwise never called); a walker waiting at a
     walk-green crossing of the phase whose run's green is short extends it by the time the run
     needs (TASK-111's step-out rule). A vehicle in that range planning a movement of another
     phase, or a walker waiting at a crossing that is red, calls the phases that serve it. With a
