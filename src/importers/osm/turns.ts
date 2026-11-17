@@ -60,6 +60,7 @@ export function addRestrictions(
   nodes: Map<string, Node>,
   roads: Map<string, JunctionRoads>,
   diagnostics: Diagnostic[],
+  removedWays: ReadonlySet<number> = new Set(),
 ): void {
   for (const { id, member, tag } of relations) {
     if (tag.type !== 'restriction') continue;
@@ -104,6 +105,22 @@ export function addRestrictions(
       });
       continue;
     }
+    // TASK-198: a polygon cut removed the way this rule sends every driver onto.
+    if (
+      only &&
+      toWays.some(({ ref }) => removedWays.has(ref)) &&
+      !incident.outgoing.some(({ road }) =>
+        toWays.some(({ ref }) => road.provenance.osmIds?.includes(ref)),
+      )
+    ) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'osm_unsupported_tag',
+        refs: [`relation/${id}`],
+        message: `Restriction on OSM relation ${id} ignored: the polygon boundary removed its to way`,
+      });
+      continue;
+    }
     for (const from of approaches) {
       for (const to of incident.outgoing) {
         const listed =
@@ -126,6 +143,34 @@ export function addRestrictions(
           });
         }
       }
+    }
+  }
+}
+
+/** TASK-198: where the polygon cut removed a street from a junction, a restriction that now
+ * leaves an approach no exit at all is dropped, so the cut makes no dead end. */
+export function releaseTrappedApproaches(
+  trimmed: Iterable<Node>,
+  roads: Map<string, JunctionRoads>,
+  diagnostics: Diagnostic[],
+): void {
+  for (const node of trimmed) {
+    const { incoming, outgoing } = roads.get(node.id)!;
+    for (const { road } of incoming) {
+      const rules = node.turnRules.filter(
+        (rule) => rule.from === road.id && !rule.allowed && rule.fromLane === undefined,
+      );
+      if (!outgoing.length || !outgoing.every(({ road: to }) => rules.some((r) => r.to === to.id)))
+        continue;
+      node.turnRules = node.turnRules.filter((rule) => !rules.includes(rule));
+      diagnostics.push({
+        severity: 'warning',
+        code: 'osm_unsupported_tag',
+        refs: [...new Set(rules.flatMap((rule) => rule.provenance.osmIds ?? []))].map(
+          (id) => `relation/${id}`,
+        ),
+        message: `Restrictions at ${node.id} ignored: the polygon boundary removed the only exit they allow from ${road.id}`,
+      });
     }
   }
 }

@@ -7,7 +7,7 @@ import { geographicMarkingTheme } from '../../schema/marking-theme';
 import { osmMarkingTheme } from './controls';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
-import { clipPart, findBoundaryCuts, type RoadPoint } from './clip';
+import { clipPart, findBoundaryCuts, prunePolygonCuts, type Bounds, type RoadPoint } from './clip';
 import { importContext } from './context';
 import { addLots, restoreLotJunctions } from './lots';
 import { addMappedLotPortals } from './lot-junctions';
@@ -41,7 +41,13 @@ import {
   mergeShortRoads,
   splitWay,
 } from './split';
-import { addLaneTurns, addLocalTurnarounds, addRestrictions, type JunctionRoads } from './turns';
+import {
+  addLaneTurns,
+  addLocalTurnarounds,
+  addRestrictions,
+  releaseTrappedApproaches,
+  type JunctionRoads,
+} from './turns';
 
 export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const diagnostics: Diagnostic[] = [];
@@ -122,10 +128,14 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   );
   if (typeof geo === 'string') return fail('osm_invalid_bbox', geo);
   const [west, south, east, north] = geo.bbox;
-  const bounds = {
+  const bounds: Bounds = {
     min: lonLatToLocal(geo, { lon: west, lat: north }),
     max: lonLatToLocal(geo, { lon: east, lat: south }),
   };
+  if (geo.boundary) {
+    const ring = geo.boundary.map(([lon, lat]) => lonLatToLocal(geo, { lon, lat }));
+    bounds.ring = [...ring, ring[0]!];
+  }
   const city: City = {
     schemaVersion: 3,
     version: 0,
@@ -247,6 +257,26 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
       }
     }
   }
+  const removedWays = new Set<number>();
+  const trimmedNodes = new Set<Node>();
+  if (bounds.ring) {
+    const pruned = new Set(prunePolygonCuts(city, roads));
+    if (pruned.size) {
+      roads.splice(0, roads.length, ...roads.filter((road) => !pruned.has(road)));
+      for (const [key, node] of nodes) if (!city.nodes[node.id]) nodes.delete(key);
+      signals.splice(0, signals.length, ...signals.filter((node) => city.nodes[node.id]));
+      for (const { wayId, road } of pruned) {
+        removedWays.add(wayId);
+        for (const id of [road.from, road.to]) if (city.nodes[id]) trimmedNodes.add(city.nodes[id]);
+      }
+      diagnostics.push({
+        severity: 'info',
+        code: 'osm_polygon_pruned',
+        refs: [...new Set([...pruned].map(({ wayId }) => `way/${wayId}`))].slice(0, 20),
+        message: `Removed ${pruned.size} directed roads the polygon cut off: minor roads cut by the ring, back to their junctions, and pieces apart from the main network`,
+      });
+    }
+  }
   if (!roads.length) return fail('osm_no_drivable_ways', 'No drivable highways intersect the bbox');
 
   const protectedNodes = new Set([
@@ -270,7 +300,12 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     incidents.get(road.road.to)!.incoming.push(road);
   }
 
-  addRestrictions(data.relation, nodes, incidents, diagnostics);
+  addRestrictions(data.relation, nodes, incidents, diagnostics, removedWays);
+  releaseTrappedApproaches(
+    [...trimmedNodes].filter((node) => city.nodes[node.id] === node),
+    incidents,
+    diagnostics,
+  );
   for (const node of nodes.values()) {
     addLocalTurnarounds(node, incidents.get(node.id)!);
   }

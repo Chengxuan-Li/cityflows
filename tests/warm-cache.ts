@@ -1,4 +1,5 @@
 import type { TestProject } from 'vitest/node';
+import { importFreiburg } from '../bench/freiburg';
 import { loadAuditCity } from '../bench/junction-audit';
 
 // TASK-171: fills the real-city import cache (bench/city-cache.ts) once, in the main process,
@@ -6,4 +7,5 @@ import { loadAuditCity } from '../bench/junction-audit';
 // takes several times its idle time, which timed out loaded runs. Warm, this reads the cache.
 export default function warmCityCache(project: TestProject) {
   loadAuditCity(project.name === 'unit' ? 'sindelfingen' : 'munich');
+  if (project.name === 'city') importFreiburg();
 }

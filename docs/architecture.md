@@ -231,7 +231,11 @@ interface City {
   version: number;         // bumps on every committed edit; caches key on it
   name: string;
   drivingSide: DrivingSide;
-  geo: (GeoReference & { bbox: [number, number, number, number]; source: GeoSource }) | null;
+  geo: (GeoReference & {
+    bbox: [number, number, number, number];
+    boundary?: [number, number][]; // TASK-198: a polygon import's ring, [lon, lat], open
+    source: GeoSource;
+  }) | null;
   nodes: Record<NodeId, Node>;
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
@@ -3660,6 +3664,21 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    no trips); compile diagnostics are unchanged.
    Local two-way residential/service boundary ends have inferred turnarounds, allowing
    a driver who misses a turn to return instead of stranding at the crop boundary.
+   TASK-198, polygon boundaries: `ImportOptions.polygon`, a ring of `[lon, lat]` in degrees,
+   replaces the bbox. `geo.bbox` and the local frame come from the ring's bounding box, and
+   `geo.boundary` keeps the ring (open, as given) so the views can draw the natural edge; a
+   bbox import has no `boundary` and is unchanged. Roads, rail, walk links, aisles and
+   platforms are cut where they cross the ring (several pieces where a concave ring leaves and
+   re-enters; a cut sliver under 1 m is dropped); areas (buildings, land use, water, lots,
+   street-side strips) keep their largest piece inside the ring (`clipper2-ts`); points
+   (places, trees, lamps, masts, stops, entrances) inside it are kept. A cut road is kept only
+   as an entry: tertiary class or above, or a link. A minor road the ring cuts is removed back
+   to the junction it leaves (a node it joined to one other street goes with it), and what the
+   cut leaves apart from the largest connected road network is dropped (info
+   `osm_polygon_pruned`). A lot aisle the ring cuts is not kept. Where the cut removed a road
+   at a junction, an `only_*` restriction onto a removed way, or bans that leave an approach no
+   exit, are ignored with `osm_unsupported_tag`. Every entry-class road end at the ring
+   carries a gateway connector.
 9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
    and `shop=mall`. TASK-048 also imports residential, office/commercial, retail and industrial
    building footprints and land use, including multipolygon courtyards and bbox clipping.

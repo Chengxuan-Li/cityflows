@@ -11,7 +11,7 @@ import { compileVisibleParking } from '../../network/parking';
 import { lonLatToLocal } from '../../geo/projection';
 import type { CompiledCity, Diagnostic } from '../../network';
 import { allocateId, type City, type Place, type RoadClass } from '../../schema';
-import { contains, type Bounds } from './clip';
+import { contains, entryClasses, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
 import type { OsmRoad } from './roads';
 
@@ -124,6 +124,7 @@ export function addPlace(
 
 export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity): void {
   const access = networkAccess(compiled);
+  const polygon = Boolean(city.geo!.boundary);
   const [west, south, east, north] = city.geo!.bbox;
   const nw = lonLatToLocal(city.geo!, { lon: west, lat: north });
   const se = lonLatToLocal(city.geo!, { lon: east, lat: south });
@@ -137,9 +138,12 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
       let candidates = lanes.filter((l) =>
         (end === 'start' ? access.toCore : access.fromCore).has(l.idx),
       );
+      // A polygon import keeps only entries at its ring (TASK-198): each carries a gateway.
       if (
         !candidates.length &&
-        ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass)
+        (polygon
+          ? entryClasses.has(road.roadClass)
+          : ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass))
       )
         candidates = lanes;
       if (!candidates.length) return [];

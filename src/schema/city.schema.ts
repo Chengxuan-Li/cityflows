@@ -215,6 +215,10 @@ const geo = z.object({
   origin: z.object({ lon: z.number().min(-180).max(180), lat: z.number().gt(-90).lt(90) }),
   scale: z.number().positive(),
   bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  boundary: z
+    .array(z.tuple([z.number().min(-180).max(180), z.number().gt(-90).lt(90)]))
+    .min(3)
+    .optional(),
   source: z.object({
     kind: z.enum(['osm', 'file']),
     snapshotDate: z.string().nullable(),

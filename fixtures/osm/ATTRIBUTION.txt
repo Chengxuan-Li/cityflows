@@ -58,3 +58,16 @@ and their rail stop area (4245550), with missing recursive members. Query:
 Only rail platform/rail stop-area relations and their members were appended; bus
 stop areas from the response were excluded. Added {'relation': 3, 'way': 4, 'node': 28}.
 All 21704 original elements remain byte-identical and ordered.
+
+freiburg-altstadt.osm — Altstadt and Hauptbahnhof, Freiburg im Breisgau, Baden-Württemberg
+(TASK-197 scouted it, TASK-198 bundles it as the landing city)
+Source: https://overpass-api.de/api/interpreter, downloaded 2026-11-17T09:58:58Z
+OSM snapshot: 2026-11-17T09:57:01Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 9) with
+every (s,w,n,e) filter replaced by (poly:"...") with the polygon below, [timeout:180]. Overpass
+returns every way that touches the polygon whole; the file has no bounds element.
+Polygon (lat lon): 47.992 7.834 47.9962 7.8368 48.001 7.841 48.001 7.8445 47.9992 7.853
+47.9986 7.8548 47.9968 7.8578 47.9935 7.8565 47.99 7.856 47.9895 7.85 47.9894 7.8458
+47.9908 7.842 47.9913 7.8385
+BBox of the polygon: 7.834, 47.9894, 7.8578, 48.001
+6,026,432 bytes, SHA-256 b3af79c9fd7b73ecfd73de9c3959d36840bda40b574615cfc0d40784f3241882

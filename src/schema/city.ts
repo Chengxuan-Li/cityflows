@@ -298,7 +298,15 @@ export interface City {
   version: number; // bumps on every committed edit; caches key on it
   name: string;
   drivingSide: DrivingSide;
-  geo: (GeoReference & { bbox: [number, number, number, number]; source: GeoSource }) | null;
+  geo:
+    | (GeoReference & {
+        bbox: [number, number, number, number];
+        /** TASK-198: a polygon import's boundary ring, [longitude, latitude] pairs, open (the
+         * last point is not repeated). Absent for a bbox import. */
+        boundary?: [number, number][];
+        source: GeoSource;
+      })
+    | null;
   nodes: Record<NodeId, Node>;
   roads: Record<RoadId, Road>;
   places: Record<PlaceId, Place>;
