@@ -4396,6 +4396,9 @@ margin over fixed-time is thin (+0.6% seed 1, -2.5% seed 2) and the default's fu
 fall 6.8%; put to the owner, who approved the switch. Open: n:635's empty phase (34 s of all-red per
 102 s cycle); jughandle lane choice is the likely lever for full demand in both modes.
 
+Full run 44114508937 (lead, manual, on 9a939d9 after TASK-194): every job green; CI green on 9a939d9;
+the city job took 39.9 min (29.6 min on the last run).
+
 TASK-197 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged): four Overpass extracts cut by a
 polygon along each natural edge (Freiburg, Köln, Lübeck, München Altstadtring), imported with the
 existing importer; `docs/decisions/2026-11-17-landing-city.md` with numbers, gaps and shots in
