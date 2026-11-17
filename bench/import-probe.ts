@@ -547,6 +547,8 @@ export function probeMorning(
     }
   }
   const gatewayTraffic: Record<string, { entered: number; left: number }> = {};
+  /** TASK-198: per gateway place, trips that entered through it and trips that left by it. */
+  const gatewayTrips: Record<string, { entered: number; left: number }> = {};
   const failures = new Map<string, number>();
   const gridlockedRoads: Record<string, number> = {};
   for (const [i, trip] of trips.entries()) {
@@ -570,10 +572,12 @@ export function probeMorning(
     ) {
       const cls = compiled.roads[first]!.roadClass;
       (gatewayTraffic[cls] ??= { entered: 0, left: 0 }).entered++;
+      (gatewayTrips[trip.originPlaceId] ??= { entered: 0, left: 0 }).entered++;
     }
     if (detail.state === 'completed' && city.places[trip.destinationPlaceId]!.kind === 'gateway') {
       const cls = compiled.roads[compiled.lanes[detail.lane]!.road]!.roadClass;
       (gatewayTraffic[cls] ??= { entered: 0, left: 0 }).left++;
+      (gatewayTrips[trip.destinationPlaceId] ??= { entered: 0, left: 0 }).left++;
     }
   }
   // Vehicle trips only: walk and transit trips (TASK-128 riders, tours that walk or ride) are not
@@ -760,6 +764,7 @@ export function probeMorning(
           engine.inspect(id + 1)?.failReason === 'no_parking'),
     ).length,
     gatewayTraffic,
+    gatewayTrips,
     sampledRoadTraffic,
     failures: Object.fromEntries(failures),
     riders: riderCensus(city, scenario, trips, engine, untilS),

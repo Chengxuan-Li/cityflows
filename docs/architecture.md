@@ -693,7 +693,8 @@ No safe placement means no approach equipment. `compileRail(city, compiled)` use
 surfaces; standalone `compileRail(city)` derives approaches without the surface check.
 
 TASK-127 marks degree-one, non-buffer nodes within 0.1 m of the geographic bbox as boundary
-ends (synthetic cities use their rail extent). `network/trains.ts` builds oriented paths through
+ends (synthetic cities use their rail extent); a polygon import (TASK-198) uses its
+`geo.boundary` ring instead of the bbox. `network/trains.ts` builds oriented paths through
 the compiled continuations only. Preferred direction is binding; untagged parallel running
 tracks within 12 m favor right-hand operation. Route search penalizes service tracks and
 opposing parallel geometry, rejects paths with more than 15% against that geometry, and keeps
@@ -3678,7 +3679,10 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    `osm_polygon_pruned`). A lot aisle the ring cuts is not kept. Where the cut removed a road
    at a junction, an `only_*` restriction onto a removed way, or bans that leave an approach no
    exit, are ignored with `osm_unsupported_tag`. Every entry-class road end at the ring
-   carries a gateway connector.
+   carries a gateway connector. A ring has no box sides, so gateways pair without the
+   same-edge test: named carriageways within 150 m, then each link end joins the nearest
+   non-link entry within 80 m (its own interchange), then complementary one-way ends within
+   150 m.
 9. Preserve `amenity=parking` polygons, `railway=station`, `aeroway=aerodrome`, `amenity=school`
    and `shop=mall`. TASK-048 also imports residential, office/commercial, retail and industrial
    building footprints and land use, including multipolygon courtyards and bbox clipping.
