@@ -137,6 +137,10 @@ interface AppState {
   tool: 'select' | 'road' | 'place' | 'ramp' | 'roundabout';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
+  /** TASK-196: the phone inspector sheet's height in px once it has settled, null while it is
+   *  closed or being dragged (inspector-sheet.tsx); the map keeps the selection above it. */
+  sheetHeight: number | null;
+  setSheetHeight: (height: number | null) => void;
   session: Session | null;
   run: Run | null;
   selection: MapPick | null;
@@ -591,6 +595,8 @@ export const useAppStore = create<AppState>((set, get) => {
       });
     },
     selectionPoint: null,
+    sheetHeight: null,
+    setSheetHeight: (sheetHeight) => set({ sheetHeight }),
     session: null,
     run: null,
     selection: null,
@@ -883,6 +889,7 @@ declare global {
       view3D?: () => { centre: Vec2; zoom: number } | null;
       setView3D?: (centre: Vec2, zoom: number, pitch?: number, bearing?: number) => void;
       worldToScreen?: (point: Vec2) => Vec2;
+      selectionAnchor?: () => Vec2 | null;
       city?: () => Project['city'];
       commit?: (command: Command) => Promise<void>;
       /** TASK-111: set the test pedestrians and restart the run with them. */

@@ -1001,6 +1001,27 @@ export class Scene3D {
           this.camera.position.distanceTo(this.controls.target)),
     };
   }
+  /** Moves the camera so the ground point sits `dx`, `dy` pixels from where it shows now, keeping
+   *  zoom, pitch and bearing. A target above the horizon is left alone. */
+  panScreen(point: Vec2, dx: number, dy: number) {
+    const plane = (this.geometry?.heights.terrain.groundAt(point.x, point.y) ?? 0) + 1;
+    const at = this.worldToScreen(point);
+    const ray = new Vector3(
+      ((at.x + dx) / this.canvas.clientWidth) * 2 - 1,
+      1 - ((at.y + dy) / this.canvas.clientHeight) * 2,
+      0.5,
+    )
+      .unproject(this.camera)
+      .sub(this.camera.position);
+    if (ray.y >= 0) return;
+    const reach = ray
+      .multiplyScalar((plane - this.camera.position.y) / ray.y)
+      .add(this.camera.position);
+    const shift = new Vector3(point.x - reach.x, 0, point.y - reach.z);
+    this.camera.position.add(shift);
+    this.controls.target.add(shift);
+    this.controls.update();
+  }
   worldToScreen(point: Vec2, heightM = 1) {
     const p = new Vector3(
       point.x,
