@@ -1,6 +1,6 @@
 # TASK-196 — Keep the selection in view above the phone sheet
 
-Status: approved by the owner 2026-11-17; in progress. Proposed owner: Claude Code subagent (Sonnet
+Status: done 2026-11-17 (merged; see plan.md). Proposed owner: Claude Code subagent (Sonnet
 5.5, high). Branch `task/196-sheet-recentre`, worktree `D:\cityflows-wt\196`, ports 5397 / 5497.
 
 ## Goal

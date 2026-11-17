@@ -221,7 +221,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-193](tasks/TASK-193.md) | 9 | The jam ring behind jg:10802 (detours feeding the queue they leave, or the exit-full hold on single-movement entry lanes) | `src/sim/**` | 121, 154, 188 | seeds 1-12 both modes, full demand, drain, gate, guard | in progress (approved 2026-11-17) |
 | [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | planned (approved 2026-11-17; after 193) |
 | [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | in progress (approved 2026-11-17) |
-| [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | in progress (approved 2026-11-17) |
+| [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4326,6 +4326,16 @@ height; while moving, text is not capped at TASK-167's maximum size until it set
 
 Full run 43885610218 (lead, manual, on 592ad58 after TASK-185, 186 and 187): every job green; the city
 job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full run 43591345828.
+
+TASK-196 (Claude Code subagent, Sonnet 5.5 high, 2026-11-17; merged): under 600 px, when a selection is
+made or the sheet settles at a new height and the selection's anchor (`src/ui/selection-anchor.ts`: a
+lane's middle, a node, a place or lot centroid, a vehicle or walker from the snapshot) is under the
+sheet, the map pans so it sits in the middle of the area above, in 2D and 3D (`Scene3D.panScreen`), with
+no zoom, pitch or bearing change; it eases, jumps under reduced motion, and a press or wheel cancels it.
+Wider layouts never mount the sheet; camera centres at 768 and 1280 px, 2D and 3D, identical to main.
+Check (1,480), light e2e (61 with the new `qa-phone-recentre`), `qa-mobile` and `qa-phone-sheet` (16).
+Open: a selected train has no anchor; a long street centres on its middle, not the tapped point; at full
+height the anchor lands in the 44 px strip; a 3D pan can show the ground plane's edge (as any pan does).
 
 Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job green; CI green on
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
