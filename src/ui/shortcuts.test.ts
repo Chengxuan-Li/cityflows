@@ -49,7 +49,7 @@ describe('bindings', () => {
     const keyOf = (id: CommandId) => bindings[id][0];
     expect(
       ['new', 'open', 'save', 'export', 'undo', 'redo'].map((id) => keyOf(id as CommandId)),
-    ).toEqual(['mod+n', 'mod+o', 'mod+s', 'mod+shift+s', 'mod+z', 'mod+shift+z']);
+    ).toEqual(['n', 'mod+o', 'mod+s', 'mod+shift+s', 'mod+z', 'mod+shift+z']);
     expect(
       ['playPause', 'step', 'restart', 'slower', 'faster'].map((id) => keyOf(id as CommandId)),
     ).toEqual(['space', '.', 'mod+r', '[', ']']);
@@ -57,6 +57,38 @@ describe('bindings', () => {
       ['select', 'road', 'place', 'ramp', 'roundabout'].map((id) => keyOf(id as CommandId)),
     ).toEqual(['1', '2', '3', '4', '5']);
     expect(bindings.shortcuts).toEqual(['mod+/', '?']);
+  });
+});
+
+describe('reserved chords', () => {
+  // Chords a browser takes in a normal tab before the page sees them (mod is Ctrl, or ⌘ on a Mac):
+  // - Chrome and Edge list new window, new tab, close tab and window, incognito, reopen tab, Ctrl+Tab,
+  //   Ctrl+PgUp/PgDn and Ctrl/⌘+1 to 9 (tabs) as browser shortcuts:
+  //   https://support.google.com/chrome/answer/157179. Chromium withholds "reserved" commands from the
+  //   page (BrowserCommandController::IsReservedCommandOrKey); whether tab 1 to 9 is among them
+  //   varies by version and platform, so they count as reserved here.
+  // - Firefox marks new window, new tab, close tab, close window and private window reserved="true"
+  //   in browser/base/content/browser-sets.inc (key_newNavigator, key_newNavigatorTab, key_close,
+  //   key_closeWindow, key_privatebrowsing, key_quitApplication: Ctrl+N/T/W, Ctrl+Shift+W/P, Ctrl+Q;
+  //   its Ctrl+1 to 9 select tabs but are not marked reserved).
+  // - Safari switches tabs on ⌘1 to ⌘8 and ⌘9 for the last one, and closes on ⌘W:
+  //   https://support.apple.com/guide/safari/keyboard-and-other-shortcuts-cpsh003/mac
+  // - A page cannot take such keys unless it locks the keyboard in fullscreen:
+  //   https://developer.mozilla.org/en-US/docs/Web/API/Keyboard_API (Keyboard Locking),
+  //   https://wicg.github.io/keyboard-lock/
+  const reserved = [
+    ...[...'ntwq'].map((k) => `mod+${k}`),
+    ...[...'ntwp'].map((k) => `mod+shift+${k}`),
+    ...[...'123456789'].map((k) => `mod+${k}`),
+    'mod+tab',
+    'mod+shift+tab',
+    'mod+pageup',
+    'mod+pagedown',
+  ];
+
+  it('are bound to no command', () => {
+    const used = Object.values(bindings).flat() as string[];
+    expect(used.filter((spec) => reserved.includes(spec))).toEqual([]);
   });
 });
 
@@ -74,7 +106,9 @@ describe('matches', () => {
     expect(bound(shifted, false)).toBe('redo');
     expect(bound(press('z', { ctrlKey: true }), false)).toBe('undo');
     expect(bound(press('2'), false)).toBe('road');
-    expect(bound(press('2', { ctrlKey: true }), false)).toBe('inspector');
+    expect(bound(press('2', { ctrlKey: true }), false)).toBeUndefined();
+    expect(bound(press('i'), false)).toBe('inspector');
+    expect(bound(press('i', { ctrlKey: true }), false)).toBeUndefined();
     expect(bound(press('S', { metaKey: true, shiftKey: true }), true)).toBe('export');
     expect(bound(press('s', { metaKey: true }), true)).toBe('save');
   });
@@ -111,7 +145,7 @@ describe('labels', () => {
   });
 
   it('list every key of an action, and none for an action without one', () => {
-    expect(labels('view3d', false)).toEqual(['Ctrl+3', 'V']);
+    expect(labels('view3d', false)).toEqual(['V']);
     expect(labels('import', false)).toEqual([]);
   });
 

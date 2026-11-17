@@ -157,15 +157,16 @@ test('the shortcut sheet opens on ? and the modifier with /, and lists every key
   await key(page, '?');
   await expect(shortcuts(page)).toBeVisible();
   for (const label of [
-    shown('Ctrl+N', '⌘N'),
+    'N',
     shown('Ctrl+Shift+S', '⇧⌘S'),
     shown('Ctrl+Shift+Z', '⇧⌘Z'),
     shown('Ctrl+K', '⌘K'),
-    shown('Ctrl+1', '⌘1'),
+    'S',
+    'I',
     'Space',
     'Esc',
   ])
-    await expect(shortcuts(page).locator('kbd', { hasText: label }).first()).toBeVisible();
+    await expect(shortcuts(page).locator(`kbd:text-is("${label}")`).first()).toBeVisible();
   await key(page, 'Escape');
   await expect(shortcuts(page)).toBeHidden();
 
@@ -186,16 +187,17 @@ test('the shortcut sheet opens on ? and the modifier with /, and lists every key
 test('the sidebar and inspector toggle on the keys, and tooltips and the overflow menu show them', async ({
   page,
 }) => {
-  await key(page, `${mod}+1`);
+  await key(page, 's');
   await expect(button(page, 'Show sidebar')).toBeVisible();
-  await key(page, `${mod}+1`);
+  await key(page, 's');
   await expect(button(page, 'Hide sidebar')).toBeVisible();
-  await key(page, `${mod}+2`);
+  await key(page, 'i');
   await expect(button(page, 'Show inspector')).toBeVisible();
-  await key(page, `${mod}+2`);
+  await key(page, 'i');
   await expect(button(page, 'Hide inspector')).toBeVisible();
 
   await expect(button(page, 'Play')).toHaveAccessibleDescription('Run the simulation · Space');
+  await expect(button(page, 'New')).toHaveAccessibleDescription('Start from a bundled city · N');
   await expect(button(page, 'Undo')).toHaveAccessibleDescription(
     `Undo the last edit · ${shown('Ctrl+Z', '⌘Z')}`,
   );

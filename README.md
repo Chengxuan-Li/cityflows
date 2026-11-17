@@ -79,16 +79,17 @@ Enter to run it, and its key is listed beside it. **Ctrl+/** or **?** lists ever
 | Ctrl+R               | Restart                                    |
 | `[` and `]`          | Slower and faster                          |
 | 1 to 5               | Select, Road, Place, Ramp, Roundabout      |
-| V or Ctrl+3          | Switch between 2D and 3D                   |
-| Ctrl+1, Ctrl+2       | Hide or show the sidebar, the inspector    |
+| V                    | Switch between 2D and 3D                   |
+| S, I                 | Hide or show the sidebar, the inspector    |
 | Esc                  | Clear the selection                        |
 | Delete               | Delete the selected street or place        |
 | Ctrl+Z, Ctrl+Shift+Z | Undo, redo                                 |
-| Ctrl+N, O, S         | New city, open a project, save             |
+| N                    | New city                                   |
+| Ctrl+O, Ctrl+S       | Open a project, save                       |
 | Ctrl+Shift+S         | Export                                     |
 
-On a Mac, read Ctrl as ⌘. Keys do nothing while you type in a field or while a sheet is open. A
-browser may keep Ctrl+N (and sometimes Ctrl+1 to 3) for itself; the command menu runs those too.
+On a Mac, read Ctrl as ⌘. Keys do nothing while you type in a field or while a sheet is open.
+Browsers keep Ctrl+N and Ctrl+1 to 9 for themselves, so New city and the panels are plain letters.
 
 ### Signals
 
