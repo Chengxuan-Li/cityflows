@@ -214,9 +214,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | done |
 | [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | done (23.7% of 25%) |
 | [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | in progress (approved 2026-11-16) |
-| [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | in progress (approved 2026-11-16) |
-| [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | in progress (approved 2026-11-16) |
-| [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | in progress (approved 2026-11-16) |
+| [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | done |
+| [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | done |
+| [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | done |
 | [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | in progress (approved 2026-11-16) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -4037,7 +4037,7 @@ set). At the queue merge T80 failed in most runs under load, also on main plus T
 event shut a sheet reopened by a quick key, and tool keys leaked past a sheet still opening. Sheets now
 report Escape through `cancel`, open in the same React commit as the store change, and the dispatcher asks
 the store which sheet is open; T80 passed 150 of 150 repeats. Open: browsers reserve Ctrl/Cmd+N and may
-reserve mod+1 to 3 in a normal tab (the command menu covers them).
+reserve mod+1 to 3 in a normal tab (the command menu covers them). Closed by TASK-191.
 
 TASK-169 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged with TASK-170): keep-clear zones over
 marked crosswalks and lot and garage mouths (`src/network/keep-clear.ts`, cached per compiled city, no schema
@@ -4254,6 +4254,37 @@ traffic light, guard and light e2e (48) on the merge. The lead accepts 23.7% aga
 (the target is the contract's, not a gate). Open: the following pass (376 s), lane-change proposals
 (107 s), spawn bookkeeping for blocked origins (86 s; skipping an origin until something near it changes
 is the next large exact cut, keeping origin courtesy's bookkeeping), rail crossings (175 s), lot admission.
+
+TASK-191 (Claude Code subagent, Sonnet 5.5 high, 2026-11-16; merged): New city moved from mod+N to N,
+the sidebar and inspector toggles from mod+1 and mod+2 to S and I, and 2D/3D keeps only V (mod+3 dropped).
+Plain letters, like the tool keys; fields and open sheets still swallow them, and the one table in
+`src/ui/shortcuts.ts` feeds the sheet, tooltips and menus. A unit test rejects reserved chords (mod+N, T,
+W, Q; mod+Shift+N, T, W, P; mod+1 to 9; Tab and PageUp/PageDown chords; sources in its comment) and keys
+stay unique. Check (1,476), light e2e (48), T80 100 of 100 under `--repeat-each=20`. Open: Mac-native
+chords (Ctrl+Cmd+S) would need the matcher to read `event.code`.
+
+TASK-189 (Claude Code subagent, Sonnet 5.5 high, 2026-11-16; merged): under 600 px the inspector is a
+bottom sheet over the map (`src/ui/inspector-sheet.tsx`, one `@media (max-width: 600px)` block in
+`app.css`). It opens at half height on a selection; the grabber drags or taps between half and full (a
+44 px strip of map stays above); a flick moves one step and a slow release lands on the nearest of
+closed, half and full; swipe down, Escape (the existing clear-selection shortcut) or the close button
+closes it. The heading stays pinned while the content scrolls. Computed styles at 601 px and wider: 0
+differences across 117 states and 120,313 nodes (TASK-182's method). Lead review caught the Dark edge
+ring (an inset ring in `--shadow-popover`) broken by the pinned heading; the heading now stops 1 px
+short of each side. Check (1,476), light e2e (53 with the new `qa-phone-sheet`), `qa-mobile` (11),
+contrast (44). Open: a selection under the sheet is not re-centred (a camera change outside `src/ui`);
+dragging starts only on the grabber row.
+
+TASK-190 (Claude Code subagent, Sonnet 5.5 high, 2026-11-16; merged): `generateStalls`
+(`src/network/stalls.ts`) drops a bay that a road or junction of another grade overlaps when that
+surface, sampled with `laneHeightAt` at the bay's corners and centre, is under 4.5 m
+(`levelClearanceM`) above the bay's aisle; a road below a bay is ignored. Munich: pk:2056 6 to 2 bays
+(four under r:1301/r:1302 at 3.9 to 4.4 m), pk:2050 10 to 8 (two on r:737's ground end), pk:2049
+unchanged, 484 to 478 in all; Sindelfingen and synthetic cities unchanged. Re-pinned (bays, the two
+capacities and index shifts only): T44, V106, T50, T62, T75, V107/V117 compile, V117 curbs, V108, the T49
+census, the TASK-164 pk:2056 case; T149's synthetic bridge now has layer-1 ends (a level deck 5 m up).
+Munich gate 5,302 / 1 gridlocked / 0 stalled (main 5,302 / 0 / 0); guard 2,554 / 0 / 0. Check (1,476),
+city (54 files), traffic light, light e2e (48).
 
 Full run 43885610218 (lead, manual, on 592ad58 after TASK-185, 186 and 187): every job green; the city
 job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full run 43591345828.

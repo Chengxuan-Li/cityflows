@@ -231,7 +231,8 @@ CityFlows looks and behaves like a clean Mac app in the Sonoma / Ventura flat ma
   synthetic-traffic notice, map attribution), and the map filling the content area. Both sidebars
   collapse from the toolbar and resize by their inner edge. Nothing floats over the map but its
   own transient overlays. Under 900 px the sidebars float over the map, and toolbar items that do
-  not fit move into the » overflow menu in priority order, never wrapping.
+  not fit move into the » overflow menu in priority order, never wrapping. Under 600 px the
+  inspector is a bottom sheet (half or full height, grabber, pinned heading; TASK-189).
 - **Controls.** One control set (`src/ui/controls.tsx`, `src/ui/app.css`), reused everywhere:
   push, primary and toolbar buttons, segmented control, pop-up and pull-down menus, checkbox,
   switch, slider, text and number fields with a stepper, disclosure sections, popovers with an
