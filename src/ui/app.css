@@ -2311,8 +2311,10 @@ input[type='file']::file-selector-button {
     position: sticky;
     top: 0;
     z-index: 1;
-    margin: 0 -14px 8px;
-    padding: 2px 14px 6px;
+    /* 1 px short of each side: the sheet's edge line is its inset shadow, which an opaque
+       heading would otherwise cover */
+    margin: 0 -13px 8px;
+    padding: 2px 13px 6px;
     background: var(--inspector);
     box-shadow: 0 1px 0 var(--separator);
   }
