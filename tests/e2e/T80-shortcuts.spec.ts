@@ -17,7 +17,7 @@ let errors: string[];
 
 test.beforeEach(async ({ page }) => {
   errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('heading', { name: '5 × 5 grid' })).toBeVisible();
   await expect(button(page, 'Play')).toBeEnabled();
 });

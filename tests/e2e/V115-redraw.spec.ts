@@ -30,7 +30,7 @@ for (const mode of ['2d', '3d'])
     // V98 covers normal camera damping; fixed settling keeps this smoke case short.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.route('https://**/*', (route) => route.abort());
-    await page.goto('/');
+    await page.goto('/?city=grid5x5');
     await expect(button(page, 'Play')).toBeEnabled();
     await importOsm(page, 'fixtures/osm/munich-donnersberger.osm');
     await button(page, 'Layers').click();

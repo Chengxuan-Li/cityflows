@@ -11,7 +11,7 @@ test('demo C, bypass: an expressway with ramps carries a share of the commute an
 }, info) => {
   test.setTimeout(240_000);
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const baseline = await runMorning(page);
   expect(baseline.trips.completed).toBeGreaterThan(100);

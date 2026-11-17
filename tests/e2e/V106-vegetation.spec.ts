@@ -45,7 +45,7 @@ test('@smoke V106 tree layers share placement in both views and stay within the 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.goto('/?city=grid5x5', { waitUntil: 'domcontentloaded' });
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm');
   const imported = await city(page);

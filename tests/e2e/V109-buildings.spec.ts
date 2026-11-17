@@ -16,7 +16,7 @@ test('@smoke V109 pitched roofs, details and hidden buildings on terrain preserv
   await page.route('https://**/*', (route) => route.abort());
   for (const name of ['munich-donnersberger', 'sindelfingen-a81']) {
     await fixtureTerrain(page, `fixtures/osm/${name}.osm`);
-    await page.goto('/');
+    await page.goto('/?city=grid5x5');
     await expect(button(page, 'Play')).toBeEnabled();
     await importOsm(page, `fixtures/osm/${name}.osm`);
     const before = await city(page);

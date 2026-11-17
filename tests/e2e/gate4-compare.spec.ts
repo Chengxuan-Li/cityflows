@@ -10,7 +10,7 @@ test('baseline comparison detects a banned center turn and paints road usage dif
   await page.setViewportSize({ width: 1440, height: 900 });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   const button = (name: string) => page.getByRole('button', { name, exact: true });
   await expect(button('Play')).toBeEnabled();
   const fixture = JSON.parse(

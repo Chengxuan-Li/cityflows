@@ -14,11 +14,15 @@ test('QA production Pages build loads and plays with no test API or requests out
     if (response.status() >= 400) failed.push(response.url());
   });
   await page.goto('./');
-  await expect(page.getByRole('heading', { name: '5 × 5 grid', exact: true })).toBeVisible();
+  // TASK-198: the landing city, paused at the scenario start.
+  await expect(
+    page.getByRole('heading', { name: 'Freiburg im Breisgau', exact: true }),
+  ).toBeVisible();
   await expect(button(page, 'Play')).toBeEnabled();
   expect(await page.evaluate(() => window.cityflows)).toBeUndefined();
   const clock = page.getByLabel('Simulation clock', { exact: true });
   const start = await clock.innerText();
+  expect(start).toBe('07:00:00.0');
   await button(page, 'Play').click();
   await expect(clock).not.toHaveText(start);
   await button(page, 'Pause').click();

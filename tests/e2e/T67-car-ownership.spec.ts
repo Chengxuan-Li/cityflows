@@ -70,7 +70,7 @@ test('T67 a household shows who drives which car, who borrows it and who has non
   );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await page.getByLabel('Open project', { exact: true }).setInputFiles({
     name: 'households.cityflows.json',

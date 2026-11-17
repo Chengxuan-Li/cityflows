@@ -8,7 +8,7 @@ test('V163 lighting persists per viewer and leaves the simulation and project un
 }) => {
   test.setTimeout(180_000);
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const map = page.getByLabel('City map', { exact: true });
   await expect(map).toHaveAttribute('data-lighting', /"mode":"day","artificial":0/);
@@ -65,7 +65,7 @@ test('V184 the clock follows the season and a bundled run reaches evening in Win
     if (!localStorage.getItem('cityflows.lighting'))
       localStorage.setItem('cityflows.lighting', '{"mode":"clock","exposure":1}');
   });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const map = page.getByLabel('City map', { exact: true });
   await expect(map).toHaveAttribute('data-lighting', /"mode":"clock","artificial":0/);

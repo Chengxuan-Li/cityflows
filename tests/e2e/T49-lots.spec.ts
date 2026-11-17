@@ -11,7 +11,7 @@ test('@smoke T49 imports both surface-lot cities and toggles stall paint in 2D a
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   for (const [file, x, y, zoom] of [
     ['munich-donnersberger', 135.7, 305.3, 7],
     ['sindelfingen-a81', -379, -498.4, 5],

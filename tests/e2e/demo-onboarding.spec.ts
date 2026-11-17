@@ -25,13 +25,13 @@ async function ringed(page: Page, target: Locator) {
 
 test('a new player following only the hints completes the loop once', async ({ page }, info) => {
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   // Test builds start without hints; the query reopens them.
   await expect(hint(page)).toBeHidden();
   await expect(button(page, 'Show hints')).toBeVisible();
 
-  await page.goto('/?hints');
+  await page.goto('/?hints&city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   const shot = (step: number | string) =>
     page.screenshot({ path: info.outputPath(`hint-${step}.png`) });
@@ -108,7 +108,7 @@ test('a new player following only the hints completes the loop once', async ({ p
   await expect(hint(page)).toBeHidden();
   expect(await page.evaluate(() => localStorage.getItem('cityflows.hints'))).toBe('done');
 
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await page.waitForTimeout(500);
   await expect(hint(page)).toBeHidden();
@@ -118,7 +118,7 @@ test('a new player following only the hints completes the loop once', async ({ p
 
 test('hints can be skipped, reopened, and resume after a reload @smoke', async ({ page }) => {
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await button(page, 'Show hints').click();
   await expect(hint(page)).toContainText('Choose a city to start from.');

@@ -32,7 +32,7 @@ test('QA Munich live edit survives save and fresh-context replay with version, h
   test.setTimeout(120_000);
   const errors = pageErrors(page);
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm');
   const imported = await city(page);
@@ -90,7 +90,7 @@ test('QA Munich live edit survives save and fresh-context replay with version, h
     const other = await context.newPage();
     const otherErrors = pageErrors(other);
     await other.route('https://**/*', (route) => route.abort());
-    await other.goto('/');
+    await other.goto('/?city=grid5x5');
     await expect(button(other, 'Play')).toBeEnabled();
     await other.getByLabel('Open project').setInputFiles(path);
     await expect(other.getByRole('heading', { name: edited.name, exact: true })).toBeVisible();

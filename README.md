@@ -10,9 +10,11 @@ streets and signals and see how the same commute plays out on the edited network
 
 ![The CityFlows window: toolbar, Layers in the sidebar, a selected car and its route in the inspector](docs/assets/window-light.png)
 
-- The 5 × 5 grid opens by default. You can also choose a city from **New**. Press **Play**, pick
-  a speed, and click a moving car to inspect its route. On a first visit a few hints point at each
-  step; **Show hints** in the empty inspector brings them back.
+- Freiburg im Breisgau opens by default: the Altstadt and the Hauptbahnhof inside the rail line,
+  the rings and the Dreisam, built from OpenStreetMap and paused at 07:00. The 5 × 5 grid and the
+  other bundled cities are under **New**. Press **Play**, pick a speed, and click a moving car to
+  inspect its route. On a first visit a few hints point at each step; **Show hints** in the empty
+  inspector brings them back.
 - While the simulation runs, select a street to edit its lanes or a junction to edit its signal
   phases.
 - To try a real city, choose **Import** → **Choose map area**, then Shift-drag to select an area
@@ -123,9 +125,10 @@ npm ci
 npm run dev
 ```
 
-Open the printed URL. The bundled 5 by 5 grid loads with a morning commute scheduled; press
-Play, pick a speed, click a car, a street or a junction, change a lane count, a one-way, a
-turn or a signal phase, then Restart to replay the same demand on the edited network.
+Open the printed URL. Freiburg loads with a morning commute scheduled (`?city=grid5x5` opens the
+5 by 5 grid instead, and any other bundled city by its id); press Play, pick a speed, click a
+car, a street or a junction, change a lane count, a one-way, a turn or a signal phase, then
+Restart to replay the same demand on the edited network.
 
 ```
 npm run check      # typecheck, lint, format check, unit tests, build

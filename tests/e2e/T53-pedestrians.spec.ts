@@ -9,7 +9,7 @@ test('@smoke T53 test pedestrians walk, wait and cross; walk groups edit with un
   test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
 
   await button(page, 'Demand').click();

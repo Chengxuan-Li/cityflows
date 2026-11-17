@@ -6,7 +6,7 @@ import type { Person, Scenario } from '../../src/schema';
 
 test('Munich import keeps lane drops in Notes after its warnings', async ({ page }, info) => {
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import city' });
   await dialog.getByLabel('OSM file').setInputFiles('fixtures/osm/munich-donnersberger.osm');
@@ -35,7 +35,7 @@ test('Munich import keeps lane drops in Notes after its warnings', async ({ page
 for (const scale of [0.15, 0.5]) {
   test(`imports and saves demand at scale ${scale}`, async ({ page }, info) => {
     await page.route('https://**/*', (route) => route.abort());
-    await page.goto('/');
+    await page.goto('/?city=grid5x5');
     await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Import city' });
     await dialog.getByLabel('OSM file').setInputFiles('fixtures/osm/downtown.osm');
@@ -89,7 +89,7 @@ test('imports the downtown fixture and generates traffic from added places @smok
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await page.getByRole('button', { name: 'Import', exact: true }).click();
@@ -197,7 +197,7 @@ test('shows area bounds, refuses oversized selections, and blocks invalid upload
   page,
 }, info) => {
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import city' });

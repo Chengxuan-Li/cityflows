@@ -8,7 +8,7 @@ for (const width of [1280, 1024, 900]) {
   test(`the window does not scroll sideways after Play at ${width} px`, async ({ page }) => {
     const errors = pageErrors(page);
     await page.setViewportSize({ width, height: 800 });
-    await page.goto('/');
+    await page.goto('/?city=grid5x5');
     await expect(button(page, 'Play')).toBeEnabled();
     await button(page, 'Play').click();
     await expect.poll(async () => (await metrics(page)).trips.driving).toBeGreaterThan(0);

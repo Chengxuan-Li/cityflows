@@ -24,7 +24,8 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
   };
 }
 
-void useAppStore.getState().open();
+// TASK-198: Freiburg opens by default; `?city=<id>` opens another bundled city by its id.
+void useAppStore.getState().open(new URLSearchParams(location.search).get('city') ?? undefined);
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

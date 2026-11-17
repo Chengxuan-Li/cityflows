@@ -699,7 +699,7 @@ export const useAppStore = create<AppState>((set, get) => {
       return changeWalkers({ kind: 'walkers', before, after: walkers }, 'commit');
     },
     reportError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
-    open: (source = 'grid5x5') =>
+    open: (source = 'freiburg') =>
       perform(async () => {
         const result =
           typeof source === 'string'

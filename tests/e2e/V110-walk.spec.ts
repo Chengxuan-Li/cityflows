@@ -8,7 +8,7 @@ test('@smoke V110 sidewalks and footways toggle independently in 2D and 3D', asy
   const errors = pageErrors(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.route('https://**/*', (r) => r.abort());
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.goto('/?city=grid5x5', { waitUntil: 'domcontentloaded' });
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm');
   const original = await city(page);

@@ -31,7 +31,7 @@ test('demo A, morning commute: 2 000 residents drive to the offices at 08:00 and
 }, info) => {
   test.setTimeout(420_000);
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   // TASK-113: the demo's residents all drive (mode choice off).
   await driveEveryone(page);

@@ -108,7 +108,7 @@ for (const kind of ['rail', 'tram'] as const)
     await page.route('https://**/*', (route) => route.abort());
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/');
+    await page.goto('/?city=grid5x5');
     await expect(button(page, 'Play')).toBeEnabled();
     const project = {
       city: source,

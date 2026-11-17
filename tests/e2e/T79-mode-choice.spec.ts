@@ -14,7 +14,7 @@ test('T79 a slider in the demand sheet moves the mode shares after a restart', a
   test.setTimeout(420_000);
   const errors = pageErrors(page);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
 
   const before = await startedModes(page);

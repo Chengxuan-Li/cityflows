@@ -18,7 +18,7 @@ test('V97 shadows expose changing under-deck signals and remove all effects when
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('https://**/*', (route) => route.abort());
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   await importOsm(page, 'fixtures/osm/munich-donnersberger.osm');
   // TASK-131's approach heads are outside the deck. Add a controlled ground signal to the

@@ -32,7 +32,7 @@ test('TASK-091: a crossing toggled in the node inspector is redrawn, and undo re
   page,
 }) => {
   const errors = pageErrors(page);
-  await page.goto('/');
+  await page.goto('/?city=grid5x5');
   await expect(button(page, 'Play')).toBeEnabled();
   // The grid's T-junction n at (120, 0), zoomed in about it so the stripes are drawn in full.
   const node = await gridPoint(page, 120, 0);
