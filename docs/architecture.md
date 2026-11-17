@@ -1204,6 +1204,10 @@ carry a polyline, cumulative metres, length, width, grade, kind and `generated`.
 name their compiled road and travel-relative side; corners name their node. Crossings name
 their road, `start`/`end` (or `midblock` for mapped crossings) and `zebra`/`signal` control.
 `places`, `parking`, `connectors` and `sourceNodes` maps expose walk-node access indices.
+TASK-198: `compile(city, deferWalk)` hands this step (and the signals' walk phases) to the
+caller instead of running it; the graph is empty until the caller runs it, then filled in place.
+The rail compiles before it and never reads it. The app opens a city this way, drawing the first
+frame before the walk graph.
 
 Default 2 m sidewalks follow the compiled outer curb, their centre 1 m beyond it, on
 residential, tertiary, secondary and primary streets. Motorways, trunks, ramps and service
