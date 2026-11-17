@@ -151,12 +151,16 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
     const before = name.startsWith('munich')
       ? [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-          '736ee70a649a46117a9ba163c118368808ca5b517f5a0348181f4b03c991932b',
+          // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
+          // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
+          'fa748b177561ff8c72078b0cd2d439a99d50c67da9fc89fbe67e915f40012ea4',
           // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-          '1deeb2de81c25c5a123f21f6da3f6706a9e0bcbed8107fce8be80fe54f6af32f',
+          // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
+          // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
+          '2f771e6e6b76971c3d03b16440b18084375c3bbf021cec817626a23401a6e3f0',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

@@ -11,6 +11,7 @@ import {
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City } from '../schema';
+import { gradeProfiles, laneHeightAt, levelClearanceM } from './heights';
 import type { CLot, CStall, CompiledCity } from './types';
 
 const closed = (ring: Vec2[]) => [...ring, ring[0]!];
@@ -44,11 +45,37 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
           city.nodes[city.roads[road.id]!.from]!.layer,
           city.nodes[city.roads[road.id]!.to]!.layer,
         ),
+      road: road.idx,
+      node: -1,
     })),
-    ...compiled.nodes.map((node) => ({ ring: node.outline, layer: city.nodes[node.id]!.layer })),
+    ...compiled.nodes.map((node) => ({
+      ring: node.outline,
+      layer: city.nodes[node.id]!.layer,
+      road: -1,
+      node: node.idx,
+    })),
   ]
     .filter(({ ring }) => ring.length >= 3)
-    .map(({ ring, layer }) => ({ ring: prepareRing(closed(ring)), layer }));
+    .map(({ ring, ...rest }) => ({ ring: prepareRing(closed(ring)), ...rest }));
+  const profiles = gradeProfiles(compiled);
+  /**
+   * TASK-190: a road of another grade overhead of a bay (a ramp, whose height varies along the
+   * bay) less than `levelClearanceM` above the bay's own surface, which is its aisle's at the
+   * bay: no car fits under it, and a bay under its ground end sits on the road itself.
+   */
+  const overhead = (
+    obstacle: (typeof obstacles)[number],
+    corners: Vec2[],
+    position: Vec2,
+    aisle: number,
+  ) => {
+    const base = laneHeightAt(compiled, { road: aisle }, position);
+    const heights =
+      obstacle.node >= 0
+        ? [profiles.nodes[obstacle.node]!]
+        : [...corners, position].map((p) => laneHeightAt(compiled, { road: obstacle.road }, p));
+    return Math.min(...heights) - base < levelClearanceM && Math.max(...heights) >= base;
+  };
   return Object.values(city.parking ?? {})
     .filter((lot) => lot.kind === 'lot')
     .sort((a, b) => a.id.localeCompare(b.id))
@@ -70,16 +97,16 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
       const layer = layers.size === 1 ? [...layers][0] : undefined;
       const sameGrade = (other: number | undefined) =>
         layer === undefined || other === undefined || layer === other;
+      const near = ({ box }: PreparedRing) =>
+        box.minX <= boundary.box.maxX &&
+        box.maxX >= boundary.box.minX &&
+        box.minY <= boundary.box.maxY &&
+        box.maxY >= boundary.box.minY;
+      const above = obstacles.filter((o) => !sameGrade(o.layer) && near(o.ring));
       const local = [
         ...obstacles.filter((o) => sameGrade(o.layer)).map((o) => o.ring),
         ...(lot.exclusions ?? []).map((ring) => prepareRing(closed(ring))),
-      ].filter(
-        ({ box }) =>
-          box.minX <= boundary.box.maxX &&
-          box.maxX >= boundary.box.minX &&
-          box.minY <= boundary.box.maxY &&
-          box.maxY >= boundary.box.minY,
-      );
+      ].filter(near);
       const junctions = compiled.nodes.filter(
         (node) =>
           (lot.entries ?? []).includes(node.id) ||
@@ -148,7 +175,12 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
             const candidate = prepareRing(closed(corners));
             if (
               local.some((obstacle) => overlaps(candidate, obstacle)) ||
-              occupied.some((other) => sameGrade(other.layer) && overlaps(candidate, other.ring))
+              occupied.some((other) => sameGrade(other.layer) && overlaps(candidate, other.ring)) ||
+              above.some(
+                (o) =>
+                  overlaps(candidate, o.ring) &&
+                  overhead(o, corners, position, compiled.index.road.get(id)!),
+              )
             )
               continue;
             // Keep the entire bay, rather than just its centre, six metres from junctions.
@@ -273,7 +305,12 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
               if (
                 local.some((o) => overlaps(candidate, o)) ||
                 throats.some((o) => overlaps(candidate, o)) ||
-                occupied.some((o) => sameGrade(o.layer) && overlaps(candidate, o.ring))
+                occupied.some((o) => sameGrade(o.layer) && overlaps(candidate, o.ring)) ||
+                above.some(
+                  (o) =>
+                    overlaps(candidate, o.ring) &&
+                    overhead(o, corners, position, compiled.index.road.get(lot.aisles![0]!)!),
+                )
               )
                 continue;
               attempt.push({

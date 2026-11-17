@@ -78,7 +78,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
             return compiled.compiled.lots!.find((f) => f.id === lot.id)!.stallCount;
           })
         : [];
-    if (restored.length) expect(restored).toEqual([86, 17, 10, 6]);
+    // TASK-190: the third and fourth lose bays under a ramp's low end (10 to 8, 6 to 2).
+    if (restored.length) expect(restored).toEqual([86, 17, 8, 2]);
     const counts = [lots.length, aisles.size, stalls - restored.reduce((sum, n) => sum + n, 0)];
     // TASK-103 also fills lots without mapped aisles, without adding a vehicle road.
     const expected = name === 'munich-donnersberger' ? [25, 51, 395] : [31, 147, 505];
