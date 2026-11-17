@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 
 // The browser source uses bundler-style extensionless imports. Keep Node's native
@@ -12,5 +12,18 @@ registerHooks({
       }
     }
     return nextResolve(specifier, context);
+  },
+  // TASK-198: src/project/manifest.ts imports `version` from package.json as the bundler allows;
+  // Node gives JSON a default export only, so a JSON module also exports its top-level keys.
+  load(url, context, nextLoad) {
+    if (!url.startsWith('file:') || !url.endsWith('.json')) return nextLoad(url, context);
+    const value = JSON.parse(readFileSync(new URL(url), 'utf8')) as Record<string, unknown>;
+    const keys = Object.keys(value);
+    const source = [
+      `const value = ${JSON.stringify(value)};`,
+      ...keys.map((key, i) => `const v${i} = value[${JSON.stringify(key)}];`),
+      `export { value as default, ${keys.map((key, i) => `v${i} as ${JSON.stringify(key)}`).join(', ')} };`,
+    ].join('');
+    return { format: 'module', source, shortCircuit: true };
   },
 });

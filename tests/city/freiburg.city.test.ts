@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { beforeAll, expect, test } from 'vitest';
-import { curateFreiburg, importFreiburg } from '../../bench/freiburg';
+import { buildFreiburgProject, freiburgProject, openFreiburg } from '../../bench/freiburg';
 import { probeMorning } from '../../bench/import-probe';
 import { compile } from '../../src/network';
 import { compileRail } from '../../src/network/rail';
@@ -8,8 +9,8 @@ import { tramCensus, tramTimetable } from '../../src/network/trams';
 import type { City } from '../../src/schema';
 import { limit } from '../timeouts';
 
-// TASK-198: the landing city's import and its morning at the showcase demand (0.15 persons per
-// resident, mode choice on), 7:00 to 10:00.
+// TASK-198: the landing city, as bundled (fixtures/projects/freiburg.cityflows.json), and its
+// morning at the showcase demand (0.15 persons per resident, mode choice on), 7:00 to 10:00.
 
 /** The entries where Freiburg's polygon crosses a road of tertiary class or above, by the OSM
  * ways each gateway serves (docs/decisions/2026-11-17-landing-city.md). The polygon's east tip
@@ -30,11 +31,12 @@ const entries: Record<string, number[]> = {
 };
 
 let city: City;
+let project: Awaited<ReturnType<typeof openFreiburg>>;
 let morning: ReturnType<typeof probeMorning>;
 
-beforeAll(() => {
-  city = importFreiburg();
-  curateFreiburg(city);
+beforeAll(async () => {
+  project = await openFreiburg();
+  city = project.city;
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 3)));
   morning = probeMorning(city, result.compiled, 0.15);
@@ -95,3 +97,31 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   expect(table.hash).toBe('aff6c2fd');
   expect(trainTimetable(rail).routes).toHaveLength(5);
 });
+
+test(
+  'the bundled project is the curated build of the committed extract',
+  async () => {
+    expect(await buildFreiburgProject()).toBe(readFileSync(freiburgProject, 'utf8'));
+    expect(city.name).toBe('Freiburg im Breisgau');
+    expect(project.population).toHaveLength(morning.persons);
+    expect(project.scenarios[0]!.demand.personsPerResident).toBe(0.15);
+    const buildings = city.context!.features.filter(
+      (f): f is Extract<typeof f, { kind: 'area' }> => f.kind === 'area' && f.class === 'building',
+    );
+    // The Münster's tower carries its spire; nothing else stands above the Schwabentor's 48 m.
+    const tall = buildings.filter((b) => (b.heightM ?? 0) > 48);
+    expect(tall.map((b) => [b.sub, b.heightM, b.roof?.shape])).toEqual([
+      ['tower', 116, 'pyramidal'],
+    ]);
+    expect(buildings.find((b) => b.sub === 'cathedral')).toMatchObject({ heightM: 30 });
+    // Building passages and covered streets run at grade.
+    const covered = [41455470, 157116842, 30343822, 111812982, 48280860];
+    const roads = Object.values(city.roads).filter((r) =>
+      r.provenance.osmIds?.some((id) => covered.includes(id)),
+    );
+    expect(roads.length).toBeGreaterThanOrEqual(5);
+    expect(roads.filter((r) => (r.layer ?? 0) !== 0)).toEqual([]);
+    expect(project.view?.camera).toMatchObject({ '3d': { pitch: 50, bearing: -60 } });
+  },
+  limit(120_000),
+);

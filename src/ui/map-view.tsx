@@ -79,6 +79,22 @@ function walkLinksForMap(links: readonly number[], { compiled, loadedCompiled }:
     .filter((i) => i !== undefined);
 }
 
+/** TASK-198: a bundled project's showcase 3D camera (view.json `camera['3d']`): centre in
+ *  metres, zoom as a multiple of the fitted 2D zoom, pitch and bearing in degrees. */
+function showcase3D(project: Session['project']) {
+  const camera = project.view?.camera as Record<string, unknown> | null | undefined;
+  const view = camera?.['3d'] as
+    { centre?: Vec2; scale?: number; pitch?: number; bearing?: number } | undefined;
+  return view &&
+    Number.isFinite(view.centre?.x) &&
+    Number.isFinite(view.centre?.y) &&
+    Number.isFinite(view.scale) &&
+    Number.isFinite(view.pitch) &&
+    Number.isFinite(view.bearing)
+    ? (view as Required<typeof view>)
+    : undefined;
+}
+
 function fitCity(scene: Scene, canvas: HTMLCanvasElement, { project, compiled }: Session) {
   const bounds: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   const points = [
@@ -336,6 +352,8 @@ export function MapView() {
       signal.addEventListener('abort', () => recentre.disconnect());
 
       let drawn: Session | null = null;
+      let showcased: Session['editor'] | null = null;
+      let fittedZoom = 1;
       let drawn3D: Session | null = null;
       let active3D = false;
       let loading3D = false;
@@ -573,6 +591,7 @@ export function MapView() {
           if (drawn?.editor !== session.editor) {
             pointer.reset();
             fitCity(view, canvas, session);
+            fittedZoom = view.camera.zoom;
             if (active3D)
               three!.setView(
                 view.camera.screenToWorld({
@@ -608,7 +627,17 @@ export function MapView() {
         if (want3D !== active3D && (!want3D || three)) {
           pointer.reset();
           const middle = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
-          if (want3D) three!.setView(view.camera.screenToWorld(middle), view.camera.zoom);
+          // The first 3D view of a session with a showcase camera opens on it.
+          const showcase = showcased !== session.editor ? showcase3D(session.project) : undefined;
+          if (want3D) showcased = session.editor;
+          if (want3D && showcase)
+            three!.setView(
+              showcase.centre,
+              fittedZoom * showcase.scale,
+              showcase.pitch,
+              showcase.bearing,
+            );
+          else if (want3D) three!.setView(view.camera.screenToWorld(middle), view.camera.zoom);
           else {
             const { centre, zoom } = three!.getView();
             view.camera.zoomAt(middle, zoom / view.camera.zoom);

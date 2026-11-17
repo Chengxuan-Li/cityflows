@@ -20,10 +20,14 @@ import {
   PlaneGeometry,
   Scene,
   ShaderMaterial,
+  Shape,
+  ShapeGeometry,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
+import { lonLatToLocal } from '../geo/projection';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import { movementLight, signalLight } from '../render/layers/signals';
@@ -542,14 +546,26 @@ export class Scene3D {
         grid ? grid.originM.y + (grid.rows - 1) * grid.cellM : -Infinity,
       ),
     };
+    // TASK-198: a polygon import's ground is its boundary ring, the city's natural edge.
+    const ring = renderedSource.terrain
+      ? undefined
+      : renderedSource.geo?.boundary?.map(([lon, lat]) =>
+          lonLatToLocal(renderedSource.geo!, { lon, lat }),
+        );
     this.ground = new Mesh(
-      renderedSource.terrain ? groundMesh(terrain, bounds, -0.04) : new PlaneGeometry(width, depth),
+      renderedSource.terrain
+        ? groundMesh(terrain, bounds, -0.04)
+        : ring
+          ? new ShapeGeometry(new Shape(ring.map(({ x, y }) => new Vector2(x, -y))))
+          : new PlaneGeometry(width, depth),
       new MeshLambertMaterial({ color: this.palette.background }),
     );
     this.ground.renderOrder = 2;
     if (!renderedSource.terrain) {
       this.ground.rotation.x = -Math.PI / 2;
-      this.ground.position.set((box.min.x + box.max.x) / 2, -0.04, (box.min.z + box.max.z) / 2);
+      if (ring) this.ground.position.set(0, -0.04, 0);
+      else
+        this.ground.position.set((box.min.x + box.max.x) / 2, -0.04, (box.min.z + box.max.z) / 2);
     }
     this.ground.receiveShadow = true;
     this.content.add(this.ground);
