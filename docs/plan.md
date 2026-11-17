@@ -216,7 +216,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | in progress (approved 2026-11-16) |
 | [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | in progress (approved 2026-11-16) |
 | [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | in progress (approved 2026-11-16) |
-| [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | in progress (approved 2026-11-16) |
+| [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | done |
 | [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | in progress (approved 2026-11-16) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -4037,7 +4037,7 @@ set). At the queue merge T80 failed in most runs under load, also on main plus T
 event shut a sheet reopened by a quick key, and tool keys leaked past a sheet still opening. Sheets now
 report Escape through `cancel`, open in the same React commit as the store change, and the dispatcher asks
 the store which sheet is open; T80 passed 150 of 150 repeats. Open: browsers reserve Ctrl/Cmd+N and may
-reserve mod+1 to 3 in a normal tab (the command menu covers them).
+reserve mod+1 to 3 in a normal tab (the command menu covers them). Closed by TASK-191.
 
 TASK-169 (Claude Code subagent, Opus 5.5 high, 2026-11-13; merged with TASK-170): keep-clear zones over
 marked crosswalks and lot and garage mouths (`src/network/keep-clear.ts`, cached per compiled city, no schema
@@ -4254,6 +4254,14 @@ traffic light, guard and light e2e (48) on the merge. The lead accepts 23.7% aga
 (the target is the contract's, not a gate). Open: the following pass (376 s), lane-change proposals
 (107 s), spawn bookkeeping for blocked origins (86 s; skipping an origin until something near it changes
 is the next large exact cut, keeping origin courtesy's bookkeeping), rail crossings (175 s), lot admission.
+
+TASK-191 (Claude Code subagent, Sonnet 5.5 high, 2026-11-16; merged): New city moved from mod+N to N,
+the sidebar and inspector toggles from mod+1 and mod+2 to S and I, and 2D/3D keeps only V (mod+3 dropped).
+Plain letters, like the tool keys; fields and open sheets still swallow them, and the one table in
+`src/ui/shortcuts.ts` feeds the sheet, tooltips and menus. A unit test rejects reserved chords (mod+N, T,
+W, Q; mod+Shift+N, T, W, P; mod+1 to 9; Tab and PageUp/PageDown chords; sources in its comment) and keys
+stay unique. Check (1,476), light e2e (48), T80 100 of 100 under `--repeat-each=20`. Open: Mac-native
+chords (Ctrl+Cmd+S) would need the matcher to read `event.code`.
 
 Full run 43885610218 (lead, manual, on 592ad58 after TASK-185, 186 and 187): every job green; the city
 job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full run 43591345828.

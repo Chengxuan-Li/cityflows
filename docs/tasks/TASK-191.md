@@ -1,6 +1,6 @@
 # TASK-191 — Shortcut keys that browsers reserve
 
-Status: approved by the owner 2026-11-16; in progress. Proposed owner: Claude Code
+Status: done 2026-11-16 (merged; see plan.md). Proposed owner: Claude Code
 subagent (Sonnet 5.5, high). Branch `task/191-reserved-keys`, worktree `D:\cityflows-wt\191`, ports 5391 / 5491.
 
 ## Goal
