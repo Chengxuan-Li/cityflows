@@ -77,7 +77,9 @@ const baseline = {
     // removed every pin equals 3e9951a's.
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-    compile: 'fe17aaa5f535c0eed3f815b43109015e8e020aaa07665b1581104efe7e02afd4',
+    // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
+    // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
+    compile: 'ea68ae21ead703043f06a83606ba9fb7362ab5cc8452a2fe57c29414f3434841',
     arrows: 'd7a4069aceff35d73a6c6596a536edac25dbb82c71b88fe1ef70cebd591b8a27',
   },
 } as const;

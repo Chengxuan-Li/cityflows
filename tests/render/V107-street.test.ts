@@ -174,7 +174,9 @@ const baselines = {
   // removed every pin equals 3e9951a's.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-  'munich-donnersberger': 'a328c8d02049121e11097c2933fa4cd3ef296455fae5e9d18db6ca5ef1a25353',
+  // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
+  // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
+  'munich-donnersberger': 'a49cb2beeb4b91e5ab5fd2f5cacf641e2b0f6334325c1e52cedeb504ba021dc9',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

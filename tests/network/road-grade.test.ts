@@ -228,3 +228,51 @@ test('bridge traffic overhead does not hold a lot exit; the same road at grade d
   console.info('exit under a bridge', { above, atGrade });
   expect(atGrade.mergeS).toBeGreaterThan(above.mergeS);
 });
+
+test('TASK-190 a lot under a ramp keeps its bays where the road overhead clears 4.5 m and drops the rest', () => {
+  const { city, node, road } = buildCity('Ramp bays', 190);
+  const aisle = road(node(0, 0), node(100, 0), { roadClass: 'service', speedKmh: 10 });
+  aisle.layer = 0;
+  // Rises 5 m over 100 m along the north bays: 4.5 m at about x = 80.
+  const ramp = road(node(0, -6), node(100, -6, 1));
+  ramp.layer = 1;
+  const id = allocateId(city, 'pk');
+  city.parking = {
+    [id]: {
+      id,
+      kind: 'lot',
+      name: 'Under the ramp',
+      capacity: 0,
+      access: 'public',
+      placeId: null,
+      connectors: [],
+      shape: {
+        kind: 'polygon',
+        ring: [
+          { x: 0, y: -12 },
+          { x: 100, y: -12 },
+          { x: 100, y: 12 },
+          { x: 0, y: 12 },
+        ],
+      },
+      aisles: [aisle.id],
+      provenance: { source: 'generated' },
+    },
+  };
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 3)));
+  const net = result.compiled;
+  const lot = net.lots![0]!;
+  const overRamp = lot.stalls.filter((s) => s.position.y < 0);
+  const heightAbove = (p: { x: number; y: number }) =>
+    laneHeightAt(net, { road: net.index.road.get(ramp.id)! }, p);
+  expect(overRamp.length).toBeGreaterThan(0);
+  for (const stall of overRamp)
+    expect(Math.min(...stall.corners.map(heightAbove))).toBeGreaterThanOrEqual(4.5);
+  const open = lot.stalls.filter((s) => s.position.y > 0);
+  expect(open.length).toBeGreaterThan(overRamp.length * 2);
+  // The south bays are the lot's layout without the ramp: the north bays are their mirror
+  // images that clear it (the ramp's height depends on x alone here).
+  const clear = open.filter((s) => s.corners.every((c) => heightAbove({ x: c.x, y: -6 }) >= 4.5));
+  expect(overRamp.map((s) => s.position.x)).toEqual(clear.map((s) => s.position.x));
+});

@@ -139,7 +139,8 @@ test('T149 parking bays respect their known aisle grade and keep ground obstruct
   aisle.layer = 0;
   const baseline = compile(city);
   if (!baseline.ok) throw new Error('Fixture compile');
-  const bridge = road(node(50, -40), node(50, 40), { roadClass: 'primary', lanes: 3 });
+  // A level deck 5 m up, clear of the 4.5 m of TASK-190 over the bays.
+  const bridge = road(node(50, -40, 1), node(50, 40, 1), { roadClass: 'primary', lanes: 3 });
   bridge.layer = 1;
   const above = compile(city);
   if (!above.ok) throw new Error('Bridge compile');
