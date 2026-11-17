@@ -288,7 +288,7 @@ function groupCensus(compiled: CompiledCity) {
 }
 
 cityTest(
-  'Munich: generated programs are fixed-time (TASK-180); a demand split times group members alike',
+  'Munich: generated programs are actuated (TASK-194); a demand split times group members alike',
   () => {
     const city = structuredClone(loadAuditCity('munich'));
     const programs = [
@@ -296,7 +296,7 @@ cityTest(
       ...Object.values(city.junctionGroups ?? {}).map((g) => g.signal),
     ].filter((p) => p !== null);
     for (const program of programs) {
-      expect(program.actuated).toBeUndefined();
+      expect(program.actuated).toBe(true);
       expect(program.demandSplit).toBeUndefined();
       program.demandSplit = true;
     }

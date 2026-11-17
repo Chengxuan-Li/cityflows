@@ -51,22 +51,26 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
             // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
             // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
-            '69bfe6c0a4e65622cf4411bfb0645c2d6bed25a7dd9c49a09ace988688570886',
+            // TASK-194: generated signal programs are actuated (`actuated: true`).
+            '22900f67331f563a5bc9a053e2a33bc032d41f7b3e8ecbd39bc0a770a89880df',
             // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
             // removed every pin equals 3e9951a's.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
             // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
             // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
-            '23ff6973a45ff8572d25fdeb601d1ef14717694dcec7127679f653fbade54355',
+            // TASK-194: generated signal programs are actuated (`actuated: true`).
+            'ab5dbb099de2bc827af35b9b19a41739c0d4c678c99dcf9e8ed7a3d2a8679430',
           ]
         : [
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-            '9f2bc7ae9ca77a4f306668c0d50bd740bb9903582d8084f28d31c466a1f164e6',
+            // TASK-194: generated signal programs are actuated (`actuated: true`).
+            '1aa0fc19e99e5abe54903d21e19d1801e287d825cf76a88dc3877b995f149250',
             // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-            'd3e47d92b52a630718dae2babc7fc70ddaa4787d0a0f06e7445df4fc77fd92bc',
+            // TASK-194: generated signal programs are actuated (`actuated: true`).
+            'bcc5a8fecf2bb085384909da6f3989713fb7b62b9801e422ac97cf455fb39d64',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;
