@@ -341,7 +341,9 @@ export function createSignalControl(
   };
 
   /** Remaining walk green of a signal crossing link: an actuated green can end once its
-   * extensions lapse, so it counts only to the green's current end. */
+   * extensions lapse, so it counts only to the green's current end. In amber and all-red a
+   * crossing that the next phase keeps green stays green to that phase's minimum green, as a
+   * fixed controller's walk window runs on into the next phase (TASK-188). */
   function walkGreen(link: number, timeS: number) {
     const node = city.walk.links[link]!.crossing!.node;
     const signal = signals[node];
@@ -349,9 +351,13 @@ export function createSignalControl(
     const c = actuated[owner[node]!];
     if (c) {
       const s = c.state;
-      return s.stage === GREEN_STAGE && (c.walkMask.get(link) ?? 0) & (1 << s.phase)
-        ? Math.max(0, s.untilS - timeS)
-        : 0;
+      const mask = c.walkMask.get(link) ?? 0;
+      if (!(mask & (1 << s.phase))) return 0;
+      if (s.stage === GREEN_STAGE) return Math.max(0, s.untilS - timeS);
+      if (!(mask & (1 << s.next))) return 0;
+      const { amberS, allRedS } = c.members[0]!;
+      const greenS = s.stageS + allRedS + (s.stage === AMBER_STAGE ? amberS : 0);
+      return Math.max(0, greenS - timeS) + c.minS[s.next]!;
     }
     let spans = windows.get(link);
     if (!spans) windows.set(link, (spans = walkWindows(signal, link)));

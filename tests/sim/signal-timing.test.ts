@@ -165,6 +165,47 @@ unitTest('actuation: a walker waiting at a red crossing calls its walk green', (
   expect(actuated.walkers.meanWaitS.signal).toBeLessThan(fixed.walkers.meanWaitS.signal / 2);
 });
 
+unitTest('actuation: amber and all-red keep the walk green the next phase keeps (TASK-188)', () => {
+  // West and east traffic: the controller alternates phases 0 and 1. A crossing walk-green in
+  // both stays green through the change between them, as under the fixed program; one walk-green
+  // only in the ending phase turns red with its amber.
+  function lights(actuated: boolean) {
+    const four = fourWay(actuated ? { actuated: true } : {}, true);
+    const { compiled, trips, node } = four;
+    const signal = compiled.nodes[node]!.signal!;
+    const links = compiled.walk.links.filter((l) => l.crossing?.node === node);
+    const engine = createEngine();
+    engine.load({ compiled, trips, scenario: scenario() });
+    // Per change from phase `from` to phase `to`: whether each link was walk-green at every step
+    // of the amber and all-red between them.
+    const changes: { from: number; to: number; green: boolean[] }[] = [];
+    let open: { from: number; green: boolean[] } | null = null;
+    while (engine.timeS < 600) {
+      engine.step(1);
+      const { phase, state, walk } = engine.snapshot().signals!;
+      if (state[node] !== 0) {
+        open ??= { from: phase[node]!, green: links.map(() => true) };
+        links.forEach((l, i) => (open!.green[i] &&= walk[l.idx] === 1));
+      } else if (open) {
+        changes.push({ ...open, to: phase[node]! });
+        open = null;
+      }
+    }
+    return { signal, links, changes };
+  }
+  for (const actuated of [false, true]) {
+    const { signal, links, changes } = lights(actuated);
+    const change = changes.find((c) => c.from === 0 && c.to === 1);
+    expect(change, `actuated ${actuated}`).toBeDefined();
+    const kept = links.map(
+      (l) => signal.phases[0]!.walk.includes(l.idx) && signal.phases[1]!.walk.includes(l.idx),
+    );
+    expect(kept.some(Boolean)).toBe(true);
+    expect(links.some((l, i) => !kept[i] && signal.phases[0]!.walk.includes(l.idx))).toBe(true);
+    expect(change!.green, `actuated ${actuated}`).toEqual(kept);
+  }
+});
+
 unitTest('actuation and demand split follow a live edit and stay deterministic', () => {
   const a = run(fourWay({ demandSplit: true, actuated: true }, true));
   const b = run(fourWay({ demandSplit: true, actuated: true }, true));

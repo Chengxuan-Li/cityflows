@@ -1095,7 +1095,10 @@ the OSM `lanes` tags carry one.
     call the green ends once its minimum has passed and no extension holds it, or at the phase's
     timed green (the split's), and amber and all-red lead to the first later phase with a call;
     unused phases are skipped. Without a call the green rests. Walkers see an actuated green's
-    walk green only to its current end, and none in amber or all-red. After a live edit a
+    walk green only to its current end. In amber and all-red a crossing walk-green in both the
+    ending phase and the next one stays green to the end of the next phase's minimum green, as a
+    fixed program's walk window runs on into the next phase (TASK-188); other crossings show
+    red, and the walk lights draw the same state. After a live edit a
     controller with the same id and enough phases keeps its state.
   - The engine owns the signal state (`createSignalControl`): intersections, walkers and rail
     crossings read it, and each snapshot carries it (`VehicleSnapshot.signals`) for the 2D and 3D
