@@ -1,6 +1,6 @@
 # TASK-199 — Freiburg jams with actuated signals
 
-Status: planned (owner 2026-11-17: Freiburg ships with fixed-time signals until this is fixed). Proposed
+Status: in progress (owner started it 2026-11-17; Freiburg ships fixed-time until this lands). Proposed
 owner: Claude Code subagent (Opus 5.5, high). Branch `task/199-freiburg-actuated`, worktree
 `D:\cityflows-wt\199`.
 

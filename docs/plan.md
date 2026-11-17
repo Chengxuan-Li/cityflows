@@ -224,7 +224,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
 | [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; owner picked Freiburg |
 | [TASK-198](tasks/TASK-198.md) | UI | Build Freiburg, the chosen landing city, as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | done 2026-11-17 (Freiburg fixed-time until TASK-199) |
-| [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | planned |
+| [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | in progress (owner 2026-11-17) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4447,6 +4447,7 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-17 (owner): start TASK-199 now.
 - 2026-11-17 (owner): Freiburg ships now with fixed-time signals; TASK-199 fixes its actuated jam.
 - 2026-11-17 (owner): merge TASK-194 with actuated generated signals as the default, accepting about
   7% fewer completed trips at full demand for 16 to 32% less delay at 0.15.
