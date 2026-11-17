@@ -1110,6 +1110,10 @@ the OSM `lanes` tags carry one.
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
 - State at simulation time `t` (a fixed controller): `((t + offsetS) mod cycleS)` locates the
   phase and whether it is in green, amber or all-red. Amber means vehicles that can stop before the stop line do.
+  TASK-194: a movement the next phase also serves stays green through the amber and all-red
+  between them (fixed and actuated controllers alike; the next phase of a fixed program is the
+  following one, of an actuated controller the one its amber leads to); the lights, the signal
+  preview and `VehicleSnapshot.signals.next` show it.
 - Error `signal_conflict`: two conflicting movements in the same phase (T13). TASK-131: two
   movements into one lane of a group's inner road are not a conflict for the signal; they merge
   inside the junction as at a lane drop, ordered by the grant rule (Munich r:480's two lanes into
@@ -1734,8 +1738,9 @@ interface VehicleSnapshot {
   state: Uint8Array;                                  // 1 driving, 2 queued_destination, 6 in_lot
   vclass: Uint8Array;                                 // car 0, van 1, truck 2, bus 3
   fade: Float32Array;                                 // TASK-077: 1, or falling to 0 before a respawn
-  signals?: { phase: Int16Array; state: Uint8Array; walk: Uint8Array }; // TASK-170: per node
-                     // phase (-1 no signal) and stage (0 green, 1 amber, 2 all-red); per walk link 1 = walk green
+  signals?: { phase: Int16Array; state: Uint8Array; next: Int16Array; walk: Uint8Array }; // TASK-170: per node
+                     // phase (-1 no signal), stage (0 green, 1 amber, 2 all-red) and the phase amber and
+                     // all-red lead to (TASK-194); per walk link 1 = walk green
 }
 
 interface PatchResult {

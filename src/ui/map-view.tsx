@@ -30,12 +30,13 @@ function snapshotForMap(
   // TASK-170: signal states by node and walk link id.
   let signals = snapshot.signals;
   if (signals) {
-    const { phase, state, walk } = signals;
+    const { phase, state, next, walk } = signals;
     const links = new Map(loadedCompiled.walk.links.map((l) => [l.id, l.idx]));
     const node = (id: string) => loadedCompiled.index.node.get(id) ?? -1;
     signals = {
       phase: Int16Array.from(compiled.nodes, (n) => (node(n.id) < 0 ? -1 : phase[node(n.id)]!)),
       state: Uint8Array.from(compiled.nodes, (n) => (node(n.id) < 0 ? 0 : state[node(n.id)]!)),
+      next: Int16Array.from(compiled.nodes, (n) => (node(n.id) < 0 ? -1 : next[node(n.id)]!)),
       walk: Uint8Array.from(compiled.walk.links, (l) => walk[links.get(l.id) ?? -1] ?? 0),
     };
   }

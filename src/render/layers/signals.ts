@@ -7,12 +7,26 @@ import type { SignalStates } from '../types';
 const stages = ['green', 'amber', 'all-red'] as const;
 
 /** TASK-170: a node's signal phase and stage as the run drives it (`states`, from the
- * snapshot), or from its program at `timeS` before a run reports one. */
+ * snapshot), or from its program at `timeS` before a run reports one; `next` is the phase its
+ * amber and all-red lead to. */
 export function signalLight(signal: CSignal, node: number, timeS: number, states?: SignalStates) {
   const phase = states?.phase[node] ?? -1;
-  return phase >= 0 && phase < signal.phases.length
-    ? { phase, state: stages[states!.state[node]!]! }
-    : signalStateAt(signal, timeS);
+  if (phase >= 0 && phase < signal.phases.length)
+    return { phase, state: stages[states!.state[node]!]!, next: states!.next[node]! };
+  const light = signalStateAt(signal, timeS);
+  return { ...light, next: (light.phase + 1) % signal.phases.length };
+}
+
+/** A movement's light: green in its phase's green and, TASK-194, through the amber and all-red
+ * into a next phase that serves it too; amber with its phase's amber; red otherwise. */
+export function movementLight(
+  signal: CSignal,
+  { phase, state, next }: ReturnType<typeof signalLight>,
+  movement: number,
+): 'green' | 'amber' | 'red' {
+  if (!signal.phases[phase]!.movements.includes(movement)) return 'red';
+  if (state === 'green' || signal.phases[next]?.movements.includes(movement)) return 'green';
+  return state === 'amber' ? 'amber' : 'red';
 }
 
 /** One light per movement of each approach lane, across the lane just before its stop line
@@ -56,7 +70,6 @@ export function drawSignal(
   night?: Container,
 ): (timeS: number, states?: SignalStates) => void {
   const signal = node.signal!;
-  const phases = signal.phases.map(({ movements }) => new Set(movements));
   const heads = signalHeads(city, node).map(({ x, y, radius, movement }) => ({
     graphic: container.addChild(
       new Graphics()
@@ -73,20 +86,20 @@ export function drawSignal(
     ? heads.map(({ graphic, movement }) => ({ graphic: night.addChild(graphic.clone()), movement }))
     : [];
 
-  let previousPhase = -1;
-  let previousState: string | undefined;
+  let previous = '';
   return (timeS, states) => {
-    const { phase, state } = signalLight(signal, node.idx, timeS, states);
-    if (phase === previousPhase && state === previousState) return;
-    previousPhase = phase;
-    previousState = state;
+    const light = signalLight(signal, node.idx, timeS, states);
+    const key = `${light.phase}:${light.state}:${light.next}`;
+    if (key === previous) return;
+    previous = key;
     for (const { graphic, movement } of [...heads, ...copies]) {
+      const color = movementLight(signal, light, movement);
       graphic.tint =
-        state === 'all-red' || !phases[phase]!.has(movement)
-          ? style.signalRed
-          : state === 'green'
-            ? style.signalGreen
-            : style.signalAmber;
+        color === 'green'
+          ? style.signalGreen
+          : color === 'amber'
+            ? style.signalAmber
+            : style.signalRed;
     }
   };
 }

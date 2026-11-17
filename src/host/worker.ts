@@ -143,7 +143,13 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
         for (const array of Object.values(walkers))
           if (typeof array !== 'number') transfer.push(array.buffer);
       if (rail) transfer.push(rail.crossings.buffer, rail.railReady.buffer);
-      if (signals) transfer.push(signals.phase.buffer, signals.state.buffer, signals.walk.buffer);
+      if (signals)
+        transfer.push(
+          signals.phase.buffer,
+          signals.state.buffer,
+          signals.next.buffer,
+          signals.walk.buffer,
+        );
       const now = performance.now();
       const updateOverlays = now - lastOverlayMs >= 500;
       const roadSpeedRatio = updateOverlays ? engine.metrics().roadSpeedRatio : undefined;
