@@ -222,7 +222,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-194](tasks/TASK-194.md) | 9 | Why actuated signals complete fewer trips at full demand; actuated default if they then match | `src/sim/signals.ts`, `signal-program.ts` | 188, 193 | full demand over time, seeds 1-12, drain, gate, guard | in progress (approved 2026-11-17) |
 | [TASK-195](tasks/TASK-195.md) | UI | 3D names for partly hidden streets (best visible stretch, smaller size) | `src/render3d/labels.ts` | 183, 192 | counts, sight lines, T64 3D within 5%, shots | done |
 | [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
-| [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | in progress (downloads approved 2026-11-17) |
+| [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; recommends Freiburg (runner-up Lübeck), awaits the owner's pick |
 | [TASK-198](tasks/TASK-198.md) | UI | Build the chosen landing city as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | planned (after 197 and the owner's pick) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -4373,6 +4373,21 @@ light e2e (53). Open: the misses still happen (from r:654 lane 1 the only way on
 the lane earlier on the jughandle in `lane-change.ts` is the next step); head-detour candidates are
 still ranked by normal cost; fixed seeds 4 and 5 and actuated seed 11 have more delay (all within the
 gates).
+
+TASK-197 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged): four Overpass extracts cut by a
+polygon along each natural edge (Freiburg, Köln, Lübeck, München Altstadtring), imported with the
+existing importer; `docs/decisions/2026-11-17-landing-city.md` with numbers, gaps and shots in
+`docs/findings/2026-11-17-landing-city/`. Quiet-window timings (open to first frame / step):
+Freiburg 10.6 s / 0.18 ms, Lübeck 19.3 s / 0.20 ms, Altstadtring 18.3 s / 0.73 ms, Köln 40.4 s / 1.17
+ms (Munich fixture 7.9 s / 0.20 ms); all hold 60 fps in 2D and 3D. At 0.15 with mode choice on,
+Freiburg and Lübeck have no gridlock (worst road visit 314 s and 759 s); the Altstadtring gridlocks
+(82) and Köln's worst visit is 1,514 s. Recommends Freiburg (rail, trams, Dreisam bridges, B 31 ramps,
+the only hill), runner-up Lübeck. Importer gaps for TASK-198: no polygon clip (way ends kept, the view
+is a rectangle), gateways only where the bbox cuts a road, disconnected fragments (the no_route
+failures), trains and trams start only at the bbox edge (Freiburg's trams build no route), landmarks
+extruded to spire height without building parts, no terrain (not fetched: outside the download
+approval). First-round timings ran under TASK-194's load and are listed as such; the tables use the
+repeats. Check passed; no source changed.
 
 Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job green; CI green on
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.

@@ -1,6 +1,6 @@
 # TASK-197 — Scouting a showcase landing city
 
-Status: in progress (owner go-ahead for the Overpass downloads 2026-11-17). Proposed
+Status: done 2026-11-17 (recommends Freiburg; awaits the owner's pick). Proposed
 owner: Claude Code subagent (Opus 5.5, high). Branch `task/197-landing-scout`, worktree
 `D:\cityflows-wt\197`, ports 5398 / 5498.
 
