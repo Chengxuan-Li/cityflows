@@ -176,6 +176,36 @@ export function curateFreiburg(city: City, data: OsmData): void {
   const martin = osmBuilding(city, data, 106951792);
   martin.heightM = 22;
   martin.roof = { ...martin.roof, shape: 'gabled', heightM: 9 };
+
+  // Siegesdenkmal: Habsburgerstraße and the Friedrichring/Leopoldring cross as two dual
+  // carriageways, a box of four signalised nodes joined by 10 m inner roads that the group's
+  // program keeps green. A U-turn round the box (westbound back east, eastbound back west) left
+  // turners queued inside it from both sides and locked it from 07:40 (41 trips gridlocked, a
+  // 7,904 s visit): the U-turns are banned there.
+  for (const [node, from, to] of [
+    [334224228, 651622058, 660517976], // n:862: Friedrichring westbound, then south round the box
+    [5276630819, 651622057, 651622058], // n:1660: northbound inner road, then west round the box
+  ] as const) {
+    const at = osmNode(city, node);
+    at.turnRules.push({
+      from: osmRoad(city, from, at.id, 'to').id,
+      to: osmRoad(city, to, at.id, 'from').id,
+      allowed: false,
+      provenance: curated,
+    });
+  }
+  // The polygon's east tip cuts the ring road where it bends outside for 150 m, so Leopoldring
+  // and Schlossbergring are gateways with a primary road's demand each, although most of the
+  // ring's traffic passes them by (the demand has no through trips, and the joining way is
+  // outside the extract). Their demand is cut to 30%: at full demand Schlossbergring's entry
+  // queued for 1,491 s in one lane into the Schwabentor junction.
+  for (const way of [243604098, 1259488934]) {
+    const gateway = Object.values(city.places).find(
+      (p) => p.kind === 'gateway' && p.provenance.osmIds?.includes(way),
+    )!;
+    gateway.population = Math.round(gateway.population * 0.3);
+    gateway.jobs = Math.round(gateway.jobs * 0.3);
+  }
 }
 
 /** The bundled project, as the app opens it: the curated city, the showcase demand (0.15

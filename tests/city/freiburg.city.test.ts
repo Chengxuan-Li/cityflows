@@ -33,20 +33,56 @@ const entries: Record<string, number[]> = {
 let city: City;
 let project: Awaited<ReturnType<typeof openFreiburg>>;
 let morning: ReturnType<typeof probeMorning>;
+/** The most wait any single visit to one road added (TASK-154's drain criterion, generalised to
+ * every road as TASK-197 measured it), sampled every simulated second, and where. */
+const worstVisit = { addedS: 0, road: '' };
 
 beforeAll(async () => {
   project = await openFreiburg();
   city = project.city;
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 3)));
-  morning = probeMorning(city, result.compiled, 0.15);
+  const { compiled } = result;
+  const visits = new Map<number, { road: number; waitS: number }>();
+  let tick = 0;
+  morning = probeMorning(city, compiled, 0.15, {
+    observe(engine) {
+      if (++tick % 10) return;
+      const snapshot = engine.snapshot();
+      const active = new Set(snapshot.id);
+      for (const id of visits.keys()) if (!active.has(id)) visits.delete(id);
+      for (const [i, id] of snapshot.id.entries()) {
+        const segment = snapshot.lane[i]!;
+        if (segment === -2147483648) {
+          visits.delete(id);
+          continue;
+        }
+        const lane = segment < 0 ? compiled.movements[-segment - 1]!.fromLane : segment;
+        const road = compiled.lanes[lane]!.road;
+        const visit = visits.get(id);
+        const waitS = engine.inspect(id)!.waitingS;
+        if (visit?.road !== road) visits.set(id, { road, waitS });
+        else if (waitS - visit.waitS > worstVisit.addedS)
+          Object.assign(worstVisit, {
+            addedS: waitS - visit.waitS,
+            road: compiled.roads[road]!.id,
+          });
+      }
+    },
+  });
   console.info('Freiburg morning at 0.15, mode choice on', {
     persons: morning.persons,
     completed: morning.completed,
+    failed: morning.failed,
     failedByReason: morning.failedByReason,
+    stalledHeads: morning.stalledHeads,
+    failures: morning.failures,
+    localArrivals: morning.localArrivals,
+    worstVisit,
+    stateHash: morning.stateHash,
     gatewayTrips: morning.gatewayTrips,
   });
-}, limit(600_000));
+}, limit(900_000));
 
 test('Freiburg has a gateway at each entry and nowhere else', () => {
   const gateways = Object.values(city.places).filter((p) => p.kind === 'gateway');
@@ -125,3 +161,20 @@ test(
   },
   limit(120_000),
 );
+
+test('Freiburg passes its own gate at the showcase demand', () => {
+  // Pinned so curation and the import do not drift: rebuild the project and re-pin on purpose.
+  // openProject checks city.json against this manifest hash, so it pins the city.
+  const { manifest } = JSON.parse(readFileSync(freiburgProject, 'utf8'));
+  expect(manifest.files['city.json']).toBe(
+    'c28e8a47ce09f0f201ed684b086ac5cf5f2ad497c85194b2f9bc965902284429',
+  );
+  expect(morning.stateHash).toBe(2081060390);
+  expect(morning.failedByReason.gridlocked).toBe(0);
+  expect(morning.stalledHeads).toBe(0);
+  expect(morning.failedByReason.no_route).toBe(0);
+  // Every failure is a counted parking failure, under 2% of local arrivals.
+  expect(morning.failed).toBe(morning.failedByReason.no_parking);
+  expect(morning.failedByReason.no_parking).toBeLessThan(0.02 * morning.localArrivals);
+  expect(worstVisit.addedS, worstVisit.road).toBeLessThan(900);
+});
