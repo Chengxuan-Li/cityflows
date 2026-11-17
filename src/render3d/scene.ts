@@ -945,6 +945,7 @@ export class Scene3D {
     this.buildingsVisible = buildings;
     if (this.surroundings) this.surroundings.visible = visible;
     if (this.buildings) this.buildings.visible = visible && buildings;
+    this.labels.setBuildings(visible && buildings);
     this.updateTerrainBackdrop();
     const count = this.geometry?.context;
     const buildingCount = visible && buildings ? (count?.buildingCount ?? 0) : 0;

@@ -14,9 +14,10 @@ import {
   Vector3,
   type PerspectiveCamera,
 } from 'three';
-import { cumulativeLengths } from '../geo/polyline';
+import { cumulativeLengths, nearestOnPolyline } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
+import { profileHeightAt } from '../network/heights';
 import {
   labelCandidates,
   labelFont,
@@ -32,7 +33,9 @@ import {
 } from '../render/labels';
 import { style, type MapPalette } from '../render/style';
 import type { CityGeometry } from '../render/types';
+import type { ContextFeature } from '../schema';
 import { heightAt, type cityHeights } from './heights';
+import { lowestGround } from './terrain';
 
 /**
  * TASK-183: TASK-167's labels in the 3D view. When the camera settles, every candidate is
@@ -40,9 +43,12 @@ import { heightAt, type cityHeights } from './heights';
  * its projected line (the name must fit its length on screen and its width at the map scale of
  * its depth, and reads left to right on screen), a point at its projected position, each with the
  * map scale at its own depth.
- * A placed label is drawn as screen-sized glyphs around one world anchor, so it moves with the map
- * while the camera moves and is placed again once the camera stops. Labels draw on top of the
- * scene, buildings included, and the lighting does not darken them.
+ * TASK-192: a stretch of street hidden from the camera by a building or a road deck carries no
+ * label, and a station, stop or place whose point is hidden is dropped (`Occluders`, tested once
+ * per placement). Visible labels draw on top of the scene and the lighting does not darken them.
+ * While the camera moves, a point label hangs screen-sized from its world point, and each glyph of
+ * a street label sits on its own road point, turned along the road on screen and sized for its
+ * distance (`glyphsOnScreen`), until the camera settles and the labels are placed again.
  */
 
 /** Street lines are sampled this often, so a projected line follows the perspective. */
@@ -54,6 +60,257 @@ export const settleFrames = 3;
 /** Labels are placed up to this far outside the view (in normalised device coordinates, where
  * the view spans -1 to 1), so a short pan still finds labels in place. */
 const marginNdc = 2;
+/** A street's sight line ends this far above its surface, so the road's own deck does not hide
+ * it. */
+const clearM = 0.5;
+/** Deck prisms are cut this short along their road, so a ramp's prism stays under the sight
+ * lines to its own surface. */
+const deckPieceM = 4;
+/** Below this height above the ground a deck hides nothing under it. */
+const deckMinM = 1;
+/** Street samples are tested for occlusion at most this often on screen. */
+const testPx = 6;
+/** The occluder grid's cell size. */
+const cellM = 32;
+
+interface Spot {
+  x: number;
+  y: number;
+  h: number;
+}
+
+/** A plan outline (closed rings, even-odd) standing between two heights. */
+export interface Prism {
+  rings: readonly (readonly Vec2[])[];
+  bottom: number;
+  top: number;
+}
+
+/** TASK-192: prisms that hide labels from the camera: the buildings, or the road decks. */
+export class Occluders {
+  /** A grid of cells holding the prisms over them and the highest top among those. */
+  private readonly originX: number = 0;
+  private readonly originY: number = 0;
+  private readonly cols: number = 0;
+  private readonly rows: number = 0;
+  private readonly cells: number[][] = [];
+  private readonly cellTop: Float64Array = new Float64Array(0);
+  private readonly seen: Uint32Array;
+  private stamp = 0;
+  private readonly crossings: number[] = [];
+  /** The highest top: a sight line above it meets nothing. */
+  private readonly top: number;
+
+  constructor(private readonly prisms: readonly Prism[]) {
+    this.seen = new Uint32Array(prisms.length);
+    this.top = prisms.reduce((top, p) => Math.max(top, p.top), -Infinity);
+    if (!prisms.length) return;
+    const boxes = prisms.map((prism) => {
+      const box = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const ring of prism.rings)
+        for (const p of ring) {
+          box[0] = Math.min(box[0]!, p.x);
+          box[1] = Math.min(box[1]!, p.y);
+          box[2] = Math.max(box[2]!, p.x);
+          box[3] = Math.max(box[3]!, p.y);
+        }
+      return box as [number, number, number, number];
+    });
+    this.originX = Math.min(...boxes.map((b) => b[0]));
+    this.originY = Math.min(...boxes.map((b) => b[1]));
+    this.cols = Math.floor((Math.max(...boxes.map((b) => b[2])) - this.originX) / cellM) + 1;
+    this.rows = Math.floor((Math.max(...boxes.map((b) => b[3])) - this.originY) / cellM) + 1;
+    this.cells = Array.from({ length: this.cols * this.rows }, () => []);
+    this.cellTop = new Float64Array(this.cols * this.rows).fill(-Infinity);
+    boxes.forEach(([minX, minY, maxX, maxY], i) => {
+      for (let cy = this.row(minY); cy <= this.row(maxY); cy++)
+        for (let cx = this.col(minX); cx <= this.col(maxX); cx++) {
+          const k = cy * this.cols + cx;
+          this.cells[k]!.push(i);
+          this.cellTop[k] = Math.max(this.cellTop[k]!, prisms[i]!.top);
+        }
+    });
+  }
+
+  private col(x: number) {
+    return Math.min(this.cols - 1, Math.max(0, Math.floor((x - this.originX) / cellM)));
+  }
+  private row(y: number) {
+    return Math.min(this.rows - 1, Math.max(0, Math.floor((y - this.originY) / cellM)));
+  }
+
+  /** Whether the sight line from `eye` to (x, y) at height h passes through a prism. With `own`,
+   * prisms whose outline holds (x, y) do not count: a place inside a building is seen where its
+   * building is. The line walks the grid from the camera, skipping cells it passes above. */
+  blocked(eye: Spot, x: number, y: number, h: number, own = false) {
+    if (!this.prisms.length) return false;
+    // Only the part of the line below the highest top can meet a prism.
+    let t0 = 0,
+      t1 = 1;
+    if (eye.h > this.top) {
+      if (h >= this.top) return false;
+      t0 = (eye.h - this.top) / (eye.h - h);
+    }
+    let dx = x - eye.x;
+    const dy = y - eye.y;
+    // Straight down: any horizontal direction finds the outlines around the point.
+    if (dx === 0 && dy === 0) dx = 1e-9;
+    // Within the grid.
+    const maxX = this.originX + this.cols * cellM,
+      maxY = this.originY + this.rows * cellM;
+    if (dx !== 0) {
+      const a = (this.originX - eye.x) / dx,
+        b = (maxX - eye.x) / dx;
+      t0 = Math.max(t0, Math.min(a, b));
+      t1 = Math.min(t1, Math.max(a, b));
+    } else if (eye.x < this.originX || eye.x > maxX) return false;
+    if (dy !== 0) {
+      const a = (this.originY - eye.y) / dy,
+        b = (maxY - eye.y) / dy;
+      t0 = Math.max(t0, Math.min(a, b));
+      t1 = Math.min(t1, Math.max(a, b));
+    } else if (eye.y < this.originY || eye.y > maxY) return false;
+    if (t0 >= t1) return false;
+    const dh = h - eye.h;
+    let cx = this.col(eye.x + dx * t0),
+      cy = this.row(eye.y + dy * t0);
+    const stepX = dx > 0 ? 1 : -1,
+      stepY = dy > 0 ? 1 : -1;
+    const tdx = dx === 0 ? Infinity : cellM / Math.abs(dx),
+      tdy = dy === 0 ? Infinity : cellM / Math.abs(dy);
+    let tx = dx === 0 ? Infinity : (this.originX + (cx + (dx > 0 ? 1 : 0)) * cellM - eye.x) / dx,
+      ty = dy === 0 ? Infinity : (this.originY + (cy + (dy > 0 ? 1 : 0)) * cellM - eye.y) / dy;
+    let enter = t0;
+    const stamp = ++this.stamp;
+    for (;;) {
+      const exit = Math.min(tx, ty, t1),
+        k = cy * this.cols + cx;
+      if (Math.min(eye.h + dh * enter, eye.h + dh * exit) <= this.cellTop[k]!)
+        for (const i of this.cells[k]!) {
+          if (this.seen[i] === stamp) continue;
+          this.seen[i] = stamp;
+          if (this.meets(this.prisms[i]!, eye, dx, dy, dh, t0, own)) return true;
+        }
+      if (exit >= t1) return false;
+      if (tx < ty) {
+        cx += stepX;
+        enter = tx;
+        tx += tdx;
+      } else {
+        cy += stepY;
+        enter = ty;
+        ty += tdy;
+      }
+      if (cx < 0 || cx >= this.cols || cy < 0 || cy >= this.rows) return false;
+    }
+  }
+
+  /** Whether eye + t (dx, dy, dh), t0 <= t <= 1, passes through `prism`. */
+  private meets(
+    prism: Prism,
+    eye: Spot,
+    dx: number,
+    dy: number,
+    dh: number,
+    t0: number,
+    own: boolean,
+  ) {
+    // Where the whole line crosses the outline; it is inside between alternate crossings.
+    const ts = this.crossings;
+    ts.length = 0;
+    for (const ring of prism.rings)
+      for (let i = 0; i + 1 < ring.length; i++) {
+        const c = ring[i]!,
+          d = ring[i + 1]!;
+        const fx = d.x - c.x,
+          fy = d.y - c.y;
+        const den = dx * fy - dy * fx;
+        if (den === 0) continue;
+        const cx = c.x - eye.x,
+          cy = c.y - eye.y;
+        const s = (cx * dy - cy * dx) / den;
+        if (s >= 0 && s < 1) ts.push((cx * fy - cy * fx) / den);
+      }
+    ts.sort((a, b) => a - b);
+    if (own)
+      for (let k = 0; k + 1 < ts.length; k += 2) if (ts[k]! <= 1 && ts[k + 1]! >= 1) return false;
+    for (let k = 0; k + 1 < ts.length; k += 2) {
+      const u = Math.max(t0, ts[k]!),
+        v = Math.min(1, ts[k + 1]!);
+      if (u >= v) continue;
+      const hu = eye.h + dh * u,
+        hv = eye.h + dh * v;
+      if (Math.max(hu, hv) >= prism.bottom && Math.min(hu, hv) <= prism.top) return true;
+    }
+    return false;
+  }
+}
+
+/** The buildings as drawn (TASK-109's walls from the minimum height to the top, on the lowest
+ * ground under them). */
+export function buildingPrisms(
+  features: readonly ContextFeature[],
+  terrain: ReturnType<typeof cityHeights>['terrain'],
+): Prism[] {
+  const prisms: Prism[] = [];
+  for (const f of features) {
+    if (f.kind !== 'area' || f.class !== 'building') continue;
+    const base = terrain.grid ? lowestGround(f.rings, terrain, true) : 0;
+    const minimum = f.minHeightM ?? (f.sub === 'roof' ? 3 : 0);
+    const height =
+      f.sub === 'roof'
+        ? Math.max(f.heightM ?? 0, minimum + 0.2)
+        : (f.heightM ?? (f.levels === undefined ? 10 : f.levels * 3));
+    prisms.push({ rings: f.rings, bottom: base + minimum, top: base + height });
+  }
+  return prisms;
+}
+
+/** Road decks and raised junctions with their 0.8 m slab, where they stand clear of the ground. */
+export function deckPrisms(city: CompiledCity, heights: ReturnType<typeof cityHeights>): Prism[] {
+  const prisms: Prism[] = [];
+  const mix = (a: Vec2, b: Vec2, t: number) => ({
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+  });
+  for (const road of city.roads) {
+    const height = heights.roads[road.idx]!;
+    if (Math.max(height.fromM, height.toM, height.deckM) < deckMinM) continue;
+    const count = road.surface.length / 2;
+    for (let i = 1; i < count; i++) {
+      const s0 = road.stations[i - 1]! - road.stations[0]!,
+        s1 = road.stations[i]! - road.stations[0]!;
+      const steps = Math.max(1, Math.ceil((s1 - s0) / deckPieceM));
+      const left0 = road.surface[i - 1]!,
+        left1 = road.surface[i]!,
+        right0 = road.surface[2 * count - i]!,
+        right1 = road.surface[2 * count - i - 1]!;
+      for (let j = 0; j < steps; j++) {
+        const a = s0 + ((s1 - s0) * j) / steps,
+          b = s0 + ((s1 - s0) * (j + 1)) / steps;
+        if (Math.max(profileHeightAt(height, a), profileHeightAt(height, b)) < deckMinM) continue;
+        const za = heightAt(height, a),
+          zb = heightAt(height, b);
+        const p = mix(left0, left1, j / steps),
+          q = mix(left0, left1, (j + 1) / steps),
+          r = mix(right0, right1, (j + 1) / steps),
+          t = mix(right0, right1, j / steps);
+        prisms.push({
+          rings: [[p, q, r, t, p]],
+          bottom: Math.min(za, zb) - 0.8,
+          top: Math.max(za, zb),
+        });
+      }
+    }
+  }
+  for (const node of city.nodes) {
+    const z = heights.nodes[node.idx]!;
+    if (node.outline.length < 3 || z - heights.terrain.groundAt(node.pos.x, node.pos.y) < deckMinM)
+      continue;
+    prisms.push({ rings: [[...node.outline, node.outline[0]!]], bottom: z - 0.8, top: z });
+  }
+  return prisms;
+}
 
 interface LineSamples {
   /** World position (x east, y south), surface height and distance along the line. */
@@ -84,21 +341,34 @@ export interface LabelView {
   height: number;
 }
 
+/** A street glyph's road point, the road points its reading direction runs between there
+ * (`placeLabels`' tangent chord), and the point's view depth when placed. */
+export interface GlyphPath {
+  at: Spot;
+  back: Spot;
+  ahead: Spot;
+  depth: number;
+}
+
 /** A label placed on screen (`label`, in pixels), the world point it hangs from, and each glyph's
  * offset from that point's projection. */
 export interface Placed3D {
   label: PlacedLabel;
-  anchor: { x: number; y: number; h: number };
+  anchor: Spot;
   offsets: Vec2[];
   /** Whether the anchor was inside the view when placed. */
   inView: boolean;
+  /** A street label's glyphs along the road as placed, and as they would read the other way
+   * round. */
+  along?: { placed: GlyphPath[]; flipped: GlyphPath[] };
 }
 
 /** Projects world points for one camera to screen pixels and view depth. */
 class Projector {
   private readonly m: number[];
   readonly focal: number;
-  private readonly near: number;
+  readonly near: number;
+  readonly eye: Spot;
   sx = 0;
   sy = 0;
   depth = 0;
@@ -109,6 +379,8 @@ class Projector {
       .toArray();
     this.focal = view.height / (2 * Math.tan((camera.fov * Math.PI) / 360));
     this.near = camera.near;
+    const e = camera.matrixWorld.elements;
+    this.eye = { x: e[12]!, y: e[14]!, h: e[13]! };
   }
   /** Projects (x, y) at height h; false behind the near plane or far outside the view. */
   project(x: number, y: number, h: number) {
@@ -153,10 +425,11 @@ export function sampleLines(
   return result;
 }
 
-/** The stretches of a street line in front of the camera and near the view, on screen. A
- * segment's width is the carriageway's at the map scale of its depth, as the flat map would
- * show it at that scale: a pitched view does not narrow it, since the text faces the camera. */
-function projectLine(samples: LineSamples, p: Projector): Run[] {
+/** The stretches of a street line in front of the camera, near the view and not hidden from it,
+ * on screen. A segment's width is the carriageway's at the map scale of its depth, as the flat map
+ * would show it at that scale: a pitched view does not narrow it, since the text faces the
+ * camera. */
+function projectLine(samples: LineSamples, p: Projector, hidden: Occluders[]): Run[] {
   const runs: Run[] = [];
   let run: Run | null = null;
   const finish = () => {
@@ -170,6 +443,8 @@ function projectLine(samples: LineSamples, p: Projector): Run[] {
     }
     run = null;
   };
+  // The last sample tested for occlusion: samples closer than `testPx` to it on screen go with it.
+  let tested: Vec2 | null = null;
   for (let k = 0; k < samples.x.length; k++) {
     const x = samples.x[k]!,
       y = samples.y[k]!,
@@ -177,6 +452,13 @@ function projectLine(samples: LineSamples, p: Projector): Run[] {
     if (!p.project(x, y, h)) {
       finish();
       continue;
+    }
+    if (!run || !tested || Math.hypot(p.sx - tested.x, p.sy - tested.y) >= testPx) {
+      if (hidden.some((o) => o.blocked(p.eye, x, y, h + clearM))) {
+        finish();
+        continue;
+      }
+      tested = { x: p.sx, y: p.sy };
     }
     const last = run?.line.at(-1);
     if (last && Math.hypot(p.sx - last.x, p.sy - last.y) < 0.05) continue;
@@ -192,7 +474,7 @@ function projectLine(samples: LineSamples, p: Projector): Run[] {
 }
 
 /** Index i with s[i] <= v <= s[i + 1], for an ascending s. */
-function bracket(s: readonly number[], v: number) {
+function bracket(s: ArrayLike<number>, v: number) {
   let lo = 0,
     hi = s.length - 2;
   while (lo < hi) {
@@ -203,14 +485,30 @@ function bracket(s: readonly number[], v: number) {
   return lo;
 }
 
+/** The world point `along` pixels along a run's screen line (perspective-correct). */
+function worldAt(run: Run, along: number): Spot {
+  const L = run.lengths;
+  const v = Math.min(L.at(-1)!, Math.max(0, along));
+  const i = bracket(L, v);
+  const t = (v - L[i]!) / (L[i + 1]! - L[i]!);
+  const w0 = run.depth[i]!,
+    w1 = run.depth[i + 1]!;
+  const u = (t * w0) / ((1 - t) * w1 + t * w0);
+  const a = run.world[i]!,
+    b = run.world[i + 1]!;
+  return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, h: a.h + (b.h - a.h) * u };
+}
+
 /** Lays out `candidates` (in placement order) for the camera in `view`: TASK-167's rules on
- * screen, collision-free and deterministic for a camera. */
+ * screen, collision-free and deterministic for a camera. Nothing is placed where `hidden` hides
+ * it from the camera. */
 export function placeLabels3D(
   candidates: readonly LabelCandidate[],
   lines: LabelLines,
   pointHeight: (p: Vec2) => number,
   view: LabelView,
   measure: Measure,
+  hidden: Occluders[] = [],
 ): Placed3D[] {
   const p = new Projector(view);
   const runs = new Map<readonly Vec2[], Run[]>();
@@ -218,14 +516,19 @@ export function placeLabels3D(
   const points = new Map<LabelCandidate, Vec2>();
   const placed = placeLabels(candidates, 1, measure, (c) => {
     if (c.kind !== 'street') {
-      if (!p.project(c.pos.x, c.pos.y, pointHeight(c.pos))) return null;
+      const h = pointHeight(c.pos);
+      if (
+        !p.project(c.pos.x, c.pos.y, h) ||
+        hidden.some((o) => o.blocked(p.eye, c.pos.x, c.pos.y, h, true))
+      )
+        return null;
       const framed = { ...c, pos: { x: p.sx, y: p.sy } };
       points.set(framed, c.pos);
       return { candidate: framed, zoom: p.focal / p.depth };
     }
     let list = runs.get(c.line);
     if (!list) {
-      list = projectLine(lines.get(c.line)!, p);
+      list = projectLine(lines.get(c.line)!, p, hidden);
       runs.set(c.line, list);
       for (const run of list) runOf.set(run.line, run);
     }
@@ -265,38 +568,32 @@ export function placeLabels3D(
   });
   return placed.map((label) => {
     const c = label.candidate;
-    const centre = label.glyphs[Math.floor(label.glyphs.length / 2)]!;
-    let anchor: Placed3D['anchor'];
+    let anchor: Spot;
+    let along: Placed3D['along'];
     if (c.kind === 'street') {
-      // The world point under the middle glyph: the nearest point of the projected line.
+      // Each glyph's road point, and the chord placeLabels turns it along (half its width or
+      // half the text height either side), for this reading direction and the other one.
       const run = runOf.get(c.line)!;
-      let best = Infinity;
-      anchor = run.world[0]!;
-      for (let i = 0; i + 1 < run.line.length; i++) {
-        const a = run.line[i]!,
-          b = run.line[i + 1]!;
-        const dx = b.x - a.x,
-          dy = b.y - a.y;
-        const t = Math.max(
-          0,
-          Math.min(1, ((centre.x - a.x) * dx + (centre.y - a.y) * dy) / (dx * dx + dy * dy)),
-        );
-        const d = Math.hypot(a.x + dx * t - centre.x, a.y + dy * t - centre.y);
-        if (d < best) {
-          best = d;
-          const a0 = run.world[i]!,
-            a1 = run.world[i + 1]!;
-          // Back from screen to world: perspective-correct along the segment.
-          const w0 = run.depth[i]!,
-            w1 = run.depth[i + 1]!;
-          const u = (t * w0) / ((1 - t) * w1 + t * w0);
-          anchor = {
-            x: a0.x + (a1.x - a0.x) * u,
-            y: a0.y + (a1.y - a0.y) * u,
-            h: a0.h + (a1.h - a0.h) * u,
-          };
-        }
-      }
+      const m = measure(c.text, c.style);
+      const s = label.glyphs.map((g) => nearestOnPolyline(run.line, g).along);
+      const half = s.map((_, i) => (m.widths[i]! * label.scale) / 2);
+      const reach = half.map((w) => Math.max(w, (m.height * label.scale) / 2));
+      const reverse = s.at(-1)! < s[0]!;
+      const ends =
+        Math.min(...s.map((v, i) => v - half[i]!)) + Math.max(...s.map((v, i) => v + half[i]!));
+      const path = (v: number, r: number, back: boolean): GlyphPath => {
+        const at = worldAt(run, v);
+        p.project(at.x, at.y, at.h);
+        return {
+          at,
+          back: worldAt(run, back ? v + r : v - r),
+          ahead: worldAt(run, back ? v - r : v + r),
+          depth: p.depth,
+        };
+      };
+      const glyphs = s.map((v, i) => path(v, reach[i]!, reverse));
+      along = { placed: glyphs, flipped: s.map((v, i) => path(ends - v, reach[i]!, !reverse)) };
+      anchor = glyphs[Math.floor(glyphs.length / 2)]!.at;
     } else {
       const pos = points.get(c)!;
       anchor = { ...pos, h: pointHeight(pos) };
@@ -309,6 +606,46 @@ export function placeLabels3D(
       anchor,
       offsets: label.glyphs.map((g) => ({ x: g.x - ox, y: g.y - oy })),
       inView: ox >= 0 && ox <= view.width && oy >= 0 && oy <= view.height,
+      ...(along && { along }),
+    };
+  });
+}
+
+/** A glyph for a camera: its world point, screen position, rotation and size factor (0 where it
+ * is behind the camera). */
+export interface GlyphPose {
+  at: Spot;
+  x: number;
+  y: number;
+  rotation: number;
+  scale: number;
+}
+
+/** A placed street label's glyphs for another camera (TASK-192): each on its road point, turned
+ * along the road on screen and sized for its distance, reading the other way round once the road
+ * has turned past upright. At the placement camera this is the placement. */
+export function glyphsOnScreen(placed: Placed3D, view: LabelView): GlyphPose[] {
+  const p = new Projector(view);
+  const { placed: glyphs, flipped } = placed.along!;
+  const screen = (s: Spot) => (p.project(s.x, s.y, s.h), { x: p.sx, y: p.sy, w: p.depth });
+  const start = screen(glyphs[0]!.back),
+    end = screen(glyphs.at(-1)!.ahead);
+  // A little past upright before flipping, so a road placed upright never flips in place.
+  const flip =
+    end.x - start.x < -0.1 * Math.hypot(end.x - start.x, end.y - start.y) &&
+    start.w > p.near &&
+    end.w > p.near;
+  return (flip ? flipped : glyphs).map(({ at, back, ahead, depth }) => {
+    const a = screen(back),
+      b = screen(ahead),
+      c = screen(at);
+    const behind = Math.min(a.w, b.w, c.w) <= p.near;
+    return {
+      at,
+      x: c.x,
+      y: c.y,
+      rotation: Math.atan2(b.y - a.y, b.x - a.x),
+      scale: behind ? 0 : depth / c.w,
     };
   });
 }
@@ -487,6 +824,12 @@ export class Labels3D {
   private movedAt = 0;
   private stillFrames = 0;
   private placed: Placed3D[] = [];
+  /** What hides labels: the buildings (while their layer shows) and the road decks. */
+  private buildings = new Occluders([]);
+  private decks = new Occluders([]);
+  private buildingsShown = true;
+  /** The drawn glyphs, in instance order, with their size on screen when placed. */
+  private glyphs: { placed: Placed3D; i: number; width: number; height: number }[] = [];
   private readonly uniforms = {
     map: { value: new Texture() },
     viewport: { value: new Vector2(1, 1) },
@@ -546,9 +889,18 @@ export class Labels3D {
     }
     this.pointHeight = (p) => heights.terrain.groundAt(p.x, p.y);
     this.lines = sampleLines(this.candidates, (p) => surface.get(p) ?? this.pointHeight(p));
+    this.buildings = new Occluders(buildingPrisms(source.context?.features ?? [], heights.terrain));
+    this.decks = new Occluders(deckPrisms(city, heights));
     this.placed = [];
     this.placedCurrent = false;
     this.fill();
+  }
+
+  /** Whether the buildings are drawn, and so hide labels; the next settled frame places again. */
+  setBuildings(shown: boolean) {
+    if (shown === this.buildingsShown) return;
+    this.buildingsShown = shown;
+    this.placedCurrent = false;
   }
 
   setColours(label: MapPalette['label']) {
@@ -565,7 +917,8 @@ export class Labels3D {
     return true;
   }
 
-  /** Places the labels again once the camera has settled somewhere new; true when it did. */
+  /** Places the labels again once the camera has settled somewhere new; true when it did. While
+   * the camera moves, street labels follow their roads. */
   update(view: LabelView, now: number) {
     this.uniforms.viewport.value.set(view.width, view.height);
     if (!this.visible || !this.atlas) return false;
@@ -580,6 +933,7 @@ export class Labels3D {
       this.movedAt = now;
       this.stillFrames = 0;
       this.placedCurrent = false;
+      this.pose(view);
       return false;
     }
     this.stillFrames++;
@@ -592,8 +946,9 @@ export class Labels3D {
       this.pointHeight,
       view,
       this.atlas.measure,
+      this.buildingsShown ? [this.buildings, this.decks] : [this.decks],
     );
-    this.fill();
+    this.fill(view);
     return true;
   }
 
@@ -608,12 +963,12 @@ export class Labels3D {
       : { street: 0, station: 0, stop: 0, place: 0, glyphs: 0 };
   }
 
-  private fill() {
+  private fill(view?: LabelView) {
     const atlas = this.atlas;
-    const glyphs: { placed: Placed3D; i: number }[] = [];
+    const glyphs: { placed: Placed3D; i: number; width: number; height: number }[] = [];
     for (const placed of this.placed)
       placed.label.glyphs.forEach((g, i) => {
-        if (g.char.trim() !== '') glyphs.push({ placed, i });
+        if (g.char.trim() !== '') glyphs.push({ placed, i, width: 0, height: 0 });
       });
     if (!atlas) glyphs.length = 0;
     // Every cell first: the atlas may grow, which moves the texture coordinates.
@@ -644,18 +999,13 @@ export class Labels3D {
     const geometry = this.meshes[0]!.geometry;
     if (this.capacity) {
       const attribute = (name: string) => geometry.getAttribute(name) as InstancedBufferAttribute;
-      const [anchor, box, cell, ink] = ['anchor', 'box', 'cell', 'ink'].map(attribute) as [
-        InstancedBufferAttribute,
-        InstancedBufferAttribute,
-        InstancedBufferAttribute,
-        InstancedBufferAttribute,
-      ];
-      glyphs.forEach(({ placed, i }, k) => {
-        const { label, anchor: a, offsets } = placed;
-        const g = label.glyphs[i]!,
-          c = cells[k]!;
-        anchor.setXYZW(k, a.x, a.h, a.y, g.rotation);
-        box.setXYZW(k, offsets[i]!.x, offsets[i]!.y, c.width * label.scale, c.height * label.scale);
+      const cell = attribute('cell'),
+        ink = attribute('ink');
+      glyphs.forEach((glyph, k) => {
+        const { label } = glyph.placed;
+        const c = cells[k]!;
+        glyph.width = c.width * label.scale;
+        glyph.height = c.height * label.scale;
         cell.setXYZW(
           k,
           c.x / atlas!.width,
@@ -665,12 +1015,14 @@ export class Labels3D {
         );
         ink.setXY(k, inkIndex[labelInk[label.candidate.style]], label.alpha);
       });
-      for (const a of [anchor, box, cell, ink]) {
+      for (const a of [cell, ink]) {
         a.clearUpdateRanges();
         a.addUpdateRange(0, glyphs.length * a.itemSize);
         a.needsUpdate = true;
       }
     }
+    this.glyphs = glyphs;
+    if (view) this.pose(view);
     geometry.instanceCount = glyphs.length;
     if (atlas) {
       atlas.upload();
@@ -681,6 +1033,33 @@ export class Labels3D {
       if (placed.inView && placed.label.alpha > 0) counts[placed.label.candidate.kind]++;
     this.placedCounts = counts;
     this.group.visible = this.visible && glyphs.length > 0;
+  }
+
+  /** Each glyph's world point, rotation and size for the camera in `view`: point labels as
+   * placed, street glyphs along their road (`glyphsOnScreen`). */
+  private pose(view: LabelView) {
+    if (!this.glyphs.length) return;
+    const geometry = this.meshes[0]!.geometry;
+    const anchor = geometry.getAttribute('anchor') as InstancedBufferAttribute,
+      box = geometry.getAttribute('box') as InstancedBufferAttribute;
+    let last: Placed3D | undefined, poses: GlyphPose[] | undefined;
+    this.glyphs.forEach(({ placed, i, width, height }, k) => {
+      if (!placed.along) {
+        const a = placed.anchor;
+        anchor.setXYZW(k, a.x, a.h, a.y, placed.label.glyphs[i]!.rotation);
+        box.setXYZW(k, placed.offsets[i]!.x, placed.offsets[i]!.y, width, height);
+        return;
+      }
+      if (placed !== last) poses = glyphsOnScreen((last = placed), view);
+      const { at, rotation, scale } = poses![i]!;
+      anchor.setXYZW(k, at.x, at.h, at.y, rotation);
+      box.setXYZW(k, 0, 0, width * scale, height * scale);
+    });
+    for (const a of [anchor, box]) {
+      a.clearUpdateRanges();
+      a.addUpdateRange(0, this.glyphs.length * a.itemSize);
+      a.needsUpdate = true;
+    }
   }
 
   destroy() {
