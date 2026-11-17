@@ -6,6 +6,7 @@ import { compile, type CompiledCity } from '../../src/network';
 import { demandSplit, MIN_GREEN_S } from '../../src/network/signal-program';
 import type { City, Scenario, TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
+import { OFF_LANE } from '../../src/sim/vehicle';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { signalControllers, timedSignals } from '../../src/sim/signals';
 import { cityTest, unitTest } from '../tier';
@@ -206,6 +207,51 @@ unitTest('actuation: amber and all-red keep the walk green the next phase keeps 
   }
 });
 
+unitTest(
+  'a movement the next phase serves too stays green through amber and all-red (TASK-194)',
+  () => {
+    // West to east is green in phases 0 and 1, east to west in phase 1 only; north and south keep
+    // a phase each. Cars keep entering west to east in the all-red between phases 0 and 1, and
+    // none enters in the all-red after phase 1.
+    function entries(actuated: boolean) {
+      const four = fourWay(actuated ? { actuated: true } : {}, true);
+      const program = Object.values(four.city.nodes).find((n) => n.signal)!.signal!;
+      const [westEast, eastWest] = program.phases.map((p) => p.groups[0]!);
+      program.phases[0]!.groups = [westEast!];
+      program.phases[1]!.groups = [westEast!, eastWest!];
+      const compiled = setup(four.city);
+      const kept = new Set(compiled.nodes[four.node]!.signal!.phases[0]!.movements);
+      const engine = createEngine();
+      engine.load({ compiled, trips: four.trips, scenario: scenario() });
+      const entered = new Set<number>();
+      // Entries onto the west-to-east movements in all-red, by change.
+      const counts: Record<string, number> = {};
+      while (engine.timeS < 700) {
+        engine.step(1);
+        const view = engine.snapshot();
+        const { phase, state, next } = view.signals!;
+        if (state[four.node] !== 0 && !actuated)
+          expect(next[four.node]).toBe((phase[four.node]! + 1) % 4);
+        for (const [i, id] of view.id.entries()) {
+          const lane = view.lane[i]!;
+          if (lane >= 0 || lane === OFF_LANE || entered.has(id)) continue;
+          entered.add(id);
+          if (state[four.node] !== 2 || !kept.has(-lane - 1)) continue;
+          const change = `${phase[four.node]}>${next[four.node]}`;
+          counts[change] = (counts[change] ?? 0) + 1;
+        }
+      }
+      expect(engine.metrics().trips.completed).toBe(80);
+      return counts;
+    }
+    for (const actuated of [false, true]) {
+      const counts = entries(actuated);
+      expect(counts['0>1'] ?? 0, `actuated ${actuated}`).toBeGreaterThan(0);
+      expect(Object.keys(counts), `actuated ${actuated}`).toEqual(['0>1']);
+    }
+  },
+);
+
 unitTest('actuation and demand split follow a live edit and stay deterministic', () => {
   const a = run(fourWay({ demandSplit: true, actuated: true }, true));
   const b = run(fourWay({ demandSplit: true, actuated: true }, true));
@@ -242,7 +288,7 @@ function groupCensus(compiled: CompiledCity) {
 }
 
 cityTest(
-  'Munich: generated programs are fixed-time (TASK-180); a demand split times group members alike',
+  'Munich: generated programs are actuated (TASK-194); a demand split times group members alike',
   () => {
     const city = structuredClone(loadAuditCity('munich'));
     const programs = [
@@ -250,7 +296,7 @@ cityTest(
       ...Object.values(city.junctionGroups ?? {}).map((g) => g.signal),
     ].filter((p) => p !== null);
     for (const program of programs) {
-      expect(program.actuated).toBeUndefined();
+      expect(program.actuated).toBe(true);
       expect(program.demandSplit).toBeUndefined();
       program.demandSplit = true;
     }

@@ -1058,16 +1058,18 @@ the OSM `lanes` tags carry one.
   Every green group is green for at least an even split of the green time. Single-node programs
   are unchanged.
 - TASK-170 (demand split and actuation). Both flags are per-program choices in the signal
-  editor, off in generated programs (import, grouping, Generate default program;
-  `GENERATED_TIMING`): on Munich seeds 1 to 6 every split tried lengthened single visits to the
-  Landsberger loop's roads past TASK-154's 900 s on some seed. TASK-180: generated programs were
-  actuated until mouth joins zipped (section 8, keep clear); since then actuation lengthens a
-  seed-6 loop visit to 1,042 s and completes fewer trips at full demand. TASK-188: that visit
-  came from a jam ring through jg:10802 and back to n:263 that fixed-time runs also form (a
-  933 s visit on seed 7); actuation now passes the drain criterion on seeds 1 to 6 but still
-  completes fewer trips at full demand, so generated programs stay fixed-time. Hand-written and saved programs without the flags run as
-  before. A controller is a signalised junction group (its members in lockstep) or a single
-  signal node.
+  editor. Generated programs (import, grouping, Generate default program; `GENERATED_TIMING`)
+  leave the demand split off: on Munich seeds 1 to 6 every split tried lengthened single visits
+  to the Landsberger loop's roads past TASK-154's 900 s on some seed. TASK-180: generated
+  programs were actuated until mouth joins zipped (section 8, keep clear); since then actuation
+  lengthens a seed-6 loop visit to 1,042 s and completes fewer trips at full demand. TASK-188:
+  that visit came from a jam ring through jg:10802 and back to n:263 that fixed-time runs also
+  form (a 933 s visit on seed 7); actuation passed the drain criterion on seeds 1 to 6 but still
+  completed fewer trips at full demand, so generated programs stayed fixed-time. TASK-194: with
+  movements that stay green into the next phase kept green through amber and all-red (below),
+  actuation completes as many trips at full demand and passes every gate, so generated programs
+  are actuated. Hand-written and saved programs without the flags run as before. A controller is
+  a signalised junction group (its members in lockstep) or a single signal node.
   - Demand split. At load the engine routes every car trip of the scenario from the connector it
     was queued at to its destination connector on free-flow costs (no noise; one route per
     connector pair, class and purpose) and counts the trips on each movement, by movement id so
@@ -1101,7 +1103,8 @@ the OSM `lanes` tags carry one.
     walk green only to its current end. In amber and all-red a crossing walk-green in both the
     ending phase and the next one stays green to the end of the next phase's minimum green, as a
     fixed program's walk window runs on into the next phase (TASK-188); other crossings show
-    red, and the walk lights draw the same state. After a live edit a
+    red, and the walk lights draw the same state. Likewise a vehicle movement the next phase
+    serves stays green through them (TASK-194). After a live edit a
     controller with the same id and enough phases keeps its state.
   - The engine owns the signal state (`createSignalControl`): intersections, walkers and rail
     crossings read it, and each snapshot carries it (`VehicleSnapshot.signals`) for the 2D and 3D
@@ -1110,6 +1113,10 @@ the OSM `lanes` tags carry one.
   appear in several phases. `cycleS = sum(durationS + amberS + allRedS)`.
 - State at simulation time `t` (a fixed controller): `((t + offsetS) mod cycleS)` locates the
   phase and whether it is in green, amber or all-red. Amber means vehicles that can stop before the stop line do.
+  TASK-194: a movement the next phase also serves stays green through the amber and all-red
+  between them (fixed and actuated controllers alike; the next phase of a fixed program is the
+  following one, of an actuated controller the one its amber leads to); the lights, the signal
+  preview and `VehicleSnapshot.signals.next` show it.
 - Error `signal_conflict`: two conflicting movements in the same phase (T13). TASK-131: two
   movements into one lane of a group's inner road are not a conflict for the signal; they merge
   inside the junction as at a lane drop, ordered by the grant rule (Munich r:480's two lanes into
@@ -1734,8 +1741,9 @@ interface VehicleSnapshot {
   state: Uint8Array;                                  // 1 driving, 2 queued_destination, 6 in_lot
   vclass: Uint8Array;                                 // car 0, van 1, truck 2, bus 3
   fade: Float32Array;                                 // TASK-077: 1, or falling to 0 before a respawn
-  signals?: { phase: Int16Array; state: Uint8Array; walk: Uint8Array }; // TASK-170: per node
-                     // phase (-1 no signal) and stage (0 green, 1 amber, 2 all-red); per walk link 1 = walk green
+  signals?: { phase: Int16Array; state: Uint8Array; next: Int16Array; walk: Uint8Array }; // TASK-170: per node
+                     // phase (-1 no signal), stage (0 green, 1 amber, 2 all-red) and the phase amber and
+                     // all-red lead to (TASK-194); per walk link 1 = walk green
 }
 
 interface PatchResult {

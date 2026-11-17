@@ -31,10 +31,12 @@ export interface VehicleSnapshot {
 }
 
 /** TASK-170: the signals as the run drives them: each node's phase (-1 without a signal) and
- * stage (0 green, 1 amber, 2 all-red), and each walk link's walk light (1 green). */
+ * stage (0 green, 1 amber, 2 all-red), the phase its amber and all-red lead to (TASK-194), and
+ * each walk link's walk light (1 green). */
 export interface SignalStates {
   phase: Int16Array;
   state: Uint8Array;
+  next: Int16Array;
   walk: Uint8Array;
 }
 

@@ -3,7 +3,7 @@ import { headingAtDistance, pointAtDistance } from '../../geo/polyline';
 import type { CompiledCity } from '../../network';
 import { style } from '../style';
 import type { SignalStates } from '../types';
-import { signalLight } from './signals';
+import { movementLight, signalLight } from './signals';
 
 /** Uses the loaded engine tables, never the inspector's draft program. */
 export function drawSignalPreview(
@@ -17,8 +17,11 @@ export function drawSignalPreview(
   const index = nodeId === null ? undefined : city?.index.node.get(nodeId);
   const node = index === undefined ? undefined : city!.nodes[index];
   if (!node?.signal) return null;
-  const { phase, state } = signalLight(node.signal, node.idx, timeS, states);
-  const movements = state === 'green' ? node.signal.phases[phase]!.movements : [];
+  const light = signalLight(node.signal, node.idx, timeS, states);
+  const { phase, state } = light;
+  const movements = node.signal.phases[phase]!.movements.filter(
+    (m) => movementLight(node.signal!, light, m) === 'green',
+  );
   for (const index of movements) {
     const { polyline, cumulative, lengthM } = city!.movements[index]!;
     graphics.poly(polyline, false).stroke({ color: style.signalGreen, width: 0.65, cap: 'round' });

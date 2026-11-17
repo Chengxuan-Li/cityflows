@@ -28,17 +28,21 @@ const hash = (value: unknown) => createHash('sha256').update(vehicleJson(value))
 const baseline = {
   'munich-donnersberger': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-    'd600246c0ee9b4d5e9b54becf568912fd780e4c8b1d18ee83508eaf79cf70e26',
+    // TASK-194: generated signal programs are actuated (`actuated: true`).
+    'aef096b57a2988133491e72cfd9579c9e812cb76ba8e64d77cf49d5cdd6fe7b1',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-    'b834c9c67eeeb5744aa3905ab34eb4c249f95e223cb4ccda27d78f28f13dd5ed',
+    // TASK-194: generated signal programs are actuated (`actuated: true`).
+    '1aa3e90edd5cf79a3e7c93c7ddea0a0b62d43db738d8e42c05deb130635fb7e9',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-    'eda6809b6682636376c1b9d6ee2333a2b88fc8776f6cd7340efabaf52888df0f',
+    // TASK-194: generated signal programs are actuated (`actuated: true`).
+    '90612cffe0d2bd5bcf88787c226029999b038e323d43bf9d3f30b91a923debc7',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-    'ccd3b0d5736a8cbf74c5b52a410690fc3edd2c82d594637370cc6e5296074f77',
+    // TASK-194: generated signal programs are actuated (`actuated: true`).
+    '18100e25a4f405d5634a93b54051aaebafd3155d8641e5e0d76a0e8fd9bf8cd8',
   ],
 };
 

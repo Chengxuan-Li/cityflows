@@ -149,10 +149,12 @@ test('preview follows the loaded engine phase through green, amber and all-red',
         nodeId: 'n:13',
         timeS,
         ...expected,
-        movements:
-          expected.state === 'green'
-            ? signal.phases[expected.phase]!.movements.map((i) => compiled.movements[i]!.id)
-            : [],
+        // TASK-194: in amber and all-red a movement the next phase serves too stays green.
+        movements: signal.phases[expected.phase]!.movements.filter(
+          (i) =>
+            expected.state === 'green' ||
+            signal.phases[(expected.phase + 1) % signal.phases.length]!.movements.includes(i),
+        ).map((i) => compiled.movements[i]!.id),
       });
     return timeS;
   }

@@ -153,21 +153,25 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
-          'fa748b177561ff8c72078b0cd2d439a99d50c67da9fc89fbe67e915f40012ea4',
+          // TASK-194: generated signal programs are actuated (`actuated: true`).
+          'b2320e4a18f36b5e6055f6e157e20359b2e75a11d2846c327972ff51bc1b63b8',
           // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
-          '2f771e6e6b76971c3d03b16440b18084375c3bbf021cec817626a23401a6e3f0',
+          // TASK-194: generated signal programs are actuated (`actuated: true`).
+          '1adea587f42874ac213e434c60ba97950970cd5c4aaefa2f329a60ec4713de7d',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-          '36ead1d461cbee968be497791dcc660e529b81aba385ac33701c57b730a9e1ba',
+          // TASK-194: generated signal programs are actuated (`actuated: true`).
+          'aef11c80f71c20d3841bced93241056d018f02bc48f2c1bcffa557db3083db41',
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
-          'b7f486223eefacc55413289953454c37c0e7d4cc562819fffc1adfc7069d2e9c',
+          // TASK-194: generated signal programs are actuated (`actuated: true`).
+          'd028b5288badf5524e7f9f3aba03fefc0357afb9c99a7acf9537d893fb566507',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

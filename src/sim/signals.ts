@@ -330,15 +330,19 @@ export function createSignalControl(
     s.untilS = -Infinity;
   }
 
-  const stateOf = (node: number, timeS: number): { phase: number; state: number } => {
+  /** A node's phase and stage, and the phase its amber and all-red lead to. */
+  const stateOf = (node: number, timeS: number): { phase: number; state: number; next: number } => {
     const c = actuated[owner[node]!];
-    if (c) return { phase: c.state.phase, state: c.state.stage };
-    const { phase, state } = signalStateAt(signals[node]!, timeS);
+    if (c) return { phase: c.state.phase, state: c.state.stage, next: c.state.next };
+    const signal = signals[node]!;
+    const { phase, state } = signalStateAt(signal, timeS);
     return {
       phase,
       state: state === 'green' ? GREEN_STAGE : state === 'amber' ? AMBER_STAGE : ALL_RED_STAGE,
+      next: (phase + 1) % signal.phases.length,
     };
   };
+  const phaseSets = signals.map((signal) => signal?.phases.map((p) => new Set(p.movements)));
 
   /** Remaining walk green of a signal crossing link: an actuated green can end once its
    * extensions lapse, so it counts only to the green's current end. In amber and all-red a
@@ -372,27 +376,35 @@ export function createSignalControl(
         const signal = signals[node.idx];
         if (!signal) continue;
         for (const movement of node.movements) colors[movement] = RED;
-        const { phase, state } = stateOf(node.idx, timeS);
-        if (state === ALL_RED_STAGE) continue;
-        const color = state === GREEN_STAGE ? GREEN : AMBER;
-        for (const movement of signal.phases[phase]!.movements) colors[movement] = color;
+        const { phase, state, next } = stateOf(node.idx, timeS);
+        if (state === GREEN_STAGE) {
+          for (const movement of signal.phases[phase]!.movements) colors[movement] = GREEN;
+          continue;
+        }
+        // A movement the next phase serves too stays green through the change.
+        const kept = phaseSets[node.idx]![next]!;
+        for (const movement of signal.phases[phase]!.movements)
+          if (kept.has(movement)) colors[movement] = GREEN;
+          else if (state === AMBER_STAGE) colors[movement] = AMBER;
       }
     },
     walkGreen,
-    /** Each node's phase and stage (0 green, 1 amber, 2 all-red; phase -1 without a signal)
-     * and each walk link's walk light (1 green), for the renderers. */
+    /** Each node's phase and stage (0 green, 1 amber, 2 all-red; phase -1 without a signal),
+     * the phase amber and all-red lead to, and each walk link's walk light (1 green), for the
+     * renderers. */
     snapshot(timeS: number) {
       const phase = new Int16Array(city.nodes.length).fill(-1);
       const state = new Uint8Array(city.nodes.length);
+      const next = new Int16Array(city.nodes.length).fill(-1);
       const walk = new Uint8Array(city.walk.links.length);
       signals.forEach((signal, n) => {
         if (!signal) return;
-        ({ phase: phase[n], state: state[n] } = stateOf(n, timeS));
+        ({ phase: phase[n], state: state[n], next: next[n] } = stateOf(n, timeS));
       });
       for (const link of city.walk.links)
         if (link.crossing?.control === 'signal' && signals[link.crossing.node])
           walk[link.idx] = Number(walkGreen(link.idx, timeS) > 0);
-      return { phase, state, walk };
+      return { phase, state, next, walk };
     },
     /** The phase greens of each demand-split controller, by group or node id. */
     timing() {

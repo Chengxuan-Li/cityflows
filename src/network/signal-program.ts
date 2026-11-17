@@ -13,13 +13,12 @@ function roadHeading(road: Road, end: boolean): number {
 
 /** TASK-170: the timing flags of generated programs. Both stay per-program choices. The demand
  * split: on Munich seeds 1 to 6 every split tried lengthened single visits to the Landsberger
- * loop's roads past TASK-154's 900 s on some seed. TASK-180: actuation too, after mouth joins
- * zip: actuated programs then had less delay at 0.15 but took one seed-6 loop visit to 1,042 s,
- * and completed fewer trips at full demand than fixed greens. TASK-188: that visit was a
- * network-wide ring through jg:10802 and back to n:263, not the loop exit; re-measured after
- * the amber walk-light fix, actuation passes the drain criterion on seeds 1 to 6 but still
- * completes fewer trips at full demand (2,814 against 3,069), so generated programs stay fixed. */
-export const GENERATED_TIMING: Pick<SignalProgram, 'demandSplit' | 'actuated'> = {};
+ * loop's roads past TASK-154's 900 s on some seed. TASK-180 and TASK-188 kept generated programs
+ * fixed-time: actuation had less delay but completed fewer trips at full demand. TASK-194: most
+ * of that gap was the amber and all-red shown to movements that stay green into the next phase;
+ * with them kept green, actuation passes every gate and completes as many trips at full demand
+ * (2,875 against 2,859), so generated programs are actuated. */
+export const GENERATED_TIMING: Pick<SignalProgram, 'demandSplit' | 'actuated'> = { actuated: true };
 
 /** TASK-170: the shortest green a demand split or an actuated controller gives a phase. */
 export const MIN_GREEN_S = 5;

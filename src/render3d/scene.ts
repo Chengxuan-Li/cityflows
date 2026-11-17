@@ -26,7 +26,7 @@ import {
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
-import { signalLight } from '../render/layers/signals';
+import { movementLight, signalLight } from '../render/layers/signals';
 import type { SignalStates } from '../render/types';
 import { mapPalettes, markingThemes, style, type MapPalette } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
@@ -814,7 +814,7 @@ export class Scene3D {
         states.set(head.node, signalLight(signal, head.node, timeS, this.signalStates));
     }
     if (this.walkSignals?.update(timeS, loaded, this.signalStates)) this.invalidate();
-    const key = [...states].map(([n, s]) => `${n}:${s.phase}:${s.state}`).join('|');
+    const key = [...states].map(([n, s]) => `${n}:${s.phase}:${s.state}:${s.next}`).join('|');
     if (key === this.lastSignalKey) return;
     this.lastSignalKey = key;
     this.invalidate();
@@ -825,17 +825,14 @@ export class Scene3D {
       const signal = index === undefined ? null : loaded!.nodes[index]!.signal;
       const movement = this.city!.movements[head.movement]!.id;
       const mapped = loaded?.index.movement.get(movement);
-      const green =
-        state &&
-        signal &&
-        mapped !== undefined &&
-        signal.phases[state.phase]!.movements.includes(mapped);
+      const light =
+        state && signal && mapped !== undefined ? movementLight(signal, state, mapped) : 'red';
       color.setHex(
-        !green || state.state === 'all-red'
-          ? style.signalRed
-          : state.state === 'green'
-            ? style.signalGreen
-            : style.signalAmber,
+        light === 'green'
+          ? style.signalGreen
+          : light === 'amber'
+            ? style.signalAmber
+            : style.signalRed,
       );
       this.lamps!.setColorAt(i, color);
       this.night?.signalHalos.setColorAt(i, color);
