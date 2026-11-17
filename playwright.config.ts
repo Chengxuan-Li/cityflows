@@ -79,6 +79,7 @@ const light = [
   'T80-shortcuts',
   'window-scroll',
   'qa-phone-sheet',
+  'qa-phone-recentre',
 ];
 const group =
   process.env.CITYFLOWS_E2E_GROUP ??

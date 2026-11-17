@@ -18,6 +18,7 @@ import { createPlacePaintTool } from './tools/place-paint';
 import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
 import { useLighting } from './lighting-store';
 import { resolveAppearance, useAppearance } from './appearance-store';
+import { selectionAnchor } from './selection-anchor';
 
 function snapshotForMap(
   snapshot: VehicleSnapshot,
@@ -374,6 +375,26 @@ export function MapView() {
       }
       let snapshotAgeS = 0;
       let lastFrame = performance.now();
+      // TASK-196: on a phone the inspector sheet covers the lower part of the map. When a selection
+      // is made or the sheet settles at a new height with the selection's anchor under it, the
+      // camera pans (in 2D and 3D, never zooms) to put the anchor in the middle of what is left.
+      let latestSnapshot: VehicleSnapshot | null = null;
+      let revealing: Vec2 | null = null;
+      let revealCheck = false;
+      let revealFrame = 0;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const project = (point: Vec2) =>
+        active3D ? three!.worldToScreen(point) : view.camera.worldToScreen(point);
+      const anchorOf = (state: ReturnType<typeof getState>) =>
+        state.selection && state.session
+          ? selectionAnchor(state.selection, state.session.compiled, latestSnapshot)
+          : null;
+      for (const surface of [canvas, canvas3D]) {
+        // Someone taking the map into their own hands ends the pan.
+        surface.addEventListener('pointerdown', () => (revealing = null), { signal });
+        surface.addEventListener('wheel', () => (revealing = null), { passive: true, signal });
+      }
+      if (window.cityflows) window.cityflows.selectionAnchor = () => anchorOf(getState());
       let inspected: Pick | null = null;
       let inspectedTime = NaN;
       let inspectedPersonId: string | null = null;
@@ -388,6 +409,7 @@ export function MapView() {
         const snapshot = await session.engine.snapshot();
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
+        latestSnapshot = snapshot;
         if (snapshot.parkedCars) {
           const stock = snapshot.parkedCars;
           for (const space of session.loadedCompiled.parkingSpaces ?? []) {
@@ -493,6 +515,30 @@ export function MapView() {
         const elapsedS = Math.max(0, now - lastFrame) / 1000;
         lastFrame = now;
         if (!session || busy) return;
+        if (revealCheck) {
+          revealCheck = false;
+          const { sheetHeight } = getState();
+          const anchor = sheetHeight === null ? null : anchorOf(getState());
+          const hidden = anchor && project(anchor).y > canvas.clientHeight - sheetHeight!;
+          if (hidden && !revealing) revealFrame = now;
+          revealing = hidden ? anchor : null;
+        }
+        if (revealing) {
+          const to = {
+            x: canvas.clientWidth / 2,
+            y: (canvas.clientHeight - getState().sheetHeight!) / 2,
+          };
+          const at = project(revealing);
+          const fraction = reducedMotion.matches ? 1 : 1 - Math.exp(-(now - revealFrame) / 65);
+          revealFrame = now;
+          const dx = to.x - at.x,
+            dy = to.y - at.y;
+          const arrived = Math.hypot(dx, dy) < 0.5;
+          const step = arrived ? 1 : fraction;
+          if (active3D) three!.panScreen(revealing, dx * step, dy * step);
+          else view.camera.pan(dx * step, dy * step);
+          if (arrived) revealing = null;
+        }
         const layers = getState().layers;
         if (layers !== drawnLayers) {
           view.setLayerVisibility(layers);
@@ -572,6 +618,7 @@ export function MapView() {
             );
           }
           active3D = want3D;
+          revealCheck = true;
           view.setActive(!active3D);
           snapshotTime = NaN;
         }
@@ -699,6 +746,12 @@ export function MapView() {
         () => tools[getState().tool],
       );
       const unsubscribe = useAppStore.subscribe((state, previous) => {
+        if (
+          state.sheetHeight !== previous.sheetHeight ||
+          (state.selection !== previous.selection &&
+            JSON.stringify(state.selection) !== JSON.stringify(previous.selection))
+        )
+          revealCheck = true;
         if (
           state.viewMode !== previous.viewMode ||
           state.tool !== previous.tool ||

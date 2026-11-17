@@ -1,4 +1,11 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { CloseButton } from './controls';
 import { useAppStore } from './store';
 
@@ -31,6 +38,20 @@ export function InspectorSheet({ children }: { children: ReactNode }) {
   const column = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const swallowClick = useRef(false);
+
+  // The map keeps the selection above the sheet (TASK-196): report each height it settles at.
+  useEffect(() => {
+    const sheet = column.current!;
+    const { setSheetHeight } = useAppStore.getState();
+    const observer = new ResizeObserver(() => {
+      if (sheet.dataset.dragging === undefined) setSheetHeight(sheet.offsetHeight);
+    });
+    observer.observe(sheet);
+    return () => {
+      observer.disconnect();
+      setSheetHeight(null);
+    };
+  }, []);
 
   function start(event: PointerEvent<HTMLButtonElement>) {
     const sheet = column.current!;
