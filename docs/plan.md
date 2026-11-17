@@ -213,11 +213,11 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-185](tasks/TASK-185.md) | render | 2D street-label frame cost under TASK-167's 5% gate | `src/render/layers/labels.ts`, 2D scene | 167, 176 | T62/T64 2D rounds, placement unchanged | done |
 | [TASK-186](tasks/TASK-186.md) | render | 2D Evening frame cost within 10% of Day | `src/render/layers/night.ts`, vehicle lights | 163, 184 | Evening/Day rounds, matching shots, V163 | done |
 | [TASK-187](tasks/TASK-187.md) | 9 | Full-demand step time (rail crossings, spawn), results unchanged | `src/sim/**`, bench profiling | 176, 180 | identical hashes, 25% faster full demand | done (23.7% of 25%) |
-| [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | planned (decision taken 2026-11-16; not started) |
-| [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | planned (not started; awaiting owner) |
-| [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | planned (not started; awaiting owner) |
-| [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | planned (not started; awaiting owner) |
-| [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | planned (not started; awaiting owner) |
+| [TASK-188](tasks/TASK-188.md) | 9 | Actuated signals as the default again after the seed-6 loop exit drains; actuated walk lights in amber | `src/sim/**`, `signal-program.ts` | 170, 180, decision signal-timing | seeds 1-6 and full demand tables, drain, gate, guard | in progress (approved 2026-11-16) |
+| [TASK-189](tasks/TASK-189.md) | UI | Inspector as a half-height bottom sheet on phones | `src/ui/**`, `app.css` | 160 | phone e2e, styles unchanged at 768 px+, shots | in progress (approved 2026-11-16) |
+| [TASK-190](tasks/TASK-190.md) | 10 | No parking bays under the low part of ramps (clearance 4.5 m) | stall generation | 175 | census, re-pins, gate, 3D shot | in progress (approved 2026-11-16) |
+| [TASK-191](tasks/TASK-191.md) | UI | Shortcut keys that browsers reserve (Ctrl/Cmd+N, mod+1 to 3) | `src/ui/shortcuts.ts`, `commands.ts` | 168 | reserved-chord test, T80 repeats | in progress (approved 2026-11-16) |
+| [TASK-192](tasks/TASK-192.md) | UI | 3D labels: hide names of streets behind buildings; keep labels aligned while the camera moves | `src/render3d/labels.ts` | 183 | occlusion and orbit tests, T64 3D within 5%, shots | in progress (approved 2026-11-16) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4260,6 +4260,7 @@ job (city tier and the full traffic tier) took 33.2 min against 44.9 min on Full
 
 ## Owner decisions log
 
+- 2026-11-16 (owner): "Proceed with the next round of tasks": TASK-188 to 192 run now.
 - 2026-11-16 (owner): every recommendation in `docs/decisions/2026-11-14-*.md` accepted. Exit clearing:
   keep hold short and zip. Signal timing: fixed-time until TASK-188 fixes the seed-6 loop exit and
   measures (TASK-188 may then make actuation the default if every gate passes). Light 3D tints: keep

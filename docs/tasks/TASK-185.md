@@ -1,6 +1,6 @@
 # TASK-185 — 2D street-label frame cost
 
-Status: approved by the owner 2026-11-16; in progress. Proposed owner: Claude Code
+Status: done 2026-11-16 (merged; see plan.md). Proposed owner: Claude Code
 subagent (Sonnet 5.5, high). Branch `task/185-label-cost`, worktree `D:\cityflows-wt\185`, ports 5385 / 5485.
 
 ## Goal

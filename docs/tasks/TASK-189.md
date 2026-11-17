@@ -1,6 +1,6 @@
 # TASK-189 — Inspector as a bottom sheet on phones
 
-Status: planned, not started; awaiting owner approval (lead, 2026-11-14). Proposed owner: Claude Code
+Status: approved by the owner 2026-11-16; in progress. Proposed owner: Claude Code
 subagent (Sonnet 5.5, high). Branch `task/189-phone-sheet`, worktree `D:\cityflows-wt\189`, ports 5389 / 5489.
 
 ## Goal
