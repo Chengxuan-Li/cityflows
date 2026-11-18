@@ -24,6 +24,7 @@ const hasShift = (road: CRoad) => road.startShift.length > 0 || road.endShift.le
 import { drawRoad } from '../src/render/layers/roads';
 import { style } from '../src/render/style';
 import type { City, Road, RoadClass } from '../src/schema';
+import { openFreiburg } from './freiburg';
 import { auditCities, loadAuditCity, markingLengths, type AuditCity } from './junction-audit';
 
 // Geometry audit (TASK-081, docs/plan.md "Geometry rework"): eleven measures of how far the drawn
@@ -564,21 +565,21 @@ export function throughPairs(city: City, net: CompiledCity, node: CNode) {
  * plus the road's converging shift (TASK-089) at the station:
  * a's up to the projection of a's cut onto C, b's from b's cut, linear between (they differ only
  * where the width or offset changes at the node). Stations every 0.5 m over the extent of the
- * node's outline and curbs projected onto C (±10 m around the node where it has none). The drawn
- * region D is the union of the incident roads' surfaces, the outline and the curbs; on each side
- * the drawn edge is the outer end of the run of the ray inside D that contains the point 0.25 m
- * inside the expected edge (or, when that point is outside D, the outer end of the nearest inside
- * run toward C), searched up to 12 m beyond the expected edge (capped there). A side is measured
- * only where its expected edge is an outer edge: the point 0.5 m beyond it is not within 1 m of
- * another incident road's expected band (so the shared edge of a two-way street's directions and
- * edges facing a coincident or adjacent carriageway are not). A side with a side road (whose
- * outward direction points to that side of C at the node) is the near side, the other the far
- * side. On either side a mouth is left out: stations whose ray, from the expected edge out to
- * 12 m beyond it, crosses a side road's surface, widened along C by that road's curb class radius
- * (6, 9 or 12 m). `laneM`: each lane of a and b against its nominal offset from C at stations
- * every 0.5 m out to `APPROACH_M` from the node, where the ray crosses the lane polyline within
- * the road's width of that offset. Pairs with an end offset or a tapering lane at the node are
- * skipped. */
+ * node's outline and curbs projected onto C (±10 m around the node where it has none), from 1 cm
+ * inside it. The drawn region D is the union of the incident roads' surfaces, the outline and the
+ * curbs; on each side the drawn edge is the outer end of the run of the ray inside D that contains
+ * the point 0.25 m inside the expected edge (or, when that point is outside D, the outer end of
+ * the nearest inside run toward C), searched up to 12 m beyond the expected edge (capped there). A
+ * side is measured only where its expected edge is an outer edge: the point 0.5 m beyond it is not
+ * within 1 m of another incident road's expected band (so the shared edge of a two-way street's
+ * directions and edges facing a coincident or adjacent carriageway are not). A side with a side
+ * road (whose outward direction points to that side of C at the node) is the near side, the other
+ * the far side. On either side a mouth is left out: stations whose ray, from the expected edge out
+ * to 12 m beyond it, crosses a side road's surface (or that of another end within 30 degrees of an
+ * arm, a fork), widened along C by that road's curb class radius (6, 9 or 12 m). `laneM`: each
+ * lane of a and b against its nominal offset from C at stations every 0.5 m out to `APPROACH_M`
+ * from the node, where the ray crosses the lane polyline within the road's width of that offset.
+ * Pairs with an end offset or a tapering lane at the node are skipped. */
 export function throughAudit(city: City, net: CompiledCity, node: CNode): ThroughDeviation | null {
   const pairs = throughPairs(city, net, node);
   if (!pairs.length) return null;
@@ -690,7 +691,16 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
         const d = outward(city, road, atEnd);
         sides[d.x * across.x + d.y * across.y < 0 ? 'left' : 'right'] = true;
       }
-    const sideRings = sideRoads.map((road) => ({
+    // TASK-213: an end within 30 degrees of an arm (a fork, n:552's r:554 beside r:556) is no
+    // side road, but its surface beside the arm is a mouth too, not the arm's edge.
+    const forks = incident.filter(
+      (road) =>
+        road !== c.a &&
+        road !== c.b &&
+        !sideRoads.includes(road) &&
+        (road.from === node.idx || road.to === node.idx),
+    );
+    const sideRings = [...sideRoads, ...forks].map((road) => ({
       ring: closed(road.surface),
       radius: curbRadius(road.roadClass),
     }));
@@ -730,7 +740,10 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
         );
       });
     const stations: number[] = [];
-    for (let k = 0; from + k * STEP_M <= to + 1e-9; k++) stations.push(from + k * STEP_M);
+    // TASK-213: from 1 cm inside the extent, so no ray runs along a cut line, the edge a road end
+    // shares with the outline, which neither counted as inside (n:1747 read 3.35 m).
+    for (let k = 0; from + 0.01 + k * STEP_M <= to + 1e-9; k++)
+      stations.push(from + 0.01 + k * STEP_M);
     const frames = stations.map((s) => frame(c.line, c.lengths, s));
     // A mouth: stations where the ray, from the expected edge out to SEARCH_M beyond it, crosses
     // a side road's surface, widened along C by that road's curb class radius.
@@ -1911,12 +1924,18 @@ export function worst(audit: GeometryAudit, count = 20) {
 
 // ---------------------------------------------------------------------------------------------
 // Named cases (docs/plan.md "Geometry rework"; ids from the Munich and Sindelfingen imports with
-// the junction audit's bboxes). A case's roads are its listed roads and every road at its listed
-// nodes; its node measures are taken at its listed nodes only.
+// the junction audit's bboxes, and from the bundled Freiburg project). A case's roads are its
+// listed roads and every road at its listed nodes; its node measures are taken at its listed nodes
+// only. TASK-131 kept every OSM node, so the merged nodes of R3-1 (main's n:1181) and R3-7 (n:949)
+// are junction groups since: their members are listed instead (T42.3).
+
+/** The junction audit's cities and Freiburg, the landing city (TASK-212, TASK-213). */
+export const geometryCities = [...auditCities, 'freiburg'] as const;
+export type GeometryCity = (typeof geometryCities)[number];
 
 export interface GeometryCase {
   id: string;
-  city: AuditCity;
+  city: GeometryCity;
   label: string;
   roads: string[];
   nodes: string[];
@@ -1968,9 +1987,10 @@ export const geometryCases: GeometryCase[] = [
   {
     id: 'R3-1',
     city: 'munich',
-    label: 'round 3 shot 1: T-junction curbs and markings (Landsberger Straße, Barthstraße)',
+    label:
+      'round 3 shot 1: T-junction curbs and markings (Landsberger Straße, Barthstraße; main n:1181)',
     roads: [],
-    nodes: ['n:1181'],
+    nodes: ['n:474', 'n:1353'],
   },
   {
     id: 'R3-3',
@@ -2003,9 +2023,9 @@ export const geometryCases: GeometryCase[] = [
   {
     id: 'R3-7',
     city: 'munich',
-    label: 'round 3 shot 7: signal curbs and arrows (Arnulfstraße, Marsstraße)',
+    label: 'round 3 shot 7: signal curbs and arrows (Arnulfstraße, Marsstraße; main n:949)',
     roads: [],
-    nodes: ['n:949'],
+    nodes: ['n:366', 'n:417'],
   },
   {
     id: 'R3-8',
@@ -2013,6 +2033,77 @@ export const geometryCases: GeometryCase[] = [
     label: 'round 3 shot 8: Y-junction curbs (Marsstraße)',
     roads: [],
     nodes: ['n:823'],
+  },
+  // TASK-212's junction cases (docs/findings/2026-11-19-geometry-audit), for TASK-213.
+  {
+    id: 'J1-hbf',
+    city: 'freiburg',
+    label: 'Hauptbahnhof group jg:13298: inner roads overlapping inside the surface',
+    roads: [],
+    nodes: ['n:1', 'n:970', 'n:1147', 'n:461', 'n:476', 'n:488'],
+  },
+  {
+    id: 'J1-stefan',
+    city: 'freiburg',
+    label: 'Stefan-Meier-Straße group jg:13268',
+    roads: [],
+    nodes: ['n:5', 'n:744'],
+  },
+  {
+    id: 'J2',
+    city: 'freiburg',
+    label: 'lobed group surfaces: jg:13295 (Schnewlinstraße, inner r:653), n:828, n:1142',
+    roads: [],
+    nodes: ['n:651', 'n:652', 'n:916', 'n:828', 'n:1142'],
+  },
+  {
+    id: 'J3',
+    city: 'freiburg',
+    label: 'acute side roads over the main road (Greiffeneggbrücke n:430/n:289, n:889)',
+    roads: [],
+    nodes: ['n:430', 'n:289', 'n:889'],
+  },
+  {
+    id: 'J4',
+    city: 'freiburg',
+    label: 'curb corners without a radius',
+    roads: [],
+    nodes: ['n:44', 'n:128', 'n:390', 'n:2206', 'n:660'],
+  },
+  {
+    id: 'J4-munich',
+    city: 'munich',
+    label: 'sharp corners since TASK-092',
+    roads: [],
+    nodes: ['n:324', 'n:621', 'n:549'],
+  },
+  {
+    id: 'J4-sindelfingen',
+    city: 'sindelfingen',
+    label: 'sharp corners since TASK-092',
+    roads: [],
+    nodes: ['n:87', 'n:27', 'n:1162', 'n:12'],
+  },
+  {
+    id: 'J5',
+    city: 'freiburg',
+    label: 'through roads bending at side streets',
+    roads: [],
+    nodes: ['n:552', 'n:1747', 'n:1132', 'n:1462', 'n:108'],
+  },
+  {
+    id: 'J6-munich',
+    city: 'munich',
+    label: 'ramp diverges overlapping their parent road',
+    roads: [],
+    nodes: ['n:27', 'n:194'],
+  },
+  {
+    id: 'J6-sindelfingen',
+    city: 'sindelfingen',
+    label: 'ramp diverge overlapping its parent road',
+    roads: [],
+    nodes: ['n:1028'],
   },
 ];
 
@@ -2053,8 +2144,10 @@ export function caseAudit(net: CompiledCity, audit: GeometryAudit, c: GeometryCa
   };
 }
 
-export function compileCity(name: AuditCity, relaxMaxM?: number) {
-  const city = loadAuditCity(name, relaxMaxM);
+export async function compileCity(name: GeometryCity, relaxMaxM?: number) {
+  // Freiburg as bundled (its curation is part of the project); the relaxation cap does not apply.
+  const city =
+    name === 'freiburg' ? (await openFreiburg()).city : loadAuditCity(name as AuditCity, relaxMaxM);
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
   return { city, net: result.compiled };
@@ -2104,8 +2197,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
   const caseTotals: Record<string, ReturnType<typeof totals>> = {};
   const caseDetail: Record<string, unknown> = {};
   const lines: string[] = [];
-  for (const name of auditCities) {
-    const { city, net } = compileCity(name, relaxMaxM);
+  for (const name of geometryCities) {
+    const { city, net } = await compileCity(name, relaxMaxM);
     const audit = auditGeometry(city, net);
     cityTotals[name] = totals(audit);
     const top = worst(audit);

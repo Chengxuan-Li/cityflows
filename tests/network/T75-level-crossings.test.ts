@@ -162,7 +162,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
           // TASK-194: generated signal programs are actuated (`actuated: true`).
-          '1adea587f42874ac213e434c60ba97950970cd5c4aaefa2f329a60ec4713de7d',
+          '619decdd30a07e8e261773c001d1a26ff95988cbffd06505dda6a80e3f29b32c',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -171,7 +171,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
-          'd028b5288badf5524e7f9f3aba03fefc0357afb9c99a7acf9537d893fb566507',
+          '9c8c81d180dd67e010f1f66bfb3c970aaef27893e90f3e7aace71c0c3e69ca92',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

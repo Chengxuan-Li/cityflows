@@ -1,4 +1,5 @@
 import { withoutLotAisles } from '../without-lot-aisles';
+import { openFreiburg } from '../../bench/freiburg';
 import { expect, test } from 'vitest';
 import { cornerAudit } from '../../bench/geometry-audit';
 import { auditCities, loadAuditCity, type AuditCity } from '../../bench/junction-audit';
@@ -57,8 +58,6 @@ const named: Record<AuditCity, Record<string, string>> = {
       'the retained 4.13 m bus-exempt segment has a 1.46 m curb turning 30.3 degrees between samples',
     'n:167 r:169>r:1111':
       'the other end of the retained 4.13 m segment: a 1.42 m curb turning 30.3 degrees between samples',
-    'n:365 r:968>r:367':
-      'the retained 5.85 m bus-exempt link meets a 7.09 m private road; no curb fits between their cuts',
     'n:1028 r:1178>r:1029': edgeBends,
     'n:1157 r:1159>r:1170': edgeBends,
     'n:1237 r:1249>r:1247': shortRoad('r:1249', 11),
@@ -89,17 +88,14 @@ const named: Record<AuditCity, Record<string, string>> = {
     'n:554 r:555>r:1223': `${keptShort('r:555', 2)} (r:1223 is 1 m)`,
     // TASK-131: acute OSM arms.
     'n:12 r:437>r:13': `${acuteArms(35)} (r:437 is 7 m)`,
-    'n:27 r:697>r:29': acuteArms(27),
     'n:436 r:437>r:444': `${acuteArms(34)} (r:437 is 7 m)`,
     'n:87 r:645>r:88': acuteArms(31),
     'n:1161 r:1174>r:1164': `${acuteArms(37)} (a triangle of service ways, legs 15.5 to 36 m)`,
-    'n:1162 r:1169>r:1164': `${acuteArms(12)} (the same triangle)`,
     'n:1167 r:1169>r:1174': `${keptShort('r:1174', 16)} (the same triangle, arms 68 degrees apart)`,
     // TASK-131: sharp OSM vertices near the node.
     'n:1105 r:1108>r:1124': unsmoothed('r:1124', 35, 8.1),
     'n:306 r:311>r:307': unsmoothed('r:311', 51, 5.2),
     // TASK-131: side-by-side noses.
-    'n:68 r:69>r:245': sideBySide(18),
     'n:294 r:1198>r:298': sideBySide(20),
     'n:440 r:740>r:442': sideBySide(19),
     'n:1157 r:1170>r:1159': sideBySide(8),
@@ -129,8 +125,6 @@ const named: Record<AuditCity, Record<string, string>> = {
       'the retained 5.95 m truck-delivery segment leaves a 1.33 m curb turning 32.5 degrees between samples',
     'n:284 r:285>r:490':
       'the retained height-restricted approaches are 13.20 and 13.16 m long; their curb has a 0.74 m radius',
-    'n:324 r:325>r:1073':
-      'the retained 17.57 m private approach leaves a 1 m curb with a 0.49 m radius',
     'n:384 r:399>r:1263':
       'the retained 14.08 m approach beside the truck-delivery boundary leaves a 1.63 m curb turning 33.2 degrees',
     'n:384 r:1260>r:383':
@@ -306,3 +300,50 @@ unitTest('T42.4: the corner measure finds a junction drawn without its curbs', (
   const square = cornerAudit(city, net, n);
   expect(square.map((c) => [c.kind, c.sharp])).toEqual(Array(4).fill(['corner', true]));
 });
+
+// TASK-213 (TASK-212's J4): three corner rules, each named by the corner it fixed.
+/** A junction corner between two roads, in either order. */
+const corner = (net: CompiledCity, id: string, kind: string, roads: string) =>
+  junctionCorners(node(net, id)).find((c) => {
+    const ids = c.roads.map((r) => net.roads[r]!.id);
+    return c.kind === kind && [ids.join('>'), [...ids].reverse().join('>')].includes(roads);
+  });
+const sharpAt = (city: City, net: CompiledCity, id: string, roads: string) =>
+  cornerAudit(city, net, node(net, id)).find((c) => c.roads === roads);
+
+unitTest(
+  'T42.5: a gore tip whose node cut takes half its road is still rounded (Sindelfingen n:27, n:1162)',
+  () => {
+    // Both arms are cut at the 10 m cap on roads of about 20 m, which left the fillet no room
+    // within the first half of either road: the tips turned 152.6 and 148.3 degrees at a vertex.
+    const { city, net } = load('sindelfingen');
+    for (const [id, roads] of [
+      ['n:27', 'r:697>r:29'],
+      ['n:1162', 'r:1169>r:1164'],
+    ] as const) {
+      expect(corner(net, id, 'gore', roads)?.fillet, `${id} ${roads}`).toBeDefined();
+      expect(sharpAt(city, net, id, roads)?.turnDeg, `${id} ${roads}`).toBeLessThan(30);
+    }
+  },
+  limit(120_000),
+);
+
+cityTest(
+  'T42.6: Freiburg: a far-cut curb runs from either edge (n:44); an acute corner over the cut is a gore (n:2206)',
+  async () => {
+    const city = (await openFreiburg()).city;
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
+    const net = result.compiled;
+    // n:44: the ramp r:45 leaves beside the capped r:1285; the curb's near edge is the ramp's, and
+    // its curve ran out along the ramp from the ramp's cut corner and back (180 degrees).
+    const far = corner(net, 'n:44', 'curb', 'r:45>r:1285');
+    expect(far?.limit).toBe('far');
+    expect(sharpAt(city, net, 'n:44', 'r:45>r:1285')?.turnDeg).toBeLessThan(10);
+    // n:2206: r:1408's cut corner lies 0.7 m over r:2208's edge line, 38 degrees apart: no curb
+    // of 0.5 m fitted and the outline took the chord (157 degrees). Now a gore with a fillet.
+    expect(corner(net, 'n:2206', 'gore', 'r:1408>r:2208')?.fillet).toBeDefined();
+    expect(sharpAt(city, net, 'n:2206', 'r:1408>r:2208')?.turnDeg).toBeLessThan(60);
+  },
+  limit(180_000),
+);
