@@ -510,6 +510,61 @@ export function groundMesh(terrain: Terrain, bounds: Bounds, offset = 0) {
   return indexTerrain(geometry);
 }
 
+/** TASK-201: the ground inside a polygon import's boundary ring (local metres, open), each
+ * triangle cut where the ring crosses it and kept on its own plane. */
+export function clipGround(ground: BufferGeometry, ring: Vec2[]) {
+  const closed = [...ring, ring[0]!];
+  const edges = ring.map((a, i) => {
+    const b = ring[(i + 1) % ring.length]!;
+    return {
+      minX: Math.min(a.x, b.x),
+      minY: Math.min(a.y, b.y),
+      maxX: Math.max(a.x, b.x),
+      maxY: Math.max(a.y, b.y),
+    };
+  });
+  const p = ground.getAttribute('position');
+  const count = ground.index?.count ?? p.count;
+  const positions: number[] = [];
+  for (let i = 0; i < count; i += 3) {
+    const ids = [0, 1, 2].map((j) => ground.index?.getX(i + j) ?? i + j);
+    const [a, b, c] = ids.map((j) => ({ x: p.getX(j), y: p.getZ(j), h: p.getY(j) })) as [
+      Vec2 & { h: number },
+      Vec2 & { h: number },
+      Vec2 & { h: number },
+    ];
+    const minX = Math.min(a.x, b.x, c.x),
+      minY = Math.min(a.y, b.y, c.y),
+      maxX = Math.max(a.x, b.x, c.x),
+      maxY = Math.max(a.y, b.y, c.y);
+    const crossed = edges.some(
+      (e) => e.minX <= maxX && e.maxX >= minX && e.minY <= maxY && e.maxY >= minY,
+    );
+    const det = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+    if (!crossed || Math.abs(det) < 1e-8) {
+      // Wholly inside or outside; a vertical bank goes with its midpoint.
+      const centre = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
+      if (pointInPolygon(centre, closed)) for (const v of [a, b, c]) positions.push(v.x, v.h, v.y);
+      continue;
+    }
+    const triangle = [a, b, c].map(({ x, y }) => ({ x, y }));
+    if (areaD(triangle) < 0) triangle.reverse();
+    for (const piece of triangulate(
+      booleanOpD(ClipType.Intersection, [triangle], [ring], FillRule.NonZero, 5),
+      false,
+    ))
+      for (const v of areaD(piece) * det > 0 ? piece : piece.reverse()) {
+        const u = ((v.x - a.x) * (c.y - a.y) - (v.y - a.y) * (c.x - a.x)) / det;
+        const w = ((b.x - a.x) * (v.y - a.y) - (b.y - a.y) * (v.x - a.x)) / det;
+        positions.push(v.x, a.h + u * (b.h - a.h) + w * (c.h - a.h), v.y);
+      }
+  }
+  ground.dispose();
+  return indexTerrain(
+    new BufferGeometry().setAttribute('position', new Float32BufferAttribute(positions, 3)),
+  );
+}
+
 /** Clip to the ground's grid triangles so overlapping areas share exactly the same plane. */
 export function drape(
   geometry: BufferGeometry,

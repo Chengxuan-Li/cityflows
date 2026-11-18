@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, expect, test } from 'vitest';
-import { buildFreiburgProject, freiburgProject, openFreiburg } from '../../bench/freiburg';
+import {
+  buildFreiburgProject,
+  freiburgProject,
+  freiburgTerrain,
+  openFreiburg,
+} from '../../bench/freiburg';
 import { probeMorning } from '../../bench/import-probe';
 import { compile } from '../../src/network';
 import { compileRail } from '../../src/network/rail';
@@ -158,6 +163,8 @@ test(
     expect(roads.length).toBeGreaterThanOrEqual(5);
     expect(roads.filter((r) => (r.layer ?? 0) !== 0)).toEqual([]);
     expect(project.view?.camera).toMatchObject({ '3d': { pitch: 50, bearing: -60 } });
+    // TASK-201: the Schlossberg's foot and the Dreisam's fall, from the committed terrain fixture.
+    expect(city.terrain).toEqual(JSON.parse(readFileSync(freiburgTerrain, 'utf8')));
   },
   limit(120_000),
 );
@@ -166,8 +173,10 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // Pinned so curation and the import do not drift: rebuild the project and re-pin on purpose.
   // openProject checks city.json against this manifest hash, so it pins the city.
   const { manifest } = JSON.parse(readFileSync(freiburgProject, 'utf8'));
+  // TASK-201: re-pinned for the terrain fixture and building parts; the traffic is unchanged
+  // (terrain is display-only and parts are context), so the state hash is TASK-198's.
   expect(manifest.files['city.json']).toBe(
-    'ded060cfd6e9787fdb7e846b3f5c074a2e0e3d2e0822ed0751c80aea696b9539',
+    'b45ea289ec7f5719e206628da828f38daa4ebf7b041b82b90d90128c10e87d91',
   );
   expect(morning.stateHash).toBe(1137612334);
   expect(morning.failedByReason.gridlocked).toBe(0);

@@ -21,6 +21,9 @@ import { importOsmCached } from './city-cache';
 
 export const freiburgExtract = 'fixtures/osm/freiburg-altstadt.osm';
 export const freiburgProject = 'fixtures/projects/freiburg.cityflows.json';
+/** TASK-201: the Schlossberg's slope and the Dreisam's fall, from AWS Terrain Tiles
+ * (`bench/terrain-fetch.ts freiburg`). */
+export const freiburgTerrain = 'fixtures/terrain/freiburg.json';
 
 /** [longitude, latitude], from the decision document's lat lon pairs. */
 export const freiburgPolygon: [number, number][] = [
@@ -216,6 +219,7 @@ export async function buildFreiburgProject(): Promise<string> {
   if (typeof data === 'string') throw new Error(data);
   const city = importFreiburg();
   curateFreiburg(city, data);
+  city.terrain = JSON.parse(readFileSync(freiburgTerrain, 'utf8')) as NonNullable<City['terrain']>;
   const scenario = defaultScenario('grid5x5');
   scenario.id = 'freiburg';
   scenario.name = city.name;
