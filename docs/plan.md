@@ -228,7 +228,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-200](tasks/TASK-200.md) | UI | Engine queries racing a project open (gate4-compare fails alone since TASK-198) | `src/main.tsx`, `src/ui/store.ts` open, `src/host/client.ts` | 198 | spec 10/10 alone, failing test without the fix, light tiers | done 2026-11-18 |
 | [TASK-201](tasks/TASK-201.md) | UI | Freiburg in detail: building parts (the Münster spire) and the Schlossberg terrain from the approved downloads | importer parts, 3D buildings, `fixtures/osm`, `fixtures/terrain/freiburg.json`, `bench/freiburg.ts`, project | 198 | parts tests, Freiburg gate, load and frame budgets, shots | in progress (owner 2026-11-18) |
 | [TASK-202](tasks/TASK-202.md) | 9 | Trams to every Freiburg stop (8 of 32 unserved) | `src/network/trams.ts`, `rail.ts` | 198 | per-cause tests, served count, other cities unchanged | in progress (owner 2026-11-18) |
-| [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | in progress (owner 2026-11-18) |
+| [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | done 2026-11-18 (showcase camera values pending TASK-201) |
 | [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | in progress (owner 2026-11-18) |
 | [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4423,6 +4423,25 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 `ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
+TASK-203 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged): opening a project fitted the
+extent of roads, nodes and places to the whole canvas (72 px), ignoring floating panels and the phone
+sheet; 3D reused the 2D centre. Now the city's `geo.boundary` (else its extent) is framed with a 24 px
+margin in the visible area (`visibleArea()` in `map-view.tsx`: canvas minus a floating sidebar or
+inspector, minus the phone sheet; TASK-196's selection pan uses it too); 2D `Camera.fitToBounds(bounds,
+area)`, 3D `Scene3D.frame(points, area, pitch, bearing)`; a saved showcase camera keeps its zoom, pitch
+and bearing and is centred in the visible area; docking or undocking a panel leaves the city where it
+is on screen. New "Fit city in view" command (F, command menu): there was no fit or reset command to
+hook into, accepted. `qa-framing.spec.ts` checks every Freiburg boundary vertex inside the visible area
+at 1440 × 900, 1024 × 768, 800 × 700 and 390 × 844, 2D and 3D; framing unit tests in
+`camera.test.ts`. Five specs and `helpers.ts` hard-coded the old 72 px fit and moved to 24 px;
+`gate3-paint` hides the sidebar before painting west of the grid. Outside the listed scope:
+`render3d/basemap.ts`, `dev/render.ts`, `V115-redraw.test.ts` (callers of the changed `fitToBounds`).
+First frame 2.22 to 2.30 s against main's 2.27 to 2.31 s (other agents running). Suggested showcase
+camera `{ centre: { x: -300, y: 220 }, scale: 1.18, pitch: 50, bearing: -60 }` fits all of Freiburg;
+the lead applies it after TASK-201 rebuilds the project (until then the current, closer showcase crops
+more than before). Lead check on the merge: check (1,505), city (183), traffic light and guard, the
+framing, phone, landing and paint specs (17), light e2e (61).
 
 Full run 44347101170 (lead, manual, on ccdd22e after TASK-205): every job green, including all five
 e2e shards; CI green on ccdd22e and Pages deployed it; the city job took 22.2 min.
