@@ -4419,6 +4419,9 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
 
+Full run 44273719376 (lead, manual, on 415edd3 after TASK-200): every job green, including all five
+e2e shards; CI green on 415edd3 and Pages deployed it; the city job took 15.5 min.
+
 TASK-200 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged): the lead's suspect held. While a
 project opens, `session.engine` is still the old engine, and the store terminated it the moment the new
 one was ready, rejecting any request still in flight. TASK-198 exposed it: its staged open keeps the
