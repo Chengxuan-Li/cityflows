@@ -233,7 +233,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
 | [TASK-206](tasks/TASK-206.md) | render | 3D load time back under 5 s after the first frame (5.2 to 6.9 s on main; 2.0 to 4.0 s at TASK-198) | `src/render3d/**`, 3D start-up | 198, 201 | phase timings, 3D within 5 s idle, shots unchanged | done 2026-11-19 |
 | [TASK-207](tasks/TASK-207.md) | UI | Freiburg's 187 validation warnings: importer fixes, curation, notices | importer, diagnostics, `bench/freiburg.ts`, project | 198, 201 | codes before and after, tests, Freiburg gate | done 2026-11-19 (curation; F1 and F2 held for the owner) |
-| [TASK-208](tasks/TASK-208.md) | 9 | Munich's remaining missed turns (r:700 lane 0, the r:639 weave) and why TASK-204's first rule gridlocked Freiburg | `src/sim/lane-change.ts`, entry chains | 204 | misses, seeds 1-12 both modes, full demand, gates | in progress (owner 2026-11-18) |
+| [TASK-208](tasks/TASK-208.md) | 9 | Munich's remaining missed turns (r:700 lane 0, the r:639 weave) and why TASK-204's first rule gridlocked Freiburg | `src/sim/lane-change.ts`, entry chains | 204 | misses, seeds 1-12 both modes, full demand, gates | held for the owner 2026-11-19 (trade-off; branch `8653e9e`) |
 | [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | done 2026-11-19 (drop all four; owner decides) |
 | [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | done 2026-11-18 |
 | [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
@@ -4461,6 +4461,24 @@ down the ramps (worst 1,592 s, 2 stalled heads per seed), which TASK-130 never t
 branch conflicts in 12 of 18 files (17 hunks in `engine.ts`) and main already has its main ideas;
 TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The owner decides on
 retiring the branches and the worktrees `D:\cityflows-wt\131p3` and `128-remeasure`.
+
+TASK-208 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
+`task/208-remaining-misses` at `8653e9e`, worktree `D:\cityflows-wt8`): (1) the r:654 misses are a
+queue-head detour: a head on r:53 or r:1306 blocked from r:700 lane 1 takes lane 0 after 45 s, which
+needs two changes back into the same queue; fix in `detourHeads` (`engine.ts`): a head no longer
+detours into another lane of its own next road when that route needs more changes after it (T58 test
+fails without it). (2) r:639 misses are spill-back from the jughandle queue through r:1304/r:680, not a
+lane-choice fault; a "give up only at the stop line" variant was worse and dropped. (3) TASK-204's
+first-rule Freiburg gridlock is a latent fault between a tram crossing and actuated signals: the
+crossing at r:1337/n:39 reaches n:18's stop line, a held car needs two controllers green together, and
+TASK-199's upstream calls lock both at their maximum in opposite phase (3.5 min on main with the second
+rule off); not fixed (signals and crossings out of scope), a follow-up for the owner. Misses, 12 seeds,
+choice off: r:654 actuated 93 to 16, fixed 310 to 7; r:639 actuated 175 to 95, fixed 932 to 607. Mean
+delay at 0.15 rises in all four configurations: actuated off 637.7 to 651.8 s (+2.2%), on 88.0 to 89.3
+s (+1.5%), fixed off 824.8 to 856.4 s (+3.8%), on 124.8 to 126.3 s (+1.2%); drain criterion on all 48
+runs. Full demand: actuated 3,345 / 177 to 3,397 / 172 (+1.6%), fixed 3,210 / 166 to 3,368 / 160
+(+4.9%, 4 stalled). Freiburg and Sindelfingen identical. Tiers pass. Lead decision: a trade-off under
+the owner's rules, so held.
 
 Full run 44407315666 (lead, manual, on 1ac0c38 after TASK-206): every job green, including all five
 e2e shards; the city job took 21.1 min.
