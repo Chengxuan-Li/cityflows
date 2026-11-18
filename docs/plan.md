@@ -229,7 +229,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-201](tasks/TASK-201.md) | UI | Freiburg in detail: building parts (the Münster spire) and the Schlossberg terrain from the approved downloads | importer parts, 3D buildings, `fixtures/osm`, `fixtures/terrain/freiburg.json`, `bench/freiburg.ts`, project | 198 | parts tests, Freiburg gate, load and frame budgets, shots | done 2026-11-18 (flat, owner; terrain fixture unused) |
 | [TASK-202](tasks/TASK-202.md) | 9 | Trams to every Freiburg stop (8 of 32 unserved) | `src/network/trams.ts`, `rail.ts` | 198 | per-cause tests, served count, other cities unchanged | in progress (owner 2026-11-18) |
 | [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | done 2026-11-18 (showcase camera values pending TASK-201) |
-| [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | in progress (owner 2026-11-18) |
+| [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | done 2026-11-18 (owner approved the trade-off) |
 | [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -4424,6 +4424,28 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
 
+TASK-204 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged with the owner's approval of the
+trade-off): the r:654 misses were a lane chosen too late, not a gap problem: 98% drove r:700 → r:697
+→ r:698 → r:654 in lane 1 without a change, though their routes planned r:697 lane 2; junction group
+jg:10778 (`entryChain`, `src/sim/intersection.ts`) took the first chain reaching any target lane and
+nothing moved the car later. r:639 is a short weave (r:1299 has one car lane; two changes in 77 m).
+Fix: a car entering a group takes the chain its route planned when usable (else the first usable);
+off its planned lane, it takes any safe change that lowers the changes its route still needs
+(`futureChanges`, `lane-change.ts`) without waiting for MOBIL's incentive. Rule 1 alone gridlocked
+Freiburg (12, r:1348); with rule 2 it passes (why not isolated). Misses, 12 seeds, r:654: actuated
+choice off 1,667 to 75, fixed 2,156 to 344, choice on to 0; r:639 fixed choice off 486 to 839 (the
+jughandle queue now forms in lane 2 and backs into r:639). Means, main to branch: actuated choice off
+mean delay 665.9 to 631.7 s (-5.1%), worst visit 808 to 337 s; actuated choice on 83.2 to 88.9 s
+(+6.9%); fixed choice off 793.7 to 833.2 s (+5.0%), worst 858 to 273 s; fixed choice on 117.1 to
+124.4 s (+6.2%); completions within 0.6% per seed; drain criterion on all 48 runs; gate seed 5,310 / 2
+to 5,311 / 1, no baseline reset. Full demand: actuated 2,997 / 160 to 3,406 / 159 (hash 649933250),
+fixed 2,859 / 181 to 3,168 / 169 (hash 227045585), the new references. Freiburg: mean delay 111 to 73 s,
+0 failed, state hash 1137612334 to 236178606. Re-pins T46, T67, Freiburg; T19, T29 and the lane-change
+replay setups adjusted with TASK-204 comments (read, they keep their intent). `docs/architecture.md`
+gains a paragraph on the two rules (accepted). Lead decision: put to the owner, who approved. Lead
+check on the merge (after TASK-201): check (1,512), city (183), traffic light and guard, light e2e
+(61). TASK-202, measuring against the older main, re-measures after this merge.
+
 Full run 44361518636 (lead, manual, on 36eb4c2 after TASK-203): every job green, including all five
 e2e shards; the city job took 30.2 min.
 
@@ -4558,6 +4580,8 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-18 (owner): merge TASK-204 (full demand +11 to 14%, mean delay at 0.15 +5 to 7% in three of
+  four configurations).
 - 2026-11-18 (owner): TASK-202 also fixes the tram-crossing stop line its served stops exposed
   (`src/sim/rail-crossings.ts`), on its branch, with Munich seeds and full demand.
 - 2026-11-18 (owner): Freiburg stays flat for now. With terrain the 3D view took 15 to 16 s after the first

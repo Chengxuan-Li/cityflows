@@ -1,6 +1,6 @@
 # TASK-204 — Munich's missed turns at the jughandle
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-18 (merged with the owner's approval). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/204-jughandle-lanes`, worktree `D:\cityflows-wt\204`, ports 5404 / 5504.
 
 ## Goal
