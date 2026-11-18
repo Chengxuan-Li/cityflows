@@ -1584,6 +1584,11 @@ before road or pedestrian stops, access points, another served crossing, and the
 junction retain strict admission. A road red inside that
 clearance holds entry; release removes only the crossing obstacle and never grants a road
 signal. Unserved, pedestrian and grade-separated crossings impose no road restriction.
+TASK-202: a driver obeys, and is committed by passing, only a facility's stop marking for the
+encounter it guards on the driver's path: one of the facility's spans reached from the marking
+through movements, lanes whose movements all lead to one road, and lanes with that facility's
+own marking or span. A marking for a turn the driver does not take, with the same facility met
+again from another approach further on, neither holds nor commits it.
 An admitted vehicle that stops wholly upstream of the physical conflict yields to rail and
 holds there before resuming. Gridlock recovery is exempt only while a protected rail stop is
 the binding obstacle at the stopped vehicle's nose; an open crossing's downstream queue
