@@ -1,6 +1,6 @@
 # TASK-209 — The parked branches: revive or drop
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-19. Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/209-parked-review`, worktree `D:\cityflows-wt\209`. Read-only on code.
 
 ## Goal

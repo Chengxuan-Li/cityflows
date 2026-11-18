@@ -232,9 +232,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | done 2026-11-18 (owner approved the trade-off) |
 | [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
 | [TASK-206](tasks/TASK-206.md) | render | 3D load time back under 5 s after the first frame (5.2 to 6.9 s on main; 2.0 to 4.0 s at TASK-198) | `src/render3d/**`, 3D start-up | 198, 201 | phase timings, 3D within 5 s idle, shots unchanged | done 2026-11-19 |
-| [TASK-207](tasks/TASK-207.md) | UI | Freiburg's 187 validation warnings: importer fixes, curation, notices | importer, diagnostics, `bench/freiburg.ts`, project | 198, 201 | codes before and after, tests, Freiburg gate | in progress (owner 2026-11-18) |
+| [TASK-207](tasks/TASK-207.md) | UI | Freiburg's 187 validation warnings: importer fixes, curation, notices | importer, diagnostics, `bench/freiburg.ts`, project | 198, 201 | codes before and after, tests, Freiburg gate | done 2026-11-19 (curation; F1 and F2 held for the owner) |
 | [TASK-208](tasks/TASK-208.md) | 9 | Munich's remaining missed turns (r:700 lane 0, the r:639 weave) and why TASK-204's first rule gridlocked Freiburg | `src/sim/lane-change.ts`, entry chains | 204 | misses, seeds 1-12 both modes, full demand, gates | in progress (owner 2026-11-18) |
-| [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | in progress (owner 2026-11-18) |
+| [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | done 2026-11-19 (drop all four; owner decides) |
 | [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | done 2026-11-18 |
 | [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
@@ -1226,8 +1226,8 @@ network and renderer, not `src/sim/parking.ts`, so they can run alongside the pa
 | TASK-125 (done 2026-11-10) | Parking claims: cars heading for a strip space or a garage count against it, as cars heading for a lot already do (TASK-103 follow-up). A space claimed by another car is taken; a strip or garage whose free spaces are all spoken for drops out of the choice; a claim is released when the car chooses again, fails or parks. Overflow cars go straight to the next option instead of circling. | Only lots count cars en route. A strip space is reserved when the car starts its manoeuvre, so many cars chase one freed space (TASK-122 round 2: 44 searches over an hour). | TASK-124 |
 | TASK-126 (done 2026-11-10) | Railway tracks and stations (R1 and R2 merged, owner 2026-11-10): rail, light rail, subway and tram ways as their own track graph (nodes, switches, platforms), compiled, saved and drawn; stations tied to their platforms and to the walk network by their entrances, drawn as stations. Munich's Donnersbergerbrücke S-Bahn station is the example. Train routing comes later. | Display-only context lines (`src/importers/osm/context.ts`, TASK-096); place kind `station` from `railway=station`; the synthetic Station fixture (T10). The bundled extracts hold no track ways yet. | none |
 | TASK-127 (done 2026-11-10; Codex) | Decorative trains: arrivals, departures and through trains that pass without stopping, on TASK-126's tracks by a simple timetable. Visual only. | none | TASK-126 |
-| TASK-128 (reviewed and held at `c9a0632`) | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
-| TASK-129 (reviewed and held at `496cfe6`) | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
+| TASK-128 (merged 2026-11-13 in `36a1eea`; the "held" label was stale, TASK-209) | Stations as trip ends: people who leave arriving trains walk out from the platforms, and trips whose destination is the station end there. No multimodal choice model; the station is simply a destination this round. | Places can be destinations; no train-linked spawns. | TASK-126 (TASK-127 to time the arrivals) |
+| TASK-129 (merged 2026-11-13 in `eaeda73`; the "held" label was stale, TASK-209) | Car ownership: a car belongs to a household; its people drive only their own cars, and a car parks near home, not far away. | TASK-112: one car per person, parking choice unchanged. | TASK-125, TASK-122; before TASK-113 (no own car limits the modes) |
 | TASK-132 (done 2026-11-11) | Rail heights: tunnels and elevated sections at their true height in 2D and 3D, with portals and supports; at least one Munich tunnel is not shown today. | TASK-126 imports `layer`, `bridge` and `tunnel` on tracks; heights are not applied everywhere. | TASK-126 |
 | TASK-133 (done 2026-11-11) | Station furniture: station signage, name boards, departure displays, shelters and benches at platforms. | Stations drawn as platforms and small discs. | TASK-126, TASK-127 (displays read the timetable) |
 | TASK-134 (done 2026-11-11) | Overhead lines: catenary masts shared by parallel tracks close together, with a portal or truss across them and a contact wire over each track. `electrified=contact_line` (or `yes`) draws it, `electrified=no` (or `rail`, third rail) does not, no tag draws it anyway (owner); mapped `power=catenary_mast` nodes place masts where present. | None. | TASK-126, TASK-132 (heights) |
@@ -4433,6 +4433,34 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 `ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
+TASK-207 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged, curation only): Freiburg's 187
+warnings sorted. Committed (all in `curateFreiburg`, keyed to OSM ids): three lots the polygon cuts off
+(pk:2814, pk:2818, pk:2829) removed with their areas kept; two dead ends into the pedestrian
+Schwabentor (bus road r:554, service road r:958) removed; the ZOB taxi rank r:1269 turns at n:607.
+187 to 174 (road_too_short 126 to 123, dead_end 24 to 19, lot_stalls_unreachable 18 to 16,
+parking_no_exit 17 to 14). Held for the owner: F1, U-turns at dead-end lot aisles (Freiburg 20 fewer,
+Munich 17, Sindelfingen 45 dead ends), which moves 13 Munich and 13 Sindelfingen pins and two TASK-164
+lot-exit tests (a behaviour change to another feature); F2, lane mapping into a group's inner road
+(fixes r:1148#4), which shifts later ids by 2 and so halves Freiburg's trams because `buildTimetable`
+derives a route's departure offset from a hash of its id (`trains.ts`); that fragility needs fixing
+first. Left: 46 junction-to-junction short roads and 17 short ends (TASK-212/213), 10 generated lot
+layouts whose aisle never reaches the stalls (importer follow-up), garages needing data or a decision
+(Karlsbau P13 pk:2675 exit unmapped; Friedrichring pk:2703 behind `motorcar=no`); severity proposals
+(road_too_short only when a setback is clamped; inferred_attributes as info; aisles reported through
+their lot; one warning per exitless lot) not applied. Re-pins: Freiburg city.json `d7bd896c...`, state
+hash 3851309981. Lead check on the merge with TASK-209: check (1,518), city (183), traffic light and
+guard, light e2e (61).
+
+TASK-209 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged, document only):
+`docs/decisions/2026-11-19-parked-branches.md`. TASK-128 and TASK-129 were merged on 2026-11-13
+(`36a1eea`, `eaeda73`); their branches are 0 commits ahead of main and the plan's "held" labels were
+stale (corrected). B56: on main at 0.15, Munich seeds 1 to 3 both choice settings show no loop ring,
+worst loop visit 327 s, every released trip completed on seed 1; at full demand a backlog from r:961
+down the ramps (worst 1,592 s, 2 stalled heads per seed), which TASK-130 never targeted. TASK-130's
+branch conflicts in 12 of 18 files (17 hunks in `engine.ts`) and main already has its main ideas;
+TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The owner decides on
+retiring the branches and the worktrees `D:\cityflows-wtYp3` and `128-remeasure`.
 
 TASK-206 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): no single regression since
 TASK-198: in one session `200bc3e` measured 5.45 to 6.01 s and main 5.50 to 6.59 s; the 3D build grew

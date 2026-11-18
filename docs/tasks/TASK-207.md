@@ -1,6 +1,6 @@
 # TASK-207 — Freiburg's validation warnings
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-19 (curation merged; F1 and F2 held for the owner). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/207-freiburg-warnings`, worktree `D:\cityflows-wt\207`, ports 5407 / 5507.
 
 ## Goal
