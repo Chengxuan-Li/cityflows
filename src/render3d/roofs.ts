@@ -5,7 +5,7 @@ import type { ContextFeature, RoofShape } from '../schema';
 type Area = Extract<ContextFeature, { kind: 'area' }>;
 type Vertex = Vec2 & { h: number };
 type Patch = { ring: Vec2[]; height: (p: Vec2) => number };
-type Fallback = 'courtyard' | 'irregular-footprint' | 'unsupported-shape';
+type Fallback = 'courtyard' | 'irregular-footprint';
 
 export interface RoofGeometry {
   roof: BufferGeometry;
@@ -144,6 +144,14 @@ function roofPatches(shape: RoofShape, a: number, b: number): Patch[] {
     case 'pyramidal':
       hip(a, b, 0, 1, true);
       break;
+    case 'round':
+      // TASK-210: a barrel vault, half an ellipse across the short side, in planar strips.
+      for (let i = 0; i < 12; i++) {
+        const t0 = (Math.PI * i) / 12,
+          t1 = (Math.PI * (i + 1)) / 12;
+        strip(-b * Math.cos(t0), Math.sin(t0), -b * Math.cos(t1), Math.sin(t1));
+      }
+      break;
     case 'mansard': {
       const inset = Math.min(a, b) * 0.25;
       const innerA = a - inset,
@@ -195,7 +203,7 @@ function convex(ring: Vec2[]) {
   );
 }
 
-function apexPatches(ring: Vector2[]): Patch[] {
+function centroid(ring: Vec2[]): Vec2 {
   let cx = 0,
     cy = 0,
     twice = 0;
@@ -206,13 +214,80 @@ function apexPatches(ring: Vector2[]): Patch[] {
     cx += (p.x + q.x) * c;
     cy += (p.y + q.y) * c;
   });
-  const apex = { x: cx / (3 * twice), y: cy / (3 * twice), h: 1 };
+  return { x: cx / (3 * twice), y: cy / (3 * twice) };
+}
+
+function apexPatches(ring: Vector2[]): Patch[] {
+  const apex = { ...centroid(ring), h: 1 };
   return ring.flatMap((p, i) => {
     const q = ring[(i + 1) % ring.length]!;
     return Math.abs(cross(p, q, apex)) > epsilon
       ? [patch([{ x: p.x, y: p.y, h: 0 }, { x: q.x, y: q.y, h: 0 }, apex])]
       : [];
   });
+}
+
+/** TASK-210: every edge faces the centroid, so copies of the outline scaled about it nest. */
+function starShaped(ring: Vec2[]) {
+  const c = centroid(ring),
+    sign = Math.sign(area(ring));
+  return ring.every((p, i) => cross(p, ring[(i + 1) % ring.length]!, c) * sign > epsilon);
+}
+
+type Profile = readonly (readonly [scale: number, height: number])[];
+
+/** A hemisphere (stretched when the roof is taller than the radius) or, lower, a spherical cap:
+ * angles from the springing to the crown, as outline scale and height fraction. */
+function domeProfile(radius: number, height: number): Profile {
+  const alpha = 2 * Math.atan(Math.min(1, height / radius));
+  return Array.from({ length: 9 }, (_, i) => {
+    const theta = alpha * (1 - i / 8);
+    return [
+      Math.sin(theta) / Math.sin(alpha),
+      (Math.cos(theta) - Math.cos(alpha)) / (1 - Math.cos(alpha)),
+    ];
+  });
+}
+
+/** A neck on a ledge, a bulb as wide as the outline, and a concave taper to a point. */
+const onionProfile: Profile = [
+  [1, 0],
+  [0.8, 0],
+  [0.9, 0.06],
+  [0.98, 0.16],
+  [1, 0.26],
+  [0.95, 0.38],
+  [0.8, 0.5],
+  [0.56, 0.6],
+  [0.34, 0.69],
+  [0.18, 0.79],
+  [0.08, 0.89],
+  [0, 1],
+];
+
+/** TASK-210: dome and onion. Each section is the outline scaled about its centroid, so each band
+ * between two sections is a ring of planar trapezoids: a sphere on a circular outline, a cloister
+ * vault on a square one. Triangles face outward (the onion's lower bulb faces down). */
+function revolve(ring: Vec2[], profile: Profile): Vertex[] {
+  const c = centroid(ring);
+  const loop = area(ring) > 0 ? [...ring].reverse() : ring;
+  const at = (p: Vec2, [scale, h]: Profile[number]): Vertex => ({
+    x: c.x + (p.x - c.x) * scale,
+    y: c.y + (p.y - c.y) * scale,
+    h,
+  });
+  const triangles: Vertex[] = [];
+  for (let k = 0; k + 1 < profile.length; k++)
+    loop.forEach((p, i) => {
+      const q = loop[(i + 1) % loop.length]!;
+      const a = at(p, profile[k]!),
+        b = at(q, profile[k]!),
+        upperB = at(q, profile[k + 1]!),
+        upperA = at(p, profile[k + 1]!);
+      triangles.push(a, b, upperB);
+      if (profile[k + 1]![0] > 0) triangles.push(a, upperB, upperA);
+    });
+  return triangles;
 }
 
 /** Convex clipping of each footprint triangle retains concave edges and courtyard holes. */
@@ -274,13 +349,17 @@ export function buildRoof(feature: Area): RoofGeometry {
   const requested = feature.roof?.shape ?? 'flat';
   const rings = feature.rings.map(openRing);
   const box = rectangle(rings[0]!);
+  const fill = Math.abs(area(rings[0]!)) / box.area;
+  const revolved = requested === 'dome' || requested === 'onion';
   let fallbackReason: Fallback | undefined;
   if (requested !== 'flat') {
     if (rings.length > 1) fallbackReason = 'courtyard';
-    else if (['round', 'dome', 'onion'].includes(requested)) fallbackReason = 'unsupported-shape';
+    // TASK-210: a box shape clipped to a convex outline (a trapezoid, a circle) stays continuous
+    // and its walls close it; only a pyramid takes a triangle.
     else if (
-      Math.abs(area(rings[0]!)) / box.area < 0.85 &&
-      !(requested === 'pyramidal' && convex(rings[0]!))
+      revolved
+        ? !starShaped(rings[0]!)
+        : fill < 0.85 && !(convex(rings[0]!) && (fill >= 0.7 || requested === 'pyramidal'))
     )
       fallbackReason = 'irregular-footprint';
   }
@@ -301,20 +380,49 @@ export function buildRoof(feature: Area): RoofGeometry {
     centerV = (oriented.minV + oriented.maxV) / 2;
   const a = (oriented.maxU - oriented.minU) / 2,
     b = (oriented.maxV - oriented.minV) / 2;
+  const middle = centroid(rings[0]!);
+  const radius =
+    rings[0]!.reduce((sum, p) => sum + Math.hypot(p.x - middle.x, p.y - middle.y), 0) /
+    rings[0]!.length;
+  // A semicircular barrel, a hemisphere, an onion three radii tall, a 35 degree pitch.
+  const natural =
+    shape === 'dome'
+      ? radius
+      : shape === 'onion'
+        ? 3 * radius
+        : Math.min(8, Math.min(a, b) * (shape === 'round' ? 1 : Math.tan((35 * Math.PI) / 180)));
+  // TASK-210: roof:levels=0 says the roof holds no storey, not that it has no height.
   const roofHeightM =
     shape === 'flat'
       ? 0
       : Math.min(
           Math.max(0, total - (feature.minHeightM ?? 0)),
           feature.roof?.heightM ??
-            (feature.roof?.levels === undefined
-              ? Math.min(8, total / 2, Math.min(a, b) * Math.tan((35 * Math.PI) / 180))
-              : feature.roof.levels * 3),
+            (feature.roof?.levels ? feature.roof.levels * 3 : Math.min(total / 2, natural)),
         );
   const wallHeightM = total - roofHeightM;
   const local = rings.map((ring) =>
     ring.map((p) => new Vector2(p.x * u.x + p.y * u.y - centerU, p.x * v.x + p.y * v.y - centerV)),
   );
+  const roofs: number[] = [],
+    infill: number[] = [];
+  const world = (p: Vec2, height: number) => [
+    (p.x + centerU) * u.x + (p.y + centerV) * v.x,
+    height,
+    (p.x + centerU) * u.y + (p.y + centerV) * v.y,
+  ];
+  if ((shape === 'dome' || shape === 'onion') && roofHeightM > 0) {
+    const profile = shape === 'dome' ? domeProfile(radius, roofHeightM) : onionProfile;
+    for (const p of revolve(local[0]!, profile))
+      roofs.push(...world(p, wallHeightM + p.h * roofHeightM));
+    return {
+      roof: geometry(roofs),
+      infill: geometry(infill),
+      wallHeightM,
+      roofHeightM,
+      shape,
+    };
+  }
   const triangles = ShapeUtils.triangulateShape(local[0]!, local.slice(1));
   const points = local.flat();
   const patches =
@@ -327,16 +435,9 @@ export function buildRoof(feature: Area): RoofGeometry {
             { x: -a, y: b, h: 0 },
           ]),
         ]
-      : shape === 'pyramidal' && Math.abs(area(rings[0]!)) / box.area < 0.85
+      : shape === 'pyramidal' && fill < 0.85
         ? apexPatches(local[0]!)
         : roofPatches(shape, a, b);
-  const roofs: number[] = [],
-    infill: number[] = [];
-  const world = (p: Vec2, height: number) => [
-    (p.x + centerU) * u.x + (p.y + centerV) * v.x,
-    height,
-    (p.x + centerU) * u.y + (p.y + centerV) * v.y,
-  ];
   for (const surface of patches) {
     const height = (p: Vec2) =>
       wallHeightM + Math.max(0, Math.min(1, surface.height(p))) * roofHeightM;
