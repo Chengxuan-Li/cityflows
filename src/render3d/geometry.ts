@@ -6,7 +6,7 @@ import { crossingStripes } from '../render/layers/roads';
 import { signalLayout } from './signals';
 import { mapPalettes, placeColors, type MapPalette } from '../render/style';
 import type { CityGeometry } from '../render/types';
-import { cityHeights, heightAt, roadStation, type RoadHeight } from './heights';
+import { cityHeights, heightAt, roadStation, roadSurfaceAt, type RoadHeight } from './heights';
 import { buildMarkings, goreTriangles, triangleHeight } from './markings';
 import { paintedGores } from '../render/marking-geometry';
 import { buildContext } from './context';
@@ -119,10 +119,7 @@ export function buildGeometry(
     if (height.crossfall && height.fromM === 0 && height.toM === 0 && height.deckM === 0)
       flatAreas.push(road.surface);
     else roadSurface(surfaceTarget, slabs, road, height);
-    const z = (p: Vec2) => {
-      const s = roadStation(road, p);
-      return heightAt(height, s) + (height.crossfall?.(s, p) ?? 0) + 0.02;
-    };
+    const z = (p: Vec2) => roadSurfaceAt(road, height, p) + 0.02;
     for (const atEnd of [false, true])
       for (const stripe of crossingStripes(city, road, atEnd, source))
         polygon(crossingTarget, stripe, z);

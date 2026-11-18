@@ -17,7 +17,7 @@ import {
 import { markingThemes } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { heightAt, roadStation, type cityHeights } from './heights';
+import { heightAt, levelRoad, roadStation, roadSurfaceAt, type cityHeights } from './heights';
 import { drape } from './terrain';
 
 export function goreHeight(
@@ -27,6 +27,7 @@ export function goreHeight(
   p: Vec2,
 ): number {
   const z = surface.edgeRoads.map((indices) => {
+    if (indices.every((i) => levelRoad(heights.roads[i]!))) return 0;
     const road = indices
       .map((i) => city.roads[i]!)
       .reduce((a, b) =>
@@ -34,6 +35,7 @@ export function goreHeight(
       );
     return heightAt(heights.roads[road.idx]!, roadStation(road, p));
   });
+  if (!z[0] && !z[1]) return 0;
   const distances = surface.edges.map((edge) => nearestOnPolyline(edge, p).away);
   const total = distances[0]! + distances[1]!;
   return total < 1e-6 ? z[0]! : (z[0]! * distances[1]! + z[1]! * distances[0]!) / total;
@@ -182,10 +184,7 @@ export function buildMarkings(
     target = terrain && profile.crossfall ? land : raised;
     add(
       [...geometry.below, ...geometry.above, ...transitionMarkings(city, road, markingTheme)],
-      (p) => {
-        const s = roadStation(road, p);
-        return heightAt(profile, s) + (profile.crossfall?.(s, p) ?? 0);
-      },
+      (p) => roadSurfaceAt(road, profile, p),
       !terrain && profile.fromM === profile.toM && profile.fromM === profile.deckM,
     );
   }

@@ -1,6 +1,6 @@
 import { cumulativeLengths, pointAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { CompiledCity } from '../network';
+import type { CompiledCity, CRoad } from '../network';
 import {
   gradeProfiles,
   profileAt,
@@ -21,6 +21,28 @@ export interface RoadHeight extends RoadProfile {
 export function heightAt(road: RoadHeight, s: number): number {
   const grade = profileHeightAt(road, s);
   return road.ground ? road.ground(s) + grade : grade;
+}
+
+/** A road at grade with no terrain under it: its surface is 0 at every station. */
+export function levelRoad(road: RoadHeight): boolean {
+  return (
+    !road.ground &&
+    !road.deckM &&
+    !road.fromM &&
+    !road.toM &&
+    !road.fromSlope &&
+    !road.toSlope &&
+    road.lengthM > 0
+  );
+}
+
+/** The surface height of `road` abreast of `p`, with the terrain's crossfall. TASK-206: on a level
+ * road the station search (a nearest point on the reference line, half of Freiburg's 3D build) is
+ * skipped; the height is the 0 it would give. */
+export function roadSurfaceAt(road: CRoad, height: RoadHeight, p: Vec2): number {
+  if (levelRoad(height)) return 0;
+  const s = roadStation(road, p);
+  return heightAt(height, s) + (height.crossfall?.(s, p) ?? 0);
 }
 
 export function heightSlopeAt(road: RoadHeight, s: number): number {

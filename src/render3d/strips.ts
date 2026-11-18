@@ -4,7 +4,7 @@ import type { CompiledCity } from '../network';
 import type { Vec2 } from '../geo/vec2';
 import type { CityGeometry } from '../render/types';
 import { stripTicks } from '../render/strip-geometry';
-import { heightAt, roadStation, type cityHeights } from './heights';
+import { roadSurfaceAt, type cityHeights } from './heights';
 import { triangulate } from './terrain';
 
 export function stripGeometry(
@@ -19,9 +19,7 @@ export function stripGeometry(
       height = heights.roads[roadIndex]!;
     for (const triangle of triangulate([areaD(ring) > 0 ? ring : [...ring].reverse()]))
       for (const p of triangle.reverse()) {
-        const s = roadStation(road, p);
-        const z = heightAt(height, s) + (height.crossfall?.(s, p) ?? 0);
-        target.push(p.x, z + offset, p.y);
+        target.push(p.x, roadSurfaceAt(road, height, p) + offset, p.y);
       }
   };
   for (const strip of city.strips ?? []) {

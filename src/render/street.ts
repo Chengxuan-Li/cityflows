@@ -14,6 +14,7 @@ import type { CompiledCity, CRoad } from '../network';
 import { crossingEnabled, crossingPlacement } from '../network/crossings';
 import type { AccessValue, MarkingThemeId } from '../schema';
 import { cityMarkingTheme } from '../schema/marking-theme';
+import { boundsOf } from './camera';
 import { cityGrades } from './grades';
 import { busLabels } from './marking-geometry';
 import type { CityGeometry } from './types';
@@ -284,10 +285,21 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
       : [],
   );
   // OSM lamps have no road ID. Associate nearby carriageway edges for display grade/height.
+  // TASK-206: a road whose surface box is beyond the best distance so far cannot be nearer.
+  const surfaceBoxes = city.roads.map((road) => boundsOf(road.surface));
   for (const lamp of lamps) {
     let best = 2.5;
     for (const road of city.roads) {
       if (roadGrades[road.idx]! < 0) continue;
+      const box = surfaceBoxes[road.idx]!,
+        { x, y } = lamp.pos;
+      if (
+        box.minX - x > best + 1e-9 ||
+        x - box.maxX > best + 1e-9 ||
+        box.minY - y > best + 1e-9 ||
+        y - box.maxY > best + 1e-9
+      )
+        continue;
       const away = nearestOnPolyline(closed(road.surface), lamp.pos).away;
       if (away < best) {
         best = away;
