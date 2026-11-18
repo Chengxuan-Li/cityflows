@@ -161,6 +161,11 @@ export function createIntersections(
           ),
         ].some((candidate) => targets.includes(candidate.lane));
       };
+      // TASK-204: the chain the route planned, when it is one; otherwise the first usable one.
+      // The route's movements put the car where the roads after the group need the fewest lane
+      // changes; the first usable chain only reaches the exit road's target lanes, which can
+      // leave a change for a queue further on (Munich jg:10778 into r:697, then r:654).
+      const planned = plan.route.movements;
       for (const candidate of group.chains) {
         if (candidate.movements[0] !== movement.idx) continue;
         const movements = endsInside
@@ -174,9 +179,11 @@ export function createIntersections(
               lane.allowed.includes(vehicleClasses[vehicles.vclass[id]!]!) &&
               !compiled.movements[m]!.neverGreen
             );
-          })
+          }) &&
+          usableExit(movements)
         ) {
-          if (usableExit(movements)) {
+          chain ??= { movements, ...plan };
+          if (movements.every((m, i) => plan.step + i < 0 || planned[plan.step + i] === m)) {
             chain = { movements, ...plan };
             break;
           }

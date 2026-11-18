@@ -75,6 +75,9 @@ test.each(['lane drop', 'delete'] as const)(
     const road = city.roads[connector.roadId]!;
     road.lanes.push(structuredClone(road.lanes[0]!));
     connector.lane = 1;
+    // TASK-204: a car off its planned lane changes as soon as it can; departing within a car
+    // length of the road's start keeps it on the added lane for the step before the edit.
+    connector.positionM = 3;
     const editor = createEditor(city);
     const engine = createEngine();
     const requests = trips(city, 20).map((trip) => ({ ...trip, departS: 28800 }));

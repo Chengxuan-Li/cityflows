@@ -169,7 +169,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   expect(manifest.files['city.json']).toBe(
     'ded060cfd6e9787fdb7e846b3f5c074a2e0e3d2e0822ed0751c80aea696b9539',
   );
-  expect(morning.stateHash).toBe(1137612334);
+  // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
+  // planned lane prepare for a later turn).
+  expect(morning.stateHash).toBe(236178606);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

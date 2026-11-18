@@ -2105,6 +2105,15 @@ side the section 8 ramp rule names, against the next road's lane count; lanes th
 elsewhere do not count (on `r:968` a through lane beside two turn lanes was treated as
 dropped and its cars held for a change they did not need).
 
+TASK-204: a car prepares for a turn on the roads before it. Off its planned lane (the route's
+first target lane on this road, the connector's lane on the last road), a discretionary
+change to a lane from which Phase 3's corridor count is lower is proposed whenever its gap is
+safe, without MOBIL's incentive; creeping, holding, yielding and giving up stay with mandatory
+changes. A car entering a junction group takes the chain its route planned when that chain is
+one of the group's usable chains, and the first usable chain otherwise. On Munich's jughandle
+the first usable chain through jg:10778 landed cars on `r:697` lane 1, from where `r:654`
+needed one more change inside the turning queue; most missed it and were sent round the ring.
+
 Gridlock recovery (TASK-077, owner-approved exception to section 1 row 10). A driving
 vehicle is a jam head while it is on a movement, or first on its lane, and not standing at a
 red signal for its own movement. Its jam time grows by `dtS` each step it is a jam head with
