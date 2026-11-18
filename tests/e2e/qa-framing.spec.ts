@@ -86,6 +86,16 @@ async function expectStill(page: Page, point: Vec2, before: Vec2) {
     .toBe(true);
 }
 
+/** Fit city, and the frame that applies it. The map frames the city in its next animation frame,
+ *  so a view read straight after the key is still the one before; a view that already shows the
+ *  whole city (the showcase camera) passes `expectFramed` at once and would hide that. */
+async function fit(page: Page) {
+  await page.keyboard.press('f');
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+}
+
 const view3D = (page: Page) => page.evaluate(() => window.cityflows!.view3D!()!);
 
 async function to3D(page: Page) {
@@ -134,7 +144,7 @@ for (const viewport of [
     await page.mouse.wheel(0, -600);
     const { shown } = await framing(page, ring);
     expect(shown.right - shown.left).toBeGreaterThan(map.width);
-    await page.keyboard.press('f');
+    await fit(page);
     await expectFramed(page, ring, true);
 
     // The sidebar and inspector open and close without moving the city.
@@ -160,7 +170,7 @@ for (const viewport of [
     expect(Math.abs(target.y - (area.top + area.bottom) / 2)).toBeLessThan(1);
 
     // Fit city frames the boundary at the view's pitch and bearing.
-    await page.keyboard.press('f');
+    await fit(page);
     await expectFramed(page, ring);
     const fitted = await view3D(page);
     expect(fitted.pitch).toBeCloseTo(50, 3);
@@ -193,14 +203,14 @@ test('QA framing Freiburg between the floating sidebar and inspector at 800 px',
   const ring = await boundary(page);
   await page.keyboard.press('s');
   await expect(page.locator('#sidebar')).toBeVisible();
-  await page.keyboard.press('f');
+  await fit(page);
   await expectFramed(page, ring, true);
   const map = page.getByLabel('City map', { exact: true });
   await expect(async () => {
     await map.click({ position: { x: 400 + 200 * Math.random(), y: 300 } });
     await expect(page.locator('#inspector-column .inspector')).toBeVisible({ timeout: 2000 });
   }).toPass();
-  await page.keyboard.press('f');
+  await fit(page);
   const { area } = await framing(page, ring);
   expect(area.left).toBeGreaterThan(200);
   expect(area.right).toBeLessThan(600);
@@ -229,11 +239,42 @@ test.describe('phone', () => {
         });
         await expect(sheet).toHaveAttribute('data-sheet', 'half', { timeout: 2000 });
       }).toPass();
-      await page.keyboard.press('f');
+      await fit(page);
       await expectFramed(page, ring, mode === '2d');
       const { area } = await framing(page, ring);
       expect(area.bottom).toBeLessThan(box.height * 0.6);
       expect(errors).toEqual([]);
     });
   }
+
+  test('QA framing Freiburg above a sheet that opens in the same frame as Fit city', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const errors = pageErrors(page);
+    await open(page);
+    const ring = await boundary(page);
+    await to3D(page);
+    // A tap that opens the sheet and the Fit key in one task: the sheet has not reported its
+    // height when the map next draws, and the fit waits for it. The key goes out as the pointer
+    // is released, after the map has taken the tap as a selection.
+    const map = page.getByLabel('3D city view', { exact: true });
+    const box = (await map.boundingBox())!;
+    await page.evaluate(() =>
+      window.addEventListener('pointerup', () =>
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' })),
+      ),
+    );
+    await expect(async () => {
+      await page.mouse.move(
+        box.x + box.width * (0.3 + 0.4 * Math.random()),
+        box.y + box.height * 0.4,
+      );
+      await page.mouse.down();
+      await page.mouse.up();
+      await expect(page.locator('[data-sheet]')).toBeVisible({ timeout: 2000 });
+    }).toPass();
+    await expectFramed(page, ring);
+    expect(errors).toEqual([]);
+  });
 });
