@@ -1,6 +1,6 @@
 # TASK-202 — Trams to every Freiburg stop
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-18 (with the crossing stop-line extension; merged with the owner's approval). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/202-tram-stops`, worktree `D:\cityflows-wt\202`, ports 5402 / 5502.
 
 ## Goal

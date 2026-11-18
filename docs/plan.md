@@ -227,7 +227,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | done 2026-11-18 (Freiburg actuated; merged as is, owner approved) |
 | [TASK-200](tasks/TASK-200.md) | UI | Engine queries racing a project open (gate4-compare fails alone since TASK-198) | `src/main.tsx`, `src/ui/store.ts` open, `src/host/client.ts` | 198 | spec 10/10 alone, failing test without the fix, light tiers | done 2026-11-18 |
 | [TASK-201](tasks/TASK-201.md) | UI | Freiburg in detail: building parts (the Münster spire) and the Schlossberg terrain from the approved downloads | importer parts, 3D buildings, `fixtures/osm`, `fixtures/terrain/freiburg.json`, `bench/freiburg.ts`, project | 198 | parts tests, Freiburg gate, load and frame budgets, shots | done 2026-11-18 (flat, owner; terrain fixture unused) |
-| [TASK-202](tasks/TASK-202.md) | 9 | Trams to every Freiburg stop (8 of 32 unserved) | `src/network/trams.ts`, `rail.ts` | 198 | per-cause tests, served count, other cities unchanged | in progress (owner 2026-11-18) |
+| [TASK-202](tasks/TASK-202.md) | 9 | Trams to every Freiburg stop (8 of 32 unserved) | `src/network/trams.ts`, `rail.ts` | 198 | per-cause tests, served count, other cities unchanged | done 2026-11-18 (with the crossing stop line; owner approved the trade-off) |
 | [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | done 2026-11-18 (showcase camera applied in the follow-up) |
 | [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | done 2026-11-18 (owner approved the trade-off) |
 | [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
@@ -4424,6 +4424,29 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
 
+TASK-202 (Claude Code subagent, Opus 5.5 high, 2026-11-18; extended by the owner to the crossing
+stop line; merged with the owner's approval of the trade-off): 8 of 32 Freiburg tram stops were
+unserved because each boundary entry kept only its straightest line (7 stops on branches and parallel
+lines) and the Schwabentor loop's switch rn:12724 leaves at 34.4°, beyond the 30° join. Fix
+(`src/network/trains.ts`, `rail.ts`): after each entry picks its line, every still-unserved halt a
+tram can pass between two boundaries gets a route (cheapest paths, most unserved stops, straightest,
+shortest); tram tracks at a node tagged as a switch join up to 45° (untagged crossings stay at 30°;
+one new join across all cities). 32 of 32 served, 8 routes at 10 per hour; Munich and Sindelfingen
+timetables hash-identical. Trams over the Eisenbahnstraße crossing then held a car on r:1719 on green
+(1 gridlocked): `ranges()` in `src/sim/rail-crossings.ts` took each facility's nearest stop marking
+anywhere on the path, here a marking for a turn the car does not make, 185 m before the span it does
+cross; passing such a marking also committed the car. Fix: a marking holds, and passing it commits,
+only if the car reaches that facility's tracks from it without turning off (through movements, lanes
+leading to one road, lanes carrying that facility); the earliest qualifying marking is the stop
+(latest-marking variant: 12 gridlocked). New `T75-crossing-encounter.test.ts` fails on the old code.
+Munich, main e9e53c6 to branch, seeds 1 to 12: mean delay actuated choice off 631.7 to 637.7 s
+(+1.0%, gridlocked 4 to 1), on 88.9 to 88.0 s; fixed choice off 833.2 to 824.8 s (gridlocked 2 to 3),
+on 124.4 to 124.8 s; drain criterion on all 48 runs. Full demand: actuated 3,406 / 159 to 3,345 / 177
+(hash 2229666949), fixed 3,168 / 169 to 3,210 / 166 (hash 2820161686), the new references. Freiburg
+1,467 completed, 0 failed, state hash 3911386262; Sindelfingen identical. `docs/architecture.md` gains
+the switch, timetable and crossing rules (accepted). Lead decision: put to the owner, who approved.
+Lead check on the merge: check (1,517), city (183), traffic light and guard, light e2e (61).
+
 Full run 44381642228 (lead, manual, on c9b6867 after the TASK-203 follow-up): every job green,
 including all five e2e shards; CI green on c9b6867 and Pages deployed it; the city job took 33.2 min.
 
@@ -4598,6 +4621,7 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-18 (owner): merge TASK-202 (all 32 Freiburg stops; actuated full demand -1.8%).
 - 2026-11-18 (owner): merge TASK-204 (full demand +11 to 14%, mean delay at 0.15 +5 to 7% in three of
   four configurations).
 - 2026-11-18 (owner): TASK-202 also fixes the tram-crossing stop line its served stops exposed
