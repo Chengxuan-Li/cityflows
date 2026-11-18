@@ -231,6 +231,16 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | done 2026-11-18 (showcase camera applied in the follow-up) |
 | [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | done 2026-11-18 (owner approved the trade-off) |
 | [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
+| [TASK-206](tasks/TASK-206.md) | render | 3D load time back under 5 s after the first frame (5.2 to 6.9 s on main; 2.0 to 4.0 s at TASK-198) | `src/render3d/**`, 3D start-up | 198, 201 | phase timings, 3D within 5 s idle, shots unchanged | in progress (owner 2026-11-18) |
+| [TASK-207](tasks/TASK-207.md) | UI | Freiburg's 187 validation warnings: importer fixes, curation, notices | importer, diagnostics, `bench/freiburg.ts`, project | 198, 201 | codes before and after, tests, Freiburg gate | in progress (owner 2026-11-18) |
+| [TASK-208](tasks/TASK-208.md) | 9 | Munich's remaining missed turns (r:700 lane 0, the r:639 weave) and why TASK-204's first rule gridlocked Freiburg | `src/sim/lane-change.ts`, entry chains | 204 | misses, seeds 1-12 both modes, full demand, gates | in progress (owner 2026-11-18) |
+| [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | in progress (owner 2026-11-18) |
+| [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | in progress (owner 2026-11-18) |
+| TASK-213 | 10 | Junction shapes, from TASK-212's cases | `junctions.ts`, `corridor.ts`, `groups.ts` | 212 | contract after the audit | planned (owner 2026-11-18) |
+| TASK-214 | 10 | Lane splits and merges, from TASK-212's cases | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 212 | contract after the audit | planned (owner 2026-11-18) |
+| TASK-215 | 10 | Lane markings, from TASK-212's cases | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts` | 212 | contract after the audit | planned (owner 2026-11-18) |
+| TASK-210 | render | Roof shapes in 3D (onion and others drawn flat) | `src/render3d/roofs.ts` | 201, 206 | contract in wave 2 | planned (owner 2026-11-18) |
+| TASK-211 | 9 | Full-demand step time (TASK-187's remaining 1.3 of 25%), results unchanged | `src/sim/**` profiling | 187 | contract in wave 2, if time | planned (owner 2026-11-18, optional) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4621,6 +4631,15 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-18 (owner): run the next batch unsupervised for about 8 to 12 hours. Wave 1: TASK-206, 207, 208,
+  209 and 212 (geometry audit). Wave 2 after the audit and wave 1: TASK-213 (junction shapes), 214 (lane
+  splits and merges), 215 (markings), 210 (roof shapes), 211 (full-demand speed, optional; dropped
+  first, then 210, if time runs short). Rules: the lead merges a task only when every gate passes and
+  nothing gets worse that the owner would want to weigh; each merge gets its own Full run, and a red
+  Full run stops merges until fixed; a task whose results trade gains against losses waits for the
+  owner; no baseline resets, no downloads, nothing beyond this list; screenshots of visual changes go
+  to the owner as they land. If TASK-209 recommends reviving a branch, the lead writes the contract and
+  leaves it for the owner.
 - 2026-11-18 (owner): merge TASK-202 (all 32 Freiburg stops; actuated full demand -1.8%).
 - 2026-11-18 (owner): merge TASK-204 (full demand +11 to 14%, mean delay at 0.15 +5 to 7% in three of
   four configurations).
