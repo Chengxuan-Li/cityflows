@@ -224,7 +224,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-196](tasks/TASK-196.md) | UI | Keep the selection in view above the phone sheet (2D and 3D) | `src/ui/**`, cameras | 189 | phone e2e, wider layouts unchanged, shots | done |
 | [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; owner picked Freiburg |
 | [TASK-198](tasks/TASK-198.md) | UI | Build Freiburg, the chosen landing city, as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | done 2026-11-17 (Freiburg fixed-time until TASK-199) |
-| [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | in progress (owner 2026-11-17) |
+| [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | done 2026-11-18 (Freiburg actuated; merged as is, owner approved) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4397,6 +4397,27 @@ margin over fixed-time is thin (+0.6% seed 1, -2.5% seed 2) and the default's fu
 fall 6.8%; put to the owner, who approved the switch. Open: n:635's empty phase (34 s of all-red per
 102 s cycle); jughandle lane choice is the likely lever for full demand in both modes.
 
+TASK-199 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged 2026-11-18 with the owner's
+approval): the jam was not TASK-194's exit filling but a resting green with a caller the controller
+could not see. At n:68, jg:13294 and jg:13270 a car waited just before an approach lane of 4.9 to 6.4 m
+(r:953, r:906, r:1055), outside the 40 m detection that only scanned approach lanes, so the controller
+rested on the other phase indefinitely; fixed time serves every phase on the clock. Fix
+(`src/sim/signals.ts`): an actuated controller's detection runs `DETECT_M` back along the route, over
+the movements and lanes feeding a short approach and through other junctions (never its own members);
+such a car calls or extends by the movement its route takes at the controller. Fixed-time unchanged;
+`curateFreiburg` keeps `actuated`; architecture section 5.4 updated (outside the listed scope, accepted
+as the description of the change). Freiburg at 0.15, choice on: actuated 1,448 completed / 11
+gridlocked / worst visit 2,838 s to 1,455 / 0 / 180 s, mean delay 111 s (fixed-time 1,430, 310 s).
+Munich actuated, seeds 1 to 12, main to branch: mean delay 669.0 to 665.9 s choice off (3 gridlocked
+trips over 2 runs, under the gate), 81.1 to 83.2 s choice on; full demand 2,875 / 151 to 2,997 / 160,
+mean delay 1,645 to 1,729 s (hash 2745499315, the new actuated reference); fixed-time hash-identical;
+drain criterion met on all 48 runs. Variant B (cars past the approach lane call but never extend):
+choice off 700.9 s, choice on 80.7 s, full demand 2,956 / 150; not taken. Seed spread (about 100 s
+choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a47...` to
+`ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
+Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
+while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
 TASK-198 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged): Freiburg is the landing view.
 Phases: (1) `ImportOptions.polygon` clips every layer to the ring and cuts ways at the crossing (700
 nodes / 1,043 roads against the bbox's 857 / 1,322; 0 m of road outside against 3,810 m; 41
@@ -4451,6 +4472,7 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-18 (owner): merge TASK-199 as it is (not variant B).
 - 2026-11-17 (owner): start TASK-199 now.
 - 2026-11-17 (owner): Freiburg ships now with fixed-time signals; TASK-199 fixes its actuated jam.
 - 2026-11-17 (owner): merge TASK-194 with actuated generated signals as the default, accepting about
