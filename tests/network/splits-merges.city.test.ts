@@ -1,6 +1,12 @@
 import { beforeAll, expect, test } from 'vitest';
 import { openFreiburg } from '../../bench/freiburg';
-import { directionPairs, joinAudit, laneFoldAudit, pairGapAudit } from '../../bench/geometry-audit';
+import {
+  directionPairs,
+  joinAudit,
+  laneFoldAudit,
+  laneOverlaps,
+  pairGapAudit,
+} from '../../bench/geometry-audit';
 import { loadAuditCity } from '../../bench/junction-audit';
 import { compile, type CompiledCity } from '../../src/network';
 import { referenceLine } from '../../src/network/corridor';
@@ -75,6 +81,13 @@ test('the roads of a side-by-side chain share one line and one window (S3)', () 
   expect(joint('munich', 'n:675')).toBeLessThan(0.05);
   // Freiburg n:393: a later block halved only the chain's second road (1.0 m step).
   expect(joint('freiburg', 'n:393')).toBeLessThan(0.1);
+});
+
+test('a branch beside lanes its neighbour adds moves off by their width (J6)', () => {
+  // Munich n:27: Arnulfstraße's two added lanes on r:958 grew over the ramp r:29 (87.7 m2).
+  const { city, net } = cities.munich!;
+  const overlap = laneOverlaps(city, net).find((o) => o.roads === 'r:29/r:958')!;
+  expect(overlap.areaM2).toBeLessThan(40);
 });
 
 test('a road too short for its cuts is not joined across a junction (S4)', () => {

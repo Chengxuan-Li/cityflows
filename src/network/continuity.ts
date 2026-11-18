@@ -362,9 +362,19 @@ export function continuationLayout(
           ),
         );
       const reach = Math.max(...branches.map((b) => polylineLength(sources[b.idx]!.centerline)));
+      // TASK-214 (J6): lanes a branch adds (or drops) on its right, beside the next branch, grow
+      // into that branch's slice, so it moves off by their width over the same taper (Munich n:194:
+      // r:416's third lane overlapped the ramp r:196 by 63 m2).
+      const addedRight = (road: CRoad) => {
+        const end = layout.get(road.idx)![split ? 'start' : 'end']!;
+        const used = road.lanes.map((_, l) => l).filter((l) => !end.tapers.includes(l));
+        return end.tapers
+          .filter((l) => l > Math.max(...used))
+          .reduce((sum, l) => sum + sources[road.idx]!.lanes[l]!.widthM, 0);
+      };
       let shift = 0;
       for (const [i, branch] of branches.entries()) {
-        shift += sharedWidth[i]!;
+        shift += sharedWidth[i]! + (i > 0 ? addedRight(branches[i - 1]!) : 0);
         Object.assign(layout.get(branch.idx)![split ? 'start' : 'end']!, {
           holdM,
           taperM,
