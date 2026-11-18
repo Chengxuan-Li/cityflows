@@ -4463,7 +4463,7 @@ TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The
 retiring the branches and the worktrees `D:\cityflows-wt\131p3` and `128-remeasure`.
 
 TASK-208 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
-`task/208-remaining-misses` at `8653e9e`, worktree `D:\cityflows-wt8`): (1) the r:654 misses are a
+`task/208-remaining-misses` at `8653e9e`, worktree `D:\cityflows-wt\208`): (1) the r:654 misses are a
 queue-head detour: a head on r:53 or r:1306 blocked from r:700 lane 1 takes lane 0 after 45 s, which
 needs two changes back into the same queue; fix in `detourHeads` (`engine.ts`): a head no longer
 detours into another lane of its own next road when that route needs more changes after it (T58 test
