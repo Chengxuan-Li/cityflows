@@ -24,6 +24,7 @@ const hasShift = (road: CRoad) => road.startShift.length > 0 || road.endShift.le
 import { drawRoad } from '../src/render/layers/roads';
 import { style } from '../src/render/style';
 import type { City, Road, RoadClass } from '../src/schema';
+import { openFreiburg } from './freiburg';
 import { auditCities, loadAuditCity, markingLengths, type AuditCity } from './junction-audit';
 
 // Geometry audit (TASK-081, docs/plan.md "Geometry rework"): eleven measures of how far the drawn
@@ -1911,12 +1912,18 @@ export function worst(audit: GeometryAudit, count = 20) {
 
 // ---------------------------------------------------------------------------------------------
 // Named cases (docs/plan.md "Geometry rework"; ids from the Munich and Sindelfingen imports with
-// the junction audit's bboxes). A case's roads are its listed roads and every road at its listed
-// nodes; its node measures are taken at its listed nodes only.
+// the junction audit's bboxes, and from the bundled Freiburg project). A case's roads are its
+// listed roads and every road at its listed nodes; its node measures are taken at its listed nodes
+// only. TASK-131 kept every OSM node, so the merged nodes of R3-1 (main's n:1181) and R3-7 (n:949)
+// are junction groups since: their members are listed instead (T42.3).
+
+/** The junction audit's cities and Freiburg, the landing city (TASK-212, TASK-213). */
+export const geometryCities = [...auditCities, 'freiburg'] as const;
+export type GeometryCity = (typeof geometryCities)[number];
 
 export interface GeometryCase {
   id: string;
-  city: AuditCity;
+  city: GeometryCity;
   label: string;
   roads: string[];
   nodes: string[];
@@ -1968,9 +1975,10 @@ export const geometryCases: GeometryCase[] = [
   {
     id: 'R3-1',
     city: 'munich',
-    label: 'round 3 shot 1: T-junction curbs and markings (Landsberger Straße, Barthstraße)',
+    label:
+      'round 3 shot 1: T-junction curbs and markings (Landsberger Straße, Barthstraße; main n:1181)',
     roads: [],
-    nodes: ['n:1181'],
+    nodes: ['n:474', 'n:1353'],
   },
   {
     id: 'R3-3',
@@ -2003,9 +2011,9 @@ export const geometryCases: GeometryCase[] = [
   {
     id: 'R3-7',
     city: 'munich',
-    label: 'round 3 shot 7: signal curbs and arrows (Arnulfstraße, Marsstraße)',
+    label: 'round 3 shot 7: signal curbs and arrows (Arnulfstraße, Marsstraße; main n:949)',
     roads: [],
-    nodes: ['n:949'],
+    nodes: ['n:366', 'n:417'],
   },
   {
     id: 'R3-8',
@@ -2013,6 +2021,77 @@ export const geometryCases: GeometryCase[] = [
     label: 'round 3 shot 8: Y-junction curbs (Marsstraße)',
     roads: [],
     nodes: ['n:823'],
+  },
+  // TASK-212's junction cases (docs/findings/2026-11-19-geometry-audit), for TASK-213.
+  {
+    id: 'J1-hbf',
+    city: 'freiburg',
+    label: 'Hauptbahnhof group jg:13298: inner roads overlapping inside the surface',
+    roads: [],
+    nodes: ['n:1', 'n:970', 'n:1147', 'n:461', 'n:476', 'n:488'],
+  },
+  {
+    id: 'J1-stefan',
+    city: 'freiburg',
+    label: 'Stefan-Meier-Straße group jg:13268',
+    roads: [],
+    nodes: ['n:5', 'n:744'],
+  },
+  {
+    id: 'J2',
+    city: 'freiburg',
+    label: 'lobed group surfaces: jg:13295 (Schnewlinstraße, inner r:653), n:828, n:1142',
+    roads: [],
+    nodes: ['n:651', 'n:652', 'n:916', 'n:828', 'n:1142'],
+  },
+  {
+    id: 'J3',
+    city: 'freiburg',
+    label: 'acute side roads over the main road (Greiffeneggbrücke n:430/n:289, n:889)',
+    roads: [],
+    nodes: ['n:430', 'n:289', 'n:889'],
+  },
+  {
+    id: 'J4',
+    city: 'freiburg',
+    label: 'curb corners without a radius',
+    roads: [],
+    nodes: ['n:44', 'n:128', 'n:390', 'n:2206', 'n:660'],
+  },
+  {
+    id: 'J4-munich',
+    city: 'munich',
+    label: 'sharp corners since TASK-092',
+    roads: [],
+    nodes: ['n:324', 'n:621', 'n:549'],
+  },
+  {
+    id: 'J4-sindelfingen',
+    city: 'sindelfingen',
+    label: 'sharp corners since TASK-092',
+    roads: [],
+    nodes: ['n:87', 'n:27', 'n:1162', 'n:12'],
+  },
+  {
+    id: 'J5',
+    city: 'freiburg',
+    label: 'through roads bending at side streets',
+    roads: [],
+    nodes: ['n:552', 'n:1747', 'n:1132', 'n:1462', 'n:108'],
+  },
+  {
+    id: 'J6-munich',
+    city: 'munich',
+    label: 'ramp diverges overlapping their parent road',
+    roads: [],
+    nodes: ['n:27', 'n:194'],
+  },
+  {
+    id: 'J6-sindelfingen',
+    city: 'sindelfingen',
+    label: 'ramp diverge overlapping its parent road',
+    roads: [],
+    nodes: ['n:1028'],
   },
 ];
 
@@ -2053,8 +2132,10 @@ export function caseAudit(net: CompiledCity, audit: GeometryAudit, c: GeometryCa
   };
 }
 
-export function compileCity(name: AuditCity, relaxMaxM?: number) {
-  const city = loadAuditCity(name, relaxMaxM);
+export async function compileCity(name: GeometryCity, relaxMaxM?: number) {
+  // Freiburg as bundled (its curation is part of the project); the relaxation cap does not apply.
+  const city =
+    name === 'freiburg' ? (await openFreiburg()).city : loadAuditCity(name as AuditCity, relaxMaxM);
   const result = compile(city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
   return { city, net: result.compiled };
@@ -2104,8 +2185,8 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
   const caseTotals: Record<string, ReturnType<typeof totals>> = {};
   const caseDetail: Record<string, unknown> = {};
   const lines: string[] = [];
-  for (const name of auditCities) {
-    const { city, net } = compileCity(name, relaxMaxM);
+  for (const name of geometryCities) {
+    const { city, net } = await compileCity(name, relaxMaxM);
     const audit = auditGeometry(city, net);
     cityTotals[name] = totals(audit);
     const top = worst(audit);
