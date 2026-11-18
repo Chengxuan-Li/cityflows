@@ -1,6 +1,6 @@
 # TASK-201 — Freiburg in detail: building parts and the Schlossberg
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-18 (Freiburg flat by the owner; terrain fixture kept, unused). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/201-freiburg-detail`, worktree `D:\cityflows-wt\201`, ports 5401 / 5501.
 
 ## Goal

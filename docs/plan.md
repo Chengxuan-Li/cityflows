@@ -226,7 +226,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-198](tasks/TASK-198.md) | UI | Build Freiburg, the chosen landing city, as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | done 2026-11-17 (Freiburg fixed-time until TASK-199) |
 | [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | done 2026-11-18 (Freiburg actuated; merged as is, owner approved) |
 | [TASK-200](tasks/TASK-200.md) | UI | Engine queries racing a project open (gate4-compare fails alone since TASK-198) | `src/main.tsx`, `src/ui/store.ts` open, `src/host/client.ts` | 198 | spec 10/10 alone, failing test without the fix, light tiers | done 2026-11-18 |
-| [TASK-201](tasks/TASK-201.md) | UI | Freiburg in detail: building parts (the Münster spire) and the Schlossberg terrain from the approved downloads | importer parts, 3D buildings, `fixtures/osm`, `fixtures/terrain/freiburg.json`, `bench/freiburg.ts`, project | 198 | parts tests, Freiburg gate, load and frame budgets, shots | in progress (owner 2026-11-18) |
+| [TASK-201](tasks/TASK-201.md) | UI | Freiburg in detail: building parts (the Münster spire) and the Schlossberg terrain from the approved downloads | importer parts, 3D buildings, `fixtures/osm`, `fixtures/terrain/freiburg.json`, `bench/freiburg.ts`, project | 198 | parts tests, Freiburg gate, load and frame budgets, shots | done 2026-11-18 (flat, owner; terrain fixture unused) |
 | [TASK-202](tasks/TASK-202.md) | 9 | Trams to every Freiburg stop (8 of 32 unserved) | `src/network/trams.ts`, `rail.ts` | 198 | per-cause tests, served count, other cities unchanged | in progress (owner 2026-11-18) |
 | [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | done 2026-11-18 (showcase camera values pending TASK-201) |
 | [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | in progress (owner 2026-11-18) |
@@ -4423,6 +4423,33 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 `ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
+Full run 44361518636 (lead, manual, on 36eb4c2 after TASK-203): every job green, including all five
+e2e shards; the city job took 30.2 min.
+
+TASK-201 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged): the owner-approved downloads. The
+Overpass extract failed three times with 502 at 16:08 UTC; a fourth attempt the lead approved
+succeeded at 16:51 (6,244,482 bytes, SHA-256 `cdc4fe43...`, 3.6% larger, replacing TASK-197's extract;
+attribution updated). AWS Terrain Tiles: 12 z15 tiles, 613,668 bytes. The importer reads
+`building:part` (height, min_height, levels, min_level, roof shape, colour, material), attached to
+the smallest building outline around each part through an optional `parts` field on buildings
+(contract change allowed by the contract; `docs/architecture.md` updated); 3D draws parts instead of
+the outline, 2D keeps the outline; the app's Overpass query fetches parts (query version 10).
+Freiburg: 335 parts on 82 buildings; the Münster from its 31 parts (nave, choir towers, openwork
+spire to 116 m) replaces TASK-198's capped block, and St. Martin's cap is dropped; pyramid roofs on
+convex non-rectangular shapes now rise to a point (other cities' 3D changes slightly). Terrain
+(`fixtures/terrain/freiburg.json`, 261 to 319 m inside the polygon; the Schlossberg summit is outside)
+made 3D appear 15 to 16 s after the first frame against 5 s; the owner kept Freiburg flat, so the
+project does not load it (fixture and the polygon-cut ground code stay). Flat: first frame 2.15 to
+2.99 s, 3D 5.2 to 6.2 s idle (main's 3D measured 5.4 to 6.9 s by TASK-203 the same day, and the 3D
+build costs the same with parts, so the overrun is not this task's; re-measure on a quiet machine).
+Render p95 1.1 to 1.8 ms 2D, 1.7 to 2.3 ms 3D. Re-pin: Freiburg `city.json` to `b85a1f34...` (snapshot
+and parts; road network identical, state hash 1137612334 unchanged). Munich gains 2 parts, no pin
+moves. Outside the listed scope: `overpass.ts`, `render3d/labels.ts`, `terrain.ts`, `context.ts`,
+`V105-terrain.test.ts`. Lead check on the merge: check (1,510), city (183), traffic light and guard,
+framing, landing and 3D specs (7), light e2e (61). TASK-203's suggested showcase camera was applied
+and reverted: with it, `qa-framing` at 1024 × 768 fails (after Fit in 3D, toggling the sidebar moves
+the city), so it goes back to TASK-203.
 
 TASK-203 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged): opening a project fitted the
 extent of roads, nodes and places to the whole canvas (72 px), ignoring floating panels and the phone
