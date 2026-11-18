@@ -231,7 +231,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | done 2026-11-18 (showcase camera applied in the follow-up) |
 | [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | done 2026-11-18 (owner approved the trade-off) |
 | [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
-| [TASK-206](tasks/TASK-206.md) | render | 3D load time back under 5 s after the first frame (5.2 to 6.9 s on main; 2.0 to 4.0 s at TASK-198) | `src/render3d/**`, 3D start-up | 198, 201 | phase timings, 3D within 5 s idle, shots unchanged | in progress (owner 2026-11-18) |
+| [TASK-206](tasks/TASK-206.md) | render | 3D load time back under 5 s after the first frame (5.2 to 6.9 s on main; 2.0 to 4.0 s at TASK-198) | `src/render3d/**`, 3D start-up | 198, 201 | phase timings, 3D within 5 s idle, shots unchanged | done 2026-11-19 |
 | [TASK-207](tasks/TASK-207.md) | UI | Freiburg's 187 validation warnings: importer fixes, curation, notices | importer, diagnostics, `bench/freiburg.ts`, project | 198, 201 | codes before and after, tests, Freiburg gate | in progress (owner 2026-11-18) |
 | [TASK-208](tasks/TASK-208.md) | 9 | Munich's remaining missed turns (r:700 lane 0, the r:639 weave) and why TASK-204's first rule gridlocked Freiburg | `src/sim/lane-change.ts`, entry chains | 204 | misses, seeds 1-12 both modes, full demand, gates | in progress (owner 2026-11-18) |
 | [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | in progress (owner 2026-11-18) |
@@ -4433,6 +4433,27 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 `ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
+TASK-206 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): no single regression since
+TASK-198: in one session `200bc3e` measured 5.45 to 6.01 s and main 5.50 to 6.59 s; the 3D build grew
+0.27 s from TASK-201/202's rail and walk data; TASK-198's 2.0 to 4.0 s was most likely a quieter
+machine. Where the time went on main: height lookups for every road vertex (1.0 to 1.2 s of 2.8 s,
+almost all on level roads where the height is 0), shader programs compiled one at a time on the first
+draw (0.43 s), every OSM lamp tested against every road surface (0.52 s), and 3D recomputing the
+marking shapes 2D already had (0.2 s). Fix: level roads without terrain skip the lookup (test that both
+paths agree), all shader programs requested before the first draw (0.53 to 0.33 s), lamp matching
+skips roads out of reach (same road chosen), 2D and 3D share cached marking shapes
+(`marking-geometry.ts`; kept in memory while the city is open). Main to branch: first frame to ready
+2.41 to 3.31 s to 1.46 to 2.48 s; 3D build 1.98 to 3.02 s to 0.91 to 1.23 s; click to first 3D frame
+2.56 to 3.73 s to 1.29 to 1.68 s. `qa-production` 3D after first frame, interleaved under 53 to 60%
+load: branch 5.48 to 7.21 s, main 8.38 to 10.10 s (both over 5 s under load); at lighter load the
+branch passed 3 of 3 (4.19 to 4.89 s); expected idle about 2.6 to 3.5 s (lead to re-measure on a quiet
+machine). 2D and 3D shots pixel-identical (970,163 triangles, 104 draw calls). Terrain, measured not
+enabled: 3D build 11.9 s with terrain against 1.6 s flat (land use clipped against the terrain ground
+4.05 s, ground mesh 2.6 s, draped markings, places and surfaces 3.7 s, walk 1.57 s); about 10 s must go
+(land use as a texture or per grid cell, cutting only boundary cells, a grid index for draping,
+indexed geometry), or build it off the main thread and show flat first. Lead check on the merge: check
+(1,518), city (183), traffic light and guard, 3D, landing and framing specs (8), light e2e (61).
 
 TASK-212 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged): read-only audit in
 `docs/findings/2026-11-19-geometry-audit/` (README and 36 close-ups). `bench/geometry-audit.ts`

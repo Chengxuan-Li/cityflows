@@ -1,6 +1,6 @@
 # TASK-206 — 3D load time back under its budget
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-19. Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/206-3d-load`, worktree `D:\cityflows-wt\206`, ports 5406 / 5506.
 
 ## Goal
