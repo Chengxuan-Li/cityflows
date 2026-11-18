@@ -194,12 +194,6 @@ export function curateFreiburg(city: City, data: OsmData): void {
       provenance: curated,
     });
   }
-  // TASK-194 made generated programs actuated. Here that locked the Schwabentor area by 09:15
-  // (11 trips gridlocked, a head stalled on Dreisamstraße, a 2,838 s visit), and setting single
-  // junctions back to fixed time moved the jam rather than clearing it; Freiburg keeps the
-  // fixed-time programs it passed its gate with.
-  for (const owner of [...Object.values(city.nodes), ...Object.values(city.junctionGroups ?? {})])
-    if (owner.signal) delete owner.signal.actuated;
   // The polygon's east tip cuts the ring road where it bends outside for 150 m, so Leopoldring
   // and Schlossbergring are gateways with a primary road's demand each, although most of the
   // ring's traffic passes them by (the demand has no through trips, and the joining way is
