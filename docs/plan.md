@@ -4531,6 +4531,8 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-18 (owner): Freiburg stays flat for now. With terrain the 3D view took 15 to 16 s after the first
+  frame against 5 s (TASK-201); the terrain fixture and code stay, unused by the project.
 - 2026-11-18 (owner): write and start TASK-201 to 205 (Freiburg detail, tram stops, framing, jughandle
   lanes, per-worktree production bundle), all at once.
 - 2026-11-18 (owner): downloads approved: a fresh Freiburg Overpass extract with `building:part`, and
