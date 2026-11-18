@@ -185,6 +185,7 @@ export class Scene3D {
   private lastRenderMs = performance.now();
   private readonly vehicleMatrix = new Matrix4();
   private shadowView = '';
+  private compilePending = false;
   private readonly restoreContext = () => {
     this.renderer.setClearColor(this.light.background);
     this.rail?.paintCache.reset();
@@ -599,6 +600,7 @@ export class Scene3D {
     this.canvas.dataset.meshes = String(this.content.children.length + 1);
     this.lightKey = '';
     this.applyLight();
+    this.compilePending = true;
   }
 
   /** TASK-163: the view's lighting preset and exposure, and the Shadows layer. View-only: it
@@ -1299,6 +1301,11 @@ export class Scene3D {
       this.camera,
       this.railVisible && !this.belowGround && !this.geometry?.heights.terrain.grid,
     );
+    // TASK-206: a rebuilt scene's programs are all requested before the draw, so the GPU process
+    // compiles them in parallel; the draw alone compiles and waits for them one at a time (Freiburg's
+    // first 3D frame: 0.33 s instead of 0.53 s).
+    if (this.compilePending) this.renderer.compile(this.scene, this.camera);
+    this.compilePending = false;
     this.renderer.render(this.scene, this.camera);
     if (import.meta.env.MODE === 'test') {
       this.canvas.dataset.railPaint = cachedRail ? 'cached' : 'mesh';

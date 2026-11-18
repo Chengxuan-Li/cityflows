@@ -259,6 +259,32 @@ export function besideNoStrip(city: CompiledCity, road: CRoad, side: number, poi
   return pieces;
 }
 
+type ShapeCache<T> = WeakMap<CompiledCity, WeakMap<object, WeakMap<MarkingTheme, Map<number, T>>>>;
+const noSource = {};
+/** TASK-206: the 2D map and the 3D scene paint the same shapes, so a road's or node's shapes are
+ * computed once per painted city, source and theme and then shared: callers never change them. */
+function shared<T>(
+  cache: ShapeCache<T>,
+  city: CompiledCity,
+  source: object | undefined,
+  theme: MarkingTheme,
+  index: number,
+  build: () => T,
+): T {
+  let bySource = cache.get(city);
+  if (!bySource) cache.set(city, (bySource = new WeakMap()));
+  let byTheme = bySource.get(source ?? noSource);
+  if (!byTheme) bySource.set(source ?? noSource, (byTheme = new WeakMap()));
+  let byIndex = byTheme.get(theme);
+  if (!byIndex) byTheme.set(theme, (byIndex = new Map()));
+  let shapes = byIndex.get(index);
+  if (!shapes) byIndex.set(index, (shapes = build()));
+  return shapes;
+}
+const roadShapes: ShapeCache<ReturnType<typeof buildRoadMarkings>> = new WeakMap();
+const nodeShapes: ShapeCache<MarkingShape[]> = new WeakMap();
+const transitionShapes: ShapeCache<MarkingShape[]> = new WeakMap();
+
 export function roadMarkingGeometry(
   city: CompiledCity,
   road: CRoad,
@@ -266,6 +292,17 @@ export function roadMarkingGeometry(
   markingTheme: MarkingTheme = defaultTheme,
 ) {
   city = paintedCity(city);
+  return shared(roadShapes, city, source, markingTheme, road.idx, () =>
+    buildRoadMarkings(city, road, source, markingTheme),
+  );
+}
+
+function buildRoadMarkings(
+  city: CompiledCity,
+  road: CRoad,
+  source: CrossingSource | undefined,
+  markingTheme: MarkingTheme,
+) {
   road = city.roads[road.idx]!;
   const belowShapes: MarkingShape[] = [],
     aboveShapes: MarkingShape[] = [],
@@ -1550,6 +1587,16 @@ export function nodeMarkingGeometry(
   markingTheme: MarkingTheme = defaultTheme,
 ): MarkingShape[] {
   city = paintedCity(city);
+  return shared(nodeShapes, city, undefined, markingTheme, node.idx, () =>
+    buildNodeMarkings(city, node, markingTheme),
+  );
+}
+
+function buildNodeMarkings(
+  city: CompiledCity,
+  node: CNode,
+  markingTheme: MarkingTheme,
+): MarkingShape[] {
   const guides = junctionGuides(city, node, markingTheme).flatMap((g) =>
     g.dashes.map((points) => ({
       kind: 'line' as const,
@@ -1577,6 +1624,16 @@ export function transitionMarkings(
   markingTheme: MarkingTheme = defaultTheme,
 ): MarkingShape[] {
   city = paintedCity(city);
+  return shared(transitionShapes, city, undefined, markingTheme, road.idx, () =>
+    buildTransitionMarkings(city, road, markingTheme),
+  );
+}
+
+function buildTransitionMarkings(
+  city: CompiledCity,
+  road: CRoad,
+  markingTheme: MarkingTheme,
+): MarkingShape[] {
   road = city.roads[road.idx]!;
   const pattern = markingTheme.classes[road.roadClass].lane.dash!;
   const shapes = seams(city, road).flatMap((line) =>

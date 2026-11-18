@@ -1,7 +1,7 @@
 import { BufferGeometry, Float32BufferAttribute } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { drape } from './terrain';
-import { heightAt, roadStation, type cityHeights } from './heights';
+import { heightAt, roadSurfaceAt, type cityHeights } from './heights';
 import { walkGeometry } from '../render/walk-geometry';
 import type { CompiledCity } from '../network';
 import type { CityGeometry } from '../render/types';
@@ -38,12 +38,8 @@ export function buildWalk(
         : footways;
     const hatchTarget = ground ? landSteps : steps;
     const z = (p: { x: number; y: number }) => {
-      if (l.road !== undefined) {
-        const r = city.roads[l.road]!,
-          h = heights.roads[l.road]!,
-          s = roadStation(r, p);
-        return heightAt(h, s) + (h.crossfall?.(s, p) ?? 0) + 0.14;
-      }
+      if (l.road !== undefined)
+        return roadSurfaceAt(city.roads[l.road]!, heights.roads[l.road]!, p) + 0.14;
       return (
         heights.terrain.groundAt(p.x, p.y) +
         (l.node !== undefined

@@ -1,7 +1,14 @@
 import { expect, it } from 'vitest';
 import { buildCity } from '../fixtures/build-city';
 import { compile } from '../network';
-import { cityHeights, heightAt, heightSlopeAt } from './heights';
+import {
+  cityHeights,
+  heightAt,
+  heightSlopeAt,
+  levelRoad,
+  roadStation,
+  roadSurfaceAt,
+} from './heights';
 
 it('uses the full approach instead of levelling off halfway along it', () => {
   const road = { lengthM: 140, deckM: 10, fromM: 0, toM: 10 };
@@ -108,5 +115,28 @@ it('keeps an outline-free junction with an allowed U-turn level', () => {
     const height = heights.roads[road.idx]!;
     if (road.to === node.idx) expect(heightSlopeAt(height, height.lengthM)).toBe(0);
     if (road.from === node.idx) expect(heightSlopeAt(height, 0)).toBe(0);
+  }
+});
+
+it('gives a level road the height its station would, without looking the station up', () => {
+  const b = buildCity('Level and ramped roads', 99);
+  const west = b.node(-150, 0, 0),
+    middle = b.node(0, 0, 0),
+    deck = b.node(160, 20, 1);
+  b.road(west, middle);
+  b.road(middle, deck).layer = 1;
+  const result = compile(b.city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const heights = cityHeights(result.compiled, b.city);
+  expect(result.compiled.roads.map((road) => levelRoad(heights.roads[road.idx]!))).toEqual([
+    true,
+    false,
+  ]);
+  for (const road of result.compiled.roads) {
+    const height = heights.roads[road.idx]!;
+    for (const p of road.surface) {
+      for (const q of [p, { x: p.x + 3, y: p.y - 2 }])
+        expect(roadSurfaceAt(road, height, q)).toBe(heightAt(height, roadStation(road, q)));
+    }
   }
 });

@@ -24,7 +24,7 @@ import {
   type placeStreet,
 } from '../render/street';
 import { lampColors } from '../render/lighting';
-import { heightAt, roadStation, type cityHeights } from './heights';
+import { roadSurfaceAt, type cityHeights } from './heights';
 
 // Bound both final 3D edges against each replacement chord; keep every gap run separate.
 function curbStations(a: number[][], b: number[][]) {
@@ -80,10 +80,11 @@ export function buildCurbs(
       b = parallelOffset(curb.points, half);
     const road = city.roads[curb.road]!,
       profile = heights.roads[curb.road]!;
-    const vertex = (p: { x: number; y: number }, up: number) => {
-      const s = roadStation(road, p);
-      return [p.x, heightAt(profile, s) + (profile.crossfall?.(s, p) ?? 0) + up, p.y];
-    };
+    const vertex = (p: { x: number; y: number }, up: number) => [
+      p.x,
+      roadSurfaceAt(road, profile, p) + up,
+      p.y,
+    ];
     const quad = (p: number[], q: number[], r: number[], s: number[]) =>
       positions.push(...p, ...q, ...r, ...p, ...r, ...s);
     const left = a.map((p) => vertex(p, 0)),
@@ -120,10 +121,7 @@ export function signHeight(
   city: CompiledCity,
   heights: ReturnType<typeof cityHeights>,
 ) {
-  const road = city.roads[sign.road]!,
-    profile = heights.roads[sign.road]!;
-  const station = roadStation(road, sign.pos);
-  return heightAt(profile, station) + (profile.crossfall?.(station, sign.pos) ?? 0);
+  return roadSurfaceAt(city.roads[sign.road]!, heights.roads[sign.road]!, sign.pos);
 }
 
 function signTexture(rules: readonly SignRule[], theme: ReturnType<typeof placeStreet>['theme']) {
@@ -217,12 +215,10 @@ export function buildStreet(
   );
   const light: { base: number }[] = [];
   street.lamps.forEach((lamp, i) => {
-    const road = lamp.road === undefined ? undefined : city.roads[lamp.road]!;
-    const profile = road ? heights.roads[road.idx]! : undefined;
-    const station = road ? roadStation(road, lamp.pos) : 0;
-    const base = profile
-      ? heightAt(profile, station) + (profile.crossfall?.(station, lamp.pos) ?? 0)
-      : heights.terrain.surfaceAt(lamp.pos.x, lamp.pos.y);
+    const base =
+      lamp.road === undefined
+        ? heights.terrain.surfaceAt(lamp.pos.x, lamp.pos.y)
+        : roadSurfaceAt(city.roads[lamp.road]!, heights.roads[lamp.road]!, lamp.pos);
     transform.position.set(lamp.pos.x, base + lamp.heightM / 2, lamp.pos.y);
     transform.rotation.set(0, -lamp.heading, 0);
     transform.scale.set(1, lamp.heightM, 1);
