@@ -28,6 +28,7 @@ export const bindings = {
   sidebar: ['s'],
   inspector: ['i'],
   view3d: ['v'],
+  fit: ['f'],
   layers: [],
   chart: [],
   demand: [],

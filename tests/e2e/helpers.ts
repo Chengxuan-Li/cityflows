@@ -60,7 +60,7 @@ export function pageErrors(page: Page) {
   return errors;
 }
 
-/** The map fits the city with a 72 px margin on load (see fitCity in map-view.tsx). */
+/** The map fits the city with a 24 px margin on load (see fitCity in map-view.tsx). */
 export function fitted(compiled: CompiledCity, source: City) {
   const points = [
     ...compiled.roads.flatMap(({ surface }) => surface),
@@ -81,8 +81,8 @@ export function fitted(compiled: CompiledCity, source: City) {
     const box = (await page.getByLabel('City map').boundingBox())!;
     const scale = Math.min(
       32,
-      (box.width - 144) / (bounds.maxX - bounds.minX),
-      (box.height - 144) / (bounds.maxY - bounds.minY),
+      (box.width - 48) / (bounds.maxX - bounds.minX),
+      (box.height - 48) / (bounds.maxY - bounds.minY),
     );
     return {
       x: box.x + world.x * scale + (box.width - (bounds.minX + bounds.maxX) * scale) / 2,
@@ -94,7 +94,7 @@ export function fitted(compiled: CompiledCity, source: City) {
 /** Grid places: Homes sits at (15, −15), Offices at (465, 495); the map centers on (240, 240). */
 export async function gridPoint(page: Page, x: number, y: number) {
   const box = (await page.getByLabel('City map').boundingBox())!;
-  const scale = (box.height - 144) / 510;
+  const scale = (box.height - 48) / 510;
   return {
     x: box.x + box.width / 2 + (x - 240) * scale,
     y: box.y + box.height / 2 + (y - 240) * scale,

@@ -238,6 +238,13 @@ export const commands: AppCommand[] = [
     enabled: running,
     run: () => store().toggleView(),
   },
+  {
+    id: 'fit',
+    group: 'View',
+    name: 'Fit city in view',
+    enabled: withSession,
+    run: () => store().fitCity(),
+  },
   ...(Object.keys(sections) as Section[]).map(section),
   {
     id: 'commandMenu',

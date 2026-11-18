@@ -65,7 +65,10 @@ test.each(['2d', '3d'])(
     const basemap = new Basemap3D(geo);
     try {
       const camera = new Camera();
-      camera.fitToBounds({ minX: -100, minY: -100, maxX: 100, maxY: 100 }, 400, 400);
+      camera.fitToBounds(
+        { minX: -100, minY: -100, maxX: 100, maxY: 100 },
+        { minX: 32, minY: 32, maxX: 368, maxY: 368 },
+      );
       const camera3D = new PerspectiveCamera(45, 1, 0.2, 5000);
       camera3D.position.set(0, 500, 500);
       camera3D.lookAt(0, 0, 0);

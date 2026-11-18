@@ -8,7 +8,7 @@ const button = (page: Page, name: string) => page.getByRole('button', { name, ex
 
 async function mapPoint(page: Page, x: number, y: number) {
   const bounds = (await page.getByLabel('City map').boundingBox())!;
-  const scale = (bounds.height - 144) / 510;
+  const scale = (bounds.height - 48) / 510;
   return {
     x: bounds.x + bounds.width / 2 + (x - 240) * scale,
     y: bounds.y + bounds.height / 2 + (y - 240) * scale,

@@ -9,7 +9,7 @@ const fixtureUrl = new URL('../../fixtures/projects/grid5x5.cityflows.json', imp
 async function pick(page: Page, x: number, y: number) {
   const map = page.getByLabel('City map');
   const bounds = (await map.boundingBox())!;
-  const scale = (bounds.height - 144) / 510;
+  const scale = (bounds.height - 48) / 510;
   await map.click({
     position: {
       x: bounds.width / 2 + (x - 240) * scale,

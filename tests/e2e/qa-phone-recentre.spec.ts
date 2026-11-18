@@ -136,10 +136,12 @@ test('QA phone brings a street into view in 3D too', async ({ page }) => {
   await to3D(page);
   const height = (await view(page)).above;
   expect((await at(page, lower)).y).toBeGreaterThan(height / 2);
+  const zoom = (await page.evaluate(() => window.cityflows!.view3D!()))!.zoom;
   await select(page, lower, '3D city view');
   await expect(sheet(page)).toHaveAttribute('data-sheet', 'half');
   await expectCentred(page);
-  const zoom = (await page.evaluate(() => window.cityflows!.view3D!()))!.zoom;
+  // A pan, not a zoom.
+  expect((await page.evaluate(() => window.cityflows!.view3D!()))!.zoom).toBeCloseTo(zoom, 5);
   await button(page, 'Close inspector').click();
   await expect(sheet(page)).toBeHidden();
 
@@ -149,7 +151,7 @@ test('QA phone brings a street into view in 3D too', async ({ page }) => {
   await select(page, upper, '3D city view');
   await page.waitForTimeout(800);
   expectSame([await at(page, upper)], [before]);
-  expect((await page.evaluate(() => window.cityflows!.view3D!()))!.zoom).toBeCloseTo(zoom, 5);
+  expect((await page.evaluate(() => window.cityflows!.view3D!()))!.zoom).toBeCloseTo(0.5, 5);
   expect(errors).toEqual([]);
 });
 

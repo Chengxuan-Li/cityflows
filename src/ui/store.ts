@@ -141,6 +141,9 @@ interface AppState {
    *  closed or being dragged (inspector-sheet.tsx); the map keeps the selection above it. */
   sheetHeight: number | null;
   setSheetHeight: (height: number | null) => void;
+  /** TASK-203: counts the Fit city commands; the map frames the city again on each. */
+  fitRequest: number;
+  fitCity: () => void;
   session: Session | null;
   /** TASK-198: a city being opened, drawn before its demand and engine are ready (the landing
    *  view's first frame); null once its session is set or the open failed. */
@@ -637,6 +640,8 @@ export const useAppStore = create<AppState>((set, get) => {
     selectionPoint: null,
     sheetHeight: null,
     setSheetHeight: (sheetHeight) => set({ sheetHeight }),
+    fitRequest: 0,
+    fitCity: () => set(({ fitRequest }) => ({ fitRequest: fitRequest + 1 })),
     session: null,
     run: null,
     selection: null,
@@ -928,7 +933,7 @@ declare global {
       parkedCars?: () => ParkedCarsSnapshot | null;
       vehicleToScreen?: (id: number) => Vec2 | null;
       capture3D?: () => Promise<string[]>;
-      view3D?: () => { centre: Vec2; zoom: number } | null;
+      view3D?: () => { centre: Vec2; zoom: number; pitch: number; bearing: number } | null;
       setView3D?: (centre: Vec2, zoom: number, pitch?: number, bearing?: number) => void;
       worldToScreen?: (point: Vec2) => Vec2;
       selectionAnchor?: () => Vec2 | null;

@@ -6,7 +6,7 @@ import type { City, Person, Scenario } from '../../src/schema';
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 async function mapPoint(page: Page, x: number, y: number) {
   const bounds = (await page.getByLabel('City map').boundingBox())!;
-  const scale = (bounds.height - 144) / 510;
+  const scale = (bounds.height - 48) / 510;
   return {
     x: bounds.x + bounds.width / 2 + (x - 240) * scale,
     y: bounds.y + bounds.height / 2 + (y - 240) * scale,
@@ -140,8 +140,24 @@ test('extend, demographic controls, connectors and delete remain undoable', asyn
 test('disconnected painting and cancelled gestures leave no dangling place', async ({ page }) => {
   const original = (await saved(page)).city;
   await button(page, 'Place').click();
-  // West of the grid but still on the map, which the sidebar narrows (TASK-160).
-  await stroke(page, [-120, 200], [-90, 220]);
+  // West of the grid, on the map once the sidebar is hidden: the city stays where it shows
+  // when a panel opens or closes (TASK-203), and comes back when it shows again.
+  await page.keyboard.press('s');
+  await expect(page.locator('#sidebar')).toBeHidden();
+  const map = (await page.getByLabel('City map').boundingBox())!;
+  const [west, end] = await page.evaluate(() =>
+    [
+      { x: -120, y: 200 },
+      { x: -90, y: 220 },
+    ].map((p) => window.cityflows!.worldToScreen!(p)),
+  );
+  expect(west!.x).toBeGreaterThan(0);
+  await page.mouse.move(map.x + west!.x, map.y + west!.y);
+  await page.mouse.down();
+  await page.mouse.move(map.x + end!.x, map.y + end!.y, { steps: 8 });
+  await page.mouse.up();
+  // The hint shows among the tool's options in the sidebar.
+  await page.keyboard.press('s');
   await expect(page.getByText('No lane within 60 m. Paint closer to a street.')).toBeVisible();
   expect((await saved(page)).city).toEqual(original);
   const start = await mapPoint(page, 60, 60);

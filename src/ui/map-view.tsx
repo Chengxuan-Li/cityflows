@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { Scene3D } from '../render3d/scene';
+import { lonLatToLocal } from '../geo/projection';
 import type { Vec2 } from '../geo/vec2';
-import type { Bounds } from '../render/camera';
+import { boundsOf, type Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
 import { mapPalettes, style, placeHue } from '../render/style';
 import type { Pick, Scene, VehicleSnapshot } from '../render/types';
@@ -103,8 +104,11 @@ function showcase3D(project: Session['project']) {
     : undefined;
 }
 
-function fitCity(scene: Scene, canvas: HTMLCanvasElement, { project, compiled }: Preview) {
-  const bounds: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+/** TASK-203: what framing fits, in metres: the city's boundary ring when it has one (TASK-198),
+ *  else the corners of everything it draws. */
+function cityOutline({ project, compiled }: Preview): Vec2[] {
+  const { geo } = project.city;
+  if (geo?.boundary) return geo.boundary.map(([lon, lat]) => lonLatToLocal(geo, { lon, lat }));
   const points = [
     ...compiled.roads.flatMap(({ surface }) => surface),
     ...compiled.nodes.map(({ pos }) => pos),
@@ -112,13 +116,50 @@ function fitCity(scene: Scene, canvas: HTMLCanvasElement, { project, compiled }:
       shape.kind === 'polygon' ? shape.ring : [shape.pos],
     ),
   ];
-  for (const { x, y } of points) {
-    bounds.minX = Math.min(bounds.minX, x);
-    bounds.minY = Math.min(bounds.minY, y);
-    bounds.maxX = Math.max(bounds.maxX, x);
-    bounds.maxY = Math.max(bounds.maxY, y);
+  if (!points.length) return [];
+  const { minX, minY, maxX, maxY } = boundsOf(points);
+  return [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ];
+}
+
+/** TASK-203: the room framing leaves between the city and the edges of the visible map, px. */
+const margin = 24;
+
+/** TASK-203: the part of the map the panels leave visible, in canvas pixels, less `inset` on each
+ *  side. Under 900 px the sidebar and inspector float over the map's sides; under 600 px the
+ *  inspector is a sheet over its lower part, whose settled height the sheet reports (TASK-196).
+ *  When panels leave almost nothing (a full-height sheet), it is the whole map. */
+function visibleArea(canvas: HTMLCanvasElement, sheetHeight: number | null, inset = 0): Bounds {
+  const map = canvas.getBoundingClientRect();
+  const area = { minX: 0, minY: 0, maxX: map.width, maxY: map.height - (sheetHeight ?? 0) };
+  const panels = sheetHeight === null ? '#sidebar, #inspector-column' : '#sidebar';
+  for (const panel of document.querySelectorAll(panels)) {
+    const box = panel.getBoundingClientRect();
+    const width = Math.min(box.right, map.right) - Math.max(box.left, map.left);
+    const height = Math.min(box.bottom, map.bottom) - Math.max(box.top, map.top);
+    if (width < 1 || height < 1) continue;
+    if (box.left + box.right < map.left + map.right)
+      area.minX = Math.max(area.minX, box.right - map.left);
+    else area.maxX = Math.min(area.maxX, box.left - map.left);
   }
-  if (points.length) scene.camera.fitToBounds(bounds, canvas.clientWidth, canvas.clientHeight, 72);
+  const room = Math.min(area.maxX - area.minX, area.maxY - area.minY);
+  if (room < 4 * inset)
+    Object.assign(area, { minX: 0, minY: 0, maxX: map.width, maxY: map.height });
+  return {
+    minX: area.minX + inset,
+    minY: area.minY + inset,
+    maxX: area.maxX - inset,
+    maxY: area.maxY - inset,
+  };
+}
+
+function fitCity(scene: Scene, area: Bounds, preview: Preview) {
+  const outline = cityOutline(preview);
+  if (outline.length) scene.camera.fitToBounds(boundsOf(outline), area);
 }
 
 function bindPointer(
@@ -349,12 +390,23 @@ export function MapView() {
       scene = view;
       await view.ready;
       if (signal.aborted) return;
-      // A sidebar opening or closing resizes the map; what sat at its centre stays there.
-      let size = { width: canvas.clientWidth, height: canvas.clientHeight };
+      // TASK-203: a docked panel opening, closing or resizing changes the map's size, and the
+      // city stays where it shows in the window; a window resize keeps what sat at the map's
+      // centre there. The 3D view keeps its centre in the middle of the canvas by itself, so it
+      // is moved by the difference, once its own size has caught up (the next frame).
+      let box = canvas.getBoundingClientRect();
+      let windowSize = { width: window.innerWidth, height: window.innerHeight };
+      let shift3D = { x: 0, y: 0 };
       const recentre = new ResizeObserver(() => {
-        const next = { width: canvas.clientWidth, height: canvas.clientHeight };
-        view.camera.pan((next.width - size.width) / 2, (next.height - size.height) / 2);
-        size = next;
+        const next = canvas.getBoundingClientRect();
+        const resized =
+          window.innerWidth !== windowSize.width || window.innerHeight !== windowSize.height;
+        const centred = { x: (next.width - box.width) / 2, y: (next.height - box.height) / 2 };
+        const pan = resized ? centred : { x: box.left - next.left, y: box.top - next.top };
+        view.camera.pan(pan.x, pan.y);
+        shift3D = { x: shift3D.x + pan.x - centred.x, y: shift3D.y + pan.y - centred.y };
+        box = next;
+        windowSize = { width: window.innerWidth, height: window.innerHeight };
       });
       recentre.observe(canvas);
       signal.addEventListener('abort', () => recentre.disconnect());
@@ -410,6 +462,8 @@ export function MapView() {
       let revealing: Vec2 | null = null;
       let revealCheck = false;
       let revealFrame = 0;
+      let fitRequested = false;
+      const area = () => visibleArea(canvas, getState().sheetHeight, margin);
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const project = (point: Vec2) =>
         active3D ? three!.worldToScreen(point) : view.camera.worldToScreen(point);
@@ -565,7 +619,7 @@ export function MapView() {
           );
           view.setCity(preview.compiled, preview.project.city, true);
           pointer.reset();
-          fitCity(view, canvas, preview);
+          fitCity(view, area(), preview);
           fittedZoom = view.camera.zoom;
           requestAnimationFrame(() => {
             performance.mark('cityflows:first-frame');
@@ -575,19 +629,20 @@ export function MapView() {
           drawn = null;
         }
         if (!session || busy) return;
+        if (active3D && (shift3D.x || shift3D.y))
+          three!.panScreen(three!.getView().centre, shift3D.x, shift3D.y);
+        shift3D = { x: 0, y: 0 };
         if (revealCheck) {
           revealCheck = false;
           const { sheetHeight } = getState();
           const anchor = sheetHeight === null ? null : anchorOf(getState());
-          const hidden = anchor && project(anchor).y > canvas.clientHeight - sheetHeight!;
+          const hidden = anchor && project(anchor).y > visibleArea(canvas, sheetHeight).maxY;
           if (hidden && !revealing) revealFrame = now;
           revealing = hidden ? anchor : null;
         }
         if (revealing) {
-          const to = {
-            x: canvas.clientWidth / 2,
-            y: (canvas.clientHeight - getState().sheetHeight!) / 2,
-          };
+          const { minX, minY, maxX, maxY } = visibleArea(canvas, getState().sheetHeight);
+          const to = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
           const at = project(revealing);
           const fraction = reducedMotion.matches ? 1 : 1 - Math.exp(-(now - revealFrame) / 65);
           revealFrame = now;
@@ -633,16 +688,9 @@ export function MapView() {
           );
           if (drawn?.editor !== session.editor) {
             pointer.reset();
-            fitCity(view, canvas, session);
+            fitCity(view, area(), session);
             fittedZoom = view.camera.zoom;
-            if (active3D)
-              three!.setView(
-                view.camera.screenToWorld({
-                  x: canvas.clientWidth / 2,
-                  y: canvas.clientHeight / 2,
-                }),
-                view.camera.zoom,
-              );
+            if (active3D) three!.frame(cityOutline(session), area(), 55, 0);
           }
           drawn = session;
           drawnSelection = drawnRoute = drawnWalkerRoute = null;
@@ -659,6 +707,16 @@ export function MapView() {
           );
           drawnComparison = null;
         }
+        if (fitRequested) {
+          fitRequested = false;
+          revealing = null;
+          pointer.reset();
+          // In 3D the city is fitted at the pitch and bearing the view has now.
+          if (active3D) {
+            const { pitch, bearing } = three!.getView();
+            three!.frame(cityOutline(session), area(), pitch, bearing);
+          } else fitCity(view, area(), session);
+        }
         if (motionGeometry !== session.loadedCompiled) {
           motionGeometry = session.loadedCompiled;
           snapshotTime = NaN;
@@ -673,14 +731,21 @@ export function MapView() {
           // The first 3D view of a session with a showcase camera opens on it.
           const showcase = showcased !== session.editor ? showcase3D(session.project) : undefined;
           if (want3D) showcased = session.editor;
-          if (want3D && showcase)
+          if (want3D && showcase) {
             three!.setView(
               showcase.centre,
               fittedZoom * showcase.scale,
               showcase.pitch,
               showcase.bearing,
             );
-          else if (want3D) three!.setView(view.camera.screenToWorld(middle), view.camera.zoom);
+            // TASK-203: the same view, centred in the part of the map the panels leave visible.
+            const { minX, minY, maxX, maxY } = area();
+            three!.panScreen(
+              showcase.centre,
+              (minX + maxX - canvas.clientWidth) / 2,
+              (minY + maxY - canvas.clientHeight) / 2,
+            );
+          } else if (want3D) three!.setView(view.camera.screenToWorld(middle), view.camera.zoom);
           else {
             const { centre, zoom } = three!.getView();
             view.camera.zoomAt(middle, zoom / view.camera.zoom);
@@ -826,6 +891,7 @@ export function MapView() {
             JSON.stringify(state.selection) !== JSON.stringify(previous.selection))
         )
           revealCheck = true;
+        if (state.fitRequest !== previous.fitRequest) fitRequested = true;
         if (
           state.viewMode !== previous.viewMode ||
           state.tool !== previous.tool ||
