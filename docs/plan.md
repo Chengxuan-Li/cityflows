@@ -4424,6 +4424,9 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
 
+Full run 44372557057 (lead, manual, on e9e53c6 after TASK-201 and TASK-204): every job green,
+including all five e2e shards; CI green on e9e53c6 and Pages deployed it; the city job took 19.6 min.
+
 TASK-204 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged with the owner's approval of the
 trade-off): the r:654 misses were a lane chosen too late, not a gap problem: 98% drove r:700 → r:697
 → r:698 → r:654 in lane 1 without a change, though their routes planned r:697 lane 2; junction group
