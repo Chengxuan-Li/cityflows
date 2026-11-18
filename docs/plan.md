@@ -4531,6 +4531,8 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-18 (owner): TASK-202 also fixes the tram-crossing stop line its served stops exposed
+  (`src/sim/rail-crossings.ts`), on its branch, with Munich seeds and full demand.
 - 2026-11-18 (owner): Freiburg stays flat for now. With terrain the 3D view took 15 to 16 s after the first
   frame against 5 s (TASK-201); the terrain fixture and code stay, unused by the project.
 - 2026-11-18 (owner): write and start TASK-201 to 205 (Freiburg detail, tram stops, framing, jughandle
