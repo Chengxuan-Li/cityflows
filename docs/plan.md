@@ -4462,6 +4462,9 @@ branch conflicts in 12 of 18 files (17 hunks in `engine.ts`) and main already ha
 TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The owner decides on
 retiring the branches and the worktrees `D:\cityflows-wt\131p3` and `128-remeasure`.
 
+Full run 44407315666 (lead, manual, on 1ac0c38 after TASK-206): every job green, including all five
+e2e shards; the city job took 21.1 min.
+
 TASK-206 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): no single regression since
 TASK-198: in one session `200bc3e` measured 5.45 to 6.01 s and main 5.50 to 6.59 s; the 3D build grew
 0.27 s from TASK-201/202's rail and walk data; TASK-198's 2.0 to 4.0 s was most likely a quieter
