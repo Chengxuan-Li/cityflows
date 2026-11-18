@@ -177,3 +177,30 @@ test('a building without parts draws exactly as before', () => {
   expect(digest.digest('hex').slice(0, 16)).toBe('134e1029b2513a57');
   expect(context.buildingCount).toBe(3);
 });
+
+test('a pyramidal roof on a convex octagon rises to a spire instead of falling back flat', () => {
+  // The Münster's spire: an octagonal part from 37 m, walls to 70 m, a 46 m pyramid above.
+  const octagon = Array.from({ length: 8 }, (_, i) => ({
+    x: Math.round(6 * Math.cos((i * Math.PI) / 4) * 10) / 10,
+    y: Math.round(6 * Math.sin((i * Math.PI) / 4) * 10) / 10,
+  }));
+  const spire: ContextFeature = {
+    kind: 'area',
+    class: 'building',
+    rings: [[...octagon, octagon[0]!]],
+    heightM: 116,
+    minHeightM: 37,
+    roof: { shape: 'pyramidal', heightM: 46 },
+  };
+  const context = buildContext([spire]);
+  expect(context.roofStats).toEqual({ shapes: { pyramidal: 1 }, fallbacks: {} });
+  expect(Math.max(...hits(context.detailedBuildings, 0.05, 0.05))).toBeGreaterThan(115);
+  // Towards a corner the roof falls linearly from the apex to the 70 m eaves.
+  expect(Math.max(...hits(context.detailedBuildings, 2.7, 0))).toBeCloseTo(
+    70 + 46 * (1 - 2.7 / 6),
+    0,
+  );
+  context.buildings.dispose();
+  context.detailedBuildings.dispose();
+  context.ground.dispose();
+});
