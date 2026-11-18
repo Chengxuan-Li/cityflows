@@ -1,6 +1,6 @@
 # TASK-203 — Framing the city beside the panels
 
-Status: done 2026-11-18 (showcase camera values applied after TASK-201). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-18 (showcase camera applied in the follow-up, `task/203b-showcase-camera`). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/203-framing`, worktree `D:\cityflows-wt\203`, ports 5403 / 5503.
 
 ## Goal

@@ -228,7 +228,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-200](tasks/TASK-200.md) | UI | Engine queries racing a project open (gate4-compare fails alone since TASK-198) | `src/main.tsx`, `src/ui/store.ts` open, `src/host/client.ts` | 198 | spec 10/10 alone, failing test without the fix, light tiers | done 2026-11-18 |
 | [TASK-201](tasks/TASK-201.md) | UI | Freiburg in detail: building parts (the Münster spire) and the Schlossberg terrain from the approved downloads | importer parts, 3D buildings, `fixtures/osm`, `fixtures/terrain/freiburg.json`, `bench/freiburg.ts`, project | 198 | parts tests, Freiburg gate, load and frame budgets, shots | done 2026-11-18 (flat, owner; terrain fixture unused) |
 | [TASK-202](tasks/TASK-202.md) | 9 | Trams to every Freiburg stop (8 of 32 unserved) | `src/network/trams.ts`, `rail.ts` | 198 | per-cause tests, served count, other cities unchanged | in progress (owner 2026-11-18) |
-| [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | done 2026-11-18 (showcase camera values pending TASK-201) |
+| [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | done 2026-11-18 (showcase camera applied in the follow-up) |
 | [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | done 2026-11-18 (owner approved the trade-off) |
 | [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4423,6 +4423,18 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 `ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
+TASK-203 follow-up (same subagent, branch `task/203b-showcase-camera`, 2026-11-18; merged): the
+`qa-framing` failure with the suggested showcase camera was the spec, not the camera. Fit lands on the
+map's next frame; with the old, cropping showcase `expectFramed` waited for it, but the new values
+already show the whole city, so the spec read the view before the fit (also 4 of 10 at 1440). A
+`fit(page)` helper now waits two frames. Repeating the spec found a real, frame-wide race: Fit
+requested in the frame a tap opens the phone sheet framed the city under the sheet; Fit now waits
+while a sheet is shown but has not reported its height (`map-view.tsx`), with a phone test that
+fails without it. Showcase camera centre (-300, 220), scale 1.18, pitch 50, bearing -60 applied in
+`bench/freiburg.ts`; rebuild byte-identical, only view.json moves (city.json `b85a1f34...`
+unchanged). Lead check on the merge: check (1,512), city (183), framing, landing, 3D and phone specs
+twice each (32), light e2e (61).
 
 Full run 44372557057 (lead, manual, on e9e53c6 after TASK-201 and TASK-204): every job green,
 including all five e2e shards; CI green on e9e53c6 and Pages deployed it; the city job took 19.6 min.
