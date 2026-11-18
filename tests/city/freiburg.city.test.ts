@@ -203,7 +203,10 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
   // TASK-202: the Rotteckring and Schwabentorschleife trams and the crossing stop-line fix.
-  expect(morning.stateHash).toBe(3911386262);
+  // TASK-213: 16 corners rounded (n:44's far-cut curb, gore fillets); the walk network follows
+  // the curbs, so walkers and the cars meeting them move: 1,468 completed (1,467), mean delay
+  // 74 s (79); no lane's stop position moves.
+  expect(morning.stateHash).toBe(2194294769);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

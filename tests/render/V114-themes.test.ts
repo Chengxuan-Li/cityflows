@@ -59,9 +59,9 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
     expect(paintHash(shapes)).toBe(
       name === 'munich'
         ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-          '4f1b746a02eb39de8dd14e2527726c9cac277c28545159aab9f7612963faf9d9'
+          '641250b9a67e90a95b64c0187f919d6d7bedbfb5a49f368f3309fc470e552750'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-          '05f8f1f9520513386bb8615a114edc62ccaa1a54bd6c28b58f0303424c025e87',
+          '2891af137bed5c2cdba5d2fe58ac154caa2c5f21d4a84fc24efc10b9e8bed8d6',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

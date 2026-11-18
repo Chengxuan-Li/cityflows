@@ -396,11 +396,11 @@ test.each(
       ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).
-        'bd02ff20533afa3e302a8fafd94ba38014a53285c24c338218e041a9c0caf063'
+        '02e17511b9c9bc3a40e659f98bf4334b47b2c01a436ff41128887f1a43bac4ee'
       : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).
-        '5708db5627076dfe2ed27104d5d545a3bf4b38a5aea9bd034c12db7adcf7b22c',
+        '9b4392912da2f35261f0f11bd1640bed6105ff2fe70d52340d05b5d6e36e749a',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

@@ -33,7 +33,7 @@ const baseline = {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    '1aa3e90edd5cf79a3e7c93c7ddea0a0b62d43db738d8e42c05deb130635fb7e9',
+    'b6736aa43cf78c6dcb2379eea67332d385cd621c9cc27130763d8a5d6316ea6d',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -42,7 +42,7 @@ const baseline = {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    '18100e25a4f405d5634a93b54051aaebafd3155d8641e5e0d76a0e8fd9bf8cd8',
+    '3ddf346e18ce972c81dffe121b8a48bb2fe340208499c382eccb34ae3addcbc5',
   ],
 };
 

@@ -67,7 +67,7 @@ const baseline = {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    compile: 'f7ab6a805af012452f34c63ff34777cee8b4114b8c6f45c2620a15d1b5740b70',
+    compile: '2469f7ea4843d9d3d6e35912b12918b86cde14b51bd58d2187ddece96acddac7',
     arrows: '29bd956f1a3e4825fe96236f91eb9bfbd94b07e62f23f9eff2f7f0e51621ba0a',
   },
   munich: {
@@ -81,7 +81,7 @@ const baseline = {
     // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
     // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    compile: '66eca5727223df3e3836a6409623d6d51198342baf5a3e3006cf6322d2dbc312',
+    compile: '8be9f82fd52541dd81567bd040446c48aac27af78b4671de440694ef46dea4f6',
     arrows: 'd7a4069aceff35d73a6c6596a536edac25dbb82c71b88fe1ef70cebd591b8a27',
   },
 } as const;

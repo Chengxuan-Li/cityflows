@@ -188,23 +188,25 @@ const pins = {
     // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
     // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    compile: '74e6b4e602bac3424a7d4397a482cffa1925de581e0608edb124c010be2bc301',
+    // TASK-213: two corners are rounded (n:324's acute corner a gore; n:661's gore tip).
+    compile: '47af58b74453a100cbe8e6aa869b76fab8310000ab8a907c7cfb5e837d8ae5eb',
     lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
     // TASK-190: the curbs open at each bay, and six bays are gone.
-    curbs: 'b3d65cd446e1c721807debf2f0c6301a6283d069ffb0e29e6b72e3cec53c0fcf',
-    de: '8b7938b03e68ee58a8aa0c86f5d0fbe3aac265f9d4f6fce9e61aa6980827dc79',
-    us: '33c25b1c73892664627deb6c326fa7ead07815db265325ff3a67c567226946ac',
+    curbs: '25e69a4587153f4f59be96a2c846bb9ff22b5eaad44bd436a5d9d8be658c48ff',
+    de: 'ded9e46f92f7ef1d114e8da5a466af533012a35d28a9467a7405c9cbeda77a38',
+    us: '6b247602538ed8c179b9d1c38cfdbc0d7b5d944e0a12261aa62cdd1eed2e38af',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    compile: '543e8039b249d3b3b7d59dcf5fc78dc54796b4e28b911af176a995bf39dd8679',
+    // TASK-213: four corners are rounded (gore fillets at n:27, n:68, n:1162; n:365's corner).
+    compile: '1438e38e5ce11eba8d3779e9f7f81d5404668389e2a759bc51612e425682a49a',
     lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
-    curbs: '24a6696b232568ba7bc93e4d1259eba28798648161c28e560d477bcd71496bd4',
-    de: '008af8c2eb93c84032b0ca14492f91914ede12b4fce5b1c2572e540f3f1a292b',
-    us: 'b54c8a1d4baaf30d9b48409e2b73b04a33c6b1f0e4d64fdbd273d14a5b8606a6',
+    curbs: '7f6d24aeb07dd9a2791295820af788fc727eef6eac6c6d4f4154e6c9848c826b',
+    de: 'cee5a378f8673f37fd5848ff1ce7e047517d184b8b3bcf84967afb402b6e79bb',
+    us: 'dbd3963c66cf248c55448d0e8bb7f246ec365212a13b593c685f1c6a915b4d4a',
   },
 } as const;
 const hash = (value: unknown) =>
