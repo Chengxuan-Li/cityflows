@@ -84,6 +84,8 @@ const CURB_REACH = 0.5;
 /** The radius rounding a gore's tip (TASK-092): a nose between two roads overlapping at an acute
  * angle, not a corner block, so it fills the notch no farther than this needs. */
 const GORE_RADIUS_M = 2;
+/** How far beyond a gore's tip its fillet may always reach along either edge (TASK-213). */
+const GORE_TANGENT_M = 4;
 /** How far beyond the cut a median's nose may move to keep the movement surfaces off the median. */
 const NOSE_REACH_M = 3;
 /** The median between attached carriageways (TASK-099). */
@@ -1030,16 +1032,22 @@ function farFillet(
   const d = radius / Math.sin(theta / 2);
   const o = { x: p.x + bisector.x * d, y: p.y + bisector.y * d };
   // As `corner`'s curbs, an edge-following cubic, here from the far cut corner along its edge's
-  // line to the arc, and on to the near edge.
-  const nb = nearestOnPolyline(b.left, qb);
-  const curve = [ka, ...edgeCurve(qa, neg(da), nb.point, nb.direction)];
+  // line to the arc, and on to the near edge. TASK-213: either edge may be the near one (n:44's
+  // ramp r:45 beside the capped r:1285); the curve once always ran from `a`'s cut corner, so with
+  // `a` near it ran out along `a`'s edge and turned back on itself (a 180 degree spike).
+  const near = nearestOnPolyline(nearA ? a.right : b.left, nearA ? qa : qb);
+  const curve = nearA
+    ? [...edgeCurve(near.point, neg(near.direction), qb, db), kb]
+    : [ka, ...edgeCurve(qa, neg(da), near.point, near.direction)];
+  const [startOut, endOut] = nearA ? [near.direction, db] : [da, near.direction];
+  const [start, end] = [curve[0]!, curve.at(-1)!];
   const far = 2 * (radius + distance(ka, kb)) + 1;
   const cut = [
     ...curve,
-    { x: nb.point.x + db.x * far, y: nb.point.y + db.y * far },
-    { x: nb.point.x + (db.x + bisector.x) * far, y: nb.point.y + (db.y + bisector.y) * far },
-    { x: ka.x + (da.x + bisector.x) * far, y: ka.y + (da.y + bisector.y) * far },
-    { x: ka.x + da.x * far, y: ka.y + da.y * far },
+    { x: end.x + endOut.x * far, y: end.y + endOut.y * far },
+    { x: end.x + (endOut.x + bisector.x) * far, y: end.y + (endOut.y + bisector.y) * far },
+    { x: start.x + (startOut.x + bisector.x) * far, y: start.y + (startOut.y + bisector.y) * far },
+    { x: start.x + startOut.x * far, y: start.y + startOut.y * far },
   ];
   const beyond = preparePolygon([...cut, cut[0]!]);
   const boundary = [cut.at(-1)!, ...curve, cut[curve.length]!];
@@ -1048,7 +1056,9 @@ function farFillet(
   return {
     kind: 'curb',
     roads,
-    ring: [...curve, ...edgeUpTo(b.left, nb.along).reverse(), kb],
+    ring: nearA
+      ? [ka, ...edgeUpTo(a.right, near.along), ...curve]
+      : [...curve, ...edgeUpTo(b.left, near.along).reverse(), kb],
     curve,
     cut,
     limit: 'far',
@@ -1147,12 +1157,10 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
             undefined,
           )
       : undefined;
-  if (hit) {
-    const attached = attachedNose(a, b, hit, roads);
-    if (attached) return attached;
-    // TASK-092: the gore's tip, where the edges cross, is rounded by a fillet of `GORE_RADIUS_M`
-    // in the notch beyond it, tangent to both edges, its tangent points within the first half of
-    // either road (the radius shrinks to fit).
+  // TASK-092: the gore's tip, where the edges cross, is rounded by a fillet of `GORE_RADIUS_M`
+  // in the notch beyond it, tangent to both edges (the radius shrinks to fit). TASK-213: the tip
+  // may lie behind one cut (`pointGore`), its station on that edge's line then negative.
+  const gore = (hit: { point: Vec2; alongA: number; alongB: number }): JunctionCorner => {
     const la = cumulativeLengths(a.right),
       lb = cumulativeLengths(b.left);
     const theta = Math.acos(
@@ -1160,38 +1168,51 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
         -1,
         Math.min(
           1,
-          dot(edgeDirection(a.right, la, hit.alongA), edgeDirection(b.left, lb, hit.alongB)),
+          dot(
+            edgeDirection(a.right, la, Math.max(0, hit.alongA)),
+            edgeDirection(b.left, lb, Math.max(0, hit.alongB)),
+          ),
         ),
       ),
     );
     // TASK-131: an inner road under 5 m is not cut back (compile's trim scale), so its edge
     // crosses the arm's beyond its cut as at a gore (n:171's 4.5 m r:173 with service r:303): the
-    // fillet, the corner's curb, may use its edge to 0.5 m before the next member.
+    // fillet, the corner's curb, may use its edge to 0.5 m before the next member. Else within the
+    // first half of the road from the node (TASK-092), or TASK-213 `GORE_TANGENT_M` beyond the tip
+    // where the node's cut takes most of that half (n:660's ramps, 21 m with a 10 m cut, kept
+    // their tips square), leaving a metre of the edge.
     const filletRoom = (edge: Vec2[], end: PolygonEnd, along: number) =>
       end.inner && end.road.lengthM < 5
         ? cumulativeLengths(edge).at(-1)! - 0.5 - along
-        : room(edge, end, along);
+        : Math.max(
+            room(edge, end, along),
+            Math.min(GORE_TANGENT_M, cumulativeLengths(edge).at(-1)! - 1 - along),
+          );
     const t = Math.min(
       Math.min(GORE_RADIUS_M, classRadius) / Math.tan(theta / 2),
       filletRoom(a.right, a, hit.alongA),
       filletRoom(b.left, b, hit.alongB),
     );
-    const pa = pointAtDistance(a.right, la, hit.alongA + t),
-      pb = pointAtDistance(b.left, lb, hit.alongB + t);
+    const sa = hit.alongA + t,
+      sb = hit.alongB + t;
+    const pa = pointAtDistance(a.right, la, sa),
+      pb = pointAtDistance(b.left, lb, sb);
     const fillet =
-      t * Math.tan(theta / 2) >= MIN_CURB_M
+      t * Math.tan(theta / 2) >= MIN_CURB_M && sa >= 0 && sb >= 0
         ? [
             hit.point,
-            ...edgeUpTo(a.right, hit.alongA + t).filter((_, i) => la[i + 1]! > hit.alongA),
+            ...(hit.alongA < 0 ? [ka] : []),
+            ...edgeUpTo(a.right, sa).filter((_, i) => la[i + 1]! > hit.alongA),
             ...edgeCurve(
               pa,
-              neg(edgeDirection(a.right, la, hit.alongA + t)),
+              neg(edgeDirection(a.right, la, sa)),
               pb,
-              edgeDirection(b.left, lb, hit.alongB + t),
+              edgeDirection(b.left, lb, sb),
             ),
-            ...edgeUpTo(b.left, hit.alongB + t)
+            ...edgeUpTo(b.left, sb)
               .filter((_, i) => lb[i + 1]! > hit.alongB)
               .reverse(),
+            ...(hit.alongB < 0 ? [kb] : []),
           ]
         : undefined;
     return {
@@ -1206,7 +1227,23 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
       ],
       ...(fillet ? { fillet } : {}),
     };
-  }
+  };
+  // TASK-213: two edges at an acute angle whose lines meet beyond one cut and behind the other
+  // (the cut corner lies just over the other road's edge, n:2206, n:128): no curb arc fits beyond
+  // both cuts at a radius worth drawing, and the corner was left as the chord. It is a gore whose
+  // tip is the meeting point, rounded in the notch beyond it.
+  const pointGore = () => {
+    if (sa > 0.01 === sb > 0.01 || dot(da, db) <= 0) return undefined;
+    const beyond = sa > 0.01 ? a.right : b.left;
+    if (Math.max(sa, sb) > cumulativeLengths(beyond).at(-1)!) return undefined;
+    const fitted = gore({
+      point: { x: ka.x + da.x * sa, y: ka.y + da.y * sa },
+      alongA: sa,
+      alongB: sb,
+    });
+    return fitted.fillet ? fitted : undefined;
+  };
+  if (hit) return attachedNose(a, b, hit, roads) ?? gore(hit);
   // Meeting beyond both cuts with no crossing near: no corner.
   if (sa > 0.01 && sb > 0.01) return undefined;
   // A curb arc of the class radius of the lower-ranked road, its tangent points on both road
@@ -1276,7 +1313,7 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
       else low = mid;
     }
     [tangent, limit] = [low, 'turn'];
-    if (tangent < Math.max(0, -best.sa, -best.sb) - 0.5) return undefined;
+    if (tangent < Math.max(0, -best.sa, -best.sb) - 0.5) return pointGore();
   }
   // An edge bending away within the curb's reach (a road turning right after the junction) takes
   // no arc there: the arc shrinks (bisection) until its tangent points lie on both edges, and none
@@ -1289,7 +1326,10 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     let low = Math.max(0, -best.sa, -best.sb),
       high = tangent;
     if (!fits(low))
-      return farFillet(a, b, roads, classRadius, surface, room(a.right, a, 0), room(b.left, b, 0));
+      return (
+        farFillet(a, b, roads, classRadius, surface, room(a.right, a, 0), room(b.left, b, 0)) ??
+        pointGore()
+      );
     for (let k = 0; k < 10; k++) {
       const mid = (low + high) / 2;
       if (fits(mid)) low = mid;
@@ -1298,7 +1338,7 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     [tangent, limit] = [low, 'edge'];
   }
   const radius = tangent / perRadius;
-  if (radius < MIN_CURB_M) return undefined;
+  if (radius < MIN_CURB_M) return pointGore();
   const ta = at(da, tangent),
     tb = at(db, tangent);
   const o = centre(tangent);

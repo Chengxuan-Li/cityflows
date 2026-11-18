@@ -565,21 +565,21 @@ export function throughPairs(city: City, net: CompiledCity, node: CNode) {
  * plus the road's converging shift (TASK-089) at the station:
  * a's up to the projection of a's cut onto C, b's from b's cut, linear between (they differ only
  * where the width or offset changes at the node). Stations every 0.5 m over the extent of the
- * node's outline and curbs projected onto C (±10 m around the node where it has none). The drawn
- * region D is the union of the incident roads' surfaces, the outline and the curbs; on each side
- * the drawn edge is the outer end of the run of the ray inside D that contains the point 0.25 m
- * inside the expected edge (or, when that point is outside D, the outer end of the nearest inside
- * run toward C), searched up to 12 m beyond the expected edge (capped there). A side is measured
- * only where its expected edge is an outer edge: the point 0.5 m beyond it is not within 1 m of
- * another incident road's expected band (so the shared edge of a two-way street's directions and
- * edges facing a coincident or adjacent carriageway are not). A side with a side road (whose
- * outward direction points to that side of C at the node) is the near side, the other the far
- * side. On either side a mouth is left out: stations whose ray, from the expected edge out to
- * 12 m beyond it, crosses a side road's surface, widened along C by that road's curb class radius
- * (6, 9 or 12 m). `laneM`: each lane of a and b against its nominal offset from C at stations
- * every 0.5 m out to `APPROACH_M` from the node, where the ray crosses the lane polyline within
- * the road's width of that offset. Pairs with an end offset or a tapering lane at the node are
- * skipped. */
+ * node's outline and curbs projected onto C (±10 m around the node where it has none), from 1 cm
+ * inside it. The drawn region D is the union of the incident roads' surfaces, the outline and the
+ * curbs; on each side the drawn edge is the outer end of the run of the ray inside D that contains
+ * the point 0.25 m inside the expected edge (or, when that point is outside D, the outer end of
+ * the nearest inside run toward C), searched up to 12 m beyond the expected edge (capped there). A
+ * side is measured only where its expected edge is an outer edge: the point 0.5 m beyond it is not
+ * within 1 m of another incident road's expected band (so the shared edge of a two-way street's
+ * directions and edges facing a coincident or adjacent carriageway are not). A side with a side
+ * road (whose outward direction points to that side of C at the node) is the near side, the other
+ * the far side. On either side a mouth is left out: stations whose ray, from the expected edge out
+ * to 12 m beyond it, crosses a side road's surface (or that of another end within 30 degrees of an
+ * arm, a fork), widened along C by that road's curb class radius (6, 9 or 12 m). `laneM`: each
+ * lane of a and b against its nominal offset from C at stations every 0.5 m out to `APPROACH_M`
+ * from the node, where the ray crosses the lane polyline within the road's width of that offset.
+ * Pairs with an end offset or a tapering lane at the node are skipped. */
 export function throughAudit(city: City, net: CompiledCity, node: CNode): ThroughDeviation | null {
   const pairs = throughPairs(city, net, node);
   if (!pairs.length) return null;
@@ -691,7 +691,16 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
         const d = outward(city, road, atEnd);
         sides[d.x * across.x + d.y * across.y < 0 ? 'left' : 'right'] = true;
       }
-    const sideRings = sideRoads.map((road) => ({
+    // TASK-213: an end within 30 degrees of an arm (a fork, n:552's r:554 beside r:556) is no
+    // side road, but its surface beside the arm is a mouth too, not the arm's edge.
+    const forks = incident.filter(
+      (road) =>
+        road !== c.a &&
+        road !== c.b &&
+        !sideRoads.includes(road) &&
+        (road.from === node.idx || road.to === node.idx),
+    );
+    const sideRings = [...sideRoads, ...forks].map((road) => ({
       ring: closed(road.surface),
       radius: curbRadius(road.roadClass),
     }));
@@ -731,7 +740,10 @@ export function throughAudit(city: City, net: CompiledCity, node: CNode): Throug
         );
       });
     const stations: number[] = [];
-    for (let k = 0; from + k * STEP_M <= to + 1e-9; k++) stations.push(from + k * STEP_M);
+    // TASK-213: from 1 cm inside the extent, so no ray runs along a cut line, the edge a road end
+    // shares with the outline, which neither counted as inside (n:1747 read 3.35 m).
+    for (let k = 0; from + 0.01 + k * STEP_M <= to + 1e-9; k++)
+      stations.push(from + 0.01 + k * STEP_M);
     const frames = stations.map((s) => frame(c.line, c.lengths, s));
     // A mouth: stations where the ray, from the expected edge out to SEARCH_M beyond it, crosses
     // a side road's surface, widened along C by that road's curb class radius.
