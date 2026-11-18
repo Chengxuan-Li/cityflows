@@ -1,6 +1,6 @@
 # TASK-200 — Engine queries racing a project open (gate4-compare fails alone)
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-18. Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/200-open-race`, worktree `D:\cityflows-wt\200`, ports 5396 / 5496.
 
 ## Goal

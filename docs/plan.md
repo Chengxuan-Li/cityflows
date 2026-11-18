@@ -225,7 +225,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; owner picked Freiburg |
 | [TASK-198](tasks/TASK-198.md) | UI | Build Freiburg, the chosen landing city, as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | done 2026-11-17 (Freiburg fixed-time until TASK-199) |
 | [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | done 2026-11-18 (Freiburg actuated; merged as is, owner approved) |
-| [TASK-200](tasks/TASK-200.md) | UI | Engine queries racing a project open (gate4-compare fails alone since TASK-198) | `src/main.tsx`, `src/ui/store.ts` open, `src/host/client.ts` | 198 | spec 10/10 alone, failing test without the fix, light tiers | in progress (owner 2026-11-18) |
+| [TASK-200](tasks/TASK-200.md) | UI | Engine queries racing a project open (gate4-compare fails alone since TASK-198) | `src/main.tsx`, `src/ui/store.ts` open, `src/host/client.ts` | 198 | spec 10/10 alone, failing test without the fix, light tiers | done 2026-11-18 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4418,6 +4418,21 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 `ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
+TASK-200 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged): the lead's suspect held. While a
+project opens, `session.engine` is still the old engine, and the store terminated it the moment the new
+one was ready, rejecting any request still in flight. TASK-198 exposed it: its staged open keeps the
+main thread busy drawing the preview during the engine load, so a query queued then (the spec's
+`page.evaluate`) runs about 2 ms before the hand-over instead of tens of ms before it. Real callers
+were affected too: the rail inspector's snapshot request had no rejection handler (an unhandled
+rejection when opening a project during a rail city's run), and the metrics panel, export menu and
+diagnostics could show "Traffic worker terminated", depending on effect timing. Fix: `EngineClient.retire()`
+refuses new requests, drops listeners and terminates once the requests already sent are answered;
+`loadSession` sets the new session first, then retires the old engine (`terminate()` stays for the
+comparison worker and failed loads). New `src/ui/store.test.ts` (a fake worker holding replies) fails
+without the fix. gate4-compare alone: 0 of 10 to 10 of 10. Freiburg first frame 1.95 to 2.09 s from
+navigation (3D a further 4.0 to 4.8 s), unchanged path. No simulation result moves. Lead check on the
+merge: check (1,489), city (183), traffic light and guard, gate4-compare alone 5 of 5, light e2e (61).
 
 Full run 44263310823 (lead, manual, on dc18fee after TASK-199): every job green, including all five
 e2e shards; CI green on dc18fee and Pages deployed it; the city job took 29.5 min.
