@@ -392,7 +392,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const { timeS, trips: counts } = await engine.metrics();
       const signalTiming = await engine.signalTiming();
       engine.onEvent((event) => onEvent(engine, event));
-      get().session?.engine.terminate();
+      const replaced = get().session?.engine;
       signalEpochs.clear();
       cancelComparison();
       set({ comparison: null, compareOpen: false });
@@ -434,6 +434,9 @@ export const useAppStore = create<AppState>((set, get) => {
         person: null,
         rejectedEdit: [],
       });
+      // Requests already sent to the replaced engine (the map, inspectors, panels, the test hook
+      // reading `session.engine`) get its replies instead of a rejection (TASK-200).
+      replaced?.retire();
     } catch (error) {
       engine.terminate();
       throw error;
