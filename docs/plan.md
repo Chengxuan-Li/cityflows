@@ -240,7 +240,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Munich delay +4 to 5%; branch `3e5e33f`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
-| TASK-211 | 9 | Full-demand step time (TASK-187's remaining 1.3 of 25%), results unchanged | `src/sim/**` profiling | 187 | contract in wave 2, if time | planned (owner 2026-11-18, optional) |
+| [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | in progress (owner 2026-11-18, optional) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
