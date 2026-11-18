@@ -225,6 +225,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-197](tasks/TASK-197.md) | UI | Scout a showcase landing city: a real German place with a natural edge, richer, curated | decision doc, scratch | owner brief 2026-11-17 | numbers and shots per candidate, recommendation | done; owner picked Freiburg |
 | [TASK-198](tasks/TASK-198.md) | UI | Build Freiburg, the chosen landing city, as a curated bundled project and open it by default | importer, `fixtures/projects`, `store.ts`, e2e | 197 | own gate, load and frame budgets, e2e on the grid by name | done 2026-11-17 (Freiburg fixed-time until TASK-199) |
 | [TASK-199](tasks/TASK-199.md) | 9 | Freiburg jams with actuated signals: find and fix the cause, drop its fixed-time opt-out | `src/sim/signals.ts`, `signal-program.ts`, `bench/freiburg.ts` | 194, 198 | Freiburg gate actuated, Munich seeds 1-12, full demand | done 2026-11-18 (Freiburg actuated; merged as is, owner approved) |
+| [TASK-200](tasks/TASK-200.md) | UI | Engine queries racing a project open (gate4-compare fails alone since TASK-198) | `src/main.tsx`, `src/ui/store.ts` open, `src/host/client.ts` | 198 | spec 10/10 alone, failing test without the fix, light tiers | in progress (owner 2026-11-18) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4475,6 +4476,7 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-18 (owner): write TASK-200 (the gate4-compare open race) and start it now.
 - 2026-11-18 (owner): merge TASK-199 as it is (not variant B).
 - 2026-11-17 (owner): start TASK-199 now.
 - 2026-11-17 (owner): Freiburg ships now with fixed-time signals; TASK-199 fixes its actuated jam.
