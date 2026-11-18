@@ -238,7 +238,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | done 2026-11-18 |
 | [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
-| [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
+| [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Munich delay +4 to 5%; branch `3e5e33f`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | TASK-211 | 9 | Full-demand step time (TASK-187's remaining 1.3 of 25%), results unchanged | `src/sim/**` profiling | 187 | contract in wave 2, if time | planned (owner 2026-11-18, optional) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4461,6 +4461,26 @@ down the ramps (worst 1,592 s, 2 stalled heads per seed), which TASK-130 never t
 branch conflicts in 12 of 18 files (17 hunks in `engine.ts`) and main already has its main ideas;
 TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The owner decides on
 retiring the branches and the worktrees `D:\cityflows-wt\131p3` and `128-remeasure`.
+
+TASK-215 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
+`task/215-markings` at `3e5e33f`, main `1ac0c38` merged in, worktree `D:\cityflows-wt\215`): M1 arrows at
+a group entry show the turn through the group (5 lanes through to left; r:1148#0/#1 no arrow); M2 lane
+lines only on inner lanes of 15 m or more (Freiburg 232 shapes in 26 groups to 0, Munich 88 to 48); M3
+no default crossing on a trunk road unless an OSM crossing way meets it within 12 m (Freiburg 10 ends
+to 0, Munich 6 to 0); M4 crossings less than 7.5 m apart on one road keep one (signal first),
+keep-clear boxes stop 0.5 m short of stripes, arrows clear the crossing (pairs within 9 m Freiburg 11
+to 2, Munich 12 to 0, Sindelfingen 14 to 0); M5 an arm whose crossing steps more than 0.25 m gets one
+straight band (steps over 1 m Freiburg 10 to 2, Munich 8 to 3, Sindelfingen 24 to 9); M6 one stop line
+across the approach (Freiburg 59 to 0 in pieces, Munich 24 to 0). Marking offset max Freiburg 0.608 to
+0.134 m. 8 tests fail on main. Crossings move walk links, signal stop lines and street parking strips:
+Munich seeds 1 to 12, choice on, mean delay actuated 88.0 to 91.5 s (+4.0%), fixed 124.8 to 131.4 s
+(+5.3%), completions about -0.15%, all drain criteria met; variants put the cost on the
+doubled-crossing rule (fixed 125.2 s without it). Freiburg gate passes (state hash 438544493). Red:
+the bundled-project build test, because the importer keeps parking strips clear of crossings, so the
+Freiburg project must be rebuilt (out of the agent's scope). Outside scope: `walk.ts`, `inspector/node.tsx`,
+many re-pins (T44 to V117, T65, T70). Lead decision: a trade-off under the owner's rules, so held; if
+approved, the lead rebuilds Freiburg and re-pins, or the owner may prefer the variant without the
+doubled-crossing rule.
 
 TASK-210 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): 3D draws `dome` (sections of
 the outline scaled about its centroid: a hemisphere or spherical cap), `onion` (ledge, neck, bulb as
