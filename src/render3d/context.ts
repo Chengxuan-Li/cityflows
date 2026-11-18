@@ -17,7 +17,7 @@ import {
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import Flatbush from 'flatbush';
-import { parallelOffset } from '../geo/polyline';
+import { parallelOffset, pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { ContextFeature } from '../schema';
 import { groundSurface, surfaceGrain, type Surface } from '../render/vegetation';
@@ -479,6 +479,18 @@ export function buildTerrainGround(
     );
   }
   index?.finish();
+  // TASK-201: each area's edges, so a ground triangle no edge reaches is wholly inside or
+  // outside it and needs no clipping (Freiburg's 190,000 triangles took 14 s clipped each).
+  const edges = areas.map(({ rings }) => {
+    const tree = new Flatbush(rings.reduce((sum, ring) => sum + ring.length, 0));
+    for (const ring of rings)
+      ring.forEach((a, i) => {
+        const b = ring[(i + 1) % ring.length]!;
+        tree.add(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y));
+      });
+    tree.finish();
+    return tree;
+  });
   const opaque = { positions: [] as number[], colors: [] as number[], normals: [] as number[] };
   const transparent = {
     positions: [] as number[],
@@ -539,8 +551,26 @@ export function buildTerrainGround(
           Math.max(a.y, b.y, c.y),
         )
         .sort((a, b) => b - a) ?? [];
+    const centre = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
     for (const j of nearby) {
       const area = areas[j]!;
+      if (
+        edges[j]!.search(
+          Math.min(a.x, b.x, c.x),
+          Math.min(a.y, b.y, c.y),
+          Math.max(a.x, b.x, c.x),
+          Math.max(a.y, b.y, c.y),
+        ).length === 0
+      ) {
+        if (
+          area.rings.filter((ring) => pointInPolygon(centre, [...ring, ring[0]!])).length % 2 ===
+          0
+        )
+          continue;
+        emit(pieces, area.color, true);
+        pieces = [];
+        break;
+      }
       emit(
         booleanOpD(ClipType.Intersection, pieces, area.rings, FillRule.NonZero, 5),
         area.color,
