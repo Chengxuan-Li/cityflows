@@ -223,6 +223,21 @@ function clipEdge(a: Vec2, b: Vec2, ring: Vec2[]) {
   return end - start > epsilon ? [start, end] : undefined;
 }
 
+/** TASK-201: what 3D draws of a building: its `building:part` areas when it has them (each
+ * from its own minimum height, in the outline's colour and material unless it has its own),
+ * otherwise the outline itself. */
+export function buildingPieces(feature: Area): Area[] {
+  if (!feature.parts?.length) return [feature];
+  const { colour, material } = feature;
+  return feature.parts.map((part) => ({
+    kind: 'area',
+    class: 'building',
+    ...(colour && { colour }),
+    ...(material && { material }),
+    ...part,
+  }));
+}
+
 /** Display-only building roof; x/east, z/south, y/up, with the building base at zero. */
 export function buildRoof(feature: Area): RoofGeometry {
   const total = feature.heightM ?? (feature.levels === undefined ? 10 : feature.levels * 3);
