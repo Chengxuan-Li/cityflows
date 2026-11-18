@@ -4494,6 +4494,8 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-18 (owner): downloads approved: a fresh Freiburg Overpass extract with `building:part`, and
+  AWS Terrain Tiles for the Schlossberg (TASK-198's deferred items).
 - 2026-11-18 (owner): write TASK-200 (the gate4-compare open race) and start it now.
 - 2026-11-18 (owner): merge TASK-199 as it is (not variant B).
 - 2026-11-17 (owner): start TASK-199 now.
