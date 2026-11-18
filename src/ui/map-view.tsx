@@ -707,7 +707,12 @@ export function MapView() {
           );
           drawnComparison = null;
         }
-        if (fitRequested) {
+        // A phone sheet reports its height once it has settled (TASK-196): in the frame it opens
+        // in, or while it is dragged, the fit waits for it rather than framing under it.
+        if (
+          fitRequested &&
+          !(getState().sheetHeight === null && document.querySelector('[data-sheet]'))
+        ) {
           fitRequested = false;
           revealing = null;
           pointer.reset();

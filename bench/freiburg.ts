@@ -179,7 +179,7 @@ export async function buildFreiburgProject(): Promise<string> {
   const population = generatePopulation(city, scenario.demand);
   // The showcase 3D camera: from over the Dreisam towards the Münster and the Schlossberg.
   const view = {
-    camera: { '3d': { centre: { x: 400, y: -40 }, scale: 1.6, pitch: 50, bearing: -60 } },
+    camera: { '3d': { centre: { x: -300, y: 220 }, scale: 1.18, pitch: 50, bearing: -60 } },
     layers: null,
     selection: null,
   };
