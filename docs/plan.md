@@ -230,7 +230,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-202](tasks/TASK-202.md) | 9 | Trams to every Freiburg stop (8 of 32 unserved) | `src/network/trams.ts`, `rail.ts` | 198 | per-cause tests, served count, other cities unchanged | in progress (owner 2026-11-18) |
 | [TASK-203](tasks/TASK-203.md) | UI | Framing the city in the area the panels leave visible, 2D and 3D | `src/ui/**` map view, 2D/3D cameras | 196, 198 | framing tests, e2e at 1440/1024/phone, first frame, shots | in progress (owner 2026-11-18) |
 | [TASK-204](tasks/TASK-204.md) | 9 | Munich's missed turns at the jughandle (r:639, r:654): choose the lane earlier | `src/sim/lane-change.ts`, lane planning | 193, 194 | miss counts, seeds 1-12 both modes, full demand, drain, gate, guard | in progress (owner 2026-11-18) |
-| [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | in progress (owner 2026-11-18) |
+| [TASK-205](tasks/TASK-205.md) | tooling | Each worktree builds its own production test bundle | `playwright.config.ts`, `.gitignore`, workflows naming the path | 198 | production spec in-worktree, light e2e, CI | done 2026-11-18 |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4423,6 +4423,16 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 `ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
+TASK-205 (Claude Code subagent, Sonnet 5.5 high, 2026-11-18; merged): the production bundle for
+`qa-production.spec.ts` builds into `dist-production/` in each worktree instead of the shared
+`node_modules/.cache/qa-production` (`playwright.config.ts`); `.gitignore`, `.prettierignore` and
+`eslint.config.js` ignore it (needed for check, beyond the listed scope, accepted). No workflow or
+script named the old path. The agent's rewording of the TASK-198 review was left out at the merge.
+Lead check on the merge: check (1,489), light e2e (61); the production spec built into the worktree
+and its checks passed except the local first-frame budget (3.8 s after page load against 3 s, 3D
+10.3 s), measured while four agents ran simulations; that budget is skipped on CI and nothing in this
+change touches the app, so it is recorded as load, to be re-measured on a quiet machine.
 
 Full run 44273719376 (lead, manual, on 415edd3 after TASK-200): every job green, including all five
 e2e shards; CI green on 415edd3 and Pages deployed it; the city job took 15.5 min.

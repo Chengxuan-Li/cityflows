@@ -1,6 +1,6 @@
 # TASK-205 — Each worktree builds its own production test bundle
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Sonnet 5.5,
+Status: done 2026-11-18. Proposed owner: Claude Code subagent (Sonnet 5.5,
 high). Branch `task/205-qa-cache`, worktree `D:\cityflows-wt\205`, ports 5405 / 5505.
 
 ## Goal
