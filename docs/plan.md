@@ -4418,6 +4418,9 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
 
+Full run 44263310823 (lead, manual, on dc18fee after TASK-199): every job green, including all five
+e2e shards; CI green on dc18fee and Pages deployed it; the city job took 29.5 min.
+
 TASK-198 (Claude Code subagent, Opus 5.5 high, 2026-11-17; merged): Freiburg is the landing view.
 Phases: (1) `ImportOptions.polygon` clips every layer to the ring and cuts ways at the crossing (700
 nodes / 1,043 roads against the bbox's 857 / 1,322; 0 m of road outside against 3,810 m; 41
