@@ -4460,7 +4460,7 @@ worst loop visit 327 s, every released trip completed on seed 1; at full demand 
 down the ramps (worst 1,592 s, 2 stalled heads per seed), which TASK-130 never targeted. TASK-130's
 branch conflicts in 12 of 18 files (17 hunks in `engine.ts`) and main already has its main ideas;
 TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The owner decides on
-retiring the branches and the worktrees `D:\cityflows-wtYp3` and `128-remeasure`.
+retiring the branches and the worktrees `D:\cityflows-wt\131p3` and `128-remeasure`.
 
 TASK-206 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): no single regression since
 TASK-198: in one session `200bc3e` measured 5.45 to 6.01 s and main 5.50 to 6.59 s; the 3D build grew
