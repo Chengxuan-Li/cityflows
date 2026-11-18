@@ -350,7 +350,10 @@ export function layoutRoad(
       : [0, 0];
     const line = base.map((p, k) => {
       const lateral =
-        value + shifts[k]! + from + (to - from) * smoothstep((unique[k]! - s0) / total);
+        value +
+        shifts[k]! +
+        from +
+        (to - from) * smoothstep((unique[k]! - s0) / Math.max(total, 1e-6));
       return { x: p.x + normal[k]!.x * lateral, y: p.y + normal[k]!.y * lateral };
     });
     if (!transition.start && !transition.end) return line;
