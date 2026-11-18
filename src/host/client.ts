@@ -41,6 +41,9 @@ export interface EngineClient {
   hash(): Promise<number>;
   onEvent(listener: (event: HostEvent) => void): () => void;
   terminate(): void;
+  /** Refuses new requests and terminates once the requests already sent have their replies: the
+   *  engine of a project being replaced answers what it was asked (TASK-200). */
+  retire(): void;
 }
 
 export function createEngineClient(worker: Worker): EngineClient {
@@ -49,6 +52,7 @@ export function createEngineClient(worker: Worker): EngineClient {
   let nextId = 1;
   let snapshotInFlight: Promise<HostSnapshot> | undefined;
   let closed: string | undefined;
+  let retired = false;
 
   function emit(event: HostEvent) {
     for (const listener of listeners) listener(event);
@@ -62,6 +66,7 @@ export function createEngineClient(worker: Worker): EngineClient {
     const match = pending.get(data.id);
     pending.delete(data.id);
     match?.(data);
+    if (retired && !pending.size) close('Traffic worker terminated');
   }
 
   function close(reason: string) {
@@ -88,7 +93,7 @@ export function createEngineClient(worker: Worker): EngineClient {
   worker.addEventListener('error', onError);
 
   function send<T>(request: WithoutId<HostWireRequest>): Promise<T> {
-    if (closed) return Promise.reject(new Error(closed));
+    if (closed || retired) return Promise.reject(new Error(closed ?? 'Traffic worker retired'));
     const id = nextId++;
     return new Promise((resolve, reject) => {
       pending.set(id, (reply) => {
@@ -147,5 +152,10 @@ export function createEngineClient(worker: Worker): EngineClient {
       return () => listeners.delete(listener);
     },
     terminate: () => close('Traffic worker terminated'),
+    retire() {
+      retired = true;
+      listeners.clear();
+      if (!pending.size) close('Traffic worker terminated');
+    },
   };
 }
