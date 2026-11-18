@@ -4424,6 +4424,9 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
 
+Full run 44381642228 (lead, manual, on c9b6867 after the TASK-203 follow-up): every job green,
+including all five e2e shards; CI green on c9b6867 and Pages deployed it; the city job took 33.2 min.
+
 TASK-203 follow-up (same subagent, branch `task/203b-showcase-camera`, 2026-11-18; merged): the
 `qa-framing` failure with the suggested showcase camera was the spec, not the camera. Fit lands on the
 map's next frame; with the old, cropping showcase `expectFramed` waited for it, but the new values
