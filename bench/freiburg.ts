@@ -72,6 +72,21 @@ function osmNode(city: City, osmId: number) {
 
 const curated = { source: 'authored' as const };
 
+/** Removes roads, their turn rules and the nodes only they used. */
+function removeRoads(city: City, ids: string[]) {
+  for (const id of ids) {
+    const { from, to } = city.roads[id]!;
+    delete city.roads[id];
+    for (const node of Object.values(city.nodes)) {
+      node.turnRules = node.turnRules.filter((rule) => rule.from !== id && rule.to !== id);
+      node.minorRoads = node.minorRoads.filter((road) => road !== id);
+    }
+    for (const end of [from, to])
+      if (Object.values(city.roads).every((r) => r.from !== end && r.to !== end))
+        delete city.nodes[end];
+  }
+}
+
 /** TASK-198: the edits that make the polygon import the showcase, each keyed to OSM ids so it
  * fails loudly if a rebuilt import moves. */
 export function curateFreiburg(city: City, data: OsmData): void {
@@ -161,6 +176,39 @@ export function curateFreiburg(city: City, data: OsmData): void {
     gateway.population = Math.round(gateway.population * 0.3);
     gateway.jobs = Math.round(gateway.jobs * 0.3);
   }
+
+  // TASK-207: three lots whose only access the polygon cut prunes (a bbox import reaches the two
+  // by the west edge from Haslacher Straße, way 51729602, and Farben-Thon's from the service way
+  // 1198950930): no car reaches them, and each showed as stalls without a path and a facility
+  // without an exit. Their areas stay on the map among the surroundings.
+  for (const osmId of [3078479, 124266993, 526598839]) {
+    const lot = Object.values(city.parking ?? {}).find(
+      (p) => p.kind === 'lot' && p.provenance.osmIds?.[0] === osmId,
+    );
+    if (!lot || lot.connectors.length) throw new Error(`Freiburg curation: lot ${osmId} moved`);
+    removeRoads(city, lot.aisles ?? []);
+    delete city.parking![lot.id];
+  }
+  // TASK-207: Schwabentorplatz's bus road and the Schlossbergring's service road go on only into
+  // the pedestrian Schwabentor (ways 41455468 and 242280648: trams, buses and bicycles), which
+  // the import does not drive, so each was a one-way dead end that a car could enter.
+  removeRoads(
+    city,
+    [30642127, 53799667].map((way) => {
+      const roads = Object.values(city.roads).filter((r) => r.provenance.osmIds?.includes(way));
+      if (roads.length !== 1) throw new Error(`Freiburg curation: way ${way} moved`);
+      return roads[0]!.id;
+    }),
+  );
+  // TASK-207: the ZOB's two-way stretch (way 238477557) ends against the one-way bus road
+  // through the station (30655298); its backward lane, a taxi rank, turns round there.
+  const zob = osmNode(city, 2463105124);
+  zob.turnRules.push({
+    from: osmRoad(city, 238477557, zob.id, 'to').id,
+    to: osmRoad(city, 238477557, zob.id, 'from').id,
+    allowed: true,
+    provenance: curated,
+  });
 }
 
 /** The bundled project, as the app opens it: the curated city, the showcase demand (0.15
