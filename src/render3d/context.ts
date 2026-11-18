@@ -17,14 +17,14 @@ import {
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import Flatbush from 'flatbush';
-import { parallelOffset } from '../geo/polyline';
+import { parallelOffset, pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { ContextFeature } from '../schema';
 import { groundSurface, surfaceGrain, type Surface } from '../render/vegetation';
 import { mapPalettes, style, type MapPalette } from '../render/style';
 import { buildingRingHash, buildingSeed, lampColors, windowLitGlsl } from '../render/lighting';
 import { drape, lowestGround, triangulate, type Terrain } from './terrain';
-import { buildRoof } from './roofs';
+import { buildingPieces, buildRoof } from './roofs';
 
 type Building = Extract<ContextFeature, { kind: 'area' }>;
 
@@ -84,13 +84,13 @@ function facade(feature: Building, low: number, high: number) {
   return windowInfo(geometry, bands, buildingSeed(feature.rings[0]!));
 }
 
-function buildingColour(feature: Building, palette: MapPalette) {
+function buildingColour(feature: Building, palette: MapPalette, ring = feature.rings[0]!) {
   if (feature.colour) return mutedColour(feature.colour, palette.context.building);
   const material = Object.hasOwn(palette.buildings.walls, feature.material ?? '')
     ? palette.buildings.walls[feature.material!]
     : undefined;
   if (material !== undefined) return material;
-  const hash = buildingRingHash(feature.rings[0]!);
+  const hash = buildingRingHash(ring);
   return new Color(palette.context.building).multiplyScalar(0.96 + (hash % 9) / 100).getHex();
 }
 
@@ -226,7 +226,8 @@ export function buildContext(
     shapes: {} as Record<string, number>,
     fallbacks: {} as Record<string, number>,
   };
-  let groundCount = 0;
+  let groundCount = 0,
+    buildingCount = 0;
   const order = {
     tree: -1,
     street_lamp: -1,
@@ -245,65 +246,71 @@ export function buildContext(
   for (const feature of [...features].sort((a, b) => rank(a) - rank(b))) {
     if (feature.kind === 'point' || feature.class === 'tree_row') continue;
     if (feature.kind === 'area' && feature.class === 'building') {
-      const geometry = new ExtrudeGeometry(shape(feature.rings), {
-        depth: feature.heightM ?? (feature.levels === undefined ? 10 : feature.levels * 3),
-        bevelEnabled: false,
-        steps: 1,
-        curveSegments: 1,
-      }).rotateX(-Math.PI / 2);
-      if (terrain?.grid) geometry.translate(0, lowestGround(feature.rings, terrain, true), 0);
-      buildings.push(paint(geometry, palette.context.building, palette.context.buildingEdge));
-      const canopy = feature.sub === 'roof';
-      const minimum = feature.minHeightM ?? (canopy ? 3 : 0);
-      const roofFeature = canopy
-        ? {
-            ...feature,
-            minHeightM: minimum + 0.2,
-            heightM: Math.max(
-              feature.heightM ??
-                minimum +
-                  0.2 +
-                  (feature.roof?.heightM ??
-                    (feature.roof?.levels !== undefined
-                      ? feature.roof.levels * 3
-                      : feature.roof && feature.roof.shape !== 'flat'
-                        ? 2
-                        : 0)),
-              minimum + 0.2,
-            ),
-          }
-        : feature;
-      const roof = buildRoof(roofFeature);
-      const wallColour = buildingColour(feature, palette);
-      const defaultRoof =
-        roof.shape === 'flat' ? palette.buildings.flatRoof : palette.buildings.pitchedRoof;
-      const roofColour = feature.roof?.colour
-        ? mutedColour(feature.roof.colour, defaultRoof)
-        : Object.hasOwn(palette.buildings.roofs, feature.roof?.material ?? '')
-          ? palette.buildings.roofs[feature.roof!.material!]!
-          : defaultRoof;
-      const parts = [windowInfo(paint(roof.roof, roofColour))];
-      if (canopy) roof.infill.dispose();
-      else parts.push(windowInfo(paint(roof.infill, wallColour)));
-      if (canopy) {
-        // A thin slab, with a visible underside and no facade down to the ground.
-        const slab = new ExtrudeGeometry(shape(feature.rings), {
-          depth: 0.2,
+      buildingCount++;
+      const base = terrain?.grid ? lowestGround(feature.rings, terrain, true) : 0;
+      for (const piece of buildingPieces(feature)) {
+        const canopy = piece.sub === 'roof';
+        const minimum = piece.minHeightM ?? (canopy ? 3 : 0);
+        const total = piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3);
+        // An outline extrudes from the ground; a part from its own minimum height.
+        const low = piece === feature ? 0 : Math.min(minimum, total);
+        const geometry = new ExtrudeGeometry(shape(piece.rings), {
+          depth: total - low || 0.2,
           bevelEnabled: false,
           steps: 1,
           curveSegments: 1,
-        })
-          .rotateX(-Math.PI / 2)
-          .translate(0, roof.wallHeightM - 0.2, 0);
-        parts.push(windowInfo(paint(slab, roofColour)));
-      } else if (roof.wallHeightM > minimum)
-        parts.push(paint(facade(feature, minimum, roof.wallHeightM), wallColour));
-      const base = terrain?.grid ? lowestGround(feature.rings, terrain, true) : 0;
-      for (const part of parts) detailed.push(part.translate(0, base, 0));
-      roofStats.shapes[roof.shape] = (roofStats.shapes[roof.shape] ?? 0) + 1;
-      if (roof.fallbackReason)
-        roofStats.fallbacks[roof.fallbackReason] =
-          (roofStats.fallbacks[roof.fallbackReason] ?? 0) + 1;
+        }).rotateX(-Math.PI / 2);
+        if (terrain?.grid || low) geometry.translate(0, base + low, 0);
+        buildings.push(paint(geometry, palette.context.building, palette.context.buildingEdge));
+        const roofFeature = canopy
+          ? {
+              ...piece,
+              minHeightM: minimum + 0.2,
+              heightM: Math.max(
+                piece.heightM ??
+                  minimum +
+                    0.2 +
+                    (piece.roof?.heightM ??
+                      (piece.roof?.levels !== undefined
+                        ? piece.roof.levels * 3
+                        : piece.roof && piece.roof.shape !== 'flat'
+                          ? 2
+                          : 0)),
+                minimum + 0.2,
+              ),
+            }
+          : piece;
+        const roof = buildRoof(roofFeature);
+        const wallColour = buildingColour(piece, palette, feature.rings[0]);
+        const defaultRoof =
+          roof.shape === 'flat' ? palette.buildings.flatRoof : palette.buildings.pitchedRoof;
+        const roofColour = piece.roof?.colour
+          ? mutedColour(piece.roof.colour, defaultRoof)
+          : Object.hasOwn(palette.buildings.roofs, piece.roof?.material ?? '')
+            ? palette.buildings.roofs[piece.roof!.material!]!
+            : defaultRoof;
+        const parts = [windowInfo(paint(roof.roof, roofColour))];
+        if (canopy) roof.infill.dispose();
+        else parts.push(windowInfo(paint(roof.infill, wallColour)));
+        if (canopy) {
+          // A thin slab, with a visible underside and no facade down to the ground.
+          const slab = new ExtrudeGeometry(shape(piece.rings), {
+            depth: 0.2,
+            bevelEnabled: false,
+            steps: 1,
+            curveSegments: 1,
+          })
+            .rotateX(-Math.PI / 2)
+            .translate(0, roof.wallHeightM - 0.2, 0);
+          parts.push(windowInfo(paint(slab, roofColour)));
+        } else if (roof.wallHeightM > minimum)
+          parts.push(paint(facade(piece, minimum, roof.wallHeightM), wallColour));
+        for (const part of parts) detailed.push(part.translate(0, base, 0));
+        roofStats.shapes[roof.shape] = (roofStats.shapes[roof.shape] ?? 0) + 1;
+        if (roof.fallbackReason)
+          roofStats.fallbacks[roof.fallbackReason] =
+            (roofStats.fallbacks[roof.fallbackReason] ?? 0) + 1;
+      }
       continue;
     }
     groundCount++;
@@ -366,7 +373,7 @@ export function buildContext(
       detailed: details.getAttribute('position').count / 3,
     },
     ground: merged(ground),
-    buildingCount: buildings.length,
+    buildingCount,
     groundCount,
   };
 }
@@ -472,6 +479,18 @@ export function buildTerrainGround(
     );
   }
   index?.finish();
+  // TASK-201: each area's edges, so a ground triangle no edge reaches is wholly inside or
+  // outside it and needs no clipping (Freiburg's 190,000 triangles took 14 s clipped each).
+  const edges = areas.map(({ rings }) => {
+    const tree = new Flatbush(rings.reduce((sum, ring) => sum + ring.length, 0));
+    for (const ring of rings)
+      ring.forEach((a, i) => {
+        const b = ring[(i + 1) % ring.length]!;
+        tree.add(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y));
+      });
+    tree.finish();
+    return tree;
+  });
   const opaque = { positions: [] as number[], colors: [] as number[], normals: [] as number[] };
   const transparent = {
     positions: [] as number[],
@@ -532,8 +551,26 @@ export function buildTerrainGround(
           Math.max(a.y, b.y, c.y),
         )
         .sort((a, b) => b - a) ?? [];
+    const centre = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
     for (const j of nearby) {
       const area = areas[j]!;
+      if (
+        edges[j]!.search(
+          Math.min(a.x, b.x, c.x),
+          Math.min(a.y, b.y, c.y),
+          Math.max(a.x, b.x, c.x),
+          Math.max(a.y, b.y, c.y),
+        ).length === 0
+      ) {
+        if (
+          area.rings.filter((ring) => pointInPolygon(centre, [...ring, ring[0]!])).length % 2 ===
+          0
+        )
+          continue;
+        emit(pieces, area.color, true);
+        pieces = [];
+        break;
+      }
       emit(
         booleanOpD(ClipType.Intersection, pieces, area.rings, FillRule.NonZero, 5),
         area.color,

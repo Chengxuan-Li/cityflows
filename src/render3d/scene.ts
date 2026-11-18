@@ -63,7 +63,7 @@ import { placeDetails, type placeStreet } from '../render/street';
 import { buildStreet } from './street';
 import { Vehicles3D } from './vehicles';
 import { buildWalkSignals, Walkers3D } from './walkers';
-import { groundMesh } from './terrain';
+import { clipGround, groundMesh } from './terrain';
 import { lotGeometry } from './stalls';
 import { stripGeometry } from './strips';
 import { terrainVehicleOffset } from './heights';
@@ -548,15 +548,16 @@ export class Scene3D {
         grid ? grid.originM.y + (grid.rows - 1) * grid.cellM : -Infinity,
       ),
     };
-    // TASK-198: a polygon import's ground is its boundary ring, the city's natural edge.
-    const ring = renderedSource.terrain
-      ? undefined
-      : renderedSource.geo?.boundary?.map(([lon, lat]) =>
-          lonLatToLocal(renderedSource.geo!, { lon, lat }),
-        );
+    // TASK-198: a polygon import's ground is its boundary ring, the city's natural edge; on
+    // terrain (TASK-201) the terrain ground cut to that ring.
+    const ring = renderedSource.geo?.boundary?.map(([lon, lat]) =>
+      lonLatToLocal(renderedSource.geo!, { lon, lat }),
+    );
     this.ground = new Mesh(
       renderedSource.terrain
-        ? groundMesh(terrain, bounds, -0.04)
+        ? ring
+          ? clipGround(groundMesh(terrain, bounds, -0.04), ring)
+          : groundMesh(terrain, bounds, -0.04)
         : ring
           ? new ShapeGeometry(new Shape(ring.map(({ x, y }) => new Vector2(x, -y))))
           : new PlaneGeometry(width, depth),

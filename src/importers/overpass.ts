@@ -1,7 +1,7 @@
 import type { ImportOptions } from './types';
 
 export type Bbox = NonNullable<ImportOptions['bbox']>;
-export const queryVersion = 9;
+export const queryVersion = 10;
 export const defaultEndpoint =
   import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 let active = false;
@@ -30,6 +30,8 @@ export function buildQuery(bbox: Bbox, context = true): string {
   const surroundings = context
     ? [
         '[building][building!=no]',
+        // TASK-201: the parts that model a building's tiers, towers and spires in 3D.
+        '["building:part"]["building:part"!=no]',
         '[natural~"^(water|wood|scrub|grassland)$"]',
         '[waterway~"^(riverbank|river|stream|canal)$"]',
         '[landuse~"^(reservoir|basin|grass|meadow|forest|recreation_ground|village_green|allotments|cemetery|residential|commercial|retail|industrial|railway|construction)$"]',

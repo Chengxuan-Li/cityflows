@@ -38,6 +38,7 @@ import { style, type MapPalette } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import type { ContextFeature } from '../schema';
 import { heightAt, type cityHeights } from './heights';
+import { buildingPieces } from './roofs';
 import { lowestGround } from './terrain';
 
 /**
@@ -265,12 +266,14 @@ export function buildingPrisms(
   for (const f of features) {
     if (f.kind !== 'area' || f.class !== 'building') continue;
     const base = terrain.grid ? lowestGround(f.rings, terrain, true) : 0;
-    const minimum = f.minHeightM ?? (f.sub === 'roof' ? 3 : 0);
-    const height =
-      f.sub === 'roof'
-        ? Math.max(f.heightM ?? 0, minimum + 0.2)
-        : (f.heightM ?? (f.levels === undefined ? 10 : f.levels * 3));
-    prisms.push({ rings: f.rings, bottom: base + minimum, top: base + height });
+    for (const piece of buildingPieces(f)) {
+      const minimum = piece.minHeightM ?? (piece.sub === 'roof' ? 3 : 0);
+      const height =
+        piece.sub === 'roof'
+          ? Math.max(piece.heightM ?? 0, minimum + 0.2)
+          : (piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3));
+      prisms.push({ rings: piece.rings, bottom: base + minimum, top: base + height });
+    }
   }
   return prisms;
 }

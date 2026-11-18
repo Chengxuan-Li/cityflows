@@ -360,9 +360,13 @@ type ContextFeature =
   | { kind: 'area'; class: ContextArea; rings: Vec2[][]; sub?: string; heightM?: number; levels?: number;
       roof?: { shape: RoofShape; heightM?: number; levels?: number; colour?: string;
                material?: string; orientation?: 'along' | 'across'; directionDeg?: number };
-      colour?: string; material?: string; minHeightM?: number }
+      colour?: string; material?: string; minHeightM?: number;
+      parts?: BuildingPart[] }  // TASK-201, buildings only
   | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number }
   | { kind: 'point'; class: ContextPoint; pos: Vec2; heightM?: number; crownM?: number; sub?: string };
+// An area's own fields without kind, class and parts; `sub` is the `building:part` value.
+type BuildingPart = { rings: Vec2[][]; sub?: string; heightM?: number; levels?: number; roof?: …;
+  colour?: string; material?: string; minHeightM?: number };
 ~~~
 
 Rings are closed, outer first then holes, in local metres rounded to 0.1 m. Optional sub is the
@@ -372,6 +376,14 @@ without a schema-version bump. Colours are lowercase `#rrggbb`; roof dimensions 
 are nonnegative metres/levels; `directionDeg` is a downhill compass bearing in [0, 360).
 Old files omit these fields. They remain display-only and survive project save/open; no
 network, demand or simulation module reads them.
+TASK-201 adds optional `parts` on a building: the `building:part` areas (ways and multipolygons
+not themselves tagged `building`) whose centre lies in its outline, the smallest outline when
+several do; parts outside every outline are left out with one warning. A part reads the same
+tags as a building (`height`, `min_height`, `building:levels`, `building:min_level`, roof, colour
+and material). The 3D view draws a building's parts, each from its minimum height and on the
+outline's base, in the outline's colour and material unless the part has its own, instead of the
+outline; 2D, demand, picking and terrain cuts use the outline. No schema-version bump; old files
+omit the field.
 TASK-106 adds tree points (`sub` is `leaf_type`, dimensions are metres) and tree-row lines
 with optional `spacingM` (minimum 2 m) from OSM `spacing` (default 8 m). This is an optional context
 extension without a schema-version bump. Only imported context is saved; generated trees
@@ -3683,8 +3695,9 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    a driver who misses a turn to return instead of stranding at the crop boundary.
    TASK-198, polygon boundaries: `ImportOptions.polygon`, a ring of `[lon, lat]` in degrees,
    replaces the bbox. `geo.bbox` and the local frame come from the ring's bounding box, and
-   `geo.boundary` keeps the ring (open, as given) so the views can draw the natural edge; a
-   bbox import has no `boundary` and is unchanged. Roads, rail, walk links, aisles and
+   `geo.boundary` keeps the ring (open, as given) so the views can draw the natural edge (on
+   terrain, TASK-201, the 3D ground is the terrain cut to the ring; the 2D hillshade keeps its
+   grid rectangle); a bbox import has no `boundary` and is unchanged. Roads, rail, walk links, aisles and
    platforms are cut where they cross the ring (several pieces where a concave ring leaves and
    re-enters; a cut sliver under 1 m is dropped); areas (buildings, land use, water, lots,
    street-side strips) keep their largest piece inside the ring (`clipper2-ts`); points

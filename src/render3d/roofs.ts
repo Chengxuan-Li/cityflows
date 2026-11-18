@@ -185,6 +185,36 @@ function roofPatches(shape: RoofShape, a: number, b: number): Patch[] {
   return patches;
 }
 
+/** TASK-201: a convex footprint other than a near-rectangle (the Münster spire's octagon) is
+ * not one of the box shapes: its pyramid rises from every edge to the centroid. */
+function convex(ring: Vec2[]) {
+  const sign = Math.sign(area(ring));
+  return ring.every(
+    (p, i) =>
+      cross(p, ring[(i + 1) % ring.length]!, ring[(i + 2) % ring.length]!) * sign >= -epsilon,
+  );
+}
+
+function apexPatches(ring: Vector2[]): Patch[] {
+  let cx = 0,
+    cy = 0,
+    twice = 0;
+  ring.forEach((p, i) => {
+    const q = ring[(i + 1) % ring.length]!;
+    const c = p.x * q.y - q.x * p.y;
+    twice += c;
+    cx += (p.x + q.x) * c;
+    cy += (p.y + q.y) * c;
+  });
+  const apex = { x: cx / (3 * twice), y: cy / (3 * twice), h: 1 };
+  return ring.flatMap((p, i) => {
+    const q = ring[(i + 1) % ring.length]!;
+    return Math.abs(cross(p, q, apex)) > epsilon
+      ? [patch([{ x: p.x, y: p.y, h: 0 }, { x: q.x, y: q.y, h: 0 }, apex])]
+      : [];
+  });
+}
+
 /** Convex clipping of each footprint triangle retains concave edges and courtyard holes. */
 function clip(subject: Vec2[], ring: Vec2[]) {
   let result = subject;
@@ -223,6 +253,21 @@ function clipEdge(a: Vec2, b: Vec2, ring: Vec2[]) {
   return end - start > epsilon ? [start, end] : undefined;
 }
 
+/** TASK-201: what 3D draws of a building: its `building:part` areas when it has them (each
+ * from its own minimum height, in the outline's colour and material unless it has its own),
+ * otherwise the outline itself. */
+export function buildingPieces(feature: Area): Area[] {
+  if (!feature.parts?.length) return [feature];
+  const { colour, material } = feature;
+  return feature.parts.map((part) => ({
+    kind: 'area',
+    class: 'building',
+    ...(colour && { colour }),
+    ...(material && { material }),
+    ...part,
+  }));
+}
+
 /** Display-only building roof; x/east, z/south, y/up, with the building base at zero. */
 export function buildRoof(feature: Area): RoofGeometry {
   const total = feature.heightM ?? (feature.levels === undefined ? 10 : feature.levels * 3);
@@ -233,7 +278,11 @@ export function buildRoof(feature: Area): RoofGeometry {
   if (requested !== 'flat') {
     if (rings.length > 1) fallbackReason = 'courtyard';
     else if (['round', 'dome', 'onion'].includes(requested)) fallbackReason = 'unsupported-shape';
-    else if (Math.abs(area(rings[0]!)) / box.area < 0.85) fallbackReason = 'irregular-footprint';
+    else if (
+      Math.abs(area(rings[0]!)) / box.area < 0.85 &&
+      !(requested === 'pyramidal' && convex(rings[0]!))
+    )
+      fallbackReason = 'irregular-footprint';
   }
   const shape = fallbackReason ? 'flat' : requested;
   let u = box.u,
@@ -278,7 +327,9 @@ export function buildRoof(feature: Area): RoofGeometry {
             { x: -a, y: b, h: 0 },
           ]),
         ]
-      : roofPatches(shape, a, b);
+      : shape === 'pyramidal' && Math.abs(area(rings[0]!)) / box.area < 0.85
+        ? apexPatches(local[0]!)
+        : roofPatches(shape, a, b);
   const roofs: number[] = [],
     infill: number[] = [];
   const world = (p: Vec2, height: number) => [

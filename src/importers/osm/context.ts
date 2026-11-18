@@ -6,11 +6,18 @@ import {
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { Diagnostic } from '../../network';
-import type { ContextArea, ContextFeature, ContextLine, RoofShape } from '../../schema';
+import type {
+  ContextArea,
+  ContextAreaFeature,
+  ContextFeature,
+  ContextLine,
+  RoofShape,
+} from '../../schema';
 import { clip, polygonSources } from './buildings';
 import { clipPart, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
 import { surfaceLot } from './lots';
+import { polygonCenter } from './places';
 
 function areaClass(tag: OsmTags): ContextArea | undefined {
   if (tag.building && tag.building !== 'no') return 'building';
@@ -42,6 +49,10 @@ function areaClass(tag: OsmTags): ContextArea | undefined {
     return 'landuse';
   if (tag.amenity === 'parking') return 'parking';
 }
+
+/** TASK-201: a `building:part` area that is not itself tagged as a building. */
+const buildingPart = (tag: OsmTags) =>
+  !tag.building && !!tag['building:part'] && tag['building:part'] !== 'no';
 
 function lineClass(tag: OsmTags): ContextLine | undefined {
   if (tag.natural === 'tree_row') return 'tree_row';
@@ -211,7 +222,11 @@ function buildingDetails(
   const minLevel = nonnegativeMeasurement(tag['building:min_level']);
   const minHeightM =
     nonnegativeMeasurement(tag.min_height) ??
-    (minLevel !== undefined ? minLevel * 3 : tag.building === 'roof' ? 3 : undefined);
+    (minLevel !== undefined
+      ? minLevel * 3
+      : (tag.building ?? tag['building:part']) === 'roof'
+        ? 3
+        : undefined);
   const rawShape = tag['roof:shape']?.trim().toLowerCase();
   let shape: RoofShape = 'flat';
   if (rawShape) {
@@ -229,7 +244,7 @@ function buildingDetails(
   const roofMaterial = tag['roof:material']?.trim().toLowerCase();
   const orientation = tag['roof:orientation'];
   const directionDeg = direction(tag['roof:direction']);
-  const details: Omit<NonNullable<Extract<ContextFeature, { kind: 'area' }>['roof']>, 'shape'> = {
+  const details: Omit<NonNullable<ContextAreaFeature['roof']>, 'shape'> = {
     ...(heightM !== undefined && { heightM }),
     ...(levels !== undefined && { levels }),
     ...(roofColour && { colour: roofColour }),
@@ -290,8 +305,8 @@ export function importContext(
       ...(sub && { sub }),
     });
   }
-  for (const source of polygonSources(data, (tag) => areaClass(tag) !== undefined)) {
-    if (omitLots && surfaceLot(source.tag)) continue;
+  /** Each outer ring of a polygon source with its holes, clipped and rounded. */
+  const areas = (source: ReturnType<typeof polygonSources>[number]) => {
     const projected = source.rings.flatMap(({ role, ids }) => {
       const ring = ids.slice(0, -1).map((id) => positions.get(id));
       return ring.every((p): p is Vec2 => p !== undefined) ? [{ role, ring }] : [];
@@ -311,14 +326,21 @@ export function importContext(
       const points = round([...clipped, clipped[0]!]);
       return points.length >= 4 && area(points) >= 4 ? points : undefined;
     };
-    for (const shape of outers) {
+    return outers.flatMap((shape) => {
       const outer = close(shape.ring);
-      if (!outer) continue;
+      if (!outer) return [];
       const holes = innerOwners
         .filter((inner) => inner.owner === shape)
         .map((inner) => close(inner.ring))
         .filter((ring): ring is Vec2[] => !!ring);
-      if (area(outer) - holes.reduce((sum, hole) => sum + area(hole), 0) < 4) continue;
+      return area(outer) - holes.reduce((sum, hole) => sum + area(hole), 0) < 4
+        ? []
+        : [[outer, ...holes]];
+    });
+  };
+  for (const source of polygonSources(data, (tag) => areaClass(tag) !== undefined)) {
+    if (omitLots && surfaceLot(source.tag)) continue;
+    for (const rings of areas(source)) {
       const tag = source.tag;
       const kind = areaClass(tag)!;
       const sub =
@@ -332,7 +354,7 @@ export function importContext(
       features.push({
         kind: 'area',
         class: kind,
-        rings: [outer, ...holes],
+        rings,
         ...(sub && { sub }),
         ...(heightM !== undefined && { heightM }),
         ...(levels !== undefined && { levels }),
@@ -340,6 +362,40 @@ export function importContext(
       });
     }
   }
+  // TASK-201: each part belongs to the smallest building outline around its centre; parts
+  // outside every outline are left out (the outline is what 2D, demand and picking use).
+  const buildings = features
+    .filter((f): f is ContextAreaFeature => f.kind === 'area' && f.class === 'building')
+    .map((feature) => ({ feature, area: area(feature.rings[0]!) }))
+    .sort((a, b) => a.area - b.area);
+  let orphans = 0;
+  for (const source of polygonSources(data, buildingPart))
+    for (const rings of areas(source)) {
+      const centre = polygonCenter(rings[0]!);
+      const owner =
+        centre && buildings.find(({ feature }) => pointInPolygon(centre, feature.rings[0]!));
+      if (!owner) {
+        orphans++;
+        continue;
+      }
+      const tag = source.tag;
+      const heightM = measurement(tag.height);
+      const levels = measurement(tag['building:levels']);
+      (owner.feature.parts ??= []).push({
+        rings,
+        sub: tag['building:part']!,
+        ...(heightM !== undefined && { heightM }),
+        ...(levels !== undefined && { levels }),
+        ...buildingDetails(tag, mappedShapes),
+      });
+    }
+  if (orphans)
+    diagnostics.push({
+      severity: 'warning',
+      code: 'osm_unsupported_tag',
+      refs: [],
+      message: `Left out ${orphans} building parts outside every building outline`,
+    });
   const wooded = features.filter(
     (f): f is Extract<ContextFeature, { kind: 'area' }> =>
       f.kind === 'area' &&

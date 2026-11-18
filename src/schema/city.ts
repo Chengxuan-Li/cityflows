@@ -252,27 +252,32 @@ export type RoofShape =
   | 'round'
   | 'dome'
   | 'onion';
+export interface ContextAreaFeature {
+  kind: 'area';
+  class: ContextArea;
+  rings: Vec2[][];
+  sub?: string;
+  heightM?: number;
+  levels?: number;
+  roof?: {
+    shape: RoofShape;
+    heightM?: number;
+    levels?: number;
+    colour?: string;
+    material?: string;
+    orientation?: 'along' | 'across';
+    directionDeg?: number;
+  };
+  colour?: string;
+  material?: string;
+  minHeightM?: number;
+  /** TASK-201: a building's `building:part` areas (`sub` is the part's value). 3D draws these
+   * instead of the outline; 2D draws the outline. Absent for a building without parts. */
+  parts?: BuildingPart[];
+}
+export type BuildingPart = Omit<ContextAreaFeature, 'kind' | 'class' | 'parts'>;
 export type ContextFeature =
-  | {
-      kind: 'area';
-      class: ContextArea;
-      rings: Vec2[][];
-      sub?: string;
-      heightM?: number;
-      levels?: number;
-      roof?: {
-        shape: RoofShape;
-        heightM?: number;
-        levels?: number;
-        colour?: string;
-        material?: string;
-        orientation?: 'along' | 'across';
-        directionDeg?: number;
-      };
-      colour?: string;
-      material?: string;
-      minHeightM?: number;
-    }
+  | ContextAreaFeature
   | {
       kind: 'line';
       class: ContextLine;

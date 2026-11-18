@@ -5,7 +5,7 @@ import { Color, DoubleSide, Matrix4, Mesh, MeshBasicMaterial, Raycaster, Vector3
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { town } from '../../src/fixtures/town';
 import { buildCity } from '../../src/fixtures/build-city';
-import { cumulativeLengths, pointAtDistance } from '../../src/geo/polyline';
+import { cumulativeLengths, pointAtDistance, pointInPolygon } from '../../src/geo/polyline';
 import { cityGrades } from '../../src/render/grades';
 import { compile } from '../../src/network';
 import { citySchema } from '../../src/schema/city.schema';
@@ -16,7 +16,7 @@ import {
   terrainVehicleOffset,
 } from '../../src/render3d/heights';
 import { Vehicles3D } from '../../src/render3d/vehicles';
-import { createTerrain, groundMesh } from '../../src/render3d/terrain';
+import { clipGround, createTerrain, groundMesh } from '../../src/render3d/terrain';
 import { buildContext, buildTerrainGround } from '../../src/render3d/context';
 import { style } from '../../src/render/style';
 import { buildGeometry } from '../../src/render3d/geometry';
@@ -55,6 +55,55 @@ unitTest('V105 coplanar ground cells share faces without changing heights or bas
   geometry.dispose();
   material.dispose();
 });
+
+unitTest(
+  'TASK-201 a polygon city on terrain keeps the ground inside its ring, on its planes',
+  () => {
+    const bytes = Buffer.alloc(9 * 9 * 2);
+    for (let r = 0; r < 9; r++)
+      for (let c = 0; c < 9; c++) bytes.writeInt16LE(((c * r) % 7) * 30, (r * 9 + c) * 2);
+    const terrain = createTerrain({
+      ...slopeGrid,
+      cols: 9,
+      rows: 9,
+      heights: bytes.toString('base64'),
+    });
+    const ring = [
+      { x: 5, y: 3 },
+      { x: 71, y: 12 },
+      { x: 40, y: 33 },
+      { x: 66, y: 74 },
+      { x: 9, y: 62 },
+    ];
+    const ground = clipGround(groundMesh(terrain, { minX: 0, minY: 0, maxX: 80, maxY: 80 }), ring);
+    const p = ground.getAttribute('position');
+    const index = ground.index!;
+    let area = 0;
+    for (let i = 0; i < index.count; i += 3) {
+      const [a, b, c] = [0, 1, 2].map((j) => index.getX(i + j));
+      const ax = p.getX(a!),
+        az = p.getZ(a!);
+      // Facing up: the same winding as the ground it came from.
+      const cross = (p.getX(b!) - ax) * (p.getZ(c!) - az) - (p.getX(c!) - ax) * (p.getZ(b!) - az);
+      expect(cross).toBeLessThan(0);
+      area -= cross / 2;
+    }
+    // Shoelace area of the ring.
+    const ringArea = Math.abs(
+      ring.reduce(
+        (sum, a, i) =>
+          sum + a.x * ring[(i + 1) % ring.length]!.y - ring[(i + 1) % ring.length]!.x * a.y,
+        0,
+      ) / 2,
+    );
+    expect(area).toBeCloseTo(ringArea, 1);
+    for (let i = 0; i < p.count; i++) {
+      expect(pointInPolygon({ x: p.getX(i), y: p.getZ(i) }, [...ring, ring[0]!], 1e-3)).toBe(true);
+      expect(p.getY(i)).toBeCloseTo(terrain.surfaceAt(p.getX(i), p.getZ(i)), 3);
+    }
+    ground.dispose();
+  },
+);
 
 unitTest('V105 merged planes keep shared edge vertices to prevent ground cracks', () => {
   const bytes = Buffer.alloc(9 * 9 * 2);

@@ -1,26 +1,28 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
-import { lonLatToLocal } from '../src/geo/projection';
-import type { Vec2 } from '../src/geo/vec2';
 import { generatePopulation } from '../src/demand';
 import { defaultScenario } from '../src/fixtures/scenarios';
 import { parseOsm, type OsmData } from '../src/importers/osm/parse';
-import { polygonCenter } from '../src/importers/osm/places';
 import type { ImportOptions } from '../src/importers/types';
 import { openProject } from '../src/project/open';
 import { saveProjectJson } from '../src/project/save';
 import type { Project } from '../src/project/types';
-import type { City, ContextFeature } from '../src/schema';
+import type { City } from '../src/schema';
 import { importOsmCached } from './city-cache';
 
 // TASK-198: the showcase landing city. Freiburg im Breisgau's Altstadt and Hauptbahnhof, inside
 // the rail line, the rings and the Dreisam: the polygon TASK-197 scouted
-// (docs/decisions/2026-11-17-landing-city.md) and fetched as fixtures/osm/freiburg-altstadt.osm.
+// (docs/decisions/2026-11-17-landing-city.md), fetched as fixtures/osm/freiburg-altstadt.osm
+// (TASK-201: again on 2026-11-18, with building parts).
 // Rebuild the bundled project on purpose with
 //   node --experimental-strip-types --import ./bench/register.ts bench/freiburg.ts
 
 export const freiburgExtract = 'fixtures/osm/freiburg-altstadt.osm';
 export const freiburgProject = 'fixtures/projects/freiburg.cityflows.json';
+/** TASK-201: the Schlossberg's foot and the Dreisam's fall, from AWS Terrain Tiles
+ * (`bench/terrain-fetch.ts freiburg`). Not loaded into the project: the owner kept Freiburg flat
+ * for now (2026-11-18), as its 3D scene took 15 s to build on terrain against a 5 s budget. */
+export const freiburgTerrain = 'fixtures/terrain/freiburg.json';
 
 /** [longitude, latitude], from the decision document's lat lon pairs. */
 export const freiburgPolygon: [number, number][] = [
@@ -66,28 +68,6 @@ function osmNode(city: City, osmId: number) {
   const node = Object.values(city.nodes).find((n) => n.provenance.osmIds?.[0] === osmId);
   if (!node) throw new Error(`Freiburg curation: no node for OSM node ${osmId}`);
   return node;
-}
-
-type Building = Extract<ContextFeature, { kind: 'area' }>;
-
-/** The building feature drawn from an OSM way (context features keep no OSM ids). */
-function osmBuilding(city: City, data: OsmData, wayId: number): Building {
-  const nodes = new Map(data.node.map((n) => [n.id, n]));
-  const way = data.way.find((w) => w.id === wayId)!;
-  const centre = polygonCenter(
-    way.nd.slice(0, -1).map((id) => lonLatToLocal(city.geo!, nodes.get(id)!)),
-  )!;
-  const building = city.context!.features.find(
-    (f): f is Building =>
-      f.kind === 'area' &&
-      f.class === 'building' &&
-      Math.hypot(
-        polygonCenter(f.rings[0]!)!.x - centre.x,
-        polygonCenter(f.rings[0]!)!.y - centre.y,
-      ) < 1,
-  );
-  if (!building) throw new Error(`Freiburg curation: no building for OSM way ${wayId}`);
-  return building;
 }
 
 const curated = { source: 'authored' as const };
@@ -148,34 +128,9 @@ export function curateFreiburg(city: City, data: OsmData): void {
     if (Object.values(walk.links).every((l) => (l.from !== id && l.to !== id) || !l.layer))
       walk.nodes[id]!.layer = 0;
 
-  // The Münster's height tag is its spire's (116 m): the nave and choir stand at 30 m under a
-  // gabled roof, and the west tower rises on its square base to the openwork spire.
-  const minster = osmBuilding(city, data, 110404213);
-  minster.heightM = 30;
-  minster.roof = { shape: 'gabled', heightM: 12 };
-  const tower: Vec2[] = (
-    [
-      [7.8521141, 47.9955958],
-      [7.8523018, 47.9956009],
-      [7.8523094, 47.9954752],
-      [7.8521216, 47.9954702],
-    ] as const
-  ).map(([lon, lat]) => {
-    const p = lonLatToLocal(city.geo!, { lon, lat });
-    return { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
-  });
-  city.context!.features.push({
-    kind: 'area',
-    class: 'building',
-    sub: 'tower',
-    rings: [[...tower, tower[0]!]],
-    heightM: 116,
-    roof: { shape: 'pyramidal', heightM: 46 },
-  });
-  // St. Martin's 34 m is its ridge turret's: the church body stands at 22 m.
-  const martin = osmBuilding(city, data, 106951792);
-  martin.heightM = 22;
-  martin.roof = { ...martin.roof, shape: 'gabled', heightM: 9 };
+  // TASK-201: the Münster, St. Martin, the gates and the Kaufhaus stand in 3D on their
+  // `building:part` areas (the Münster's openwork spire is its 37 to 116 m part), so TASK-198's
+  // capped bodies and added tower are gone.
 
   // Siegesdenkmal: Habsburgerstraße and the Friedrichring/Leopoldring cross as two dual
   // carriageways, a box of four signalised nodes joined by 10 m inner roads that the group's

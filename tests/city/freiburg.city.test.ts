@@ -144,12 +144,23 @@ test(
     const buildings = city.context!.features.filter(
       (f): f is Extract<typeof f, { kind: 'area' }> => f.kind === 'area' && f.class === 'building',
     );
-    // The Münster's tower carries its spire; nothing else stands above the Schwabentor's 48 m.
-    const tall = buildings.filter((b) => (b.heightM ?? 0) > 48);
-    expect(tall.map((b) => [b.sub, b.heightM, b.roof?.shape])).toEqual([
-      ['tower', 116, 'pyramidal'],
+    // TASK-201: 3D draws a building's parts instead of its outline. Above the Schwabentor's 48 m
+    // stand only the Münster's choir towers and openwork spire (from 37 m) and the Martinstor.
+    const drawn = buildings.flatMap((b) =>
+      (b.parts ?? [b]).map((part) => ({ ...part, of: b.sub })),
+    );
+    expect(
+      drawn
+        .filter((part) => (part.heightM ?? 0) > 48)
+        .map((part) => [part.of, part.heightM, part.minHeightM, part.roof?.shape]),
+    ).toEqual([
+      ['cathedral', 53, undefined, 'pyramidal'],
+      ['cathedral', 53, undefined, 'pyramidal'],
+      ['cathedral', 116, 37, 'pyramidal'],
+      ['gatehouse', 53, undefined, 'hipped'],
     ]);
-    expect(buildings.find((b) => b.sub === 'cathedral')).toMatchObject({ heightM: 30 });
+    expect(buildings.find((b) => b.sub === 'cathedral')?.parts).toHaveLength(31);
+    expect(buildings.filter((b) => b.parts)).toHaveLength(82);
     // Building passages and covered streets run at grade.
     const covered = [41455470, 157116842, 30343822, 111812982, 48280860];
     const roads = Object.values(city.roads).filter((r) =>
@@ -158,6 +169,8 @@ test(
     expect(roads.length).toBeGreaterThanOrEqual(5);
     expect(roads.filter((r) => (r.layer ?? 0) !== 0)).toEqual([]);
     expect(project.view?.camera).toMatchObject({ '3d': { pitch: 50, bearing: -60 } });
+    // TASK-201: flat for now (owner, 2026-11-18); fixtures/terrain/freiburg.json is not loaded.
+    expect(city.terrain).toBeUndefined();
   },
   limit(120_000),
 );
@@ -166,8 +179,11 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // Pinned so curation and the import do not drift: rebuild the project and re-pin on purpose.
   // openProject checks city.json against this manifest hash, so it pins the city.
   const { manifest } = JSON.parse(readFileSync(freiburgProject, 'utf8'));
+  // TASK-201: re-pinned for the 2026-11-18 extract with building parts and the parts in place of
+  // TASK-198's Münster and St. Martin curation. The road network is the same, so the state hash
+  // is TASK-198's.
   expect(manifest.files['city.json']).toBe(
-    'ded060cfd6e9787fdb7e846b3f5c074a2e0e3d2e0822ed0751c80aea696b9539',
+    'b85a1f341199c8681156c9414dc731ef586b948e382764a7e9a7087f38b428a5',
   );
   expect(morning.stateHash).toBe(1137612334);
   expect(morning.failedByReason.gridlocked).toBe(0);
