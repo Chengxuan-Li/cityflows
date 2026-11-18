@@ -76,7 +76,7 @@ test('runs, pauses, replays the same steps, and inspects the map @smoke', async 
   const map = page.getByLabel('City map');
   const bounds = (await map.boundingBox())!;
   // The demo is centered on (240, 240), with 510 m north to south including the two places.
-  const scale = (bounds.height - 144) / 510;
+  const scale = (bounds.height - 48) / 510;
   async function pick(x: number, y: number) {
     await map.click({
       position: {

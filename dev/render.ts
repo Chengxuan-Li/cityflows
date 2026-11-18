@@ -80,7 +80,7 @@ async function start() {
   }
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
-  scene.camera.fitToBounds(bounds, width, height, 55);
+  scene.camera.fitToBounds(bounds, { minX: 55, minY: 55, maxX: width - 55, maxY: height - 55 });
   const requestedZoom = Number(query.get('zoom'));
   if (requestedZoom > 0) {
     const center = {

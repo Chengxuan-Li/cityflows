@@ -34,6 +34,7 @@ import { movementLight, signalLight } from '../render/layers/signals';
 import type { SignalStates } from '../render/types';
 import { mapPalettes, markingThemes, style, type MapPalette } from '../render/style';
 import { FrameDemand, renderContinuously } from '../render/frame-demand';
+import { boundsOf, frameView, type Bounds } from '../render/camera';
 import {
   defaultLayers,
   type CityGeometry,
@@ -1006,14 +1007,36 @@ export class Scene3D {
     });
   }
   getView() {
+    const offset = this.camera.position.clone().sub(this.controls.target);
     return {
       centre: { x: this.controls.target.x, y: this.controls.target.z },
       zoom:
         this.canvas.clientHeight /
-        (2 *
-          Math.tan((this.camera.fov * Math.PI) / 360) *
-          this.camera.position.distanceTo(this.controls.target)),
+        (2 * Math.tan((this.camera.fov * Math.PI) / 360) * offset.length()),
+      pitch: (Math.asin(offset.y / offset.length()) * 180) / Math.PI,
+      bearing: (Math.atan2(offset.x, offset.z) * 180) / Math.PI,
     };
+  }
+  /** TASK-203: the view at this pitch and bearing that fits the ground points into `area`
+   *  (canvas pixels), centred. */
+  frame(points: readonly Vec2[], area: Bounds, pitch: number, bearing: number) {
+    const { minX, minY, maxX, maxY } = boundsOf(points);
+    // Start well back, so every point is in front of the camera and below the horizon.
+    const zoom =
+      0.25 *
+      Math.min(
+        (area.maxX - area.minX) / Math.max(1, maxX - minX),
+        (area.maxY - area.minY) / Math.max(1, maxY - minY),
+      );
+    this.setView({ x: (minX + maxX) / 2, y: (minY + maxY) / 2 }, zoom, pitch, bearing);
+    frameView(points, area, {
+      worldToScreen: (point) => this.worldToScreen(point),
+      zoomBy: (factor) => {
+        const { centre, zoom } = this.getView();
+        this.setView(centre, zoom * factor, pitch, bearing);
+      },
+      panBy: (dx, dy) => this.panScreen(this.getView().centre, dx, dy),
+    });
   }
   /** Moves the camera so the ground point sits `dx`, `dy` pixels from where it shows now, keeping
    *  zoom, pitch and bearing. A target above the horizon is left alone. */

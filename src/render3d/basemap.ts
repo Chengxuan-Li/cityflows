@@ -68,9 +68,7 @@ export class Basemap3D {
     if (!this.group.visible) return false;
     this.proxy.fitToBounds(
       groundBounds(camera, this.terrain?.groundAt(camera.position.x, camera.position.z) ?? 0),
-      width,
-      height,
-      0,
+      { minX: 0, minY: 0, maxX: width, maxY: height },
     );
     const changed = this.tiles.update(this.proxy, width, height, deltaMs);
     for (const [sprite, mesh] of this.meshes) {
