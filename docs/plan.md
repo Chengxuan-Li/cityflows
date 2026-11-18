@@ -239,7 +239,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
-| [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | in progress (owner 2026-11-18) |
+| [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | TASK-211 | 9 | Full-demand step time (TASK-187's remaining 1.3 of 25%), results unchanged | `src/sim/**` profiling | 187 | contract in wave 2, if time | planned (owner 2026-11-18, optional) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
@@ -4461,6 +4461,21 @@ down the ramps (worst 1,592 s, 2 stalled heads per seed), which TASK-130 never t
 branch conflicts in 12 of 18 files (17 hunks in `engine.ts`) and main already has its main ideas;
 TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The owner decides on
 retiring the branches and the worktrees `D:\cityflows-wt\131p3` and `128-remeasure`.
+
+TASK-210 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): 3D draws `dome` (sections of
+the outline scaled about its centroid: a hemisphere or spherical cap), `onion` (ledge, neck, bulb as
+wide as the outline, taper to a point) and `round` (a barrel vault along the long axis, clipped to the
+outline); dome and onion need an outline whose every edge faces the centroid, else flat. Box shapes
+also take convex outlines filling at least 70% of their box (15 Freiburg, 2 Munich roofs off flat);
+`roof:levels=0` no longer flattens a roof (28 Freiburg, 5 Munich). Flat fallbacks: Freiburg 260 to 204
+(4 domes, 4 onions including the Schwabentor, 4 round roofs now drawn), Munich 79 to 70, Sindelfingen 0.
+Left: 196 concave Freiburg outlines and 69 Munich ones need a straight skeleton (L, T, U shapes); 27
+and 4 are nearly convex, a box roof with one ridge would cover them (owner's call). 3D build median
+1,340 to 1,349 ms; render p95 3D 2.9 ms, 2D 1.2 ms. 11 new tests fail on main. Lead check on the merge:
+check (1,529), city (183), landing and 3D specs (2), light e2e (61).
+
+Full run 44410242710 (lead, manual, on 1aae088 after TASK-207 and TASK-209): every job green,
+including all five e2e shards; the city job took 41.1 min.
 
 TASK-208 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
 `task/208-remaining-misses` at `8653e9e`, worktree `D:\cityflows-wt\208`): (1) the r:654 misses are a

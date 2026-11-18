@@ -1,6 +1,6 @@
 # TASK-210 — Roof shapes in 3D: round, dome and onion
 
-Status: in progress (owner started it 2026-11-18, unsupervised batch). Proposed owner: Claude Code
+Status: done 2026-11-19. Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/210-roof-shapes`, worktree `D:\cityflows-wt\210`, ports 5410 /
 5510.
 
