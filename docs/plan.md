@@ -236,7 +236,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-208](tasks/TASK-208.md) | 9 | Munich's remaining missed turns (r:700 lane 0, the r:639 weave) and why TASK-204's first rule gridlocked Freiburg | `src/sim/lane-change.ts`, entry chains | 204 | misses, seeds 1-12 both modes, full demand, gates | held for the owner 2026-11-19 (trade-off; branch `8653e9e`) |
 | [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | done 2026-11-19 (drop all four; owner decides) |
 | [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | done 2026-11-18 |
-| [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
+| [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | done 2026-11-19 (J4 and the audit; J1, J2, J3, J5, J6 handed on) |
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Munich delay +4 to 5%; branch `3e5e33f`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
@@ -4461,6 +4461,28 @@ down the ramps (worst 1,592 s, 2 stalled heads per seed), which TASK-130 never t
 branch conflicts in 12 of 18 files (17 hunks in `engine.ts`) and main already has its main ideas;
 TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The owner decides on
 retiring the branches and the worktrees `D:\cityflows-wt\131p3` and `128-remeasure`.
+
+TASK-213 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): `bench/geometry-audit.ts` runs on
+main again (R3-1 now n:474/n:1353, R3-7 n:366/n:417; Freiburg as a city; J1 to J6 as named cases) and its
+through-road measure is corrected (first station 1 cm past the cut; roads within 30° no longer measured
+at their far edge: J5's 5.25 m at n:552 and 3.35 m at n:1747 were audit faults; the real worst is n:108,
+1.78 m, held by B43's 2 m storage rule, an owner decision). J4 fixed in `junctions.ts` with three rules:
+a far-cut corner's curb starts from whichever edge is far (n:44 180° to 4°); an acute corner whose cut
+corner lies just over the other edge becomes a gore with a rounded tip (n:2206 157° to 49°, Munich
+n:324 off the list); a gore fillet may reach 4 m past the tip (n:660 152° to 23°, Sindelfingen n:27,
+n:1162, n:68). Sharp corners Freiburg 106 to 92, Munich 22 to 20, Sindelfingen 31 to 28; bulge
+Sindelfingen 105.5 to 110.6 m² (the rounded gore tips at n:1162 and n:68; accepted by the lead as the
+area the rounding adds, not a defect); every other audit row identical. Traffic: Munich 48 runs and
+both full demands bit-identical to main; Freiburg moves through the walk network (state hash on top of
+TASK-207: 1813598902, re-pinned by the lead at the merge); Sindelfingen identical. Not fixed here: J1
+(needs a group-level surface and curb rule, its own contract), J2 lobes and J6 Munich (in TASK-214's
+files, passed on), J3 (r:433 clears the main road only 22 m out), J6 Sindelfingen (two overlapping OSM
+ways, importer). Re-pins: Munich and Sindelfingen compiled-network and paint hashes (T44, T49, T55, T75,
+V106 to V108, V114, V117), stale T42.1 exceptions removed. Lead check on the merge: check (1,530), city
+(185), traffic light and guard, light e2e (61).
+
+Full run 44417927328 (lead, manual, on 6827d2c after TASK-210): every job green, including all five
+e2e shards; the city job took 33.4 min.
 
 TASK-215 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
 `task/215-markings` at `3e5e33f`, main `1ac0c38` merged in, worktree `D:\cityflows-wt\215`): M1 arrows at

@@ -1,6 +1,6 @@
 # TASK-213 — Junction shapes
 
-Status: in progress (owner started it 2026-11-18, unsupervised batch). Proposed owner: Claude Code
+Status: done 2026-11-19 (J4 and the audit bench; other cases handed on, see the review). Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/213-junction-shapes`, worktree `D:\cityflows-wt\213`, ports
 5413 / 5513.
 
