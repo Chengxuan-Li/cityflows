@@ -239,7 +239,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
-| TASK-210 | render | Roof shapes in 3D (onion and others drawn flat) | `src/render3d/roofs.ts` | 201, 206 | contract in wave 2 | planned (owner 2026-11-18) |
+| [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | in progress (owner 2026-11-18) |
 | TASK-211 | 9 | Full-demand step time (TASK-187's remaining 1.3 of 25%), results unchanged | `src/sim/**` profiling | 187 | contract in wave 2, if time | planned (owner 2026-11-18, optional) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
