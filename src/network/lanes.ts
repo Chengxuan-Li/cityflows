@@ -222,7 +222,6 @@ function laneNormals(lane: CLane, roadLanes: CLane[]): Vec2[] {
 /** Stations closer than this to a cut are left out of the road's stations. */
 const CUT_GAP_M = 0.05;
 const MIN_STEP_M = 0.1;
-const TRANSITION_STEP_M = 0.25;
 const GRID_M = 0.5;
 
 export function layoutRoad(
@@ -255,6 +254,7 @@ export function layoutRoad(
   // A transition gets a station every half metre of the reference, counted from its source
   // start, so the two directions of a street, whose cuts differ, still share them.
   const grid = [s0, s1];
+  const windowEnds: number[] = [];
   const refLength = joined.lengths.at(-1)!;
   const phase = (s: number) => (joined.reversed ? refLength - s : s) / GRID_M;
   for (const atEnd of [false, true]) {
@@ -266,6 +266,7 @@ export function layoutRoad(
       Math.max(0, end ? end.holdM + end.taperM : 0, shifted - (atEnd ? refLength - s1 : s0)),
     );
     grid.push(atEnd ? s1 - span : s0 + span);
+    windowEnds.push(atEnd ? s1 - span : s0 + span);
     const [a, b] = [phase(atEnd ? s1 - span : s0), phase(atEnd ? s1 : s0 + span)].sort(
       (x, y) => x - y,
     ) as [number, number];
@@ -278,27 +279,29 @@ export function layoutRoad(
   // Stations closer than `MIN_STEP_M` merge (the short chords between them turn the normals of
   // the lane polylines noisily): grid stations into their mean (a cut stays), and a reference
   // vertex near a grid station is left out. Both rules read the same from either end, so the
-  // two directions of a street get the same stations. TASK-214: on a road with a transition the
-  // step is a quarter metre; its eases draw stations together on a lane (Freiburg r:1548, 0.09 m,
-  // under the 0.1 m the painted edges keep).
-  const step = transition.start || transition.end ? TRANSITION_STEP_M : MIN_STEP_M;
+  // two directions of a street get the same stations.
   const merged: number[][] = [];
   for (const s of grid) {
     const last = merged.at(-1);
-    if (last && s - last.at(-1)! < step) last.push(s);
+    if (last && s - last.at(-1)! < MIN_STEP_M) last.push(s);
     else merged.push([s]);
   }
+  // A cut stays, then a window's end (where its ease is back on the road's offsets).
   const fixed = merged.map((group) =>
     group.includes(s0)
       ? s0
       : group.includes(s1)
         ? s1
-        : group.reduce((a, b) => a + b) / group.length,
+        : (group.find((s) => windowEnds.includes(s)) ??
+          group.reduce((a, b) => a + b) / group.length),
   );
   const unique = [
     ...fixed,
     ...[...joined.lengths].filter(
-      (s) => s > s0 + CUT_GAP_M && s < s1 - CUT_GAP_M && !fixed.some((g) => Math.abs(g - s) < step),
+      (s) =>
+        s > s0 + CUT_GAP_M &&
+        s < s1 - CUT_GAP_M &&
+        !fixed.some((g) => Math.abs(g - s) < MIN_STEP_M),
     ),
   ].sort((a, b) => a - b);
   compiled.reference = joined.points;
@@ -422,6 +425,24 @@ export function layoutRoad(
     lane.lengthM = lane.cumulative.at(-1)!;
   }
   if (roadLanes.some((l) => l.taperStartM || l.taperEndM)) {
+    // TASK-214: a station whose points close to under `MIN_STEP_M` on some lane (an added lane
+    // easing in beside a jogging block, Freiburg r:1548: 0.09 m) leaves every lane of the road, so
+    // the painted edges, which skip such points, keep one point per station.
+    const close = new Set<number>();
+    for (const lane of roadLanes)
+      for (let i = 1; i < lane.polyline.length - 1; i++)
+        if (lane.cumulative[i]! - lane.cumulative[i - 1]! < MIN_STEP_M) close.add(i);
+    if (close.size) {
+      const keep = (_: unknown, i: number) => !close.has(i);
+      compiled.stations = compiled.stations.filter(keep);
+      const normals = roadLanes[0]!.normals.filter(keep);
+      for (const lane of roadLanes) {
+        lane.polyline = lane.polyline.filter(keep);
+        lane.normals = normals;
+        lane.cumulative = cumulativeLengths(lane.polyline);
+        lane.lengthM = lane.cumulative.at(-1)!;
+      }
+    }
     const first = laneEdges(roadLanes[0]!, roadLanes);
     const last = laneEdges(roadLanes.at(-1)!, roadLanes);
     compiled.surface = [...first.left, ...last.right.reverse()];
