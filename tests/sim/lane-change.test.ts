@@ -54,11 +54,13 @@ test('a grid vehicle changes lanes before the decision point and takes its plann
     const detail = engine.inspect(1)!;
     const snapshot = engine.snapshot();
     const index = snapshot.id.indexOf(1);
-    if (before?.lane === startLane && detail.lane === turnLane) {
+    // TASK-204: off its planned lane the car may change in its first step, from its origin.
+    if ((before?.lane ?? startLane) === startLane && detail.lane === turnLane) {
       changed = true;
-      expect(detail.positionM - before.positionM).toBeCloseTo(
-        detail.speedMps * DEFAULT_SIM_PARAMS.dtS,
-      );
+      if (before)
+        expect(detail.positionM - before.positionM).toBeCloseTo(
+          detail.speedMps * DEFAULT_SIM_PARAMS.dtS,
+        );
       expect(compiled.lanes[turnLane]!.lengthM - detail.positionM).toBeGreaterThan(
         DEFAULT_SIM_PARAMS.intersection.decisionDistanceM,
       );

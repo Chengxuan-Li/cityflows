@@ -34,10 +34,11 @@ const before = {
   town: {
     // Phase 3's downstream lane choice saves 0.5 vehicle-seconds across the same 207 trips.
     // TASK-165: exit storage beyond the exit crosswalk costs 0.06 s per trip on the town.
+    // TASK-204: changes off the planned lane that prepare for a later turn add 0.008 s per trip.
     completed: 207,
-    meanTravelTimeS: 138.35314009661843,
-    meanDelayS: 45.33288956755263,
-    hash: 2690743176,
+    meanTravelTimeS: 138.36086956521748,
+    meanDelayS: 45.34061903615167,
+    hash: 1073880220,
     trips: 414,
   },
 };

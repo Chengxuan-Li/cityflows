@@ -383,6 +383,12 @@ export function createLaneChanges(
     let bestLane = -1;
     let bestIncentive = mobil.thresholdMps2;
     let sourceFuture = -1;
+    // TASK-204: off the planned lane, a change that lowers the changes the route still needs
+    // over the corridor (`futureChanges`) is taken whenever it is safe, not only for MOBIL's
+    // incentive: a car prepares on the roads before a turn instead of leaving the change to a
+    // queue at the turn, where gaps are rare and the mandatory window is short.
+    const strategic =
+      !mandatory && source.idx !== (finalRoad ? destination.lane : route.targetLanes[step]![0]);
     for (let side = 0; side < 2; side++) {
       const target = side === 0 ? source.left : source.right;
       const lane = compiled.lanes[target];
@@ -407,6 +413,11 @@ export function createLaneChanges(
             remaining < changesAfter * laneChangeDistanceM + mandatoryUrgencyM
       )
         continue;
+      let prepares = false;
+      if (strategic) {
+        if (sourceFuture === -1) sourceFuture = futureChanges(id, source.idx, positionM);
+        prepares = futureChanges(id, target, positionM) < sourceFuture;
+      }
       findNeighbors(target, positionM, true);
       const leader = nearLeader;
       const follower = nearFollower;
@@ -425,8 +436,8 @@ export function createLaneChanges(
           pickYielder(id, positionM);
         continue;
       }
-      if (mandatory) {
-        creeping[id] = 1;
+      if (mandatory || prepares) {
+        if (mandatory) creeping[id] = 1;
         bestLane = target;
         break;
       }

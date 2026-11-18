@@ -319,6 +319,9 @@ test('T29 a held car whose target lane is blocked for good gives the exit up and
     trips.at(-1)!.destinationPlaceId = closed.id;
   }
   const requester = depart(0, 300, 500);
+  // TASK-204: the late car's origin is a plain gateway, so no garage-mouth keep-clear gap opens
+  // in the queue beside it; a car off its planned lane would take such a gap (lane-change.ts).
+  Object.values(city.places).at(-1)!.kind = 'gateway';
   const compiled = setup(city);
   const left = compiled.index.lane.get(`${main.id}#0`)!;
   const right = compiled.index.lane.get(`${main.id}#1`)!;
