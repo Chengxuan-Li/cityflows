@@ -15,6 +15,7 @@ export const serviceDwellS = (kind: TrainKind) => (kind === 'tram' ? 25 : trainD
 export const serviceCarLengthM = (kind: TrainKind) =>
   kind === 'tram' ? 9 : trainDefaults.carLengthM;
 type Section = { track: number; forward: boolean; startM: number; endM: number };
+type Step = { track: number; forward: boolean };
 type Phase = {
   timeS: number;
   durationS: number;
@@ -140,6 +141,192 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
     adjacency.set(key, list);
   }
 
+  /** The route from boundary `origin` over `path` to `node`, with its stops; no motion yet. */
+  const toRoute = (origin: number, node: number, path: Step[]): TrainRoute => {
+    let lengthM = 0;
+    const sections = path.map((s) => {
+      const startM = lengthM;
+      lengthM += rail.tracks[s.track]!.lengthM;
+      return { ...s, startM, endM: lengthM };
+    });
+    const stops: TrainRoute['stops'] = rail.platforms
+      .filter(
+        (p) =>
+          p.mode === 'rail' &&
+          p.station &&
+          sections.some((s) => p.tracks.includes(rail.tracks[s.track]!.id)),
+      )
+      .map((p) => {
+        const points =
+          p.shape.kind === 'point'
+            ? [p.shape.pos]
+            : p.shape.kind === 'line'
+              ? p.shape.line
+              : p.shape.ring.slice(0, -1);
+        const centre = {
+          x: (Math.min(...points.map((p) => p.x)) + Math.max(...points.map((p) => p.x))) / 2,
+          y: (Math.min(...points.map((p) => p.y)) + Math.max(...points.map((p) => p.y))) / 2,
+        };
+        const candidates = sections
+          .filter((s) => p.tracks.includes(rail.tracks[s.track]!.id))
+          .map((s) => {
+            const track = rail.tracks[s.track]!,
+              q = nearestOnPolyline(track.line, centre);
+            return {
+              away: q.away,
+              positionM: s.startM + (s.forward ? q.along : track.lengthM - q.along),
+            };
+          })
+          .sort((a, b) => a.away - b.away);
+        return {
+          platform: p.id,
+          name: p.name,
+          positionM: candidates[0]!.positionM,
+          arrivalS: 0,
+        };
+      })
+      .sort((a, b) => a.positionM - b.positionM);
+    if (mode === 'tram') {
+      stops.length = 0;
+      for (const stop of rail.tramStops ?? []) {
+        const candidates = stop.halts
+          .flatMap((halt) =>
+            sections
+              .filter((s) => rail.tracks[s.track]!.id === halt.track)
+              .map((s) => {
+                const track = rail.tracks[s.track]!,
+                  q = nearestOnPolyline(track.line, halt.pos);
+                return {
+                  away: q.away,
+                  positionM: s.startM + (s.forward ? q.along : track.lengthM - q.along),
+                };
+              }),
+          )
+          .sort((a, b) => a.away - b.away);
+        if (candidates[0])
+          stops.push({
+            platform: stop.id,
+            name: stop.name,
+            positionM: candidates[0].positionM - trainDefaults.tram.lengthM / 2,
+            haltM: candidates[0].positionM,
+            arrivalS: 0,
+          });
+      }
+      stops.sort((a, b) => a.positionM - b.positionM || a.platform.localeCompare(b.platform));
+    }
+    const kind = mode === 'tram' ? 'tram' : stops.length ? 'sbahn' : 'mainline';
+    return {
+      id: `${mode}:${rail.nodes[origin]!.id}>${rail.nodes[node]!.id}`,
+      ...(mode === 'tram'
+        ? { destination: `${stops.at(-1)?.name ?? rail.nodes[node]!.id} to city edge` }
+        : {}),
+      from: origin,
+      to: node,
+      kind,
+      sections,
+      lengthM,
+      stops,
+      phases: [],
+      durationS: 0,
+      occupancy: [],
+    };
+  };
+
+  /** TASK-202: the cheapest tram paths from `start` on to each exit, or back to each entry
+   * (`reverse`), keeping to its own track of a pair. Connections are symmetric, so the same
+   * adjacency serves both ways. */
+  const tramPaths = (start: Step, reverse: boolean) => {
+    const permitted = (track: number, forward: boolean) => {
+      const t = rail.tracks[track]!;
+      return (
+        t.kind === 'tram' &&
+        tramService(t.service) &&
+        (allowed[track] === 'both' || allowed[track] === (forward ? 'forward' : 'backward'))
+      );
+    };
+    const ends: Step[][] = [];
+    if (!permitted(start.track, start.forward)) return ends;
+    const seen = new Set<string>();
+    const queue = [{ ...start, cost: 0, path: [start] }];
+    while (queue.length) {
+      queue.sort((a, b) => a.cost - b.cost || a.track - b.track);
+      const step = queue.shift()!,
+        key = `${step.track}/${step.forward}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const t = rail.tracks[step.track]!,
+        node = step.forward !== reverse ? t.toNode : t.fromNode;
+      if (rail.nodes[node]!.boundary) ends.push(step.path);
+      for (const next of adjacency.get(`${node}/${step.track}`) ?? []) {
+        const n = rail.tracks[next]!,
+          forward = reverse ? n.toNode === node : n.fromNode === node;
+        if (!permitted(next, forward) || step.path.some((s) => s.track === next)) continue;
+        queue.push({
+          track: next,
+          forward,
+          cost: step.cost + n.lengthM + (n.service ? 100000 : 0),
+          path: [...step.path, { track: next, forward }],
+        });
+      }
+    }
+    return ends;
+  };
+
+  /** TASK-202: each origin keeps only its straightest line, so a branch or a parallel line that
+   * no origin's straightest line takes had no tram (Freiburg's Rotteckring and the Kronenstraße
+   * line out of the centre). Each mapped halt still unserved gets a route if a tram can pass it
+   * from one boundary to another: of the routes from any entry through the halt to any exit, the
+   * one serving the most unserved stops, then the straightest, then the shortest; until no route
+   * adds a stop. */
+  const coverStops = (chosen: TrainRoute[]) => {
+    const served = new Set(chosen.flatMap((r) => r.stops.map((s) => s.platform)));
+    const trackIndex = new Map(rail.tracks.map((t) => [t.id, t.idx]));
+    const pool: { route: TrainRoute; turning: number }[] = [];
+    for (const stop of rail.tramStops ?? []) {
+      if (served.has(stop.id)) continue;
+      for (const halt of stop.halts) {
+        // A halt may name a track an edit removed; it has nothing to serve.
+        const track = trackIndex.get(halt.track);
+        if (track === undefined) continue;
+        for (const forward of [true, false]) {
+          const start = { track, forward };
+          const exits = tramPaths(start, false);
+          for (const entry of tramPaths(start, true))
+            for (const exit of exits) {
+              const path = [...entry].reverse().concat(exit.slice(1));
+              if (new Set(path.map((s) => s.track)).size < path.length) continue;
+              const first = rail.tracks[path[0]!.track]!,
+                last = rail.tracks[path.at(-1)!.track]!;
+              const route = toRoute(
+                path[0]!.forward ? first.fromNode : first.toNode,
+                path.at(-1)!.forward ? last.toNode : last.fromNode,
+                path,
+              );
+              pool.push({ route, turning: turning(rail, route) });
+            }
+        }
+      }
+    }
+    for (;;) {
+      const gain = (r: TrainRoute) => r.stops.filter((s) => !served.has(s.platform)).length;
+      const best = pool
+        .filter((c) => gain(c.route))
+        .sort(
+          (a, b) =>
+            gain(b.route) - gain(a.route) ||
+            a.turning - b.turning ||
+            a.route.lengthM - b.route.lengthM ||
+            a.route.id.localeCompare(b.route.id),
+        )[0]?.route;
+      if (!best) return;
+      if (chosen.some((r) => r.id === best.id))
+        best.id += ` via ${best.stops.find((s) => !served.has(s.platform))!.platform}`;
+      motion(rail, best);
+      chosen.push(best);
+      for (const s of best.stops) served.add(s.platform);
+    }
+  };
+
   const routes: TrainRoute[] = [];
   for (const origin of rail.nodes.filter((n) => n.boundary)) {
     // Dijkstra over oriented sections, never a node-only search (which could reverse at a switch).
@@ -210,93 +397,8 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
         // TASK-198: a tram keeps to its own track of a pair; a train may run against the
         // geometry for up to 15% of its path.
         if (wrong > total * (mode === 'tram' ? 0 : 0.15)) continue;
-        let lengthM = 0;
-        const sections = step.path.map((s) => {
-          const startM = lengthM;
-          lengthM += rail.tracks[s.track]!.lengthM;
-          return { ...s, startM, endM: lengthM };
-        });
-        const stops: TrainRoute['stops'] = rail.platforms
-          .filter(
-            (p) =>
-              p.mode === 'rail' &&
-              p.station &&
-              sections.some((s) => p.tracks.includes(rail.tracks[s.track]!.id)),
-          )
-          .map((p) => {
-            const points =
-              p.shape.kind === 'point'
-                ? [p.shape.pos]
-                : p.shape.kind === 'line'
-                  ? p.shape.line
-                  : p.shape.ring.slice(0, -1);
-            const centre = {
-              x: (Math.min(...points.map((p) => p.x)) + Math.max(...points.map((p) => p.x))) / 2,
-              y: (Math.min(...points.map((p) => p.y)) + Math.max(...points.map((p) => p.y))) / 2,
-            };
-            const candidates = sections
-              .filter((s) => p.tracks.includes(rail.tracks[s.track]!.id))
-              .map((s) => {
-                const track = rail.tracks[s.track]!,
-                  q = nearestOnPolyline(track.line, centre);
-                return {
-                  away: q.away,
-                  positionM: s.startM + (s.forward ? q.along : track.lengthM - q.along),
-                };
-              })
-              .sort((a, b) => a.away - b.away);
-            return {
-              platform: p.id,
-              name: p.name,
-              positionM: candidates[0]!.positionM,
-              arrivalS: 0,
-            };
-          })
-          .sort((a, b) => a.positionM - b.positionM);
-        if (mode === 'tram') {
-          stops.length = 0;
-          for (const stop of rail.tramStops ?? []) {
-            const candidates = stop.halts
-              .flatMap((halt) =>
-                sections
-                  .filter((s) => rail.tracks[s.track]!.id === halt.track)
-                  .map((s) => {
-                    const track = rail.tracks[s.track]!,
-                      q = nearestOnPolyline(track.line, halt.pos);
-                    return {
-                      away: q.away,
-                      positionM: s.startM + (s.forward ? q.along : track.lengthM - q.along),
-                    };
-                  }),
-              )
-              .sort((a, b) => a.away - b.away);
-            if (candidates[0])
-              stops.push({
-                platform: stop.id,
-                name: stop.name,
-                positionM: candidates[0].positionM - trainDefaults.tram.lengthM / 2,
-                haltM: candidates[0].positionM,
-                arrivalS: 0,
-              });
-          }
-          stops.sort((a, b) => a.positionM - b.positionM || a.platform.localeCompare(b.platform));
-        }
-        const kind = mode === 'tram' ? 'tram' : stops.length ? 'sbahn' : 'mainline';
-        const route: TrainRoute = {
-          id: `${mode}:${origin.id}>${rail.nodes[node]!.id}`,
-          ...(mode === 'tram'
-            ? { destination: `${stops.at(-1)?.name ?? rail.nodes[node]!.id} to city edge` }
-            : {}),
-          from: origin.idx,
-          to: node,
-          kind,
-          sections,
-          lengthM,
-          stops,
-          phases: [],
-          durationS: 0,
-          occupancy: [],
-        };
+        const route = toRoute(origin.idx, node, step.path),
+          { kind, lengthM } = route;
         if (rail.nodes[node]!.kind === 'buffer_stop') {
           if (
             lengthM <= trainDefaults[kind].lengthM ||
@@ -344,7 +446,7 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
   const used = new Set<string>();
   const throughRoutes = routes.filter((r) => r.terminal === undefined);
   const services = throughRoutes.length ? throughRoutes : routes;
-  return services
+  const chosen = services
     .sort(
       (a, b) =>
         Number(b.kind === 'sbahn') - Number(a.kind === 'sbahn') ||
@@ -359,6 +461,8 @@ function routesFor(rail: RailGraph, mode: 'train' | 'tram'): TrainRoute[] {
       for (const s of r.sections) used.add(`${s.track}/${s.forward}`);
       return true;
     });
+  if (mode === 'tram') coverStops(chosen);
+  return chosen;
 }
 
 function motion(
