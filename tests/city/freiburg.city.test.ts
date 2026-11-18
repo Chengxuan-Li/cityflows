@@ -1,11 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, expect, test } from 'vitest';
-import {
-  buildFreiburgProject,
-  freiburgProject,
-  freiburgTerrain,
-  openFreiburg,
-} from '../../bench/freiburg';
+import { buildFreiburgProject, freiburgProject, openFreiburg } from '../../bench/freiburg';
 import { probeMorning } from '../../bench/import-probe';
 import { compile } from '../../src/network';
 import { compileRail } from '../../src/network/rail';
@@ -174,8 +169,8 @@ test(
     expect(roads.length).toBeGreaterThanOrEqual(5);
     expect(roads.filter((r) => (r.layer ?? 0) !== 0)).toEqual([]);
     expect(project.view?.camera).toMatchObject({ '3d': { pitch: 50, bearing: -60 } });
-    // TASK-201: the Schlossberg's foot and the Dreisam's fall, from the committed terrain fixture.
-    expect(city.terrain).toEqual(JSON.parse(readFileSync(freiburgTerrain, 'utf8')));
+    // TASK-201: flat for now (owner, 2026-11-18); fixtures/terrain/freiburg.json is not loaded.
+    expect(city.terrain).toBeUndefined();
   },
   limit(120_000),
 );
@@ -184,11 +179,11 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // Pinned so curation and the import do not drift: rebuild the project and re-pin on purpose.
   // openProject checks city.json against this manifest hash, so it pins the city.
   const { manifest } = JSON.parse(readFileSync(freiburgProject, 'utf8'));
-  // TASK-201: re-pinned for the 2026-11-18 extract with building parts, the parts in place of
-  // TASK-198's Münster and St. Martin curation, and the terrain fixture. The road network is
-  // the same and terrain is display-only, so the state hash is TASK-198's.
+  // TASK-201: re-pinned for the 2026-11-18 extract with building parts and the parts in place of
+  // TASK-198's Münster and St. Martin curation. The road network is the same, so the state hash
+  // is TASK-198's.
   expect(manifest.files['city.json']).toBe(
-    '90d73bc76ab7c6c6d794e1c934cb209c1bfe2ed95c5d8691f665fa0ad042919f',
+    'b85a1f341199c8681156c9414dc731ef586b948e382764a7e9a7087f38b428a5',
   );
   expect(morning.stateHash).toBe(1137612334);
   expect(morning.failedByReason.gridlocked).toBe(0);
