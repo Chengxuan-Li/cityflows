@@ -249,3 +249,83 @@ test('T76 a return halt already behind the new cab is excluded and reported', ()
     },
   ]);
 });
+
+/** A line from rn:0 to rn:2 through rn:1, and a tram branch from rn:1 to rn:3 leaving the line
+ * eastward at `angleDeg`, with a stop on the branch. */
+function branch(angleDeg: number) {
+  const city = fixture();
+  const rail = city.rail!;
+  delete rail.tracks['rt:3'];
+  delete rail.nodes['rn:3'];
+  const angle = (angleDeg * Math.PI) / 180,
+    end = { x: 200 + 200 * Math.cos(angle), y: -200 * Math.sin(angle) };
+  rail.nodes['rn:3'] = { id: 'rn:3', pos: end, layer: 0, kind: 'plain' };
+  rail.tracks['rt:3'] = {
+    id: 'rt:3',
+    from: 'rn:1',
+    to: 'rn:3',
+    line: [rail.nodes['rn:1']!.pos, end],
+    kind: 'tram',
+    layer: 0,
+  };
+  rail.tramStops!['ts:2'] = {
+    id: 'ts:2',
+    name: 'Branch',
+    lines: [],
+    layer: 0,
+    tracks: ['rt:3'],
+    halts: [{ track: 'rt:3', pos: { x: (200 + end.x) / 2, y: end.y / 2 } }],
+    platform: null,
+    osmIds: [],
+  };
+  return city;
+}
+
+test('TASK-202 a one-way branch that no origin takes straight on still gets a tram', () => {
+  // From rn:0 the straight line to rn:2 wins; the branch runs only away from the line, so no
+  // other origin enters it. Before TASK-202 its stop had no service.
+  const city = branch(20);
+  city.rail!.tracks['rt:3']!.preferredDirection = 'forward';
+  const rail = compileRail(city)!,
+    table = buildTramTimetable(rail),
+    census = tramCensus(rail, table);
+  expect(census.unservedStops).toEqual([]);
+  const end = (node: number) => rail.nodes[node]!.id;
+  expect(table.routes.map((r) => `${end(r.from)}>${end(r.to)}`)).toEqual([
+    'rn:0>rn:2',
+    'rn:2>rn:0',
+    'rn:0>rn:3',
+  ]);
+  expect(table.routes[2]!.id).toBe('tram:rn:0>rn:3');
+  expect(table.routes[2]!.stops.map((s) => s.platform)).toEqual(['ts:2']);
+  expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10]);
+  for (let time = 0; time < 7200; time += 0.5) {
+    const used = new Set<number>();
+    for (const pose of trainsAt(rail, table, time))
+      for (const track of pose.occupied) {
+        expect(used.has(track)).toBe(false);
+        used.add(track);
+      }
+  }
+});
+
+test('TASK-202 a tram switch connects a diverging track mapped up to 45 degrees off the line', () => {
+  // The chord from a tight street turnout to its next vertex turns past the 30 degrees a
+  // railway turnout keeps (Freiburg's Schwabentorschleife: 34 degrees).
+  const city = branch(35);
+  city.rail!.tracks['rt:3']!.preferredDirection = 'forward';
+  const unserved = (c: typeof city) => tramCensus(compileRail(c)!).unservedStops.map((s) => s.id);
+  expect(unserved(city)).toEqual(['ts:2']);
+  city.rail!.nodes['rn:1']!.kind = 'switch';
+  const rail = compileRail(city)!;
+  expect(rail.connections).toContainEqual({ node: 1, from: 0, to: 2 });
+  expect(unserved(city)).toEqual([]);
+  // A wider angle, or the same angle at an untagged node or between railway tracks, stays apart.
+  city.rail!.nodes['rn:3']!.pos = { x: 200 + 200 * Math.cos(0.87), y: -200 * Math.sin(0.87) };
+  city.rail!.tracks['rt:3']!.line = [{ x: 200, y: 0 }, city.rail!.nodes['rn:3']!.pos];
+  expect(unserved(city)).toEqual(['ts:2']);
+  const railway = branch(35);
+  railway.rail!.nodes['rn:1']!.kind = 'switch';
+  for (const t of Object.values(railway.rail!.tracks)) t.kind = 'rail';
+  expect(compileRail(railway)!.connections).not.toContainEqual({ node: 1, from: 0, to: 2 });
+});

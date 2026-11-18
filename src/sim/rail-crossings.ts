@@ -179,6 +179,14 @@ export function createRailCrossings(
   const marked = Uint8Array.from(stopsBySegment, (stops, b) =>
     Number(stops.length > 0 || spansBySegment[b]!.length > 0),
   );
+  /** TASK-202: a lane whose movements all lead to one road continues an approach; any other lane
+   * is a turn away from it, unless it carries the facility's own marking or span. */
+  const through = Uint8Array.from(city.lanes, (lane) =>
+    Number(new Set(lane.out.map((m) => city.lanes[city.movements[m]!.toLane]!.road)).size <= 1),
+  );
+  const onSegment = (b: number, facility: number) =>
+    stopsBySegment[b]!.some((m) => m.facility === facility) ||
+    spansBySegment[b]!.some((s) => s.facility === facility);
   /** Per vehicle in `roadOccupancy`: the facilities its body overlaps. */
   const bodyInside = new Uint8Array(facilities.length);
   /** TASK-176: a vehicle's path ahead and, per facility, its nearest stop marking and the extent
@@ -202,6 +210,8 @@ export function createRailCrossings(
     leading: number;
     /** The segments with a stop marking or span, by index. */
     markedAt: number[];
+    /** TASK-202: per segment, how many lanes up to it turn away from an approach. */
+    turns: number[];
     /** Where the walk goes on: its next segment and route step, or done. */
     nextSegment: number;
     nextStep: number;
@@ -210,6 +220,9 @@ export function createRailCrossings(
     stops: Float64Array;
     starts: Float64Array;
     ends: Float64Array;
+    /** TASK-202: per facility, whether the path from its first segment reaches one of the
+     * facility's spans without turning away: the encounter a marking just passed guards. */
+    live: Uint8Array;
     ranged: boolean;
   };
   const paths: (Path | undefined)[] = [];
@@ -219,7 +232,10 @@ export function createRailCrossings(
     segmentCount = 0,
     pathStops: Float64Array = new Float64Array(0),
     pathStarts = pathStops,
-    pathEnds = pathStops;
+    pathEnds = pathStops,
+    pathLive: Uint8Array = new Uint8Array(0);
+  const liveList: number[] = [];
+  const liveFlags = new Uint8Array(facilities.length);
   const histories = new Map<number, { segment: number; trail: number[]; position: number }>();
   const segmentLength = (segment: number) =>
     segment >= 0 ? city.lanes[segment]!.lengthM : city.movements[-segment - 1]!.lengthM;
@@ -311,6 +327,7 @@ export function createRailCrossings(
         segmentEnds: [],
         leading: 0,
         markedAt: [],
+        turns: [],
         nextSegment: lane,
         nextStep: routeStep,
         done: false,
@@ -318,6 +335,7 @@ export function createRailCrossings(
         stops: new Float64Array(facilities.length),
         starts: new Float64Array(facilities.length),
         ends: new Float64Array(facilities.length),
+        live: new Uint8Array(facilities.length),
         ranged: false,
       };
       paths[id] = entry;
@@ -328,6 +346,7 @@ export function createRailCrossings(
     pathStops = entry.stops;
     pathStarts = entry.starts;
     pathEnds = entry.ends;
+    pathLive = entry.live;
     if (kept && entry.position === position) {
       segmentCount = entry.count;
       return;
@@ -340,7 +359,12 @@ export function createRailCrossings(
       entry.nextSegment = lane;
       entry.nextStep = routeStep;
       entry.done = false;
-      segments.length = offsets.length = entry.segmentEnds.length = entry.markedAt.length = 0;
+      segments.length =
+        offsets.length =
+        entry.segmentEnds.length =
+        entry.markedAt.length =
+        entry.turns.length =
+          0;
     }
     const ends = entry.segmentEnds;
     // The walk as it was done for each position: up to 128 segments, the last one the first that
@@ -353,6 +377,7 @@ export function createRailCrossings(
       const segment = entry.nextSegment;
       const offset = segments.length ? ends[segments.length - 1]! : 0;
       if (marked[bucket(segment)]) entry.markedAt.push(segments.length);
+      entry.turns.push((entry.turns.at(-1) ?? 0) + (segment >= 0 && !through[segment] ? 1 : 0));
       segments.push(segment);
       offsets.push(offset);
       ends.push(offset + segmentLength(segment));
@@ -389,16 +414,78 @@ export function createRailCrossings(
       if (s >= segmentCount) break;
       const b = bucket(segments[s]!);
       const offset = offsets[s]!;
-      for (const marking of stopsBySegment[b]!) {
-        const at = offset + marking.at;
-        if (at >= position - 1e-6)
-          pathStops[marking.facility] = Math.min(pathStops[marking.facility]!, at);
-      }
       for (const span of spansBySegment[b]!) {
         if (offset + span.to < position) continue;
         pathStarts[span.facility] = Math.min(pathStarts[span.facility]!, offset + span.from);
         pathEnds[span.facility] = Math.max(pathEnds[span.facility]!, offset + span.to);
       }
+    }
+    // TASK-202: a stop marking binds only for the encounter it guards on this path: a span of its
+    // facility reached from it without turning away (through movements, lanes that lead on to one
+    // road, and lanes with the facility's own marking or span). A marking for a turn the vehicle
+    // does not take, met again from another approach further on, does not hold it back here.
+    // Walked backward over the marked segments; the earliest bound marking is the stop.
+    const turns = entry.turns;
+    const clear = () => {
+      for (const f of liveList) liveFlags[f] = 0;
+      liveList.length = 0;
+    };
+    clear();
+    let after = segmentCount;
+    for (let k = entry.markedAt.length - 1; k >= 0; k--) {
+      const s = entry.markedAt[k]!;
+      if (s >= segmentCount) continue;
+      if (after - 1 > s && turns[after - 1]! > turns[s]!) clear();
+      after = s;
+      const segment = segments[s]!,
+        b = bucket(segment),
+        offset = offsets[s]!;
+      if (segment >= 0 && !through[segment] && liveList.length) {
+        let kept = 0;
+        for (const f of liveList)
+          if (onSegment(b, f)) liveList[kept++] = f;
+          else liveFlags[f] = 0;
+        liveList.length = kept;
+      }
+      for (const marking of stopsBySegment[b]!) {
+        const at = offset + marking.at;
+        if (at < position - 1e-6) continue;
+        const f = marking.facility;
+        if (
+          liveFlags[f] ||
+          spansBySegment[b]!.some(
+            (span) => span.facility === f && span.to >= marking.at && offset + span.to >= position,
+          )
+        )
+          pathStops[f] = Math.min(pathStops[f]!, at);
+      }
+      for (const span of spansBySegment[b]!)
+        if (offset + span.to >= position && !liveFlags[span.facility]) {
+          liveFlags[span.facility] = 1;
+          liveList.push(span.facility);
+        }
+      if (s === 0) {
+        pathLive.fill(0);
+        for (const f of liveList) pathLive[f] = 1;
+      }
+      // A marking on a lane without the facility's span begins the encounter: one further back
+      // guards another visit, if any.
+      if (stopsBySegment[b]!.length && liveList.length) {
+        let kept = 0;
+        for (const f of liveList)
+          if (
+            !stopsBySegment[b]!.some((m) => m.facility === f) ||
+            spansBySegment[b]!.some((span) => span.facility === f)
+          )
+            liveList[kept++] = f;
+          else liveFlags[f] = 0;
+        liveList.length = kept;
+      }
+    }
+    if (after > 0) {
+      if (turns[after - 1]! > 0) clear();
+      pathLive.fill(0);
+      for (const f of liveList) pathLive[f] = 1;
     }
   }
   const platoonLane = Uint8Array.from(city.lanes, (lane) =>
@@ -486,7 +573,23 @@ export function createRailCrossings(
         ranges();
         for (const marking of continuous ? stopsBySegment[bucket(previousSegment)]! : []) {
           const passed = field === previousSegment ? position > marking.at + 1e-6 : true;
-          if (passed && previousPosition <= marking.at + 1e-6) commit(marking.facility, id);
+          // TASK-202: only a marking for the encounter ahead commits the vehicle to it.
+          if (
+            passed &&
+            previousPosition <= marking.at + 1e-6 &&
+            (field === previousSegment
+              ? pathLive[marking.facility]
+              : spansBySegment[bucket(previousSegment)]!.some(
+                  (s) => s.facility === marking.facility && s.to >= marking.at,
+                ) ||
+                (pathLive[marking.facility] &&
+                  !(
+                    field >= 0 &&
+                    stopsBySegment[field]!.some((m) => m.facility === marking.facility) &&
+                    !spansBySegment[field]!.some((s) => s.facility === marking.facility)
+                  )))
+          )
+            commit(marking.facility, id);
         }
         // The body, walked back once for every facility: the segments it covers.
         bodyInside.fill(0);

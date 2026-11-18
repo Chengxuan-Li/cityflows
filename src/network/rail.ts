@@ -36,6 +36,11 @@ export interface RailGraph {
 
 // Thirty degrees accommodates shallow turnout frogs, while excluding corners and reversals.
 export const railDeflectionDeg = 30;
+/** TASK-202: a tram turnout in the street is short and tight, and OSM maps it with few vertices,
+ * so the chord from a mapped switch to the next vertex of its diverging track can turn further
+ * (Freiburg's Schwabentorschleife leaves its line at 34 degrees). Only at a node tagged as a
+ * switch: an untagged node where tram tracks meet at a wider angle is a crossing. */
+export const tramSwitchDeflectionDeg = 45;
 export function compileRail(city: City, geometry?: CompiledCity): RailGraph | undefined {
   if (!city.rail) return undefined;
   const nodes = Object.values(city.rail.nodes)
@@ -97,7 +102,11 @@ export function compileRail(city: City, geometry?: CompiledCity): RailGraph | un
         if (from === to) continue;
         const a = outward(tracks[from]!, n.id),
           b = outward(tracks[to]!, n.id);
-        if (-a.x * b.x - a.y * b.y >= Math.cos((railDeflectionDeg * Math.PI) / 180) - 1e-9)
+        const limit =
+          n.kind === 'switch' && tracks[from]!.kind === 'tram' && tracks[to]!.kind === 'tram'
+            ? tramSwitchDeflectionDeg
+            : railDeflectionDeg;
+        if (-a.x * b.x - a.y * b.y >= Math.cos((limit * Math.PI) / 180) - 1e-9)
           connections.push({ node: n.idx, from, to });
       }
   }

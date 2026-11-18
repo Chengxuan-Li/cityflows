@@ -4,7 +4,7 @@ import { buildFreiburgProject, freiburgProject, openFreiburg } from '../../bench
 import { probeMorning } from '../../bench/import-probe';
 import { compile } from '../../src/network';
 import { compileRail } from '../../src/network/rail';
-import { trainTimetable } from '../../src/network/trains';
+import { trainTimetable, trainsAt } from '../../src/network/trains';
 import { tramCensus, tramTimetable } from '../../src/network/trams';
 import type { City } from '../../src/schema';
 import { limit } from '../timeouts';
@@ -117,20 +117,35 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   );
   const end = (node: number) => rail.nodes[node]!.id;
   // West at the Stühlingerbrücke, east at the Schwabentorbrücke, north on Habsburgerstraße,
-  // south on Günterstalstraße, and the Rotteckring line from Kronenstraße.
+  // south on Günterstalstraße, and the line from Kronenstraße; then (TASK-202) the Rotteckring
+  // both ways, between Habsburgerstraße and Kronenstraße, and the Schwabentorschleife from the
+  // east and back.
   expect(table.routes.map((r) => `${end(r.from)}>${end(r.to)}`)).toEqual([
     'rn:12244>rn:12227',
     'rn:12885>rn:12227',
     'rn:12229>rn:12562',
     'rn:12518>rn:12578',
     'rn:12050>rn:12516',
+    'rn:12518>rn:12883',
+    'rn:12885>rn:12516',
+    'rn:12229>rn:12227',
   ]);
-  for (const route of table.routes.filter((r) => end(r.from) !== 'rn:12885'))
+  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12885'))
     expect(route.stops.map((s) => s.name)).toContain('Bertoldsbrunnen');
-  expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10, 10, 10]);
+  expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10, 10, 10, 10, 10, 10]);
   expect(table.periodS).toBe(720);
-  expect(census.servedStops).toHaveLength(24);
-  expect(table.hash).toBe('aff6c2fd');
+  // Every mapped stop has a tram (TASK-202; TASK-198 served 24 of the 32).
+  expect(census.servedStops).toHaveLength(32);
+  expect(census.unservedStops).toEqual([]);
+  expect(table.hash).toBe('b0b017ca');
+  for (let time = 0; time < 86400; time += 5) {
+    const used = new Set<number>();
+    for (const tram of trainsAt(rail, table, time))
+      for (const track of tram.occupied) {
+        if (used.has(track)) throw Error(`Tram collision at ${time} on ${rail.tracks[track]!.id}`);
+        used.add(track);
+      }
+  }
   expect(trainTimetable(rail).routes).toHaveLength(5);
 });
 
@@ -187,7 +202,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
-  expect(morning.stateHash).toBe(236178606);
+  // TASK-202: the Rotteckring and Schwabentorschleife trams and the crossing stop-line fix.
+  expect(morning.stateHash).toBe(3911386262);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

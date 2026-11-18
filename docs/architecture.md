@@ -684,7 +684,9 @@ TASK-126 derives optional `CompiledCity.rail` after walk compilation, in `networ
 Dense nodes list incident track indices; dense tracks carry canonical identity/geometry,
 endpoint indices, cumulative metres and length. Directed continuation pairs connect different
 tracks only at a shared node and at deflection <=30 degrees: shallow turnout branches connect
-to their stem, while branch-to-branch reversals and sharp corners do not. Buffer stops have
+to their stem, while branch-to-branch reversals and sharp corners do not. TASK-202: two tram
+tracks at a node tagged as a switch connect at deflection <=45 degrees, since a tight street
+turnout's mapped chord turns further; an untagged node stays at 30 (a crossing). Buffer stops have
 no continuations. Geographic crossings never create rail connectivity; explicitly shared nodes
 may join grades at mapped abutments. Components report physical track connectivity, including
 branches that cannot be traversed directly. Same-grade road/track intersections carry road ID,
@@ -742,7 +744,11 @@ boundary entry takes the reachable exit that turns least off the straight at the
 passes (nodes of three or more tracks, heading 15 m before to 15 m after), so a line runs on
 across the centre rather than to the nearest edge. Tram routes may share directed sections; a
 shorter one is dropped only when a longer route already serves all of its track, and the
-reservations keep their bodies apart. Stop attachment projects
+reservations keep their bodies apart. TASK-202: a mapped halt that no entry's straightest line
+passes still gets a route when a tram can pass it from one boundary end to another on its own
+track: of the cheapest paths from each entry through the halt to each exit, the route serving
+the most unserved stops, then the one turning least, then the shortest, is added (its id gains
+` via <stop>` if an earlier route has the same ends), until no route adds a stop. Stop attachment projects
 the mapped halt onto its named section and places the tram centre half a body length before
 it along the connected route, so its nose meets the halt marking in either travel direction.
 The centre may lie on a preceding section or outside the bounded extract; canonical halts stay
@@ -1578,6 +1584,11 @@ before road or pedestrian stops, access points, another served crossing, and the
 junction retain strict admission. A road red inside that
 clearance holds entry; release removes only the crossing obstacle and never grants a road
 signal. Unserved, pedestrian and grade-separated crossings impose no road restriction.
+TASK-202: a driver obeys, and is committed by passing, only a facility's stop marking for the
+encounter it guards on the driver's path: one of the facility's spans reached from the marking
+through movements, lanes whose movements all lead to one road, and lanes with that facility's
+own marking or span. A marking for a turn the driver does not take, with the same facility met
+again from another approach further on, neither holds nor commits it.
 An admitted vehicle that stops wholly upstream of the physical conflict yields to rail and
 holds there before resuming. Gridlock recovery is exempt only while a protected rail stop is
 the binding obstacle at the stopped vehicle's nose; an open crossing's downstream queue
