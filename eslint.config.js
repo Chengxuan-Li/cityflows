@@ -12,7 +12,7 @@ const deterministicModules = 'src/{sim,routing,demand,editor,network}/**/*.ts';
 const uiLibraries = ['react', 'react-dom', 'react/*', 'react-dom/*', 'zustand', 'zustand/*'];
 
 export default defineConfig([
-  globalIgnores(['dist', 'node_modules', 'playwright-report', 'test-results']),
+  globalIgnores(['dist', 'dist-production', 'node_modules', 'playwright-report', 'test-results']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

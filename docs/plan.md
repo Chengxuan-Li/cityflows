@@ -4469,8 +4469,8 @@ shipping that way (2026-11-17), TASK-199 written. Schema: optional `geo.boundary
 contract). Lead check on the merge: check (1,486), city (183), traffic light, light e2e (61); the
 production build opened in the browser on Freiburg in Light and Dark at 1440 and 800 px with no
 console errors. Open: 8 tram stops unserved; 3D camera crops the west behind the inspector; the 2D view
-leaves margin; the e2e production build cache under `node_modules/.cache/qa-production` is shared by
-every worktree; a wider extract with `building:part` and AWS terrain need the owner's go-ahead.
+leaves margin; the e2e production build cache under `node_modules/.cache/qa-production` was shared by
+every worktree (TASK-205 moves it to `dist-production`); a wider extract with `building:part` and AWS terrain need the owner's go-ahead.
 
 Full run 44130610052 (lead, manual, on 07cf54b after TASK-198): every job green, including all five
 e2e shards (the full e2e suite TASK-198 did not run); CI green on 07cf54b and Pages deployed it; the
