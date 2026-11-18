@@ -4434,6 +4434,9 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
 
+Full run 44390084748 (lead, manual, on aeba494 after TASK-202): every job green, including all five
+e2e shards; CI green on aeba494 and Pages deployed it; the city job took 32.8 min.
+
 TASK-202 (Claude Code subagent, Opus 5.5 high, 2026-11-18; extended by the owner to the crossing
 stop line; merged with the owner's approval of the trade-off): 8 of 32 Freiburg tram stops were
 unserved because each boundary entry kept only its straightest line (7 stops on branches and parallel
