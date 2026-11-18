@@ -59,6 +59,7 @@ const pitched: RoofShape[] = [
   'skillion',
   'mansard',
   'gambrel',
+  'round',
 ];
 
 test.each(pitched)(
@@ -86,7 +87,7 @@ test.each(pitched)(
   },
 );
 
-test.each<RoofShape>(['gabled', 'hipped', 'half-hipped', 'gambrel', 'mansard'])(
+test.each<RoofShape>(['gabled', 'hipped', 'half-hipped', 'gambrel', 'mansard', 'round'])(
   'V109 %s ridge follows the long side and across overrides it',
   (shape) => {
     for (const across of [false, true]) {
@@ -186,7 +187,6 @@ test('V109 flat fallbacks retain courtyard holes and explain unsupported footpri
   );
   expect(triangle.shape).toBe('flat');
   expect(triangle.fallbackReason).toBe('irregular-footprint');
-  expect(buildRoof(building('onion')).fallbackReason).toBe('unsupported-shape');
 });
 
 test('V109 roofs use height and level precedence, capped defaults, and leave untagged roofs flat', () => {
@@ -203,4 +203,233 @@ test('V109 roofs use height and level precedence, capped defaults, and leave unt
   expect(flat.shape).toBe('flat');
   expect(flat.fallbackReason).toBeUndefined();
   expect(flat.wallHeightM).toBe(14);
+});
+
+// TASK-210: round, dome and onion roofs.
+type Ring = { x: number; y: number }[];
+const polygon = (n: number, r: number, cx = 0, cy = 0, phase = 0): Ring => {
+  const ring = Array.from({ length: n }, (_, i) => ({
+    x: cx + r * Math.cos(phase + (2 * Math.PI * i) / n),
+    y: cy + r * Math.sin(phase + (2 * Math.PI * i) / n),
+  }));
+  return [...ring, ring[0]!];
+};
+const box = (w: number, d: number): Ring => [
+  { x: 0, y: 0 },
+  { x: w, y: 0 },
+  { x: w, y: d },
+  { x: 0, y: d },
+  { x: 0, y: 0 },
+];
+
+function inside(ring: Ring, x: number, z: number) {
+  const open = ring.slice(0, -1);
+  const distance = (i: number) => {
+    const p = open[i]!,
+      q = open[(i + 1) % open.length]!;
+    const t = Math.max(
+      0,
+      Math.min(
+        1,
+        ((x - p.x) * (q.x - p.x) + (z - p.y) * (q.y - p.y)) / ((q.x - p.x) ** 2 + (q.y - p.y) ** 2),
+      ),
+    );
+    return Math.hypot(x - p.x - t * (q.x - p.x), z - p.y - t * (q.y - p.y));
+  };
+  let crossings = 0;
+  open.forEach((p, i) => {
+    const q = open[(i + 1) % open.length]!;
+    if (p.y > z !== q.y > z && x < p.x + ((z - p.y) * (q.x - p.x)) / (q.y - p.y)) crossings++;
+  });
+  return crossings % 2 === 1 || open.some((_, i) => distance(i) < 1e-4);
+}
+
+/** Every vertex over the outline and between the wall top and the total height; the surface
+ * closed: each edge shared by two triangles in opposite directions (one outward winding), except
+ * its rim, which is exactly the outline at the wall top. */
+function expectClosedRoof(geometry: BufferGeometry, ring: Ring, wall: number, total: number) {
+  const p = geometry.getAttribute('position');
+  expect(p.count).toBeGreaterThan(0);
+  const key = (i: number) => [p.getX(i), p.getY(i), p.getZ(i)].map((v) => v.toFixed(3)).join();
+  const edges = new Map<string, number>();
+  for (let i = 0; i < p.count; i++) {
+    expect(inside(ring, p.getX(i), p.getZ(i)), `vertex ${key(i)} over the outline`).toBe(true);
+    expect(p.getY(i)).toBeGreaterThanOrEqual(wall - 1e-4);
+    expect(p.getY(i)).toBeLessThanOrEqual(total + 1e-4);
+  }
+  for (let i = 0; i < p.count; i += 3)
+    for (let j = 0; j < 3; j++) {
+      const a = key(i + j),
+        b = key(i + ((j + 1) % 3));
+      if (a !== b) edges.set(`${a}|${b}`, (edges.get(`${a}|${b}`) ?? 0) + 1);
+    }
+  let rim = 0;
+  for (const [edge, count] of edges) {
+    expect(count, edge).toBe(1);
+    const [a, b] = edge.split('|');
+    if (edges.has(`${b}|${a}`)) continue;
+    const [ax, ay, az] = a!.split(',').map(Number),
+      [bx, by, bz] = b!.split(',').map(Number);
+    expect(ay, `open edge ${edge} at the wall top`).toBeCloseTo(wall, 3);
+    expect(by).toBeCloseTo(wall, 3);
+    rim += Math.hypot(bx! - ax!, bz! - az!);
+  }
+  const open = ring.slice(0, -1);
+  const perimeter = open.reduce((sum, q, i) => {
+    const r = open[(i + 1) % open.length]!;
+    return sum + Math.hypot(r.x - q.x, r.y - q.y);
+  }, 0);
+  expect(rim).toBeCloseTo(perimeter, 2);
+}
+
+const topY = (geometry: BufferGeometry) => {
+  const p = geometry.getAttribute('position');
+  let best = 0;
+  for (let i = 1; i < p.count; i++) if (p.getY(i) > p.getY(best)) best = i;
+  return { x: p.getX(best), y: p.getY(best), z: p.getZ(best) };
+};
+
+test.each([
+  ['circular', polygon(32, 6, 10, 10)],
+  ['square', box(12, 12)],
+  ['rectangular', box(20, 10)],
+] as const)('TASK-210 dome on a %s outline is a closed vault within the outline', (_, ring) => {
+  const result = buildRoof(
+    building('dome', { rings: [ring], heightM: 20, roof: { shape: 'dome', heightM: 5 } }),
+  );
+  expect(result.shape).toBe('dome');
+  expect(result.fallbackReason).toBeUndefined();
+  expect(result.wallHeightM).toBe(15);
+  expectClosedRoof(result.roof, ring, 15, 20);
+  expect(result.infill.getAttribute('position').count).toBe(0);
+  const apex = topY(result.roof);
+  expect(apex.y).toBeCloseTo(20, 5);
+  const xs = ring.map((p) => p.x),
+    zs = ring.map((p) => p.y);
+  expect(apex.x).toBeCloseTo((Math.min(...xs) + Math.max(...xs)) / 2, 4);
+  expect(apex.z).toBeCloseTo((Math.min(...zs) + Math.max(...zs)) / 2, 4);
+});
+
+test('TASK-210 a dome on a circle is a hemisphere at its radius and a spherical cap below it', () => {
+  const ring = polygon(32, 6);
+  for (const height of [6, 3]) {
+    const result = buildRoof(
+      building('dome', { rings: [ring], heightM: 20, roof: { shape: 'dome', heightM: height } }),
+    );
+    const sphere = (36 + height ** 2) / (2 * height);
+    const centre = 20 - sphere;
+    const p = result.roof.getAttribute('position');
+    for (let i = 0; i < p.count; i++)
+      expect(Math.hypot(p.getX(i), p.getY(i) - centre, p.getZ(i))).toBeCloseTo(sphere, 3);
+  }
+  // Without roof:height a dome is a hemisphere, as far as half the building allows.
+  const tall = buildRoof(building('dome', { rings: [ring], heightM: 20, roof: { shape: 'dome' } }));
+  expect(tall.roofHeightM).toBeCloseTo(6, 6);
+});
+
+test.each([
+  ['octagonal', polygon(8, 1.5, 5, 5, Math.PI / 8)],
+  ['square', box(3, 3)],
+] as const)(
+  'TASK-210 onion on a %s outline bulges, narrows to a point and stays closed',
+  (_, ring) => {
+    const result = buildRoof(
+      building('onion', { rings: [ring], heightM: 31, roof: { shape: 'onion', heightM: 4 } }),
+    );
+    expect(result.shape).toBe('onion');
+    expectClosedRoof(result.roof, ring, 27, 31);
+    const p = result.roof.getAttribute('position');
+    const centre = { x: 1.5 + (ring[0]!.x > 4 ? 3.5 : 0), z: 1.5 + (ring[0]!.x > 4 ? 3.5 : 0) };
+    // The widest section is above the neck: the bulb.
+    const reach = (from: number, to: number) => {
+      let best = 0;
+      for (let i = 0; i < p.count; i++)
+        if (p.getY(i) > from && p.getY(i) < to)
+          best = Math.max(best, Math.hypot(p.getX(i) - centre.x, p.getZ(i) - centre.z));
+      return best;
+    };
+    expect(reach(27.1, 28.6)).toBeGreaterThan(reach(27.01, 27.3) * 1.1);
+    expect(reach(30, 31.01)).toBeLessThan(reach(27.1, 28.6) * 0.5);
+    const apex = topY(result.roof);
+    expect(Math.hypot(apex.x - centre.x, apex.z - centre.z)).toBeLessThan(1e-4);
+    expect(apex.y).toBeCloseTo(31, 5);
+  },
+);
+
+test('TASK-210 round on a circle is a barrel clipped to the outline, closed by its end walls', () => {
+  const ring = polygon(24, 5);
+  const result = buildRoof(
+    building('round', { rings: [ring], heightM: 14, roof: { shape: 'round', heightM: 4 } }),
+  );
+  expect(result.shape).toBe('round');
+  const p = result.roof.getAttribute('position');
+  for (let i = 0; i < p.count; i++) {
+    expect(inside(ring, p.getX(i), p.getZ(i))).toBe(true);
+    expect(p.getY(i)).toBeGreaterThanOrEqual(10 - 1e-5);
+    expect(p.getY(i)).toBeLessThanOrEqual(14 + 1e-5);
+  }
+  const open = ring.slice(0, -1);
+  const area = open.reduce((sum, q, i) => {
+    const r = open[(i + 1) % open.length]!;
+    return sum + (q.x * r.y - r.x * q.y) / 2;
+  }, 0);
+  expect(projectedArea(result.roof)).toBeCloseTo(area, 3);
+  expect(result.infill.getAttribute('position').count).toBeGreaterThan(0);
+});
+
+test('TASK-210 the barrel vault ends are closed to the wall top under its arc', () => {
+  const { infill } = buildRoof(building('round'));
+  const p = infill.getAttribute('position');
+  let ends = 0;
+  for (let i = 0; i < p.count; i += 3) {
+    const ax = p.getX(i + 1) - p.getX(i),
+      ay = p.getY(i + 1) - p.getY(i),
+      az = p.getZ(i + 1) - p.getZ(i);
+    const bx = p.getX(i + 2) - p.getX(i),
+      by = p.getY(i + 2) - p.getY(i),
+      bz = p.getZ(i + 2) - p.getZ(i);
+    ends += Math.hypot(ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx) / 2;
+  }
+  // Two ends under a 12-segment half ellipse, 5 m across and 4 m high.
+  expect(ends).toBeCloseTo(2 * 5 * 4 * 6 * Math.sin(Math.PI / 12), 3);
+});
+
+test('TASK-210 fallbacks: box shapes take convex outlines, domes need a star-shaped one', () => {
+  const trapezoid = [
+    { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 16, y: 10 },
+    { x: 4, y: 10 },
+    { x: 0, y: 0 },
+  ];
+  for (const shape of ['gabled', 'hipped', 'round'] as const) {
+    const result = buildRoof(building(shape, { rings: [trapezoid] }));
+    expect(result.shape).toBe(shape);
+    expect(projectedArea(result.roof)).toBeCloseTo(160, 4);
+  }
+  const hook = [
+    { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 20, y: 20 },
+    { x: 0, y: 20 },
+    { x: 0, y: 17 },
+    { x: 17, y: 17 },
+    { x: 17, y: 3 },
+    { x: 0, y: 3 },
+    { x: 0, y: 0 },
+  ];
+  for (const shape of ['dome', 'onion'] as const) {
+    const result = buildRoof(building(shape, { rings: [hook] }));
+    expect(result.shape).toBe('flat');
+    expect(result.fallbackReason).toBe('irregular-footprint');
+  }
+  const courtyard = polygon(6, 2, 10, 5);
+  expect(buildRoof(building('dome', { rings: [rectangle, courtyard] })).fallbackReason).toBe(
+    'courtyard',
+  );
+  // roof:levels=0: no storey in the roof, which still has its height.
+  const noStorey = buildRoof(
+    building('gabled', { heightM: undefined, levels: 4, roof: { shape: 'gabled', levels: 0 } }),
+  );
+  expect(noStorey.roofHeightM).toBeCloseTo(5 * Math.tan((35 * Math.PI) / 180), 6);
 });
