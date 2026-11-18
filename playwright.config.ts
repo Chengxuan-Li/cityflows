@@ -113,7 +113,7 @@ export default defineConfig({
     ...(withProduction
       ? [
           {
-            command: `npm run build -- --mode production --outDir node_modules/.cache/qa-production && npm run preview -- --outDir node_modules/.cache/qa-production --port ${productionPort} --strictPort`,
+            command: `npm run build -- --mode production --outDir dist-production && npm run preview -- --outDir dist-production --port ${productionPort} --strictPort`,
             env: { CITYFLOWS_BASE_PATH: '/cityflows/' },
             url: `http://localhost:${productionPort}/cityflows/`,
             reuseExistingServer: false,
