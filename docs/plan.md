@@ -235,7 +235,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-207](tasks/TASK-207.md) | UI | Freiburg's 187 validation warnings: importer fixes, curation, notices | importer, diagnostics, `bench/freiburg.ts`, project | 198, 201 | codes before and after, tests, Freiburg gate | in progress (owner 2026-11-18) |
 | [TASK-208](tasks/TASK-208.md) | 9 | Munich's remaining missed turns (r:700 lane 0, the r:639 weave) and why TASK-204's first rule gridlocked Freiburg | `src/sim/lane-change.ts`, entry chains | 204 | misses, seeds 1-12 both modes, full demand, gates | in progress (owner 2026-11-18) |
 | [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | in progress (owner 2026-11-18) |
-| [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | in progress (owner 2026-11-18) |
+| [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | done 2026-11-18 |
 | TASK-213 | 10 | Junction shapes, from TASK-212's cases | `junctions.ts`, `corridor.ts`, `groups.ts` | 212 | contract after the audit | planned (owner 2026-11-18) |
 | TASK-214 | 10 | Lane splits and merges, from TASK-212's cases | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 212 | contract after the audit | planned (owner 2026-11-18) |
 | TASK-215 | 10 | Lane markings, from TASK-212's cases | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts` | 212 | contract after the audit | planned (owner 2026-11-18) |
@@ -4433,6 +4433,21 @@ choice off) is as large as each difference. Re-pins: Freiburg city.json `c28e8a4
 `ded060cf...`, its state hash 3091275482 to 1137612334. Lead check on the merge: check, city (183), traffic light and guard, light e2e (61) all pass.
 Open: `gate4-compare` fails on main when run alone ("Traffic worker terminated" after Open project
 while the landing city is still loading), a race from TASK-198 that CI's retry hides.
+
+TASK-212 (Claude Code subagent, Opus 5.5 high, 2026-11-18; merged): read-only audit in
+`docs/findings/2026-11-19-geometry-audit/` (README and 36 close-ups). `bench/geometry-audit.ts`
+crashes on main: its named cases R3-1 (`n:1181`) and R3-7 (`n:949`) no longer exist since TASK-131
+renumbered Munich, and it has no Freiburg entry (figures taken with a scratch wrapper; TASK-213 fixes
+the bench). Regressions against the recorded figures: sharp curb corners Munich 9 to 22, Sindelfingen
+8 to 31; lane back-steps Munich 0 to 3 (`r:589#0`, `r:728#0`); continuation join max Munich 0.047 to
+0.315 m; same-corridor overlap Munich 1 to 3 pairs, Sindelfingen 0 to 2. Freiburg: 17 folded lanes, 106
+sharp corners, 124 joins over 5 cm, 84 of 159 lane-count changes without a taper. Cases: junctions J1
+to J6 (group surfaces at the Hauptbahnhof, lobed group edges, acute side roads, corners without radius,
+through-road bends, ramp diverges) for TASK-213; splits and merges S1 to S6 (sawtooth pinches, gain
+fans, joint steps, folds, chained gains, point merges) for TASK-214; markings M1 to M7 (group-entry
+arrows, splayed inner dashes, zebras across the B 31, doubled crossings, staggered stripes, split stop
+lines; M7, solid lines before signals, is a theme rule for the owner) for TASK-215. Lead check: check
+passes; docs only.
 
 Full run 44390084748 (lead, manual, on aeba494 after TASK-202): every job green, including all five
 e2e shards; CI green on aeba494 and Pages deployed it; the city job took 32.8 min.

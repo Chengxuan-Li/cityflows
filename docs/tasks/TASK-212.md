@@ -1,6 +1,6 @@
 # TASK-212 — Geometry audit: junctions, lane splits and merges, markings
 
-Status: in progress (owner started it 2026-11-18). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: done 2026-11-18. Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/212-geometry-audit`, worktree `D:\cityflows-wt\212`, ports 5412 / 5512. Read-only on
 code.
 
