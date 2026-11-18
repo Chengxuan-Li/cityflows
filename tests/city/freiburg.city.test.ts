@@ -197,13 +197,17 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-201: re-pinned for the 2026-11-18 extract with building parts and the parts in place of
   // TASK-198's Münster and St. Martin curation. The road network is the same, so the state hash
   // is TASK-198's.
+  // TASK-207: re-pinned for its validation curation: three lots the polygon cut leaves without
+  // access and two dead-end roads into the pedestrian Schwabentor removed; the ZOB's taxi rank
+  // turns round.
   expect(manifest.files['city.json']).toBe(
-    'b85a1f341199c8681156c9414dc731ef586b948e382764a7e9a7087f38b428a5',
+    'd7bd896c90fce657fedc5a4151d1a337911950b6cf90ba29f2771277916558ac',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
   // TASK-202: the Rotteckring and Schwabentorschleife trams and the crossing stop-line fix.
-  expect(morning.stateHash).toBe(3911386262);
+  // TASK-207: its validation curation (above).
+  expect(morning.stateHash).toBe(3851309981);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
