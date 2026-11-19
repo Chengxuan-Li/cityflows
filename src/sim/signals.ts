@@ -220,6 +220,8 @@ interface ActuatedState {
   stageS: number;
   untilS: number;
   next: number;
+  /** TASK-222: the green is kept to here for a car a joined controller is about to release. */
+  keepS: number;
 }
 
 /**
@@ -231,6 +233,16 @@ interface ActuatedState {
  * (such a vehicle or walker for it) the green ends when no extension holds it or at the phase's
  * timed green, and amber and all-red lead to the next phase with demand. Without other demand it
  * rests in green. `walkCalls` gives the walk links walkers wait at, with the green they need.
+ *
+ * TASK-222: `crossingRed` gives the movement whose red stop line, inside the clear zone beyond a
+ * rail crossing, holds a vehicle short of the tracks (-1 if none). Such a car needs this
+ * controller's green and the other one's together. When this controller also has a call from a
+ * car the crossing holds for its own red (a mutual wait), and the other controller is changing
+ * to a phase serving the first car's movement, this green is kept (to `PASSAGE_S` beyond, past
+ * its timed green if need be). Controllers advance in a fixed order, so of two that would change
+ * together the second sees the first changing and keeps its green: two controllers whose stop
+ * lines a crossing joins cannot lock in opposite phases, each extended by a car the other holds
+ * (Freiburg's n:18 and group 2).
  */
 export function createSignalControl(
   city: CompiledCity,
@@ -240,6 +252,7 @@ export function createSignalControl(
   timeS: number,
   walkCalls: () => ReadonlyMap<number, number> | undefined,
   previous?: ReadonlyMap<string, ActuatedState>,
+  crossingRed: (id: number) => number = () => -1,
 ) {
   const actuated = signalControllers(city).flatMap((controller) => {
     const members = controller.nodes.map((n) => signals[n]!);
@@ -291,6 +304,7 @@ export function createSignalControl(
             stageS: timeS,
             untilS: -Infinity,
             next: 0,
+            keepS: -Infinity,
           };
     return [
       {
@@ -317,13 +331,20 @@ export function createSignalControl(
       const own = 1 << s.phase;
       let extend = false;
       let calls = 0;
+      let kept = -Infinity;
+      let mutual = false;
       for (const lane of c.lanes) {
         const stopM = city.lanes[lane]!.stopM;
         for (let id = vehicles.first(lane); id !== -1; id = vehicles.next[id]!) {
           if (vehicles.position[id]! < stopM - DETECT_M) break;
           const mask = c.phaseMask.get(vehicles.movement[id]!) ?? 0;
-          if (mask & own) extend = true;
-          else calls |= mask;
+          if (mask & own) {
+            extend = true;
+            kept = Math.max(kept, keptFor(c, id, timeS));
+          } else {
+            calls |= mask;
+            mutual ||= heldBy(c, id);
+          }
         }
       }
       for (const { segment, fromM, hops, road } of c.upstream)
@@ -333,8 +354,13 @@ export function createSignalControl(
           const step = vehicles.routeStep[id]! + hops;
           if (route?.roads[step] !== road) continue;
           const mask = c.phaseMask.get(route.movements[step]!) ?? 0;
-          if (mask & own) extend = true;
-          else calls |= mask;
+          if (mask & own) {
+            extend = true;
+            kept = Math.max(kept, keptFor(c, id, timeS));
+          } else {
+            calls |= mask;
+            mutual ||= heldBy(c, id);
+          }
         }
       let walkNeedS = 0;
       for (const [link, needS] of walkCalls() ?? []) {
@@ -353,6 +379,8 @@ export function createSignalControl(
           Math.min(until, s.stageS + phases[s.phase]!.durationS),
         );
       else until = Math.max(until, timeS + params.dtS);
+      if (mutual) s.keepS = Math.max(s.keepS, kept);
+      until = Math.max(until, s.keepS);
       s.untilS = until;
       if (!calls || timeS < until - eps) return;
       s.stage = AMBER_STAGE;
@@ -375,6 +403,27 @@ export function createSignalControl(
     s.stage = GREEN_STAGE;
     s.stageS = timeS;
     s.untilS = -Infinity;
+    s.keepS = -Infinity;
+  }
+
+  /** TASK-222: a crossing holds `id` for a red stop line of `c`. */
+  const heldBy = (c: (typeof actuated)[number], id: number) => {
+    const red = crossingRed(id);
+    return red !== -1 && actuated[owner[city.movements[red]!.node]!] === c;
+  };
+
+  /** TASK-222: `id` would use the green of `c`, but a crossing holds it for a red stop line of
+   * another controller; while that one is changing to a phase serving the movement, the time
+   * `c` keeps its green to (`PASSAGE_S` from now), else -Infinity. */
+  function keptFor(c: (typeof actuated)[number], id: number, timeS: number) {
+    const red = crossingRed(id);
+    if (red === -1) return -Infinity;
+    const node = city.movements[red]!.node;
+    if (actuated[owner[node]!] === c) return -Infinity;
+    const far = stateOf(node, timeS);
+    return far.state !== GREEN_STAGE && phaseSets[node]![far.next]!.has(red)
+      ? timeS + PASSAGE_S
+      : -Infinity;
   }
 
   /** A node's phase and stage, and the phase its amber and all-red lead to. */
