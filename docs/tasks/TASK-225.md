@@ -1,6 +1,7 @@
 # TASK-225 — The Siegesdenkmal box lock (Freiburg jg:13305)
 
-Status: in progress (unsupervised run, owner 2026-11-19; written when TASK-219 was parked). Proposed
+Status: in progress (unsupervised run, owner 2026-11-19; written when TASK-219 was parked). Diagnosed
+2026-11-19: the fix is in `src/sim/rail-crossings.ts`; it lands after TASK-222 (review in `docs/plan.md`). Proposed
 owner: Claude Code subagent (Opus 5.5, high). Branch `task/225-siegesdenkmal-lock`, worktree
 `D:\cityflows-wt\225`, ports 5425 / 5525.
 

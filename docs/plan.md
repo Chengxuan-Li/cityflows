@@ -248,8 +248,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
 | [TASK-223](tasks/TASK-223.md) | 9 | TASK-208's missed-turn rule re-measured on TASK-222 | `detourHeads` | 208, 222 | misses, traffic, merge rule | planned (unsupervised run, wave B) |
 | [TASK-224](tasks/TASK-224.md) | 10 | Aerial re-check of the Hauptbahnhof box after wave A | overlay bench, findings | 216 to 220 | D1 to D9 before and now | planned (unsupervised run, wave B) |
-| [TASK-225](tasks/TASK-225.md) | 9 | The Siegesdenkmal box lock (Freiburg jg:13305; main seeds 2 and 4, TASK-219 seed 1) | `src/sim` box and group-chain rules | 219 | repro test, Freiburg seeds 1 to 6, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
+| [TASK-225](tasks/TASK-225.md) | 9 | The Siegesdenkmal box lock (Freiburg jg:13305; main seeds 2 and 4, TASK-219 seed 1) | `src/sim` box and group-chain rules | 219 | repro test, Freiburg seeds 1 to 6, traffic, merge rule | in progress: diagnosed (tram held at start keeps two crossings closed, `rail-crossings.ts`); rule lands after TASK-222 |
 | [TASK-226](tasks/TASK-226.md) | 10 | TASK-219's group membership re-measured on TASK-225 | `split.ts`, Freiburg rebuild | 219, 225 | TASK-219's gates | planned (unsupervised run) |
+| [TASK-227](tasks/TASK-227.md) | render | Pitched roofs on concave outlines (straight skeleton) | `render3d/roofs.ts` | 210 | flat fallbacks, skeleton tests, close-ups, budgets, identical hashes | in progress (unsupervised run 2026-11-19) |
+| [TASK-228](tasks/TASK-228.md) | 9 | Tram backlog: one delayed tram holds every unstarted one (found by TASK-225) | `rail-crossings.ts` service holds | 225 | backlog figures, traffic, merge rule | planned (unsupervised run; after TASK-225) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4578,6 +4580,27 @@ gate), the variant the contract's "no audit measure worse", so both miss and the
 (branch kept, worktree `D:\cityflows-wt\219`). Follow-ups written: TASK-225 (the Siegesdenkmal lock,
 main's own) and TASK-226 (the tip re-measured on it). Rule slip reported by the agent: one `pkill -f`
 with a pattern unique to its own script (the lead's rule is stop by PID); no other process affected.
+
+TASK-225 (Claude Code subagent, Opus 5.5 high, 2026-11-19; diagnosed, rule waits for TASK-222):
+the Siegesdenkmal lock is not in the box. The group is empty throughout; two tram crossings inside it
+(facility 9, stop line on `r:1789`; facility 17, on `r:1659`) stay closed from the lock's start to
+10:00 (main seed 2 from 31,510 s, seed 4 from 29,161 s; TASK-219's tip seed 1 from 29,761 s). Two tram
+routes enter the map at `rn:12517`, about 120 m before the crossings, and reach them 7.6 to 8.4 s after
+starting, inside the 12 s warning; a tram waiting at its start for its track (`delayedTracks`: any
+delayed tram on a shared section holds unstarted services) is therefore already warning, and
+departures queue back to back, so the crossings never reopen. Held heads have their jam timer reset
+and never respawn; the cars behind them fail as gridlocked. Proposed rule (in
+`D:\cityflows-wt\225-evidence\rule.patch`, +16/-14 in `rail-crossings.ts`, TASK-222's file): a
+service standing still for its track does not keep closed a crossing it has not reached (the existing
+upstream-interlock state; the crossing entered this step excepted); a fresh full warning runs when
+it moves. Prototype on main: Freiburg seed 2 1,460 / 5 to 1,476 / 0 (67.8 to 67.4 s), seed 4 1,351 /
+21 to 1,463 / 0 (73.3 to 68.3 s), seeds 1, 3, 5, 6 identical hashes; TASK-219's tip seed 1 1,370 / 24
+to 1,461 / 0 (73.7 s); Munich seed 1 four configurations, both full demands and Sindelfingen
+identical hashes. Committed on the branch (`270bcdd`): the reproduction
+`tests/sim/T75-held-service-crossing.test.ts` as `test.fails` (to flip when the rule lands). Tiers on
+the branch: check (1,533 and 2 expected fails), city (193), traffic light, light e2e (61). Lead
+decision: the agent resumes after TASK-222 merges, rebases, applies the rule and measures it in full
+(12 Munich seeds); the backlog it found is TASK-228.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
