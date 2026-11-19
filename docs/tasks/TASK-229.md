@@ -1,6 +1,6 @@
 # TASK-229 — Marking follow-ups from the aerial re-check (N1, N2)
 
-Status: in progress (unsupervised run, owner 2026-11-19; written from TASK-224's findings). Proposed
+Status: done 2026-11-19 (merged; review in `docs/plan.md`). Proposed
 owner: Claude Code subagent (Opus 5.5, high). Branch `task/229-marking-followups`, worktree
 `D:\cityflows-wt\229`, ports 5429 / 5529.
 

@@ -1,6 +1,6 @@
 # TASK-226 — TASK-219's group membership re-measured on the Siegesdenkmal fix
 
-Status: in progress (unsupervised run, owner 2026-11-19; started after TASK-225 merged). Proposed owner:
+Status: parked 2026-11-19 (merge rule met; one corner under 2 m at `n:473`; lead recommends merging; review in `docs/plan.md`). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/226-group-surfaces-2`, worktree
 `D:\cityflows-wt\226`, ports 5426 / 5526.
 
