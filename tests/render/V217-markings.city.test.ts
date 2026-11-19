@@ -69,7 +69,9 @@ test('M2: inner roads of junction groups with lanes under 15 m carry no lane lin
     const { below, above } = roadMarkingGeometry(net, r, city);
     if ([...below, ...above].some((s) => s.role === 'lane')) lines.push(r.id);
   }
-  expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(81);
+  // TASK-226: Friedrichstraße's r:1149 and r:475 are no longer inner roads of the Hauptbahnhof's
+  // group (TASK-219's slip-road diverge rule), 81 to 79.
+  expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(79);
   expect(lines).toEqual([]);
 });
 
