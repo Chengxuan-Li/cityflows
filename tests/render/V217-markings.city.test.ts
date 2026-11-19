@@ -310,12 +310,14 @@ test('D1: zebras where OSM maps them (TASK-216: n:211, n:1139, the Zur Unterfüh
   const osm = (lat: number, lon: number) => lonLatToLocal(city.geo!, { lat, lon });
   // 2479358348 at n:211 and 9118444286 at n:1139 are mapped as nodes only; 320091867 on a
   // `path=crossing` way where a 7 m slip road splits at n:398.
-  for (const [id, at] of [
-    ['2479358348', osm(47.9975169, 7.8428582)],
-    ['9118444286', osm(47.997331, 7.8436884)],
-    ['320091867', osm(47.9997243, 7.8438616)],
+  // n:211's stays in its arm's band, 5.4 m from the mapped node (the band no longer moves to a
+  // mapped crossing: that cost Munich 3.7 to 4.6% of mean delay in fixed time).
+  for (const [id, at, m] of [
+    ['2479358348', osm(47.9975169, 7.8428582), 7],
+    ['9118444286', osm(47.997331, 7.8436884), 3],
+    ['320091867', osm(47.9997243, 7.8438616), 3],
   ] as const)
-    expect(paintNear(city, at, 3).length, id).toBeGreaterThanOrEqual(3);
+    expect(paintNear(city, at, m).length, id).toBeGreaterThanOrEqual(3);
   // Without the mapped walk network the n:1139 zebra is gone: it comes from OSM, not a default.
   expect(paintNear({ roads: city.roads }, osm(47.997331, 7.8436884), 3)).toEqual([]);
 });

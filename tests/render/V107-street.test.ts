@@ -184,7 +184,7 @@ const baselines = {
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
   // TASK-194: generated signal programs are actuated (`actuated: true`).
   // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-  'sindelfingen-a81': 'e1a283a260b06caa66f9a3ef9b5e199af14000c20669ba7173309f3222728fd7',
+  'sindelfingen-a81': '7ae0da89f8140b3a01dcd13dbb4e6842c7245cf1ebec5b4859d4858b4859ba1f',
 };
 const lampCounts = {
   grid: [0, 0],

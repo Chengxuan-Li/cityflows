@@ -206,11 +206,11 @@ const pins = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: four corners are rounded (gore fillets at n:27, n:68, n:1162; n:365's corner).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    compile: 'e1a283a260b06caa66f9a3ef9b5e199af14000c20669ba7173309f3222728fd7',
+    compile: '7ae0da89f8140b3a01dcd13dbb4e6842c7245cf1ebec5b4859d4858b4859ba1f',
     lamps: '16fb9356ddf16749af5bb9de94fcd54b9efe54c8f63e4500e84da23ab8de59c3',
-    curbs: '8c09fcbbf69049d5ebb75b6ab10df5d740a5d9d834b7285f16b5f2d48acda8e1',
+    curbs: '4e128f9f6adae5e7315d2e5c7dae70ad65024503593c2f6aa34296c6052f10aa',
     de: '718267f44fd7345365be0c27320b894a308d25739f5f58533e9548045fe13541',
-    us: 'db33b59c5b998ebd83e6043d6f9a673feb75ce56542e664f5783a889877dad7a',
+    us: '91aae98a1512fdf48410250a6d0aaf9f8121eb64da1c2436d6aecfbedab315cb',
   },
 } as const;
 const hash = (value: unknown) =>
