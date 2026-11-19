@@ -24,6 +24,7 @@ import type { CompiledCity } from '../network';
 import { railHeights } from '../network/rail';
 import type { RailTrack } from '../schema/rail';
 import { cityGrades } from './grades';
+import { platformRing } from './station-furniture';
 import { style } from './style';
 import type { CityGeometry, Pick } from './types';
 
@@ -70,6 +71,9 @@ export const bedWidthM = (t: {
     : t.service
       ? 2.1
       : 2.7;
+/** TASK-232: the widest gap between embedded track's street paving and a road beside it that the
+ * paving fills (the importer's `alongsideM`, the reach of a one-lane street's band). */
+export const pavingGapM = 2.5;
 /** Pieces of `line` `on` metres long, `off` apart. */
 function dashes(line: Vec2[], on: number, off: number) {
   const length = cumulativeLengths(line).at(-1)!;
@@ -190,6 +194,26 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
       .filter(Boolean)
       .map((t) => t.osmId ?? t.id),
   );
+  // TASK-232: embedded track's street paving takes in the mapped platforms beside it and closes
+  // gaps to the other embedded tracks' bands.
+  const tramBand = (t: { line: Vec2[] }) =>
+    inflatePathsD([t.line], style.tram.bedWidthM / 2, JoinType.Round, EndType.Butt, 2, 3);
+  const parts = [
+    ...city.rail.platforms.flatMap((p) => {
+      const ring = p.shape.kind === 'point' ? null : platformRing(p.shape);
+      return ring ? [{ rings: [ring], layer: p.layer, track: -1, platform: true }] : [];
+    }),
+    ...city.rail.tracks
+      .filter((t) => t.kind === 'tram' && (t.form ?? 'embedded') === 'embedded')
+      .map((t) => ({ rings: tramBand(t), layer: t.layer, track: t.idx, platform: false })),
+  ].map((part) => ({ ...part, box: box(part.rings.flat()) }));
+  const partsNear = (paths: Vec2[][], layer: number) => {
+    const [x0, y0, x1, y1] = box(paths.flat());
+    return parts.filter(
+      (p) =>
+        p.layer === layer && p.box[0] <= x1 && p.box[2] >= x0 && p.box[1] <= y1 && p.box[3] >= y0,
+    );
+  };
   const onAsphalt = (p: Vec2, layer: number) =>
     spatial
       .search(p.x, p.y, p.x, p.y)
@@ -262,42 +286,113 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
         // TASK-220: the street's surface under the rails off the drawn roads, none on them:
         // asphalt where the track meets a road (the gap that narrow default lane widths leave
         // between one-way carriageways), stone paving where it runs in a pedestrian street.
-        const band = inflatePathsD(
-          [t.line],
-          style.tram.bedWidthM / 2,
-          JoinType.Round,
-          EndType.Butt,
-          2,
-          3,
-        );
-        const roads = spatial
-          .search(...box(band.flat()))
-          .flatMap((i) => (obstacles[i]!.layer === t.layer ? [obstacles[i]!.ring] : []))
-          .filter(
-            (ring) => booleanOpD(ClipType.Intersection, band, [ring], FillRule.NonZero, 3).length,
-          );
+        const band = tramBand(t);
+        const meets = (area: Vec2[][]) =>
+          spatial
+            .search(...box(area.flat()))
+            .flatMap((i) => (obstacles[i]!.layer === t.layer ? [obstacles[i]!.ring] : []))
+            .filter(
+              (ring) => booleanOpD(ClipType.Intersection, area, [ring], FillRule.NonZero, 3).length,
+            );
+        const roads = meets(band);
         // It reaches 0.1 m under the roads it meets, so no seam of canvas shows along their edge.
-        add(
-          roads.length
-            ? booleanOpD(
-                ClipType.Difference,
-                band,
-                inflatePathsD(roads, -0.1, JoinType.Miter, EndType.Polygon, 2, 3),
+        let paving = roads.length
+          ? booleanOpD(
+              ClipType.Difference,
+              band,
+              inflatePathsD(roads, -0.1, JoinType.Miter, EndType.Polygon, 2, 3),
+              FillRule.NonZero,
+              3,
+            )
+          : band;
+        let inStreet = roads.length > 0;
+        // TASK-232 (TASK-224 N3): and on to the edge of the roads beside it, closing gaps under
+        // `pavingGapM` to them and to the other embedded tracks' paving (the light strip and wedge
+        // beside the Rotteckring's carriageways), reaching no further than that. A stop's
+        // platforms beside the track are street too (Fahnenbergplatz, between its tracks and
+        // carriageways). Track wholly on the road keeps none.
+        // Mitred, not round: closing fills concave corners either way, with far fewer vertices.
+        const close = (paths: Vec2[][], by: number) =>
+          inflatePathsD(paths, by, JoinType.Miter, EndType.Polygon, 2, 3);
+        const widen = (by: number) =>
+          inflatePathsD(
+            [t.line],
+            style.tram.bedWidthM / 2 + by,
+            JoinType.Round,
+            EndType.Butt,
+            2,
+            3,
+          );
+        const touching = widen(0.5);
+        const platforms = partsNear(touching, t.layer).filter(
+          (p) =>
+            p.platform &&
+            booleanOpD(ClipType.Intersection, touching, p.rings, FillRule.NonZero, 3).length,
+        );
+        if (platforms.length || (inStreet && paving.reduce((sum, r) => sum + areaD(r), 0) > 0.01)) {
+          const street = [...band, ...platforms.flatMap((p) => p.rings)];
+          const m = pavingGapM / 2;
+          const around = (by: number) =>
+            platforms.length
+              ? booleanOpD(
+                  ClipType.Union,
+                  widen(by),
+                  close(
+                    platforms.flatMap((p) => p.rings),
+                    by,
+                  ),
+                  FillRule.NonZero,
+                  3,
+                )
+              : widen(by);
+          const reach = around(pavingGapM);
+          // Roads and tracks are cut to the reach and the closing's margin first: closing whole
+          // roads is slow.
+          const frame = around(pavingGapM + m);
+          const clip = (paths: Vec2[][]) =>
+            booleanOpD(ClipType.Intersection, paths, frame, FillRule.NonZero, 3);
+          const beside = clip(
+            spatial
+              .search(...box(frame.flat()))
+              .flatMap((i) => (obstacles[i]!.layer === t.layer ? [obstacles[i]!.ring] : [])),
+          );
+          inStreet ||=
+            booleanOpD(ClipType.Intersection, reach, beside, FillRule.NonZero, 3).length > 0;
+          if (inStreet) {
+            const tracks = partsNear(frame, t.layer).filter(
+              (p) => !p.platform && p.track !== t.idx,
+            );
+            paving = booleanOpD(
+              ClipType.Difference,
+              booleanOpD(
+                ClipType.Intersection,
+                close(
+                  close([...street, ...beside, ...clip(tracks.flatMap((p) => p.rings))], m),
+                  -m,
+                ),
+                reach,
                 FillRule.NonZero,
                 3,
-              )
-            : band,
+              ),
+              inflatePathsD(beside, -0.1, JoinType.Miter, EndType.Polygon, 2, 3),
+              FillRule.NonZero,
+              3,
+            );
+          }
+        }
+        add(
+          inStreet ? paving : band,
           t.layer,
-          roads.length ? style.asphalt : style.tram.beds.paved,
+          inStreet ? style.asphalt : style.tram.beds.paved,
           alpha,
           true,
           pick,
           false,
-          { tram: 'paving', ...(roads.length ? {} : { onWalk: true }) },
+          { tram: 'paving', ...(inStreet ? {} : { onWalk: true }) },
         );
         add(rails, t.layer, style.tram.groove, alpha, true, pick, false, {
           tram: 'street',
-          ...(roads.length ? {} : { onWalk: true }),
+          ...(inStreet ? {} : { onWalk: true }),
         });
         continue;
       }
