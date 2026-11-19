@@ -239,7 +239,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | done 2026-11-19 (J4 and the audit; J1, J2, J3, J5, J6 handed on) |
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | done 2026-11-19 (owner approved the trade-off; Freiburg rebuilt) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Munich delay +4 to 5%; branch `3e5e33f`) |
-| [TASK-216](tasks/TASK-216.md) | 10 | Road shapes against aerial imagery (LGL DOP20), Freiburg Hauptbahnhof first (owner's suggestion) | `bench/` overlay script, findings | 213, 214 | registration, ranked defects by class, close-ups | in progress (owner approved the download 2026-11-19) |
+| [TASK-216](tasks/TASK-216.md) | 10 | Road shapes against aerial imagery (LGL DOP20), Freiburg Hauptbahnhof first (owner's suggestion) | `bench/` overlay script, findings | 213, 214 | registration, ranked defects by class, close-ups | done 2026-11-19 (9 defects; follow-ups proposed) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4487,6 +4487,27 @@ V106 to V108, V114, V117), stale T42.1 exceptions removed. Lead check on the mer
 
 Full run 44417927328 (lead, manual, on 6827d2c after TASK-210): every job green, including all five
 e2e shards; the city job took 33.4 min.
+
+TASK-216 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): Freiburg's Hauptbahnhof box
+checked against LGL Baden-Württemberg DOP20 (WMS `WMS_LGL-BW_ATKIS_DOP_20_C`, layer
+`IMAGES_DOP_20_RGB`, dl-de/by-2-0; 15 tiles, 2.2 MB, kept in `D:\cityflows-wt\216-data`), overlaid by
+`bench/aerial-overlay.ts` (Playwright). Registration on four tram-rail stretches: raw offsets under
+0.4 m, residual 0.12 m after a 0.27 m constant, no correction applied. Defects
+(`docs/findings/2026-11-19-aerial-check/`): D1 default zebras at almost every arm, none at the five
+mapped zebras (155 of 167 drawn crossings over 4 m from any mapped crossing; geometry rule,
+`crossings.ts`); D2 the Hbf group swallows a median crossover, stop line and zebra 37 m before the
+painted line at n:1147 (J1); D3 five-lane approaches 2 m too wide (r:1179, r:261; importer, 3.5 m
+lanes); D4 r:1178's stop line 9 m past the signalised cycle crossing (importer, `controls.ts`); D5
+Bismarckallee drawn as two carriageways with a 1.3 m median where it is one (importer); D6 a two-way
+`lanes=1` promenade drawn as a two-lane road; D7 Friedrichstraße's lane gain 19 m off (OSM data); D8
+tram track on ballast where it is embedded or on grass (825 m; importer track form); D9 `width=`
+ignored (Rotteckring 4 m drawn 3 m). Group ids in the box moved at the TASK-214 rebuild (jg:13298 is
+now jg:13297). Outside scope: `bench/register.ts` leaves `node_modules` JSON to Node (Playwright
+under Node 24 broke on the rewritten `package.json`). Proposed follow-ups: crossings from mapped OSM
+nodes (D1; with or after TASK-215), group stop lines across median crossovers (D2, the J1 contract),
+importer road widths, medians, shared lanes and stop lines (D3 to D6, D9), tram track form (D8), and
+an OSM edit or curation entry for D7 (owner's). Lead check on the merge: check (1,532), city (193);
+the Freiburg build through the changed loader reproduces the bundled project.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

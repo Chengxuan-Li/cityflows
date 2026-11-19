@@ -1,6 +1,6 @@
 # TASK-216 — Road shapes against aerial imagery: Freiburg Hauptbahnhof first
 
-Status: in progress (owner approved the imagery download and started it 2026-11-19). Proposed owner: Claude Code subagent (Opus 5.5, high). Branch
+Status: done 2026-11-19 (owner approved the imagery download). Proposed owner: Claude Code subagent (Opus 5.5, high). Branch
 `task/216-aerial-check`, worktree `D:\cityflows-wt\216`, ports 5416 / 5516. Read-only on code.
 
 ## Goal
