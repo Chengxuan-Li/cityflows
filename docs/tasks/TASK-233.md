@@ -1,6 +1,6 @@
 # TASK-233 — Shared one-lane streets alone (TASK-231's D6), with the grade-aware overlap audit
 
-Status: in progress (unsupervised run, owner 2026-11-19; TASK-231's proposed follow-up). Proposed
+Status: done 2026-11-19 (merged as the variant `649dbbe`; review in `docs/plan.md`). Proposed
 owner: Claude Code subagent (Opus 5.5, high). Branch `task/233-shared-lanes`, worktree
 `D:\cityflows-wt\233`, ports 5433 / 5533.
 

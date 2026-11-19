@@ -255,6 +255,8 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-229](tasks/TASK-229.md) | render | Marking follow-ups from the aerial re-check: M2 lane lines on carriageway inside groups (N1), arrows on double-left entry lanes (N2) | `marking-geometry.ts` | 217, 224 | tests, counts, close-ups, audit, identical hashes | done 2026-11-19 (merged; paint only, hashes identical) |
 | [TASK-230](tasks/TASK-230.md) | 9 | Step time, third pass: Munich full demand and the Freiburg landing city, results identical | `src/sim/**` except `rail-crossings.ts` | 211 | phase tables, identical hashes, interleaved timings | in progress (unsupervised run 2026-11-19) |
 | [TASK-231](tasks/TASK-231.md) | 10 | One carriageway for close halves and shared one-lane streets (TASK-218's D5 and D6 alone) | `corridors.ts`, `roads.ts`, `marking-geometry.ts` | 218, 229 | tests, audit, traffic, merge rule | parked 2026-11-19 (D5-only variant meets the merge rule and every city total; named case R3-8 Marsstraße width max 0.387 to 0.481 m) |
+| [TASK-232](tasks/TASK-232.md) | render | Tram track form follow-ups: Fahnenbergplatz ballast, Rotteckring paving (TASK-224 D8, N3) | `rail.ts`, `rail-geometry.ts` | 220, 224 | tests, close-ups, identical hashes, budgets | done 2026-11-19 (merged; hashes identical) |
+| [TASK-233](tasks/TASK-233.md) | render | Shared one-lane streets drawn without a centre line (TASK-231's D6 alone) and the grade-aware lane-overlap audit | `roads.ts`, `marking-geometry.ts`, `geometry-audit.ts` | 231 | tests, audit, traffic, merge rule | done 2026-11-19 (merged variant; networks byte-identical) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4945,6 +4947,40 @@ cases cover), D6 on its own after the audit fix `e68dcf1`, or keep both parked. 
 demand completes 120 fewer trips by 10:00 at lower delay. Outside scope: Munich and Freiburg re-pins,
 T36.1 (moved pairs 1 to 2). Tiers on the variant: check (1,558), city (208), traffic light and guard,
 light e2e (61).
+
+TASK-232 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged, render and track form only): D8's
+remainder and N3. At Fahnenbergplatz the 4.5 to 5.4 m between the tracks and the drawn one-lane
+carriageways is the stop's two platforms (648533263/4, `area:highway=platform`), not parking
+(`parking:both=no`). TASK-220's rule 7 now measures its 2.5 m from the street band's outer edge: the
+carriageway, its street parking strips, and any `area:highway` area within 2.5 m of a one-lane
+carriageway (80% of the track still required). Freiburg only: 13 sections ballast to embedded, 299 m
+(Fahnenbergplatz `rt:12913`, `rt:12915`, `rt:12942`; Stadttheater 3; Europaplatz 7); embedded 5,043 to
+5,342 m, ballast 797 to 498 m; `rt:12944` (10 m, 60% beside the platform) stays ballast; Munich's median
+stop (rail-only platforms) stays ballast. N3: the TASK-220 paving was a 3.2 m band per track, so canvas
+showed as a 1 m strip and a wedge; it now fills gaps under 2.5 m between the band, roads beside it,
+other embedded tracks and touching platforms, stopping 0.1 m under the road edge; a track whose
+platform reaches a road counts as in the street (asphalt). Hashes identical (Munich seed 1 four
+configurations, Freiburg 1407248127, Sindelfingen, both full demands). Render CPU p95 2D 1.2 / 2.1 ms,
+3D 3.2 / 3.8 ms (main 1.4 / 2.1, 3.3 / 3.6); rail geometry build about 150 to 250 ms once per scene.
+Outside scope: the Freiburg rebuild and pin. Lead check on the merge: the rebuild reproduces the
+project; check (1,562), city (208), traffic light and guard, light e2e (61); full demand identical.
+
+TASK-233 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged under the owner's merge rule as the
+variant `649dbbe`): (1) the audit fix from TASK-231 (`525b55f`, cherry-picked from `e68dcf1`, test
+T34.9): measure 9 leaves out only node outlines at the road pair's grade. Re-based on main: Munich lane
+overlap 257.14 to 283.92 m², corridor share 69.79 to 71.29 m², B39 81.78 to 108.56 m², J6-munich 113.83
+to 140.61 m²; nothing else moves. (2) A two-way `lanes=1` way with no `lanes:forward`/`backward` gets
+`sharedLane` in its provenance and is drawn without a centre line (Freiburg 12 roads, 350 m of centre
+line; Munich 10, 377 m; Sindelfingen 8, 196 m); the variant keeps the default width, so the compiled
+networks are byte-identical to main and every audit measure and named case is identical. The first
+version (`62cdb77`, 4.5 m carriageway) missed: Freiburg's gate 80.3 to 94.8 s (+14.5 s; the promenade
+`r:225`/`r:226` alone 91.9 s; its ground is about 10 m of unpainted paving); Munich +1.3% at most; full
+demand 378 and 43 fewer completed at lower delay. Variant traffic: every figure equals main. Left: the
+promenade's parking hatch (needs `width` tags or curation). Note for parked TASK-221: its corridor
+lane overlap figure (69.79 to 69.91 m²) was measured with the old measure 9 and should be re-measured.
+Outside scope: re-pins (T44, T49, T75, V106, V107, V117, Freiburg manifest), V108's 2D/3D test passes
+the canonical city. Lead check on the merge (on top of TASK-232; both rebuilt the Freiburg project, so
+the lead rebuilt it again, city.json `ed396216...`): check (1,565), city (208, including the Freiburg gate and tram timetable pins), traffic light and guard, light e2e (61); full demand actuated 3,759 / 143 (4028429784), fixed-time 3,501 / 168 (2888500527).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

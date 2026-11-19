@@ -1,6 +1,6 @@
 # TASK-232 — Tram track form follow-ups: Rotteckring's ballast and the paving wedge (TASK-224 D8, N3)
 
-Status: in progress (unsupervised run, owner 2026-11-19; from TASK-220's and TASK-224's open items).
+Status: done 2026-11-19 (merged; review in `docs/plan.md`).
 Proposed owner: Claude Code subagent (Opus 5.5, high). Branch `task/232-tram-form-followups`, worktree
 `D:\cityflows-wt\232`, ports 5432 / 5532.
 
