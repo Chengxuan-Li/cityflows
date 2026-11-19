@@ -237,7 +237,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | done 2026-11-19 (drop all four; owner decides) |
 | [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | done 2026-11-18 |
 | [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | done 2026-11-19 (J4 and the audit; J1, J2, J3, J5, J6 handed on) |
-| [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | in progress (owner 2026-11-18) |
+| [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Freiburg delay 75 to 89 s, full demand up; branch `cc70c3e`) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Munich delay +4 to 5%; branch `3e5e33f`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | in progress (owner 2026-11-18, optional) |
@@ -4486,6 +4486,29 @@ V106 to V108, V114, V117), stale T42.1 exceptions removed. Lead check on the mer
 
 Full run 44417927328 (lead, manual, on 6827d2c after TASK-210): every job green, including all five
 e2e shards; the city job took 33.4 min.
+
+TASK-214 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
+`task/214-splits-merges` at `cc70c3e` on main `08ebee4`, worktree `D:\cityflows-wt\214`): eight rules in
+`src/network` (R1 a road between two transitions goes from one end's shift to the other's; R2 at a
+one-branch gain or drop the wider road takes the shift, with exceptions for longer tapers, two-way
+streets and divided carriageways; R3 side-by-side lanes on short roads measured from the trimmed cut;
+R4 interpolated vertex normals along a side-by-side line; R5 a side-by-side chain shares one line and
+`compile.ts` closes the joint; R6 no easing across a 3+-end junction for a road trimmed to nothing; R7
+two tight corners a straight apart both eased; R8 a branch beside added lanes moves over), each with a
+test that fails without it. Audit, main to branch: Freiburg folds 17/13/18 to 4/2/5, joins over 5 cm
+124 to 82 (max 2.298 to 1.704 m at n:717), lane overlap 255.6 to 214.8 m², marking offset max 0.608 to
+0.224 m, J2 n:652 folds 4 to 0; Munich folds 3/3/2 to 0/0/0, r:588/r:589 gap 0.693 to 0.062 m, J6 n:27
+overlap 87.7 to 32.1 m²; Sindelfingen unchanged; no measure worse. Not fixed: S6 point merges, S5's 84
+untapered changes, J2's last lobes, J6 n:194 (all need tapers carried across plain nodes), Munich join
+max 0.315 m at n:19/n:624. Traffic, Munich 0.15 seeds 1 to 12 mean delay: actuated off -1.1%, on
++3.2%, fixed off -4.3%, on +0.2%; gridlocked trips 1 to 4 (actuated off) and 3 to 4 (fixed off); drain
+criterion on all 48 runs. Full demand: actuated 3,345 / 177 to 3,759 / 143 (delay 1,746 to 1,678 s),
+fixed 3,210 / 166 to 3,501 / 168 (delay 1,695 to 1,727 s, +1.9%). Freiburg gate 1,467 to 1,463, mean
+delay 75 to 89 s (state hash 2204867137). Sindelfingen 155 / 0 / 0 unchanged (hash 3472231659). Red:
+the bundled-project build test (the Freiburg project must be rebuilt; fixtures out of scope). Outside
+scope: `compile.ts` (R5, R6), fingerprint re-pins, T35's Munich exceptions removed. Lead decision: a
+trade-off under the owner's rules (Freiburg delay +19%, more gridlocked trips at 0.15, against full
+demand and Munich choice-off gains), so held; if approved, the lead rebuilds Freiburg and re-pins.
 
 TASK-215 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
 `task/215-markings` at `3e5e33f`, main `1ac0c38` merged in, worktree `D:\cityflows-wt\215`): M1 arrows at
