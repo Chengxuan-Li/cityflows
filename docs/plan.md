@@ -4985,6 +4985,9 @@ Outside scope: re-pins (T44, T49, T75, V106, V107, V117, Freiburg manifest), V10
 the canonical city. Lead check on the merge (on top of TASK-232; both rebuilt the Freiburg project, so
 the lead rebuilt it again, city.json `ed396216...`): check (1,565), city (208, including the Freiburg gate and tram timetable pins), traffic light and guard, light e2e (61); full demand actuated 3,759 / 143 (4028429784), fixed-time 3,501 / 168 (2888500527).
 
+Full run 44612061076 (lead, manual, on bd87de5 after TASK-230): every job green, including all five
+e2e shards; the city job took 19.5 min.
+
 TASK-230 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged, performance only): step time, third
 pass. The largest finding: per-car passes read plain arrays at index -1 for most cars
 (`compiled.connectors[arrival[id]]`, `compiled.movements[vehicles.movement[id]]`), which V8 serves by a
@@ -5361,6 +5364,57 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-19 (lead): report on the 12-hour unsupervised run (04:42 to about 16:40, rules above). Every
+  merge passed the lead's tiers and full demand, and every Full run after a merge was green (44517065466,
+  44536794264, 44547052795, 44551579772, 44555679026, 44576912292, 44602678869, 44612061076). Every merged
+  change is live on the Freiburg landing page.
+  - **Merged (11).** TASK-220 tram track form (D8; traffic identical); TASK-222 the tram-crossing
+    actuated-signal lock (Munich identical, Freiburg -0.5 s); TASK-217 markings and crossings as its
+    paint-only variant (D1 partly, M1, M2, M4, M6, M7; the full version cost Munich up to +4.6%);
+    TASK-227 pitched roofs on concave outlines (flat roofs Freiburg 204 to 14, Munich 70 to 13);
+    TASK-225 the Siegesdenkmal lock (a tram held at its start kept two crossings closed; Freiburg
+    seed 2 5 gridlocked to 0); TASK-224 aerial re-check of the Hbf box (findings only); TASK-229 lane
+    lines and arrows restored (N1, N2); TASK-228 the tram backlog (full timetable, 80 trams an hour
+    instead of 48 to 75; Freiburg's gate +4.6 s, inside the 5 s limit); TASK-232 Fahnenbergplatz track
+    embedded and the paving gaps filled; TASK-233 shared one-lane streets without a centre line, and
+    the lane-overlap audit made grade-aware (Munich baseline 257.14 to 283.92 m²); TASK-230 step time,
+    third pass (full demand 14.5% faster, Freiburg 8%, results identical).
+  - **Parked (6), branches and worktrees kept, tables in the review log.**
+    - TASK-226 (TASK-219's group membership on TASK-225): meets the merge rule, fixes D2 (the Hbf
+      stop line from 37 m off to the painted line); misses the audit by one corner under 2 m (a
+      1.16 m nose at the 5 m slip road `r:2153`). **Lead recommends merging.** It supersedes TASK-219.
+    - TASK-221 (lane tapers across short roads): variant meets the merge rule; Munich end overlap
+      105.95 to 20.92 m², the `n:194` ramp overlap 59.8 to 0; misses the audit by 0.12 m² (corridor
+      lane overlap, measured with the old measure 9) and 3 mm (B39). **Lead recommends merging after
+      re-measuring with TASK-233's audit.**
+    - TASK-231 (D5, close halves as one carriageway): variant meets the merge rule and every city
+      total; named case R3-8 (Marsstraße) width max 0.387 to 0.481 m. Options: merge, exclude the
+      pairs the named cases cover, or keep parked.
+    - TASK-223 (TASK-208's missed-turn rule on TASK-222): v1 Munich fixed choice off +6.7%, v2 fixed
+      full demand +3.1% (one seed); both cut `r:654` misses about 30-fold. Options: park, v2, v1.
+    - TASK-218 (importer road shapes): first version missed traffic, variant the audit. D5 and D6 were
+      split out (TASK-231, 233); D3/D9 widths (need `placement` for the 1.7 m offset and a void
+      measure against the drawn median) and D4 with J1 remain.
+    - TASK-219: superseded by TASK-226.
+  - **Decisions for the owner.** (1) TASK-226 merge; (2) TASK-221 re-measure and merge; (3) TASK-231
+    options; (4) TASK-223 options; (5) TASK-218's remaining splits; (6) a walk-link marking field so
+    `crossing=unmarked` reaches the city (24 Munich crossings paint as zebras; schema); (7) node-only
+    zebras (`n:211`, `n:1139`) need walk links, which move traffic; (8) Munich Arnulfstraße drawn as
+    grass where OSM maps grass strips (TASK-135's reference shows ballast near Donnersbergerbrücke;
+    no Munich imagery); (9) D7 (Friedrichstraße lane gain 19 m late): an OSM edit or a curation entry;
+    three roofs in the box with doubtful OSM outlines or tags; (10) retiring the parked branches and
+    worktrees once decided.
+  - **Incidents (all reported by the agents, none lasting).** TASK-219 used one `pkill -f` with a
+    pattern unique to its own script; TASK-226 stopped `MoNotificationUx.exe` (a Windows Update
+    notification process whose stale parent id matched its vitest process); TASK-221 started one
+    `npm run check` in `D:\cityflows` by a mis-scoped `cd` (stopped; git status clean); TASK-217 left
+    a duplicate seed-report chain running for about 50 minutes (hashes matched); TASK-232 and 233
+    briefly stashed their worktrees during runs (re-run clean). Later agents were told never to stop
+    processes by name, pattern or parent id and to run only inside their worktrees.
+  - **Open technical items.** The 115 m Rotteckring ballast is fixed bar 10 m (`rt:12944`); N4's
+    three doubtful roofs; the promenade's parking hatch; a late run of a tram line slower than its
+    headway holds the next run longer than the gap (TASK-228, not seen); step time left in the rail
+    hold and step (about 19%) and routing (about 10%).
 - 2026-11-19 (owner): run unsupervised for about 12 hours; plan and execute new tasks without
   stopping for review or decisions. Rules (the lead's proposal, accepted as is):
   - **Merge rule.** A task merges when every gate passes, the drain criterion holds on all runs, mean
