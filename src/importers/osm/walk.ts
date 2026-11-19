@@ -106,12 +106,7 @@ export function importWalk(
   for (const way of [...ways].sort((a, b) => a.id - b.id)) {
     const highway = way.tag.highway;
     if (way.tag.foot === 'no' || way.tag.access === 'no') continue;
-    // TASK-217 (D1): a path mapped as a crossing (`path=crossing`, Freiburg's 31 sidepath
-    // crossings, 12 of them signalised) is one, as `footway=crossing` is.
-    const kind: WalkKind =
-      way.tag.footway === 'crossing' || way.tag.path === 'crossing'
-        ? 'crossing'
-        : (highway as WalkKind);
+    const kind: WalkKind = way.tag.footway === 'crossing' ? 'crossing' : (highway as WalkKind);
     const layer = osmLayer(way.tag) ?? 0;
     const width = Number(way.tag.width?.replace(/\s*m$/, ''));
     let run: RoadPoint[] = [];
@@ -156,90 +151,5 @@ export function importWalk(
       continue;
     addNode({ key: String(node.id), osmId: node.id, pos }, osmLayer(node.tag) ?? 0);
   }
-  addNodeCrossings(city, walk, data, positions, bounds, incidents);
   city.walk = walk;
-}
-
-/** TASK-217 (D1): a crossing node's markings, from its `crossing`, `crossing_ref` and
- * `crossing:markings` tags: painted (zebra, marked, uncontrolled or signalised), or unmarked or
- * unknown (no tag says), which get no crossing link. */
-function markedCrossing(tags: OsmTags): boolean {
-  const { crossing } = tags,
-    markings = tags['crossing:markings'];
-  if (crossing === 'unmarked' || crossing === 'no' || crossing === 'informal' || markings === 'no')
-    return false;
-  return (
-    ['zebra', 'marked', 'uncontrolled', 'traffic_signals'].includes(crossing ?? '') ||
-    tags.crossing_ref === 'zebra' ||
-    markings !== undefined
-  );
-}
-
-/**
- * TASK-217 (D1): a marked crossing mapped only as a node of a road (`highway=crossing`, or a
- * signal with `crossing=traffic_signals`), on no mapped path, becomes a crossing link: straight
- * across the road's carriageways at the node, square to the road, 1.5 m beyond their outer lane
- * edges, so the compiled walk graph joins its ends to the sidewalks as it does a mapped crossing
- * way's, and the renderer paints it where it is (Freiburg's zebras 2479358348 and 9118444286 at
- * the Hauptbahnhof). Unmarked crossings stay unmapped, as before.
- */
-function addNodeCrossings(
-  city: City,
-  walk: NonNullable<City['walk']>,
-  data: OsmData,
-  positions: Map<number, Vec2>,
-  bounds: Bounds,
-  incidents: Map<number, unknown[]>,
-) {
-  const roads = Object.values(city.roads);
-  for (const node of [...data.node].sort((a, b) => a.id - b.id)) {
-    const tags = node.tag;
-    if (
-      (tags.highway !== 'crossing' &&
-        !(tags.highway === 'traffic_signals' && tags.crossing === 'traffic_signals')) ||
-      !markedCrossing(tags) ||
-      incidents.has(node.id)
-    )
-      continue;
-    const pos = positions.get(node.id);
-    if (!pos || !contains(bounds, pos)) continue;
-    const near = roads
-      .map((road) => ({ road, near: nearestOnPolyline(road.centerline, pos) }))
-      .filter(({ near }) => near.away < 0.5);
-    if (!near.length) continue;
-    const { direction } = near[0]!.near;
-    const normal = { x: -direction.y, y: direction.x };
-    let low = Infinity,
-      high = -Infinity;
-    for (const { road, near: hit } of near) {
-      const sign = hit.direction.x * direction.x + hit.direction.y * direction.y > 0 ? 1 : -1;
-      const width = road.lanes.reduce((sum, lane) => sum + lane.widthM, 0);
-      low = Math.min(low, sign * road.lateralOffsetM - width / 2);
-      high = Math.max(high, sign * road.lateralOffsetM + width / 2);
-    }
-    const layer = osmLayer(tags) ?? near[0]!.road.layer ?? 0;
-    const end = (offset: number): WalkNode => {
-      const id = allocateId(city, 'wn');
-      const point = { x: pos.x + normal.x * offset, y: pos.y + normal.y * offset };
-      return (walk.nodes[id] = {
-        id,
-        pos: point,
-        layer,
-        provenance: { source: 'osm', osmIds: [node.id] },
-      });
-    };
-    const from = end(low - 1.5),
-      to = end(high + 1.5);
-    const id = allocateId(city, 'wl');
-    walk.links[id] = {
-      id,
-      from: from.id,
-      to: to.id,
-      line: [from.pos, to.pos],
-      kind: 'crossing',
-      layer,
-      widthM: null,
-      provenance: { source: 'osm', osmIds: [node.id] },
-    };
-  }
 }

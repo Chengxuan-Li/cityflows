@@ -996,7 +996,7 @@ export function crossingStripes(
 ): Vec2[][] {
   const mapped = mappedStripes(city, road, atEnd, source);
   if (!crossingEnabled(city, road, atEnd, source)) return mapped;
-  const { stripes } = crossingPlacement(city, road, atEnd, source);
+  const { stripes } = crossingPlacement(city, road, atEnd);
   const style = crossingStyle(city, road, atEnd, source);
   return [
     ...(style === 'zebra' ? stripes : style === 'signal' ? signalLines(stripes) : []),
@@ -1059,7 +1059,7 @@ function mappedStripes(
   const lanes = road.lanes.map((i) => city.lanes[i]!);
   const ownCrossing =
     crossingEnabled(city, road, atEnd, source) &&
-    crossingPlacement(city, road, atEnd, source).stripes.length > 0;
+    crossingPlacement(city, road, atEnd).stripes.length > 0;
   const outlines = [city.nodes[road.from]!.outline, city.nodes[road.to]!.outline]
     .filter((o) => o.length)
     .map((o) => preparePolygonRing(o));

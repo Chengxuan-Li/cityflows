@@ -41,9 +41,7 @@ function Crossings({ node, compiled, city }: { node: CNode; compiled: CompiledCi
   const arms = crossingArms(compiled, node).map((ends) => {
     const roads = ends.map(({ road }) => road);
     const names = [...new Set(roads.map((road) => city.roads[road.id]?.name ?? null))];
-    const placements = ends.map(({ road, atEnd }) =>
-      crossingPlacement(compiled, road, atEnd, city),
-    );
+    const placements = ends.map(({ road, atEnd }) => crossingPlacement(compiled, road, atEnd));
     const short = ends.every(({ road }, k) =>
       road.lanes.every((i) => compiled.lanes[i]!.lengthM < placements[k]!.nearM + 9.75),
     );
@@ -76,8 +74,7 @@ function Crossings({ node, compiled, city }: { node: CNode; compiled: CompiledCi
                     kind: 'setCrossing',
                     roadId: road.id,
                     end: atEnd ? 'end' : 'start',
-                    crossing:
-                      crossing === crossingDefault(compiled, road, atEnd, city) ? null : crossing,
+                    crossing: crossing === crossingDefault(compiled, road, atEnd) ? null : crossing,
                   }));
                   void commit({ kind: 'batch', label: 'Crossing', commands });
                 }}
