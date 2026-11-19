@@ -23,11 +23,12 @@ import {
   nearestOnPolyline,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { CLane, CMovement, CNode, CompiledCity, CRoad, Turn } from '../network';
+import type { CGroup, CLane, CMovement, CNode, CompiledCity, CRoad, Turn } from '../network';
 import {
   crossingEnabled,
   crossingPlacement,
   crossingSpan,
+  crossingStyle,
   endDirection,
   endEdges,
   type CrossingSource,
@@ -45,6 +46,8 @@ import { defaultSlice, orderBranches } from '../network/continuity';
 import { paintedCity, paintedLaneEdges as laneEdges } from './road-paint';
 
 const LINE_CLEAR_M = 0.5;
+/** TASK-215 (M2): an inner road's lanes carry lane lines from this length (the audit's 15 m). */
+const INNER_LINES_M = 15;
 
 export type MarkingShape = {
   color?: number;
@@ -148,13 +151,37 @@ export function keepClearMarkings(
   city: CompiledCity,
   road: CRoad,
   markingTheme: MarkingTheme = defaultTheme,
+  source?: CrossingSource,
 ): MarkingShape[] {
   const shapes: MarkingShape[] = [];
   const zones = keepClearZones(city);
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
-    for (const zone of zones[index]!) {
-      if (zone.kind !== 'mouth' || zone.toM - zone.fromM < 3) continue;
+    // TASK-215 (M4): not over a crossing's stripes (Freiburg n:1462, a lot mouth at two
+    // crossings): a box is drawn on the parts of its zone 0.5 m clear of the lane's crossings.
+    const crosswalks = [false, true].flatMap((atEnd) => {
+      const span = crossingSpan(city, lane, atEnd, source);
+      return span
+        ? [
+            {
+              fromM: Math.min(span.nearM, span.farM) - LINE_CLEAR_M,
+              toM: Math.max(span.nearM, span.farM) + LINE_CLEAR_M,
+            },
+          ]
+        : [];
+    });
+    const pieces = zones[index]!.filter((zone) => zone.kind === 'mouth').flatMap((zone) =>
+      crosswalks.reduce(
+        (parts, walk) =>
+          parts.flatMap((part) => [
+            ...(walk.fromM > part.fromM ? [{ ...part, toM: Math.min(part.toM, walk.fromM) }] : []),
+            ...(walk.toM < part.toM ? [{ ...part, fromM: Math.max(part.fromM, walk.toM) }] : []),
+          ]),
+        [zone],
+      ),
+    );
+    for (const zone of pieces) {
+      if (zone.toM - zone.fromM < 3) continue;
       const half = lane.widthM / 2 - 0.15;
       // Lane coordinates: `x` along the lane from the zone's start, `y` to the driver's right.
       const world = ({ x, y }: Vec2) => {
@@ -336,10 +363,13 @@ function buildRoadMarkings(
   // TASK-131 (owner, checkpoint 2): an inner road of a junction group is part of the junction
   // surface, but its lanes run on through the group: dashed lines between lanes of one direction,
   // as on any road; no centre or edge line, and no stop, yield or crossing (`approachMarkings`).
+  // TASK-215 (M2): only on lanes of `INNER_LINES_M` or more; on the short links of most groups
+  // (Freiburg's inner lanes run 2 to 9 m between their cuts) a dash or two splays across the
+  // junction at the link's angle.
   if (road.group !== undefined) {
     for (const index of road.lanes) {
       const lane = city.lanes[index]!;
-      if (lane.right < 0) continue;
+      if (lane.right < 0 || lane.lengthM < INNER_LINES_M) continue;
       draw(
         roadDashes(
           parallelOffset(lane.polyline, lane.widthM / 2),
@@ -474,17 +504,64 @@ function buildRoadMarkings(
               });
       }
     }
-    aboveShapes.push(...approachShapes(city, lane, endFarM, markingTheme));
+    aboveShapes.push(...approachShapes(city, lane, endFarM, startSpan?.farM ?? 0, markingTheme));
   }
+  aboveShapes.push(...stopLine(city, road, markingTheme));
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
-  belowShapes.push(...keepClearMarkings(city, road, markingTheme));
+  belowShapes.push(...keepClearMarkings(city, road, markingTheme, source));
   return { below: belowShapes, above: aboveShapes, pavement };
 }
 
+/**
+ * TASK-215 (M6): an approach's stop line, one line across all its lanes where any lane has one
+ * (`approachMarkings`): through each lane's stop position, from 0.44 of a lane width beyond the
+ * first lane's to as far beyond the last's, so it meets every lane where its cars stop, also
+ * where a lane's stop position or heading differs from its neighbour's (Freiburg r:1185 at n:970,
+ * whose short lanes end 0.26 m apart and fold) and on a lane without movements (r:1148#4).
+ */
+function stopLine(
+  city: CompiledCity,
+  road: CRoad,
+  markingTheme: MarkingTheme = defaultTheme,
+): MarkingShape[] {
+  const lanes = road.lanes.map((i) => city.lanes[i]!);
+  if (!lanes.some((lane) => approachMarkings(city, lane).stop)) return [];
+  const stops = lanes.map((lane) => pointAtDistance(lane.polyline, lane.cumulative, lane.stopM));
+  const first = lanes[0]!,
+    last = lanes.at(-1)!;
+  // Across the approach, to the right of travel: from the first stop to the last, or square to a
+  // lone lane.
+  let across = { x: stops.at(-1)!.x - stops[0]!.x, y: stops.at(-1)!.y - stops[0]!.y };
+  if (lanes.length === 1) {
+    const h = headingAtDistance(first.polyline, first.cumulative, first.stopM);
+    across = { x: -Math.sin(h), y: Math.cos(h) };
+  }
+  const length = Math.hypot(across.x, across.y);
+  const beyond = (p: Vec2, lane: CLane, side: number) => ({
+    x: p.x + (side * across.x * lane.widthM * 0.44) / length,
+    y: p.y + (side * across.y * lane.widthM * 0.44) / length,
+  });
+  return [
+    lineShape(
+      road,
+      'stop',
+      [
+        beyond(stops[0]!, first, -1),
+        ...(lanes.length > 1 ? stops : []),
+        beyond(stops.at(-1)!, last, 1),
+      ],
+      1,
+      markingTheme,
+    ),
+  ];
+}
+
+/** `startFarM`: the far edge of the crossing at the lane's start, from its start (0 for none). */
 function approachShapes(
   city: CompiledCity,
   lane: CLane,
   crossingFarM: number,
+  startFarM: number,
   markingTheme: MarkingTheme = defaultTheme,
 ): MarkingShape[] {
   const marks = approachMarkings(city, lane, crossingFarM);
@@ -499,16 +576,6 @@ function approachShapes(
     };
   };
   const half = lane.widthM * 0.44;
-  if (marks.stop)
-    shapes.push(
-      lineShape(
-        road,
-        'stop',
-        [local(lane.stopM, 0, -half), local(lane.stopM, 0, half)],
-        1,
-        markingTheme,
-      ),
-    );
   if (marks.yield && markingTheme.id === 'uk') {
     for (const forward of [0, -0.6])
       for (let side = -half; side < half; side += 0.9)
@@ -551,7 +618,15 @@ function approachShapes(
       (lane.speedLimitMps >= 70 / 3.6 ? markingTheme.fastArrowLengthM : markingTheme.arrowLengthM) /
       5;
     // Keep the existing centre unless the longer glyph needs more space behind the crossing.
-    const at = Math.min(marks.arrowAt, lane.lengthM - crossingFarM - ARROW_CLEAR_M - 2.5 * scale);
+    let at = Math.min(marks.arrowAt, lane.lengthM - crossingFarM - ARROW_CLEAR_M - 2.5 * scale);
+    // TASK-215 (M4): nor on the crossing at the lane's start (Freiburg r:467 at n:464): moved
+    // forward clear of it where the lane has room before its stop line and end crossing, else none.
+    const back = startFarM + ARROW_CLEAR_M + 2.5 * scale;
+    if (startFarM > 0 && at < back) {
+      const front = Math.min(lane.stopM, lane.lengthM - crossingFarM) - ARROW_CLEAR_M - 2.5 * scale;
+      if (back > front) return shapes;
+      at = back;
+    }
     for (const polygon of turns.length === 3
       ? [...markingTheme.arrows.through, ...markingTheme.arrows['left-right']]
       : markingTheme.arrows[key])
@@ -717,8 +792,12 @@ function mouthPiece(road: CRoad, atEnd: boolean): Vec2[] {
 }
 
 /** The turns a lane's arrow shows: its usable movements, without u-turns and turns into
- * service roads. */
+ * service roads. TASK-215 (M1): on an entry of a junction group, its paths through the group
+ * (`groupTurns`), not the first inner link it enters. */
 function arrowTurns(city: CompiledCity, lane: CLane): Turn[] {
+  const road = city.roads[lane.road]!;
+  const group = road.group === undefined ? city.nodes[road.to]!.group : undefined;
+  if (group !== undefined) return groupTurns(city, city.groups![group]!, lane);
   const turns = new Set<Turn>();
   for (const index of lane.out) {
     const movement = city.movements[index]!;
@@ -726,6 +805,66 @@ function arrowTurns(city: CompiledCity, lane: CLane): Turn[] {
     if (movement.turn === 'merge' || movement.turn === 'diverge') continue;
     if (city.roads[city.lanes[movement.toLane]!.road]!.roadClass === 'service') continue;
     turns.add(movement.turn);
+  }
+  return [...turns];
+}
+
+/** Signed change of heading from `a` to `b`, in (-pi, pi]. */
+const turnBetween = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+
+/** The heading of a polyline's chord over its first 20 m. */
+function chordHeading(line: Vec2[]): number {
+  const lengths = cumulativeLengths(line);
+  const p = pointAtDistance(line, lengths, Math.min(20, lengths.at(-1)!));
+  return Math.atan2(p.y - line[0]!.y, p.x - line[0]!.x);
+}
+
+/**
+ * TASK-215 (M1): the turns of a group entry lane's chains (`CGroup.chains`) through the group,
+ * as the importer reads the entry's arrows (`groupAngle`): the angle between the entry's and the
+ * exit's chords over 20 m from the group, classified as a movement's turn is. That angle is taken
+ * on the side of a full turn the path itself turns through (the headings it changes along its
+ * movements and inner lanes), so a path round the block (three lefts, Freiburg r:1396#0 to
+ * r:868) is no right turn but a u-turn, and shown as none. A path of one movement keeps that
+ * movement's turn; paths with a never-green movement, into a service road, merges and diverges
+ * are left out as at any node (`arrowTurns`).
+ */
+function groupTurns(city: CompiledCity, group: CGroup, lane: CLane): Turn[] {
+  const turns = new Set<Turn>();
+  const entry = city.roads[lane.road]!;
+  for (const chain of group.chains) {
+    const movements = chain.movements.map((i) => city.movements[i]!);
+    if (movements[0]!.fromLane !== lane.idx || movements.some((m) => m.neverGreen)) continue;
+    const exit = city.roads[chain.to]!;
+    if (exit.roadClass === 'service') continue;
+    let turn = movements[0]!.turn;
+    if (movements.length > 1) {
+      let path = 0;
+      for (const [k, m] of movements.entries()) {
+        path += turnBetween(startHeading(m.polyline), endHeading(m.polyline));
+        if (k < movements.length - 1) {
+          const inner = city.lanes[m.toLane]!.polyline;
+          path += turnBetween(endHeading(m.polyline), startHeading(inner));
+          path += turnBetween(startHeading(inner), endHeading(inner));
+          path += turnBetween(endHeading(inner), startHeading(movements[k + 1]!.polyline));
+        }
+      }
+      const chord = turnBetween(
+        chordHeading([...entry.reference].reverse()) + Math.PI,
+        chordHeading(exit.reference),
+      );
+      const angle = chord + 2 * Math.PI * Math.round((path - chord) / (2 * Math.PI));
+      turn =
+        Math.abs(angle) > (5 * Math.PI) / 6
+          ? 'uturn'
+          : Math.abs(angle) < Math.PI / 6
+            ? 'through'
+            : angle > 0
+              ? 'right'
+              : 'left';
+    }
+    if (turn === 'uturn' || turn === 'merge' || turn === 'diverge') continue;
+    turns.add(turn);
   }
   return [...turns];
 }
@@ -801,16 +940,63 @@ function onOtherRoad(city: CompiledCity, lane: CLane, at: number): boolean {
   });
 }
 
-/** Zebra stripes of a road end's crossing, empty where it has none (`crossingEnabled`). */
+/** The paint of a road end's crossing, empty where it has none (`crossingEnabled`) or it is
+ * unmarked: zebra stripes, or the two broken lines of a signalised crossing along the stripes'
+ * near and far edges (TASK-217, `crossingStyle`). */
 export function crossingStripes(
   city: CompiledCity,
   road: CRoad,
   atEnd: boolean,
   source?: CrossingSource,
 ): Vec2[][] {
-  return crossingEnabled(city, road, atEnd, source)
-    ? crossingPlacement(city, road, atEnd).stripes
-    : [];
+  if (!crossingEnabled(city, road, atEnd, source)) return [];
+  const { stripes } = crossingPlacement(city, road, atEnd, source);
+  const style = crossingStyle(city, road, atEnd, source);
+  return style === 'zebra' ? stripes : style === 'signal' ? signalLines(stripes) : [];
+}
+
+/** TASK-217 (D1): a signalised crossing's broken lines (German `Fußgängerfurt`), 0.15 m wide,
+ * 0.5 m dashes and 0.2 m gaps, along the near and far edges of the stripes the crossing would
+ * have, run by run where stripes are left out (a curb return, the junction outline). */
+const FURT_WIDTH_M = 0.15;
+const FURT_DASH_M = 0.5;
+const FURT_GAP_M = 0.2;
+function signalLines(stripes: Vec2[][]): Vec2[][] {
+  const dashes: Vec2[][] = [];
+  // A stripe is [near side, far side, far side + width, near side + width]; stripes adjoin at a
+  // 0.9 m pitch, so a gap of over 1 m between them starts a new run.
+  const runs: Vec2[][][] = [];
+  for (const stripe of stripes) {
+    const run = runs.at(-1);
+    const last = run?.at(-1);
+    if (run && last && distance(last[3]!, stripe[0]!) < 1) run.push(stripe);
+    else runs.push([stripe]);
+  }
+  for (const run of runs)
+    for (const [a, b] of [
+      [0, 3],
+      [1, 2],
+    ] as const) {
+      const edge = run.flatMap((stripe) => [stripe[a]!, stripe[b]!]);
+      const lengths = cumulativeLengths(edge);
+      const total = lengths.at(-1)!;
+      for (let start = 0; start < total - 0.05; start += FURT_DASH_M + FURT_GAP_M) {
+        const end = Math.min(total, start + FURT_DASH_M);
+        const p = pointAtDistance(edge, lengths, start),
+          q = pointAtDistance(edge, lengths, end);
+        const length = distance(p, q);
+        if (length < 0.05) continue;
+        const half = FURT_WIDTH_M / 2;
+        const n = { x: (-(q.y - p.y) / length) * half, y: ((q.x - p.x) / length) * half };
+        dashes.push([
+          { x: p.x - n.x, y: p.y - n.y },
+          { x: q.x - n.x, y: q.y - n.y },
+          { x: q.x + n.x, y: q.y + n.y },
+          { x: p.x + n.x, y: p.y + n.y },
+        ]);
+      }
+    }
+  return dashes;
 }
 
 export interface Guide {

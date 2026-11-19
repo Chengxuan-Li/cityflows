@@ -61,7 +61,7 @@ export function placeTrees(city: CompiledCity, source: CityGeometry) {
   for (const road of city.roads)
     for (const end of [false, true]) {
       if (crossingEnabled(city, road, end, source))
-        for (const stripe of crossingPlacement(city, road, end).stripes)
+        for (const stripe of crossingPlacement(city, road, end, source).stripes)
           obstacles.push({ rings: [closed(stripe)] });
     }
   for (const connector of city.connectors) {

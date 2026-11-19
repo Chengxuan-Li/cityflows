@@ -106,7 +106,12 @@ export function importWalk(
   for (const way of [...ways].sort((a, b) => a.id - b.id)) {
     const highway = way.tag.highway;
     if (way.tag.foot === 'no' || way.tag.access === 'no') continue;
-    const kind: WalkKind = way.tag.footway === 'crossing' ? 'crossing' : (highway as WalkKind);
+    // TASK-217 (D1): a path mapped as a crossing (`path=crossing`, Freiburg's 31 sidepath
+    // crossings, 12 of them signalised) is one, as `footway=crossing` is.
+    const kind: WalkKind =
+      way.tag.footway === 'crossing' || way.tag.path === 'crossing'
+        ? 'crossing'
+        : (highway as WalkKind);
     const layer = osmLayer(way.tag) ?? 0;
     const width = Number(way.tag.width?.replace(/\s*m$/, ''));
     let run: RoadPoint[] = [];
