@@ -860,7 +860,56 @@ export function createRailCrossings(
   }
   const trackOwners = new Int32Array(rail.tracks.length);
   const nextOwners = new Int32Array(rail.tracks.length);
-  const delayedTracks = new Uint8Array(rail.tracks.length);
+  /** TASK-228: per route, its occupancy by track (`TrainRoute.occupancy`, one entry per section),
+   * and whether two routes run a shared track in opposite directions (a route that turns back at a
+   * terminal runs each of its tracks both ways). */
+  const occupancyByTrack = table.routes.map((route) => {
+    const byTrack = new Map<number, { enterS: number; exitS: number; forward: boolean }[]>();
+    route.occupancy.forEach((o, i) => {
+      const list = byTrack.get(o.track) ?? [];
+      list.push({ enterS: o.enterS, exitS: o.exitS, forward: route.sections[i]!.forward });
+      byTrack.set(o.track, list);
+    });
+    return byTrack;
+  });
+  const opposes = table.routes.map((a, i) =>
+    table.routes.map((b, j) =>
+      [...occupancyByTrack[i]!].some(([track, mine]) =>
+        occupancyByTrack[j]!.get(track)?.some(
+          (theirs) =>
+            a.terminal !== undefined ||
+            b.terminal !== undefined ||
+            mine.some((m) => m.forward !== theirs.forward),
+        ),
+      ),
+    ),
+  );
+  /** The services in service behind their timetable at the start of the step, and whether each
+   * was standing (held) then. */
+  const delayed: number[] = [];
+  const delayedStanding: boolean[] = [];
+  /** TASK-228: whether a service about to enter at `ageS` on `route` waits for the delayed service
+   * `delayed[k]`. It waits when their routes run a shared track in opposite directions, since the two could
+   * meet head on (the rule before TASK-228, for every shared track). Otherwise it waits only when,
+   * on the delayed service's clock, the delayed one would still hold a shared track while the
+   * entering one is on it: the timetable's own check (`buildTimetable`) on live clocks. A delayed
+   * service standing still holds every shared track still ahead of it without end, since when it
+   * moves again is not known. Following services on the same tracks cannot lock (the block rule
+   * keeps them apart), so a delay that does not reach the entering service's path in time no
+   * longer holds it: before, one delayed tram held every unstarted run on any track it shares. */
+  function waitsFor(k: number, route: number, ageS: number) {
+    const other = services[delayed[k]!]!;
+    const theirs = table.departures[other.departure]!.route;
+    if (opposes[theirs]![route]) return true;
+    const mine = occupancyByTrack[route]!;
+    for (const o of table.routes[theirs]!.occupancy) {
+      if (o.exitS <= other.ageS) continue;
+      const exitS = delayedStanding[k] ? Infinity : o.exitS - other.ageS;
+      for (const m of mine.get(o.track) ?? [])
+        if (m.enterS - ageS < exitS && m.exitS - ageS > o.enterS - other.ageS) return true;
+    }
+    return false;
+  }
   return {
     canSpawn(lane: number, positionM: number, lengthM: number) {
       for (let f = 0; f < facilities.length; f++)
@@ -879,7 +928,8 @@ export function createRailCrossings(
       roadOccupancy();
       trackOwners.fill(-1);
       nextOwners.fill(-1);
-      delayedTracks.fill(0);
+      delayed.length = 0;
+      delayedStanding.length = 0;
       for (let i = 0; i < services.length; i++) {
         const service = services[i]!;
         tracksAt(service, service.ageS, service.current);
@@ -889,9 +939,10 @@ export function createRailCrossings(
         if (
           service.current.length &&
           timeS - departure.timeS - service.cycle * table.periodS - service.ageS > params.dtS
-        )
-          for (const section of table.routes[departure.route]!.sections)
-            delayedTracks[section.track] = 1;
+        ) {
+          delayed.push(i);
+          delayedStanding.push(service.held);
+        }
       }
       for (let i = 0; i < services.length; i++) {
         const service = services[i]!;
@@ -913,7 +964,7 @@ export function createRailCrossings(
           ) ||
           (!service.current.length &&
             service.proposed.length > 0 &&
-            table.routes[route]!.sections.some((s) => delayedTracks[s.track]));
+            delayed.some((_, k) => waitsFor(k, route, service.ageS)));
         // TASK-225: a service standing still for its track (or before it enters the map) does
         // not keep a crossing it has not reached closed; a fresh warning runs when it moves.
         events[route]!.forEach((event, index) => {

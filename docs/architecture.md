@@ -1611,8 +1611,10 @@ apply, and turns on red wait for green candidates.
 Each scheduled occurrence has its own progress clock. Exceptional road blockage pauses that
 service before the crossing; occupied rail sections and same-tick reservations hold following
 or opposing services, while unrelated routes keep advancing. Delayed services also retain
-admission priority over new occurrences sharing their tracks. Protection remains until the
-last carriage clears the entire road band plus one second; overlapping warnings and services
+admission priority over new occurrences that run a shared track in the opposite direction, or
+that, on the delayed clock, would be on a shared track while the delayed service still holds it
+(a standing one holds every shared track still ahead of it; TASK-228). Protection remains until
+the last carriage clears the entire road band plus one second; overlapping warnings and services
 combine by the most restrictive state. That final second uses simulation time from the actual
 tail clearance, so a later service hold at another crossing or rail section cannot extend it.
 Live edits retain that timestamp only for the same facility and motion interval.
