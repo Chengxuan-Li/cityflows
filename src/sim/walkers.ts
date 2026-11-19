@@ -239,7 +239,8 @@ export function createWalkers(
   }
 
   // Lanes held this step: flat [lo, hi, inside, kind] per lane.
-  let blocks: (number[] | undefined)[] = [];
+  // TASK-211: allocated whole (a sparse `[]` written at large lane indices becomes a dictionary).
+  let blocks = Array<number[] | undefined>(city.lanes.length).fill(undefined);
   let touched: number[] = [];
   let blocking = false;
   /** TASK-187: the lanes held this step and the lanes with a movement onto one. `hold` looks at a
@@ -752,7 +753,7 @@ export function createWalkers(
       sourceRoutes = sources.map(({ fromPlaceId, toPlaceId }) =>
         routeBetween(fromPlaceId, toPlaceId),
       );
-      blocks = [];
+      blocks = Array<number[] | undefined>(city.lanes.length).fill(undefined);
       touched = [];
       blocking = false;
       nearHeld = new Uint8Array(city.lanes.length);

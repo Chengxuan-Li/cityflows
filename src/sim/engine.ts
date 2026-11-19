@@ -74,6 +74,10 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
   debugParkingClaims?: boolean;
   /** TASK-187: check after every step that each lane's list is ordered by position. */
   debugLaneOrder?: boolean;
+  /** TASK-211: take none of the step's exact shortcuts (a settled vehicle's rail pass, a car's
+   * kept lane plan, the lot stop looked up only on the way to the destination's lane) and check
+   * each against the full computation, so a run with it gives the same results. */
+  debugSkips?: boolean;
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -99,6 +103,7 @@ function createRun({
   walkRouter: injectedWalkRouter,
   debugParkingClaims = false,
   debugLaneOrder = false,
+  debugSkips = false,
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -226,8 +231,15 @@ function createRun({
     routeVersion: () => costs.version,
     signalColors: (timeS, colors) => signalControl.update(timeS, colors),
   });
-  let railCrossings = createRailCrossings(compiled, vehicles, params, scenario.startS, (m) =>
-    intersections.red(m),
+  let railCrossings = createRailCrossings(
+    compiled,
+    vehicles,
+    params,
+    scenario.startS,
+    (m) => intersections.red(m),
+    undefined,
+    undefined,
+    debugSkips,
   );
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
   const originCourtesy = createOriginCourtesy(
@@ -241,7 +253,14 @@ function createRun({
   // a walker holds (TASK-165).
   const landingBlocked = (lane: number, fromM: number, toM: number) =>
     parking.crossingBlocks(lane, fromM, toM) || !!walkers?.holds(lane, fromM, toM);
-  let laneChanges = createLaneChanges(compiled, vehicles, params, hasGrant, landingBlocked);
+  let laneChanges = createLaneChanges(
+    compiled,
+    vehicles,
+    params,
+    hasGrant,
+    landingBlocked,
+    debugSkips,
+  );
   // TASK-169: each lane's keep-clear zones, and where a head held short of one stands.
   let keepClear = keepClearZones(compiled);
   const keepClearStop = new Float64Array(trips.length).fill(Infinity);
@@ -827,19 +846,24 @@ function createRun({
         }
         if (path) stopAt = intersections.zoneStop(path, position) + idm.minGapM;
         // A driver turning into this same mouth leaves the committed departure its
-        // insertion gap. Ordinary through traffic keeps its normal priority.
-        const parkingStop = parking.arrivalStop(id);
-        if (parkingStop) {
-          const at =
-            lane?.idx === parkingStop.lane
-              ? parkingStop.positionM
-              : path?.toLane === parkingStop.lane
-                ? path.lengthM + parkingStop.positionM
-                : movement?.toLane === parkingStop.lane && lane
-                  ? lane.lengthM + movement.lengthM + parkingStop.positionM
-                  : Infinity;
-          stopAt = Math.min(stopAt, at + idm.minGapM);
-        }
+        // insertion gap. Ordinary through traffic keeps its normal priority. TASK-211: the stop
+        // is on the destination's lane, so it binds only there or on the way onto it; the query
+        // (pure, and costly at a busy lot) runs only then.
+        const parkingLane = compiled.connectors[vehicles.destination[id]!]?.lane ?? -1;
+        const parkingOffset =
+          lane?.idx === parkingLane
+            ? 0
+            : path?.toLane === parkingLane
+              ? path.lengthM
+              : movement?.toLane === parkingLane && lane
+                ? lane.lengthM + movement.lengthM
+                : Infinity;
+        const parkingStop =
+          parkingOffset < Infinity || debugSkips ? parking.arrivalStop(id) : undefined;
+        if (parkingStop && parkingStop.lane !== parkingLane)
+          throw new Error(`Vehicle ${id}: lot stop off its destination's lane`);
+        if (parkingStop && parkingOffset < Infinity)
+          stopAt = Math.min(stopAt, parkingOffset + parkingStop.positionM + idm.minGapM);
         if (stopAt < obstacle) {
           obstacle = stopAt;
           leaderSpeed = 0;
@@ -1651,7 +1675,7 @@ function createRun({
       routeVersion: () => costs.version,
       signalColors: (timeS, colors) => signalControl.update(timeS, colors),
     });
-    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked);
+    laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked, debugSkips);
     keepClear = keepClearZones(next);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
@@ -1817,6 +1841,7 @@ function createRun({
       (m) => intersections.red(m),
       railCrossings?.clocks(),
       railCrossings?.roadState(changes),
+      debugSkips,
     );
     return result;
   }
