@@ -4507,6 +4507,9 @@ scope. Lead check on the merge (on top of TASK-213): check (1,532), city (185), 
 guard, light e2e (61); full demand on the merged tree actuated 3,345 / 177 hash 2229666949, fixed
 3,210 / 166 hash 2820161686 (the references), about 820 s stepping each.
 
+Full run 44443575251 (lead, manual, on cb565a3 after TASK-211): every job green, including all five
+e2e shards; the city job took 32.9 min.
+
 TASK-214 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
 `task/214-splits-merges` at `cc70c3e` on main `08ebee4`, worktree `D:\cityflows-wt\214`): eight rules in
 `src/network` (R1 a road between two transitions goes from one end's shift to the other's; R2 at a
