@@ -244,7 +244,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-218](tasks/TASK-218.md) | 10 | Importer road shapes: widths, medians, shared lanes, stop lines (D3 to D6, D9) | `roads.ts`, `corridors.ts`, `controls.ts` | 216 | tests, close-ups, traffic, merge rule | parked 2026-11-19 (first version missed traffic, variant the audit) |
 | [TASK-219](tasks/TASK-219.md) | 10 | Junction-group surfaces and stop lines (J1, D2) | `junctions.ts`, `groups.ts` | 213, 216 | tests, close-ups, traffic, merge rule | parked 2026-11-19 (tip misses Freiburg's gate, variant the audit; TASK-225, 226) |
 | [TASK-220](tasks/TASK-220.md) | render | Tram track form: embedded, grass, paved, ballast (D8) | rail import and drawing | 216 | identical hashes, close-ups, frame budgets | done 2026-11-19 (merged; hashes identical) |
-| [TASK-221](tasks/TASK-221.md) | 10 | Lane tapers across the plain nodes between short roads (S5, S6, J2, J6 left by TASK-214) | `lanes.ts`, `lane-drop.ts`, `continuity.ts`, `corridor.ts` | 214 | audit, tests, close-ups, traffic, merge rule | planned (unsupervised run, wave B) |
+| [TASK-221](tasks/TASK-221.md) | 10 | Lane tapers across the plain nodes between short roads (S5, S6, J2, J6 left by TASK-214) | `lanes.ts`, `lane-drop.ts`, `continuity.ts`, `corridor.ts` | 214 | audit, tests, close-ups, traffic, merge rule | parked 2026-11-19 (variant meets the merge rule; audit +0.12 m² Munich corridor overlap, +3 mm B39 width; lead recommends merging) |
 | [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | done 2026-11-19 (merged; Munich and full demand identical, Freiburg -0.5 s) |
 | [TASK-223](tasks/TASK-223.md) | 9 | TASK-208's missed-turn rule re-measured on TASK-222 | `detourHeads` | 208, 222 | misses, traffic, merge rule | parked 2026-11-19 (v1 misses Munich fixed +6.7%, v2 full demand fixed +3.1%) |
 | [TASK-224](tasks/TASK-224.md) | 10 | Aerial re-check of the Hauptbahnhof box after wave A | overlay bench, findings | 216 to 220 | D1 to D9 before and now | done 2026-11-19 (merged; D8 mostly, D1 partly fixed on main; N1 to N4 new) |
@@ -4866,6 +4866,45 @@ so it is parked. Lead recommendation: merge (one 1.16 m nose at a real 5 m slip 
 slip: stopping its own leftover vitest process by PID it also stopped `MoNotificationUx.exe` (a Windows
 Update notification process whose stale parent id matched); no agent's work affected. Later agents are
 told never to stop processes by name, pattern or parent id.
+
+TASK-221 (Claude Code subagent, Opus 5.5 high, 2026-11-19; parked, the lead recommends merging; branch
+`task/221-carry-tapers`, first version `5973019`, variant `0b62f2c`, worktree `D:\cityflows-wt\221`): at a
+continuation node a lane shift (a branch held beside the trunk, a split, a jog) runs on through the
+plain nodes beyond its roads so it gets its full taper (`carryTransitions` in `continuity.ts`, with
+`lanes.ts` and `compile.ts`); the branches leave the node straight and bend onto the widest branch's
+road; eight sub-rules, each with a test in `tests/network/carry-tapers.city.test.ts` that fails with it
+off. The variant drops the carry where only the widest branch goes past its first road (Munich
+`n:734`, Freiburg `n:1709`). Cases (variant): S6 `n:536` join 0.438 to 0.012 m, ramp overlap 12.1 to
+0 m²; J6 Munich `n:194` ramp/`r:416` overlap 59.8 to 0 m², end overlap 85 to 0; `n:600` 0.449 to
+0.040, `n:1483` 0.177 to 0.045; new join `n:601` 0 to 0.153. Unchanged: S6 `n:900` (shared splits left
+alone) and `n:1130` (a lane-width step), S5 and J2 (consecutive gains with no plain node between; the
+fix is in the marking renderer), Munich `n:19`/`n:624` (a two-way 87° turn, nothing to carry).
+Audit main to variant: Freiburg joins over 5 cm 82 to 76, lane overlap 214.80 to 200.97 m², nothing
+worse; Munich lane overlap 257.14 to 190.75, overlap 145.22 to 138.28, end overlap 105.95 to 20.92,
+worse: corridor lane overlap 69.79 to 69.91 m² (`r:259` moves up to 2.2 cm near `n:257`);
+Sindelfingen joins over 5 cm 17 to 16; named case B39 width p95 0.192 to 0.195 m.
+
+| mean delay | main | first version | variant |
+|---|---|---|---|
+| Munich actuated, choice off | 630.6 s | 629.8 s | 620.8 s (-1.6%) |
+| Munich actuated, choice on | 90.8 s | 89.6 s | 90.3 s (-0.6%) |
+| Munich fixed, choice off | 789.0 s | 818.0 s (+3.7%) | 800.3 s (+1.4%) |
+| Munich fixed, choice on | 125.0 s | 124.6 s | 124.9 s (-0.1%) |
+| full demand actuated | 1,677.6 s | 1,852.9 s (+10.4%) | 1,678.3 s (+0.04%), 3,591 / 173 |
+| full demand fixed | 1,727.1 s | 1,707.3 s | 1,747.5 s (+1.2%), 3,504 / 153 |
+| Freiburg gate | 75.7 s | 74.8 s | 75.8 s, 1,461 / 0 (hash 1102481493) |
+
+Drain criterion 48 of 48 in both; Sindelfingen 155 / 0, 27.1 s (hash 3762136883). The first version
+also failed `test:city`'s Munich road-body budget (7 against 6, at `n:734`). The variant meets the
+merge rule (full-demand actuated completes 168 fewer at the same delay) and every tier (check 1,555,
+city 213, traffic light and guard, light e2e 61), but misses the contract's "no audit measure worse"
+by 0.12 m² and 3 mm, so it is parked. Lead recommendation: merge; the gains (Munich end overlap -85 m²,
+lane overlap -66 m², Freiburg six joins fewer) far outweigh the two figures, both under any visible
+size; it needs re-pins on whatever lands first. TASK-219's items not taken (the 5 m trim floor moves
+every short road; the `n:473` dividers and `r:770` fold exist only on TASK-219's branch). Outside
+scope: test re-pins (T44 to V117) and the `n:194` crossing name in `tests/network/junction-audit.ts`.
+The agent reported a slip: one `npm run check` started in `D:\cityflows` from a mis-scoped `cd`,
+stopped during its unit tests; no tracked file changed (git status clean).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
