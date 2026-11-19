@@ -1,6 +1,6 @@
 # TASK-222 — The lock between a tram crossing and two actuated signals (Freiburg n:18, n:39)
 
-Status: in progress (unsupervised run, owner 2026-11-19; started when TASK-220 finished). Proposed owner:
+Status: done 2026-11-19 (merged under the owner's merge rule; review in `docs/plan.md`). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/222-crossing-signal-lock`, worktree `D:\cityflows-wt\222`, ports
 5422 / 5522.
 

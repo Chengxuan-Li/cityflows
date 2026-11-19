@@ -245,7 +245,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-219](tasks/TASK-219.md) | 10 | Junction-group surfaces and stop lines (J1, D2) | `junctions.ts`, `groups.ts` | 213, 216 | tests, close-ups, traffic, merge rule | parked 2026-11-19 (tip misses Freiburg's gate, variant the audit; TASK-225, 226) |
 | [TASK-220](tasks/TASK-220.md) | render | Tram track form: embedded, grass, paved, ballast (D8) | rail import and drawing | 216 | identical hashes, close-ups, frame budgets | done 2026-11-19 (merged; hashes identical) |
 | [TASK-221](tasks/TASK-221.md) | 10 | Lane tapers across the plain nodes between short roads (S5, S6, J2, J6 left by TASK-214) | `lanes.ts`, `lane-drop.ts`, `continuity.ts`, `corridor.ts` | 214 | audit, tests, close-ups, traffic, merge rule | planned (unsupervised run, wave B) |
-| [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
+| [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | done 2026-11-19 (merged; Munich and full demand identical, Freiburg -0.5 s) |
 | [TASK-223](tasks/TASK-223.md) | 9 | TASK-208's missed-turn rule re-measured on TASK-222 | `detourHeads` | 208, 222 | misses, traffic, merge rule | planned (unsupervised run, wave B) |
 | [TASK-224](tasks/TASK-224.md) | 10 | Aerial re-check of the Hauptbahnhof box after wave A | overlay bench, findings | 216 to 220 | D1 to D9 before and now | planned (unsupervised run, wave B) |
 | [TASK-225](tasks/TASK-225.md) | 9 | The Siegesdenkmal box lock (Freiburg jg:13305; main seeds 2 and 4, TASK-219 seed 1) | `src/sim` box and group-chain rules | 219 | repro test, Freiburg seeds 1 to 6, traffic, merge rule | in progress: diagnosed (tram held at start keeps two crossings closed, `rail-crossings.ts`); rule lands after TASK-222 |
@@ -4601,6 +4601,31 @@ identical hashes. Committed on the branch (`270bcdd`): the reproduction
 the branch: check (1,533 and 2 expected fails), city (193), traffic light, light e2e (61). Lead
 decision: the agent resumes after TASK-222 merges, rebases, applies the rule and measures it in full
 (12 Munich seeds); the backlog it found is TASK-228.
+
+TASK-222 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged under the owner's merge rule): the
+lock between a tram crossing and two actuated signals (TASK-208's item 3). At Freiburg's `n:18` a car
+on `r:1348` needs `n:18` phase 0 and group 2 phase 0 green together, one on `r:1059` group 2 phase 1
+or 2 and `n:18` phase 2; each, held at the crossing for the other controller's red inside its
+clearance, extends the green it cannot use and calls the other, so both run to their 30 s maximum and
+swap within 0.6 s, for ever (on TASK-208's tree with TASK-204's second rule off: 07:54:16 to 07:57:16,
+cars 1373 and 1631 through five swaps; latent on main). Rule (`src/sim/signals.ts`, with the red stop
+line that held each car recorded in `rail-crossings.ts` and passed through `engine.ts`): an actuated
+controller in green keeps it while a car that would extend it is held by a crossing for another
+controller's red, that controller is changing to a phase serving the car, and the wait is mutual (it
+also has a call from a car the crossing holds for its own red); kept to `PASSAGE_S` beyond, past the
+timed green if need be. Controllers advance in a fixed order, so the second of two keeps its green.
+Real case cleared in 50 s. Tried and dropped: "a car that cannot clear does not extend" (alone the
+synthetic corridor still locks; with the keep Freiburg 76.2 to 88.5 s). First version without the
+mutual condition also met the rule but moved Munich (actuated choice off +2.6%, choice on -1.8%; full
+demand actuated 206 fewer completed) through a one-way wait at jg:10783/n:474 that cannot lock; the
+narrower version shipped. Reproduction: `tests/sim/T75-crossing-signal-lock.test.ts` (two actuated
+signals 10 m apart joined by a crossing, opposite phases: main 0 of 30 cars complete). Traffic: Munich
+48 runs (seeds 1 to 12, choice off and on, both modes) and both full demands hash-identical; Freiburg
+1,462 / 0 both, 76.2 to 75.7 s, hash 1730700508 to 4038635547 (re-pinned); Sindelfingen identical.
+Outside scope: `src/sim/engine.ts` (3 lines), the Freiburg re-pin, one paragraph in
+`docs/architecture.md` section 5.4 (accepted by the lead: it documents the rule as TASK-204's did).
+Lead check on the merge (on top of TASK-220): check (1,534), city (193), traffic light and guard,
+light e2e (61); full demand actuated 3,759 / 143 (4028429784), fixed-time 3,501 / 168 (2888500527).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
