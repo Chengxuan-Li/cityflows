@@ -431,49 +431,16 @@ function placeArm(
     );
     if (band.every((p, k) => drawn(p, k) >= drawn(chosen[k]!, k))) chosen = band;
   }
-  // TASK-217 (D1): at a node without signals a mapped crossing way leads: the band moves to it
-  // (all ends together, no move-out) where it lies over `MAPPED_SHIFT_M` from the placement
-  // above, no nearer the node than 0.25 m beyond the lane cuts (a stripe in the junction or by a
-  // curb return is left out, as anywhere), unless an end then loses its
-  // stripes. A signalized approach keeps its place (TASK-094: its stop line follows the crossing).
+  // TASK-217 (D1): at a node without signals a mapped crossing way leads the arm's style
+  // (`crossingStyle`); the band stays where the rules above put it. (The variant that moved the
+  // band to the mapped crossing cost Munich 3.7 to 4.6% of mean delay in fixed time.)
   const mapped = node.signal === null ? mappedAt(city, node, arm, axis, source) : null;
-  if (mapped !== null) {
-    const centres = chosen.flatMap((p, k) =>
-      drawn(p, k)
-        ? arm[k]!.road.lanes.map((i, j) => {
-            const lane = city.lanes[i]!;
-            const m = (p.lanes[j]!.nearM + p.lanes[j]!.farM) / 2;
-            const q = pointAtDistance(
-              lane.polyline,
-              lane.cumulative,
-              arm[k]!.atEnd ? lane.lengthM - m : m,
-            );
-            return (q.x - node.pos.x) * axis.x + (q.y - node.pos.y) * axis.y;
-          })
-        : [],
-    );
-    const centre = centres.length ? centres.reduce((a, b) => a + b, 0) / centres.length : null;
-    if (centre === null || Math.abs(mapped - centre) > MAPPED_SHIFT_M) {
-      const moved = arm.map((e) => {
-        const frame = bandFrame(city, node, arm, e, curbs, axis);
-        return placeCrossing(city, node, e, curbs, {
-          ...frame,
-          near: Math.max(frame.cutNear!, mapped - CROSSING_M / 2),
-          fixed: true,
-        });
-      });
-      if (moved.every((p, k) => drawn(p, k) > 0 || drawn(chosen[k]!, k) === 0)) chosen = moved;
-    }
-  }
   arm.forEach((e, k) => {
     let cached = cache.get(e.road);
     if (!cached) cache.set(e.road, (cached = []));
     cached[+e.atEnd] = { ...chosen[k]!, mapped: mapped !== null };
   });
 }
-
-/** TASK-217 (D1): a mapped crossing closer than this to the default placement keeps it. */
-const MAPPED_SHIFT_M = 1;
 
 /** TASK-215 (M5): how far TASK-091's crossing may step across the road before it is redrawn as
  * one band (Freiburg's steps: 1.3 to 5.5 m; square ends of the grid and town: none). */
@@ -483,10 +450,6 @@ const STEP_M = 0.25;
  * the frame on its centreline, or `offset` metres to its right. */
 interface Frame {
   near: number;
-  /** TASK-217: no move-out (a mapped crossing's place). */
-  fixed?: boolean;
-  /** TASK-217: the band's near edge without the curb returns' clearance (`bandFrame`). */
-  cutNear?: number;
   station: (lane: CLane, t: number, offset?: number) => number;
 }
 
@@ -531,7 +494,6 @@ function bandFrame(
         }),
       ),
     ) + 0.25;
-  const cutNear = near;
   for (const corner of curbs)
     corner.roads.forEach((index, k) => {
       if (arm.some((e) => e.road.idx === index))
@@ -560,7 +522,7 @@ function bandFrame(
     const h = headingAtDistance(lane.polyline, lane.cumulative, end.atEnd ? lane.lengthM - d : d);
     return centre(lane, t - offset * (-Math.sin(h) * axis.x + Math.cos(h) * axis.y));
   };
-  return { near, cutNear, station };
+  return { near, station };
 }
 
 /** The crossing of road end `end` in `frame`. */
@@ -569,7 +531,7 @@ function placeCrossing(
   node: CNode,
   end: RoadEnd,
   curbs: Curb[],
-  { near, station, fixed: mappedPlace }: Frame,
+  { near, station }: Frame,
 ): Placement {
   const { road, atEnd } = end;
   const lanes = road.lanes.map((index) => city.lanes[index]!);
@@ -629,7 +591,7 @@ function placeCrossing(
   const full = Math.floor((width - 0.225) / STRIPE_PITCH_M + 0.5);
   let best = { stripes: at(near), from: near };
   // A served signal's approach stays where the curb return puts it (TASK-094).
-  const fixed = mappedPlace || (atEnd && servedSignal(city, road));
+  const fixed = atEnd && servedSignal(city, road);
   for (
     let offset = 0.25;
     !fixed && offset <= MOVE_OUT_M + 1e-9 && best.stripes.length < full;
