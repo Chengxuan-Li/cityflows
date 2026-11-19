@@ -240,6 +240,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | done 2026-11-19 (owner approved the trade-off; Freiburg rebuilt) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Munich delay +4 to 5%; branch `3e5e33f`) |
 | [TASK-216](tasks/TASK-216.md) | 10 | Road shapes against aerial imagery (LGL DOP20), Freiburg Hauptbahnhof first (owner's suggestion) | `bench/` overlay script, findings | 213, 214 | registration, ranked defects by class, close-ups | done 2026-11-19 (9 defects; follow-ups proposed) |
+| [TASK-217](tasks/TASK-217.md) | 10 | Markings and crossings: TASK-215 reworked on TASK-214, crossings where OSM maps them (D1), solid lines before stop lines (M7) | markings, `crossings.ts`, walk links | 214, 215, 216 | tests, close-ups, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
+| [TASK-218](tasks/TASK-218.md) | 10 | Importer road shapes: widths, medians, shared lanes, stop lines (D3 to D6, D9) | `roads.ts`, `corridors.ts`, `controls.ts` | 216 | tests, close-ups, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
+| [TASK-219](tasks/TASK-219.md) | 10 | Junction-group surfaces and stop lines (J1, D2) | `junctions.ts`, `groups.ts` | 213, 216 | tests, close-ups, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
+| [TASK-220](tasks/TASK-220.md) | render | Tram track form: embedded, grass, paved, ballast (D8) | rail import and drawing | 216 | identical hashes, close-ups, frame budgets | in progress (unsupervised run 2026-11-19) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4867,6 +4871,28 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-19 (owner): run unsupervised for about 12 hours; plan and execute new tasks without
+  stopping for review or decisions. Rules (the lead's proposal, accepted as is):
+  - **Merge rule.** A task merges when every gate passes, the drain criterion holds on all runs, mean
+    delay rises no more than 3% in any Munich configuration (seeds 1 to 12, choice off and on, both
+    modes), full-demand delay no more than 2% in either mode, and Freiburg's gate delay no more than
+    5 s. A task that misses gets one reworked variant; if that misses too, it is parked with both
+    tables for the owner.
+  - TASK-215 is reworked as TASK-217 (rebased on TASK-214, with TASK-216's D1: crossings where OSM
+    maps them, and M7: solid lane lines over the last stretch before a stop line, as German practice)
+    and judged by the merge rule. TASK-208 waits for the tram-crossing lock fix, then is re-measured
+    and judged the same way. TASK-207's F1 is judged by the rule; F2 is dropped (the salted timetable
+    offsets cover its symptom).
+  - Still off limits: baseline resets, gate floors, deleting the parked branches, any new download
+    (TASK-216's Freiburg imagery may be reused; no Sindelfingen or Munich imagery).
+  - Every main push redeploys the Freiburg landing page; merged visual changes go live without
+    review.
+  - At most four agents at a time (Opus 5.5 high or Sonnet); a Full run after every merge, and a red
+    Full run stops merges until fixed.
+  - Plan: wave A TASK-217 (markings and crossings), 218 (importer road shapes, D3 to D6, D9), 219
+    (junction-group surfaces, J1 and D2), 220 (tram track form, D8); wave B TASK-221 (tapers across
+    short roads), 222 (tram crossing and actuated signal lock), 223 (TASK-208 on 222), 224 (aerial
+    re-check); then concave roofs and step time if time allows.
 - 2026-11-19 (owner): approve TASK-216's download (LGL Baden-Württemberg DOP20 aerial imagery for the
   Freiburg Hauptbahnhof box, through the public WMS, kept out of the repo) and start TASK-216.
 - 2026-11-19 (owner): merge TASK-214 despite the traffic trade-off (merged 5b10d5a with a Freiburg
