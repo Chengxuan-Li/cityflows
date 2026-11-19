@@ -7,13 +7,14 @@ import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { setup } from './fixtures';
 
 /**
- * TASK-228 (Freiburg's tram backlog): a run waiting at its origin waited for every delayed run on
- * any track its route shares, until that run left the map, so one delay queued every later
- * departure behind it. Here the first run of a tram line is held at the crossing by a car, then
- * goes on behind its timetable over three 1 km blocks; the next run is due well after it has
- * cleared each block it will use, and enters on time. While the first run stands, it waits.
+ * TASK-228 (Freiburg's tram backlog): a run waiting at its origin waited for every delayed run of
+ * any line sharing a track with it, until that run left the map, so one delay queued every later
+ * departure of every line behind it. Here two lines share a crossing and three 1 km blocks. The
+ * first line's run is held at the crossing by a car, then goes on behind its timetable; the other
+ * line's next run is due well after it has cleared each block, and enters on time. While the first
+ * run stands it waits, and so does a later run of the first run's own line (as before).
  */
-function lateLeader() {
+function lateLeader(next: number) {
   const city = operatingCrossing('tram');
   const rail = city.rail!;
   // rt:2 (rn:2 to rn:3) is the first 1 km block past the crossing; two more follow it.
@@ -39,9 +40,10 @@ function lateLeader() {
     table = railTimetable(compiled.rail!);
   expect(table.routes).toHaveLength(1);
   expect(table.routes[0]!.sections).toHaveLength(4);
+  table.routes.push({ ...table.routes[0]!, id: `${table.routes[0]!.id}:other line` });
   table.departures = [
     { route: 0, timeS: 0, requestedS: 0 },
-    { route: 0, timeS: 250, requestedS: 250 },
+    { route: next, timeS: 250, requestedS: 250 },
   ];
   const span = compiled.rail!.facilities![0]!.spans!.find((s) => s.segment >= 0)!;
   const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
@@ -51,8 +53,8 @@ function lateLeader() {
   return { control, vehicles, span };
 }
 
-function run(clearAtS: number) {
-  const { control, vehicles, span } = lateLeader();
+function run(clearAtS: number, next = 1) {
+  const { control, vehicles, span } = lateLeader(next);
   let enteredS = Infinity;
   for (let i = 0; i < 4000; i++) {
     const timeS = i * 0.1;
@@ -67,11 +69,15 @@ function run(clearAtS: number) {
   return enteredS;
 }
 
-test('T75 a run enters on time behind a late run that has cleared its blocks (TASK-228)', () => {
+test('T75 a run enters on time behind a late run of another line that has cleared its blocks (TASK-228)', () => {
   // The car leaves at 150 s: the first run is about a minute late, three minutes ahead of the next.
   expect(run(150)).toBeLessThan(251);
 });
 
 test('T75 a run waits at its origin while a late run on its tracks stands (TASK-228)', () => {
   expect(run(Infinity)).toBe(Infinity);
+});
+
+test('T75 a run waits at its origin while a late run of its own line is in service (TASK-228)', () => {
+  expect(run(150, 0)).toBeGreaterThan(300);
 });

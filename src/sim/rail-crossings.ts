@@ -889,18 +889,18 @@ export function createRailCrossings(
   const delayed: number[] = [];
   const delayedStanding: boolean[] = [];
   /** TASK-228: whether a service about to enter at `ageS` on `route` waits for the delayed service
-   * `delayed[k]`. It waits when their routes run a shared track in opposite directions, since the two could
-   * meet head on (the rule before TASK-228, for every shared track). Otherwise it waits only when,
-   * on the delayed service's clock, the delayed one would still hold a shared track while the
-   * entering one is on it: the timetable's own check (`buildTimetable`) on live clocks. A delayed
-   * service standing still holds every shared track still ahead of it without end, since when it
-   * moves again is not known. Following services on the same tracks cannot lock (the block rule
-   * keeps them apart), so a delay that does not reach the entering service's path in time no
-   * longer holds it: before, one delayed tram held every unstarted run on any track it shares. */
+   * `delayed[k]`. As before TASK-228, it waits for a delayed run of its own route, and for one on
+   * a route running a shared track in the opposite direction, since the two could meet head on.
+   * For any other route it waits only when, on the delayed service's clock, the delayed one would
+   * still hold a shared track while the entering one is on it: the timetable's own check
+   * (`buildTimetable`) on live clocks. A delayed service standing still holds every shared track
+   * still ahead of it without end, since when it moves again is not known. Before, one delayed
+   * tram held every unstarted run of every route sharing any of its tracks until it left the map,
+   * and the runs it held, late in turn, held the next ones (Freiburg's backlog). */
   function waitsFor(k: number, route: number, ageS: number) {
     const other = services[delayed[k]!]!;
     const theirs = table.departures[other.departure]!.route;
-    if (opposes[theirs]![route]) return true;
+    if (theirs === route || opposes[theirs]![route]) return true;
     const mine = occupancyByTrack[route]!;
     for (const o of table.routes[theirs]!.occupancy) {
       if (o.exitS <= other.ageS) continue;
