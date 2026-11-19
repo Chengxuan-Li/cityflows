@@ -246,12 +246,12 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-220](tasks/TASK-220.md) | render | Tram track form: embedded, grass, paved, ballast (D8) | rail import and drawing | 216 | identical hashes, close-ups, frame budgets | done 2026-11-19 (merged; hashes identical) |
 | [TASK-221](tasks/TASK-221.md) | 10 | Lane tapers across the plain nodes between short roads (S5, S6, J2, J6 left by TASK-214) | `lanes.ts`, `lane-drop.ts`, `continuity.ts`, `corridor.ts` | 214 | audit, tests, close-ups, traffic, merge rule | planned (unsupervised run, wave B) |
 | [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | done 2026-11-19 (merged; Munich and full demand identical, Freiburg -0.5 s) |
-| [TASK-223](tasks/TASK-223.md) | 9 | TASK-208's missed-turn rule re-measured on TASK-222 | `detourHeads` | 208, 222 | misses, traffic, merge rule | planned (unsupervised run, wave B) |
+| [TASK-223](tasks/TASK-223.md) | 9 | TASK-208's missed-turn rule re-measured on TASK-222 | `detourHeads` | 208, 222 | misses, traffic, merge rule | parked 2026-11-19 (v1 misses Munich fixed +6.7%, v2 full demand fixed +3.1%) |
 | [TASK-224](tasks/TASK-224.md) | 10 | Aerial re-check of the Hauptbahnhof box after wave A | overlay bench, findings | 216 to 220 | D1 to D9 before and now | planned (unsupervised run, wave B) |
-| [TASK-225](tasks/TASK-225.md) | 9 | The Siegesdenkmal box lock (Freiburg jg:13305; main seeds 2 and 4, TASK-219 seed 1) | `src/sim` box and group-chain rules | 219 | repro test, Freiburg seeds 1 to 6, traffic, merge rule | in progress: diagnosed (tram held at start keeps two crossings closed, `rail-crossings.ts`); rule lands after TASK-222 |
-| [TASK-226](tasks/TASK-226.md) | 10 | TASK-219's group membership re-measured on TASK-225 | `split.ts`, Freiburg rebuild | 219, 225 | TASK-219's gates | planned (unsupervised run) |
+| [TASK-225](tasks/TASK-225.md) | 9 | The Siegesdenkmal box lock (Freiburg jg:13305; main seeds 2 and 4, TASK-219 seed 1) | `src/sim` box and group-chain rules | 219 | repro test, Freiburg seeds 1 to 6, traffic, merge rule | done 2026-11-19 (merged; lock gone, every other hash identical) |
+| [TASK-226](tasks/TASK-226.md) | 10 | TASK-219's group membership re-measured on TASK-225 | `split.ts`, Freiburg rebuild | 219, 225 | TASK-219's gates | in progress (unsupervised run 2026-11-19) |
 | [TASK-227](tasks/TASK-227.md) | render | Pitched roofs on concave outlines (straight skeleton) | `render3d/roofs.ts` | 210 | flat fallbacks, skeleton tests, close-ups, budgets, identical hashes | done 2026-11-19 (merged; flat roofs Freiburg 204 to 14, Munich 70 to 13) |
-| [TASK-228](tasks/TASK-228.md) | 9 | Tram backlog: one delayed tram holds every unstarted one (found by TASK-225) | `rail-crossings.ts` service holds | 225 | backlog figures, traffic, merge rule | planned (unsupervised run; after TASK-225) |
+| [TASK-228](tasks/TASK-228.md) | 9 | Tram backlog: one delayed tram holds every unstarted one (found by TASK-225) | `rail-crossings.ts` service holds | 225 | backlog figures, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4714,6 +4714,47 @@ TASK-217 combined): the Freiburg rebuild reproduces the bundled project; check 1
 Sindelfingen tests over their 60 s limit (65 s, the machine running two full demands and three agents;
 9 s and 20 s alone, both pass rerun); city (205), traffic light and guard, light e2e (61); full demand
 actuated 3,759 / 143 (4028429784), fixed-time 3,501 / 168 (2888500527).
+
+TASK-225, rule (same agent, 2026-11-19; merged under the owner's merge rule, `35bb37b` on 486a631):
+the rule above in `src/sim/rail-crossings.ts`, applied cleanly on TASK-222 (which changed `hold()`,
+not the service loop); the two reproductions in `tests/sim/T75-held-service-crossing.test.ts` now pass.
+Freiburg 0.15 against main 486a631: seed 2 1,460 / 5 (4 stalled heads), 67.8 s to 1,476 / 0, 67.4 s;
+seeds 1 (gate, 4038635547), 3, 4, 5, 6 identical hashes (TASK-222's timing already cleared seed 4).
+TASK-219's tip merged on 486a631 with its project rebuilt, without and with the rule: seed 1 1,369 /
+22 to 1,461 / 0 (73.7 s), seed 2 1,361 / 28 to 1,479 / 0 (76.2 to 65.2 s), seed 3 1,422 / 11 to 1,487 /
+0; all those locks at the Siegesdenkmal. Munich 48 runs, both full demands and Sindelfingen
+hash-identical; drain criterion 48 of 48. No files outside scope. Lead check on the merge (on top of
+TASK-217 and 227): check (1,557), city (205), traffic light and guard, light e2e (61); full demand
+actuated 3,759 / 143 (4028429784), fixed-time 3,501 / 168 (2888500527).
+
+TASK-223 (Claude Code subagent, Opus 5.5 high, 2026-11-19; parked under the owner's merge rule, branch
+`task/223-remaining-misses-2`, v1 `f5071e7`, v2 `5fb2693`, worktree `D:\cityflows-wt\223`): TASK-208's
+`detourHeads` rule re-measured on TASK-222. v1 (as TASK-208): a queue head does not detour into
+another lane of its next road whose route needs more later lane changes than its planned lane's. v2:
+only when the alternative needs at least two more (keeps `r:700` lane 0, the cause of `r:654`'s misses;
+drops the one-change cases, which the refusal log showed at a dozen other Munich stop lines and which
+raised v1's fixed-time delay). The contract's example variant (only when the detour's next road is the
+head's own) was not taken: almost every refusal already continues on the planned route's next two
+roads, so it would not narrow the rule. Misses, 12 seeds choice off (main / v1 / v2): `r:654` actuated
+83 / 8 / 8, fixed 310 / 11 / 10; `r:639` actuated 94 / 82 / 77, fixed 883 / 406 / 604; choice on 0 in
+all.
+
+| Munich 0.15 seeds 1 to 12 mean delay | main | v1 | v2 |
+|---|---|---|---|
+| actuated, choice off | 630.6 s | 646.8 s (+2.6%) | 627.6 s (-0.5%) |
+| actuated, choice on | 90.8 s | 91.6 s (+0.9%) | identical hashes |
+| fixed, choice off | 789.0 s | 841.5 s (+6.7%) | 797.5 s (+1.1%) |
+| fixed, choice on | 125.0 s | 125.2 s (+0.2%) | identical hashes |
+
+| Full demand | main | v1 | v2 |
+|---|---|---|---|
+| actuated | 3,759 / 143, 1,677.6 s | 3,718 / 147, 1,592.7 s (-5.1%) | 3,730 / 140, 1,616.0 s (-3.7%) |
+| fixed | 3,501 / 168, 1,727.1 s | 3,500 / 185, 1,755.7 s (+1.7%) | 3,414 / 169, 1,781.2 s (+3.1%) |
+
+Drain 48 of 48 in every version; Freiburg (the rule never fires there) and Sindelfingen identical. v1
+misses on Munich fixed choice off, v2 on fixed full demand (one seed, so noisier than the 12-seed
+means), so the task is parked. Owner's options: park, take v2, or take v1. Outside scope:
+`docs/architecture.md` (TASK-208's paragraph carried over, updated for the two-change threshold).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

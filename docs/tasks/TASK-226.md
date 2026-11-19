@@ -1,6 +1,6 @@
 # TASK-226 — TASK-219's group membership re-measured on the Siegesdenkmal fix
 
-Status: planned (unsupervised run, owner 2026-11-19; starts after TASK-225 merges). Proposed owner:
+Status: in progress (unsupervised run, owner 2026-11-19; started after TASK-225 merged). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/226-group-surfaces-2`, worktree
 `D:\cityflows-wt\226`, ports 5426 / 5526.
 
@@ -20,7 +20,12 @@ it; do not take the variant.
 `src/importers/osm/split.ts`, `tests/importers/group-membership.test.ts`, the Freiburg rebuild and its
 pins, TASK-219's findings folder (update the close-ups if the shapes moved).
 
-Out of scope: `src/sim`, `src/network`, `src/schema`, gate floors, `bench/traffic-baseline.json`.
+`src/network/junctions.ts` only for the one corner TASK-219's tip added (the slip road's gore at
+`n:473`, sharp corners 89 to 90), since the audit gate is "no measure worse" (lead, 2026-11-19, after
+TASK-225 showed the tip passes Freiburg's gate on seeds 1 to 6 with the rule).
+
+Out of scope: `src/sim`, the rest of `src/network`, `src/schema`, gate floors,
+`bench/traffic-baseline.json`.
 
 ## Gates
 

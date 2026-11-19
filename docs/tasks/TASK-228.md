@@ -1,6 +1,6 @@
 # TASK-228 — The tram backlog: one delayed tram holds every unstarted one
 
-Status: planned (unsupervised run, owner 2026-11-19; starts after TASK-225's rule lands, same file).
+Status: in progress (unsupervised run, owner 2026-11-19; started after TASK-225 merged).
 Proposed owner: Claude Code subagent (Opus 5.5, high). Branch `task/228-tram-backlog`, worktree
 `D:\cityflows-wt\228`, ports 5428 / 5528.
 

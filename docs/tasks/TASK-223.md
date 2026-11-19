@@ -1,6 +1,6 @@
 # TASK-223 — TASK-208 re-measured on the lock fix
 
-Status: planned (unsupervised run, owner 2026-11-19; starts when a wave A slot frees). Proposed owner:
+Status: parked 2026-11-19 (v1 `f5071e7` and v2 `5fb2693` each miss one limit; review in `docs/plan.md`). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/223-remaining-misses-2`, worktree `D:\cityflows-wt\223`, ports
 5423 / 5523.
 
