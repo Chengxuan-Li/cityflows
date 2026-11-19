@@ -167,7 +167,7 @@ const baselines = {
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   grid: '94f4c0a0c54c607f58d079b290976c3b5429903d55353ac5f66bee1948e9aa5e',
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-  town: '3595116920f094559c7d78b9cc1cfde9fa1b0773419b31a7df233ea8a4909e79',
+  town: '1b11017975d956b8794c1a515f41c1d981d4c344a1d1e39347d7c50276dcd860',
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
   // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
@@ -184,7 +184,7 @@ const baselines = {
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
   // TASK-194: generated signal programs are actuated (`actuated: true`).
   // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-  'sindelfingen-a81': 'd08892bdc1c6ed077bba19e06dce14841e1e2c009ac69138dff2ea366e899078',
+  'sindelfingen-a81': 'e1a283a260b06caa66f9a3ef9b5e199af14000c20669ba7173309f3222728fd7',
 };
 const lampCounts = {
   grid: [0, 0],

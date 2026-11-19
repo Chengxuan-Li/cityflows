@@ -33,6 +33,7 @@ import {
   endDirection,
   endEdges,
   MAPPED_M,
+  nearSignal,
   type CrossingSource,
 } from '../network/crossings';
 import { lanesNear } from '../network/walk';
@@ -1044,8 +1045,8 @@ function roadMappedHits(city: CompiledCity, road: CRoad, source?: CrossingSource
  * or one at an end without a crossing of its own (Freiburg's zebras where a slip road splits at
  * the crossing node, n:398). Stripes 2.5 m long along each lane, centred where the way crosses
  * its centreline, at the end crossings' 0.9 m pitch across the road; none inside a junction; the
- * broken lines of a signalised crossing within 40 m of a signalized node (the walk graph's
- * rule), zebra stripes elsewhere.
+ * broken lines of a signalised crossing near a signalized node (`nearSignal`), zebra stripes
+ * elsewhere.
  */
 function mappedStripes(
   city: CompiledCity,
@@ -1099,15 +1100,12 @@ function mappedStripes(
       if (stripe.some((p) => outlines.some((inside) => inside(p)))) continue;
       stripes.push(stripe);
     }
-    const node = city.nodes[atEnd ? road.to : road.from]!;
     const p = pointAtDistance(
       lanes[0]!.polyline,
       lanes[0]!.cumulative,
       Math.min(lanes[0]!.lengthM, mean),
     );
-    paint.push(
-      ...(node.signal !== null && distance(node.pos, p) < 40 ? signalLines(stripes) : stripes),
-    );
+    paint.push(...(nearSignal(city, p) ? signalLines(stripes) : stripes));
   }
   return paint;
 }
@@ -1115,7 +1113,7 @@ function mappedStripes(
 const preparePolygonRing = (ring: Vec2[]) => (p: Vec2) => pointInPolygon(p, ring, 0);
 
 /** TASK-217 (D1): a signalised crossing's broken lines (German `Fußgängerfurt`), 0.15 m wide,
- * 0.5 m dashes and 0.2 m gaps, along the near and far edges of the stripes the crossing would
+ * 0.5 m dashes and 0.2 m gaps, inside the near and far edges of the stripes the crossing would
  * have, run by run where stripes are left out (a curb return, the junction outline). */
 const FURT_WIDTH_M = 0.15;
 const FURT_DASH_M = 0.5;
@@ -1131,27 +1129,31 @@ function signalLines(stripes: Vec2[][]): Vec2[][] {
     if (run && last && distance(last[3]!, stripe[0]!) < 1) run.push(stripe);
     else runs.push([stripe]);
   }
+  // Each line lies inside the stripes' footprint, along its near or far edge.
+  const towards = (p: Vec2, q: Vec2) => {
+    const f = FURT_WIDTH_M / distance(p, q);
+    return { x: p.x + (q.x - p.x) * f, y: p.y + (q.y - p.y) * f };
+  };
   for (const run of runs)
-    for (const [a, b] of [
-      [0, 3],
-      [1, 2],
-    ] as const) {
-      const edge = run.flatMap((stripe) => [stripe[a]!, stripe[b]!]);
-      const lengths = cumulativeLengths(edge);
-      const total = lengths.at(-1)!;
+    for (const near of [true, false]) {
+      const outer = run.flatMap((t) => (near ? [t[0]!, t[3]!] : [t[1]!, t[2]!]));
+      const inner = run.flatMap((t) =>
+        near
+          ? [towards(t[0]!, t[1]!), towards(t[3]!, t[2]!)]
+          : [towards(t[1]!, t[0]!), towards(t[2]!, t[3]!)],
+      );
+      const outerLengths = cumulativeLengths(outer),
+        innerLengths = cumulativeLengths(inner);
+      const total = outerLengths.at(-1)!,
+        innerTotal = innerLengths.at(-1)!;
       for (let start = 0; start < total - 0.05; start += FURT_DASH_M + FURT_GAP_M) {
         const end = Math.min(total, start + FURT_DASH_M);
-        const p = pointAtDistance(edge, lengths, start),
-          q = pointAtDistance(edge, lengths, end);
-        const length = distance(p, q);
-        if (length < 0.05) continue;
-        const half = FURT_WIDTH_M / 2;
-        const n = { x: (-(q.y - p.y) / length) * half, y: ((q.x - p.x) / length) * half };
+        if (end - start < 0.05) continue;
         dashes.push([
-          { x: p.x - n.x, y: p.y - n.y },
-          { x: q.x - n.x, y: q.y - n.y },
-          { x: q.x + n.x, y: q.y + n.y },
-          { x: p.x + n.x, y: p.y + n.y },
+          pointAtDistance(outer, outerLengths, start),
+          pointAtDistance(outer, outerLengths, end),
+          pointAtDistance(inner, innerLengths, (end / total) * innerTotal),
+          pointAtDistance(inner, innerLengths, (start / total) * innerTotal),
         ]);
       }
     }

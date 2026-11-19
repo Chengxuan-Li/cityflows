@@ -63,7 +63,7 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           '36bcdfa9e5787fa8ebac8e13843c988b8107cfc027f4abeb99a6816801aa00c5'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          'a3e115596665e676e4153004fd089f2805ad62182ae378aece9994d53cf7bb58',
+          '80ce42de9bdbb6231b6e895528fc41677d301580a98c4b54d77345538080234b',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

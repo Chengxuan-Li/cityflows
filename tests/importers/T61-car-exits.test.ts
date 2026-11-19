@@ -365,7 +365,7 @@ test.each(
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
       'd4ab86a62b041752ac85cbcdef177b165a286e3d15f71e1ccf1219588832d908',
-      'f4fae021fb29d507d1e9d4f38c371a79667c8b81d09ad5c7fd9b48b704207fd6',
+      '63580a91bc841efa9f323b5efdd27d2bada9a904f6226b1e960a6e26507db3d4',
       31,
       703,
     ],

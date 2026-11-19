@@ -68,13 +68,13 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
             // TASK-194: generated signal programs are actuated (`actuated: true`).
             // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-            '91b726a20a19d8bd2de94778e25f1d3244d629c5078b307364f4b75baaf86b8b',
+            'e5f450034cdc1ca23bbc1a5b6926ba2d3bd4ab75fea33281e7d15cbeb1c2675a',
             // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
             // TASK-194: generated signal programs are actuated (`actuated: true`).
             // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-            'af41a8f4dd2874f432bdeef010eac5d7948fabe290ba79da848293cd9aa39d60',
+            '2e42947d4da4c04184451aa8b3754ed69d27be1ee14cc0b74d19fc04976d684f',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

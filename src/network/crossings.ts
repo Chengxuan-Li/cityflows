@@ -260,8 +260,9 @@ function mappedAt(
 }
 
 /** TASK-217 (D1): how a road end's crossing is painted. `signal`: at a signalized node, the
- * two dashed lines of a signalised crossing (German practice: no zebra under signals); `zebra`:
- * where a mapped crossing way leads the arm (`crossingPlacement`), where an edit turned the
+ * two dashed lines of a signalised crossing (German practice: no zebra under signals), also where
+ * a mapped crossing leads the arm within `SIGNAL_NEAR_M` of a signalized node; `zebra`: where
+ * a mapped crossing way leads the arm (`crossingPlacement`), where an edit turned the
  * crossing on, and at the default crossings of roads drawn by hand; `none`: a default crossing
  * of an imported road where OSM maps none near the arm (TASK-216's D1: 155 of 167 drawn crossings
  * at the Hauptbahnhof lay over 4 m from any mapped one; a mapped city maps its marked crossings).
@@ -273,11 +274,32 @@ export function crossingStyle(
   atEnd: boolean,
   source?: CrossingSource,
 ): CrossingStyle {
-  if (city.nodes[atEnd ? road.to : road.from]!.signal !== null) return 'signal';
-  if (crossingPlacement(city, road, atEnd, source).mapped) return 'zebra';
+  const node = city.nodes[atEnd ? road.to : road.from]!;
+  if (node.signal !== null) return 'signal';
+  const placement = crossingPlacement(city, road, atEnd, source);
+  if (placement.mapped) {
+    const points = placement.stripes.flat();
+    const centre = points.length
+      ? {
+          x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+          y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+        }
+      : node.pos;
+    return nearSignal(city, centre) ? 'signal' : 'zebra';
+  }
   const canonical = source?.roads?.[road.id];
   if (canonical?.crossings?.[atEnd ? 'end' : 'start'] === true) return 'zebra';
   return canonical?.provenance.source === 'osm' ? 'none' : 'zebra';
+}
+
+/** TASK-217 (D1): a mapped crossing this close to a signalized node is a signalised crossing,
+ * whose own signal the importer moved to the junction (TASK-216's D4: `controlTransferred`
+ * leaves the crossing node uncontrolled); German practice puts no zebra at a signalised junction. */
+export const SIGNAL_NEAR_M = 12;
+export function nearSignal(city: CompiledCity, p: Vec2): boolean {
+  return city.nodes.some(
+    (n) => n.signal !== null && Math.hypot(n.pos.x - p.x, n.pos.y - p.y) < SIGNAL_NEAR_M,
+  );
 }
 
 /** Whether a road end has a crossing: its override in the canonical road, else the default. */
