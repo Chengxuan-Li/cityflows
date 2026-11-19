@@ -1,6 +1,6 @@
 # TASK-214 — Lane splits and merges
 
-Status: held for the owner 2026-11-19 (traffic trade-off; branch `cc70c3e`, see the plan's review). Proposed owner: Claude Code
+Status: done 2026-11-19 (owner approved the trade-off; merged with a Freiburg rebuild). Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/214-splits-merges`, worktree `D:\cityflows-wt\214`, ports
 5414 / 5514.
 

@@ -237,7 +237,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-209](tasks/TASK-209.md) | - | The parked branches (TASK-128, 129, 130, 131 Phase 3): revive or drop | decision document | - | measured recommendation each | done 2026-11-19 (drop all four; owner decides) |
 | [TASK-212](tasks/TASK-212.md) | 10 | Geometry audit of junctions, lane splits and merges, and markings (Freiburg first) | findings | 201 | ranked defects with ids, close-ups, counts | done 2026-11-18 |
 | [TASK-213](tasks/TASK-213.md) | 10 | Junction shapes (TASK-212 J1 to J6; fixes the geometry-audit bench) | `junctions.ts`, `groups.ts`, `bench/geometry-audit.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | done 2026-11-19 (J4 and the audit; J1, J2, J3, J5, J6 handed on) |
-| [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Freiburg delay 75 to 89 s, full demand up; branch `cc70c3e`) |
+| [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | done 2026-11-19 (owner approved the trade-off; Freiburg rebuilt) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Munich delay +4 to 5%; branch `3e5e33f`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -4532,6 +4532,18 @@ the bundled-project build test (the Freiburg project must be rebuilt; fixtures o
 scope: `compile.ts` (R5, R6), fingerprint re-pins, T35's Munich exceptions removed. Lead decision: a
 trade-off under the owner's rules (Freiburg delay +19%, more gridlocked trips at 0.15, against full
 demand and Munich choice-off gains), so held; if approved, the lead rebuilds Freiburg and re-pins.
+
+TASK-214 merge (owner approved 2026-11-19, "Merge"): the lead rebuilt the Freiburg project. The
+rebuild renumbers the rail nodes by one, and departure offsets are hashed from route ids: the new
+offsets did not fit 10 trams an hour in 720 s, so every line fell to 5 an hour. Fixed in
+`buildTimetable` (`src/network/trains.ts`): up to 16 salted offsets per period before the period
+grows; the first attempt is the plain id, so every timetable that fitted before is unchanged (a
+narrow form of TASK-207's held F2). Freiburg after the merge: 10 trams an hour on all eight routes,
+timetable hash 90e3ff6f, `city.json` 2243703f..., morning 1,462 / 0, mean delay 76 s (main 75 s; the
+branch's 89 s came with the halved trams), state hash 1730700508. Lead check on the merge: check
+(1,532), city (193), traffic light and guard, light e2e (61); full demand reproduces the branch:
+actuated 3,759 / 143 hash 4028429784, fixed 3,501 / 168 hash 2888500527. These are the new
+full-demand references.
 
 TASK-215 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
 `task/215-markings` at `3e5e33f`, main `1ac0c38` merged in, worktree `D:\cityflows-wt\215`): M1 arrows at
