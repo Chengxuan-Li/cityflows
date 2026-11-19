@@ -4948,6 +4948,9 @@ demand completes 120 fewer trips by 10:00 at lower delay. Outside scope: Munich 
 T36.1 (moved pairs 1 to 2). Tiers on the variant: check (1,558), city (208), traffic light and guard,
 light e2e (61).
 
+Full run 44602678869 (lead, manual, on c4d693b after TASK-232 and 233): every job green, including all
+five e2e shards; the city job took 19.6 min.
+
 TASK-232 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged, render and track form only): D8's
 remainder and N3. At Fahnenbergplatz the 4.5 to 5.4 m between the tracks and the drawn one-lane
 carriageways is the stop's two platforms (648533263/4, `area:highway=platform`), not parking
