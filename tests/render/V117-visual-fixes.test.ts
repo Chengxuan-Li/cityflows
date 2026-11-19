@@ -189,12 +189,15 @@ const pins = {
     // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: two corners are rounded (n:324's acute corner a gore; n:661's gore tip).
-    compile: '47af58b74453a100cbe8e6aa869b76fab8310000ab8a907c7cfb5e837d8ae5eb',
-    lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    compile: '47aa5c2a10a7fde6dae75ab31db873451b80be0b88ad062b7cc6d0afed8d7b0c',
+    lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
-    curbs: '25e69a4587153f4f59be96a2c846bb9ff22b5eaad44bd436a5d9d8be658c48ff',
-    de: 'ded9e46f92f7ef1d114e8da5a466af533012a35d28a9467a7405c9cbeda77a38',
-    us: '6b247602538ed8c179b9d1c38cfdbc0d7b5d944e0a12261aa62cdd1eed2e38af',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
+    de: '93c80da1875ad5068561101700c2d56d7453fd0a40f08629bebcc74b2d5f9a99',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    us: '1ca009b61590dd872e3d0d080b60c85e8d0fe95a1aaecacd85e3bbb04858cb82',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.

@@ -154,7 +154,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
           // TASK-194: generated signal programs are actuated (`actuated: true`).
-          'b2320e4a18f36b5e6055f6e157e20359b2e75a11d2846c327972ff51bc1b63b8',
+          // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+          '3cbd8e27f8be39d2d6d4dbdd794e7df80c9ff594471dd22a7b60ff5d73c81d14',
           // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
@@ -162,7 +163,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
           // TASK-194: generated signal programs are actuated (`actuated: true`).
-          '619decdd30a07e8e261773c001d1a26ff95988cbffd06505dda6a80e3f29b32c',
+          // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+          'a893a96803342d78238f72e3c7edb70f6ee8b3e07f277682306a87322bdf5b24',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

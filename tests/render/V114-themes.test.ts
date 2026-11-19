@@ -59,7 +59,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
     expect(paintHash(shapes)).toBe(
       name === 'munich'
         ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-          '641250b9a67e90a95b64c0187f919d6d7bedbfb5a49f368f3309fc470e552750'
+          // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+          '36bcdfa9e5787fa8ebac8e13843c988b8107cfc027f4abeb99a6816801aa00c5'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           'a3e115596665e676e4153004fd089f2805ad62182ae378aece9994d53cf7bb58',

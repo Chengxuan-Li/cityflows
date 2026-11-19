@@ -354,8 +354,9 @@ test.each(
     [
       'munich',
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-      'e1525e9029b6fcf729720daff642605180d994bfefe0efdf4d81fc4ae543dd73',
-      '9e15a4d6ac0cd7d3254c2abb9d8e7e8ed88365a158a6ae2f596319a6d680cafe',
+      // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+      'a586e401298b2b882e8b2af8cb4b1ef8c698c29328442b809b4e2c8a0abcafb7',
+      '741cf5660bbb6893febbfa55824038cf263df106c5fb3a863b64f3c8a6e9f64c',
       14,
       79,
     ],

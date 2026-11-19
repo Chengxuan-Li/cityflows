@@ -58,7 +58,8 @@ const baselines = {
   // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
   // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
   // TASK-194: generated signal programs are actuated (`actuated: true`).
-  'munich-donnersberger': '10de283440973d4047c98458f9c26c7fc81e52e72144817370c1d106fcb14aa4',
+  // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+  'munich-donnersberger': '573942cd3cdfc21d4c81da2189f41c0456bebaadd1a9bef656fde20929a3eee1',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

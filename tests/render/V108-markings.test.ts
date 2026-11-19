@@ -82,8 +82,9 @@ const baseline = {
     // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
     // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    compile: '8be9f82fd52541dd81567bd040446c48aac27af78b4671de440694ef46dea4f6',
-    arrows: 'd7a4069aceff35d73a6c6596a536edac25dbb82c71b88fe1ef70cebd591b8a27',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    compile: '198ec4db6b8ec6a79cdafc1b94d2c00ddc3794bb63899ff9c8d1b809d50103ef',
+    arrows: '12672c2496ebf0ba83725a10f255712bd00e081631eaccb0c407e555037d0422',
   },
 } as const;
 const hash = (value: unknown) =>
