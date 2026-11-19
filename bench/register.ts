@@ -16,7 +16,9 @@ registerHooks({
   // TASK-198: src/project/manifest.ts imports `version` from package.json as the bundler allows;
   // Node gives JSON a default export only, so a JSON module also exports its top-level keys.
   load(url, context, nextLoad) {
-    if (!url.startsWith('file:') || !url.endsWith('.json')) return nextLoad(url, context);
+    // Packages' own JSON stays as Node loads it: Playwright `require`s its package.json (TASK-216).
+    if (!url.startsWith('file:') || !url.endsWith('.json') || url.includes('/node_modules/'))
+      return nextLoad(url, context);
     const value = JSON.parse(readFileSync(new URL(url), 'utf8')) as Record<string, unknown>;
     const keys = Object.keys(value);
     const source = [
