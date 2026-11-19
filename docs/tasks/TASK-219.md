@@ -1,6 +1,6 @@
 # TASK-219 — Junction-group surfaces and stop lines (J1, TASK-216 D2)
 
-Status: in progress (unsupervised run, owner 2026-11-19). Proposed owner: Claude Code subagent (Opus
+Status: parked 2026-11-19 (tip `5bc497a` misses Freiburg's gate, variant `c96c115` the audit; re-measured as TASK-226 after TASK-225). Proposed owner: Claude Code subagent (Opus
 5.5, high). Branch `task/219-group-surfaces`, worktree `D:\cityflows-wt\219`, ports 5419 / 5519.
 
 ## Goal
