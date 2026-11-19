@@ -1,11 +1,12 @@
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
+import { straightSkeleton, type StraightSkeleton } from '../geo/straight-skeleton';
 import type { Vec2 } from '../geo/vec2';
 import type { ContextFeature, RoofShape } from '../schema';
 
 type Area = Extract<ContextFeature, { kind: 'area' }>;
 type Vertex = Vec2 & { h: number };
 type Patch = { ring: Vec2[]; height: (p: Vec2) => number };
-type Fallback = 'courtyard' | 'irregular-footprint';
+type Fallback = 'courtyard' | 'irregular-footprint' | 'skeleton';
 
 export interface RoofGeometry {
   roof: BufferGeometry;
@@ -328,6 +329,60 @@ function clipEdge(a: Vec2, b: Vec2, ring: Vec2[]) {
   return end - start > epsilon ? [start, end] : undefined;
 }
 
+/** TASK-227: the roof over a straight skeleton, as triangles of (x, y, time) in the outline's
+ * frame: every face slopes from its edge, all at one pitch. Gabled, a face that is a triangle
+ * under the end of a level ridge (the ridge leaves its apex within 60 degrees of square to the
+ * edge, its apex over the middle 80% of the edge: a wing's short end) stands vertical instead:
+ * its apex moves out over the edge, keeping its height, and the triangle goes to the walls. */
+function skeletonRoof({ nodes, faces, arcs }: StraightSkeleton, gabled: boolean) {
+  const moved = new Map<number, Vertex>();
+  const gables: [Vertex, Vertex, Vertex][] = [];
+  const standing = new Set<number>();
+  if (gabled)
+    faces.forEach((face, index) => {
+      const apex = face.nodes.slice(face.base);
+      if (apex.length !== 1 || moved.has(apex[0]!)) return;
+      const top = nodes[apex[0]!]!,
+        from = nodes[face.nodes[0]!]!,
+        to = nodes[face.nodes[face.base - 1]!]!;
+      const length = Math.hypot(to.x - from.x, to.y - from.y);
+      const dx = (to.x - from.x) / length,
+        dy = (to.y - from.y) / length;
+      const along = (top.x - from.x) * dx + (top.y - from.y) * dy;
+      if (along < 0.1 * length || along > 0.9 * length) return;
+      const incident = arcs.filter((arc) => arc.includes(apex[0]!));
+      const ridges = incident.filter((arc) => {
+        const other = nodes[arc[0] === apex[0] ? arc[1] : arc[0]]!;
+        const run = Math.hypot(other.x - top.x, other.y - top.y);
+        return (
+          run > 0.01 &&
+          Math.abs(other.t - top.t) < 0.1 * run &&
+          Math.abs((other.x - top.x) * dx + (other.y - top.y) * dy) < 0.5 * run
+        );
+      });
+      if (incident.length !== 3 || ridges.length !== 1) return;
+      const foot = { x: from.x + dx * along, y: from.y + dy * along, h: top.t };
+      moved.set(apex[0]!, foot);
+      standing.add(index);
+      gables.push([{ ...from, h: 0 }, { ...to, h: 0 }, foot]);
+    });
+  const at = (i: number): Vertex =>
+    moved.get(i) ?? { x: nodes[i]!.x, y: nodes[i]!.y, h: nodes[i]!.t };
+  const triangles: Vertex[] = [];
+  faces.forEach((face, index) => {
+    if (standing.has(index)) return;
+    const ring = face.nodes.map(at);
+    for (const triangle of ShapeUtils.triangulateShape(
+      ring.map((p) => new Vector2(p.x, p.y)),
+      [],
+    )) {
+      const [p, q, r] = triangle.map((i) => ring[i]!) as [Vertex, Vertex, Vertex];
+      triangles.push(p, q, r);
+    }
+  });
+  return { triangles, gables };
+}
+
 /** TASK-201: what 3D draws of a building: its `building:part` areas when it has them (each
  * from its own minimum height, in the outline's colour and material unless it has its own),
  * otherwise the outline itself. */
@@ -363,6 +418,16 @@ export function buildRoof(feature: Area): RoofGeometry {
     )
       fallbackReason = 'irregular-footprint';
   }
+  // TASK-227: gabled, hipped and pyramidal roofs that no box shape fits (concave outlines,
+  // courtyards, triangles) come from the straight skeleton; convex ones keep their box shape.
+  let skeleton: StraightSkeleton | undefined;
+  if (
+    fallbackReason &&
+    (requested === 'gabled' || requested === 'hipped' || requested === 'pyramidal')
+  ) {
+    skeleton = straightSkeleton(rings);
+    fallbackReason = skeleton ? undefined : 'skeleton';
+  }
   const shape = fallbackReason ? 'flat' : requested;
   let u = box.u,
     v = box.v;
@@ -384,9 +449,13 @@ export function buildRoof(feature: Area): RoofGeometry {
   const radius =
     rings[0]!.reduce((sum, p) => sum + Math.hypot(p.x - middle.x, p.y - middle.y), 0) /
     rings[0]!.length;
-  // A semicircular barrel, a hemisphere, an onion three radii tall, a 35 degree pitch.
-  const natural =
-    shape === 'dome'
+  // The skeleton's peak: the half width of its widest wing.
+  const peak = skeleton ? Math.max(...skeleton.nodes.map((node) => node.t)) : 0;
+  // A semicircular barrel, a hemisphere, an onion three radii tall, a 35 degree pitch (on the
+  // skeleton, from its widest wing).
+  const natural = skeleton
+    ? Math.min(8, peak * Math.tan((35 * Math.PI) / 180))
+    : shape === 'dome'
       ? radius
       : shape === 'onion'
         ? 3 * radius
@@ -411,6 +480,24 @@ export function buildRoof(feature: Area): RoofGeometry {
     height,
     (p.x + centerU) * u.y + (p.y + centerV) * v.y,
   ];
+  if (skeleton && roofHeightM > 0) {
+    // One pitch for every face, so the widest wing's ridge is at the roof height and no wing
+    // rises above it.
+    const { triangles, gables } = skeletonRoof(skeleton, shape === 'gabled');
+    const point = (p: Vertex) => [p.x, wallHeightM + (p.h / peak) * roofHeightM, p.y];
+    for (let i = 0; i < triangles.length; i += 3) {
+      const p = triangles[i]!;
+      let q = triangles[i + 1]!,
+        r = triangles[i + 2]!;
+      const signed = cross(p, q, r);
+      if (Math.abs(signed) < epsilon) continue;
+      if (signed > 0) [q, r] = [r, q];
+      roofs.push(...point(p), ...point(q), ...point(r));
+    }
+    // The roof lay left of each gable's edge: wound edge start, apex, edge end, it faces out.
+    for (const [from, to, top] of gables) infill.push(...point(from), ...point(top), ...point(to));
+    return { roof: geometry(roofs), infill: geometry(infill), wallHeightM, roofHeightM, shape };
+  }
   if ((shape === 'dome' || shape === 'onion') && roofHeightM > 0) {
     const profile = shape === 'dome' ? domeProfile(radius, roofHeightM) : onionProfile;
     for (const p of revolve(local[0]!, profile))

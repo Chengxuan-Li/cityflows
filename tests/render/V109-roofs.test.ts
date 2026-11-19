@@ -166,7 +166,8 @@ test('V109 flat fallbacks retain courtyard holes and explain unsupported footpri
     { x: 5, y: 7 },
     { x: 5, y: 3 },
   ];
-  const result = buildRoof(building('hipped', { rings: [rectangle, courtyard] }));
+  // TASK-227: gabled, hipped and pyramidal courtyards come from the straight skeleton.
+  const result = buildRoof(building('gambrel', { rings: [rectangle, courtyard] }));
   expect(result.shape).toBe('flat');
   expect(result.fallbackReason).toBe('courtyard');
   expect(result.wallHeightM).toBe(14);
@@ -174,7 +175,7 @@ test('V109 flat fallbacks retain courtyard holes and explain unsupported footpri
   expect(heightAt(result.roof, 10, 5)).toBeUndefined();
   expect(projectedArea(result.roof)).toBeCloseTo(160, 4);
   const triangle = buildRoof(
-    building('gabled', {
+    building('mansard', {
       rings: [
         [
           { x: 0, y: 0 },
@@ -432,4 +433,125 @@ test('TASK-210 fallbacks: box shapes take convex outlines, domes need a star-sha
     building('gabled', { heightM: undefined, levels: 4, roof: { shape: 'gabled', levels: 0 } }),
   );
   expect(noStorey.roofHeightM).toBeCloseTo(5 * Math.tan((35 * Math.PI) / 180), 6);
+});
+
+// TASK-227: pitched roofs on concave outlines and courtyards, from the straight skeleton.
+const closed = (...xy: number[]): Ring => {
+  const ring = Array.from({ length: xy.length / 2 }, (_, i) => ({
+    x: xy[2 * i]!,
+    y: xy[2 * i + 1]!,
+  }));
+  return [...ring, ring[0]!];
+};
+const outlines = {
+  L: closed(0, 0, 20, 0, 20, 8, 8, 8, 8, 20, 0, 20),
+  T: closed(0, 0, 30, 0, 30, 8, 19, 8, 19, 25, 11, 25, 11, 8, 0, 8),
+  U: closed(0, 0, 30, 0, 30, 20, 22, 20, 22, 8, 8, 8, 8, 20, 0, 20),
+};
+const ringArea = (ring: Ring) =>
+  Math.abs(
+    ring.slice(0, -1).reduce((sum, p, i) => sum + p.x * ring[i + 1]!.y - ring[i + 1]!.x * p.y, 0) /
+      2,
+  );
+
+test.each(
+  (['hipped', 'pyramidal', 'gabled'] as const).flatMap((shape) =>
+    Object.entries(outlines).map(([name, ring]) => [shape, name, ring] as const),
+  ),
+)('TASK-227 %s on a concave %s outline covers it at one pitch', (shape, _, ring) => {
+  const result = buildRoof(building(shape, { rings: [ring], roof: { shape, heightM: 4 } }));
+  expect(result.shape).toBe(shape);
+  expect(result.fallbackReason).toBeUndefined();
+  expect(result.wallHeightM).toBe(10);
+  expect(projectedArea(result.roof)).toBeCloseTo(ringArea(ring), 4);
+  const xs = ring.map((p) => p.x),
+    zs = ring.map((p) => p.y);
+  for (let x = Math.min(...xs); x <= Math.max(...xs); x += 0.5)
+    for (let z = Math.min(...zs); z <= Math.max(...zs); z += 0.5)
+      if (inside(ring, x, z)) expect(heightAt(result.roof, x, z), `${x},${z}`).toBeDefined();
+  const p = result.roof.getAttribute('position'),
+    n = result.roof.getAttribute('normal');
+  for (let i = 0; i < p.count; i++) {
+    expect(inside(ring, p.getX(i), p.getZ(i))).toBe(true);
+    expect(n.getY(i)).toBeGreaterThan(0);
+  }
+  // Every wing is 8 m wide: its ridge 4 m from the eaves, at the roof height, a 45 degree pitch.
+  expect(Math.max(...Array.from({ length: p.count }, (_, i) => p.getY(i)))).toBeCloseTo(14, 6);
+  expect(heightAt(result.roof, (ring[0]!.x + ring[1]!.x) / 2, 2)).toBeCloseTo(12, 6);
+  if (shape === 'gabled') expect(result.infill.getAttribute('position').count).toBeGreaterThan(0);
+  else expectClosedRoof(result.roof, ring, 10, 14);
+  const again = buildRoof(building(shape, { rings: [ring], roof: { shape, heightM: 4 } }));
+  expect(Array.from(again.roof.getAttribute('position').array)).toEqual(Array.from(p.array));
+});
+
+test('TASK-227 gabled: the short ends of the wings stand vertical, the corner stays hipped', () => {
+  const ring = outlines.L;
+  const result = buildRoof(
+    building('gabled', { rings: [ring], roof: { shape: 'gabled', heightM: 4 } }),
+  );
+  const p = result.infill.getAttribute('position');
+  expect(p.count).toBe(6);
+  const tops: number[][] = [];
+  for (let i = 0; i < p.count; i++)
+    if (p.getY(i) > 10) tops.push([p.getX(i), p.getY(i), p.getZ(i)]);
+  expect(tops).toHaveLength(2);
+  expect(tops).toContainEqual([20, 14, 4]);
+  expect(tops).toContainEqual([4, 14, 20]);
+  // Facing out of the building: east and south.
+  const n = result.infill.getAttribute('normal');
+  expect([n.getX(0), n.getZ(0)].map(Math.round)).toEqual([1, 0]);
+  expect([n.getX(3), n.getZ(3)].map(Math.round)).toEqual([0, 1]);
+  // The ridges run out to the gables; the outer corner and the valley keep their hips.
+  expect(heightAt(result.roof, 19.9, 4)).toBeCloseTo(14, 6);
+  expect(heightAt(result.roof, 1, 1)).toBeCloseTo(11, 6);
+  expect(heightAt(result.roof, 7.5, 7.5)).toBeCloseTo(10.5, 6);
+  // The hipped roof keeps its hipped ends.
+  const hipped = buildRoof(
+    building('hipped', { rings: [ring], roof: { shape: 'hipped', heightM: 4 } }),
+  );
+  expect(heightAt(hipped.roof, 19.9, 4)).toBeCloseTo(10.1, 6);
+});
+
+test('TASK-227 a courtyard roof slopes to the courtyard and leaves it open', () => {
+  const outer = box(30, 20),
+    court = closed(8, 6, 22, 6, 22, 14, 8, 14);
+  const result = buildRoof(
+    building('hipped', {
+      rings: [outer, court],
+      heightM: 13,
+      roof: { shape: 'hipped', heightM: 3 },
+    }),
+  );
+  expect(result.shape).toBe('hipped');
+  expect(result.fallbackReason).toBeUndefined();
+  expect(projectedArea(result.roof)).toBeCloseTo(600 - 112, 4);
+  expect(heightAt(result.roof, 15, 10)).toBeUndefined();
+  // The long sides are 6 m deep, ridge at 3 m from both walls; the corners rise to 4 m: the peak.
+  expect(heightAt(result.roof, 15, 3)).toBeCloseTo(10 + 3 * (3 / 4), 6);
+  expect(heightAt(result.roof, 4, 4)).toBeCloseTo(13, 6);
+});
+
+test('TASK-227 one pitch from the widest wing: the default height and the cap', () => {
+  // Wings 8 m and 32 m wide. By default the widest wing's ridge is 35 degrees up, at most 8 m
+  // and half the building; the 8 m wing then has the same pitch and a lower ridge.
+  const ring = closed(0, 0, 60, 0, 60, 40, 28, 40, 28, 8, 0, 8);
+  const result = buildRoof(
+    building('hipped', { rings: [ring], heightM: 30, roof: { shape: 'hipped' } }),
+  );
+  expect(result.roofHeightM).toBe(8);
+  expect(heightAt(result.roof, 5, 4)).toBeCloseTo(22 + 8 * (4 / 16), 6);
+  const narrow = buildRoof(
+    building('hipped', { rings: [outlines.L], heightM: 30, roof: { shape: 'hipped' } }),
+  );
+  expect(narrow.roofHeightM).toBeCloseTo(4 * Math.tan((35 * Math.PI) / 180), 9);
+  // A box shape on a convex outline keeps TASK-210's geometry: the hipped rectangle's end.
+  expect(heightAt(buildRoof(building('hipped')).roof, 19.9, 5)).toBeCloseTo(10.08, 6);
+});
+
+test('TASK-227 other shapes on a concave outline stay flat', () => {
+  for (const shape of ['gambrel', 'mansard', 'half-hipped', 'skillion', 'round'] as const) {
+    const result = buildRoof(building(shape, { rings: [outlines.L] }));
+    expect(result.shape).toBe('flat');
+    expect(result.fallbackReason).toBe('irregular-footprint');
+  }
 });
