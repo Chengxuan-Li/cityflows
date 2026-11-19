@@ -36,22 +36,22 @@ function gasse(tags: Record<string, string>) {
 }
 
 describe('TASK-233 shared one-lane streets', () => {
-  it('a two-way way with lanes=1 is one shared 4.5 m carriageway', () => {
+  it('a two-way way with lanes=1 is one shared carriageway, each direction at its default width', () => {
     const shared = specs({ highway: 'service', lanes: '1' }, 'service');
-    expect(shared.map((s) => s.widths)).toEqual([[2.25], [2.25]]);
+    expect(shared.map((s) => s.widths)).toEqual([[3], [3]]);
     expect(shared.every((s) => s.inferred.includes('sharedLane'))).toBe(true);
     // lanes=2, lanes:forward given, or a one-way lanes=1 is not shared.
-    expect(specs({ lanes: '2' }, 'service').map((s) => s.widths)).toEqual([[3], [3]]);
+    expect(specs({ lanes: '2' }, 'service')[0]!.inferred).not.toContain('sharedLane');
     expect(specs({ lanes: '1', 'lanes:forward': '1' }, 'tertiary')[0]!.inferred).not.toContain(
       'sharedLane',
     );
     expect(specs({ oneway: 'yes', lanes: '1' }, 'service')[0]!.inferred).not.toContain(
       'sharedLane',
     );
-    // Imported, the two directions lie side by side within 4.5 m.
+    // Imported, the two directions lie side by side, 6 m in all.
     const roads = Object.values(gasse({ lanes: '1' }).roads);
     expect(roads).toHaveLength(2);
-    for (const road of roads) expect(road.lateralOffsetM).toBeCloseTo(1.125, 9);
+    for (const road of roads) expect(road.lateralOffsetM).toBeCloseTo(1.5, 9);
   });
 
   it('no centre line between the halves of a shared carriageway', () => {

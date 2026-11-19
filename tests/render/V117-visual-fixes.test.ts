@@ -192,15 +192,18 @@ const pins = {
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
-    compile: '11fa237b380ffdb84472526dd4068b524445ce044cd25ce6cfb492c9ee170099',
+    // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
+    compile: 'ab6773c91d5488a23bcfe86cc5cd40c91ad61c49455f823a150c9b6e33494309',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
     // TASK-229 (N1): the four dividers of the inner road r:267; without them both equal 5c47b75's.
-    de: 'b6b2926b8363099e5d53d12b03fdb0d02d5b030e89928f8667e8cdc8c950413e',
+    // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
+    de: '74ef61804cf742a12e97f3a7f025657db4b5b0f0dc12cc7329e6c92f9643d703',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    us: 'e98ea741c5d75fae726635d184e73181a3b9f07a860d34a9c855aac7e75b10a5',
+    // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
+    us: 'b31c9f5f11c830f65c1828ebd6b3482c6803169e8e575c65f4e97394f225e4b6',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
@@ -209,12 +212,13 @@ const pins = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: four corners are rounded (gore fillets at n:27, n:68, n:1162; n:365's corner).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
-    compile: 'ae433c246c7679cbb684efc904e036f3aacc11bf503c21ac6e53220eeb46cd16',
-    lamps: 'b935549a1a7586465014bf3ed1af14d2c3d81a04c349971e0a228c3e7e5fead0',
-    curbs: 'c25663bd4c2143393a1d0c4fc7239451b8a4e5fbc0d084faaa41aa59d1d5ad25',
-    de: '59ee065735b87e80bad2032f438452f9fab4f4f8d9c76152ce514c85fa47cd71',
-    us: 'fd7716be16265e5492e84ce667a26b477cd71d20f967eb458d2bc8dce54c5469',
+    // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
+    compile: '33c16c9930dfa854431a92d0ca14817b8178a8e06ef97d05226f9f151d938fa2',
+    lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
+    curbs: '463c6ce254acbddf8b3a709efcfd3f621e40244c7f9641e9b6f69fc176260c4b',
+    // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
+    de: '47b4858b79125ab1803935366b594367c38fb22d286abc2edc9fa7eec841995e',
+    us: 'c6c6dd9891ef5afd18e4b43eded4540b1528ddb6d583781537bef3b157d60e75',
   },
 } as const;
 const hash = (value: unknown) =>

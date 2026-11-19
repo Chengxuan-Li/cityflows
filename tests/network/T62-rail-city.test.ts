@@ -36,8 +36,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           '7dd0f86492dbc47bc5182bdca87ed6987b413aaec1fb13c5f804197da4fa86eb'
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
-          '745e31ccee5348686e762058999d84a8abbbfe2c54aa663e6b1601699af531f8',
+          '2a5a17347a391600b44dbbe7dd735b5e9245dea196f9bdcace578c44b0ebb2b0',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);
     expect(

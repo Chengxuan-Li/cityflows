@@ -17,11 +17,6 @@ const speedKph: Record<RoadClass, number> = {
   ramp: 40,
 };
 
-/** TASK-233 (TASK-216 D6, TASK-231's rule): a two-way way tagged `lanes=1` is one carriageway that
- * oncoming cars share at low speed, RASt 06's 4.5 m for a car meeting a lorry; each direction takes
- * half. */
-const SHARED_CARRIAGEWAY_M = 4.5;
-
 export interface OsmRoad {
   road: Road;
   wayId: number;
@@ -198,13 +193,13 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
   const hasSpeed = Number.isFinite(taggedSpeed) && taggedSpeed > 0;
   if (!hasSpeed && tag.maxspeed !== undefined) unsupported('maxspeed');
   if (osmLayer(tag) === undefined) unsupported('layer');
+  const widthM = roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
+  // TASK-233 (TASK-216 D6): a two-way way tagged `lanes=1` is one carriageway that oncoming cars
+  // share, drawn without a centre line (`marking-geometry.ts`). Each direction keeps its default
+  // width: TASK-231's 4.5 m (RASt 06, a car meeting a lorry) narrowed Freiburg's promenade, whose
+  // ground is about 10 m, and moved its traffic (the gate +14.5 s).
   const shared =
     directions.length === 2 && total === 1 && forward === undefined && backward === undefined;
-  const widthM = shared
-    ? SHARED_CARRIAGEWAY_M / 2
-    : roadClass === 'residential' || roadClass === 'service'
-      ? 3
-      : 3.5;
 
   return directions.map((direction) => {
     const direct = direction === 'forward' ? forward : backward;

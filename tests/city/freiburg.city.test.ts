@@ -205,7 +205,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-214: rebuilt by the lead (connector positions, platform and junction-group ids move).
   // TASK-220: rebuilt for the tram track forms (only tram `form` and its provenance change).
   expect(manifest.files['city.json']).toBe(
-    '77d57494b1cc58e34a7b28acaf75801d2b99d815299232fcae346aceeee9bc67',
+    // TASK-233: rebuilt; 12 roads are shared lanes (sharedLane inferred), the compiled network and the state hash are unchanged.
+    'cdafea99db7d688c5f1c77653adc3e2cd227a66372fc5df35e52962f8893db07',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).

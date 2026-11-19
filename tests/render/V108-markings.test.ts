@@ -68,9 +68,8 @@ const baseline = {
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
-    compile: '6c6ae6f151b3b4e01e1820cd99b3886e4194064a16a30c71703dc036f6850419',
-    arrows: '0cac9636cac29a71b21130b8f172bee87f48faa06eec237d984140813bfeb62f',
+    compile: 'b87b8a83a8bae407ffd9f9f8069a321329e6bed9a2d4f66956eab463d7c18fbe',
+    arrows: '95f4434b279dea44ce702ca32df0c3a7a49ff17862cc7455ac486f4ebb31fc6e',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.

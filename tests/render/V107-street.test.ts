@@ -180,14 +180,15 @@ const baselines = {
   // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
   // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
   // tram `form` stripped the city equals b3bcde6's.
-  'munich-donnersberger': '11fa237b380ffdb84472526dd4068b524445ce044cd25ce6cfb492c9ee170099',
+  // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
+  'munich-donnersberger': 'ab6773c91d5488a23bcfe86cc5cd40c91ad61c49455f823a150c9b6e33494309',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
   // TASK-194: generated signal programs are actuated (`actuated: true`).
   // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-  // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
-  'sindelfingen-a81': 'ae433c246c7679cbb684efc904e036f3aacc11bf503c21ac6e53220eeb46cd16',
+  // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
+  'sindelfingen-a81': '33c16c9930dfa854431a92d0ca14817b8178a8e06ef97d05226f9f151d938fa2',
 };
 const lampCounts = {
   grid: [0, 0],
