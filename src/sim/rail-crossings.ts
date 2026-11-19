@@ -69,6 +69,8 @@ export function createRailCrossings(
   red: (movement: number) => boolean,
   clocks?: Clock[],
   roadState?: RoadState,
+  /** TASK-211: run a settled vehicle's pass anyway and check that it changes nothing. */
+  checkSettled = false,
 ) {
   const rail = city.rail;
   if (!rail) return undefined;
@@ -225,7 +227,7 @@ export function createRailCrossings(
     live: Uint8Array;
     ranged: boolean;
   };
-  const paths: (Path | undefined)[] = [];
+  const paths = Array<Path | undefined>(vehicles.count).fill(undefined);
   let current: Path | undefined,
     segments: number[] = [],
     offsets: number[] = [],
@@ -531,14 +533,60 @@ export function createRailCrossings(
     return frontier - end >= needed;
   }
 
+  /** TASK-211: what each vehicle's last pass of `roadOccupancy` read and marked. A vehicle with
+   * the same segment, position, speed, movement, route and route step as in the pass just before
+   * would repeat it exactly: its path and ranges are kept, no marking is passed (it has not
+   * moved), its body covers the same spans, and the per-facility rules are idempotent on the
+   * commitments that pass left (only `roadOccupancy` changes them, but for the dilemma commit in
+   * `publish`, which clears the record). So it only marks the facilities it marked then. */
+  let pass = 1;
+  const settledPass = new Uint32Array(vehicles.count);
+  const settledField = new Int32Array(vehicles.count);
+  const settledPosition = new Float64Array(vehicles.count);
+  const settledSpeed = new Float64Array(vehicles.count);
+  const settledStep = new Uint32Array(vehicles.count);
+  const settledMovement = new Int32Array(vehicles.count);
+  const settledRoute = Array<(typeof vehicles.route)[number]>(vehicles.count).fill(null);
+  const marks = new Uint8Array(vehicles.count);
+  const markedBy = facilities.map(() => new Uint8Array(vehicles.count));
+  const settledFlags = new Uint8Array(facilities.length);
+  const settledMarks = new Uint8Array(facilities.length);
   function roadOccupancy() {
     occupied.fill(0);
+    pass++;
     for (const b of vehicles.occupied) {
       if (!influences[b]) continue;
       const field = b < city.lanes.length ? b : city.lanes.length - b - 1;
       for (let id = vehicles.first(field); id !== -1; id = vehicles.next[id]!) {
         if (vehicles.state[id] !== DRIVING && vehicles.state[id] !== QUEUED_DESTINATION) continue;
         const position = vehicles.position[id]!;
+        const speed = vehicles.speed[id]!;
+        const settled =
+          settledPass[id] === pass - 1 &&
+          settledField[id] === field &&
+          settledPosition[id] === position &&
+          settledSpeed[id] === speed &&
+          settledStep[id] === vehicles.routeStep[id] &&
+          settledMovement[id] === vehicles.movement[id] &&
+          settledRoute[id] === vehicles.route[id];
+        if (settled && !checkSettled) {
+          settledPass[id] = pass;
+          if (marks[id])
+            for (let f = 0; f < facilities.length; f++) if (markedBy[f]![id]) occupied[f] = 1;
+          continue;
+        }
+        if (settled)
+          for (let f = 0; f < facilities.length; f++) {
+            settledFlags[f] = committedFlags[f]![id]!;
+            settledMarks[f] = markedBy[f]![id]!;
+          }
+        settledPass[id] = pass;
+        settledField[id] = field;
+        settledPosition[id] = position;
+        settledSpeed[id] = speed;
+        settledStep[id] = vehicles.routeStep[id]!;
+        settledMovement[id] = vehicles.movement[id]!;
+        settledRoute[id] = vehicles.route[id]!;
         let history = histories.get(id);
         const previousSegment = history?.segment ?? field;
         const previousPosition = history?.position ?? -Infinity;
@@ -568,7 +616,7 @@ export function createRailCrossings(
           keep = 0;
         while (remaining > 0 && keep < history.trail.length)
           remaining -= segmentLength(history.trail[keep++]!);
-        history.trail.length = keep;
+        if (keep < history.trail.length) history.trail.length = keep;
         path(id);
         ranges();
         for (const marking of continuous ? stopsBySegment[bucket(previousSegment)]! : []) {
@@ -616,13 +664,14 @@ export function createRailCrossings(
           front = segmentLength(segment);
           rear += front;
         }
+        let marking = 0;
         for (let f = 0; f < facilities.length; f++) {
+          markedBy[f]![id] = 0;
           if (!served[f]) continue;
           const stop = pathStops[f]!,
             near = pathStarts[f]!;
           // An unmetered upstream vehicle can wait before the conflict if it can brake there.
           // Only an actual marked entry, a braking dilemma, or its physical body reserves rail.
-          const speed = vehicles.speed[id]!;
           const brake = profiles[vehicles.vclass[id]!]!.idm.bMps2;
           if (
             near < Infinity &&
@@ -641,7 +690,16 @@ export function createRailCrossings(
             if (near < Infinity || inside) occupied[f] = 1;
             else uncommit(f, id);
           }
+          if (inside || (committedFlags[f]![id] && near < Infinity)) {
+            markedBy[f]![id] = 1;
+            marking = 1;
+          }
         }
+        marks[id] = marking;
+        if (settled)
+          for (let f = 0; f < facilities.length; f++)
+            if (settledFlags[f] !== committedFlags[f]![id] || settledMarks[f] !== markedBy[f]![id])
+              throw new Error(`Settled vehicle ${id} changed its pass at facility ${f}`);
       }
     }
   }
@@ -695,6 +753,7 @@ export function createRailCrossings(
             distance < (speed * speed) / (2 * brake) + params.idm.minGapM
           ) {
             commit(f, id);
+            settledPass[id] = 0;
             occupied[f] = 1;
             railReady[f] = 0;
           }

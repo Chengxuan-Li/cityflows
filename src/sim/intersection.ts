@@ -98,7 +98,9 @@ export function createIntersections(
       crosswalkEnd[lane.idx] = Math.max(crosswalkEnd[lane.idx]!, span.atM + span.halfM);
     }
   type GroupPath = { movements: number[]; route: Route; step: number };
-  const groupPaths: (GroupPath | undefined)[] = [];
+  // TASK-211: per-vehicle arrays are allocated whole; a sparse `[]` written at large ids turns
+  // into a dictionary, and these are read for every car each step.
+  const groupPaths = Array<GroupPath | undefined>(vehicles.count).fill(undefined);
   const groupOccupants = compiled.groups?.map(() => new Set<number>()) ?? [];
 
   function leaveGroup(id: number, lane?: number) {
@@ -122,7 +124,7 @@ export function createIntersections(
         chains: Map<number, GroupPath | undefined>;
       }
     | undefined
-  )[] = [];
+  )[] = Array(vehicles.count).fill(undefined);
 
   function entryChain(id: number, movement: CMovement) {
     const route = vehicles.route[id]!;
