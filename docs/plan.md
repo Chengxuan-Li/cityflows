@@ -247,11 +247,12 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-221](tasks/TASK-221.md) | 10 | Lane tapers across the plain nodes between short roads (S5, S6, J2, J6 left by TASK-214) | `lanes.ts`, `lane-drop.ts`, `continuity.ts`, `corridor.ts` | 214 | audit, tests, close-ups, traffic, merge rule | planned (unsupervised run, wave B) |
 | [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | done 2026-11-19 (merged; Munich and full demand identical, Freiburg -0.5 s) |
 | [TASK-223](tasks/TASK-223.md) | 9 | TASK-208's missed-turn rule re-measured on TASK-222 | `detourHeads` | 208, 222 | misses, traffic, merge rule | parked 2026-11-19 (v1 misses Munich fixed +6.7%, v2 full demand fixed +3.1%) |
-| [TASK-224](tasks/TASK-224.md) | 10 | Aerial re-check of the Hauptbahnhof box after wave A | overlay bench, findings | 216 to 220 | D1 to D9 before and now | planned (unsupervised run, wave B) |
+| [TASK-224](tasks/TASK-224.md) | 10 | Aerial re-check of the Hauptbahnhof box after wave A | overlay bench, findings | 216 to 220 | D1 to D9 before and now | done 2026-11-19 (merged; D8 mostly, D1 partly fixed on main; N1 to N4 new) |
 | [TASK-225](tasks/TASK-225.md) | 9 | The Siegesdenkmal box lock (Freiburg jg:13305; main seeds 2 and 4, TASK-219 seed 1) | `src/sim` box and group-chain rules | 219 | repro test, Freiburg seeds 1 to 6, traffic, merge rule | done 2026-11-19 (merged; lock gone, every other hash identical) |
 | [TASK-226](tasks/TASK-226.md) | 10 | TASK-219's group membership re-measured on TASK-225 | `split.ts`, Freiburg rebuild | 219, 225 | TASK-219's gates | in progress (unsupervised run 2026-11-19) |
 | [TASK-227](tasks/TASK-227.md) | render | Pitched roofs on concave outlines (straight skeleton) | `render3d/roofs.ts` | 210 | flat fallbacks, skeleton tests, close-ups, budgets, identical hashes | done 2026-11-19 (merged; flat roofs Freiburg 204 to 14, Munich 70 to 13) |
 | [TASK-228](tasks/TASK-228.md) | 9 | Tram backlog: one delayed tram holds every unstarted one (found by TASK-225) | `rail-crossings.ts` service holds | 225 | backlog figures, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
+| [TASK-229](tasks/TASK-229.md) | render | Marking follow-ups from the aerial re-check: M2 lane lines on carriageway inside groups (N1), arrows on double-left entry lanes (N2) | `marking-geometry.ts` | 217, 224 | tests, counts, close-ups, audit, identical hashes | in progress (unsupervised run 2026-11-19) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4759,6 +4760,36 @@ Drain 48 of 48 in every version; Freiburg (the rule never fires there) and Sinde
 misses on Munich fixed choice off, v2 on fixed full demand (one seed, so noisier than the 12-seed
 means), so the task is parked. Owner's options: park, take v2, or take v1. Outside scope:
 `docs/architecture.md` (TASK-208's paragraph carried over, updated for the two-change threshold).
+
+TASK-224 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged, bench and findings only): TASK-216's
+box re-measured on main 2d4dd1f with the same imagery (registration 0.27 m, unchanged), and the parked
+branches rendered as they would look on main (scratch merges, Freiburg rebuilt). Findings in
+`docs/findings/2026-11-19-aerial-recheck/` (31 figures).
+
+| # | TASK-216 | main now | parked branch on main |
+|---|---|---|---|
+| D1 crossings | 170 painted (all zebra), 158 over 4 m from a mapped crossing, 0 of 13 zebras matched | partly: 42 painted (6 zebra, 36 signal lines), 22 away, 2 of 13; node-only zebras `n:211`, `n:1139` not drawn | — |
+| D2 Hbf stop line | 37 m before the painted line | not fixed; its lane lines now gone too (N1) | TASK-219: fixed, 4.0 m past; lane lines back but swing 1 to 2 m across `n:1147` |
+| D3 five-lane width | `r:1179` 17.5 m, `r:261` 17.8 m | not fixed | TASK-218: both 16.25 m, but about 1.7 m off the ground line (`placement`) |
+| D4 `r:1178` stop line | 9 m past | not fixed (now one solid line) | TASK-218: fixed, 0.8 m |
+| D5 Bismarckallee median | west kerb 2.3 m out | not fixed | TASK-218: one carriageway, west kerb 1.5 m out, east 0.8 m in |
+| D6 promenade | 6.0 m, two lanes | not fixed | TASK-218: partly, one 4.5 m shared lane, centre line and hatch still drawn |
+| D7 lane gain | 19 m late | not fixed; two lanes lost arrows (N2) | TASK-219: no stop line at `n:1147`; arrows still missing |
+| D8 tram bed | 825 m ballast | mostly: 123 m ballast left (115 m at Fahnenbergplatz on paving) | as main |
+| D9 width tags | Rotteckring 3.0 m, ground about 5 m | not fixed | TASK-218: `r:1690` 4.0 m; `r:1590` 3.0 m (street parking) |
+
+New: N1 (TASK-217 M2) lane lines removed where a group takes in carriageway (35 m of westbound
+Friedrichstraße, Stefan-Meier-Straße at `r:1179`); N2 (TASK-217 M1) the two left lanes of `r:1148`
+show no arrows (lane 0 has no path through the Hbf group; lane 1's only path turns left twice, read as
+a U-turn); N3 (TASK-220, minor) a darker asphalt wedge where embedded track paving meets the
+Rotteckring approach; N4 (TASK-227) 31 roofs in the box now pitched, 23 match the imagery, 4 unclear,
+1 half outside, 3 doubtful from OSM outlines or tags the flat fallback hid (a block over a glass-roofed
+courtyard, an outline over yard sheds, a school tagged hipped drawn steep over a low pitch). Bench:
+`shots3d` takes `--port` and `--buildings`, views D9b, D8b, R1 to R4, a `roofs` option. Follow-ups
+written: TASK-229 (N1, N2). Others for the owner: TASK-218 split (D4 with J1; D3/D9 widths with
+`placement` and a void measure against the drawn median; D5 and D6 alone), node-only zebras with walk
+links (moves traffic), the Rotteckring ballast (curation or TASK-220's rule to the bays' outer edge),
+D7 (OSM edit or curation), OSM fixes for the three roofs, N3. Lead check on the merge: check (1,557).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

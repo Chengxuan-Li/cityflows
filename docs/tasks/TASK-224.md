@@ -1,6 +1,6 @@
 # TASK-224 — Aerial re-check of the Freiburg Hauptbahnhof box after wave A
 
-Status: planned (unsupervised run, owner 2026-11-19; starts when a wave A slot frees). Proposed owner:
+Status: done 2026-11-19 (merged; review in `docs/plan.md`). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/224-aerial-recheck`, worktree `D:\cityflows-wt\224`, ports
 5424 / 5524.
 
