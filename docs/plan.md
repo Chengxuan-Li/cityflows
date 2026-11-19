@@ -4761,6 +4761,9 @@ misses on Munich fixed choice off, v2 on fixed full demand (one seed, so noisier
 means), so the task is parked. Owner's options: park, take v2, or take v1. Outside scope:
 `docs/architecture.md` (TASK-208's paragraph carried over, updated for the two-change threshold).
 
+Full run 44551579772 (lead, manual, on 2d4dd1f after TASK-225): every job green, including all five
+e2e shards; the city job took 19.2 min.
+
 TASK-224 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged, bench and findings only): TASK-216's
 box re-measured on main 2d4dd1f with the same imagery (registration 0.27 m, unchanged), and the parked
 branches rendered as they would look on main (scratch merges, Freiburg rebuilt). Findings in
