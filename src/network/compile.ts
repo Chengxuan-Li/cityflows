@@ -398,6 +398,30 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
       original.taperEndM = lane.taperEndM;
     }
   }
+  // TASK-214: where a side-by-side block runs on through a plain node, both roads place their lane
+  // ends on the block's one line, measured each along its own reference; the millimetres between
+  // the two measures are closed at the node's midpoint.
+  for (const road of roads) {
+    const end = continuity.ends[road.idx]!.end;
+    const next = outgoing[road.to]!.length === 1 ? outgoing[road.to]![0]! : undefined;
+    const start = next && continuity.ends[next.idx]!.start;
+    if (!end || !start || end.reference !== start.reference || incident[road.to]!.length !== 2)
+      continue;
+    road.lanes.forEach((i, k) => {
+      const a = lanes[i]!,
+        b = lanes[next!.lanes[k] ?? -1];
+      if (!b) return;
+      const p = a.polyline.at(-1)!,
+        q = b.polyline[0]!;
+      const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+      a.polyline[a.polyline.length - 1] = mid;
+      b.polyline[0] = mid;
+      for (const lane of [a, b]) {
+        lane.cumulative = cumulativeLengths(lane.polyline);
+        lane.lengthM = lane.cumulative.at(-1)!;
+      }
+    });
+  }
   for (const lane of lanes) {
     lane.in = [];
     lane.out = [];

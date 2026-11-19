@@ -141,12 +141,13 @@ function widthOutsideTransitions(city: City, net: CompiledCity, road: CRoad) {
  * offset from a sharp OSM corner there folds. Munich r:589#0 (service, two-way, corners of 89
  * and 82 degrees over 2 m, 22.5 m and 26 m from its ends; r:588's ease at 37.8 m is limited to
  * radius 0.45 m) and r:728#0 (Landsberger Straße, -3.5 m, the OSM curve of 79 degrees over
- * 10 m ending 6 m before n:474, as in T33). */
-const unsmoothedFolds = ['r:589#0', 'r:728#0'];
+ * 10 m ending 6 m before n:474, as in T33). TASK-214: neither folds now (both corners of r:589's
+ * hairpin are eased to their radius; r:728's side-by-side line has interpolated normals). */
+const unsmoothedFolds: string[] = [];
 
-/** TASK-131: road surfaces that overlap themselves at those corners: the two roads above and
- * Munich r:553 (service, 100 degrees over 5 m, 16 m from n:549). */
-const unsmoothedSurfaces = ['r:553', 'r:589', 'r:728'];
+/** TASK-131: road surfaces that overlap themselves at sharp OSM corners: Munich r:553 (service,
+ * 100 degrees over 5 m, 16 m from n:549); r:589 and r:728 no longer (TASK-214). */
+const unsmoothedSurfaces = ['r:553'];
 
 /** TASK-131: the two directions of a street parting by 2 cm or more, each with its bound.
  * - Sharp OSM corners within 30 m of a node, no longer filleted: the two directions share one
@@ -162,7 +163,7 @@ const unsmoothedSurfaces = ['r:553', 'r:589', 'r:728'];
 const keptParting: Record<string, number> = {
   'sindelfingen r:175/r:176': 0.03,
   'munich r:552/r:553': 0.04,
-  'munich r:588/r:589': 0.7,
+  'munich r:588/r:589': 0.07, // TASK-214: 0.69 m before both hairpin corners were eased
   'sindelfingen r:873/r:874': 0.38,
   'munich r:1264/r:1265': 0.07,
 };
