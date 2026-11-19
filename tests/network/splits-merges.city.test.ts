@@ -11,6 +11,7 @@ import { loadAuditCity } from '../../bench/junction-audit';
 import { compile, type CompiledCity } from '../../src/network';
 import { referenceLine } from '../../src/network/corridor';
 import type { City } from '../../src/schema';
+import { limit } from '../timeouts';
 
 // TASK-214: lane splits and merges, the cases of TASK-212's audit
 // (docs/findings/2026-11-19-geometry-audit/README.md, S1 to S6) and its Munich regressions. Each
@@ -27,7 +28,8 @@ beforeAll(async () => {
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 3)));
     cities[name] = { city, net: result.compiled };
   }
-});
+  // Importing both cities with a cold cache (CI) takes longer than the 10 s default hook limit.
+}, limit(300_000));
 
 /** The largest step between the edges of a movement's two lane ends at a node (audit measure 7). */
 function joint(name: string, node: string): number {
