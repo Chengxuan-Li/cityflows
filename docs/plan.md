@@ -4488,6 +4488,9 @@ V106 to V108, V114, V117), stale T42.1 exceptions removed. Lead check on the mer
 Full run 44417927328 (lead, manual, on 6827d2c after TASK-210): every job green, including all five
 e2e shards; the city job took 33.4 min.
 
+Full run 44486203252 (lead, manual, on b5b8c1d after TASK-216): every job green, including all five
+e2e shards; the city job took 15.3 min.
+
 TASK-216 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): Freiburg's Hauptbahnhof box
 checked against LGL Baden-Württemberg DOP20 (WMS `WMS_LGL-BW_ATKIS_DOP_20_C`, layer
 `IMAGES_DOP_20_RGB`, dl-de/by-2-0; 15 tiles, 2.2 MB, kept in `D:\cityflows-wt\216-data`), overlaid by
