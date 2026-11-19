@@ -1,6 +1,6 @@
 # TASK-220 — Tram track form (TASK-216 D8)
 
-Status: in progress (unsupervised run, owner 2026-11-19). Proposed owner: Claude Code subagent (Opus
+Status: done 2026-11-19 (merged under the owner's merge rule; traffic hashes identical). Proposed owner: Claude Code subagent (Opus
 5.5, high). Branch `task/220-tram-track-form`, worktree `D:\cityflows-wt\220`, ports 5420 / 5520.
 
 ## Goal

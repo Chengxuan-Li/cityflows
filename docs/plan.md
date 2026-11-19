@@ -243,9 +243,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-217](tasks/TASK-217.md) | 10 | Markings and crossings: TASK-215 reworked on TASK-214, crossings where OSM maps them (D1), solid lines before stop lines (M7) | markings, `crossings.ts`, walk links | 214, 215, 216 | tests, close-ups, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
 | [TASK-218](tasks/TASK-218.md) | 10 | Importer road shapes: widths, medians, shared lanes, stop lines (D3 to D6, D9) | `roads.ts`, `corridors.ts`, `controls.ts` | 216 | tests, close-ups, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
 | [TASK-219](tasks/TASK-219.md) | 10 | Junction-group surfaces and stop lines (J1, D2) | `junctions.ts`, `groups.ts` | 213, 216 | tests, close-ups, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
-| [TASK-220](tasks/TASK-220.md) | render | Tram track form: embedded, grass, paved, ballast (D8) | rail import and drawing | 216 | identical hashes, close-ups, frame budgets | in progress (unsupervised run 2026-11-19) |
+| [TASK-220](tasks/TASK-220.md) | render | Tram track form: embedded, grass, paved, ballast (D8) | rail import and drawing | 216 | identical hashes, close-ups, frame budgets | done 2026-11-19 (merged; hashes identical) |
 | [TASK-221](tasks/TASK-221.md) | 10 | Lane tapers across the plain nodes between short roads (S5, S6, J2, J6 left by TASK-214) | `lanes.ts`, `lane-drop.ts`, `continuity.ts`, `corridor.ts` | 214 | audit, tests, close-ups, traffic, merge rule | planned (unsupervised run, wave B) |
-| [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | planned (unsupervised run, wave B) |
+| [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
 | [TASK-223](tasks/TASK-223.md) | 9 | TASK-208's missed-turn rule re-measured on TASK-222 | `detourHeads` | 208, 222 | misses, traffic, merge rule | planned (unsupervised run, wave B) |
 | [TASK-224](tasks/TASK-224.md) | 10 | Aerial re-check of the Hauptbahnhof box after wave A | overlay bench, findings | 216 to 220 | D1 to D9 before and now | planned (unsupervised run, wave B) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
@@ -4519,6 +4519,31 @@ nodes (D1; with or after TASK-215), group stop lines across median crossovers (D
 importer road widths, medians, shared lanes and stop lines (D3 to D6, D9), tram track form (D8), and
 an OSM edit or curation entry for D7 (owner's). Lead check on the merge: check (1,532), city (193);
 the Freiburg build through the changed loader reproduces the bundled project.
+
+TASK-220 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged under the owner's merge rule,
+traffic identical): tram track form (TASK-216 D8) in `assignTramForms` (`src/importers/osm/rail.ts`).
+Tags first: a tram on a highway way, `embedded=*` (no gives an own bed), `surface=grass` or
+`railway:track_ballast`, loose surfaces, and highways carrying the rails (`embedded_rails*`,
+`railway:lanes*`, pedestrian streets) over half the track; then inferred (marked so): over 80% inside
+road or group surfaces is embedded, on a mapped grass strip is grass, within 2.5 m of a one-lane
+carriageway over 80% is embedded (Rotteckring, whose lanes D9 draws narrow), else paved where a paved
+surface is tagged (cobblestone, concrete plates and bricks now count) or ballast. Freiburg ballast
+308 sections / 6,613 m to 47 / 797 m (embedded 596 m to 5,044 m, grass 640 m to 1,448 m); the D8 ways
+in the box 784 m of ballast to 189 m embedded, 372 m grass, 100 m paved, 123 m ballast. Munich: 16 of
+54 tracks change (2,045 m of Arnulfstraße on mapped grass strips). Drawing: embedded track off the
+drawn roads gets a street surface (asphalt where it meets a road, grey stone in a pedestrian street,
+lifted onto the footways in 3D); paved beds grey stone `0xbab5ab`. Hashes identical to main (Munich
+0.15 seed 1 all four configurations, Freiburg 1730700508, Sindelfingen 2565719556, both full demands);
+frame budgets within limits (2D p95 2.0 ms, 3D 3.4 ms, a loaded machine). Re-pins: Freiburg city.json
+`77d57494...` (only tram `form` and provenance), Munich city and compile hashes (T44, T49, T75, V106
+to V108, V117). Outside scope: `src/importers/osm/index.ts` (positions passed), `src/render/style.ts`,
+`bench/aerial-overlay.ts` (rails coloured by form). Left open: Arnulfstraße near Donnersbergerbrücke
+may be ballast on the ground (TASK-135's reference images) where OSM maps grass; no Munich imagery to
+check (owner's call: curation entry or rule 6 change); about 115 m of Rotteckring track
+(rt:12913, rt:12942, rt:12944, rt:12915) stays ballast because parking bays keep it over 2.5 m from the
+drawn carriageway (fixed by D9 widths, TASK-218, or a curation entry). Lead check on the merge: the
+Freiburg rebuild reproduces the bundled project; check (1,533), city (193), traffic light and guard,
+light e2e (61); full demand actuated 3,759 / 143 (4028429784), fixed-time 3,501 / 168 (2888500527).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
