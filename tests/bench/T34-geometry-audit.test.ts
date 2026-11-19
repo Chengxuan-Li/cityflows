@@ -3,6 +3,7 @@ import {
   auditGeometry,
   joinAudit,
   junctionShapeAudit,
+  laneOverlaps,
   laneFoldAudit,
   markingAudit,
   markingLines,
@@ -221,4 +222,38 @@ test('T34.8: a marking off its offset', () => {
   )!;
   expect(off.maxM).toBeCloseTo(0.3, 6);
   expect(off.over).toBe(lines.length);
+});
+
+test('T34.9: a junction at another grade hides no lane overlap (TASK-231, TASK-233)', () => {
+  // Two unrelated one-way roads in a tunnel (layer -1) 2 m apart, their 3.5 m lanes overlapping,
+  // and with `street` a three-arm junction at grade 0 right above them (Munich's r:196/r:416 under
+  // n:204, Trappentreustraße).
+  const tunnel = (street: boolean) => {
+    const { city, node, road } = buildCity('T34.9', 1);
+    const a = road(node(-100, 0, -1), node(100, 0, -1), { roadClass: 'secondary' });
+    const b = road(node(100, 2, -1), node(-100, 2, -1), { roadClass: 'secondary' });
+    if (street) {
+      const m = node(0, 1);
+      for (const [x, y, group] of [
+        [0, -100, 'g:n'],
+        [0, 100, 'g:s'],
+        [100, -40, 'g:e'],
+      ] as const) {
+        const end = node(x, y);
+        road(m, end, { roadClass: 'secondary', streetGroupId: group });
+        road(end, m, { roadClass: 'secondary', streetGroupId: group });
+      }
+    }
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    return { city: city as City, net: result.compiled, pair: `${a.id}/${b.id}` };
+  };
+  const area = ({ city, net, pair }: ReturnType<typeof tunnel>) =>
+    laneOverlaps(city, net).find((o) => o.roads === pair)?.areaM2;
+  const above = tunnel(true);
+  const junction = above.net.nodes.find((n) => n.pos.x === 0 && n.pos.y === 1)!;
+  expect(junction.outline.length).toBeGreaterThan(2);
+  const alone = area(tunnel(false))!;
+  expect(alone).toBeGreaterThan(150);
+  expect(area(above)).toBe(alone);
 });

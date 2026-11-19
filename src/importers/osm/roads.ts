@@ -194,6 +194,12 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
   if (!hasSpeed && tag.maxspeed !== undefined) unsupported('maxspeed');
   if (osmLayer(tag) === undefined) unsupported('layer');
   const widthM = roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
+  // TASK-233 (TASK-216 D6): a two-way way tagged `lanes=1` is one carriageway that oncoming cars
+  // share, drawn without a centre line (`marking-geometry.ts`). Each direction keeps its default
+  // width: TASK-231's 4.5 m (RASt 06, a car meeting a lorry) narrowed Freiburg's promenade, whose
+  // ground is about 10 m, and moved its traffic (the gate +14.5 s).
+  const shared =
+    directions.length === 2 && total === 1 && forward === undefined && backward === undefined;
 
   return directions.map((direction) => {
     const direct = direction === 'forward' ? forward : backward;
@@ -213,6 +219,7 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
     }
     if (!hasSpeed) inferred.push('speedLimitMps');
     if (!supportedOneway) inferred.push('oneway');
+    if (shared) inferred.push('sharedLane');
     const access = roadAccess(tag, direction, inferred);
     return {
       ...(access && { access }),

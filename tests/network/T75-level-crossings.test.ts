@@ -157,7 +157,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
           // tram `form` stripped the city equals b3bcde6's.
-          'def9b601dd30e233d5c208c8bb48c48872db694486c666d99279b5be4c5aec0d',
+          // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
+          'f7eaa3d5eb4daf32b43c12a5a4b152f6153116f74fa6e87a182933f9f517ce2b',
           // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
@@ -168,18 +169,21 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
           // tram `form` stripped the city equals b3bcde6's.
-          '8f36cd88395e4f63016ac32c5cae8795a8a9c9f669e05c295e03571e2fe2d03c',
+          // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
+          '8222b9aaba99dceb02c218d01b8a52a875d2567e6fe4dc4fc1e39d1d07ea405e',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          'a9fa8de77a349f7276ea6aadd96ec135ff519848078c6171ebbeab5b4bbb699e',
+          // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
+          '5796a8298c0a7537c50e5218c1ce28f70b3f9d20aab68c532976a8f3f3cf2536',
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          '4435179413bcf92d7effaec4c99da7925a889be9a6c4cf8128f6394194e39c5d',
+          // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
+          'd4d8d82af0bbc3fa7fb6a026c9686db5cfb954e1c9f78086fc972521afcfe9d5',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

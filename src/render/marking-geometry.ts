@@ -398,6 +398,9 @@ function buildRoadMarkings(
         .filter((piece) => cumulativeLengths(piece).at(-1)! >= 2.7)
         .map((points) => lineShape(road, 'centre', points, 0.85, markingTheme)),
     );
+  const sharedLane =
+    road.lanes.length === 1 &&
+    source?.roads?.[road.id]?.provenance.inferred?.includes('sharedLane');
   const partners =
     road.streetGroupId === null && road.corridorId !== null
       ? city.roads
@@ -428,9 +431,11 @@ function buildRoadMarkings(
         0.78,
         !tapered,
       );
-    // A dashed centre is shared by both directions; painting it twice can fill its gaps.
+    // A dashed centre is shared by both directions; painting it twice can fill its gaps. None
+    // between the halves of a shared one-lane carriageway (TASK-233, TASK-216 D6).
     if (
       road.streetGroupId !== null &&
+      !sharedLane &&
       (medianOnRight ? lane.right : lane.left) < 0 &&
       (markingTheme.id !== 'uk' ||
         !city.roads.some(

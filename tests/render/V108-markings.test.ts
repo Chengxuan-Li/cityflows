@@ -169,9 +169,11 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
   'V108: %s 2D and 3D draw the complete shared geometry including arrows',
   (name) => {
     const city = compileAuditCity(name);
+    // TASK-233: the canonical city, as the 3D scene gets it (shared-lane roads draw no centre).
+    const source = loadAuditCity(name);
     const shapes = city.roads
       .flatMap((road) => {
-        const geometry = roadMarkingGeometry(city, road);
+        const geometry = roadMarkingGeometry(city, road, source);
         return [...geometry.below, ...geometry.above, ...transitionMarkings(city, road)];
       })
       .concat(
@@ -229,7 +231,7 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
       },
     } as unknown as Graphics;
     for (const road of city.roads) {
-      drawRoad(surface, pen, city, road, false, pen);
+      drawRoad(surface, pen, city, road, false, pen, source);
       drawTransitions(surface, pen, city, road);
     }
     for (const node of city.nodes) drawJunctionMarkings(pen, city, node);
@@ -243,7 +245,7 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
         sum + markingPolygons(shape).reduce((area, ring) => area + Math.abs(areaD(ring)), 0),
       0,
     );
-    const geometry = buildGeometry(city, loadAuditCity(name));
+    const geometry = buildGeometry(city, source);
     const position = geometry.markings.getAttribute('position');
     expect(geometry.markings.userData.markingCounts).toEqual({
       line: lineCount,
