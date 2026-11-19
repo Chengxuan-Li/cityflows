@@ -31,7 +31,13 @@ export function createConnectors(
   vehicles: Vehicles,
   accounting: ReturnType<typeof createAccounting>,
   parking: ReturnType<typeof createParking>,
-  persons?: { handlesWalk(id: number): boolean; ready(id: number): boolean },
+  persons?: {
+    handlesWalk(id: number): boolean;
+    ready(id: number): boolean;
+    drives(id: number): boolean;
+  },
+  /** TASK-230: check each trip's mode flag against the trip (the engine's `debugSkips`). */
+  checkCaches = false,
 ) {
   let queues = compiled.connectors.map((): number[] => []);
   let head = new Uint32Array(queues.length);
@@ -78,6 +84,14 @@ export function createConnectors(
   const random = createRandom(scenario.seed);
   const queuedAt = new Int32Array(trips.length).fill(-1);
   const queuedSince = (id: number) => Math.max(scenario.startS, trips[id]!.departS, requeuedS[id]!);
+  // TASK-230: whether a queued trip still drives (a tour can choose to walk or ride as it departs),
+  // from the persons' flag: the queues ask it of each waiting trip every step.
+  const drives = (id: number) => {
+    const flag = persons ? persons.drives(id) : trips[id]!.mode === 'car';
+    if (checkCaches && flag !== (trips[id]!.mode === 'car'))
+      throw new Error(`Trip ${id}: mode flag differs`);
+    return flag;
+  };
 
   for (const [id, trip] of trips.entries()) {
     if (trip.mode !== 'car') {
@@ -186,7 +200,7 @@ export function createConnectors(
       while (available < queue.length && queuedSince(queue[available]!) <= timeS + 1e-9) {
         const id = queue[available]!;
         // TASK-173: a trip whose tour chose to walk as it departed leaves its queue.
-        if (trips[id]!.mode !== 'car') {
+        if (!drives(id)) {
           queue.splice(available, 1);
           continue;
         }
@@ -200,7 +214,7 @@ export function createConnectors(
         // Cars still approaching a car park do not hold up already parked departures.
         let candidate = i;
         while (candidate < available) {
-          if (trips[queue[candidate]!]!.mode !== 'car') {
+          if (!drives(queue[candidate]!)) {
             queue.splice(candidate, 1);
             ready[idx] = --available;
             continue;

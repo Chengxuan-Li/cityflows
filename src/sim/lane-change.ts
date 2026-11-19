@@ -353,17 +353,17 @@ export function createLaneChanges(
   /** TASK-211: per vehicle, what `propose` derives from its route step and lane alone: whether
    * the step is the route's last, whether the lane survives into the next road, the planned
    * lane, and the changes to the step's targets from the lane and its two neighbours (NaN until
-   * asked). Kept while the route (never edited, only replaced), step, lane and destination stay. */
+   * asked). Kept while the route (never edited, only replaced), step, lane and destination stay.
+   * TASK-230: one record of PLAN numbers per vehicle in one array (step, lane, destination, final,
+   * dropped, target, needed, left; right at the next slot), so a car's plan shares cache lines. */
+  const PLAN = 9;
+  const [STEP, LANE, DESTINATION, FINAL, DROPPED, TARGET, NEEDED, LEFT, RIGHT] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8,
+  ] as const;
   const planRoute = Array<Route | null>(vehicles.count).fill(null);
-  const planStep = new Int32Array(vehicles.count).fill(-1);
-  const planLane = new Int32Array(vehicles.count).fill(-1);
-  const planDestination = new Int32Array(vehicles.count).fill(-1);
-  const planFinal = new Uint8Array(vehicles.count);
-  const planDropped = new Uint8Array(vehicles.count);
-  const planTarget = new Int32Array(vehicles.count);
-  const planNeeded = new Float64Array(vehicles.count);
-  const planLeft = new Float64Array(vehicles.count);
-  const planRight = new Float64Array(vehicles.count);
+  const plans = new Float64Array(vehicles.count * PLAN);
+  for (let id = 0; id < vehicles.count; id++)
+    plans[id * PLAN + STEP] = plans[id * PLAN + LANE] = plans[id * PLAN + DESTINATION] = -1;
 
   /** Returns true when the vehicle gives its mandatory change up in this step. */
   function propose(
@@ -379,11 +379,12 @@ export function createLaneChanges(
     if (gaveUp[id] || (source.left === -1 && source.right === -1)) return false;
     const step = vehicles.routeStep[id]!;
     const route = vehicles.route[id]!;
+    const plan = id * PLAN;
     const kept =
       planRoute[id] === route &&
-      planStep[id] === step &&
-      planLane[id] === source.idx &&
-      planDestination[id] === vehicles.destination[id];
+      plans[plan + STEP] === step &&
+      plans[plan + LANE] === source.idx &&
+      plans[plan + DESTINATION] === vehicles.destination[id];
     if (!kept || checkPlans) {
       const final = step === route.roads.length - 1;
       const dropped = Number(!final && !survives(source.idx, route.roads[step + 1]!));
@@ -393,24 +394,24 @@ export function createLaneChanges(
       const needed = changesToTargets(id, source.lane, step, final);
       if (
         kept &&
-        (planFinal[id] !== Number(final) ||
-          planDropped[id] !== dropped ||
-          planTarget[id] !== target ||
-          planNeeded[id] !== needed)
+        (plans[plan + FINAL] !== Number(final) ||
+          plans[plan + DROPPED] !== dropped ||
+          plans[plan + TARGET] !== target ||
+          plans[plan + NEEDED] !== needed)
       )
         throw new Error(`Vehicle ${id}: kept lane plan differs`);
       planRoute[id] = route;
-      planStep[id] = step;
-      planLane[id] = source.idx;
-      planDestination[id] = vehicles.destination[id]!;
-      planFinal[id] = Number(final);
-      planDropped[id] = dropped;
-      planTarget[id] = target;
-      planNeeded[id] = needed;
-      if (!kept) planLeft[id] = planRight[id] = NaN;
+      plans[plan + STEP] = step;
+      plans[plan + LANE] = source.idx;
+      plans[plan + DESTINATION] = vehicles.destination[id]!;
+      plans[plan + FINAL] = Number(final);
+      plans[plan + DROPPED] = dropped;
+      plans[plan + TARGET] = target;
+      plans[plan + NEEDED] = needed;
+      if (!kept) plans[plan + LEFT] = plans[plan + RIGHT] = NaN;
     }
-    const finalRoad = planFinal[id] === 1;
-    holding[id] = planDropped[id]!;
+    const finalRoad = plans[plan + FINAL] === 1;
+    holding[id] = plans[plan + DROPPED]!;
     const positionM = vehicles.position[id]!;
     const cutoff = finalRoad
       ? Math.min(source.lengthM, compiled.connectors[vehicles.destination[id]!]!.positionM)
@@ -418,7 +419,7 @@ export function createLaneChanges(
     const remaining = cutoff - positionM;
     const changesNeeded =
       requiredLane === undefined
-        ? planNeeded[id]!
+        ? plans[plan + NEEDED]!
         : Math.abs(compiled.lanes[requiredLane]!.lane - source.lane);
     const mandatory =
       remaining >= 0 &&
@@ -452,10 +453,10 @@ export function createLaneChanges(
     // over the corridor (`futureChanges`) is taken whenever it is safe, not only for MOBIL's
     // incentive: a car prepares on the roads before a turn instead of leaving the change to a
     // queue at the turn, where gaps are rare and the mandatory window is short.
-    const strategic = !mandatory && source.idx !== planTarget[id];
+    const strategic = !mandatory && source.idx !== plans[plan + TARGET];
     for (let side = 0; side < 2; side++) {
       const target = side === 0 ? source.left : source.right;
-      const lane = compiled.lanes[target];
+      const lane = target === -1 ? undefined : compiled.lanes[target];
       // A car standing at its own stop position for a mandatory change may be past the end of
       // a shorter neighbor's setback; it may still land up to that neighbor's stop position.
       const standing = mandatory && vehicles.speed[id]! < 0.1;
@@ -465,16 +466,16 @@ export function createLaneChanges(
         (standing ? positionM > lane.stopM + 1e-8 : lane.lengthM - positionM < idm.minGapM - 1e-8)
       )
         continue;
-      const planned = side === 0 ? planLeft : planRight;
-      if (requiredLane === undefined && (Number.isNaN(planned[id]) || checkPlans)) {
+      const planned = plan + (side === 0 ? LEFT : RIGHT);
+      if (requiredLane === undefined && (Number.isNaN(plans[planned]) || checkPlans)) {
         const fresh = changesToTargets(id, lane.lane, step, finalRoad);
-        if (!Number.isNaN(planned[id]) && planned[id] !== fresh)
+        if (!Number.isNaN(plans[planned]) && plans[planned] !== fresh)
           throw new Error(`Vehicle ${id}: kept lane plan differs`);
-        planned[id] = fresh;
+        plans[planned] = fresh;
       }
       const changesAfter =
         requiredLane === undefined
-          ? planned[id]!
+          ? plans[planned]!
           : Math.abs(compiled.lanes[requiredLane]!.lane - lane.lane);
       // A discretionary change never adds a needed change, on any road (TASK-076).
       if (

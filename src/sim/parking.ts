@@ -67,6 +67,8 @@ export function createParking(
   scenario: Scenario,
   params: SimParams,
   vehicles: Vehicles,
+  /** TASK-230: recompute each cached gateway origin and check it (the engine's `debugSkips`). */
+  checkCaches = false,
 ) {
   /** An inferred garage with an inferred capacity stands in for parking OSM does not map. Its
    * nameplate covers its place's residents and jobs (compile), and it never turns a car away:
@@ -481,10 +483,20 @@ export function createParking(
   }
   const destinationPlace = (id: number) =>
     compiled.places[compiled.index.place.get(trips[id]!.destinationPlaceId)!]!;
-  const requiresExit = (id: number) =>
-    id >= 0 &&
-    nextTrip[id] !== -1 &&
-    compiled.places[compiled.index.place.get(trips[id]!.originPlaceId)!]!.kind !== 'gateway';
+  // TASK-230: whether each trip leaves a gateway, looked up once (-1 until asked; reset on a patch).
+  const gatewayOrigin = new Int8Array(trips.length).fill(-1);
+  const requiresExit = (id: number) => {
+    if (id < 0 || nextTrip[id] === -1) return false;
+    if (gatewayOrigin[id] === -1 || checkCaches) {
+      const gateway = Number(
+        compiled.places[compiled.index.place.get(trips[id]!.originPlaceId)!]!.kind === 'gateway',
+      );
+      if (gatewayOrigin[id] !== -1 && gatewayOrigin[id] !== gateway)
+        throw new Error(`Trip ${id}: cached origin kind differs`);
+      gatewayOrigin[id] = gateway;
+    }
+    return gatewayOrigin[id] === 0;
+  };
   const distance = (id: number, facility: number) => {
     const a = destinationPlace(id).centroid,
       b = compiled.parking[facility]!.centroid;
@@ -803,6 +815,8 @@ export function createParking(
   /** TASK-157: by lane, the spans merging lot cars are crossing. */
   const crossing = new Map<number, { fromM: number; toM: number }[]>();
   const motionById = Array<ParkingMotion | undefined>(trips.length).fill(undefined);
+  // TASK-230: 1 where `motionById` holds a motion; the per-car passes test only this.
+  const moving = new Uint8Array(trips.length);
   /** TASK-176: the motions by the parking facility of their connector (`motionsAt`) and of their
    * space (`motionsIn`). The checks that run for every car bound for or leaving a lot, every step,
    * read only their own facility's: a motion elsewhere never passes their facility test. */
@@ -833,12 +847,14 @@ export function createParking(
     unindexMotion(id);
     motions.set(id, m);
     motionById[id] = m;
+    moving[id] = 1;
     indexMotion(id, m);
   };
   const removeMotion = (id: number) => {
     unindexMotion(id);
     motions.delete(id);
     motionById[id] = undefined;
+    moving[id] = 0;
   };
   const choiceRank = new Uint32Array(trips.length),
     choiceScore = new Float64Array(trips.length),
@@ -1689,6 +1705,8 @@ export function createParking(
       assertClaims();
     },
     motion: (id: number) => motionById[id],
+    /** TASK-230: per car, 1 while it has a motion (`motion`); read-only for callers. */
+    moving: moving as Readonly<Uint8Array>,
     startArrival,
     lotArrival: (connector: number) =>
       compiled.parking[compiled.connectors[connector]!.parking ?? -1]?.kind === 'lot',
@@ -1707,6 +1725,8 @@ export function createParking(
     /** TASK-157: where a lane's traffic from `fromM` on meets a lot car crossing it: the near
      * edge of the crossing span, a standing obstacle until the body has left the lane. */
     crossingStop(lane: number, fromM: number) {
+      // TASK-230: every car asks every step; nearly always no lot car is crossing anywhere.
+      if (crossing.size === 0) return Infinity;
       const spans = crossing.get(lane);
       if (!spans) return Infinity;
       let stop = Infinity;
@@ -2304,6 +2324,7 @@ export function createParking(
       revision++;
       edits++;
       compiled = next;
+      gatewayOrigin.fill(-1);
       motionsAt = new Map();
       motionsIn = new Map();
       for (const [id, m] of motions) indexMotion(id, m);

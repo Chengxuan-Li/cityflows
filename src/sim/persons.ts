@@ -129,7 +129,12 @@ export function createPersons(
     [trip.originPlaceId, trip.destinationPlaceId].every(
       (id) => city.places[city.index.place.get(id)!]?.kind !== 'gateway',
     );
-  const managed = trips.map((trip) => localWalk(trip) || (trip.mode === 'car' && hasPerson(trip)));
+  const managed = Uint8Array.from(trips, (trip) =>
+    Number(localWalk(trip) || (trip.mode === 'car' && hasPerson(trip))),
+  );
+  // TASK-230: 1 while a trip drives (mode 'car'), kept where a tour's choice replaces its trips;
+  // the origin queues ask it of every waiting trip each step.
+  const driving = Uint8Array.from(trips, (trip) => Number(trip.mode === 'car'));
   const records: (PersonTripDetail | null)[] = trips.map((trip, id) =>
     managed[id]
       ? {
@@ -401,6 +406,7 @@ export function createPersons(
     if (mode === 'car' || (mode === 'walk' && !carTour)) return;
     for (const id of tour) {
       trips[id] = mode === 'walk' ? walkTrip(trips[id]!) : transitTrip(trips[id]!);
+      driving[id] = 0;
       if (carTour) accounting.excludeWalk(id);
     }
     if (carTour) parking.walked(tour);
@@ -870,6 +876,8 @@ export function createPersons(
     handlesWalk: (id: number) => trips[id]!.mode === 'walk' && !!managed[id],
     occupant: (id: number) => (hasPerson(trips[id]!) ? trips[id]!.personId : null),
     ready: (id: number) => !managed[id] || !!ready[id],
+    /** TASK-230: whether trip `id` still drives (its mode is 'car'). */
+    drives: (id: number) => driving[id] === 1,
     step(timeS: number) {
       nowS = timeS;
       while (next < ids.length && trips[ids[next]!]!.departS <= timeS + 1e-9)

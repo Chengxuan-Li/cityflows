@@ -8,8 +8,10 @@ import { setup, trips } from './fixtures';
 
 // TASK-211: the step skips work that cannot change its outcome: the rail pass of a vehicle that
 // has not moved since the last one, a car's lane plan while its route, step, lane and
-// destination stay, the lot stop off the way to the destination's lane. `debugSkips` takes none
-// of the shortcuts and checks each against the full computation; the results must not differ.
+// destination stay, the lot stop off the way to the destination's lane. TASK-230: a car's motion
+// flag mirrors its parking motion, a trip's mode flag its mode, a trip's origin kind is looked up
+// once, and the signal pass visits a list of the granted cars. `debugSkips` takes none of the
+// shortcuts and checks each against the full computation; the results must not differ.
 const run = (load: (debugSkips: boolean) => ReturnType<typeof createEngine>, steps: number) =>
   [false, true].map((debugSkips) => {
     const engine = load(debugSkips);
