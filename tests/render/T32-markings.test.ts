@@ -214,6 +214,19 @@ test.each(tierCities(['grid', 'munich'] as const))(
   limit(120_000),
 );
 
+cityTest('TASK-229 (N1): Munich’s inner roads across a wide median carry no lane lines', () => {
+  // 22 to 24 m node to node, as long as carriageway a group takes in, but crossed at both ends.
+  // r:267 (n:266 to n:262) is crossed at n:262 only: carriageway, with its four dividers.
+  const city = net('munich');
+  const lines = (id: string) => {
+    const { below, above } = roadMarkingGeometry(city, city.roads[city.index.road.get(id)!]!);
+    return [...below, ...above].filter((s) => s.role === 'lane').length;
+  };
+  for (const id of ['r:252', 'r:966', 'r:331', 'r:939', 'r:656', 'r:660'])
+    expect(lines(id), id).toBe(0);
+  expect(lines('r:267')).toBeGreaterThanOrEqual(4);
+});
+
 cityTest('T32.2: the owner’s X-marked arrows on Munich’s Marsstraße below n:823 are gone', () => {
   // On 5024a83 the two one-way carriageways r:368 (n:949 to n:823) and r:480 (n:823 to n:949),
   // which the importer realigned onto one centreline, carried arrows of both directions on the

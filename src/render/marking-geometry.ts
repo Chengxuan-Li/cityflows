@@ -369,11 +369,13 @@ function buildRoadMarkings(
   // as on any road; no centre or edge line, and no stop, yield or crossing (`approachMarkings`).
   // TASK-215 (M2): only on lanes of `INNER_LINES_M` or more; on the short links of most groups
   // (Freiburg's inner lanes run 2 to 9 m between their cuts) a dash or two splays across the
-  // junction at the link's angle.
+  // junction at the link's angle. TASK-229 (N1): also on carriageway a group takes in
+  // (`innerCarriageway`).
   if (road.group !== undefined) {
+    const carriageway = innerCarriageway(city, road);
     for (const index of road.lanes) {
       const lane = city.lanes[index]!;
-      if (lane.right < 0 || lane.lengthM < INNER_LINES_M) continue;
+      if (lane.right < 0 || (lane.lengthM < INNER_LINES_M && !carriageway)) continue;
       draw(
         roadDashes(
           parallelOffset(lane.polyline, lane.widthM / 2),
@@ -515,6 +517,55 @@ function buildRoadMarkings(
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
   belowShapes.push(...keepClearMarkings(city, road, markingTheme, source));
   return { below: belowShapes, above: aboveShapes, pavement };
+}
+
+/**
+ * TASK-229 (N1): an inner road is carriageway the group takes in, not a link inside a junction,
+ * when its run (the group's inner roads joined through plain joins: nodes whose movements all
+ * lead from one road into one other) measures `INNER_LINES_M` or more node to node, and crossing
+ * traffic meets the run at one end at most. A lane's cut-to-cut length cannot tell: the junction
+ * outlines at both ends take most of a member road (Freiburg's Friedrichstraße `r:1149`, 18 m
+ * node to node, 4.7 m lanes), and a short road between plain joins is one piece of a longer
+ * carriageway (Stefan-Meier-Straße `r:6`, `r:745`, `r:1179`: 33 m). Length alone takes in the
+ * links across a wide median (Munich `r:252`, 23 m), which lie between two crossings. A crossing
+ * is a conflict with a movement that shares neither the entry nor the exit road (not a merge or
+ * diverge).
+ */
+function innerCarriageway(city: CompiledCity, road: CRoad): boolean {
+  const roadOf = (lane: number) => city.lanes[lane]!.road;
+  const run = new Set([road.idx]);
+  /** The inner road beyond a plain join at `node`, on the side road `at` does not take. */
+  const beyond = (node: number, after: boolean, at: number) => {
+    const movements = city.nodes[node]!.movements.map((i) => city.movements[i]!);
+    const from = new Set(movements.map((m) => roadOf(m.fromLane)));
+    const to = new Set(movements.map((m) => roadOf(m.toLane)));
+    if (from.size !== 1 || to.size !== 1 || !(after ? from : to).has(at)) return undefined;
+    const next = city.roads[[...(after ? to : from)][0]!]!;
+    return next.group === road.group && !run.has(next.idx) ? next : undefined;
+  };
+  let [first, last, length] = [road, road, road.lengthM];
+  for (let r; (r = beyond(first.from, false, first.idx)); first = r) {
+    run.add(r.idx);
+    length += r.lengthM;
+  }
+  for (let r; (r = beyond(last.to, true, last.idx)); last = r) {
+    run.add(r.idx);
+    length += r.lengthM;
+  }
+  const crossed = (end: CRoad, atEnd: boolean) =>
+    end.lanes.some((i) =>
+      (atEnd ? city.lanes[i]!.out : city.lanes[i]!.in).some((index) => {
+        const m = city.movements[index]!;
+        return m.conflicts.some((c) => {
+          const other = city.movements[c]!;
+          return (
+            roadOf(other.fromLane) !== roadOf(m.fromLane) &&
+            roadOf(other.toLane) !== roadOf(m.toLane)
+          );
+        });
+      }),
+    );
+  return length >= INNER_LINES_M && !(crossed(first, false) && crossed(last, true));
 }
 
 /**
@@ -838,11 +889,13 @@ function mouthPiece(road: CRoad, atEnd: boolean): Vec2[] {
 
 /** The turns a lane's arrow shows: its usable movements, without u-turns and turns into
  * service roads. TASK-215 (M1): on an entry of a junction group, its paths through the group
- * (`groupTurns`), not the first inner link it enters. */
+ * (`groupTurns`), not the first inner link it enters; TASK-229 (N2): its movements at the entry
+ * node when the group gives it no path, or double lefts only. */
 function arrowTurns(city: CompiledCity, lane: CLane): Turn[] {
   const road = city.roads[lane.road]!;
   const group = road.group === undefined ? city.nodes[road.to]!.group : undefined;
-  if (group !== undefined) return groupTurns(city, city.groups![group]!, lane);
+  const paths = group === undefined ? null : groupTurns(city, city.groups![group]!, lane);
+  if (paths) return paths;
   const turns = new Set<Turn>();
   for (const index of lane.out) {
     const movement = city.movements[index]!;
@@ -873,13 +926,21 @@ function chordHeading(line: Vec2[]): number {
  * r:868) is no right turn but a u-turn, and shown as none. A path of one movement keeps that
  * movement's turn; paths with a never-green movement, into a service road, merges and diverges
  * are left out as at any node (`arrowTurns`).
+ * TASK-229 (N2): null for a lane with no chain, or whose chains are all u-turns of two turns to
+ * one side (double lefts): Freiburg `r:1148#0` has no chain through the Hauptbahnhof group and
+ * `#1`'s only one turns left twice (to `r:484`), yet the ground has arrows on both. A path round
+ * the block (three lefts) stays a u-turn.
  */
-function groupTurns(city: CompiledCity, group: CGroup, lane: CLane): Turn[] {
+function groupTurns(city: CompiledCity, group: CGroup, lane: CLane): Turn[] | null {
   const turns = new Set<Turn>();
   const entry = city.roads[lane.road]!;
+  let paths = 0,
+    doubles = 0;
   for (const chain of group.chains) {
     const movements = chain.movements.map((i) => city.movements[i]!);
-    if (movements[0]!.fromLane !== lane.idx || movements.some((m) => m.neverGreen)) continue;
+    if (movements[0]!.fromLane !== lane.idx) continue;
+    paths++;
+    if (movements.some((m) => m.neverGreen)) continue;
     const exit = city.roads[chain.to]!;
     if (exit.roadClass === 'service') continue;
     let turn = movements[0]!.turn;
@@ -908,10 +969,12 @@ function groupTurns(city: CompiledCity, group: CGroup, lane: CLane): Turn[] {
               ? 'right'
               : 'left';
     }
+    const sides = movements.filter((m) => m.turn === 'left' || m.turn === 'right');
+    if (turn === 'uturn' && sides.length === 2 && sides[0]!.turn === sides[1]!.turn) doubles++;
     if (turn === 'uturn' || turn === 'merge' || turn === 'diverge') continue;
     turns.add(turn);
   }
-  return [...turns];
+  return paths === doubles ? null : [...turns];
 }
 
 /** `crossingFarM`: the far edge of the crossing at the lane's end, from the cut (0 for none);
