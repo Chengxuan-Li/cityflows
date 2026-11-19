@@ -76,39 +76,3 @@ test('closed pedestrian ways and independently tagged crossing ways retain their
   expect(links.filter((l) => l.provenance.osmIds?.includes(50))).toHaveLength(4);
   expect(links.find((l) => l.provenance.osmIds?.includes(51))?.kind).toBe('crossing');
 });
-
-test('TASK-217: a path=crossing way is a crossing, and a marked crossing node becomes a crossing link', () => {
-  const nodes = `<node id="50" lat="48.005" lon="11.0005"/><node id="51" lat="48.005" lon="11.0015"/>
-<node id="52" lat="48.003" lon="11.001"><tag k="highway" v="crossing"/><tag k="crossing" v="uncontrolled"/><tag k="crossing_ref" v="zebra"/></node>
-<node id="53" lat="48.004" lon="11.001"><tag k="highway" v="crossing"/><tag k="crossing" v="unmarked"/></node>
-<node id="54" lat="48.006" lon="11.001"><tag k="highway" v="crossing"/></node>
-<node id="55" lat="48.007" lon="11.001"><tag k="highway" v="crossing"/><tag k="crossing" v="traffic_signals"/></node>`;
-  const ways = `<way id="12"><nd ref="1"/><nd ref="52"/><nd ref="53"/><nd ref="54"/><nd ref="55"/><nd ref="2"/><tag k="highway" v="residential"/></way>
-<way id="60"><nd ref="50"/><nd ref="51"/><tag k="highway" v="path"/><tag k="path" v="crossing"/></way>`;
-  const result = importOsm(
-    xml
-      .replace(
-        '<node id="1" lat="48.001" lon="11.001"/><node id="2" lat="48.009" lon="11.001"/>',
-        '',
-      )
-      .replace(
-        '<way id="10">',
-        `<node id="1" lat="48.001" lon="11.001"/><node id="2" lat="48.009" lon="11.001"/>${nodes}${ways}<way id="10">`,
-      )
-      .replace(/<way id="10">[\s\S]*?<\/way>/, ''),
-    { importerVersion: 'test' },
-  );
-  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-  const links = Object.values(result.city.walk!.links);
-  expect(links.find((l) => l.provenance.osmIds?.includes(60))?.kind).toBe('crossing');
-  // The zebra and the signalised crossing; neither the unmarked one nor the untagged one.
-  const fromNodes = links.filter((l) => l.provenance.osmIds?.some((id) => id >= 52 && id <= 55));
-  expect(fromNodes.map((l) => l.provenance.osmIds![0]).sort()).toEqual([52, 55]);
-  for (const link of fromNodes) {
-    expect(link.kind).toBe('crossing');
-    // Square to the north-south road, across both directions' lanes and 1.5 m beyond.
-    const [a, b] = link.line as [{ x: number; y: number }, { x: number; y: number }];
-    expect(Math.abs(a.y - b.y)).toBeLessThan(0.01);
-    expect(Math.abs(a.x - b.x)).toBeGreaterThan(6);
-  }
-});

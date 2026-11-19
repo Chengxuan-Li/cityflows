@@ -163,11 +163,11 @@ const pins = {
   },
   town: {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-    compile: '1b11017975d956b8794c1a515f41c1d981d4c344a1d1e39347d7c50276dcd860',
+    compile: '3595116920f094559c7d78b9cc1cfde9fa1b0773419b31a7df233ea8a4909e79',
     lamps: 'bd56acb9b3028f1d5a884f0926a86e19405a839f16185957cb0479a89ee99d7f',
-    curbs: '7ec241b43d488f06b368df914a618ec58a4454c93e62e0ef7a65ae7adafba9b0',
-    de: '1ddd72d2450335970655fca6b9290c09621d8c3f71ef4c8da8eb5b11a529fa29',
-    us: '6e34a73e9994ac347e9485ddbc59515e11bb301cdb16481997158bea37854c34',
+    curbs: 'e5b1df98b54b260c89c37bf096c4aa51ba309b50ed7b6dfdb318d0487fe170ca',
+    de: 'ff73eb4e2a6234d91a773a570f491f1eb3d3453d7e9ef564786dbf3c8abfcf12',
+    us: 'e2c414d8332497748b26a0318058924304b1812d54425ea365139599dee63397',
   },
   // TASK-131 keeps OSM geometry (no node merges, junction groups): the real cities' roads,
   // lamps, curbs and paint move, so they no longer equal main's.
@@ -206,11 +206,11 @@ const pins = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: four corners are rounded (gore fillets at n:27, n:68, n:1162; n:365's corner).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    compile: '7ae0da89f8140b3a01dcd13dbb4e6842c7245cf1ebec5b4859d4858b4859ba1f',
-    lamps: '16fb9356ddf16749af5bb9de94fcd54b9efe54c8f63e4500e84da23ab8de59c3',
-    curbs: '4e128f9f6adae5e7315d2e5c7dae70ad65024503593c2f6aa34296c6052f10aa',
-    de: '718267f44fd7345365be0c27320b894a308d25739f5f58533e9548045fe13541',
-    us: '91aae98a1512fdf48410250a6d0aaf9f8121eb64da1c2436d6aecfbedab315cb',
+    compile: 'd08892bdc1c6ed077bba19e06dce14841e1e2c009ac69138dff2ea366e899078',
+    lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
+    curbs: '463c6ce254acbddf8b3a709efcfd3f621e40244c7f9641e9b6f69fc176260c4b',
+    de: 'da80a22d3a6439a24be0cb2aa377451494a82943755c2fb4691c3856736fac34',
+    us: 'f7bd9f157198df6d4ab267e3ce70cc34583a69a647a8392be679b2c1ccbd4f01',
   },
 } as const;
 const hash = (value: unknown) =>

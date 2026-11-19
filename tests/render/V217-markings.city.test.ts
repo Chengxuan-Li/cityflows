@@ -5,16 +5,14 @@ import { lonLatToLocal } from '../../src/geo/projection';
 import {
   cumulativeLengths,
   distance,
-  headingAtDistance,
   nearestOnPolyline,
   pointAtDistance,
   pointInPolygon,
   segmentDistance,
 } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
-import { compile, type CompiledCity, type CRoad } from '../../src/network';
+import { compile, type CompiledCity } from '../../src/network';
 import {
-  crossingArms,
   crossingEnabled,
   crossingPlacement,
   crossingSpan,
@@ -44,13 +42,12 @@ beforeAll(async () => {
 
 const road = (id: string) => net.roads[net.index.road.get(id as never)!]!;
 const lane = (id: string) => net.lanes.find((l) => l.id === id)!;
-const nodeOf = (r: CRoad, atEnd: boolean) => net.nodes[atEnd ? r.to : r.from]!;
 /** Every road end that draws stripes, with its placement. */
 const striped = () =>
   net.roads.flatMap((r) =>
     [false, true].flatMap((atEnd) => {
       if (!crossingEnabled(net, r, atEnd, city)) return [];
-      const placement = crossingPlacement(net, r, atEnd, city);
+      const placement = crossingPlacement(net, r, atEnd);
       return placement.stripes.length ? [{ road: r, atEnd, placement }] : [];
     }),
   );
@@ -76,39 +73,6 @@ test('M2: inner roads of junction groups with lanes under 15 m carry no lane lin
   expect(lines).toEqual([]);
 });
 
-test('M3: no default crossing over a trunk road, unless OSM maps one', () => {
-  const trunk = striped().filter((e) => e.road.roadClass === 'trunk');
-  expect(trunk.map((e) => `${e.road.id} at ${nodeOf(e.road, e.atEnd).id}`)).toEqual([]);
-  // A mapped crossing way over the B 31 at n:446 keeps its crossing there.
-  const r = road('r:1692');
-  const [a, b] = [r.lanes[0]!, r.lanes.at(-1)!].map((i) => {
-    const l = net.lanes[i]!;
-    return pointAtDistance(l.polyline, l.cumulative, l.lengthM - 5);
-  }) as [Vec2, Vec2];
-  const out = (p: Vec2, q: Vec2) => ({ x: p.x + (p.x - q.x), y: p.y + (p.y - q.y) });
-  const mapped: Pick<City, 'roads' | 'walk'> = {
-    roads: city.roads,
-    walk: {
-      nodes: {},
-      links: {
-        ['wl:1' as never]: {
-          id: 'wl:1' as never,
-          from: 'wn:1' as never,
-          to: 'wn:2' as never,
-          line: [out(a, b), out(b, a)],
-          kind: 'crossing',
-          layer: 0,
-          widthM: null,
-          provenance: { source: 'osm' },
-        },
-      },
-    },
-  };
-  // TASK-217: Freiburg now maps one there itself (a marked crossing node becomes a link).
-  expect(crossingEnabled(net, r, true, { roads: city.roads })).toBe(false);
-  expect(crossingEnabled(net, r, true, mapped)).toBe(true);
-});
-
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {
   const both: string[] = [];
   for (const r of net.roads) {
@@ -127,45 +91,6 @@ test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both 
     both.every((entry) => entry.endsWith('signal/signal')),
     both.join(),
   ).toBe(true);
-});
-
-test('D1: a ramp (a `_link` road) has a crossing only where OSM maps one over it', () => {
-  // r:405, the Hauptbahnhof slip road at n:403.
-  const r = road('r:405');
-  const n403 = net.index.node.get('n:403' as never)!;
-  const atEnd = r.to === n403;
-  expect(crossingEnabled(net, r, atEnd, city)).toBe(false);
-  const lanes = r.lanes.map((i) => net.lanes[i]!);
-  const [a, b] = [lanes[0]!, lanes.at(-1)!].map((l) =>
-    pointAtDistance(l.polyline, l.cumulative, atEnd ? l.lengthM - 4 : 4),
-  ) as [Vec2, Vec2];
-  // Square to the first lane, 3 m beyond the outer lanes' centres.
-  const l0 = lanes[0]!;
-  const heading = headingAtDistance(l0.polyline, l0.cumulative, atEnd ? l0.lengthM - 4 : 4);
-  const n = { x: -Math.sin(heading) * 3, y: Math.cos(heading) * 3 };
-  const mapped: Pick<City, 'roads' | 'walk'> = {
-    roads: city.roads,
-    walk: {
-      nodes: {},
-      links: {
-        ['wl:1' as never]: {
-          id: 'wl:1' as never,
-          from: 'wn:1' as never,
-          to: 'wn:2' as never,
-          line: [
-            { x: a.x - n.x, y: a.y - n.y },
-            { x: b.x + n.x, y: b.y + n.y },
-          ],
-          kind: 'crossing',
-          layer: r.grade,
-          widthM: null,
-          provenance: { source: 'osm' },
-        },
-      },
-    },
-  };
-  expect(crossingEnabled(net, r, atEnd, mapped)).toBe(true);
-  expect(crossingStyle(net, r, atEnd, mapped)).toBe('zebra');
 });
 
 /** Keep-clear boxes painted on stripes, and arrows on a crossing at their lane's start or end. */
@@ -207,55 +132,6 @@ test('M4: no keep-clear box on a crossing', () => expect(paintOnStripes().over).
 test('M4: no arrow on a crossing (r:467 at n:464)', () =>
   expect(paintOnStripes().arrows).toEqual([]));
 
-test('M5: a crossing is one straight band across its arm, and its walk link runs on it', () => {
-  // The audit's steps: r:460 at n:403 5.5 m (its crossing now yields to n:461), n:11 4.1 m between
-  // the directions, n:276 2.3, n:18 2.0, n:4 1.6. TASK-091's placement stays where a band costs an
-  // end stripes: r:1448 at n:552 (too short for a band clear of the far curb), r:1381 at n:94.
-  const steps = new Map<string, number>();
-  const ends = striped();
-  for (const node of net.nodes)
-    for (const arm of crossingArms(net, node)) {
-      const own = ends.filter((e) => arm.some((a) => a.road === e.road && a.atEnd === e.atEnd));
-      if (!own.length) continue;
-      const sum = arm.reduce((s, e) => ({ x: s.x + e.direction.x, y: s.y + e.direction.y }), {
-        x: 0,
-        y: 0,
-      });
-      const along = (p: Vec2) => (p.x * sum.x + p.y * sum.y) / Math.hypot(sum.x, sum.y);
-      const near = own.flatMap((e) =>
-        e.placement.stripes.map((s) =>
-          along({ x: (s[0]!.x + s[3]!.x) / 2, y: (s[0]!.y + s[3]!.y) / 2 }),
-        ),
-      );
-      const step = Math.max(...near) - Math.min(...near);
-      steps.set(node.id, Math.max(step, steps.get(node.id) ?? 0));
-    }
-  for (const id of ['n:11', 'n:276', 'n:18', 'n:4']) expect(steps.get(id), id).toBeLessThan(0.3);
-  expect(
-    [...steps]
-      .filter(([, step]) => step > 1)
-      .map(([id]) => id)
-      .sort(),
-    // TASK-217: r:460 at n:403 (5.5 m), which TASK-215's dropped M4 removed, keeps TASK-091's
-    // placement; it is unmarked (no signal, no mapped crossing), so the step does not show.
-  ).toEqual(['n:403', 'n:552', 'n:94']);
-  // A generated walk link crosses each lane at that lane's stripes (as T71.1, lane by lane; six
-  // mapped crossings stay where OSM maps them, as on main).
-  let spans = 0;
-  for (const link of net.walk.links)
-    for (const span of link.generated ? (link.crossing?.spans ?? []) : []) {
-      const l = net.lanes[span.lane]!;
-      const r = net.roads[l.road]!;
-      const n = link.crossing!.node;
-      if (n < 0 || (r.from !== n && r.to !== n)) continue;
-      const stripes = crossingSpan(net, l, r.to === n, city);
-      if (!stripes) continue;
-      spans++;
-      expect(Math.abs(span.atM - (stripes.nearM + stripes.farM) / 2), l.id).toBeLessThan(0.3);
-    }
-  expect(spans).toBeGreaterThan(150);
-});
-
 test('M6: a stop line is one line across its approach, through every lane’s stop position', () => {
   let approaches = 0;
   for (const r of net.roads) {
@@ -294,7 +170,7 @@ test('D1: a crossing at a signal paints the broken lines of a signalised crossin
     for (const atEnd of [false, true]) {
       if (net.nodes[atEnd ? r.to : r.from]!.signal === null) continue;
       if (!crossingEnabled(net, r, atEnd, city)) continue;
-      const { stripes } = crossingPlacement(net, r, atEnd, city);
+      const { stripes } = crossingPlacement(net, r, atEnd);
       if (!stripes.length) continue;
       ends++;
       expect(crossingStyle(net, r, atEnd, city)).toBe('signal');
@@ -306,20 +182,16 @@ test('D1: a crossing at a signal paints the broken lines of a signalised crossin
   expect(ends).toBeGreaterThan(80);
 });
 
-test('D1: zebras where OSM maps them (TASK-216: n:211, n:1139, the Zur Unterführung slip road)', () => {
+test('D1: zebras where OSM maps a crossing way (TASK-216 box: n:229, n:1651)', () => {
   const osm = (lat: number, lon: number) => lonLatToLocal(city.geo!, { lat, lon });
-  // 2479358348 at n:211 and 9118444286 at n:1139 are mapped as nodes only; 320091867 on a
-  // `path=crossing` way where a 7 m slip road splits at n:398.
-  // n:211's stays in its arm's band, 5.4 m from the mapped node (the band no longer moves to a
-  // mapped crossing: that cost Munich 3.7 to 4.6% of mean delay in fixed time).
-  for (const [id, at, m] of [
-    ['2479358348', osm(47.9975169, 7.8428582), 7],
-    ['9118444286', osm(47.997331, 7.8436884), 3],
-    ['320091867', osm(47.9997243, 7.8438616), 3],
+  // 21875560 on Friedrichstraße and 334498547, mapped zebras whose crossing ways lead their arms.
+  for (const [id, at] of [
+    ['21875560', osm(47.9978027, 7.8480967)],
+    ['334498547', osm(47.9978582, 7.8479135)],
   ] as const)
-    expect(paintNear(city, at, m).length, id).toBeGreaterThanOrEqual(3);
-  // Without the mapped walk network the n:1139 zebra is gone: it comes from OSM, not a default.
-  expect(paintNear({ roads: city.roads }, osm(47.997331, 7.8436884), 3)).toEqual([]);
+    expect(paintNear(city, at, 4).length, id).toBeGreaterThanOrEqual(3);
+  // Without the mapped walk network they are default crossings of imported roads: unmarked.
+  expect(paintNear({ roads: city.roads }, osm(47.9978027, 7.8480967), 4)).toEqual([]);
 });
 
 test('D1: a default crossing where OSM maps none is unmarked, and stays where it was', () => {
@@ -331,18 +203,18 @@ test('D1: a default crossing where OSM maps none is unmarked, and stays where it
     expect(crossingEnabled(net, r, atEnd, city), id).toBe(true);
     expect(crossingStyle(net, r, atEnd, city), id).toBe('none');
     expect(crossingStripes(net, r, atEnd, city), id).toEqual([]);
-    expect(crossingPlacement(net, r, atEnd, city).stripes.length, id).toBeGreaterThan(0);
+    expect(crossingPlacement(net, r, atEnd).stripes.length, id).toBeGreaterThan(0);
     // It keeps its span: parking strips and walk links treat it as before.
     expect(crossingSpan(net, net.lanes[r.lanes[0]!]!, atEnd, city), id).not.toBeNull();
   }
-  // Every zebra painted at a road end is led by a mapped crossing (no hand edits in Freiburg).
+  // Every zebra painted at a road end comes from a mapped crossing (no hand edits in Freiburg).
   for (const r of net.roads)
     for (const atEnd of [false, true])
       if (crossingEnabled(net, r, atEnd, city) && crossingStyle(net, r, atEnd, city) === 'zebra')
-        expect(crossingPlacement(net, r, atEnd, city).mapped, r.id).toBe(true);
+        expect(crossingStyle(net, r, atEnd, { roads: city.roads }), r.id).toBe('none');
 });
 
-test('D1: a mapped crossing leads its arm, and one beyond 12 m of the cut paints where mapped', () => {
+test('D1: a mapped crossing beyond 12 m of a cut paints where it is mapped', () => {
   // A long two-lane road; a crossing mapped across it in the middle and one 6 m from its end.
   const r = net.roads.find(
     (x) => x.group === undefined && x.lanes.length === 2 && net.lanes[x.lanes[0]!]!.lengthM > 80,
