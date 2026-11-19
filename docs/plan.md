@@ -253,7 +253,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-227](tasks/TASK-227.md) | render | Pitched roofs on concave outlines (straight skeleton) | `render3d/roofs.ts` | 210 | flat fallbacks, skeleton tests, close-ups, budgets, identical hashes | done 2026-11-19 (merged; flat roofs Freiburg 204 to 14, Munich 70 to 13) |
 | [TASK-228](tasks/TASK-228.md) | 9 | Tram backlog: one delayed tram holds every unstarted one (found by TASK-225) | `rail-crossings.ts` service holds | 225 | backlog figures, traffic, merge rule | done 2026-11-19 (merged v2; full timetable, Munich identical, Freiburg +4.6 s) |
 | [TASK-229](tasks/TASK-229.md) | render | Marking follow-ups from the aerial re-check: M2 lane lines on carriageway inside groups (N1), arrows on double-left entry lanes (N2) | `marking-geometry.ts` | 217, 224 | tests, counts, close-ups, audit, identical hashes | done 2026-11-19 (merged; paint only, hashes identical) |
-| [TASK-230](tasks/TASK-230.md) | 9 | Step time, third pass: Munich full demand and the Freiburg landing city, results identical | `src/sim/**` except `rail-crossings.ts` | 211 | phase tables, identical hashes, interleaved timings | in progress (unsupervised run 2026-11-19) |
+| [TASK-230](tasks/TASK-230.md) | 9 | Step time, third pass: Munich full demand and the Freiburg landing city, results identical | `src/sim/**` except `rail-crossings.ts` | 211 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (merged; full demand 14.5% faster, Freiburg 8%, hashes identical) |
 | [TASK-231](tasks/TASK-231.md) | 10 | One carriageway for close halves and shared one-lane streets (TASK-218's D5 and D6 alone) | `corridors.ts`, `roads.ts`, `marking-geometry.ts` | 218, 229 | tests, audit, traffic, merge rule | parked 2026-11-19 (D5-only variant meets the merge rule and every city total; named case R3-8 Marsstraße width max 0.387 to 0.481 m) |
 | [TASK-232](tasks/TASK-232.md) | render | Tram track form follow-ups: Fahnenbergplatz ballast, Rotteckring paving (TASK-224 D8, N3) | `rail.ts`, `rail-geometry.ts` | 220, 224 | tests, close-ups, identical hashes, budgets | done 2026-11-19 (merged; hashes identical) |
 | [TASK-233](tasks/TASK-233.md) | render | Shared one-lane streets drawn without a centre line (TASK-231's D6 alone) and the grade-aware lane-overlap audit | `roads.ts`, `marking-geometry.ts`, `geometry-audit.ts` | 231 | tests, audit, traffic, merge rule | done 2026-11-19 (merged variant; networks byte-identical) |
@@ -4984,6 +4984,27 @@ lane overlap figure (69.79 to 69.91 m²) was measured with the old measure 9 and
 Outside scope: re-pins (T44, T49, T75, V106, V107, V117, Freiburg manifest), V108's 2D/3D test passes
 the canonical city. Lead check on the merge (on top of TASK-232; both rebuilt the Freiburg project, so
 the lead rebuilt it again, city.json `ed396216...`): check (1,565), city (208, including the Freiburg gate and tram timetable pins), traffic light and guard, light e2e (61); full demand actuated 3,759 / 143 (4028429784), fixed-time 3,501 / 168 (2888500527).
+
+TASK-230 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged, performance only): step time, third
+pass. The largest finding: per-car passes read plain arrays at index -1 for most cars
+(`compiled.connectors[arrival[id]]`, `compiled.movements[vehicles.movement[id]]`), which V8 serves by a
+slow lookup (about 16 ns against 4 ns; about 134 s in the actuated profile). Cuts (none skips work):
+negative indices guarded in `engine.ts`, `exitRear`, the walker hold and the lane-change neighbour
+lane, `continuations` a `Uint8Array`; per-movement and per-connector tables (`inner`, `needsStop`,
+connector lanes) rebuilt on a live patch; a `parking.moving` byte array; a `persons.drives(id)` flag;
+`requiresExit` caching each trip's origin kind; `crossingStop` returning at once with no lot car
+crossing; departure-courtesy envelopes in a `Float64Array`; TASK-211's nine per-car lane-plan arrays as
+one record per car; a granted-car list in the signal pass. Under `debugSkips` the four cached values are
+checked against the plain computation (`exact-skips.test.ts`). Phase table, main and branch profiled at
+once (CPU 84%): following pass 1,030.6 to 913.9 s actuated, spawn 214.2 to 179.2, commit 165.9 to 105.1,
+signals 26.0 to 11.0, total 2,115.3 to 1,883.4 (-11% with timers on; fixed alike). Untimed interleaved
+pairs: actuated -16.0%, -15.1%, -16.0%; fixed -9.2% (load swung 2 to 73%), -16.2%, -16.0%; mean -14.5%
+(target 10%); Freiburg -8.0% over six idle pairs (90.8 to 83.5 s). Hashes identical on Munich 0.15 seeds
+1 to 3 in all four configurations, both full demands, Freiburg, Sindelfingen (0.15 and scale 1), with
+and without `debugSkips`. Left: the rail hold and step (about 19%, `rail-crossings.ts` was out of
+scope), routing (about 10%). No files outside scope. Lead check on the merge (on top of TASK-232 and
+233): check (1,565), city (208), traffic light and guard, light e2e (61); full demand actuated 3,759 /
+143 (4028429784), fixed-time 3,501 / 168 (2888500527), stepping 689 and 692 s on the lead's machine.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

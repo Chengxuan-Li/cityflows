@@ -1,6 +1,6 @@
 # TASK-230 — Step time, third pass: full demand and the Freiburg landing city
 
-Status: in progress (unsupervised run, owner 2026-11-19; "step time if time allows"). Proposed owner:
+Status: done 2026-11-19 (merged; review in `docs/plan.md`). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/230-step-time-3`, worktree `D:\cityflows-wt\230`,
 ports 5430 / 5530.
 
