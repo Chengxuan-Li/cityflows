@@ -155,7 +155,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-          '3cbd8e27f8be39d2d6d4dbdd794e7df80c9ff594471dd22a7b60ff5d73c81d14',
+          // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
+          // tram `form` stripped the city equals b3bcde6's.
+          'def9b601dd30e233d5c208c8bb48c48872db694486c666d99279b5be4c5aec0d',
           // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
@@ -164,7 +166,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-          'a893a96803342d78238f72e3c7edb70f6ee8b3e07f277682306a87322bdf5b24',
+          // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
+          // tram `form` stripped the city equals b3bcde6's.
+          '8f36cd88395e4f63016ac32c5cae8795a8a9c9f669e05c295e03571e2fe2d03c',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

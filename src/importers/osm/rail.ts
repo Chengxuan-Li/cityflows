@@ -375,32 +375,90 @@ export function importRail(
   }
 }
 
-const pavedSurfaces = new Set(['asphalt', 'paving_stones', 'concrete', 'sett', 'paved']);
+const pavedSurfaces = new Set([
+  'asphalt',
+  'paving_stones',
+  'concrete',
+  'concrete:plates',
+  'sett',
+  'cobblestone',
+  'unhewn_cobblestone',
+  'bricks',
+  'paved',
+]);
+const ballastSurfaces = new Set(['gravel', 'fine_gravel', 'pebblestone', 'ballast']);
 /** Share of a tram track inside drivable road for an untagged track to count as embedded. */
 export const embeddedShare = 0.8;
+/** TASK-220: one-lane carriageways are drawn at the default lane width, narrower than their
+ * street (TASK-216 D9: the Rotteckring's 2 m); track this close to one runs in that street. */
+export const alongsideM = 2.5;
+/** TASK-220: a mapped grass area narrower than this (mean width, m) is a strip along the track,
+ * not a park or a lawn it crosses. */
+export const grassStripM = 10;
+/** How far off a grass strip track still counts as on it (strips end at their own kerb). */
+const stripReachM = 1.5;
+
+/** TASK-220: a highway that carries tram rails, from `embedded_rails*`, `railway:lanes*` or
+ * `railway=tram` on the highway itself; its half-width from `width`, else 1.5 m a lane (two at
+ * least, for untagged pedestrian streets) and 1 m of tolerance for the rails off its centreline. */
+function tramRoadHalfWidth(tag: OsmTags): number | undefined {
+  if (!tag.highway || tag.highway === 'platform') return;
+  const rails =
+    tag.railway === 'tram' ||
+    Object.entries(tag).some(
+      ([key, value]) =>
+        (key.startsWith('embedded_rails') || key.startsWith('railway:lanes')) &&
+        (value ?? '').split(/[;|]/).includes('tram'),
+    );
+  if (!rails) return;
+  const width = Number.parseFloat(tag.width ?? '');
+  return (width > 0 ? width / 2 : Math.max(2, Number(tag.lanes) || 0) * 1.5) + 1;
+}
+
+const bbox = (points: Vec2[]) =>
+  [
+    Math.min(...points.map((p) => p.x)),
+    Math.min(...points.map((p) => p.y)),
+    Math.max(...points.map((p) => p.x)),
+    Math.max(...points.map((p) => p.y)),
+  ] as const;
 
 /**
- * TASK-135: the form of each tram track. The way's own tags decide first (`embedded=yes|no`,
- * `surface=grass` or `railway:track_ballast=no` for grass, a paved `surface` for a paved bed,
- * `railway:track_ballast=yes` for ballast), then `embedded_rails=tram` on the highways it lies in
- * (over half its length), and otherwise its geometry: a track inside same-grade road or junction
- * surface over `embeddedShare` of its length is embedded, any other an own bed (ballast unless a
- * paved surface is tagged), marked `inferred: ['form']`.
+ * TASK-135, TASK-220: the form of each tram track. Tags decide first: a tram mapped on a highway
+ * way is embedded; `embedded=no` gives an own bed (from `surface`, else ballast) and any other
+ * `embedded` value embedded; `surface=grass` or `railway:track_ballast=no` grass;
+ * `railway:track_ballast=yes` or a loose `surface` (gravel) ballast; a highway carrying tram rails
+ * (`tramRoadHalfWidth`) along over half its length embedded. Otherwise, marked
+ * `inferred: ['form']`: inside same-grade road or junction surface over `embeddedShare` of its
+ * length, embedded; on (or within `stripReachM` of) a mapped grass strip over half its length off
+ * the road, grass, unless a paved `surface` is tagged; inside or within `alongsideM` of a one-lane
+ * carriageway over `embeddedShare`, embedded; else a paved bed for a paved `surface`, and ballast
+ * for the rest (a separate track between carriageways; `railway:track_ref` says nothing of form).
  */
-export function assignTramForms(city: City, data: OsmData, compiled: CompiledCity) {
+export function assignTramForms(
+  city: City,
+  data: OsmData,
+  compiled: CompiledCity,
+  positions: Map<number, Vec2>,
+) {
   const trams = Object.values(city.rail?.tracks ?? {}).filter((t) => t.kind === 'tram');
   if (!trams.length) return;
   const ways = new Map(data.way.map((w) => [w.id, w.tag]));
   const nodeLayer = (id: string) => city.nodes[id]!.layer;
+  const index = <T>(items: T[], points: (item: T) => Vec2[]) => {
+    const spatial = new Flatbush(Math.max(1, items.length));
+    for (const item of items) spatial.add(...bbox(points(item)));
+    if (!items.length) spatial.add(0, 0, 0, 0);
+    spatial.finish();
+    return spatial;
+  };
   const areas = [
     ...compiled.roads.map((r) => {
       const road = city.roads[r.id]!;
       return {
         ring: [...r.surface, r.surface[0]!],
         layer: road.layer ?? Math.min(nodeLayer(road.from), nodeLayer(road.to)),
-        tramRails: road.provenance.osmIds?.some((id) =>
-          (ways.get(id)?.embedded_rails ?? '').split(';').includes('tram'),
-        ),
+        oneLane: road.lanes.length === 1,
       };
     }),
     ...compiled.nodes
@@ -408,59 +466,108 @@ export function assignTramForms(city: City, data: OsmData, compiled: CompiledCit
       .map((n) => ({
         ring: [...n.outline, n.outline[0]!],
         layer: nodeLayer(n.id),
-        tramRails: false,
+        oneLane: false,
       })),
   ];
-  const spatial = new Flatbush(Math.max(1, areas.length));
-  for (const { ring } of areas)
-    spatial.add(
-      Math.min(...ring.map((p) => p.x)),
-      Math.min(...ring.map((p) => p.y)),
-      Math.max(...ring.map((p) => p.x)),
-      Math.max(...ring.map((p) => p.y)),
+  const areaIndex = index(areas, (a) => a.ring);
+  const located = (ids: number[]) =>
+    ids.every((id) => positions.has(id)) ? ids.map((id) => positions.get(id)!) : undefined;
+  const tramRoads = data.way.flatMap((w) => {
+    const half = tramRoadHalfWidth(w.tag);
+    const line = half === undefined ? undefined : located(w.nd);
+    return line && line.length >= 2 ? [{ line, half: half!, layer: osmLayer(w.tag) ?? 0 }] : [];
+  });
+  const tramRoadIndex = index(tramRoads, (r) => r.line);
+  const reach = Math.max(0, ...tramRoads.map((r) => r.half));
+  const strips = data.way.flatMap((w) => {
+    const grass =
+      w.tag.landuse === 'grass' || w.tag.landcover === 'grass' || w.tag.natural === 'grassland';
+    const ring = grass && w.nd[0] === w.nd.at(-1) ? located(w.nd) : undefined;
+    if (!ring || ring.length < 4) return [];
+    const area = Math.abs(
+      ring.reduce((sum, a, i) => {
+        const b = ring[(i + 1) % ring.length]!;
+        return sum + a.x * b.y - b.x * a.y;
+      }, 0) / 2,
     );
-  if (!areas.length) spatial.add(0, 0, 0, 0);
-  spatial.finish();
+    return (2 * area) / polylineLength(ring) <= grassStripM ? [ring] : [];
+  });
+  const stripIndex = index(strips, (r) => r);
   for (const t of trams) {
     const tag = ways.get(t.osmId!)!;
+    const paved = pavedSurfaces.has(tag.surface ?? '');
     const bed: TrackForm | undefined =
       tag.surface === 'grass' || tag['railway:track_ballast'] === 'no'
         ? 'grass'
-        : tag['railway:track_ballast'] === 'yes'
+        : tag['railway:track_ballast'] === 'yes' || ballastSurfaces.has(tag.surface ?? '')
           ? 'ballast'
-          : pavedSurfaces.has(tag.surface ?? '')
+          : paved
             ? 'paved'
             : undefined;
-    let form: TrackForm | undefined =
-      tag.embedded === 'yes'
-        ? 'embedded'
-        : tag.embedded === 'no'
-          ? (bed ?? 'ballast')
+    let form: TrackForm | undefined = tag.highway
+      ? 'embedded'
+      : tag.embedded === 'no'
+        ? (bed ?? 'ballast')
+        : tag.embedded
+          ? 'embedded'
           : bed === 'grass' || bed === 'ballast'
             ? bed
             : undefined;
-    if (!form) {
-      // Length-weighted samples at the middle of each metre along the centreline.
-      const lengths = cumulativeLengths(t.line),
-        length = lengths.at(-1)!,
-        steps = Math.max(1, Math.round(length));
-      let inRoad = 0,
-        inTramRoad = 0;
-      for (let i = 0; i < steps; i++) {
-        const p = pointAtDistance(t.line, lengths, ((i + 0.5) * length) / steps);
-        const hits = spatial
-          .search(p.x, p.y, p.x, p.y)
-          .map((j) => areas[j]!)
-          .filter((a) => a.layer === t.layer && pointInPolygon(p, a.ring));
-        if (hits.length) inRoad++;
-        if (hits.some((a) => a.tramRails)) inTramRoad++;
-      }
-      if (inTramRoad > steps / 2) form = 'embedded';
-      else {
-        form = inRoad >= embeddedShare * steps ? 'embedded' : (bed ?? 'ballast');
-        t.provenance = { source: 'osm', inferred: ['form'] };
-      }
+    if (form) {
+      t.form = form;
+      continue;
     }
+    // Length-weighted samples at the middle of each metre along the centreline.
+    const lengths = cumulativeLengths(t.line),
+      length = lengths.at(-1)!,
+      steps = Math.max(1, Math.round(length));
+    let inRoad = 0,
+      byRoad = 0,
+      onTramRoad = 0,
+      onStrip = 0;
+    for (let i = 0; i < steps; i++) {
+      const p = pointAtDistance(t.line, lengths, ((i + 0.5) * length) / steps);
+      if (
+        tramRoadIndex.search(p.x - reach, p.y - reach, p.x + reach, p.y + reach).some((j) => {
+          const r = tramRoads[j]!;
+          return r.layer === t.layer && nearestOnPolyline(r.line, p).away <= r.half;
+        })
+      )
+        onTramRoad++;
+      const near = areaIndex
+        .search(p.x - alongsideM, p.y - alongsideM, p.x + alongsideM, p.y + alongsideM)
+        .map((j) => areas[j]!)
+        .filter((a) => a.layer === t.layer);
+      if (near.some((a) => pointInPolygon(p, a.ring))) {
+        inRoad++;
+        byRoad++;
+        continue;
+      }
+      if (near.some((a) => a.oneLane && nearestOnPolyline(a.ring, p).away <= alongsideM)) byRoad++;
+      // Off the road only, where a strip ends at the kerb, a little short of the drawn one.
+      if (
+        stripIndex
+          .search(p.x - stripReachM, p.y - stripReachM, p.x + stripReachM, p.y + stripReachM)
+          .some(
+            (j) =>
+              pointInPolygon(p, strips[j]!) || nearestOnPolyline(strips[j]!, p).away <= stripReachM,
+          )
+      )
+        onStrip++;
+    }
+    if (onTramRoad > steps / 2) {
+      t.form = 'embedded';
+      continue;
+    }
+    form =
+      inRoad >= embeddedShare * steps
+        ? 'embedded'
+        : onStrip > (steps - inRoad) / 2 && !paved
+          ? 'grass'
+          : byRoad >= embeddedShare * steps
+            ? 'embedded'
+            : (bed ?? 'ballast');
     t.form = form;
+    t.provenance = { source: 'osm', inferred: ['form'] };
   }
 }

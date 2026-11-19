@@ -368,7 +368,8 @@ export const style = {
   vegetation: { canopy: [0xb6d8a6, 0xc1deb2, 0xaad19a], trunk: 0x9c8f7a },
   /** TASK-135: tram track forms, apart from the railway palette in `rail-geometry.ts`. */
   tram: {
-    beds: { grass: 0x9dbf88, paved: 0xc4b9a8, ballast: 0x9e9c95 },
+    // TASK-220: paved is grey stone (was 0xc4b9a8, a warm sand), apart from asphalt and ballast.
+    beds: { grass: 0x9dbf88, paved: 0xbab5ab, ballast: 0x9e9c95 },
     sleeper: 0xc6c2b8,
     rail: 0x5b6266,
     groove: 0x4a5054,

@@ -17,6 +17,7 @@ import { cityGrades } from '../render/grades';
 import { bedWidthM, railGeometry, type RailShape } from '../render/rail-geometry';
 import type { CityGeometry, Pick } from '../render/types';
 import { style } from '../render/style';
+import { surfaceTexture } from './vegetation';
 import type { Vec2 } from '../geo/vec2';
 import type { cityHeights } from './heights';
 import { RailPaintCache } from './rail-paint-cache';
@@ -31,7 +32,11 @@ const tramHeights: Record<NonNullable<RailShape['tram']>, [number, number]> = {
   sleepers: [0.13, 0.13],
   rail: [0.17, 0.12],
   street: [0.06, 0],
+  // TASK-220: the road surfaces' own lift, so the asphalt meets them flush.
+  paving: [0.02, 0.02],
 };
+/** TASK-220: embedded track in a pedestrian street sits on its footways (0.14 m, `walk.ts`). */
+const onWalkM = 0.145;
 // A deterministic mottle in [-1, 1] from the position, the procedural grass tone.
 const mottle = (x: number, y: number) => {
   const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
@@ -421,21 +426,21 @@ export function buildRail(
     colors: [] as number[],
     spans: [] as { pick: Pick | undefined; from: number; to: number }[],
   }));
+  // TASK-220: embedded track's street paving, lit and grained as the road asphalt it continues.
+  const paving = { positions: [] as number[], colors: [] as number[], uvs: [] as number[] };
   const color = new Color();
   const side = new Color();
   for (const shape of railGeometry(city, source)) {
     if (shape.only2d) continue;
     const track = shape.pick?.kind === 'track' ? city.rail!.tracks[shape.pick.track] : undefined;
     const batch = batches[track && rail!.grades[track.idx] === 'tunnel' ? 1 : 0]!;
-    const { positions, colors } = batch;
+    const { positions, colors } = shape.tram === 'paving' ? paving : batch;
     const from = colors.length;
     color.setHex(shape.color);
     side.copy(color).multiplyScalar(0.72);
-    const [top, foot] = shape.tram
-      ? tramHeights[shape.tram]
-      : shape.crossing
-        ? [0.085, 0.085]
-        : [0.06, 0.06];
+    const [top, foot] = (
+      shape.tram ? tramHeights[shape.tram] : shape.crossing ? [0.085, 0.085] : [0.06, 0.06]
+    ).map((h) => (shape.onWalk ? h + onWalkM : h)) as [number, number];
     const ramp = track && rail!.profiles[track.idx]!.length > 1;
     const node = shape.node === undefined ? undefined : city.rail!.nodes[shape.node]!;
     const nodeTrack = node && city.rail!.tracks[node.tracks[0]!]!;
@@ -469,6 +474,7 @@ export function buildRail(
       }
       for (const p of [...tri].reverse()) {
         positions.push(p.x, z(p, top), p.y);
+        if (shape.tram === 'paving') paving.uvs.push(p.x / 2.56, p.y / 2.56);
         if (shape.grass) {
           const k = 1 + 0.07 * mottle(p.x, p.y);
           colors.push(color.r * k, color.g * k, color.b * k);
@@ -492,7 +498,7 @@ export function buildRail(
           );
           for (let k = 0; k < 6; k++) colors.push(side.r, side.g, side.b);
         }
-    batch.spans.push({ pick: shape.pick, from, to: colors.length });
+    if (shape.tram !== 'paving') batch.spans.push({ pick: shape.pick, from, to: colors.length });
   }
   const meshes = batches.map(({ positions, colors }) => {
     const geometry = new BufferGeometry()
@@ -512,6 +518,29 @@ export function buildRail(
   if (structures) group.add(structures.solidMesh, structures.tubeMesh);
   const paintCache = new RailPaintCache(meshes[0]!);
   group.add(paintCache.mesh);
+  if (paving.positions.length) {
+    const mesh = new Mesh(
+      new BufferGeometry()
+        .setAttribute('position', new Float32BufferAttribute(paving.positions, 3))
+        .setAttribute('color', new Float32BufferAttribute(paving.colors, 3))
+        .setAttribute('uv', new Float32BufferAttribute(paving.uvs, 2))
+        .setAttribute(
+          'normal',
+          new Float32BufferAttribute(
+            Array.from({ length: paving.positions.length / 3 }, () => [0, 1, 0]).flat(),
+            3,
+          ),
+        ),
+      new MeshLambertMaterial({
+        vertexColors: true,
+        side: DoubleSide,
+        map: surfaceTexture('asphalt'),
+      }),
+    );
+    mesh.name = 'tram-paving';
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
   if (structures) {
     const material = structures.tubeMesh.material as MeshLambertMaterial;
     material.transparent = true;

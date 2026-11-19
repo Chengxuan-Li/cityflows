@@ -203,8 +203,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // access and two dead-end roads into the pedestrian Schwabentor removed; the ZOB's taxi rank
   // turns round.
   // TASK-214: rebuilt by the lead (connector positions, platform and junction-group ids move).
+  // TASK-220: rebuilt for the tram track forms (only tram `form` and its provenance change).
   expect(manifest.files['city.json']).toBe(
-    '2243703f23e12701edf30fd518326404849328dd604430c0021f620da6042878',
+    '77d57494b1cc58e34a7b28acaf75801d2b99d815299232fcae346aceeee9bc67',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).

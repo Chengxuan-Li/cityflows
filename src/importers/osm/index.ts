@@ -433,7 +433,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addStrips(city, data, positions, bounds, diagnostics);
   connectCarExits(city, parkingGraph, garageFootprints);
   importRail(city, data, positions, bounds, diagnostics);
-  assignTramForms(city, data, parkingGraph);
+  assignTramForms(city, data, parkingGraph, positions);
   if (options.context !== false)
     city.context = { features: importContext(data, positions, bounds, diagnostics, true) };
   if (city.rail && city.context)

@@ -110,3 +110,87 @@ test('T69 the railway imports as it does without trams, and the same import give
   const hash = (c: City) => createHash('sha256').update(JSON.stringify(c)).digest('hex');
   expect(hash(load())).toBe(hash(city));
 });
+
+// TASK-220 (TASK-216 D8): more tags and the inference beside one-lane carriageways and on grass.
+test('T220 forms from paving surfaces, embedded values, tram streets, grass strips and one-lane carriageways', () => {
+  const square = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+    [x0, y0],
+  ];
+  const city = load(
+    osm([
+      // A one-way one-lane residential street (drawn 3 m wide) at y = 0, and a two-lane one at y = 60.
+      {
+        id: 1,
+        tags: { highway: 'residential', lanes: '1', oneway: 'yes' },
+        points: [
+          [-250, 0],
+          [250, 0],
+        ],
+      },
+      {
+        id: 2,
+        tags: { highway: 'secondary', lanes: '2', oneway: 'yes' },
+        points: [
+          [-250, 60],
+          [250, 60],
+        ],
+      },
+      // A pedestrian street carrying the rails in its lanes, and a tram mapped on a service way.
+      {
+        id: 3,
+        tags: { highway: 'pedestrian', 'railway:lanes:forward': 'tram|no', surface: 'sett' },
+        points: [
+          [-250, -100],
+          [250, -100],
+        ],
+      },
+      // A 6 m grass strip along y = 150 and a 60 m lawn around y = 210 (not a strip).
+      { id: 4, tags: { landuse: 'grass' }, points: square(-220, 147, 220, 153) },
+      { id: 5, tags: { leisure: 'park', landuse: 'grass' }, points: square(-220, 180, 220, 240) },
+      ...(
+        [
+          [20, 3.2, {}], // beside the one-lane street, outside its 3 m: embedded (inferred)
+          [21, 65.2, {}], // as far beside the two-lane street (7 m): ballast (inferred)
+          [22, -98, { surface: 'cobblestone' }], // in the tram street: embedded
+          [23, 100, { surface: 'cobblestone' }], // alone, cobbled: paved (inferred)
+          [24, 120, { embedded: 'pavement' }],
+          [25, 150, {}], // on the grass strip: grass (inferred)
+          [26, 210, {}], // across the lawn: ballast (inferred)
+          [27, 260, { surface: 'gravel' }],
+          [28, 150.5, { surface: 'paving_stones' }], // tagged paving wins over the strip
+        ] as [number, number, Record<string, string>][]
+      ).map(([id, y, tags]) => ({ id, tags: { railway: 'tram', ...tags }, points: line(y) })),
+      {
+        id: 29,
+        tags: { railway: 'tram', highway: 'service' },
+        points: [
+          [-200, -130],
+          [200, -130],
+        ],
+      },
+    ]),
+  );
+  const expected: Record<number, [string, boolean]> = {
+    20: ['embedded', true],
+    21: ['ballast', true],
+    22: ['embedded', false],
+    23: ['paved', true],
+    24: ['embedded', false],
+    25: ['grass', true],
+    26: ['ballast', true],
+    27: ['ballast', false],
+    28: ['paved', true],
+    29: ['embedded', false],
+  };
+  for (const [id, [form, inferred]] of Object.entries(expected))
+    for (const t of byWay(city, Number(id)))
+      expect({
+        way: id,
+        form: t.form,
+        inferred: !!t.provenance?.inferred?.includes('form'),
+      }).toEqual({ way: id, form, inferred });
+});

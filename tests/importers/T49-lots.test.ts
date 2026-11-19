@@ -30,12 +30,16 @@ const baseline = {
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    '7bbba539e3a81d7042c8a174300e31926332d563f0457f2b1ed88b997ca8565c',
+    // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
+    // tram `form` stripped the city equals b3bcde6's.
+    '55580eac3a03b319128b5a49dd3d50fe57997b19083bb4575b461dc5503ca5ef',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    '98d88486016507e5afd11787a012ff060229039e6a24c495674960fd7a35acc4',
+    // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
+    // tram `form` stripped the city equals b3bcde6's.
+    'd4d0ac475cd173a8aada1fa5fce7217509d6f0633cf09ef08dbc3de842a26c12',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
