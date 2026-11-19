@@ -85,8 +85,9 @@ const baseline = {
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
+    // TASK-217: an entry lane shows its turns through the whole junction group (M1).
     compile: 'f25342f599272f7bb143910b7f7a855e7b0a313928a2da4632038dddca22b62d',
-    arrows: '12672c2496ebf0ba83725a10f255712bd00e081631eaccb0c407e555037d0422',
+    arrows: 'a53a6755a8a990f7e1e9c3773d6d12a4dfb523f7a288168e854cb2ec04e39056',
   },
 } as const;
 const hash = (value: unknown) =>

@@ -158,16 +158,16 @@ const pins = {
     compile: '94f4c0a0c54c607f58d079b290976c3b5429903d55353ac5f66bee1948e9aa5e',
     lamps: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
     curbs: 'e45b9bee6d047cf3354bb3e6f57e86ae929db7210a24bf866f44e2e46892736d',
-    de: '822b5cf8111f54a40468c2a59f1bf1b48d4acbc602a8c78be8daf1bc70cf86d8',
-    us: '619044a5c6f76eb0ae11811514404d30215ceebf4246e71469b1bed6f144e52f',
+    de: '1bc52f00a134b3fbed827342299fd671d0d27c082f4a1d3cc9fba53f5f871284',
+    us: 'a458c46b4972ea56829046a4f248d2ed0e7605ebf06f05ad9a783fdeabf98269',
   },
   town: {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     compile: '3595116920f094559c7d78b9cc1cfde9fa1b0773419b31a7df233ea8a4909e79',
     lamps: 'bd56acb9b3028f1d5a884f0926a86e19405a839f16185957cb0479a89ee99d7f',
     curbs: 'e5b1df98b54b260c89c37bf096c4aa51ba309b50ed7b6dfdb318d0487fe170ca',
-    de: '7f515227bf45fa456c539a3ec5b25cb9c98e2c45790f34d5fd89b62fc0b459a6',
-    us: '832e7626f8885cb77334373a6a9c8ce57f9f73f9c828e11f4bffb80504d033da',
+    de: 'ff73eb4e2a6234d91a773a570f491f1eb3d3453d7e9ef564786dbf3c8abfcf12',
+    us: 'e2c414d8332497748b26a0318058924304b1812d54425ea365139599dee63397',
   },
   // TASK-131 keeps OSM geometry (no node merges, junction groups): the real cities' roads,
   // lamps, curbs and paint move, so they no longer equal main's.
@@ -197,9 +197,9 @@ const pins = {
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
-    de: '93c80da1875ad5068561101700c2d56d7453fd0a40f08629bebcc74b2d5f9a99',
+    de: '645d23751d626ef6d9a6c1da294898903053137ce362f632827bd30c9d13187b',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    us: '1ca009b61590dd872e3d0d080b60c85e8d0fe95a1aaecacd85e3bbb04858cb82',
+    us: '98f62234ad45f2cace7a1d43b244bc1f86378284b688263ecfd5d4acf1a01be1',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
@@ -211,8 +211,8 @@ const pins = {
     compile: 'd08892bdc1c6ed077bba19e06dce14841e1e2c009ac69138dff2ea366e899078',
     lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
     curbs: '463c6ce254acbddf8b3a709efcfd3f621e40244c7f9641e9b6f69fc176260c4b',
-    de: 'dffa64d12d9776e183bb26d98388a4c5d2517520d0965164cba1dde237a6ac82',
-    us: 'e6324d6b7ecb9b76d110d719e52b7d50f54afb63d305bacd5bebadd43ee35d14',
+    de: 'da80a22d3a6439a24be0cb2aa377451494a82943755c2fb4691c3856736fac34',
+    us: 'f7bd9f157198df6d4ab267e3ce70cc34583a69a647a8392be679b2c1ccbd4f01',
   },
 } as const;
 const hash = (value: unknown) =>

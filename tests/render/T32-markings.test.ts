@@ -16,11 +16,8 @@ import {
 } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { compile, type CLane, type CompiledCity, type CRoad } from '../../src/network';
-import {
-  approachMarkings,
-  crossingPlacement,
-  crossingStripes,
-} from '../../src/render/layers/roads';
+import { crossingSpan } from '../../src/network/crossings';
+import { approachMarkings } from '../../src/render/layers/roads';
 import { markingTheme } from '../../src/render/style';
 import { roadMarkingGeometry } from '../../src/render/marking-geometry';
 import { cityTest, tierCities, unitTest } from '../tier';
@@ -87,16 +84,16 @@ test.each(tierCities(['grid', 'munich'] as const))(
         .map((o) => [...o.surface, o.surface[0]!]);
       // TASK-091 (B46): a centre line ends where its node's outline reaches back over the lane.
       const outline = city.nodes[road.to]!.outline;
-      const crossingEnd = crossingStripes(city, road, true).length
-        ? crossingPlacement(city, road, true).farM
-        : 0;
-      const startTrim = crossingStripes(city, road, false).length
-        ? crossingPlacement(city, road, false).farM + 0.5
-        : 0;
       const headingOf = (lane: CLane) => (s: number) =>
         headingAtDistance(lane.polyline, lane.cumulative, s);
       for (const index of road.lanes) {
         const lane = city.lanes[index]!;
+        // TASK-215: each lane's own span of the crossings (a band crosses lanes obliquely).
+        const end = crossingSpan(city, lane, true);
+        const crossingEnd = end ? lane.lengthM - end.farM : 0;
+        const startTrim = (crossingSpan(city, lane, false)?.farM ?? -0.5) + 0.5;
+        // TASK-215 (M2): an inner road's lanes under 15 m carry no lines.
+        if (road.group !== undefined && lane.lengthM < 15) continue;
         for (const offset of laneLines(road, lane)) {
           checked++;
           let reach = 0;
@@ -172,7 +169,11 @@ test.each(tierCities(['grid', 'munich'] as const))(
     let drawn = 0;
     for (const road of city.roads) {
       const { arrows } = record(city, road);
-      const alike = new Set(road.lanes.map((i) => turnsOf(city, city.lanes[i]!))).size === 1;
+      // TASK-215 (M1): a group entry's arrows show its paths through the group, not its movements.
+      const entry = road.group === undefined && city.nodes[road.to]!.group !== undefined;
+      const turns = (lane: CLane) =>
+        entry ? approachMarkings(city, lane).turns.toSorted().join() : turnsOf(city, lane);
+      const alike = new Set(road.lanes.map((i) => turns(city.lanes[i]!))).size === 1;
       for (const index of road.lanes) {
         const lane = city.lanes[index]!;
         const points = arrows
@@ -195,9 +196,14 @@ test.each(tierCities(['grid', 'munich'] as const))(
           wrong.push(`${lane.id}: more than once`);
         // TASK-091: behind a crossing set back from the junction an arrow's front stays 0.5 m
         // from it (within the 2.5 m an arrow shape varies by).
-        const gap = lane.lengthM - crossingPlacement(city, road, true).farM - Math.max(...along);
-        const behind = crossingStripes(city, road, true).length > 0 && gap > 0.45 && gap < 3;
-        if ((lane.stopM - centre < 6 || lane.stopM - centre > 9) && !behind)
+        const end = crossingSpan(city, lane, true);
+        const gap = end ? end.farM - Math.max(...along) : 0;
+        const behind = end !== null && gap > 0.45 && gap < 3;
+        // TASK-215 (M4): or moved forward off the crossing at the lane's start, 0.5 m past it.
+        const start = crossingSpan(city, lane, false);
+        const past = start ? Math.min(...along) - start.farM : 0;
+        const after = start !== null && past > 0.45 && past < 3;
+        if ((lane.stopM - centre < 6 || lane.stopM - centre > 9) && !behind && !after)
           wrong.push(`${lane.id}: centred ${(lane.stopM - centre).toFixed(2)} m before stop`);
       }
     }

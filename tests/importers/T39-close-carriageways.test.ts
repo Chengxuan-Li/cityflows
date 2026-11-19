@@ -11,7 +11,7 @@ import {
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity } from '../../src/network';
-import { crossingStripes } from '../../src/render/layers/roads';
+import { crossingPlacement } from '../../src/network/crossings';
 import type { City, Road } from '../../src/schema';
 import { importedRoadBodyOverlaps, junctionOverlaps } from '../network/junction-audit';
 import { cityTest, tierCities, unitTest } from '../tier';
@@ -524,7 +524,8 @@ cityTest(
     ] as const) {
       const road = net.roads[net.index.road.get(id)!]!;
       const node = net.index.node.get(at)!;
-      expect(crossingStripes(net, road, road.to === node).length, id).toBe(stripes);
+      // TASK-217: their crossings paint signal lines; the stripes are the placement's.
+      expect(crossingPlacement(net, road, road.to === node).stripes.length, id).toBe(stripes);
     }
     expect(city.roads['r:728']!.lateralOffsetM).toBe(0);
     expect(city.roads['r:984']!.lateralOffsetM).toBe(0);

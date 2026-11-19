@@ -163,9 +163,9 @@ describe('T68 Phase 2: inner links, shifts and editing', () => {
       for (const l of net.roads[r]!.lanes) expect(net.lanes[l]!.stopM).toBe(net.lanes[l]!.lengthM);
   });
 
-  it('T68.14: an inner road draws its lane lines only (owner, checkpoint 2)', () => {
-    // The side street with two lanes each way: its inner roads carry a dashed lane line, no
-    // centre, edge, stop or yield line.
+  it('T68.14: an inner road draws its lane lines only (owner, checkpoint 2), on lanes of 15 m or more', () => {
+    // The side street with two lanes each way: its inner roads carry no centre, edge, stop or
+    // yield line, and (TASK-215, M2) their 11 m lanes no lane line either.
     const xml = dualSingle(20).replace(
       '<tag k="name" v="Side"/>',
       '<tag k="name" v="Side"/><tag k="lanes" v="4"/>',
@@ -180,10 +180,9 @@ describe('T68 Phase 2: inner links, shifts and editing', () => {
     expect(inner.length).toBeGreaterThan(0);
     for (const road of inner) {
       expect(road.lanes.length).toBe(2);
+      for (const i of road.lanes) expect(net.lanes[i]!.lengthM).toBeLessThan(15);
       const { below, above } = roadMarkingGeometry(net, road);
-      const shapes = [...below, ...above];
-      expect(shapes.length).toBeGreaterThan(0);
-      expect(new Set(shapes.map((s) => s.role))).toEqual(new Set(['lane']));
+      expect([...below, ...above]).toEqual([]);
     }
   });
 

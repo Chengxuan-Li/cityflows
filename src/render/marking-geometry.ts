@@ -17,21 +17,26 @@ import {
   offsetPolyline,
   pointAtDistance,
   pointInPolygon,
+  polylineCrossings,
   segmentDistance,
   segmentIntersection,
   trimPolyline,
   nearestOnPolyline,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { CLane, CMovement, CNode, CompiledCity, CRoad, Turn } from '../network';
+import type { CGroup, CLane, CMovement, CNode, CompiledCity, CRoad, Turn } from '../network';
 import {
   crossingEnabled,
   crossingPlacement,
   crossingSpan,
+  crossingStyle,
   endDirection,
   endEdges,
+  MAPPED_M,
+  nearSignal,
   type CrossingSource,
 } from '../network/crossings';
+import { lanesNear } from '../network/walk';
 import { SETBACK_CAP_M, junctionCorners } from '../network/junctions';
 import { keepClearZones } from '../network/keep-clear';
 import {
@@ -45,6 +50,8 @@ import { defaultSlice, orderBranches } from '../network/continuity';
 import { paintedCity, paintedLaneEdges as laneEdges } from './road-paint';
 
 const LINE_CLEAR_M = 0.5;
+/** TASK-215 (M2): an inner road's lanes carry lane lines from this length (the audit's 15 m). */
+const INNER_LINES_M = 15;
 
 export type MarkingShape = {
   color?: number;
@@ -148,13 +155,37 @@ export function keepClearMarkings(
   city: CompiledCity,
   road: CRoad,
   markingTheme: MarkingTheme = defaultTheme,
+  source?: CrossingSource,
 ): MarkingShape[] {
   const shapes: MarkingShape[] = [];
   const zones = keepClearZones(city);
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
-    for (const zone of zones[index]!) {
-      if (zone.kind !== 'mouth' || zone.toM - zone.fromM < 3) continue;
+    // TASK-215 (M4): not over a crossing's stripes (Freiburg n:1462, a lot mouth at two
+    // crossings): a box is drawn on the parts of its zone 0.5 m clear of the lane's crossings.
+    const crosswalks = [false, true].flatMap((atEnd) => {
+      const span = crossingSpan(city, lane, atEnd, source);
+      return span
+        ? [
+            {
+              fromM: Math.min(span.nearM, span.farM) - LINE_CLEAR_M,
+              toM: Math.max(span.nearM, span.farM) + LINE_CLEAR_M,
+            },
+          ]
+        : [];
+    });
+    const pieces = zones[index]!.filter((zone) => zone.kind === 'mouth').flatMap((zone) =>
+      crosswalks.reduce(
+        (parts, walk) =>
+          parts.flatMap((part) => [
+            ...(walk.fromM > part.fromM ? [{ ...part, toM: Math.min(part.toM, walk.fromM) }] : []),
+            ...(walk.toM < part.toM ? [{ ...part, fromM: Math.max(part.fromM, walk.toM) }] : []),
+          ]),
+        [zone],
+      ),
+    );
+    for (const zone of pieces) {
+      if (zone.toM - zone.fromM < 3) continue;
       const half = lane.widthM / 2 - 0.15;
       // Lane coordinates: `x` along the lane from the zone's start, `y` to the driver's right.
       const world = ({ x, y }: Vec2) => {
@@ -336,10 +367,13 @@ function buildRoadMarkings(
   // TASK-131 (owner, checkpoint 2): an inner road of a junction group is part of the junction
   // surface, but its lanes run on through the group: dashed lines between lanes of one direction,
   // as on any road; no centre or edge line, and no stop, yield or crossing (`approachMarkings`).
+  // TASK-215 (M2): only on lanes of `INNER_LINES_M` or more; on the short links of most groups
+  // (Freiburg's inner lanes run 2 to 9 m between their cuts) a dash or two splays across the
+  // junction at the link's angle.
   if (road.group !== undefined) {
     for (const index of road.lanes) {
       const lane = city.lanes[index]!;
-      if (lane.right < 0) continue;
+      if (lane.right < 0 || lane.lengthM < INNER_LINES_M) continue;
       draw(
         roadDashes(
           parallelOffset(lane.polyline, lane.widthM / 2),
@@ -383,10 +417,11 @@ function buildRoadMarkings(
     // start and below the junction surface; here only their stretch under it, in their phase.
     if (lane.right >= 0)
       draw(
-        roadDashes(
+        dividerPieces(
           parallelOffset(along, lane.widthM / 2),
           !tapered,
           markingTheme.classes[road.roadClass].lane.dash!,
+          solidBeforeStop(city, road, lane),
         ),
         0.78,
         !tapered,
@@ -474,17 +509,64 @@ function buildRoadMarkings(
               });
       }
     }
-    aboveShapes.push(...approachShapes(city, lane, endFarM, markingTheme));
+    aboveShapes.push(...approachShapes(city, lane, endFarM, startSpan?.farM ?? 0, markingTheme));
   }
+  aboveShapes.push(...stopLine(city, road, markingTheme));
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
-  belowShapes.push(...keepClearMarkings(city, road, markingTheme));
+  belowShapes.push(...keepClearMarkings(city, road, markingTheme, source));
   return { below: belowShapes, above: aboveShapes, pavement };
 }
 
+/**
+ * TASK-215 (M6): an approach's stop line, one line across all its lanes where any lane has one
+ * (`approachMarkings`): through each lane's stop position, from 0.44 of a lane width beyond the
+ * first lane's to as far beyond the last's, so it meets every lane where its cars stop, also
+ * where a lane's stop position or heading differs from its neighbour's (Freiburg r:1185 at n:970,
+ * whose short lanes end 0.26 m apart and fold) and on a lane without movements (r:1148#4).
+ */
+function stopLine(
+  city: CompiledCity,
+  road: CRoad,
+  markingTheme: MarkingTheme = defaultTheme,
+): MarkingShape[] {
+  const lanes = road.lanes.map((i) => city.lanes[i]!);
+  if (!lanes.some((lane) => approachMarkings(city, lane).stop)) return [];
+  const stops = lanes.map((lane) => pointAtDistance(lane.polyline, lane.cumulative, lane.stopM));
+  const first = lanes[0]!,
+    last = lanes.at(-1)!;
+  // Across the approach, to the right of travel: from the first stop to the last, or square to a
+  // lone lane.
+  let across = { x: stops.at(-1)!.x - stops[0]!.x, y: stops.at(-1)!.y - stops[0]!.y };
+  if (lanes.length === 1) {
+    const h = headingAtDistance(first.polyline, first.cumulative, first.stopM);
+    across = { x: -Math.sin(h), y: Math.cos(h) };
+  }
+  const length = Math.hypot(across.x, across.y);
+  const beyond = (p: Vec2, lane: CLane, side: number) => ({
+    x: p.x + (side * across.x * lane.widthM * 0.44) / length,
+    y: p.y + (side * across.y * lane.widthM * 0.44) / length,
+  });
+  return [
+    lineShape(
+      road,
+      'stop',
+      [
+        beyond(stops[0]!, first, -1),
+        ...(lanes.length > 1 ? stops : []),
+        beyond(stops.at(-1)!, last, 1),
+      ],
+      1,
+      markingTheme,
+    ),
+  ];
+}
+
+/** `startFarM`: the far edge of the crossing at the lane's start, from its start (0 for none). */
 function approachShapes(
   city: CompiledCity,
   lane: CLane,
   crossingFarM: number,
+  startFarM: number,
   markingTheme: MarkingTheme = defaultTheme,
 ): MarkingShape[] {
   const marks = approachMarkings(city, lane, crossingFarM);
@@ -499,16 +581,6 @@ function approachShapes(
     };
   };
   const half = lane.widthM * 0.44;
-  if (marks.stop)
-    shapes.push(
-      lineShape(
-        road,
-        'stop',
-        [local(lane.stopM, 0, -half), local(lane.stopM, 0, half)],
-        1,
-        markingTheme,
-      ),
-    );
   if (marks.yield && markingTheme.id === 'uk') {
     for (const forward of [0, -0.6])
       for (let side = -half; side < half; side += 0.9)
@@ -551,7 +623,15 @@ function approachShapes(
       (lane.speedLimitMps >= 70 / 3.6 ? markingTheme.fastArrowLengthM : markingTheme.arrowLengthM) /
       5;
     // Keep the existing centre unless the longer glyph needs more space behind the crossing.
-    const at = Math.min(marks.arrowAt, lane.lengthM - crossingFarM - ARROW_CLEAR_M - 2.5 * scale);
+    let at = Math.min(marks.arrowAt, lane.lengthM - crossingFarM - ARROW_CLEAR_M - 2.5 * scale);
+    // TASK-215 (M4): nor on the crossing at the lane's start (Freiburg r:467 at n:464): moved
+    // forward clear of it where the lane has room before its stop line and end crossing, else none.
+    const back = startFarM + ARROW_CLEAR_M + 2.5 * scale;
+    if (startFarM > 0 && at < back) {
+      const front = Math.min(lane.stopM, lane.lengthM - crossingFarM) - ARROW_CLEAR_M - 2.5 * scale;
+      if (back > front) return shapes;
+      at = back;
+    }
     for (const polygon of turns.length === 3
       ? [...markingTheme.arrows.through, ...markingTheme.arrows['left-right']]
       : markingTheme.arrows[key])
@@ -671,6 +751,46 @@ function splitAtRing(line: Vec2[], ring: Vec2[]) {
   return { inside, outside };
 }
 
+/** TASK-217 (M7, owner-approved, German practice): a lane line is solid over the last
+ * `SOLID_M` before a stop line, over the last half of a line shorter than twice that. */
+const SOLID_M = 30;
+
+/**
+ * TASK-217 (M7): how much of the line between `lane` and its right-hand neighbour is solid
+ * before the approach's stop line (`approachMarkings`), in metres back from the lane's stop
+ * position: `SOLID_M`, or half the stop position on a short road, and no farther back than the
+ * end of a lane gain's taper on either side (the added lane is entered across a dashed line);
+ * none beside a lane that ends in a taper (its cars merge across the line).
+ */
+function solidBeforeStop(city: CompiledCity, road: CRoad, lane: CLane): number {
+  const neighbour = city.lanes[lane.right]!;
+  if (
+    lane.taperEndM ||
+    neighbour.taperEndM ||
+    !road.lanes.some((i) => approachMarkings(city, city.lanes[i]!).stop)
+  )
+    return 0;
+  const gain = Math.max(lane.taperStartM, neighbour.taperStartM);
+  return Math.max(0, Math.min(SOLID_M, lane.stopM / 2, lane.stopM - gain));
+}
+
+/** A divider's pieces: dashes (`roadDashes`) and, where `solidM` > 0, one solid line over its
+ * last `solidM` metres, the dashes then anchored to the solid line's start. */
+function dividerPieces(
+  line: Vec2[],
+  fromEnd: boolean,
+  pattern: readonly [number, number],
+  solidM: number,
+): Vec2[][] {
+  const total = cumulativeLengths(line).at(-1)!;
+  const solid = Math.min(solidM, total);
+  if (solid <= 0.05) return roadDashes(line, fromEnd, pattern);
+  return [
+    ...(total - solid > 0.05 ? roadDashes(trimPolyline(line, 0, solid), true, pattern) : []),
+    trimPolyline(line, total - solid, 0),
+  ];
+}
+
 /** Dashes of a divider: anchored so the last dash ends at the line's end, or as
  * `drawTransitions` lays them, from its start. */
 function roadDashes(line: Vec2[], fromEnd: boolean, pattern: readonly [number, number]): Vec2[][] {
@@ -717,8 +837,12 @@ function mouthPiece(road: CRoad, atEnd: boolean): Vec2[] {
 }
 
 /** The turns a lane's arrow shows: its usable movements, without u-turns and turns into
- * service roads. */
+ * service roads. TASK-215 (M1): on an entry of a junction group, its paths through the group
+ * (`groupTurns`), not the first inner link it enters. */
 function arrowTurns(city: CompiledCity, lane: CLane): Turn[] {
+  const road = city.roads[lane.road]!;
+  const group = road.group === undefined ? city.nodes[road.to]!.group : undefined;
+  if (group !== undefined) return groupTurns(city, city.groups![group]!, lane);
   const turns = new Set<Turn>();
   for (const index of lane.out) {
     const movement = city.movements[index]!;
@@ -726,6 +850,66 @@ function arrowTurns(city: CompiledCity, lane: CLane): Turn[] {
     if (movement.turn === 'merge' || movement.turn === 'diverge') continue;
     if (city.roads[city.lanes[movement.toLane]!.road]!.roadClass === 'service') continue;
     turns.add(movement.turn);
+  }
+  return [...turns];
+}
+
+/** Signed change of heading from `a` to `b`, in (-pi, pi]. */
+const turnBetween = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+
+/** The heading of a polyline's chord over its first 20 m. */
+function chordHeading(line: Vec2[]): number {
+  const lengths = cumulativeLengths(line);
+  const p = pointAtDistance(line, lengths, Math.min(20, lengths.at(-1)!));
+  return Math.atan2(p.y - line[0]!.y, p.x - line[0]!.x);
+}
+
+/**
+ * TASK-215 (M1): the turns of a group entry lane's chains (`CGroup.chains`) through the group,
+ * as the importer reads the entry's arrows (`groupAngle`): the angle between the entry's and the
+ * exit's chords over 20 m from the group, classified as a movement's turn is. That angle is taken
+ * on the side of a full turn the path itself turns through (the headings it changes along its
+ * movements and inner lanes), so a path round the block (three lefts, Freiburg r:1396#0 to
+ * r:868) is no right turn but a u-turn, and shown as none. A path of one movement keeps that
+ * movement's turn; paths with a never-green movement, into a service road, merges and diverges
+ * are left out as at any node (`arrowTurns`).
+ */
+function groupTurns(city: CompiledCity, group: CGroup, lane: CLane): Turn[] {
+  const turns = new Set<Turn>();
+  const entry = city.roads[lane.road]!;
+  for (const chain of group.chains) {
+    const movements = chain.movements.map((i) => city.movements[i]!);
+    if (movements[0]!.fromLane !== lane.idx || movements.some((m) => m.neverGreen)) continue;
+    const exit = city.roads[chain.to]!;
+    if (exit.roadClass === 'service') continue;
+    let turn = movements[0]!.turn;
+    if (movements.length > 1) {
+      let path = 0;
+      for (const [k, m] of movements.entries()) {
+        path += turnBetween(startHeading(m.polyline), endHeading(m.polyline));
+        if (k < movements.length - 1) {
+          const inner = city.lanes[m.toLane]!.polyline;
+          path += turnBetween(endHeading(m.polyline), startHeading(inner));
+          path += turnBetween(startHeading(inner), endHeading(inner));
+          path += turnBetween(endHeading(inner), startHeading(movements[k + 1]!.polyline));
+        }
+      }
+      const chord = turnBetween(
+        chordHeading([...entry.reference].reverse()) + Math.PI,
+        chordHeading(exit.reference),
+      );
+      const angle = chord + 2 * Math.PI * Math.round((path - chord) / (2 * Math.PI));
+      turn =
+        Math.abs(angle) > (5 * Math.PI) / 6
+          ? 'uturn'
+          : Math.abs(angle) < Math.PI / 6
+            ? 'through'
+            : angle > 0
+              ? 'right'
+              : 'left';
+    }
+    if (turn === 'uturn' || turn === 'merge' || turn === 'diverge') continue;
+    turns.add(turn);
   }
   return [...turns];
 }
@@ -801,16 +985,179 @@ function onOtherRoad(city: CompiledCity, lane: CLane, at: number): boolean {
   });
 }
 
-/** Zebra stripes of a road end's crossing, empty where it has none (`crossingEnabled`). */
+/** The paint of a road end's crossing, empty where it has none (`crossingEnabled`) or it is
+ * unmarked: zebra stripes, or the two broken lines of a signalised crossing along the stripes'
+ * near and far edges (TASK-217, `crossingStyle`). */
 export function crossingStripes(
   city: CompiledCity,
   road: CRoad,
   atEnd: boolean,
   source?: CrossingSource,
 ): Vec2[][] {
-  return crossingEnabled(city, road, atEnd, source)
-    ? crossingPlacement(city, road, atEnd).stripes
-    : [];
+  const mapped = mappedStripes(city, road, atEnd, source);
+  if (!crossingEnabled(city, road, atEnd, source)) return mapped;
+  const { stripes } = crossingPlacement(city, road, atEnd);
+  const style = crossingStyle(city, road, atEnd, source);
+  return [
+    ...(style === 'zebra' ? stripes : style === 'signal' ? signalLines(stripes) : []),
+    ...mapped,
+  ];
+}
+
+/** TASK-217 (D1): where each mapped crossing way (walk link of kind `crossing`) crosses a
+ * road's lanes, in lane metres from the lane's start, by road; a link crossing at another grade
+ * is left out. */
+const mappedHits = new WeakMap<object, WeakMap<CompiledCity, Map<number, MappedHit[]>>>();
+interface MappedHit {
+  link: number;
+  lane: number;
+  atM: number;
+}
+function roadMappedHits(city: CompiledCity, road: CRoad, source?: CrossingSource): MappedHit[] {
+  const walk = source?.walk;
+  if (!walk) return [];
+  let byCity = mappedHits.get(walk.links);
+  if (!byCity) mappedHits.set(walk.links, (byCity = new WeakMap()));
+  let byRoad = byCity.get(city);
+  if (!byRoad) {
+    byRoad = new Map();
+    for (const [k, link] of Object.values(walk.links).entries()) {
+      if (link.kind !== 'crossing') continue;
+      const grade = link.layer ?? walk.nodes[link.from]!.layer;
+      for (const i of lanesNear(city, link.line)) {
+        const lane = city.lanes[i]!;
+        if (city.roads[lane.road]!.grade !== grade) continue;
+        for (const hit of polylineCrossings(link.line, lane.polyline)) {
+          const list = byRoad.get(lane.road) ?? [];
+          list.push({ link: k, lane: i, atM: hit.alongB });
+          byRoad.set(lane.road, list);
+        }
+      }
+    }
+    byCity.set(city, byRoad);
+  }
+  return byRoad.get(road.idx) ?? [];
+}
+
+/**
+ * TASK-217 (D1): the paint of the mapped crossings over the half of a road nearer one end that
+ * the end's own crossing does not stand for: a midblock crossing (over `MAPPED_M` from the cut),
+ * or one at an end without a crossing of its own (Freiburg's zebras where a slip road splits at
+ * the crossing node, n:398). Stripes 2.5 m long along each lane, centred where the way crosses
+ * its centreline, at the end crossings' 0.9 m pitch across the road; none inside a junction; the
+ * broken lines of a signalised crossing near a signalized node (`nearSignal`), zebra stripes
+ * elsewhere.
+ */
+function mappedStripes(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): Vec2[][] {
+  const hits = roadMappedHits(city, road, source);
+  if (!hits.length || road.group !== undefined) return [];
+  const lanes = road.lanes.map((i) => city.lanes[i]!);
+  const ownCrossing =
+    crossingEnabled(city, road, atEnd, source) &&
+    crossingPlacement(city, road, atEnd).stripes.length > 0;
+  const outlines = [city.nodes[road.from]!.outline, city.nodes[road.to]!.outline]
+    .filter((o) => o.length)
+    .map((o) => preparePolygonRing(o));
+  const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
+  const paint: Vec2[][] = [];
+  for (const link of [...new Set(hits.map((h) => h.link))]) {
+    const at = new Map(hits.filter((h) => h.link === link).map((h) => [h.lane, h.atM]));
+    const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
+    const length = lanes.find((lane) => at.has(lane.idx))!.lengthM;
+    if (mean > length / 2 !== atEnd) continue;
+    const fromCut = atEnd ? length - mean : mean;
+    if (ownCrossing && fromCut <= MAPPED_M) continue;
+    const local = (lane: CLane, d: number, offset: number): Vec2 => {
+      const s = Math.max(0, Math.min(lane.lengthM, d));
+      const p = pointAtDistance(lane.polyline, lane.cumulative, s);
+      const h = headingAtDistance(lane.polyline, lane.cumulative, s);
+      return { x: p.x - Math.sin(h) * offset, y: p.y + Math.cos(h) * offset };
+    };
+    const stripes: Vec2[][] = [];
+    for (let side = 0.225; side + 0.45 <= width; side += 0.9) {
+      let edge = 0;
+      const lane = lanes.find((lane) => {
+        if (side + 0.225 <= edge + lane.widthM) return true;
+        edge += lane.widthM;
+        return false;
+      });
+      const centre = lane && at.get(lane.idx);
+      if (!lane || centre === undefined) continue;
+      const near = side - edge - lane.widthM / 2,
+        far = near + 0.45;
+      const stripe = [
+        local(lane, centre - 1.25, near),
+        local(lane, centre + 1.25, near),
+        local(lane, centre + 1.25, far),
+        local(lane, centre - 1.25, far),
+      ];
+      if (distance(stripe[0]!, stripe[1]!) < 0.2) continue;
+      if (stripe.some((p) => outlines.some((inside) => inside(p)))) continue;
+      stripes.push(stripe);
+    }
+    const p = pointAtDistance(
+      lanes[0]!.polyline,
+      lanes[0]!.cumulative,
+      Math.min(lanes[0]!.lengthM, mean),
+    );
+    paint.push(...(nearSignal(city, p) ? signalLines(stripes) : stripes));
+  }
+  return paint;
+}
+
+const preparePolygonRing = (ring: Vec2[]) => (p: Vec2) => pointInPolygon(p, ring, 0);
+
+/** TASK-217 (D1): a signalised crossing's broken lines (German `Fußgängerfurt`), 0.15 m wide,
+ * 0.5 m dashes and 0.2 m gaps, inside the near and far edges of the stripes the crossing would
+ * have, run by run where stripes are left out (a curb return, the junction outline). */
+const FURT_WIDTH_M = 0.15;
+const FURT_DASH_M = 0.5;
+const FURT_GAP_M = 0.2;
+function signalLines(stripes: Vec2[][]): Vec2[][] {
+  const dashes: Vec2[][] = [];
+  // A stripe is [near side, far side, far side + width, near side + width]; stripes adjoin at a
+  // 0.9 m pitch, so a gap of over 1 m between them starts a new run.
+  const runs: Vec2[][][] = [];
+  for (const stripe of stripes) {
+    const run = runs.at(-1);
+    const last = run?.at(-1);
+    if (run && last && distance(last[3]!, stripe[0]!) < 1) run.push(stripe);
+    else runs.push([stripe]);
+  }
+  // Each line lies inside the stripes' footprint, along its near or far edge.
+  const towards = (p: Vec2, q: Vec2) => {
+    const f = FURT_WIDTH_M / distance(p, q);
+    return { x: p.x + (q.x - p.x) * f, y: p.y + (q.y - p.y) * f };
+  };
+  for (const run of runs)
+    for (const near of [true, false]) {
+      const outer = run.flatMap((t) => (near ? [t[0]!, t[3]!] : [t[1]!, t[2]!]));
+      const inner = run.flatMap((t) =>
+        near
+          ? [towards(t[0]!, t[1]!), towards(t[3]!, t[2]!)]
+          : [towards(t[1]!, t[0]!), towards(t[2]!, t[3]!)],
+      );
+      const outerLengths = cumulativeLengths(outer),
+        innerLengths = cumulativeLengths(inner);
+      const total = outerLengths.at(-1)!,
+        innerTotal = innerLengths.at(-1)!;
+      for (let start = 0; start < total - 0.05; start += FURT_DASH_M + FURT_GAP_M) {
+        const end = Math.min(total, start + FURT_DASH_M);
+        if (end - start < 0.05) continue;
+        dashes.push([
+          pointAtDistance(outer, outerLengths, start),
+          pointAtDistance(outer, outerLengths, end),
+          pointAtDistance(inner, innerLengths, (end / total) * innerTotal),
+          pointAtDistance(inner, innerLengths, (start / total) * innerTotal),
+        ]);
+      }
+    }
+  return dashes;
 }
 
 export interface Guide {
@@ -1642,11 +1989,14 @@ function buildTransitionMarkings(
   if (!road.lanes.some((i) => city.lanes[i]!.taperStartM || city.lanes[i]!.taperEndM))
     return shapes;
   const geometry = transitionGeometry(city, road);
-  for (const divider of geometry.dividers)
+  for (const [k, divider] of geometry.dividers.entries())
     shapes.push(
-      ...roadDashes(divider, true, pattern).map((p) =>
-        lineShape(road, 'lane', p, 0.78, markingTheme),
-      ),
+      ...dividerPieces(
+        divider,
+        true,
+        pattern,
+        solidBeforeStop(city, road, city.lanes[road.lanes[k]!]!),
+      ).map((p) => lineShape(road, 'lane', p, 0.78, markingTheme)),
     );
   for (const item of geometry.lanes) {
     const lane = city.lanes[item.lane]!;

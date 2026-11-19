@@ -135,8 +135,10 @@ test('T20: signal crossings lie on the road between stop position and junction',
   const net = result.compiled;
   const node = net.nodes.find((n) => n.signal)!;
   for (const road of net.roads.filter((r) => r.to === node.idx)) {
-    const stripes = crossingStripes(net, road, true);
+    // TASK-217: a signalised crossing paints broken lines inside its stripes' footprint.
+    const stripes = crossingPlacement(net, road, true).stripes;
     expect(stripes.length).toBeGreaterThan(0);
+    expect(crossingStripes(net, road, true).length).toBeGreaterThan(stripes.length);
     const lane = net.lanes[road.lanes[0]!]!;
     const end = lane.polyline.at(-1)!;
     const h = headingAtDistance(lane.polyline, lane.cumulative, lane.lengthM);
@@ -259,7 +261,7 @@ test('T26: exit crossings set back on the exit road', () => {
     const lane = net.lanes[road.lanes[0]!]!;
     const start = lane.polyline[0]!;
     const h = headingAtDistance(lane.polyline, lane.cumulative, 0);
-    const stripes = crossingStripes(net, road, false);
+    const stripes = crossingPlacement(net, road, false).stripes;
     expect(stripes.length).toBeGreaterThan(0);
     for (const stripe of stripes) {
       expect(stripe.every((p) => pointInPolygon(p, [...road.surface, road.surface[0]!]))).toBe(
