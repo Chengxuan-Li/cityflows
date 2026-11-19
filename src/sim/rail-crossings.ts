@@ -904,13 +904,24 @@ export function createRailCrossings(
             next >= event.enterS - params.dtS,
         );
         service.held = blocked !== undefined;
+        // A delayed train keeps its physical track reservation; following/opposing services
+        // wait before their nose enters it. Other routes retain their own clocks.
+        const trackHeld =
+          service.proposed.some(
+            (track) =>
+              (trackOwners[track] !== -1 && trackOwners[track] !== i) || nextOwners[track] !== -1,
+          ) ||
+          (!service.current.length &&
+            service.proposed.length > 0 &&
+            table.routes[route]!.sections.some((s) => delayedTracks[s.track]));
+        // TASK-225: a service standing still for its track (or before it enters the map) does
+        // not keep a crossing it has not reached closed; a fresh warning runs when it moves.
         events[route]!.forEach((event, index) => {
           if (
-            blocked &&
-            event.facility !== blocked.facility &&
-            event.enterS > blocked.enterS &&
             service.ageS < event.enterS &&
-            service.ageS >= event.enterS - event.warningS
+            service.ageS >= event.enterS - event.warningS &&
+            ((blocked && event.facility !== blocked.facility && event.enterS > blocked.enterS) ||
+              (trackHeld && next < event.enterS - params.dtS))
           )
             service.warningStartedS[index] = Infinity;
           else if (service.warningStartedS[index] === Infinity)
@@ -926,16 +937,7 @@ export function createRailCrossings(
               service.ageS <= event.enterS &&
               next >= event.enterS - params.dtS,
           );
-        // A delayed train keeps its physical track reservation; following/opposing services
-        // wait before their nose enters it. Other routes retain their own clocks.
-        if (!service.held)
-          service.held = service.proposed.some(
-            (track) =>
-              (trackOwners[track] !== -1 && trackOwners[track] !== i) || nextOwners[track] !== -1,
-          );
-        if (!service.held && !service.current.length && service.proposed.length) {
-          service.held = table.routes[route]!.sections.some((s) => delayedTracks[s.track]);
-        }
+        if (!service.held) service.held = trackHeld;
         if (!service.held) {
           events[route]!.forEach((event, index) => {
             if (service.ageS <= event.exitS && next > event.exitS)
