@@ -45,12 +45,14 @@ const baseline = {
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    'e77e2e2cbd0cad5cffa2e24779666be97b0f40aa9f4e704a2fd19aa9d0f0a990',
+    // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
+    'c586e50f433103f145d100ebffe8d5dcaa5fa141a6889bca7f5ec3acbbc7b866',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    '42e7f4957021dc138b4e261a227ca03056e2d8dea6595bbce0a2fcd500874816',
+    // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
+    '9fcfc1982ccb88f1d1b45bd78d4095913b11882ebd6edd6d419e549cd17d4447',
   ],
 };
 

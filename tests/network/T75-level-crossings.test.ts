@@ -174,12 +174,14 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          'a9fa8de77a349f7276ea6aadd96ec135ff519848078c6171ebbeab5b4bbb699e',
+          // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
+          '9acb863d3d978ca48db3e20b2ef1a8df741bdad127456d8823122cc91d687d3a',
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          '4435179413bcf92d7effaec4c99da7925a889be9a6c4cf8128f6394194e39c5d',
+          // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
+          '1c61c674ecb4a9c86f1e902019facc348a664db323b67f0df93cbaa66295fa2d',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

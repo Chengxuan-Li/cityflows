@@ -209,11 +209,12 @@ const pins = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: four corners are rounded (gore fillets at n:27, n:68, n:1162; n:365's corner).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    compile: 'd08892bdc1c6ed077bba19e06dce14841e1e2c009ac69138dff2ea366e899078',
-    lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
-    curbs: '463c6ce254acbddf8b3a709efcfd3f621e40244c7f9641e9b6f69fc176260c4b',
-    de: 'da80a22d3a6439a24be0cb2aa377451494a82943755c2fb4691c3856736fac34',
-    us: 'f7bd9f157198df6d4ab267e3ce70cc34583a69a647a8392be679b2c1ccbd4f01',
+    // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
+    compile: 'ae433c246c7679cbb684efc904e036f3aacc11bf503c21ac6e53220eeb46cd16',
+    lamps: 'b935549a1a7586465014bf3ed1af14d2c3d81a04c349971e0a228c3e7e5fead0',
+    curbs: 'c25663bd4c2143393a1d0c4fc7239451b8a4e5fbc0d084faaa41aa59d1d5ad25',
+    de: '59ee065735b87e80bad2032f438452f9fab4f4f8d9c76152ce514c85fa47cd71',
+    us: 'fd7716be16265e5492e84ce667a26b477cd71d20f967eb458d2bc8dce54c5469',
   },
 } as const;
 const hash = (value: unknown) =>

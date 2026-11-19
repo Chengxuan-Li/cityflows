@@ -64,7 +64,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           'e69a43658f893855a20712eb8ff5da40bd8914842b3f5b992bd490aaea3fa5fb'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          'e6b09b7696f4961a488a504dfc59a9f03fc4b50978ae8f04638a28d03076e522',
+          // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
+          '6ae8992ffb8b7794ee349cfd2db9deda2bceee857e9999c3fd4ec8ec7caf8d64',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

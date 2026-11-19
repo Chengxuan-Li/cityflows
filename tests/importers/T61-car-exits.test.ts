@@ -364,8 +364,9 @@ test.each(
       'sindelfingen',
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-      'd4ab86a62b041752ac85cbcdef177b165a286e3d15f71e1ccf1219588832d908',
-      'f4fae021fb29d507d1e9d4f38c371a79667c8b81d09ad5c7fd9b48b704207fd6',
+      // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
+      '7f76e42301d314dfddc870b02fdc4a2b5d32117414f532147a7bbd26ffdc3606',
+      'c49a2e5d2f6c18aead43d64c68e46181a49cdf7e06af2b4fbd7a7da620af9686',
       31,
       703,
     ],

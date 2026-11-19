@@ -68,8 +68,9 @@ const baseline = {
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    compile: 'b87b8a83a8bae407ffd9f9f8069a321329e6bed9a2d4f66956eab463d7c18fbe',
-    arrows: '95f4434b279dea44ce702ca32df0c3a7a49ff17862cc7455ac486f4ebb31fc6e',
+    // TASK-233: two-way lanes=1 ways are one 4.5 m shared carriageway (8 Sindelfingen roads).
+    compile: '6c6ae6f151b3b4e01e1820cd99b3886e4194064a16a30c71703dc036f6850419',
+    arrows: '0cac9636cac29a71b21130b8f172bee87f48faa06eec237d984140813bfeb62f',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
@@ -169,9 +170,11 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
   'V108: %s 2D and 3D draw the complete shared geometry including arrows',
   (name) => {
     const city = compileAuditCity(name);
+    // TASK-233: the canonical city, as the 3D scene gets it (shared-lane roads draw no centre).
+    const source = loadAuditCity(name);
     const shapes = city.roads
       .flatMap((road) => {
-        const geometry = roadMarkingGeometry(city, road);
+        const geometry = roadMarkingGeometry(city, road, source);
         return [...geometry.below, ...geometry.above, ...transitionMarkings(city, road)];
       })
       .concat(
@@ -229,7 +232,7 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
       },
     } as unknown as Graphics;
     for (const road of city.roads) {
-      drawRoad(surface, pen, city, road, false, pen);
+      drawRoad(surface, pen, city, road, false, pen, source);
       drawTransitions(surface, pen, city, road);
     }
     for (const node of city.nodes) drawJunctionMarkings(pen, city, node);
@@ -243,7 +246,7 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
         sum + markingPolygons(shape).reduce((area, ring) => area + Math.abs(areaD(ring)), 0),
       0,
     );
-    const geometry = buildGeometry(city, loadAuditCity(name));
+    const geometry = buildGeometry(city, source);
     const position = geometry.markings.getAttribute('position');
     expect(geometry.markings.userData.markingCounts).toEqual({
       line: lineCount,
