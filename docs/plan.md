@@ -4867,6 +4867,9 @@ slip: stopping its own leftover vitest process by PID it also stopped `MoNotific
 Update notification process whose stale parent id matched); no agent's work affected. Later agents are
 told never to stop processes by name, pattern or parent id.
 
+Full run 44576912292 (lead, manual, on d184570 after TASK-229 and 228): every job green, including all
+five e2e shards; the city job took 23.2 min.
+
 TASK-221 (Claude Code subagent, Opus 5.5 high, 2026-11-19; parked, the lead recommends merging; branch
 `task/221-carry-tapers`, first version `5973019`, variant `0b62f2c`, worktree `D:\cityflows-wt\221`): at a
 continuation node a lane shift (a branch held beside the trunk, a split, a jog) runs on through the
