@@ -119,25 +119,27 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // West at the Stühlingerbrücke, east at the Schwabentorbrücke, north on Habsburgerstraße,
   // south on Günterstalstraße, and the line from Kronenstraße; then (TASK-202) the Rotteckring
   // both ways, between Habsburgerstraße and Kronenstraße, and the Schwabentorschleife from the
-  // east and back.
+  // east and back. TASK-214's rebuild of the project renumbers the rail nodes by one.
   expect(table.routes.map((r) => `${end(r.from)}>${end(r.to)}`)).toEqual([
-    'rn:12244>rn:12227',
-    'rn:12885>rn:12227',
-    'rn:12229>rn:12562',
-    'rn:12518>rn:12578',
-    'rn:12050>rn:12516',
-    'rn:12518>rn:12883',
-    'rn:12885>rn:12516',
-    'rn:12229>rn:12227',
+    'rn:12243>rn:12226',
+    'rn:12884>rn:12226',
+    'rn:12228>rn:12561',
+    'rn:12517>rn:12577',
+    'rn:12049>rn:12515',
+    'rn:12517>rn:12882',
+    'rn:12884>rn:12515',
+    'rn:12228>rn:12226',
   ]);
-  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12885'))
+  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12884'))
     expect(route.stops.map((s) => s.name)).toContain('Bertoldsbrunnen');
   expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10, 10, 10, 10, 10, 10]);
   expect(table.periodS).toBe(720);
   // Every mapped stop has a tram (TASK-202; TASK-198 served 24 of the 32).
   expect(census.servedStops).toHaveLength(32);
   expect(census.unservedStops).toEqual([]);
-  expect(table.hash).toBe('b0b017ca');
+  // TASK-214's rebuild: the renumbered ids' offsets no longer fitted 10 an hour, so the lead's
+  // salted retry in `buildTimetable` picks other offsets (same routes and headways).
+  expect(table.hash).toBe('90e3ff6f');
   for (let time = 0; time < 86400; time += 5) {
     const used = new Set<number>();
     for (const tram of trainsAt(rail, table, time))
@@ -200,8 +202,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-207: re-pinned for its validation curation: three lots the polygon cut leaves without
   // access and two dead-end roads into the pedestrian Schwabentor removed; the ZOB's taxi rank
   // turns round.
+  // TASK-214: rebuilt by the lead (connector positions, platform and junction-group ids move).
   expect(manifest.files['city.json']).toBe(
-    'd7bd896c90fce657fedc5a4151d1a337911950b6cf90ba29f2771277916558ac',
+    '2243703f23e12701edf30fd518326404849328dd604430c0021f620da6042878',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -211,7 +214,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // the curbs, so walkers and the cars meeting them move; no lane's stop position moves.
   // Re-pinned by the lead on top of TASK-207's curation.
   // TASK-214: lanes through splits and merges (1,467 to 1,463 completed, 75 to 89 s).
-  expect(morning.stateHash).toBe(2204867137);
+  // Rebuilt project and the retimed trams (lead, at the merge): 1,462 completed, 76 s.
+  expect(morning.stateHash).toBe(1730700508);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

@@ -664,13 +664,22 @@ export function buildTimetable(rail: RailGraph, mode: 'train' | 'tram' = 'train'
   const routes = routesFor(rail, mode);
   let periodS = 720;
   let departures: TrainTimetable['departures'];
-  for (;;) {
+  // Departure offsets come from the route ids. When they do not fit in the period, other offsets
+  // (the ids salted) are tried before the period grows and the service thins: an id change alone
+  // (a rebuilt project renumbering its rail nodes) halved Freiburg's trams (TASK-214). The first
+  // attempt is the plain id, so every timetable that fitted before is unchanged.
+  const offsetAttempts = 16;
+  for (let attempt = 0; ; attempt++) {
+    if (attempt === offsetAttempts) {
+      attempt = 0;
+      periodS += 720;
+    }
     departures = [];
     const reservations: { enter: number; exit: number }[][] = rail.tracks.map(() => []);
     const requests = routes
       .flatMap((r, route) => {
         const headway = trainDefaults[r.kind].headwayS,
-          offset = parseInt(hash(r.id), 16) % headway;
+          offset = parseInt(hash(attempt === 0 ? r.id : `${r.id}#${attempt}`), 16) % headway;
         return Array.from({ length: 720 / headway }, (_, i) => ({
           route,
           requestedS: offset + i * headway,
@@ -713,7 +722,6 @@ export function buildTimetable(rail: RailGraph, mode: 'train' | 'tram' = 'train'
         reservations[block.track]!.push({ enter: start + block.enterS, exit: start + block.exitS });
     }
     if (fits) break;
-    periodS += 720;
   }
   const used = new Set(routes.flatMap((r) => r.sections.map((s) => s.track)));
   const table = {
