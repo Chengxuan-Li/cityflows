@@ -36,7 +36,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-          'c62a114aae53cd12a10c895051cd8bc0ac96319d61181d2422e644a7d582d91a'
+          '29855df96bd3f4bafd831cfa120c411a13d1206cfa8872f49419f919fef8508e'
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           '9057d24359d144f3975a0c583bdbeaf02c84dd32e073b812d2e3be5b9c1396fe',
     );

@@ -180,7 +180,7 @@ const baselines = {
   // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
   // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
   // tram `form` stripped the city equals b3bcde6's.
-  'munich-donnersberger': '11fa237b380ffdb84472526dd4068b524445ce044cd25ce6cfb492c9ee170099',
+  'munich-donnersberger': 'aab20d7d7366f4118cc5f7f97d4c7e20e766ad6872d4f159d33eabc94d5200b4',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

@@ -86,8 +86,9 @@ const baseline = {
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-217: an entry lane shows its turns through the whole junction group (M1).
-    compile: 'f25342f599272f7bb143910b7f7a855e7b0a313928a2da4632038dddca22b62d',
-    arrows: 'a53a6755a8a990f7e1e9c3773d6d12a4dfb523f7a288168e854cb2ec04e39056',
+    // TASK-231: Marsstraße r:845/r:944 pulled to the painted median (their arrows move with them).
+    compile: '1faa15c41fc333634334cf98b56d30ab168f3069051d318781fefaa76ca762cd',
+    arrows: '0e3e73101a998959cc16478afc6ac54bcd1b1f77c306d1b02dba8bcc5d0bee51',
   },
 } as const;
 const hash = (value: unknown) =>
@@ -169,11 +170,9 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
   'V108: %s 2D and 3D draw the complete shared geometry including arrows',
   (name) => {
     const city = compileAuditCity(name);
-    // TASK-231: the canonical city, as the 3D scene gets it (shared-lane roads draw no centre).
-    const source = loadAuditCity(name);
     const shapes = city.roads
       .flatMap((road) => {
-        const geometry = roadMarkingGeometry(city, road, source);
+        const geometry = roadMarkingGeometry(city, road);
         return [...geometry.below, ...geometry.above, ...transitionMarkings(city, road)];
       })
       .concat(
@@ -231,7 +230,7 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
       },
     } as unknown as Graphics;
     for (const road of city.roads) {
-      drawRoad(surface, pen, city, road, false, pen, source);
+      drawRoad(surface, pen, city, road, false, pen);
       drawTransitions(surface, pen, city, road);
     }
     for (const node of city.nodes) drawJunctionMarkings(pen, city, node);
@@ -245,7 +244,7 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
         sum + markingPolygons(shape).reduce((area, ring) => area + Math.abs(areaD(ring)), 0),
       0,
     );
-    const geometry = buildGeometry(city, source);
+    const geometry = buildGeometry(city, loadAuditCity(name));
     const position = geometry.markings.getAttribute('position');
     expect(geometry.markings.userData.markingCounts).toEqual({
       line: lineCount,

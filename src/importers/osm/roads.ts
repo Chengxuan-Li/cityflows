@@ -17,10 +17,6 @@ const speedKph: Record<RoadClass, number> = {
   ramp: 40,
 };
 
-/** TASK-231 (TASK-216 D6): a two-way way tagged `lanes=1` is one carriageway that oncoming cars
- * share at low speed, RASt 06's 4.5 m for a car meeting a lorry; each direction takes half. */
-const SHARED_CARRIAGEWAY_M = 4.5;
-
 export interface OsmRoad {
   road: Road;
   wayId: number;
@@ -197,13 +193,7 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
   const hasSpeed = Number.isFinite(taggedSpeed) && taggedSpeed > 0;
   if (!hasSpeed && tag.maxspeed !== undefined) unsupported('maxspeed');
   if (osmLayer(tag) === undefined) unsupported('layer');
-  const shared =
-    directions.length === 2 && total === 1 && forward === undefined && backward === undefined;
-  const widthM = shared
-    ? SHARED_CARRIAGEWAY_M / 2
-    : roadClass === 'residential' || roadClass === 'service'
-      ? 3
-      : 3.5;
+  const widthM = roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
 
   return directions.map((direction) => {
     const direct = direction === 'forward' ? forward : backward;
@@ -223,7 +213,6 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
     }
     if (!hasSpeed) inferred.push('speedLimitMps');
     if (!supportedOneway) inferred.push('oneway');
-    if (shared) inferred.push('sharedLane');
     const access = roadAccess(tag, direction, inferred);
     return {
       ...(access && { access }),

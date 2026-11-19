@@ -144,8 +144,9 @@ cityTest(
     // and the median pull; on their OSM lines their medians are 9 m or more, so they stay dual.
     // The one pushed pair is Trappentreutunnel r:687/r:1030 (10.1 m apart for 10.5 m of lanes,
     // pushOverlapping) (5 -> 1). The same-direction Landsberger pair r:729/r:984 met at main's
-    // merged n:1181; kept, r:728 and r:984 end at n:474 and n:1353 (1 -> 0).
-    expect(kinds.pushed).toBe(1);
+    // merged n:1181; kept, r:728 and r:984 end at n:474 and n:1353 (1 -> 0). TASK-231: Marsstraße
+    // r:845/r:944, halves of one carriageway (1.4 m between their blocks), are pulled (1 -> 2).
+    expect(kinds.pushed).toBe(2);
     expect(kinds.sameDirection).toBe(0);
     // TASK-093: Landsberger r:961 (beside r:1276 and r:1366 into n:362), r:978 (r:476/r:1308) and
     // r:644 (r:922/r:964), Marsstraße r:944 (r:845/r:1370) and Arnulfstraße r:654 (r:680/r:698)

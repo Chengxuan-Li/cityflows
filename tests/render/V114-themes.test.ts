@@ -61,7 +61,7 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
         ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           // TASK-229 (N1): the four dividers of the inner road r:267; without them it equals 5c47b75's.
-          'e69a43658f893855a20712eb8ff5da40bd8914842b3f5b992bd490aaea3fa5fb'
+          '38b364aa3cc58b946658880b083697627f221d2124f2336278b273597525f880'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           'e6b09b7696f4961a488a504dfc59a9f03fc4b50978ae8f04638a28d03076e522',

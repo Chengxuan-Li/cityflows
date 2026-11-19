@@ -1288,8 +1288,8 @@ function outside(x0: number, x1: number, holes: number[][]): number[][] {
 }
 
 /** Measure 9. The area where the drawn lane surfaces (`laneEdges`, tapers included, each shrunk
- * by `LANE_TOUCH_M`) of two different roads of one grade overlap outside every node outline of
- * that grade (TASK-231), per road pair, except a movement's own from and to roads (their lanes meet end to end) when
+ * by `LANE_TOUCH_M`) of two different roads of one grade overlap outside every node outline,
+ * per road pair, except a movement's own from and to roads (their lanes meet end to end) when
  * they are not of one corridor. A u-turn exempts nothing: its two roads run side by side.
  * Same corridor pairs are marked. With `outsideOutlines` false the node outlines are not left out (a
  * lane lying on another under a junction polygon, as zebra stripes there show). Integrated along the 0.25 m cell rows; the nearest
@@ -1339,16 +1339,10 @@ function overlapPieces(city: City, net: CompiledCity, outsideOutlines: boolean, 
       }
     }
   }
-  // Outlines by grade: a junction above or below does not hide an overlap (a tunnel's lanes under
-  // a street's junction, Munich's r:196/r:416 under n:204).
-  const outlines = new Map<number, Map<number, number[][]>>();
+  const outlines = new Map<number, number[][]>();
   if (outsideOutlines)
-    for (const node of net.nodes) {
-      if (node.outline.length < 3) continue;
-      const level = city.nodes[node.id]!.layer ?? 0;
-      if (!outlines.has(level)) outlines.set(level, new Map());
-      rowIntervals(node.outline, 0, outlines.get(level)!);
-    }
+    for (const node of net.nodes)
+      if (node.outline.length > 2) rowIntervals(node.outline, 0, outlines);
   const joined = new Set(
     net.movements.flatMap((m) => {
       if (m.turn === 'uturn') return [];
@@ -1360,11 +1354,7 @@ function overlapPieces(city: City, net: CompiledCity, outsideOutlines: boolean, 
   const pairs = new Map<string, { a: number; b: number; pieces: number[][] }>();
   for (const [k, list] of lanes) {
     const y = OFFSET_Y + k * CELL_M;
-    const holesAt = new Map<number, number[][]>();
-    const holes = (level: number) => {
-      if (!holesAt.has(level)) holesAt.set(level, union(outlines.get(level)?.get(k) ?? []));
-      return holesAt.get(level)!;
-    };
+    const holes = union(outlines.get(k) ?? []);
     const byRoad = new Map<number, number[][]>();
     for (const [x0, x1, road] of list) {
       const intervals = byRoad.get(road!) ?? [];
@@ -1381,7 +1371,7 @@ function overlapPieces(city: City, net: CompiledCity, outsideOutlines: boolean, 
         const q = merged[j]!;
         if (q.road === p.road || (!anyGrade && grades[p.road] !== grades[q.road])) continue;
         if (joined.has(`${p.road}|${q.road}`) && !sameCorridor(net, p.road, q.road)) continue;
-        const pieces = outside(q.x0, Math.min(p.x1, q.x1), holes(grades[p.road]!));
+        const pieces = outside(q.x0, Math.min(p.x1, q.x1), holes);
         if (!pieces.length) continue;
         const [a, b] = p.road < q.road ? [p.road, q.road] : [q.road, p.road];
         const key = `${a}|${b}`;

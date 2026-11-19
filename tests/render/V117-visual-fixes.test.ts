@@ -192,15 +192,15 @@ const pins = {
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
-    compile: '11fa237b380ffdb84472526dd4068b524445ce044cd25ce6cfb492c9ee170099',
-    lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
+    compile: 'aab20d7d7366f4118cc5f7f97d4c7e20e766ad6872d4f159d33eabc94d5200b4',
+    lamps: 'd7a7469c6baf84eb36bd9e8eb5ca4e5fdf973a3e46dbf45c9c5834d64dee1a26',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
+    curbs: 'c1b4d5510ff15367a94c0ef06d159175462ab6addb9e7325578b229b6fc8164a',
     // TASK-229 (N1): the four dividers of the inner road r:267; without them both equal 5c47b75's.
-    de: 'b6b2926b8363099e5d53d12b03fdb0d02d5b030e89928f8667e8cdc8c950413e',
+    de: 'c6d4563181d67f595ee6ec5a57a081e5201eb126cd6c15e8aa6c11afd6a98901',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    us: 'e98ea741c5d75fae726635d184e73181a3b9f07a860d34a9c855aac7e75b10a5',
+    us: '142412bb72b6000f9ab4a81a16926e4b6e976867b5bb29cc17015f2161a86cb4',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.

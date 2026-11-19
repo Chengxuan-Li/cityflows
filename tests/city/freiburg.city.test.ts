@@ -204,8 +204,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // turns round.
   // TASK-214: rebuilt by the lead (connector positions, platform and junction-group ids move).
   // TASK-220: rebuilt for the tram track forms (only tram `form` and its provenance change).
+  // TASK-231: rebuilt; Bismarckallee r:1251/r:2215 pulled to the painted median (D5).
   expect(manifest.files['city.json']).toBe(
-    '77d57494b1cc58e34a7b28acaf75801d2b99d815299232fcae346aceeee9bc67',
+    '001402d8ec2c53816f0dc0c6514c38314de082281d1187f0be3af120eea9c75c',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -218,7 +219,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // Rebuilt project and the retimed trams (lead, at the merge): 1,462 completed, 76 s.
   // TASK-222: in a mutual wait at a crossing, an actuated green is kept for the held car while
   // the joined controller changes to its phase (1,462 completed, 76.2 to 75.7 s).
-  expect(morning.stateHash).toBe(4038635547);
+  // TASK-231: Bismarckallee r:1251/r:2215 one carriageway (1,461 completed, 75.7 to 75.6 s).
+  expect(morning.stateHash).toBe(1476845663);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
