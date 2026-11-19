@@ -138,7 +138,7 @@ function createRun({
   const reservationAcceleration = new Float64Array(trips.length);
   let tick = 0;
   const time = () => scenario.startS + tick * dtS;
-  const parking = createParking(compiled, trips, scenario, params, vehicles);
+  const parking = createParking(compiled, trips, scenario, params, vehicles, debugSkips);
   const accounting = createAccounting(compiled, vehicles, parking, time, trips);
   const walkers = createWalkers(
     compiled,
@@ -187,6 +187,7 @@ function createRun({
     accounting,
     parking,
     persons,
+    debugSkips,
   );
   // TASK-170: demand-split signals are timed by the scenario's car trips routed on free-flow
   // costs in the loaded city, from the origin connectors the trips were queued at; routed the
@@ -232,6 +233,7 @@ function createRun({
     groupRoute,
     routeVersion: () => costs.version,
     signalColors: (timeS, colors) => signalControl.update(timeS, colors),
+    checkGranted: debugSkips,
   });
   let railCrossings = createRailCrossings(
     compiled,
@@ -265,6 +267,8 @@ function createRun({
   );
   // TASK-169: each lane's keep-clear zones, and where a head held short of one stands.
   let keepClear = keepClearZones(compiled);
+  // TASK-230: each connector's lane, read for every car each step (its destination's lane).
+  let connectorLanes = Int32Array.from(compiled.connectors, (c) => c.lane);
   const keepClearStop = new Float64Array(trips.length).fill(Infinity);
   const keepClearHeld = new Uint8Array(trips.length);
   // TASK-180: the mouth (lane and zone start) where a standing car let a joining car in.
@@ -733,7 +737,7 @@ function createRun({
       for (let id = vehicles.first(lane.idx); id !== -1; id = vehicles.next[id]!) {
         if (
           vehicles.state[id] !== DRIVING ||
-          parking.motion(id) ||
+          parking.moving[id] ||
           intersections.groupPaths[id]?.movements.some(
             (m) => compiled.movements[m]!.fromLane === lane.idx,
           )
@@ -775,7 +779,9 @@ function createRun({
       for (let id = head; id !== -1; id = vehicles.next[id]!) {
         order[orderCount++] = id;
         if (ahead !== -1 || !lane) vehicles.headDetourS[id] = 0;
-        if (parking.motion(id) || vehicles.state[id] === QUEUED_DESTINATION) {
+        if (debugSkips && !parking.moving[id] !== !parking.motion(id))
+          throw new Error(`Vehicle ${id}: motion flag differs`);
+        if (parking.moving[id] || vehicles.state[id] === QUEUED_DESTINATION) {
           standFront[id] = vehicles.position[id]!;
           ahead = id;
           continue;
@@ -797,8 +803,9 @@ function createRun({
           } else vehicles.destination[id] = previousDestination;
         }
         if (lane) parking.approach(id, lane.idx, position, timeS);
-        const destination = compiled.connectors[arrival[id]!];
-        const movement = compiled.movements[vehicles.movement[id]!];
+        const destination = arrival[id] === -1 ? undefined : compiled.connectors[arrival[id]!];
+        const movement =
+          vehicles.movement[id] === -1 ? undefined : compiled.movements[vehicles.movement[id]!];
         if (laneChanges.holding[id] && intersections.grants[id] !== -1) intersections.release(id);
         const granted =
           intersections.grants[id] !== -1 ||
@@ -851,7 +858,7 @@ function createRun({
         // insertion gap. Ordinary through traffic keeps its normal priority. TASK-211: the stop
         // is on the destination's lane, so it binds only there or on the way onto it; the query
         // (pure, and costly at a busy lot) runs only then.
-        const parkingLane = compiled.connectors[vehicles.destination[id]!]?.lane ?? -1;
+        const parkingLane = connectorLanes[vehicles.destination[id]!] ?? -1;
         const parkingOffset =
           lane?.idx === parkingLane
             ? 0
@@ -1085,7 +1092,8 @@ function createRun({
       const lane = compiled.lanes[segment];
       if (!lane) break;
       const id = vehicles.first(segment);
-      const planned = compiled.movements[vehicles.movement[id]!];
+      const planned =
+        vehicles.movement[id] === -1 ? undefined : compiled.movements[vehicles.movement[id]!];
       const blocked =
         vehicles.state[id] === DRIVING &&
         !intersections.groupPaths[id] &&
@@ -1271,7 +1279,7 @@ function createRun({
       vehicles.routeStep[id] = vehicles.routeStep[id]! + 1;
     }
     planLane(id, lane, 0);
-    const destination = compiled.connectors[arrival[id]!];
+    const destination = arrival[id] === -1 ? undefined : compiled.connectors[arrival[id]!];
     vehicles.insert(
       id,
       lane,
@@ -1285,8 +1293,8 @@ function createRun({
   function commit(timeS: number) {
     for (let i = 0; i < orderCount; i++) {
       const id = order[i]!;
-      if (parking.motion(id)) continue;
-      const destination = compiled.connectors[arrival[id]!];
+      if (parking.moving[id]) continue;
+      const destination = arrival[id] === -1 ? undefined : compiled.connectors[arrival[id]!];
       if (vehicles.state[id] === QUEUED_DESTINATION) {
         reachDestination(id, destination!, timeS);
         continue;
@@ -1677,9 +1685,11 @@ function createRun({
       groupRoute,
       routeVersion: () => costs.version,
       signalColors: (timeS, colors) => signalControl.update(timeS, colors),
+      checkGranted: debugSkips,
     });
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked, debugSkips);
     keepClear = keepClearZones(next);
+    connectorLanes = Int32Array.from(next.connectors, (c) => c.lane);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
     );

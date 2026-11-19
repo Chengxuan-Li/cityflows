@@ -119,7 +119,7 @@ test.each([
   if (kind === 'turnOnRed') movement.turnOnRed = true;
   const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
   const intersections = createIntersections(compiled, vehicles, DEFAULT_SIM_PARAMS);
-  expect(intersections.continuations[movement.idx]).toBe(kind === 'uncontrolled');
+  expect(intersections.continuations[movement.idx]).toBe(Number(kind === 'uncontrolled'));
 });
 
 test('a connector just beyond a continuation cannot spawn into approaching traffic', () => {

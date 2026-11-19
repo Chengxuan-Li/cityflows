@@ -505,7 +505,8 @@ export function createWalkers(
     let current: number;
     if (lane) {
       check(lane.idx, 0);
-      const movement = city.movements[vehicles.movement[id]!];
+      const movement =
+        vehicles.movement[id] === -1 ? undefined : city.movements[vehicles.movement[id]!];
       if (!movement || lane.lengthM - position > RANGE_M) return held.best;
       offset = lane.lengthM + movement.lengthM;
       current = movement.toLane;
@@ -516,7 +517,9 @@ export function createWalkers(
     check(current, offset);
     // The route is read only when the next movement can start within range (its lengthM >= 0).
     if (offset + city.lanes[current]!.lengthM - position > RANGE_M) return held.best;
-    const after = city.movements[vehicles.route[id]?.movements[vehicles.routeStep[id]! + 1] ?? -1];
+    // TASK-230: no array read at -1 (a negative index takes V8's slow lookup path).
+    const next = vehicles.route[id]?.movements[vehicles.routeStep[id]! + 1] ?? -1;
+    const after = next < 0 ? undefined : city.movements[next];
     if (after && after.fromLane === current) {
       offset += city.lanes[current]!.lengthM + after.lengthM;
       if (offset - position <= RANGE_M) check(after.toLane, offset);
@@ -617,7 +620,8 @@ export function createWalkers(
     hold(id: number, lane: CLane | undefined, path: CMovement | null) {
       if (!blocking) return Infinity;
       if (lane) {
-        const movement = city.movements[vehicles.movement[id]!];
+        const movement =
+          vehicles.movement[id] === -1 ? undefined : city.movements[vehicles.movement[id]!];
         if (!blocks[lane.idx] && (!movement || !nearHeld[movement.toLane])) return Infinity;
       } else if (!nearHeld[path!.toLane]) return Infinity;
       return hold(id, lane, path);

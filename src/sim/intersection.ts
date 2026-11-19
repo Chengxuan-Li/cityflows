@@ -42,20 +42,27 @@ export function createIntersections(
     /** TASK-170: the run's signal control (timed and actuated signals); without it each signal
      * shows its compiled program at the step's time. */
     signalColors?: (timeS: number, colors: Uint8Array) => void;
+    /** TASK-230: check the list of granted cars against `grants` at every `signals`. */
+    checkGranted?: boolean;
   } = {},
 ) {
-  const inner = (movement: CMovement) =>
-    compiled.roads[compiled.lanes[movement.fromLane]!.road]!.group !== undefined;
-  const continuations = compiled.movements.map((movement) => {
+  // TASK-230: whether a movement leaves an inner road of a junction group, once per movement.
+  const innerFlags = Uint8Array.from(compiled.movements, (movement) =>
+    Number(compiled.roads[compiled.lanes[movement.fromLane]!.road]!.group !== undefined),
+  );
+  const inner = (movement: CMovement) => innerFlags[movement.idx] === 1;
+  // TASK-230: flags in a typed array; the engine reads them with -1 for a car without a movement,
+  // and a negative index into a plain array takes V8's slow lookup path.
+  const continuations = Uint8Array.from(compiled.movements, (movement) => {
     const node = compiled.nodes[movement.node]!;
-    return (
+    return Number(
       node.control === 'uncontrolled' &&
-      !node.signal &&
-      movement.conflicts.length === 0 &&
-      movement.turn !== 'merge' &&
-      !movement.neverGreen &&
-      !movement.turnOnRed &&
-      compiled.nodes[movement.node]!.group === undefined
+        !node.signal &&
+        movement.conflicts.length === 0 &&
+        movement.turn !== 'merge' &&
+        !movement.neverGreen &&
+        !movement.turnOnRed &&
+        compiled.nodes[movement.node]!.group === undefined,
     );
   });
   const colors = new Uint8Array(compiled.movements.length);
@@ -71,11 +78,19 @@ export function createIntersections(
   const redGrants = new Uint8Array(vehicles.count);
   // Retain provenance until the rear clears the exit, without treating same-path leaders as conflicts.
   const exitedFrom = new Int32Array(vehicles.count).fill(-1);
+  // TASK-230: the cars holding a grant, at `grantedAt` (-1 for none), so that `signals` visits
+  // them instead of every car. Listed from `grants` at the first `signals`: a live edit's patch
+  // writes the carried grants into the new array before it.
+  const granted: number[] = [];
+  const grantedAt = new Int32Array(vehicles.count).fill(-1);
+  let listed = false;
   const onRed = (movement: CMovement) => !!movement.turnOnRed && colors[movement.idx] === RED;
+  // TASK-230: a minor movement at a stop sign, once per movement (every request asks).
+  const stopSign = Uint8Array.from(compiled.movements, (movement) =>
+    Number(compiled.nodes[movement.node]!.control === 'stop' && movement.priority < 10),
+  );
   const needsStop = (movement: CMovement) =>
-    !inner(movement) &&
-    (onRed(movement) ||
-      (compiled.nodes[movement.node]!.control === 'stop' && movement.priority < 10));
+    !inner(movement) && (onRed(movement) || stopSign[movement.idx] === 1);
   const candidates = compiled.nodes.map((): number[] => []);
   const activeNodes: number[] = [];
   const headings = compiled.lanes.map((lane) =>
@@ -260,6 +275,14 @@ export function createIntersections(
     occupancy[grants[id]!] = occupancy[grants[id]!]! - 1;
     grants[id] = -1;
     redGrants[id] = 0;
+    const at = grantedAt[id]!;
+    if (at === -1) return;
+    const last = granted.pop()!;
+    if (last !== id) {
+      granted[at] = last;
+      grantedAt[last] = at;
+    }
+    grantedAt[id] = -1;
   }
 
   let ownControl: SignalControl | undefined;
@@ -276,10 +299,25 @@ export function createIntersections(
       )).update(timeS, colors));
   function signals(timeS: number) {
     signalColors(timeS, colors);
-    // A reservation cannot authorize entry after the light changes.
-    for (let id = 0; id < vehicles.count; id++) {
+    if (!listed || options.checkGranted) {
+      let count = 0;
+      for (let id = 0; id < vehicles.count; id++) {
+        if (grants[id] === -1) continue;
+        count++;
+        if (listed && granted[grantedAt[id]!] !== id)
+          throw new Error(`Vehicle ${id}: granted, but not listed`);
+        if (!listed) grantedAt[id] = granted.push(id) - 1;
+      }
+      if (count !== granted.length) throw new Error('A listed car holds no grant');
+      listed = true;
+    }
+    // A reservation cannot authorize entry after the light changes. Each car's check reads and
+    // writes only its own grant (and the movement's count), so their order is free; from the end,
+    // a release moves an already visited car into the freed place.
+    for (let i = granted.length - 1; i >= 0; i--) {
+      const id = granted[i]!;
       const idx = grants[id]!;
-      if (idx === -1 || vehicles.lane[id]! < 0) continue;
+      if (vehicles.lane[id]! < 0) continue;
       const movement = compiled.movements[idx]!;
       if (colors[idx] === GREEN) redGrants[id] = 0;
       if (compiled.nodes[movement.node]!.signal && !signalAllows(id, movement)) release(id);
@@ -329,7 +367,8 @@ export function createIntersections(
       const destination = compiled.connectors[vehicles.destination[car]!];
       if (destination?.lane === lane.idx && destination.positionM >= vehicles.position[car]!)
         front = Math.min(front, destination.positionM);
-      const next = compiled.movements[vehicles.movement[car]!];
+      const next =
+        vehicles.movement[car] === -1 ? undefined : compiled.movements[vehicles.movement[car]!];
       if (next && !signalAllows(car, next))
         front = Math.min(front, Math.max(vehicles.position[car]!, lane.stopM - params.idm.minGapM));
       space = Math.min(space, front - behind);
@@ -696,6 +735,7 @@ export function createIntersections(
           if (!canGrant(id, movement)) continue;
           options.onDecision?.(id, movement, 'granted');
           grants[id] = movement.idx;
+          if (listed && grantedAt[id] === -1) grantedAt[id] = granted.push(id) - 1;
           redGrants[id] = Number(onRed(movement));
           occupancy[movement.idx] = occupancy[movement.idx]! + 1;
         }

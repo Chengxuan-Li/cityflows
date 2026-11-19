@@ -31,7 +31,11 @@ export function createOriginCourtesy(
   const followerLane = new Int32Array(vehicles.count).fill(-1);
   const eligible = new Set<number>();
   const holds = new Map<number, Hold>();
-  const envelopes = new Map<number, { low: number; high: number }>();
+  // TASK-230: each (space, vehicle class)'s manoeuvre envelope on the lane, [low, high] at 2 * key
+  // (NaN until found). Blocked departures ask every step; a dense array spares the map lookup.
+  let envelopes = new Float64Array(
+    2 * (compiled.parkingSpaces?.length ?? 0) * profiles.length,
+  ).fill(NaN);
   const stats = { started: 0, succeeded: 0, aborted: 0 };
 
   function finish(hold: Hold, success: boolean) {
@@ -64,9 +68,8 @@ export function createOriginCourtesy(
       if (gap || timeS - since[id]! < params.gridlock.respawnS || holds.has(connector.lane)) return;
       const lane = compiled.lanes[connector.lane]!;
       if (compiled.roads[lane.road]!.group !== undefined) return;
-      const key = slot.idx * profiles.length + vehicles.vclass[id]!;
-      let envelope = envelopes.get(key);
-      if (!envelope) {
+      const key = 2 * (slot.idx * profiles.length + vehicles.vclass[id]!);
+      if (Number.isNaN(envelopes[key])) {
         const to = {
           ...pointAtDistance(lane.polyline, lane.cumulative, connector.positionM),
           heading: headingAtDistance(lane.polyline, lane.cumulative, connector.positionM),
@@ -79,15 +82,16 @@ export function createOriginCourtesy(
         );
         const bounds = manoeuvreLaneBounds(path, lane, profile(id).lengthM, profile(id).widthM);
         if (!bounds) return;
-        envelopes.set(key, (envelope = bounds));
+        envelopes[key] = bounds.low;
+        envelopes[key + 1] = bounds.high;
       }
       const spawnGap = Math.max(params.spawnMinGapM, params.idm.minGapM);
       const frontM = Math.min(
-        envelope.low - params.idm.minGapM,
+        envelopes[key]! - params.idm.minGapM,
         connector.positionM - profile(id).lengthM - spawnGap,
       );
       const clearRearM = Math.max(
-        envelope.high + params.idm.minGapM,
+        envelopes[key + 1]! + params.idm.minGapM,
         connector.positionM + spawnGap,
       );
       let follower = -1;
@@ -169,7 +173,9 @@ export function createOriginCourtesy(
       for (const hold of holds.values()) finish(hold, false);
       compiled = next;
       eligible.clear();
-      envelopes.clear();
+      envelopes = new Float64Array(2 * (next.parkingSpaces?.length ?? 0) * profiles.length).fill(
+        NaN,
+      );
       since.fill(NaN);
       seen.fill(-Infinity);
       lastLeader.fill(-1);
