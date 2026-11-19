@@ -218,7 +218,10 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // Rebuilt project and the retimed trams (lead, at the merge): 1,462 completed, 76 s.
   // TASK-222: in a mutual wait at a crossing, an actuated green is kept for the held car while
   // the joined controller changes to its phase (1,462 completed, 76.2 to 75.7 s).
-  expect(morning.stateHash).toBe(4038635547);
+  // TASK-228: a tram waits at its origin for a delayed run of another line only when it would
+  // meet it in time, so all 240 runs due by 10:00 enter (184 before), and their crossings close
+  // more often (1,462 to 1,460 completed, 75.7 to 80.3 s).
+  expect(morning.stateHash).toBe(1407248127);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
