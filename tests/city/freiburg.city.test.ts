@@ -204,8 +204,10 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // turns round.
   // TASK-214: rebuilt by the lead (connector positions, platform and junction-group ids move).
   // TASK-220: rebuilt for the tram track forms (only tram `form` and its provenance change).
+  // TASK-232: rebuilt; 13 stop tracks behind `area:highway` platforms ballast to embedded (only
+  // their `form` changes).
   expect(manifest.files['city.json']).toBe(
-    '77d57494b1cc58e34a7b28acaf75801d2b99d815299232fcae346aceeee9bc67',
+    'd7fb0530b8866ef477c39cb1ead0160b6b2d468f97a2cc6367d6779b7d5adc03',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).

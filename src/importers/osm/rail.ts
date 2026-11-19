@@ -6,9 +6,12 @@ import {
   pointAtDistance,
   pointInPolygon,
   polylineLength,
+  offsetPolyline,
+  trimPolyline,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { CompiledCity, Diagnostic } from '../../network';
+import { curbLane, stripWidth } from '../../network/strips';
 import { allocateId, type City, type Place } from '../../schema';
 import {
   railKinds,
@@ -390,7 +393,9 @@ const ballastSurfaces = new Set(['gravel', 'fine_gravel', 'pebblestone', 'ballas
 /** Share of a tram track inside drivable road for an untagged track to count as embedded. */
 export const embeddedShare = 0.8;
 /** TASK-220: one-lane carriageways are drawn at the default lane width, narrower than their
- * street (TASK-216 D9: the Rotteckring's 2 m); track this close to one runs in that street. */
+ * street (TASK-216 D9: the Rotteckring's 2 m); track this close to one runs in that street.
+ * TASK-232: measured to the street band's outer edge, its street parking and the mapped street
+ * areas (`area:highway`) that reach within this of the carriageway (a stop's platform). */
 export const alongsideM = 2.5;
 /** TASK-220: a mapped grass area narrower than this (mean width, m) is a strip along the track,
  * not a park or a lawn it crosses. */
@@ -432,8 +437,10 @@ const bbox = (points: Vec2[]) =>
  * `inferred: ['form']`: inside same-grade road or junction surface over `embeddedShare` of its
  * length, embedded; on (or within `stripReachM` of) a mapped grass strip over half its length off
  * the road, grass, unless a paved `surface` is tagged; inside or within `alongsideM` of a one-lane
- * carriageway over `embeddedShare`, embedded; else a paved bed for a paved `surface`, and ballast
- * for the rest (a separate track between carriageways; `railway:track_ref` says nothing of form).
+ * carriageway's street band (TASK-232: the carriageway, its street parking strips, and the
+ * `area:highway` areas reaching within `alongsideM` of it) over `embeddedShare`, embedded; else a
+ * paved bed for a paved `surface`, and ballast for the rest (a separate track between
+ * carriageways, a median reservation; `railway:track_ref` says nothing of form).
  */
 export function assignTramForms(
   city: City,
@@ -472,6 +479,56 @@ export function assignTramForms(
   const areaIndex = index(areas, (a) => a.ring);
   const located = (ids: number[]) =>
     ids.every((id) => positions.has(id)) ? ids.map((id) => positions.get(id)!) : undefined;
+  // TASK-232: a one-lane carriageway's street band beyond its drawn surface. Street parking
+  // strips (a mapped area, else the band beside the curb lane) belong to their road; a mapped
+  // street area (`area:highway`: platform, footway, pedestrian) when it reaches within
+  // `alongsideM` of the carriageway. Fahnenbergplatz's stop platforms lie between the tracks and
+  // their carriageways, 4.5 to 5.4 m off.
+  const nearOneLane = (ring: Vec2[], layer: number) => {
+    const [x0, y0, x1, y1] = bbox(ring);
+    return areaIndex
+      .search(x0 - alongsideM, y0 - alongsideM, x1 + alongsideM, y1 + alongsideM)
+      .map((j) => areas[j]!)
+      .some(
+        (a) =>
+          a.oneLane &&
+          a.layer === layer &&
+          (ring.some(
+            (q) => pointInPolygon(q, a.ring) || nearestOnPolyline(a.ring, q).away <= alongsideM,
+          ) ||
+            a.ring.some((q) => nearestOnPolyline(ring, q).away <= alongsideM)),
+      );
+  };
+  const band = [
+    ...Object.values(city.parking ?? {}).flatMap(({ strip }) => {
+      const road = strip && city.roads[strip.roadId];
+      if (!road || road.lanes.length !== 1) return [];
+      const layer = road.layer ?? Math.min(nodeLayer(road.from), nodeLayer(road.to));
+      if (strip.ring) return [{ ring: [...strip.ring, strip.ring[0]!], layer }];
+      const lane = curbLane(city, compiled, strip.roadId, strip.side);
+      if (!lane) return [];
+      const cumulative = cumulativeLengths(road.centerline);
+      const at = (station: number) =>
+        nearestOnPolyline(lane.polyline, pointAtDistance(road.centerline, cumulative, station))
+          .along;
+      const part = trimPolyline(
+        lane.polyline,
+        at(strip.fromM),
+        lane.cumulative.at(-1)! - at(strip.toM),
+      );
+      const sign = strip.side === 'left' ? -1 : 1;
+      const inner = offsetPolyline(part, (sign * lane.widthM) / 2);
+      const outer = offsetPolyline(part, sign * (lane.widthM / 2 + stripWidth(strip.layout)));
+      const ring = [...inner, ...outer.reverse()];
+      return [{ ring: [...ring, ring[0]!], layer }];
+    }),
+    ...data.way.flatMap((w) => {
+      const ring = w.tag['area:highway'] && w.nd[0] === w.nd.at(-1) ? located(w.nd) : undefined;
+      const layer = osmLayer(w.tag) ?? 0;
+      return ring && ring.length >= 4 && nearOneLane(ring, layer) ? [{ ring, layer }] : [];
+    }),
+  ];
+  const bandIndex = index(band, (b) => b.ring);
   const tramRoads = data.way.flatMap((w) => {
     const half = tramRoadHalfWidth(w.tag);
     const line = half === undefined ? undefined : located(w.nd);
@@ -543,7 +600,19 @@ export function assignTramForms(
         byRoad++;
         continue;
       }
-      if (near.some((a) => a.oneLane && nearestOnPolyline(a.ring, p).away <= alongsideM)) byRoad++;
+      if (
+        near.some((a) => a.oneLane && nearestOnPolyline(a.ring, p).away <= alongsideM) ||
+        bandIndex
+          .search(p.x - alongsideM, p.y - alongsideM, p.x + alongsideM, p.y + alongsideM)
+          .some((j) => {
+            const b = band[j]!;
+            return (
+              b.layer === t.layer &&
+              (pointInPolygon(p, b.ring) || nearestOnPolyline(b.ring, p).away <= alongsideM)
+            );
+          })
+      )
+        byRoad++;
       // Off the road only, where a strip ends at the kerb, a little short of the drawn one.
       if (
         stripIndex

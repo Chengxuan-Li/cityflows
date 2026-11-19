@@ -194,3 +194,77 @@ test('T220 forms from paving surfaces, embedded values, tram streets, grass stri
         inferred: !!t.provenance?.inferred?.includes('form'),
       }).toEqual({ way: id, form, inferred });
 });
+
+// TASK-232 (TASK-224 D8b): rule 7 measured to the street band's outer edge, the carriageway's
+// street parking and the mapped street areas (`area:highway`) beside it, so Fahnenbergplatz's
+// stop tracks behind their platforms count as in the street; a median track stays an own bed.
+test('T232 track behind a one-lane street parking strip or `area:highway` platform is embedded', () => {
+  const square = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+    [x0, y0],
+  ];
+  const street = (id: number, y: number, tags: Record<string, string> = {}) => ({
+    id,
+    tags: { highway: 'residential', lanes: '1', oneway: 'yes', ...tags },
+    points: [
+      [-250, y],
+      [250, y],
+    ] as [number, number][],
+  });
+  const city = load(
+    osm([
+      // Eastbound one-lane streets (3 m drawn, so 1.5 m each side of the line; right is +y).
+      // Angled bays (4.5 m) on the right of way 1: its band reaches y = -144.
+      street(1, -150, { 'parking:right': 'lane', 'parking:right:orientation': 'diagonal' }),
+      // A stop platform 1 m off way 2, mapped as part of the street, and one mapped as a rail
+      // platform only beside way 3 (a median stop like Munich's Marsstraße).
+      street(2, -50),
+      {
+        id: 4,
+        tags: { 'area:highway': 'platform', highway: 'platform', public_transport: 'platform' },
+        points: square(-200, -47.5, 200, -44.5),
+      },
+      street(3, 50),
+      {
+        id: 5,
+        tags: { railway: 'platform', public_transport: 'platform', area: 'yes' },
+        points: square(-200, 52.5, 200, 55.5),
+      },
+      // A two-lane carriageway with the same street platform: no tolerance (TASK-220).
+      street(6, 150, { highway: 'secondary', lanes: '2' }),
+      {
+        id: 7,
+        tags: { 'area:highway': 'platform', highway: 'platform', public_transport: 'platform' },
+        points: square(-200, 155.5, 200, 158.5),
+      },
+      ...(
+        [
+          [20, -142], // 2 m beyond the bays, 6.5 m off the carriageway: embedded
+          [21, -158], // as far off the side without parking: ballast
+          [22, -43], // 1.5 m beyond the street platform, 5.5 m off the carriageway: embedded
+          [23, 57], // the same beyond the rail-only platform: ballast
+          [24, 160], // beyond the two-lane street's platform: ballast
+        ] as [number, number][]
+      ).map(([id, y]) => ({ id, tags: { railway: 'tram' }, points: line(y) })),
+    ]),
+  );
+  const strips = Object.values(city.parking ?? {}).filter((p) => p.strip?.roadId);
+  expect(strips.length).toBeGreaterThan(0);
+  const expected: Record<number, string> = {
+    20: 'embedded',
+    21: 'ballast',
+    22: 'embedded',
+    23: 'ballast',
+    24: 'ballast',
+  };
+  for (const [id, form] of Object.entries(expected))
+    for (const t of byWay(city, Number(id)))
+      expect({ way: id, form: t.form, inferred: t.provenance?.inferred }).toEqual({
+        way: id,
+        form,
+        inferred: ['form'],
+      });
+});

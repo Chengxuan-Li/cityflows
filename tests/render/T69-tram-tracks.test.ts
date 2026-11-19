@@ -3,7 +3,7 @@ import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
 import { pointInPolygon } from '../../src/geo/polyline';
 import { compile } from '../../src/network';
-import { railGeometry } from '../../src/render/rail-geometry';
+import { pavingGapM, railGeometry } from '../../src/render/rail-geometry';
 import { style } from '../../src/render/style';
 import { cityHeights } from '../../src/render3d/heights';
 import { buildRail } from '../../src/render3d/rail';
@@ -135,4 +135,103 @@ test('T69 railways keep their bed and rails; trams differ from them in both view
   const tram = new Set(heights(-40, 15, 51));
   for (const h of [0, 0.12, 0.13, 0.17]) expect(tram.has(h)).toBe(true);
   expect(new Set(heights(-40, -1, 1))).toEqual(new Set([0, 0.06]));
+});
+
+// TASK-232 (TASK-224 N3): the street paving under embedded track runs on to the road edge beside
+// it, gaps under `pavingGapM` closed (no light strip or wedge), and takes in a stop's platform.
+test('T232 embedded paving closes narrow gaps to the road and reaches past a platform', () => {
+  const { city, node, road } = buildCity('Tram paving', 1);
+  road(node(0, -100), node(0, 100), { lanes: 1 });
+  const track = (id: number, line: { x: number; y: number }[]) => {
+    const from = `rn:${2 * id - 1}`,
+      to = `rn:${2 * id}`;
+    city.rail!.nodes[from] = { id: from, pos: line[0]!, layer: 0, kind: 'plain' };
+    city.rail!.nodes[to] = { id: to, pos: line.at(-1)!, layer: 0, kind: 'plain' };
+    city.rail!.tracks[`rt:${id}`] = {
+      id: `rt:${id}`,
+      from,
+      to,
+      line,
+      kind: 'tram',
+      layer: 0,
+      form: 'embedded',
+    };
+  };
+  city.rail = { nodes: {}, tracks: {}, platforms: {} };
+  const first = compile(city);
+  if (!first.ok) throw Error(JSON.stringify(first.diagnostics));
+  const edge = Math.max(...first.compiled.roads[0]!.surface.map((p) => p.x));
+  const half = style.tram.bedWidthM / 2;
+  // East: its band 1 m off the road, turning into it at the north end. West: 3.5 m off.
+  track(1, [
+    { x: edge + 1 + half, y: -60 },
+    { x: edge + 1 + half, y: 40 },
+    { x: 0, y: 60 },
+  ]);
+  track(2, [
+    { x: -edge - 3.5 - half, y: -60 },
+    { x: -edge - 3.5 - half, y: 40 },
+    { x: 0, y: 60 },
+  ]);
+  const covered = (
+    shapes: ReturnType<typeof railGeometry>,
+    track: number,
+    p: { x: number; y: number },
+  ) =>
+    shapes.some(
+      (s) =>
+        s.tram === 'paving' &&
+        s.pick?.kind === 'track' &&
+        s.pick.track === track &&
+        s.polygons.some((tri) => pointInPolygon(p, [...tri, tri[0]!])),
+    );
+  const result = compile(city);
+  if (!result.ok) throw Error(JSON.stringify(result.diagnostics));
+  let shapes = railGeometry(result.compiled, city);
+  expect(covered(shapes, 0, { x: edge + 0.5, y: -20 })).toBe(true);
+  expect(covered(shapes, 1, { x: -edge - 1.75, y: -20 })).toBe(false);
+  // Not onto the road itself (0.1 m under its edge at most), nor beyond the reach.
+  expect(covered(shapes, 0, { x: edge - 0.3, y: -20 })).toBe(false);
+  expect(covered(shapes, 0, { x: edge + 2 + 2 * half + pavingGapM, y: -20 })).toBe(false);
+
+  // A stop: track 5 m off the road, meeting none, with a platform between (1 m off the road).
+  delete city.rail.tracks['rt:1'];
+  delete city.rail.tracks['rt:2'];
+  city.rail.nodes = {};
+  track(3, [
+    { x: edge + 5, y: -60 },
+    { x: edge + 5, y: 40 },
+  ]);
+  const paving = () => {
+    const compiled = compile(city);
+    if (!compiled.ok) throw Error(JSON.stringify(compiled.diagnostics));
+    return railGeometry(compiled.compiled, city);
+  };
+  shapes = paving();
+  expect(shapes.find((s) => s.tram === 'paving')).toMatchObject({
+    color: style.tram.beds.paved,
+    onWalk: true,
+  });
+  city.rail.platforms['rp:1'] = {
+    id: 'rp:1',
+    shape: {
+      kind: 'polygon',
+      ring: [
+        { x: edge + 1, y: -40 },
+        { x: edge + 3.3, y: -40 },
+        { x: edge + 3.3, y: 20 },
+        { x: edge + 1, y: 20 },
+        { x: edge + 1, y: -40 },
+      ],
+    },
+    layer: 0,
+    name: 'Stop',
+    mode: 'tram',
+    tracks: ['rt:3'],
+    station: null,
+  };
+  shapes = paving();
+  const stop = shapes.find((s) => s.tram === 'paving')!;
+  expect([stop.color, stop.onWalk]).toEqual([style.asphalt, undefined]);
+  expect(covered(shapes, 0, { x: edge + 0.5, y: -10 })).toBe(true);
 });
