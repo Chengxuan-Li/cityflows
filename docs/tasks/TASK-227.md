@@ -1,6 +1,6 @@
 # TASK-227 — Pitched roofs on concave outlines (straight skeleton)
 
-Status: in progress (unsupervised run, owner 2026-11-19; "concave roofs if time allows"). Proposed
+Status: done 2026-11-19 (merged; render only). Proposed
 owner: Claude Code subagent (Opus 5.5, high). Branch `task/227-concave-roofs`, worktree
 `D:\cityflows-wt\227`, ports 5427 / 5527.
 

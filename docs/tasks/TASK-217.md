@@ -1,6 +1,6 @@
 # TASK-217 — Markings and crossings (TASK-215 reworked, with D1 and M7)
 
-Status: in progress (unsupervised run, owner 2026-11-19). Proposed owner: Claude Code subagent (Opus
+Status: done 2026-11-19 (merged as the paint-only variant `51fd128`; the full version missed the merge rule). Proposed owner: Claude Code subagent (Opus
 5.5, high). Branch `task/217-markings-crossings`, worktree `D:\cityflows-wt\217`, ports 5417 / 5517.
 
 ## Goal

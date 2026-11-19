@@ -1,6 +1,6 @@
 # TASK-218 — Importer road shapes: widths, medians, shared lanes, stop lines (TASK-216 D3 to D6, D9)
 
-Status: in progress (unsupervised run, owner 2026-11-19). Proposed owner: Claude Code subagent (Opus
+Status: parked 2026-11-19 (first version missed traffic, variant `26f69c5` the audit; review in `docs/plan.md`). Proposed owner: Claude Code subagent (Opus
 5.5, high). Branch `task/218-importer-roads`, worktree `D:\cityflows-wt\218`, ports 5418 / 5518.
 
 ## Goal
