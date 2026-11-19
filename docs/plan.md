@@ -4522,6 +4522,9 @@ importer road widths, medians, shared lanes and stop lines (D3 to D6, D9), tram 
 an OSM edit or curation entry for D7 (owner's). Lead check on the merge: check (1,532), city (193);
 the Freiburg build through the changed loader reproduces the bundled project.
 
+Full run 44517065466 (lead, manual, on 424b03c after TASK-220): every job green, including all five
+e2e shards; the city job took 19.4 min.
+
 TASK-220 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged under the owner's merge rule,
 traffic identical): tram track form (TASK-216 D8) in `assignTramForms` (`src/importers/osm/rail.ts`).
 Tags first: a tram on a highway way, `embedded=*` (no gives an own bed), `surface=grass` or
