@@ -28,6 +28,7 @@ import {
   type MarkingShape,
 } from '../src/render/marking-geometry';
 import { paintedCity } from '../src/render/road-paint';
+import { buildingPieces, buildRoof } from '../src/render3d/roofs';
 import { markingThemes } from '../src/render/style';
 import { cityMarkingTheme } from '../src/schema/marking-theme';
 import { openFreiburg } from './freiburg';
@@ -39,7 +40,8 @@ import { openFreiburg } from './freiburg';
 //   register <data-dir>           the registration on tram rails (RAIL_STRETCHES)
 //   render <data-dir> <out-dir>   the findings' close-ups (VIEWS, or --only <id,id>), --sweep (the
 //                                 box in overview tiles) or --view <spec>... (ad hoc, parseView)
-//   shots3d <out-dir>             VIEWS in the app's 3D view (dev server on port 5416)
+//   shots3d <out-dir>             VIEWS in the app's 3D view (a dev server on --port, default 5416;
+//                                 --buildings keeps the surroundings on, for roofs)
 // `fetch` reads the service's capabilities, stops unless its access constraints are the open
 // licence below, and saves the box as JPEG tiles with `tiles.json`. The tiles are third-party
 // data and stay outside the repository.
@@ -223,7 +225,57 @@ async function overlayGeometry() {
     }),
     ...nodes.map((node) => ({ at: node.pos, text: node.id, cls: 'l-node' })),
   ];
-  return { city, compiled, kerbs, strips, centrelines, rails, lines, polygons, labels };
+  // TASK-224: the 3D view's pitched roofs (TASK-227), as their eaves and the edges between faces
+  // of different slope (ridges, hips, valleys), for a check against the imagery.
+  const roofs: Line[] = [];
+  for (const feature of city.context?.features ?? [])
+    if (feature.kind === 'area' && feature.class === 'building')
+      for (const piece of buildingPieces(feature)) {
+        if (!piece.rings[0]!.some((p) => inBox(p, 0))) continue;
+        const roof = buildRoof(piece);
+        if (roof.shape !== 'flat')
+          roofs.push(...roofEdges(roof.roof.getAttribute('position').array));
+      }
+  return { city, compiled, kerbs, strips, centrelines, rails, lines, polygons, labels, roofs };
+}
+
+/** A roof mesh's eaves and fold lines in plan: the edges of its sloped triangles that border
+ * one triangle or two of different slope (the triangulation's own diagonals left out). */
+function roofEdges(position: ArrayLike<number>): Line[] {
+  const edges = new Map<string, { a: Vec2; b: Vec2; normals: number[][] }>();
+  for (let i = 0; i + 8 < position.length; i += 9) {
+    const [p, q, r] = [0, 3, 6].map((k) => [0, 1, 2].map((j) => position[i + k + j]!));
+    const u = [0, 1, 2].map((j) => q![j]! - p![j]!);
+    const v = [0, 1, 2].map((j) => r![j]! - p![j]!);
+    const n = [
+      u[1]! * v[2]! - u[2]! * v[1]!,
+      u[2]! * v[0]! - u[0]! * v[2]!,
+      u[0]! * v[1]! - u[1]! * v[0]!,
+    ];
+    const length = Math.hypot(...n);
+    // Walls (gable ends) stand on the outline: their plan is an eave.
+    if (!length || Math.abs(n[1]! / length) < 0.05) continue;
+    const normal = n.map((x) => x / length);
+    for (const [a, b] of [
+      [p, q],
+      [q, r],
+      [r, p],
+    ] as const) {
+      const ends = [a!, b!]
+        .map((c) => ({ x: c[0]!, y: c[2]! }))
+        .sort((m, k) => m.x - k.x || m.y - k.y);
+      const key = ends.map((c) => `${c.x.toFixed(2)},${c.y.toFixed(2)}`).join(' ');
+      const edge = edges.get(key) ?? { a: ends[0]!, b: ends[1]!, normals: [] };
+      edge.normals.push(normal);
+      edges.set(key, edge);
+    }
+  }
+  return [...edges.values()]
+    .filter(
+      ({ normals: [m, k, ...rest] }) =>
+        !k || rest.length || m!.reduce((sum, x, j) => sum + x * k[j]!, 0) < 0.999,
+    )
+    .map(({ a, b }) => ({ points: [a, b], cls: 'roof' }));
 }
 
 /** Rail centres of standard gauge (as `render/rail-geometry.ts` draws them). */
@@ -245,6 +297,8 @@ export interface View {
    * attribution). */
   plain?: boolean;
   marks?: { at: Vec2; text: string }[];
+  /** The 3D view's pitched roofs drawn over the imagery (TASK-224). */
+  roofs?: boolean;
   /** Cross-sections with metre ticks: [road id, station on its OSM centreline (m), half length
    * (m)]; the drawn kerbs' and lines' offsets along each are printed. */
   sections?: [string, number, number][];
@@ -340,6 +394,7 @@ text{paint-order:stroke;stroke:#000;fill:#fff}
 .mark{stroke:#ff2a2a;stroke-width:1.5}
 .cut{stroke:#ffffff;stroke-width:1.5}
 .bare .ov{display:none}.nolabels .labels{display:none}
+.roof{stroke:#ffe600;stroke-width:1.2}g.roofs{display:none}.with-roofs g.roofs{display:inline}
 #caption{position:fixed;left:0;bottom:0;padding:2px 6px;background:rgba(0,0,0,.65);color:#fff;font-size:12px}
 #scale{position:fixed;right:8px;bottom:22px;color:#fff;font-size:12px;text-align:right}
 #scale div{height:4px;background:#fff;border:1px solid #000;margin-top:2px}
@@ -355,6 +410,7 @@ ${group('paint', geometry.lines, false)}
 ${group('paint', geometry.polygons, true)}
 </g>
 <g class="labels ov">${labels}</g>
+${group('roofs', geometry.roofs, false)}
 <g id="grid" class="grid"></g><g id="marks"></g>
 </svg><div id="scale"></div><div id="caption"></div>
 <div id="legend" class="ov"><span style="color:#ff8a00">embedded</span> <span style="color:#7dff6a">grass</span> <span style="color:#d6c8ff">paved</span> <span style="color:#ff3b3b">ballast</span></div>
@@ -366,6 +422,8 @@ window.show = (v, attribution, cuts) => {
   svg.setAttribute('width', w); svg.setAttribute('height', h);
   svg.setAttribute('viewBox', [x0, y0, v.size[0], v.size[1]].join(' '));
   svg.classList.toggle('bare', !!v.bare);
+  svg.classList.toggle('with-roofs', !!v.roofs);
+  document.getElementById('legend').style.display = v.bare ? 'none' : '';
   document.getElementById('imagery').setAttribute('filter', v.lift ? 'url(#lift)' : '');
   svg.classList.toggle('nolabels', !v.labels);
   const font = 11 / v.zoom;
@@ -533,6 +591,59 @@ export const VIEWS: (View & { camera3d: [number, number, number] })[] = [
     size: [50, 36],
     zoom: 14,
     camera3d: [22, 45, 0],
+  },
+  // TASK-224: TASK-218's D9 section, the Rotteckring track left on ballast, and roofs (TASK-227) against the imagery:
+  // the imagery alone, and `shots3d --buildings` from nearly overhead.
+  {
+    id: 'D9b-width-tag-r1690-rotteckring',
+    centre: [NaN, NaN],
+    size: [40, 30],
+    zoom: 13,
+    sections: [['r:1690', 50, 12]],
+    camera3d: [21, 45, 0],
+  },
+  {
+    id: 'D8b-rotteckring-ballast',
+    centre: [168, -318],
+    size: [40, 30],
+    zoom: 14,
+    camera3d: [22, 45, 0],
+  },
+  {
+    id: 'R1-roofs-rheinstrasse',
+    centre: [-38, -536],
+    size: [90, 70],
+    zoom: 8,
+    bare: true,
+    roofs: true,
+    camera3d: [8, 85, 0],
+  },
+  {
+    id: 'R2-roofs-eisenbahnstrasse',
+    centre: [125, -135],
+    size: [90, 70],
+    zoom: 8,
+    bare: true,
+    roofs: true,
+    camera3d: [8, 85, 0],
+  },
+  {
+    id: 'R3-roofs-hans-sachs-gasse',
+    centre: [-125, -115],
+    size: [90, 70],
+    zoom: 8,
+    bare: true,
+    roofs: true,
+    camera3d: [8, 85, 0],
+  },
+  {
+    id: 'R4-roofs-poststrasse',
+    centre: [-60, -310],
+    size: [90, 70],
+    zoom: 8,
+    bare: true,
+    roofs: true,
+    camera3d: [8, 85, 0],
   },
 ];
 
@@ -740,12 +851,12 @@ async function railProfiles(dataDir: string) {
   return results;
 }
 
-/** The views' cameras in the app's 3D view (the bundled Freiburg project from the dev server,
- * port 5416), with buildings, trees, places and entrances off, as `<id>-3d.png`. */
-async function shots3d(out: string, views: typeof VIEWS) {
+/** The views' cameras in the app's 3D view (the bundled Freiburg project from a dev server on
+ * `port`), with trees, places and entrances off, and buildings unless `buildings`, as
+ * `<id>-3d.jpg` (`<id>-3d-buildings.jpg`). */
+async function shots3d(out: string, views: typeof VIEWS, port: number, buildings: boolean) {
   mkdirSync(out, { recursive: true });
   const geometry = await overlayGeometry();
-  const port = 5416;
   const server = spawn(
     process.execPath,
     [
@@ -793,7 +904,7 @@ async function shots3d(out: string, views: typeof VIEWS) {
     await button('Layers').click();
     const layers = page.getByRole('region', { name: 'Map layers' });
     for (const label of [
-      'Surroundings',
+      ...(buildings ? [] : ['Surroundings']),
       'Trees',
       'Street trees',
       'Places',
@@ -827,8 +938,9 @@ async function shots3d(out: string, views: typeof VIEWS) {
           ) > n,
         frames,
       );
-      await canvas.screenshot({ path: join(out, `${view.id}-3d.jpg`), type: 'jpeg', quality: 85 });
-      console.info(`${view.id}-3d.jpg`);
+      const file = `${view.id}-3d${buildings ? '-buildings' : ''}.jpg`;
+      await canvas.screenshot({ path: join(out, file), type: 'jpeg', quality: 85 });
+      console.info(file);
     }
   } finally {
     await browser.close();
@@ -836,7 +948,8 @@ async function shots3d(out: string, views: typeof VIEWS) {
   }
 }
 
-/** `--view id:x,y,w,h,zoom[,grid][,bare][,labels]` renders ad hoc views. */
+/** `--view id:x,y,w,h,zoom[,grid][,bare][,labels][,lift][,plain][,roofs][,r:<id>@<m>@<half>]`
+ * renders ad hoc views. */
 function parseView(spec: string): View {
   const id = spec.slice(0, spec.indexOf(':'));
   const rest = spec.slice(id.length + 1);
@@ -851,6 +964,7 @@ function parseView(spec: string): View {
     bare: parts.includes('bare'),
     labels: parts.includes('labels'),
     lift: parts.includes('lift'),
+    roofs: parts.includes('roofs'),
     plain: parts.includes('plain'),
     sections: parts
       .filter((part) => part.startsWith('r:'))
@@ -873,14 +987,20 @@ else if (command === 'render' && args.length >= 2) {
         : VIEWS.filter((view) => flag !== '--only' || value!.split(',').includes(view.id));
   await render(resolve(dataDir!), resolve(out!), views);
 } else if (command === 'shots3d' && args.length >= 1) {
-  const [out, flag, value] = args;
+  const option = (name: string) => {
+    const i = args.indexOf(name);
+    return i < 0 ? undefined : args[i + 1];
+  };
+  const only = option('--only')?.split(',');
   await shots3d(
-    resolve(out!),
-    VIEWS.filter((view) => flag !== '--only' || value!.split(',').includes(view.id)),
+    resolve(args[0]!),
+    VIEWS.filter((view) => !only || only.includes(view.id)),
+    Number(option('--port') ?? 5416),
+    args.includes('--buildings'),
   );
 } else if (command === 'register' && args.length === 1) {
   console.info(JSON.stringify(registration(await railProfiles(resolve(args[0]!))), null, 2));
 } else
   throw new Error(
-    'Usage: bench/aerial-overlay.ts fetch <data-dir> | register <data-dir> | render <data-dir> <out-dir> [--sweep | --view <spec>... | --only <id,id>] | shots3d <out-dir> [--only <id,id>]',
+    'Usage: bench/aerial-overlay.ts fetch <data-dir> | register <data-dir> | render <data-dir> <out-dir> [--sweep | --view <spec>... | --only <id,id>] | shots3d <out-dir> [--only <id,id>] [--port <n>] [--buildings]',
   );
