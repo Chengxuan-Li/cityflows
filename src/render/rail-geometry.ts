@@ -37,8 +37,13 @@ export interface RailShape {
   /** Sub-pixel at ordinary 2D zoom; the 2D map draws it only close up (lead, TASK-126 merge). */
   detail?: boolean;
   /** TASK-135: the part of a tram track. Rails draw above road surfaces in 2D (`street` where
-   * they run in the road, `rail` on an own bed); 3D raises each part to its own height. */
-  tram?: 'bed' | 'sleepers' | 'rail' | 'street';
+   * they run in the road, `rail` on an own bed); 3D raises each part to its own height. TASK-220:
+   * `paving` is the street surface under embedded track off the drawn roads (asphalt, or stone in
+   * a pedestrian street), flat at road height. */
+  tram?: 'bed' | 'sleepers' | 'rail' | 'street' | 'paving';
+  /** TASK-220: embedded track that meets no road (a pedestrian street): 3D lifts it to the top of
+   * the footways it runs in. */
+  onWalk?: boolean;
   /** Outline rings of a tram part, for its 3D sides. */
   outline?: Vec2[][];
   grass?: boolean;
@@ -254,7 +259,46 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
       // Tracks of older projects carry no form: drawn as street-running rails, as before.
       const form = t.form ?? 'embedded';
       if (form === 'embedded') {
-        add(rails, t.layer, style.tram.groove, alpha, true, pick, false, { tram: 'street' });
+        // TASK-220: the street's surface under the rails off the drawn roads, none on them:
+        // asphalt where the track meets a road (the gap that narrow default lane widths leave
+        // between one-way carriageways), stone paving where it runs in a pedestrian street.
+        const band = inflatePathsD(
+          [t.line],
+          style.tram.bedWidthM / 2,
+          JoinType.Round,
+          EndType.Butt,
+          2,
+          3,
+        );
+        const roads = spatial
+          .search(...box(band.flat()))
+          .flatMap((i) => (obstacles[i]!.layer === t.layer ? [obstacles[i]!.ring] : []))
+          .filter(
+            (ring) => booleanOpD(ClipType.Intersection, band, [ring], FillRule.NonZero, 3).length,
+          );
+        // It reaches 0.1 m under the roads it meets, so no seam of canvas shows along their edge.
+        add(
+          roads.length
+            ? booleanOpD(
+                ClipType.Difference,
+                band,
+                inflatePathsD(roads, -0.1, JoinType.Miter, EndType.Polygon, 2, 3),
+                FillRule.NonZero,
+                3,
+              )
+            : band,
+          t.layer,
+          roads.length ? style.asphalt : style.tram.beds.paved,
+          alpha,
+          true,
+          pick,
+          false,
+          { tram: 'paving', ...(roads.length ? {} : { onWalk: true }) },
+        );
+        add(rails, t.layer, style.tram.groove, alpha, true, pick, false, {
+          tram: 'street',
+          ...(roads.length ? {} : { onWalk: true }),
+        });
         continue;
       }
       const bed = add(

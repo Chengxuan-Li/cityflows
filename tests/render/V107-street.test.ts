@@ -178,7 +178,9 @@ const baselines = {
   // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
   // TASK-194: generated signal programs are actuated (`actuated: true`).
   // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-  'munich-donnersberger': '47aa5c2a10a7fde6dae75ab31db873451b80be0b88ad062b7cc6d0afed8d7b0c',
+  // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
+  // tram `form` stripped the city equals b3bcde6's.
+  'munich-donnersberger': '11fa237b380ffdb84472526dd4068b524445ce044cd25ce6cfb492c9ee170099',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

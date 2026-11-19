@@ -83,7 +83,9 @@ const baseline = {
     // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    compile: '198ec4db6b8ec6a79cdafc1b94d2c00ddc3794bb63899ff9c8d1b809d50103ef',
+    // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
+    // tram `form` stripped the city equals b3bcde6's.
+    compile: 'f25342f599272f7bb143910b7f7a855e7b0a313928a2da4632038dddca22b62d',
     arrows: '12672c2496ebf0ba83725a10f255712bd00e081631eaccb0c407e555037d0422',
   },
 } as const;

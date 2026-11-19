@@ -54,8 +54,12 @@ test('T69 2D: embedded rails only, own beds in their colour clipped by the road,
     const bed = parts.find((s) => s.tram === 'bed');
     const sleepers = parts.find((s) => s.tram === 'sleepers');
     if (form === 'embedded') {
-      expect(parts.map((s) => s.tram)).toEqual(['street']);
-      expect(parts[0]!.color).toBe(style.tram.groove);
+      // TASK-220: street asphalt beside the road, none on it, and the grooved rails.
+      expect(parts.map((s) => s.tram)).toEqual(['paving', 'street']);
+      expect(parts.map((s) => s.color)).toEqual([style.asphalt, style.tram.groove]);
+      expect(
+        parts[0]!.polygons.every((tri) => Math.max(...tri.map((p) => Math.abs(p.x))) > 5.2),
+      ).toBe(true);
       continue;
     }
     expect(bed!.color).toBe(style.tram.beds[form]);
@@ -89,7 +93,25 @@ test('T69 2D: embedded rails only, own beds in their colour clipped by the road,
   }
   // A tram of an older project has no form and keeps the street-running look.
   const legacy = scene([{ kind: 'tram' }]);
-  expect(railGeometry(legacy.compiled, legacy.city).map((s) => s.tram)).toEqual(['street']);
+  expect(railGeometry(legacy.compiled, legacy.city).map((s) => s.tram)).toEqual([
+    'paving',
+    'street',
+  ]);
+  // TASK-220: embedded track that meets no road (a pedestrian street) lies in stone paving.
+  const away = scene([{ kind: 'tram', form: 'embedded' }]);
+  away.city.rail!.tracks['rt:1']!.line = [
+    { x: 20, y: -60 },
+    { x: 60, y: -60 },
+  ];
+  away.city.rail!.nodes['rn:1']!.pos = { x: 20, y: -60 };
+  const result = compile(away.city);
+  if (!result.ok) throw Error(JSON.stringify(result.diagnostics));
+  // 3D lifts it onto the footways of its street; track that meets a road stays at road height.
+  expect(railGeometry(result.compiled, away.city).map((s) => [s.tram, s.color, s.onWalk])).toEqual([
+    ['paving', style.tram.beds.paved, true],
+    ['street', style.tram.groove, true],
+  ]);
+  expect(railGeometry(legacy.compiled, legacy.city).some((s) => s.onWalk)).toBe(false);
 });
 
 test('T69 railways keep their bed and rails; trams differ from them in both views', () => {

@@ -190,7 +190,9 @@ const pins = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: two corners are rounded (n:324's acute corner a gore; n:661's gore tip).
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    compile: '47aa5c2a10a7fde6dae75ab31db873451b80be0b88ad062b7cc6d0afed8d7b0c',
+    // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
+    // tram `form` stripped the city equals b3bcde6's.
+    compile: '11fa237b380ffdb84472526dd4068b524445ce044cd25ce6cfb492c9ee170099',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).

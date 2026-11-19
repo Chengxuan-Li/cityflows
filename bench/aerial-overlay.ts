@@ -153,7 +153,7 @@ const inBox = (p: Vec2, margin = 30) =>
 
 /** The overlay's shapes in the local frame: the drawn carriageway's edge (the union of road
  * surfaces, junction polygons, tapers and gore pavement, per grade), parking strips, the paint,
- * the OSM centrelines and the tram rails. */
+ * the OSM centrelines and the tram rails, coloured by form (TASK-220). */
 async function overlayGeometry() {
   const project = await openFreiburg();
   const city = project.city;
@@ -212,7 +212,8 @@ async function overlayGeometry() {
     .flatMap((track) =>
       [-TRAM_RAIL_M, TRAM_RAIL_M].map((offset) => ({
         points: offsetPolyline(track.line, offset),
-        cls: track.layer ? 'rail-off' : 'rail',
+        // TASK-220: coloured by the track's form.
+        cls: `${track.layer ? 'rail-off' : 'rail'} form-${track.form ?? 'embedded'}`,
       })),
     );
   const labels = [
@@ -325,6 +326,8 @@ path{fill:none;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .osm{stroke:#ffffff;stroke-width:1;stroke-dasharray:2 3;opacity:.85}
 .rail{stroke:#ff8a00;stroke-width:1.2}
 .rail-off{stroke:#ff8a00;stroke-width:1;stroke-dasharray:5 4}
+.form-ballast{stroke:#ff3b3b}.form-grass{stroke:#7dff6a}.form-paved{stroke:#d6c8ff}
+#legend{position:fixed;left:6px;top:4px;padding:2px 6px;background:rgba(0,0,0,.65);font-size:12px}
 .m-lane,.m-edge,.m-centre,.m-channel,.m-bus{stroke:#ffe600;stroke-width:1.4}
 .m-hatch{stroke:#ffb000;stroke-width:1}
 .m-arrow{stroke:#ffe600;stroke-width:1.2}
@@ -354,6 +357,7 @@ ${group('paint', geometry.polygons, true)}
 <g class="labels ov">${labels}</g>
 <g id="grid" class="grid"></g><g id="marks"></g>
 </svg><div id="scale"></div><div id="caption"></div>
+<div id="legend" class="ov"><span style="color:#ff8a00">embedded</span> <span style="color:#7dff6a">grass</span> <span style="color:#d6c8ff">paved</span> <span style="color:#ff3b3b">ballast</span></div>
 <script>
 window.show = (v, attribution, cuts) => {
   const [w, h] = [v.size[0] * v.zoom, v.size[1] * v.zoom];
