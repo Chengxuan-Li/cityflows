@@ -185,7 +185,7 @@ function streetArms(city: CompiledCity, node: CNode) {
 
 /** TASK-215 (M3): how far from a road end's cut a mapped crossing way still crosses that end
  * (TASK-140's reach for re-anchoring one onto the stripes). */
-const MAPPED_M = 12;
+export const MAPPED_M = 12;
 
 interface MappedCrossing {
   line: Vec2[];
@@ -411,7 +411,8 @@ function placeArm(
   }
   // TASK-217 (D1): at a node without signals a mapped crossing way leads: the band moves to it
   // (all ends together, no move-out) where it lies over `MAPPED_SHIFT_M` from the placement
-  // above and no nearer the node than the band's near edge allows, unless an end then loses its
+  // above, no nearer the node than 0.25 m beyond the lane cuts (a stripe in the junction or by a
+  // curb return is left out, as anywhere), unless an end then loses its
   // stripes. A signalized approach keeps its place (TASK-094: its stop line follows the crossing).
   const mapped = node.signal === null ? mappedAt(city, node, arm, axis, source) : null;
   if (mapped !== null) {
@@ -435,7 +436,7 @@ function placeArm(
         const frame = bandFrame(city, node, arm, e, curbs, axis);
         return placeCrossing(city, node, e, curbs, {
           ...frame,
-          near: Math.max(frame.near, mapped - CROSSING_M / 2),
+          near: Math.max(frame.cutNear!, mapped - CROSSING_M / 2),
           fixed: true,
         });
       });
@@ -462,6 +463,8 @@ interface Frame {
   near: number;
   /** TASK-217: no move-out (a mapped crossing's place). */
   fixed?: boolean;
+  /** TASK-217: the band's near edge without the curb returns' clearance (`bandFrame`). */
+  cutNear?: number;
   station: (lane: CLane, t: number, offset?: number) => number;
 }
 
@@ -506,6 +509,7 @@ function bandFrame(
         }),
       ),
     ) + 0.25;
+  const cutNear = near;
   for (const corner of curbs)
     corner.roads.forEach((index, k) => {
       if (arm.some((e) => e.road.idx === index))
@@ -534,7 +538,7 @@ function bandFrame(
     const h = headingAtDistance(lane.polyline, lane.cumulative, end.atEnd ? lane.lengthM - d : d);
     return centre(lane, t - offset * (-Math.sin(h) * axis.x + Math.cos(h) * axis.y));
   };
-  return { near, station };
+  return { near, cutNear, station };
 }
 
 /** The crossing of road end `end` in `frame`. */
