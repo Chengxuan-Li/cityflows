@@ -84,7 +84,7 @@ const baseline = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     compile: '198ec4db6b8ec6a79cdafc1b94d2c00ddc3794bb63899ff9c8d1b809d50103ef',
-    arrows: '12672c2496ebf0ba83725a10f255712bd00e081631eaccb0c407e555037d0422',
+    arrows: 'a53a6755a8a990f7e1e9c3773d6d12a4dfb523f7a288168e854cb2ec04e39056',
   },
 } as const;
 const hash = (value: unknown) =>

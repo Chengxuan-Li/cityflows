@@ -195,9 +195,9 @@ const pins = {
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
-    de: '93c80da1875ad5068561101700c2d56d7453fd0a40f08629bebcc74b2d5f9a99',
+    de: '645d23751d626ef6d9a6c1da294898903053137ce362f632827bd30c9d13187b',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    us: '1ca009b61590dd872e3d0d080b60c85e8d0fe95a1aaecacd85e3bbb04858cb82',
+    us: '98f62234ad45f2cace7a1d43b244bc1f86378284b688263ecfd5d4acf1a01be1',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.

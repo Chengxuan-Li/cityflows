@@ -69,13 +69,13 @@ mapped crossing 614 to 94 (tip) or 40 (full); 24 (tip) or 47 (full) of its 105 m
 crossings get zebras (main 35), because they are mapped as `footway=crossing` ways whose
 `crossing=unmarked` the walk schema cannot carry. Sindelfingen: painted 697 to 22.
 
-Geometry audit (`bench/geometry-audit.ts`, five cities, full version against main): every city
-total equal except `lineOutsideM` and `markingOutsideM`, the painted metres outside junctions,
-which grow with the solid lines (Freiburg 14,857 to 14,871 m, Munich 34,881 to 35,072, town
-79,218 to 80,456, grid 8,010 to 8,094) and shrink with M2 (Sindelfingen 44,555 to 44,508); they
-are amounts of paint, not distances. Named cases: marking offset J4 0.013 to 0.002 m, J1-stefan
-0.004 to 0, J3 0.001 to 0.003 m (the solid line keeps the lane edge's vertices that dashes
-interpolated past; 2 mm).
+Geometry audit (`bench/geometry-audit.ts`, five cities, against main): every city total equal in
+both versions except `lineOutsideM` and `markingOutsideM`, the painted metres outside junctions,
+which grow with the solid lines and shrink with M2 (tip: Freiburg 14,857 to 14,865 m, Munich
+34,881 to 35,062, town 79,218 to 80,486, grid 8,010 to 8,094, Sindelfingen 44,555 to 44,549; full:
+14,871, 35,072, 80,456, 8,094, 44,508); they are amounts of paint, not distances. Named cases, both
+versions: marking offset J4 0.013 to 0.002 m, J1-stefan 0.004 to 0, J3 0.001 to 0.003 m (the
+solid line keeps the lane edge's vertices that dashes interpolated past; 2 mm).
 
 ## Traffic
 
@@ -101,8 +101,11 @@ departure offsets). No single part explains Munich's fixed-time rise; per-seed d
 up to 15% between trees that differ in a few crossings, so the paint-only version is the variant.
 
 Paint only (tip): state hashes identical to main on Munich seeds 1 to 3 in all four
-configurations, full demand both modes, Freiburg's gate and Sindelfingen (figures in the commit
-report); the importer and the Freiburg project are main's byte for byte.
+configurations (actuated off 599167940, 187323141, 1769668491; on 647224768, 4137063479,
+243488400; fixed off 5860114, 3135126470, 1029796786; on 125757433, 274055063, 612908735), full
+demand (actuated 3,759 / 143, 4028429784; fixed 3,501 / 168, 2888500527), Freiburg's gate (1,462
+/ 0, 76 s, 1730700508) and Sindelfingen (155 / 0, 27.1 s, 3472231659); the importer and the
+Freiburg project are main's byte for byte.
 
 ## Not done, and why
 
