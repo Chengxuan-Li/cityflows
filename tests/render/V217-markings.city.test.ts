@@ -29,7 +29,8 @@ import type { City } from '../../src/schema';
 // TASK-215: the marking cases M1 to M6 of TASK-212's audit
 // (docs/findings/2026-11-19-geometry-audit/README.md), on the bundled Freiburg project; TASK-217:
 // crossings where OSM maps them (D1 of docs/findings/2026-11-19-aerial-check/) and solid lane
-// lines before stop lines (M7).
+// lines before stop lines (M7); TASK-229: N1 and N2 of TASK-224's re-check
+// (docs/findings/2026-11-19-aerial-recheck/).
 
 let city: City;
 let net: CompiledCity;
@@ -62,15 +63,57 @@ test('M1: a group entry lane shows its turns through the group, not its first in
   expect(turns('r:1396#2')).toEqual(['left', 'right', 'through']);
 });
 
-test('M2: inner roads of junction groups with lanes under 15 m carry no lane lines', () => {
+const laneLines = (id: string) => {
+  const { below, above } = roadMarkingGeometry(net, road(id), city);
+  return [...below, ...above].filter((s) => s.role === 'lane').length;
+};
+
+test('M2: inner roads of junction groups with lanes under 15 m carry lane lines only on carriageway (N1)', () => {
   const lines: string[] = [];
   for (const r of net.roads) {
     if (r.group === undefined || r.lanes.every((i) => net.lanes[i]!.lengthM >= 15)) continue;
-    const { below, above } = roadMarkingGeometry(net, r, city);
-    if ([...below, ...above].some((s) => s.role === 'lane')) lines.push(r.id);
+    if (laneLines(r.id)) lines.push(r.id);
   }
   expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(81);
-  expect(lines).toEqual([]);
+  // Runs of 15 m or more node to node through plain joins, crossed at one end at most; the
+  // other short inner roads lie inside junctions (TASK-217's M2).
+  expect(lines.sort()).toEqual(
+    [
+      ...['r:1149', 'r:475'], // Friedrichstraße westbound in the Hauptbahnhof group (D2)
+      ...['r:6', 'r:745', 'r:1179'], // Stefan-Meier-Straße, 33 m through n:5 and n:744
+      ...['r:775', 'r:288', 'r:663'],
+      ...['r:816', 'r:1225'],
+      ...['r:1484', 'r:1881'],
+      ...['r:1372', 'r:2167', 'r:770'],
+    ].sort(),
+  );
+});
+
+test('N1: lane lines on carriageway a group takes in, none on the links inside its junction', () => {
+  // TASK-224: about 35 m of westbound Friedrichstraße (r:1149 18.1 m and r:475 19.1 m node to
+  // node, lanes of 4.6 to 5.5 m between their cuts) and Stefan-Meier-Straße's 13 m r:1179 lost
+  // the dashed lines the ground has.
+  for (const id of ['r:1149', 'r:475', 'r:6', 'r:745', 'r:1179'])
+    expect(laneLines(id), id).toBeGreaterThanOrEqual(road(id).lanes.length - 1);
+  // The Hauptbahnhof junction's own links, crossed at both ends: none.
+  for (const id of ['r:972', 'r:973', 'r:975', 'r:976']) expect(laneLines(id), id).toBe(0);
+});
+
+test('N2: an entry lane with no path through the group, or only a double left, shows its own turn', () => {
+  const turns = (id: string) => [...approachMarkings(net, lane(id)).turns].sort();
+  // r:1148#0 has no chain through jg:13297; #1's only chain turns left twice (to r:484), which
+  // M1 reads as a u-turn. Both enter r:1149 straight on, as #2 and #3 do; #4 has no movement.
+  for (const id of ['r:1148#0', 'r:1148#1', 'r:1148#2', 'r:1148#3'])
+    expect(turns(id), id).toEqual(['through']);
+  expect(turns('r:1148#4')).toEqual([]);
+  // r:460#0 has no chain either (its arrow finds no room behind the crossing at its start, M4);
+  // #1's only chain turns left three times round the block: a u-turn, no arrow.
+  expect(turns('r:460#0')).toEqual(['through']);
+  expect(turns('r:460#1')).toEqual([]);
+  // Where the double left was the only lane without an arrow, every lane now runs straight on
+  // and none carries one (TASK-079), as on the ground at r:1262 and r:1478.
+  for (const id of ['r:1262#0', 'r:1262#1', 'r:1478#0', 'r:1478#1'])
+    expect(turns(id), id).toEqual([]);
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {
