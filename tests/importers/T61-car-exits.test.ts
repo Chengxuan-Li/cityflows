@@ -362,8 +362,9 @@ test.each(
     [
       'sindelfingen',
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-      'a4de4301abf294a4da9074eb6ea8f154dae170d61b8b21ea5a9e175e0453e1f5',
-      'e386a323dff201af5378e7cee85444cf6d04a9fbe33db85d7ba0f61a794a8e68',
+      // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+      'd4ab86a62b041752ac85cbcdef177b165a286e3d15f71e1ccf1219588832d908',
+      'f4fae021fb29d507d1e9d4f38c371a79667c8b81d09ad5c7fd9b48b704207fd6',
       31,
       703,
     ],

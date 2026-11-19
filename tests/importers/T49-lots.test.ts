@@ -38,11 +38,13 @@ const baseline = {
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    '90612cffe0d2bd5bcf88787c226029999b038e323d43bf9d3f30b91a923debc7',
+    // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    'e77e2e2cbd0cad5cffa2e24779666be97b0f40aa9f4e704a2fd19aa9d0f0a990',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    '3ddf346e18ce972c81dffe121b8a48bb2fe340208499c382eccb34ae3addcbc5',
+    // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    '42e7f4957021dc138b4e261a227ca03056e2d8dea6595bbce0a2fcd500874816',
   ],
 };
 

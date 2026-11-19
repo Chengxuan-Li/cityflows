@@ -67,8 +67,9 @@ const baseline = {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    compile: '2469f7ea4843d9d3d6e35912b12918b86cde14b51bd58d2187ddece96acddac7',
-    arrows: '29bd956f1a3e4825fe96236f91eb9bfbd94b07e62f23f9eff2f7f0e51621ba0a',
+    // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    compile: 'b87b8a83a8bae407ffd9f9f8069a321329e6bed9a2d4f66956eab463d7c18fbe',
+    arrows: '95f4434b279dea44ce702ca32df0c3a7a49ff17862cc7455ac486f4ebb31fc6e',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.

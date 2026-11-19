@@ -210,7 +210,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-213: 16 corners rounded (n:44's far-cut curb, gore fillets); the walk network follows
   // the curbs, so walkers and the cars meeting them move; no lane's stop position moves.
   // Re-pinned by the lead on top of TASK-207's curation.
-  expect(morning.stateHash).toBe(1813598902);
+  // TASK-214: lanes through splits and merges (1,467 to 1,466 completed, 75 to 74 s).
+  expect(morning.stateHash).toBe(934610280);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

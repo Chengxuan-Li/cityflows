@@ -202,11 +202,12 @@ const pins = {
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: four corners are rounded (gore fillets at n:27, n:68, n:1162; n:365's corner).
-    compile: '1438e38e5ce11eba8d3779e9f7f81d5404668389e2a759bc51612e425682a49a',
-    lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
-    curbs: '7f6d24aeb07dd9a2791295820af788fc727eef6eac6c6d4f4154e6c9848c826b',
-    de: 'cee5a378f8673f37fd5848ff1ce7e047517d184b8b3bcf84967afb402b6e79bb',
-    us: 'dbd3963c66cf248c55448d0e8bb7f246ec365212a13b593c685f1c6a915b4d4a',
+    // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    compile: 'd08892bdc1c6ed077bba19e06dce14841e1e2c009ac69138dff2ea366e899078',
+    lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
+    curbs: '463c6ce254acbddf8b3a709efcfd3f621e40244c7f9641e9b6f69fc176260c4b',
+    de: 'dffa64d12d9776e183bb26d98388a4c5d2517520d0965164cba1dde237a6ac82',
+    us: 'e6324d6b7ecb9b76d110d719e52b7d50f54afb63d305bacd5bebadd43ee35d14',
   },
 } as const;
 const hash = (value: unknown) =>
