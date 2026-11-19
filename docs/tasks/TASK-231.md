@@ -1,6 +1,6 @@
 # TASK-231 — One carriageway for close halves and shared one-lane streets (TASK-218's D5 and D6 alone)
 
-Status: in progress (unsupervised run, owner 2026-11-19; split from parked TASK-218). Proposed owner:
+Status: parked 2026-11-19 (D5-only variant `a6c4ba1` meets the merge rule, worsens named case R3-8 by 9.4 cm; review in `docs/plan.md`). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/231-halves-shared-lanes`, worktree
 `D:\cityflows-wt\231`, ports 5431 / 5531.
 

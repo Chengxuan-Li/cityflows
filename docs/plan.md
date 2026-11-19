@@ -254,7 +254,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-228](tasks/TASK-228.md) | 9 | Tram backlog: one delayed tram holds every unstarted one (found by TASK-225) | `rail-crossings.ts` service holds | 225 | backlog figures, traffic, merge rule | done 2026-11-19 (merged v2; full timetable, Munich identical, Freiburg +4.6 s) |
 | [TASK-229](tasks/TASK-229.md) | render | Marking follow-ups from the aerial re-check: M2 lane lines on carriageway inside groups (N1), arrows on double-left entry lanes (N2) | `marking-geometry.ts` | 217, 224 | tests, counts, close-ups, audit, identical hashes | done 2026-11-19 (merged; paint only, hashes identical) |
 | [TASK-230](tasks/TASK-230.md) | 9 | Step time, third pass: Munich full demand and the Freiburg landing city, results identical | `src/sim/**` except `rail-crossings.ts` | 211 | phase tables, identical hashes, interleaved timings | in progress (unsupervised run 2026-11-19) |
-| [TASK-231](tasks/TASK-231.md) | 10 | One carriageway for close halves and shared one-lane streets (TASK-218's D5 and D6 alone) | `corridors.ts`, `roads.ts`, `marking-geometry.ts` | 218, 229 | tests, audit, traffic, merge rule | in progress (unsupervised run 2026-11-19) |
+| [TASK-231](tasks/TASK-231.md) | 10 | One carriageway for close halves and shared one-lane streets (TASK-218's D5 and D6 alone) | `corridors.ts`, `roads.ts`, `marking-geometry.ts` | 218, 229 | tests, audit, traffic, merge rule | parked 2026-11-19 (D5-only variant meets the merge rule and every city total; named case R3-8 Marsstraße width max 0.387 to 0.481 m) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -4908,6 +4908,43 @@ every short road; the `n:473` dividers and `r:770` fold exist only on TASK-219's
 scope: test re-pins (T44 to V117) and the `n:194` crossing name in `tests/network/junction-audit.ts`.
 The agent reported a slip: one `npm run check` started in `D:\cityflows` from a mis-scoped `cd`,
 stopped during its unit tests; no tracked file changed (git status clean).
+
+TASK-231 (Claude Code subagent, Opus 5.5 high, 2026-11-19; parked under the owner's merge rule, branch
+`task/231-halves-shared-lanes`, first version `2922724`, variant `a6c4ba1`, worktree
+`D:\cityflows-wt\231`): TASK-218's D5 and D6 alone. D5 (`pushOverlapping`, `corridors.ts`): opposite
+carriageways (not motorway, trunk or ramp) whose lane blocks leave a gap under 2 m over at least 20 m
+are pulled to a 0.5 m painted median where the gap is under 3 m, narrowed to pairs clear of each other
+everywhere and to the stretch beyond the 15 m junction zones at both ends (at least 20 m each), easing
+in; no node moves (without the narrowing 27 Freiburg roads moved and four Freiburg measures got
+worse). Freiburg 2 roads (Bismarckallee `r:1251`/`r:2215`, gap 67.74 to 37.46 m²), Munich 2
+(Marsstraße `r:845`/`r:944`), Sindelfingen 0. D6 (first version only): a two-way `lanes=1` way is one
+4.5 m carriageway marked `sharedLane`, drawn without a centre line (Freiburg 12, Munich 10, Sindelfingen
+8). Audit, variant: Freiburg widths over 5 cm 384 to 382, voids 3,545.88 to 3,515.60 m², corners under
+2 m 166 to 165; Munich voids 15,578.46 to 15,567.91 m²; Sindelfingen identical; every other total
+equal; named case R3-8 (Marsstraße) width max 0.387 to 0.481 m (worse). The first version's Munich
+lane overlap 257.14 to 257.90 m² was an audit artefact (a narrowed street junction outline stopped
+hiding a tunnel overlap below it; `e68dcf1` fixes the audit, reverted at the tip: main and the first
+version both measure 283.92 m² with it).
+
+| | main | first version (D5, D6) | variant (D5) |
+|---|---|---|---|
+| Munich actuated, choice off | 630.6 s | 620.4 s (-1.62%) | 633.3 s (+0.42%) |
+| Munich actuated, choice on | 90.8 s | 90.7 s (-0.15%) | 92.1 s (+1.49%) |
+| Munich fixed, choice off | 789.0 s | 808.0 s (+2.41%) | 789.3 s (+0.04%) |
+| Munich fixed, choice on | 125.0 s | 126.0 s (+0.80%) | 124.0 s (-0.77%) |
+| full demand actuated | 3,759 / 143, 1,677.6 s | 3,379 / 151, 1,750.2 s (+4.3%) | 3,813 / 166, 1,701.4 s (+1.42%) |
+| full demand fixed | 3,501 / 168, 1,727.1 s | 3,381 / 167, 1,704.7 s (-1.30%) | the same as the first version |
+| Freiburg gate | 1,462 / 0, 75.7 s | 1,458 / 0, 81.6 s (+5.9 s) | 1,461 / 0, 75.6 s |
+
+Drain criterion 48 of 48 in both; Sindelfingen identical; Freiburg's tram timetable unchanged at the
+rebuild (90e3ff6f). The first version misses on Freiburg (+5.9 s) and full-demand actuated (+4.3%);
+D5 alone gives 75.6 s, D6 alone 76.3 s. The variant meets the merge rule and every city audit total
+but worsens one named case by 9.4 cm, so under the same reading as TASK-221 it is parked. Owner's
+options: merge the variant (Bismarckallee closes; check Marsstraße, or exclude pairs that the named
+cases cover), D6 on its own after the audit fix `e68dcf1`, or keep both parked. Note: fixed-time full
+demand completes 120 fewer trips by 10:00 at lower delay. Outside scope: Munich and Freiburg re-pins,
+T36.1 (moved pairs 1 to 2). Tiers on the variant: check (1,558), city (208), traffic light and guard,
+light e2e (61).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
