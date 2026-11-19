@@ -4715,6 +4715,10 @@ Sindelfingen tests over their 60 s limit (65 s, the machine running two full dem
 9 s and 20 s alone, both pass rerun); city (205), traffic light and guard, light e2e (61); full demand
 actuated 3,759 / 143 (4028429784), fixed-time 3,501 / 168 (2888500527).
 
+Full run 44547052795 (lead, manual, on a46d906 after TASK-217 and 227): every job green, including all
+five e2e shards (the two Sindelfingen tests that timed out on the loaded machine pass); the city job
+took 18.1 min.
+
 TASK-225, rule (same agent, 2026-11-19; merged under the owner's merge rule, `35bb37b` on 486a631):
 the rule above in `src/sim/rail-crossings.ts`, applied cleanly on TASK-222 (which changed `hold()`,
 not the service loop); the two reproductions in `tests/sim/T75-held-service-crossing.test.ts` now pass.
