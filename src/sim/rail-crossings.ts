@@ -157,6 +157,8 @@ export function createRailCrossings(
   const occupied = new Uint8Array(facilities.length);
   const holds = new Uint8Array(vehicles.count);
   const holdPositions = new Float64Array(vehicles.count);
+  /** TASK-222: per vehicle, the movement whose red stop line in the clear zone holds it, or -1. */
+  const holdReds = new Int32Array(vehicles.count).fill(-1);
   const services: Service[] = [];
   const nextCycle = new Int32Array(table.departures.length);
   const warningMax = Math.max(0, ...events.flatMap((e) => e.map((v) => v.warningS)));
@@ -956,6 +958,7 @@ export function createRailCrossings(
     hold(id: number) {
       holds[id] = 0;
       holdPositions[id] = Infinity;
+      holdReds[id] = -1;
       const field = vehicles.lane[id]!;
       if (field < -city.movements.length || !influences[bucket(field)]) return Infinity;
       path(id);
@@ -972,6 +975,7 @@ export function createRailCrossings(
           pathStops[f]! <= near ? pathStops[f]! : Math.max(position, near - params.idm.minGapM);
         if (stop === Infinity || end < stop || stop >= best) continue;
         let blocked = states[f] !== CROSSING_OPEN;
+        let redLine = -1;
         const clear = end + length(id) + params.idm.minGapM;
         if (!blocked)
           for (let s = 0; s < segmentCount; s++) {
@@ -999,19 +1003,25 @@ export function createRailCrossings(
                 red(-next - 1) &&
                 offset + city.lanes[segment]!.stopM > stop &&
                 offset + city.lanes[segment]!.stopM < clear
-              )
+              ) {
                 blocked = true;
+                if (redLine === -1) redLine = -next - 1;
+              }
             }
           }
         if (blocked) {
           best = stop;
           protectedStop = states[f] !== CROSSING_OPEN;
+          holdReds[id] = redLine;
         }
       }
       holds[id] = Number(protectedStop);
       holdPositions[id] = best;
       return best;
     },
+    /** TASK-222: the movement whose red stop line, inside the clear zone beyond the tracks, held
+     * `id` at its last `hold`, or -1. */
+    holdRed: (id: number) => holdReds[id]!,
     binding(id: number, binding: boolean) {
       if (!binding) holds[id] = 0;
     },

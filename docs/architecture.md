@@ -1139,8 +1139,16 @@ the OSM `lanes` tags carry one.
     ending phase and the next one stays green to the end of the next phase's minimum green, as a
     fixed program's walk window runs on into the next phase (TASK-188); other crossings show
     red, and the walk lights draw the same state. Likewise a vehicle movement the next phase
-    serves stays green through them (TASK-194). After a live edit a
-    controller with the same id and enough phases keeps its state.
+    serves stays green through them (TASK-194). TASK-222: a vehicle that would extend the green but
+    is held short of a rail crossing because another controller's stop line inside its clearance is
+    red (section 8: a road red inside that clearance holds entry) needs both greens together. When
+    the controller also has a call from a car the crossing holds for its own red (a mutual wait) and
+    the other controller is changing to a phase serving the first car's movement, the green is kept,
+    to `PASSAGE_S` after the last such step, past its timed green if need be. Controllers advance in
+    a fixed order, so of two that a crossing joins and that would change together, the second sees
+    the first changing and keeps its green; before, both could swap in step for ever, each extended
+    by a car the other held (Freiburg's n:18 and group 2). After a live edit a controller with the
+    same id and enough phases keeps its state.
   - The engine owns the signal state (`createSignalControl`): intersections, walkers and rail
     crossings read it, and each snapshot carries it (`VehicleSnapshot.signals`) for the 2D and 3D
     lights, walk lights and the signal preview.

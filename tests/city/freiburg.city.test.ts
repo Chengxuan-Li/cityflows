@@ -215,7 +215,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // Re-pinned by the lead on top of TASK-207's curation.
   // TASK-214: lanes through splits and merges (1,467 to 1,463 completed, 75 to 89 s).
   // Rebuilt project and the retimed trams (lead, at the merge): 1,462 completed, 76 s.
-  expect(morning.stateHash).toBe(1730700508);
+  // TASK-222: in a mutual wait at a crossing, an actuated green is kept for the held car while
+  // the joined controller changes to its phase (1,462 completed, 76.2 to 75.7 s).
+  expect(morning.stateHash).toBe(4038635547);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
