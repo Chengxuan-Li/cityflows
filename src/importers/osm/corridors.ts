@@ -7,6 +7,26 @@ import type { OsmRoad } from './roads';
 
 /** Gap between the lane blocks of a separated coincident pair (owner, 2026-11-06). */
 export const MEDIAN_M = 0.5;
+/** TASK-231 (TASK-216 D5, TASK-218's rule): opposite carriageways of one street whose lane
+ * blocks, on their OSM lines, leave less than this between them over most of their run (20 m or
+ * more) are the two halves of one carriageway: RASt 06's narrowest median strip is 2 m, so a
+ * narrower one is paint, which OSM drew as two ways (Freiburg's Bismarckallee before the
+ * Hauptbahnhof, `r:1251`/`r:2215`). They are pulled together to `MEDIAN_M`, where B54 (owner,
+ * 2026-11-10) would keep them as drawn. */
+export const HALVES_GAP_M = 2;
+/** Where halves part by more than this (toward a junction) they are not pulled. */
+const HALVES_PART_M = 3;
+/** Halves run beside each other over at least this, and are pulled over at least this. */
+const HALVES_RUN_M = 20;
+/** Motorway, trunk and ramp carriageways are kept apart by a barrier, never halves. */
+const separated = (...roads: Road[]) =>
+  roads.some((road) => ['motorway', 'trunk', 'ramp'].includes(road.roadClass));
+/** The median of `values` (non-empty). */
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+};
 const cosine30 = Math.cos(Math.PI / 6);
 const SAMPLE_M = 1;
 const halfBlock = (road: Road) => road.lanes.reduce((w, lane) => w + lane.widthM, 0) / 2;
@@ -449,9 +469,16 @@ export function separateDual(city: City, roads: OsmRoad[]): void {
         ((nearest[i]!.point.x - p.x) * normals[i]!.x + (nearest[i]!.point.y - p.y) * normals[i]!.y),
     );
     // TASK-131 (owner, checkpoint 0): only where the blocks overlap or leave less than the
-    // median; a pair with space between its blocks everywhere stays where it is drawn.
-    if (gaps.every((gap) => gap >= clearance)) continue;
-    const closing = gaps.map(() => false);
+    // median; a pair with space between its blocks everywhere stays where it is drawn, unless it
+    // is one carriageway's two halves (TASK-231, `HALVES_GAP_M`): those close to the median
+    // wherever they run within `HALVES_PART_M`.
+    const blockGap = (gap: number) => gap - clearance + MEDIAN_M;
+    const halves =
+      !separated(a.road, b.road) &&
+      gaps.length >= HALVES_RUN_M / SAMPLE_M &&
+      median(gaps.map(blockGap)) < HALVES_GAP_M;
+    if (!halves && gaps.every((gap) => gap >= clearance)) continue;
+    const closing = gaps.map((gap) => halves && blockGap(gap) < HALVES_PART_M);
     const centerlines = [a, b].map(({ road }, k) => {
       // The push this road needs (its share of the shortfall), unclamped and clamped at zero.
       const shortfall = gaps.map((gap) => ((clearance - gap) * shares[k]!) / clearance);
@@ -540,14 +567,19 @@ export function pushOverlapping(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
   const boxes = new Map(oneWay.map((source) => [source, boxOf(source.road.centerline)]));
   const lines = new Map(oneWay.map(({ road }) => [road, road.centerline]));
   const pushes = new Map<OsmRoad, number[]>();
+  const pulls = new Map<OsmRoad, number[]>();
   const pairs: [OsmRoad, OsmRoad][] = [];
-  // The push `x` needs against `y`, per point of `points` (x's line every metre).
+  // The push `x` needs against `y`, per point of `points` (x's line every metre), the pull toward
+  // `y` if they are halves of one carriageway, and the gaps between the two lane blocks where they
+  // run beside each other.
   const needed = (x: OsmRoad, y: OsmRoad, points: Vec2[], normals: Vec2[]) => {
     const share = halfBlock(x.road) + MEDIAN_M / 2;
     const clearance = share + halfBlock(y.road) + MEDIAN_M / 2;
     const other = lines.get(y.road)!;
     const lengthY = cumulativeLengths(other).at(-1)!;
-    return points.map((p, i) => {
+    const lengthsX = cumulativeLengths(points);
+    const totalX = lengthsX.at(-1)!;
+    const beside = points.map((p, i) => {
       const q = nearestOnPolyline(other, p);
       const n = normals[i]!;
       // Beside and travelling the other way: y's direction within 30 degrees of x's reversed.
@@ -556,11 +588,28 @@ export function pushOverlapping(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
         q.along >= lengthY ||
         q.direction.y * n.x - q.direction.x * n.y < cosine30
       )
-        return 0;
+        return null;
       // Signed gap along x's normal, positive when y lies on the side opposite to the push.
       const gap = -side * ((q.point.x - p.x) * n.x + (q.point.y - p.y) * n.y);
-      return gap > 0 ? Math.max(0, ((clearance - gap) * share) / clearance) : 0;
+      // TASK-231: halves are pulled only where both lie outside the junction zones at their ends,
+      // so no node's junction changes shape.
+      const s = lengthsX[i]!;
+      const inner =
+        Math.min(s, totalX - s) >= JUNCTION_ZONE_M &&
+        Math.min(q.along, lengthY - q.along) >= JUNCTION_ZONE_M;
+      return { gap, inner };
     });
+    const shortfall = (gap: number) => ((clearance - gap) * share) / clearance;
+    return {
+      push: beside.map((b) => (b && b.gap > 0 ? Math.max(0, shortfall(b.gap)) : 0)),
+      // TASK-231: toward the other half of one carriageway (negative), as far as the median.
+      pull: beside.map((b) =>
+        b && b.inner && b.gap - clearance + MEDIAN_M < HALVES_PART_M
+          ? Math.min(0, shortfall(b.gap))
+          : 0,
+      ),
+      blockGaps: beside.flatMap((b) => (b ? [b.gap - clearance + MEDIAN_M] : [])),
+    };
   };
   const sampled = new Map(
     oneWay.map((source) => {
@@ -578,24 +627,55 @@ export function pushOverlapping(city: City, roads: OsmRoad[]): [OsmRoad, OsmRoad
         const { points, normals } = sampled.get(x)!;
         return needed(x, y, points, normals);
       });
+      // TASK-231: halves of one carriageway (`HALVES_GAP_M`) beside each other over at least
+      // `HALVES_RUN_M` both ways, whose blocks are clear of each other everywhere (TASK-131 left
+      // them as drawn), are pulled together where they leave more than the median, over a run of
+      // at least `HALVES_RUN_M` on each.
+      const halves =
+        !separated(a.road, b.road) &&
+        found.every(
+          ({ blockGaps, push, pull }) =>
+            blockGaps.length >= HALVES_RUN_M / SAMPLE_M &&
+            median(blockGaps) < HALVES_GAP_M &&
+            push.every((v) => v < 0.05) &&
+            pull.filter((v) => v < 0).length >= HALVES_RUN_M / SAMPLE_M,
+        );
       // Pushes under 5 cm (blocks touching within rounding) leave both lines as drawn.
-      if (found.every((values) => values.every((v) => v < 0.05))) continue;
+      if (!halves && found.every(({ push }) => push.every((v) => v < 0.05))) continue;
       pairs.push([a, b]);
       for (const [k, x] of [a, b].entries()) {
+        const { pull } = found[k]!;
+        // Halves need no push: theirs are under 5 cm, which leave a pair as drawn.
+        const push = halves ? pull.map(() => 0) : found[k]!.push;
         const before = pushes.get(x);
-        pushes.set(x, before ? before.map((v, j) => Math.max(v, found[k]![j]!)) : found[k]!);
+        pushes.set(x, before ? before.map((v, j) => Math.max(v, push[j]!)) : push);
+        if (!halves) continue;
+        const pulled = pulls.get(x);
+        pulls.set(x, pulled ? pulled.map((v, j) => Math.min(v, pull[j]!)) : pull);
       }
     }
-  for (const [source, values] of pushes) {
+  for (const [source, pushed] of pushes) {
     const { road } = source;
     const { points, normals } = sampled.get(source)!;
     const lengths = cumulativeLengths(points);
     const total = lengths.at(-1)!;
     const taper = taperLength(road);
-    const means = movingMean(values, lengths, taper);
+    const means = movingMean(pushed, lengths, taper);
+    // TASK-231: a pull (where no push is needed) eases in over the taper beyond the junction zone.
+    const pulled = pulls.get(source);
+    const pullMeans =
+      pulled &&
+      movingMean(
+        pulled.map((v, j) => (pushed[j]! > 0 ? 0 : v)),
+        lengths,
+        taper,
+      );
     road.centerline = points.map((p, i) => {
-      const s = lengths[i]!;
-      const push = side * means[i]! * smoothstep(Math.min(s, total - s) / taper);
+      const d = Math.min(lengths[i]!, total - lengths[i]!);
+      const push =
+        side *
+        (means[i]! * smoothstep(d / taper) +
+          (pullMeans ? pullMeans[i]! * smoothstep((d - JUNCTION_ZONE_M) / taper) : 0));
       return { x: p.x + normals[i]!.x * push, y: p.y + normals[i]!.y * push };
     });
     road.centerline[0] = city.nodes[road.from]!.pos;
