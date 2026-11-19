@@ -189,8 +189,13 @@ export function referenceLine(source: readonly Vec2[], needLeft: number, needRig
     });
     const replacements: Replacement[] = [];
     let fixed = 0;
+    // TASK-214 (S4): the last point of the previous run's fillet. A tight run may start at that
+    // fillet's far anchor (two corners a straight apart, Munich r:589's hairpin), its entry kept
+    // beyond the fillet's exit; it used to start after it, with a sliver of its first segment, and
+    // its corner was rounded to a fraction of a metre (the inside lane folded back 2.5 m).
+    let exit: Vec2 | undefined;
     for (let i = 1; i < n - 1; i++) {
-      if (!tight[i] || i <= fixed) continue;
+      if (!tight[i] || i < fixed || (i === fixed && !exit)) continue;
       const sign = Math.sign(turn[i]!);
       const target = need(turn[i]!);
       let lo = i,
@@ -217,19 +222,23 @@ export function referenceLine(source: readonly Vec2[], needLeft: number, needRig
         const room = (j: number) =>
           Math.abs(turn[j]!) > MAX_TURN ? 2 * need(turn[j]!) * Math.tan(Math.abs(turn[j]!) / 2) : 0;
         const tangent = target * tanHalf;
-        const inOk = tIn >= tangent + room(lo - 1),
+        // An entry on the previous fillet's exit line stays beyond that fillet's exit.
+        const reserve = exit && lo === fixed ? Math.max(0, dot(sub(exit, p), u)) : room(lo - 1);
+        const inOk = tIn >= tangent + reserve,
           outOk = tOut >= tangent + room(hi + 1);
         if (inOk && outOk) {
           replacements.push(fillet(lo, hi, p, u, sweep, tIn, target, false));
           break;
         }
-        if ((!usable || !inOk) && lo - 1 > fixed && along(lo - 1)) lo--;
+        const minimum = exit && lo === fixed ? reserve : 0;
+        if ((!usable || !inOk) && (lo - 1 > fixed || (lo - 1 === fixed && exit)) && along(lo - 1))
+          lo--;
         else if ((!usable || !outOk) && hi + 1 < n - 1 && along(hi + 1)) hi++;
-        else if (usable && tIn >= tangent && tOut >= tangent) {
+        else if (usable && tIn >= tangent + minimum && tOut >= tangent) {
           replacements.push(fillet(lo, hi, p, u, sweep, tIn, target, false));
           break;
         } else {
-          const radius = usable ? Math.min(tIn, tOut) / tanHalf : 0;
+          const radius = usable ? Math.max(0, Math.min(tIn - minimum, tOut)) / tanHalf : 0;
           if (radius > 1e-3)
             replacements.push(fillet(lo, hi, p, u, sweep, tIn, radius, radius < target - MARGIN_M));
           else {
@@ -245,6 +254,8 @@ export function referenceLine(source: readonly Vec2[], needLeft: number, needRig
         }
       }
       fixed = hi + 1;
+      const last = replacements.at(-1)!;
+      exit = last.points[0] === line[last.lo] ? undefined : last.points.at(-1);
     }
     const spliced = splice(line, replacements);
     line = spliced.out;

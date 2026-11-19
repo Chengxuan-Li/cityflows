@@ -396,11 +396,13 @@ test.each(
       ? // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).
-        '02e17511b9c9bc3a40e659f98bf4334b47b2c01a436ff41128887f1a43bac4ee'
+        // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+        '245ad5fe871cbf8e51e6b4867c7ff16346a83411d84f09a51cdf7b00e2ddfa94'
       : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).
-        '9b4392912da2f35261f0f11bd1640bed6105ff2fe70d52340d05b5d6e36e749a',
+        // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+        '5d3bfe8306c08a6cf8fa24d1642331146a9cfcaf1e43c22b9a4b155f72a52b2e',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

@@ -189,12 +189,15 @@ const pins = {
     // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: two corners are rounded (n:324's acute corner a gore; n:661's gore tip).
-    compile: '47af58b74453a100cbe8e6aa869b76fab8310000ab8a907c7cfb5e837d8ae5eb',
-    lamps: '75b5fb398a5f6b59992ac1e60aaa00e16d31a2039094e98e67bf3d1348f8fef4',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    compile: '47aa5c2a10a7fde6dae75ab31db873451b80be0b88ad062b7cc6d0afed8d7b0c',
+    lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
-    curbs: '25e69a4587153f4f59be96a2c846bb9ff22b5eaad44bd436a5d9d8be658c48ff',
-    de: 'ded9e46f92f7ef1d114e8da5a466af533012a35d28a9467a7405c9cbeda77a38',
-    us: '6b247602538ed8c179b9d1c38cfdbc0d7b5d944e0a12261aa62cdd1eed2e38af',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
+    de: '93c80da1875ad5068561101700c2d56d7453fd0a40f08629bebcc74b2d5f9a99',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    us: '1ca009b61590dd872e3d0d080b60c85e8d0fe95a1aaecacd85e3bbb04858cb82',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
@@ -202,11 +205,12 @@ const pins = {
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-213: four corners are rounded (gore fillets at n:27, n:68, n:1162; n:365's corner).
-    compile: '1438e38e5ce11eba8d3779e9f7f81d5404668389e2a759bc51612e425682a49a',
-    lamps: '0d8ddd17b55105372b0e41ea4f20ea63f8abfdc1eaf96fdba0e5acc34685e684',
-    curbs: '7f6d24aeb07dd9a2791295820af788fc727eef6eac6c6d4f4154e6c9848c826b',
-    de: 'cee5a378f8673f37fd5848ff1ce7e047517d184b8b3bcf84967afb402b6e79bb',
-    us: 'dbd3963c66cf248c55448d0e8bb7f246ec365212a13b593c685f1c6a915b4d4a',
+    // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    compile: 'd08892bdc1c6ed077bba19e06dce14841e1e2c009ac69138dff2ea366e899078',
+    lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
+    curbs: '463c6ce254acbddf8b3a709efcfd3f621e40244c7f9641e9b6f69fc176260c4b',
+    de: 'dffa64d12d9776e183bb26d98388a4c5d2517520d0965164cba1dde237a6ac82',
+    us: 'e6324d6b7ecb9b76d110d719e52b7d50f54afb63d305bacd5bebadd43ee35d14',
   },
 } as const;
 const hash = (value: unknown) =>

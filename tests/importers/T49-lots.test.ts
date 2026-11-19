@@ -29,20 +29,24 @@ const baseline = {
   'munich-donnersberger': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    'aef096b57a2988133491e72cfd9579c9e812cb76ba8e64d77cf49d5cdd6fe7b1',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    '7bbba539e3a81d7042c8a174300e31926332d563f0457f2b1ed88b997ca8565c',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    'b6736aa43cf78c6dcb2379eea67332d385cd621c9cc27130763d8a5d6316ea6d',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    '98d88486016507e5afd11787a012ff060229039e6a24c495674960fd7a35acc4',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    '90612cffe0d2bd5bcf88787c226029999b038e323d43bf9d3f30b91a923debc7',
+    // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    'e77e2e2cbd0cad5cffa2e24779666be97b0f40aa9f4e704a2fd19aa9d0f0a990',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    '3ddf346e18ce972c81dffe121b8a48bb2fe340208499c382eccb34ae3addcbc5',
+    // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    '42e7f4957021dc138b4e261a227ca03056e2d8dea6595bbce0a2fcd500874816',
   ],
 };
 

@@ -177,12 +177,14 @@ const baselines = {
   // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
   // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
   // TASK-194: generated signal programs are actuated (`actuated: true`).
-  'munich-donnersberger': '47af58b74453a100cbe8e6aa869b76fab8310000ab8a907c7cfb5e837d8ae5eb',
+  // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+  'munich-donnersberger': '47aa5c2a10a7fde6dae75ab31db873451b80be0b88ad062b7cc6d0afed8d7b0c',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
   // TASK-194: generated signal programs are actuated (`actuated: true`).
-  'sindelfingen-a81': '1438e38e5ce11eba8d3779e9f7f81d5404668389e2a759bc51612e425682a49a',
+  // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+  'sindelfingen-a81': 'd08892bdc1c6ed077bba19e06dce14841e1e2c009ac69138dff2ea366e899078',
 };
 const lampCounts = {
   grid: [0, 0],

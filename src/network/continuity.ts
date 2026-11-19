@@ -3,7 +3,6 @@ import {
   headingAtDistance,
   pointAtDistance,
   polylineLength,
-  trimPolyline,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { Node, Road } from '../schema';
@@ -230,8 +229,22 @@ export function continuationLayout(
       }
       const usedTrunk = new Set<number>();
       const sharedWidth: number[] = [];
+      // TASK-214 (S2, S3): a lane gain or drop with one branch (2 to 5 lanes at Freiburg n:1146)
+      // jogs on the wider road, whose added or dropped lanes taper over the same stretch: the
+      // block widens on both sides as one funnel. The narrow road used to jog alone, over a few
+      // metres where it is short (n:1169, 5.25 m in 3 m), and the funnel notched beside it. The
+      // narrow road still jogs where it holds the longer taper (n:1209, a 4 m wide road), on a
+      // direction of a two-way street (it never moves) and on a carriageway of a divided street
+      // (the wide one would leave its median).
       let cursor = 0;
       const trunkSource = sources[trunk.idx]!;
+      const trunkJogs =
+        branches.length === 1 &&
+        !balanced &&
+        trunkSource.streetGroupId === null &&
+        !trunkSource.corridorId &&
+        taperLength(trunkSource) >= taperLength(sources[branches[0]!.idx]!);
+      let trunkOffsetM = 0;
       for (const [position, branch] of branches.entries()) {
         const from = split ? trunk : branch,
           to = split ? branch : trunk;
@@ -321,10 +334,11 @@ export function continuationLayout(
             roadPair(from, to),
             new Set(matches.map(([a, b]) => (split ? `${a}:${b}` : `${b}:${a}`))),
           );
+        if (trunkJogs) trunkOffsetM = -offsetM;
         layout.set(branch.idx, {
           [split ? 'start' : 'end']: {
             heading,
-            offsetM,
+            offsetM: trunkJogs ? 0 : offsetM,
             tapers: branch.lanes.map((_, i) => i).filter((i) => !usedBranch.has(i)),
             holdM: 0,
             taperM: 0,
@@ -348,9 +362,19 @@ export function continuationLayout(
           ),
         );
       const reach = Math.max(...branches.map((b) => polylineLength(sources[b.idx]!.centerline)));
+      // TASK-214 (J6): lanes a branch adds (or drops) on its right, beside the next branch, grow
+      // into that branch's slice, so it moves off by their width over the same taper (Munich n:194:
+      // r:416's third lane overlapped the ramp r:196 by 63 m2).
+      const addedRight = (road: CRoad) => {
+        const end = layout.get(road.idx)![split ? 'start' : 'end']!;
+        const used = road.lanes.map((_, l) => l).filter((l) => !end.tapers.includes(l));
+        return end.tapers
+          .filter((l) => l > Math.max(...used))
+          .reduce((sum, l) => sum + sources[road.idx]!.lanes[l]!.widthM, 0);
+      };
       let shift = 0;
       for (const [i, branch] of branches.entries()) {
-        shift += sharedWidth[i]!;
+        shift += sharedWidth[i]! + (i > 0 ? addedRight(branches[i - 1]!) : 0);
         Object.assign(layout.get(branch.idx)![split ? 'start' : 'end']!, {
           holdM,
           taperM,
@@ -361,7 +385,7 @@ export function continuationLayout(
       layout.set(trunk.idx, {
         [split ? 'end' : 'start']: {
           heading,
-          offsetM: 0,
+          offsetM: trunkOffsetM,
           tapers: trunk.lanes.map((_, i) => i).filter((i) => !usedTrunk.has(i)),
           holdM: 0,
           taperM: taperLength(trunkSource),
@@ -389,6 +413,15 @@ export function continuationLayout(
 function cutAt(node: CNode, roads: CRoad[], road: CRoad): number {
   const incident = roads.filter((r) => r.from === node.idx || r.to === node.idx);
   return node.setbacks[incident.indexOf(road)]!;
+}
+
+/** TASK-214: the cut at `node` as compile trims the road: both ends' setbacks scaled to leave it
+ * 5 m of lane. A side-by-side block measured from the unscaled cut ran a short road's lanes past
+ * its node (Freiburg r:718 at n:717, 3 m beyond, a 2.3 m step and a fold). */
+function trimmedCut(node: CNode, nodes: CNode[], roads: CRoad[], road: CRoad): number {
+  const cut = cutAt(node, roads, road);
+  const trim = cutAt(nodes[road.from]!, roads, road) + cutAt(nodes[road.to]!, roads, road);
+  return trim === 0 ? cut : cut * Math.min(1, Math.max(0, road.lengthM - 5) / trim);
 }
 
 /** A continuation's transitions fit their road; with transitions at both ends each gets half. */
@@ -495,12 +528,33 @@ function sideBySide(
       chain.junction = !pairs.has(far.idx) && cutAt(far, roads, last) > 0;
       const farEnd = ends[last.idx]![split ? 'end' : 'start'];
       if (farEnd) {
-        // A transition of its own at the far end (a continuation): both share the road.
+        chain.junction = false;
         const half = lengthOf(last) / 2;
+        // TASK-214 (S3): the far end continues another block's chain through a plain node. That
+        // block ends by the middle of this road on every road of its chain, so its lanes still
+        // meet at the plain node (shrinking this end alone stepped them 1 m at Freiburg n:393).
+        const fromM = farEnd.referenceFromM ?? 0;
+        if (fromM > 0) {
+          const block = roads
+            .flatMap((r) => [ends[r.idx]!.start, ends[r.idx]!.end])
+            .filter(
+              (e): e is ContinuationEnd =>
+                e !== undefined && e.reference === farEnd.reference && e.holdM + e.taperM > 0,
+            );
+          const limit = fromM + half;
+          if (fromM + farEnd.holdM + farEnd.taperM > limit) {
+            const first = Math.min(...block.map((e) => e.referenceFromM ?? 0));
+            const taperM = Math.max(0.5, Math.min(farEnd.taperM, limit - first));
+            for (const e of block)
+              Object.assign(e, { holdM: limit - taperM - (e.referenceFromM ?? 0), taperM });
+          }
+          chain.length = chain.starts.at(-1)! + half;
+          return chain;
+        }
+        // A transition of its own at the far end (a continuation): both share the road.
         farEnd.taperM = Math.min(farEnd.taperM, half);
         farEnd.holdM = Math.min(farEnd.holdM, half - farEnd.taperM);
         chain.length = chain.starts.at(-1)! + half;
-        chain.junction = false;
         return chain;
       }
       const next = incident.find((r) => r !== last);
@@ -594,7 +648,7 @@ function sideBySide(
   for (const i of order) {
     const chain = chains[i]!;
     for (const [k, road] of chain.roads.entries()) {
-      const near = chain.starts[k]! + (k === 0 ? cuts[i]! : 0);
+      const near = chain.starts[k]! + (k === 0 ? trimmedCut(node, nodes, roads, road) : 0);
       if (apart + taperM <= near) break;
       const source = sources[road.idx]!;
       const end: ContinuationEnd = {
@@ -603,7 +657,8 @@ function sideBySide(
         tapers: [],
         holdM: apart - near,
         taperM,
-        reference: split ? trimPolyline(travel, near, 0) : trimPolyline(travel, 0, near),
+        reference: travel,
+        referenceFromM: near,
       };
       ends[road.idx]![split ? 'start' : 'end'] = end;
       // The block reaches this road's far end: that end only marks it (no window of its own).

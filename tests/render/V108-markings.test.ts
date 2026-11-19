@@ -67,8 +67,9 @@ const baseline = {
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    compile: '2469f7ea4843d9d3d6e35912b12918b86cde14b51bd58d2187ddece96acddac7',
-    arrows: '29bd956f1a3e4825fe96236f91eb9bfbd94b07e62f23f9eff2f7f0e51621ba0a',
+    // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    compile: 'b87b8a83a8bae407ffd9f9f8069a321329e6bed9a2d4f66956eab463d7c18fbe',
+    arrows: '95f4434b279dea44ce702ca32df0c3a7a49ff17862cc7455ac486f4ebb31fc6e',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
@@ -81,8 +82,9 @@ const baseline = {
     // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
     // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
     // TASK-194: generated signal programs are actuated (`actuated: true`).
-    compile: '8be9f82fd52541dd81567bd040446c48aac27af78b4671de440694ef46dea4f6',
-    arrows: 'd7a4069aceff35d73a6c6596a536edac25dbb82c71b88fe1ef70cebd591b8a27',
+    // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
+    compile: '198ec4db6b8ec6a79cdafc1b94d2c00ddc3794bb63899ff9c8d1b809d50103ef',
+    arrows: '12672c2496ebf0ba83725a10f255712bd00e081631eaccb0c407e555037d0422',
   },
 } as const;
 const hash = (value: unknown) =>

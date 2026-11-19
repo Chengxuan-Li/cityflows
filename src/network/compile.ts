@@ -342,14 +342,19 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     road.endOffsetM = transition.end?.offsetM ?? 0;
     const rebuilt: CLane[] = [];
     const copy = { ...road, lanes: [] as number[], surface: [] as Vec2[] };
-    const before =
-      !transition.start && trims[road.idx]!.start === 0
-        ? continuingRoad(references, road, incoming[road.from]!, false)
-        : undefined;
-    const after =
-      !transition.end && trims[road.idx]!.end === 0
-        ? continuingRoad(references, road, outgoing[road.to]!, true)
-        : undefined;
+    // TASK-214: a side-by-side block running on through a plain node (`sideBySide`'s chain) still
+    // lets the two roads' own lines meet on the bisector there, as the block eases onto them. A
+    // road too short for its cuts (trimmed to nothing) is not joined across a junction of three or
+    // more road ends (its lanes folded round the next road's line at Freiburg n:652, r:653).
+    const joins = (end: ContinuationEnd | undefined, node: number) =>
+      (!end || end.holdM + end.taperM === 0 || (end.referenceFromM ?? 0) > 0) &&
+      (incident[node]!.length < 3 || nodes[node]!.setbacks[incident[node]!.indexOf(road)] === 0);
+    const before = joins(transition.start, road.from)
+      ? continuingRoad(references, road, incoming[road.from]!, false)
+      : undefined;
+    const after = joins(transition.end, road.to)
+      ? continuingRoad(references, road, outgoing[road.to]!, true)
+      : undefined;
     for (let i = diagnostics.length - 1; i >= 0; i--)
       if (diagnostics[i]!.code === 'road_too_short' && diagnostics[i]!.refs.includes(road.id))
         diagnostics.splice(i, 1);
@@ -392,6 +397,30 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
       original.taperStartM = lane.taperStartM;
       original.taperEndM = lane.taperEndM;
     }
+  }
+  // TASK-214: where a side-by-side block runs on through a plain node, both roads place their lane
+  // ends on the block's one line, measured each along its own reference; the millimetres between
+  // the two measures are closed at the node's midpoint.
+  for (const road of roads) {
+    const end = continuity.ends[road.idx]!.end;
+    const next = outgoing[road.to]!.length === 1 ? outgoing[road.to]![0]! : undefined;
+    const start = next && continuity.ends[next.idx]!.start;
+    if (!end || !start || end.reference !== start.reference || incident[road.to]!.length !== 2)
+      continue;
+    road.lanes.forEach((i, k) => {
+      const a = lanes[i]!,
+        b = lanes[next!.lanes[k] ?? -1];
+      if (!b) return;
+      const p = a.polyline.at(-1)!,
+        q = b.polyline[0]!;
+      const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+      a.polyline[a.polyline.length - 1] = mid;
+      b.polyline[0] = mid;
+      for (const lane of [a, b]) {
+        lane.cumulative = cumulativeLengths(lane.polyline);
+        lane.lengthM = lane.cumulative.at(-1)!;
+      }
+    });
   }
   for (const lane of lanes) {
     lane.in = [];
