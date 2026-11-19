@@ -4546,6 +4546,11 @@ branch's 89 s came with the halved trams), state hash 1730700508. Lead check on 
 actuated 3,759 / 143 hash 4028429784, fixed 3,501 / 168 hash 2888500527. These are the new
 full-demand references.
 
+Full run 44477718803 (lead, manual, on 5b10d5a after TASK-214): red in the city job only; TASK-214's
+`splits-merges.city.test.ts` setup hook imported Freiburg and Munich under the 10 s default hook
+limit, which a cold CI import cache exceeds. Fixed in fc5ebec (`limit(300_000)`). Full run
+44480972194 on fc5ebec: every job green, including all five e2e shards; the city job took 19.3 min.
+
 TASK-215 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
 `task/215-markings` at `3e5e33f`, main `1ac0c38` merged in, worktree `D:\cityflows-wt\215`): M1 arrows at
 a group entry show the turn through the group (5 lanes through to left; r:1148#0/#1 no arrow); M2 lane
