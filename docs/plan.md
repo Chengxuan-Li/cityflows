@@ -4462,6 +4462,9 @@ branch conflicts in 12 of 18 files (17 hunks in `engine.ts`) and main already ha
 TASK-131 Phase 3's tip is message-only. Recommendation: drop all four holds. The owner decides on
 retiring the branches and the worktrees `D:\cityflows-wt\131p3` and `128-remeasure`.
 
+Full run 44424186431 (lead, manual, on 08ebee4 after TASK-213): every job green, including all five
+e2e shards; the city job took 28.4 min.
+
 TASK-213 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): `bench/geometry-audit.ts` runs on
 main again (R3-1 now n:474/n:1353, R3-7 n:366/n:417; Freiburg as a city; J1 to J6 as named cases) and its
 through-road measure is corrected (first station 1 cm past the cut; roads within 30° no longer measured
