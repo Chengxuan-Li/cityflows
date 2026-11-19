@@ -240,7 +240,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-214](tasks/TASK-214.md) | 10 | Lane splits and merges (TASK-212 S1 to S6) | `lanes.ts`, `lane-drop.ts`, `corridor.ts`, `continuity.ts` | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Freiburg delay 75 to 89 s, full demand up; branch `cc70c3e`) |
 | [TASK-215](tasks/TASK-215.md) | 10 | Lane markings (TASK-212 M1 to M6; M7 for the owner) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` defaults | 212 | audit before and after, tests, close-ups, traffic if it moves | held for the owner 2026-11-19 (Munich delay +4 to 5%; branch `3e5e33f`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
-| [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | in progress (owner 2026-11-18, optional) |
+| [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
 
 ### Waves
@@ -4486,6 +4486,26 @@ V106 to V108, V114, V117), stale T42.1 exceptions removed. Lead check on the mer
 
 Full run 44417927328 (lead, manual, on 6827d2c after TASK-210): every job green, including all five
 e2e shards; the city job took 33.4 min.
+
+TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
+(1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
+it, or about to take that movement (elsewhere it returned `min(stopAt, Infinity)`); (2) the rail
+occupancy pass skips a vehicle whose segment, position, speed, movement, route and step match the
+step before, re-marking its crossings (commit and release rules are idempotent); (3) a per-car lane
+plan cache in `lane-change.ts`, valid while route object, step, lane and destination hold (routes are
+replaced, never edited), and `futureChanges` keeps the last corridor; (4) sparse arrays (`groupPaths`,
+entry chains, rail paths, walker blocks) allocated at full size. A `debugSkips` load option runs
+every shortcut and throws if one would differ; `tests/sim/exact-skips.test.ts` covers rail and tram
+queues and a town morning (Munich 0.15 seed 1 skipped 13.2M of 23.7M rail passes with no
+difference). Phases, Munich full demand seed 1, main to branch: following pass 452 to 366 s actuated,
+509 to 399 s fixed; lane-change proposals -39%/-37%; rail crossing step -62%/-60%; total stepping
+-22.3%/-22.1%. Timing pairs, interleaved, CPU load 14 to 31% mean: actuated -20.4% and -22.8%, fixed
+-23.3% and -25.5%; overall -23.1% (target 15%). Hashes identical main against branch on Munich 0.15
+seeds 1 to 3 in all four configurations, both full demands, Freiburg and Sindelfingen. Left: the
+following pass, spawn's blocked-origin scan, the rail hold, reroute routing, commit. No files outside
+scope. Lead check on the merge (on top of TASK-213): check (1,532), city (185), traffic light and
+guard, light e2e (61); full demand on the merged tree actuated 3,345 / 177 hash 2229666949, fixed
+3,210 / 166 hash 2820161686 (the references), about 820 s stepping each.
 
 TASK-214 (Claude Code subagent, Opus 5.5 high, 2026-11-19; held for the owner, branch
 `task/214-splits-merges` at `cc70c3e` on main `08ebee4`, worktree `D:\cityflows-wt\214`): eight rules in

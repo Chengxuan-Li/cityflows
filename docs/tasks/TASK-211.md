@@ -1,6 +1,6 @@
 # TASK-211 — Full-demand step time, results unchanged
 
-Status: in progress (owner started it 2026-11-18, unsupervised batch, optional). Proposed owner: Claude
+Status: done 2026-11-19. Proposed owner: Claude
 Code subagent (Opus 5.5, high). Branch `task/211-step-time`, worktree `D:\cityflows-wt\211`, ports 5411 /
 5511.
 
