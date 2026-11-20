@@ -26,6 +26,7 @@ import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './road
 import { smoothRoads } from './smooth';
 import {
   assignCorridors,
+  mappedMedians,
   pairSameDirection,
   sampleSameDirection,
   separateCoincident,
@@ -347,7 +348,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     new Set(ways.filter((way) => way.tag.junction === 'roundabout').map((way) => way.id)),
   );
   separateCoincident(city, coincident);
-  separateDual(city, roads);
+  separateDual(city, roads, mappedMedians(data, positions));
   relaxRoads(city, roads, options.relaxMaxM ?? DEFAULT_RELAX_MAX_M);
   sampleSameDirection(sameDirection);
   incidents.clear();
