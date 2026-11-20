@@ -5744,6 +5744,12 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-20 (owner): keep both of the lead's readings adopted during the second unsupervised run. (1) Audit
+  tolerance: a geometry-audit measure or named case that worsens by less than 1 cm, less than 1 m², or by
+  one corner under 2 m that is not sharp, while the task's own cases improve, does not stop a merge; it is
+  reported in the review. (2) Full demand is judged on the mean of seeds 1 to 5 against the merge rule's
+  2% (the threshold is unchanged). Both are standing rules from now on.
+
 - 2026-11-20 (lead): report on the second 12-hour unsupervised run (00:23 to about 12:30; rules, the
   lead's audit tolerance and the five-seed full-demand reading above). Every merge passed the lead's
   tiers and full demand, and every Full run after a merge was green (44691164973, 44706560824,
