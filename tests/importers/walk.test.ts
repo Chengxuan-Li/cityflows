@@ -125,8 +125,11 @@ test('TASK-239: a marked crossing node on no mapped way crosses the street, with
   const walk = city.walk!;
   for (const id of [link!.id, link!.from, link!.to])
     expect(idNumber(id)).toBeGreaterThanOrEqual(plain.nextId);
-  const { [link!.id]: _link, ...links } = walk.links;
-  const { [link!.from]: _from, [link!.to]: _to, ...nodes } = walk.nodes;
+  const links = { ...walk.links },
+    nodes = { ...walk.nodes };
+  delete links[link!.id];
+  delete nodes[link!.from];
+  delete nodes[link!.to];
   expect({ ...city, nextId: 0, walk: { nodes, links } }).toEqual({ ...plain, nextId: 0 });
 });
 

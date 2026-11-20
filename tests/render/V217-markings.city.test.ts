@@ -336,7 +336,7 @@ test('TASK-239: zebras mapped only as nodes cross their streets and paint (n:211
       (id) => city.walk!.nodes[id]!.provenance.osmIds?.[0] === l.provenance.osmIds?.[0],
     );
   const links = Object.values(city.walk!.links).filter(fromNode);
-  expect(links.map((l) => l.provenance.osmIds![0]).sort((a, b) => a - b)).toEqual([
+  expect(links.map((l) => l.provenance.osmIds![0]!).sort((a, b) => a - b)).toEqual([
     334475575, 436628448, 507040002, 1245631005, 2479358348, 2497871560, 2497871561, 9118444286,
     10250574052, 12056000625,
   ]);
