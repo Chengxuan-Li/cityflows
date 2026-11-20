@@ -1,4 +1,9 @@
-import { nearestOnPolyline, pointInPolygon, polylineCrossings } from '../../geo/polyline';
+import {
+  nearestOnPolyline,
+  pointInPolygon,
+  polylineCrossings,
+  polylineLength,
+} from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import { SIGNAL_NEAR_M } from '../../network/crossings';
 import { allocateId, type City, type Road, type WalkKind, type WalkNode } from '../../schema';
@@ -179,6 +184,9 @@ export function markedCrossing(tags: OsmTags): boolean {
 /** TASK-239: how far a road's centreline may lie from its crossing node (relaxing and separating
  * carriageways move centrelines off the mapped nodes). */
 const NODE_ROAD_M = 3;
+/** TASK-239: how far from a signalised node the compiled walk graph gives a mapped crossing that
+ * node's walk light (`compileWalk`). */
+const SIGNAL_WALK_M = 40;
 /** TASK-239: a node crossing reaches this far beyond the outer lane edges of its roads, past the
  * curb, so the compiled walk graph joins its ends to the generated sidewalks (`SNAP_M`)... */
 const NODE_KERB_M = 1.5;
@@ -237,19 +245,29 @@ export function addNodeCrossings(
     const pos = positions.get(node.id);
     const ways = roadWays.get(node.id);
     if (!pos || !ways || !contains(bounds, pos)) continue;
-    // A signalised crossing paints its broken lines only near a signal the import kept
-    // (`nearSignal`); one whose signal the import dropped or moved farther (Freiburg 507039980,
-    // 14.5 m from n:899) would paint and yield as a zebra.
-    if (
-      tags.crossing === 'traffic_signals' &&
-      !signals.some((n) => Math.hypot(n.pos.x - pos.x, n.pos.y - pos.y) < SIGNAL_NEAR_M)
-    )
-      continue;
     const near = [...new Set(ways.flatMap((way) => roadsByWay.get(way) ?? []))]
       .map((road) => ({ road, hit: nearestOnPolyline(road.centerline, pos) }))
       .filter(({ hit }) => hit.away < NODE_ROAD_M)
       .sort((a, b) => a.hit.away - b.hit.away || a.road.id.localeCompare(b.road.id));
     if (!near.length) continue;
+    // A signalised crossing is made only where it works as one: it paints its broken lines only
+    // near a signal the import kept (`nearSignal`; Freiburg 507039980 lies 14.5 m from n:899),
+    // and its walkers wait for a walk light only where the end of the road it crosses nearer it
+    // is that signal (`compileWalk`). Elsewhere they would cross at will, as on a zebra, through
+    // a signalised street: Freiburg 334475575, on the carriageway beside n:527's, alone cost its
+    // gate 5.9 s (the first version).
+    if (tags.crossing === 'traffic_signals') {
+      const { road, hit } = near[0]!;
+      const end =
+        city.nodes[hit.along > polylineLength(road.centerline) / 2 ? road.to : road.from]!;
+      const away = (n: { pos: Vec2 }) => Math.hypot(n.pos.x - pos.x, n.pos.y - pos.y);
+      if (
+        !signals.some((n) => away(n) < SIGNAL_NEAR_M) ||
+        end.control !== 'signal' ||
+        away(end) >= SIGNAL_WALK_M
+      )
+        continue;
+    }
     const base = near[0]!.hit.point,
       direction = near[0]!.hit.direction;
     const normal = { x: -direction.y, y: direction.x };

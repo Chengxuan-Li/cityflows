@@ -199,6 +199,25 @@ test('TASK-239: a signalised crossing node needs a signal the import kept within
   expect(Object.values(kept.walk!.links).filter((l) => l.provenance.osmIds?.[0] === 9)).toEqual([]);
 });
 
+test('TASK-239: a signalised crossing node needs the signal at its road, for the walk light', () => {
+  // A side street south from the signalised node 9; a one-way street 10 m north of it, with no
+  // junction of its own, carries the crossing: the signal is near, but not at its road's end.
+  const junction = `<node id="9" lat="48.001" lon="11.002">${tag('highway', 'traffic_signals')}</node><node id="3" lat="47.999" lon="11.002"/><way id="11"><nd ref="9"/><nd ref="3"/><tag k="highway" v="residential"/></way>`;
+  const beside = (crossing: string) =>
+    `<node id="21" lat="48.00109" lon="11.001"/><node id="22" lat="48.00109" lon="11.005"/><node id="23" lat="48.00109" lon="11.002">${crossing}</node><way id="12"><nd ref="21"/><nd ref="23"/><nd ref="22"/><tag k="highway" v="residential"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="both"/></way>`;
+  const xml = (crossing: string) =>
+    street('', junction + beside(crossing)).replace(
+      '<nd ref="1"/><nd ref="7"/>',
+      '<nd ref="1"/><nd ref="9"/><nd ref="7"/>',
+    );
+  const links = (city: ReturnType<typeof imported>) =>
+    Object.values(city.walk!.links).filter((l) => l.provenance.osmIds?.[0] === 23);
+  expect(links(imported(xml(zebra)))).toHaveLength(1);
+  expect(
+    links(imported(xml(tag('highway', 'crossing') + tag('crossing', 'traffic_signals')))),
+  ).toEqual([]);
+});
+
 test('TASK-239: a node crossing ends on a mapped footway within 8 m of the lane edge', () => {
   // A footway 7.8 m north of the street's centreline, along it.
   const footway = `<node id="3" lat="48.00107" lon="11.002"/><node id="4" lat="48.00107" lon="11.004"/><way id="20"><nd ref="3"/><nd ref="4"/><tag k="highway" v="footway"/></way>`;
