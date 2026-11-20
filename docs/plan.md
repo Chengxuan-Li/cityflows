@@ -257,6 +257,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-231](tasks/TASK-231.md) | 10 | One carriageway for close halves and shared one-lane streets (TASK-218's D5 and D6 alone) | `corridors.ts`, `roads.ts`, `marking-geometry.ts` | 218, 229 | tests, audit, traffic, merge rule | parked 2026-11-19 (D5-only variant meets the merge rule and every city total; named case R3-8 Marsstraße width max 0.387 to 0.481 m) |
 | [TASK-232](tasks/TASK-232.md) | render | Tram track form follow-ups: Fahnenbergplatz ballast, Rotteckring paving (TASK-224 D8, N3) | `rail.ts`, `rail-geometry.ts` | 220, 224 | tests, close-ups, identical hashes, budgets | done 2026-11-19 (merged; hashes identical) |
 | [TASK-233](tasks/TASK-233.md) | render | Shared one-lane streets drawn without a centre line (TASK-231's D6 alone) and the grade-aware lane-overlap audit | `roads.ts`, `marking-geometry.ts`, `geometry-audit.ts` | 231 | tests, audit, traffic, merge rule | done 2026-11-19 (merged variant; networks byte-identical) |
+| [TASK-234](tasks/TASK-234.md) | 10 | Land TASK-226 (Hbf group membership, D2) on current main | `split.ts`, `junctions.ts`, Freiburg rebuild | 226 | audit, Freiburg seeds 1 to 6, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-235](tasks/TASK-235.md) | 10 | Land TASK-221 (lane tapers across short roads) with the grade-aware audit | `lanes.ts`, `continuity.ts`, `compile.ts` | 221, 233 | audit, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-236](tasks/TASK-236.md) | render | The remaining roof shapes on concave outlines (half-hipped, gambrel, mansard, skillion, round) | `render3d/roofs.ts` | 227 | flat fallbacks, tests, close-ups, budgets, identical hashes | in progress (second unsupervised run 2026-11-20) |
+| [TASK-237](tasks/TASK-237.md) | 9 | Step time, fourth pass: the rail hold and rail step, results identical | `rail-crossings.ts` performance | 230 | phase tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5363,6 +5367,20 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-20 (owner): a second 12-hour unsupervised run (from 00:23); "you may merge"; the owner reviews
+  only when stepping in. The lead's reading, logged for review:
+  - The 2026-11-19 rules stand (merge rule, one variant then park, off limits: baseline resets, gate
+    floors, deleting parked branches, new downloads; at most four agents; a Full run after every
+    merge; a red Full run stops merges).
+  - "You may merge" covers the two parked tasks the lead recommended: TASK-226 (rebased and
+    re-measured on main as TASK-234) and TASK-221 (re-measured with TASK-233's audit as TASK-235).
+  - Audit tolerance (new, the lead's): a geometry-audit measure or named case that worsens by less
+    than 1 cm, less than 1 m², or by one corner under 2 m that is not sharp, while the task's own
+    cases improve, does not stop a merge; it is reported in the review. Anything larger parks the
+    task as before (TASK-231's 9.4 cm stays parked).
+  - Owner-only decisions stay open: schema fields, OSM edits, Arnulfstraße's track form, retiring
+    parked branches, TASK-223's choice.
 
 - 2026-11-19 (lead): report on the 12-hour unsupervised run (04:42 to about 16:40, rules above). Every
   merge passed the lead's tiers and full demand, and every Full run after a merge was green (44517065466,
