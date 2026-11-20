@@ -234,6 +234,12 @@ interface ActuatedState {
  * timed green, and amber and all-red lead to the next phase with demand. Without other demand it
  * rests in green. `walkCalls` gives the walk links walkers wait at, with the green they need.
  *
+ * TASK-247: a car behind one that waits for another phase on its approach lane cannot reach the
+ * stop line, so it does not extend the green (an upstream car counts at its movement's approach
+ * lane). Before, where one lane carries movements of two phases (Freiburg's r:1479 at n:1132),
+ * the car behind a head held for the other phase kept each green to its maximum, and the phases
+ * swapped serving one or two cars each.
+ *
  * TASK-222: `crossingRed` gives the movement whose red stop line, inside the clear zone beyond a
  * rail crossing, holds a vehicle short of the tracks (-1 if none). Such a car needs this
  * controller's green and the other one's together. When this controller also has a call from a
@@ -323,6 +329,8 @@ export function createSignalControl(
   actuated.forEach((c, i) => c.nodes.forEach((n) => (owner[n] = i)));
   const windows = new Map<number, [number, number][]>();
   const eps = 1e-9;
+  /** TASK-247: approach lanes whose queue a car waiting for another phase heads. */
+  const blocked = new Set<number>();
 
   function advance(c: (typeof actuated)[number], timeS: number) {
     const s = c.state;
@@ -333,17 +341,20 @@ export function createSignalControl(
       let calls = 0;
       let kept = -Infinity;
       let mutual = false;
+      blocked.clear();
       for (const lane of c.lanes) {
         const stopM = city.lanes[lane]!.stopM;
         for (let id = vehicles.first(lane); id !== -1; id = vehicles.next[id]!) {
           if (vehicles.position[id]! < stopM - DETECT_M) break;
           const mask = c.phaseMask.get(vehicles.movement[id]!) ?? 0;
           if (mask & own) {
+            if (blocked.has(lane)) continue;
             extend = true;
             kept = Math.max(kept, keptFor(c, id, timeS));
           } else {
             calls |= mask;
             mutual ||= heldBy(c, id);
+            if (mask) blocked.add(lane);
           }
         }
       }
@@ -353,8 +364,10 @@ export function createSignalControl(
           const route = vehicles.route[id];
           const step = vehicles.routeStep[id]! + hops;
           if (route?.roads[step] !== road) continue;
-          const mask = c.phaseMask.get(route.movements[step]!) ?? 0;
+          const movement = route.movements[step]!;
+          const mask = c.phaseMask.get(movement) ?? 0;
           if (mask & own) {
+            if (blocked.has(city.movements[movement]!.fromLane)) continue;
             extend = true;
             kept = Math.max(kept, keptFor(c, id, timeS));
           } else {
