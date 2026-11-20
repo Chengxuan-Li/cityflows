@@ -9,8 +9,8 @@ import {
   MeshLambertMaterial,
   Object3D,
 } from 'three';
-import { walkGreenS, type CompiledCity, type CSignal } from '../network';
-import { walkSignalMarks } from '../render/layers/walkers';
+import { type CompiledCity, type CSignal } from '../network';
+import { walkLightAt, walkLightColor, walkSignalMarks } from '../render/layers/walkers';
 import { style } from '../render/style';
 import type { SignalStates, WalkerSnapshot } from '../render/types';
 import type { cityHeights } from './heights';
@@ -125,15 +125,13 @@ export function buildWalkSignals(city: CompiledCity, heights: ReturnType<typeof 
           ? 0
           : states
             ? states.walk[marks[i]!.link]!
-            : walkGreenS(light.signal, light.link, timeS) > 0
-              ? 1
-              : 0,
+            : walkLightAt(light.signal, light.link, timeS),
       )
       .join('');
     if (key === previous) return false;
     previous = key;
     marks.forEach((_, i) => {
-      heads.setColorAt(i, color.setHex(key[i] === '1' ? style.signalGreen : style.signalRed));
+      heads.setColorAt(i, color.setHex(walkLightColor(Number(key[i]))));
     });
     if (heads.instanceColor) heads.instanceColor.needsUpdate = true;
     return true;

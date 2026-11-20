@@ -396,6 +396,8 @@ export const style = {
   signalRed: 0xc95656,
   signalAmber: 0xe7a637,
   signalGreen: 0x30926c,
+  // TASK-252: an unlit walk light, at a signal crossing no phase serves.
+  signalDark: 0x3f4649,
   dividerWidthM: markingTheme.classes.residential.lane.widthM,
   pointRadiusM: 6,
   placeAlpha: 0.72,

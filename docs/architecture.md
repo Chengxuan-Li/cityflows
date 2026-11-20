@@ -1142,9 +1142,11 @@ the OSM `lanes` tags carry one.
     walk green only to its current end. In amber and all-red a crossing walk-green in both the
     ending phase and the next one stays green to the end of the next phase's minimum green, as a
     fixed program's walk window runs on into the next phase (TASK-188); other crossings show
-    red, and the walk lights draw the same state. Likewise a vehicle movement the next phase
-    serves stays green through them (TASK-194). TASK-222: a vehicle that would extend the green but
-    is held short of a rail crossing because another controller's stop line inside its clearance is
+    red, and the walk lights draw the same state. TASK-252: a signal crossing no phase serves,
+    which walkers cross in a gap (TASK-245), has a dark walk light (`signals.walk` 2). Likewise
+    a vehicle movement the next phase serves stays green through them (TASK-194). TASK-222: a
+    vehicle that would extend the green but is held short of a rail crossing because another
+    controller's stop line inside its clearance is
     red (section 8: a road red inside that clearance holds entry) needs both greens together. When
     the controller also has a call from a car the crossing holds for its own red (a mutual wait) and
     the other controller is changing to a phase serving the first car's movement, the green is kept,

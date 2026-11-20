@@ -1,6 +1,12 @@
 import { Container, Graphics } from 'pixi.js';
 import type { Vec2 } from '../../geo/vec2';
-import { walkGreenS, type CNode, type CompiledCity, type CWalkLink } from '../../network';
+import {
+  walkGreenS,
+  type CNode,
+  type CompiledCity,
+  type CSignal,
+  type CWalkLink,
+} from '../../network';
 import { style } from '../style';
 import type { SignalStates, WalkerSnapshot } from '../types';
 
@@ -28,7 +34,18 @@ export function walkSignalMarks(city: CompiledCity, node: CNode) {
   });
 }
 
-/** Small marks at both kerbs of each signalised crossing, red or green with its walk light. */
+/** TASK-252: a walk light from the program alone (before the run's first snapshot): 1 green,
+ * 0 red, or 2 dark at a crossing no phase serves, which walkers cross in a gap (TASK-245), so
+ * nothing shows red while they legally cross. */
+export function walkLightAt(signal: CSignal, link: number, timeS: number) {
+  if (!signal.phases.some((phase) => phase.walk.includes(link))) return 2;
+  return walkGreenS(signal, link, timeS) > 0 ? 1 : 0;
+}
+
+export const walkLightColor = (light: number) =>
+  light === 1 ? style.signalGreen : light === 2 ? style.signalDark : style.signalRed;
+
+/** Small marks at both kerbs of each signalised crossing, with its walk light. */
 export function drawWalkSignals(
   city: CompiledCity,
   node: CNode,
@@ -48,14 +65,12 @@ export function drawWalkSignals(
   let previous = '';
   return (timeS, states) => {
     const key = marks
-      .map(({ link }) =>
-        states ? states.walk[link]! : walkGreenS(signal, link, timeS) > 0 ? 1 : 0,
-      )
+      .map(({ link }) => (states ? states.walk[link]! : walkLightAt(signal, link, timeS)))
       .join('');
     if (key === previous) return;
     previous = key;
     marks.forEach(({ graphic }, i) => {
-      graphic.tint = key[i] === '1' ? style.signalGreen : style.signalRed;
+      graphic.tint = walkLightColor(Number(key[i]));
     });
   };
 }
