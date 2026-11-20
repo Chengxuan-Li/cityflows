@@ -477,6 +477,12 @@ export function createSignalControl(
     return walkGreenS(signal, link, timeS, spans);
   }
 
+  // TASK-252: the signal crossing links some phase gives walk green; walkers cross the others in
+  // a gap (TASK-245), and their walk light is dark.
+  const served = new Uint8Array(city.walk.links.length);
+  for (const signal of signals)
+    for (const phase of signal?.phases ?? []) for (const link of phase.walk) served[link] = 1;
+
   return {
     /** The movement colours at `timeS`, advancing actuated controllers to it. */
     update(timeS: number, colors: Uint8Array) {
@@ -499,8 +505,8 @@ export function createSignalControl(
     },
     walkGreen,
     /** Each node's phase and stage (0 green, 1 amber, 2 all-red; phase -1 without a signal),
-     * the phase amber and all-red lead to, and each walk link's walk light (1 green), for the
-     * renderers. */
+     * the phase amber and all-red lead to, and each walk link's walk light (0 red, 1 green, 2
+     * dark at a crossing no phase serves), for the renderers. */
     snapshot(timeS: number) {
       const phase = new Int16Array(city.nodes.length).fill(-1);
       const state = new Uint8Array(city.nodes.length);
@@ -512,7 +518,7 @@ export function createSignalControl(
       });
       for (const link of city.walk.links)
         if (link.crossing?.control === 'signal' && signals[link.crossing.node])
-          walk[link.idx] = Number(walkGreen(link.idx, timeS) > 0);
+          walk[link.idx] = served[link.idx] ? Number(walkGreen(link.idx, timeS) > 0) : 2;
       return { phase, state, next, walk };
     },
     /** The phase greens of each demand-split controller, by group or node id. */
