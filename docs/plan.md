@@ -5373,6 +5373,9 @@ Freiburg's gate 1,522 / 0, 66.1 s (hash 4228017009). Lead check: check (1,611), 
 Full run 44755991581 (lead, manual, on ecb7075 after TASK-249): every job green, including all five e2e
 shards; the city job took 22.5 min.
 
+Full run 44761655915 (lead, manual, on debb2ac after TASK-252): every job green, including all five e2e
+shards; the city job took 15.0 min.
+
 TASK-252 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, render only): at a signal crossing no
 phase serves (TASK-249 lets walkers cross there in a gap), the walk light draws dark (an unlit head), never
 red or green: `VehicleSnapshot.signals.walk` takes 0 red, 1 green, 2 dark (`snapshot` in `signals.ts`
@@ -5741,6 +5744,45 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-20 (lead): report on the second 12-hour unsupervised run (00:23 to about 12:30; rules, the
+  lead's audit tolerance and the five-seed full-demand reading above). Every merge passed the lead's
+  tiers and full demand, and every Full run after a merge was green (44691164973, 44706560824,
+  44712186713, 44719286946, 44740518122, 44744589116, 44750599300, 44755991581, 44761655915). Every merged
+  change is live on the Freiburg landing page.
+  - **Merged (14).** TASK-235 (TASK-221's lane tapers: Munich lane overlap 283.92 to 192.26 m²);
+    TASK-234 (TASK-226's Hbf group membership: the westbound stop line at the painted one, D2);
+    TASK-236 (half-hipped, gambrel, mansard, skillion, round roofs on concave outlines: flat roofs
+    Freiburg 14 to 1, Munich 13 to 0); TASK-240 (arrows of the next junction past plain nodes: `r:1148`
+    left, left, through, through, right); TASK-238 (close halves as one carriageway unless a mapped
+    median lies between: Bismarckallee closes, Marsstraße's planted median left alone); TASK-237 (rail
+    hold and step: full demand 9.5% faster); TASK-241 (no taper hatch on lane gains, arrows off
+    keep-clear boxes, give-way marks behind crossing paint); TASK-247 (Freiburg's 08:00 jam: cars stuck
+    behind a car waiting for another phase no longer extend an actuated green; Freiburg's gate 77.9 to
+    68.1 s and no longer flips); TASK-246 (keep-clear boxes off lane tapers); TASK-243 (routing: route
+    requests 59% faster, stepping 7.3%); TASK-248 (TASK-239's node-only crossings: walk links and paint,
+    `n:1139` on its spot); TASK-251 (reroute checks skip the lane search when no switch is possible:
+    route requests about 34% less; optional `RouteProvider.route` bound); TASK-249 (TASK-245's walker
+    fixes: walk green that never counted as long enough, a 1e-13 s rounding, and crossings no phase
+    serves; Freiburg walker waits 433 to 0.9 s, 204 to 0 never served; merged on the five-seed reading:
+    full demand +0.2%, 40 more trips); TASK-252 (walk lights at those crossings draw dark). Freiburg's
+    gate now 1,522 / 0, 66.1 s (77.9 s at the start of the run). Performance only and results identical:
+    237, 243, 251. Diagnosis only: TASK-250 (single-seed full demand swings more than the 2% limit).
+  - **Parked (2), branches kept, tables in the review log.** TASK-244 (route load term: clears the
+    thresholds but not its aim, adds stalled heads); TASK-242 (urban lane widths, `width` tags,
+    `placement`: both versions miss full demand and the audit; imagery shows `r:261` within 0.25 m).
+  - **Decisions for the owner.** (1) The lead's audit tolerance (used for TASK-235: +0.12 m², +3 mm;
+    TASK-234: one 1.16 m corner). (2) The five-seed full-demand reading (used for TASK-249; it could also
+    re-measure TASK-223). (3) TASK-242's options (placement plus tagged widths alone if the voids, real
+    trams and grass between carriageways, are accepted). (4) OSM edits: `r:1179`'s `placement=right_of:3`
+    contradicts the imagery; D7's late lane gain. (5) A walk-link marking field so `crossing=unmarked`
+    reaches the city (schema). (6) TASK-223's choice. (7) The Arnulfstraße track form. (8) Counting a
+    full-demand stalled head only if it persists (TASK-250's proposal). (9) Retiring parked branches.
+  - **Open technical items.** `n:211`'s zebra drawn 4.4 m along the street; full-demand stalled heads
+    come and go with the seed (TASK-250); TASK-218's D4 rule with J1 still unlanded; the promenade's
+    parking hatch.
+  - **Incidents.** None with lasting effect: brief worktree stashes during runs (re-run clean), one
+    contract path the lead fixed before the agent started, one lead tier run started without tracking
+    (watched by a second command; results complete).
 - 2026-11-20 (lead, during the second run): full demand is judged on the mean of seeds 1 to 5 from now
   on. TASK-250 showed one full-demand seed swings more than the merge rule's 2% (TASK-247's rule: seeds 1
   to 5 from -7.0% to +7.3%, mean -0.7%). The threshold is the owner's and unchanged; the measure is the
