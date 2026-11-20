@@ -62,14 +62,16 @@ const baselines = {
   // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
   // tram `form` stripped the city equals b3bcde6's.
   // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
-  'munich-donnersberger': 'cdca8008fae617ff56e6ff0157775be71815d7a0c3fe6c0bd35d3670b599be8e',
+  // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
+  'munich-donnersberger': '873f2868d6e84900b0ddaa033a6b04742df54870f3d36c704de89d0cd102b854',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
   // TASK-194: generated signal programs are actuated (`actuated: true`).
   // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
   // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-  'sindelfingen-a81': '5b942e98272d59d1588f377612303adc261ea2f44d516b3403300f0fd854b06e',
+  // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
+  'sindelfingen-a81': 'a6ec148d86c6d50ddfec9d3b4a7c1e443aacefb7c4975112b3330e3a6e1e2913',
 };
 
 unitTest(

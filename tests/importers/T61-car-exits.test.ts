@@ -355,7 +355,7 @@ test.each(
       'munich',
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-      'a586e401298b2b882e8b2af8cb4b1ef8c698c29328442b809b4e2c8a0abcafb7',
+      'd66934643600a4f176bfbc3d8f7d5700e0994ce7be364f15a04b5b7bf08ddf91',
       '741cf5660bbb6893febbfa55824038cf263df106c5fb3a863b64f3c8a6e9f64c',
       14,
       79,
@@ -364,7 +364,7 @@ test.each(
       'sindelfingen',
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-      'd4ab86a62b041752ac85cbcdef177b165a286e3d15f71e1ccf1219588832d908',
+      '34dbb02fe860319cfcc334da356f2820a5cd016a9ea579b5acdf53bee4dc4dbf',
       'f4fae021fb29d507d1e9d4f38c371a79667c8b81d09ad5c7fd9b48b704207fd6',
       31,
       703,

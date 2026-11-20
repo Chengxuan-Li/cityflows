@@ -17,6 +17,7 @@ import {
   SHIFT_STEP_M,
   shiftAt,
   smoothstep,
+  smootherstep,
   taperLength,
   type ContinuationEnd,
   type RoadContinuity,
@@ -162,6 +163,7 @@ export function continuationLayout(
   centerlineLengths = new Map();
   const ends: RoadContinuity[] = roads.map(() => ({}));
   const pairs = new Map<number, ContinuationPairs>();
+  const groups: ContinuationGroup[] = [];
   for (const node of nodes) {
     const legal = node.movements.map((i) => movements[i]!);
     if (
@@ -192,6 +194,7 @@ export function continuationLayout(
     }
     const layout = new Map<number, RoadContinuity>();
     const selected: ContinuationPairs = new Map();
+    const nodeGroups: ContinuationGroup[] = [];
     let valid = true;
     let axis: number | undefined;
     for (const group of components) {
@@ -392,6 +395,13 @@ export function continuationLayout(
           reference: ray(node.pos, heading, split, polylineLength(trunkSource.centerline) + 50),
         },
       });
+      nodeGroups.push({
+        node,
+        split,
+        trunk,
+        branches,
+        shared: sharedWidth.some((w) => w > 0),
+      });
     }
     if (!valid) continue;
     pairs.set(node.idx, selected);
@@ -402,11 +412,17 @@ export function continuationLayout(
           (!r.start || (r.start.offsetM === 0 && !r.start.splitM && !r.start.tapers.length)) &&
           (!r.end || (r.end.offsetM === 0 && !r.end.splitM && !r.end.tapers.length)),
       );
-    if (!unchanged) for (const [idx, end] of layout) Object.assign(ends[idx]!, end);
+    if (!unchanged) {
+      for (const [idx, end] of layout) Object.assign(ends[idx]!, end);
+      groups.push(...nodeGroups);
+    }
   }
   fitContinuations(nodes, roads, sources, ends, pairs);
   for (const node of nodes)
     if (!pairs.has(node.idx)) sideBySide(node, nodes, roads, sources, ends, pairs, side);
+  // After `sideBySide`, whose blocks run through plain nodes too: a road one of them reaches ends a
+  // carried chain, which then shares it as with any transition at its far end.
+  carryTransitions(groups, nodes, roads, sources, ends, pairs, plainNodes(nodes, roads, ends));
   return { ends, pairs };
 }
 
@@ -422,6 +438,19 @@ function trimmedCut(node: CNode, nodes: CNode[], roads: CRoad[], road: CRoad): n
   const cut = cutAt(node, roads, road);
   const trim = cutAt(nodes[road.from]!, roads, road) + cutAt(nodes[road.to]!, roads, road);
   return trim === 0 ? cut : cut * Math.min(1, Math.max(0, road.lengthM - 5) / trim);
+}
+
+/** TASK-221: the nodes where no road end moves its lanes (no offset, split or taper). Compile
+ * drops the transitions there (TASK-082: the lanes meet at the node's mitre). */
+function plainNodes(nodes: CNode[], roads: CRoad[], ends: RoadContinuity[]): Set<number> {
+  const moves = (end: ContinuationEnd | undefined) =>
+    !!end && (end.offsetM !== 0 || !!end.splitM || end.tapers.length > 0);
+  const moving = new Set<number>();
+  for (const road of roads) {
+    if (moves(ends[road.idx]!.start)) moving.add(road.from);
+    if (moves(ends[road.idx]!.end)) moving.add(road.to);
+  }
+  return new Set(nodes.map((n) => n.idx).filter((n) => !moving.has(n)));
 }
 
 /** A continuation's transitions fit their road; with transitions at both ends each gets half. */
@@ -472,6 +501,266 @@ function chainPoint(chain: Chain, sources: Road[], split: boolean, a: number, si
   while (k > 0 && chain.starts[k]! > at) k--;
   const arm = { source: sources[chain.roads[k]!.idx]!, atEnd: !split };
   return blockPoint(arm, at - chain.starts[k]!, side);
+}
+
+interface ContinuationGroup {
+  node: CNode;
+  split: boolean;
+  trunk: CRoad;
+  /** Left to right across the group's heading. */
+  branches: CRoad[];
+  /** A branch shares a trunk lane with its left neighbour. */
+  shared: boolean;
+}
+
+/** TASK-221: a road and the roads that continue it through plain nodes (two road ends, no cut, no
+ * transition that moves lanes, the same lane block on a road that is not a direction of a two-way
+ * street), away from the node (`downstream`: from the road's start), up to 400 m; and the room a
+ * transition from the node has on them, as `fitContinuations` gives it on one road. */
+function plainChain(
+  road: CRoad,
+  downstream: boolean,
+  nodes: CNode[],
+  roads: CRoad[],
+  sources: Road[],
+  ends: RoadContinuity[],
+  pairs: Map<number, ContinuationPairs>,
+  plain: Set<number>,
+): { chain: Chain; room: number } {
+  const lengthOf = (r: CRoad) => polylineLength(sources[r.idx]!.centerline);
+  const chain: Chain = { roads: [road], starts: [0], length: lengthOf(road), junction: false };
+  for (;;) {
+    const last = chain.roads.at(-1)!;
+    const far = nodes[downstream ? last.to : last.from]!;
+    const start = chain.starts.at(-1)!;
+    if (ends[last.idx]![downstream ? 'end' : 'start'] && !plain.has(far.idx))
+      return { chain, room: start + lengthOf(last) / 2 };
+    const incident = roads.filter((r) => r.from === far.idx || r.to === far.idx);
+    const next = incident.find((r) => r !== last);
+    const source = next && sources[next.idx]!;
+    if (
+      chain.length >= 400 ||
+      incident.length !== 2 ||
+      !next ||
+      !source ||
+      (downstream ? next.from : next.to) !== far.idx ||
+      (!pairs.has(far.idx) && far.setbacks.some((s) => s > 0)) ||
+      source.streetGroupId !== null ||
+      roadWidth(source) !== roadWidth(sources[last.idx]!) ||
+      source.lateralOffsetM !== sources[last.idx]!.lateralOffsetM
+    ) {
+      const cut = pairs.has(far.idx) ? 0 : trimmedCut(far, nodes, roads, last);
+      return { chain, room: start + lengthOf(last) - cut };
+    }
+    chain.roads.push(next);
+    chain.starts.push(chain.length);
+    chain.length += lengthOf(next);
+  }
+}
+
+/** `separation` along two chains: how far from the node their own lane blocks overlap. */
+function chainSeparation(left: Chain, right: Chain, sources: Road[], downstream: boolean): number {
+  const limit = Math.min(left.length, right.length);
+  let apart = 0;
+  for (let a = 0; a <= limit; a += 0.5) {
+    const l = chainPoint(left, sources, downstream, a, 1),
+      r = chainPoint(right, sources, downstream, a, -1);
+    const gap =
+      -(r.point.x - l.point.x) * Math.sin(l.heading) +
+      (r.point.y - l.point.y) * Math.cos(l.heading);
+    if (gap < -0.05) apart = Math.min(limit, a + 0.5);
+  }
+  return apart;
+}
+
+/**
+ * TASK-221 (S6, J6): a continuation's transitions run on through the plain nodes beyond its roads.
+ * A ramp of 11 m (Freiburg n:536) got a taper of half its length, halved again by the plain node
+ * at its far end, and jogged 3.5 m in 5.9 m; a ramp whose own line lies on the next road's lanes
+ * beyond its first road (Munich n:194) eased off the side-by-side block on top of them. Where a
+ * branch or the trunk continues through plain nodes, its taper is taken by speed over the whole
+ * chain (still at most half of it), the branches hold side by side while their chains' own lane
+ * blocks overlap, and each road of a chain the window reaches follows the node's line from where
+ * it starts along it (`referenceFromM`), as `sideBySide`'s chains do; a road the window passes
+ * ends in a marker. Groups whose roads continue nowhere keep TASK-080's windows.
+ */
+function carryTransitions(
+  groups: ContinuationGroup[],
+  nodes: CNode[],
+  roads: CRoad[],
+  sources: Road[],
+  ends: RoadContinuity[],
+  pairs: Map<number, ContinuationPairs>,
+  plain: Set<number>,
+) {
+  const speedTaper = (chain: Chain) =>
+    Math.min(
+      chain.length / 2,
+      ...chain.roads.map((r) =>
+        Math.max(15, Math.min(40, 0.4 * sources[r.idx]!.speedLimitMps * 3.6)),
+      ),
+    );
+  for (const group of groups) {
+    const { node, split } = group;
+    // A plain node's own continuation moves nothing; another group's chain may run through it. A
+    // trunk lane shared by two branches splits over the taper, the branches overlapping as it
+    // does: a longer taper only lengthens that (Sindelfingen n:967, Freiburg n:900).
+    if (plain.has(node.idx) || group.shared) continue;
+    const branches = group.branches.map((b) =>
+      plainChain(b, split, nodes, roads, sources, ends, pairs, plain),
+    );
+    const trunk = plainChain(group.trunk, !split, nodes, roads, sources, ends, pairs, plain);
+    // A side whose ends do not move (no offset, no split) only eases onto the node's ray: carried
+    // on, that would pull its lanes off a curving road for nothing.
+    const moves = (road: CRoad, atEnd: boolean) => {
+      const end = ends[road.idx]![atEnd ? 'end' : 'start']!;
+      return end.offsetM !== 0 || !!end.splitM;
+    };
+    const trunkEnd = ends[group.trunk.idx]![split ? 'end' : 'start']!;
+    const trunkCarried = moves(group.trunk, split) && trunk.chain.roads.length > 1;
+    const branchesCarried =
+      group.branches.some((b) => moves(b, !split)) &&
+      branches.some(({ chain }) => chain.roads.length > 1);
+    if (!trunkCarried && !branchesCarried) continue;
+    // The branches ease together within the room of the shortest: first holding while their own
+    // blocks overlap, then over the longest taper that leaves (never shorter than without the
+    // chains, when the hold is clipped as before).
+    const room = Math.min(...branches.map((b) => b.room));
+    let apart = 0;
+    for (let i = 1; i < branches.length; i++)
+      apart = Math.max(
+        apart,
+        chainSeparation(branches[i - 1]!.chain, branches[i]!.chain, sources, split),
+      );
+    const unchained = Math.min(room, ...group.branches.map((b) => taperLength(sources[b.idx]!)));
+    const taperM = Math.max(
+      unchained,
+      Math.min(...branches.map(({ chain }) => speedTaper(chain)), room - apart),
+    );
+    const holdM = Math.min(apart, room - taperM);
+    const apply = (
+      { chain, room }: { chain: Chain; room: number },
+      downstream: boolean,
+      taper: number,
+      hold: number,
+      reference: Vec2[] | undefined,
+    ) => {
+      const near = downstream ? 'start' : 'end',
+        far = downstream ? 'end' : 'start';
+      const base = ends[chain.roads[0]!.idx]![near]!;
+      const t = Math.max(0.5, Math.min(taper, room));
+      const h = Math.min(hold, room - t);
+      Object.assign(base, { holdM: h, taperM: t });
+      if (!reference) return;
+      Object.assign(base, { reference, carried: true });
+      for (const [k, road] of chain.roads.entries()) {
+        const from = chain.starts[k]!;
+        if (k > 0) {
+          if (h + t <= from) break;
+          ends[road.idx]![near] = {
+            ...base,
+            tapers: [],
+            holdM: h - from,
+            taperM: t,
+            referenceFromM: from,
+          };
+        }
+        if (h + t > from + polylineLength(sources[road.idx]!.centerline))
+          ends[road.idx]![far] = { ...ends[road.idx]![near]!, tapers: [], holdM: 0, taperM: 0 };
+      }
+    };
+    // The branches share one line: from the node along its heading, bending over the taper onto
+    // the chain of the branch with most lanes (the road the others leave or join); between
+    // branches with as many lanes it stays the ray.
+    const heading = ends[group.trunk.idx]![split ? 'end' : 'start']!.heading;
+    const lanesOf = ({ chain }: { chain: Chain }) => chain.roads[0]!.lanes.length;
+    const widest = [...branches].sort((a, b) => lanesOf(b) - lanesOf(a));
+    const main = widest[0]!.chain;
+    const mainEnd = ends[main.roads[0]!.idx]![split ? 'start' : 'end']!;
+    const reach = Math.max(...branches.map(({ chain }) => chain.length));
+    const branchLine = bentRay(
+      node.pos,
+      heading,
+      main,
+      mainEnd.offsetM + (mainEnd.splitM ?? 0),
+      sources,
+      split,
+      reach,
+      !widest[1] || lanesOf(widest[0]!) > lanesOf(widest[1]) ? taperM : Infinity,
+    );
+    // Only a window that reaches past the first road of the narrowest branch (the ramp) needs the
+    // chains; the others keep the ray and TASK-080's windows.
+    const firstRoad = ({ chain }: { chain: Chain }) =>
+      polylineLength(sources[chain.roads[0]!.idx]!.centerline);
+    const narrowest = widest.at(-1)!;
+    if (branchesCarried && holdM + taperM > firstRoad(narrowest))
+      for (const branch of branches) apply(branch, split, taperM, holdM, branchLine);
+    const trunkTaper = Math.min(speedTaper(trunk.chain), trunk.room);
+    if (trunkCarried && trunkTaper > firstRoad(trunk)) {
+      const taper = trunkTaper;
+      const line = bentRay(
+        node.pos,
+        trunkEnd.heading,
+        trunk.chain,
+        trunkEnd.offsetM,
+        sources,
+        !split,
+        0,
+        taper,
+      );
+      apply(trunk, !split, taper, 0, line);
+    }
+  }
+}
+
+/** A reference line in travel direction from `at` along `heading` (outward: downstream from the
+ * node, or upstream), bending from that ray by a smootherstep over `blendM` (no step in heading or
+ * curvature at the node, where the other side's ray meets it) onto the line, `shift` to the left
+ * of `chain`'s own reference lines, on which the chain's lanes keep their own places, up to the
+ * chain's end; then continued straight to 50 m beyond `reach`. */
+function bentRay(
+  at: Vec2,
+  heading: number,
+  chain: Chain,
+  shift: number,
+  sources: Road[],
+  downstream: boolean,
+  reach: number,
+  blendM: number,
+): Vec2[] {
+  const sign = downstream ? 1 : -1;
+  const dir = { x: Math.cos(heading) * sign, y: Math.sin(heading) * sign };
+  const lines = chain.roads.map((r) => ({
+    points: r.reference,
+    lengths: cumulativeLengths(r.reference),
+  }));
+  const outward: Vec2[] = [];
+  for (let a = 0; ; a = Math.min(chain.length, a + 1)) {
+    let k = chain.starts.length - 1;
+    while (k > 0 && chain.starts[k]! > a) k--;
+    const { points, lengths } = lines[k]!;
+    const total = lengths.at(-1)!;
+    // Along the road's own reference, in proportion to its source length (`chain.starts`).
+    const along =
+      ((a - chain.starts[k]!) / polylineLength(sources[chain.roads[k]!.idx]!.centerline)) * total;
+    const s = Math.max(0, Math.min(total, downstream ? along : total - along));
+    const p = pointAtDistance(points, lengths, s);
+    const h = headingAtDistance(points, lengths, s);
+    const target = { x: p.x + Math.sin(h) * shift, y: p.y - Math.cos(h) * shift };
+    const w = smootherstep(a / blendM);
+    const ray = { x: at.x + dir.x * a, y: at.y + dir.y * a };
+    outward.push({ x: ray.x + (target.x - ray.x) * w, y: ray.y + (target.y - ray.y) * w });
+    if (a === chain.length) break;
+  }
+  const tip = outward.at(-1)!,
+    before = outward.at(-2) ?? at;
+  const d = Math.hypot(tip.x - before.x, tip.y - before.y) || 1;
+  const beyond = Math.max(0, reach - chain.length) + 50;
+  outward.push({
+    x: tip.x + ((tip.x - before.x) / d) * beyond,
+    y: tip.y + ((tip.y - before.y) / d) * beyond,
+  });
+  return downstream ? outward : outward.reverse();
 }
 
 /** TASK-080 (B36): a split or merge outside the continuation rule (a branch more than 30 degrees
