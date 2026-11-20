@@ -1,6 +1,7 @@
 export class MinHeap {
-  private readonly nodes: number[] = [];
-  private readonly costs: number[] = [];
+  // TASK-243: typed arrays, doubled when full (the entries and their order are unchanged).
+  private nodes = new Int32Array(64);
+  private costs = new Float64Array(64);
   private size = 0;
   cost = 0;
 
@@ -9,6 +10,14 @@ export class MinHeap {
   }
 
   push(node: number, cost: number): void {
+    if (this.size === this.nodes.length) {
+      const nodes = new Int32Array(this.size * 2);
+      const costs = new Float64Array(this.size * 2);
+      nodes.set(this.nodes);
+      costs.set(this.costs);
+      this.nodes = nodes;
+      this.costs = costs;
+    }
     const { nodes, costs } = this;
     let index = this.size++;
     while (index > 0) {

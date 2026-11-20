@@ -117,10 +117,14 @@ function createRun({
   };
   const { dtS, idm, spawnMinGapM } = params;
   const provider =
-    routeProvider ?? createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
+    routeProvider ??
+    createRouteProvider({
+      laneChangeDistanceM: params.laneChangeDistanceM,
+      checkSkips: debugSkips,
+    });
   const observedCosts = createLinkCosts(compiled, params, scenario.startS);
   const costs = linkCosts ?? observedCosts.costs;
-  const walkRouter = injectedWalkRouter ?? createWalkRouter(compiled.walk);
+  const walkRouter = injectedWalkRouter ?? createWalkRouter(compiled.walk, debugSkips);
   // TASK-173: the trips as scheduled; each tour in the mode choice turns its car trips into walks
   // in this copy when it chooses to walk as it departs (`createPersons`).
   const trips = requested.slice();

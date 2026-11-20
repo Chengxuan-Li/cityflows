@@ -1,7 +1,13 @@
 import type { CompiledCity } from '../network';
 import { vehicleClasses, type VehicleClass, type VehiclePurpose } from '../schema';
-import { createCostCache, routeCosts } from './costs';
-import { createGraphCache } from './graph';
+import { createCostCache, createNoiseMemo, routeCosts } from './costs';
+import {
+  ACCESS_DELIVERY,
+  ACCESS_YES,
+  ACCESS_ZONE,
+  createGraphCache,
+  type RoadGraph,
+} from './graph';
 import { createLaneSearch } from './lane-search';
 import { resolveLanes } from './lanes';
 import { createPathSearch } from './search';
@@ -43,6 +49,9 @@ export interface RouteProvider {
 
 export interface RoutingParams {
   laneChangeDistanceM?: number;
+  /** TASK-243: check each request's access filter and noise factors against their plain
+   * computation and throw on a difference (the engine's `debugSkips`). */
+  checkSkips?: boolean;
 }
 
 export function roadAccessFilter(compiled: CompiledCity, request: RouteRequest) {
@@ -61,13 +70,29 @@ export function roadAccessFilter(compiled: CompiledCity, request: RouteRequest) 
   };
 }
 
+/** `roadAccessFilter` read from the class graph's access and zone arrays (TASK-243). */
+function graphAccessFilter(graph: RoadGraph, request: RouteRequest, from: number, to: number) {
+  const { access, zone } = graph;
+  const delivery = request.purpose === 'delivery';
+  const originZone = zone[from]!;
+  const destinationZone = zone[to]!;
+  return (idx: number) => {
+    const rule = access[idx];
+    if (rule === ACCESS_YES) return true;
+    if (rule === ACCESS_ZONE) return zone[idx] === originZone || zone[idx] === destinationZone;
+    return rule === ACCESS_DELIVERY && delivery;
+  };
+}
+
 export function createRouteProvider({
   laneChangeDistanceM = 30,
+  checkSkips = false,
 }: RoutingParams = {}): RouteProvider {
   const graphFor = createGraphCache();
   const costsFor = createCostCache();
   const searchLanes = createLaneSearch(laneChangeDistanceM);
   const shortestPath = createPathSearch();
+  const noise = createNoiseMemo();
   return {
     route(compiled, costs, request) {
       const destination = compiled.connectors[request.toConnector];
@@ -90,23 +115,36 @@ export function createRouteProvider({
       }
       const from = compiled.lanes[request.fromLane]!.road;
       const to = compiled.lanes[destination.lane]!.road;
-      const permits = roadAccessFilter(compiled, request);
+      const fast = graphAccessFilter(graph, request, from, to);
+      const plain = checkSkips ? roadAccessFilter(compiled, request) : null;
+      const permits = plain
+        ? (idx: number) => {
+            if (fast(idx) !== plain(idx))
+              throw new Error(`Access filter differs on road ${idx} for ${request.vehicleClass}`);
+            return plain(idx);
+          }
+        : fast;
       if (!permits(from) || !permits(to)) return { ok: false, reason: 'class_forbidden' };
-      const weights = routeCosts(compiled, costsFor(costs), request);
+      const weights = routeCosts(compiled, costsFor(costs), request, noise, checkSkips);
+      const { edgeStart, edgeTo, edgePenalty } = graph;
       const path = shortestPath(
         compiled.roads.length,
         from,
         to,
         weights.originCost,
         (road, relax) => {
-          for (const edge of graph.roads[road]!)
-            if (permits(edge.to)) relax(edge.to, weights.transition(edge.to, edge.penaltyS));
+          for (let edge = edgeStart[road]!, end = edgeStart[road + 1]!; edge < end; edge++) {
+            const next = edgeTo[edge]!;
+            if (permits(next)) relax(next, weights.transition(next, edgePenalty[edge]!));
+          }
         },
       );
       if (!path) {
         const unrestricted = graphFor(compiled, null);
         const connected = shortestPath(compiled.roads.length, from, to, 0, (road, relax) => {
-          for (const edge of unrestricted.roads[road]!) relax(edge.to, 1);
+          const end = unrestricted.edgeStart[road + 1]!;
+          for (let edge = unrestricted.edgeStart[road]!; edge < end; edge++)
+            relax(unrestricted.edgeTo[edge]!, 1);
         });
         return { ok: false, reason: connected ? 'class_forbidden' : 'no_path' };
       }
