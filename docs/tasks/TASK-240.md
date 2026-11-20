@@ -1,6 +1,6 @@
 # TASK-240 — Arrows on the Hauptbahnhof approach r:1148 (TASK-234's side effect, N2)
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/240-r1148-arrows`, worktree `D:\cityflows-wt\240`, ports 5440 / 5540.
 
 ## Goal

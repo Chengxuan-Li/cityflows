@@ -261,6 +261,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-235](tasks/TASK-235.md) | 10 | Land TASK-221 (lane tapers across short roads) with the grade-aware audit | `lanes.ts`, `continuity.ts`, `compile.ts` | 221, 233 | audit, traffic, merge rule | done 2026-11-20 (merged; audit within the lead's tolerance) |
 | [TASK-236](tasks/TASK-236.md) | render | The remaining roof shapes on concave outlines (half-hipped, gambrel, mansard, skillion, round) | `render3d/roofs.ts` | 227 | flat fallbacks, tests, close-ups, budgets, identical hashes | done 2026-11-20 (merged; flat roofs Freiburg 14 to 1, Munich 13 to 0) |
 | [TASK-237](tasks/TASK-237.md) | 9 | Step time, fourth pass: the rail hold and rail step, results identical | `rail-crossings.ts` performance | 230 | phase tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
+| [TASK-238](tasks/TASK-238.md) | 10 | Close halves as one carriageway unless a mapped median lies between them (TASK-231's D5 reworked) | `corridors.ts` | 231 | audit, traffic, merge rule | done 2026-11-20 (merged; nothing worse) |
+| [TASK-239](tasks/TASK-239.md) | 10 | Crossings mapped only as OSM nodes get walk links and paint | importer `walk.ts` | 217, 224 | census, audit, traffic, merge rule | held 2026-11-20 (passes alone; with TASK-238 Freiburg's gate 90.3 s; diagnosing) |
+| [TASK-240](tasks/TASK-240.md) | render | Arrows of the next junction on approaches ending at a plain node or median crossover (r:1148) | `marking-geometry.ts` | 229, 234 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
+| [TASK-241](tasks/TASK-241.md) | render | Paint fixes: gores between one carriageway's lanes, arrows over keep-clear boxes, give-way triangles over zebras | `marking-geometry.ts` | 108, 240 | tests, counts, close-ups, identical hashes | in progress (second unsupervised run 2026-11-20) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5058,6 +5062,50 @@ Lead check on the merge of TASK-235, 234 and 236 (234's Freiburg pin re-measured
 0, 77.8 s, hash 118989361; the project rebuilt and reproduced): check (1,587), city (217), traffic light
 and guard, light e2e (61); full demand actuated 3,591 / 173 (151240499), fixed 3,504 / 153 (4004936993).
 Combined audit is the sum of 235's and 234's changes (no interaction).
+
+TASK-240 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, paint only): since TASK-234,
+`r:1148` ends at the median crossover `n:1147`, a plain node, where every lane goes straight on (lane 0's
+left into the service crossover is ignored), so `arrowTurns` read five through lanes and TASK-079's
+lanes-must-differ rule drew none; the group entry is now `r:475`, two roads on, whose lanes are too short
+for arrows. Rule (`aheadTurns`, `noJunction`, `arrowRoom`): a node outside any group, with no control and
+no crossing movements (service roads ignored) is no junction; on an approach ending at one, each lane
+follows its single straight-on movement to the next junction (stopping early where a lane on the way has
+room for its own arrows) and shows its movements there, or its group paths, or for a group entry with no
+path its first turn inside the group; any ambiguous lane keeps the approach's old arrows. `r:1148` now
+paints left, left, through, through, right (way 227874537's `turn:lanes` and the ground). Lanes / roads /
+shapes with arrows: Hbf box 20 / 7 / 21 to 38 / 13 / 44, Freiburg 90 / 33 / 111 to 120 / 44 / 150, Munich
+unchanged, Sindelfingen 56 / 23 / 83 to 60 / 25 / 89; arrows only added; exact `turn:lanes` matches on
+six roads. Audit JSON identical. Hashes identical; main's Munich 0.15 seed-1 hashes after TASK-235:
+actuated off 1475577836, on 345011196, fixed off 3548154257, on 3041964370. Left: arrows over keep-clear
+boxes at car-park mouths (TASK-241). Outside scope: Sindelfingen paint pins (V108, V114, V117).
+
+TASK-238 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, nothing worse): TASK-231's D5 reworked.
+Marsstraße's R3-8 error is a sideways shift on `r:845` 9.5 to 10 m from `n:484`, where TASK-083's through
+alignment curves `r:946` into `r:845` within 20 m; D5's ease from 15 m bent that curve further. On the
+ground the pull was wrong there: OSM maps way 71822752 (`landuse=grass`, `barrier=green`), a planted
+median about 2 m wide along `r:845`. Rule (`mappedMedians`, `corridors.ts`): halves are pulled only at
+points where the line between the two centerlines crosses no street-level median way (any `barrier`,
+`landcover`, `area:highway=traffic_island`, green `landuse` and `natural`); the 20 m pulled-run condition
+then drops Marsstraße. Pulled pairs: Freiburg 1 (Bismarckallee, void 67.74 to 37.46 m²), Munich and
+Sindelfingen 0 (imports byte-identical). Audit: Freiburg widths over 5 cm 382 to 380, voids 3,545.88 to
+3,515.60 m², corners under 2 m 167 to 166; every named case identical. Traffic: Munich 48 runs and both
+full demands identical; Freiburg 1,461 / 0, 77.8 to 77.9 s (hash 809576249), seeds 2 and 3 69.4 and
+66.4 s. Outside scope: one line in `index.ts`, the Freiburg re-pins.
+
+TASK-239 (Claude Code subagent, Opus 5.5 high, 2026-11-20; held): crossings mapped only as nodes
+(`addNodeCrossings`, importer `walk.ts`, new ids last): Freiburg 9 links, Munich 1, Sindelfingen 0; the
+variant (`f52ca2e`) requires a signalised crossing's road to end at a signalised node within 40 m (the
+first version `5e377ca` let pedestrian signal 334475575 act as a zebra: Freiburg 83.7 s). Alone on
+e2e1457: car traffic identical everywhere, Freiburg 77.3 s, audit identical, Hbf mapped zebras matched 3
+to 5 (n:1139 yes; n:211 painted 4.4 m along the street). Merged together with TASK-238 (lead check,
+Freiburg rebuilt): seed 1 1,458 / 0, 90.3 s (hash 988683669), seeds 2 and 3 68.3 and 68.6 s. The gate
+misses by 12.5 s although each task alone is within 0.5 s, so 239 is held and its agent is diagnosing on
+the new base (a latent fault elsewhere becomes its own task, as the Siegesdenkmal lock did). Also found:
+give-way triangles overlap a new zebra at `n:2088` (added to TASK-241).
+
+Lead check on the merge of TASK-240 and 238: the Freiburg rebuild reproduces the project; check (1,589),
+city (218), traffic light and guard, light e2e (61); full demand actuated 3,591 / 173 (151240499), fixed
+3,504 / 153 (4004936993).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

@@ -1,6 +1,6 @@
 # TASK-238 — Close halves as one carriageway, without the Marsstraße regression (TASK-231 D5 reworked)
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/238-close-halves-2`, worktree `D:\cityflows-wt\238`, ports 5438 / 5538.
 
 ## Goal
