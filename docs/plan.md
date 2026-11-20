@@ -267,8 +267,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-241](tasks/TASK-241.md) | render | Paint fixes: gores between one carriageway's lanes, arrows over keep-clear boxes, give-way triangles over zebras | `marking-geometry.ts` | 108, 240 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
 | [TASK-242](tasks/TASK-242.md) | 10 | Road widths from the data: urban lane widths, `width` tags, `placement` (TASK-218's D3, D9) | `roads.ts`, `corridors.ts` | 218, 238 | imagery checks, audit, traffic, merge rule | parked 2026-11-20 (both versions miss full demand and the audit) |
 | [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
-| [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | parked 2026-11-20 (meets the thresholds, misses its aim: the band does not narrow; new stalls) |
 | [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | held 2026-11-20 (v1 fixes two walker bugs; Freiburg gate 108 s from the batch flip; re-measure after TASK-244) |
+| [TASK-246](tasks/TASK-246.md) | render | Keep-clear boxes on lane gains (found by TASK-241) | `marking-geometry.ts` | 241 | test, census, identical hashes | in progress (second unsupervised run 2026-11-20) |
+| [TASK-247](tasks/TASK-247.md) | 9 | Freiburg's 08:00 station peak: spillback at the Hauptbahnhof signals (`n:364`, `n:1132`) | `signals.ts`, junction admission | 239, 244, 245 | repro test, Freiburg band, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5226,6 +5228,23 @@ v1 misses only Freiburg's gate (+30.1 s): the extra delay is on Schnewlinstraße
 alone gives 86.3 s (rounding) and 81.4 s (unserved crossings). v2 misses Freiburg (+6.2 s) and full demand
 (+6.2%). Lead decision: held like TASK-239; v1 is re-measured on TASK-244. Open: the walk light at an
 unserved crossing still draws red while walkers cross. Outside scope: the Freiburg re-pin, the new test.
+
+TASK-244 (Claude Code subagent, Opus 5.5 high, 2026-11-20; parked by the lead, branch `task/244-route-batching`
+`2860f41`, worktree `D:\cityflows-wt\244`): departures route on their own costs, each road's observed time
+times (1 + n / capacity), n the departed cars whose first route uses the road and are not yet due past its
+end, capacity the car lanes times 1,800 cars an hour over the 60 s interval (`link-costs.ts`,
+`releaseTrip`); test `tests/sim/departure-load.test.ts` (0 of 28 cars take the longer branch without the
+rule, 7 of 28 with it). The 07:58 batch now splits, but the Freiburg band does not narrow: TASK-239's
+probes 80.3 to 95.6 s become 72.1 to 88.7 s; halved and quartered capacity gave 75.0 to 89.1 and 69.4 to
+84.4 s. The 08:00 jam's waiting sits on both routes at once, feeding the signals at `n:364` (group 24)
+and `n:1132`: peak load and spillback at the station's signals, not route choice. Traffic against main:
+Munich 0.15 actuated choice off +1.1%, on -0.6%, fixed off -6.5%, on -3.0% (drain 48 of 48; four seeds in
+each of actuated choice off and fixed choice off now gridlock one trip); full demand actuated 3,549 / 153,
+1,633.3 s (-2.7%), fixed 3,335 / 164 with 8 stalled heads, 1,582.7 s (-9.4%, 169 fewer completed);
+Freiburg 79.5 s (+1.6 s). It clears the merge rule's thresholds, but its aim (the band) is not met, it
+changes route choice everywhere, and fixed-time full demand ends with stalled heads main does not have
+(its lower delay partly unfinished trips); lead decision: parked. The station-signal spillback is TASK-247;
+TASK-239 and 245 wait for it.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

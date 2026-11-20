@@ -1,6 +1,6 @@
 # TASK-244 — Departing batches spread over routes (latent fault found by TASK-239)
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: parked 2026-11-20 (meets the thresholds but not its aim; new stalled heads; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/244-route-batching`, worktree `D:\cityflows-wt\244`, ports 5444 / 5544.
 
 ## Goal
