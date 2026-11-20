@@ -5013,6 +5013,9 @@ scope), routing (about 10%). No files outside scope. Lead check on the merge (on
 233): check (1,565), city (208), traffic light and guard, light e2e (61); full demand actuated 3,759 /
 143 (4028429784), fixed-time 3,501 / 168 (2888500527), stepping 689 and 692 s on the lead's machine.
 
+Full run 44691164973 (lead, manual, on e2e1457 after TASK-235, 234 and 236): every job green, including
+all five e2e shards; the city job took 19.4 min.
+
 TASK-235 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged under the owner's merge rule and the
 lead's audit tolerance): TASK-221's variant `0b62f2c` landed as one squashed commit, source
 byte-identical (main had not touched its files); only test pins conflicted. Audit against main d96f7c8
