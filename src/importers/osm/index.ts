@@ -38,6 +38,7 @@ import {
   joinDividedFeeders,
   prepareJunctions,
   junctions,
+  medianCrossovers,
   mergeShortRoads,
   splitWay,
 } from './split';
@@ -317,13 +318,9 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   // Corridors before the groups: a median crossing joins the two carriageways of one corridor.
   const coincident = assignCorridors(city, roads);
   const sameDirection = pairSameDirection(roads);
-  const groups = formJunctionGroups(
-    city,
-    roads,
-    options.junctionGroupMaxM ?? DEFAULT_JUNCTION_GROUP_MAX_M,
-    sources,
-    new Set(signalIds),
-  );
+  const groupMaxM = options.junctionGroupMaxM ?? DEFAULT_JUNCTION_GROUP_MAX_M;
+  const groups = formJunctionGroups(city, roads, groupMaxM, sources, new Set(signalIds));
+  const crossovers = medianCrossovers(roads, groupMaxM);
   // Provisional group ids: the final ones are allocated last, so that no other id moves.
   if (groups.length)
     city.junctionGroups = Object.fromEntries(
@@ -365,16 +362,21 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const inner = new Set(groups.flatMap(({ innerRoads }) => innerRoads));
   const exitsVia = groupExits(city);
   const members = new Set(groups.flatMap(({ nodes }) => nodes));
-  for (const node of Object.values(city.nodes))
+  // TASK-234: a median crossover is no exit for the arrows: they describe the junction ahead, as
+  // its stop line does (Freiburg's r:1148 read its left arrows as two lanes into the gated
+  // crossover r:1876). Its movements take the compiler's defaults.
+  for (const node of Object.values(city.nodes)) {
+    const { incoming, outgoing } = incidents.get(node.id)!;
     addLaneTurns(
       node,
-      incidents.get(node.id)!,
+      { incoming, outgoing: outgoing.filter(({ road }) => !crossovers.has(road.id)) },
       city.drivingSide,
       diagnostics,
       members.has(node.id)
         ? { entry: (road) => !inner.has(road.id), exitsVia, angle: groupAngle }
         : undefined,
     );
+  }
   markRoundaboutEntries(city, data);
   // One signal anywhere in a group makes the group signalised, as the merged node was.
   const signalGroups = Object.values(city.junctionGroups ?? {}).filter((g) =>

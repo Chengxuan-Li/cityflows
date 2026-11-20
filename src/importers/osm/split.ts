@@ -68,16 +68,54 @@ export function prepareJunctions(
  *     `JUNCTION_GROUP_RATIO` times the widest road block at its ends.
  * The cluster rules stay for (a) and (c): no group across a stop or yield node, a motorway, a
  * bridge, a roundabout ring or an access change on the inner road; a group spans at most 60 m;
- * another road longer than `maxM` between members splits it. Restriction via nodes may join,
+ * another road longer than `maxM` between members splits it; a median crossover's nodes and a
+ * signalised group's slip-road diverges join none (TASK-219). Restriction via nodes may join,
  * their restrictions staying at the member. A group needs an entry, an exit and three street
  * arms: a dead end or a stretch of one road is not a junction.
  */
+/**
+ * TASK-219 (TASK-216 D2): the median crossovers on plain stretches of road, by road id: links of
+ * at most `maxM` between the two carriageways of one street whose ends carry nothing else, one
+ * road of the carriageway in and one out (a U-turn or emergency gap: Freiburg's way 795829487,
+ * gated, 25 m before the Hauptbahnhof's stop line, which joined its group by rule (c)). Their
+ * nodes are no junction: no link at them joins a group, the carriageway's stop line stays at the
+ * junction ahead, and so do its arrows (TASK-234, `addLaneTurns` in `index.ts`).
+ */
+export function medianCrossovers(roads: OsmRoad[], maxM: number): Set<string> {
+  const incident = new Map<string, Road[]>();
+  for (const { road } of roads)
+    for (const id of [road.from, road.to]) incident.set(id, [...(incident.get(id) ?? []), road]);
+  const carriageway = (node: string, link: Road) => {
+    const other = link.from === node ? link.to : link.from;
+    const rest = incident.get(node)!.filter((road) => road.from !== other && road.to !== other);
+    const into = rest.find((road) => road.to === node);
+    const out = rest.find((road) => road.from === node);
+    return rest.length === 2 && into && out && into.name && into.name === out.name
+      ? { name: into.name, heading: roadHeading(into, true) }
+      : null;
+  };
+  const crossover = (road: Road) => {
+    if (polylineLength(road.centerline) > maxM) return false;
+    const a = carriageway(road.from, road),
+      b = carriageway(road.to, road);
+    return (
+      !!a &&
+      !!b &&
+      a.name === b.name &&
+      road.name !== a.name &&
+      Math.cos(a.heading - b.heading) < -0.9
+    );
+  };
+  return new Set(roads.filter(({ road }) => crossover(road)).map(({ road }) => road.id));
+}
+
 export function formJunctionGroups(
   city: City,
   roads: OsmRoad[],
   maxM: number,
   sources: Set<string>,
   signals: Set<string>,
+  diverges = new Set<string>(),
 ): PendingGroup[] {
   const parent = new Map(Object.keys(city.nodes).map((id) => [id, id]));
   const members = new Map(Object.keys(city.nodes).map((id) => [id, [id]]));
@@ -147,6 +185,39 @@ export function formJunctionGroups(
     const at = corridorsAt(road.from, road);
     return [...corridorsAt(road.to, road)].some((c) => at.has(c) && c !== corridor(road));
   };
+  // A slip road's diverge on such a stretch: one street's carriageway passes through (one road in
+  // and one out of the same name) and a link leaves it, nothing else (the Hauptbahnhof's n:473,
+  // where Stefan-Meier-Straße's slip road leaves Friedrichstraße 8 m before the painted stop
+  // line). Where a signalised group took in the slip road, diverge and end, the junction lies
+  // ahead of the diverge, whose stop lines stood across the slip road too: the diverge leaves
+  // the group and the groups are formed again without it (`diverges`). Not where the slip road
+  // leaves the group (Lessingstraße's n:768: its 23 m inner road, a plain road then, folds under
+  // TASK-214's lane shifts) nor in unsignalised groups, which have no stop lines (taking
+  // Freiburg's n:390 and n:397 out too raised its gate morning's mean delay from 76 to 97 s).
+  const slipRoad = (node: string) => {
+    const here = (incident.get(node) ?? []).map(({ road }) => road);
+    const into = here.filter((road) => road.to === node);
+    const out = here.filter((road) => road.from === node);
+    const through = out.find(
+      (road) =>
+        !!into[0]?.name && road.name === into[0].name && road.roadClass === into[0].roadClass,
+    );
+    const slip = out.find((road) => road !== through && road.roadClass === 'ramp');
+    return here.length === 3 &&
+      into.length === 1 &&
+      through &&
+      slip &&
+      into[0]!.roadClass !== 'ramp'
+      ? slip
+      : undefined;
+  };
+  const crossovers = medianCrossovers(roads, maxM);
+  const plain = new Set([
+    ...roads
+      .filter(({ road }) => crossovers.has(road.id))
+      .flatMap(({ road }) => [road.from, road.to]),
+    ...diverges,
+  ]);
   // The widest road block (all directed roads of one street end) at `node`, but the link's.
   const width = (node: string, link: Road) => {
     const arms = new Map<string, number>();
@@ -207,7 +278,9 @@ export function formJunctionGroups(
   };
   const byLength = (list: OsmRoad[]) =>
     [...list].sort((x, y) => length.get(x.road.id)! - length.get(y.road.id)!);
-  const candidates = roads.filter((r) => eligible(r) && !apart(r));
+  const candidates = roads.filter(
+    (r) => eligible(r) && !apart(r) && !plain.has(r.road.from) && !plain.has(r.road.to),
+  );
   // (a) Median crossings.
   const crossings = byLength(candidates.filter(crossing));
   for (const link of crossings) unite(link, true);
@@ -264,7 +337,22 @@ export function formJunctionGroups(
     }
     return streets.length >= 3;
   };
-  return [...members.values()].filter(junction).map((nodes) => {
+  const groups = [...members.values()].filter(junction);
+  const leaving = groups
+    .filter((nodes) => nodes.some((id) => signals.has(id)))
+    .flatMap((nodes) =>
+      nodes.filter((id) => !signals.has(id) && nodes.includes(slipRoad(id)?.to ?? '')),
+    );
+  if (leaving.length)
+    return formJunctionGroups(
+      city,
+      roads,
+      maxM,
+      sources,
+      signals,
+      new Set([...diverges, ...leaving]),
+    );
+  return groups.map((nodes) => {
     const set = new Set(nodes);
     return {
       nodes: [...nodes].sort(),

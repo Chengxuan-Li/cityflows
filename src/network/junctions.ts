@@ -1157,6 +1157,12 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
             undefined,
           )
       : undefined;
+  const continues = (edge: Vec2[], { road, incoming }: PolygonEnd) =>
+    road.roadClass === 'ramp' &&
+    edge.length * 2 === road.surface.length &&
+    (incoming
+      ? road.stations[0]!
+      : cumulativeLengths(road.reference).at(-1)! - road.stations.at(-1)!) < 1e-6;
   // TASK-092: the gore's tip, where the edges cross, is rounded by a fillet of `GORE_RADIUS_M`
   // in the notch beyond it, tangent to both edges (the radius shrinks to fit). TASK-213: the tip
   // may lie behind one cut (`pointGore`), its station on that edge's line then negative.
@@ -1180,13 +1186,19 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
     // fillet, the corner's curb, may use its edge to 0.5 m before the next member. Else within the
     // first half of the road from the node (TASK-092), or TASK-213 `GORE_TANGENT_M` beyond the tip
     // where the node's cut takes most of that half (n:660's ramps, 21 m with a 10 m cut, kept
-    // their tips square), leaving a metre of the edge.
+    // their tips square), leaving a metre of the edge. TASK-226: 5 cm on a slip road whose whole
+    // edge reaches a far node that cuts nothing off it, a continuation (the Hauptbahnhof's r:2153,
+    // 12 m from its diverge n:473 to n:406, where r:408 runs on straight; its 0.75 m fillet turned
+    // 42 degrees at a 3 cm back-step). Kept to slip roads, where no other gore moves.
     const filletRoom = (edge: Vec2[], end: PolygonEnd, along: number) =>
       end.inner && end.road.lengthM < 5
         ? cumulativeLengths(edge).at(-1)! - 0.5 - along
         : Math.max(
             room(edge, end, along),
-            Math.min(GORE_TANGENT_M, cumulativeLengths(edge).at(-1)! - 1 - along),
+            Math.min(
+              GORE_TANGENT_M,
+              cumulativeLengths(edge).at(-1)! - (continues(edge, end) ? 0.05 : 1) - along,
+            ),
           );
     const t = Math.min(
       Math.min(GORE_RADIUS_M, classRadius) / Math.tan(theta / 2),
