@@ -1,6 +1,6 @@
 # TASK-221 — Lane tapers across the plain nodes between short roads
 
-Status: parked 2026-11-19 (variant `0b62f2c` meets the merge rule, misses the audit by 0.12 m² and 3 mm; lead recommends merging). Proposed owner:
+Status: done 2026-11-20 (landed as TASK-235). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/221-carry-tapers`, worktree `D:\cityflows-wt\221`, ports
 5421 / 5521.
 

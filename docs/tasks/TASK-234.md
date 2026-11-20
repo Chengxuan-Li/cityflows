@@ -1,6 +1,6 @@
 # TASK-234 — Land TASK-226 (Hbf group membership, D2) on current main
 
-Status: in progress (second unsupervised run, owner 2026-11-20: "you may merge"). Proposed owner:
+Status: done 2026-11-20 (merged as the variant `e0c2d43`; review in `docs/plan.md`). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/234-land-226`, worktree `D:\cityflows-wt\234`,
 ports 5434 / 5534.
 

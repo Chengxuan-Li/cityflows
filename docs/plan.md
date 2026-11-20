@@ -242,14 +242,14 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-216](tasks/TASK-216.md) | 10 | Road shapes against aerial imagery (LGL DOP20), Freiburg Hauptbahnhof first (owner's suggestion) | `bench/` overlay script, findings | 213, 214 | registration, ranked defects by class, close-ups | done 2026-11-19 (9 defects; follow-ups proposed) |
 | [TASK-217](tasks/TASK-217.md) | 10 | Markings and crossings: TASK-215 reworked on TASK-214, crossings where OSM maps them (D1), solid lines before stop lines (M7) | markings, `crossings.ts`, walk links | 214, 215, 216 | tests, close-ups, traffic, merge rule | done 2026-11-19 (merged: paint-only variant; full version missed the rule) |
 | [TASK-218](tasks/TASK-218.md) | 10 | Importer road shapes: widths, medians, shared lanes, stop lines (D3 to D6, D9) | `roads.ts`, `corridors.ts`, `controls.ts` | 216 | tests, close-ups, traffic, merge rule | parked 2026-11-19 (first version missed traffic, variant the audit) |
-| [TASK-219](tasks/TASK-219.md) | 10 | Junction-group surfaces and stop lines (J1, D2) | `junctions.ts`, `groups.ts` | 213, 216 | tests, close-ups, traffic, merge rule | parked 2026-11-19 (tip misses Freiburg's gate, variant the audit; TASK-225, 226) |
+| [TASK-219](tasks/TASK-219.md) | 10 | Junction-group surfaces and stop lines (J1, D2) | `junctions.ts`, `groups.ts` | 213, 216 | tests, close-ups, traffic, merge rule | done 2026-11-20 (its rules landed through TASK-226 and 234) |
 | [TASK-220](tasks/TASK-220.md) | render | Tram track form: embedded, grass, paved, ballast (D8) | rail import and drawing | 216 | identical hashes, close-ups, frame budgets | done 2026-11-19 (merged; hashes identical) |
-| [TASK-221](tasks/TASK-221.md) | 10 | Lane tapers across the plain nodes between short roads (S5, S6, J2, J6 left by TASK-214) | `lanes.ts`, `lane-drop.ts`, `continuity.ts`, `corridor.ts` | 214 | audit, tests, close-ups, traffic, merge rule | parked 2026-11-19 (variant meets the merge rule; audit +0.12 m² Munich corridor overlap, +3 mm B39 width; lead recommends merging) |
+| [TASK-221](tasks/TASK-221.md) | 10 | Lane tapers across the plain nodes between short roads (S5, S6, J2, J6 left by TASK-214) | `lanes.ts`, `lane-drop.ts`, `continuity.ts`, `corridor.ts` | 214 | audit, tests, close-ups, traffic, merge rule | done 2026-11-20 (landed as TASK-235) |
 | [TASK-222](tasks/TASK-222.md) | 9 | Lock between a tram crossing and two actuated signals (Freiburg n:18, n:39; found by TASK-208) | actuated control, rail-crossing calls | 199, 208 | repro test, traffic, merge rule | done 2026-11-19 (merged; Munich and full demand identical, Freiburg -0.5 s) |
 | [TASK-223](tasks/TASK-223.md) | 9 | TASK-208's missed-turn rule re-measured on TASK-222 | `detourHeads` | 208, 222 | misses, traffic, merge rule | parked 2026-11-19 (v1 misses Munich fixed +6.7%, v2 full demand fixed +3.1%) |
 | [TASK-224](tasks/TASK-224.md) | 10 | Aerial re-check of the Hauptbahnhof box after wave A | overlay bench, findings | 216 to 220 | D1 to D9 before and now | done 2026-11-19 (merged; D8 mostly, D1 partly fixed on main; N1 to N4 new) |
 | [TASK-225](tasks/TASK-225.md) | 9 | The Siegesdenkmal box lock (Freiburg jg:13305; main seeds 2 and 4, TASK-219 seed 1) | `src/sim` box and group-chain rules | 219 | repro test, Freiburg seeds 1 to 6, traffic, merge rule | done 2026-11-19 (merged; lock gone, every other hash identical) |
-| [TASK-226](tasks/TASK-226.md) | 10 | TASK-219's group membership re-measured on TASK-225 | `split.ts`, Freiburg rebuild | 219, 225 | TASK-219's gates | parked 2026-11-19 (merge rule met; audit corners under 2 m 166 to 167 at n:473; lead recommends merging) |
+| [TASK-226](tasks/TASK-226.md) | 10 | TASK-219's group membership re-measured on TASK-225 | `split.ts`, Freiburg rebuild | 219, 225 | TASK-219's gates | done 2026-11-20 (landed as TASK-234) |
 | [TASK-227](tasks/TASK-227.md) | render | Pitched roofs on concave outlines (straight skeleton) | `render3d/roofs.ts` | 210 | flat fallbacks, skeleton tests, close-ups, budgets, identical hashes | done 2026-11-19 (merged; flat roofs Freiburg 204 to 14, Munich 70 to 13) |
 | [TASK-228](tasks/TASK-228.md) | 9 | Tram backlog: one delayed tram holds every unstarted one (found by TASK-225) | `rail-crossings.ts` service holds | 225 | backlog figures, traffic, merge rule | done 2026-11-19 (merged v2; full timetable, Munich identical, Freiburg +4.6 s) |
 | [TASK-229](tasks/TASK-229.md) | render | Marking follow-ups from the aerial re-check: M2 lane lines on carriageway inside groups (N1), arrows on double-left entry lanes (N2) | `marking-geometry.ts` | 217, 224 | tests, counts, close-ups, audit, identical hashes | done 2026-11-19 (merged; paint only, hashes identical) |
@@ -257,9 +257,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-231](tasks/TASK-231.md) | 10 | One carriageway for close halves and shared one-lane streets (TASK-218's D5 and D6 alone) | `corridors.ts`, `roads.ts`, `marking-geometry.ts` | 218, 229 | tests, audit, traffic, merge rule | parked 2026-11-19 (D5-only variant meets the merge rule and every city total; named case R3-8 Marsstraße width max 0.387 to 0.481 m) |
 | [TASK-232](tasks/TASK-232.md) | render | Tram track form follow-ups: Fahnenbergplatz ballast, Rotteckring paving (TASK-224 D8, N3) | `rail.ts`, `rail-geometry.ts` | 220, 224 | tests, close-ups, identical hashes, budgets | done 2026-11-19 (merged; hashes identical) |
 | [TASK-233](tasks/TASK-233.md) | render | Shared one-lane streets drawn without a centre line (TASK-231's D6 alone) and the grade-aware lane-overlap audit | `roads.ts`, `marking-geometry.ts`, `geometry-audit.ts` | 231 | tests, audit, traffic, merge rule | done 2026-11-19 (merged variant; networks byte-identical) |
-| [TASK-234](tasks/TASK-234.md) | 10 | Land TASK-226 (Hbf group membership, D2) on current main | `split.ts`, `junctions.ts`, Freiburg rebuild | 226 | audit, Freiburg seeds 1 to 6, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
-| [TASK-235](tasks/TASK-235.md) | 10 | Land TASK-221 (lane tapers across short roads) with the grade-aware audit | `lanes.ts`, `continuity.ts`, `compile.ts` | 221, 233 | audit, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
-| [TASK-236](tasks/TASK-236.md) | render | The remaining roof shapes on concave outlines (half-hipped, gambrel, mansard, skillion, round) | `render3d/roofs.ts` | 227 | flat fallbacks, tests, close-ups, budgets, identical hashes | in progress (second unsupervised run 2026-11-20) |
+| [TASK-234](tasks/TASK-234.md) | 10 | Land TASK-226 (Hbf group membership, D2) on current main | `split.ts`, `junctions.ts`, Freiburg rebuild | 226 | audit, Freiburg seeds 1 to 6, traffic, merge rule | done 2026-11-20 (merged variant; D2 fixed; Freiburg with 235 77.8 s) |
+| [TASK-235](tasks/TASK-235.md) | 10 | Land TASK-221 (lane tapers across short roads) with the grade-aware audit | `lanes.ts`, `continuity.ts`, `compile.ts` | 221, 233 | audit, traffic, merge rule | done 2026-11-20 (merged; audit within the lead's tolerance) |
+| [TASK-236](tasks/TASK-236.md) | render | The remaining roof shapes on concave outlines (half-hipped, gambrel, mansard, skillion, round) | `render3d/roofs.ts` | 227 | flat fallbacks, tests, close-ups, budgets, identical hashes | done 2026-11-20 (merged; flat roofs Freiburg 14 to 1, Munich 13 to 0) |
 | [TASK-237](tasks/TASK-237.md) | 9 | Step time, fourth pass: the rail hold and rail step, results identical | `rail-crossings.ts` performance | 230 | phase tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -5012,6 +5012,49 @@ and without `debugSkips`. Left: the rail hold and step (about 19%, `rail-crossin
 scope), routing (about 10%). No files outside scope. Lead check on the merge (on top of TASK-232 and
 233): check (1,565), city (208), traffic light and guard, light e2e (61); full demand actuated 3,759 /
 143 (4028429784), fixed-time 3,501 / 168 (2888500527), stepping 689 and 692 s on the lead's machine.
+
+TASK-235 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged under the owner's merge rule and the
+lead's audit tolerance): TASK-221's variant `0b62f2c` landed as one squashed commit, source
+byte-identical (main had not touched its files); only test pins conflicted. Audit against main d96f7c8
+(grade-aware measure 9): Freiburg joins over 5 cm 82 to 76, lane overlap 214.80 to 200.97 m²; Munich lane
+overlap 283.92 to 192.26, end overlap 105.95 to 20.92, body overlap 145.22 to 138.28; Sindelfingen joins
+17 to 16; J6-munich lane / end overlap 140.61 / 85.03 to 51.22 / 0; B39 108.56 / 99.89 to 19.17 / 14.86.
+Worse, inside the tolerance: Munich corridor lane overlap 71.29 to 71.41 m² (+0.12, `r:259/r:694`) and B39
+width p95 0.192 to 0.195 m (+3 mm). Munich 0.15 seeds 1 to 12: actuated choice off 630.6 to 620.8 s
+(-1.6%), on 90.8 to 90.3 s, fixed off 789.0 to 800.3 s (+1.4%), on 125.0 to 124.9 s; drain 48 of 48.
+New full-demand references: actuated 3,591 / 173, 1,678.3 s, hash 151240499 (168 fewer completed at the
+same delay); fixed 3,504 / 153, 1,747.5 s, hash 4004936993 (+1.2%). Freiburg alone 1,459 / 0, 82.0 s;
+Sindelfingen 3762136883. Outside scope: test re-pins only. Lead check (with 234 and 236, below).
+
+TASK-234 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged under the owner's merge rule as the
+variant `e0c2d43`): TASK-226 landed on main. The plain cherry-pick (`646c7fd`) took Freiburg's gate from
+80.3 to 95.4 s under TASK-228's full timetable: outside the group, the crossover end `n:1147` became a
+plain node with a left exit (the gated crossover `r:1876`), the importer read the Hbf's `left|left|...`
+arrows there, so `r:1148`'s two left lanes fed only the crossover. Variant: a median crossover (TASK-219's
+definition, moved into a shared `medianCrossovers` in `split.ts`) is not an exit when turn arrows are
+read (`index.ts`); new test. Lead decision: accepted as completing TASK-219's crossover rule (same
+definition), not a new rule. Audit (tip and variant alike): Freiburg corners under 2 m 166 to 167 (the
+1.16 m nose at `n:473`, not sharp, inside the tolerance), stop lines at the crossover gone (17.1 m on
+`r:1148`, 6.6 m on `r:489`; marking outside 15,426 to 15,410 m), every named case identical. Freiburg
+alone seed 1 80.3 to 80.6 s; seeds 1 to 6 mean 68.5 to 69.0 s; no gridlock. Munich and Sindelfingen cities
+byte-identical. Side effect: `r:1148` now shows no arrows (main drew four through arrows 19 m late; the
+painted arrows belong to the junction two roads on): a marking follow-up. Outside scope: `index.ts`,
+re-pins.
+
+TASK-236 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, render only): half-hipped, gambrel,
+mansard and round roofs on concave outlines from TASK-227's skeleton, each as which wing ends stand as
+walls plus one height profile against distance from the eaves for every face (hips and valleys stay
+continuous; faces split where the profile breaks, split points shared exactly). Breaks copied from the
+box shapes (gambrel 35% in, 72% up; mansard 25% in, 75% up); round a 12-step semicircle, hipped where no
+wing end can stand; skillion one plane over the outline's box along `roof:direction` or across the long
+axis. Flat fallbacks Freiburg 14 to 1 (a zero-height part, data), Munich 13 to 0; the other 4,560 roofs
+byte-identical; 121 roofs pass area (0.1%), upward faces and closure. 3D build 2,695 to 2,757 ms (loaded,
+within spread); render p95 within budget. Hashes identical. No files outside scope.
+
+Lead check on the merge of TASK-235, 234 and 236 (234's Freiburg pin re-measured on top of 235: 1,461 /
+0, 77.8 s, hash 118989361; the project rebuilt and reproduced): check (1,587), city (217), traffic light
+and guard, light e2e (61); full demand actuated 3,591 / 173 (151240499), fixed 3,504 / 153 (4004936993).
+Combined audit is the sum of 235's and 234's changes (no interaction).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
