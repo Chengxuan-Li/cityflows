@@ -74,12 +74,12 @@ test('M2: inner roads of junction groups with lanes under 15 m carry lane lines 
     if (r.group === undefined || r.lanes.every((i) => net.lanes[i]!.lengthM >= 15)) continue;
     if (laneLines(r.id)) lines.push(r.id);
   }
-  expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(81);
+  // TASK-226: r:1149 and r:475 leave the Hauptbahnhof group (D2), 81 to 79.
+  expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(79);
   // Runs of 15 m or more node to node through plain joins, crossed at one end at most; the
   // other short inner roads lie inside junctions (TASK-217's M2).
   expect(lines.sort()).toEqual(
     [
-      ...['r:1149', 'r:475'], // Friedrichstraße westbound in the Hauptbahnhof group (D2)
       ...['r:6', 'r:745', 'r:1179'], // Stefan-Meier-Straße, 33 m through n:5 and n:744
       ...['r:775', 'r:288', 'r:663'],
       ...['r:816', 'r:1225'],
@@ -92,7 +92,8 @@ test('M2: inner roads of junction groups with lanes under 15 m carry lane lines 
 test('N1: lane lines on carriageway a group takes in, none on the links inside its junction', () => {
   // TASK-224: about 35 m of westbound Friedrichstraße (r:1149 18.1 m and r:475 19.1 m node to
   // node, lanes of 4.6 to 5.5 m between their cuts) and Stefan-Meier-Straße's 13 m r:1179 lost
-  // the dashed lines the ground has.
+  // the dashed lines the ground has. Since TASK-226 (D2) r:1149 and r:475 are plain roads before
+  // the group and keep their lines as any road does.
   for (const id of ['r:1149', 'r:475', 'r:6', 'r:745', 'r:1179'])
     expect(laneLines(id), id).toBeGreaterThanOrEqual(road(id).lanes.length - 1);
   // The Hauptbahnhof junction's own links, crossed at both ends: none.
@@ -101,11 +102,14 @@ test('N1: lane lines on carriageway a group takes in, none on the links inside i
 
 test('N2: an entry lane with no path through the group, or only a double left, shows its own turn', () => {
   const turns = (id: string) => [...approachMarkings(net, lane(id)).turns].sort();
-  // r:1148#0 has no chain through jg:13297; #1's only chain turns left twice (to r:484), which
-  // M1 reads as a u-turn. Both enter r:1149 straight on, as #2 and #3 do; #4 has no movement.
-  for (const id of ['r:1148#0', 'r:1148#1', 'r:1148#2', 'r:1148#3'])
+  // TASK-226 (D2): r:1148 no longer enters the Hauptbahnhof group but ends at the median
+  // crossover n:1147, a plain node, where way 227874537's turn:lanes (meant for the junction
+  // ahead) are read: #0 and #1 turn left into the crossover r:1876 only, a service road, which
+  // shows no arrow; #2 to #4 run on straight. The ground has arrows on every lane, so N2 is open
+  // again at r:1148 until arrows at a crossover defer to the junction ahead (TASK-234 report).
+  for (const id of ['r:1148#0', 'r:1148#1']) expect(turns(id), id).toEqual([]);
+  for (const id of ['r:1148#2', 'r:1148#3', 'r:1148#4'])
     expect(turns(id), id).toEqual(['through']);
-  expect(turns('r:1148#4')).toEqual([]);
   // r:460#0 has no chain either (its arrow finds no room behind the crossing at its start, M4);
   // #1's only chain turns left three times round the block: a u-turn, no arrow.
   expect(turns('r:460#0')).toEqual(['through']);

@@ -347,3 +347,21 @@ cityTest(
   },
   limit(180_000),
 );
+
+cityTest(
+  'T42.7: Freiburg: a gore fillet may use a road edge to its end where the road runs on (n:473)',
+  async () => {
+    // TASK-226: the slip road r:2153 leaves Friedrichstraße at n:473 (out of the Hauptbahnhof's
+    // group since TASK-219) and runs on into r:408 at n:406, 12 m on; its surface is 5 m. Leaving a
+    // metre of its edge, the gore's fillet had a 0.75 m radius and turned 42 degrees.
+    const city = (await openFreiburg()).city;
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
+    const net = result.compiled;
+    expect(corner(net, 'n:473', 'gore', 'r:475>r:2153')?.fillet).toBeDefined();
+    const audit = sharpAt(city, net, 'n:473', 'r:475>r:2153');
+    expect(audit?.sharp).toBe(false);
+    expect(audit?.radiusM).toBeGreaterThan(1);
+  },
+  limit(180_000),
+);
