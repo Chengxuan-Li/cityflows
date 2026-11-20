@@ -895,21 +895,109 @@ function mouthPiece(road: CRoad, atEnd: boolean): Vec2[] {
 /** The turns a lane's arrow shows: its usable movements, without u-turns and turns into
  * service roads. TASK-215 (M1): on an entry of a junction group, its paths through the group
  * (`groupTurns`), not the first inner link it enters; TASK-229 (N2): its movements at the entry
- * node when the group gives it no path, or double lefts only. */
+ * node when the group gives it no path, or double lefts only; TASK-240: on an approach ending at
+ * no junction, the junction's ahead (`aheadTurns`). */
 function arrowTurns(city: CompiledCity, lane: CLane): Turn[] {
   const road = city.roads[lane.road]!;
+  const ahead = aheadTurns(city, road);
+  if (ahead) return ahead[road.lanes.indexOf(lane.idx)]!;
   const group = road.group === undefined ? city.nodes[road.to]!.group : undefined;
   const paths = group === undefined ? null : groupTurns(city, city.groups![group]!, lane);
   if (paths) return paths;
-  const turns = new Set<Turn>();
-  for (const index of lane.out) {
-    const movement = city.movements[index]!;
-    if (movement.neverGreen || movement.turn === 'uturn') continue;
-    if (movement.turn === 'merge' || movement.turn === 'diverge') continue;
-    if (city.roads[city.lanes[movement.toLane]!.road]!.roadClass === 'service') continue;
-    turns.add(movement.turn);
+  return [...new Set(arrowMovements(city, lane).map((m) => m.turn))];
+}
+
+/** A lane's movements an arrow can show: no u-turns, merges, diverges, never-green movements or
+ * turns into service roads (a median crossover is one, Freiburg `r:1876`). */
+const arrowMovements = (city: CompiledCity, lane: CLane) =>
+  lane.out
+    .map((index) => city.movements[index]!)
+    .filter(
+      (m) =>
+        !m.neverGreen &&
+        !['uturn', 'merge', 'diverge'].includes(m.turn) &&
+        city.roads[city.lanes[m.toLane]!.road]!.roadClass !== 'service',
+    );
+
+/** TASK-240: no junction for arrows: a node outside any group, without a signal, stop or yield,
+ * where no two movements cross (`innerCarriageway`'s crossing; movements to or from service roads
+ * aside, so a median crossover's end is none, Freiburg `n:1147`). */
+function noJunction(city: CompiledCity, node: CNode): boolean {
+  if (node.group !== undefined || node.signal || node.control !== 'uncontrolled') return false;
+  const roadOf = (lane: number) => city.roads[city.lanes[lane]!.road]!;
+  const counted = (m: CMovement) =>
+    roadOf(m.fromLane).roadClass !== 'service' && roadOf(m.toLane).roadClass !== 'service';
+  return node.movements.every((index) => {
+    const m = city.movements[index]!;
+    return (
+      !counted(m) ||
+      m.conflicts.every((c) => {
+        const other = city.movements[c]!;
+        return (
+          !counted(other) ||
+          roadOf(other.fromLane) === roadOf(m.fromLane) ||
+          roadOf(other.toLane) === roadOf(m.toLane)
+        );
+      })
+    );
+  });
+}
+
+/**
+ * TASK-240: on an approach that ends at no junction (`noJunction`: a plain node or a median
+ * crossover), each lane's turns at the junction its path reaches next, where no lane on the way
+ * has room for that junction's arrows (`arrowRoom`). A lane follows its one movement straight on
+ * across nodes that are no junction; a lane whose one movement there turns (Freiburg `r:1149#4`
+ * right onto the ramp `r:2153` at the gore `n:473`) shows that turn. At a junction: its movements
+ * there, or on a group entry its paths through the group (`groupTurns`, M1); where the group gives
+ * it none (TASK-229's case), the first turn its one movement after another makes inside the group,
+ * or through where it leaves the group straight on. TASK-229's stand-in, the movement at the entry
+ * node, is the first inner link M1 does not show, and stays for the entry's own arrows only.
+ * Westbound Friedrichstraße `r:1148` ends at the crossover `n:1147`; its lanes run on through
+ * `r:1149` and `r:475`, too short for arrows: `#0` and `#1` have no path through the Hauptbahnhof
+ * group (a loop and a double left), and turn left at `n:1` first; the lanes read left, left,
+ * through, through, right, as way 227874537's turn:lanes and the ground do. Null (the approach's
+ * own movements) when any lane's path is ambiguous: several movements, or none, at a node that is
+ * no junction or inside a group, or a lane on the way with room for arrows of its own; and when
+ * the junction gives a lane no arrow (all its paths u-turns, Freiburg `r:1059#0` and `#1`), so an
+ * approach keeps its arrows rather than show the junction's on some lanes only (`r:1285`).
+ */
+function aheadTurns(city: CompiledCity, road: CRoad): Turn[][] | null {
+  if (road.group !== undefined || !noJunction(city, city.nodes[road.to]!)) return null;
+  const turns: Turn[][] = [];
+  for (const index of road.lanes) {
+    let lane = city.lanes[index]!;
+    const seen = new Set<number>();
+    for (;;) {
+      seen.add(lane.idx);
+      const inside = city.roads[lane.road]!.group !== undefined;
+      const end = city.nodes[city.roads[lane.road]!.to]!;
+      if (!inside && !noJunction(city, end)) {
+        const group = end.group === undefined ? undefined : city.groups![end.group]!;
+        const paths = group && groupTurns(city, group, lane);
+        if (!group || paths) {
+          const there = paths ?? arrowTurns(city, lane);
+          if (!there.length) return null;
+          turns.push(there);
+          break;
+        }
+      }
+      const out = arrowMovements(city, lane);
+      if (out.length !== 1) return null;
+      if (out[0]!.turn !== 'through') {
+        turns.push([out[0]!.turn]);
+        break;
+      }
+      lane = city.lanes[out[0]!.toLane]!;
+      if (seen.has(lane.idx)) return null;
+      if (inside && city.roads[lane.road]!.group === undefined) {
+        turns.push(['through']);
+        break;
+      }
+      if (!inside && city.roads[lane.road]!.group === undefined && arrowRoom(lane)) return null;
+    }
   }
-  return [...turns];
+  return turns;
 }
 
 /** Signed change of heading from `a` to `b`, in (-pi, pi]. */
@@ -997,11 +1085,7 @@ export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM =
   const differ = road.lanes.some(
     (index) => key(arrowTurns(city, city.lanes[index]!)) !== key(turns),
   );
-  const scale = Math.min(1, lane.lengthM / 18);
-  const arrowAt = Math.min(
-    lane.stopM - ARROW_BEFORE_STOP_M,
-    lane.lengthM - crossingFarM - ARROW_CLEAR_M - ARROW_HALF_M * scale,
-  );
+  const arrowAt = arrowPosition(lane, crossingFarM);
   return {
     // TASK-131: no stop or yield line on a junction group's inner road.
     stop:
@@ -1013,8 +1097,7 @@ export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM =
     turns:
       road.group === undefined &&
       differ &&
-      lane.lengthM >= ARROW_MIN_LANE_M &&
-      arrowAt >= ARROW_HALF_M * scale &&
+      arrowRoom(lane, crossingFarM) &&
       !onOtherRoad(city, lane, arrowAt)
         ? turns
         : [],
@@ -1027,6 +1110,20 @@ const ARROW_MIN_LANE_M = 12;
 /** An arrow's half length, and the gap it keeps to a crossing in front of it (TASK-091). */
 const ARROW_HALF_M = 2;
 const ARROW_CLEAR_M = 0.5;
+
+/** Where a lane's arrow is centred, from its start (`approachMarkings`). */
+function arrowPosition(lane: CLane, crossingFarM = 0): number {
+  const scale = Math.min(1, lane.lengthM / 18);
+  return Math.min(
+    lane.stopM - ARROW_BEFORE_STOP_M,
+    lane.lengthM - crossingFarM - ARROW_CLEAR_M - ARROW_HALF_M * scale,
+  );
+}
+
+/** A lane is long enough for an arrow, with the arrow behind its stop position. */
+const arrowRoom = (lane: CLane, crossingFarM = 0) =>
+  lane.lengthM >= ARROW_MIN_LANE_M &&
+  arrowPosition(lane, crossingFarM) >= ARROW_HALF_M * Math.min(1, lane.lengthM / 18);
 
 /** The arrow position lies on the surface of a road running the other way at one of this
  * road's nodes: two carriageways drawn on top of each other (B34, Munich r:368 and r:480),

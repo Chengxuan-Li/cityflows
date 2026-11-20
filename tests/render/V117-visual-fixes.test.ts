@@ -222,9 +222,11 @@ const pins = {
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     curbs: 'b106cc51797f6654a5098d7f022b8af9377c9176e2331ad4450740f5a185029c',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-    de: '47b4858b79125ab1803935366b594367c38fb22d286abc2edc9fa7eec841995e',
+    // TASK-240: arrows of the junction ahead on r:1057 and r:821.
+    de: '16aa6c68d99c37ce4f33619cf5367cf822ee4cca66c02732ca26137ff4dd46c4',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    us: 'cd62afa2516d3950bae79f5f7c8b38656e06a930e59ab23a6a23e788d38f79e9',
+    // TASK-240: arrows of the junction ahead on r:1057 and r:821.
+    us: '49acc7470bfa70b862f064c42750013a9f2d3f0648cb0b8242a5fc4105c978af',
   },
 } as const;
 const hash = (value: unknown) =>
