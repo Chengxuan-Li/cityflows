@@ -66,7 +66,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-240: arrows of the junction ahead on r:1057 and r:821.
-          'c4b5a24f9c8e68726a399b7b0c65e4f3e636e5966bbdded2de6d95c56fdc1d4a',
+          // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+          '03e27e9f5011b58aacb89fbc6761e4b92d70613de9dace0a998a66c9e81dcf25',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

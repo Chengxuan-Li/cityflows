@@ -9,7 +9,7 @@ import { CONVERGING, sameStreet, smoothstep, taperLength } from '../../network/l
 import type { City, Road } from '../../schema';
 import type { OsmData, OsmTags } from './parse';
 import { JUNCTION_ZONE_M, resample, vertexNormals } from './relax';
-import { osmLayer, type OsmRoad } from './roads';
+import { osmLayer, placementOffset, type OsmRoad } from './roads';
 
 /** Gap between the lane blocks of a separated coincident pair (owner, 2026-11-06). */
 export const MEDIAN_M = 0.5;
@@ -101,6 +101,80 @@ function beside(a: readonly Vec2[], b: readonly Vec2[]) {
     if (nearest.away < 25) within25 += SAMPLE_M;
   }
   return { samples, within1, within25 };
+}
+
+/**
+ * TASK-242: a one-way way's OSM `placement` puts its line on a lane boundary instead of the middle
+ * of its lanes (`placementOffset`): the road's lane block is set that far off the line
+ * (`lateralOffsetM`), before the corridor rules, which measure the blocks where they lie. A road
+ * keeps one offset, and the network draws no offset taper where a road runs on into the next
+ * (across a node of only their two ends, or straight across a junction): there a placed road's
+ * block must meet the next road's as the network lines lanes up (left edges together, TASK-071,
+ * TASK-083), else the road is left centred, until every placed road meets its neighbours.
+ * `placement=transition` ways (whose line moves between the placements of the ways they join),
+ * roads of several ways placed differently and two-way ways (`placement:forward`, whose blocks
+ * the network keeps beside their centre line) keep the default.
+ */
+export function placeRoads(city: City, roads: OsmRoad[], data: OsmData): void {
+  const tags = new Map(data.way.map(({ id, tag }) => [id, tag]));
+  const ends = new Map<string, Road[]>();
+  for (const { road } of roads)
+    for (const node of [road.from, road.to]) ends.set(node, [...(ends.get(node) ?? []), road]);
+  const offsets = new Map<Road, number>();
+  const transitions = new Set<Road>();
+  for (const { road } of roads) {
+    if (road.streetGroupId !== null) continue;
+    const placements = new Set(road.provenance.osmIds!.map((id) => tags.get(id)!.placement));
+    if (placements.size !== 1) continue;
+    if (placements.has('transition')) transitions.add(road);
+    const offset = placementOffset(
+      [...placements][0],
+      road.lanes.map((lane) => lane.widthM),
+    );
+    if (offset !== undefined) offsets.set(road, offset);
+  }
+  const leftEdge = (road: Road) => (offsets.get(road) ?? road.lateralOffsetM) - halfBlock(road);
+  // The unit direction away from `node` along `road`, over its first 5 m.
+  const outward = (road: Road, node: string) => {
+    const line = road.from === node ? road.centerline : [...road.centerline].reverse();
+    const lengths = cumulativeLengths(line);
+    const p = pointAtDistance(line, lengths, Math.min(5, lengths.at(-1)!));
+    const o = city.nodes[node]!.pos;
+    const d = Math.hypot(p.x - o.x, p.y - o.y) || 1;
+    return { x: (p.x - o.x) / d, y: (p.y - o.y) / d };
+  };
+  // The one-way road `road` runs on into at `node`: the other road end there, or at a junction
+  // the one running straight on (within 30 degrees, the straightest; TASK-083's through pairs)
+  // unless that is a transition, whose line OSM leaves free there.
+  const next = (road: Road, node: string) => {
+    const at = ends.get(node)!;
+    const on = at.filter(
+      (o) =>
+        o !== road && o.streetGroupId === null && (node === road.from ? o.to : o.from) === node,
+    );
+    if (at.length === 2) return on[0];
+    const d = outward(road, node);
+    let best: { road: Road; cos: number } | undefined;
+    for (const o of on) {
+      const e = outward(o, node);
+      const cos = d.x * e.x + d.y * e.y;
+      if (cos < -cosine30 && (!best || cos < best.cos)) best = { road: o, cos };
+    }
+    return best && !transitions.has(best.road) ? best.road : undefined;
+  };
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const road of offsets.keys()) {
+      const step = [road.from, road.to].some((node) => {
+        const other = next(road, node);
+        return other !== undefined && Math.abs(leftEdge(other) - leftEdge(road)) > 1e-6;
+      });
+      if (!step) continue;
+      offsets.delete(road);
+      changed = true;
+    }
+  }
+  for (const [road, offset] of offsets) road.lateralOffsetM = offset;
 }
 
 /**
@@ -358,7 +432,9 @@ function closePairs(roads: OsmRoad[]): [OsmRoad, OsmRoad][] {
       pair.length === 2 &&
       pair[0]!.road.from === pair[1]!.road.to &&
       pair[0]!.road.to === pair[1]!.road.from &&
-      pair.every(({ road }) => road.lateralOffsetM === 0),
+      // TASK-242: a block set aside by its `placement` still takes part; one a pair set aside
+      // (`separated`) does not.
+      pair.every(({ road }) => !road.provenance.inferred!.includes('separated')),
   );
 }
 
@@ -494,11 +570,20 @@ export function separateDual(city: City, roads: OsmRoad[], medians: readonly Vec
     const nearest = points.map((p) => nearestOnPolyline(b.road.centerline, p));
     // The nearest points must run back along b; a pair that folds the map stays as drawn.
     if (nearest.some((n, i) => i > 0 && n.along > nearest[i - 1]!.along + 1e-9)) continue;
+    // The centres of the two lane blocks at p and at its nearest point on b: the centerlines
+    // moved by their `placement` offsets (TASK-242; zero elsewhere), to the right of travel.
+    const blockA = points.map((p, i) => ({
+      x: p.x + normals[i]!.x * a.road.lateralOffsetM,
+      y: p.y + normals[i]!.y * a.road.lateralOffsetM,
+    }));
+    const blockB = nearest.map(({ point, direction: d }) => ({
+      x: point.x - d.y * b.road.lateralOffsetM,
+      y: point.y + d.x * b.road.lateralOffsetM,
+    }));
     // Signed gap along a's normal, positive when b lies on the side opposite to the push.
-    const gaps = points.map(
+    const gaps = blockA.map(
       (p, i) =>
-        -side *
-        ((nearest[i]!.point.x - p.x) * normals[i]!.x + (nearest[i]!.point.y - p.y) * normals[i]!.y),
+        -side * ((blockB[i]!.x - p.x) * normals[i]!.x + (blockB[i]!.y - p.y) * normals[i]!.y),
     );
     // TASK-131 (owner, checkpoint 0): only where the blocks overlap or leave less than the
     // median; a pair with space between its blocks everywhere stays where it is drawn, unless it
@@ -532,12 +617,12 @@ export function separateDual(city: City, roads: OsmRoad[], medians: readonly Vec
             taper / 2,
           )
         : mean(needed, taper);
-      return points.map((p, i) => {
+      return blockA.map((p, i) => {
         const push = pushes[i]!;
         // The point dividing p to q by the shares lies half a block plus half the median from
         // where each block goes when fully pushed; the centerline is that point moved by the
         // push beyond full closure, along the road's own normal.
-        const q = nearest[i]!.point;
+        const q = blockB[i]!;
         const t = shares[0]! / clearance;
         const middle = { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t };
         const d = nearest[i]!.direction;
@@ -598,10 +683,7 @@ export function pushOverlapping(
     (a.road.roadClass === b.road.roadClass && sameRef(a, b));
   // Not a pair `separateCoincident` or `separateDual` already set apart.
   const oneWay = roads.filter(
-    ({ road }) =>
-      road.streetGroupId === null &&
-      road.lateralOffsetM === 0 &&
-      !road.provenance.inferred!.includes('separated'),
+    ({ road }) => road.streetGroupId === null && !road.provenance.inferred!.includes('separated'),
   );
   const boxes = new Map(oneWay.map((source) => [source, boxOf(source.road.centerline)]));
   const medianBoxes = medians.map(boxOf);
@@ -633,8 +715,11 @@ export function pushOverlapping(
         q.direction.y * n.x - q.direction.x * n.y < cosine30
       )
         return null;
-      // Signed gap along x's normal, positive when y lies on the side opposite to the push.
-      const gap = -side * ((q.point.x - p.x) * n.x + (q.point.y - p.y) * n.y);
+      // Signed gap along x's normal between the lane blocks, positive when y lies on the side
+      // opposite to the push; a block set aside by its `placement` (TASK-242) moves the gap.
+      const gap =
+        -side * ((q.point.x - p.x) * n.x + (q.point.y - p.y) * n.y) +
+        side * (x.road.lateralOffsetM + y.road.lateralOffsetM);
       // TASK-231: halves are pulled only where both lie outside the junction zones at their ends,
       // so no node's junction changes shape, and (TASK-238) where no mapped median (a grass strip,
       // a barrier, an island) lies between their lines: that is the median, not paint.

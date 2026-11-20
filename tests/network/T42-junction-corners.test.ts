@@ -78,6 +78,10 @@ const named: Record<AuditCity, Record<string, string>> = {
     'n:875 r:876>r:1070': `${edgeBends} (r:1070 is 12 m long)`,
     'n:887 r:1091>r:892': `${edgeBends}: the arc shrinks to 0.53 m`,
     'n:915 r:999>r:917': shortRoad('r:999', 3),
+    // TASK-242: Flugfeld-Allee's urban 3.25 m lanes beside the 3.5 m ramp leave no room for the
+    // class radius (TASK-218 named it too).
+    'n:706 r:962>r:715':
+      'r:962 narrowed to 3.25 m lanes beside the 3.5 m ramp r:715: a 4.8 m curb turning 42.5 degrees',
     'n:924 r:925>r:1020': shortRoad('r:1020', 17),
     // TASK-131: short roads between OSM nodes main merged.
     'n:1047 r:1048>r:1229': keptShort('r:1229', 9),
@@ -358,8 +362,10 @@ cityTest(
     const result = compile(city);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 5)));
     const net = result.compiled;
-    expect(corner(net, 'n:473', 'gore', 'r:475>r:2153')?.fillet).toBeDefined();
-    const audit = sharpAt(city, net, 'n:473', 'r:475>r:2153');
+    // TASK-242: Friedrichstraße's r:1149 narrowed to its `width:lanes` (14 m) puts the slip road
+    // before r:475 in the outline's order; the gore and its fillet are as before.
+    expect(corner(net, 'n:473', 'gore', 'r:2153>r:475')?.fillet).toBeDefined();
+    const audit = sharpAt(city, net, 'n:473', 'r:2153>r:475');
     expect(audit?.sharp).toBe(false);
     expect(audit?.radiusM).toBeGreaterThan(1);
   },

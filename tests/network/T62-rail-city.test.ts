@@ -36,7 +36,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           'e9094fb72b47af9bab3484fa9eb9798774291cf3f355a5b17f323be285fa7a9d'
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          '971a6a41541676f7b7cee321660bd112a3c4001ea91c6b7de4dcb41331d2c874',
+          // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+          '849b1dcf766980688c0f40505132fb246f14e1391cd8d02dc5ceceed4d7ec9d7',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);
     expect(

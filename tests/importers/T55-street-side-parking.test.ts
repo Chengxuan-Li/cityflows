@@ -402,7 +402,8 @@ test.each(
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).
         // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-        'cec7abe1394ccbe06ded5a4b71ba8fbcd63bfd665c540bceb098eecb1e77cf09',
+        // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+        'de68efdb0a21641462e58c92de62b7ddf963c796446db061c31e9551ab4b7874',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

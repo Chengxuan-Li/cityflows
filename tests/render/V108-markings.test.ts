@@ -69,8 +69,10 @@ const baseline = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-240: r:1057 and r:821, before roads too short for arrows, show the junction's ahead.
-    compile: 'a5607f2bfacea83ae6413eed313d53a94aaa050aed809be10599c1e71e53f308',
-    arrows: '44567c220d7c56744267a9b443d72d2a0f0685e3a5cfdeb44cf95685337ae93b',
+    // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+    compile: '6a998b12ee674d2faa3afe583a39d591267bd2a0b0139a90b5d325b563d06b35',
+    // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+    arrows: 'c5e875e05382270693b92ad304e1e6d6203a2de42412d3e147d69f2728732d83',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.

@@ -49,14 +49,16 @@ const baseline = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-    '79b62497821cc4f5218070a0469fa00f751d43288c7dd73b2d2a7db272a70fca',
+    // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+    '9d363ed32bb9522e23797d9b0891651769fe3f2722311504c63eb76fb51429f7',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    '1fd427fa4725d3802e03e37e5d2ddd741f8873fbe5f81f9913b56a674c7d01c3',
+    // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+    'fe3bef530548a311147ecae0fe1ba9263c81989aed9de4a1952ed04e05ea88b5',
   ],
 };
 

@@ -217,16 +217,20 @@ const pins = {
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    compile: '1c1dc61655f698be069e5e8b4844bffc85d10e53321fe9e58ae3b1fe498c45c8',
+    // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+    compile: '7ce044aa74483b61ba22306fa74b5e7368f6cf62c88b11c0e4e4fde2f85ad518',
     lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    curbs: 'b106cc51797f6654a5098d7f022b8af9377c9176e2331ad4450740f5a185029c',
+    // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+    curbs: 'debf26ba3b635e7496f6065e384a2b10859b770cee5dcea5cc91d06ba5691f19',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
-    de: '16aa6c68d99c37ce4f33619cf5367cf822ee4cca66c02732ca26137ff4dd46c4',
+    // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+    de: '81a1862c6dcf0eb2fb33ecb94ce525db858b24136cd175c0978ab2e15673c170',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
-    us: '49acc7470bfa70b862f064c42750013a9f2d3f0648cb0b8242a5fc4105c978af',
+    // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+    us: '4498f10b220da76fa64ae768c075986b6f34565c9c91ae192ae5e60f0de1beb2',
   },
 } as const;
 const hash = (value: unknown) =>

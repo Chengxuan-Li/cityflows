@@ -178,14 +178,16 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-          '5796a8298c0a7537c50e5218c1ce28f70b3f9d20aab68c532976a8f3f3cf2536',
+          // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+          '50ba9f21011d27c5ad52e53a05eca50e4dc8f9a7c4ccda72af69ab2e7b9f316e',
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-          '898ddcb0324f2c99edfdf2ad313496a1733077c45432a4decec6d8d7a5f434c5',
+          // TASK-242: Sindelfingen's A 81 placed (`placement=right_of:1`) and Flugfeld-Allee's urban 3.25 m lanes.
+          '49d6e6336a4c1cce2cadbb77870457310e186ace1af2934cdfd2513600f9d74f',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(
