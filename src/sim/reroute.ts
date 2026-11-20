@@ -1,5 +1,5 @@
 import type { CompiledCity } from '../network';
-import type { LinkCosts, RouteProvider, RouteRequest } from '../routing';
+import type { LinkCosts, Route, RouteProvider, RouteRequest } from '../routing';
 import { remainingRouteCost } from '../routing/costs';
 import { vehicleClasses, vehiclePurposes, type SimParams } from '../schema';
 import { COMPLETED, DRIVING, FAILED, type Vehicles } from './vehicle';
@@ -23,12 +23,20 @@ export function vehicleRouteRequest(
   };
 }
 
+function sameRoads(roads: number[], route: Route, step: number) {
+  return (
+    roads.length === route.roads.length - step &&
+    roads.every((road, i) => road === route.roads[step + i])
+  );
+}
+
 export function createRerouter(
   compiled: CompiledCity,
   vehicles: Vehicles,
   params: SimParams,
   provider: RouteProvider,
   costs: LinkCosts,
+  debugSkips = false,
 ) {
   const replans = new Uint32Array(vehicles.count);
   const nextCheck = new Float64Array(vehicles.count).fill(Infinity);
@@ -126,12 +134,9 @@ export function createRerouter(
           if (edit.invalid) checked(id, true);
           continue;
         }
-        const sameRoads =
-          result.route.roads.length === route.roads.length - step &&
-          result.route.roads.every((road, i) => road === route.roads[step + i]);
         if (
           !edit.invalid &&
-          (sameRoads ||
+          (sameRoads(result.route.roads, route, step) ||
             result.route.costS >=
               (1 - params.rerouteHysteresis) *
                 remainingRouteCost(compiled, costs, request, route, step))
@@ -181,18 +186,23 @@ export function createRerouter(
         const route = vehicles.route[id]!;
         const step = vehicles.routeStep[id]!;
         const request = vehicleRouteRequest(vehicles, params, id, lane.idx, vehicles.position[id]!);
-        const result = provider.route(compiled, costs, request);
-        if (!result.ok) continue;
-        const sameRoads =
-          result.route.roads.length === route.roads.length - step &&
-          result.route.roads.every((road, i) => road === route.roads[step + i]);
-        if (
-          sameRoads ||
-          result.route.costS >=
-            (1 - params.rerouteHysteresis) *
-              remainingRouteCost(compiled, costs, request, route, step)
-        )
+        // TASK-251: a route switches only below this cost, so the provider may stop after its
+        // road search when that already costs as much.
+        const boundS =
+          (1 - params.rerouteHysteresis) *
+          remainingRouteCost(compiled, costs, request, route, step);
+        const result = provider.route(compiled, costs, request, boundS);
+        if (!result.ok) {
+          if (debugSkips && result.reason === 'above_bound') {
+            const full = provider.route(compiled, costs, request);
+            if (full.ok && !sameRoads(full.route.roads, route, step) && full.route.costS < boundS)
+              throw new Error(
+                `Reroute check of vehicle ${id} stopped at its bound ${boundS} s; the route costs ${full.route.costS} s`,
+              );
+          }
           continue;
+        }
+        if (sameRoads(result.route.roads, route, step) || result.route.costS >= boundS) continue;
         vehicles.route[id] = result.route;
         vehicles.routeStep[id] = 0;
         replans[id] = replans[id]! + 1;
