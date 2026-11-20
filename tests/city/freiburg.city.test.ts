@@ -241,7 +241,11 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // (Bismarckallee's shared lane at n:1132; 1,461 to 1,464 completed, 77.9 to 68.1 s).
   // TASK-239 (landed as TASK-248): walkers cross at the 9 zebras and signals mapped only as nodes
   // (1,464 completed, 68.1 to 70.4 s).
-  expect(morning.stateHash).toBe(1618405036);
+  // TASK-249 (TASK-245's v1): an actuated green resting with walk green serves a waiting walker (a
+  // rounding error held it), and signal crossings no phase serves are crossed in a gap (1,464 to
+  // 1,523 completed, 68.1 to 68.2 s).
+  // With TASK-248 (lead, at the merge): 1,522 completed, 66.1 s.
+  expect(morning.stateHash).toBe(4228017009);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
