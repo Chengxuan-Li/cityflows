@@ -202,11 +202,13 @@ const pins = {
     // TASK-229 (N1): the four dividers of the inner road r:267; without them both equal 5c47b75's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-    de: 'f8da7757d8ed27c004274e3a874a7303500fa794b95b010208d500b1fc5bbbce',
+    // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
+    de: 'f11dcbf2fb63575bd2f4678b3c2ee727f2c00477f42fe791fa57134fadd2d23b',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-    us: 'bd8c86ea380b1252626c5bbca2ee3b5583d6447e0ab72d0f8d711cc6dc7df8e6',
+    // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
+    us: '40e6fe5c634daddc1529fe7ce1845131fa4a3bb645e1a59cb5b453e64cafe630',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
@@ -223,10 +225,12 @@ const pins = {
     curbs: 'b106cc51797f6654a5098d7f022b8af9377c9176e2331ad4450740f5a185029c',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
-    de: '16aa6c68d99c37ce4f33619cf5367cf822ee4cca66c02732ca26137ff4dd46c4',
+    // TASK-241: no hatch at lane gains (5 roads).
+    de: '9cd02464624925ca52fb87cc9ee176c7edcd613047d874434a728a4c16b5aaec',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
-    us: '49acc7470bfa70b862f064c42750013a9f2d3f0648cb0b8242a5fc4105c978af',
+    // TASK-241: no hatch at lane gains (5 roads).
+    us: '3d4a4d86647b45ed1ebba742b719a7f2d9120c6ac26a087b091b7261c7d47797',
   },
 } as const;
 const hash = (value: unknown) =>
