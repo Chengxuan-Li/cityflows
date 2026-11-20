@@ -68,8 +68,9 @@ const baseline = {
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
+    // TASK-240: r:1057 and r:821, before roads too short for arrows, show the junction's ahead.
     compile: 'a5607f2bfacea83ae6413eed313d53a94aaa050aed809be10599c1e71e53f308',
-    arrows: '503e5fccadab0eaf7508150ce764f111f914486f2fdcfa2f8722e4bd8b0455e7',
+    arrows: '44567c220d7c56744267a9b443d72d2a0f0685e3a5cfdeb44cf95685337ae93b',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.

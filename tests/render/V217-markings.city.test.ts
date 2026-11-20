@@ -30,7 +30,7 @@ import type { City } from '../../src/schema';
 // (docs/findings/2026-11-19-geometry-audit/README.md), on the bundled Freiburg project; TASK-217:
 // crossings where OSM maps them (D1 of docs/findings/2026-11-19-aerial-check/) and solid lane
 // lines before stop lines (M7); TASK-229: N1 and N2 of TASK-224's re-check
-// (docs/findings/2026-11-19-aerial-recheck/).
+// (docs/findings/2026-11-19-aerial-recheck/); TASK-240: arrows of the junction ahead.
 
 let city: City;
 let net: CompiledCity;
@@ -103,12 +103,14 @@ test('N1: lane lines on carriageway a group takes in, none on the links inside i
 test('N2: an entry lane with no path through the group, or only a double left, shows its own turn', () => {
   const turns = (id: string) => [...approachMarkings(net, lane(id)).turns].sort();
   // TASK-226 (D2): r:1148 no longer enters the Hauptbahnhof group but ends at the median
-  // crossover n:1147, a plain node. TASK-234: way 227874537's turn:lanes are not read there (the
-  // crossover is no exit for arrows), so every lane runs on straight and none carries an arrow
-  // (TASK-079). The ground's arrows on r:1148 are the junction ahead's, two roads on: N2 is open
-  // at r:1148 until arrows can be drawn before a plain node for the junction beyond it.
-  for (const id of ['r:1148#0', 'r:1148#1', 'r:1148#2', 'r:1148#3', 'r:1148#4'])
-    expect(turns(id), id).toEqual([]);
+  // crossover n:1147; TASK-240 paints there the arrows of the junction ahead (below).
+  expect(['r:1148#0', 'r:1148#1', 'r:1148#2', 'r:1148#3', 'r:1148#4'].map(turns)).toEqual([
+    ['left'],
+    ['left'],
+    ['through'],
+    ['through'],
+    ['right'],
+  ]);
   // r:460#0 has no chain either (its arrow finds no room behind the crossing at its start, M4);
   // #1's only chain turns left three times round the block: a u-turn, no arrow.
   expect(turns('r:460#0')).toEqual(['through']);
@@ -117,6 +119,32 @@ test('N2: an entry lane with no path through the group, or only a double left, s
   // and none carries one (TASK-079), as on the ground at r:1262 and r:1478.
   for (const id of ['r:1262#0', 'r:1262#1', 'r:1478#0', 'r:1478#1'])
     expect(turns(id), id).toEqual([]);
+});
+
+test('TASK-240: an approach ending at a plain node or a median crossover shows the arrows of the junction ahead', () => {
+  const turns = (id: string) =>
+    road(id).lanes.map((i) => [...approachMarkings(net, net.lanes[i]!).turns].sort().join('+'));
+  // r:1148 runs on through the crossover n:1147, r:1149 and r:475 (lanes under 6 m, no room for
+  // arrows) into the Hauptbahnhof group; #4 leaves at the gore n:473 onto the ramp r:2153. As way
+  // 227874537's turn:lanes (left|left|through|through|right) and the ground.
+  expect(turns('r:1148')).toEqual(['left', 'left', 'through', 'through', 'right']);
+  const arrows = (id: string) => {
+    const { below, above } = roadMarkingGeometry(net, road(id), city);
+    return [...below, ...above].filter((s) => s.role === 'arrow').length;
+  };
+  expect(arrows('r:1148')).toBe(5);
+  for (const id of ['r:1149', 'r:475']) expect(arrows(id), id).toBe(0);
+  // Others before a road too short for arrows, as their ways' turn:lanes.
+  expect(turns('r:261')).toEqual(['left', 'through', 'through', 'right', 'right']);
+  expect(turns('r:296')).toEqual(['left', 'through', 'through']);
+  expect(turns('r:500')).toEqual(['left', 'left+right']);
+  expect(turns('r:904')).toEqual(['left+through', 'through']);
+  expect(turns('r:2199')).toEqual(['through', 'right+through']);
+  // The road ahead has room for the arrows itself (r:1148): none here.
+  expect(turns('r:1175')).toEqual(['', '']);
+  // The Lessingstraße group gives r:1059#0 and #1 no arrow (their paths are u-turns): r:1285
+  // keeps its own movements' arrows rather than show the junction's on two lanes.
+  expect(turns('r:1285')).toEqual(['through', 'through', 'through', 'right']);
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {
