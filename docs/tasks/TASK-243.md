@@ -1,6 +1,6 @@
 # TASK-243 — Step time, fifth pass: routing and reroutes, results identical
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/243-routing-step-time`, worktree `D:\cityflows-wt\243`, ports 5443 / 5543.
 
 ## Goal

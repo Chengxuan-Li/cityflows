@@ -262,17 +262,19 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-236](tasks/TASK-236.md) | render | The remaining roof shapes on concave outlines (half-hipped, gambrel, mansard, skillion, round) | `render3d/roofs.ts` | 227 | flat fallbacks, tests, close-ups, budgets, identical hashes | done 2026-11-20 (merged; flat roofs Freiburg 14 to 1, Munich 13 to 0) |
 | [TASK-237](tasks/TASK-237.md) | 9 | Step time, fourth pass: the rail hold and rail step, results identical | `rail-crossings.ts` performance | 230 | phase tables, identical hashes, interleaved timings | done 2026-11-20 (merged; full demand 9.5% faster, rail 41%, hashes identical) |
 | [TASK-238](tasks/TASK-238.md) | 10 | Close halves as one carriageway unless a mapped median lies between them (TASK-231's D5 reworked) | `corridors.ts` | 231 | audit, traffic, merge rule | done 2026-11-20 (merged; nothing worse) |
-| [TASK-239](tasks/TASK-239.md) | 10 | Crossings mapped only as OSM nodes get walk links and paint | importer `walk.ts` | 217, 224 | census, audit, traffic, merge rule | held 2026-11-20 (passes alone; with TASK-238 Freiburg's gate 90.3 s; diagnosing) |
+| [TASK-239](tasks/TASK-239.md) | 10 | Crossings mapped only as OSM nodes get walk links and paint | importer `walk.ts` | 217, 224 | census, audit, traffic, merge rule | done 2026-11-20 (landed as TASK-248) |
 | [TASK-240](tasks/TASK-240.md) | render | Arrows of the next junction on approaches ending at a plain node or median crossover (r:1148) | `marking-geometry.ts` | 229, 234 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
 | [TASK-241](tasks/TASK-241.md) | render | Paint fixes: gores between one carriageway's lanes, arrows over keep-clear boxes, give-way triangles over zebras | `marking-geometry.ts` | 108, 240 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
 | [TASK-242](tasks/TASK-242.md) | 10 | Road widths from the data: urban lane widths, `width` tags, `placement` (TASK-218's D3, D9) | `roads.ts`, `corridors.ts` | 218, 238 | imagery checks, audit, traffic, merge rule | parked 2026-11-20 (both versions miss full demand and the audit) |
-| [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
+| [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | done 2026-11-20 (merged; route requests 59% faster, stepping 7.3%, hashes identical) |
 | [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | parked 2026-11-20 (meets the thresholds, misses its aim: the band does not narrow; new stalls) |
-| [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | held 2026-11-20 (v1 fixes two walker bugs; Freiburg gate 108 s from the batch flip; re-measure after TASK-244) |
+| [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | held 2026-11-20 (v1 re-measured as TASK-249, parked) |
 | [TASK-246](tasks/TASK-246.md) | render | Keep-clear boxes on lane gains (found by TASK-241) | `marking-geometry.ts` | 241 | test, census, identical hashes | done 2026-11-20 (merged; hashes identical) |
 | [TASK-247](tasks/TASK-247.md) | 9 | Freiburg's 08:00 station peak: spillback at the Hauptbahnhof signals (`n:364`, `n:1132`) | `signals.ts`, junction admission | 239, 244, 245 | repro test, Freiburg band, traffic, merge rule | done 2026-11-20 (merged v1; Freiburg's 08:00 flip gone, gate 68.1 s) |
-| [TASK-248](tasks/TASK-248.md) | 10 | Land TASK-239 (node-only crossings) on TASK-247 | importer `walk.ts`, Freiburg rebuild | 239, 247 | Freiburg seeds, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
-| [TASK-249](tasks/TASK-249.md) | 9 | Land TASK-245's v1 (walker fixes) on TASK-247 | `walkers.ts` | 245, 247 | waits, Freiburg seeds, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-248](tasks/TASK-248.md) | 10 | Land TASK-239 (node-only crossings) on TASK-247 | importer `walk.ts`, Freiburg rebuild | 239, 247 | Freiburg seeds, traffic, merge rule | done 2026-11-20 (merged; TASK-239 landed) |
+| [TASK-249](tasks/TASK-249.md) | 9 | Land TASK-245's v1 (walker fixes) on TASK-247 | `walkers.ts` | 245, 247 | waits, Freiburg seeds, traffic, merge rule | parked 2026-11-20 (full demand actuated seed 1 +8.1%; seed 2 -5.2%; lead recommends merging) |
+| [TASK-250](tasks/TASK-250.md) | 9 | Full demand after TASK-247: four stalled heads and 164 fewer trips | `signals.ts` | 247 | trace, repro test, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-251](tasks/TASK-251.md) | 9 | Reroute checks skip the lane search when no switch is possible (optional bound on `RouteProvider.route`) | `src/routing/**`, engine reroute check, architecture 5.x | 243 | identical hashes, timings | in progress (second unsupervised run 2026-11-20) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5283,6 +5285,48 @@ with keep-clear paint outside the surface 5 / 1 / 0 to 0. Audit JSON identical; 
 Outside scope: Munich paint pins (V114, V117).
 
 Lead check on the merge of TASK-247 and 246: check, city, traffic light and guard, light e2e; check (1,593), city (221), traffic light and guard, light e2e (61); full demand actuated 3,427 / 155 (4165965277), fixed 3,504 / 153 (4004936993).
+
+Full run 44740518122 (lead, manual, on e7f0c7e after TASK-247 and 246): every job green, including all five
+e2e shards.
+
+TASK-243 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, performance only): routing. Cuts (all
+exact: same searches, same edge order, same arithmetic): the class graph keeps each road's access code and
+zone in typed arrays (no object reads and string compares per edge); road and lane edges in flat typed-array
+rows; the per-road route noise computed with the same integer operations without building a key string or a
+generator, once per request; lane resolution without generator, spread and sort, stamps instead of Maps;
+the heap in typed arrays; the walk router with stamps and kept link times. `debugSkips` compares the access
+filter, each noise factor and each kept walk time against the original (`tests/routing/route-scratch.test.ts`).
+Profiled together (load 93%): route requests 205.2 to 85.1 s (-59%; road search -71%, lane search -51%),
+reroute update -57%, total stepping 2,089.3 to 1,936.8 s actuated (-7%). Interleaved untimed pairs: -7.7,
+-3.1 (load swing), -12.2, -8.6, -6.3, -7.0%, mean -7.3% (target 5%, or route time -25%); Freiburg gate
+213.4 to 178.9 s (-16.2%). Hashes identical on its base (Munich 0.15 seeds 1 to 3 all configurations,
+both full demands, Freiburg seeds 1 to 3, Sindelfingen, with `debugSkips`; routing benchmark route
+hashes). Left: an exact reroute skip needing an optional `RouteProvider.route` bound (TASK-251). No files
+outside scope.
+
+TASK-248 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged under the owner's merge rule): TASK-239's
+variant landed on TASK-247 (source diff applied in one step; `walk.ts` byte-identical to `f52ca2e`; the
+Freiburg rebuild byte-identical to TASK-239's tip, timetable 90e3ff6f). Freiburg seeds 1 to 6 base /
+branch: 68.1 / 70.4 s (gate, 1,464 / 0 both; hash 1618405036), then identical within 1 s. Munich 0.15 48
+runs: completed trips and mean delay seed by seed identical (hashes differ by one walk link at `n:6`);
+drain 48 of 48. Full demand identical (actuated 3,427 / 155, 4 stalled heads from TASK-247; fixed hash
+2862775104). Audit JSON identical. TASK-239 thereby lands: Hbf mapped zebras matched 3 to 5 (`n:1139` on
+its spot; `n:211` 4.4 m along the street).
+
+TASK-249 (Claude Code subagent, Opus 5.5 high, 2026-11-20; parked, the lead recommends merging; branch
+`task/249-land-245` `3460a31`): TASK-245's v1 landed on TASK-247. Walker waits at signal crossings
+(Freiburg actuated, mean / p99 / never served): 433.5 / 3,881 / 204 to 0.9 / 18.1 / 0; Munich actuated
+12.9 / 128.1 / 2 to 4.1 / 40.1 / 0. Freiburg seeds 1 to 6: gate 68.1 to 68.2 s, each seed 57 to 66 more
+trips completed, no gridlock. Munich 0.15: actuated choice off +1.1%, on -4.1%, fixed identical; drain 48
+of 48, no stalled heads. Full demand fixed identical; actuated seed 1 1,705.5 to 1,843.2 s (+8.1%, 3,420 /
+157, 0 stalled heads against 4); an extra seed 2 run went the other way (1,810.4 to 1,715.6 s, -5.2%, 112
+more completed). Munich has no unserved crossings, so the change there is the rounding fix alone. It misses
+the merge rule on full-demand actuated seed 1 only, and TASK-245's variant is used, so it is parked. Lead
+recommendation: merge (a clear bug: walk greens that never counted as long enough, and crossings no
+phase serves; the seed-1 rise looks like a flip, seed 2 the opposite; it also removes TASK-247's stalled
+heads).
+
+Lead check on the merge of TASK-243 and 248: the Freiburg rebuild reproduces the project; check (1,608), city (222), traffic light and guard, light e2e (61); full demand actuated 3,427 / 155 (3935022588; one Munich walk link), fixed 3,504 / 153 (2862775104).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

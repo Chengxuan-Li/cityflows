@@ -1,6 +1,6 @@
 # TASK-239 — Crossings mapped only as OSM nodes get walk links and paint (TASK-217, TASK-224 D1)
 
-Status: held 2026-11-20 (passes alone; with TASK-238 Freiburg's gate 90.3 s; review in `docs/plan.md`). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (landed as TASK-248). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/239-node-crossings`, worktree `D:\cityflows-wt\239`, ports 5439 / 5539.
 
 ## Goal

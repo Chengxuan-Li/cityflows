@@ -1,6 +1,6 @@
 # TASK-248 — Land TASK-239 (crossings mapped only as OSM nodes) on TASK-247
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/248-land-239`, worktree `D:\cityflows-wt\248`, ports 5248 / 5548.
 
 ## Goal
