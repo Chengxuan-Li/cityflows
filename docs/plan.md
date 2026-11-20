@@ -268,7 +268,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-242](tasks/TASK-242.md) | 10 | Road widths from the data: urban lane widths, `width` tags, `placement` (TASK-218's D3, D9) | `roads.ts`, `corridors.ts` | 218, 238 | imagery checks, audit, traffic, merge rule | parked 2026-11-20 (both versions miss full demand and the audit) |
 | [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
 | [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
-| [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | held 2026-11-20 (v1 fixes two walker bugs; Freiburg gate 108 s from the batch flip; re-measure after TASK-244) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5196,6 +5196,36 @@ Freiburg 77.9 to 78.5 s (both); the rebuild shifts rail ids by one (timetable ha
 service). Both versions miss full demand and the audit, so the task is parked. Owner's options: placement
 plus tagged widths alone (Munich byte-identical) if the voids are accepted as real and the `n:1146` bulge
 is checked; the `r:1179` OSM edit. Outside scope: one line in `index.ts`.
+
+TASK-245 (Claude Code subagent, Opus 5.5 high, 2026-11-20; held, to be re-measured after TASK-244; branch
+`task/245-walker-signal-waits` v1 `8bd8de0`, `task/245-walker-signal-waits-v2` `4341eee`, worktree
+`D:\cityflows-wt\245`): the 424 s mean signal wait is real but a tail (median 4.2 s, 172 waits over 20
+minutes; 203 walkers still waiting at 10:00 are not counted). Causes: (1) actuated only (469,000 of
+474,000 waiting seconds): a controller resting in green with walk green extends to exactly
+`timeS + needS`, read back about 1e-13 s short, so `green >= needS` fails and the walker re-calls every
+step until a car on another phase ends the green; (2) both modes: 9 Freiburg and 3 Sindelfingen crossings
+are in no phase's walk list, so their light never turns green (about 200 Freiburg walkers a morning never
+cross; their later trips never start). Rules (`src/sim/walkers.ts`): walk green within 1e-6 s of the need
+is enough; at a crossing no phase serves, walkers cross in a gap every approaching car can stop for and
+hold no lanes while waiting; v2 adds that a walker just arrived at a kerb holds no lanes until it asks for
+walk green. Test `tests/sim/walk-calls.test.ts`. Waits (Freiburg actuated mean / p99 / max, never
+served): main 424.3 / 3,822 / 7,390, 203; v1 0.9 / 17.8 / 85.5, 0; Munich actuated 12.4 to 4.1 s.
+
+| | main | v1 | v2 |
+|---|---|---|---|
+| Munich actuated, choice off | 620.8 s | 609.9 s (-1.8%) | 630.1 s (+1.5%) |
+| Munich actuated, choice on | 90.3 s | 87.5 s (-3.1%) | 87.9 s (-2.7%) |
+| Munich fixed, choice off | 800.3 s | identical | +0.2% |
+| Munich fixed, choice on | 124.9 s | identical | -0.2% |
+| full demand actuated | 1,678.3 s | 1,668.3 s (-0.6%; 2 stalled heads) | 1,782.1 s (+6.2%) |
+| full demand fixed | 1,747.5 s | identical | 1,624.0 s |
+| Freiburg gate (actuated) | 77.9 s | 108.0 s | 84.1 s |
+
+v1 misses only Freiburg's gate (+30.1 s): the extra delay is on Schnewlinstraße and Wilhelmstraße at
+08:00, TASK-239's batch flip (TASK-244), and freed walkers add 51 to 67 car trips a morning; each rule
+alone gives 86.3 s (rounding) and 81.4 s (unserved crossings). v2 misses Freiburg (+6.2 s) and full demand
+(+6.2%). Lead decision: held like TASK-239; v1 is re-measured on TASK-244. Open: the walk light at an
+unserved crossing still draws red while walkers cross. Outside scope: the Freiburg re-pin, the new test.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

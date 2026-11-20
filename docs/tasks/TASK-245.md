@@ -1,6 +1,6 @@
 # TASK-245 — Walkers wait about 420 s at signalised crossings (found by TASK-239)
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: held 2026-11-20 (v1 `8bd8de0` misses only Freiburg's gate, from TASK-244's batch flip; re-measured after TASK-244). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/245-walker-signal-waits`, worktree `D:\cityflows-wt\245`, ports 5445 / 5545.
 
 ## Goal
