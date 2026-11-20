@@ -6,10 +6,21 @@ import { Graphics } from 'pixi.js';
 import { buildCity } from '../../src/fixtures/build-city';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { signalApproach } from '../../src/fixtures/signal-approach';
-import { distance, segmentsIntersect } from '../../src/geo/polyline';
+import {
+  distance,
+  headingAtDistance,
+  nearestOnPolyline,
+  pointAtDistance,
+  segmentsIntersect,
+} from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { compile, type CompiledCity, type CNode } from '../../src/network';
-import { junctionGuides, majorThroughs } from '../../src/render/marking-geometry';
+import {
+  crossingStripes,
+  junctionGuides,
+  majorThroughs,
+  roadMarkingGeometry,
+} from '../../src/render/marking-geometry';
 import type { City, Node } from '../../src/schema';
 import { insideOutline } from '../network/junction-audit';
 import { tierCities, unitTest } from '../tier';
@@ -256,4 +267,48 @@ unitTest('T28.4: a two-lane one-way priority road gets one divider following its
     Math.atan2(l.at(-1)!.y - l.at(-2)!.y, l.at(-1)!.x - l.at(-2)!.x);
   expect(heading(0) - heading(line.length - 2)).toBeGreaterThan((3 * Math.PI) / 180);
   expect(heading(0) - heading(line.length - 2)).toBeCloseTo(turn(a!.polyline), 1);
+});
+
+unitTest('TASK-241: give-way teeth keep behind a zebra on their arm', () => {
+  const { city, centre } = tJunction();
+  const arm = Object.values(city.roads).find(
+    (r) => r.to === centre.id && city.nodes[r.from]!.pos.y === 150,
+  )!;
+  // TASK-239's Freiburg n:2088: a crossing mapped 1.5 m before the arm's cut, on an end without
+  // a crossing of its own, paints a zebra where the teeth stood.
+  arm.crossings = { end: false };
+  const net = compiled(city);
+  const road = net.roads.find((r) => r.id === arm.id)!;
+  const lane = net.lanes[road.lanes[0]!]!;
+  const atM = lane.lengthM - 1.5;
+  const p = pointAtDistance(lane.polyline, lane.cumulative, atM);
+  const h = headingAtDistance(lane.polyline, lane.cumulative, atM);
+  const end = (side: number) => ({ x: p.x - Math.sin(h) * side, y: p.y + Math.cos(h) * side });
+  const provenance = { source: 'generated' as const };
+  const walk = {
+    nodes: {
+      'w:1': { id: 'w:1', pos: end(-8), layer: 0, provenance },
+      'w:2': { id: 'w:2', pos: end(8), layer: 0, provenance },
+    },
+    links: {
+      'wl:1': {
+        id: 'wl:1',
+        from: 'w:1',
+        to: 'w:2',
+        line: [end(-8), end(8)],
+        kind: 'crossing',
+        widthM: null,
+        provenance,
+      },
+    },
+  } as NonNullable<City['walk']>;
+  const source = { ...city, walk };
+  expect(crossingStripes(net, road, true, source).length).toBeGreaterThan(0);
+  const teeth = roadMarkingGeometry(net, road, source).above.filter(
+    (s) => s.role === 'stop' && s.kind === 'polygon',
+  );
+  expect(teeth.length).toBeGreaterThan(0);
+  // The mapped stripes run 1.25 m either side of the way; the teeth keep 0.5 m behind them.
+  for (const q of teeth.flatMap((t) => t.points))
+    expect(nearestOnPolyline(lane.polyline, q).along).toBeLessThanOrEqual(atM - 1.75 + 1e-6);
 });

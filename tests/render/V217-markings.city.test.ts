@@ -147,6 +147,58 @@ test('TASK-240: an approach ending at a plain node or a median crossover shows t
   expect(turns('r:1285')).toEqual(['through', 'through', 'through', 'right']);
 });
 
+test('TASK-241: no hatched taper where lanes of one carriageway widen or fan', () => {
+  const hatched = (id: string) =>
+    transitionMarkings(net, road(id)).filter((s) => s.role === 'hatch' || s.role === 'channel')
+      .length;
+  // r:1175's two lanes fan into r:1148's five at the way split n:1146 (r:1169's likewise into
+  // r:1171 at n:1169): plain lanes on the ground, no gore.
+  for (const id of ['r:1148', 'r:1171', 'r:1187', 'r:1189', 'r:261', 'r:402'])
+    expect(hatched(id), id).toBe(0);
+  // Every hatched taper left is a lane end (with its merge arrow); diverge gores are the ramps'.
+  for (const r of net.roads)
+    if (hatched(r.id))
+      expect(
+        r.lanes.some((i) => net.lanes[i]!.taperEndM > 0),
+        r.id,
+      ).toBe(true);
+});
+
+test('TASK-241: arrows keep off keep-clear boxes, moved along their lane or left out', () => {
+  // A box's lane stretch from its hatch: the paint of the lane's `hatch` shapes, along the lane.
+  const onBoxes: string[] = [];
+  const arrowsOf = (id: string) => {
+    const { below, above } = roadMarkingGeometry(net, road(id), city);
+    return [...below, ...above].filter((s) => s.role === 'arrow');
+  };
+  for (const r of net.roads) {
+    const { below, above } = roadMarkingGeometry(net, r, city);
+    const shapes = [...below, ...above];
+    for (const i of r.lanes) {
+      const l = net.lanes[i]!;
+      const along = (role: string) =>
+        shapes
+          .filter((s) => s.role === role)
+          .flatMap((s) =>
+            s.points
+              .map((p) => nearestOnPolyline(l.polyline, p))
+              .filter((on) => on.away < l.widthM / 2)
+              .map((on) => on.along),
+          );
+      const box = along('hatch');
+      if (!box.length) continue;
+      const [from, to] = [Math.min(...box), Math.max(...box)];
+      if (along('arrow').some((a) => a > from && a < to)) onBoxes.push(l.id);
+    }
+  }
+  expect(onBoxes).toEqual([]);
+  // r:296#2 (box 2.0 to 16.5 m) and r:1333#1 (12.8 to 27.3 m) keep their arrows, moved past and
+  // behind the box; r:904#0 and r:1362#3 have no room beside theirs.
+  expect(arrowsOf('r:296').length).toBe(3);
+  expect(arrowsOf('r:1333').length).toBe(2);
+  expect(arrowsOf('r:904').length).toBe(1);
+});
+
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {
   const both: string[] = [];
   for (const r of net.roads) {

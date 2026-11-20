@@ -7,7 +7,7 @@ import { distance, pointInPolygon } from '../../src/geo/polyline';
 import { buildCity } from '../../src/fixtures/build-city';
 import { paintedCity } from '../../src/render/road-paint';
 
-test('T25: drops shrink to zero with a standard merge arrow and hatched verge, additions grow, and boundaries meet', () => {
+test('T25: drops shrink to zero with a standard merge arrow and hatched verge, additions grow unhatched, and boundaries meet', () => {
   const result = compile(continuity());
   if (!result.ok) throw new Error('continuity fixture');
   const net = result.compiled;
@@ -25,7 +25,8 @@ test('T25: drops shrink to zero with a standard merge arrow and hatched verge, a
     expect(
       marks.every((s) => s.points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))),
     ).toBe(true);
-    expect(marks.some((s) => s.role === 'hatch')).toBe(true);
+    // TASK-241: hatched only where the lane ends; a lane gain is plain lanes widening.
+    expect(marks.some((s) => s.role === 'hatch')).toBe(!added);
     expect(geometry.dividers.length).toBe(2);
   }
 });

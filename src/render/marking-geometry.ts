@@ -38,7 +38,7 @@ import {
 } from '../network/crossings';
 import { lanesNear } from '../network/walk';
 import { SETBACK_CAP_M, junctionCorners } from '../network/junctions';
-import { keepClearZones } from '../network/keep-clear';
+import { keepClearZones, type KeepClearZone } from '../network/keep-clear';
 import {
   markingTheme as defaultTheme,
   type MarkingRole,
@@ -148,33 +148,31 @@ const keepGlyphs: Record<string, string[]> = {
   A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
   R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
 };
-/** TASK-169: the keep-clear markings of a road's mouth zones (`keepClearZones`), one per lane
- * and zone: the German theme's hatched box (a border with diagonal stripes), the US and UK
- * themes' KEEP CLEAR text, read in travel order, KEEP first. */
-export function keepClearMarkings(
+/** TASK-169: the stretches of a lane its keep-clear markings cover, in lane metres: its mouth
+ * zones (`keepClearZones`), cut 0.5 m clear of the lane's crossings (TASK-215, M4: Freiburg
+ * n:1462, a lot mouth at two crossings), each 3 m or more; the US and UK themes' text also needs
+ * glyphs of 0.8 m or more. */
+function keepClearBoxes(
   city: CompiledCity,
-  road: CRoad,
-  markingTheme: MarkingTheme = defaultTheme,
+  lane: CLane,
+  markingTheme: MarkingTheme,
   source?: CrossingSource,
-): MarkingShape[] {
-  const shapes: MarkingShape[] = [];
-  const zones = keepClearZones(city);
-  for (const index of road.lanes) {
-    const lane = city.lanes[index]!;
-    // TASK-215 (M4): not over a crossing's stripes (Freiburg n:1462, a lot mouth at two
-    // crossings): a box is drawn on the parts of its zone 0.5 m clear of the lane's crossings.
-    const crosswalks = [false, true].flatMap((atEnd) => {
-      const span = crossingSpan(city, lane, atEnd, source);
-      return span
-        ? [
-            {
-              fromM: Math.min(span.nearM, span.farM) - LINE_CLEAR_M,
-              toM: Math.max(span.nearM, span.farM) + LINE_CLEAR_M,
-            },
-          ]
-        : [];
-    });
-    const pieces = zones[index]!.filter((zone) => zone.kind === 'mouth').flatMap((zone) =>
+): KeepClearZone[] {
+  const crosswalks = [false, true].flatMap((atEnd) => {
+    const span = crossingSpan(city, lane, atEnd, source);
+    return span
+      ? [
+          {
+            fromM: Math.min(span.nearM, span.farM) - LINE_CLEAR_M,
+            toM: Math.max(span.nearM, span.farM) + LINE_CLEAR_M,
+          },
+        ]
+      : [];
+  });
+  const zones = keepClearZones(city)[lane.idx]!;
+  return zones
+    .filter((zone) => zone.kind === 'mouth')
+    .flatMap((zone) =>
       crosswalks.reduce(
         (parts, walk) =>
           parts.flatMap((part) => [
@@ -183,9 +181,27 @@ export function keepClearMarkings(
           ]),
         [zone],
       ),
+    )
+    .filter(
+      (zone) =>
+        zone.toM - zone.fromM >= 3 && (markingTheme.id === 'de' || keepClearGlyphM(zone) >= 0.8),
     );
-    for (const zone of pieces) {
-      if (zone.toM - zone.fromM < 3) continue;
+}
+const keepClearGlyphM = (zone: KeepClearZone) => Math.min(2.4, (zone.toM - zone.fromM - 1.5) / 2.5);
+
+/** TASK-169: the keep-clear markings of a lane's boxes (`keepClearBoxes`), one per lane and box:
+ * the German theme's hatched box (a border with diagonal stripes), the US and UK themes' KEEP
+ * CLEAR text, read in travel order, KEEP first. */
+export function keepClearMarkings(
+  city: CompiledCity,
+  road: CRoad,
+  markingTheme: MarkingTheme = defaultTheme,
+  source?: CrossingSource,
+): MarkingShape[] {
+  const shapes: MarkingShape[] = [];
+  for (const index of road.lanes) {
+    const lane = city.lanes[index]!;
+    for (const zone of keepClearBoxes(city, lane, markingTheme, source)) {
       const half = lane.widthM / 2 - 0.15;
       // Lane coordinates: `x` along the lane from the zone's start, `y` to the driver's right.
       const world = ({ x, y }: Vec2) => {
@@ -229,8 +245,7 @@ export function keepClearMarkings(
       }
       const words = ['KEEP', 'CLEAR'];
       const cell = (2 * half) / 29;
-      const glyphM = Math.min(2.4, (length - 1.5) / 2.5);
-      if (glyphM < 0.8) continue;
+      const glyphM = keepClearGlyphM(zone);
       words.forEach((word, line) => {
         // KEEP nearer the driver, CLEAR beyond it, centred in the zone.
         const bottom = length / 2 + (line === 0 ? -0.25 - glyphM : 0.25);
@@ -516,7 +531,9 @@ function buildRoadMarkings(
               });
       }
     }
-    aboveShapes.push(...approachShapes(city, lane, endFarM, startSpan?.farM ?? 0, markingTheme));
+    aboveShapes.push(
+      ...approachShapes(city, lane, endFarM, startSpan?.farM ?? 0, markingTheme, source),
+    );
   }
   aboveShapes.push(...stopLine(city, road, markingTheme));
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
@@ -623,7 +640,8 @@ function approachShapes(
   lane: CLane,
   crossingFarM: number,
   startFarM: number,
-  markingTheme: MarkingTheme = defaultTheme,
+  markingTheme: MarkingTheme,
+  source?: CrossingSource,
 ): MarkingShape[] {
   const marks = approachMarkings(city, lane, crossingFarM);
   const road = city.roads[lane.road]!;
@@ -637,29 +655,41 @@ function approachShapes(
     };
   };
   const half = lane.widthM * 0.44;
-  if (marks.yield && markingTheme.id === 'uk') {
+  // TASK-241: give-way markings (1 m deep, their front at the stop position) not over crossing
+  // paint (a zebra on a give-way arm, TASK-239's Freiburg n:2088): moved back behind it, or none
+  // where the lane has no room.
+  const paint = marks.yield ? crossingPaint(city, lane, source) : [];
+  const yieldAt = marks.yield
+    ? (clearOf(lane.stopM, 1, 0, lane.stopM, lane.stopM, paint) ??
+      clearOf(
+        lane.stopM,
+        1,
+        0,
+        (startFarM > 0 ? startFarM + LINE_CLEAR_M : 0) + 1,
+        lane.stopM,
+        paint,
+      ))
+    : null;
+  if (yieldAt !== null && markingTheme.id === 'uk') {
     for (const forward of [0, -0.6])
       for (let side = -half; side < half; side += 0.9)
         shapes.push(
           lineShape(
             road,
             'stop',
-            [
-              local(lane.stopM, forward, side),
-              local(lane.stopM, forward, Math.min(half, side + 0.6)),
-            ],
+            [local(yieldAt, forward, side), local(yieldAt, forward, Math.min(half, side + 0.6))],
             1,
             markingTheme,
           ),
         );
   }
-  if (marks.yield && markingTheme.id !== 'uk')
+  if (yieldAt !== null && markingTheme.id !== 'uk')
     for (let side = -half + 0.4; side <= half - 0.2; side += 0.85)
       shapes.push(
         fillShape('stop', [
-          local(lane.stopM, 0, side),
-          local(lane.stopM, -1, side - 0.3),
-          local(lane.stopM, -1, side + 0.3),
+          local(yieldAt, 0, side),
+          local(yieldAt, -1, side - 0.3),
+          local(yieldAt, -1, side + 0.3),
         ]),
       );
   const turns = marks.turns;
@@ -683,10 +713,26 @@ function approachShapes(
     // TASK-215 (M4): nor on the crossing at the lane's start (Freiburg r:467 at n:464): moved
     // forward clear of it where the lane has room before its stop line and end crossing, else none.
     const back = startFarM + ARROW_CLEAR_M + 2.5 * scale;
+    const front = Math.min(lane.stopM, lane.lengthM - crossingFarM) - ARROW_CLEAR_M - 2.5 * scale;
     if (startFarM > 0 && at < back) {
-      const front = Math.min(lane.stopM, lane.lengthM - crossingFarM) - ARROW_CLEAR_M - 2.5 * scale;
       if (back > front) return shapes;
       at = back;
+    }
+    // TASK-241: nor on a keep-clear box (Freiburg r:904, r:296, r:1333, r:1362 at lot mouths):
+    // moved along the lane to the nearest place clear of boxes and crossing paint, between the
+    // start crossing and the stop line, else none.
+    const boxes = keepClearBoxes(city, lane, markingTheme, source);
+    if (clearOf(at, 2.5 * scale, 2.5 * scale, at, at, boxes) === null) {
+      const moved = clearOf(
+        at,
+        2.5 * scale,
+        2.5 * scale,
+        startFarM > 0 ? back : 2.5 * scale,
+        front,
+        [...boxes, ...crossingPaint(city, lane, source)],
+      );
+      if (moved === null) return shapes;
+      at = moved;
     }
     for (const polygon of turns.length === 3
       ? [...markingTheme.arrows.through, ...markingTheme.arrows['left-right']]
@@ -1111,6 +1157,33 @@ const ARROW_MIN_LANE_M = 12;
 const ARROW_HALF_M = 2;
 const ARROW_CLEAR_M = 0.5;
 
+/** A stretch of a lane, in lane metres. */
+type Span = { fromM: number; toM: number };
+
+/** TASK-241: the position nearest `at`, within `lo` to `hi`, of a glyph reaching `behind` back
+ * and `ahead` forward from it that keeps `ARROW_CLEAR_M` off every blocked span; null if none. */
+function clearOf(
+  at: number,
+  behind: number,
+  ahead: number,
+  lo: number,
+  hi: number,
+  blocked: Span[],
+): number | null {
+  const clear = (c: number) =>
+    blocked.every(
+      (b) => c + ahead + ARROW_CLEAR_M <= b.fromM || c - behind - ARROW_CLEAR_M >= b.toM,
+    );
+  return (
+    [
+      at,
+      ...blocked.flatMap((b) => [b.fromM - ARROW_CLEAR_M - ahead, b.toM + ARROW_CLEAR_M + behind]),
+    ]
+      .filter((c) => c >= lo - 1e-9 && c <= hi + 1e-9 && clear(c))
+      .sort((a, b) => Math.abs(a - at) - Math.abs(b - at) || a - b)[0] ?? null
+  );
+}
+
 /** Where a lane's arrow is centred, from its start (`approachMarkings`). */
 function arrowPosition(lane: CLane, crossingFarM = 0): number {
   const scale = Math.min(1, lane.lengthM / 18);
@@ -1219,24 +1292,14 @@ function mappedStripes(
   atEnd: boolean,
   source?: CrossingSource,
 ): Vec2[][] {
-  const hits = roadMappedHits(city, road, source);
-  if (!hits.length || road.group !== undefined) return [];
   const lanes = road.lanes.map((i) => city.lanes[i]!);
-  const ownCrossing =
-    crossingEnabled(city, road, atEnd, source) &&
-    crossingPlacement(city, road, atEnd).stripes.length > 0;
   const outlines = [city.nodes[road.from]!.outline, city.nodes[road.to]!.outline]
     .filter((o) => o.length)
     .map((o) => preparePolygonRing(o));
   const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
   const paint: Vec2[][] = [];
-  for (const link of [...new Set(hits.map((h) => h.link))]) {
-    const at = new Map(hits.filter((h) => h.link === link).map((h) => [h.lane, h.atM]));
+  for (const at of paintedMapped(city, road, atEnd, source)) {
     const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
-    const length = lanes.find((lane) => at.has(lane.idx))!.lengthM;
-    if (mean > length / 2 !== atEnd) continue;
-    const fromCut = atEnd ? length - mean : mean;
-    if (ownCrossing && fromCut <= MAPPED_M) continue;
     const local = (lane: CLane, d: number, offset: number): Vec2 => {
       const s = Math.max(0, Math.min(lane.lengthM, d));
       const p = pointAtDistance(lane.polyline, lane.cumulative, s);
@@ -1276,6 +1339,47 @@ function mappedStripes(
 }
 
 const preparePolygonRing = (ring: Vec2[]) => (p: Vec2) => pointInPolygon(p, ring, 0);
+
+/** The mapped crossings `mappedStripes` paints over the half of a road nearer one end: per
+ * crossing way, where it crosses each lane (lane index to lane metres). */
+function paintedMapped(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): Map<number, number>[] {
+  const hits = roadMappedHits(city, road, source);
+  if (!hits.length || road.group !== undefined) return [];
+  const ownCrossing =
+    crossingEnabled(city, road, atEnd, source) &&
+    crossingPlacement(city, road, atEnd).stripes.length > 0;
+  return [...new Set(hits.map((h) => h.link))].flatMap((link) => {
+    const at = new Map(hits.filter((h) => h.link === link).map((h) => [h.lane, h.atM]));
+    const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
+    const length = city.lanes[road.lanes.find((lane) => at.has(lane))!]!.lengthM;
+    const fromCut = atEnd ? length - mean : mean;
+    return mean > length / 2 !== atEnd || (ownCrossing && fromCut <= MAPPED_M) ? [] : [at];
+  });
+}
+
+/** TASK-241: the stretches of a lane under crossing paint, in lane metres: the crossings its
+ * road's ends draw (zebra stripes or a signalised crossing's lines, `crossingStripes`) and the
+ * mapped crossings it draws (`mappedStripes`, 2.5 m along the lane). */
+function crossingPaint(city: CompiledCity, lane: CLane, source?: CrossingSource): Span[] {
+  const road = city.roads[lane.road]!;
+  return [false, true].flatMap((atEnd) => {
+    const span = crossingSpan(city, lane, atEnd, source);
+    const own =
+      span && crossingStyle(city, road, atEnd, source) !== 'none'
+        ? [{ fromM: Math.min(span.nearM, span.farM), toM: Math.max(span.nearM, span.farM) }]
+        : [];
+    const mapped = paintedMapped(city, road, atEnd, source).flatMap((at) => {
+      const m = at.get(lane.idx);
+      return m === undefined ? [] : [{ fromM: m - 1.25, toM: m + 1.25 }];
+    });
+    return [...own, ...mapped];
+  });
+}
 
 /** TASK-217 (D1): a signalised crossing's broken lines (German `Fußgängerfurt`), 0.15 m wide,
  * 0.5 m dashes and 0.2 m gaps, inside the near and far edges of the stripes the crossing would
@@ -2163,57 +2267,54 @@ function buildTransitionMarkings(
         solidBeforeStop(city, road, city.lanes[road.lanes[k]!]!),
       ).map((p) => lineShape(road, 'lane', p, 0.78, markingTheme)),
     );
+  // TASK-241: a hatched taper only where a lane ends (with its merge arrow). A lane gain is lanes
+  // of one carriageway widening or fanning (2 to 5 lanes at Freiburg's n:1146 and n:1169), where
+  // the ground has plain lanes: no hatch there. Hatched gores between roads with an island are
+  // `paintedGores`'.
   for (const item of geometry.lanes) {
     const lane = city.lanes[item.lane]!;
-    for (const start of [true, false]) {
-      const taper = start ? lane.taperStartM : lane.taperEndM;
-      if (!taper) continue;
-      const others = road.lanes
-        .map((i) => city.lanes[i]!)
-        .filter((l) => !(start ? l.taperStartM : l.taperEndM));
-      const neighbor = others.reduce((a, b) =>
-        Math.abs(a.lane - lane.lane) < Math.abs(b.lane - lane.lane) ? a : b,
+    const taper = lane.taperEndM;
+    if (!taper) continue;
+    const others = road.lanes.map((i) => city.lanes[i]!).filter((l) => !l.taperEndM);
+    const neighbor = others.reduce((a, b) =>
+      Math.abs(a.lane - lane.lane) < Math.abs(b.lane - lane.lane) ? a : b,
+    );
+    const side = Math.sign(lane.lane - neighbor.lane);
+    const nominal = parallelOffset(lane.polyline, side * 0.15);
+    const actual = side > 0 ? item.right : item.left;
+    const from = lane.lengthM - taper,
+      to = lane.lengthM;
+    const section = (edge: Vec2[]) => [
+      pointAtDistance(edge, lane.cumulative, from),
+      ...edge.filter((_, i) => lane.cumulative[i]! > from && lane.cumulative[i]! < to),
+      pointAtDistance(edge, lane.cumulative, to),
+    ];
+    const between = [...section(nominal), ...section(actual).reverse()];
+    const rings = clearCentrelines(city, intersect(unionRings([between]), [road.surface]));
+    const at = lane.lengthM - taper;
+    const h = headingAtDistance(lane.polyline, lane.cumulative, at);
+    for (const ring of rings.filter((r) => areaD(r) > 0.15)) {
+      const holes = rings.filter(
+        (r) => areaD(r) < 0 && pointInPolygon(r[0]!, [...ring, ring[0]!], 0),
       );
-      const side = Math.sign(lane.lane - neighbor.lane);
-      const nominal = parallelOffset(lane.polyline, side * 0.15);
-      const actual = side > 0 ? item.right : item.left;
-      const from = start ? 0 : lane.lengthM - taper,
-        to = start ? taper : lane.lengthM;
-      const section = (edge: Vec2[]) => [
-        pointAtDistance(edge, lane.cumulative, from),
-        ...edge.filter((_, i) => lane.cumulative[i]! > from && lane.cumulative[i]! < to),
-        pointAtDistance(edge, lane.cumulative, to),
-      ];
-      const between = [...section(nominal), ...section(actual).reverse()];
-      const rings = clearCentrelines(city, intersect(unionRings([between]), [road.surface]));
-      const at = start ? taper : lane.lengthM - taper;
-      const h = headingAtDistance(lane.polyline, lane.cumulative, at);
-      for (const ring of rings.filter((r) => areaD(r) > 0.15)) {
-        const holes = rings.filter(
-          (r) => areaD(r) < 0 && pointInPolygon(r[0]!, [...ring, ring[0]!], 0),
-        );
-        shapes.push(...hatchGeometry(ring, h, road, holes, markingTheme));
-      }
-      if (!start) {
-        const centre = Math.max(3.75, lane.taperStartM, at - 7.5);
-        const scale =
-          (lane.speedLimitMps >= 70 / 3.6
-            ? markingTheme.fastArrowLengthM
-            : markingTheme.arrowLengthM) / 5;
-        for (const arrow of markingTheme.arrows[side > 0 ? 'merge-left' : 'merge-right'])
-          shapes.push(
-            fillShape(
-              'arrow',
-              arrow.map((q) => {
-                const at = Math.max(0, centre + q.x * scale),
-                  p = pointAtDistance(lane.polyline, lane.cumulative, at),
-                  h = headingAtDistance(lane.polyline, lane.cumulative, at);
-                return { x: p.x - Math.sin(h) * q.y, y: p.y + Math.cos(h) * q.y };
-              }),
-            ),
-          );
-      }
+      shapes.push(...hatchGeometry(ring, h, road, holes, markingTheme));
     }
+    const centre = Math.max(3.75, lane.taperStartM, at - 7.5);
+    const scale =
+      (lane.speedLimitMps >= 70 / 3.6 ? markingTheme.fastArrowLengthM : markingTheme.arrowLengthM) /
+      5;
+    for (const arrow of markingTheme.arrows[side > 0 ? 'merge-left' : 'merge-right'])
+      shapes.push(
+        fillShape(
+          'arrow',
+          arrow.map((q) => {
+            const at = Math.max(0, centre + q.x * scale),
+              p = pointAtDistance(lane.polyline, lane.cumulative, at),
+              h = headingAtDistance(lane.polyline, lane.cumulative, at);
+            return { x: p.x - Math.sin(h) * q.y, y: p.y + Math.cos(h) * q.y };
+          }),
+        ),
+      );
   }
   return shapes;
 }
