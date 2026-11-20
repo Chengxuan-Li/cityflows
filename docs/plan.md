@@ -265,7 +265,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-239](tasks/TASK-239.md) | 10 | Crossings mapped only as OSM nodes get walk links and paint | importer `walk.ts` | 217, 224 | census, audit, traffic, merge rule | held 2026-11-20 (passes alone; with TASK-238 Freiburg's gate 90.3 s; diagnosing) |
 | [TASK-240](tasks/TASK-240.md) | render | Arrows of the next junction on approaches ending at a plain node or median crossover (r:1148) | `marking-geometry.ts` | 229, 234 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
 | [TASK-241](tasks/TASK-241.md) | render | Paint fixes: gores between one carriageway's lanes, arrows over keep-clear boxes, give-way triangles over zebras | `marking-geometry.ts` | 108, 240 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
-| [TASK-242](tasks/TASK-242.md) | 10 | Road widths from the data: urban lane widths, `width` tags, `placement` (TASK-218's D3, D9) | `roads.ts`, `corridors.ts` | 218, 238 | imagery checks, audit, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-242](tasks/TASK-242.md) | 10 | Road widths from the data: urban lane widths, `width` tags, `placement` (TASK-218's D3, D9) | `roads.ts`, `corridors.ts` | 218, 238 | imagery checks, audit, traffic, merge rule | parked 2026-11-20 (both versions miss full demand and the audit) |
 | [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
 | [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
 | [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
@@ -5164,6 +5164,38 @@ triangles (and the UK bars) within 0.5 m of crossing paint move back behind it o
 hashes identical. Left: `r:1189`'s keep-clear box fans across a lane gain (box geometry). Outside scope:
 tests (T25, T28, V217) and paint pins (V114, V117). Lead check on the merge (after TASK-237): check (1,592),
 city (220), traffic light and guard, light e2e (61); full demand identical.
+
+Full run 44719286946 (lead, manual, on ff6ca31 after TASK-241): every job green, including all five e2e
+shards; the city job took 17.3 min.
+
+TASK-242 (Claude Code subagent, Opus 5.5 high, 2026-11-20; parked under the owner's merge rule, branch
+`task/242-road-widths`, first version `4f10345`, variant `0d98c7a`, worktree `D:\cityflows-wt\242`): (1)
+untagged urban secondary lanes 3.25 m (primary 3.5 m; the first version also tertiary 3.0 m): Freiburg 69,
+Munich 47, Sindelfingen 8 roads (first version Munich +48 tertiary); (2) `width:lanes` when complete,
+`width` only without street parking, `source:width=estimated` ignored: Freiburg 12; (3) one-way
+`placement` (`left_of`, `middle_of`, `right_of`) sets the lateral offset, left centred where the block would
+step against the next road (the network cannot taper an offset; without that, fold back-step 3.47 to
+36.3 m): Freiburg 46 of 124 off-centre applied, Sindelfingen 3 (A 81). Imagery: `r:261` 16.25 m at -6.5 /
++9.75 against about -6.5 / +9.5 (within 0.25 m); `r:1179` 16.25 m, still 2.1 m over the gore (ground 15.5
+m; its `placement=right_of:3` contradicts the imagery: an OSM edit, owner's); Rotteckring `r:1690` 3.0 to
+4.0 m. Audit (variant): Freiburg fold 3.47 to 0, joins 76 to 64, lane overlap 201.0 to 179.6, but bulge
+31.46 to 34.10 m² (`n:1146`, `r:1148`'s `width:lanes`), square noses 10 to 11; Munich voids 15,578 to
+16,190 m² (real: tram tracks or grass mapped between all 17 growing pairs); Sindelfingen voids 1,335 to
+2,188 m² (A 81 blocks no longer overlap), corners 28 to 29, under 2 m 91 to 92, widths 358 to 361.
+
+| | main | first version | variant |
+|---|---|---|---|
+| Munich actuated, choice off | 620.8 s | -0.2% | 609.3 s (-1.9%) |
+| Munich actuated, choice on | 90.3 s | -3.5% | 88.6 s (-1.9%) |
+| Munich fixed, choice off | 800.3 s | -1.2% | 782.3 s (-2.3%) |
+| Munich fixed, choice on | 124.9 s | +0.2% | 124.0 s (-0.7%) |
+| full demand actuated | 3,591 / 173, 1,678.3 s | 3,622 / 157, 1,716.6 s (+2.3%) | 3,497 / 168, 1,788.3 s (+6.6%) |
+| full demand fixed | 3,504 / 153, 1,747.5 s | 3,351 / 167, 1,728.7 s (-1.1%) | 3,302 / 181, 1,784.7 s (+2.1%) |
+
+Freiburg 77.9 to 78.5 s (both); the rebuild shifts rail ids by one (timetable hash b0b017ca, same
+service). Both versions miss full demand and the audit, so the task is parked. Owner's options: placement
+plus tagged widths alone (Munich byte-identical) if the voids are accepted as real and the `n:1146` bulge
+is checked; the `r:1179` OSM edit. Outside scope: one line in `index.ts`.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

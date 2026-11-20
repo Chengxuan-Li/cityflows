@@ -1,6 +1,6 @@
 # TASK-242 — Road widths from the data: urban lane widths, `width` tags and `placement` (TASK-218's D3, D9)
 
-Status: in progress (second unsupervised run, owner 2026-11-20; split from parked TASK-218). Proposed
+Status: parked 2026-11-20 (both versions miss full demand and the audit; review in `docs/plan.md`). Proposed
 owner: Claude Code subagent (Opus 5.5, high). Branch `task/242-road-widths`, worktree
 `D:\cityflows-wt\242`, ports 5442 / 5542.
 
