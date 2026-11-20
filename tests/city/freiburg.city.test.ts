@@ -211,7 +211,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // and the state hash are unchanged.
     // TASK-226 (landed as TASK-234): rebuilt (TASK-219's rules: the Hauptbahnhof group loses
     // the median crossover's nodes and the slip-road diverge; the crossover reads no arrows).
-    '34ebeaba282dfce9c80f4a6466f2045aaad29fe0cef5b69ce3a71ff81da748d0',
+    // TASK-238: rebuilt; Bismarckallee's halves r:1251/r:2215 are one carriageway (TASK-231's D5).
+    'd98f66bf9792aa812760e063f84b0b881c0b128b2b29168c98a1233d5c3bcaba',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -233,7 +234,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // group membership), the gore fillet at n:473, and the carriageway's arrows read at the
   // junction past the median crossover n:1147, not at it (80.3 to 80.6 s alone; with TASK-235
   // 1,461 completed, 77.8 s).
-  expect(morning.stateHash).toBe(118989361);
+  // TASK-238: Bismarckallee's halves pulled to one carriageway (1,461 completed, 77.8 to 77.9 s).
+  expect(morning.stateHash).toBe(809576249);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
