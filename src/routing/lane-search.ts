@@ -44,11 +44,59 @@ function laneEdges(
   return edges;
 }
 
+/** Every lane's edges in compressed rows (TASK-243): lane `l`'s are `start[l]` to
+ * `start[l + 1]`, in `laneEdges`' order. */
+interface LaneEdgeRows {
+  /** Each lane's road. */
+  laneRoad: Int32Array;
+  start: Int32Array;
+  to: Int32Array;
+  road: Int32Array;
+  penaltyS: Float64Array;
+  changeCostS: Float64Array;
+  movement: Int32Array;
+}
+
+function laneEdgeRows(compiled: CompiledCity, graph: RoadGraph, changeDistanceM: number) {
+  const lists = compiled.lanes.map((lane) =>
+    laneEdges(
+      compiled,
+      graph,
+      lane.idx,
+      Math.max(0, compiled.roads[lane.road]!.lengthM - 10),
+      changeDistanceM,
+    ),
+  );
+  const count = lists.reduce((sum, list) => sum + list.length, 0);
+  const rows: LaneEdgeRows = {
+    laneRoad: Int32Array.from(compiled.lanes, (lane) => lane.road),
+    start: new Int32Array(lists.length + 1),
+    to: new Int32Array(count),
+    road: new Int32Array(count),
+    penaltyS: new Float64Array(count),
+    changeCostS: new Float64Array(count),
+    movement: new Int32Array(count),
+  };
+  let at = 0;
+  lists.forEach((list, lane) => {
+    rows.start[lane] = at;
+    for (const edge of list) {
+      rows.to[at] = edge.to;
+      rows.road[at] = edge.road;
+      rows.penaltyS[at] = edge.penaltyS;
+      rows.changeCostS[at] = edge.changeCostS;
+      rows.movement[at++] = edge.movement;
+    }
+  });
+  rows.start[lists.length] = at;
+  return rows;
+}
+
 export function createLaneSearch(changeDistanceM: number) {
   const shortestPath = createPathSearch();
   // Graph identity already includes compiled version and vehicle class. The
   // provider owns the lane-change distance, so none of these edges are request-dependent.
-  const cache = new WeakMap<RoadGraph, LaneEdge[][]>();
+  const cache = new WeakMap<RoadGraph, LaneEdgeRows>();
   return (
     compiled: CompiledCity,
     graph: RoadGraph,
@@ -57,19 +105,12 @@ export function createLaneSearch(changeDistanceM: number) {
     destination: CConnector,
     permits: (road: number) => boolean,
   ): Route | null => {
-    let outgoing = cache.get(graph);
-    if (!outgoing) {
-      outgoing = compiled.lanes.map((lane) =>
-        laneEdges(
-          compiled,
-          graph,
-          lane.idx,
-          Math.max(0, compiled.roads[lane.road]!.lengthM - 10),
-          changeDistanceM,
-        ),
-      );
-      cache.set(graph, outgoing);
+    let rows = cache.get(graph);
+    if (!rows) {
+      rows = laneEdgeRows(compiled, graph, changeDistanceM);
+      cache.set(graph, rows);
     }
+    const { laneRoad, start, to, road, penaltyS, changeCostS, movement } = rows;
     // Distinguish the partial origin lane from later entries at the start of that lane.
     const origin = compiled.lanes.length;
     const goal = origin + 1;
@@ -84,28 +125,38 @@ export function createLaneSearch(changeDistanceM: number) {
     );
     const destinationRoad = compiled.lanes[destination.lane]!.road;
     const path = shortestPath(goal + 1, origin, goal, costs.originCost, (node, relax) => {
-      const entry = compiled.lanes[node === origin ? request.fromLane : node]!;
-      const positionM = node === origin ? request.fromPosM : 0;
+      const entry = node === origin ? request.fromLane : node;
       // Arrival stops at the connector, independently of the budget for leaving this road.
-      if (entry.road === destinationRoad)
+      if (laneRoad[entry] === destinationRoad)
         for (const { lane, changes } of reachableLanes(
           compiled,
           graph.allowed,
-          entry.idx,
+          entry,
           destination.positionM,
           changeDistanceM,
-          positionM,
+          node === origin ? request.fromPosM : 0,
         )) {
           if (lane === destination.lane) relax(goal, changes * laneChangePenaltyS);
         }
       // Fold a run of adjacent changes into the next movement. The shared budget
       // prevents consecutive lane changes from each spending the same road length.
-      for (const edge of node === origin ? originEdges : outgoing[node]!) {
-        if (!permits(edge.road)) continue;
+      if (node === origin) {
+        for (const edge of originEdges) {
+          if (!permits(edge.road)) continue;
+          relax(
+            edge.to,
+            edge.changeCostS + costs.transition(edge.road, edge.penaltyS),
+            edge.movement,
+          );
+        }
+        return;
+      }
+      for (let edge = start[node]!, end = start[node + 1]!; edge < end; edge++) {
+        if (!permits(road[edge]!)) continue;
         relax(
-          edge.to,
-          edge.changeCostS + costs.transition(edge.road, edge.penaltyS),
-          edge.movement,
+          to[edge]!,
+          changeCostS[edge]! + costs.transition(road[edge]!, penaltyS[edge]!),
+          movement[edge],
         );
       }
     });
