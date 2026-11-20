@@ -1,7 +1,7 @@
-# TASK-249 — Land TASK-245 (the two walker fixes (rounding in walk green, crossings no phase serves)) on TASK-247
+# TASK-249 — Land TASK-245 (the two walker fixes: rounding in walk green, crossings no phase serves) on TASK-247
 
 Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
-(Opus 5.5, high). Branch `task/249-land-245`, worktree `D:\cityflows-wt$t`, ports 5249 / 5549.
+(Opus 5.5, high). Branch `task/249-land-245`, worktree `D:\cityflows-wt\249`, ports 5249 / 5549.
 
 ## Goal
 
