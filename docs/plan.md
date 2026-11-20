@@ -274,7 +274,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-248](tasks/TASK-248.md) | 10 | Land TASK-239 (node-only crossings) on TASK-247 | importer `walk.ts`, Freiburg rebuild | 239, 247 | Freiburg seeds, traffic, merge rule | done 2026-11-20 (merged; TASK-239 landed) |
 | [TASK-249](tasks/TASK-249.md) | 9 | Land TASK-245's v1 (walker fixes) on TASK-247 | `walkers.ts` | 245, 247 | waits, Freiburg seeds, traffic, merge rule | parked 2026-11-20 (full demand actuated seed 1 +8.1%; seed 2 -5.2%; lead recommends merging) |
 | [TASK-250](tasks/TASK-250.md) | 9 | Full demand after TASK-247: four stalled heads and 164 fewer trips | `signals.ts` | 247 | trace, repro test, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
-| [TASK-251](tasks/TASK-251.md) | 9 | Reroute checks skip the lane search when no switch is possible (optional bound on `RouteProvider.route`) | `src/routing/**`, engine reroute check, architecture 5.x | 243 | identical hashes, timings | in progress (second unsupervised run 2026-11-20) |
+| [TASK-251](tasks/TASK-251.md) | 9 | Reroute checks skip the lane search when no switch is possible (optional bound on `RouteProvider.route`) | `src/routing/**`, engine reroute check, architecture 5.x | 243 | identical hashes, timings | done 2026-11-20 (merged; route requests about 34% less, hashes identical) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5327,6 +5327,25 @@ phase serves; the seed-1 rise looks like a flip, seed 2 the opposite; it also re
 heads).
 
 Lead check on the merge of TASK-243 and 248: the Freiburg rebuild reproduces the project; check (1,608), city (222), traffic light and guard, light e2e (61); full demand actuated 3,427 / 155 (3935022588; one Munich walk link), fixed 3,504 / 153 (2862775104).
+
+Full run 44744589116 (lead, manual, on f2ac18c after TASK-243 and 248): every job green, including all five
+e2e shards; the city job took 20.2 min.
+
+TASK-251 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, performance only): a reroute check
+switches only to a route costing less than (1 - `rerouteHysteresis`) times the current route's rest, and
+the road search's cost never exceeds the returned route's cost (also in floating point), so when the road
+search alone reaches that threshold no lane search can switch. `RouteProvider.route(compiled, costs, req,
+boundS?)` returns `{ ok: false, reason: 'above_bound' }` (a new `RouteResult` variant; `RouteFailure`
+unchanged) when the road search costs at least `boundS`; callers without a bound get the old behaviour;
+`docs/architecture.md` section 7 updated (authorised in the contract). Only the periodic congestion check
+(`src/sim/reroute.ts`) passes the bound; live-edit checks do not. `debugSkips` re-routes every stopped
+check without the bound and throws if it would have switched (`tests/routing/route-bound.test.ts`). About
+88% of reroute checks stop after the road search; their route time about 40 to 19 s per run. Interleaved
+pairs (load 61%): route requests -34.1, -33.3, -34.8, -34.1%; stepping -1.3 to -2.9%. Hashes identical on
+its base (Munich 0.15 seeds 1 to 3 all configurations, both full demands, Freiburg seeds 1 to 3,
+Sindelfingen, with and without `debugSkips`). Outside scope: `src/sim/reroute.ts` (where the check lives;
+`engine.ts` passes `debugSkips`). Lead check: check (1,609), city (222), traffic light and guard, light e2e
+(61); full demand identical (actuated 3,427 / 155, 3935022588; fixed 3,504 / 153, 2862775104).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
