@@ -275,6 +275,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-249](tasks/TASK-249.md) | 9 | Land TASK-245's v1 (walker fixes) on TASK-247 | `walkers.ts` | 245, 247 | waits, Freiburg seeds, traffic, merge rule | done 2026-11-20 (merged on the five-seed full-demand reading: +0.2%, 40 more trips) |
 | [TASK-250](tasks/TASK-250.md) | 9 | Full demand after TASK-247: four stalled heads and 164 fewer trips | `signals.ts` | 247 | trace, repro test, traffic, merge rule | done 2026-11-20 (diagnosis only: seed-1 full demand is divergence; no change) |
 | [TASK-251](tasks/TASK-251.md) | 9 | Reroute checks skip the lane search when no switch is possible (optional bound on `RouteProvider.route`) | `src/routing/**`, engine reroute check, architecture 5.x | 243 | identical hashes, timings | done 2026-11-20 (merged; route requests about 34% less, hashes identical) |
+| [TASK-252](tasks/TASK-252.md) | render | Walk lights at crossings no signal phase serves draw dark | walk-light drawing, signal snapshot | 245, 249 | test, list, identical hashes, budgets | done 2026-11-20 (merged; hashes identical) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5368,6 +5369,22 @@ on its branch: 3,604 / 166, 1,715.6 s; 3,314 / 178, 1,827.6 s; 3,292 / 168, 1,62
 with seed 1 (3,420 / 157, 1,843.2 s) the mean is 3,457.8 completed, 1,767.5 s against main's 3,418.0,
 1,763.3 s (+0.2%, 40 more trips), stalled heads mean 1.6 against 2.6. Merged on top of TASK-243, 248, 251:
 Freiburg's gate 1,522 / 0, 66.1 s (hash 4228017009). Lead check: check (1,611), city (222), traffic light and guard, light e2e (61); full demand actuated 3,420 / 157 (3501316164), fixed 3,504 / 153 (2862775104).
+
+Full run 44755991581 (lead, manual, on ecb7075 after TASK-249): every job green, including all five e2e
+shards; the city job took 22.5 min.
+
+TASK-252 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, render only): at a signal crossing no
+phase serves (TASK-249 lets walkers cross there in a gap), the walk light draws dark (an unlit head), never
+red or green: `VehicleSnapshot.signals.walk` takes 0 red, 1 green, 2 dark (`snapshot` in `signals.ts`
+only; control unchanged); before the first snapshot the renderers derive the same from the program
+(`walkLightAt`). Dark rather than no lamp: the crossing is mapped as signalised and walkers yield as at a
+switched-off signal, and no geometry changes. Freiburg 8 crossings (9 links: `n:1532`, `n:1625`, `n:31`
+twice, `n:429`, `n:776`, `n:796`, `n:907` two links), Sindelfingen 3 (`n:422`, `n:733` two arms), Munich
+none. Hashes identical; render p95 2D 3.0 ms, 3D 3.8 ms (budgets 4 and 6). Test in
+`tests/sim/walk-calls.test.ts`. Outside scope: the comments in `src/sim/types.ts` and `src/render/types.ts`,
+`style.signalDark`, one sentence in `docs/architecture.md` section 5.4 (the new value; within the contract's
+"snapshot field"). Lead check: check (1,612), city (222), traffic light and guard, light e2e (61); full
+demand identical (actuated 3,420 / 157, 3501316164; fixed 3,504 / 153, 2862775104).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

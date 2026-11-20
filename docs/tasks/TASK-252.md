@@ -1,6 +1,6 @@
 # TASK-252 — Walk lights at crossings no signal phase serves (TASK-249's open item)
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/252-unserved-walk-light`, worktree `D:\cityflows-wt\252`, ports 5452 / 5552.
 
 ## Goal
