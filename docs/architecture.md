@@ -1130,7 +1130,11 @@ the OSM `lanes` tags carry one.
     route takes at the controller (TASK-199: a car held at the junction behind a short approach
     lane, such as Freiburg's 6 m Wallstraße into n:68, otherwise never called); a walker waiting at a
     walk-green crossing of the phase whose run's green is short extends it by the time the run
-    needs (TASK-111's step-out rule). A vehicle in that range planning a movement of another
+    needs (TASK-111's step-out rule). TASK-247: a vehicle behind one on its approach lane that
+    plans a movement of another phase does not extend the green (it cannot reach the stop line;
+    an upstream car counts at its movement's approach lane), so a lane that carries movements of
+    two phases no longer holds each green to its timed end for a car stuck behind the head
+    (Freiburg's r:1479 at n:1132). A vehicle in that range planning a movement of another
     phase, or a walker waiting at a crossing that is red, calls the phases that serve it. With a
     call the green ends once its minimum has passed and no extension holds it, or at the phase's
     timed green (the split's), and amber and all-red lead to the first later phase with a call;
