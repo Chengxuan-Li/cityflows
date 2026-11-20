@@ -212,7 +212,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-226 (landed as TASK-234): rebuilt (TASK-219's rules: the Hauptbahnhof group loses
     // the median crossover's nodes and the slip-road diverge; the crossover reads no arrows).
     // TASK-238: rebuilt; Bismarckallee's halves r:1251/r:2215 are one carriageway (TASK-231's D5).
-    'd98f66bf9792aa812760e063f84b0b881c0b128b2b29168c98a1233d5c3bcaba',
+    // TASK-239 (landed as TASK-248): rebuilt; 9 crossing links from marked crossings mapped only
+    // as nodes, with the last ids (the tram timetable stays 90e3ff6f).
+    'eda9414182fc7c4e511a594c5eed4f50d048abbd13bee8a03362d87e4d54a202',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -237,7 +239,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-238: Bismarckallee's halves pulled to one carriageway (1,461 completed, 77.8 to 77.9 s).
   // TASK-247: a car behind a head waiting for another phase does not extend an actuated green
   // (Bismarckallee's shared lane at n:1132; 1,461 to 1,464 completed, 77.9 to 68.1 s).
-  expect(morning.stateHash).toBe(649852386);
+  // TASK-239 (landed as TASK-248): walkers cross at the 9 zebras and signals mapped only as nodes
+  // (1,464 completed, 68.1 to 70.4 s).
+  expect(morning.stateHash).toBe(1618405036);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

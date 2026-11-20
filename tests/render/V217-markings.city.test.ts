@@ -419,6 +419,43 @@ test('D1: a mapped crossing beyond 12 m of a cut paints where it is mapped', () 
   ).toBe(false);
 });
 
+test('TASK-239: zebras mapped only as nodes cross their streets and paint (n:211, n:1139)', () => {
+  // The crossing links made from OSM crossing nodes (both ends and the link from the node).
+  const fromNode = (l: NonNullable<City['walk']>['links'][string]) =>
+    l.kind === 'crossing' &&
+    [l.from, l.to].every(
+      (id) => city.walk!.nodes[id]!.provenance.osmIds?.[0] === l.provenance.osmIds?.[0],
+    );
+  const links = Object.values(city.walk!.links).filter(fromNode);
+  expect(links.map((l) => l.provenance.osmIds![0]!).sort((a, b) => a - b)).toEqual([
+    436628448, 507040002, 1245631005, 2479358348, 2497871560, 2497871561, 9118444286, 10250574052,
+    12056000625,
+  ]);
+  const without = {
+    roads: city.roads,
+    walk: {
+      nodes: city.walk!.nodes,
+      links: Object.fromEntries(Object.entries(city.walk!.links).filter(([, l]) => !fromNode(l))),
+    },
+  };
+  const osm = (lat: number, lon: number) => lonLatToLocal(city.geo!, { lat, lon });
+  // 9118444286 at n:1139: the arm's band is drawn on it.
+  const n1139 = osm(47.997331, 7.8436884);
+  expect(paintNear(city, n1139, 4).length).toBeGreaterThanOrEqual(4);
+  expect(paintNear(without, n1139, 4)).toEqual([]);
+  // 2479358348 at n:211: the arm's band, 4.4 m along the street from the mapped node (the band
+  // keeps its place, as for every mapped crossing: TASK-217's move cost traffic).
+  const n211 = osm(47.9975169, 7.8428582);
+  expect(paintNear(city, n211, 6).length).toBeGreaterThanOrEqual(4);
+  expect(paintNear(without, n211, 6)).toEqual([]);
+  for (const id of ['r:1945', 'r:1946']) {
+    const r = road(id);
+    const atEnd = net.nodes[r.to]!.id === 'n:211';
+    expect(crossingStyle(net, r, atEnd, city), id).toBe('zebra');
+    expect(crossingStyle(net, r, atEnd, without), id).toBe('none');
+  }
+});
+
 test('M7: lane lines are solid over the last 30 m before a stop line', () => {
   const result = compile(signalApproach());
   if (!result.ok) throw new Error('fixture');

@@ -194,7 +194,8 @@ const pins = {
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-    compile: '727455b3d8c313c2757d59ed73e495f4796fef4902c5e14cb6a3b943c12d46ad',
+    // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
+    compile: 'd2959e1ab01640a549a333aaae2995abd30b0e4c3a0e27f734b29c15daacb280',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
