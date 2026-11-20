@@ -1,6 +1,6 @@
 # TASK-246 — Keep-clear boxes on lane gains (found by TASK-241)
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/246-keepclear-gains`, worktree `D:\cityflows-wt\246`, ports 5446 / 5546.
 
 ## Goal

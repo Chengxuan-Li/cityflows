@@ -1,6 +1,6 @@
 # TASK-247 — Freiburg's 08:00 station peak: spillback at the Hauptbahnhof signals
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged as v1 `5570824`; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/247-station-peak`, worktree `D:\cityflows-wt\247`, ports 5447 / 5547.
 
 ## Goal

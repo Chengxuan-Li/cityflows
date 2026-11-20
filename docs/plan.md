@@ -269,8 +269,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
 | [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | parked 2026-11-20 (meets the thresholds, misses its aim: the band does not narrow; new stalls) |
 | [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | held 2026-11-20 (v1 fixes two walker bugs; Freiburg gate 108 s from the batch flip; re-measure after TASK-244) |
-| [TASK-246](tasks/TASK-246.md) | render | Keep-clear boxes on lane gains (found by TASK-241) | `marking-geometry.ts` | 241 | test, census, identical hashes | in progress (second unsupervised run 2026-11-20) |
-| [TASK-247](tasks/TASK-247.md) | 9 | Freiburg's 08:00 station peak: spillback at the Hauptbahnhof signals (`n:364`, `n:1132`) | `signals.ts`, junction admission | 239, 244, 245 | repro test, Freiburg band, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-246](tasks/TASK-246.md) | render | Keep-clear boxes on lane gains (found by TASK-241) | `marking-geometry.ts` | 241 | test, census, identical hashes | done 2026-11-20 (merged; hashes identical) |
+| [TASK-247](tasks/TASK-247.md) | 9 | Freiburg's 08:00 station peak: spillback at the Hauptbahnhof signals (`n:364`, `n:1132`) | `signals.ts`, junction admission | 239, 244, 245 | repro test, Freiburg band, traffic, merge rule | done 2026-11-20 (merged v1; Freiburg's 08:00 flip gone, gate 68.1 s) |
+| [TASK-248](tasks/TASK-248.md) | 10 | Land TASK-239 (node-only crossings) on TASK-247 | importer `walk.ts`, Freiburg rebuild | 239, 247 | Freiburg seeds, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-249](tasks/TASK-249.md) | 9 | Land TASK-245's v1 (walker fixes) on TASK-247 | `walkers.ts` | 245, 247 | waits, Freiburg seeds, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5245,6 +5247,42 @@ Freiburg 79.5 s (+1.6 s). It clears the merge rule's thresholds, but its aim (th
 changes route choice everywhere, and fixed-time full demand ends with stalled heads main does not have
 (its lower delay partly unfinished trips); lead decision: parked. The station-signal spillback is TASK-247;
 TASK-239 and 245 wait for it.
+
+TASK-247 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged under the owner's merge rule as v1
+`5570824`): Freiburg's 08:00 flip. Group 24 at `n:364` sits in phase 1 green all morning and is a victim;
+the jam starts at `n:1132`, 200 m on: lane 1 of `r:1479` carries straight-on cars (phase 2) and right
+turns into `r:1134` (phase 1), lane 0 sits empty (station traffic needs `r:1478` lane 1 later); with the
+two kinds mixed, the car behind a waiting car wants the green phase, is in detection range, and keeps that
+green running to its 30 s maximum though it cannot reach the line. `n:1132` passed 1 to 8 cars a minute
+from 08:02 to 08:13 and the queue reached `n:364`'s exit (box and exit-full refusals at `r:1245>r:366`),
+filling Schnewlinstraße and Wilhelmstraße; the 08:00 batch decides whether the lane ends up mixed. Rule
+(`src/sim/signals.ts`): reading an approach lane from the stop line back, once a car that wants another
+phase is met, the cars behind it no longer extend the green (they still call their own phases); a car
+upstream is judged by the lane its movement starts from; TASK-222's keep ignores cars behind a blocker.
+Test `tests/sim/shared-lane-actuation.test.ts` (40 cars in one lane feeding two phases: 26 arrive by
+1,000 s on main, 40 with the rule). 08:00-band waiting main / 239's tip / 245's v1: 10,131 / 13,107 /
+17,455 s without, 6,211 / 6,231 / 6,465 s with. Freiburg seed 1 (without / with): main 77.9 / 68.1 s,
+239's tip 90.3 / 70.4 s, 245's v1 108.0 / 68.2 s; TASK-239's link probes 77.9 to 95.6 s become 67.0 to
+71.5 s; main seeds 1 to 6 mean 69.1 to 63.9 s; no gridlock. Munich 0.15: actuated choice off 620.8 to
+621.6 s (+0.1%), on 90.3 to 90.6 s (+0.3%), fixed identical; drain 48 of 48, no stalled heads (seed 12
+actuated choice off one gridlocked trip). Full demand actuated 3,591 / 173, 0 stalled, 1,678.3 s to
+3,427 / 155, 4 stalled heads, 1,705.5 s (+1.6%; 164 fewer completed, not traced), fixed identical;
+Sindelfingen identical. The variant (`e57f6ef`, a car blocks only while standing) missed full demand
+(+4.1%). Lead decision: merged; the aim is met decisively and Munich at 0.15 barely moves; the full-demand
+stalled heads and completions are an open item. Outside scope: one sentence in `docs/architecture.md`
+section 5.4 (accepted, as for TASK-222), the Freiburg re-pin (649852386). New full-demand references:
+actuated 3,427 / 155, 1,705.5 s, hash 4165965277; fixed 3,504 / 153, 1,747.5 s, hash 4004936993.
+
+TASK-246 (Claude Code subagent, Sonnet, 2026-11-20; merged, paint only): a keep-clear box was drawn along
+its lane's centre line at the lane's width, so one overlapping a taper bent with the fan and ran off the
+carriageway (`r:1189#3`). Rule (`keepClearBoxes`): each box stretch is cut to the lane's whole stretch
+(`taperStartM` to `lengthM - taperEndM`) before the crossing cuts; under 3 m left is dropped (0.8 m for
+US / UK text). Boxes overlapping a transition Freiburg 6 to 0, Munich 2 to 0; trimmed `r:1189#3`,
+`r:1360#2`, `r:296#2`, `r:500#1`; dropped Freiburg `r:1151#1`, `r:1389#1`, Munich `r:654#3`, `#4`; roads
+with keep-clear paint outside the surface 5 / 1 / 0 to 0. Audit JSON identical; hashes identical.
+Outside scope: Munich paint pins (V114, V117).
+
+Lead check on the merge of TASK-247 and 246: check, city, traffic light and guard, light e2e; check (1,593), city (221), traffic light and guard, light e2e (61); full demand actuated 3,427 / 155 (4165965277), fixed 3,504 / 153 (4004936993).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
