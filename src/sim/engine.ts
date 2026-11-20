@@ -769,6 +769,7 @@ function createRun({
       const lane = compiled.lanes[segment];
       const path = lane ? null : compiled.movements[segment - compiled.lanes.length]!;
       const length = lane?.lengthM ?? path!.lengthM;
+      const field = lane ? segment : -path!.idx - 1;
       const speedLimit =
         lane?.speedLimitMps ??
         Math.min(
@@ -902,7 +903,7 @@ function createRun({
           }
           limit[id] = Math.min(limit[id]!, Math.max(position, walkerStop - idm.minGapM));
         }
-        const railStop = railCrossings?.hold(id) ?? Infinity;
+        const railStop = railCrossings?.hold(id, field) ?? Infinity;
         railCrossings?.binding(id, railStop + idm.minGapM <= obstacle + 1e-6);
         if (railStop < Infinity) {
           if (railStop + idm.minGapM < obstacle) {

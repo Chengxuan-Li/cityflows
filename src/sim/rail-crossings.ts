@@ -69,8 +69,9 @@ export function createRailCrossings(
   red: (movement: number) => boolean,
   clocks?: Clock[],
   roadState?: RoadState,
-  /** TASK-211: run a settled vehicle's pass anyway and check that it changes nothing. */
-  checkSettled = false,
+  /** TASK-211: run a settled vehicle's pass anyway and check that it changes nothing. TASK-237:
+   * and check that the segment a caller passes is the vehicle's lane. */
+  checkSkips = false,
 ) {
   const rail = city.rail;
   if (!rail) return undefined;
@@ -142,23 +143,31 @@ export function createRailCrossings(
   const committed = facilities.map(() => new Set<number>());
   /** TASK-187: membership of `committed` by facility and vehicle, so that the per-vehicle passes
    * touch a set only to change it (the sets keep their order for `roadState`). */
-  const committedFlags = facilities.map(() => new Uint8Array(vehicles.count));
+  const facilityCount = facilities.length;
+  /** TASK-237: by vehicle, then facility (`id * facilityCount + f`): a vehicle's flags share a
+   * cache line, read together in its passes. */
+  const committedFlags = new Uint8Array(vehicles.count * facilityCount);
   const commit = (f: number, id: number) => {
-    if (committedFlags[f]![id]) return;
-    committedFlags[f]![id] = 1;
+    const k = id * facilityCount + f;
+    if (committedFlags[k]) return;
+    committedFlags[k] = 1;
     committed[f]!.add(id);
   };
   const uncommit = (f: number, id: number) => {
-    if (!committedFlags[f]![id]) return;
-    committedFlags[f]![id] = 0;
+    const k = id * facilityCount + f;
+    if (!committedFlags[k]) return;
+    committedFlags[k] = 0;
     committed[f]!.delete(id);
   };
   const railReady = new Uint8Array(facilities.length);
   const occupied = new Uint8Array(facilities.length);
+  /** Per vehicle: 1 while its stop is a protected (closed or warning) crossing's and binds (a byte
+   * each: `held` is asked for every driving car). */
   const holds = new Uint8Array(vehicles.count);
-  const holdPositions = new Float64Array(vehicles.count);
-  /** TASK-222: per vehicle, the movement whose red stop line in the clear zone holds it, or -1. */
-  const holdReds = new Int32Array(vehicles.count).fill(-1);
+  /** Per vehicle at `id * 2` (TASK-237: one record, written for every car each step): its stop's
+   * position and (TASK-222) the movement whose red stop line in the clear zone holds it, or -1. */
+  const holdRecords = new Float64Array(vehicles.count * 2);
+  for (let id = 0; id < vehicles.count; id++) holdRecords[id * 2 + 1] = -1;
   const services: Service[] = [];
   const nextCycle = new Int32Array(table.departures.length);
   const warningMax = Math.max(0, ...events.flatMap((e) => e.map((v) => v.warningS)));
@@ -198,14 +207,14 @@ export function createRailCrossings(
    * route and route step stay the same (routes are replaced, never edited), walked on as the
    * vehicle moves up; the path at a position is their prefix up to the first segment ending more
    * than 600 m ahead. The ranges are kept while the position stays the same too: a standing queue,
-   * and the hold after the occupancy pass in the same step, reuse them. `path` points the names
-   * below at the vehicle's. */
+   * and the hold after the occupancy pass in the same step, reuse them. `path` points `current`
+   * and `segmentCount` at the vehicle's. TASK-237: the ranges read the position only by comparing
+   * it with span ends and marking positions along the path, so they are also kept while the
+   * vehicle moves up no farther than the nearest of those still ahead and the path's segment count
+   * stays the same; the count changes only once the next segment's end comes within 600 m. What
+   * these checks read is kept in `pathKeys`, one record per vehicle, so that a vehicle moving up
+   * where neither changes reads no object. */
   type Path = {
-    lane: number;
-    position: number;
-    step: number;
-    movement: number;
-    route: (typeof vehicles.route)[number] | undefined;
     segments: number[];
     offsets: number[];
     /** Where each segment ends along the path. */
@@ -220,27 +229,50 @@ export function createRailCrossings(
     nextSegment: number;
     nextStep: number;
     done: boolean;
-    count: number;
-    stops: Float64Array;
-    starts: Float64Array;
-    ends: Float64Array;
+    /** Per facility, its nearest stop marking, then the start and the end of its spans
+     * (`f`, `facilityCount + f`, `2 * facilityCount + f`; TASK-237: one array). */
+    range: Float64Array;
     /** TASK-202: per facility, whether the path from its first segment reaches one of the
      * facility's spans without turning away: the encounter a marking just passed guards. */
     live: Uint8Array;
-    ranged: boolean;
   };
   const paths = Array<Path | undefined>(vehicles.count).fill(undefined);
+  /** Per vehicle at `id * 8`: the path's lane, route step (-1: no path yet), first movement,
+   * position and segment count; its ranges' state (`UNRANGED`, or found with a served facility's
+   * span past the position or not: `AHEAD`, `CLEAR`); the end of the first segment not yet
+   * counted (Infinity once the walk is done); and how far the ranges hold. The route is in
+   * `pathRoutes`. */
+  const pathKeys = new Float64Array(vehicles.count * 8);
+  for (let id = 0; id < vehicles.count; id++) pathKeys[id * 8 + 1] = -1;
+  const pathRoutes = Array<(typeof vehicles.route)[number] | undefined>(vehicles.count).fill(
+    undefined,
+  );
+  const [LANE, STEP, MOVEMENT, POSITION, COUNT, RANGES, NEXT_END, RANGED_UNTIL] = [
+    0, 1, 2, 3, 4, 5, 6, 7,
+  ];
+  const [UNRANGED, CLEAR, AHEAD] = [0, 1, 2];
   let current: Path | undefined,
-    segments: number[] = [],
-    offsets: number[] = [],
-    segmentCount = 0,
-    pathStops: Float64Array = new Float64Array(0),
-    pathStarts = pathStops,
-    pathEnds = pathStops,
-    pathLive: Uint8Array = new Uint8Array(0);
+    currentKey = 0,
+    segmentCount = 0;
   const liveList: number[] = [];
   const liveFlags = new Uint8Array(facilities.length);
-  const histories = new Map<number, { segment: number; trail: number[]; position: number }>();
+  function clearLive() {
+    for (const f of liveList) liveFlags[f] = 0;
+    liveList.length = 0;
+  }
+  /** Each vehicle's history: its segment and position at its last pass of `roadOccupancy` and
+   * the segments its body trails back over. TASK-237: the segment and position are its settled
+   * record's (`settledRecord`, which also says whether it has a history and the trail's length);
+   * the trails are here, in the order first seen (`roadState`) and by vehicle. */
+  const histories = new Map<number, number[]>();
+  const trails = Array<number[] | undefined>(vehicles.count).fill(undefined);
+  const setHistory = (id: number, trail: number[], segment: number, position: number) => {
+    histories.set(id, trail);
+    trails[id] = trail;
+    settledRecord[id * 8 + 1] = segment;
+    settledRecord[id * 8 + 2] = position;
+    settledRecord[id * 8 + 7] = 1 + trail.length;
+  };
   const segmentLength = (segment: number) =>
     segment >= 0 ? city.lanes[segment]!.lengthM : city.movements[-segment - 1]!.lengthM;
   const influencing = (segment: number, left: number) => {
@@ -306,26 +338,38 @@ export function createRailCrossings(
       nextSpawnS = Math.min(nextSpawnS, departure.timeS + nextCycle[i]! * table.periodS);
     });
   }
-  function path(id: number) {
-    const lane = vehicles.lane[id]!,
-      position = vehicles.position[id]!,
+  /** `lane`: the vehicle's segment (`vehicles.lane[id]`), which every caller has at hand. */
+  function path(id: number, lane: number) {
+    if (checkSkips && vehicles.lane[id] !== lane)
+      throw new Error(`Vehicle ${id}: path asked off its segment`);
+    const position = vehicles.position[id]!,
       routeStep = vehicles.routeStep[id]!,
       firstMovement = vehicles.movement[id]!,
       route = vehicles.route[id];
-    let entry = paths[id];
+    const k = id * 8;
+    currentKey = k;
+    current = paths[id];
     const kept =
-      entry !== undefined &&
-      entry.lane === lane &&
-      entry.step === routeStep &&
-      entry.movement === firstMovement &&
-      entry.route === route;
+      pathKeys[k + STEP] === routeStep &&
+      pathKeys[k + LANE] === lane &&
+      pathKeys[k + MOVEMENT] === firstMovement &&
+      pathRoutes[id] === route;
+    const previous = pathKeys[k + POSITION]!;
+    if (kept && position === previous) {
+      segmentCount = pathKeys[k + COUNT]!;
+      return;
+    }
+    const still = kept && position > previous && !(pathKeys[k + NEXT_END]! - position <= 600);
+    if (still && !checkSkips) {
+      // The walk below would count no further segment (under `debugSkips` it checks so).
+      segmentCount = pathKeys[k + COUNT]!;
+      pathKeys[k + POSITION] = position;
+      if (!(position <= pathKeys[k + RANGED_UNTIL]!)) pathKeys[k + RANGES] = UNRANGED;
+      return;
+    }
+    let entry = current;
     if (!entry) {
       entry = {
-        lane,
-        position,
-        step: routeStep,
-        movement: firstMovement,
-        route,
         segments: [],
         offsets: [],
         segmentEnds: [],
@@ -335,31 +379,17 @@ export function createRailCrossings(
         nextSegment: lane,
         nextStep: routeStep,
         done: false,
-        count: 0,
-        stops: new Float64Array(facilities.length),
-        starts: new Float64Array(facilities.length),
-        ends: new Float64Array(facilities.length),
+        range: new Float64Array(3 * facilityCount),
         live: new Uint8Array(facilities.length),
-        ranged: false,
       };
-      paths[id] = entry;
+      paths[id] = current = entry;
     }
-    current = entry;
-    segments = entry.segments;
-    offsets = entry.offsets;
-    pathStops = entry.stops;
-    pathStarts = entry.starts;
-    pathEnds = entry.ends;
-    pathLive = entry.live;
-    if (kept && entry.position === position) {
-      segmentCount = entry.count;
-      return;
-    }
+    const { segments, offsets } = entry;
     if (!kept) {
-      entry.lane = lane;
-      entry.step = routeStep;
-      entry.movement = firstMovement;
-      entry.route = route;
+      pathKeys[k + LANE] = lane;
+      pathKeys[k + STEP] = routeStep;
+      pathKeys[k + MOVEMENT] = firstMovement;
+      pathRoutes[id] = route;
       entry.nextSegment = lane;
       entry.nextStep = routeStep;
       entry.done = false;
@@ -373,9 +403,11 @@ export function createRailCrossings(
     const ends = entry.segmentEnds;
     // The walk as it was done for each position: up to 128 segments, the last one the first that
     // ends more than 600 m ahead or the last the plan and route lead on to.
-    let count = kept && position >= entry.position ? entry.leading : 0;
-    entry.position = position;
-    entry.ranged = false;
+    const onward = kept && position >= previous;
+    const ranged = onward && position <= pathKeys[k + RANGED_UNTIL]!;
+    const previousCount = pathKeys[k + COUNT]!;
+    let count = onward ? entry.leading : 0;
+    pathKeys[k + POSITION] = position;
     while (count < segments.length && ends[count]! - position <= 600) count++;
     while (count === segments.length && !entry.done) {
       const segment = entry.nextSegment;
@@ -397,8 +429,12 @@ export function createRailCrossings(
       }
       if (ends[ends.length - 1]! - position <= 600) count++;
     }
+    if (still && count !== entry.leading)
+      throw new Error(`Vehicle ${id}: kept path count would change`);
     entry.leading = count;
-    entry.count = segmentCount = Math.min(count + 1, segments.length);
+    pathKeys[k + COUNT] = segmentCount = Math.min(count + 1, segments.length);
+    pathKeys[k + NEXT_END] = count < segments.length ? ends[count]! : Infinity;
+    if (!(ranged && segmentCount === previousCount)) pathKeys[k + RANGES] = UNRANGED;
   }
   function overlaps(f: number, segment: number, front: number, rear: number) {
     return spansBySegment[bucket(segment)]!.some(
@@ -407,39 +443,56 @@ export function createRailCrossings(
   }
   /** The current path's ranges from the vehicle's position. */
   function ranges() {
+    const k = currentKey;
+    if (pathKeys[k + RANGES] !== UNRANGED && !checkSkips) return;
     const entry = current!;
-    if (entry.ranged) return;
-    entry.ranged = true;
-    const position = entry.position;
-    pathStops.fill(Infinity);
-    pathStarts.fill(Infinity);
-    pathEnds.fill(-Infinity);
+    const { segments, offsets, range: pathRange, live: pathLive } = entry;
+    if (pathKeys[k + RANGES] !== UNRANGED) {
+      // Under `debugSkips`, find them again and compare.
+      const kept = [pathRange.slice(), pathLive.slice(), pathKeys[k + RANGES]];
+      pathKeys[k + RANGES] = UNRANGED;
+      ranges();
+      if (
+        kept[2] !== pathKeys[k + RANGES] ||
+        (kept[0] as Float64Array).some((v, i) => v !== pathRange[i]) ||
+        (kept[1] as Uint8Array).some((v, i) => v !== pathLive[i])
+      )
+        throw new Error(`Vehicle ${k / 8}: kept rail ranges differ`);
+      return;
+    }
+    const position = pathKeys[k + POSITION]!;
+    let until = Infinity;
+    const startAt = facilityCount,
+      endAt = 2 * facilityCount;
+    pathRange.fill(Infinity, 0, endAt);
+    pathRange.fill(-Infinity, endAt);
+    let ahead = false;
     for (const s of entry.markedAt) {
       if (s >= segmentCount) break;
       const b = bucket(segments[s]!);
       const offset = offsets[s]!;
       for (const span of spansBySegment[b]!) {
         if (offset + span.to < position) continue;
-        pathStarts[span.facility] = Math.min(pathStarts[span.facility]!, offset + span.from);
-        pathEnds[span.facility] = Math.max(pathEnds[span.facility]!, offset + span.to);
+        until = Math.min(until, offset + span.to);
+        const f = span.facility;
+        pathRange[startAt + f] = Math.min(pathRange[startAt + f]!, offset + span.from);
+        pathRange[endAt + f] = Math.max(pathRange[endAt + f]!, offset + span.to);
+        if (served[f]) ahead = true;
       }
     }
+    pathKeys[k + RANGES] = ahead ? AHEAD : CLEAR;
     // TASK-202: a stop marking binds only for the encounter it guards on this path: a span of its
     // facility reached from it without turning away (through movements, lanes that lead on to one
     // road, and lanes with the facility's own marking or span). A marking for a turn the vehicle
     // does not take, met again from another approach further on, does not hold it back here.
     // Walked backward over the marked segments; the earliest bound marking is the stop.
     const turns = entry.turns;
-    const clear = () => {
-      for (const f of liveList) liveFlags[f] = 0;
-      liveList.length = 0;
-    };
-    clear();
+    clearLive();
     let after = segmentCount;
     for (let k = entry.markedAt.length - 1; k >= 0; k--) {
       const s = entry.markedAt[k]!;
       if (s >= segmentCount) continue;
-      if (after - 1 > s && turns[after - 1]! > turns[s]!) clear();
+      if (after - 1 > s && turns[after - 1]! > turns[s]!) clearLive();
       after = s;
       const segment = segments[s]!,
         b = bucket(segment),
@@ -454,6 +507,7 @@ export function createRailCrossings(
       for (const marking of stopsBySegment[b]!) {
         const at = offset + marking.at;
         if (at < position - 1e-6) continue;
+        until = Math.min(until, at);
         const f = marking.facility;
         if (
           liveFlags[f] ||
@@ -461,7 +515,7 @@ export function createRailCrossings(
             (span) => span.facility === f && span.to >= marking.at && offset + span.to >= position,
           )
         )
-          pathStops[f] = Math.min(pathStops[f]!, at);
+          pathRange[f] = Math.min(pathRange[f]!, at);
       }
       for (const span of spansBySegment[b]!)
         if (offset + span.to >= position && !liveFlags[span.facility]) {
@@ -487,16 +541,18 @@ export function createRailCrossings(
       }
     }
     if (after > 0) {
-      if (turns[after - 1]! > 0) clear();
+      if (turns[after - 1]! > 0) clearLive();
       pathLive.fill(0);
       for (const f of liveList) pathLive[f] = 1;
     }
+    pathKeys[k + RANGED_UNTIL] = until;
   }
   const platoonLane = Uint8Array.from(city.lanes, (lane) =>
     Number(lane.left === -1 && lane.right === -1),
   );
   for (const space of city.parkingSpaces ?? []) platoonLane[space.lane] = 0;
   const walkStops = city.lanes.map(() => [] as number[]);
+  const laneStops = Float64Array.from(city.lanes, (lane) => lane.stopM);
   for (const link of city.walk.links)
     for (const span of link.crossing?.spans ?? [])
       walkStops[span.lane]!.push(span.atM - span.halfM - params.idm.minGapM);
@@ -542,15 +598,12 @@ export function createRailCrossings(
    * commitments that pass left (only `roadOccupancy` changes them, but for the dilemma commit in
    * `publish`, which clears the record). So it only marks the facilities it marked then. */
   let pass = 1;
-  const settledPass = new Uint32Array(vehicles.count);
-  const settledField = new Int32Array(vehicles.count);
-  const settledPosition = new Float64Array(vehicles.count);
-  const settledSpeed = new Float64Array(vehicles.count);
-  const settledStep = new Uint32Array(vehicles.count);
-  const settledMovement = new Int32Array(vehicles.count);
+  /** TASK-237: one record per vehicle (pass, segment, position, speed, route step, movement, whether
+   * it marked any facility, and 0 without a history or 1 + its trail's length), so that the check
+   * and the history read one cache line. */
+  const settledRecord = new Float64Array(vehicles.count * 8);
   const settledRoute = Array<(typeof vehicles.route)[number]>(vehicles.count).fill(null);
-  const marks = new Uint8Array(vehicles.count);
-  const markedBy = facilities.map(() => new Uint8Array(vehicles.count));
+  const markedBy = new Uint8Array(vehicles.count * facilityCount);
   const settledFlags = new Uint8Array(facilities.length);
   const settledMarks = new Uint8Array(facilities.length);
   function roadOccupancy() {
@@ -563,64 +616,72 @@ export function createRailCrossings(
         if (vehicles.state[id] !== DRIVING && vehicles.state[id] !== QUEUED_DESTINATION) continue;
         const position = vehicles.position[id]!;
         const speed = vehicles.speed[id]!;
+        const r = id * 8;
         const settled =
-          settledPass[id] === pass - 1 &&
-          settledField[id] === field &&
-          settledPosition[id] === position &&
-          settledSpeed[id] === speed &&
-          settledStep[id] === vehicles.routeStep[id] &&
-          settledMovement[id] === vehicles.movement[id] &&
+          settledRecord[r] === pass - 1 &&
+          settledRecord[r + 1] === field &&
+          settledRecord[r + 2] === position &&
+          settledRecord[r + 3] === speed &&
+          settledRecord[r + 4] === vehicles.routeStep[id] &&
+          settledRecord[r + 5] === vehicles.movement[id] &&
           settledRoute[id] === vehicles.route[id];
-        if (settled && !checkSettled) {
-          settledPass[id] = pass;
-          if (marks[id])
-            for (let f = 0; f < facilities.length; f++) if (markedBy[f]![id]) occupied[f] = 1;
+        if (settled && !checkSkips) {
+          settledRecord[r] = pass;
+          if (settledRecord[r + 6])
+            for (let f = 0, k = id * facilityCount; f < facilityCount; f++, k++)
+              if (markedBy[k]) occupied[f] = 1;
           continue;
         }
         if (settled)
           for (let f = 0; f < facilities.length; f++) {
-            settledFlags[f] = committedFlags[f]![id]!;
-            settledMarks[f] = markedBy[f]![id]!;
+            settledFlags[f] = committedFlags[id * facilityCount + f]!;
+            settledMarks[f] = markedBy[id * facilityCount + f]!;
           }
-        settledPass[id] = pass;
-        settledField[id] = field;
-        settledPosition[id] = position;
-        settledSpeed[id] = speed;
-        settledStep[id] = vehicles.routeStep[id]!;
-        settledMovement[id] = vehicles.movement[id]!;
+        const tracked = settledRecord[r + 7]! > 0;
+        const previousSegment = tracked ? settledRecord[r + 1]! : field;
+        const previousPosition = tracked ? settledRecord[r + 2]! : -Infinity;
+        let trailLength = tracked ? settledRecord[r + 7]! - 1 : 0;
+        settledRecord[r] = pass;
+        settledRecord[r + 1] = field;
+        settledRecord[r + 2] = position;
+        settledRecord[r + 3] = speed;
+        settledRecord[r + 4] = vehicles.routeStep[id]!;
+        settledRecord[r + 5] = vehicles.movement[id]!;
         settledRoute[id] = vehicles.route[id]!;
-        let history = histories.get(id);
-        const previousSegment = history?.segment ?? field;
-        const previousPosition = history?.position ?? -Infinity;
         let continuous = true;
-        if (!history) {
-          history = { segment: field, trail: [], position };
-          histories.set(id, history);
-        } else if (history.segment !== field) {
+        if (!tracked) setHistory(id, [], field, position);
+        else if (previousSegment !== field) {
           continuous =
-            history.segment < 0
-              ? city.movements[-history.segment - 1]!.toLane === field
+            previousSegment < 0
+              ? city.movements[-previousSegment - 1]!.toLane === field
               : field < 0
-                ? city.movements[-field - 1]!.fromLane === history.segment
-                : city.lanes[history.segment]!.out.some(
+                ? city.movements[-field - 1]!.fromLane === previousSegment
+                : city.lanes[previousSegment]!.out.some(
                     (m) => city.movements[m]!.toLane === field && city.movements[m]!.lengthM === 0,
                   );
-          if (continuous) history.trail.unshift(history.segment);
-          else history.trail.length = 0;
-          history.segment = field;
-        } else if (position < history.position - 1e-6) {
-          history.trail.length = 0;
+          const trail = trails[id]!;
+          if (continuous) trail.unshift(previousSegment);
+          else trail.length = 0;
+          trailLength = trail.length;
+        } else if (position < previousPosition - 1e-6) {
+          if (trailLength) trails[id]!.length = 0;
+          trailLength = 0;
           continuous = false;
         }
         if (!continuous) for (let f = 0; f < facilities.length; f++) uncommit(f, id);
-        history.position = position;
-        let remaining = length(id) - position,
-          keep = 0;
-        while (remaining > 0 && keep < history.trail.length)
-          remaining -= segmentLength(history.trail[keep++]!);
-        if (keep < history.trail.length) history.trail.length = keep;
-        path(id);
+        if (trailLength) {
+          const trail = trails[id]!;
+          let remaining = length(id) - position,
+            keep = 0;
+          while (remaining > 0 && keep < trail.length) remaining -= segmentLength(trail[keep++]!);
+          if (keep < trail.length) trail.length = keep;
+          trailLength = trail.length;
+        }
+        settledRecord[r + 7] = 1 + trailLength;
+        path(id, field);
         ranges();
+        // Without a served span ahead every facility's is at Infinity (`ranges`).
+        const pathRange = pathKeys[currentKey + RANGES] === AHEAD ? current!.range : undefined;
         for (const marking of continuous ? stopsBySegment[bucket(previousSegment)]! : []) {
           const passed = field === previousSegment ? position > marking.at + 1e-6 : true;
           // TASK-202: only a marking for the encounter ahead commits the vehicle to it.
@@ -628,11 +689,11 @@ export function createRailCrossings(
             passed &&
             previousPosition <= marking.at + 1e-6 &&
             (field === previousSegment
-              ? pathLive[marking.facility]
+              ? current!.live[marking.facility]
               : spansBySegment[bucket(previousSegment)]!.some(
                   (s) => s.facility === marking.facility && s.to >= marking.at,
                 ) ||
-                (pathLive[marking.facility] &&
+                (current!.live[marking.facility] &&
                   !(
                     field >= 0 &&
                     stopsBySegment[field]!.some((m) => m.facility === marking.facility) &&
@@ -653,7 +714,7 @@ export function createRailCrossings(
             for (const s of spansBySegment[b]!)
               if (front >= s.from && rear <= s.to) bodyInside[s.facility] = 1;
           if (rear >= 0) break;
-          const actual = history.trail[back];
+          const actual = back < trailLength ? trails[id]![back] : undefined;
           if (actual !== undefined) {
             if (segment >= 0) step--;
             segment = actual;
@@ -667,14 +728,15 @@ export function createRailCrossings(
           rear += front;
         }
         let marking = 0;
+        const row = id * facilityCount;
+        const brake = profiles[vehicles.vclass[id]!]!.idm.bMps2;
         for (let f = 0; f < facilities.length; f++) {
-          markedBy[f]![id] = 0;
+          markedBy[row + f] = 0;
           if (!served[f]) continue;
-          const stop = pathStops[f]!,
-            near = pathStarts[f]!;
+          const stop = pathRange ? pathRange[f]! : Infinity,
+            near = pathRange ? pathRange[facilityCount + f]! : Infinity;
           // An unmetered upstream vehicle can wait before the conflict if it can brake there.
           // Only an actual marked entry, a braking dilemma, or its physical body reserves rail.
-          const brake = profiles[vehicles.vclass[id]!]!.idm.bMps2;
           if (
             near < Infinity &&
             stop > near &&
@@ -688,19 +750,22 @@ export function createRailCrossings(
             commit(f, id);
           }
           if (speed < 0.1 && !inside && near > position + 1e-6) uncommit(f, id);
-          if (committedFlags[f]![id]) {
+          if (committedFlags[row + f]) {
             if (near < Infinity || inside) occupied[f] = 1;
             else uncommit(f, id);
           }
-          if (inside || (committedFlags[f]![id] && near < Infinity)) {
-            markedBy[f]![id] = 1;
+          if (inside || (committedFlags[row + f] && near < Infinity)) {
+            markedBy[row + f] = 1;
             marking = 1;
           }
         }
-        marks[id] = marking;
+        settledRecord[r + 6] = marking;
         if (settled)
           for (let f = 0; f < facilities.length; f++)
-            if (settledFlags[f] !== committedFlags[f]![id] || settledMarks[f] !== markedBy[f]![id])
+            if (
+              settledFlags[f] !== committedFlags[row + f] ||
+              settledMarks[f] !== markedBy[row + f]
+            )
               throw new Error(`Settled vehicle ${id} changed its pass at facility ${f}`);
       }
     }
@@ -737,7 +802,8 @@ export function createRailCrossings(
         if (!influences[b]) continue;
         const field = b < city.lanes.length ? b : city.lanes.length - b - 1;
         for (let id = vehicles.first(field); id !== -1; id = vehicles.next[id]!) {
-          path(id);
+          path(id, field);
+          const { segments, offsets } = current!;
           let stop = Infinity;
           for (let s = 0; s < segmentCount; s++)
             for (const marking of facilities[f]!.stops ?? [])
@@ -755,7 +821,7 @@ export function createRailCrossings(
             distance < (speed * speed) / (2 * brake) + params.idm.minGapM
           ) {
             commit(f, id);
-            settledPass[id] = 0;
+            settledRecord[id * 8] = 0;
             occupied[f] = 1;
             railReady[f] = 0;
           }
@@ -768,7 +834,7 @@ export function createRailCrossings(
   if (roadState) {
     for (const history of roadState.histories)
       if (history.segment === vehicles.lane[history.id])
-        histories.set(history.id, { ...history, position: vehicles.position[history.id]! });
+        setHistory(history.id, history.trail, history.segment, vehicles.position[history.id]!);
     for (let f = 0; f < facilities.length; f++) {
       const previous = roadState.admissions.find(
         (a) =>
@@ -1008,24 +1074,31 @@ export function createRailCrossings(
           services.splice(i, 1);
       publish();
     },
-    hold(id: number) {
+    /** `field`: the vehicle's segment (TASK-237: the engine's following pass has it at hand). */
+    hold(id: number, field = vehicles.lane[id]!) {
+      const h = id * 2;
       holds[id] = 0;
-      holdPositions[id] = Infinity;
-      holdReds[id] = -1;
-      const field = vehicles.lane[id]!;
+      holdRecords[h] = Infinity;
+      holdRecords[h + 1] = -1;
+      if (checkSkips && vehicles.lane[id] !== field)
+        throw new Error(`Vehicle ${id}: hold asked off its segment`);
       if (field < -city.movements.length || !influences[bucket(field)]) return Infinity;
-      path(id);
+      path(id, field);
       ranges();
+      // TASK-237: without a served facility's span ahead on the path, no stop below binds.
+      if (pathKeys[currentKey + RANGES] !== AHEAD) return Infinity;
+      const { segments, offsets, range: pathRange } = current!;
       const position = vehicles.position[id]!;
+      const row = id * facilityCount;
       let best = Infinity;
       let protectedStop = false;
-      for (let f = 0; f < facilities.length; f++) {
+      for (let f = 0; f < facilityCount; f++) {
         if (!served[f]) continue;
-        if (committedFlags[f]![id]) continue;
-        const near = pathStarts[f]!,
-          end = pathEnds[f]!;
-        const stop =
-          pathStops[f]! <= near ? pathStops[f]! : Math.max(position, near - params.idm.minGapM);
+        if (committedFlags[row + f]) continue;
+        const near = pathRange[facilityCount + f]!,
+          end = pathRange[2 * facilityCount + f]!,
+          marked = pathRange[f]!;
+        const stop = marked <= near ? marked : Math.max(position, near - params.idm.minGapM);
         if (stop === Infinity || end < stop || stop >= best) continue;
         let blocked = states[f] !== CROSSING_OPEN;
         let redLine = -1;
@@ -1037,52 +1110,51 @@ export function createRailCrossings(
             if (offset > clear) break;
             // The nearest car ahead. On its own segment the list is ordered (vehicle.ts): the cars
             // behind it stand no farther on, so the search starts at it (TASK-187).
-            let tail = s === 0 ? vehicles.previous[id]! : vehicles.last(segment);
-            while (tail !== -1 && (tail === id || offset + vehicles.position[tail]! <= position))
-              tail = vehicles.previous[tail]!;
-            if (
-              tail !== -1 &&
-              tail !== id &&
-              offset + vehicles.position[tail]! > position &&
-              offset + vehicles.position[tail]! - length(tail) < clear &&
-              (segment !== field || !platoonFits(id, f, end))
-            )
-              blocked = true;
-            if (segment >= 0) {
-              const next = s + 1 < segmentCount ? segments[s + 1] : undefined;
+            // TASK-237: once blocked, only the first red line can still change the outcome.
+            if (!blocked) {
+              let tail = s === 0 ? vehicles.previous[id]! : vehicles.last(segment);
+              while (tail !== -1 && (tail === id || offset + vehicles.position[tail]! <= position))
+                tail = vehicles.previous[tail]!;
               if (
-                next !== undefined &&
-                next < 0 &&
-                red(-next - 1) &&
-                offset + city.lanes[segment]!.stopM > stop &&
-                offset + city.lanes[segment]!.stopM < clear
-              ) {
+                tail !== -1 &&
+                tail !== id &&
+                offset + vehicles.position[tail]! > position &&
+                offset + vehicles.position[tail]! - length(tail) < clear &&
+                (segment !== field || !platoonFits(id, f, end))
+              )
                 blocked = true;
-                if (redLine === -1) redLine = -next - 1;
+            }
+            if (segment >= 0 && s + 1 < segmentCount) {
+              const next = segments[s + 1]!;
+              const line = offset + laneStops[segment]!;
+              if (next < 0 && line > stop && line < clear && red(-next - 1)) {
+                blocked = true;
+                redLine = -next - 1;
+                break;
               }
             }
           }
         if (blocked) {
           best = stop;
           protectedStop = states[f] !== CROSSING_OPEN;
-          holdReds[id] = redLine;
+          holdRecords[h + 1] = redLine;
         }
       }
       holds[id] = Number(protectedStop);
-      holdPositions[id] = best;
+      holdRecords[h] = best;
       return best;
     },
     /** TASK-222: the movement whose red stop line, inside the clear zone beyond the tracks, held
      * `id` at its last `hold`, or -1. */
-    holdRed: (id: number) => holdReds[id]!,
+    holdRed: (id: number) => holdRecords[id * 2 + 1]!,
     binding(id: number, binding: boolean) {
       if (!binding) holds[id] = 0;
     },
-    blocksExit: (id: number, lengthM: number) => holdPositions[id]! <= lengthM + 1e-6,
+    blocksExit: (id: number, lengthM: number) => holdRecords[id * 2]! <= lengthM + 1e-6,
     held: (id: number) =>
       !!holds[id] &&
       vehicles.speed[id]! < 0.1 &&
-      Math.abs(vehicles.position[id]! - holdPositions[id]!) < 0.5,
+      Math.abs(vehicles.position[id]! - holdRecords[id * 2]!) < 0.5,
     clocks(): Clock[] {
       return services.map((s) => ({
         routeId: table.routes[table.departures[s.departure]!.route]!.id,
@@ -1128,16 +1200,17 @@ export function createRailCrossings(
         histories: [],
         admissions: facilities.map((f, i) => ({ nodes: f.nodes, ids: [...committed[i]!] })),
       };
-      for (const [id, history] of histories) {
-        const segment = remap(history.segment);
-        if (segment === undefined || (history.segment >= 0 && segment === -1)) continue;
+      for (const [id, previousTrail] of histories) {
+        const at = settledRecord[id * 8 + 1]!;
+        const segment = remap(at);
+        if (segment === undefined || (at >= 0 && segment === -1)) continue;
         const trail: number[] = [];
-        for (const previous of history.trail) {
+        for (const previous of previousTrail) {
           const mapped = remap(previous);
           if (mapped === undefined || (previous >= 0 && mapped === -1)) break;
           trail.push(mapped);
         }
-        result.histories.push({ id, segment, trail, position: history.position });
+        result.histories.push({ id, segment, trail, position: settledRecord[id * 8 + 2]! });
       }
       return result;
     },
