@@ -260,11 +260,14 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-234](tasks/TASK-234.md) | 10 | Land TASK-226 (Hbf group membership, D2) on current main | `split.ts`, `junctions.ts`, Freiburg rebuild | 226 | audit, Freiburg seeds 1 to 6, traffic, merge rule | done 2026-11-20 (merged variant; D2 fixed; Freiburg with 235 77.8 s) |
 | [TASK-235](tasks/TASK-235.md) | 10 | Land TASK-221 (lane tapers across short roads) with the grade-aware audit | `lanes.ts`, `continuity.ts`, `compile.ts` | 221, 233 | audit, traffic, merge rule | done 2026-11-20 (merged; audit within the lead's tolerance) |
 | [TASK-236](tasks/TASK-236.md) | render | The remaining roof shapes on concave outlines (half-hipped, gambrel, mansard, skillion, round) | `render3d/roofs.ts` | 227 | flat fallbacks, tests, close-ups, budgets, identical hashes | done 2026-11-20 (merged; flat roofs Freiburg 14 to 1, Munich 13 to 0) |
-| [TASK-237](tasks/TASK-237.md) | 9 | Step time, fourth pass: the rail hold and rail step, results identical | `rail-crossings.ts` performance | 230 | phase tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
+| [TASK-237](tasks/TASK-237.md) | 9 | Step time, fourth pass: the rail hold and rail step, results identical | `rail-crossings.ts` performance | 230 | phase tables, identical hashes, interleaved timings | done 2026-11-20 (merged; full demand 9.5% faster, rail 41%, hashes identical) |
 | [TASK-238](tasks/TASK-238.md) | 10 | Close halves as one carriageway unless a mapped median lies between them (TASK-231's D5 reworked) | `corridors.ts` | 231 | audit, traffic, merge rule | done 2026-11-20 (merged; nothing worse) |
 | [TASK-239](tasks/TASK-239.md) | 10 | Crossings mapped only as OSM nodes get walk links and paint | importer `walk.ts` | 217, 224 | census, audit, traffic, merge rule | held 2026-11-20 (passes alone; with TASK-238 Freiburg's gate 90.3 s; diagnosing) |
 | [TASK-240](tasks/TASK-240.md) | render | Arrows of the next junction on approaches ending at a plain node or median crossover (r:1148) | `marking-geometry.ts` | 229, 234 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
 | [TASK-241](tasks/TASK-241.md) | render | Paint fixes: gores between one carriageway's lanes, arrows over keep-clear boxes, give-way triangles over zebras | `marking-geometry.ts` | 108, 240 | tests, counts, close-ups, identical hashes | in progress (second unsupervised run 2026-11-20) |
+| [TASK-242](tasks/TASK-242.md) | 10 | Road widths from the data: urban lane widths, `width` tags, `placement` (TASK-218's D3, D9) | `roads.ts`, `corridors.ts` | 218, 238 | imagery checks, audit, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
+| [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5106,6 +5109,41 @@ give-way triangles overlap a new zebra at `n:2088` (added to TASK-241).
 Lead check on the merge of TASK-240 and 238: the Freiburg rebuild reproduces the project; check (1,589),
 city (218), traffic light and guard, light e2e (61); full demand actuated 3,591 / 173 (151240499), fixed
 3,504 / 153 (4004936993).
+
+Full run 44706560824 (lead, manual, on 3f37dfb after TASK-240 and 238): every job green, including all
+five e2e shards; the city job took 18.0 min.
+
+TASK-239, diagnosis (same agent, 2026-11-20; still held): with TASK-238 the gate is 90.3 s because
+Freiburg's seed 1 has two outcomes, a normal morning (about 78 s) and a jam at 08:00 (90 to 96 s), and
+small unrelated changes pick one. No lock, no stalled crossing; walkers hold cars about 800 s in every
+tree. One link alone (1245631005, a midblock zebra on Wilhelmstraße 4 m before `n:697`, placed where OSM
+maps it) gives 91 s even without TASK-238; link 436628448 about 1 km away gives 91.3 s through mode choice.
+The extra delay is a batch of about 50 trips leaving p:2257, p:2263, p:2403, p:2489 at about 08:00 for the
+station places: in the good run their first route uses Wilhelmstraße (`r:698`), in the bad run the same
+trips at the same second take Schnewlinstraße's short-road chain (`r:805`, `r:807`, `r:441`, `r:1245` to
+`n:364`), which queues 100 to 160 s per car, and reroutes spill onto Bismarckallee. Cause:
+`src/sim/link-costs.ts` refreshes costs every 60 s from finished roads only, so every car departing in one
+interval gets the same cheapest route and the 0.1 noise does not split them. A latent fault, written as
+TASK-244; 239 is re-measured after it. Branch rebased (`6fd050e`, on 80935ff) with re-pins only; seeds 1 to
+3: 90.3, 68.3, 68.6 s. Also noted: walkers wait about 420 s on average at signalised crossings in every
+tree, main included (a fault of its own, to be written).
+
+TASK-237 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, performance only): the rail hold and
+rail step. Cuts (all exact): per-vehicle crossing commitments, settled-check data and path keys packed in
+one record each; the path keeps only the new position while no new segment comes within 600 m; a car's
+crossing ranges kept until it passes a span end or marking (Munich 0.15 to 08:30: recomputed 92K times
+instead of 5.38M); `hold` exits early with no served crossing ahead; the hold scan stops at the first red
+line once blocked; the engine passes the car's segment to `hold`; history moved into the settled record.
+A first packing of the held flag slowed the gridlock pass by 14 s and was reverted to a byte array.
+`debugSkips` recomputes and compares kept ranges, skipped path walks and the passed segment
+(`exact-skips.test.ts`). Profiled together (CPU 82%): rail hold 248.7 to 144.3 s (-42%), rail crossing step
+132.8 to 78.1 s (-41%), total 1,839.9 to 1,668.6 s actuated (-9%), fixed alike. Interleaved untimed pairs:
+-7.1, -7.7, -9.6, -13.4% (load 50 to 56%), mean -9.5% (target 7%); Freiburg's timed gate 40.3 to 37.3 s.
+Hashes identical on its base (Munich 0.15 seeds 1 to 3 all configurations, both full demands, Freiburg,
+Sindelfingen, with and without `debugSkips`). No files outside scope. Lead check on current main (after
+TASK-235, 234, 236, 240, 238): check (1,591), city (218), traffic light and guard, light e2e (61); full demand
+actuated 3,591 / 173 (151240499), fixed 3,504 / 153 (4004936993), identical to main (stepping 1,427 and 1,439
+s against 1,116 and 1,127 s at the TASK-238 check, a busier machine: not a like-for-like timing).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

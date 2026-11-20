@@ -1,6 +1,6 @@
 # TASK-237 — Step time, fourth pass: the rail hold and rail step
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/237-rail-step-time`, worktree `D:\cityflows-wt\237`, ports 5437 / 5537.
 
 ## Goal
