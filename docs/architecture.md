@@ -1467,10 +1467,13 @@ interface Route {
 }
 
 type RouteFailure = 'no_path' | 'destination_unreachable' | 'lane_infeasible' | 'class_forbidden';
-type RouteResult = { ok: true; route: Route } | { ok: false; reason: RouteFailure };
+type RouteResult =
+  | { ok: true; route: Route }
+  | { ok: false; reason: RouteFailure }
+  | { ok: false; reason: 'above_bound' };    // only with boundS (TASK-251)
 
 interface RouteProvider {
-  route(compiled: CompiledCity, costs: LinkCosts, req: RouteRequest): RouteResult;
+  route(compiled: CompiledCity, costs: LinkCosts, req: RouteRequest, boundS?: number): RouteResult;
 }
 
 interface LinkCosts {                        // owned by the sim; free-flow in Gate 1
@@ -1524,6 +1527,16 @@ Algorithm:
    ordered sets, including through lane-index remapping; dropped-lane recovery stays exact.
    `desiredSpeedFactor` is carried in the request for congestion-aware costs (Gate 3) and
    unused in Gate 1. A `toConnector` with direction `out` yields `destination_unreachable`.
+
+`boundS` (TASK-251, optional) is a cost the caller's route must stay below to be of use. The
+road search's cost is a lower bound for every route the request can return (each lane-search edge
+pays its road's cheapest movement or a dearer one, plus lane changes, with the same weights);
+when it is at or above `boundS`, the provider returns `above_bound` without lane resolution or
+the lane search. Without `boundS`, or below it, the result is the unbounded one. The engine's
+congestion check passes `(1 - rerouteHysteresis)` times the incumbent's remaining cost, the
+cost a switch must beat; under `debugSkips` it routes each stopped check without the bound and
+throws if that route would have switched, and the provider throws if a lane search ever costs
+less than its road search.
 
 `laneChangeDistanceM` is a simulation parameter (default 30 m) shared with the sim through
 `SimParams`. Congestion-aware costs (Gate 3) replace `roadTravelTimeS` with EWMA observed

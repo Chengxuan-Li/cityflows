@@ -36,7 +36,11 @@ export interface Route {
 
 export type RouteFailure =
   'no_path' | 'destination_unreachable' | 'lane_infeasible' | 'class_forbidden';
-export type RouteResult = { ok: true; route: Route } | { ok: false; reason: RouteFailure };
+export type RouteResult =
+  | { ok: true; route: Route }
+  | { ok: false; reason: RouteFailure }
+  /** TASK-251: only with `boundS`, when no route the request can return costs less. */
+  | { ok: false; reason: 'above_bound' };
 
 export interface LinkCosts {
   roadTravelTimeS: Float64Array;
@@ -44,7 +48,10 @@ export interface LinkCosts {
 }
 
 export interface RouteProvider {
-  route(compiled: CompiledCity, costs: LinkCosts, req: RouteRequest): RouteResult;
+  /** `boundS` (TASK-251): the caller needs the route only if it costs less. When the road
+   * search's cost, a lower bound for every route the request can return, is at or above it, the
+   * provider may return `above_bound` instead of resolving lanes and searching them. */
+  route(compiled: CompiledCity, costs: LinkCosts, req: RouteRequest, boundS?: number): RouteResult;
 }
 
 export interface RoutingParams {
@@ -94,7 +101,7 @@ export function createRouteProvider({
   const shortestPath = createPathSearch();
   const noise = createNoiseMemo();
   return {
-    route(compiled, costs, request) {
+    route(compiled, costs, request, boundS) {
       const destination = compiled.connectors[request.toConnector];
       if (!destination || destination.direction === 'out') {
         return { ok: false, reason: 'destination_unreachable' };
@@ -149,6 +156,10 @@ export function createRouteProvider({
         return { ok: false, reason: connected ? 'class_forbidden' : 'no_path' };
       }
 
+      // Every lane-search edge pays its road's cheapest movement or a dearer one, plus lane
+      // changes, with the same weights and the same additions: never less than the road search.
+      if (boundS !== undefined && path.costS >= boundS) return { ok: false, reason: 'above_bound' };
+
       const roads = path.nodes;
       const lanes = resolveLanes(compiled, graph, roads, request, destination, laneChangeDistanceM);
       // The road search is a lower bound. It is exact only when the chosen chain needs
@@ -169,6 +180,10 @@ export function createRouteProvider({
       }
 
       const route = searchLanes(compiled, graph, weights, request, destination, permits);
+      if (checkSkips && route && route.costS < path.costS)
+        throw new Error(
+          `Lane search costs ${route.costS} s, below its road search's ${path.costS} s`,
+        );
       if (route) return { ok: true, route };
       const withoutAccess = searchLanes(
         compiled,

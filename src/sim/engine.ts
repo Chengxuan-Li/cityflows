@@ -289,7 +289,7 @@ function createRun({
     { request: RouteRequest; results: Map<number, RouteResult> }
   >();
   let headRouteVersion = costs.version;
-  const rerouter = createRerouter(compiled, vehicles, params, provider, costs);
+  const rerouter = createRerouter(compiled, vehicles, params, provider, costs, debugSkips);
   const roadEnteredS = new Float64Array(trips.length);
   const roadEnteredM = new Float64Array(trips.length);
   const routeReasons: VehicleDetail['routeReason'][] = Array(trips.length).fill('initial');
