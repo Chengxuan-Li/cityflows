@@ -237,7 +237,10 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-238: Bismarckallee's halves pulled to one carriageway (1,461 completed, 77.8 to 77.9 s).
   // TASK-247: a car behind a head waiting for another phase does not extend an actuated green
   // (Bismarckallee's shared lane at n:1132; 1,461 to 1,464 completed, 77.9 to 68.1 s).
-  expect(morning.stateHash).toBe(649852386);
+  // TASK-249 (TASK-245's v1): an actuated green resting with walk green serves a waiting walker (a
+  // rounding error held it), and signal crossings no phase serves are crossed in a gap (1,464 to
+  // 1,523 completed, 68.1 to 68.2 s).
+  expect(morning.stateHash).toBe(3588934866);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

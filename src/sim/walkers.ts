@@ -31,6 +31,8 @@ const SIGNAL = 1;
 const RANGE_M = 100;
 /** How far ahead of a crossing a walker on it already counts as inside a lane's band. */
 const ENTER_M = 0.5;
+/** TASK-245: rounding allowed when walk green is compared with the green a run needs. */
+const GREEN_EPS_S = 1e-6;
 
 export interface WalkerSnapshot {
   count: number;
@@ -171,6 +173,7 @@ export function createWalkers(
   let arrivedS = new Float64Array(capacity).fill(NaN);
   let crossings = new Uint16Array(capacity);
   let green = new Uint8Array(capacity);
+  let yields = new Uint8Array(capacity);
   let tripLeg = new Uint8Array(capacity);
   const owners: ({
     fromPlaceId: PlaceId;
@@ -196,6 +199,7 @@ export function createWalkers(
     arrivedS = grow(arrivedS, capacity, NaN);
     crossings = grow(crossings, capacity);
     green = grow(green, capacity);
+    yields = grow(yields, capacity);
     tripLeg = grow(tripLeg, capacity);
   }
   let next = 0;
@@ -255,11 +259,25 @@ export function createWalkers(
   const isCrossing = (legs: WalkLeg[], i: number) =>
     i < legs.length && !!link(legs[i]!.link).crossing;
 
-  /** Remaining walk green of a link at `timeS`: 0 when red, Infinity off a signal. */
+  /** TASK-245: the signal crossing links some phase of their node's program gives walk green.
+   * A walker at one no phase serves waited for ever (Freiburg: about 200 walkers a morning at 9
+   * mapped crossings); it crosses there as without a signal, in a gap it needs no one to stop for
+   * (`yields`). */
+  const servedLinks = (on: CompiledCity) => {
+    const served = new Uint8Array(on.walk.links.length);
+    for (const node of on.nodes)
+      for (const phase of node.signal?.phases ?? [])
+        for (const index of phase.walk) served[index] = 1;
+    return served;
+  };
+  let served = servedLinks(city);
+
+  /** Remaining walk green of a link at `timeS`: 0 when red, Infinity off a signal or at a signal
+   * crossing no phase serves. */
   let windows = new Map<number, [number, number][]>();
   function walkGreen(index: number, timeS: number) {
     const crossing = link(index).crossing!;
-    if (crossing.control !== 'signal') return Infinity;
+    if (crossing.control !== 'signal' || !served[index]) return Infinity;
     if (signalWalkGreen) return signalWalkGreen(index, timeS);
     const signal = city.nodes[crossing.node]?.signal;
     if (!signal) return 0;
@@ -302,6 +320,11 @@ export function createWalkers(
     runPos[id] = 0;
     runLength[id] = offset;
     runKind[id] = kindOf(city, legs, start, end);
+    yields[id] = Number(
+      legs
+        .slice(start, end)
+        .some((l) => link(l.link).crossing!.control === 'signal' && !served[l.link]),
+    );
     runSpans[id] = spans;
     state[id] = WAITING;
     currentWaitS[id] = 0;
@@ -350,7 +373,11 @@ export function createWalkers(
   }
 
   /** At a signal, the run's walk green covers the crossing at walking speed plus the clearance.
-   * TASK-170: a walker without it calls for that green at each signal leg of its run (`calls`). */
+   * TASK-170: a walker without it calls for that green at each signal leg of its run (`calls`).
+   * TASK-245: within `GREEN_EPS_S`: an actuated green extended for the call ends at `timeS +
+   * needS`, and `(timeS + needS) - timeS` can fall short of `needS` by a rounding error, every
+   * step, so a walker at a resting green waited until some vehicle ended it (Freiburg: 424 s on
+   * average). */
   let calls = new Map<number, number>();
   function greenEnough(id: number, timeS: number) {
     if (runKind[id] !== SIGNAL) return true;
@@ -360,7 +387,7 @@ export function createWalkers(
     for (let i = leg[id]!; i < runEnd[id]!; i++)
       if (link(legs[i]!.link).crossing!.control === 'signal')
         green = Math.min(green, walkGreen(legs[i]!.link, timeS));
-    if (green >= needS) return true;
+    if (green >= needS - GREEN_EPS_S) return true;
     for (let i = leg[id]!; i < runEnd[id]!; i++) {
       const index = legs[i]!.link;
       if (link(index).crossing!.control === 'signal')
@@ -462,8 +489,9 @@ export function createWalkers(
     for (const id of active) {
       const s = state[id];
       if (s !== WAITING && s !== CROSSING) continue;
-      // A waiting walker holds lanes only when it would step out but for the traffic.
-      if (s === WAITING && !green[id]) continue;
+      // A waiting walker holds lanes only when it would step out but for the traffic, and not
+      // at a signal crossing no phase serves, where it waits for a gap (TASK-245).
+      if (s === WAITING && (!green[id] || yields[id])) continue;
       const position = s === CROSSING ? runPos[id]! : 0;
       for (const span of runSpans[id]!) {
         if (position > span.at + span.half + params.crossingClearM) continue;
@@ -754,6 +782,7 @@ export function createWalkers(
       city = signalled;
       router = createWalkRouter(city.walk);
       windows = new Map();
+      served = servedLinks(city);
       sourceRoutes = sources.map(({ fromPlaceId, toPlaceId }) =>
         routeBetween(fromPlaceId, toPlaceId),
       );
