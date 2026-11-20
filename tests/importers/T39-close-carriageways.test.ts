@@ -583,17 +583,18 @@ cityTest(
       expect(city.roads[id]!.lateralOffsetM).toBe(0);
       expect(city.roads[id]!.provenance.inferred).not.toContain('separated');
     }
-    // The facing edges, from r:961's cut at n:362 out to 40 m: the OSM median, 11.7 m narrowing
-    // to 8 m (main attached them at 0.5 m).
+    // The facing edges, from r:961's cut at n:362 out to 40 m: the OSM median, 12.3 m narrowing
+    // to 8.6 m (main attached them at 0.5 m; TASK-242's urban 3.25 m lanes leave 0.6 m more of
+    // the tram median than 3.5 m lanes did).
     const node = net.index.node.get('n:362')!;
     const [a, b] = [medianEdge(net, 'r:961', node), medianEdge(net, 'r:1276', node)];
     const lengths = cumulativeLengths(a);
     const start = nearestOnPolyline(a, b[0]!).along;
     for (const [d, gap] of [
-      [0, 11.75],
-      [10, 10.52],
-      [20, 9.67],
-      [40, 7.98],
+      [0, 12.35],
+      [10, 11.13],
+      [20, 10.29],
+      [40, 8.6],
     ] as const)
       expect(nearestOnPolyline(b, pointAtDistance(a, lengths, start + d)).away).toBeCloseTo(gap, 1);
   },
@@ -605,15 +606,16 @@ cityTest(
   () => {
     const { city, net } = load('munich');
     // Facing edges of r:724 and r:1279 every metre (TASK-095 attached them at the 0.5 m median
-    // under the 15 m gap limit): on their OSM lines they stay 5.9 to 8.6 m apart, no void closed.
+    // under the 15 m gap limit): on their OSM lines they stay 6.4 to 9.1 m apart, no void closed
+    // (5.9 to 8.6 m before TASK-242's urban 3.25 m lanes).
     const node = net.index.node.get('n:721')!;
     const [a, b] = [medianEdge(net, 'r:724', node), medianEdge(net, 'r:1279', node)];
     const lengths = cumulativeLengths(a);
     const gaps: number[] = [];
     for (let s = 0; s <= lengths.at(-1)!; s += 1)
       gaps.push(nearestOnPolyline(b, pointAtDistance(a, lengths, s)).away);
-    expect(Math.min(...gaps)).toBeGreaterThan(5.5);
-    expect(Math.max(...gaps)).toBeLessThan(9);
+    expect(Math.min(...gaps)).toBeGreaterThan(6);
+    expect(Math.max(...gaps)).toBeLessThan(9.5);
     for (const id of ['r:724', 'r:1279'] as const) expect(city.roads[id]!.lateralOffsetM).toBe(0);
   },
   limit(120_000),

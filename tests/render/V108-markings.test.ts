@@ -89,8 +89,10 @@ const baseline = {
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-217: an entry lane shows its turns through the whole junction group (M1).
-    compile: 'cdb919be6cf54234e80b8f65227cac01f0e126b1878179f05dc1f2c76e356a2b',
-    arrows: '78c0c21190095a89060dd900a32a4edea30f717798d1988e618f806c1251ceca',
+    // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+    compile: '71e2b6a6454c5d2b3d45d41ceab481a5b76e768860742fa5c744ec28071f766d',
+    // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+    arrows: '5a4cae3795dbb5a67423e6aa98eb166475d64e0253c01abcd3c799cea5e21a24',
   },
 } as const;
 const hash = (value: unknown) =>

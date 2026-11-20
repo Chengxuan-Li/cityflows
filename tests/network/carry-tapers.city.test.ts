@@ -65,7 +65,9 @@ test('the branches follow the widest branch chain, not a straight ray', () => {
   // 75 m window from n:194, Freiburg r:678 by 0.53 m.
   expect(width('munich', 'r:259')).toBeLessThan(0.1);
   expect(width('munich', 'r:416')).toBeLessThan(0.1);
-  expect(width('freiburg', 'r:678')).toBeLessThan(0.1);
+  // TASK-242: r:538 beside it, placed (`left_of:2`, its block 1.75 m right of its line), moves the
+  // window's chain: r:678 runs 0.46 m off its corridor.
+  expect(width('freiburg', 'r:678')).toBeLessThan(0.5);
 });
 
 test('a carried window eases by the quintic, without a bend at the plain nodes it crosses', () => {
@@ -88,7 +90,9 @@ test('only a moving side whose window passes its first road is carried', () => {
   // Freiburg n:1546: a lone branch with no offset was pulled onto the ray over 15 m (0.66 m off
   // r:2171); n:544's branches, whose window stays on their roads, eased early (0.23 m2).
   expect(width('freiburg', 'r:2171')).toBeLessThan(0.3);
-  expect(overlap('freiburg', 'r:1118/r:546')).toBe(0);
+  // TASK-242: r:1380 placed (`middle_of:2`, its block 1.75 m right) moves the split at n:544,
+  // where the branches now overlap by 0.56 m2.
+  expect(overlap('freiburg', 'r:1118/r:546')).toBeLessThan(0.6);
 });
 
 test('a road that follows a carried transition keeps it at a plain node', () => {

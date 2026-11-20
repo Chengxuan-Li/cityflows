@@ -18,13 +18,13 @@ const speedKph: Record<RoadClass, number> = {
 };
 
 /** TASK-242 (TASK-216 D3): the lane width where no width is tagged. Inside a built-up area
- * secondary and tertiary roads take RASt 06's urban widths, 3.25 m and 3.0 m, instead of 3.5 m
- * (Freiburg's five-lane secondary approaches `r:261` and `r:1179` measure 16.0 and 15.5 m on the
- * aerial imagery); primary roads keep 3.5 m, as Bismarckallee measures 3.45 to 3.5 m a lane. */
+ * secondary roads take RASt 06's urban 3.25 m instead of 3.5 m (Freiburg's five-lane secondary
+ * approaches `r:261` and `r:1179` measure 16.0 and 15.5 m on the aerial imagery); primary roads
+ * keep 3.5 m, as Bismarckallee measures 3.45 to 3.5 m a lane. Tertiary roads keep 3.5 m: no
+ * imagery checks them, and 3.0 m left Munich's arms too narrow for their corner radii. */
 export function defaultLaneWidth(roadClass: RoadClass, urban: boolean): number {
   if (roadClass === 'residential' || roadClass === 'service') return 3;
   if (urban && roadClass === 'secondary') return 3.25;
-  if (urban && roadClass === 'tertiary') return 3;
   return 3.5;
 }
 

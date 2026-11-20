@@ -63,7 +63,8 @@ const baselines = {
   // tram `form` stripped the city equals b3bcde6's.
   // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-  'munich-donnersberger': '873f2868d6e84900b0ddaa033a6b04742df54870f3d36c704de89d0cd102b854',
+  // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+  'munich-donnersberger': '514bd2da71ffdbe410df79ac0def9fc5834d263530ea1acb7a02a9401e2b50ed',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

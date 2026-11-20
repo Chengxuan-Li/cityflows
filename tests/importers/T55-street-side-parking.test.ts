@@ -397,7 +397,8 @@ test.each(
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).
         // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-        '396fb24889574926ba0618affefc95c0023d6dd55a361e786e6382e398559c2c'
+        // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+        '56addcaef52f27ad65a97d7fcc8fd56ad139f02ca33e0dc4f5f3146afaed045c'
       : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).

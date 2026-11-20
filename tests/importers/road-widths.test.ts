@@ -30,20 +30,21 @@ const roadOf = (city: City, way: number) => {
 };
 
 describe('TASK-242 road widths and placement', () => {
-  it('untagged secondary and tertiary lanes in a built-up area take the urban widths', () => {
+  it('untagged secondary lanes in a built-up area take the urban width', () => {
     const oneWay = { oneway: 'yes', lanes: '2' };
     // Freiburg's five-lane secondary approaches r:261 and r:1179: 16.0 and 15.5 m on the ground.
     expect(widths({ oneway: 'yes', lanes: '5', maxspeed: '50' }, 'secondary')).toEqual([
       Array(5).fill(3.25),
     ]);
-    expect(widths({ ...oneWay, 'zone:traffic': 'DE:urban' }, 'tertiary')).toEqual([[3, 3]]);
+    expect(widths({ ...oneWay, 'zone:traffic': 'DE:urban' }, 'secondary')).toEqual([[3.25, 3.25]]);
     expect(widths({ ...oneWay, 'maxspeed:type': 'DE:zone30' }, 'secondary')).toEqual([
       [3.25, 3.25],
     ]);
-    // Outside a built-up area, untagged, or primary (Bismarckallee measures 3.45 to 3.5 m a
-    // lane), lanes keep 3.5 m.
+    // Outside a built-up area, untagged, primary (Bismarckallee measures 3.45 to 3.5 m a lane) or
+    // tertiary, lanes keep 3.5 m.
     expect(widths({ ...oneWay, maxspeed: '70' }, 'secondary')).toEqual([[3.5, 3.5]]);
-    expect(widths(oneWay, 'tertiary')).toEqual([[3.5, 3.5]]);
+    expect(widths(oneWay, 'secondary')).toEqual([[3.5, 3.5]]);
+    expect(widths({ ...oneWay, maxspeed: '50' }, 'tertiary')).toEqual([[3.5, 3.5]]);
     expect(widths({ ...oneWay, maxspeed: '50' }, 'primary')).toEqual([[3.5, 3.5]]);
   });
 
@@ -159,7 +160,7 @@ describe('TASK-242 road widths and placement', () => {
     let city = run({ placement: 'right_of:1' });
     expect([roadOf(city, 1), roadOf(city, 2)].map((r) => r.lateralOffsetM)).toEqual([1.75, 1.75]);
     // The next way centred (untagged, or a transition the network cannot taper): neither steps.
-    for (const second of [{}, { placement: 'transition' }]) {
+    for (const second of [{}, { placement: 'transition' }] as Record<string, string>[]) {
       city = run(second);
       expect([roadOf(city, 1), roadOf(city, 2)].map((r) => r.lateralOffsetM)).toEqual([0, 0]);
     }

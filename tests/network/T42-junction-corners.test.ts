@@ -183,6 +183,9 @@ const named: Record<AuditCity, Record<string, string>> = {
     'n:474 r:1355>r:476': groupInner('r:1355', 18.2),
     'n:483 r:944>r:485': groupInner('r:485', 10.1),
     'n:52 r:1305>r:700': groupInner('r:700', 11.1),
+    // TASK-242: Marsstraße's r:1061 narrowed to urban 3.25 m lanes: the 1.5 m curb turns 30.2
+    // degrees between samples (24.9 on main).
+    'n:484 r:845>r:1061': 'r:1061 narrowed to 3.25 m lanes: a 1.5 m curb turning 30.2 degrees',
   },
 };
 

@@ -194,19 +194,24 @@ const pins = {
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-    compile: '727455b3d8c313c2757d59ed73e495f4796fef4902c5e14cb6a3b943c12d46ad',
-    lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
+    // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+    compile: 'e6ce5d133f1d6f49868ba767920deed7aa994aca185c79e4fc7cf458cdc4ca27',
+    // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+    lamps: 'a2a03c89d6d61bb38e3a1eed0e016ed2b24638cf0806d2eadeb4c061035dfeca',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
+    // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+    curbs: '30c6306aaea1a098d1dfcd48eb2f1faa6f0e7e7d148b2d9ade2eabc9092c8c86',
     // TASK-229 (N1): the four dividers of the inner road r:267; without them both equal 5c47b75's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-    de: 'f8da7757d8ed27c004274e3a874a7303500fa794b95b010208d500b1fc5bbbce',
+    // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+    de: 'd1229cbcc5b633371a8c763b5f55466de368aafb81db2a5a8fbec1ff68bbfa04',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-    us: 'bd8c86ea380b1252626c5bbca2ee3b5583d6447e0ab72d0f8d711cc6dc7df8e6',
+    // TASK-242: Munich's urban secondary lanes 3.25 m (47 roads).
+    us: '58948af0199cfea64a56246f3e4607bbaf86417b2b3377c30b027f3d7ba69885',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
