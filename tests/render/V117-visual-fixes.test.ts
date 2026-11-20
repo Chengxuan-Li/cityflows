@@ -203,12 +203,14 @@ const pins = {
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
-    de: 'f11dcbf2fb63575bd2f4678b3c2ee727f2c00477f42fe791fa57134fadd2d23b',
+    // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
+    de: '8afbd5fe05eed429a6ab4a6a0320cf48571d47b0a238bf05e0688e82bc8023a2',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
-    us: '40e6fe5c634daddc1529fe7ce1845131fa4a3bb645e1a59cb5b453e64cafe630',
+    // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
+    us: '714f48807b1837b21e6360ba10f95db9fde9a28f04e82ba6efffdf8edc3acb4c',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.

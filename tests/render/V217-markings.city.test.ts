@@ -21,9 +21,13 @@ import {
 import {
   approachMarkings,
   crossingStripes,
+  keepClearBoxes,
+  keepClearMarkings,
   roadMarkingGeometry,
   transitionMarkings,
 } from '../../src/render/marking-geometry';
+import { paintedCity } from '../../src/render/road-paint';
+import { markingThemes } from '../../src/render/style';
 import type { City } from '../../src/schema';
 
 // TASK-215: the marking cases M1 to M6 of TASK-212's audit
@@ -197,6 +201,41 @@ test('TASK-241: arrows keep off keep-clear boxes, moved along their lane or left
   expect(arrowsOf('r:296').length).toBe(3);
   expect(arrowsOf('r:1333').length).toBe(2);
   expect(arrowsOf('r:904').length).toBe(1);
+});
+
+test('TASK-246: a keep-clear box stands on its lane between its tapers, inside the carriageway', () => {
+  const box = (id: string) =>
+    keepClearBoxes(net, net.lanes[net.index.lane.get(id as never)!]!, markingThemes.de, city);
+  // r:1189#3 gains its lane at n:1169 (taper 8.7 m), r:1360#2 at 15 m, r:296#2 at 11.3 m: the box
+  // starts where the lane is whole (it was 2.0, 7.9 and 2.0 m).
+  expect(box('r:1189#3').map((z) => [+z.fromM.toFixed(1), +z.toM.toFixed(1)])).toEqual([
+    [8.7, 16.5],
+  ]);
+  expect(box('r:1360#2')[0]!.fromM).toBeCloseTo(15, 6);
+  expect(box('r:296#2')[0]!.fromM).toBeCloseTo(
+    net.lanes[net.index.lane.get('r:296#2' as never)!]!.taperStartM,
+    6,
+  );
+  // r:1151#1 (9.5 m, 6.7 m taper) and r:1389#1 (a gain and an end of 15 m on 30.3 m) keep under
+  // 3 m of whole lane: no box.
+  expect(box('r:1151#1')).toEqual([]);
+  expect(box('r:1389#1')).toEqual([]);
+  const painted = paintedCity(net);
+  for (const r of net.roads) {
+    for (const i of r.lanes) {
+      const l = net.lanes[i]!;
+      for (const z of keepClearBoxes(net, l, markingThemes.de, city)) {
+        expect(z.fromM, l.id).toBeGreaterThanOrEqual(l.taperStartM - 1e-9);
+        expect(z.toM, l.id).toBeLessThanOrEqual(l.lengthM - l.taperEndM + 1e-9);
+      }
+    }
+    // Every point of the box paint lies on the road's painted surface (r:1189's, r:1389's and
+    // r:296's fanned across the ground beside the widening).
+    const surface = painted.roads[r.idx]!.surface;
+    const ring = [...surface, surface[0]!];
+    for (const shape of keepClearMarkings(net, r, markingThemes.de, city))
+      for (const p of shape.points) expect(pointInPolygon(p, ring, 0.05), r.id).toBe(true);
+  }
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {

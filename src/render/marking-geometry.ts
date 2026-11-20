@@ -151,8 +151,11 @@ const keepGlyphs: Record<string, string[]> = {
 /** TASK-169: the stretches of a lane its keep-clear markings cover, in lane metres: its mouth
  * zones (`keepClearZones`), cut 0.5 m clear of the lane's crossings (TASK-215, M4: Freiburg
  * n:1462, a lot mouth at two crossings), each 3 m or more; the US and UK themes' text also needs
- * glyphs of 0.8 m or more. */
-function keepClearBoxes(
+ * glyphs of 0.8 m or more. TASK-246: a box stands on the lane at its full width, so it keeps to the
+ * lane between its taper at the start (a lane gain, `taperStartM`) and its taper at the end
+ * (`taperEndM`), where the lane's centre line and edges bend: Freiburg's r:1189#3 box fanned
+ * across the gain at n:1169. A box that is shorter than 3 m once cut is left out. */
+export function keepClearBoxes(
   city: CompiledCity,
   lane: CLane,
   markingTheme: MarkingTheme,
@@ -170,8 +173,14 @@ function keepClearBoxes(
       : [];
   });
   const zones = keepClearZones(city)[lane.idx]!;
+  const straight = { fromM: lane.taperStartM, toM: lane.lengthM - lane.taperEndM };
   return zones
     .filter((zone) => zone.kind === 'mouth')
+    .map((zone) => ({
+      ...zone,
+      fromM: Math.max(zone.fromM, straight.fromM),
+      toM: Math.min(zone.toM, straight.toM),
+    }))
     .flatMap((zone) =>
       crosswalks.reduce(
         (parts, walk) =>
