@@ -63,7 +63,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-229 (N1): the four dividers of the inner road r:267; without them it equals 5c47b75's.
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
           // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
-          'c6c707190dd25f74411a6aea64b59997548e47e47722fad4001f8a81114a411f'
+          // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
+          '425ed4dc4f99a5ddab8d9d4ca5076222ff1c04c9d714b8a78ca0b3e6e1e3401f'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-240: arrows of the junction ahead on r:1057 and r:821.
