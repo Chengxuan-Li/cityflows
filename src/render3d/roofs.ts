@@ -329,16 +329,105 @@ function clipEdge(a: Vec2, b: Vec2, ring: Vec2[]) {
   return end - start > epsilon ? [start, end] : undefined;
 }
 
+type Ends = 'hipped' | 'gabled' | 'half-hipped';
+/** Height (fraction of the roof's) against time (fraction of the skeleton's peak). */
+type Section = readonly (readonly [time: number, height: number])[];
+const pitch: Section = [
+  [0, 0],
+  [1, 1],
+];
+/** TASK-236: how each pitched shape takes the skeleton: which wing ends stand, and its section.
+ * Gambrel and mansard break where the box roofs do (at 35% and 25% of the half width, 72% and
+ * 75% up); round is the box barrel's semicircle in the same 12 steps, from the widest wing. */
+const skeletonStyles: Partial<Record<RoofShape, { ends: Ends; section: Section }>> = {
+  gabled: { ends: 'gabled', section: pitch },
+  hipped: { ends: 'hipped', section: pitch },
+  pyramidal: { ends: 'hipped', section: pitch },
+  'half-hipped': { ends: 'half-hipped', section: pitch },
+  gambrel: {
+    ends: 'gabled',
+    section: [
+      [0, 0],
+      [0.35, 0.72],
+      [1, 1],
+    ],
+  },
+  mansard: {
+    ends: 'hipped',
+    section: [
+      [0, 0],
+      [0.25, 0.75],
+      [1, 1],
+    ],
+  },
+  round: {
+    ends: 'gabled',
+    section: Array.from(
+      { length: 7 },
+      (_, i) => [1 - Math.cos((Math.PI * i) / 12), Math.sin((Math.PI * i) / 12)] as const,
+    ),
+  },
+};
+
+/** The point where the edge pq reaches time `level`, found from its lower end so the faces on
+ * either side of the edge share it exactly. */
+function cut(p: Vertex, q: Vertex, level: number): Vertex {
+  const [low, high] = p.h < q.h ? [p, q] : [q, p];
+  const t = (level - low.h) / (high.h - low.h);
+  return { x: low.x + (high.x - low.x) * t, y: low.y + (high.y - low.y) * t, h: level };
+}
+
+/** The convex pieces of a convex polygon between consecutive levels of its time. A vertex
+ * within a micrometre of a level lies on it, so no piece has a sliver beside it. */
+function bands(polygon: Vertex[], levels: readonly number[]) {
+  const pieces: Vertex[][] = [];
+  let rest = polygon;
+  for (const level of levels) {
+    const below: Vertex[] = [],
+      above: Vertex[] = [];
+    rest.forEach((p, i) => {
+      const q = rest[(i + 1) % rest.length]!;
+      const dp = p.h - level,
+        dq = q.h - level;
+      if (dp <= 1e-6) below.push(p);
+      if (dp >= -1e-6) above.push(p);
+      if ((dp < -1e-6 && dq > 1e-6) || (dp > 1e-6 && dq < -1e-6)) {
+        const point = cut(p, q, level);
+        below.push(point);
+        above.push(point);
+      }
+    });
+    if (below.length >= 3) pieces.push(below);
+    rest = above;
+    if (rest.length < 3) return pieces;
+  }
+  pieces.push(rest);
+  return pieces;
+}
+
 /** TASK-227: the roof over a straight skeleton, as triangles of (x, y, time) in the outline's
  * frame: every face slopes from its edge, all at one pitch. Gabled, a face that is a triangle
  * under the end of a level ridge (the ridge leaves its apex within 60 degrees of square to the
  * edge, its apex over the middle 80% of the edge: a wing's short end) stands vertical instead:
- * its apex moves out over the edge, keeping its height, and the triangle goes to the walls. */
-function skeletonRoof({ nodes, faces, arcs }: StraightSkeleton, gabled: boolean) {
-  const moved = new Map<number, Vertex>();
-  const gables: [Vertex, Vertex, Vertex][] = [];
-  const standing = new Set<number>();
-  if (gabled)
+ * its apex moves out over the edge, keeping its height, and the triangle goes to the walls.
+ * TASK-236: half-hipped, such an end stands to half the ridge's time under a hip at the face's
+ * own pitch: the apex moves halfway out, the wall's top corners lie on the edge at half time
+ * (the box roof's half hip), and the neighbouring faces run out to them. `walls` are the
+ * standing ends, each wound edge start, top, edge end, so it faces out. */
+function skeletonRoof({ nodes, faces, arcs }: StraightSkeleton, ends: Ends) {
+  const points: Vertex[] = nodes.map(({ x, y, t }) => ({ x, y, h: t }));
+  const rings = faces.map((face) => [...face.nodes]);
+  const walls: Vertex[][] = [];
+  const moved = new Set<number>();
+  /** Puts `node` between `a` and `b` in the face that runs from `a` to `b`. */
+  const insert = (a: number, b: number, node: number) => {
+    for (const ring of rings) {
+      const i = ring.findIndex((n, k) => n === a && ring[(k + 1) % ring.length] === b);
+      if (i >= 0) return void ring.splice(i + 1, 0, node);
+    }
+    throw new Error('A skeleton arc has no face on its other side');
+  };
+  if (ends !== 'hipped')
     faces.forEach((face, index) => {
       const apex = face.nodes.slice(face.base);
       if (apex.length !== 1 || moved.has(apex[0]!)) return;
@@ -361,17 +450,34 @@ function skeletonRoof({ nodes, faces, arcs }: StraightSkeleton, gabled: boolean)
         );
       });
       if (incident.length !== 3 || ridges.length !== 1) return;
-      const foot = { x: from.x + dx * along, y: from.y + dy * along, h: top.t };
-      moved.set(apex[0]!, foot);
-      standing.add(index);
-      gables.push([{ ...from, h: 0 }, { ...to, h: 0 }, foot]);
+      moved.add(apex[0]!);
+      const on = (s: number, h: number) => ({ x: from.x + dx * s, y: from.y + dy * s, h });
+      const start = { x: from.x, y: from.y, h: 0 },
+        end = { x: to.x, y: to.y, h: 0 };
+      if (ends === 'gabled') {
+        points[apex[0]!] = on(along, top.t);
+        rings[index] = [];
+        walls.push([start, points[apex[0]!]!, end]);
+        return;
+      }
+      const half = top.t / 2;
+      // The inward normal is the edge's direction turned left.
+      points[apex[0]!] = {
+        x: from.x + dx * along - dy * half,
+        y: from.y + dy * along + dx * half,
+        h: top.t,
+      };
+      const left = points.push(on(along / 2, half)) - 1,
+        right = points.push(on((length + along) / 2, half)) - 1;
+      insert(face.nodes[0]!, apex[0]!, left);
+      insert(apex[0]!, face.nodes[face.base - 1]!, right);
+      rings[index] = [left, right, apex[0]!];
+      walls.push([start, points[left]!, points[right]!, end]);
     });
-  const at = (i: number): Vertex =>
-    moved.get(i) ?? { x: nodes[i]!.x, y: nodes[i]!.y, h: nodes[i]!.t };
   const triangles: Vertex[] = [];
-  faces.forEach((face, index) => {
-    if (standing.has(index)) return;
-    const ring = face.nodes.map(at);
+  for (const nodeRing of rings) {
+    if (!nodeRing.length) continue;
+    const ring = nodeRing.map((i) => points[i]!);
     for (const triangle of ShapeUtils.triangulateShape(
       ring.map((p) => new Vector2(p.x, p.y)),
       [],
@@ -379,8 +485,8 @@ function skeletonRoof({ nodes, faces, arcs }: StraightSkeleton, gabled: boolean)
       const [p, q, r] = triangle.map((i) => ring[i]!) as [Vertex, Vertex, Vertex];
       triangles.push(p, q, r);
     }
-  });
-  return { triangles, gables };
+  }
+  return { triangles, walls };
 }
 
 /** TASK-201: what 3D draws of a building: its `building:part` areas when it has them (each
@@ -407,7 +513,9 @@ export function buildRoof(feature: Area): RoofGeometry {
   const fill = Math.abs(area(rings[0]!)) / box.area;
   const revolved = requested === 'dome' || requested === 'onion';
   let fallbackReason: Fallback | undefined;
-  if (requested !== 'flat') {
+  // TASK-236: a skillion is one plane over the oriented box, so it fits any outline (courtyards
+  // too); the walls close every edge under it.
+  if (requested !== 'flat' && requested !== 'skillion') {
     if (rings.length > 1) fallbackReason = 'courtyard';
     // TASK-210: a box shape clipped to a convex outline (a trapezoid, a circle) stays continuous
     // and its walls close it; only a pyramid takes a triangle.
@@ -418,17 +526,24 @@ export function buildRoof(feature: Area): RoofGeometry {
     )
       fallbackReason = 'irregular-footprint';
   }
-  // TASK-227: gabled, hipped and pyramidal roofs that no box shape fits (concave outlines,
-  // courtyards, triangles) come from the straight skeleton; convex ones keep their box shape.
+  // TASK-227: pitched roofs that no box shape fits (concave outlines, courtyards, triangles)
+  // come from the straight skeleton; convex ones keep their box shape.
+  const style = fallbackReason ? skeletonStyles[requested] : undefined;
   let skeleton: StraightSkeleton | undefined;
-  if (
-    fallbackReason &&
-    (requested === 'gabled' || requested === 'hipped' || requested === 'pyramidal')
-  ) {
+  let built: ReturnType<typeof skeletonRoof> | undefined;
+  if (style) {
     skeleton = straightSkeleton(rings);
     fallbackReason = skeleton ? undefined : 'skeleton';
+    if (skeleton) built = skeletonRoof(skeleton, style.ends);
   }
-  const shape = fallbackReason ? 'flat' : requested;
+  // TASK-236: a vault runs along a ridge between standing ends; with no wing end to stand (a
+  // triangle, a ring of wings round a courtyard) the round roof is hipped.
+  const shape = fallbackReason
+    ? 'flat'
+    : requested === 'round' && built && !built.walls.length
+      ? 'hipped'
+      : requested;
+  const section = shape === 'hipped' ? pitch : style?.section;
   let u = box.u,
     v = box.v;
   if (feature.roof?.directionDeg !== undefined) {
@@ -454,7 +569,7 @@ export function buildRoof(feature: Area): RoofGeometry {
   // A semicircular barrel, a hemisphere, an onion three radii tall, a 35 degree pitch (on the
   // skeleton, from its widest wing).
   const natural = skeleton
-    ? Math.min(8, peak * Math.tan((35 * Math.PI) / 180))
+    ? Math.min(8, peak * (shape === 'round' ? 1 : Math.tan((35 * Math.PI) / 180)))
     : shape === 'dome'
       ? radius
       : shape === 'onion'
@@ -480,22 +595,45 @@ export function buildRoof(feature: Area): RoofGeometry {
     height,
     (p.x + centerU) * u.y + (p.y + centerV) * v.y,
   ];
-  if (skeleton && roofHeightM > 0) {
-    // One pitch for every face, so the widest wing's ridge is at the roof height and no wing
-    // rises above it.
-    const { triangles, gables } = skeletonRoof(skeleton, shape === 'gabled');
-    const point = (p: Vertex) => [p.x, wallHeightM + (p.h / peak) * roofHeightM, p.y];
-    for (let i = 0; i < triangles.length; i += 3) {
-      const p = triangles[i]!;
-      let q = triangles[i + 1]!,
-        r = triangles[i + 2]!;
-      const signed = cross(p, q, r);
-      if (Math.abs(signed) < epsilon) continue;
-      if (signed > 0) [q, r] = [r, q];
-      roofs.push(...point(p), ...point(q), ...point(r));
+  if (built && section && roofHeightM > 0) {
+    // One section for every face, so the widest wing's ridge is at the roof height and no wing
+    // rises above it; faces split where the section breaks, so each piece is planar.
+    const levels = section.slice(1, -1).map(([time]) => time * peak);
+    const rise = (h: number) => {
+      const s = h / peak;
+      let k = 1;
+      while (k < section.length - 1 && s > section[k]![0]) k++;
+      const [s0, h0] = section[k - 1]!,
+        [s1, h1] = section[k]!;
+      return h0 + ((s - s0) / (s1 - s0)) * (h1 - h0);
+    };
+    const point = (p: Vertex) => [p.x, wallHeightM + rise(p.h) * roofHeightM, p.y];
+    const { triangles, walls } = built;
+    for (let i = 0; i < triangles.length; i += 3)
+      for (const piece of levels.length
+        ? bands(triangles.slice(i, i + 3), levels)
+        : [triangles.slice(i, i + 3)])
+        for (let k = 1; k + 1 < piece.length; k++) {
+          const p = piece[0]!;
+          let q = piece[k]!,
+            r = piece[k + 1]!;
+          const signed = cross(p, q, r);
+          if (Math.abs(signed) < epsilon) continue;
+          if (signed > 0) [q, r] = [r, q];
+          roofs.push(...point(p), ...point(q), ...point(r));
+        }
+    // A standing end is convex under its section: a fan from the edge's start keeps its winding.
+    for (const wall of walls) {
+      const top = wall.flatMap((p, i) => {
+        const q = wall[(i + 1) % wall.length]!;
+        const between = levels.filter(
+          (level) => Math.min(p.h, q.h) + 1e-6 < level && level < Math.max(p.h, q.h) - 1e-6,
+        );
+        return [p, ...(p.h > q.h ? between.reverse() : between).map((level) => cut(p, q, level))];
+      });
+      for (let k = 1; k + 1 < top.length; k++)
+        infill.push(...point(top[0]!), ...point(top[k]!), ...point(top[k + 1]!));
     }
-    // The roof lay left of each gable's edge: wound edge start, apex, edge end, it faces out.
-    for (const [from, to, top] of gables) infill.push(...point(from), ...point(top), ...point(to));
     return { roof: geometry(roofs), infill: geometry(infill), wallHeightM, roofHeightM, shape };
   }
   if ((shape === 'dome' || shape === 'onion') && roofHeightM > 0) {
