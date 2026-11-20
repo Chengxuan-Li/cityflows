@@ -1,6 +1,6 @@
 # TASK-241 — Paint fixes: gores between one carriageway's lanes, arrows over keep-clear boxes
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/241-gores-keepclear`, worktree `D:\cityflows-wt\241`, ports 5441 / 5541.
 
 ## Goal

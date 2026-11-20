@@ -264,10 +264,11 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-238](tasks/TASK-238.md) | 10 | Close halves as one carriageway unless a mapped median lies between them (TASK-231's D5 reworked) | `corridors.ts` | 231 | audit, traffic, merge rule | done 2026-11-20 (merged; nothing worse) |
 | [TASK-239](tasks/TASK-239.md) | 10 | Crossings mapped only as OSM nodes get walk links and paint | importer `walk.ts` | 217, 224 | census, audit, traffic, merge rule | held 2026-11-20 (passes alone; with TASK-238 Freiburg's gate 90.3 s; diagnosing) |
 | [TASK-240](tasks/TASK-240.md) | render | Arrows of the next junction on approaches ending at a plain node or median crossover (r:1148) | `marking-geometry.ts` | 229, 234 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
-| [TASK-241](tasks/TASK-241.md) | render | Paint fixes: gores between one carriageway's lanes, arrows over keep-clear boxes, give-way triangles over zebras | `marking-geometry.ts` | 108, 240 | tests, counts, close-ups, identical hashes | in progress (second unsupervised run 2026-11-20) |
+| [TASK-241](tasks/TASK-241.md) | render | Paint fixes: gores between one carriageway's lanes, arrows over keep-clear boxes, give-way triangles over zebras | `marking-geometry.ts` | 108, 240 | tests, counts, close-ups, identical hashes | done 2026-11-20 (merged; hashes identical) |
 | [TASK-242](tasks/TASK-242.md) | 10 | Road widths from the data: urban lane widths, `width` tags, `placement` (TASK-218's D3, D9) | `roads.ts`, `corridors.ts` | 218, 238 | imagery checks, audit, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
 | [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | in progress (second unsupervised run 2026-11-20) |
 | [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5144,6 +5145,25 @@ Sindelfingen, with and without `debugSkips`). No files outside scope. Lead check
 TASK-235, 234, 236, 240, 238): check (1,591), city (218), traffic light and guard, light e2e (61); full demand
 actuated 3,591 / 173 (151240499), fixed 3,504 / 153 (4004936993), identical to main (stepping 1,427 and 1,439
 s against 1,116 and 1,127 s at the TASK-238 check, a busier machine: not a like-for-like timing).
+
+Full run 44712186713 (lead, manual, on 47bf22d after TASK-237): every job green, including all five e2e
+shards; the city job took 19.2 min.
+
+TASK-241 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged, paint only): (1) the hatched fans at
+`r:1148` were not TASK-108's ramp gores (`paintedGores`, unchanged) but `buildTransitionMarkings`
+hatching every tapering lane, gains as well as ends; every lane gain in the three cities is one
+carriageway widening at an OSM way split (`n:1146` 2 to 5 lanes, `n:1169`, `r:1187`, `r:1189`, `r:261`,
+`r:402`), none hatched on the ground. Rule: a hatched taper only where a lane ends. Roads with taper
+hatches / area: Freiburg 64 / 62.1 m² to 16 / 9.1, Munich 19 / 26.3 to 1 / 0.4, Sindelfingen 10 / 13.0 to
+5 / 5.0; ramp gores and lane-end hatches unchanged. (2) Arrows within 0.5 m of a keep-clear box move
+along their lane to the nearest clear place between the start crossing and the stop line, or are left out
+(`keepClearBoxes`): arrow paint over other paint Freiburg 3.11 to 0 m², Munich 0.66 to 0, Sindelfingen
+0.58 to 0 (moved `r:296#2`, `r:1333#1`; left out `r:904#0`, `r:1362#3`, Munich `r:269#4`). (3) Give-way
+triangles (and the UK bars) within 0.5 m of crossing paint move back behind it or are left out
+(`crossingPaint`); none on main, one on TASK-239's branch (`r:2091`, 0.52 m²) fixed. Audit JSON identical;
+hashes identical. Left: `r:1189`'s keep-clear box fans across a lane gain (box geometry). Outside scope:
+tests (T25, T28, V217) and paint pins (V114, V117). Lead check on the merge (after TASK-237): check (1,592),
+city (220), traffic light and guard, light e2e (61); full demand identical.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
