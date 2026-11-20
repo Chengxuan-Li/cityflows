@@ -1,6 +1,6 @@
 # TASK-250 — Full demand after TASK-247: four stalled heads and 164 fewer trips
 
-Status: in progress (second unsupervised run, owner 2026-11-20). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (diagnosis only; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/250-full-demand-stalls`, worktree `D:\cityflows-wt\250`, ports 5450 / 5550.
 
 ## Goal

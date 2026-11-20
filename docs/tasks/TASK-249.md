@@ -1,6 +1,6 @@
 # TASK-249 — Land TASK-245 (the two walker fixes: rounding in walk green, crossings no phase serves) on TASK-247
 
-Status: parked 2026-11-20 (full demand actuated seed 1 +8.1%; lead recommends merging; review in `docs/plan.md`). Proposed owner: Claude Code subagent
+Status: done 2026-11-20 (merged on the five-seed full-demand reading; review in `docs/plan.md`). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/249-land-245`, worktree `D:\cityflows-wt\249`, ports 5249 / 5549.
 
 ## Goal

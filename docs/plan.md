@@ -268,12 +268,12 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-242](tasks/TASK-242.md) | 10 | Road widths from the data: urban lane widths, `width` tags, `placement` (TASK-218's D3, D9) | `roads.ts`, `corridors.ts` | 218, 238 | imagery checks, audit, traffic, merge rule | parked 2026-11-20 (both versions miss full demand and the audit) |
 | [TASK-243](tasks/TASK-243.md) | 9 | Step time, fifth pass: routing and reroutes, results identical | `src/routing/**` performance | 230, 237 | tables, identical hashes, interleaved timings | done 2026-11-20 (merged; route requests 59% faster, stepping 7.3%, hashes identical) |
 | [TASK-244](tasks/TASK-244.md) | 9 | Departing batches spread over routes (latent fault found by TASK-239) | `link-costs.ts`, engine route assignment | 239 | repro test, Freiburg band, traffic, merge rule | parked 2026-11-20 (meets the thresholds, misses its aim: the band does not narrow; new stalls) |
-| [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | held 2026-11-20 (v1 re-measured as TASK-249, parked) |
+| [TASK-245](tasks/TASK-245.md) | 9 | Walkers wait about 420 s at signalised crossings (found by TASK-239) | `signals.ts`, walkers' signal wait | 188, 222, 239 | repro test, wait distributions, traffic, merge rule | done 2026-11-20 (v1 landed as TASK-249) |
 | [TASK-246](tasks/TASK-246.md) | render | Keep-clear boxes on lane gains (found by TASK-241) | `marking-geometry.ts` | 241 | test, census, identical hashes | done 2026-11-20 (merged; hashes identical) |
 | [TASK-247](tasks/TASK-247.md) | 9 | Freiburg's 08:00 station peak: spillback at the Hauptbahnhof signals (`n:364`, `n:1132`) | `signals.ts`, junction admission | 239, 244, 245 | repro test, Freiburg band, traffic, merge rule | done 2026-11-20 (merged v1; Freiburg's 08:00 flip gone, gate 68.1 s) |
 | [TASK-248](tasks/TASK-248.md) | 10 | Land TASK-239 (node-only crossings) on TASK-247 | importer `walk.ts`, Freiburg rebuild | 239, 247 | Freiburg seeds, traffic, merge rule | done 2026-11-20 (merged; TASK-239 landed) |
-| [TASK-249](tasks/TASK-249.md) | 9 | Land TASK-245's v1 (walker fixes) on TASK-247 | `walkers.ts` | 245, 247 | waits, Freiburg seeds, traffic, merge rule | parked 2026-11-20 (full demand actuated seed 1 +8.1%; seed 2 -5.2%; lead recommends merging) |
-| [TASK-250](tasks/TASK-250.md) | 9 | Full demand after TASK-247: four stalled heads and 164 fewer trips | `signals.ts` | 247 | trace, repro test, traffic, merge rule | in progress (second unsupervised run 2026-11-20) |
+| [TASK-249](tasks/TASK-249.md) | 9 | Land TASK-245's v1 (walker fixes) on TASK-247 | `walkers.ts` | 245, 247 | waits, Freiburg seeds, traffic, merge rule | done 2026-11-20 (merged on the five-seed full-demand reading: +0.2%, 40 more trips) |
+| [TASK-250](tasks/TASK-250.md) | 9 | Full demand after TASK-247: four stalled heads and 164 fewer trips | `signals.ts` | 247 | trace, repro test, traffic, merge rule | done 2026-11-20 (diagnosis only: seed-1 full demand is divergence; no change) |
 | [TASK-251](tasks/TASK-251.md) | 9 | Reroute checks skip the lane search when no switch is possible (optional bound on `RouteProvider.route`) | `src/routing/**`, engine reroute check, architecture 5.x | 243 | identical hashes, timings | done 2026-11-20 (merged; route requests about 34% less, hashes identical) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -5347,6 +5347,28 @@ Sindelfingen, with and without `debugSkips`). Outside scope: `src/sim/reroute.ts
 `engine.ts` passes `debugSkips`). Lead check: check (1,609), city (222), traffic light and guard, light e2e
 (61); full demand identical (actuated 3,427 / 155, 3935022588; fixed 3,504 / 153, 2862775104).
 
+Full run 44750599300 (lead, manual, on 778b30f after TASK-251): every job green, including all five e2e
+shards; the city job took 13.3 min.
+
+TASK-250 (Claude Code subagent, Opus 5.5 high, 2026-11-20; diagnosis only, no merge): TASK-247's rule
+ends a green early only 22 times by 08:00 at full demand (four groups; each time the head stands at the
+line waiting for another phase on its lane, TASK-247's own case). Grants already differ at 49 junctions by
+07:10; both runs are gridlocked from 07:30 with about 5,600 respawns each. Turning the rule on only until
+07:20 or 07:30 gives 3,694 and 3,626 completed: one seed swings more than the rule. The four stalled heads
+at 10:00 are none locked and none still counted at 10:05 (the 180 s timer clears them); without the rule
+the count runs 0 to 7. Full demand actuated, with / without the rule (completed, mean delay): seed 1
+3,427, 1,705.5 / 3,591, 1,678.3; 2: 3,492, 1,810.4 / 3,456, 1,778.1; 3: 3,100, 1,833.7 / 3,432, 1,708.3;
+4: 3,275, 1,670.8 / 3,282, 1,795.6; 5: 3,796, 1,796.2 / 3,319, 1,918.6; mean 3,418.0, 1,763.3 / 3,416.0,
+1,775.8 (+2 trips, -0.7%); stalled heads mean 2.6 / 1.4 (four of five seeds stall without the rule too). No
+rule added. Proposed: judge full demand on seeds 1 to 5 (taken, decisions log); count a stalled head at
+full demand only if it stands in two samples 5 minutes apart (owner's call).
+
+TASK-249, merged (lead, 2026-11-20, on the five-seed reading): lead-run full demand actuated seeds 2 to 5
+on its branch: 3,604 / 166, 1,715.6 s; 3,314 / 178, 1,827.6 s; 3,292 / 168, 1,622.9 s; 3,659 / 168, 1,828.0 s;
+with seed 1 (3,420 / 157, 1,843.2 s) the mean is 3,457.8 completed, 1,767.5 s against main's 3,418.0,
+1,763.3 s (+0.2%, 40 more trips), stalled heads mean 1.6 against 2.6. Merged on top of TASK-243, 248, 251:
+Freiburg's gate 1,522 / 0, 66.1 s (hash 4228017009). Lead check: check (1,611), city (222), traffic light and guard, light e2e (61); full demand actuated 3,420 / 157 (3501316164), fixed 3,504 / 153 (2862775104).
+
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
 it, or about to take that movement (elsewhere it returned `min(stopAt, Infinity)`); (2) the rail
@@ -5701,6 +5723,13 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-20 (lead, during the second run): full demand is judged on the mean of seeds 1 to 5 from now
+  on. TASK-250 showed one full-demand seed swings more than the merge rule's 2% (TASK-247's rule: seeds 1
+  to 5 from -7.0% to +7.3%, mean -0.7%). The threshold is the owner's and unchanged; the measure is the
+  five-seed mean. Applied first to TASK-249 (seed 1 +8.1%, five-seed mean +0.2%), which it merges. It does
+  not change TASK-242 or 244 (parked on other grounds); TASK-223 (parked 2026-11-19 on one fixed-time seed,
+  +3.1%) could be re-measured this way. For the owner's review.
 
 - 2026-11-20 (owner): a second 12-hour unsupervised run (from 00:23); "you may merge"; the owner reviews
   only when stepping in. The lead's reading, logged for review:
