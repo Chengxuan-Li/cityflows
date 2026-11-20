@@ -11,7 +11,7 @@ import { clipPart, findBoundaryCuts, prunePolygonCuts, type Bounds, type RoadPoi
 import { importContext } from './context';
 import { addLots, restoreLotJunctions } from './lots';
 import { addMappedLotPortals } from './lot-junctions';
-import { importWalk } from './walk';
+import { addNodeCrossings, importWalk } from './walk';
 import { assignTramForms, importRail } from './rail';
 import { importTramStops } from './tram-stops';
 import { addStrips } from './strips';
@@ -462,6 +462,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     parkingGraph,
   );
   addMappedLotPortals(city, data, diagnostics, portalGeometry ?? parkingGraph);
+  // TASK-239: last, so that no other id moves.
+  addNodeCrossings(city, data, positions, bounds);
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)
