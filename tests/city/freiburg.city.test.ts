@@ -225,7 +225,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-228: a tram waits at its origin for a delayed run of another line only when it would
   // meet it in time, so all 240 runs due by 10:00 enter (184 before), and their crossings close
   // more often (1,462 to 1,460 completed, 75.7 to 80.3 s).
-  expect(morning.stateHash).toBe(1407248127);
+  // TASK-221 (landed as TASK-235): lane transitions carried through plain nodes (1,460 to 1,459
+  // completed, 80.3 to 82.0 s).
+  expect(morning.stateHash).toBe(3910801284);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

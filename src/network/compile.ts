@@ -324,8 +324,11 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   // into the next with the same lanes), the lanes run along their own corridors and meet at the
   // node's mitre, as at a through node, instead of easing onto a straight ray along the node's
   // heading, which pulls them off a curving road.
+  // TASK-221: a road that follows a transition carried on from another node (`referenceFromM`)
+  // keeps it, as does the road before it there.
   const shifts = (end: ContinuationEnd | undefined) =>
-    !!end && (end.offsetM !== 0 || !!end.splitM || end.tapers.length > 0);
+    !!end &&
+    (end.offsetM !== 0 || !!end.splitM || end.tapers.length > 0 || (end.referenceFromM ?? 0) > 0);
   const plain = nodes.map(() => true);
   for (const road of roads) {
     const { start, end } = continuity.ends[road.idx]!;

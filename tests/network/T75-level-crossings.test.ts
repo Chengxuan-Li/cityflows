@@ -170,7 +170,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
           // tram `form` stripped the city equals b3bcde6's.
           // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
-          '8222b9aaba99dceb02c218d01b8a52a875d2567e6fe4dc4fc1e39d1d07ea405e',
+          // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
+          '24d078c287731f39cd8c6f38b5ae67f982c5f9edf4fa5403ae701bf1b1b8f219',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -183,7 +184,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-          'd4d8d82af0bbc3fa7fb6a026c9686db5cfb954e1c9f78086fc972521afcfe9d5',
+          // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
+          '898ddcb0324f2c99edfdf2ad313496a1733077c45432a4decec6d8d7a5f434c5',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

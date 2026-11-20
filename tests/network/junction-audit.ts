@@ -15,7 +15,9 @@ export const importedRoadBodyOverlaps: Record<string, Record<string, string>> = 
     'r:29#0>r:958#2':
       'The source slip road crosses Arnulfstraße beside the retained truck-delivery boundary.',
     'r:29#0>r:958#3': 'The same source slip road crosses the adjacent Arnulfstraße lane.',
-    'r:196#0>r:416#2':
+    // TASK-221: the ramp now holds beside r:416 and no longer crosses it; at n:194 its lane meets
+    // the trunk's lane 2 instead.
+    'r:196#0>r:687#2':
       'The source ramp crosses the trunk lane body at n:194; TASK-071 removes the capped-setback classification at this continuation.',
     // TASK-131 keeps OSM geometry (different roads are not moved): Landsberger Straße's tertiary
     // r:728 meets n:474 at about 24 degrees to Barthstraße's inner links of jg:10798 (main's

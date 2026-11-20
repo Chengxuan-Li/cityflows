@@ -27,6 +27,9 @@ export interface ContinuationEnd {
   /** Distance along `reference` from its node end to the road's end (TASK-214): the roads of a
    * side-by-side chain share one line, so their lanes meet on the same normals. */
   referenceFromM?: number;
+  /** A transition carried through plain nodes (TASK-221): it eases by `smootherstep`, so where
+   * its hold or taper ends near one of those nodes the lanes do not bend across the joint. */
+  carried?: boolean;
 }
 
 export interface RoadContinuity {
@@ -37,6 +40,12 @@ export interface RoadContinuity {
 export function smoothstep(t: number): number {
   const u = Math.max(0, Math.min(1, t));
   return u * u * (3 - 2 * u);
+}
+
+/** TASK-221: the quintic ease, whose curvature is zero at both ends too. */
+export function smootherstep(t: number): number {
+  const u = Math.max(0, Math.min(1, t));
+  return u * u * u * (u * (6 * u - 15) + 10);
 }
 
 /** TASK-080 (B37): every taper is short and scaled by speed, at most half the road. */
@@ -327,7 +336,9 @@ export function layoutRoad(
     reach(transition.start) + reach(transition.end) >= total - 0.01;
   const sidePoint = (end: ContinuationEnd, atEnd: boolean, s: number, value: number) => {
     const away = atEnd ? s1 - s : s - s0;
-    const split = (end.splitM ?? 0) * smoothstep(away / end.taperM);
+    // TASK-221: on a road that carries the transition on, the split runs from the node.
+    const ease = end.carried ? smootherstep : smoothstep;
+    const split = (end.splitM ?? 0) * ease((away + (end.referenceFromM ?? 0)) / end.taperM);
     // A converging shift reaching the node (TASK-089) moves the side-by-side block with it.
     return referencePoint(
       end,
@@ -369,7 +380,7 @@ export function layoutRoad(
         // Up to `holdM` the lane keeps its place in the side-by-side block along the reference
         // line; over the next `taperM` it eases onto its own offset. Both paths are smooth and
         // the smoothstep has zero slope at both ends, so the heading stays continuous.
-        const f = smoothstep((away - end.holdM) / end.taperM);
+        const f = (end.carried ? smootherstep : smoothstep)((away - end.holdM) / end.taperM);
         const side = sidePoint(end, atEnd, s, value);
         result = { x: side.x * (1 - f) + result.x * f, y: side.y * (1 - f) + result.y * f };
       }

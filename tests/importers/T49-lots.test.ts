@@ -41,7 +41,8 @@ const baseline = {
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
-    '9060554ec10b2107cfff00e515122b1c33c20a43987bbac5e45aa9856e0c8d69',
+    // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
+    '62d1822415042049fd4df8e990d9b9b86d3235f3e7111ae301271fe8c43440c4',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -54,7 +55,8 @@ const baseline = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-    '32e46bfa7493f842bdef65d69341d2e2c6abfff0d2374223958d7ea34e98300d',
+    // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
+    '1fd427fa4725d3802e03e37e5d2ddd741f8873fbe5f81f9913b56a674c7d01c3',
   ],
 };
 

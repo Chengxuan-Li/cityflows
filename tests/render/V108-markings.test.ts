@@ -68,8 +68,8 @@ const baseline = {
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-    compile: 'b87b8a83a8bae407ffd9f9f8069a321329e6bed9a2d4f66956eab463d7c18fbe',
-    arrows: '95f4434b279dea44ce702ca32df0c3a7a49ff17862cc7455ac486f4ebb31fc6e',
+    compile: 'a5607f2bfacea83ae6413eed313d53a94aaa050aed809be10599c1e71e53f308',
+    arrows: '503e5fccadab0eaf7508150ce764f111f914486f2fdcfa2f8722e4bd8b0455e7',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
@@ -86,8 +86,8 @@ const baseline = {
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-217: an entry lane shows its turns through the whole junction group (M1).
-    compile: 'f25342f599272f7bb143910b7f7a855e7b0a313928a2da4632038dddca22b62d',
-    arrows: 'a53a6755a8a990f7e1e9c3773d6d12a4dfb523f7a288168e854cb2ec04e39056',
+    compile: 'cdb919be6cf54234e80b8f65227cac01f0e126b1878179f05dc1f2c76e356a2b',
+    arrows: '78c0c21190095a89060dd900a32a4edea30f717798d1988e618f806c1251ceca',
   },
 } as const;
 const hash = (value: unknown) =>
