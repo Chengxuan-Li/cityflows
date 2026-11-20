@@ -73,6 +73,42 @@ export function prepareJunctions(
  * their restrictions staying at the member. A group needs an entry, an exit and three street
  * arms: a dead end or a stretch of one road is not a junction.
  */
+/**
+ * TASK-219 (TASK-216 D2): the median crossovers on plain stretches of road, by road id: links of
+ * at most `maxM` between the two carriageways of one street whose ends carry nothing else, one
+ * road of the carriageway in and one out (a U-turn or emergency gap: Freiburg's way 795829487,
+ * gated, 25 m before the Hauptbahnhof's stop line, which joined its group by rule (c)). Their
+ * nodes are no junction: no link at them joins a group, the carriageway's stop line stays at the
+ * junction ahead, and so do its arrows (TASK-234, `addLaneTurns` in `index.ts`).
+ */
+export function medianCrossovers(roads: OsmRoad[], maxM: number): Set<string> {
+  const incident = new Map<string, Road[]>();
+  for (const { road } of roads)
+    for (const id of [road.from, road.to]) incident.set(id, [...(incident.get(id) ?? []), road]);
+  const carriageway = (node: string, link: Road) => {
+    const other = link.from === node ? link.to : link.from;
+    const rest = incident.get(node)!.filter((road) => road.from !== other && road.to !== other);
+    const into = rest.find((road) => road.to === node);
+    const out = rest.find((road) => road.from === node);
+    return rest.length === 2 && into && out && into.name && into.name === out.name
+      ? { name: into.name, heading: roadHeading(into, true) }
+      : null;
+  };
+  const crossover = (road: Road) => {
+    if (polylineLength(road.centerline) > maxM) return false;
+    const a = carriageway(road.from, road),
+      b = carriageway(road.to, road);
+    return (
+      !!a &&
+      !!b &&
+      a.name === b.name &&
+      road.name !== a.name &&
+      Math.cos(a.heading - b.heading) < -0.9
+    );
+  };
+  return new Set(roads.filter(({ road }) => crossover(road)).map(({ road }) => road.id));
+}
+
 export function formJunctionGroups(
   city: City,
   roads: OsmRoad[],
@@ -149,35 +185,6 @@ export function formJunctionGroups(
     const at = corridorsAt(road.from, road);
     return [...corridorsAt(road.to, road)].some((c) => at.has(c) && c !== corridor(road));
   };
-  // TASK-219 (TASK-216 D2): a median crossover on a plain stretch of road, a link of at most
-  // `maxM` between the two carriageways of one street whose ends carry nothing else, one road of
-  // the carriageway in and one out (a U-turn or emergency gap: Freiburg's way 795829487, gated,
-  // 25 m before the Hauptbahnhof's stop line, which joined its group by rule (c)). Its nodes are no
-  // junction, so no link at them joins a group, and the carriageway's stop line stays at the
-  // junction ahead.
-  const carriageway = (node: string, link: Road) => {
-    const other = link.from === node ? link.to : link.from;
-    const rest = (incident.get(node) ?? [])
-      .map(({ road }) => road)
-      .filter((road) => road.from !== other && road.to !== other);
-    const into = rest.find((road) => road.to === node);
-    const out = rest.find((road) => road.from === node);
-    return rest.length === 2 && into && out && into.name && into.name === out.name
-      ? { name: into.name, heading: roadHeading(into, true) }
-      : null;
-  };
-  const crossover = ({ road }: OsmRoad) => {
-    if (length.get(road.id)! > maxM) return false;
-    const a = carriageway(road.from, road),
-      b = carriageway(road.to, road);
-    return (
-      !!a &&
-      !!b &&
-      a.name === b.name &&
-      road.name !== a.name &&
-      Math.cos(a.heading - b.heading) < -0.9
-    );
-  };
   // A slip road's diverge on such a stretch: one street's carriageway passes through (one road in
   // and one out of the same name) and a link leaves it, nothing else (the Hauptbahnhof's n:473,
   // where Stefan-Meier-Straße's slip road leaves Friedrichstraße 8 m before the painted stop
@@ -204,8 +211,11 @@ export function formJunctionGroups(
       ? slip
       : undefined;
   };
+  const crossovers = medianCrossovers(roads, maxM);
   const plain = new Set([
-    ...roads.filter(crossover).flatMap(({ road }) => [road.from, road.to]),
+    ...roads
+      .filter(({ road }) => crossovers.has(road.id))
+      .flatMap(({ road }) => [road.from, road.to]),
     ...diverges,
   ]);
   // The widest road block (all directed roads of one street end) at `node`, but the link's.

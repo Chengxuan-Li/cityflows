@@ -3,8 +3,53 @@
 TASK-219 wrote this on main b3bcde6 (parked: its tip missed Freiburg's gate, a Siegesdenkmal lock
 main had on other seeds). TASK-226 brought the tip's two rules unchanged onto main 2d4dd1f (after
 TASK-217, 220, 222, 225 and 227), rounded the one gore the tip left sharp (`n:473`, below) and
-re-measured; the audit, traffic and close-ups below are TASK-226's, main 2d4dd1f against the
-branch.
+re-measured; the audit and traffic sections below are TASK-226's, main 2d4dd1f against the
+branch. TASK-234 landed it on main d96f7c8 (after TASK-228, 229, 230, 232 and 233) with one
+reworked rule (next section); the close-ups are TASK-234's.
+
+## TASK-234: TASK-226 on main d96f7c8, and the crossover's arrows
+
+TASK-226's commit applied cleanly to the sources; the Freiburg project was rebuilt (tram timetable
+hash 90e3ff6f unchanged) and its pins and V217's M2 and N2 (TASK-229) re-pinned.
+
+Plain cherry-pick (the tip): Freiburg's gate morning 1,460 / 0, 80.3 s on main to 1,459 / 0,
+95.4 s (+15.1 s, over the merge rule's 5 s); seeds 2 to 6 +2.7, +1.5, +0.2, +0.4, +6.8 s. The
+waiting rose around Schnewlinstraße and Bismarckallee from 08:00 to 08:30, away from the box, but
+the cause was at the box: out of the group, the crossover end `n:1147` is a plain node with a left
+exit (the gated crossover `r:1876`), and the importer read way 227874537's turn:lanes there
+(`left|left|...`, the Hauptbahnhof's arrows), so `r:1148#0` and `#1` turned into the crossover
+only and the westbound carriageway kept three lanes through (`r:1149#2` and `#3` were fed by no
+lane; the lane lines swung across the crossover). Dropping those rules alone gave 80.6 s.
+
+Rule (variant): a median crossover (TASK-219's definition, now `medianCrossovers` in `split.ts`)
+is no exit when the importer reads arrows (`addLaneTurns`, `index.ts`): the arrows are left for
+the junction ahead, as its stop line is, and the crossover's movements take the compiler's
+defaults (`r:1148#0` through and left into it). Freiburg only (no other crossover matches);
+Munich's and Sindelfingen's cities byte-identical. `r:1148` then carries no arrows (every lane
+runs straight on; the ground's arrows there belong to the junction two roads on, so N2 stays open
+at `r:1148`).
+
+Geometry audit, main d96f7c8 against the variant (the tip's figures are the same): Freiburg
+`cornersUnder2m` 166 to 167 (the `n:473` nose, 1.16 m, not sharp, the lead's tolerance),
+`lineOutsideM` 14,984 to 14,988, `markingOutsideM` 15,426 to 15,410 (stop lines only: the 17.1 m
+stop line on `r:1148` at `n:1147` and the 6.6 m one on `r:489` at `n:488` go, the new 13.6 m one
+on `r:475` lies mostly on the junction floor; lane lines outside +3.9 m). Every other measure of
+the three cities and all 23 named cases (J1-hbf and J1-stefan among them) identical.
+
+Freiburg 0.15, choice on (completed / gridlocked, mean delay; no stalled heads anywhere):
+
+| seed | main d96f7c8 | tip | variant |
+| --- | --- | --- | --- |
+| 1 (gate) | 1,460 / 0, 80.3 s, 1407248127 | 1,459 / 0, 95.4 s | 1,460 / 0, 80.6 s, 3557957712 |
+| 2 | 1,477 / 0, 67.1 s | 1,478 / 0, 69.8 s | 1,475 / 0, 68.3 s |
+| 3 | 1,487 / 0, 67.2 s | 1,485 / 0, 68.7 s | 1,487 / 0, 67.9 s |
+| 4 | 1,463 / 0, 67.9 s | 1,462 / 0, 68.1 s | 1,463 / 0, 67.6 s |
+| 5 | 1,466 / 0, 64.8 s | 1,467 / 0, 65.2 s | 1,466 / 0, 66.1 s |
+| 6 | 1,477 / 0, 63.8 s | 1,475 / 0, 70.6 s | 1,477 / 0, 63.6 s |
+| mean | 68.5 s | 73.0 s | 69.0 s |
+
+Munich 0.15 seeds 1 to 3 in all four configurations, both full demands and Sindelfingen: every
+state hash equals main's (cities byte-identical, no simulation file changed).
 
 TASK-212's J1 (inner roads overlapping inside a group's surface) and TASK-216's D2 (the
 Hauptbahnhof group swallowing a median crossover, its stop line 37 m before the painted one).
@@ -189,8 +234,8 @@ rule alone gave 1,371 / 22, 77.4 s; both rules in every group (`n:390`, `n:397` 
 
 ## Close-ups
 
-Before is main 2d4dd1f, after this branch (Freiburg rebuilt), except the lane-block and variant
-shots (TASK-219, main b3bcde6). App shots: 760 x 520 px crops of the dev build, basemap, places,
+Re-taken by TASK-234: before is main d96f7c8, after the TASK-234 variant (Freiburg rebuilt),
+except the lane-block and Lessingstraße variant shots (TASK-219, main b3bcde6). App shots: 760 x 520 px crops of the dev build, basemap, places,
 entrances, trees, labels and parked cars off, German markings; 2D at 7, 10, 12 or 24 px/m, 3D
 pitched 50 to 55 degrees. Aerial overlays: `bench/aerial-overlay.ts` on TASK-216's imagery (cyan
 the drawn carriageway's edge, yellow lines, red stop lines, magenta crossing stripes, white dotted
@@ -200,7 +245,10 @@ OSM centrelines); attribution in each caption.
   and signalised crossing at `n:1147` and a stop line on the eastbound carriageway at `n:488`;
   after, the westbound stop line at the painted one, the default crossing at `n:1147` unpainted
   (TASK-217's D1), and only the cycle crossing's stop line at `n:482` on the eastbound side.
-- `D2-aerial-wide-before.jpg`, `-after.jpg`: the junction and Friedrichstraße to `n:1147`.
+- `D2-aerial-wide-before.jpg`, `-after.jpg`: the junction and Friedrichstraße to `n:1147`; after, the
+  lane lines run straight past the crossover (the tip swung them across it, TASK-234 above).
+- `D2-aerial-n1146-arrows-before.jpg`, `-after.jpg` (TASK-216's D7 frame): before, through arrows on
+  four lanes of `r:1148` 19 m nearer the junction than the painted ones; after, none (N2 open).
 - `D2-aerial-n473-gore-before.jpg`, `-after.jpg`, `D2-hbf-n473-gore-*` (2D at 24 px/m and 3D): the
   island's nose between Friedrichstraße and the slip road `r:2153`; before a point inside the group,
   after rounded at 1.16 m, close to the kerb on the ground.

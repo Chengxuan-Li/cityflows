@@ -210,8 +210,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-233: rebuilt; 12 roads are shared lanes (`sharedLane` inferred); the compiled network
     // and the state hash are unchanged.
     // TASK-226 (landed as TASK-234): rebuilt (TASK-219's rules: the Hauptbahnhof group loses
-    // the median crossover's nodes and the slip-road diverge).
-    'dbf3c82cfb0f7720755959190942f52cd69c9c29f91d83f07cf81f56422aa94a',
+    // the median crossover's nodes and the slip-road diverge; the crossover reads no arrows).
+    '34ebeaba282dfce9c80f4a6466f2045aaad29fe0cef5b69ce3a71ff81da748d0',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -228,8 +228,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // meet it in time, so all 240 runs due by 10:00 enter (184 before), and their crossings close
   // more often (1,462 to 1,460 completed, 75.7 to 80.3 s).
   // TASK-226 (landed as TASK-234): the Hauptbahnhof's stop line at the junction (TASK-219's
-  // group membership) and the gore fillet at n:473 (1,460 to 1,459 completed, 80.3 to 95.4 s).
-  expect(morning.stateHash).toBe(3128679283);
+  // group membership), the gore fillet at n:473, and the carriageway's arrows read at the
+  // junction past the median crossover n:1147, not at it (80.3 to 80.6 s).
+  expect(morning.stateHash).toBe(3557957712);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

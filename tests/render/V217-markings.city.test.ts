@@ -103,13 +103,12 @@ test('N1: lane lines on carriageway a group takes in, none on the links inside i
 test('N2: an entry lane with no path through the group, or only a double left, shows its own turn', () => {
   const turns = (id: string) => [...approachMarkings(net, lane(id)).turns].sort();
   // TASK-226 (D2): r:1148 no longer enters the Hauptbahnhof group but ends at the median
-  // crossover n:1147, a plain node, where way 227874537's turn:lanes (meant for the junction
-  // ahead) are read: #0 and #1 turn left into the crossover r:1876 only, a service road, which
-  // shows no arrow; #2 to #4 run on straight. The ground has arrows on every lane, so N2 is open
-  // again at r:1148 until arrows at a crossover defer to the junction ahead (TASK-234 report).
-  for (const id of ['r:1148#0', 'r:1148#1']) expect(turns(id), id).toEqual([]);
-  for (const id of ['r:1148#2', 'r:1148#3', 'r:1148#4'])
-    expect(turns(id), id).toEqual(['through']);
+  // crossover n:1147, a plain node. TASK-234: way 227874537's turn:lanes are not read there (the
+  // crossover is no exit for arrows), so every lane runs on straight and none carries an arrow
+  // (TASK-079). The ground's arrows on r:1148 are the junction ahead's, two roads on: N2 is open
+  // at r:1148 until arrows can be drawn before a plain node for the junction beyond it.
+  for (const id of ['r:1148#0', 'r:1148#1', 'r:1148#2', 'r:1148#3', 'r:1148#4'])
+    expect(turns(id), id).toEqual([]);
   // r:460#0 has no chain either (its arrow finds no room behind the crossing at its start, M4);
   // #1's only chain turns left three times round the block: a u-turn, no arrow.
   expect(turns('r:460#0')).toEqual(['through']);

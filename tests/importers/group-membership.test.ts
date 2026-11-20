@@ -14,7 +14,7 @@ const H = 8;
  * eastbound at y = 8, westbound at y = -8) and the two-way Side; `crossover` adds an untagged
  * service crossover between the carriageways at x = 20, `slip` a link leaving the westbound
  * carriageway at x = 15 for Side north of the junction. */
-function junction({ crossover = false, slip = false }) {
+function junction({ crossover = false, slip = false, turns = '' }) {
   const stops = [250, ...(crossover ? [20] : []), ...(slip ? [15] : [])].sort((a, b) => b - a);
   return osm(
     [
@@ -28,7 +28,7 @@ function junction({ crossover = false, slip = false }) {
       },
       {
         id: 2,
-        tags: main,
+        tags: turns ? { ...main, 'turn:lanes': turns } : main,
         points: [...stops.map((x) => [x, -H]), [0, -H], [-250, -H]] as [number, number][],
       },
       {
@@ -99,6 +99,22 @@ describe('TASK-219 junction-group membership', () => {
     expect(entry.from).toBe(ends[0]!.id);
     const lanes = compiled.roads[compiled.index.road.get(entry.id)!]!.lanes;
     expect(lanes.every((lane) => compiled.lanes[lane]!.stopM !== undefined)).toBe(true);
+  });
+
+  it('a carriageway keeps its arrows for the junction past a median crossover (TASK-234)', () => {
+    // The westbound arrows mark the junction's left turn; at the crossover, a left exit too, they
+    // made the two left lanes turn into the crossover only.
+    const { city, compiled } = load(
+      junction({ crossover: true, turns: 'left|left|through|through|through' }),
+    );
+    const crossover = nodeAt(city, 20, -H);
+    expect(crossover.turnRules).toEqual([]);
+    const before = westbound(city).find((r) => r.to === crossover.id)!;
+    const lanes = compiled.roads[compiled.index.road.get(before.id)!]!.lanes;
+    for (const lane of lanes) {
+      const turns = compiled.lanes[lane]!.out.map((m) => compiled.movements[m]!.turn);
+      expect(turns, compiled.lanes[lane]!.id).toContain('through');
+    }
   });
 
   it("a slip road's diverge before the junction joins no group", () => {
