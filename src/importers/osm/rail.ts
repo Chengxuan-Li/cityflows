@@ -54,6 +54,22 @@ const center = (points: Vec2[]) => ({
 });
 const placePos = (p: Place) => (p.shape.kind === 'point' ? p.shape.pos : center(p.shape.ring));
 
+/** TASK-277 (TASK-259's D13): the name of the `public_transport=stop_area` each element is a
+ * member of, by `type/id` (the lowest relation id first). A stop area names its stop; its
+ * platforms often carry no name (Philadelphia's Suburban Station platforms) or only a `ref`, a
+ * platform or track number (the trolley tunnel's "3"), which names no stop. */
+export function stopAreaNames(data: OsmData): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const r of data.relation
+    .filter((r) => r.tag.public_transport === 'stop_area' && r.tag.name)
+    .sort((a, b) => a.id - b.id))
+    for (const m of r.member) {
+      const key = `${m.type}/${m.ref}`;
+      if (!names.has(key)) names.set(key, r.tag.name!);
+    }
+  return names;
+}
+
 /** Runs after all vehicle/walk/parking allocation, preserving existing entity IDs. */
 export function importRail(
   city: City,
@@ -215,6 +231,7 @@ export function importRail(
     .map((n) => ({ pos: positions.get(n.id)!, osmId: n.id }));
   if (masts.length) rail.masts = masts;
   const platformSources = new Map<string, string[]>();
+  const areaNames = stopAreaNames(data);
   const addPlatform = (
     sourceKey: string,
     osmId: number,
@@ -226,7 +243,7 @@ export function importRail(
     const p: RailPlatform = {
       id,
       shape,
-      name: tag.name ?? tag.ref ?? 'Platform',
+      name: tag.name ?? areaNames.get(sourceKey) ?? tag.ref ?? 'Platform',
       ...(tag.ref ? { ref: tag.ref } : {}),
       mode,
       layer: osmLayer(tag) ?? 0,

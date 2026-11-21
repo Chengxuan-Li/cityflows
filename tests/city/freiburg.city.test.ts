@@ -237,7 +237,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-281: rebuilt; the importer leaves out every lot no car reaches (TASK-207's three, no
     // longer curated, and 6 more) with the aisles only they own (22 roads); one driveway fewer, so
     // the later ids move down by 1.
-    'b0eb4e8045f25bcd1ea99a7340b95c1d02845d4e9aa1fb0e9424d42dadfbc4a1',
+    // TASK-277: rebuilt; the Hauptbahnhof's four platforms mapped with only a `ref` ("1", "2;3",
+    // "4;5", "6;7") take their stop area's name; nothing else changes.
+    'PENDING_MANIFEST',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).

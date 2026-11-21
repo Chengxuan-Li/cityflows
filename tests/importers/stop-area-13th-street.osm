@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="cityflows TASK-277 excerpt">
+<note>© OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright). 13th Street (stop area relation 7929732): its station, subway and trolley platforms, and the tracks and main roads around it, cut from TASK-259's Overpass extract philadelphia-center-city.osm (snapshot 2026-11-21T07:02:38Z).</note>
+<bounds minlat="39.951" minlon="-75.1635" maxlat="39.9535" maxlon="-75.1595"/>
+<node id="109750941" lat="39.9531287" lon="-75.1624884"/>
+<node id="109750950" lat="39.9532633" lon="-75.1622572"/>
+<node id="109814489" lat="39.9522072" lon="-75.1624313"/>
+<node id="109814491" lat="39.9521471" lon="-75.1625538"/>
+<node id="109814493" lat="39.9517882" lon="-75.1627087"/>
+<node id="110139477" lat="39.9510542" lon="-75.1584607"/>
+<node id="110151380" lat="39.9509204" lon="-75.160102"/>
+<node id="110167089" lat="39.9514412" lon="-75.1616067"/>
+<node id="110167094" lat="39.9511167" lon="-75.1616785"/>
+<node id="110167859" lat="39.9509939" lon="-75.1606823"/>
+<node id="110179190" lat="39.9529468" lon="-75.1596671"><tag k="highway" v="traffic_signals"/></node>
+<node id="110179199" lat="39.9531373" lon="-75.161245"><tag k="highway" v="traffic_signals"/></node>
+<node id="110377356" lat="39.9516121" lon="-75.1635689"/>
+<node id="110402230" lat="39.9534497" lon="-75.1639523"/>
+<node id="110416548" lat="39.9544056" lon="-75.1630979"/>
+<node id="110425696" lat="39.9527844" lon="-75.1613236"/>
+<node id="110425703" lat="39.9529299" lon="-75.1624525"/>
+<node id="110438793" lat="39.9533552" lon="-75.1595757"/>
+<node id="110438798" lat="39.953552" lon="-75.1611545"/>
+<node id="110438830" lat="39.9539179" lon="-75.1632022"/>
+<node id="110540235" lat="39.9525078" lon="-75.1625401"/>
+<node id="361011453" lat="39.9522404" lon="-75.1616127"><tag k="railway" v="subway_entrance"/></node>
+<node id="361011459" lat="39.9522906" lon="-75.1624163"/>
+<node id="361011461" lat="39.9523482" lon="-75.1624946"/>
+<node id="361011464" lat="39.952367" lon="-75.1625068"/>
+<node id="534961122" lat="39.9532345" lon="-75.1626111"/>
+<node id="534961125" lat="39.9532833" lon="-75.1627689"/>
+<node id="534962239" lat="39.9515901" lon="-75.163418"/>
+<node id="534962326" lat="39.9515745" lon="-75.1628491"/>
+<node id="534962336" lat="39.9516451" lon="-75.162763"/>
+<node id="609530569" lat="39.9522359" lon="-75.1555344"/>
+<node id="609530571" lat="39.9534466" lon="-75.163514"/>
+<node id="775308781" lat="39.9540679" lon="-75.1594158"/>
+<node id="775895204" lat="39.9531937" lon="-75.1624257"/>
+<node id="775895205" lat="39.9532099" lon="-75.1624083"/>
+<node id="775895206" lat="39.9532418" lon="-75.1623617"/>
+<node id="775895207" lat="39.9521622" lon="-75.1625396"/>
+<node id="775895210" lat="39.9515455" lon="-75.1630657"/>
+<node id="775895211" lat="39.9515393" lon="-75.1629789"/>
+<node id="775895212" lat="39.9515485" lon="-75.162913"/>
+<node id="775895213" lat="39.9516045" lon="-75.1628029"/>
+<node id="775895214" lat="39.9517241" lon="-75.1627233"/>
+<node id="775895215" lat="39.9529903" lon="-75.1624478"/>
+<node id="775895216" lat="39.9531921" lon="-75.1625464"/>
+<node id="775895217" lat="39.9532623" lon="-75.1626765"/>
+<node id="1015357519" lat="39.9521742" lon="-75.1618148"><tag k="name" v="13th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="subway" v="yes"/></node>
+<node id="1118188486" lat="39.9518211" lon="-75.158968"><tag k="name" v="11th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="subway" v="yes"/><tag k="wheelchair" v="no"/></node>
+<node id="2644228571" lat="39.9527486" lon="-75.1663854"><tag k="name" v="15th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="subway" v="yes"/><tag k="wheelchair" v="no"/></node>
+<node id="2644235371" lat="39.952118" lon="-75.1614611"><tag k="highway" v="traffic_signals"/></node>
+<node id="2878636361" lat="39.9524446" lon="-75.1565715"/>
+<node id="2952951438" lat="39.9506064" lon="-75.161791"><tag k="highway" v="traffic_signals"/></node>
+<node id="2952951440" lat="39.949646" lon="-75.160371"><tag k="highway" v="traffic_signals"/></node>
+<node id="3146301033" lat="39.9522702" lon="-75.1613547"><tag k="highway" v="elevator"/><tag k="railway" v="subway_entrance"/><tag k="wheelchair" v="yes"/></node>
+<node id="3146301036" lat="39.9523102" lon="-75.1621676"><tag k="railway" v="subway_entrance"/><tag k="wheelchair" v="no"/></node>
+<node id="3157371251" lat="39.9534036" lon="-75.1635283"/>
+<node id="3157371258" lat="39.9521918" lon="-75.1555484"/>
+<node id="3157371473" lat="39.9521492" lon="-75.1555619"/>
+<node id="3157371475" lat="39.9523982" lon="-75.156569"/>
+<node id="3157371482" lat="39.9522755" lon="-75.1566504"/>
+<node id="3157371487" lat="39.9525838" lon="-75.1565619"/>
+<node id="3157371488" lat="39.9534896" lon="-75.1634997"/>
+<node id="3157371507" lat="39.9533606" lon="-75.1635427"/>
+<node id="3157371509" lat="39.9522801" lon="-75.1555205"/>
+<node id="3401274166" lat="39.9512342" lon="-75.1600336"/>
+<node id="3409804864" lat="39.9533388" lon="-75.1632378"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3409804865" lat="39.9533469" lon="-75.1634862"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3409813341" lat="39.952315" lon="-75.1624573"><tag k="crossing" v="traffic_signals"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/></node>
+<node id="3409813342" lat="39.9521856" lon="-75.1625008"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/><tag k="traffic_signals:sound" v="no"/></node>
+<node id="3409813346" lat="39.9522308" lon="-75.1614429"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/><tag k="traffic_signals:sound" v="no"/></node>
+<node id="3413844254" lat="39.9520362" lon="-75.1598635"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/><tag k="traffic_signals:sound" v="no"/><tag k="traffic_signals:vibration" v="no"/></node>
+<node id="3413844255" lat="39.9518139" lon="-75.1599083"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/><tag k="traffic_signals:sound" v="no"/><tag k="traffic_signals:vibration" v="no"/></node>
+<node id="3413844256" lat="39.9519098" lon="-75.1597873"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:island" v="no"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/><tag k="traffic_signals:sound" v="no"/><tag k="traffic_signals:vibration" v="no"/></node>
+<node id="3414251599" lat="39.9543326" lon="-75.1631133"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3415309226" lat="39.9528732" lon="-75.162467"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/></node>
+<node id="3415309227" lat="39.9534796" lon="-75.1632997"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3424828946" lat="39.9504114" lon="-75.1602095"><tag k="highway" v="traffic_signals"/></node>
+<node id="3426140691" lat="39.950667" lon="-75.1617777"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/><tag k="traffic_signals:sound" v="no"/></node>
+<node id="3428124102" lat="39.9539522" lon="-75.1594419"><tag k="highway" v="traffic_signals"/></node>
+<node id="3429439285" lat="39.9528838" lon="-75.1596798"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3429439291" lat="39.9540306" lon="-75.159424"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3429567127" lat="39.953145" lon="-75.1613045"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3429567128" lat="39.9530686" lon="-75.16126"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3429567129" lat="39.9532086" lon="-75.1612291"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3429567130" lat="39.9531274" lon="-75.1611598"><tag k="crossing" v="marked"/><tag k="crossing:island" v="no"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="3429659625" lat="39.9528316" lon="-75.1586279"/>
+<node id="3429659626" lat="39.9529414" lon="-75.1595761"/>
+<node id="3454064545" lat="39.9521995" lon="-75.1612797"><tag k="railway" v="subway_entrance"/></node>
+<node id="3454064547" lat="39.9520419" lon="-75.1600411"><tag k="railway" v="subway_entrance"/></node>
+<node id="4241833037" lat="39.9518431" lon="-75.1592507"/>
+<node id="4241833040" lat="39.9532778" lon="-75.1627348"/>
+<node id="4242028646" lat="39.9521739" lon="-75.1619116"/>
+<node id="4844635143" lat="39.9524372" lon="-75.1597791"/>
+<node id="5336784619" lat="39.9533818" lon="-75.1633528"><tag k="railway" v="switch"/></node>
+<node id="5336784620" lat="39.9533508" lon="-75.16271"><tag k="railway" v="switch"/></node>
+<node id="5336784821" lat="39.9533068" lon="-75.1627202"><tag k="railway" v="switch"/></node>
+<node id="5336784822" lat="39.9534259" lon="-75.1633438"><tag k="railway" v="switch"/></node>
+<node id="5372039293" lat="39.9512275" lon="-75.1542327"><tag k="name" v="8th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="subway" v="yes"/></node>
+<node id="5372059864" lat="39.9519215" lon="-75.1598866"><tag k="highway" v="traffic_signals"/><tag k="traffic_signals" v="signal"/></node>
+<node id="5372098384" lat="39.952184" lon="-75.1615338"><tag k="light_rail" v="no"/><tag k="name" v="13th Street"/><tag k="network" v="SEPTA"/><tag k="network:wikidata" v="Q2037863"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="station"/><tag k="railway" v="station"/><tag k="station" v="subway"/><tag k="subway" v="yes"/><tag k="tram" v="yes"/><tag k="wikidata" v="Q4549546"/><tag k="wikipedia" v="en:13th Street station (SEPTA)"/></node>
+<node id="5534030096" lat="39.952389" lon="-75.1597876"/>
+<node id="5534891499" lat="39.9521953" lon="-75.1620836"/>
+<node id="5534891501" lat="39.9521132" lon="-75.1625758"><tag k="highway" v="traffic_signals"/><tag k="traffic_signals:direction" v="forward"/></node>
+<node id="5534891503" lat="39.9522685" lon="-75.1623587"><tag k="highway" v="traffic_signals"/><tag k="traffic_signals:direction" v="forward"/></node>
+<node id="5559134499" lat="39.9515504" lon="-75.1615824"/>
+<node id="5559134513" lat="39.9525071" lon="-75.1613827"/>
+<node id="6549549374" lat="39.9525521" lon="-75.16513"><tag k="name" v="15th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="subway" v="yes"/><tag k="wheelchair" v="no"/></node>
+<node id="6549549375" lat="39.9525134" lon="-75.1651384"><tag k="name" v="15th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="railway:position" v="mi:2.20"/><tag k="tram" v="yes"/></node>
+<node id="6549549376" lat="39.9519474" lon="-75.1626702"/>
+<node id="6549549378" lat="39.9519778" lon="-75.160559"><tag k="name" v="13th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="subway" v="yes"/></node>
+<node id="6549549379" lat="39.9516296" lon="-75.1577164"><tag k="name" v="11th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="subway" v="yes"/><tag k="wheelchair" v="no"/></node>
+<node id="6549549382" lat="39.9510404" lon="-75.1529865"><tag k="name" v="8th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="subway" v="yes"/></node>
+<node id="6634345450" lat="39.9522646" lon="-75.1626307"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/></node>
+<node id="6634345451" lat="39.9521762" lon="-75.1626471"><tag k="highway" v="traffic_signals"/></node>
+<node id="6634345452" lat="39.9523989" lon="-75.1625957"/>
+<node id="6634345453" lat="39.9520452" lon="-75.1626776"/>
+<node id="6979774513" lat="39.9529103" lon="-75.1623028"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/></node>
+<node id="6979774515" lat="39.9527976" lon="-75.161419"><tag k="crossing" v="unmarked"/><tag k="crossing:markings" v="no"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6979774518" lat="39.953255" lon="-75.1621929"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/></node>
+<node id="6983227759" lat="39.9530663" lon="-75.1606616"/>
+<node id="6983227760" lat="39.9529923" lon="-75.160058"/>
+<node id="6983301816" lat="39.9520172" lon="-75.1614786"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/><tag k="traffic_signals:sound" v="no"/></node>
+<node id="6983301818" lat="39.952105" lon="-75.1613606"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:island" v="no"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/><tag k="traffic_signals:sound" v="no"/></node>
+<node id="6983301835" lat="39.9511091" lon="-75.1616073"><tag k="crossing" v="unmarked"/><tag k="crossing:markings" v="no"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6983628874" lat="39.9519344" lon="-75.1599854"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:island" v="no"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="no"/><tag k="traffic_signals:sound" v="no"/><tag k="traffic_signals:vibration" v="no"/></node>
+<node id="6983628875" lat="39.952955" lon="-75.1597541"><tag k="crossing" v="marked"/><tag k="crossing:island" v="no"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6983628883" lat="39.9530126" lon="-75.1596517"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6983694985" lat="39.9538794" lon="-75.1594586"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6984953880" lat="39.9529419" lon="-75.1595933"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6985042709" lat="39.9512258" lon="-75.1599631"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6985042710" lat="39.9504652" lon="-75.1602034"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6985042714" lat="39.9510536" lon="-75.1585274"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="surface"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6985042715" lat="39.9508833" lon="-75.1601112"/>
+<node id="6985042729" lat="39.9503415" lon="-75.1602215"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="yes"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<node id="6985042730" lat="39.9496849" lon="-75.1603621"><tag k="crossing" v="marked"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/></node>
+<node id="7065419679" lat="39.9533663" lon="-75.1630318"><tag k="railway" v="railway_crossing"/></node>
+<node id="7065419681" lat="39.9537294" lon="-75.1656164"><tag k="name" v="Suburban Station"/><tag k="name:de" v="Suburban Station Gleis 1"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="ref" v="1"/><tag k="train" v="yes"/></node>
+<node id="7065419682" lat="39.9538012" lon="-75.1656"><tag k="name" v="Suburban Station"/><tag k="name:de" v="Suburban Station Gleis 2"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="ref" v="2"/><tag k="train" v="yes"/></node>
+<node id="7067119198" lat="39.9527872" lon="-75.1580836"><tag k="name" v="Jefferson Station"/><tag k="network" v="SEPTA"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="train" v="yes"/></node>
+<node id="7067119199" lat="39.9526503" lon="-75.1581179"><tag k="name" v="Jefferson Station"/><tag k="network" v="SEPTA"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="train" v="yes"/></node>
+<node id="7067119200" lat="39.9526069" lon="-75.1581288"><tag k="name" v="Jefferson Station"/><tag k="network" v="SEPTA"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="train" v="yes"/></node>
+<node id="7067119201" lat="39.9524736" lon="-75.1581622"><tag k="name" v="Jefferson Station"/><tag k="network" v="SEPTA"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="train" v="yes"/></node>
+<node id="7067119202" lat="39.952782" lon="-75.1596326"/>
+<node id="7067119203" lat="39.952392" lon="-75.1566415"/>
+<node id="7067119204" lat="39.9522975" lon="-75.1566625"/>
+<node id="7067119205" lat="39.9526875" lon="-75.1596536"/>
+<node id="7067119206" lat="39.9530666" lon="-75.1612654"/>
+<node id="7067119207" lat="39.9531101" lon="-75.1612558"/>
+<node id="7067119208" lat="39.9531537" lon="-75.1612462"/>
+<node id="7067119209" lat="39.9531973" lon="-75.1612366"/>
+<node id="7067119210" lat="39.952673" lon="-75.1596835"/>
+<node id="7067119211" lat="39.9528066" lon="-75.1596519"/>
+<node id="7067119212" lat="39.95285" lon="-75.1596411"/>
+<node id="7067119213" lat="39.9529864" lon="-75.1596038"/>
+<node id="7067119214" lat="39.9524812" lon="-75.1566233"/>
+<node id="7067119215" lat="39.9528712" lon="-75.1596144"/>
+<node id="7067119216" lat="39.9525757" lon="-75.1566023"/>
+<node id="7067119217" lat="39.9529657" lon="-75.1595934"/>
+<node id="7191834362" lat="39.9521354" lon="-75.1618232"/>
+<node id="7191834363" lat="39.9524894" lon="-75.1625367"><tag k="name" v="13th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="railway:position" v="mi:2.40"/><tag k="tram" v="yes"/><tag k="wheelchair" v="yes"/></node>
+<node id="7191843587" lat="39.9521901" lon="-75.1618147"/>
+<node id="7191843588" lat="39.9520326" lon="-75.1605518"/>
+<node id="7191843589" lat="39.9521203" lon="-75.161825"/>
+<node id="7191843590" lat="39.9519628" lon="-75.1605621"/>
+<node id="7191843591" lat="39.95271" lon="-75.1663948"/>
+<node id="7191843604" lat="39.9521858" lon="-75.1625874"/>
+<node id="7191843605" lat="39.9523206" lon="-75.1625579"/>
+<node id="7191843606" lat="39.9523259" lon="-75.1625771"><tag k="name" v="13th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="railway:position" v="mi:2.40"/><tag k="tram" v="yes"/><tag k="wheelchair" v="yes"/></node>
+<node id="7191843607" lat="39.9521893" lon="-75.1626092"><tag k="name" v="13th Street"/><tag k="network" v="SEPTA"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="public_transport" v="stop_position"/><tag k="railway" v="stop"/><tag k="railway:position" v="mi:2.40"/><tag k="tram" v="yes"/><tag k="wheelchair" v="yes"/></node>
+<node id="7191843609" lat="39.9516074" lon="-75.1632653"/>
+<node id="7191843610" lat="39.951819" lon="-75.1627209"/>
+<node id="7191843612" lat="39.9526843" lon="-75.1624961"/>
+<node id="7191843613" lat="39.9529412" lon="-75.1625274"/>
+<node id="7191843614" lat="39.9531979" lon="-75.16281"/>
+<node id="7191843615" lat="39.9532407" lon="-75.1629507"/>
+<node id="7191843617" lat="39.9530902" lon="-75.1626313"/>
+<node id="7191843618" lat="39.9524931" lon="-75.164994"/>
+<node id="7191843619" lat="39.9526886" lon="-75.1650436"/>
+<node id="7191843620" lat="39.9524005" lon="-75.1647196"/>
+<node id="7191843622" lat="39.9517421" lon="-75.1642446"/>
+<node id="7191843623" lat="39.9533569" lon="-75.1637434"/>
+<node id="7191843624" lat="39.9524553" lon="-75.1625284"/>
+<node id="7191843625" lat="39.9520511" lon="-75.1626169"/>
+<node id="7191843627" lat="39.9527658" lon="-75.1668412"><tag k="railway" v="switch"/></node>
+<node id="7191843628" lat="39.9528043" lon="-75.1668317"><tag k="railway" v="switch"/></node>
+<node id="7192213151" lat="39.9507715" lon="-75.1508197"><tag k="railway" v="switch"/></node>
+<node id="7192213153" lat="39.9508087" lon="-75.1508107"><tag k="railway" v="switch"/></node>
+<node id="7198964074" lat="39.9520149" lon="-75.1605518"/>
+<node id="7198964081" lat="39.952811" lon="-75.1624974"/>
+<node id="7198964084" lat="39.9523449" lon="-75.1646602"/>
+<node id="7198986388" lat="39.9533208" lon="-75.163995"/>
+<node id="7198986393" lat="39.9522163" lon="-75.1645954"/>
+<node id="7198986394" lat="39.9524392" lon="-75.1647865"/>
+<node id="7198986395" lat="39.9521533" lon="-75.1645905"/>
+<node id="7204822926" lat="39.9538371" lon="-75.1655919"/>
+<node id="7204822927" lat="39.9539088" lon="-75.1655755"/>
+<node id="7357184006" lat="39.9519048" lon="-75.1645635"/>
+<node id="7357184007" lat="39.9519959" lon="-75.1645873"/>
+<node id="7357184008" lat="39.9517842" lon="-75.1644142"/>
+<node id="7357184009" lat="39.9516295" lon="-75.1629205"/>
+<node id="7357184010" lat="39.9515962" lon="-75.1631279"/>
+<node id="7357184011" lat="39.9516994" lon="-75.1628084"/>
+<node id="7357184012" lat="39.9526459" lon="-75.165233"/>
+<node id="7357184013" lat="39.9533556" lon="-75.1638768"/>
+<node id="7411169140" lat="39.9507764" lon="-75.1617511"/>
+<node id="7411169145" lat="39.9510239" lon="-75.1616974"/>
+<node id="7412644648" lat="39.9534695" lon="-75.1611728"/>
+<node id="7412644651" lat="39.9530857" lon="-75.1608195"/>
+<node id="7419106748" lat="39.9511592" lon="-75.1600497"/>
+<node id="7427995579" lat="39.9513925" lon="-75.1600001"/>
+<node id="7641147837" lat="39.9529932" lon="-75.1600655"/>
+<node id="8108484992" lat="39.95231" lon="-75.1632086"/>
+<node id="8108484993" lat="39.9524503" lon="-75.1640117"/>
+<node id="8316680729" lat="39.9528131" lon="-75.1624764"><tag k="highway" v="traffic_signals"/></node>
+<node id="8316680737" lat="39.9533308" lon="-75.1631539"><tag k="highway" v="traffic_signals"/></node>
+<node id="8316680739" lat="39.9542627" lon="-75.1631298"><tag k="highway" v="traffic_signals"/></node>
+<node id="8326614389" lat="39.9532879" lon="-75.1623424"/>
+<node id="8488378840" lat="39.9522931" lon="-75.1555989"/>
+<node id="8488378841" lat="39.9522481" lon="-75.1556094"/>
+<node id="8488378842" lat="39.9522032" lon="-75.1556218"/>
+<node id="8488378843" lat="39.9522189" lon="-75.1556973"/>
+<node id="8488378844" lat="39.9522626" lon="-75.155677"/>
+<node id="8488378845" lat="39.952305" lon="-75.1556572"/>
+<node id="8488378846" lat="39.9523234" lon="-75.1557192"/>
+<node id="8488378847" lat="39.9524163" lon="-75.1566748"/>
+<node id="8488378848" lat="39.9524072" lon="-75.1566191"/>
+<node id="8488378849" lat="39.9524597" lon="-75.156663"/>
+<node id="8488378850" lat="39.9524498" lon="-75.1566021"/>
+<node id="8488378851" lat="39.952597" lon="-75.156632"/>
+<node id="8488378852" lat="39.9525086" lon="-75.1563211"/>
+<node id="8488378853" lat="39.9525516" lon="-75.1564474"/>
+<node id="8488378854" lat="39.9525747" lon="-75.1565237"/>
+<node id="8588176087" lat="39.9511583" lon="-75.1594014"/>
+<node id="9044700877" lat="39.9515419" lon="-75.1630359"/>
+<node id="9044700878" lat="39.9515399" lon="-75.1630075"/>
+<node id="9044700879" lat="39.9515427" lon="-75.1629453"/>
+<node id="9044700880" lat="39.9515584" lon="-75.1628824"/>
+<node id="9044700881" lat="39.951588" lon="-75.1628246"/>
+<node id="9044700882" lat="39.9516239" lon="-75.1627815"/>
+<node id="9044700883" lat="39.9516629" lon="-75.1627511"/>
+<node id="9044700884" lat="39.9516831" lon="-75.1627396"/>
+<node id="9044700885" lat="39.9517046" lon="-75.1627299"/>
+<node id="9044700886" lat="39.9520381" lon="-75.1625966"/>
+<node id="9044700887" lat="39.9520664" lon="-75.1625912"/>
+<node id="9044700888" lat="39.9520904" lon="-75.1625845"/>
+<node id="9044700889" lat="39.9521303" lon="-75.1625661"/>
+<node id="9044700890" lat="39.9521735" lon="-75.1625233"/>
+<node id="9044700891" lat="39.9521921" lon="-75.1624836"/>
+<node id="9044700892" lat="39.9522003" lon="-75.16246"/>
+<node id="9044700893" lat="39.9522104" lon="-75.1624047"/>
+<node id="9044700894" lat="39.9522803" lon="-75.1623956"/>
+<node id="9044700895" lat="39.9523301" lon="-75.1624766"/>
+<node id="9044700896" lat="39.9524044" lon="-75.1625224"/>
+<node id="9044700897" lat="39.9524298" lon="-75.1625289"/>
+<node id="9044700898" lat="39.9524536" lon="-75.1625344"/>
+<node id="9044700899" lat="39.9529595" lon="-75.1624485"/>
+<node id="9044700900" lat="39.9530333" lon="-75.1624491"/>
+<node id="9044700901" lat="39.9531703" lon="-75.1625223"/>
+<node id="9044700905" lat="39.953251" lon="-75.1626455"/>
+<node id="9044700906" lat="39.9532134" lon="-75.1625764"/>
+<node id="9044700907" lat="39.9532705" lon="-75.1627046"/>
+<node id="9044700908" lat="39.9534417" lon="-75.1633054"/>
+<node id="9044700909" lat="39.9534611" lon="-75.1633035"/>
+<node id="9044700910" lat="39.9534177" lon="-75.1633011"/>
+<node id="9044700911" lat="39.9533974" lon="-75.1632945"/>
+<node id="9044700912" lat="39.9533786" lon="-75.1632873"/>
+<node id="9044700913" lat="39.9533598" lon="-75.1632761"/>
+<node id="9044700914" lat="39.9533869" lon="-75.1637614"/>
+<node id="9067128482" lat="39.9532228" lon="-75.1624754"/>
+<node id="9067128483" lat="39.9532649" lon="-75.1622845"/>
+<node id="9067128484" lat="39.9532612" lon="-75.1623106"/>
+<node id="9067128485" lat="39.9532509" lon="-75.1623411"/>
+<node id="9067128486" lat="39.9532268" lon="-75.1623843"/>
+<node id="9067128487" lat="39.9531523" lon="-75.1625055"/>
+<node id="9067128488" lat="39.9530798" lon="-75.1624629"/>
+<node id="9067128489" lat="39.9531057" lon="-75.1624739"/>
+<node id="9067128490" lat="39.9530554" lon="-75.162453"/>
+<node id="9067128491" lat="39.9530098" lon="-75.1624474"/>
+<node id="9067572573" lat="39.9515253" lon="-75.1599746"/>
+<node id="9590457996" lat="39.9524724" lon="-75.164883"/>
+<node id="9590457997" lat="39.9522837" lon="-75.1646202"/>
+<node id="9590457998" lat="39.9519545" lon="-75.1645794"/>
+<node id="9590457999" lat="39.951861" lon="-75.1645339"/>
+<node id="9590458000" lat="39.9518221" lon="-75.1644846"/>
+<node id="9590458001" lat="39.9517603" lon="-75.1643313"/>
+<node id="9590458002" lat="39.9516005" lon="-75.1632008"/>
+<node id="9590458003" lat="39.9515986" lon="-75.1630542"/>
+<node id="9590458004" lat="39.9516087" lon="-75.1629838"/>
+<node id="9590458005" lat="39.9516567" lon="-75.1628648"/>
+<node id="9590458006" lat="39.9517531" lon="-75.1627637"/>
+<node id="9590458007" lat="39.9518771" lon="-75.1626919"/>
+<node id="9590458008" lat="39.9532773" lon="-75.1631333"/>
+<node id="9590458009" lat="39.9527501" lon="-75.1624924"/>
+<node id="9590458010" lat="39.9528766" lon="-75.162507"/>
+<node id="9590458011" lat="39.9530024" lon="-75.1625585"/>
+<node id="9590458012" lat="39.9530489" lon="-75.1625937"/>
+<node id="9590458013" lat="39.9531322" lon="-75.1626838"/>
+<node id="9590458014" lat="39.9531688" lon="-75.1627455"/>
+<node id="9590458015" lat="39.9532201" lon="-75.1628761"/>
+<node id="9590458016" lat="39.953261" lon="-75.1630394"/>
+<node id="9590525917" lat="39.9533606" lon="-75.1638131"/>
+<node id="9590525918" lat="39.9533422" lon="-75.1639324"/>
+<node id="9590525919" lat="39.9532876" lon="-75.1640634"/>
+<node id="9590525920" lat="39.9526445" lon="-75.1651973"/>
+<node id="9590525921" lat="39.952647" lon="-75.1651612"/>
+<node id="9590525922" lat="39.952651" lon="-75.1651373"/>
+<node id="9590525923" lat="39.9526574" lon="-75.1651102"/>
+<node id="9590525924" lat="39.9526698" lon="-75.1650779"/>
+<node id="9590525925" lat="39.9526496" lon="-75.1652688"/>
+<node id="9673692485" lat="39.9519378" lon="-75.1626906"/>
+<node id="9715920123" lat="39.9519438" lon="-75.1613467"><tag k="name" v="Eastbound MFL Entrance"/><tag k="railway" v="subway_entrance"/><tag k="wheelchair" v="yes"/></node>
+<node id="11219273556" lat="39.9529753" lon="-75.1624481"/>
+<node id="11345036593" lat="39.9521286" lon="-75.1615495"><tag k="button_operated" v="no"/><tag k="crossing" v="traffic_signals"/><tag k="crossing:island" v="yes"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/><tag k="traffic_signals:sound" v="no"/></node>
+<node id="11345036596" lat="39.9519886" lon="-75.1604212"/>
+<node id="11345036597" lat="39.9520485" lon="-75.1609027"/>
+<node id="11345036599" lat="39.9522742" lon="-75.1623783"/>
+<node id="11345036600" lat="39.9523003" lon="-75.1624345"/>
+<node id="11345036601" lat="39.9523844" lon="-75.1625154"/>
+<node id="11345036602" lat="39.9524587" lon="-75.1625447"/>
+<node id="11345036603" lat="39.9524799" lon="-75.1625378"/>
+<node id="11345036604" lat="39.9522111" lon="-75.1623718"/>
+<node id="11345036636" lat="39.9510568" lon="-75.1585577"><tag k="direction" v="forward"/><tag k="highway" v="stop"/></node>
+<node id="11345036637" lat="39.951273" lon="-75.160026"><tag k="crossing" v="uncontrolled"/><tag k="crossing:markings" v="zebra"/><tag k="highway" v="crossing"/></node>
+<node id="11345036638" lat="39.9528037" lon="-75.1614699"><tag k="direction" v="forward"/><tag k="highway" v="stop"/></node>
+<node id="13116241984" lat="39.9536579" lon="-75.1652095"/>
+<node id="13116241985" lat="39.951863" lon="-75.1594091"><tag k="bus" v="yes"/><tag k="name" v="Pennsylvania Convention Center"/><tag k="public_transport" v="stop_position"/></node>
+<node id="13116241987" lat="39.9518739" lon="-75.1594964"><tag k="bus" v="yes"/><tag k="name" v="12th St &amp; Market St"/><tag k="network" v="SEPTA"/><tag k="network:wikidata" v="Q2037863"/><tag k="operator" v="SEPTA"/><tag k="public_transport" v="stop_position"/><tag k="ref" v="10262"/></node>
+<node id="13481124307" lat="39.9514165" lon="-75.1616122"><tag k="crossing" v="unmarked"/><tag k="crossing:markings" v="no"/><tag k="highway" v="crossing"/><tag k="tactile_paving" v="yes"/></node>
+<way id="12153942"><nd ref="110179190"/><nd ref="6983628875"/><nd ref="6983227760"/><nd ref="7641147837"/><nd ref="6983227759"/><nd ref="7412644651"/><nd ref="3429567130"/><nd ref="110179199"/><tag k="cycleway:both" v="no"/><tag k="highway" v="residential"/><tag k="lane_markings" v="no"/><tag k="lit" v="yes"/><tag k="name" v="Filbert Street"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A41"/><tag k="tiger:name_base" v="Filbert"/><tag k="tiger:name_type" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/></way>
+<way id="12183514"><nd ref="110425703"/><nd ref="6979774513"/><nd ref="11345036638"/><nd ref="6979774515"/><nd ref="110425696"/><tag k="highway" v="residential"/><tag k="lane_markings" v="no"/><tag k="name" v="Commerce Street"/><tag k="oneway" v="yes"/><tag k="sidewalk:left" v="no"/><tag k="sidewalk:right" v="separate"/><tag k="surface" v="asphalt"/></way>
+<way id="12202652"><nd ref="534962239"/><nd ref="775895210"/><nd ref="9044700877"/><nd ref="9044700878"/><nd ref="775895211"/><nd ref="9044700879"/><nd ref="775895212"/><nd ref="9044700880"/><nd ref="534962326"/><nd ref="9044700881"/><nd ref="775895213"/><nd ref="9044700882"/><nd ref="534962336"/><nd ref="9044700883"/><nd ref="9044700884"/><nd ref="9044700885"/><nd ref="775895214"/><nd ref="109814493"/><tag k="NHS" v="yes"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:lane" v="exclusive"/><tag k="cycleway:left:oneway" v="1"/><tag k="cycleway:right" v="no"/><tag k="hgv" v="designated"/><tag k="highway" v="primary"/><tag k="lanes" v="3"/><tag k="lit" v="yes"/><tag k="name" v="East Penn Square"/><tag k="name_1" v="N Juniper St"/><tag k="oneway" v="yes"/><tag k="ref" v="PA 611"/><tag k="ref:penndot" v="SR 3022"/><tag k="sidewalk" v="separate"/><tag k="source:hgv" v="https://www.dot.state.pa.us/public/pubsforms/Publications/TruckersMap.pdf"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A35"/><tag k="tiger:name_base" v="Penn"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_base_2" v="State Route 611"/><tag k="tiger:name_base_3" v="Juniper"/><tag k="tiger:name_direction_prefix" v="E"/><tag k="tiger:name_direction_prefix_3" v="N"/><tag k="tiger:name_type" v="Sq"/><tag k="tiger:name_type_3" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/><tag k="turn:lanes" v="none|none|right"/></way>
+<way id="30908207"><nd ref="3409804864"/><nd ref="9044700913"/><nd ref="9044700912"/><nd ref="9044700911"/><nd ref="9044700910"/><nd ref="9044700908"/><nd ref="9044700909"/><nd ref="3415309227"/><nd ref="110438830"/><nd ref="8316680739"/><nd ref="3414251599"/><nd ref="110416548"/><tag k="NHS" v="yes"/><tag k="hgv" v="designated"/><tag k="highway" v="primary"/><tag k="lanes" v="3"/><tag k="name" v="North Broad Street"/><tag k="old_ref" v="US 611"/><tag k="oneway" v="yes"/><tag k="ref" v="PA 611"/><tag k="sidewalk" v="separate"/><tag k="source:hgv" v="https://www.dot.state.pa.us/public/pubsforms/Publications/TruckersMap.pdf"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A31"/><tag k="tiger:name_base" v="Broad"/><tag k="tiger:name_base_1" v="State Route 611"/><tag k="tiger:name_direction_prefix" v="N"/><tag k="tiger:name_type" v="St"/><tag k="tiger:reviewed" v="no"/><tag k="tiger:zip_left" v="19121"/><tag k="tiger:zip_right" v="19122"/></way>
+<way id="32163457"><nd ref="2644235371"/><nd ref="3409813346"/><nd ref="5559134513"/><nd ref="110425696"/><tag k="cycleway:left" v="track"/><tag k="cycleway:right" v="no"/><tag k="cycleway:right:buffer" v="no"/><tag k="highway" v="tertiary"/><tag k="lanes" v="1"/><tag k="lit" v="yes"/><tag k="name" v="North 13th Street"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="separate"/><tag k="surface" v="asphalt"/></way>
+<way id="32165052"><nd ref="109814493"/><nd ref="9044700886"/><nd ref="9044700887"/><nd ref="9044700888"/><nd ref="5534891501"/><nd ref="9044700889"/><nd ref="109814491"/><nd ref="775895207"/><nd ref="9044700890"/><nd ref="3409813342"/><nd ref="9044700891"/><nd ref="9044700892"/><nd ref="109814489"/><nd ref="9044700893"/><nd ref="11345036604"/><nd ref="5534891499"/><tag k="highway" v="primary"/><tag k="lanes" v="2"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="Market Street"/><tag k="old_name" v="High Street"/><tag k="oneway" v="yes"/><tag k="ref:penndot" v="SR2004"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A31"/><tag k="tiger:name_base" v="Market"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_type" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/><tag k="turn:lanes" v="right|right"/><tag k="wikidata" v="Q6770747"/><tag k="wikipedia" v="en:Market Street (Philadelphia)"/></way>
+<way id="32165055"><nd ref="5534891499"/><nd ref="5534891503"/><nd ref="11345036599"/><nd ref="9044700894"/><nd ref="361011459"/><nd ref="11345036600"/><nd ref="3409813341"/><nd ref="9044700895"/><nd ref="361011461"/><nd ref="361011464"/><nd ref="11345036601"/><nd ref="9044700896"/><nd ref="9044700897"/><nd ref="9044700898"/><nd ref="11345036603"/><nd ref="110540235"/><tag k="access:lanes" v="yes|no"/><tag k="bus:lanes" v="yes|designated"/><tag k="cycleway:right" v="share_busway"/><tag k="highway" v="primary"/><tag k="lanes" v="2"/><tag k="lanes:bus" v="1"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="Market Street"/><tag k="old_name" v="High Street"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="wikidata" v="Q6770747"/><tag k="wikipedia" v="en:Market Street (Philadelphia)"/></way>
+<way id="42784695"><nd ref="3409804864"/><nd ref="3409804865"/><nd ref="9044700914"/><nd ref="110402230"/><tag k="alt_name" v="JFK Boulevard"/><tag k="cycleway:left" v="lane"/><tag k="cycleway:right" v="no"/><tag k="highway" v="primary"/><tag k="lanes" v="3"/><tag k="name" v="John F. Kennedy Boulevard"/><tag k="oneway" v="yes"/><tag k="ref:penndot" v="SR 3022"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A35"/><tag k="tiger:name_base" v="John F Kennedy"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_type" v="Blvd"/><tag k="tiger:zip_left" v="19103"/><tag k="turn:lanes" v="left|left|"/></way>
+<way id="62202559"><nd ref="110377356"/><nd ref="534962239"/><tag k="NHS" v="yes"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:lane" v="exclusive"/><tag k="cycleway:left:oneway" v="1"/><tag k="cycleway:right" v="no"/><tag k="hgv" v="designated"/><tag k="highway" v="primary"/><tag k="lanes" v="4"/><tag k="name" v="South Penn Square"/><tag k="oneway" v="yes"/><tag k="placement" v="middle_of:3"/><tag k="ref" v="PA 611"/><tag k="sidewalk:left" v="no"/><tag k="sidewalk:right" v="separate"/><tag k="source:hgv" v="https://www.dot.state.pa.us/public/pubsforms/Publications/TruckersMap.pdf"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A35"/><tag k="tiger:name_base" v="Penn"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_base_2" v="State Route 611"/><tag k="tiger:name_direction_prefix" v="S"/><tag k="tiger:name_type" v="Sq"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/></way>
+<way id="62202565"><nd ref="109750941"/><nd ref="775895204"/><nd ref="775895205"/><nd ref="9067128486"/><nd ref="775895206"/><nd ref="9067128485"/><nd ref="9067128484"/><nd ref="9067128483"/><nd ref="109750950"/><tag k="highway" v="residential"/><tag k="lane_markings" v="yes"/><tag k="lanes" v="1"/><tag k="name" v="Filbert Street"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/></way>
+<way id="62202575"><nd ref="2644235371"/><nd ref="11345036593"/><nd ref="4242028646"/><tag k="access:lanes:backward" v="yes|yes|no"/><tag k="access:lanes:forward" v="yes|no"/><tag k="bus:lanes:backward" v="yes|yes|designated"/><tag k="bus:lanes:forward" v="yes|designated"/><tag k="cycleway" v="share_busway"/><tag k="cycleway:both" v="share_busway"/><tag k="highway" v="primary"/><tag k="lanes" v="5"/><tag k="lanes:backward" v="3"/><tag k="lanes:bus:backward" v="1"/><tag k="lanes:bus:forward" v="1"/><tag k="lanes:forward" v="2"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="Market Street"/><tag k="old_name" v="High Street"/><tag k="oneway" v="no"/><tag k="ref:penndot" v="SR 2004"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="turn:lanes:backward" v="through||"/><tag k="wikidata" v="Q6770747"/><tag k="wikipedia" v="en:Market Street (Philadelphia)"/></way>
+<way id="63063019"><nd ref="9673692485"/><nd ref="6634345453"/><nd ref="6634345451"/><nd ref="6634345450"/><nd ref="6634345452"/><nd ref="110540235"/><tag k="NHS" v="yes"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:lane" v="exclusive"/><tag k="cycleway:left:oneway" v="1"/><tag k="cycleway:right" v="no"/><tag k="hgv" v="designated"/><tag k="highway" v="primary"/><tag k="lanes" v="3"/><tag k="lit" v="yes"/><tag k="name" v="East Penn Square"/><tag k="name_1" v="N Juniper St"/><tag k="oneway" v="yes"/><tag k="placement" v="right_of:2"/><tag k="ref" v="PA 611"/><tag k="ref:penndot" v="SR 3022"/><tag k="sidewalk" v="separate"/><tag k="source:hgv" v="https://www.dot.state.pa.us/public/pubsforms/Publications/TruckersMap.pdf"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A35"/><tag k="tiger:name_base" v="Penn"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_base_2" v="State Route 611"/><tag k="tiger:name_base_3" v="Juniper"/><tag k="tiger:name_direction_prefix" v="E"/><tag k="tiger:name_direction_prefix_3" v="N"/><tag k="tiger:name_type" v="Sq"/><tag k="tiger:name_type_3" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/><tag k="turn:lanes" v="none|none|through"/></way>
+<way id="104524024"><nd ref="2952951438"/><nd ref="3426140691"/><nd ref="7411169140"/><nd ref="7411169145"/><tag k="cycleway:left" v="lane"/><tag k="cycleway:right" v="no"/><tag k="cycleway:right:buffer" v="yes"/><tag k="highway" v="tertiary"/><tag k="lanes" v="1"/><tag k="lit" v="yes"/><tag k="name" v="South 13th Street"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="both"/><tag k="surface" v="asphalt"/></way>
+<way id="127806656"><nd ref="110540235"/><nd ref="8316680729"/><nd ref="3415309226"/><nd ref="110425703"/><nd ref="9044700899"/><nd ref="11219273556"/><nd ref="775895215"/><nd ref="9067128491"/><nd ref="9044700900"/><nd ref="9067128490"/><nd ref="9067128488"/><nd ref="9067128489"/><nd ref="109750941"/><tag k="NHS" v="yes"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:lane" v="exclusive"/><tag k="cycleway:left:oneway" v="1"/><tag k="cycleway:right" v="no"/><tag k="hgv" v="designated"/><tag k="highway" v="primary"/><tag k="lanes" v="4"/><tag k="name" v="East Penn Square"/><tag k="name_1" v="N Juniper St"/><tag k="oneway" v="yes"/><tag k="ref" v="PA 611"/><tag k="ref:penndot" v="SR 3022"/><tag k="sidewalk" v="separate"/><tag k="source:hgv" v="https://www.dot.state.pa.us/public/pubsforms/Publications/TruckersMap.pdf"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A35"/><tag k="tiger:name_base" v="Penn"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_base_2" v="State Route 611"/><tag k="tiger:name_base_3" v="Juniper"/><tag k="tiger:name_direction_prefix" v="E"/><tag k="tiger:name_direction_prefix_3" v="N"/><tag k="tiger:name_type" v="Sq"/><tag k="tiger:name_type_3" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/></way>
+<way id="170020485"><nd ref="775308781"/><nd ref="3429439291"/><nd ref="3428124102"/><nd ref="6983694985"/><nd ref="110438793"/><nd ref="6983628883"/><nd ref="110179190"/><nd ref="3429439285"/><nd ref="4844635143"/><tag k="abandoned:railway" v="tram"/><tag k="cycleway:both" v="no"/><tag k="highway" v="secondary"/><tag k="lanes" v="2"/><tag k="name" v="North 12th Street"/><tag k="oneway" v="yes"/><tag k="service" v="disused_tram"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A41"/><tag k="tiger:name_base" v="12th"/><tag k="tiger:name_direction_prefix" v="N"/><tag k="tiger:name_type" v="St"/></way>
+<way id="194837500"><nd ref="110179190"/><nd ref="6984953880"/><nd ref="3429659626"/><tag k="highway" v="residential"/><tag k="lit" v="yes"/><tag k="name" v="Filbert Street"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="separate"/><tag k="source" v="Bing"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A41"/><tag k="tiger:name_base" v="Filbert"/><tag k="tiger:name_type" v="St"/></way>
+<way id="333012753"><nd ref="3401274166"/><nd ref="6985042709"/><nd ref="8588176087"/><nd ref="11345036636"/><nd ref="6985042714"/><nd ref="110139477"/><tag k="highway" v="residential"/><tag k="name" v="Ludlow Street"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="separate"/><tag k="surface" v="paving_stones"/></way>
+<way id="335853588"><nd ref="3429659626"/><nd ref="3429659625"/><tag k="highway" v="residential"/><tag k="lanes" v="2"/><tag k="name" v="Filbert Street"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="separate"/><tag k="source" v="Bing"/><tag k="tiger:cfcc" v="A41"/><tag k="tiger:name_base" v="Filbert"/><tag k="tiger:name_type" v="St"/><tag k="tunnel" v="building_passage"/></way>
+<way id="424807258"><nd ref="4241833040"/><nd ref="534961125"/><nd ref="8316680737"/><nd ref="3409804864"/><tag k="NHS" v="yes"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:lane" v="exclusive"/><tag k="cycleway:left:oneway" v="1"/><tag k="cycleway:right" v="no"/><tag k="hgv" v="designated"/><tag k="highway" v="primary"/><tag k="lanes" v="4"/><tag k="name" v="East Penn Square"/><tag k="name_1" v="N Juniper St"/><tag k="oneway" v="yes"/><tag k="ref" v="PA 611"/><tag k="ref:penndot" v="SR 3022"/><tag k="sidewalk" v="separate"/><tag k="source:hgv" v="https://www.dot.state.pa.us/public/pubsforms/Publications/TruckersMap.pdf"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A35"/><tag k="tiger:name_base" v="Penn"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_base_2" v="State Route 611"/><tag k="tiger:name_base_3" v="Juniper"/><tag k="tiger:name_direction_prefix" v="E"/><tag k="tiger:name_direction_prefix_3" v="N"/><tag k="tiger:name_type" v="Sq"/><tag k="tiger:name_type_3" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/><tag k="turn:lanes" v="||right|right"/></way>
+<way id="424807264"><nd ref="4241833037"/><nd ref="13116241985"/><nd ref="13116241987"/><nd ref="3413844256"/><nd ref="5372059864"/><tag k="access:lanes:backward" v="yes|yes|no"/><tag k="access:lanes:forward" v="yes|no"/><tag k="bus:lanes:backward" v="yes|yes|designated"/><tag k="bus:lanes:forward" v="yes|designated"/><tag k="cycleway" v="share_busway"/><tag k="cycleway:both" v="share_busway"/><tag k="highway" v="primary"/><tag k="lanes" v="5"/><tag k="lanes:backward" v="3"/><tag k="lanes:bus:backward" v="1"/><tag k="lanes:bus:forward" v="1"/><tag k="lanes:forward" v="2"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="Market Street"/><tag k="old_name" v="High Street"/><tag k="oneway" v="no"/><tag k="ref:penndot" v="SR 2004"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="turn:lanes:forward" v="through|"/><tag k="wikidata" v="Q6770747"/><tag k="wikipedia" v="en:Market Street (Philadelphia)"/></way>
+<way id="424829490"><nd ref="4242028646"/><nd ref="5534891499"/><tag k="access:lanes:backward" v="yes|yes|no"/><tag k="access:lanes:forward" v="yes|no"/><tag k="bus:lanes:backward" v="yes|yes|designated"/><tag k="bus:lanes:forward" v="yes|designated"/><tag k="cycleway" v="share_busway"/><tag k="cycleway:both" v="share_busway"/><tag k="highway" v="primary"/><tag k="lanes" v="5"/><tag k="lanes:backward" v="3"/><tag k="lanes:bus:backward" v="1"/><tag k="lanes:bus:forward" v="1"/><tag k="lanes:forward" v="2"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="Market Street"/><tag k="old_name" v="High Street"/><tag k="oneway" v="no"/><tag k="ref:penndot" v="SR 2004"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="wikidata" v="Q6770747"/><tag k="wikipedia" v="en:Market Street (Philadelphia)"/></way>
+<way id="492442039"><nd ref="4844635143"/><nd ref="5534030096"/><tag k="abandoned:railway" v="tram"/><tag k="covered" v="yes"/><tag k="highway" v="secondary"/><tag k="lanes" v="2"/><tag k="maxheight" v="default"/><tag k="maxheight:signed" v="no"/><tag k="name" v="North 12th Street"/><tag k="oneway" v="yes"/><tag k="service" v="disused_tram"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A41"/><tag k="tiger:name_base" v="12th"/><tag k="tiger:name_direction_prefix" v="N"/><tag k="tiger:name_type" v="St"/></way>
+<way id="492442040"><nd ref="5534030096"/><nd ref="3413844254"/><nd ref="5372059864"/><tag k="abandoned:railway" v="tram"/><tag k="cycleway:both" v="no"/><tag k="highway" v="secondary"/><tag k="lanes" v="2"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="North 12th Street"/><tag k="oneway" v="yes"/><tag k="service" v="disused_tram"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A41"/><tag k="tiger:name_base" v="12th"/><tag k="tiger:name_direction_prefix" v="N"/><tag k="tiger:name_type" v="St"/></way>
+<way id="552819715"><nd ref="5336784620"/><nd ref="7065419679"/><nd ref="5336784619"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="reporting_marks" v="SEPA"/><tag k="service" v="crossover"/><tag k="tunnel" v="yes"/><tag k="voltage" v="12000"/></way>
+<way id="552819719"><nd ref="5336784822"/><nd ref="7065419679"/><nd ref="5336784821"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="reporting_marks" v="SEPA"/><tag k="service" v="crossover"/><tag k="tunnel" v="yes"/><tag k="voltage" v="12000"/></way>
+<way id="556954159"><nd ref="11345036597"/><nd ref="6983301818"/><nd ref="2644235371"/><tag k="access:lanes:backward" v="yes|yes|no"/><tag k="bus:lanes:backward" v="yes|yes|designated"/><tag k="cycleway" v="share_busway"/><tag k="cycleway:both" v="share_busway"/><tag k="highway" v="primary"/><tag k="lanes" v="5"/><tag k="lanes:backward" v="3"/><tag k="lanes:bus:backward" v="1"/><tag k="lanes:bus:forward" v="1"/><tag k="lanes:forward" v="2"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="Market Street"/><tag k="old_name" v="High Street"/><tag k="oneway" v="no"/><tag k="ref:penndot" v="SR 2004"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="turn:lanes:forward" v="|right"/><tag k="wikidata" v="Q6770747"/><tag k="wikipedia" v="en:Market Street (Philadelphia)"/></way>
+<way id="588277269"><nd ref="109750950"/><nd ref="6979774518"/><nd ref="3429567127"/><nd ref="110179199"/><tag k="highway" v="residential"/><tag k="lane_markings" v="no"/><tag k="name" v="Filbert Street"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A41"/><tag k="tiger:name_base" v="Filbert"/><tag k="tiger:name_type" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/></way>
+<way id="588277270"><nd ref="110179199"/><nd ref="3429567129"/><nd ref="7412644648"/><nd ref="110438798"/><tag k="cycleway:left" v="track"/><tag k="cycleway:right" v="no"/><tag k="highway" v="tertiary"/><tag k="lanes" v="1"/><tag k="lit" v="yes"/><tag k="name" v="North 13th Street"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/></way>
+<way id="626112968"><nd ref="5372059864"/><nd ref="3413844255"/><nd ref="9067572573"/><nd ref="7427995579"/><nd ref="11345036637"/><nd ref="3401274166"/><nd ref="7419106748"/><nd ref="110151380"/><nd ref="6985042715"/><nd ref="6985042710"/><nd ref="3424828946"/><nd ref="6985042729"/><nd ref="6985042730"/><nd ref="2952951440"/><tag k="abandoned:railway" v="tram"/><tag k="cycleway:both" v="no"/><tag k="highway" v="secondary"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="South 12th Street"/><tag k="oneway" v="yes"/><tag k="service" v="disused_tram"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A41"/><tag k="tiger:name_base" v="12th"/><tag k="tiger:name_direction_prefix" v="S"/><tag k="tiger:name_type" v="St"/><tag k="tiger:reviewed" v="no"/><tag k="tiger:zip_left" v="19147;19148"/><tag k="tiger:zip_right" v="19147;19148;19148"/></way>
+<way id="756441106"><nd ref="7065419681"/><nd ref="13116241984"/><nd ref="3157371507"/><nd ref="9067128482"/><nd ref="7067119206"/><nd ref="7067119210"/><nd ref="7067119201"/><nd ref="3157371482"/><nd ref="3157371473"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="maxspeed" v="20 mph"/><tag k="maxspeed:freight" v="10 mph"/><tag k="name" v="Main Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="owner" v="Southeastern Pennsylvania Transportation Authority"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="railway:acses" v="yes"/><tag k="railway:atc" v="yes"/><tag k="railway:ctc" v="yes"/><tag k="railway:preferred_direction" v="both"/><tag k="railway:ptc" v="yes"/><tag k="railway:track_class" v="3"/><tag k="railway:track_ref" v="1"/><tag k="railway:traffic_mode" v="mixed"/><tag k="ref" v="MLN"/><tag k="reporting_marks" v="SEPA"/><tag k="tunnel" v="yes"/><tag k="usage" v="main"/><tag k="voltage" v="12000"/></way>
+<way id="756441108"><nd ref="3157371509"/><nd ref="8488378840"/><nd ref="8488378845"/><nd ref="8488378846"/><nd ref="8488378852"/><nd ref="8488378853"/><nd ref="8488378854"/><nd ref="3157371487"/><nd ref="8488378851"/><nd ref="7067119198"/><nd ref="7067119213"/><nd ref="7067119209"/><nd ref="3157371488"/><nd ref="7204822927"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="maxspeed" v="20 mph"/><tag k="maxspeed:freight" v="10 mph"/><tag k="name" v="Main Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="owner" v="Southeastern Pennsylvania Transportation Authority"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="railway:acses" v="yes"/><tag k="railway:atc" v="yes"/><tag k="railway:ctc" v="yes"/><tag k="railway:preferred_direction" v="both"/><tag k="railway:ptc" v="yes"/><tag k="railway:track_class" v="3"/><tag k="railway:track_ref" v="4"/><tag k="railway:traffic_mode" v="mixed"/><tag k="ref" v="MLN"/><tag k="reporting_marks" v="SEPA"/><tag k="tunnel" v="yes"/><tag k="usage" v="main"/><tag k="voltage" v="12000"/></way>
+<way id="756631863"><nd ref="7067119205"/><nd ref="7067119204"/><nd ref="7067119203"/><nd ref="7067119202"/><nd ref="7067119205"/><tag k="area" v="yes"/><tag k="layer" v="-2"/><tag k="location" v="underground"/><tag k="network" v="SEPTA"/><tag k="note" v="location approximate"/><tag k="public_transport" v="platform"/><tag k="railway" v="platform"/><tag k="train" v="yes"/><tag k="tunnel" v="yes"/></way>
+<way id="756631865"><nd ref="609530569"/><nd ref="8488378841"/><nd ref="8488378844"/><nd ref="2878636361"/><nd ref="8488378850"/><nd ref="8488378849"/><nd ref="7067119199"/><nd ref="7067119212"/><nd ref="7067119208"/><nd ref="5336784620"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="maxspeed" v="20 mph"/><tag k="maxspeed:freight" v="10 mph"/><tag k="name" v="Main Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="owner" v="Southeastern Pennsylvania Transportation Authority"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="railway:acses" v="yes"/><tag k="railway:atc" v="yes"/><tag k="railway:ctc" v="yes"/><tag k="railway:preferred_direction" v="both"/><tag k="railway:ptc" v="yes"/><tag k="railway:track_class" v="3"/><tag k="railway:track_ref" v="3"/><tag k="railway:traffic_mode" v="mixed"/><tag k="ref" v="MLN"/><tag k="reporting_marks" v="SEPA"/><tag k="tunnel" v="yes"/><tag k="usage" v="main"/><tag k="voltage" v="12000"/></way>
+<way id="756631872"><nd ref="7067119215"/><nd ref="7067119214"/><nd ref="7067119216"/><nd ref="7067119217"/><nd ref="7067119215"/><tag k="area" v="yes"/><tag k="layer" v="-2"/><tag k="location" v="underground"/><tag k="network" v="SEPTA"/><tag k="note" v="location approximate"/><tag k="public_transport" v="platform"/><tag k="railway" v="platform"/><tag k="train" v="yes"/><tag k="tunnel" v="yes"/></way>
+<way id="769773524"><nd ref="5336784620"/><nd ref="5336784822"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="maxspeed" v="20 mph"/><tag k="maxspeed:freight" v="10 mph"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="railway:track_ref" v="3"/><tag k="railway:traffic_mode" v="passenger"/><tag k="reporting_marks" v="SEPA"/><tag k="tunnel" v="yes"/><tag k="usage" v="main"/><tag k="voltage" v="12000"/></way>
+<way id="769773525"><nd ref="5336784821"/><nd ref="7067119207"/><nd ref="7067119211"/><nd ref="7067119200"/><nd ref="8488378847"/><nd ref="8488378848"/><nd ref="3157371475"/><nd ref="8488378843"/><nd ref="8488378842"/><nd ref="3157371258"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="maxspeed" v="20 mph"/><tag k="maxspeed:freight" v="10 mph"/><tag k="name" v="Main Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="owner" v="Southeastern Pennsylvania Transportation Authority"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="railway:acses" v="yes"/><tag k="railway:atc" v="yes"/><tag k="railway:ctc" v="yes"/><tag k="railway:preferred_direction" v="both"/><tag k="railway:ptc" v="yes"/><tag k="railway:track_class" v="3"/><tag k="railway:track_ref" v="2"/><tag k="railway:traffic_mode" v="mixed"/><tag k="ref" v="MLN"/><tag k="reporting_marks" v="SEPA"/><tag k="tunnel" v="yes"/><tag k="usage" v="main"/><tag k="voltage" v="12000"/></way>
+<way id="769773526"><nd ref="5336784619"/><nd ref="5336784821"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="maxspeed" v="20 mph"/><tag k="maxspeed:freight" v="10 mph"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="railway:track_ref" v="2"/><tag k="railway:traffic_mode" v="passenger"/><tag k="reporting_marks" v="SEPA"/><tag k="tunnel" v="yes"/><tag k="usage" v="main"/><tag k="voltage" v="12000"/></way>
+<way id="770447392"><nd ref="7191843588"/><nd ref="7191843587"/><tag k="bench" v="no"/><tag k="bin" v="yes"/><tag k="layer" v="-2"/><tag k="location" v="underground"/><tag k="network" v="SEPTA"/><tag k="note" v="location approximate"/><tag k="public_transport" v="platform"/><tag k="railway" v="platform"/><tag k="subway" v="yes"/><tag k="tunnel" v="yes"/></way>
+<way id="770447393"><nd ref="7191843590"/><nd ref="7191843589"/><tag k="bench" v="no"/><tag k="bin" v="yes"/><tag k="layer" v="-2"/><tag k="location" v="underground"/><tag k="network" v="SEPTA"/><tag k="note" v="location approximate"/><tag k="public_transport" v="platform"/><tag k="railway" v="platform"/><tag k="subway" v="yes"/><tag k="tunnel" v="yes"/></way>
+<way id="770447398"><nd ref="7191843605"/><nd ref="7191843624"/><tag k="layer" v="-3"/><tag k="location" v="underground"/><tag k="network" v="SEPTA"/><tag k="note" v="location approximate"/><tag k="public_transport" v="platform"/><tag k="railway" v="platform"/><tag k="ref" v="1"/><tag k="tram" v="yes"/><tag k="tunnel" v="yes"/></way>
+<way id="770447399"><nd ref="7191843604"/><nd ref="7191843605"/><tag k="layer" v="-3"/><tag k="location" v="underground"/><tag k="network" v="SEPTA"/><tag k="note" v="location approximate"/><tag k="public_transport" v="platform"/><tag k="railway" v="platform"/><tag k="ref" v="2"/><tag k="tram" v="yes"/><tag k="tunnel" v="yes"/></way>
+<way id="770447400"><nd ref="7191843606"/><nd ref="11345036602"/><nd ref="7191834363"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="0"/><tag k="gauge" v="1581"/><tag k="layer" v="-3"/><tag k="maxspeed" v="10 mph"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="railway" v="tram"/><tag k="railway:preferred_direction" v="forward"/><tag k="tunnel" v="yes"/><tag k="voltage" v="600"/></way>
+<way id="770447401"><nd ref="7191843607"/><nd ref="7191843606"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="0"/><tag k="gauge" v="1581"/><tag k="layer" v="-3"/><tag k="maxspeed" v="10 mph"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="railway" v="tram"/><tag k="railway:preferred_direction" v="forward"/><tag k="tunnel" v="yes"/><tag k="voltage" v="600"/></way>
+<way id="770447402"><nd ref="6549549375"/><nd ref="7191843618"/><nd ref="9590457996"/><nd ref="7198986394"/><nd ref="7191843620"/><nd ref="7198964084"/><nd ref="9590457997"/><nd ref="7198986393"/><nd ref="7198986395"/><nd ref="7357184007"/><nd ref="9590457998"/><nd ref="7357184006"/><nd ref="9590457999"/><nd ref="9590458000"/><nd ref="7357184008"/><nd ref="9590458001"/><nd ref="7191843622"/><nd ref="7191843609"/><nd ref="9590458002"/><nd ref="7357184010"/><nd ref="9590458003"/><nd ref="9590458004"/><nd ref="7357184009"/><nd ref="9590458005"/><nd ref="7357184011"/><nd ref="9590458006"/><nd ref="7191843610"/><nd ref="9590458007"/><nd ref="6549549376"/><nd ref="7191843607"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="0"/><tag k="gauge" v="1581"/><tag k="layer" v="-3"/><tag k="maxspeed" v="10 mph"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="railway" v="tram"/><tag k="railway:preferred_direction" v="forward"/><tag k="tunnel" v="yes"/><tag k="voltage" v="600"/></way>
+<way id="770447403"><nd ref="7191843625"/><nd ref="7191843604"/><tag k="layer" v="-3"/><tag k="location" v="underground"/><tag k="network" v="SEPTA"/><tag k="note" v="location approximate"/><tag k="public_transport" v="platform"/><tag k="railway" v="platform"/><tag k="ref" v="3"/><tag k="tram" v="yes"/><tag k="tunnel" v="yes"/></way>
+<way id="770447404"><nd ref="7191834363"/><nd ref="7191843612"/><nd ref="9590458009"/><nd ref="7198964081"/><nd ref="9590458010"/><nd ref="7191843613"/><nd ref="9590458011"/><nd ref="9590458012"/><nd ref="7191843617"/><nd ref="9590458013"/><nd ref="9590458014"/><nd ref="7191843614"/><nd ref="9590458015"/><nd ref="7191843615"/><nd ref="9590458016"/><nd ref="9590458008"/><nd ref="7191843623"/><nd ref="9590525917"/><nd ref="7357184013"/><nd ref="9590525918"/><nd ref="7198986388"/><nd ref="9590525919"/><nd ref="7191843619"/><nd ref="9590525924"/><nd ref="9590525923"/><nd ref="9590525922"/><nd ref="9590525921"/><nd ref="9590525920"/><nd ref="7357184012"/><nd ref="9590525925"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="0"/><tag k="gauge" v="1581"/><tag k="layer" v="-3"/><tag k="maxspeed" v="10 mph"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="railway" v="tram"/><tag k="railway:preferred_direction" v="forward"/><tag k="tunnel" v="yes"/><tag k="voltage" v="600"/></way>
+<way id="770532952"><nd ref="7192213153"/><nd ref="5372039293"/><nd ref="1118188486"/><nd ref="7198964074"/><nd ref="1015357519"/><tag k="electrified" v="rail"/><tag k="frequency" v="0"/><tag k="gauge" v="1581"/><tag k="layer" v="-2"/><tag k="level" v="-2"/><tag k="maxspeed" v="55 mph"/><tag k="name" v="Market-Frankford Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="railway" v="subway"/><tag k="railway:preferred_direction" v="forward"/><tag k="railway:track_ref" v="1"/><tag k="tracks" v="2"/><tag k="tunnel" v="yes"/><tag k="voltage" v="700"/></way>
+<way id="770532959"><nd ref="1015357519"/><nd ref="8108484993"/><nd ref="2644228571"/><nd ref="7191843628"/><tag k="electrified" v="rail"/><tag k="frequency" v="0"/><tag k="gauge" v="1581"/><tag k="layer" v="-2"/><tag k="level" v="-2"/><tag k="maxspeed" v="55 mph"/><tag k="name" v="Market-Frankford Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="railway" v="subway"/><tag k="railway:preferred_direction" v="forward"/><tag k="railway:track_ref" v="1"/><tag k="tracks" v="2"/><tag k="tunnel" v="yes"/><tag k="voltage" v="700"/></way>
+<way id="770532961"><nd ref="7191843627"/><nd ref="7191843591"/><nd ref="6549549374"/><nd ref="8108484992"/><nd ref="7191834362"/><nd ref="6549549378"/><nd ref="6549549379"/><nd ref="6549549382"/><nd ref="7192213151"/><tag k="electrified" v="rail"/><tag k="frequency" v="0"/><tag k="gauge" v="1581"/><tag k="layer" v="-2"/><tag k="level" v="-2"/><tag k="maxspeed" v="55 mph"/><tag k="name" v="Market-Frankford Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="railway" v="subway"/><tag k="railway:preferred_direction" v="forward"/><tag k="railway:track_ref" v="2"/><tag k="tunnel" v="yes"/><tag k="voltage" v="700"/></way>
+<way id="895771402"><nd ref="7191843612"/><nd ref="8326614389"/><tag k="gauge" v="1581"/><tag k="layer" v="-3"/><tag k="name" v="Juniper Street trolley spur"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="railway" v="tram"/><tag k="tunnel" v="yes"/><tag k="voltage" v="600"/></way>
+<way id="1039351124"><nd ref="110425696"/><nd ref="3429567128"/><nd ref="110179199"/><tag k="cycleway:left" v="lane"/><tag k="cycleway:right" v="no"/><tag k="cycleway:right:buffer" v="no"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="lit" v="yes"/><tag k="name" v="North 13th Street"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="separate"/><tag k="surface" v="asphalt"/><tag k="turn:lanes" v="none|right"/></way>
+<way id="1052616156"><nd ref="109814493"/><nd ref="9673692485"/><tag k="NHS" v="yes"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:lane" v="exclusive"/><tag k="cycleway:left:oneway" v="1"/><tag k="cycleway:right" v="no"/><tag k="hgv" v="designated"/><tag k="highway" v="primary"/><tag k="lanes" v="3"/><tag k="lit" v="yes"/><tag k="name" v="East Penn Square"/><tag k="name_1" v="N Juniper St"/><tag k="oneway" v="yes"/><tag k="placement" v="right_of:2"/><tag k="ref" v="PA 611"/><tag k="ref:penndot" v="SR 3022"/><tag k="sidewalk" v="separate"/><tag k="source:hgv" v="https://www.dot.state.pa.us/public/pubsforms/Publications/TruckersMap.pdf"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A35"/><tag k="tiger:name_base" v="Penn"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_base_2" v="State Route 611"/><tag k="tiger:name_base_3" v="Juniper"/><tag k="tiger:name_direction_prefix" v="E"/><tag k="tiger:name_direction_prefix_3" v="N"/><tag k="tiger:name_type" v="Sq"/><tag k="tiger:name_type_3" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/></way>
+<way id="1121149102"><nd ref="109750941"/><nd ref="9067128487"/><nd ref="9044700901"/><nd ref="775895216"/><nd ref="9044700906"/><nd ref="534961122"/><nd ref="9044700905"/><nd ref="775895217"/><nd ref="9044700907"/><nd ref="4241833040"/><tag k="NHS" v="yes"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:lane" v="exclusive"/><tag k="cycleway:left:oneway" v="1"/><tag k="cycleway:right" v="no"/><tag k="hgv" v="designated"/><tag k="highway" v="primary"/><tag k="lanes" v="4"/><tag k="name" v="East Penn Square"/><tag k="name_1" v="N Juniper St"/><tag k="oneway" v="yes"/><tag k="ref" v="PA 611"/><tag k="ref:penndot" v="SR 3022"/><tag k="sidewalk" v="separate"/><tag k="source:hgv" v="https://www.dot.state.pa.us/public/pubsforms/Publications/TruckersMap.pdf"/><tag k="surface" v="asphalt"/><tag k="tiger:cfcc" v="A35"/><tag k="tiger:name_base" v="Penn"/><tag k="tiger:name_base_1" v="State Route 3"/><tag k="tiger:name_base_2" v="State Route 611"/><tag k="tiger:name_base_3" v="Juniper"/><tag k="tiger:name_direction_prefix" v="E"/><tag k="tiger:name_direction_prefix_3" v="N"/><tag k="tiger:name_type" v="Sq"/><tag k="tiger:name_type_3" v="St"/><tag k="tiger:zip_left" v="19107"/><tag k="tiger:zip_right" v="19107"/><tag k="turn:lanes" v="none|through|right|right"/></way>
+<way id="1191712521"><nd ref="5559134499"/><nd ref="6983301816"/><nd ref="2644235371"/><tag k="cycleway:left" v="lane"/><tag k="cycleway:right" v="no"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="South 13th Street"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="separate"/><tag k="surface" v="asphalt"/><tag k="turn:lanes" v="left|"/></way>
+<way id="1191712522"><nd ref="7411169145"/><nd ref="110167094"/><tag k="cycleway:left" v="lane"/><tag k="cycleway:right" v="no"/><tag k="cycleway:right:buffer" v="yes"/><tag k="highway" v="tertiary"/><tag k="lanes" v="1"/><tag k="lit" v="yes"/><tag k="name" v="South 13th Street"/><tag k="oneway" v="yes"/><tag k="sidewalk" v="both"/><tag k="surface" v="asphalt"/></way>
+<way id="1223043709"><nd ref="5372059864"/><nd ref="6983628874"/><nd ref="11345036596"/><tag k="access:lanes:forward" v="yes|no"/><tag k="bus:lanes:forward" v="yes|designated"/><tag k="cycleway" v="share_busway"/><tag k="cycleway:both" v="share_busway"/><tag k="highway" v="primary"/><tag k="lanes" v="5"/><tag k="lanes:backward" v="3"/><tag k="lanes:bus:backward" v="1"/><tag k="lanes:bus:forward" v="1"/><tag k="lanes:forward" v="2"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="Market Street"/><tag k="old_name" v="High Street"/><tag k="oneway" v="no"/><tag k="ref:penndot" v="SR 2004"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="turn:lanes:backward" v="||right"/><tag k="wikidata" v="Q6770747"/><tag k="wikipedia" v="en:Market Street (Philadelphia)"/></way>
+<way id="1223043710"><nd ref="11345036596"/><nd ref="11345036597"/><tag k="access:lanes:backward" v="yes|yes|no"/><tag k="access:lanes:forward" v="yes|no"/><tag k="bus:lanes:backward" v="yes|yes|designated"/><tag k="bus:lanes:forward" v="yes|designated"/><tag k="cycleway" v="share_busway"/><tag k="cycleway:both" v="share_busway"/><tag k="highway" v="primary"/><tag k="lanes" v="5"/><tag k="lanes:backward" v="3"/><tag k="lanes:bus:backward" v="1"/><tag k="lanes:bus:forward" v="1"/><tag k="lanes:forward" v="2"/><tag k="lit" v="yes"/><tag k="maxspeed" v="25 mph"/><tag k="name" v="Market Street"/><tag k="old_name" v="High Street"/><tag k="oneway" v="no"/><tag k="ref:penndot" v="SR 2004"/><tag k="sidewalk" v="separate"/><tag k="surface" v="asphalt"/><tag k="wikidata" v="Q6770747"/><tag k="wikipedia" v="en:Market Street (Philadelphia)"/></way>
+<way id="1223043719"><nd ref="110167094"/><nd ref="13481124307"/><nd ref="110167089"/><nd ref="5559134499"/><tag k="cycleway:left" v="lane"/><tag k="cycleway:right" v="no"/><tag k="highway" v="tertiary"/><tag k="lanes" v="1"/><tag k="lit" v="yes"/><tag k="name" v="South 13th Street"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="separate"/><tag k="surface" v="asphalt"/></way>
+<way id="1470458227"><nd ref="110167859"/><nd ref="6983301835"/><nd ref="110167094"/><tag k="disused:sidewalk:left" v="separate"/><tag k="highway" v="residential"/><tag k="name" v="Clover Street"/><tag k="note" v="Aerial and street level imagery (Bing Streetside) shows south sidewalk blocked by dumpsters and cars"/><tag k="oneway" v="yes"/><tag k="sidewalk:right" v="separate"/></way>
+<way id="1582181368"><nd ref="7065419682"/><nd ref="3157371251"/><nd ref="5336784619"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="maxspeed" v="20 mph"/><tag k="maxspeed:freight" v="10 mph"/><tag k="name" v="Main Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="owner" v="Southeastern Pennsylvania Transportation Authority"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="railway:acses" v="yes"/><tag k="railway:atc" v="yes"/><tag k="railway:ctc" v="yes"/><tag k="railway:preferred_direction" v="both"/><tag k="railway:ptc" v="yes"/><tag k="railway:track_class" v="2"/><tag k="railway:track_ref" v="2"/><tag k="railway:traffic_mode" v="passenger"/><tag k="ref" v="MLS"/><tag k="reporting_marks" v="SEPA"/><tag k="tunnel" v="yes"/><tag k="usage" v="main"/><tag k="voltage" v="12000"/></way>
+<way id="1582181369"><nd ref="5336784822"/><nd ref="609530571"/><nd ref="7204822926"/><tag k="electrified" v="contact_line"/><tag k="frequency" v="25"/><tag k="gauge" v="1435"/><tag k="layer" v="-2"/><tag k="maxspeed" v="20 mph"/><tag k="maxspeed:freight" v="10 mph"/><tag k="name" v="Main Line"/><tag k="operator" v="Southeastern Pennsylvania Transportation Authority"/><tag k="operator:wikidata" v="Q2037863"/><tag k="owner" v="Southeastern Pennsylvania Transportation Authority"/><tag k="passenger_lines" v="4"/><tag k="railway" v="rail"/><tag k="railway:acses" v="yes"/><tag k="railway:atc" v="yes"/><tag k="railway:ctc" v="yes"/><tag k="railway:preferred_direction" v="both"/><tag k="railway:ptc" v="yes"/><tag k="railway:track_class" v="2"/><tag k="railway:track_ref" v="3"/><tag k="railway:traffic_mode" v="passenger"/><tag k="ref" v="MLS"/><tag k="reporting_marks" v="SEPA"/><tag k="tunnel" v="yes"/><tag k="usage" v="main"/><tag k="voltage" v="12000"/></way>
+<relation id="7929732"><member type="node" ref="5372098384" role=""/><member type="node" ref="6549549378" role="stop"/><member type="way" ref="770447393" role="platform"/><member type="node" ref="1015357519" role="stop"/><member type="way" ref="770447392" role="platform"/><member type="node" ref="7191834363" role="stop"/><member type="way" ref="770447398" role="platform"/><member type="node" ref="7191843606" role="stop"/><member type="way" ref="770447399" role="platform"/><member type="node" ref="7191843607" role="stop"/><member type="way" ref="770447403" role="platform"/><member type="node" ref="3146301033" role=""/><member type="node" ref="3454064545" role=""/><member type="node" ref="361011453" role=""/><member type="node" ref="3146301036" role=""/><member type="node" ref="3454064547" role=""/><member type="node" ref="9715920123" role=""/><tag k="name" v="13th Street"/><tag k="network" v="SEPTA"/><tag k="public_transport" v="stop_area"/><tag k="railway" v="facility"/><tag k="type" v="public_transport"/></relation>
+</osm>
