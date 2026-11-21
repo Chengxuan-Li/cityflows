@@ -48,24 +48,26 @@ function place(city: City, name: string, pos: { x: number; y: number }) {
 /** A secondary street west to east with priority over a minor street from the north.
  * `imported`: the roads come from OSM, which maps no crossing here, so the junction's crossings
  * draw no zebra (`crossingStyle` 'none'); drawn by hand they are zebras. */
-function tStreet(imported: boolean) {
+function tStreet(imported: boolean, crawl = false) {
   const { city, node, road, street, place: carPlace } = buildCity('Unmarked', 1);
   const west = node(-300, 0),
     centre = node(0, 0),
     east = node(300, 0);
-  const major = (a: typeof west, b: typeof west) => {
+  const major = (a: typeof west, b: typeof west, speedKmh = 50) => {
     const options = { roadClass: 'secondary' as const, streetGroupId: `major:${a.id}:${b.id}` };
-    return [road(a, b, options), road(b, a, options)] as const;
+    return [road(a, b, { ...options, speedKmh }), road(b, a, { ...options, speedKmh })] as const;
   };
   const [westIn, westOut] = major(west, centre);
-  const [eastOut, eastIn] = major(centre, east);
+  const [eastOut, eastIn] = major(centre, east, crawl ? 2 : 50);
   const [northIn] = street(node(0, -150), centre);
   centre.control = 'yield';
   carPlace('West homes', 'residential', { x: -290, y: 10 }, [{ road: westIn, direction: 'out' }]);
   carPlace('East offices', 'work', { x: 290, y: 10 }, [
-    { road: eastOut, direction: 'in', positionM: 250 },
+    { road: eastOut, direction: 'in', positionM: crawl ? 60 : 250 },
   ]);
-  carPlace('East homes', 'residential', { x: 290, y: -10 }, [{ road: eastIn, direction: 'out' }]);
+  carPlace('East homes', 'residential', { x: 290, y: -10 }, [
+    { road: eastIn, direction: 'out', ...(crawl ? { positionM: 240 } : {}) },
+  ]);
   carPlace('West offices', 'work', { x: -290, y: -10 }, [
     { road: westOut, direction: 'in', positionM: 250 },
   ]);
@@ -75,10 +77,10 @@ function tStreet(imported: boolean) {
   const south = place(city, 'South bank', { x: 24, y: 14 });
   if (imported) for (const road of Object.values(city.roads)) road.provenance = { source: 'osm' };
   const trips = [
-    ...Array.from({ length: 70 }, (_, i) =>
+    ...Array.from({ length: crawl ? 200 : 70 }, (_, i) =>
       i % 2
-        ? trip(`trip:${i}`, eastHomes!, westOffices!, 100 + i * 7.9)
-        : trip(`trip:${i}`, westHomes!, eastOffices!, 100 + i * 7.3),
+        ? trip(`trip:${i}`, eastHomes!, westOffices!, 100 + i * (crawl ? 2.3 : 7.9))
+        : trip(`trip:${i}`, westHomes!, eastOffices!, 100 + i * (crawl ? 2.1 : 7.3)),
     ),
     ...Array.from({ length: 45 }, (_, i) =>
       trip(`turn:${i}`, northHomes!, eastOffices!, 110 + i * 11.3),
@@ -101,8 +103,8 @@ const eastCrossing = (compiled: CompiledCity) =>
  * close on this street): a car going straight, counted only while no walker is on the crossing,
  * and a driver turning in from the north arm.
  */
-function observe(imported: boolean) {
-  const { city, trips, walkers, northHomes } = tStreet(imported);
+function observe(imported: boolean, crawl = false) {
+  const { city, trips, walkers, northHomes } = tStreet(imported, crawl);
   const compiled = setup(city);
   const links = eastCrossing(compiled);
   const spans = links.flatMap((link) => link.crossing!.spans);
@@ -168,6 +170,21 @@ describe('TASK-279 unmarked crossings', () => {
     expect(unmarked.counts.overlap).toBe('');
     expect(unmarked.walkers.hardStops).toBe(0);
     expect(unmarked.engine.metrics().trips.failed).toBe(0);
+  });
+});
+
+describe('TASK-279 v2: traffic crawling below walking pace', () => {
+  // The east arm at 2 km/h, with more cars than it carries, so queues crawl over the crossing in
+  // both directions: the next car always reaches the stripes sooner than the walker needs.
+  const crawl = observe(true, true);
+
+  test('a walker steps out in front of crawling traffic that can stop, which then stops', () => {
+    // Without the rule: mean wait 12.1 s, 19 stops (walkers waited for the queues to thin).
+    expect(crawl.walkers.crossings.unmarked).toBeGreaterThan(10);
+    expect(crawl.walkers.meanWaitS.unmarked).toBeLessThan(6);
+    expect(crawl.walkers.vehicleStops.unmarked).toBeGreaterThan(25);
+    expect(crawl.counts.overlap).toBe('');
+    expect(crawl.walkers.hardStops).toBe(0);
   });
 });
 

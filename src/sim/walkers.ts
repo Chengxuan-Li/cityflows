@@ -394,8 +394,9 @@ export function createWalkers(
    * standing, or its braking distance at bMps2 plus minGapM fits; relaxed (entering the next
    * lane from the crossing): its braking distance alone fits. Upstream lanes count only vehicles
    * that plan the movement toward the span. TASK-279 at an unmarked crossing, by `mode`: `GAP`
-   * reads only the vehicles not turning into the arm at `node`, each standing or reaching the
-   * span no sooner than `needS` at its speed; `TURNING` only those turning in, strictly.
+   * reads only the vehicles not turning into the arm at `node`, each standing, crawling below
+   * walking pace able to stop before it, or reaching the span no sooner than `needS` at its speed;
+   * `TURNING` only those turning in, strictly.
    */
   function clear(
     lane: number,
@@ -426,11 +427,15 @@ export function createWalkers(
           continue;
         if (front > lo) return false;
         const v = vehicles.speed[id]!;
+        const braking = (v * v) / (2 * brakeOf(id));
         if (mode === GAP) {
-          if (v >= 0.1 && d < v * needS) return false;
+          // TASK-279 v2: traffic crawling below walking pace lets the walker go, as standing
+          // traffic does, if it can stop before the stripes (a jam's creeping queue never left
+          // a gap: full-demand waits up to 6,294 s); faster traffic keeps its priority.
+          const crawling = v < params.walkSpeedMps && braking <= d;
+          if (v >= 0.1 && !crawling && d < v * needS) return false;
           continue;
         }
-        const braking = (v * v) / (2 * brakeOf(id));
         if (strict ? !(v < 0.1 || braking + minGapM <= d) : braking > d) return false;
       }
       if (depth === 2) return true;
