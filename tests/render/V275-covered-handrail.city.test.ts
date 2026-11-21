@@ -21,6 +21,8 @@ test(
       city,
       cityHeights(result.compiled, city),
     );
+    // Lead merge (TASK-273, 276, 278, 281, 282): the combined Freiburg rebuild splits one covered
+    // piece in two (167 to 168, 529 to 534 m² of light canopy).
     expect(counts).toMatchObject({
       bridges: 65,
       links: 230,
@@ -29,9 +31,9 @@ test(
       canopyPosts: 18,
       handrailLinks: 58,
       centerRailM: 15,
-      coveredLinks: 167,
+      coveredLinks: 168,
       lightCanopies: 90,
-      lightCanopyM2: 529,
+      lightCanopyM2: 534,
     });
     const p = (
       group.children[2] as never as {
