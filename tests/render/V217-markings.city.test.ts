@@ -374,6 +374,13 @@ const paintNear = (source: Pick<City, 'roads' | 'walk'>, p: Vec2, m: number) =>
   net.roads
     .flatMap((r) => [false, true].flatMap((atEnd) => crossingStripes(net, r, atEnd, source)))
     .filter((shape) => distance(centroid(shape), p) < m);
+const polygonArea = (ring: Vec2[]) =>
+  Math.abs(
+    ring.reduce((a, p, i) => {
+      const q = ring[(i + 1) % ring.length]!;
+      return a + p.x * q.y - q.x * p.y;
+    }, 0),
+  ) / 2;
 const key = (shape: Vec2[]) => shape.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`).join(' ');
 
 test('D1: a crossing at a signal paints the broken lines of a signalised crossing, no zebra', () => {
@@ -501,6 +508,49 @@ test('TASK-239: zebras mapped only as nodes cross their streets and paint (n:211
     expect(crossingStyle(net, r, atEnd, city), id).toBe('zebra');
     expect(crossingStyle(net, r, atEnd, without), id).toBe('none');
   }
+});
+
+test('TASK-257: crossings paint as OSM marks them; a project without the field paints as before', () => {
+  /** Road ends painting zebra stripes, and the stripes and line dashes painted. */
+  const count = (source: Pick<City, 'roads' | 'walk'>) => {
+    let ends = 0,
+      zebra = 0,
+      dashes = 0;
+    for (const r of net.roads)
+      for (const atEnd of [false, true]) {
+        const shapes = crossingStripes(net, r, atEnd, source);
+        // A zebra stripe is 0.45 by 2.5 m, a dash 0.5 by 0.15 m.
+        const stripes = shapes.filter((s) => polygonArea(s) > 0.5).length;
+        ends += stripes ? 1 : 0;
+        zebra += stripes;
+        dashes += shapes.length - stripes;
+      }
+    return { ends, zebra, dashes };
+  };
+  const links = city.walk!.links;
+  const marked = Object.values(links).filter((l) => l.marking);
+  expect(
+    marked.reduce<Record<string, number>>(
+      (n, l) => ({ ...n, [l.marking!]: (n[l.marking!] ?? 0) + 1 }),
+      {},
+    ),
+  ).toEqual({ none: 37, lines: 124, zebra: 40 });
+  // An older project: the links without the field, as main drew them.
+  const old = structuredClone(city.walk!);
+  for (const link of Object.values(old.links)) delete link.marking;
+  // Lead merge on TASK-255: its stop positions draw no crossing paint, so both counts drop
+  // (without the field 53 / 213 / 1,973 before TASK-255; with it 30 / 104 / 2,143).
+  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1939 });
+  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2023 });
+  // The signalised crossing 648533265 over the Rotteckring at n:208, whose crossing nodes OSM
+  // tags `crossing=traffic_signals` (the way itself is untagged), drew zebra stripes beside the
+  // junction's broken lines: now broken lines only.
+  const at = { x: 181, y: -344 };
+  const near = (source: Pick<City, 'roads' | 'walk'>) =>
+    paintNear(source, at, 8).map((s) => (polygonArea(s) > 0.5 ? 'zebra' : 'dash'));
+  expect(near({ roads: city.roads, walk: old })).toContain('zebra');
+  expect(near(city).length).toBeGreaterThan(8);
+  expect(near(city)).not.toContain('zebra');
 });
 
 test('M7: lane lines are solid over the last 30 m before a stop line', () => {

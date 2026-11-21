@@ -209,6 +209,7 @@ export interface ParkingFacility {
 /** Phase 2 format (lead, 2026-11-08), used by TASK-110 to TASK-112. Mapped pedestrian ways
  * only; sidewalks along streets and walk links over crossings are derived at compile. */
 export type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 'crossing';
+export type CrossingMarking = 'zebra' | 'lines' | 'none';
 
 export interface WalkNode {
   id: WalkNodeId;
@@ -225,6 +226,10 @@ export interface WalkLink {
   to: WalkNodeId;
   line: Vec2[]; // >= 2 points; first and last equal the nodes' positions
   kind: WalkKind;
+  /** TASK-257: a crossing's paint as OSM maps it (`crossingMarking` in the importer): zebra
+   * stripes, two lines along its edges, or none. Absent = not stated: painted as before (zebra,
+   * or a signalised crossing's lines near a signal). */
+  marking?: CrossingMarking;
   widthM: number | null;
   provenance: Provenance;
 }

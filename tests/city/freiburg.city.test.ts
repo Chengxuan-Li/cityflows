@@ -220,7 +220,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // embedded (Rotteckring rt:12944 among them; only their `form` changes).
     // TASK-255: rebuilt; 18 signals mapped at their stop positions join their junctions' groups
     // (groups 39 to 46) and are marked `stopPosition` (`stopPositionCrossing` on a crossing).
-    '59bcbb988b3d38d37283d5861684d220fee5da4ea4c6dcc178ff7312fa664dd7',
+    // TASK-257: rebuilt; crossing walk links carry their OSM `marking` (none 37, lines 124, zebra
+    // 40); nothing else changes.
+    '4d1bb6f353c8a78cbc5c76a51c47a17cd72578f0cc325015aef89dbfa79fddb6',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
