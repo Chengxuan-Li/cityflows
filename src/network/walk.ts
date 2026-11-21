@@ -637,7 +637,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       const served = arm.find(
         (e) =>
           crossingEnabled(city, e.road, e.atEnd, source) &&
-          crossingPlacement(city, e.road, e.atEnd).stripes.length,
+          crossingPlacement(city, e.road, e.atEnd, source).stripes.length,
       );
       if (!served) continue;
       const { road, atEnd } = served,

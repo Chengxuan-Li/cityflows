@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
-import { distance, segmentDistance } from '../../src/geo/polyline';
+import { distance, pointAtDistance, segmentDistance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity, type CWalkLink } from '../../src/network';
@@ -249,7 +249,7 @@ describe('T71 crossing walk links at the stripes', () => {
     },
   );
 
-  test('T71.4 a mapped crossing nearer the junction moves onto the stripes and keeps its kerbs', () => {
+  test('T71.4 a mapped crossing places the stripes, its walk link and the stop line, and keeps its kerbs', () => {
     const city = signalJunction();
     const net = compiled(city);
     const links = net.walk.links.filter((l) => l.id.startsWith('wl:900'));
@@ -257,10 +257,29 @@ describe('T71 crossing walk links at the stripes', () => {
     expect(net.walk.links.some((l) => l.id.startsWith('wl:901/'))).toBe(false);
     const crossing = links.filter((l) => l.crossing);
     expect(crossing.flatMap((l) => l.crossing!.spans)).toHaveLength(4);
-    // Mapped at y = 9 m, it now runs more than 3 m farther out, along the stripes.
-    expect(Math.min(...crossing.flatMap((l) => l.line.map((p) => p.y)))).toBeGreaterThan(12);
+    // TASK-265: mapped at y = 9 m, nearer the junction than TASK-091's curb rule puts the stripes
+    // (centre about 12.7 m), the stripes, the link and the stop line follow the mapped crossing.
+    const centre = net.nodes.findIndex((n) => n.pos.x === 0 && n.pos.y === 0);
+    const south = net.roads.filter(
+      (r) => [r.from, r.to].includes(centre) && r.surface.every((p) => p.y > 0),
+    );
+    expect(south).toHaveLength(2);
+    for (const road of south)
+      for (const i of road.lanes) {
+        const lane = net.lanes[i]!;
+        const atEnd = road.to === centre;
+        const span = crossingSpan(net, lane, atEnd, city)!;
+        const p = pointAtDistance(lane.polyline, lane.cumulative, (span.nearM + span.farM) / 2);
+        expect(p.y).toBeCloseTo(9, 1);
+        if (atEnd) expect(lane.stopM).toBeCloseTo(span.farM - STOP_CLEAR_M, 6);
+      }
+    for (const link of crossing)
+      for (const p of link.line) expect(Math.abs(p.y - 9)).toBeLessThan(0.1);
     const kerbs = links.filter((l) => l.id.includes(':kerb:'));
-    expect(kerbs).toHaveLength(2);
+    // Both kerb links, which the generated sidewalks now split where the link meets them.
+    expect(new Set(kerbs.map((l) => l.id.split('/')[0]))).toEqual(
+      new Set(['wl:900:kerb:0', 'wl:900:kerb:1']),
+    );
     expect(kerbs.every((l) => !l.crossing && l.kind === 'crossing')).toBe(true);
     // The mapped footways on both sides still connect through the crossing.
     const node = (x: number) => net.walk.nodes.findIndex((n) => n.pos.x === x && n.pos.y === 60);

@@ -433,7 +433,7 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
     }
     const ground = !roadGrades[road.idx] && !nodeGrades[road.from] && !nodeGrades[road.to];
     const crossings = [false, true].flatMap((end) =>
-      crossingEnabled(city, road, end, source) ? crossingPlacement(city, road, end).stripes : [],
+      crossingEnabled(city, road, end, source) ? crossingPlacement(city, road, end, source).stripes : [],
     );
     const connectors = access
       .filter((c) => {
