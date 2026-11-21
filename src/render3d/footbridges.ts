@@ -457,7 +457,8 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
   ).size;
   // Piers: at the ends of each raised span and at most `pierSpacingM` apart between, under the
   // deck's centre line; moved along the deck off carriageways and tracks, or left out so the
-  // deck spans them; none inside a building (it carries the deck) or along stairs.
+  // deck spans them; none inside a building (it carries the deck), on a stair flight or along
+  // stairs.
   const piers: { p: Vec2; base: number; top: number; heading: number; widthM: number }[] = [];
   const pierGrid = new Map<string, Vec2[]>();
   const near = (p: Vec2) => {
@@ -476,6 +477,7 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
       if (!floor.inside(p)) continue;
       if (floor.building) return true;
       if (floor.carriageway && floor.z(p) < deckZ - 1) return true;
+      if (floor.shape?.link.kind === 'steps') return true;
     }
     if (m.trackIndex)
       for (const i of m.trackIndex.search(p.x, p.y, p.x, p.y)) {

@@ -3,6 +3,7 @@ import { buildCity } from '../../src/fixtures/build-city';
 import { pointInPolygon } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { compile } from '../../src/network';
+import { walkGeometry } from '../../src/render/walk-geometry';
 import { buildFootbridges, footbridgeSize, liftCanopies } from '../../src/render3d/footbridges';
 import { cityHeights } from '../../src/render3d/heights';
 import type { City, ContextAreaFeature } from '../../src/schema';
@@ -139,11 +140,15 @@ test('V262 a footbridge has a deck with depth, railings on its open sides and pi
     ).toBe(false);
   // The stairs carry their own railings.
   expect(railVertices.some((v) => v.y > 31 && v.y < 39)).toBe(true);
-  // Piers: none on the carriageway, the 60 m span supported beside it.
+  // Piers: none on the carriageway or on the stair flight (TASK-262b), the 60 m span supported
+  // beside the street.
   expect(piers.length).toBeGreaterThanOrEqual(3);
   const road = compiled.roads[0]!;
+  const flight = walkGeometry(compiled, city).find((shape) => shape.link.kind === 'steps')!;
   for (const pier of piers) {
     expect(pointInPolygon(pier.p, [...road.surface, road.surface[0]!])).toBe(false);
+    for (const tri of flight.polygons)
+      expect(pointInPolygon(pier.p, [...tri, tri[0]!]), 'on the flight').toBe(false);
     expect(pier.top).toBeCloseTo(deckTop - footbridgeSize.deckM, 1);
   }
   // At most `pierSpacingM` between neighbouring piers, except where the deck spans the street.
