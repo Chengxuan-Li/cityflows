@@ -307,8 +307,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-281](tasks/TASK-281.md) | wave A | Lübeck's parking failures under 2% (D17) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; unreachable lots left out; Freiburg 60.1 s) |
 | [TASK-282](tasks/TASK-282.md) | wave B | Left-hand turn ranking: the far-side right yields like a left (architecture 5.3) | movement priority | 268 | York, right-hand identity | done 2026-11-21 (merged; turn rank by driving side) |
 | [TASK-283](tasks/TASK-283.md) | wave B | Gateways into restricted pockets: gateway trips judged by the person's own car | `src/demand`, `places.ts` | 270 | Lübeck, Cambridge, traffic, merge rule | held for the owner 2026-11-21 (passes the merge rule; Lübeck -557 and Cambridge -679 trips a day until populations draw reachable gateways) |
-| [TASK-284](tasks/TASK-284.md) | wave B | Lübeck and York as preloaded cities | builder, fixtures, panel | 258, 259 to 282 | gates, budgets, e2e | in progress 2026-11-21 (run 3) |
+| [TASK-284](tasks/TASK-284.md) | wave B | Lübeck and York as preloaded cities | builder, fixtures, panel | 258, 259 to 282 | gates, budgets, e2e | done 2026-11-21 (merged; Lübeck in the panel; York held out: TASK-286, 287) |
 | [TASK-285](tasks/TASK-285.md) | wave B | Philadelphia as a preloaded city | builder, fixtures, panel | 258, 270, 272, 277 | gates, budgets, e2e | done 2026-11-21 (merged; passes the gate and budgets) |
+| [TASK-286](tasks/TASK-286.md) | city | Polygon gateways by the router's lane-change rule (York's Layerthorpe) | `places.ts` | 270, 284 | York gate, traffic, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | in progress 2026-11-21 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5731,6 +5733,14 @@ around City Hall: right on red, trains below"). Showcase gate: 12,926 persons, 4
 worst visit 404 s, 156.1 s. Budgets: first frame 2.95 to 3.14 s near idle (Freiburg 2.38 to 2.57), 3D after the click
 3.6 s idle, 2D p95 1.5 ms, 3D p95 3.0 ms. Archive 6.47 MB, 1.02 MB gzip. Follow-ups: 155 validation warnings (F1),
 load at 1.2x Freiburg (F2), subway service (F3). Lead merge: archives rebuilt unchanged.
+
+TASK-284 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `2ae278a`): Lübeck Altstadt and York city centre bundled
+(raw polygon imports, side inferred: Lübeck right, York left; extracts committed with attribution). Lübeck passes
+(seed 1: 2,522 completed, 0 failed, worst visit 61 s; seeds 2, 3 clean) and loads on par with Freiburg: in the panel,
+`?city=luebeck`. York fails the gate (3 `no_route`, all from the Layerthorpe gateway: TASK-286) and loads at 1.6x
+Freiburg (TASK-287): bundled, `?city=york`, held out of the panel (`heldOutOfPanel`; its gate test expects failure).
+Archives 9.15 MB (1.55 MB gzip) and 6.77 MB (1.19). Lead merge with TASK-285: the builder, panel, attribution,
+staleness test and real-places spec combined; archives rebuilt unchanged.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
