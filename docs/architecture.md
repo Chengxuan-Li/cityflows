@@ -384,7 +384,11 @@ tags as a building (`height`, `min_height`, `building:levels`, `building:min_lev
 and material). The 3D view draws a building's parts, each from its minimum height and on the
 outline's base, in the outline's colour and material unless the part has its own, instead of the
 outline; 2D, demand, picking and terrain cuts use the outline. No schema-version bump; old files
-omit the field.
+omit the field. TASK-272: an outline whose height is not its tallest part's is the building's
+body, so 3D also draws the outline's area that no part covers (pieces under 1 m wide or 4 m² left
+out) with the outline's tags, and a part with neither height nor levels takes the outline's height
+or levels; an outline as tall as its tallest part only envelopes its parts, as before. Display only;
+the data are unchanged.
 TASK-106 adds tree points (`sub` is `leaf_type`, dimensions are metres) and tree-row lines
 with optional `spacingM` (minimum 2 m) from OSM `spacing` (default 8 m). This is an optional context
 extension without a schema-version bump. Only imported context is saved; generated trees
