@@ -25,6 +25,8 @@ import { mapPalettes, style, type MapPalette } from '../render/style';
 import { buildingRingHash, buildingSeed, lampColors, windowLitGlsl } from '../render/lighting';
 import { drape, lowestGround, triangulate, type Terrain } from './terrain';
 import { buildingPieces, buildRoof } from './roofs';
+import { elevatorLandings, elevatorShaft, elevatorTopM, isElevator } from './elevators';
+import type { WalkGraph } from '../network';
 
 type Building = Extract<ContextFeature, { kind: 'area' }>;
 
@@ -145,6 +147,9 @@ export function buildingMaterial(windowColour = style.buildings.window as number
           // Far off, cells shrink below a pixel: their average glow, without shimmer.
           float far = smoothstep(${style.buildings.litWindowFadeM[0]}.0, ${style.buildings.litWindowFadeM[1]}.0, length(vViewPosition));
           totalEmissiveRadiance += windowGlow * light * mix(pane * lit, 0.27 * windowShare, far);
+        } else if (vWindowInfo.z < 0.0) {
+          // TASK-263: an elevator shaft's glass, lit evenly from inside.
+          totalEmissiveRadiance += windowGlow * vec3(0.18, 0.2, 0.23);
         }
         #endif`,
         )
@@ -211,12 +216,14 @@ function merged(geometries: BufferGeometry[]) {
   return geometry;
 }
 
-/** Display-only surroundings. Metric x/east, z/south, y/up; roofs retain courtyard holes. */
+/** Display-only surroundings. Metric x/east, z/south, y/up; roofs retain courtyard holes. The
+ * walk network gives the levels an elevator serves (TASK-263). */
 export function buildContext(
   features: readonly ContextFeature[],
   terrain?: Terrain,
   groundMeshes = true,
   palette: MapPalette = mapPalettes.light,
+  walk?: WalkGraph,
 ) {
   const start = performance.now();
   const buildings: BufferGeometry[] = [],
@@ -251,7 +258,10 @@ export function buildContext(
       for (const piece of buildingPieces(feature)) {
         const canopy = piece.sub === 'roof';
         const minimum = piece.minHeightM ?? (canopy ? 3 : 0);
-        const total = piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3);
+        const landings = isElevator(piece) ? elevatorLandings(piece.rings, walk) : undefined;
+        const total = landings
+          ? elevatorTopM(piece, landings)
+          : (piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3));
         // An outline extrudes from the ground; a part from its own minimum height.
         const low = piece === feature ? 0 : Math.min(minimum, total);
         const geometry = new ExtrudeGeometry(shape(piece.rings), {
@@ -262,6 +272,13 @@ export function buildContext(
         }).rotateX(-Math.PI / 2);
         if (terrain?.grid || low) geometry.translate(0, base + low, 0);
         buildings.push(paint(geometry, palette.context.building, palette.context.buildingEdge));
+        if (landings) {
+          detailed.push(
+            elevatorShaft(piece.rings, low, total, landings, palette).translate(0, base, 0),
+          );
+          roofStats.shapes.flat = (roofStats.shapes.flat ?? 0) + 1;
+          continue;
+        }
         const roofFeature = canopy
           ? {
               ...piece,

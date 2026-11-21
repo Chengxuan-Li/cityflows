@@ -16,7 +16,7 @@ import {
 } from 'three';
 import { cumulativeLengths, nearestOnPolyline, preparePolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { CompiledCity } from '../network';
+import type { CompiledCity, WalkGraph } from '../network';
 import { profileHeightAt } from '../network/heights';
 import {
   labelCandidates,
@@ -39,6 +39,7 @@ import type { CityGeometry } from '../render/types';
 import type { ContextFeature } from '../schema';
 import { heightAt, type cityHeights } from './heights';
 import { buildingPieces } from './roofs';
+import { elevatorLandings, elevatorTopM, isElevator } from './elevators';
 import { lowestGround } from './terrain';
 
 /**
@@ -261,6 +262,7 @@ export class Occluders {
 export function buildingPrisms(
   features: readonly ContextFeature[],
   terrain: ReturnType<typeof cityHeights>['terrain'],
+  walk?: WalkGraph,
 ): Prism[] {
   const prisms: Prism[] = [];
   for (const f of features) {
@@ -271,7 +273,9 @@ export function buildingPrisms(
       const height =
         piece.sub === 'roof'
           ? Math.max(piece.heightM ?? 0, minimum + 0.2)
-          : (piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3));
+          : isElevator(piece)
+            ? elevatorTopM(piece, elevatorLandings(piece.rings, walk))
+            : (piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3));
       prisms.push({ rings: piece.rings, bottom: base + minimum, top: base + height });
     }
   }
@@ -1188,7 +1192,9 @@ export class Labels3D {
     }
     this.pointHeight = (p) => heights.terrain.groundAt(p.x, p.y);
     this.lines = sampleLines(this.candidates, (p) => surface.get(p) ?? this.pointHeight(p));
-    this.buildings = new Occluders(buildingPrisms(source.context?.features ?? [], heights.terrain));
+    this.buildings = new Occluders(
+      buildingPrisms(source.context?.features ?? [], heights.terrain, city.walk),
+    );
     this.decks = new Occluders(deckPrisms(city, heights));
     this.placed = [];
     this.placedCurrent = false;
