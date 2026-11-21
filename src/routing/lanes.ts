@@ -2,35 +2,7 @@ import type { CConnector, CompiledCity } from '../network';
 import type { RoadGraph } from './graph';
 import type { RouteRequest } from './index';
 
-export function* reachableLanes(
-  compiled: CompiledCity,
-  allowed: boolean[],
-  from: number,
-  endM: number,
-  changeDistanceM: number,
-  startM = 0,
-) {
-  if (!allowed[from] || startM > endM) return;
-  yield { lane: from, changes: 0 };
-  for (const side of ['left', 'right'] as const) {
-    let lane = from;
-    for (let changes = 1; ; changes++) {
-      const positionM = startM + changes * changeDistanceM;
-      const current = compiled.lanes[lane]!;
-      const next = current[side];
-      if (
-        next === -1 ||
-        !allowed[next] ||
-        positionM > endM ||
-        positionM > current.lengthM ||
-        positionM > compiled.lanes[next]!.lengthM
-      )
-        break;
-      yield { lane: next, changes };
-      lane = next;
-    }
-  }
-}
+export { reachableLanes } from '../network/lane-reach';
 
 // Scratch for `sortedReachable`: resolveLanes reads each list before it asks for the next.
 const sideLanes: number[] = [];

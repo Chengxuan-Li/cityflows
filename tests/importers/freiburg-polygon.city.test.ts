@@ -4,7 +4,7 @@ import { nearestOnPolyline, pointInPolygon } from '../../src/geo/polyline';
 import { lonLatToLocal } from '../../src/geo/projection';
 import type { Vec2 } from '../../src/geo/vec2';
 import { compile } from '../../src/network';
-import { polygonCenter } from '../../src/importers/osm/places';
+import { networkAccess, polygonCenter } from '../../src/importers/osm/places';
 import { limit } from '../timeouts';
 
 // TASK-198 phase 1: Freiburg's polygon import keeps nothing outside the ring, and the cut leaves
@@ -76,6 +76,31 @@ test(
           .flatMap((r) => r.provenance.osmIds!),
       ),
     ]).toEqual([234491459]);
+  },
+  limit(120_000),
+);
+
+test(
+  "a cut end where no lane passes the router's rule keeps TASK-270's connector lane",
+  () => {
+    // TASK-286: Stefan-Meier-Straße's way in (986453816) has one lane, which meets the widening
+    // to five lanes over roads too short to change lanes on, so the router cannot leave it in the
+    // import; Freiburg's curation feeds every wide lane from it afterwards. With no lane passing,
+    // the gateway keeps the lane TASK-270's reach rule (lane changes on every road) chose.
+    const city = importFreiburg();
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 3)));
+    const { compiled } = result;
+    const gateway = Object.values(city.places).find(
+      (p) => p.kind === 'gateway' && p.provenance.osmIds!.includes(986453816),
+    )!;
+    const out = gateway.connectors.find(
+      (c) => c.direction === 'out' && city.roads[c.roadId]!.provenance.osmIds!.includes(986453816),
+    )!;
+    expect(city.roads[out.roadId]!.lanes).toHaveLength(1);
+    const lane = compiled.index.lane.get(`${out.roadId}#${out.lane}`)!;
+    expect(networkAccess(compiled, 'router', true).leaves(lane, out.positionM)).toBe(false);
+    expect(networkAccess(compiled, 'every', true).toCore.has(lane)).toBe(true);
   },
   limit(120_000),
 );

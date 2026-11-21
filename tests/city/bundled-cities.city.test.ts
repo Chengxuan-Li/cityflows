@@ -56,7 +56,8 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
 // per resident, mode choice on, the bundled population), 07:00 to 10:00. A place that fails it
 // leaves the panel; it is not curated (owner, 2026-11-20). The state hash is reported, not pinned:
 // Munich's and Sindelfingen's own traffic tests pin theirs. A place held out of the panel for its
-// gate (`heldOutOfPanel`, TASK-284: York) is expected to fail, so the fix that lets it pass shows.
+// gate (`heldOutOfPanel`) is expected to fail, so the fix that lets it pass shows. TASK-286: York passes
+// since its Layerthorpe gateway leaves on a lane the router can leave, and it joins the panel.
 describe.for(['munich', 'sindelfingen', 'philadelphia', 'luebeck', 'york'])(
   '%s at the showcase demand',
   (id) => {

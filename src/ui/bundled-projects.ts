@@ -53,6 +53,11 @@ export const realPlaces = [
     name: 'Lübeck Altstadt',
     note: 'Altstadt island and Hauptbahnhof: Holstentor, Trave bridges',
   },
+  {
+    id: 'york',
+    name: 'York city centre',
+    note: 'City walls and station: left-hand traffic, mini-roundabouts',
+  },
 ];
 
 export async function bundledProject(id: string): Promise<OpenResult> {

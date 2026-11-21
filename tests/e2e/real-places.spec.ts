@@ -3,11 +3,12 @@ import { writeFile } from 'node:fs/promises';
 import { button, pageErrors, toolbarAction } from './helpers';
 import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 
-// TASK-258: the real places of the New city panel (TASK-284 adds Lübeck). Each opens from the
+// TASK-258: the real places of the New city panel (TASK-284 adds Lübeck; TASK-286 York). Each opens from the
 // panel and by `?city=<id>`, paused at 07:00, and every place but Freiburg reports its frame
 // figures as the Freiburg landing spec measures them (render CPU p95 in 2D and 3D while the
-// morning plays, and the 3D build). York is bundled but held out of the panel (`heldOutOfPanel`
-// in bench/bundled-cities.ts): it opens by `?city=york` and reports its figures too.
+// morning plays, and the 3D build).
+// A place held out of the panel (`heldOutOfPanel` in bench/bundled-cities.ts) is listed in
+// `heldOut` and opens by `?city=` only; none is held out now.
 
 test.use({ trace: 'off' });
 if (process.platform === 'win32')
@@ -23,9 +24,10 @@ const realPlaces = [
   { id: 'sindelfingen', name: 'Sindelfingen A81' },
   { id: 'philadelphia', name: 'Philadelphia Center City' },
   { id: 'luebeck', name: 'Lübeck Altstadt' },
+  { id: 'york', name: 'York city centre' },
 ];
 /** Bundled, opened by `?city=`, not in the panel. */
-const heldOut = [{ id: 'york', name: 'York city centre' }];
+const heldOut: { id: string; name: string }[] = [];
 
 const opened = async (page: Page, name: string) => {
   // Sindelfingen's first frame takes 8 to 13 s on a busy machine (its rail clipping), longer than
