@@ -178,18 +178,8 @@ export function curateFreiburg(city: City, data: OsmData): void {
     gateway.jobs = Math.round(gateway.jobs * 0.3);
   }
 
-  // TASK-207: three lots whose only access the polygon cut prunes (a bbox import reaches the two
-  // by the west edge from Haslacher Straße, way 51729602, and Farben-Thon's from the service way
-  // 1198950930): no car reaches them, and each showed as stalls without a path and a facility
-  // without an exit. Their areas stay on the map among the surroundings.
-  for (const osmId of [3078479, 124266993, 526598839]) {
-    const lot = Object.values(city.parking ?? {}).find(
-      (p) => p.kind === 'lot' && p.provenance.osmIds?.[0] === osmId,
-    );
-    if (!lot || lot.connectors.length) throw new Error(`Freiburg curation: lot ${osmId} moved`);
-    removeRoads(city, lot.aisles ?? []);
-    delete city.parking![lot.id];
-  }
+  // TASK-207 removed three lots here whose only access the polygon cut prunes; since TASK-281 the
+  // importer leaves out every lot no car reaches (ways 3078479, 124266993, 526598839 among them).
   // TASK-207: Schwabentorplatz's bus road and the Schlossbergring's service road go on only into
   // the pedestrian Schwabentor (ways 41455468 and 242280648: trams, buses and bicycles), which
   // the import does not drive, so each was a one-way dead end that a car could enter.
