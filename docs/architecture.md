@@ -526,7 +526,8 @@ interface CompiledCity {
 }
 
 interface CNode { idx: number; id: NodeId; pos: Vec2; grade: number; radiusM: number; control: Control;
-  movements: number[]; signal: CSignal | null; group?: number; }
+  movements: number[]; signal: CSignal | null; group?: number;
+  miniRoundabout?: boolean; }               // TASK-269: `highway=mini_roundabout`; every entry gives way, priority 0
 interface CGroup { idx: number; id: JunctionGroupId; nodes: number[]; innerRoads: number[];
   entries: number[]; exits: number[];          // road idx entering / leaving the group
   chains: { from: number; to: number; movements: number[] }[]; signalised: boolean; }

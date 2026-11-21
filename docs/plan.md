@@ -290,9 +290,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-264](tasks/TASK-264.md) | 10 | Lane gains that start where the ground widens (D7, Friedrichstraße), by rule | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 216, 254 | imagery, audit, traffic, merge rule | done 2026-11-21 (merged on the owner's approval; arrows at the painted ones, traffic identical) |
 | [TASK-265](tasks/TASK-265.md) | 10 | Zebras where OSM maps them: crossing placement from the crossing node (`n:211`) | `crossings.ts`, `stops.ts`, walk-link placement | 140, 217, 256 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-266](tasks/TASK-266.md) | render | Rail geometry load time: the polygon clipping in `railGeometry` (Sindelfingen 6.7 s) | `rail-geometry.ts` | 258 | identical output, times, budgets | done 2026-11-21 (Sindelfingen railGeometry 12 s to 0.3 s, identical output) |
-| [TASK-267](tasks/TASK-267.md) | city | Imports that import: one bad parking facility never fails or crashes an import (D1, D2) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
-| [TASK-268](tasks/TASK-268.md) | city | Left-hand traffic: the driving side from the location, far-side protected turns, no priority to the left (D3, D11, D15) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
-| [TASK-269](tasks/TASK-269.md) | city | Mini-roundabouts and UK zebra zig-zags (D4, D16) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-267](tasks/TASK-267.md) | city | Imports that import: one bad parking facility never fails or crashes an import (D1, D2) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (merged; York and Cambridge import; none dropped) |
+| [TASK-268](tasks/TASK-268.md) | city | Left-hand traffic: the driving side from the location, far-side protected turns, no priority to the left (D3, D11, D15) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (merged; York far-side turns; right-hand identical) |
+| [TASK-269](tasks/TASK-269.md) | city | Mini-roundabouts and UK zebra zig-zags (D4, D16) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (merged; 6 UK nodes, Freiburg n:347; zig-zags) |
 | [TASK-270](tasks/TASK-270.md) | city | Polygon gateways that route (D7) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (merged; no_route 0 in Lübeck, Cambridge, Philadelphia; Freiburg gate 62.6 s) |
 | [TASK-271](tasks/TASK-271.md) | city | Reading rules for building passages, conditional access and alternating one-ways (D6, D12, `oneway=faux`) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-272](tasks/TASK-272.md) | city | Landmark buildings mapped as multipolygons (D9, Philadelphia City Hall) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (render rule for parts; City Hall stands; Freiburg 20 bodies) |
@@ -5600,6 +5600,28 @@ it whole within a circle 30 m wider, its arms cut there. `no_route` (0.15, choic
 seed 1 checked). Passes the merge rule. Left: pockets behind restricted streets get no gateway (Lübeck's south
 loop via Wallstraße, Cambridge's north-east behind its bus gates); keeping them needs demand to judge a gateway
 trip by the person's own car facility (a follow-up). Lead merge: archives rebuilt by the builder, unchanged.
+
+TASK-269 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `f858bd2`): `highway=mini_roundabout` nodes are marked
+(`miniRoundabout`), become `yield` nodes where every entry gives way, compile with `CNode.miniRoundabout` and
+priority 0 on every movement, and of cars arriving together each gives way to the side circulating traffic comes
+from; a white disc in every theme, arrows under `uk`. UK zebras get zig-zags and Belisha beacons under `uk`. York 2
+of 3 and Cambridge 4 of 5 nodes imported (the others outside the polygons); Freiburg `n:347` (gate 65.8 to 65.3 s
+alone); Munich, Sindelfingen none. Lead merge with TASK-270: Freiburg rebuilt (manifest 16eac73d...), gate 1,530
+/ 0, 61.4 s, hash 3949968739; `CNode.miniRoundabout` added to `docs/architecture.md`.
+
+TASK-268 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `96d9563`): left-hand traffic. (D11) `drivingSide`
+follows the inferred marking theme unless set (`uk` left, else right); the wizard starts on "From location". (D3)
+The protected turn is the one across oncoming traffic for the side, plus U-turns. (D15) Left-hand equal ranks have
+no side rule (waiting time, id). York (diagnostic): its four-arm signals' 15 s phases carry 9 rights, no lefts;
+0.15 choice on 1,780 completed, 86.7 s, worst visit 156 to 113 s, passes the showcase gate. Right-hand cities'
+cities and programs identical. Follow-up: the turn rank in movement priority is not mirrored (architecture 5.3).
+Lead merge: `yieldsTo` combines TASK-269's mini-roundabout side (now in either driving side) with D15.
+
+TASK-267 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `fa7836f`): (D1) a parking entry up to 1e-6 m past its
+lane's end is valid (York's lot entry 1e-13 m out after a recompile); (D2) a facility whose owner place
+`addStrips` removed gets no owner (Cambridge's Trinity College lot); the final compile drops and reports a facility
+it rejects (`parking_dropped`) instead of failing. York and Cambridge import under both sides, none dropped;
+Munich, Sindelfingen, Freiburg byte-identical.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
