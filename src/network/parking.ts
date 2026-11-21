@@ -14,6 +14,11 @@ import { parkingEgress } from './parking-egress';
 import { STALL_LINK_M } from './lot-paths';
 import { isLaneDrop } from './lane-drop';
 
+/** TASK-267: a parking entry at a lane's end stays valid when a later compile measures the lane
+ * a few ulps shorter (York's lot 1346647913 on Bootham Row, left-hand: 30.03074235393875 m
+ * snapped against 30.03074235393865 m). It is compiled at the end. */
+const LANE_END_TOLERANCE_M = 1e-6;
+
 /** Source aisle permissions also apply to the fitted off-street leg at a mapped mouth. */
 export function parkingConnectorPermitted(
   compiled: CompiledCity,
@@ -141,7 +146,7 @@ export function compileVisibleParking(
           const r = compiled.roads[compiled.index.road.get(entry.roadId)!];
           const l = r && compiled.lanes[r.lanes[entry.lane]!];
           if (!l) return -1;
-          const idx = connector(l.idx, entry.positionM, entry.id);
+          const idx = connector(l.idx, Math.min(entry.positionM, l.lengthM), entry.id);
           compiled.connectors[idx]!.direction = entry.direction;
           compiled.connectors[idx]!.throughputPerMin = entry.throughputPerMin;
           if (entry.direction === 'out')
@@ -293,7 +298,7 @@ export function compileParking(
         if (
           !lane ||
           entry.positionM < 0 ||
-          entry.positionM > lane.lengthM ||
+          entry.positionM > lane.lengthM + LANE_END_TOLERANCE_M ||
           entry.throughputPerMin <= 0
         )
           error(`Parking entry ${entry.id} has an invalid road, lane, position or throughput`);
@@ -359,7 +364,7 @@ export function compileParking(
       if (
         !lane ||
         entry.positionM < 0 ||
-        entry.positionM > lane.lengthM ||
+        entry.positionM > lane.lengthM + LANE_END_TOLERANCE_M ||
         entry.throughputPerMin <= 0
       ) {
         error(`Parking entry ${entry.id} has an invalid road, lane, position or throughput`);
@@ -368,7 +373,14 @@ export function compileParking(
       const existing = compiled.index.connector.get(entry.id);
       const idx = existing ?? compiled.connectors.length;
       if (existing === undefined) {
-        compiled.connectors.push({ ...entry, idx, lane: lane.idx, place, parking: facility.idx });
+        compiled.connectors.push({
+          ...entry,
+          idx,
+          lane: lane.idx,
+          positionM: Math.min(entry.positionM, lane.lengthM),
+          place,
+          parking: facility.idx,
+        });
         compiled.index.connector.set(entry.id, idx);
         lane.connectors.push(idx);
       } else if (!implicit || compiled.connectors[idx]!.parking !== undefined) {

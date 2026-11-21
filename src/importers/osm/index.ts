@@ -33,7 +33,7 @@ import {
 } from './controls';
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
-import { addOsmGarages } from './parking';
+import { addOsmGarages, compileDroppingParking } from './parking';
 import { addGateways, addOsmPlaces, connectCarExits, gatewayDiagnostics } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
@@ -514,6 +514,12 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
         message: `Inferred ${label} on ${inferred.length} roads`,
       });
   }
+  const validation = citySchema.safeParse(city);
+  if (!validation.success) {
+    const issue = validation.error.issues[0]!;
+    return fail('osm_invalid_city', `${issue.path.join('.')}: ${issue.message}`);
+  }
+  const final = compileDroppingParking(city, diagnostics);
   geo.source.inferredCount = [
     ...Object.values(city.nodes),
     ...Object.values(city.nodes).flatMap((node) => node.turnRules),
@@ -521,12 +527,6 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     ...Object.values(city.places),
     ...Object.values(city.parking ?? {}),
   ].reduce((sum, entity) => sum + (entity.provenance.inferred?.length ?? 0), 0);
-  const validation = citySchema.safeParse(city);
-  if (!validation.success) {
-    const issue = validation.error.issues[0]!;
-    return fail('osm_invalid_city', `${issue.path.join('.')}: ${issue.message}`);
-  }
-  const final = compile(city);
   if (final.ok)
     for (const lot of final.compiled.lots ?? []) {
       const facility = city.parking![lot.id]!;
