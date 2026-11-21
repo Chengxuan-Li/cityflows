@@ -256,6 +256,7 @@ export function buildMapContext(
     heights.terrain,
     !omitContextGround,
     palette,
+    city.walk,
   );
   if (source.terrain) context.ground = indexTerrain(context.ground);
   return context;
