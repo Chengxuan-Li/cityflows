@@ -180,12 +180,18 @@ interface MappedCrossing {
    * link and both its end nodes carry that one node's OSM id. */
   node: boolean;
 }
-const mappedSets = new WeakMap<object, MappedCrossing[]>();
-/** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. */
-function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
+const mappedSets = new WeakMap<CompiledCity, WeakMap<object, MappedCrossing[]>>();
+/** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. Cached
+ * per compiled city (TASK-265): the importer compiles the city before it adds the node crossings
+ * to the same walk links (TASK-239's `addNodeCrossings`), so a list cached by the links alone left
+ * them out of every later compile in that process, and a fresh import placed and painted
+ * differently from a cached one. */
+function mappedCrossings(city: CompiledCity, source?: CrossingSource): MappedCrossing[] {
   const walk = source?.walk;
   if (!walk) return [];
-  let set = mappedSets.get(walk.links);
+  let byLinks = mappedSets.get(city);
+  if (!byLinks) mappedSets.set(city, (byLinks = new WeakMap()));
+  let set = byLinks.get(walk.links);
   if (!set) {
     set = Object.values(walk.links)
       .filter((l) => l.kind === 'crossing')
@@ -199,7 +205,7 @@ function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
             [l.from, l.to].every((id) => walk.nodes[id]!.provenance.osmIds?.[0] === osm[0]),
         };
       });
-    mappedSets.set(walk.links, set);
+    byLinks.set(walk.links, set);
   }
   return set;
 }
@@ -221,7 +227,7 @@ function mappedCentreM(
   source?: CrossingSource,
 ): number | null {
   let best: number | null = null;
-  for (const link of mappedCrossings(source)) {
+  for (const link of mappedCrossings(city, source)) {
     if (!link.node || link.grade !== road.grade) continue;
     const along: number[] = [];
     for (const i of road.lanes) {
@@ -242,7 +248,7 @@ function mappedCentreM(
  * end within `MAPPED_M` of its cut, in the half of the lane nearer the node (so a crossing on a
  * short road belongs to one of its ends). */
 function mappedArm(city: CompiledCity, road: CRoad, atEnd: boolean, source?: CrossingSource) {
-  const links = mappedCrossings(source);
+  const links = mappedCrossings(city, source);
   if (!links.length) return false;
   const node = city.nodes[atEnd ? road.to : road.from]!;
   const arm = crossingArms(city, node).find((a) =>

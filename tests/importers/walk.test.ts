@@ -2,6 +2,8 @@ import { expect, test } from 'vitest';
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
+import { crossingSpan } from '../../src/network/crossings';
+import { pointAtDistance } from '../../src/geo/polyline';
 import { crossingStripes } from '../../src/render/marking-geometry';
 import { buildQuery } from '../../src/importers/overpass';
 import { citySchema } from '../../src/schema';
@@ -230,4 +232,35 @@ test('TASK-239: a node crossing ends on a mapped footway within 8 m of the lane 
   const plain = nodeLinks(imported(street(zebra)))[0]!;
   const south = (line: Vec2[]) => line.reduce((a, b) => (b.y > a.y ? b : a));
   expect(south(link!.line)).toEqual(south(plain.line));
+});
+
+test('TASK-265: a freshly imported node crossing near a junction places that arm’s band', () => {
+  // A T of residential streets at node 8, with a zebra node 7 on the street about 7 m west of it.
+  // Imported in this process: the importer compiles the city before it adds the node crossing to
+  // the same walk links, and the band must still follow the node in a later compile.
+  const xml = `<osm><bounds minlat="48" minlon="11" maxlat="48.01" maxlon="11.01"/>
+<node id="1" lat="48.001" lon="11.001"/><node id="2" lat="48.001" lon="11.005"/>
+<node id="7" lat="48.001" lon="11.0031">${zebra}</node><node id="8" lat="48.001" lon="11.0032"/>
+<node id="9" lat="48.003" lon="11.0032"/>
+<way id="10"><nd ref="1"/><nd ref="7"/><nd ref="8"/><nd ref="2"/><tag k="highway" v="residential"/><tag k="sidewalk" v="both"/></way>
+<way id="11"><nd ref="8"/><nd ref="9"/><tag k="highway" v="residential"/><tag k="sidewalk" v="both"/></way>
+</osm>`;
+  const city = imported(xml);
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const net = result.compiled;
+  const [link] = nodeLinks(city);
+  const x = (link!.line[0]!.x + link!.line[1]!.x) / 2;
+  const junction = net.nodes.find((n) => city.nodes[n.id]!.provenance.osmIds?.[0] === 8)!;
+  const west = net.roads.filter(
+    (r) => [r.from, r.to].includes(junction.idx) && r.surface.every((p) => p.x < junction.pos.x),
+  );
+  expect(west).toHaveLength(2);
+  for (const road of west)
+    for (const i of road.lanes) {
+      const lane = net.lanes[i]!;
+      const span = crossingSpan(net, lane, road.to === junction.idx, city)!;
+      const p = pointAtDistance(lane.polyline, lane.cumulative, (span.nearM + span.farM) / 2);
+      expect(Math.abs(p.x - x), lane.id).toBeLessThan(0.3);
+    }
 });
