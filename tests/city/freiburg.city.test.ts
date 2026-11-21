@@ -237,7 +237,7 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-281: rebuilt; the importer leaves out every lot no car reaches (TASK-207's three, no
     // longer curated, and 6 more) with the aisles only they own (22 roads); one driveway fewer, so
     // the later ids move down by 1.
-    'PENDING_MANIFEST',
+    'b0eb4e8045f25bcd1ea99a7340b95c1d02845d4e9aa1fb0e9424d42dadfbc4a1',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -277,7 +277,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // Lead merge: TASK-270 and 269 together, 1,530 completed, 61.4 s.
   // TASK-281: the lots no car reaches are left out, and the later ids move down by 1 (1,530 to
   // 1,531 completed, 62.6 to 60.1 s).
-  expect(morning.stateHash).toBe(PENDING_HASH);
+  // Lead merge: TASK-273, 276, 278, 281, 282 on main, 1,533 completed, 60.5 s.
+  expect(morning.stateHash).toBe(502784661);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

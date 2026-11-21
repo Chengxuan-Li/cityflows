@@ -288,7 +288,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-262](tasks/TASK-262.md) | render | Footbridges with piers, railings, canopies (owner bugs 5, 7) | `render3d` footbridges | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | done 2026-11-21 (decks, railings, piers, roofs as canopies; walk-link tags need a schema field) |
 | [TASK-263](tasks/TASK-263.md) | render | Elevators drawn as elevators (owner bug 6) | `render3d` buildings, `lights.ts` | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | done 2026-11-21 (merged; 6 Freiburg shafts; node-only elevators need a schema value, owner) |
 | [TASK-264](tasks/TASK-264.md) | 10 | Lane gains that start where the ground widens (D7, Friedrichstraße), by rule | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 216, 254 | imagery, audit, traffic, merge rule | done 2026-11-21 (merged on the owner's approval; arrows at the painted ones, traffic identical) |
-| [TASK-265](tasks/TASK-265.md) | 10 | Zebras where OSM maps them: crossing placement from the crossing node (`n:211`) | `crossings.ts`, `stops.ts`, walk-link placement | 140, 217, 256 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-265](tasks/TASK-265.md) | 10 | Zebras where OSM maps them: crossing placement from the crossing node (`n:211`) | `crossings.ts`, `stops.ts`, walk-link placement | 140, 217, 256 | imagery, audit, traffic, merge rule | parked 2026-11-21 (v2 misses Munich actuated choice on by 0.3 points; owner's call) |
 | [TASK-266](tasks/TASK-266.md) | render | Rail geometry load time: the polygon clipping in `railGeometry` (Sindelfingen 6.7 s) | `rail-geometry.ts` | 258 | identical output, times, budgets | done 2026-11-21 (Sindelfingen railGeometry 12 s to 0.3 s, identical output) |
 | [TASK-267](tasks/TASK-267.md) | city | Imports that import: one bad parking facility never fails or crashes an import (D1, D2) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (merged; York and Cambridge import; none dropped) |
 | [TASK-268](tasks/TASK-268.md) | city | Left-hand traffic: the driving side from the location, far-side protected turns, no priority to the left (D3, D11, D15) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (merged; York far-side turns; right-hand identical) |
@@ -296,16 +296,16 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-270](tasks/TASK-270.md) | city | Polygon gateways that route (D7) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (merged; no_route 0 in Lübeck, Cambridge, Philadelphia; Freiburg gate 62.6 s) |
 | [TASK-271](tasks/TASK-271.md) | city | Reading rules for building passages, conditional access and alternating one-ways (D6, D12, `oneway=faux`) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-272](tasks/TASK-272.md) | city | Landmark buildings mapped as multipolygons (D9, Philadelphia City Hall) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (render rule for parts; City Hall stands; Freiburg 20 bodies) |
-| [TASK-273](tasks/TASK-273.md) | city | City walls and gates: fetched, read and drawn (D5, York; owner-approved query change and re-fetch) | `overpass.ts`, context import, drawing | 259 | tests, close-ups, identity, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-273](tasks/TASK-273.md) | city | City walls and gates: fetched, read and drawn (D5, York; owner-approved query change and re-fetch) | `overpass.ts`, context import, drawing | 259 | tests, close-ups, identity, budgets | done 2026-11-21 (merged; York walls; Freiburg's one wall) |
 | [TASK-274](tasks/TASK-274.md) | render | Elevators mapped only as points (owner-approved schema value) | `src/schema`, point import, `elevators.ts` | 263 | tests, counts, close-ups, hashes | done 2026-11-21 (merged; Donnersbergerbrücke lifts as shafts) |
 | [TASK-275](tasks/TASK-275.md) | render | Covered and handrail on walk links (owner-approved schema fields) | `src/schema`, `walk.ts`, `footbridges.ts` | 262 | tests, counts, close-ups, hashes | done 2026-11-21 (merged; railings by handrail, canopies on covered ways) |
-| [TASK-276](tasks/TASK-276.md) | wave A | UK kerb markings read from OSM (D8) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-276](tasks/TASK-276.md) | wave A | UK kerb markings read from OSM (D8) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; UK kerb lines from tags) |
 | [TASK-277](tasks/TASK-277.md) | wave A | Philadelphia within budget, and transit names (D10, D13) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
-| [TASK-278](tasks/TASK-278.md) | wave A | Faster 3D walkways: height lookups (TASK-266's follow-up) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-278](tasks/TASK-278.md) | wave A | Faster 3D walkways: height lookups (TASK-266's follow-up) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; Sindelfingen 3D 3.7 s sooner, identical meshes) |
 | [TASK-279](tasks/TASK-279.md) | wave A | Unmarked crossings by German rules: no walker priority | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
 | [TASK-280](tasks/TASK-280.md) | wave A | One height profile for rail tracks sharing a bridge | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
-| [TASK-281](tasks/TASK-281.md) | wave A | Lübeck's parking failures under 2% (D17) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
-| [TASK-282](tasks/TASK-282.md) | wave B | Left-hand turn ranking: the far-side right yields like a left (architecture 5.3) | movement priority | 268 | York, right-hand identity | in progress 2026-11-21 (run 3) |
+| [TASK-281](tasks/TASK-281.md) | wave A | Lübeck's parking failures under 2% (D17) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; unreachable lots left out; Freiburg 60.1 s) |
+| [TASK-282](tasks/TASK-282.md) | wave B | Left-hand turn ranking: the far-side right yields like a left (architecture 5.3) | movement priority | 268 | York, right-hand identity | done 2026-11-21 (merged; turn rank by driving side) |
 | [TASK-283](tasks/TASK-283.md) | wave B | Gateways into restricted pockets: gateway trips judged by the person's own car | `src/demand`, `places.ts` | 270 | Lübeck, Cambridge, traffic, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -5641,6 +5641,49 @@ unchanged within noise. Left: one 3 m canopy piece just outside the Stühlinger 
 
 Lead merge of TASK-274 and 275 (with contracts TASK-282, 283): bundled projects rebuilt (Freiburg manifest
 a6b96fb3...); the pinned render tests pass.
+
+TASK-273 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `5c7c3f2`): owner-approved query change (version 10 to
+11: `barrier=city_wall`, `historic=citywalls`, `historic=city_gate` with surroundings) and York's one re-fetch
+(4,189,077 bytes, SHA-256 7e9ba136..., snapshot 2026-11-21T09:51:52Z, one retry after an empty 502). Walls read as
+context lines (`city_wall`, `city_gate`; `heightM`, `walkway`, `bridge`), drawn as stone bodies (4 m by 2 m default)
+with parapets or the raised walk deck on top; gates mapped as buildings stay gatehouses, lone gate nodes on a way
+become arches. York 3.40 km of wall (2.31 km walked); Micklegate, Bootham, Monk, Fishergate Bars as buildings;
+Walmgate Bar outside TASK-259's polygon. Freiburg gains its one real wall (Augustinerplatz, way 1052938724, 19 m;
+lead accepted, state hash unchanged); Munich, Sindelfingen byte-identical. Lead merge with TASK-274: schema and
+context unions resolved.
+
+TASK-276 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `0afbee6`): UK kerb lines from OSM parking tags
+(double yellow for no parking/stopping or `parking:<side>=no`, single for timed restrictions), recorded as
+`kerbLine:*` in `provenance.inferred` for `uk` imports only; untagged town kerbs draw nothing; no yellow across
+junction mouths. York yellow 19.5 to 2.2 km. German and US imports byte-identical. A `Road.kerb` field would be
+the proper home (schema, owner).
+
+TASK-278 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `30e9ce8`): `polylineNearest` (bit-identical, runs of
+8 segments under a box), one index per road reference line in render3d's `roadStation`, and a per-shape memo in
+`buildWalk`. Sindelfingen `buildWalk` 4.8 to 5.7 s to 1.0 to 1.3 s; its 3D scene 3.7 s sooner. Mesh hashes pinned;
+lead re-pinned on TASK-275's canopies after checking the merged tree gives the same hashes with and without it.
+
+TASK-281 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `6f07dbb`): Lübeck already passed on main after
+TASK-270 (0% parking failures, seeds 1 to 5). A lot with no reachable aisle and no permitted road within 30 m is
+left out with the aisles only it owns (replaces TASK-207's three curated Freiburg lots): Lübeck 16, Freiburg 9,
+York 8. Freiburg gate 62.6 to 60.1 s; Munich, Sindelfingen byte-identical. Left: 24 Lübeck facilities behind
+"Anlieger frei" pockets (a routing zone rule, follow-up); `amenity=parking_entrance` reading (follow-up).
+
+TASK-282 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `2894d59`): turn rank mirrored by driving side
+(`docs/architecture.md` 5.3): through and the near-side turn 2, the turn across oncoming traffic 1, U-turns 0. York
+1,662 movements at 477 nodes change; choice on unchanged, choice off mean delay 240.4 to 198.8 s (one more
+gridlocked trip). Right-hand cities identical.
+
+Lead merge of TASK-273, 276, 281, 282, 278: Freiburg rebuilt (manifest b0eb4e80...), gate 1,533 / 0, 60.5 s, hash
+502784661 (main 61.4 s).
+
+TASK-265 (Claude Code subagent, Opus 5.5 high, 2026-11-21; parked under the owner's merge rule, branch
+`task/265-crossing-placement`, v1 `ab45b2e`, v2 `19a6ad9`): v1 moved every mapped crossing's band (Munich fixed choice
+off +5.9%); v2 moves only node-mapped crossings (Freiburg 7 ends: `n:211` 7.9 to 3.7 m, on the ground zebra; Munich
+`n:6`), stripes 0.2 m from the curb. v2 traffic: Munich actuated off -1.6%, actuated on +3.3% (miss by 0.3 points;
+seed spread ±1.7%), fixed off +1.3%, fixed on -0.4%; full demand five-seed +1.1% / -1.3%; Freiburg +1.1 s. Parked;
+owner's call (the only Munich change is `n:6`'s zebra 3.6 m outward). Also fixed on the branch: the mapped-crossing
+cache keyed by walk links went stale after in-process imports.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into

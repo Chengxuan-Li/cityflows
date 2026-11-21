@@ -13,8 +13,10 @@ import { limit } from '../timeouts';
 // footbridge meshes of each bundled city, to the bit, equal main 9ac29c5's, which scanned every
 // road's reference line for every triangle corner.
 const pins = {
-  freiburg: '36362e1f6e57bd0b102f8841a9a8078ece9b0a79548e680219c222d00de84613',
-  munich: '129283c3a7c8ae7d7a5733e2ec8c80b539e244bd7cf3d3e5033d2f8fc5e6eb19',
+  // Lead merge: re-pinned on TASK-275's canopies and handrails (the same hashes with and without
+  // TASK-278's lookups on the merged tree).
+  freiburg: '853e54608e31f6916aa5a405c0b5c5e6659b92e4888daa3b9fb59fe4f3009072',
+  munich: '5389be4bbb864ce2cc7ac816c6383754e013373d79944c5bb0b78f2b4039da03',
   sindelfingen: '6bb02c52f5fa278a97666b3908bc4667d4fbfe253ba354671b107cd929cc36b2',
 };
 
