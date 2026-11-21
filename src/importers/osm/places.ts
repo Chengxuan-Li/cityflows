@@ -11,7 +11,7 @@ import { reachableLanes } from '../../network/lane-reach';
 import { parkingEgress } from '../../network/parking-egress';
 import { compileVisibleParking } from '../../network/parking';
 import { lonLatToLocal } from '../../geo/projection';
-import type { CompiledCity, Diagnostic } from '../../network';
+import type { CLane, CompiledCity, Diagnostic } from '../../network';
 import { allocateId, vehicleClasses, type City, type Place, type RoadClass } from '../../schema';
 import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
@@ -37,13 +37,19 @@ const gatewayDemand: Record<RoadClass, number> = {
 // TASK-270: `publicCar` keeps only what a car may drive through, as the router does (car lanes on
 // roads with car access `yes`, no lane drops), so the core is the public network and a lane only
 // reaches it through public roads, not through a destination or private zone.
-// TASK-286: there lane changes count as the router makes them (`reachableLanes`, the lane search's
-// edges): a lane entered at its road's start leaves by the movements of every lane it can change
-// to within the road's length less 10 m, each change 30 m. TASK-270 counted a change on every road,
-// so York's Layerthorpe gateway left on a lane that reaches the core only by changing lanes on
-// roads of 5 to 22.6 m, and every route from it failed. `leaves` and `arrives` judge a gateway's
-// connector by the router's origin and destination budgets.
-export function networkAccess(compiled: CompiledCity, laneChanges = true, publicCar = false) {
+// `laneChanges`: `none`; `long` on roads whose every lane is long enough for all of them;
+// `every` on every road (TASK-270's polygon rule); `router` as the router makes them (TASK-286:
+// `reachableLanes`, the lane search's edges): a lane entered at its road's start leaves by the
+// movements of every lane it can change to within the road's length less 10 m, each change 30 m.
+// TASK-270 counted a change on every road, so York's Layerthorpe gateway left on a lane that
+// reaches the core only by changing lanes on roads of 5 to 22.6 m, and every route from it failed.
+// `leaves` and `arrives` judge a gateway's connector by the router's origin and destination
+// budgets.
+export function networkAccess(
+  compiled: CompiledCity,
+  laneChanges: 'none' | 'long' | 'every' | 'router',
+  publicCar = false,
+) {
   const car = vehicleClasses.indexOf('car');
   const open = compiled.lanes.map(
     (lane) =>
@@ -59,7 +65,7 @@ export function networkAccess(compiled: CompiledCity, laneChanges = true, public
     incoming[m.toLane]!.push(m.fromLane);
   }
   const moves = out.map((next) => [...next]);
-  if (publicCar)
+  if (laneChanges === 'router')
     for (const lane of compiled.lanes) {
       const endM = Math.max(0, compiled.roads[lane.road]!.lengthM - 10);
       for (const { lane: from, changes } of reachableLanes(
@@ -75,9 +81,14 @@ export function networkAccess(compiled: CompiledCity, laneChanges = true, public
         }
     }
   else
-    for (const road of laneChanges ? compiled.roads : []) {
+    for (const road of laneChanges === 'none' ? [] : compiled.roads) {
       const lanes = road.lanes.map((i) => compiled.lanes[i]!);
-      if (lanes.some((l) => l.lengthM < (lanes.length - 1) * laneChangeM + 10)) continue;
+      if (lanes.some((l) => !open[l.idx])) continue;
+      if (
+        laneChanges === 'long' &&
+        lanes.some((l) => l.lengthM < (lanes.length - 1) * laneChangeM + 10)
+      )
+        continue;
       for (const lane of lanes)
         for (const other of lanes) {
           if (lane.idx === other.idx) continue;
@@ -185,7 +196,8 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
   // network (out) or is reached from it (in). Lübeck's Wallstraße reached only a pocket of the
   // Altstadt behind destination streets, and a cut end whose lanes lead nowhere had connectors
   // anyway: every `no_route` of TASK-259's scout.
-  const access = networkAccess(compiled, true, polygon);
+  const access = networkAccess(compiled, polygon ? 'router' : 'long', polygon);
+  const reach = polygon ? networkAccess(compiled, 'every', true) : access;
   const inset = (lengthM: number) => Math.min(5, lengthM / 2);
   const [west, south, east, north] = city.geo!.bbox;
   const nw = lonLatToLocal(city.geo!, { lon: west, lat: north });
@@ -200,14 +212,17 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
       // TASK-286: a polygon's connector lane is one the router can leave (out) or reach (in) from
       // the connector's own position; of several, the driving side's outer one as before (York's
       // Layerthorpe `r:3638`: lane 1, not lane 0, which reaches the core only by lane changes on
-      // roads under 30 m).
-      let candidates = lanes.filter((l) =>
-        polygon
-          ? end === 'start'
-            ? access.leaves(l.idx, inset(l.lengthM))
-            : access.arrives(l.idx, l.lengthM - inset(l.lengthM))
-          : (end === 'start' ? access.toCore : access.fromCore).has(l.idx),
-      );
+      // roads under 30 m). Where no lane passes, TASK-270's reach decides, as before: Freiburg's
+      // curation makes Stefan-Meier-Straße's way in usable after the import (lead, 2026-11-21).
+      const reaches = (l: CLane) => (end === 'start' ? reach.toCore : reach.fromCore).has(l.idx);
+      let candidates = polygon
+        ? lanes.filter((l) =>
+            end === 'start'
+              ? access.leaves(l.idx, inset(l.lengthM))
+              : access.arrives(l.idx, l.lengthM - inset(l.lengthM)),
+          )
+        : lanes.filter(reaches);
+      if (polygon && !candidates.length) candidates = lanes.filter(reaches);
       if (
         !polygon &&
         !candidates.length &&
@@ -385,7 +400,7 @@ export function polygonCenter(ring: Vec2[]): Vec2 | undefined {
 
 // Preserve the original layout and ID allocation while generating fixed roadside strips.
 export function layoutConnector(city: City, compiled: CompiledCity, parking = false) {
-  const { core } = networkAccess(compiled, false);
+  const { core } = networkAccess(compiled, 'none');
   const segments = compiled.lanes
     .filter((lane) => {
       if ((!parking && !core.has(lane.idx)) || !lane.allowed.includes('car')) return false;
