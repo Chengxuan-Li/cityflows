@@ -220,7 +220,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // embedded (Rotteckring rt:12944 among them; only their `form` changes).
     // TASK-255: rebuilt; 18 signals mapped at their stop positions join their junctions' groups
     // (groups 39 to 46) and are marked `stopPosition` (`stopPositionCrossing` on a crossing).
-    '59bcbb988b3d38d37283d5861684d220fee5da4ea4c6dcc178ff7312fa664dd7',
+    // TASK-264: rebuilt; 40 roads from ways tagged placement=transition are marked
+    // `placementTransition`; r:1175's widened surface moves two car-park exits on it by 0.05 mm.
+    'bf3f76cd30325f155943347acf165f32800a23e99e95849dec1361abaa1b6314',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).

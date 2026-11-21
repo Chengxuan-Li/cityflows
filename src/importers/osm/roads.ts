@@ -1,5 +1,6 @@
 import { offsetPolyline } from '../../geo/polyline';
 import type { Diagnostic } from '../../network';
+import { PLACEMENT_TRANSITION } from '../../network/lanes';
 import { allocateId, type City, type Road, type RoadClass } from '../../schema';
 import { vehicleClasses, type AccessValue } from '../../schema';
 import type { ClippedPart } from './clip';
@@ -220,6 +221,8 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
     if (!hasSpeed) inferred.push('speedLimitMps');
     if (!supportedOneway) inferred.push('oneway');
     if (shared) inferred.push('sharedLane');
+    if (directions.length === 1 && tag.placement === 'transition')
+      inferred.push(PLACEMENT_TRANSITION);
     const access = roadAccess(tag, direction, inferred);
     return {
       ...(access && { access }),

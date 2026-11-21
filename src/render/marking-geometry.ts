@@ -47,7 +47,12 @@ import {
 } from './style';
 
 import { defaultSlice, orderBranches } from '../network/continuity';
-import { paintedCity, paintedLaneEdges as laneEdges } from './road-paint';
+import {
+  paintedCity,
+  paintedLaneEdges as laneEdges,
+  transitionLanes,
+  transitionAt,
+} from './road-paint';
 
 const LINE_CLEAR_M = 0.5;
 /** TASK-215 (M2): an inner road's lanes carry lane lines from this length (the audit's 15 m). */
@@ -366,6 +371,7 @@ function buildRoadMarkings(
   source: CrossingSource | undefined,
   markingTheme: MarkingTheme,
 ) {
+  city = transitionLanes(city);
   road = city.roads[road.idx]!;
   const belowShapes: MarkingShape[] = [],
     aboveShapes: MarkingShape[] = [],
@@ -737,12 +743,26 @@ function approachShapes(
     // moved along the lane to the nearest place clear of boxes and crossing paint, between the
     // start crossing and the stop line, else none.
     const boxes = keepClearBoxes(city, lane, markingTheme, source);
+    // TASK-264: an arrow on a gain's transition also keeps off the boxes of the lane under it there.
+    const before = at < 0 ? transitionAt(city, road, false) : null;
+    if (before) {
+      const start = lane.polyline[0]!;
+      const under = before.road.lanes
+        .map((i) => city.lanes[i]!)
+        .find((l) => {
+          const end = l.polyline.at(-1)!;
+          return Math.hypot(end.x - start.x, end.y - start.y) < l.widthM / 2;
+        });
+      if (under)
+        for (const box of keepClearBoxes(city, under, markingTheme, source))
+          boxes.push({ ...box, fromM: box.fromM - under.lengthM, toM: box.toM - under.lengthM });
+    }
     if (clearOf(at, 2.5 * scale, 2.5 * scale, at, at, boxes) === null) {
       const moved = clearOf(
         at,
         2.5 * scale,
         2.5 * scale,
-        startFarM > 0 ? back : 2.5 * scale,
+        before ? 2.5 * scale - before.road.lengthM : startFarM > 0 ? back : 2.5 * scale,
         front,
         [...boxes, ...crossingPaint(city, lane, source)],
       );
@@ -755,7 +775,12 @@ function approachShapes(
       shapes.push(
         fillShape(
           'arrow',
-          polygon.map((p) => local(Math.max(0, at + p.x * scale), 0, p.y)),
+          // Before the lane's start (a gain's transition), along its first heading.
+          polygon.map((p) =>
+            before
+              ? local(Math.max(0, at + p.x * scale), Math.min(0, at + p.x * scale), p.y)
+              : local(Math.max(0, at + p.x * scale), 0, p.y),
+          ),
         ),
       );
   }
@@ -1161,7 +1186,8 @@ export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM =
   const differ = road.lanes.some(
     (index) => key(arrowTurns(city, city.lanes[index]!)) !== key(turns),
   );
-  const arrowAt = arrowPosition(lane, crossingFarM);
+  const before = transitionAt(city, road, false);
+  const arrowAt = before ? -before.atM : arrowPosition(lane, crossingFarM);
   return {
     // TASK-131: no stop or yield line on a junction group's inner road.
     stop:
@@ -1173,7 +1199,7 @@ export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM =
     turns:
       road.group === undefined &&
       differ &&
-      arrowRoom(lane, crossingFarM) &&
+      (before !== null || arrowRoom(lane, crossingFarM)) &&
       !onOtherRoad(city, lane, arrowAt)
         ? turns
         : [],
@@ -2280,6 +2306,7 @@ function buildTransitionMarkings(
   road: CRoad,
   markingTheme: MarkingTheme,
 ): MarkingShape[] {
+  city = transitionLanes(city);
   road = city.roads[road.idx]!;
   const pattern = markingTheme.classes[road.roadClass].lane.dash!;
   const shapes = seams(city, road).flatMap((line) =>
