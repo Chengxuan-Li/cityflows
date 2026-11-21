@@ -88,3 +88,35 @@ Polygon (lat lon): 39.9592 -75.159 39.9592 -75.17 39.9585 -75.1722 39.9566 -75.1
 -75.173 39.9465 -75.159
 BBox of the polygon: -75.173, 39.9465, -75.159, 39.9592
 3,614,043 bytes, SHA-256 0dd8a433d90f8fa5ac064edf1cc38e1d67c8c146fcbe6d0bfcc03c779cc68ef4
+
+luebeck-altstadt.osm — the Altstadt island and the Hauptbahnhof, Lübeck, Schleswig-Holstein
+(TASK-259 scouted it, TASK-284 bundles it)
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-21T07:00:41Z, finished 07:01:39Z
+OSM snapshot: 2026-11-21T07:00:36Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 10, before
+TASK-273 added city walls and gates) with every (s,w,n,e) filter replaced by (poly:"...") with the
+polygon below, [timeout:180]. Overpass returns every way that touches the polygon whole; the file has
+no bounds element.
+Polygon (lat lon): 53.876 10.6895 53.8738 10.682 53.8725 10.6775 53.8708 10.673 53.868 10.666
+53.865 10.669 53.864 10.6745 53.8618 10.679 53.856 10.687 53.8612 10.695 53.8655 10.6982 53.871
+10.6985 53.8752 10.695
+BBox of the polygon: 10.666, 53.856, 10.6985, 53.876
+7,986,825 bytes, SHA-256 4557d9e505e975b6bc844e12f3b0e3dd1bbcbbdda03ecc94174505be6f1a2f44
+
+york-walls-v11.osm — inside the city walls, with the station, York, North Yorkshire
+(TASK-259 scouted it, TASK-273 fetched it again with the walls, TASK-284 bundles it)
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-21T09:52:49Z (after one empty
+502 at 09:51:31Z), finished 09:53:54Z
+OSM snapshot: 2026-11-21T09:51:52Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 11, which
+adds barrier=city_wall, historic=citywalls and historic=city_gate) with every (s,w,n,e) filter
+replaced by (poly:"...") with the polygon below, [timeout:180]. Overpass returns every way that
+touches the polygon whole; the file has no bounds element.
+Polygon (lat lon): 53.9655 -1.0835 53.9634 -1.0872 53.9628 -1.0895 53.9614 -1.0908 53.9604 -1.0945
+53.9592 -1.0975 53.9556 -1.0968 53.9543 -1.0925 53.9522 -1.0885 53.9514 -1.0842 53.952 -1.0808
+53.9521 -1.078 53.9533 -1.0737 53.9555 -1.0718 53.9577 -1.0713 53.9611 -1.0724 53.9633 -1.0754
+53.9647 -1.0775
+BBox of the polygon: -1.0975, 53.9514, -1.0713, 53.9655
+4,189,077 bytes, SHA-256 7e9ba136abe8141171154e09f99c89ccf41e8e1814ecbf821f33529c978524c7
+It replaces TASK-259's query-10 fetch of 2026-11-21 (york-walls.osm, never committed, 4,171,757
+bytes, SHA-256 762dc47387d41ed9425fc902638a93d407e0a5fc7189d8deec6aa826ab21f057).

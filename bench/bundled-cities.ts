@@ -49,12 +49,61 @@ async function philadelphia(): Promise<string> {
   return showcaseProject(result.city, 'philadelphia', '2026-11-21T00:00:00.000Z');
 }
 
+/** TASK-284: the polygon import of an extract TASK-259 scouted, with Freiburg's options but not
+ * its curation, flat. The driving side is left to the importer, which infers it from the location
+ * (TASK-268: York left, Lübeck right). The polygon is TASK-259's lat lon pairs
+ * (docs/decisions/2026-11-20-more-cities.md, fixtures/osm/ATTRIBUTION.txt). */
+async function polygonImport(id: string, extract: string, latLon: string, name: string) {
+  const values = latLon.trim().split(/\s+/).map(Number);
+  const polygon = values.flatMap((lat, i, all): [number, number][] =>
+    i % 2 ? [] : [[all[i + 1]!, lat]],
+  );
+  const result = importOsmCached(readFileSync(`fixtures/osm/${extract}`, 'utf8'), {
+    importerVersion: '1',
+    polygon,
+    terrain: false,
+  });
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(-5)));
+  result.city.name = name;
+  return showcaseProject(result.city, id, '2026-11-21T00:00:00.000Z');
+}
+
 /** Builds each bundled real place by its id (`?city=<id>`, `src/ui/bundled-projects.ts`). */
 export const realPlaceBuilds: Record<string, () => Promise<string>> = {
   freiburg: buildFreiburgProject,
   munich: () => rawImport('munich', 'Munich Donnersbergerbrücke'),
   sindelfingen: () => rawImport('sindelfingen', 'Sindelfingen A81'),
   philadelphia,
+  // The Altstadt island and the Hbf: the Trave, the Elbe-Lübeck canal, the rail line.
+  luebeck: () =>
+    polygonImport(
+      'luebeck',
+      'luebeck-altstadt.osm',
+      `53.876 10.6895 53.8738 10.682 53.8725 10.6775 53.8708 10.673 53.868 10.666 53.865 10.669
+       53.864 10.6745 53.8618 10.679 53.856 10.687 53.8612 10.695 53.8655 10.6982 53.871 10.6985
+       53.8752 10.695`,
+      'Lübeck Altstadt',
+    ),
+  // Inside the walls and the inner ring, with the station (query version 11, with the walls).
+  york: () =>
+    polygonImport(
+      'york',
+      'york-walls-v11.osm',
+      `53.9655 -1.0835 53.9634 -1.0872 53.9628 -1.0895 53.9614 -1.0908 53.9604 -1.0945 53.9592
+       -1.0975 53.9556 -1.0968 53.9543 -1.0925 53.9522 -1.0885 53.9514 -1.0842 53.952 -1.0808
+       53.9521 -1.078 53.9533 -1.0737 53.9555 -1.0718 53.9577 -1.0713 53.9611 -1.0724 53.9633
+       -1.0754 53.9647 -1.0775`,
+      'York city centre',
+    ),
+};
+
+/** TASK-284: places built, staleness-checked and opened by `?city=<id>`, but kept out of the New
+ * city panel because they fail the showcase gate or the load budget (the gate test expects the
+ * failure, so a fix shows); each with why. */
+export const heldOutOfPanel: Record<string, string> = {
+  york:
+    'no_route at the Layerthorpe gateway (its exit lane needs lane changes on roads under 30 m); ' +
+    'first frame 1.6x Freiburg',
 };
 
 /** The committed bundled project, opened as the app opens it. */
