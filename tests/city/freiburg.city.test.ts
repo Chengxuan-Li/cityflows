@@ -224,7 +224,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-270: rebuilt; the B 31 link out at Lessingstraße has no connector (no public road
     // reaches it), Lessingstraße's way in joins Schnewlinstraße's gateway, and the later ids
     // move down by 2.
-    '7485c8529baf9b72e11096967716119af450db629fe97213224a25c49b6d3169',
+    // TASK-277: rebuilt; the Hauptbahnhof's four platforms mapped with only a `ref` ("1", "2;3",
+    // "4;5", "6;7") take their stop area's name; nothing else changes.
+    '46f98bd077941c986ccf6d94a064252d9aa6f7a2af81456f6b828193bf153d57',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).

@@ -1,4 +1,6 @@
 import {
+  boxesMeet,
+  boxOf,
   headingAtDistance,
   nearestOnPolyline,
   pointAtDistance,
@@ -6,6 +8,7 @@ import {
   preparePolygon,
   segmentDistance,
 } from '../geo/polyline';
+import type { Box } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, CrossingMarking } from '../schema';
 import { junctionCorners } from './junctions';
@@ -175,6 +178,7 @@ export const MAPPED_M = 12;
 
 interface MappedCrossing {
   line: Vec2[];
+  box: Box;
   grade: number;
   marking?: CrossingMarking;
 }
@@ -189,12 +193,20 @@ function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
       .filter((l) => l.kind === 'crossing')
       .map((l) => ({
         line: l.line,
+        box: boxOf(l.line),
         grade: l.layer ?? walk.nodes[l.from]!.layer,
         ...(l.marking ? { marking: l.marking } : {}),
       }));
     mappedSets.set(walk.links, set);
   }
   return set;
+}
+
+const laneBoxes = new WeakMap<readonly Vec2[], Box>();
+function laneBox(lane: CLane): Box {
+  let box = laneBoxes.get(lane.polyline);
+  if (!box) laneBoxes.set(lane.polyline, (box = boxOf(lane.polyline)));
+  return box;
 }
 
 /** TASK-217 (D1): the mapped crossing ways that cross a lane centreline of the arm of a road end
@@ -213,6 +225,9 @@ function mappedArm(city: CompiledCity, road: CRoad, atEnd: boolean, source?: Cro
         link.grade === e.road.grade &&
         e.road.lanes.some((i) => {
           const lane = city.lanes[i]!;
+          // TASK-277: lines whose boxes do not meet cannot cross (Philadelphia: 4.8 s of the first
+          // frame and again of the 3D build went to testing every mapped crossing against every lane).
+          if (!boxesMeet(link.box, laneBox(lane))) return false;
           return polylineCrossings(link.line, lane.polyline).some((hit) => {
             const s = e.atEnd ? lane.lengthM - hit.alongB : hit.alongB;
             return s <= MAPPED_M && s <= lane.lengthM / 2;

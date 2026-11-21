@@ -44,7 +44,13 @@ import { drawMovementArrow, drawRoad, drawCrossings, updateZoomFade } from './la
 import { drawTransitions } from './layers/transitions';
 import { paintedCity } from './road-paint';
 import { drawSignal } from './layers/signals';
-import { drawWalkerRoute, drawWalkers, drawWalkSignals } from './layers/walkers';
+import {
+  createWalkerLayer,
+  drawWalkerRoute,
+  drawWalkers,
+  drawWalkSignals,
+  type WalkerLayer,
+} from './layers/walkers';
 import { drawSigns } from './layers/signs';
 import { DeckCoverage, deckCover, DeckGhosts, drawGradeShadows } from './layers/shadows';
 import { Tiles } from './layers/tiles';
@@ -110,8 +116,9 @@ export function createGrade(layer: number) {
   const placeFills = new Graphics();
   const connectors = new Graphics();
   const signals = new Container();
+  signals.isRenderGroup = true;
   const vehicles = createVehicleLayer();
-  const walkers = new Graphics();
+  const walkers = createWalkerLayer();
   const parkedCars = createVehicleLayer();
   const bands = new Graphics();
   const slotTicks = new Graphics();
@@ -139,7 +146,7 @@ export function createGrade(layer: number) {
     parkedCars.container,
     vehicles.container,
     trains,
-    walkers,
+    walkers.container,
   );
   return {
     layer,
@@ -334,7 +341,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
-  let walkerLayers = new Map<number, Graphics>();
+  let walkerLayers = new Map<number, WalkerLayer>();
   let walkerSnapshot: WalkerSnapshot | undefined;
   let selectedWalker = -1;
   let drawnWalkers = false;
@@ -534,7 +541,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     );
     routeOverlay.visible = layerVisibility.routes;
     walkerRoute.visible = layerVisibility.routes && layerVisibility.pedestrians;
-    for (const graphics of walkerLayers.values()) graphics.visible = layerVisibility.pedestrians;
+    for (const layer of walkerLayers.values())
+      layer.container.visible = layerVisibility.pedestrians;
     disconnectedOverlay.visible = layerVisibility.disconnected;
     for (const grade of visibleGrades) {
       if (grade.placeFills.visible !== layerVisibility.places) {
