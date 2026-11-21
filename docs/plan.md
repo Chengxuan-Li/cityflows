@@ -302,7 +302,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-276](tasks/TASK-276.md) | wave A | UK kerb markings read from OSM (D8) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; UK kerb lines from tags) |
 | [TASK-277](tasks/TASK-277.md) | wave A | Philadelphia within budget, and transit names (D10, D13) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; Philadelphia 2D 8.0 to 1.3 ms; stop names) |
 | [TASK-278](tasks/TASK-278.md) | wave A | Faster 3D walkways: height lookups (TASK-266's follow-up) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; Sindelfingen 3D 3.7 s sooner, identical meshes) |
-| [TASK-279](tasks/TASK-279.md) | wave A | Unmarked crossings by German rules: no walker priority | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-279](tasks/TASK-279.md) | wave A | Unmarked crossings by German rules: no walker priority | see contract | 259 to 270 | tests, counts, gates | parked for the owner 2026-11-21 (v2 `af007d4`: walker waits level with main; fixed full demand +2.1% against 2%) |
 | [TASK-280](tasks/TASK-280.md) | wave A | One height profile for rail tracks sharing a bridge | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; covered bed points 148 to 0; hashes identical) |
 | [TASK-281](tasks/TASK-281.md) | wave A | Lübeck's parking failures under 2% (D17) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; unreachable lots left out; Freiburg 60.1 s) |
 | [TASK-282](tasks/TASK-282.md) | wave B | Left-hand turn ranking: the far-side right yields like a left (architecture 5.3) | movement priority | 268 | York, right-hand identity | done 2026-11-21 (merged; turn rank by driving side) |
@@ -5758,6 +5758,20 @@ Stefan-Meier-Straße entry, +2.8 s; lead asked for the variant). York's Layertho
 to 3 `no_route` 0 (main 3 / 2 / 2), parking failures 0 / 1 / 1 (main 21 / 23 / 23). Freiburg, Lübeck, Munich,
 Sindelfingen archives byte-identical. Lead merge: York joins the New city panel ("City walls and station: left-hand
 traffic, mini-roundabouts"; first frame 2.80 s after TASK-287); `heldOutOfPanel` emptied.
+
+TASK-279 (Claude Code subagent, Opus 5.5 high, 2026-11-21; parked for the owner, branch `task/279-unmarked-yield`
+`af007d4`): unmarked crossings by German rules. v1 (`7f7c238`, no walker priority) met the thresholds but left walkers
+waiting at full demand (p99 3,149 s, max 6,294 s, 450 waits over 300 s); the lead sent it back. v2: a walker may step out
+in front of standing traffic and of traffic crawling below 1.4 m/s that can stop before the stripes, and a waiting
+walker holds crawling traffic short of them (added by the agent: the step-out alone left p99 1,112 s and 4 walkers stuck
+all morning, queues stopping on the stripes at `n:212`). Full demand seed 1 waits: main p99 182 s, max 338 s; v2 193 s,
+366 s, 9 over 300 s; mean walk time 129.1 s (main 128.8). Measured against main `a6a1d92` (the agent re-measured: TASK-271
+moved Munich): Munich 0.15 twelve seeds -3.0, -1.5, -3.8, -0.8%, drain on all 96; full demand five-seed actuated +0.4%,
+fixed +2.1% (41 more completed; single seeds -9.2 to +19.3%); Freiburg gate 1,530 / 0, 60.1 s (+0.3 s), seeds 2, 3 equal;
+Sindelfingen 27.2 s. Misses the merge rule by 0.1 point after its variant: parked (owner: accept v2, or more seeds).
+Also carries a cache fix in `src/network/crossings.ts` (mapped crossings cached per compiled city); the lead checked
+main: a fresh import of the York extract gives the same crossing styles with and without it, so the stale read comes
+from v2's own `walk.ts` and the fix stays with the task.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
