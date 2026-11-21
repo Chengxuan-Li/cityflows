@@ -6,12 +6,13 @@ import {
   polylineCrossings,
 } from '../../geo/polyline';
 import { carService } from '../../network/car-service';
+import { isLaneDrop } from '../../network/lane-drop';
 import { parkingEgress } from '../../network/parking-egress';
 import { compileVisibleParking } from '../../network/parking';
 import { lonLatToLocal } from '../../geo/projection';
 import type { CompiledCity, Diagnostic } from '../../network';
-import { allocateId, type City, type Place, type RoadClass } from '../../schema';
-import { contains, entryClasses, type Bounds } from './clip';
+import { allocateId, vehicleClasses, type City, type Place, type RoadClass } from '../../schema';
+import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
 import type { OsmRoad } from './roads';
 
@@ -29,17 +30,29 @@ const gatewayDemand: Record<RoadClass, number> = {
 // Place access uses actual movement paths, not a road-level approximation that can require
 // an impossible lane change on a short section. Keep disconnected roads, but do not seed
 // unreachable demand on them. Boundary lanes need only reach (or leave) the main component.
-export function networkAccess(compiled: CompiledCity, laneChanges = true) {
+// TASK-270: `publicCar` keeps only what a car may drive through, as the router does (car lanes on
+// roads with car access `yes`, no lane drops), so the core is the public network and a lane only
+// reaches it through public roads, not through a destination or private zone. Lane changes count on
+// every road there, as in `carService`: the router can make them further on.
+export function networkAccess(compiled: CompiledCity, laneChanges = true, publicCar = false) {
+  const car = vehicleClasses.indexOf('car');
+  const open = compiled.lanes.map(
+    (lane) =>
+      !publicCar ||
+      (lane.allowed.includes('car') && compiled.roads[lane.road]!.access[car] === 'yes'),
+  );
   const out = compiled.lanes.map((): number[] => []);
   const incoming = compiled.lanes.map((): number[] => []);
   for (const m of compiled.movements) {
-    if (m.neverGreen) continue;
+    if (m.neverGreen || !open[m.fromLane] || !open[m.toLane]) continue;
+    if (publicCar && isLaneDrop(compiled, m)) continue;
     out[m.fromLane]!.push(m.toLane);
     incoming[m.toLane]!.push(m.fromLane);
   }
   for (const road of laneChanges ? compiled.roads : []) {
     const lanes = road.lanes.map((i) => compiled.lanes[i]!);
-    if (lanes.some((l) => l.lengthM < (lanes.length - 1) * 30 + 10)) continue;
+    if (lanes.some((l) => !open[l.idx])) continue;
+    if (!publicCar && lanes.some((l) => l.lengthM < (lanes.length - 1) * 30 + 10)) continue;
     for (const lane of lanes)
       for (const other of lanes) {
         if (lane.idx === other.idx) continue;
@@ -123,8 +136,12 @@ export function addPlace(
 }
 
 export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity): void {
-  const access = networkAccess(compiled);
   const polygon = Boolean(city.geo!.boundary);
+  // TASK-270: a polygon import's gateway connector is made only on a lane that reaches the public
+  // network (out) or is reached from it (in). Lübeck's Wallstraße reached only a pocket of the
+  // Altstadt behind destination streets, and a cut end whose lanes lead nowhere had connectors
+  // anyway: every `no_route` of TASK-259's scout.
+  const access = networkAccess(compiled, true, polygon);
   const [west, south, east, north] = city.geo!.bbox;
   const nw = lonLatToLocal(city.geo!, { lon: west, lat: north });
   const se = lonLatToLocal(city.geo!, { lon: east, lat: south });
@@ -138,12 +155,10 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
       let candidates = lanes.filter((l) =>
         (end === 'start' ? access.toCore : access.fromCore).has(l.idx),
       );
-      // A polygon import keeps only entries at its ring (TASK-198): each carries a gateway.
       if (
+        !polygon &&
         !candidates.length &&
-        (polygon
-          ? entryClasses.has(road.roadClass)
-          : ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass))
+        ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass)
       )
         candidates = lanes;
       if (!candidates.length) return [];

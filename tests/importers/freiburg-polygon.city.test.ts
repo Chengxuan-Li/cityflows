@@ -66,7 +66,16 @@ test(
     const touching = (r: ReturnType<typeof road>) =>
       onRing(r.centerline[0]!) || onRing(r.centerline.at(-1)!);
     expect(apart.filter(touching)).toEqual([]);
-    expect(refs('dead_end').map(road).filter(touching)).toEqual([]);
+    // TASK-270: the B 31 link out at Lessingstraße loops back in outside the extract; no public
+    // lane inside reaches it, so it carries no gateway and ends at the ring.
+    expect([
+      ...new Set(
+        refs('dead_end')
+          .map(road)
+          .filter(touching)
+          .flatMap((r) => r.provenance.osmIds!),
+      ),
+    ]).toEqual([234491459]);
   },
   limit(120_000),
 );

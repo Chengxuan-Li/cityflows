@@ -10,6 +10,124 @@ export interface Bounds {
   /** TASK-198: a polygon import's boundary, closed, in the local frame; `min` and `max` are its
    * bounding box. Everything kept lies inside both. */
   ring?: Vec2[];
+  /** TASK-270: circles the road clip keeps besides the ring, one round each roundabout the ring
+   * cuts (`roundaboutBounds`); `min` and `max` then cover them too. */
+  discs?: { centre: Vec2; radius: number }[];
+  /** TASK-270: OSM nodes in those circles where the extract stops: the road goes on in ways
+   * Overpass did not return (they do not touch the ring), so its end there is cut. */
+  extractEnds?: Set<number>;
+}
+
+/** TASK-270: how far past a cut roundabout's farthest node its arms are kept, as entries. */
+export const ROUNDABOUT_ARM_M = 30;
+
+/**
+ * TASK-270: a polygon ring must not halve a roundabout (Cambridge's ring cut the signalised
+ * Newmarket Road roundabout, mapped `junction=circular`, leaving its inner half as a gateway no
+ * route reached). Each set of joined `junction=roundabout` or `circular` ways with nodes both
+ * inside and outside the ring gives a circle round its nodes, `ROUNDABOUT_ARM_M` wider, that the
+ * road clip keeps whole: the roundabout stays entire and its arms are cut on the circle, where they
+ * become entries like any road the ring cuts. A way end outside the ring in a circle that no other
+ * way meets, or that traffic can only reach or only leave, goes on in ways the extract lacks
+ * (Newmarket Road's gyratory continues in ways that do not touch the ring): it is cut too, so it
+ * can be an entry.
+ * Returns the road bounds: `bounds` with the circles, its box grown to hold them.
+ */
+export function roundaboutBounds(
+  ways: OsmWay[],
+  positions: Map<number, Vec2>,
+  bounds: Bounds,
+): Bounds {
+  const ring = bounds.ring;
+  if (!ring) return bounds;
+  const parent = new Map<number, number>();
+  const find = (id: number): number => {
+    let root = id;
+    while (parent.get(root)! !== root) root = parent.get(root)!;
+    parent.set(id, root);
+    return root;
+  };
+  const rings = ways.filter(
+    (way) => way.tag.junction === 'roundabout' || way.tag.junction === 'circular',
+  );
+  for (const { nd } of rings)
+    for (const id of nd) {
+      if (!parent.has(id)) parent.set(id, id);
+      parent.set(find(id), find(nd[0]!));
+    }
+  const groups = new Map<number, Set<number>>();
+  for (const id of parent.keys()) {
+    const set = groups.get(find(id)) ?? new Set();
+    set.add(id);
+    groups.set(find(id), set);
+  }
+  const discs: NonNullable<Bounds['discs']> = [];
+  for (const ids of groups.values()) {
+    const points = [...ids].map((id) => positions.get(id)!);
+    const inside = points.map((p) => pointInPolygon(p, ring));
+    if (inside.every(Boolean) || !inside.some(Boolean)) continue;
+    const centre = {
+      x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+      y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+    };
+    const radius =
+      Math.max(...points.map((p) => Math.hypot(p.x - centre.x, p.y - centre.y))) + ROUNDABOUT_ARM_M;
+    discs.push({ centre, radius });
+  }
+  if (!discs.length) return bounds;
+  const inDisc = (p: Vec2) =>
+    discs.some(({ centre, radius }) => Math.hypot(p.x - centre.x, p.y - centre.y) < radius);
+  const touching = new Map<
+    number,
+    { arrive: boolean; leave: boolean; through: boolean; ways: number }
+  >();
+  for (const { nd, tag } of ways) {
+    const forward = tag.oneway !== '-1';
+    const backward =
+      tag.oneway === '-1' ||
+      !(
+        ['yes', '1', 'true'].includes(tag.oneway ?? '') ||
+        (tag.oneway === undefined && (tag.highway === 'motorway' || tag.junction === 'roundabout'))
+      );
+    nd.forEach((id, i) => {
+      const end = i === 0 ? 'start' : i === nd.length - 1 ? 'end' : null;
+      const entry = touching.get(id) ?? { arrive: false, leave: false, through: false, ways: 0 };
+      entry.ways++;
+      if (!end) entry.through = true;
+      else if (end === 'end') {
+        entry.arrive ||= forward;
+        entry.leave ||= backward;
+      } else {
+        entry.leave ||= forward;
+        entry.arrive ||= backward;
+      }
+      touching.set(id, entry);
+    });
+  }
+  const extractEnds = new Set<number>();
+  for (const [id, { arrive, leave, through, ways: count }] of touching) {
+    const pos = positions.get(id)!;
+    if (
+      !through &&
+      (count === 1 || !(arrive && leave)) &&
+      inDisc(pos) &&
+      !pointInPolygon(pos, ring)
+    )
+      extractEnds.add(id);
+  }
+  return {
+    ring,
+    discs,
+    extractEnds,
+    min: {
+      x: Math.min(bounds.min.x, ...discs.map((d) => d.centre.x - d.radius)),
+      y: Math.min(bounds.min.y, ...discs.map((d) => d.centre.y - d.radius)),
+    },
+    max: {
+      x: Math.max(bounds.max.x, ...discs.map((d) => d.centre.x + d.radius)),
+      y: Math.max(bounds.max.y, ...discs.map((d) => d.centre.y + d.radius)),
+    },
+  };
 }
 
 export interface RoadPoint {
@@ -107,7 +225,28 @@ function clipSpans(a: Vec2, b: Vec2, bounds: Bounds): [number, number][] {
     if (last && last[1] === enter) last[1] = exit;
     else spans.push([enter, exit]);
   }
-  return spans;
+  if (!bounds.discs) return spans;
+  // The circles kept round cut roundabouts, joined with the ring's ranges.
+  for (const { centre, radius } of bounds.discs) {
+    const fx = a.x - centre.x,
+      fy = a.y - centre.y;
+    const qa = dx * dx + dy * dy,
+      qb = 2 * (fx * dx + fy * dy),
+      qc = fx * fx + fy * fy - radius * radius;
+    const root = qb * qb - 4 * qa * qc;
+    if (qa === 0 || root <= 0) continue;
+    const enter = Math.max(span[0], (-qb - Math.sqrt(root)) / (2 * qa));
+    const exit = Math.min(span[1], (-qb + Math.sqrt(root)) / (2 * qa));
+    if (enter < exit) spans.push([enter, exit]);
+  }
+  spans.sort((p, q) => p[0] - q[0]);
+  const joined: [number, number][] = [];
+  for (const [enter, exit] of spans) {
+    const last = joined.at(-1);
+    if (last && enter <= last[1]) last[1] = Math.max(last[1], exit);
+    else joined.push([enter, exit]);
+  }
+  return joined;
 }
 
 export function clipPart(
@@ -116,7 +255,8 @@ export function clipPart(
   key: string,
   boundaryCuts: ReadonlySet<number>,
 ): ClippedPart[] {
-  const cutAtJunction = ({ osmId }: RoadPoint) => osmId !== undefined && boundaryCuts.has(osmId);
+  const cutAtJunction = ({ osmId }: RoadPoint) =>
+    osmId !== undefined && (boundaryCuts.has(osmId) || Boolean(bounds.extractEnds?.has(osmId)));
   const clamp = (value: number, axis: 'x' | 'y') =>
     Math.max(bounds.min[axis], Math.min(bounds.max[axis], value));
   const result: ClippedPart[] = [];
