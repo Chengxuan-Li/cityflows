@@ -71,6 +71,7 @@ import { buildTerrainGround } from './context';
 import { Parking3D } from './parking';
 import { ParkedCars3D } from './parked-cars';
 import { buildWalk } from './walk';
+import { buildFootbridges } from './footbridges';
 import { buildRail, pickRail3D } from './rail';
 import { buildCatenary } from './catenary';
 import { Trains3D } from './trains';
@@ -180,6 +181,7 @@ export class Scene3D {
     | undefined;
   private lotSurface: Mesh<BufferGeometry, MeshLambertMaterial> | undefined;
   private walkVisibility = { sidewalks: true, footways: true };
+  private footbridges: Group | undefined;
   private basemap: Basemap3D | undefined;
   private tilesEnabled = defaultLayers.basemap;
   private lastRenderMs = performance.now();
@@ -385,6 +387,10 @@ export class Scene3D {
       footways: add(walk.footways, this.palette.walk.footway, false),
       steps: add(walk.steps, this.palette.walk.steps, false),
     };
+    const footbridges = buildFootbridges(city, renderedSource, geometry.heights);
+    this.footbridges = footbridges.group;
+    this.content.add(footbridges.group);
+    this.canvas.dataset.footbridges = JSON.stringify(footbridges.counts);
     this.setWalkLayers(this.walkVisibility.sidewalks, this.walkVisibility.footways);
     asphalt.material.map = surfaceTexture('asphalt');
     const placementStart = performance.now();
@@ -1334,6 +1340,7 @@ export class Scene3D {
     if (this.walk) {
       this.walk.sidewalks.visible = sidewalks;
       this.walk.footways.visible = this.walk.steps.visible = footways;
+      this.footbridges!.visible = footways;
     }
     this.canvas.dataset.sidewalks = String(sidewalks);
     this.canvas.dataset.footways = String(footways);

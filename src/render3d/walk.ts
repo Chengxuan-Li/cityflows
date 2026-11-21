@@ -248,6 +248,56 @@ export function stairFlight(
   );
 }
 
+const walkContexts = new WeakMap<CompiledCity, { levels: number[]; roads?: Flatbush }>();
+
+/** The paved surface height of a walk link at `p` (the deck top on a bridge), as `buildWalk` draws
+ * it: TASK-262 shares it with the footbridge structure under and along the walk. Merged with
+ * TASK-261: node levels from `walkLevels`, stair ends from `stairEnds`, and a stair whose ends
+ * differ by 0.3 m or more follows its flight's pitch line. */
+export function walkHeight(
+  city: CompiledCity,
+  heights: Heights,
+  l: CWalkLink,
+): (p: Vec2) => number {
+  let context = walkContexts.get(city);
+  if (!context) walkContexts.set(city, (context = { levels: walkLevels(city) }));
+  const { levels } = context;
+  const fromGrade = levels[l.from]!,
+    toGrade = levels[l.to]!;
+  const ends = stairs(l)
+    ? stairEnds(city, heights, levels, (context.roads ??= roadIndex(city)), l)
+    : undefined;
+  const deck = ends ? fromGrade : l.layer;
+  if (ends && Math.abs(ends[1]! - ends[0]!) >= 0.3) {
+    const length = cumulativeLengths(l.line).at(-1)! || 1;
+    return (p) => {
+      const t = Math.min(1, Math.max(0, nearestOnPolyline(l.line, p).along / length));
+      return ends[0]! + (ends[1]! - ends[0]!) * t;
+    };
+  }
+  return (p) => {
+    if (l.road !== undefined)
+      return roadSurfaceAt(city.roads[l.road]!, heights.roads[l.road]!, p) + paving;
+    if (ends)
+      return (
+        ends[0]! +
+        heights.terrain.groundAt(p.x, p.y) -
+        heights.terrain.groundAt(l.line[0]!.x, l.line[0]!.y)
+      );
+    return (
+      heights.terrain.groundAt(p.x, p.y) +
+      (l.node !== undefined
+        ? heights.nodes[l.node]! -
+          heights.terrain.groundAt(city.nodes[l.node]!.pos.x, city.nodes[l.node]!.pos.y)
+        : heightAt(
+            { lengthM: l.lengthM, fromM: fromGrade * 5, toM: toGrade * 5, deckM: deck * 5 },
+            nearestOnPolyline(l.line, p).along,
+          )) +
+      paving
+    );
+  };
+}
+
 export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Heights) {
   const sidewalks: number[] = [],
     footways: number[] = [],

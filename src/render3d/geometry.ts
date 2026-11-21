@@ -10,6 +10,7 @@ import { cityHeights, heightAt, roadStation, roadSurfaceAt, type RoadHeight } fr
 import { buildMarkings, goreTriangles, triangleHeight } from './markings';
 import { paintedGores } from '../render/marking-geometry';
 import { buildContext } from './context';
+import { liftCanopies } from './footbridges';
 import { drape, indexTerrain, terrainAreas } from './terrain';
 import { paintedCity } from '../render/road-paint';
 
@@ -250,7 +251,7 @@ export function buildMapContext(
   palette: MapPalette,
 ) {
   const context = buildContext(
-    (source.context?.features ?? []).filter(
+    liftCanopies(city, source, heights, source.context?.features ?? []).filter(
       (f) => !city.rail || (f.class !== 'rail' && f.class !== 'tram'),
     ),
     heights.terrain,
