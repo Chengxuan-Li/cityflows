@@ -1,17 +1,25 @@
-import { cumulativeLengths, pointAtDistance } from '../geo/polyline';
+import {
+  cumulativeLengths,
+  pointAtDistance,
+  polylineNearest,
+  type NearestOnPolyline,
+} from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
-import {
-  gradeProfiles,
-  profileAt,
-  profileHeightAt,
-  roadStation,
-  type RoadProfile,
-} from '../network/heights';
+import { gradeProfiles, profileAt, profileHeightAt, type RoadProfile } from '../network/heights';
 import type { CityGeometry } from '../render/types';
 import { createTerrain } from './terrain';
 
-export { roadStation };
+const nearest = new WeakMap<readonly Vec2[], (p: Vec2) => NearestOnPolyline>();
+
+/** `roadStation` of `network/heights`, the station on `road`'s reference line abreast of `point`,
+ * to the bit, from an index of the line built on first use (TASK-278: the walk network's height
+ * lookups on Sindelfingen's A 81 ramps were 3.4 s of its 3D build in TASK-266's profile). */
+export function roadStation(road: CRoad, point: Vec2): number {
+  let find = nearest.get(road.reference);
+  if (!find) nearest.set(road.reference, (find = polylineNearest(road.reference)));
+  return find(point).along - road.stations[0]!;
+}
 
 export interface RoadHeight extends RoadProfile {
   ground?: (s: number) => number;
