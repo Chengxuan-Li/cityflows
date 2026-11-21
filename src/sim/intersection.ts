@@ -692,10 +692,13 @@ export function createIntersections(
     vehicles.junctionWaiting[b]! - vehicles.junctionWaiting[a]! ||
     a - b;
 
+  // Priority to the right among equal ranks. TASK-268 (D15): left-hand traffic has no mirrored
+  // priority to the left (the UK gives way by the road hierarchy alone, which the rank holds), so
+  // its equal ranks go by waiting time and id.
   function yieldsTo(id: number, other: number) {
+    if (compiled.drivingSide === 'left') return false;
     const angle = headings[vehicles.lane[id]!]! - headings[vehicles.lane[other]!]!;
-    const side = Math.sin(angle);
-    return compiled.drivingSide === 'right' ? side > 1e-9 : side < -1e-9;
+    return Math.sin(angle) > 1e-9;
   }
 
   function resolve() {
@@ -707,7 +710,7 @@ export function createIntersections(
         const rank = priority(queue[start]!);
         let end = start + 1;
         while (end < queue.length && priority(queue[end]!) === rank) end++;
-        // Give way to a contender on the favored side. A circular tie uses wait time and id.
+        // Give way to a contender on the right. A circular tie uses wait time and id.
         for (let remaining = end - start; remaining > 0; remaining--) {
           let first = -1;
           let winner = -1;

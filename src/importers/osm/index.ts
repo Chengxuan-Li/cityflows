@@ -139,13 +139,16 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     const ring = geo.boundary.map(([lon, lat]) => lonLatToLocal(geo, { lon, lat }));
     bounds.ring = [...ring, ring[0]!];
   }
+  const markingTheme = osmMarkingTheme(data) ?? geographicMarkingTheme(geo);
   const city: City = {
     schemaVersion: 3,
     version: 0,
     name: 'OpenStreetMap import',
-    drivingSide: options.drivingSide ?? 'right',
+    // TASK-268 (D11): unless set, the side follows the marking theme, from the extract's country
+    // tags or else its location: left where the theme is the UK's (Great Britain and Ireland).
+    drivingSide: options.drivingSide ?? (markingTheme === 'uk' ? 'left' : 'right'),
     geo,
-    markingTheme: osmMarkingTheme(data) ?? geographicMarkingTheme(geo),
+    markingTheme,
     nodes: {},
     roads: {},
     places: {},
