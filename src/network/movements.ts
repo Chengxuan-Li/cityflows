@@ -69,14 +69,14 @@ function bestRule(rules: TurnRule[], from: number, to: number): TurnRule | undef
 
 const continuing = (turn: Turn) => turn === 'through' || turn === 'merge' || turn === 'diverge';
 
-const turnRank: Record<Turn, number> = {
-  through: 2,
-  right: 2,
-  left: 1,
-  merge: 1,
-  diverge: 1,
-  uturn: 0,
-};
+// TASK-282: the turn across the oncoming flow (left under right-hand traffic, right under
+// left-hand) ranks with merges and diverges below through traffic; the near-side turn ranks with it.
+const turnRank = (turn: Turn, side: DrivingSide) =>
+  turn === 'uturn'
+    ? 0
+    : turn === 'through' || turn === (side === 'left' ? 'left' : 'right')
+      ? 2
+      : 1;
 
 export function generateMovements(
   node: CNode,
@@ -217,7 +217,7 @@ export function generateMovements(
           )
             continue;
           if (!shareClass(a, b)) continue;
-          add(a, b, turn, majorRank * 10 + turnRank[turn]);
+          add(a, b, turn, majorRank * 10 + turnRank(turn, side));
         }
       }
     }
@@ -317,7 +317,7 @@ export function generateMovements(
         const b = lanes[to.lanes[split ? branchLane : trunkLane]!]!;
         if (a.out.some((idx) => movements[idx]!.toLane === b.idx)) continue;
         if (bestRule(rules, a.lane, b.lane)?.allowed === false || !shareClass(a, b)) continue;
-        add(a, b, turn, from.classRank * 10 + turnRank[turn]);
+        add(a, b, turn, from.classRank * 10 + turnRank(turn, side));
       }
     }
   }
